@@ -3,10 +3,14 @@
 #[macro_use] extern crate rocket;
 extern crate dotenv;
 
+extern crate tendabike;
+
+use rocket::State;
+use tendabike::Config;
 
 #[get("/")]
-fn index() -> &'static str {
-    "Hello, want to tend your bikes?"
+fn index(conf: State<Config>) -> String {
+    conf.greeting.clone()
 }
 
 fn main() {
@@ -14,5 +18,7 @@ fn main() {
 // read environment variables from file
     dotenv::dotenv().ok();
 
-    rocket::ignite().mount("/", routes![index]).launch();
+    rocket::ignite()
+        .manage(Config::default())
+        .mount("/", routes![index]).launch();
 }
