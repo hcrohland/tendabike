@@ -6,7 +6,7 @@ extern crate dotenv;
 
 #[get("/")]
 fn index() -> &'static str {
-    "Hello, world!"
+    "Hello, want to tend your bikes?"
 }
 
 fn main() {
