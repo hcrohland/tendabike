@@ -6,6 +6,12 @@ edition = "2018"
 
 [dependencies]
 rocket = "0.4.0"
+diesel = { version = "1.4.2", features = ["postgres"] }
 dotenv = "0.13.0"
 log = "0.4.6"  
 simplelog = "0.5.3"
+
+[dependencies.rocket_contrib]
+version = "0.4.0"
+default-features = false
+features = ["diesel_postgres_pool"]

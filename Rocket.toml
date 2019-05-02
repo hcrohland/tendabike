@@ -1,0 +1,2 @@
+[global.databases.app_db]
+url = "postgres://localhost/tendabike"

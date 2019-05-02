@@ -1,4 +1,12 @@
+
+
 #[macro_use] extern crate log;
+extern crate simplelog;
+
+
+use diesel::prelude::*;
+use diesel::pg::PgConnection;
+
 
 use std::env;
 
