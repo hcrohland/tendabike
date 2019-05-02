@@ -1,0 +1,16 @@
+12:37:33 [DEBUG] tendabike: Debug
+12:37:33 [INFO] Info
+12:37:33 [ERROR] Error
+12:37:33 [INFO] 🔧 Configured for development.
+12:37:33 [INFO] address: [1;49;39mlocalhost[0m
+12:37:33 [INFO] port: [1;49;39m8000[0m
+12:37:33 [INFO] log: [1;49;39mnormal[0m
+12:37:33 [INFO] workers: [1;49;39m8[0m
+12:37:33 [INFO] secret key: [1;49;39mgenerated[0m
+12:37:33 [INFO] limits: [1;49;39mforms = 32KiB[0m
+12:37:33 [INFO] keep-alive: [1;49;39m5s[0m
+12:37:33 [INFO] tls: [1;49;39mdisabled[0m
+12:37:33 [INFO] 🛰  [35mMounting[0m [34m/[0m[35m:[0m
+12:37:33 [INFO] [32mGET[0m [34m/[0m [36m([0m[35mindex[0m[36m)[0m
+12:37:33 [INFO] 🚀 [1;49;39mRocket has launched from[0m [1;4;49;39mhttp://[0m[1;4;49;39mlocalhost:8000[0m
+12:37:33 [DEBUG] hyper::server: threads = 8
