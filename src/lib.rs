@@ -1,8 +1,16 @@
+#![feature(proc_macro_hygiene, decl_macro)]
 
+#[macro_use] extern crate rocket;
+#[macro_use] extern crate rocket_contrib;
+
+#[macro_use] extern crate diesel;
 
 #[macro_use] extern crate log;
+
+extern crate dotenv;
 extern crate simplelog;
 
+//extern crate tendabike;
 
 use diesel::prelude::*;
 use diesel::pg::PgConnection;
@@ -17,6 +25,9 @@ use simplelog::{
     WriteLogger,
 };
 use std::fs::File;
+
+pub mod db;
+pub mod schema;
 
 pub struct Config {
     pub greeting: String,
@@ -46,8 +57,4 @@ pub fn init_logging (){
     ])
     .expect("Can't get logger.");
 
-    trace!("Trace");
-    debug!("Debug");
-    info!("Info");
-    error!("Error");
 }
