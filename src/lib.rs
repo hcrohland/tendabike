@@ -1,22 +1,14 @@
-#![feature(proc_macro_hygiene, decl_macro)]
+#![feature(proc_macro_hygiene, decl_macro, never_type)]
 
-#[macro_use] extern crate rocket;
-#[macro_use] extern crate rocket_contrib;
+extern crate rocket;
+extern crate rocket_contrib;
 
 #[macro_use] extern crate diesel;
 
-#[macro_use] extern crate log;
-
-extern crate dotenv;
+extern crate log;
 extern crate simplelog;
 
-//extern crate tendabike;
-
-use diesel::prelude::*;
-use diesel::pg::PgConnection;
-
-
-use std::env;
+extern crate dotenv;
 
 use simplelog::{
     CombinedLogger,
@@ -24,10 +16,12 @@ use simplelog::{
     TermLogger,
     WriteLogger,
 };
+use std::env;
 use std::fs::File;
 
 pub mod db;
 pub mod schema;
+pub mod user;
 
 pub struct Config {
     pub greeting: String,

@@ -1,0 +1,8 @@
+GET http://[::1]:8000/config
+x-user-id: 3
+
+
+###
+GET http://[::1]:8000/exit
+x-user-id: 1
+
