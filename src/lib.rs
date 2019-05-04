@@ -1,7 +1,7 @@
 #![feature(proc_macro_hygiene, decl_macro, never_type)]
 
 extern crate rocket;
-extern crate rocket_contrib;
+#[macro_use] extern crate rocket_contrib;
 
 #[macro_use] extern crate diesel;
 
