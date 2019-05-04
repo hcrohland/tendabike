@@ -1,13 +1,13 @@
-GET http://[::1]:8000/config
+GET http://[::1]:8000/greet/config
 x-user-id: 3
 
 
 ###
-GET http://[::1]:8000/json
+GET http://[::1]:8000/greet/json
 x-user-id: 5
 
 
 ###
-GET http://[::1]:8000/exit
+GET http://[::1]:8000/greet/exit
 x-user-id: 1
 

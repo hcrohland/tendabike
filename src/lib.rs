@@ -1,11 +1,12 @@
 #![feature(proc_macro_hygiene, decl_macro, never_type)]
 
-extern crate rocket;
+#[macro_use] extern crate serde_derive;
+#[macro_use] extern crate rocket;
 #[macro_use] extern crate rocket_contrib;
 
 #[macro_use] extern crate diesel;
 
-extern crate log;
+#[macro_use] extern crate log;
 extern crate simplelog;
 
 extern crate dotenv;
@@ -22,6 +23,7 @@ use std::fs::File;
 pub mod db;
 pub mod schema;
 pub mod user;
+pub mod greetings;
 
 #[database("app_db")]
 pub struct AppDbConn(diesel::PgConnection);

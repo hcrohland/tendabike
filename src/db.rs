@@ -12,12 +12,12 @@ pub struct Greeting {
 }
 
 
-pub fn get_greeting(conn: &diesel::PgConnection) -> String {
+pub fn get_greetings(conn: &diesel::PgConnection) -> Vec<String> {
     use crate::schema::greetings::dsl::*;
     
     let result = greetings
         .select(text)
-        .first(conn)
+        .load(conn)
         .expect("Error loading posts");
 
     result 
