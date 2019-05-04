@@ -23,6 +23,9 @@ pub mod db;
 pub mod schema;
 pub mod user;
 
+#[database("app_db")]
+pub struct AppDbConn(diesel::PgConnection);
+
 pub struct Config {
     pub greeting: String,
 }
@@ -39,7 +42,7 @@ impl Default for Config{
     }
 }
 
-pub fn init_logging (){
+fn init_logging (){
     const LOGFILE_NAME: &'static str = "tendabike.log";
     CombinedLogger::init(vec![
         TermLogger::new(LevelFilter::Info, simplelog::Config::default()).expect("Couldn't get terminal logger"),
@@ -51,4 +54,10 @@ pub fn init_logging (){
     ])
     .expect("Can't get logger.");
 
+}
+
+pub fn init_environment () -> () {
+    dotenv::dotenv().ok();
+
+    init_logging();       
 }

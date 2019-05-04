@@ -5,9 +5,6 @@ use diesel::{
     RunQueryDsl,
 };
 
-#[database("app_db")]
-pub struct AppDbConn(diesel::PgConnection);
-
 #[derive(Queryable)]
 pub struct Greeting {
     pub id: i32,

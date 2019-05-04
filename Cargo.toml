@@ -13,6 +13,10 @@ simplelog = "0.5.3"
 serde = "1.0.90" 
 serde_derive = "1.0.90"  
 
+# bitflags 1.0.5 triggers a panic in rustc via rls 
+# https://github.com/rust-lang/rust/issues/59134
+bitflags = "=1.0.4" 
+
 [dependencies.rocket_contrib]
 version = "0.4.0"
 default-features = false
