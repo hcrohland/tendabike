@@ -36,6 +36,7 @@ struct GearTypes {
 
 /// The database's representation of a gear. 
 #[derive(Clone, Debug, Queryable, Serialize, Identifiable, Associations)]
+#[belongs_to(GearTypes, foreign_key = "what")]
 #[primary_key(id)]
 #[table_name = "gears"]
 pub struct Gear {
@@ -89,15 +90,13 @@ impl Gear {
     fn gear_by_user (conn: &diesel::PgConnection, uid: i32, main: bool) -> Vec<Gear>{
       //  use crate::schema::gears::dsl::*;
 
-        let main_types = gear_types::table
-            .select(gear_types::id)
+        let types = gear_types::table
             .filter(gear_types::main.eq(main))
-            .load::<i32>(conn)
-            .expect("Error loading gear types");
+            .load::<GearTypes>(conn)
+            .expect("Error loading types");
 
-        gears::table
+        Gear::belonging_to(&types)
             .filter(gears::user_id.eq(uid))
-            .filter(gears::what.eq(diesel::pg::expression::dsl::any(main_types)))
             .filter(gears::attached_to.is_null())
             .load::<Gear>(conn)
             .expect("Error loading user's gear")
