@@ -8,13 +8,19 @@ pub trait Person {
 
 pub struct User (pub i32);
 
+impl Person for User {
+    fn get_id(&self) -> i32 {
+        self.0
+    }
+}
+
 impl<'a, 'r> FromRequest<'a, 'r> for User {
     type Error = i32;
 
     fn from_request(request: &'a Request<'r>) -> request::Outcome<Self, i32> {
         let keys: Vec<_> = request.headers().get("x-user-id").collect();
         match keys.len() {
-            0 => Outcome::Success(User(0)),
+            0 => Outcome::Success(User(2)),
             1 => match keys[0].parse() {
                     Ok(1) => Outcome::Failure((Status::BadRequest, 3)),
 
@@ -44,14 +50,9 @@ impl<'a, 'r> FromRequest<'a, 'r> for Admin {
     }
 }
 
-impl Person for User {
-     fn get_id(&self) -> i32 {
-        self.0
-    }
-}
 
-impl Admin {
-    pub fn get_id (&self) -> i32 {
+impl Person for Admin {
+    fn get_id (&self) -> i32 {
         self.0
     }
 }

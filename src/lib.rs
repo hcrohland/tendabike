@@ -8,6 +8,7 @@
 
 #[macro_use] extern crate log;
 extern crate simplelog;
+extern crate chrono;
 
 extern crate dotenv;
 
@@ -24,6 +25,7 @@ pub mod db;
 pub mod schema;
 pub mod user;
 pub mod greetings;
+pub mod gear;
 
 #[database("app_db")]
 pub struct AppDbConn(diesel::PgConnection);
