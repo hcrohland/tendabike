@@ -17,6 +17,7 @@ use diesel::{
     RunQueryDsl,
 };
 
+
 /// The list of gear types
 /// Includes the list of gear types which can be attached to it as parts
 /// multiple parts are possible
@@ -85,11 +86,18 @@ pub struct UpdateGear {
 
 
 impl Gear {
-    fn gear_by_user (conn: &diesel::PgConnection, uid: i32) -> Vec<Gear>{
+    fn gear_by_user (conn: &diesel::PgConnection, uid: i32, main: bool) -> Vec<Gear>{
       //  use crate::schema::gears::dsl::*;
+
+        let main_types = gear_types::table
+            .select(gear_types::id)
+            .filter(gear_types::main.eq(main))
+            .load::<i32>(conn)
+            .expect("Error loading gear types");
 
         gears::table
             .filter(gears::user_id.eq(uid))
+            .filter(gears::what.eq(diesel::pg::expression::dsl::any(main_types)))
             .filter(gears::attached_to.is_null())
             .load::<Gear>(conn)
             .expect("Error loading user's gear")
@@ -98,9 +106,14 @@ impl Gear {
 
 #[get("/mygear")]
 fn mygear(conn: AppDbConn, user: user::User) -> Json<Vec<Gear>> {    
-    Json(Gear::gear_by_user(&conn, user.get_id()))
+    Json(Gear::gear_by_user(&conn, user.get_id(), true))
+}
+
+#[get("/myspares")]
+fn myspares(conn: AppDbConn, user: user::User) -> Json<Vec<Gear>> {    
+    Json(Gear::gear_by_user(&conn, user.get_id(), false))
 }
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![mygear]
+    routes![mygear, myspares]
 }
