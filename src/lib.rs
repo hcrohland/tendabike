@@ -25,10 +25,12 @@ pub mod db;
 pub mod schema;
 pub mod user;
 pub mod greetings;
-pub mod gear;
+pub mod part;
+
+type AppConn = diesel::PgConnection;
 
 #[database("app_db")]
-pub struct AppDbConn(diesel::PgConnection);
+pub struct AppDbConn(AppConn);
 
 pub struct Config {
     pub greeting: String,

@@ -28,7 +28,7 @@ fn main() {
         // mount all the endpoints from the module
         .mount("/", rocket_contrib::serve::StaticFiles::from(concat!(env!("CARGO_MANIFEST_DIR"), "/www")))
         .mount("/greet", greetings::routes())
-        .mount("/gear", gear::routes())
+        .mount("/part", part::routes())
 
         // start the server
         .launch();

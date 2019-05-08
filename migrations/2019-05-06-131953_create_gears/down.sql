@@ -1,2 +1,2 @@
-DROP TABLE "gears";
-DROP TABLE "gear_types";
+DROP TABLE "parts";
+DROP TABLE "part_types";

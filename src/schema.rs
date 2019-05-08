@@ -1,5 +1,5 @@
 table! {
-    gear_types (id) {
+    part_types (id) {
         id -> Int4,
         name -> Text,
         parts -> Array<Int4>,
@@ -8,7 +8,7 @@ table! {
 }
 
 table! {
-    gears (id) {
+    parts (id) {
         id -> Int4,
         user_id -> Int4,
         what -> Int4,
@@ -31,10 +31,10 @@ table! {
     }
 }
 
-joinable!(gears -> gear_types (what));
+joinable!(parts -> part_types (what));
 
 allow_tables_to_appear_in_same_query!(
-    gear_types,
-    gears,
+    part_types,
+    parts,
     greetings,
 );

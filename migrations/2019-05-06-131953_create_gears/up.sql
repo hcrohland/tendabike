@@ -1,4 +1,4 @@
-CREATE TABLE gear_types (
+CREATE TABLE part_types (
     id SERIAL PRIMARY KEY,
     name text NOT NULL,
     parts integer[] NOT NULL DEFAULT '{}'::integer[],
@@ -6,10 +6,10 @@ CREATE TABLE gear_types (
 );
 
 
-CREATE TABLE "gears" (
+CREATE TABLE "parts" (
     "id" serial PRIMARY KEY,
     "user_id" integer NOT NULL,
-    "what" integer NOT NULL REFERENCES gear_types(id),
+    "what" integer NOT NULL REFERENCES part_types(id),
     "name" text NOT NULL,
     "vendor" text NOT NULL DEFAULT '""',
     "model" text NOT NULL DEFAULT '""',
