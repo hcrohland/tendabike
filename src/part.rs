@@ -98,7 +98,7 @@ pub struct Assembly {
 }
 
 impl Assembly {
-    pub fn new (part: Part, conn: &AppConn) -> Assembly {
+    pub fn get (part: Part, conn: &AppConn) -> Assembly {
         use crate::schema::parts::dsl::*;
         
 
@@ -108,7 +108,7 @@ impl Assembly {
     
         let subs = subs.into_iter()
             .map(|x: Part| -> Assembly {
-                    Assembly::new(x, conn)
+                    Assembly::get(x, conn)
             });
 
         let subs: Vec<Assembly> = subs.collect();
@@ -124,15 +124,11 @@ impl Assembly {
 
 
 impl Part {
-    fn get (part: i32, _owner: User, conn: &AppConn) -> Part {
-        use crate::schema::parts::dsl::*;
-
-        parts.find(part).first(conn).expect("error loading part")
+    fn get (part: i32, _owner: User, conn: &AppConn) -> Option<Part> {
+        parts::table.find(part).first(conn).ok()
     }
 
     fn part_by_user (conn: &AppConn, uid: i32, main: bool) -> Vec<Part>{
-      //  use crate::schema::parts::dsl::*;
-
         let types = part_types::table
             .filter(part_types::main.eq(main))
             .load::<PartTypes>(conn)
@@ -144,12 +140,6 @@ impl Part {
             .load::<Part>(conn)
             .expect("Error loading user's part")
     }
-
-    fn subparts (part: i32, conn: &AppConn) -> Box<[Part]> {
-        use crate::schema::parts::dsl::*;
-
-        parts.filter(attached_to.eq(part)).load(conn).expect("Error loading subparts").into_boxed_slice()
-    }
 }
 
 #[get("/types")]
@@ -158,14 +148,14 @@ fn types(_user: User, conn: AppDbConn) -> Json<Vec<PartTypes>> {
 }
 
 #[get("/<part>")]
-fn get (part: i32, user: User, conn: AppDbConn) -> Json<Part> {
-    Json(Part::get(part, user, &conn))
+fn get (part: i32, user: User, conn: AppDbConn) -> Option<Json<Part>> {
+    Part::get(part, user, &conn).map(|x| Json(x))
 }
 
-#[get("/ass/<part>")]
-fn get_assembly (part: i32, user: User, conn: AppDbConn) -> Json<Assembly> {
-    let part = Part::get(part, user, &conn);
-    Json(Assembly::new(part, &conn))
+#[get("/<part>/assembly")]
+fn get_assembly (part: i32, user: User, conn: AppDbConn) -> Option<Json<Assembly>> {
+    let part = Part::get(part, user, &conn)?;
+    Some(Json(Assembly::get(part, &conn)))
 }
 
 #[get("/mygear")]
@@ -178,11 +168,6 @@ fn myspares(user: User, conn: AppDbConn) -> Json<Vec<Part>> {
     Json(Part::part_by_user(&conn, user.get_id(), false))
 }
 
-#[get("/subpart/<part>")]
-fn subparts(part: i32, _user: User,conn: AppDbConn) -> Json<Box<[Part]>> {    
-    Json(Part::subparts(part, &conn))
-}
-
 pub fn routes () -> Vec<rocket::Route> {
-    routes![types, get, get_assembly, mygear, myspares, subparts]
+    routes![types, get, get_assembly, mygear, myspares]
 }
