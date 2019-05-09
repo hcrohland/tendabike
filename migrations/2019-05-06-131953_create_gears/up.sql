@@ -8,7 +8,7 @@ CREATE TABLE part_types (
 
 CREATE TABLE "parts" (
     "id" serial PRIMARY KEY,
-    "user_id" integer NOT NULL,
+    "owner" integer NOT NULL,
     "what" integer NOT NULL REFERENCES part_types(id),
     "name" text NOT NULL,
     "vendor" text NOT NULL DEFAULT '""',

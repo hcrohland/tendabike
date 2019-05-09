@@ -17,7 +17,6 @@ use diesel::{
     RunQueryDsl,
 };
 
-
 /// The list of part types
 /// Includes the list of part types which can be attached to it as parts
 /// multiple parts are possible
@@ -29,7 +28,7 @@ struct PartTypes {
     /// The name
     pub name: String,
     /// Part types that can be attached
-    pub parts: Vec<i32>,
+    pub hooks: Vec<i32>,
     /// is it a main part?
     pub main: bool,
 }
@@ -49,7 +48,7 @@ pub struct Part {
     /// The primary key
     pub id: i32,
     /// The owner
-    pub user_id: i32,
+    pub owner: i32,
     /// The type of the part
     pub what: i32,
     /// This name of the part.
@@ -72,10 +71,11 @@ pub struct Part {
     attached_to: Option<i32>,
 }
 
+/*
 #[derive(Insertable, Debug, Clone)]
 #[table_name = "parts"]
 pub struct NewPart {
-    pub user_id: i32,
+    pub owner: i32,
     pub name: String,
     pub vendor: String,
     pub model: String
@@ -85,11 +85,12 @@ pub struct NewPart {
 #[table_name = "parts"]
 pub struct UpdatePart {
     pub id: i32,
-    pub user_id: i32,
+    pub owner: i32,
     pub name: Option<String>,
     pub vendor: Option<String>,
     pub model: Option<String>
 }
+*/
 
 #[derive(Serialize)]
 pub struct Assembly {
@@ -97,48 +98,33 @@ pub struct Assembly {
     pub subs: Box<[Assembly]>,
 }
 
-impl Assembly {
-    pub fn get (part: Part, conn: &AppConn) -> Assembly {
-        use crate::schema::parts::dsl::*;
-        
-
-        let subs = parts
-            .filter(attached_to.eq(part.id))
-            .load::<Part>(conn).expect("Error loading subparts");
-    
-        let subs = subs.into_iter()
-            .map(|x: Part| -> Assembly {
-                    Assembly::get(x, conn)
-            });
-
-        let subs: Vec<Assembly> = subs.collect();
-        let subs = subs.into_boxed_slice();
-
-        Assembly {
-            part: part, 
-            subs: subs,
-        }
-    }
-
-}
-
-
 impl Part {
-    fn get (part: i32, _owner: User, conn: &AppConn) -> Option<Part> {
+    fn get (part: i32, _owner: &User, conn: &AppConn) -> Option<Part> {
         parts::table.find(part).first(conn).ok()
     }
 
-    fn part_by_user (conn: &AppConn, uid: i32, main: bool) -> Vec<Part>{
+    fn part_by_user (user: &Person, main: bool, conn: &AppConn) -> Vec<Part>{
         let types = part_types::table
             .filter(part_types::main.eq(main))
             .load::<PartTypes>(conn)
             .expect("Error loading types");
 
         Part::belonging_to(&types)
-            .filter(parts::user_id.eq(uid))
+            .filter(parts::owner.eq(user.get_id()))
             .filter(parts::attached_to.is_null())
             .load::<Part>(conn)
             .expect("Error loading user's part")
+    }
+
+    fn assemble (self, conn: &AppConn) -> Assembly {
+        Assembly {
+            subs: parts::table
+                .filter(parts::attached_to.eq(self.id))
+                .load::<Part>(conn).expect("Error loading subparts")
+                .into_iter().map(|x| x.assemble(conn)).collect::<Vec<_>>()
+                .into_boxed_slice(),
+            part: self,
+        }
     }
 }
 
@@ -149,23 +135,25 @@ fn types(_user: User, conn: AppDbConn) -> Json<Vec<PartTypes>> {
 
 #[get("/<part>")]
 fn get (part: i32, user: User, conn: AppDbConn) -> Option<Json<Part>> {
-    Part::get(part, user, &conn).map(|x| Json(x))
+    Part::get(part, &user, &conn).map(|x| Json(x))
 }
 
 #[get("/<part>/assembly")]
 fn get_assembly (part: i32, user: User, conn: AppDbConn) -> Option<Json<Assembly>> {
-    let part = Part::get(part, user, &conn)?;
-    Some(Json(Assembly::get(part, &conn)))
+    Some(Json(
+        Part::get(part, &user, &conn)?
+        .assemble(&conn)
+    ))
 }
 
 #[get("/mygear")]
 fn mygear(user: User, conn: AppDbConn) -> Json<Vec<Part>> {    
-    Json(Part::part_by_user(&conn, user.get_id(), true))
+    Json(Part::part_by_user(&user, true, &conn))
 }
 
 #[get("/myspares")]
 fn myspares(user: User, conn: AppDbConn) -> Json<Vec<Part>> {    
-    Json(Part::part_by_user(&conn, user.get_id(), false))
+    Json(Part::part_by_user(&user, false, &conn))
 }
 
 pub fn routes () -> Vec<rocket::Route> {

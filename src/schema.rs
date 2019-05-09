@@ -10,7 +10,7 @@ table! {
 table! {
     parts (id) {
         id -> Int4,
-        user_id -> Int4,
+        owner -> Int4,
         what -> Int4,
         name -> Text,
         vendor -> Text,
