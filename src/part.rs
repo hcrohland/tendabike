@@ -33,14 +33,8 @@ struct PartTypes {
     pub main: bool,
 }
 
-impl PartTypes {
-    fn all (conn: &AppConn) -> Vec<PartTypes> {
-        part_types::table.load::<PartTypes>(conn).expect("error loading PartTypes")
-    }
-}
-
 /// The database's representation of a part. 
-#[derive(Clone, Debug, Queryable, Serialize, Identifiable, Associations)]
+#[derive(Clone, Debug, Queryable, Serialize, Identifiable, Associations, AsChangeset)]
 #[belongs_to(PartTypes, foreign_key = "what")]
 #[primary_key(id)]
 #[table_name = "parts"]
@@ -99,6 +93,10 @@ pub struct Assembly {
 }
 
 impl Part {
+    fn types (conn: &AppConn) -> Vec<PartTypes> {
+        part_types::table.load::<PartTypes>(conn).expect("error loading PartTypes")
+    }
+
     fn get (part: i32, _owner: &User, conn: &AppConn) -> Option<Part> {
         parts::table.find(part).first(conn).ok()
     }
@@ -126,23 +124,42 @@ impl Part {
             part: self,
         }
     }
+
+    pub fn register (usage: Usage, id: i32, user: &User, conn: &AppConn) -> Option<()> {
+        Part::get(id, user, conn)?
+                .reg_traverse (&usage, conn);
+        Some(())
+    }
+
+    fn reg_traverse (mut self, usage: &Usage, conn: &AppConn) {
+        for p in parts::table
+                 .filter(parts::attached_to.eq(self.id))
+                .load::<Part>(conn).expect("Error loading subparts"){
+                    p.reg_traverse(usage, conn);
+                }
+        self.time += usage.time;
+        self.distance += usage.distance;
+        self.climb += usage.climb;
+        self.descend += usage.descend;
+        self.save_changes::<Part>(conn).expect("error saving part");
+    }
 }
 
 #[get("/types")]
 fn types(_user: User, conn: AppDbConn) -> Json<Vec<PartTypes>> {
-    Json(PartTypes::all(&conn))
+    Json(Part::types(&conn))
 }
 
 #[get("/<part>")]
 fn get (part: i32, user: User, conn: AppDbConn) -> Option<Json<Part>> {
-    Part::get(part, &user, &conn).map(|x| Json(x))
+    Some (Json(Part::get(part, &user, &conn)?))
 }
 
-#[get("/<part>/assembly")]
+#[get("/<part>?assembly")]
 fn get_assembly (part: i32, user: User, conn: AppDbConn) -> Option<Json<Assembly>> {
     Some(Json(
         Part::get(part, &user, &conn)?
-        .assemble(&conn)
+            .assemble(&conn)
     ))
 }
 

@@ -6,11 +6,17 @@
 
 #[macro_use] extern crate diesel;
 
-#[macro_use] extern crate log;
+//#[macro_use] 
+extern crate log;
 extern crate simplelog;
 extern crate chrono;
 
 extern crate dotenv;
+
+use chrono::{
+    Utc,
+    DateTime,
+};
 
 use simplelog::{
     CombinedLogger,
@@ -21,11 +27,12 @@ use simplelog::{
 use std::env;
 use std::fs::File;
 
-pub mod db;
+//pub mod db;
 pub mod schema;
 pub mod user;
-pub mod greetings;
+//pub mod greetings;
 pub mod part;
+pub mod activity;
 
 type AppConn = diesel::PgConnection;
 
@@ -66,4 +73,19 @@ pub fn init_environment () -> () {
     dotenv::dotenv().ok();
 
     init_logging();       
+}
+
+pub struct Usage {
+    // start time
+    pub start: DateTime<Utc>,
+    // usage time
+    pub time: i32,
+    /// Usage distance
+	pub distance: i32,
+	/// Overall climbing
+    pub climb: i32,
+    /// Overall descending
+	pub descend: i32,
+    /// Overall descending
+	pub power: i32,
 }
