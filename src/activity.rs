@@ -5,7 +5,7 @@ use chrono::{
 
 use rocket_contrib::json::Json;
 
-use crate::schema::*;
+use crate::schema::{activities, activity_types};
 use crate::user::*;
 use crate::*;
 
@@ -68,7 +68,7 @@ impl Activity {
         activity_types::table.load::<ActivityType>(conn).expect("error loading ActivityTypes")
     }
 
-    fn get(id: i32, _user: &User, conn: &AppConn) -> Option<Activity> {
+    fn get(id: i32, _user: &Person, conn: &AppConn) -> Option<Activity> {
         activities::table.find(id).first::<Activity>(conn).ok()
     }
 
@@ -84,7 +84,7 @@ impl Activity {
         }
     }
 
-    fn register (mut self, gear: Option<i32>, user: &User, conn: &AppConn) -> Option<part::Assembly> {
+    fn register (mut self, gear: Option<i32>, user: &Person, conn: &AppConn) -> Option<part::Assembly> {
         if self.registered == true {
             part::Part::register(self.usage(std::ops::SubAssign::sub_assign), self.gear?, user, conn);
             self.registered = false;

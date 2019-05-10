@@ -99,7 +99,7 @@ impl Part {
         part_types::table.load::<PartTypes>(conn).expect("error loading PartTypes")
     }
 
-    fn get (part: i32, _owner: &User, conn: &AppConn) -> Option<Part> {
+    fn get (part: i32, _owner: &Person, conn: &AppConn) -> Option<Part> {
         parts::table.find(part).first(conn).ok()
     }
 
@@ -127,7 +127,7 @@ impl Part {
         }
     }
 
-    pub fn register (usage: Usage, id: i32, user: &User, conn: &AppConn) -> Option<Assembly> {
+    pub fn register (usage: Usage, id: i32, user: &Person, conn: &AppConn) -> Option<Assembly> {
         Some(Part::get(id, user, conn)?
                 .traverse (&usage, conn))
     }
