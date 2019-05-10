@@ -72,30 +72,30 @@ impl Activity {
         activities::table.find(id).first::<Activity>(conn).ok()
     }
 
-    fn usage (&self, factor: i32) -> Usage {
+    fn usage (&self) -> Usage {
         Usage {
             start: self.start,
-            time: self.time.unwrap_or(0) * factor,
-            distance: self.distance.unwrap_or(0) * factor,
-            climb: self.climb.unwrap_or(0) * factor,
-            descend: self.descend.unwrap_or(self.climb.unwrap_or(0)) * factor,
-            power: self.power.unwrap_or(0) * factor,            
+            time: self.time.unwrap_or(0),
+            distance: self.distance.unwrap_or(0),
+            climb: self.climb.unwrap_or(0),
+            descend: self.descend.unwrap_or(self.climb.unwrap_or(0)),
+            power: self.power.unwrap_or(0),            
         }
     }
 
-    fn register (mut self, gear: Option<i32>, user: &User, conn: &AppConn) -> Option<()> {
+    fn register (mut self, gear: Option<i32>, user: &User, conn: &AppConn) -> Option<part::Assembly> {
         if self.registered == true {
-            part::Part::register(self.usage(-1), self.gear?, user, conn)?;
+            part::Part::register(self.usage(), self.gear?, true, user, conn);
             self.registered = false;
         }
         
         let gear = gear.unwrap_or(self.gear?);
 
-        part::Part::register(self.usage(1), gear, user, conn)?;
+        let res = part::Part::register(self.usage(), gear, false, user, conn);
         self.registered = true;
         self.gear = Some(gear);
         self.save_changes::<Activity>(conn).expect("saving changes to Activity failed");
-        Some(())
+        res
     }
 }
 
@@ -110,8 +110,9 @@ fn get (id: i32, user: User, conn: AppDbConn) -> Option<Json<Activity>> {
 }
 
 #[patch("/<id>?bike&<gear>")]
-fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> Option<()> {
-    Activity::get(id, &user, &conn)?.register(gear, &user, &conn)
+fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> Option<Json<part::Assembly>> {
+    let act = Activity::get(id, &user, &conn)?;
+    act.register(gear, &user, &conn).map(|x| Json(x))
 }
 
 pub fn routes () -> Vec<rocket::Route> {

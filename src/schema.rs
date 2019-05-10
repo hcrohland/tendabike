@@ -54,7 +54,8 @@ table! {
         climb -> Int4,
         descend -> Int4,
         attached_to -> Nullable<Int4>,
-    }
+        count -> Int4,
+     }
 }
 
 joinable!(activities -> activity_types (what));

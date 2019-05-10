@@ -63,6 +63,8 @@ pub struct Part {
 	descend: i32,
     /// Is the part attached to an assembly?
     attached_to: Option<i32>,
+    /// usage count
+    count: i32,
 }
 
 /*
@@ -125,23 +127,33 @@ impl Part {
         }
     }
 
-    pub fn register (usage: Usage, id: i32, user: &User, conn: &AppConn) -> Option<()> {
-        Part::get(id, user, conn)?
-                .reg_traverse (&usage, conn);
-        Some(())
+    pub fn register (usage: Usage, id: i32, dereg: bool, user: &User, conn: &AppConn) -> Option<Assembly> {
+        let f = match dereg {
+            true => std::ops::SubAssign::sub_assign,
+            false => std::ops::AddAssign::add_assign,
+        };
+
+        Some(Part::get(id, user, conn)?
+                .reg_traverse (&usage, f, conn))
     }
 
-    fn reg_traverse (mut self, usage: &Usage, conn: &AppConn) {
-        for p in parts::table
-                 .filter(parts::attached_to.eq(self.id))
-                .load::<Part>(conn).expect("Error loading subparts"){
-                    p.reg_traverse(usage, conn);
-                }
-        self.time += usage.time;
-        self.distance += usage.distance;
-        self.climb += usage.climb;
-        self.descend += usage.descend;
-        self.save_changes::<Part>(conn).expect("error saving part");
+    fn reg_traverse (mut self, usage: &Usage, f: for<'r> fn(&'r mut i32, i32), conn: &AppConn) -> Assembly {
+        let subs = parts::table
+                .filter(parts::attached_to.eq(self.id))
+                .load::<Part>(conn).expect("Error loading subparts")
+                .into_iter().map(|x| x.reg_traverse(usage, f, conn)).collect::<Vec<_>>()
+                .into_boxed_slice();
+
+        f(& mut self.time, usage.time);
+        f(& mut self.distance, usage.distance);
+        f(& mut self.climb, usage.climb);
+        f(& mut self.descend, usage.descend);
+        f(& mut self.count, 1);
+
+        Assembly {
+            part:self.save_changes::<Part>(conn).expect("error saving part"),
+            subs
+        }
     }
 }
 
