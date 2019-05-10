@@ -72,8 +72,9 @@ impl Activity {
         activities::table.find(id).first::<Activity>(conn).ok()
     }
 
-    fn usage (&self) -> Usage {
+    fn usage (&self, op: for<'r> fn(&'r mut i32, i32)) -> Usage {
         Usage {
+            op: op,
             start: self.start,
             time: self.time.unwrap_or(0),
             distance: self.distance.unwrap_or(0),
@@ -85,13 +86,13 @@ impl Activity {
 
     fn register (mut self, gear: Option<i32>, user: &User, conn: &AppConn) -> Option<part::Assembly> {
         if self.registered == true {
-            part::Part::register(self.usage(), self.gear?, true, user, conn);
+            part::Part::register(Some(&self.usage(std::ops::SubAssign::sub_assign)), self.gear?, user, conn);
             self.registered = false;
         }
         
         let gear = gear.unwrap_or(self.gear?);
 
-        let res = part::Part::register(self.usage(), gear, false, user, conn);
+        let res = part::Part::register(Some(&self.usage(std::ops::AddAssign::add_assign)), gear, user, conn);
         self.registered = true;
         self.gear = Some(gear);
         self.save_changes::<Activity>(conn).expect("saving changes to Activity failed");

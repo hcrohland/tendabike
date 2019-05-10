@@ -76,6 +76,7 @@ pub fn init_environment () -> () {
 }
 
 pub struct Usage {
+    pub op: for<'r> fn(&'r mut i32, i32),
     // start time
     pub start: DateTime<Utc>,
     // usage time

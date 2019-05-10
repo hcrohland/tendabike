@@ -116,46 +116,38 @@ impl Part {
             .expect("Error loading user's part")
     }
 
-    fn assemble (self, conn: &AppConn) -> Assembly {
+    fn traverse (self, usage: Option<&Usage>, conn: &AppConn) -> Assembly {
         Assembly {
             subs: parts::table
                 .filter(parts::attached_to.eq(self.id))
                 .load::<Part>(conn).expect("Error loading subparts")
-                .into_iter().map(|x| x.assemble(conn)).collect::<Vec<_>>()
+                .into_iter().map(|x| x.traverse(usage, conn)).collect::<Vec<_>>()
                 .into_boxed_slice(),
-            part: self,
+            part: self.apply(usage, conn),
         }
     }
 
-    pub fn register (usage: Usage, id: i32, dereg: bool, user: &User, conn: &AppConn) -> Option<Assembly> {
-        let f = match dereg {
-            true => std::ops::SubAssign::sub_assign,
-            false => std::ops::AddAssign::add_assign,
-        };
-
+    pub fn register (usage: Option<&Usage>, id: i32, user: &User, conn: &AppConn) -> Option<Assembly> {
         Some(Part::get(id, user, conn)?
-                .reg_traverse (&usage, f, conn))
+                .traverse (usage, conn))
     }
 
-    fn reg_traverse (mut self, usage: &Usage, f: for<'r> fn(&'r mut i32, i32), conn: &AppConn) -> Assembly {
-        let subs = parts::table
-                .filter(parts::attached_to.eq(self.id))
-                .load::<Part>(conn).expect("Error loading subparts")
-                .into_iter().map(|x| x.reg_traverse(usage, f, conn)).collect::<Vec<_>>()
-                .into_boxed_slice();
+    fn apply (mut self, usage: Option<&Usage>, conn: &AppConn) -> Part {
+        if let Some(us) = usage {
+            let func = us.op;
 
-        f(& mut self.time, usage.time);
-        f(& mut self.distance, usage.distance);
-        f(& mut self.climb, usage.climb);
-        f(& mut self.descend, usage.descend);
-        f(& mut self.count, 1);
+            func(& mut self.time, us.time);
+            func(& mut self.distance, us.distance);
+            func(& mut self.climb, us.climb);
+            func(& mut self.descend, us.descend);
+            func(& mut self.count, 1);
 
-        Assembly {
-            part:self.save_changes::<Part>(conn).expect("error saving part"),
-            subs
+            self.save_changes::<Part>(conn).expect("error saving part")
+        } else {
+            self
         }
     }
-}
+ }
 
 #[get("/types")]
 fn types(_user: User, conn: AppDbConn) -> Json<Vec<PartTypes>> {
@@ -171,7 +163,7 @@ fn get (part: i32, user: User, conn: AppDbConn) -> Option<Json<Part>> {
 fn get_assembly (part: i32, user: User, conn: AppDbConn) -> Option<Json<Assembly>> {
     Some(Json(
         Part::get(part, &user, &conn)?
-            .assemble(&conn)
+            .traverse(None, &conn)
     ))
 }
 
