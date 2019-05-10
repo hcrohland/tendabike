@@ -6,7 +6,7 @@
 
 #[macro_use] extern crate diesel;
 
-//#[macro_use] 
+#[macro_use] 
 extern crate log;
 extern crate simplelog;
 extern crate chrono;
@@ -43,7 +43,7 @@ pub struct Config {
     pub greeting: String,
 }
 
-impl Default for Config{
+impl Default for Config {
     fn default() -> Config {
         let greet = match env::var("TENDER_GREETING") {
             Ok(val) => val,
@@ -76,7 +76,7 @@ pub fn init_environment () -> () {
 }
 
 pub struct Usage {
-    pub op: for<'r> fn(&'r mut i32, i32),
+    pub op: Option<for<'r> fn(&'r mut i32, i32)>,
     // start time
     pub start: DateTime<Utc>,
     // usage time
@@ -89,4 +89,18 @@ pub struct Usage {
 	pub descend: i32,
     /// Overall descending
 	pub power: i32,
+}
+
+impl Usage {
+    pub fn none() -> Usage {
+        Usage {
+            op: None,
+            start: Utc::now(),
+            time: 0,
+            climb: 0,
+            descend: 0,
+            power: 0,
+            distance: 0,
+        }
+    }
 }

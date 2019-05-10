@@ -116,7 +116,7 @@ impl Part {
             .expect("Error loading user's part")
     }
 
-    fn traverse (self, usage: Option<&Usage>, conn: &AppConn) -> Assembly {
+    fn traverse (self, usage: &Usage, conn: &AppConn) -> Assembly {
         Assembly {
             subs: parts::table
                 .filter(parts::attached_to.eq(self.id))
@@ -127,19 +127,19 @@ impl Part {
         }
     }
 
-    pub fn register (usage: Option<&Usage>, id: i32, user: &User, conn: &AppConn) -> Option<Assembly> {
+    pub fn register (usage: Usage, id: i32, user: &User, conn: &AppConn) -> Option<Assembly> {
         Some(Part::get(id, user, conn)?
-                .traverse (usage, conn))
+                .traverse (&usage, conn))
     }
 
-    fn apply (mut self, usage: Option<&Usage>, conn: &AppConn) -> Part {
-        if let Some(us) = usage {
-            let func = us.op;
+    fn apply (mut self, usage: &Usage, conn: &AppConn) -> Part {
+        if let Some(func) = usage.op {
+            info!("Applying usage to part {}", self.id);
 
-            func(& mut self.time, us.time);
-            func(& mut self.distance, us.distance);
-            func(& mut self.climb, us.climb);
-            func(& mut self.descend, us.descend);
+            func(& mut self.time, usage.time);
+            func(& mut self.distance, usage.distance);
+            func(& mut self.climb, usage.climb);
+            func(& mut self.descend, usage.descend);
             func(& mut self.count, 1);
 
             self.save_changes::<Part>(conn).expect("error saving part")
@@ -161,10 +161,7 @@ fn get (part: i32, user: User, conn: AppDbConn) -> Option<Json<Part>> {
 
 #[get("/<part>?assembly")]
 fn get_assembly (part: i32, user: User, conn: AppDbConn) -> Option<Json<Assembly>> {
-    Some(Json(
-        Part::get(part, &user, &conn)?
-            .traverse(None, &conn)
-    ))
+    Part::register(Usage::none(), part, &user, &conn).map(|x| Json(x))
 }
 
 #[get("/mygear")]
