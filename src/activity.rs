@@ -68,8 +68,8 @@ impl Activity {
         activity_types::table.load::<ActivityType>(conn).expect("error loading ActivityTypes")
     }
 
-    fn get(id: i32, _user: &Person, conn: &AppConn) -> Option<Activity> {
-        activities::table.find(id).first::<Activity>(conn).ok()
+    fn get(id: i32, _user: &Person, conn: &AppConn) -> QueryResult<Activity> {
+        activities::table.find(id).first::<Activity>(conn)
     }
 
     fn usage (&self, op: for<'r> fn(&'r mut i32, i32)) -> Usage {
@@ -84,18 +84,36 @@ impl Activity {
         }
     }
 
-    fn register (mut self, gear: Option<i32>, user: &Person, conn: &AppConn) -> Option<part::Assembly> {
-        if self.registered == true {
-            part::Part::register(self.usage(std::ops::SubAssign::sub_assign), self.gear?, user, conn);
-            self.registered = false;
-        }
+    fn register (mut self, gear: Option<i32>, user: &Person, conn: &AppConn) -> QueryResult<part::Assembly> {
+        if self.gear == None && gear == None {
+            return Err(diesel::NotFound);
+        } 
+        let gear = gear.unwrap_or(self.gear.unwrap());
         
-        let gear = gear.unwrap_or(self.gear?);
-
-        let res = part::Part::register(self.usage(std::ops::AddAssign::add_assign), gear, user, conn);
+        info!("registering activity {} to gear {}", self.id, gear);
+        
+        if self.registered == true {
+            part::Part::register(self.usage(std::ops::SubAssign::sub_assign), self.gear.unwrap(), user, conn)?;
+            self.registered = false;
+        } 
+        
         self.registered = true;
         self.gear = Some(gear);
-        self.save_changes::<Activity>(conn).expect("saving changes to Activity failed");
+        self.save_changes::<Activity>(conn)?;
+        part::Part::register(self.usage(std::ops::AddAssign::add_assign), gear, user, conn)
+    }
+
+    fn update (gear_id: i32, user: &Person, conn: &AppConn) -> QueryResult<part::Assembly> {
+        use crate::schema::activities::dsl::*;
+
+        let acts = activities
+            .filter(registered.eq(false)).filter(gear.eq(gear_id))
+            .load::<Activity>(conn)?;
+
+        let mut res = Err(diesel::NotFound);
+        for a in acts  {
+            res = a.register (Some(gear_id), user, conn);
+        };
         res
     }
 }
@@ -106,16 +124,22 @@ fn types(_user: User, conn: AppDbConn) -> Json<Vec<ActivityType>> {
 }
 
 #[get("/<id>")]
-fn get (id: i32, user: User, conn: AppDbConn) -> Option<Json<Activity>> {
+fn get (id: i32, user: User, conn: AppDbConn) -> QueryResult<Json<Activity>> {
     Activity::get(id, &user, &conn).map(|x| Json(x))
 }
 
-#[patch("/<id>?bike&<gear>")]
-fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> Option<Json<part::Assembly>> {
+#[patch("/<id>?<gear>")]
+fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> QueryResult<Json<part::Assembly>> {
+    info! ("register act {} to gear {:?}", id, gear);
     Activity::get(id, &user, &conn)?
         .register(gear, &user, &conn).map(|x| Json(x))
 }
 
+#[patch("/update/<gear>")]
+fn update (gear: i32, user: User, conn: AppDbConn) -> QueryResult<Json<part::Assembly>> {
+    Activity::update(gear, &user, &conn).map(|x| Json(x))
+}
+
 pub fn routes () -> Vec<rocket::Route> {
-    routes![types, get, register,]
+    routes![types, get, register, update, ]
 }

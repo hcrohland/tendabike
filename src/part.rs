@@ -99,40 +99,42 @@ impl Part {
         part_types::table.load::<PartTypes>(conn).expect("error loading PartTypes")
     }
 
-    fn get (part: i32, _owner: &Person, conn: &AppConn) -> Option<Part> {
-        parts::table.find(part).first(conn).ok()
+    fn get (part: i32, _owner: &Person, conn: &AppConn) -> diesel::QueryResult<Part> {
+        parts::table.find(part).first(conn)
     }
 
-    fn part_by_user (user: &Person, main: bool, conn: &AppConn) -> Vec<Part>{
+    fn part_by_user (user: &Person, main: bool, conn: &AppConn) -> diesel::QueryResult<Vec<Part>>{
         let types = part_types::table
             .filter(part_types::main.eq(main))
-            .load::<PartTypes>(conn)
-            .expect("Error loading types");
+            .load::<PartTypes>(conn)?;
 
         Part::belonging_to(&types)
             .filter(parts::owner.eq(user.get_id()))
             .filter(parts::attached_to.is_null())
             .load::<Part>(conn)
-            .expect("Error loading user's part")
     }
 
-    fn traverse (self, usage: &Usage, conn: &AppConn) -> Assembly {
-        Assembly {
-            subs: parts::table
+    fn traverse (self, usage: &Usage, conn: &AppConn) -> diesel::QueryResult<Assembly> {
+        let subs = parts::table
                 .filter(parts::attached_to.eq(self.id))
-                .load::<Part>(conn).expect("Error loading subparts")
-                .into_iter().map(|x| x.traverse(usage, conn)).collect::<Vec<_>>()
-                .into_boxed_slice(),
-            part: self.apply(usage, conn),
-        }
+                .load::<Part>(conn)?
+                .into_iter().map(|x| x.traverse(usage, conn))
+                .collect::<diesel::QueryResult<Vec<_>>>()
+                .map (|x| x.into_boxed_slice())?;
+        let part = self.apply(usage, conn)?;
+
+        Ok (Assembly {
+            subs,
+            part,
+        })
     }
 
-    pub fn register (usage: Usage, id: i32, user: &Person, conn: &AppConn) -> Option<Assembly> {
-        Some(Part::get(id, user, conn)?
-                .traverse (&usage, conn))
+    pub fn register (usage: Usage, id: i32, user: &Person, conn: &AppConn) -> diesel::QueryResult<Assembly> {
+        Part::get(id, user, conn)?
+                .traverse (&usage, conn)
     }
 
-    fn apply (mut self, usage: &Usage, conn: &AppConn) -> Part {
+    fn apply (mut self, usage: &Usage, conn: &AppConn) -> diesel::QueryResult<Part> {
         if let Some(func) = usage.op {
             info!("Applying usage to part {}", self.id);
 
@@ -142,9 +144,9 @@ impl Part {
             func(& mut self.descend, usage.descend);
             func(& mut self.count, 1);
 
-            self.save_changes::<Part>(conn).expect("error saving part")
+            self.save_changes::<Part>(conn)
         } else {
-            self
+            Ok(self)
         }
     }
  }
@@ -155,23 +157,23 @@ fn types(_user: User, conn: AppDbConn) -> Json<Vec<PartTypes>> {
 }
 
 #[get("/<part>")]
-fn get (part: i32, user: User, conn: AppDbConn) -> Option<Json<Part>> {
-    Some (Json(Part::get(part, &user, &conn)?))
+fn get (part: i32, user: User, conn: AppDbConn) -> diesel::QueryResult<Json<Part>> {
+    Part::get(part, &user, &conn).map (|x| Json(x))
 }
 
 #[get("/<part>?assembly")]
-fn get_assembly (part: i32, user: User, conn: AppDbConn) -> Option<Json<Assembly>> {
+fn get_assembly (part: i32, user: User, conn: AppDbConn) -> diesel::QueryResult<Json<Assembly>> {
     Part::register(Usage::none(), part, &user, &conn).map(|x| Json(x))
 }
 
 #[get("/mygear")]
-fn mygear(user: User, conn: AppDbConn) -> Json<Vec<Part>> {    
-    Json(Part::part_by_user(&user, true, &conn))
+fn mygear(user: User, conn: AppDbConn) -> diesel::QueryResult<Json<Vec<Part>>> {    
+    Part::part_by_user(&user, true, &conn).map(|x| Json(x))
 }
 
 #[get("/myspares")]
-fn myspares(user: User, conn: AppDbConn) -> Json<Vec<Part>> {    
-    Json(Part::part_by_user(&user, false, &conn))
+fn myspares(user: User, conn: AppDbConn) -> diesel::QueryResult<Json<Vec<Part>>> {    
+    Part::part_by_user(&user, false, &conn).map(|x| Json(x))
 }
 
 pub fn routes () -> Vec<rocket::Route> {

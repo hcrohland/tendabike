@@ -17,11 +17,11 @@ x-user-id: 2
 {{host}}/part/1
 x-user-id: 2
 ###
-{{host}}/part/1?assembly
+{{host}}/part/16?assembly
 x-user-id: 2
 ###
-GET   {{host}}/activ/7
+PATCH {{host}}/activ/9?gear=14
 x-user-id: 2
 ###
-PATCH  {{host}}/activ/16?bike
+PATCH  {{host}}/activ/update/1
 x-user-id: 2

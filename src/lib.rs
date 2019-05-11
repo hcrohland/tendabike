@@ -24,6 +24,8 @@ use simplelog::{
     TermLogger,
     WriteLogger,
 };
+
+use std::error::Error;
 use std::env;
 use std::fs::File;
 
@@ -104,3 +106,9 @@ impl Usage {
         }
     }
 }
+
+/* enum Error {
+    AnyErr,
+}
+ */
+type Result<T> = std::result::Result<T, Box<dyn Error>>;
