@@ -92,29 +92,33 @@ impl Activity {
         
         info!("registering activity {} to gear {}", self.id, gear);
         
-        if self.registered == true {
-            part::Part::register(self.usage(std::ops::SubAssign::sub_assign), self.gear.unwrap(), user, conn)?;
-            self.registered = false;
-        } 
-        
-        self.registered = true;
-        self.gear = Some(gear);
-        self.save_changes::<Activity>(conn)?;
-        part::Part::register(self.usage(std::ops::AddAssign::add_assign), gear, user, conn)
+        conn.transaction(|| {
+            if self.registered == true {
+                part::Part::register(self.usage(std::ops::SubAssign::sub_assign), self.gear.unwrap(), user, conn)?;
+                self.registered = false;
+            } 
+            
+            self.registered = true;
+            self.gear = Some(gear);
+            self.save_changes::<Activity>(conn)?;
+            part::Part::register(self.usage(std::ops::AddAssign::add_assign), gear, user, conn)
+        })
     }
 
     fn update (gear_id: i32, user: &Person, conn: &AppConn) -> QueryResult<part::Assembly> {
         use crate::schema::activities::dsl::*;
 
-        let acts = activities
-            .filter(registered.eq(false)).filter(gear.eq(gear_id))
-            .load::<Activity>(conn)?;
+        conn.transaction(|| {
+            let acts = activities
+                .filter(registered.eq(false)).filter(gear.eq(gear_id))
+                .load::<Activity>(conn)?;
 
-        let mut res = Err(diesel::NotFound);
-        for a in acts  {
-            res = a.register (Some(gear_id), user, conn);
-        };
-        res
+            let mut res = Err(diesel::NotFound);
+            for a in acts  {
+                res = a.register (Some(gear_id), user, conn);
+            };
+            res
+        })
     }
 }
 
