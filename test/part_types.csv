@@ -1,0 +1,10 @@
+"id","name","parts","main"
+3,"tire","{}",FALSE
+4,"chain","{}",FALSE
+2,"front wheel","{3}",FALSE
+6,"brake pads","{}",FALSE
+7,"front brake","{6}",FALSE
+8,"rear brake","{6}",FALSE
+9,"cassette","{}",FALSE
+5,"rear wheel","{3,9}",FALSE
+1,"Bike","{2,4,5,7,8}",TRUE
