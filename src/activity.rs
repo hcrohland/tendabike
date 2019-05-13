@@ -88,16 +88,19 @@ impl Activity {
         if self.gear == None && gear == None {
             return Err(diesel::NotFound);
         } 
-        let gear = gear.unwrap_or(self.gear.unwrap());
-        
-        info!("registering activity {} to gear {}", self.id, gear);
-        
+
+        // unwarp_or_else evaluates lazily, contrary to unwrap_or!
+        let gear = gear.unwrap_or_else(|| self.gear.unwrap());
+
         conn.transaction(|| {
             if self.registered == true {
-                part::Part::register(self.usage(std::ops::SubAssign::sub_assign), self.gear.unwrap(), user, conn)?;
+                let gear = self.gear.unwrap();
+                info!("de-registering activity {} from gear {}", self.id, gear);
+                part::Part::register(self.usage(std::ops::SubAssign::sub_assign), gear, user, conn)?;
                 self.registered = false;
             } 
             
+            info!("registering activity {} to gear {}", self.id, gear);
             self.registered = true;
             self.gear = Some(gear);
             self.save_changes::<Activity>(conn)?;
