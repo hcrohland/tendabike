@@ -35,9 +35,10 @@ struct PartTypes {
 
 /// The database's representation of a part. 
 #[derive(Clone, Debug, Queryable, Serialize, Identifiable, Associations, AsChangeset)]
-#[belongs_to(PartTypes, foreign_key = "what")]
 #[primary_key(id)]
 #[table_name = "parts"]
+#[belongs_to(PartTypes, foreign_key = "what")]
+#[belongs_to(Part, foreign_key = "attached_to")]
 pub struct Part {
     /// The primary key
     pub id: i32,
@@ -99,11 +100,11 @@ impl Part {
         part_types::table.load::<PartTypes>(conn).expect("error loading PartTypes")
     }
 
-    fn get (part: i32, _owner: &Person, conn: &AppConn) -> diesel::QueryResult<Part> {
+    fn get (part: i32, _owner: &Person, conn: &AppConn) -> QueryResult<Part> {
         parts::table.find(part).first(conn)
     }
 
-    fn part_by_user (user: &Person, main: bool, conn: &AppConn) -> diesel::QueryResult<Vec<Part>>{
+    fn part_by_user (user: &Person, main: bool, conn: &AppConn) -> QueryResult<Vec<Part>>{
         let types = part_types::table
             .filter(part_types::main.eq(main))
             .load::<PartTypes>(conn)?;
@@ -114,12 +115,11 @@ impl Part {
             .load::<Part>(conn)
     }
 
-    fn traverse (self, usage: &Usage, conn: &AppConn) -> diesel::QueryResult<Assembly> {
-        let subs = parts::table
-                .filter(parts::attached_to.eq(self.id))
+    fn traverse (self, usage: &Usage, conn: &AppConn) -> QueryResult<Assembly> {
+        let subs = Part::belonging_to(&self)
                 .load::<Part>(conn)?
                 .into_iter().map(|x| x.traverse(usage, conn))
-                .collect::<diesel::QueryResult<Vec<_>>>()
+                .collect::<QueryResult<Vec<_>>>()
                 .map (|x| x.into_boxed_slice())?;
         let part = self.apply(usage, conn)?;
 
@@ -129,12 +129,12 @@ impl Part {
         })
     }
 
-    pub fn register (usage: Usage, id: i32, user: &Person, conn: &AppConn) -> diesel::QueryResult<Assembly> {
+    pub fn register (usage: Usage, id: i32, user: &Person, conn: &AppConn) -> QueryResult<Assembly> {
         Part::get(id, user, conn)?
                 .traverse (&usage, conn)
     }
 
-    fn apply (mut self, usage: &Usage, conn: &AppConn) -> diesel::QueryResult<Part> {
+    fn apply (mut self, usage: &Usage, conn: &AppConn) -> QueryResult<Part> {
         if let Some(func) = usage.op {
             info!("Applying usage to part {}", self.id);
 
@@ -157,22 +157,22 @@ fn types(_user: User, conn: AppDbConn) -> Json<Vec<PartTypes>> {
 }
 
 #[get("/<part>")]
-fn get (part: i32, user: User, conn: AppDbConn) -> diesel::QueryResult<Json<Part>> {
+fn get (part: i32, user: User, conn: AppDbConn) -> QueryResult<Json<Part>> {
     Part::get(part, &user, &conn).map (|x| Json(x))
 }
 
 #[get("/<part>?assembly")]
-fn get_assembly (part: i32, user: User, conn: AppDbConn) -> diesel::QueryResult<Json<Assembly>> {
+fn get_assembly (part: i32, user: User, conn: AppDbConn) -> QueryResult<Json<Assembly>> {
     Part::register(Usage::none(), part, &user, &conn).map(|x| Json(x))
 }
 
 #[get("/mygear")]
-fn mygear(user: User, conn: AppDbConn) -> diesel::QueryResult<Json<Vec<Part>>> {    
+fn mygear(user: User, conn: AppDbConn) -> QueryResult<Json<Vec<Part>>> {    
     Part::part_by_user(&user, true, &conn).map(|x| Json(x))
 }
 
 #[get("/myspares")]
-fn myspares(user: User, conn: AppDbConn) -> diesel::QueryResult<Json<Vec<Part>>> {    
+fn myspares(user: User, conn: AppDbConn) -> QueryResult<Json<Vec<Part>>> {    
     Part::part_by_user(&user, false, &conn).map(|x| Json(x))
 }
 

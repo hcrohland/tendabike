@@ -18,6 +18,6 @@ CREATE TABLE "parts" (
     "distance" integer NOT NULL DEFAULT '0',
     "climb" integer NOT NULL DEFAULT '0',
     "descend" integer NOT NULL DEFAULT '0',
-    "attached_to" integer,
+    "attached_to" integer REFERENCES parts(id),
     "count" integer NOT NULL DEFAULT '0'
 );
