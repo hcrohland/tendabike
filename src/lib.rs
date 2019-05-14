@@ -1,6 +1,7 @@
 #![feature(proc_macro_hygiene, decl_macro, result_map_or_else)]
 
 #[macro_use] extern crate serde_derive;
+extern crate serde_json;
 #[macro_use] extern crate rocket;
 #[macro_use] extern crate rocket_contrib;
 
@@ -55,6 +56,20 @@ impl Default for Config {
             greeting: greet,
         }
     }
+}
+
+pub fn ignite_rocket () -> rocket::Rocket {
+    // Initialize server
+    rocket::ignite()
+       // add config object
+        .manage(Config::default())
+        // add database pool
+        .attach(AppDbConn::fairing())
+
+        // mount all the endpoints from the module
+        .mount("/", rocket_contrib::serve::StaticFiles::from(concat!(env!("CARGO_MANIFEST_DIR"), "/www")))
+        .mount("/part", part::routes())
+        .mount("/activ", activity::routes())
 }
 
 fn init_logging (){
@@ -127,7 +142,6 @@ impl<'r, R: Responder<'r>> Responder<'r> for DbResult<R>
     where R: std::fmt::Debug
 {
     fn respond_to(self, req: &Request) -> response::Result<'r> {
-        info!("DbResult responder for {:?}", self.0);
         let res = match self.0 {
             Err(diesel::result::Error::NotFound) => None,
             _ => Some(self.0),
