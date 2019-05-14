@@ -131,20 +131,24 @@ fn types(_user: User, conn: AppDbConn) -> Json<Vec<ActivityType>> {
 }
 
 #[get("/<id>")]
-fn get (id: i32, user: User, conn: AppDbConn) -> QueryResult<Json<Activity>> {
-    Activity::get(id, &user, &conn).map(|x| Json(x))
+fn get (id: i32, user: User, conn: AppDbConn) -> DbResult<Json<Activity>> {
+    DbResult(Activity::get(id, &user, &conn).map(|x| Json(x)))
 }
 
 #[patch("/<id>?<gear>")]
-fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> QueryResult<Json<part::Assembly>> {
+fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> DbResult<Json<part::Assembly>> {
     info! ("register act {} to gear {:?}", id, gear);
-    Activity::get(id, &user, &conn)?
-        .register(gear, &user, &conn).map(|x| Json(x))
+    
+    Activity::get(id, &user, &conn)
+        .map_or_else(
+            |err| DbResult(Err(err)),
+            |act| DbResult (act.register(gear, &user, &conn).map(|x| Json(x)))
+        )
 }
 
 #[patch("/update/<gear>")]
-fn update (gear: i32, user: User, conn: AppDbConn) -> QueryResult<Json<part::Assembly>> {
-    Activity::update(gear, &user, &conn).map(|x| Json(x))
+fn update (gear: i32, user: User, conn: AppDbConn) -> DbResult<Json<part::Assembly>> {
+    DbResult (Activity::update(gear, &user, &conn).map(|x| Json(x)))
 }
 
 pub fn routes () -> Vec<rocket::Route> {

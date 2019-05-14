@@ -89,7 +89,7 @@ pub struct UpdatePart {
 }
 */
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct Assembly {
     pub part: Part,
     pub subs: Box<[Assembly]>,
@@ -157,13 +157,13 @@ fn types(_user: User, conn: AppDbConn) -> Json<Vec<PartTypes>> {
 }
 
 #[get("/<part>")]
-fn get (part: i32, user: User, conn: AppDbConn) -> QueryResult<Json<Part>> {
-    Part::get(part, &user, &conn).map (|x| Json(x))
+fn get (part: i32, user: User, conn: AppDbConn) -> DbResult<Json<Part>> {
+    DbResult (Part::get(part, &user, &conn).map (|x| Json(x)))
 }
 
 #[get("/<part>?assembly")]
-fn get_assembly (part: i32, user: User, conn: AppDbConn) -> QueryResult<Json<Assembly>> {
-    Part::register(Usage::none(), part, &user, &conn).map(|x| Json(x))
+fn get_assembly (part: i32, user: User, conn: AppDbConn) -> DbResult<Json<Assembly>> {
+    DbResult (Part::register(Usage::none(), part, &user, &conn).map(|x| Json(x)))
 }
 
 #[get("/mygear")]

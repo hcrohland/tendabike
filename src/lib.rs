@@ -1,4 +1,4 @@
-#![feature(proc_macro_hygiene, decl_macro, never_type)]
+#![feature(proc_macro_hygiene, decl_macro, result_map_or_else)]
 
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate rocket;
@@ -25,7 +25,7 @@ use simplelog::{
     WriteLogger,
 };
 
-use std::error::Error;
+//use std::error;
 use std::env;
 use std::fs::File;
 
@@ -107,8 +107,32 @@ impl Usage {
     }
 }
 
-/* enum Error {
-    AnyErr,
+// enum Error {
+//     DbError(diesel::result::Error),
+//     NotAuth (String),
+//     NotFound (String),
+//     AnyErr,
+// }
+
+
+use rocket::request::Request;
+use rocket::response::{self, Responder};
+
+#[derive(Debug)]
+struct DbResult<T> (diesel::result::QueryResult<T>);
+
+/// If `self` is Err(NotFound), respond with None to generate a 404 response
+/// otherwise responds with the wrapped `Responder`.  
+impl<'r, R: Responder<'r>> Responder<'r> for DbResult<R> 
+    where R: std::fmt::Debug
+{
+    fn respond_to(self, req: &Request) -> response::Result<'r> {
+        info!("DbResult responder for {:?}", self.0);
+        let res = match self.0 {
+            Err(diesel::result::Error::NotFound) => None,
+            _ => Some(self.0),
+        };
+        res.respond_to(req)
+    }
 }
- */
-type Result<T> = std::result::Result<T, Box<dyn Error>>;
+
