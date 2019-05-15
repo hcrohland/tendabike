@@ -15,23 +15,23 @@
     fn getparts<'a, 'b> (client: &'a Client, uri: &'b str) -> Vec<Part> {
         let mut response = myreq (client, uri);
 
+        let body = response.body_string().expect("body is no string");
         let myparts = serde_json::from_str(
-                &response.body_string().expect("body is no string")
+                &body
             ).expect("malformed body");
         myparts
     }
 
     /* use serde::de::Deserialize;
-    fn getjson<'c, 'u: 'c, U: Into<std::borrow::Cow<'u, str>>, T: Deserialize<'u>> (req: &'c Client, uri: U) -> T {
-        let mut response = req.get(uri).header(Header::new("x-user-id", "2")).dispatch();
-        assert_eq!(response.status(), Status::Ok);
+    fn getjson<'c, 'u, T: Deserialize<'c>> (client: &'c Client, uri: &'u str) -> T {
+        let mut response = myreq (client, uri);
 
         let body = response.body_string().expect("body is no string");
         let myparts: T = serde_json::from_str(
                 &body
             ).expect("malformed body");
         myparts
-    } */
+    } */ 
 
     #[test]
     fn part_types () {
