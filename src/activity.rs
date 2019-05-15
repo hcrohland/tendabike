@@ -49,7 +49,7 @@ pub struct Activity {
     /// End time
     pub duration: i32,
     /// activity time
-   	time: Option<i32>,
+   	pub time: Option<i32>,
     /// Covered distance
 	distance: Option<i32>,
 	/// Total climbing
@@ -90,21 +90,25 @@ impl Activity {
         } 
 
         // unwarp_or_else evaluates lazily, contrary to unwrap_or!
-        let gear = gear.unwrap_or_else(|| self.gear.unwrap());
+        let new_gear = gear.unwrap_or_else(|| self.gear.unwrap());
 
         conn.transaction(|| {
             if self.registered == true {
                 let gear = self.gear.unwrap();
                 info!("de-registering activity {} from gear {}", self.id, gear);
-                part::Part::register(self.usage(std::ops::SubAssign::sub_assign), gear, user, conn)?;
+                let part = part::Part::register(self.usage(std::ops::SubAssign::sub_assign), gear, user, conn)?;
                 self.registered = false;
+                if new_gear == 0 {
+                    self.save_changes::<Activity>(conn)?;
+                    return Ok(part);
+                }
             } 
             
-            info!("registering activity {} to gear {}", self.id, gear);
+            info!("registering activity {} to gear {}", self.id, new_gear);
             self.registered = true;
-            self.gear = Some(gear);
+            self.gear = Some(new_gear);
             self.save_changes::<Activity>(conn)?;
-            part::Part::register(self.usage(std::ops::AddAssign::add_assign), gear, user, conn)
+            part::Part::register(self.usage(std::ops::AddAssign::add_assign), new_gear, user, conn)
         })
     }
 

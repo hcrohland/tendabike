@@ -55,7 +55,7 @@ pub struct Part {
     /// purchase date
     pub purchase: DateTime<Utc>,
     /// usage time
-   	time: i32,
+   	pub time: i32,
     /// Usage distance
 	distance: i32,
 	/// Overall climbing
@@ -65,7 +65,7 @@ pub struct Part {
     /// Is the part attached to an assembly?
     attached_to: Option<i32>,
     /// usage count
-    count: i32,
+    pub count: i32,
 }
 
 /*
@@ -89,7 +89,7 @@ pub struct UpdatePart {
 }
 */
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Assembly {
     pub part: Part,
     pub subs: Box<[Assembly]>,

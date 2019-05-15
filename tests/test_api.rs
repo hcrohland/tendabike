@@ -1,22 +1,34 @@
     
     
     use rocket::local::*;
-    use rocket::http::{Header, Status};
+    use rocket::http::{Header, Status, Method};
     use tendabike::*;
 
     use tendabike::part::*;
 
     use serde::de::Deserialize;
-    fn getjson<'c, 'u, T, U> (client: &'c Client, uri: U) -> T 
+    fn reqjson<'c, 'u, T, U> (client: &'c Client, method: Method,uri: U) -> T 
         where for<'a> T: Deserialize<'a>, U: Into<std::borrow::Cow<'u, str>>,
     {
-        let mut response = client.get(uri).header(Header::new("x-user-id", "2")).dispatch();
+        let mut response = client.req(method, uri).header(Header::new("x-user-id", "2")).dispatch();
         assert_eq!(response.status(), Status::Ok);
 
         serde_json::from_str::<T>(
                 &response.body_string().expect("body is no string")
             ).expect("malformed body")
     } 
+
+    fn getjson<'c, 'u, T, U> (client: &'c Client, uri: U) -> T 
+        where for<'a> T: Deserialize<'a>, U: Into<std::borrow::Cow<'u, str>>,
+    {
+        reqjson(client, Method::Get, uri)
+    }
+    
+    fn patchjson<'c, 'u, T, U> (client: &'c Client, uri: U) -> T 
+        where for<'a> T: Deserialize<'a>, U: Into<std::borrow::Cow<'u, str>>,
+    {
+        reqjson(client, Method::Patch, uri)
+    }
 
     #[test]
     fn part_types () {
@@ -29,7 +41,7 @@
     fn part () {
         let client = Client::new(crate::ignite_rocket()).expect("valid rocket instance");
 
-        let response = client.get("/part/999").header(Header::new("x-user-id", "2")).dispatch();
+        let response = client.get("/part/0").header(Header::new("x-user-id", "2")).dispatch();
         assert_eq!(response.status(), Status::NotFound);
 
         let _myspares: Vec<Part> = getjson(&client, "/part/myspares");
@@ -55,28 +67,31 @@
     fn activities () {
         let client = Client::new(crate::ignite_rocket()).expect("valid rocket instance");
 
-        let response = client.get("/activ/999").header(Header::new("x-user-id", "2")).dispatch();
+        let response = client.get("/activ/0").header(Header::new("x-user-id", "2")).dispatch();
         assert_eq!(response.status(), Status::NotFound);
 
         let _part: Activity = getjson(&client, "/activ/1");
     }
-/* 
+
     #[test]
     fn usage () {
         let client = Client::new(crate::ignite_rocket()).expect("valid rocket instance");
 
-        let parts = getparts(&client, "/part/mygear");
+        let act: Activity = getjson(&client, "/activ/9");
+        let ass1: Assembly = patchjson(&client, "/activ/9?gear=0");
+        let response = client.patch("/activ/9?gear=-1").header(Header::new("x-user-id", "2")).dispatch();
+        assert_eq!(response.status(), Status::NotFound);
+        let ass4: Assembly = getjson(&client, format!("/part/{}?assembly", ass1.part.id));
+        assert_eq!(ass1, ass4);
+        let ass2: Assembly = patchjson(&client, "/activ/9");
+        let ass3: Assembly = patchjson(&client, format!("/activ/9?gear={}",ass2.part.id));
 
-        let mut response = myreq(&client, "/activ/1");
-        let activity: Activity = serde_json::from_str(&response.body_string()
-            .expect("body is no string")).expect("body is no activity");
+        assert_eq!(ass2, ass3);
+        assert_eq!(ass1.part.count + 1, ass2.part.count);
+        assert_eq!(ass1.part.time + act.time.unwrap_or(0), ass2.part.time);
 
-        let part1 = &parts[0];
-        let part2 = &parts[1];
-
-        let (i1, i2) = match activity.id {
-            part1.id => (part2.id, part1.id);
-            part2.id => (part1.id, part2.id);
-            _ => panic!("part not found {}", activity.id)
-        }
-    } */
+        let response = client.patch("/activ/9?gear=-1").header(Header::new("x-user-id", "2")).dispatch();
+        assert_eq!(response.status(), Status::NotFound);
+        let ass4: Assembly = getjson(&client, format!("/part/{}?assembly", ass2.part.id));
+        assert_eq!(ass2, ass4);
+    } 
