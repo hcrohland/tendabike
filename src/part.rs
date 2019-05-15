@@ -22,7 +22,7 @@ use diesel::{
 /// multiple parts are possible
 #[derive(Clone, Debug, Serialize, Deserialize, Queryable, Identifiable, Associations, PartialEq)]
 #[table_name = "part_types"]
-struct PartTypes {
+pub struct PartTypes {
     /// The primary key
     pub id: i32,
     /// The name
@@ -181,57 +181,4 @@ fn myspares(user: User, conn: AppDbConn) -> QueryResult<Json<Vec<Part>>> {
 
 pub fn routes () -> Vec<rocket::Route> {
     routes![types, get, get_assembly, mygear, myspares]
-}
-
-#[cfg(test)]
-mod test {
-    use rocket::local::Client;
-    use rocket::http::{Header, Status};
-    use serde_json;
-    use super::*;
-
-    #[test]
-    fn test_types () {
-            let client = Client::new(crate::ignite_rocket()).expect("valid rocket instance");
-
-            let mut response = client.get("/part/types").header(Header::new("x-user-id", "2")).dispatch();
-            assert_eq!(response.status(), Status::Ok);
-            let types: Vec<PartTypes> = serde_json::from_str(&response.body_string().expect("")).expect("");
-            assert_eq!(types.len(), 9);
-            let t = &types[0];
-            assert_eq!(t.id, 1);
-            assert_eq!(t.name, "Bike");
-            assert_eq!(types[0], PartTypes{id:1,name: String::from("Bike"), main:true, hooks: vec!(2,4,5,7,8)});
-    }
-    #[test]
-    fn test_part () {
-        let client = Client::new(crate::ignite_rocket()).expect("valid rocket instance");
-
-        let response = client.get("/part/999").header(Header::new("x-user-id", "2")).dispatch();
-        assert_eq!(response.status(), Status::NotFound);
-
-        let mut response = client.get("/part/myspares").header(Header::new("x-user-id", "2")).dispatch();
-        assert_eq!(response.status(), Status::Ok);
-        
-        let _myparts: Vec<Part> = serde_json::from_str(&response.body_string()
-                .expect("body is no string")).expect("body is no part");
-
-        response = client.get("/part/mygear").header(Header::new("x-user-id", "2")).dispatch();
-        assert_eq!(response.status(), Status::Ok);
-
-        let myparts: Vec<Part> = serde_json::from_str(&response.body_string()
-            .expect("body is no string")).expect("body is no part");
-        response = client.get(format!("/part/{}", myparts[0].id)).header(Header::new("x-user-id", "2")).dispatch();
-        assert_eq!(response.status(), Status::Ok);
-
-        let part: Part = serde_json::from_str(&response.body_string().expect("")).expect("");
-        assert_eq!(part.name.to_string(), "Bronson");
-
-        response = client.get(format!("/part/{}?assembly", myparts[1].id)).header(Header::new("x-user-id", "2")).dispatch();
-        assert_eq!(response.status(), Status::Ok);
-
-        let ass: Assembly = serde_json::from_str(&response.body_string()
-            .expect("body is no string")).expect("body is no assembly");
-        assert_eq!(ass.part.name.to_string(), "Slide");
-    }
 }

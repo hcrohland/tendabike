@@ -154,37 +154,3 @@ fn update (gear: i32, user: User, conn: AppDbConn) -> DbResult<Json<part::Assemb
 pub fn routes () -> Vec<rocket::Route> {
     routes![types, get, register, update, ]
 }
-
-
-#[cfg(test)]
-mod test {
-    use rocket::local::Client;
-    use rocket::http::{Header, Status};
-    use serde_json;
-    use super::*;
-
-    #[test]
-    fn test_types () {
-            let client = Client::new(crate::ignite_rocket()).expect("valid rocket instance");
-
-            let mut response = client.get("/activ/types").header(Header::new("x-user-id", "2")).dispatch();
-            assert_eq!(response.status(), Status::Ok);
-            let types: Vec<ActivityType> = serde_json::from_str(&response.body_string().expect("")).expect("");
-            assert!(types.len() > 0);
-            assert_eq!(types[0], ActivityType {id:1,name: String::from("Bike Ride"), gear: 1});
-    }
-    #[test]
-    fn test_activities () {
-        let client = Client::new(crate::ignite_rocket()).expect("valid rocket instance");
-
-        let response = client.get("/activ/999").header(Header::new("x-user-id", "2")).dispatch();
-        assert_eq!(response.status(), Status::NotFound);
-
-        let mut response = client.get(format!("/activ/1")).header(Header::new("x-user-id", "2")).dispatch();
-        assert_eq!(response.status(), Status::Ok);
-
-        let _part: Activity = serde_json::from_str(&response.body_string()
-            .expect("body is no string")).expect("body is no activity");
-
-    }
-}
