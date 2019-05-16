@@ -20,7 +20,7 @@
         let mut response = client.req(method, uri)
             .header(Header::new("x-user-id", "2"))
             .header(ContentType::JSON)
-            .body(dbg!(serde_json::to_string(&body).unwrap()))
+            .body(serde_json::to_string(&body).unwrap())
             .dispatch();
         assert_eq!(response.status(), Status::Ok);
 
@@ -82,10 +82,12 @@
         assert_eq!(response.status(), Status::NotFound);
 
         let _part: Activity = getjson(&client, "/activ/1");
+        reassign_activities();
+        post_and_delete_activity();
     }
 
-    #[test]
-    fn usage () {
+  
+    fn reassign_activities () {
         let client = Client::new(crate::ignite_rocket()).expect("valid rocket instance");
 
         let act: Activity = getjson(&client, "/activ/9");
@@ -106,8 +108,7 @@
         let ass4: Assembly = getjson(&client, format!("/part/{}?assembly", ass2.part.id));
         assert_eq!(ass2, ass4);
     } 
-
-    #[test]
+    
     fn post_and_delete_activity () {
         let client = Client::new(crate::ignite_rocket()).expect("valid rocket instance");
 
@@ -131,6 +132,4 @@
 
         let result: usize = reqjson(&client, Method::Delete, format!("/activ/{}",act_new.id), "");
         assert_eq!(result, 1);
-        let result: usize = reqjson(&client, Method::Delete, "/activ/0", "");
-        assert_eq!(result, 0);
     }

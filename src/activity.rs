@@ -95,26 +95,35 @@ impl Activity {
         activity_types::table.load::<ActivityType>(conn).expect("error loading ActivityTypes")
     }
 
-    fn get(id: i32, _user: &Person, conn: &AppConn) -> QueryResult<Activity> {
-        activities::table.find(id).first::<Activity>(conn)
+    fn get(id: i32, person: &Person, conn: &AppConn) -> QueryResult<Activity> {
+        let act = activities::table.find(id).first::<Activity>(conn)?;
+        if act.user_id != person.get_id() && !person.is_admin() {
+                return Err(diesel::result::Error::NotFound); // Replace with own NotAuthorized
+        }
+        Ok(act)
     }
 
     fn delete(act_id: i32, person: &Person, conn: &AppConn) -> QueryResult<usize> {
         use crate::schema::activities::dsl::*;
-
-        match person.is_admin() {
-            true    => diesel::delete(activities.filter(id.eq(act_id))).execute(conn),
-            false   => diesel::delete(activities.filter(id.eq(act_id)).filter(user_id.eq(person.get_id()))).execute(conn)
-        }
+        conn.transaction(|| {
+            Activity::get(act_id, person,conn)?.register(Some(0), person, conn)?;
+            diesel::delete(activities.filter(id.eq(act_id))).execute(conn)
+        })
     }
 
     fn create(act: NewActivity, user: &Person, conn: &AppConn) -> QueryResult<Activity> {
         if act.user_id != user.get_id() && !user.is_admin() {
             return Err(diesel::result::Error::NotFound); // Replace with own NotAuthorized
         }
-        diesel::insert_into(activities::table)
-            .values(&act)
-            .get_result(conn)
+        conn.transaction(|| {
+            let mut new: Activity = diesel::insert_into(activities::table)
+                .values(&act)
+                .get_result(conn)?;
+            if new.gear.is_some()  {
+                new.register(None, user, conn)?; 
+            }
+            Ok(new)
+        })
     }
 
     fn usage (&self, op: for<'r> fn(&'r mut i32, i32)) -> Usage {
@@ -129,7 +138,7 @@ impl Activity {
         }
     }
 
-    fn register (mut self, gear: Option<i32>, user: &Person, conn: &AppConn) -> QueryResult<part::Assembly> {
+    fn register (& mut self, gear: Option<i32>, user: &Person, conn: &AppConn) -> QueryResult<part::Assembly> {
         if self.gear == None && gear == None {
             return Err(diesel::NotFound);
         } 
@@ -157,19 +166,17 @@ impl Activity {
         })
     }
 
-    fn update (gear_id: i32, user: &Person, conn: &AppConn) -> QueryResult<part::Assembly> {
+    fn scan (gear_id: i32, user: &Person, conn: &AppConn) -> QueryResult<part::Assembly> {
         use crate::schema::activities::dsl::*;
 
         conn.transaction(|| {
-            let acts = activities
+            let mut acts = activities
                 .filter(registered.eq(false)).filter(gear.eq(gear_id))
                 .load::<Activity>(conn)?;
 
-            let mut res = Err(diesel::NotFound);
-            for a in acts  {
-                res = a.register (Some(gear_id), user, conn);
-            };
-            res
+            acts.iter_mut()
+                .map (|a| a.register(Some(gear_id), user, conn))
+                .last().unwrap_or(Err(diesel::NotFound))
         })
     }
 }
@@ -201,13 +208,13 @@ fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> DbResul
     Activity::get(id, &user, &conn)
         .map_or_else(
             |err| DbResult(Err(err)),
-            |act| DbResult (act.register(gear, &user, &conn).map(|x| Json(x)))
+            |mut act| DbResult (act.register(gear, &user, &conn).map(|x| Json(x)))
         )
 }
 
 #[patch("/update/<gear>")]
 fn scan (gear: i32, user: User, conn: AppDbConn) -> DbResult<Json<part::Assembly>> {
-    DbResult (Activity::update(gear, &user, &conn).map(|x| Json(x)))
+    DbResult (Activity::scan(gear, &user, &conn).map(|x| Json(x)))
 }
 
 pub fn routes () -> Vec<rocket::Route> {
