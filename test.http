@@ -1,25 +1,31 @@
 @host = http://[::1]:8000
 
-{{host}}/part/types
+{{host}}/part/types 
 x-user-id: 2
 ###
-{{host}}/part/mygear
+{{host}}/ 
 x-user-id: 2
 ###
-{{host}}/part/myspares
+{{host}}/part/mygear 
 x-user-id: 2
 ###
-{{host}}/part/111
+{{host}}/part/myspares 
 x-user-id: 2
 ###
-{{host}}/part/1?assembly
+{{host}}/part/1 
 x-user-id: 2
 ###
-Get {{host}}/activ/9
+{{host}}/part/1?assembly 
 x-user-id: 2
 ###
-PATCH {{host}}/activ/9?gear=1
+Get {{host}}/activ/9 
 x-user-id: 2
 ###
-PATCH  {{host}}/activ/update/6
+PATCH {{host}}/activ/9?gear= 
+x-user-id: 2
+###
+PATCH  {{host}}/activ/update/6 
+x-user-id: 2
+###
+DELETE   {{host}}/activ/302 
 x-user-id: 2

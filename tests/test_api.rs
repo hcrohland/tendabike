@@ -108,7 +108,7 @@
     } 
 
     #[test]
-    fn post_activity () {
+    fn post_and_delete_activity () {
         let client = Client::new(crate::ignite_rocket()).expect("valid rocket instance");
 
         let act = NewActivity {
@@ -128,4 +128,9 @@
         let act_new: Activity = reqjson(&client, Method::Put, "/activ/", &act);
         assert_ne!(act_new.id, 0);
         assert_eq!(act_new.start, act.start);
+
+        let result: usize = reqjson(&client, Method::Delete, format!("/activ/{}",act_new.id), "");
+        assert_eq!(result, 1);
+        let result: usize = reqjson(&client, Method::Delete, "/activ/0", "");
+        assert_eq!(result, 0);
     }

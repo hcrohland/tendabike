@@ -99,6 +99,15 @@ impl Activity {
         activities::table.find(id).first::<Activity>(conn)
     }
 
+    fn delete(act_id: i32, person: &Person, conn: &AppConn) -> QueryResult<usize> {
+        use crate::schema::activities::dsl::*;
+
+        match person.is_admin() {
+            true    => diesel::delete(activities.filter(id.eq(act_id))).execute(conn),
+            false   => diesel::delete(activities.filter(id.eq(act_id)).filter(user_id.eq(person.get_id()))).execute(conn)
+        }
+    }
+
     fn create(act: NewActivity, user: &Person, conn: &AppConn) -> QueryResult<Activity> {
         if act.user_id != user.get_id() && !user.is_admin() {
             return Err(diesel::result::Error::NotFound); // Replace with own NotAuthorized
@@ -180,6 +189,11 @@ fn put (activity: Json<NewActivity>, user: User, conn: AppDbConn) -> DbResult<Js
     DbResult (Activity::create(activity.0, &user, &conn).map(|x| Json(x)))
 }
 
+#[delete("/<id>")]
+fn delete (id: i32, user: User, conn: AppDbConn) -> DbResult<Json<usize>> {
+    DbResult (Activity::delete(id, &user, &conn).map(|x| Json(x)))
+}
+
 #[patch("/<id>?<gear>")]
 fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> DbResult<Json<part::Assembly>> {
     info! ("register act {} to gear {:?}", id, gear);
@@ -192,10 +206,10 @@ fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> DbResul
 }
 
 #[patch("/update/<gear>")]
-fn update (gear: i32, user: User, conn: AppDbConn) -> DbResult<Json<part::Assembly>> {
+fn scan (gear: i32, user: User, conn: AppDbConn) -> DbResult<Json<part::Assembly>> {
     DbResult (Activity::update(gear, &user, &conn).map(|x| Json(x)))
 }
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![types, get, register, update, put]
+    routes![types, get, register, scan, put, delete,]
 }
