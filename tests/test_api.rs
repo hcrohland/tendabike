@@ -1,16 +1,27 @@
     
     
     use rocket::local::*;
-    use rocket::http::{Header, Status, Method};
+    use rocket::http::{Header, Status, Method, ContentType};
+    use chrono::Utc;
     use tendabike::*;
 
     use tendabike::part::*;
 
-    use serde::de::Deserialize;
-    fn reqjson<'c, 'u, T, U> (client: &'c Client, method: Method,uri: U) -> T 
-        where for<'a> T: Deserialize<'a>, U: Into<std::borrow::Cow<'u, str>>,
+    use serde::{
+            de::Deserialize,
+            ser::Serialize
+        };
+    
+    fn reqjson<'c, 'u, T, B, U> (client: &'c Client, method: Method, uri: U, body: B) -> T 
+        where   for<'a> T: Deserialize<'a>, 
+                B: Serialize,
+                U: Into<std::borrow::Cow<'u, str>>,
     {
-        let mut response = client.req(method, uri).header(Header::new("x-user-id", "2")).dispatch();
+        let mut response = client.req(method, uri)
+            .header(Header::new("x-user-id", "2"))
+            .header(ContentType::JSON)
+            .body(dbg!(serde_json::to_string(&body).unwrap()))
+            .dispatch();
         assert_eq!(response.status(), Status::Ok);
 
         serde_json::from_str::<T>(
@@ -21,13 +32,13 @@
     fn getjson<'c, 'u, T, U> (client: &'c Client, uri: U) -> T 
         where for<'a> T: Deserialize<'a>, U: Into<std::borrow::Cow<'u, str>>,
     {
-        reqjson(client, Method::Get, uri)
+        reqjson(client, Method::Get, uri, "")
     }
     
     fn patchjson<'c, 'u, T, U> (client: &'c Client, uri: U) -> T 
         where for<'a> T: Deserialize<'a>, U: Into<std::borrow::Cow<'u, str>>,
     {
-        reqjson(client, Method::Patch, uri)
+        reqjson(client, Method::Patch, uri, "")
     }
 
     #[test]
@@ -95,3 +106,26 @@
         let ass4: Assembly = getjson(&client, format!("/part/{}?assembly", ass2.part.id));
         assert_eq!(ass2, ass4);
     } 
+
+    #[test]
+    fn post_activity () {
+        let client = Client::new(crate::ignite_rocket()).expect("valid rocket instance");
+
+        let act = NewActivity {
+            user_id: 2,
+            name:   String::from("test activity"),
+            what:   1,
+            gear:   Some(1),
+            start:  Utc::now(),
+            duration: 70,
+            time:   Some(60),
+            climb:  Some(1000),
+            distance: Some(20000),
+            descend: None,
+            power: None,
+        };
+
+        let act_new: Activity = reqjson(&client, Method::Put, "/activ/", &act);
+        assert_ne!(act_new.id, 0);
+        assert_eq!(act_new.start, act.start);
+    }

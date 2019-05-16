@@ -63,6 +63,33 @@ pub struct Activity {
     registered: bool,
 }
 
+#[derive(Debug, Clone, Insertable, PartialEq, Serialize, Deserialize)]
+#[table_name = "activities"]
+pub struct NewActivity {
+    pub user_id: i32,
+    /// The activity type
+    pub what: i32,
+    /// This name of the activity.
+    pub name: String,
+    /// Start time
+    pub start: DateTime<Utc>,
+    /// End time
+    pub duration: i32,
+    /// activity time
+   	pub time: Option<i32>,
+    /// Covered distance
+	pub distance: Option<i32>,
+	/// Total climbing
+    pub climb: Option<i32>,
+    /// Total descending
+	pub descend: Option<i32>,
+    /// average power output
+    pub power: Option<i32>,
+    /// Which gear did she use?
+    pub gear: Option<i32>,
+}
+
+
 impl Activity {
     fn types (conn: &AppConn) -> Vec<ActivityType> {
         activity_types::table.load::<ActivityType>(conn).expect("error loading ActivityTypes")
@@ -70,6 +97,15 @@ impl Activity {
 
     fn get(id: i32, _user: &Person, conn: &AppConn) -> QueryResult<Activity> {
         activities::table.find(id).first::<Activity>(conn)
+    }
+
+    fn create(act: NewActivity, user: &Person, conn: &AppConn) -> QueryResult<Activity> {
+        if act.user_id != user.get_id() && !user.is_admin() {
+            return Err(diesel::result::Error::NotFound); // Replace with own NotAuthorized
+        }
+        diesel::insert_into(activities::table)
+            .values(&act)
+            .get_result(conn)
     }
 
     fn usage (&self, op: for<'r> fn(&'r mut i32, i32)) -> Usage {
@@ -139,6 +175,11 @@ fn get (id: i32, user: User, conn: AppDbConn) -> DbResult<Json<Activity>> {
     DbResult(Activity::get(id, &user, &conn).map(|x| Json(x)))
 }
 
+#[put("/", data="<activity>")]
+fn put (activity: Json<NewActivity>, user: User, conn: AppDbConn) -> DbResult<Json<Activity>> {
+    DbResult (Activity::create(activity.0, &user, &conn).map(|x| Json(x)))
+}
+
 #[patch("/<id>?<gear>")]
 fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> DbResult<Json<part::Assembly>> {
     info! ("register act {} to gear {:?}", id, gear);
@@ -156,5 +197,5 @@ fn update (gear: i32, user: User, conn: AppDbConn) -> DbResult<Json<part::Assemb
 }
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![types, get, register, update, ]
+    routes![types, get, register, update, put]
 }

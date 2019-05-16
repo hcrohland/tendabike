@@ -4,6 +4,7 @@ use rocket::request::{self, Request, FromRequest};
 
 pub trait Person {
     fn get_id(&self) -> i32;
+    fn is_admin(&self) -> bool;
 }
 
 pub struct User (pub i32);
@@ -11,6 +12,12 @@ pub struct User (pub i32);
 impl Person for User {
     fn get_id(&self) -> i32 {
         self.0
+    }
+    fn is_admin(&self) -> bool {
+        match self.0 {
+            1 => true,
+            _ => false
+        } 
     }
 }
 
@@ -54,5 +61,8 @@ impl<'a, 'r> FromRequest<'a, 'r> for Admin {
 impl Person for Admin {
     fn get_id (&self) -> i32 {
         self.0
+    }
+    fn is_admin(&self) -> bool {
+        true
     }
 }
