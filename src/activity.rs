@@ -212,7 +212,7 @@ fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> DbResul
         )
 }
 
-#[patch("/update/<gear>")]
+#[patch("/scan/<gear>")]
 fn scan (gear: i32, user: User, conn: AppDbConn) -> DbResult<Json<part::Assembly>> {
     DbResult (Activity::scan(gear, &user, &conn).map(|x| Json(x)))
 }

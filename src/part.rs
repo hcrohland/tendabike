@@ -120,6 +120,7 @@ impl Part {
 
     fn traverse (self, usage: &Usage, conn: &AppConn) -> QueryResult<Assembly> {
         let subs = Part::belonging_to(&self)
+                .order_by(parts::id)  // need this for stable test results
                 .load::<Part>(conn)?
                 .into_iter().map(|x| x.traverse(usage, conn))
                 .collect::<QueryResult<Vec<_>>>()
