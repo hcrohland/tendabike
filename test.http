@@ -29,3 +29,20 @@ x-user-id: 2
 ###
 DELETE   {{host}}/activ/302 
 x-user-id: 2
+###
+PUT {{host}}/activ
+x-user-id: 2
+
+{
+  "user_id": 2,
+  "what": 1,
+  "name": "Fahrt am Morgen",
+  "start": "2019-04-24T08:55:12Z",
+  "duration": 4868,
+  "time": 3331,
+  "distance": 18032,
+  "climb": 52,
+  "descend": null,
+  "power": 154,
+  "gear": 1
+}

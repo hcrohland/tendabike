@@ -12,7 +12,7 @@
             ser::Serialize
         };
     
-    fn reqjson<'c, 'u, T, B, U> (client: &'c Client, method: Method, uri: U, body: B) -> T 
+    fn reqjson<'c, 'u, T, B, U> (client: &'c Client, method: Method, uri: U, body: B, status: Status) -> T 
         where   for<'a> T: Deserialize<'a>, 
                 B: Serialize,
                 U: Into<std::borrow::Cow<'u, str>>,
@@ -22,7 +22,7 @@
             .header(ContentType::JSON)
             .body(serde_json::to_string(&body).unwrap())
             .dispatch();
-        assert_eq!(response.status(), Status::Ok);
+        assert_eq!(response.status(), status);
 
         serde_json::from_str::<T>(
                 &response.body_string().expect("body is no string")
@@ -32,13 +32,13 @@
     fn getjson<'c, 'u, T, U> (client: &'c Client, uri: U) -> T 
         where for<'a> T: Deserialize<'a>, U: Into<std::borrow::Cow<'u, str>>,
     {
-        reqjson(client, Method::Get, uri, "")
+        reqjson(client, Method::Get, uri, "", Status::Ok)
     }
     
     fn patchjson<'c, 'u, T, U> (client: &'c Client, uri: U) -> T 
         where for<'a> T: Deserialize<'a>, U: Into<std::borrow::Cow<'u, str>>,
     {
-        reqjson(client, Method::Patch, uri, "")
+        reqjson(client, Method::Patch, uri, "", Status::Ok)
     }
 
     #[test]
@@ -126,10 +126,10 @@
             power: None,
         };
 
-        let act_new: Activity = reqjson(&client, Method::Put, "/activ/", &act);
+        let act_new: Activity = reqjson(&client, Method::Put, "/activ/", &act, Status::Created);
         assert_ne!(act_new.id, 0);
         assert_eq!(act_new.start, act.start);
 
-        let result: usize = reqjson(&client, Method::Delete, format!("/activ/{}",act_new.id), "");
+        let result: usize = reqjson(&client, Method::Delete, format!("/activ/{}",act_new.id), "", Status::Ok);
         assert_eq!(result, 1);
     }

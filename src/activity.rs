@@ -111,7 +111,7 @@ impl Activity {
         })
     }
 
-    fn create(act: NewActivity, user: &Person, conn: &AppConn) -> QueryResult<Activity> {
+    fn create(act: NewActivity, user: &Person, conn: &AppConn) -> diesel::result::QueryResult<Activity> {
         if act.user_id != user.get_id() && !user.is_admin() {
             return Err(diesel::result::Error::NotFound); // Replace with own NotAuthorized
         }
@@ -191,9 +191,15 @@ fn get (id: i32, user: User, conn: AppDbConn) -> DbResult<Json<Activity>> {
     DbResult(Activity::get(id, &user, &conn).map(|x| Json(x)))
 }
 
+use rocket::response::status;
+
 #[put("/", data="<activity>")]
-fn put (activity: Json<NewActivity>, user: User, conn: AppDbConn) -> DbResult<Json<Activity>> {
-    DbResult (Activity::create(activity.0, &user, &conn).map(|x| Json(x)))
+fn put (activity: Json<NewActivity>, user: User, conn: AppDbConn) 
+            -> diesel::result::QueryResult<status::Created<Json<Activity>>> {
+
+    let activity = Activity::create(activity.0, &user, &conn)?;
+    let url = uri! (get: activity.id);
+    Ok (status::Created(url.to_string(), Some(Json(activity))))
 }
 
 #[delete("/<id>")]
