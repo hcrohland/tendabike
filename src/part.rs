@@ -133,7 +133,7 @@ impl Part {
         })
     }
 
-    pub fn register (usage: Usage, id: i32, user: &Person, conn: &AppConn) -> TbResult<Assembly> {
+    pub fn utilize (usage: Usage, id: i32, user: &Person, conn: &AppConn) -> TbResult<Assembly> {
         Part::get(id, user, conn)?
                 .traverse (&usage, conn)
     }
@@ -167,7 +167,7 @@ fn get (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Part>> {
 
 #[get("/<part>?assembly")]
 fn get_assembly (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
-    Part::register(Usage::none(), part, &user, &conn).map(|x| Json(x))
+    Part::utilize(Usage::none(), part, &user, &conn).map(|x| Json(x))
 }
 
 #[get("/mygear")]

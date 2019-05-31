@@ -52,19 +52,20 @@ pub struct Activity {
     /// activity time
    	pub time: Option<i32>,
     /// Covered distance
-	distance: Option<i32>,
+	pub distance: Option<i32>,
 	/// Total climbing
-    climb: Option<i32>,
+    pub climb: Option<i32>,
     /// Total descending
-	descend: Option<i32>,
+	pub descend: Option<i32>,
     /// average power output
-    power: Option<i32>,
+    pub power: Option<i32>,
     /// Which gear did she use?
-    gear: Option<i32>,
+    pub gear: Option<i32>,
     registered: bool,
 }
 
-#[derive(Debug, Clone, Insertable, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Insertable, AsChangeset, PartialEq, Serialize, Deserialize)]
+#[changeset_options(treat_none_as_null="true")]
 #[table_name = "activities"]
 pub struct NewActivity {
     pub user_id: i32,
@@ -130,6 +131,22 @@ impl Activity {
         })
     }
 
+    fn update (act_id: i32, act: NewActivity, user: &Person, conn: &AppConn) -> TbResult<Activity> {
+        if act.user_id != user.get_id() && !user.is_admin() {
+           return Err(MyError::Forbidden(format!("user {} cannot update for user {}", user.get_id(), act.user_id)));
+        }
+        conn.transaction(|| {
+            let mut new: Activity = diesel::update(activities::table)
+                .filter(activities::id.eq(act_id))
+                .set(&act)
+                .get_result(conn)?;
+            if new.gear.is_some()  {
+                new.register(None, user, conn)?; 
+            }
+            Ok(new)
+        })
+    }
+
     fn usage (&self, op: for<'r> fn(&'r mut i32, i32)) -> Usage {
         Usage {
             op: Some(op),
@@ -147,14 +164,14 @@ impl Activity {
             return Err(MyError::AnyErr("trying to register to nothing...".to_string()));
         } 
 
-        // unwarp_or_else evaluates lazily, contrary to unwrap_or!
+        // unwrap_or_else evaluates lazily, contrary to unwrap_or!
         let new_gear = gear.unwrap_or_else(|| self.gear.unwrap());
 
         conn.transaction(|| {
             if self.registered == true {
                 let gear = self.gear.unwrap();
                 info!("de-registering activity {} from gear {}", self.id, gear);
-                let part = part::Part::register(self.usage(std::ops::SubAssign::sub_assign), gear, user, conn)?;
+                let part = part::Part::utilize(self.usage(std::ops::SubAssign::sub_assign), gear, user, conn)?;
                 self.registered = false;
                 if new_gear == 0 {
                     self.save_changes::<Activity>(conn)?;
@@ -166,7 +183,7 @@ impl Activity {
             self.registered = true;
             self.gear = Some(new_gear);
             self.save_changes::<Activity>(conn)?;
-            part::Part::register(self.usage(std::ops::AddAssign::add_assign), new_gear, user, conn)
+            part::Part::utilize(self.usage(std::ops::AddAssign::add_assign), new_gear, user, conn)
         })
     }
 
@@ -197,13 +214,18 @@ fn get (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Activity>> {
 
 use rocket::response::status;
 
-#[put("/", data="<activity>")]
-fn put (activity: Json<NewActivity>, user: User, conn: AppDbConn) 
+#[post("/", data="<activity>")]
+fn post (activity: Json<NewActivity>, user: User, conn: AppDbConn) 
             -> TbResult<status::Created<Json<Activity>>> {
 
     let activity = Activity::create(activity.0, &user, &conn)?;
     let url = uri! (get: activity.id);
     Ok (status::Created(url.to_string(), Some(Json(activity))))
+}
+
+#[put("/<id>", data="<activity>")]
+fn put (id: i32, activity: Json<NewActivity>, user: User, conn: AppDbConn) -> TbResult<Json<Activity>> {
+    Activity::update(id, activity.0, &user, &conn).map(|x| Json(x))
 }
 
 #[delete("/<id>")]
@@ -228,5 +250,5 @@ fn scan (gear: i32, user: User, conn: AppDbConn) -> TbResult<Json<part::Assembly
 }
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![types, get, register, scan, put, delete,]
+    routes![types, get, register, scan, put, delete,post,]
 }

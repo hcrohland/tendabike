@@ -126,9 +126,16 @@
             power: None,
         };
 
-        let act_new: Activity = reqjson(&client, Method::Put, "/activ/", &act, Status::Created);
+        let mut act_new: Activity = reqjson(&client, Method::Post, "/activ/", &act, Status::Created);
         assert_ne!(act_new.id, 0);
         assert_eq!(act_new.start, act.start);
+     
+        act_new.descend = Some(555);
+
+        let act_3: Activity = reqjson(&client, Method::Put, format!("/activ/{}", act_new.id), &act_new, Status::Ok); //Should use response header
+        assert_eq!(act_new.id, act_3.id);
+        assert_eq!(act_new.start, act_3.start);
+        assert_eq!(act_3.descend, Some(555));
 
         let act_del: Activity = reqjson(&client, Method::Delete, format!("/activ/{}",act_new.id), "", Status::Ok);
         assert_eq!(act_del.name, act.name);
