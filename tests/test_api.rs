@@ -130,6 +130,6 @@
         assert_ne!(act_new.id, 0);
         assert_eq!(act_new.start, act.start);
 
-        let result: usize = reqjson(&client, Method::Delete, format!("/activ/{}",act_new.id), "", Status::Ok);
-        assert_eq!(result, 1);
+        let act_del: Activity = reqjson(&client, Method::Delete, format!("/activ/{}",act_new.id), "", Status::Ok);
+        assert_eq!(act_del.name, act.name);
     }

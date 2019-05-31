@@ -104,11 +104,14 @@ impl Activity {
         Ok(act)
     }
 
-    fn delete(act_id: i32, person: &Person, conn: &AppConn) -> TbResult<usize> {
+    fn delete(act_id: i32, person: &Person, conn: &AppConn) -> TbResult<Activity> {
         use crate::schema::activities::dsl::*;
         conn.transaction(|| {
-            Activity::get(act_id, person, conn)?.register(Some(0), person, conn)?;
-            Ok(diesel::delete(activities.filter(id.eq(act_id))).execute(conn)?)
+            let mut act = Activity::get(act_id, person, conn)?;
+            if act.gear != None {
+                act.register(None, person, conn)?;
+            }
+            Ok(diesel::delete(activities.filter(id.eq(act_id))).get_result(conn)?)
         })
     }
 
@@ -204,7 +207,7 @@ fn put (activity: Json<NewActivity>, user: User, conn: AppDbConn)
 }
 
 #[delete("/<id>")]
-fn delete (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<usize>> {
+fn delete (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Activity>> {
     Activity::delete(id, &user, &conn).map(|x| Json(x))
 }
 
