@@ -100,30 +100,30 @@ impl Part {
         part_types::table.order_by(part_types::id).load::<PartTypes>(conn).expect("error loading PartTypes")
     }
 
-    fn get (part: i32, _owner: &Person, conn: &AppConn) -> QueryResult<Part> {
-        parts::table.find(part).first(conn)
+    fn get (part: i32, _owner: &Person, conn: &AppConn) -> TbResult<Part> {
+        Ok(parts::table.find(part).first(conn)?)
     }
 
-    fn part_by_user (user: &Person, main: bool, conn: &AppConn) -> QueryResult<Vec<Part>>{
+    fn part_by_user (user: &Person, main: bool, conn: &AppConn) -> TbResult<Vec<Part>>{
         use crate::schema::parts::dsl::*;
 
         let types = part_types::table
             .filter(part_types::main.eq(main))
             .load::<PartTypes>(conn)?;
 
-        Part::belonging_to(&types)
+        Ok(Part::belonging_to(&types)
             .filter(owner.eq(user.get_id()))
             .filter(attached_to.is_null())
             .order_by(id)
-            .load::<Part>(conn)
+            .load::<Part>(conn)?)
     }
 
-    fn traverse (self, usage: &Usage, conn: &AppConn) -> QueryResult<Assembly> {
+    fn traverse (self, usage: &Usage, conn: &AppConn) -> TbResult<Assembly> {
         let subs = Part::belonging_to(&self)
                 .order_by(parts::id)  // need this for stable test results
                 .load::<Part>(conn)?
                 .into_iter().map(|x| x.traverse(usage, conn))
-                .collect::<QueryResult<Vec<_>>>()
+                .collect::<TbResult<Vec<_>>>()
                 .map (|x| x.into_boxed_slice())?;
         let part = self.apply(usage, conn)?;
 
@@ -133,12 +133,12 @@ impl Part {
         })
     }
 
-    pub fn register (usage: Usage, id: i32, user: &Person, conn: &AppConn) -> QueryResult<Assembly> {
+    pub fn register (usage: Usage, id: i32, user: &Person, conn: &AppConn) -> TbResult<Assembly> {
         Part::get(id, user, conn)?
                 .traverse (&usage, conn)
     }
 
-    fn apply (mut self, usage: &Usage, conn: &AppConn) -> QueryResult<Part> {
+    fn apply (mut self, usage: &Usage, conn: &AppConn) -> TbResult<Part> {
         if let Some(func) = usage.op {
             info!("Applying usage to part {}", self.id);
 
@@ -148,7 +148,7 @@ impl Part {
             func(& mut self.descend, usage.descend);
             func(& mut self.count, 1);
 
-            self.save_changes::<Part>(conn)
+            Ok(self.save_changes::<Part>(conn)?)
         } else {
             Ok(self)
         }
@@ -161,22 +161,22 @@ fn types(_user: User, conn: AppDbConn) -> Json<Vec<PartTypes>> {
 }
 
 #[get("/<part>")]
-fn get (part: i32, user: User, conn: AppDbConn) -> DbResult<Json<Part>> {
-    DbResult (Part::get(part, &user, &conn).map (|x| Json(x)))
+fn get (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Part>> {
+    Part::get(part, &user, &conn).map (|x| Json(x))
 }
 
 #[get("/<part>?assembly")]
-fn get_assembly (part: i32, user: User, conn: AppDbConn) -> DbResult<Json<Assembly>> {
-    DbResult (Part::register(Usage::none(), part, &user, &conn).map(|x| Json(x)))
+fn get_assembly (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
+    Part::register(Usage::none(), part, &user, &conn).map(|x| Json(x))
 }
 
 #[get("/mygear")]
-fn mygear(user: User, conn: AppDbConn) -> QueryResult<Json<Vec<Part>>> {    
+fn mygear(user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {    
     Part::part_by_user(&user, true, &conn).map(|x| Json(x))
 }
 
 #[get("/myspares")]
-fn myspares(user: User, conn: AppDbConn) -> QueryResult<Json<Vec<Part>>> {    
+fn myspares(user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {    
     Part::part_by_user(&user, false, &conn).map(|x| Json(x))
 }
 

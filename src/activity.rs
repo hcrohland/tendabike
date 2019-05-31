@@ -7,6 +7,7 @@ use rocket_contrib::json::Json;
 
 use crate::schema::{activities, activity_types};
 use crate::user::*;
+use crate::error::MyError;
 use crate::*;
 
 use self::diesel::prelude::*;
@@ -95,25 +96,25 @@ impl Activity {
         activity_types::table.load::<ActivityType>(conn).expect("error loading ActivityTypes")
     }
 
-    fn get(id: i32, person: &Person, conn: &AppConn) -> QueryResult<Activity> {
+    fn get(id: i32, person: &Person, conn: &AppConn) -> TbResult<Activity> {
         let act = activities::table.find(id).first::<Activity>(conn)?;
         if act.user_id != person.get_id() && !person.is_admin() {
-                return Err(diesel::result::Error::NotFound); // Replace with own NotAuthorized
+                return Err(MyError::NotAuth(format!("User {} cannot access activity {}", person.get_id(), id)));
         }
         Ok(act)
     }
 
-    fn delete(act_id: i32, person: &Person, conn: &AppConn) -> QueryResult<usize> {
+    fn delete(act_id: i32, person: &Person, conn: &AppConn) -> TbResult<usize> {
         use crate::schema::activities::dsl::*;
         conn.transaction(|| {
-            Activity::get(act_id, person,conn)?.register(Some(0), person, conn)?;
-            diesel::delete(activities.filter(id.eq(act_id))).execute(conn)
+            Activity::get(act_id, person, conn)?.register(Some(0), person, conn)?;
+            Ok(diesel::delete(activities.filter(id.eq(act_id))).execute(conn)?)
         })
     }
 
-    fn create(act: NewActivity, user: &Person, conn: &AppConn) -> diesel::result::QueryResult<Activity> {
+    fn create(act: NewActivity, user: &Person, conn: &AppConn) -> TbResult<Activity> {
         if act.user_id != user.get_id() && !user.is_admin() {
-            return Err(diesel::result::Error::NotFound); // Replace with own NotAuthorized
+            return Err(MyError::NotAuth(format!("user {} cannot create for user {}", user.get_id(), act.user_id)));
         }
         conn.transaction(|| {
             let mut new: Activity = diesel::insert_into(activities::table)
@@ -138,9 +139,9 @@ impl Activity {
         }
     }
 
-    fn register (& mut self, gear: Option<i32>, user: &Person, conn: &AppConn) -> QueryResult<part::Assembly> {
+    fn register (& mut self, gear: Option<i32>, user: &Person, conn: &AppConn) -> TbResult<part::Assembly> {
         if self.gear == None && gear == None {
-            return Err(diesel::NotFound);
+            return Err(MyError::AnyErr("trying to register to nothing...".to_string()));
         } 
 
         // unwarp_or_else evaluates lazily, contrary to unwrap_or!
@@ -166,7 +167,7 @@ impl Activity {
         })
     }
 
-    fn scan (gear_id: i32, user: &Person, conn: &AppConn) -> QueryResult<part::Assembly> {
+    fn scan (gear_id: i32, user: &Person, conn: &AppConn) -> TbResult<part::Assembly> {
         use crate::schema::activities::dsl::*;
 
         conn.transaction(|| {
@@ -176,7 +177,7 @@ impl Activity {
 
             acts.iter_mut()
                 .map (|a| a.register(Some(gear_id), user, conn))
-                .last().unwrap_or(Err(diesel::NotFound))
+                .last().unwrap_or(Err(MyError::AnyErr("".to_string())))
         })
     }
 }
@@ -187,15 +188,15 @@ fn types(_user: User, conn: AppDbConn) -> Json<Vec<ActivityType>> {
 }
 
 #[get("/<id>")]
-fn get (id: i32, user: User, conn: AppDbConn) -> DbResult<Json<Activity>> {
-    DbResult(Activity::get(id, &user, &conn).map(|x| Json(x)))
+fn get (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Activity>> {
+    Activity::get(id, &user, &conn).map(|x| Json(x))
 }
 
 use rocket::response::status;
 
 #[put("/", data="<activity>")]
 fn put (activity: Json<NewActivity>, user: User, conn: AppDbConn) 
-            -> diesel::result::QueryResult<status::Created<Json<Activity>>> {
+            -> TbResult<status::Created<Json<Activity>>> {
 
     let activity = Activity::create(activity.0, &user, &conn)?;
     let url = uri! (get: activity.id);
@@ -203,24 +204,24 @@ fn put (activity: Json<NewActivity>, user: User, conn: AppDbConn)
 }
 
 #[delete("/<id>")]
-fn delete (id: i32, user: User, conn: AppDbConn) -> DbResult<Json<usize>> {
-    DbResult (Activity::delete(id, &user, &conn).map(|x| Json(x)))
+fn delete (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<usize>> {
+    Activity::delete(id, &user, &conn).map(|x| Json(x))
 }
 
 #[patch("/<id>?<gear>")]
-fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> DbResult<Json<part::Assembly>> {
+fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> TbResult<Json<part::Assembly>> {
     info! ("register act {} to gear {:?}", id, gear);
     
     Activity::get(id, &user, &conn)
         .map_or_else(
-            |err| DbResult(Err(err)),
-            |mut act| DbResult (act.register(gear, &user, &conn).map(|x| Json(x)))
+            |err| Err(err),
+            |mut act| act.register(gear, &user, &conn).map(|x| Json(x))
         )
 }
 
 #[patch("/scan/<gear>")]
-fn scan (gear: i32, user: User, conn: AppDbConn) -> DbResult<Json<part::Assembly>> {
-    DbResult (Activity::scan(gear, &user, &conn).map(|x| Json(x)))
+fn scan (gear: i32, user: User, conn: AppDbConn) -> TbResult<Json<part::Assembly>> {
+    Activity::scan(gear, &user, &conn).map(|x| Json(x))
 }
 
 pub fn routes () -> Vec<rocket::Route> {

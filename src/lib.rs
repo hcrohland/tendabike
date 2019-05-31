@@ -122,31 +122,65 @@ impl Usage {
     }
 }
 
-// enum Error {
-//     DbError(diesel::result::Error),
-//     NotAuth (String),
-//     NotFound (String),
-//     AnyErr,
-// }
+mod error {
+    use std::fmt;
+    use std::error;
 
+    #[derive(Debug)]
+    pub enum MyError {
+        DbError (diesel::result::Error),
+        NotAuth (String),
+        NotFound (String),
+        AnyErr (String),
+    }
 
-use rocket::request::Request;
-use rocket::response::{self, Responder};
+    impl fmt::Display for MyError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self {
+                MyError::NotAuth(x)     => write!(f, "Not authorized {}", x),
+                MyError::NotFound(x)    => write!(f, "Could not find object: {}", x),
+                MyError::AnyErr(x)      => write!(f, "Internal error detected: {}", x),
+                MyError::DbError(ref e) => e.fmt(f),
+            }
+        }
+    }
 
-#[derive(Debug)]
-struct DbResult<T> (diesel::result::QueryResult<T>);
+    impl error::Error for MyError {
+        fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+            match *self {
+                MyError::DbError(ref e) => Some(e),
+                _ => None,
+            }
+        }
+    }
 
-/// If `self` is Err(NotFound), respond with None to generate a 404 response
-/// otherwise responds with the wrapped `Responder`.  
-impl<'r, R: Responder<'r>> Responder<'r> for DbResult<R> 
-    where R: std::fmt::Debug
-{
-    fn respond_to(self, req: &Request) -> response::Result<'r> {
-        let res = match self.0 {
-            Err(diesel::result::Error::NotFound) => None,
-            _ => Some(self.0),
-        };
-        res.respond_to(req)
+    impl std::convert::From<diesel::result::Error> for MyError {
+        fn from(err: diesel::result::Error) -> MyError {
+            MyError::DbError(err)
+        }
+    }
+
+    use rocket::http::Status;
+    use rocket::response::{Response, Responder};
+    use rocket::request::Request;
+    use diesel::result::Error as DieselError;
+
+    impl<'r> Responder<'r> for MyError {
+        fn respond_to(self, _: &Request) -> Result<Response<'r>, Status> {
+            match self {
+                MyError::DbError(error) => {
+                    match error  {
+                        DieselError::NotFound => Err(Status::NotFound),
+                        _ => Err(Status::InternalServerError)
+                    }
+                },
+                MyError::NotFound(_) => Err(Status::NotFound),
+                MyError::NotAuth(_)  => Err(Status::Unauthorized),
+                _ => Err(Status::InternalServerError),
+            }
+        }
     }
 }
+
+pub type TbResult<T> = Result<T, error::MyError>;
 
