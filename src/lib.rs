@@ -131,6 +131,7 @@ mod error {
         DbError (diesel::result::Error),
         NotAuth (String),
         NotFound (String),
+        Forbidden (String),
         AnyErr (String),
     }
 
@@ -138,6 +139,7 @@ mod error {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             match self {
                 MyError::NotAuth(x)     => write!(f, "Not authorized {}", x),
+                MyError::Forbidden(x)   => write!(f, "Forbiddenrequest: {}", x),
                 MyError::NotFound(x)    => write!(f, "Could not find object: {}", x),
                 MyError::AnyErr(x)      => write!(f, "Internal error detected: {}", x),
                 MyError::DbError(ref e) => e.fmt(f),
@@ -176,6 +178,7 @@ mod error {
                 },
                 MyError::NotFound(_) => Err(Status::NotFound),
                 MyError::NotAuth(_)  => Err(Status::Unauthorized),
+                MyError::Forbidden(_) => Err(Status::Forbidden),
                 _ => Err(Status::InternalServerError),
             }
         }

@@ -99,7 +99,7 @@ impl Activity {
     fn get(id: i32, person: &Person, conn: &AppConn) -> TbResult<Activity> {
         let act = activities::table.find(id).first::<Activity>(conn)?;
         if act.user_id != person.get_id() && !person.is_admin() {
-                return Err(MyError::NotAuth(format!("User {} cannot access activity {}", person.get_id(), id)));
+                return Err(MyError::Forbidden(format!("User {} cannot access activity {}", person.get_id(), id)));
         }
         Ok(act)
     }
@@ -114,7 +114,7 @@ impl Activity {
 
     fn create(act: NewActivity, user: &Person, conn: &AppConn) -> TbResult<Activity> {
         if act.user_id != user.get_id() && !user.is_admin() {
-            return Err(MyError::NotAuth(format!("user {} cannot create for user {}", user.get_id(), act.user_id)));
+            return Err(MyError::Forbidden(format!("user {} cannot create for user {}", user.get_id(), act.user_id)));
         }
         conn.transaction(|| {
             let mut new: Activity = diesel::insert_into(activities::table)
