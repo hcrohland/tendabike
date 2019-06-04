@@ -16,6 +16,8 @@ serde_json = "1.0.39"
 
 chrono = { version = "0.4.6", features = ["serde"] }
 
+pretty_assertions = "0.6.1"
+
 [dependencies.rocket_contrib]
 version = "0.4.1"
 default-features = false

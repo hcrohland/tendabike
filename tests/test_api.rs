@@ -11,6 +11,8 @@
             de::Deserialize,
             ser::Serialize
         };
+
+    use pretty_assertions::{assert_eq, assert_ne};
     
     fn reqjson<'c, 'u, T, B, U> (client: &'c Client, method: Method, uri: U, body: B, status: Status) -> T 
         where   for<'a> T: Deserialize<'a>, 
