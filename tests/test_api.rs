@@ -1,5 +1,5 @@
     
-    
+    use part::Assembly;
     use rocket::local::*;
     use rocket::http::{Header, Status, Method, ContentType};
     use chrono::Utc;
@@ -64,7 +64,7 @@
         assert_eq!(part.name.to_string(), "Bronson");
 
         let ass: Assembly = getjson (&client, format!("/part/{}?assembly", myparts[1].id));
-        assert_eq!(ass.part.name.to_string(), "Slide");
+        assert_eq!(ass.get(&myparts[1].id).unwrap().name.to_string(), "Slide");
     }
 
     use tendabike::activity::*;
@@ -92,23 +92,25 @@
     fn reassign_activities () {
         let client = Client::new(crate::ignite_rocket()).expect("valid rocket instance");
 
+        // get the activity
         let act: Activity = getjson(&client, "/activ/9");
-        let ass1: Assembly = patchjson(&client, "/activ/9?gear=0");
+        // Deregister Activitiy from any gear
+        patchjson::<Assembly,_>(&client, "/activ/9?gear=");
+        let ass: Assembly = getjson(&client, "/part/1?assembly");
+        let part0 = ass.get(&1).unwrap();
+        // Now register it to gear 1
+        let ass: Assembly = patchjson(&client, "/activ/9?gear=1");
+        // gear 1 has to be in the result. Get it!
+        let part1 = ass.get(&1).unwrap();
+        // Make sure you get a NotFound wen trying to register to a non-existing gear
         let response = client.patch("/activ/9?gear=-1").header(Header::new("x-user-id", "2")).dispatch();
         assert_eq!(response.status(), Status::NotFound);
-        let ass4: Assembly = getjson(&client, format!("/part/{}?assembly", ass1.part.id));
-        assert_eq!(ass1, ass4);
-        let ass2: Assembly = patchjson(&client, "/activ/9");
-        let ass3: Assembly = patchjson(&client, format!("/activ/9?gear={}",ass2.part.id));
-
-        assert_eq!(ass2, ass3);
-        assert_eq!(ass1.part.count + 1, ass2.part.count);
-        assert_eq!(ass1.part.time + act.time.unwrap_or(0), ass2.part.time);
-
-        let response = client.patch("/activ/9?gear=-1").header(Header::new("x-user-id", "2")).dispatch();
-        assert_eq!(response.status(), Status::NotFound);
-        let ass4: Assembly = getjson(&client, format!("/part/{}?assembly", ass2.part.id));
-        assert_eq!(ass2, ass4);
+        // Make sure that the patch result matches the stored assembly
+        let ass: Assembly = getjson(&client, format!("/part/{}?assembly", part1.id));
+        let part2 = ass.get(&1).unwrap();
+        assert_eq!(part1, part2);
+        assert_eq!(part0.count + 1, part1.count);
+        assert_eq!(part0.time + act.time.unwrap_or(0), part1.time);
     } 
     
     fn post_and_delete_activity () {

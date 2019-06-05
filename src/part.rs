@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::{
     Utc,
     DateTime,
@@ -34,7 +36,9 @@ pub struct PartTypes {
 }
 
 /// The database's representation of a part. 
-#[derive(Clone, Debug, Serialize, Deserialize, Queryable, Identifiable, Associations, AsChangeset, PartialEq)]
+#[derive(Clone, Debug, PartialEq, 
+        Serialize, Deserialize, 
+        Queryable, Identifiable, Associations, AsChangeset)]
 #[primary_key(id)]
 #[table_name = "parts"]
 #[belongs_to(PartTypes, foreign_key = "what")]
@@ -89,11 +93,8 @@ pub struct UpdatePart {
 }
 */
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub struct Assembly {
-    pub part: Part,
-    pub subs: Box<[Assembly]>,
-}
+//#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub type Assembly = HashMap<i32, Part>;
 
 impl Part {
     fn types (conn: &AppConn) -> Vec<PartTypes> {
@@ -104,7 +105,7 @@ impl Part {
         Ok(parts::table.find(part).first(conn)?)
     }
 
-    fn part_by_user (user: &Person, main: bool, conn: &AppConn) -> TbResult<Vec<Part>>{
+    fn parts_by_user (user: &Person, main: bool, conn: &AppConn) -> TbResult<Vec<Part>>{
         use crate::schema::parts::dsl::*;
 
         let types = part_types::table
@@ -118,27 +119,14 @@ impl Part {
             .load::<Part>(conn)?)
     }
 
-    fn traverse (self, usage: &Usage, conn: &AppConn) -> TbResult<Assembly> {
-        let subs = Part::belonging_to(&self)
-                .order_by(parts::id)  // need this for stable test results
-                .load::<Part>(conn)?
-                .into_iter().map(|x| x.traverse(usage, conn))
-                .collect::<TbResult<Vec<_>>>()
-                .map (|x| x.into_boxed_slice())?;
-        let part = self.apply(usage, conn)?;
+   fn _parts_by_part (&self, conn: &AppConn) -> TbResult<HashMap<i32, Part>>{
+        use crate::schema::parts::dsl::*;
 
-        Ok (Assembly {
-            subs,
-            part,
-        })
+        Ok(Part::belonging_to(self).order_by(id)
+            .load::<Part>(conn)?.into_iter().map(|x| {(x.id, x)}).collect())
     }
 
-    pub fn utilize (usage: Usage, id: i32, user: &Person, conn: &AppConn) -> TbResult<Assembly> {
-        Part::get(id, user, conn)?
-                .traverse (&usage, conn)
-    }
-
-    fn apply (mut self, usage: &Usage, conn: &AppConn) -> TbResult<Part> {
+   fn apply (mut self, usage: &Usage, conn: &AppConn) -> TbResult<Part> {
         if let Some(func) = usage.op {
             info!("Applying usage to part {}", self.id);
 
@@ -153,7 +141,23 @@ impl Part {
             Ok(self)
         }
     }
- }
+
+    fn traverse (self, map: & mut HashMap<i32, Part>, usage: &Usage, conn: &AppConn) -> TbResult<()> {
+        Part::belonging_to(&self)
+                .order_by(parts::id)  // need this for stable test results
+                .load::<Part>(conn)?
+                .into_iter().map(|x| x.traverse(map, usage, conn))
+                .for_each(drop);
+
+        map.insert(self.id, self.apply(usage, conn)?);
+        Ok(())
+    }
+
+    pub fn utilize (map: & mut HashMap<i32, Part>, usage: Usage, part_id: i32, user: &Person, conn: &AppConn) -> TbResult<()> {
+        Part::get(part_id, user, conn)?
+                .traverse (map, &usage, conn)
+    }
+}
 
 #[get("/types")]
 fn types(_user: User, conn: AppDbConn) -> Json<Vec<PartTypes>> {
@@ -167,17 +171,21 @@ fn get (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Part>> {
 
 #[get("/<part>?assembly")]
 fn get_assembly (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
-    Part::utilize(Usage::none(), part, &user, &conn).map(|x| Json(x))
+    let mut map = HashMap::new();
+
+    Part::utilize(&mut map, Usage::none(), part, &user, &conn)?;
+    
+    Ok(Json(map))
 }
 
 #[get("/mygear")]
 fn mygear(user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {    
-    Part::part_by_user(&user, true, &conn).map(|x| Json(x))
+    Part::parts_by_user(&user, true, &conn).map(|x| Json(x))
 }
 
 #[get("/myspares")]
 fn myspares(user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {    
-    Part::part_by_user(&user, false, &conn).map(|x| Json(x))
+    Part::parts_by_user(&user, false, &conn).map(|x| Json(x))
 }
 
 pub fn routes () -> Vec<rocket::Route> {

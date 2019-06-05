@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::{
     Utc,
     DateTime,
@@ -35,6 +37,7 @@ pub struct ActivityType {
 
 /// The database's representation of an activity.
 #[derive(Debug, Clone, Identifiable, Queryable, AsChangeset, PartialEq, Serialize, Deserialize)]
+#[changeset_options(treat_none_as_null="true")]
 #[table_name = "activities"]
 pub struct Activity {
     /// The primary key
@@ -61,7 +64,6 @@ pub struct Activity {
     pub power: Option<i32>,
     /// Which gear did she use?
     pub gear: Option<i32>,
-    registered: bool,
 }
 
 #[derive(Debug, Clone, Insertable, AsChangeset, PartialEq, Serialize, Deserialize)]
@@ -136,6 +138,8 @@ impl Activity {
            return Err(MyError::Forbidden(format!("user {} cannot update for user {}", user.get_id(), act.user_id)));
         }
         conn.transaction(|| {
+            let mut old = Activity::get(act_id, user, conn)?;
+            old.register(None, user, conn)?;
             let mut new: Activity = diesel::update(activities::table)
                 .filter(activities::id.eq(act_id))
                 .set(&act)
@@ -159,48 +163,34 @@ impl Activity {
         }
     }
 
-    fn register (& mut self, gear: Option<i32>, user: &Person, conn: &AppConn) -> TbResult<part::Assembly> {
-        if self.gear == None && gear == None {
-            return Err(MyError::AnyErr("trying to register to nothing...".to_string()));
-        } 
-
-        // unwrap_or_else evaluates lazily, contrary to unwrap_or!
-        let new_gear = gear.unwrap_or_else(|| self.gear.unwrap());
-
+    fn register (& mut self, gear: Option<i32>, user: &Person, conn: &AppConn) -> TbResult<HashMap<i32, part::Part>> {
         conn.transaction(|| {
-            if self.registered == true {
+            let mut hash = HashMap::new();
+
+            if self.gear == gear {
+                return Ok(hash)
+            }
+
+            if self.gear.is_some() {
                 let gear = self.gear.unwrap();
+                self.gear = None;
                 info!("de-registering activity {} from gear {}", self.id, gear);
-                let part = part::Part::utilize(self.usage(std::ops::SubAssign::sub_assign), gear, user, conn)?;
-                self.registered = false;
-                if new_gear == 0 {
-                    self.save_changes::<Activity>(conn)?;
-                    return Ok(part);
-                }
+                self.save_changes::<Activity>(conn)?;
+                part::Part::utilize(&mut hash, self.usage(std::ops::SubAssign::sub_assign), gear, user, conn)?;
             } 
             
-            info!("registering activity {} to gear {}", self.id, new_gear);
-            self.registered = true;
-            self.gear = Some(new_gear);
-            self.save_changes::<Activity>(conn)?;
-            part::Part::utilize(self.usage(std::ops::AddAssign::add_assign), new_gear, user, conn)
-        })
-    }
-
-    fn scan (gear_id: i32, user: &Person, conn: &AppConn) -> TbResult<part::Assembly> {
-        use crate::schema::activities::dsl::*;
-
-        conn.transaction(|| {
-            let mut acts = activities
-                .filter(registered.eq(false)).filter(gear.eq(gear_id))
-                .load::<Activity>(conn)?;
-
-            acts.iter_mut()
-                .map (|a| a.register(Some(gear_id), user, conn))
-                .last().unwrap_or(Err(MyError::AnyErr("".to_string())))
+            if gear.is_some() {
+                let new_gear = gear.unwrap();
+                info!("registering activity {} to gear {}", self.id, new_gear);
+                self.gear = gear;
+                self.save_changes::<Activity>(conn)?;
+                part::Part::utilize(&mut hash, self.usage(std::ops::AddAssign::add_assign), new_gear, user, conn)?;
+            }
+            Ok(hash)
         })
     }
 }
+
 
 #[get("/types")]
 fn types(_user: User, conn: AppDbConn) -> Json<Vec<ActivityType>> {
@@ -234,7 +224,7 @@ fn delete (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Activity>> {
 }
 
 #[patch("/<id>?<gear>")]
-fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> TbResult<Json<part::Assembly>> {
+fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> TbResult<Json<HashMap<i32, part::Part>>> {
     info! ("register act {} to gear {:?}", id, gear);
     
     Activity::get(id, &user, &conn)
@@ -244,11 +234,6 @@ fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> TbResul
         )
 }
 
-#[patch("/scan/<gear>")]
-fn scan (gear: i32, user: User, conn: AppDbConn) -> TbResult<Json<part::Assembly>> {
-    Activity::scan(gear, &user, &conn).map(|x| Json(x))
-}
-
 pub fn routes () -> Vec<rocket::Route> {
-    routes![types, get, register, scan, put, delete,post,]
+    routes![types, get, register, put, delete, post,]
 }

@@ -12,7 +12,6 @@ table! {
         descend -> Nullable<Int4>,
         power -> Nullable<Int4>,
         gear -> Nullable<Int4>,
-        registered -> Bool,
     }
 }
 
