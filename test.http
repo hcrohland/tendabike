@@ -27,10 +27,13 @@ x-user-id: 2
 PATCH  {{host}}/activ/scan/14 
 x-user-id: 2
 ###
-DELETE   {{host}}/activ/343
+GET    {{host}}/activ/362
 x-user-id: 2
 ###
-PUT {{host}}/activ
+DELETE {{host}}/activ/375
+x-user-id: 2
+###
+POST {{host}}/activ
 x-user-id: 2
 
 {
@@ -42,7 +45,30 @@ x-user-id: 2
   "time": 3331,
   "distance": 18032,
   "climb": 52,
-  "descend": null,
+  "descend": 2000,
   "power": 154,
   "gear": 1
 }
+###
+Put {{host}}/activ/376
+x-user-id: 2
+
+{
+  "id": 373,
+  "user_id": 2,
+  "what": 1,
+  "name": "Fahrt am Morgen",
+  "start": "2019-04-24T08:55:12Z",
+  "duration": 4868,
+  "time": 3331,
+  "distance": 18032,
+  "climb": 52,
+  "descend": 1000,
+  "power": 154,
+  "gear": 1
+}
+
+###
+
+PATCH {{host}}/activ/all/1
+x-user-id: 2

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+//use std::collections::HashMap;
 
 use chrono::{
     Utc,
@@ -19,6 +19,8 @@ use diesel::{
     QueryDsl,
     RunQueryDsl,
 };
+
+use part::Assembly;
 
 
 /// The list of activity types
@@ -107,47 +109,50 @@ impl Activity {
         Ok(act)
     }
 
-    fn delete(act_id: i32, person: &Person, conn: &AppConn) -> TbResult<Activity> {
+    fn delete(act_id: i32, person: &Person, conn: &AppConn) -> TbResult<Assembly> {
         use crate::schema::activities::dsl::*;
         conn.transaction(|| {
             let mut act = Activity::get(act_id, person, conn)?;
-            if act.gear != None {
-                act.register(None, person, conn)?;
-            }
-            Ok(diesel::delete(activities.filter(id.eq(act_id))).get_result(conn)?)
+            let res = act.register(None, person, conn)?;
+            diesel::delete(activities.filter(id.eq(act_id))).execute(conn)?;
+            Ok (res)
         })
     }
 
-    fn create(act: NewActivity, user: &Person, conn: &AppConn) -> TbResult<Activity> {
+    fn create(act: NewActivity, user: &Person, conn: &AppConn) -> TbResult<(Activity, Assembly)> {
         if act.user_id != user.get_id() && !user.is_admin() {
             return Err(MyError::Forbidden(format!("user {} cannot create for user {}", user.get_id(), act.user_id)));
         }
         conn.transaction(|| {
-            let mut new: Activity = diesel::insert_into(activities::table)
+            let new: Activity = diesel::insert_into(activities::table)
                 .values(&act)
                 .get_result(conn)?;
-            if new.gear.is_some()  {
-                new.register(None, user, conn)?; 
+            let mut res = Assembly::new();
+            if let Some(gear) = new.gear {
+                part::Part::utilize(&mut res, new.usage(std::ops::AddAssign::add_assign), gear, user, conn)?;
             }
-            Ok(new)
+            Ok((new, res))
         })
     }
 
-    fn update (act_id: i32, act: NewActivity, user: &Person, conn: &AppConn) -> TbResult<Activity> {
-        if act.user_id != user.get_id() && !user.is_admin() {
-           return Err(MyError::Forbidden(format!("user {} cannot update for user {}", user.get_id(), act.user_id)));
-        }
+    fn update (act_id: i32, act: NewActivity, user: &Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction(|| {
-            let mut old = Activity::get(act_id, user, conn)?;
-            old.register(None, user, conn)?;
-            let mut new: Activity = diesel::update(activities::table)
+            let mut hash = Assembly::new();
+
+            let old = Activity::get(act_id, user, conn)?;
+            if let Some(gear) = old.gear {
+                part::Part::utilize(&mut hash, old.usage(std::ops::SubAssign::sub_assign), gear, user, conn)?;
+            }
+
+            let new: Activity = diesel::update(activities::table)
                 .filter(activities::id.eq(act_id))
                 .set(&act)
                 .get_result(conn)?;
-            if new.gear.is_some()  {
-                new.register(None, user, conn)?; 
+            if let Some(gear) = new.gear {
+                part::Part::utilize(&mut hash, new.usage(std::ops::AddAssign::add_assign), gear, user, conn)?;
             }
-            Ok(new)
+            
+            Ok(hash)
         })
     }
 
@@ -159,35 +164,42 @@ impl Activity {
             distance: self.distance.unwrap_or(0),
             climb: self.climb.unwrap_or(0),
             descend: self.descend.unwrap_or(self.climb.unwrap_or(0)),
-            power: self.power.unwrap_or(0),            
+            power: self.power.unwrap_or(0),  
+            count: 1,          
         }
     }
 
-    fn register (& mut self, gear: Option<i32>, user: &Person, conn: &AppConn) -> TbResult<HashMap<i32, part::Part>> {
+    fn register (& mut self, gear: Option<i32>, user: &Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction(|| {
-            let mut hash = HashMap::new();
+            let mut hash = Assembly::new();
 
             if self.gear == gear {
                 return Ok(hash)
             }
 
-            if self.gear.is_some() {
-                let gear = self.gear.unwrap();
-                self.gear = None;
+            if let Some(gear) = self.gear {
                 info!("de-registering activity {} from gear {}", self.id, gear);
-                self.save_changes::<Activity>(conn)?;
+                self.gear = None;
                 part::Part::utilize(&mut hash, self.usage(std::ops::SubAssign::sub_assign), gear, user, conn)?;
             } 
-            
-            if gear.is_some() {
-                let new_gear = gear.unwrap();
+            if let Some(new_gear) = gear {
                 info!("registering activity {} to gear {}", self.id, new_gear);
                 self.gear = gear;
-                self.save_changes::<Activity>(conn)?;
                 part::Part::utilize(&mut hash, self.usage(std::ops::AddAssign::add_assign), new_gear, user, conn)?;
             }
+            
+            self.save_changes::<Activity>(conn)?;
             Ok(hash)
         })
+    }
+
+    fn rescan (part: i32, ass: &mut Assembly, user: &Person, conn: &AppConn) -> TbResult<()> {
+        let activities = activities::table.filter(activities::gear.eq(part)).load::<Activity>(conn)?;
+
+        for act in activities {
+            part::Part::utilize(ass, act.usage(std::ops::AddAssign::add_assign), part, user, conn)?
+        }
+        Ok(())
     }
 }
 
@@ -206,25 +218,25 @@ use rocket::response::status;
 
 #[post("/", data="<activity>")]
 fn post (activity: Json<NewActivity>, user: User, conn: AppDbConn) 
-            -> TbResult<status::Created<Json<Activity>>> {
+            -> TbResult<status::Created<Json<(Activity, Assembly)>>> {
 
-    let activity = Activity::create(activity.0, &user, &conn)?;
+    let (activity, assembly) = Activity::create(activity.0, &user, &conn)?;
     let url = uri! (get: activity.id);
-    Ok (status::Created(url.to_string(), Some(Json(activity))))
+    Ok (status::Created(url.to_string(), Some(Json((activity, assembly)))))
 }
 
 #[put("/<id>", data="<activity>")]
-fn put (id: i32, activity: Json<NewActivity>, user: User, conn: AppDbConn) -> TbResult<Json<Activity>> {
+fn put (id: i32, activity: Json<NewActivity>, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
     Activity::update(id, activity.0, &user, &conn).map(|x| Json(x))
 }
 
 #[delete("/<id>")]
-fn delete (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Activity>> {
+fn delete (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
     Activity::delete(id, &user, &conn).map(|x| Json(x))
 }
 
 #[patch("/<id>?<gear>")]
-fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> TbResult<Json<HashMap<i32, part::Part>>> {
+fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
     info! ("register act {} to gear {:?}", id, gear);
     
     Activity::get(id, &user, &conn)
@@ -234,6 +246,16 @@ fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> TbResul
         )
 }
 
+#[patch("/all/<part>")]
+fn rescan (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
+    let mut map = Assembly::new();
+
+    part::Part::utilize(&mut map, Usage::reset(), part, &user, &conn)?;
+    Activity::rescan(part, &mut map, &user, &conn)?;
+    
+    Ok(Json(map))
+}
+
 pub fn routes () -> Vec<rocket::Route> {
-    routes![types, get, register, put, delete, post,]
+    routes![types, get, register, put, delete, post, rescan]
 }

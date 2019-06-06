@@ -106,6 +106,8 @@ pub struct Usage {
 	pub descend: i32,
     /// Overall descending
 	pub power: i32,
+    /// number of activities
+    pub count: i32,
 }
 
 impl Usage {
@@ -118,8 +120,17 @@ impl Usage {
             descend: 0,
             power: 0,
             distance: 0,
+            count: 0,
         }
     }
+
+    pub fn reset() -> Usage {
+        let mut usage = Usage::none();
+        usage.op = Some(std::ops::MulAssign::mul_assign); // Didn't find a pure Assign
+        usage.start = chrono::MIN_DATE.and_hms(0,0,0);
+        usage
+    }
+
 }
 
 mod error {

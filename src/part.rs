@@ -61,13 +61,13 @@ pub struct Part {
     /// usage time
    	pub time: i32,
     /// Usage distance
-	distance: i32,
+	pub distance: i32,
 	/// Overall climbing
-    climb: i32,
+    pub climb: i32,
     /// Overall descending
-	descend: i32,
+	pub descend: i32,
     /// Is the part attached to an assembly?
-    attached_to: Option<i32>,
+    pub attached_to: Option<i32>,
     /// usage count
     pub count: i32,
 }
@@ -95,6 +95,16 @@ pub struct UpdatePart {
 
 //#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub type Assembly = HashMap<i32, Part>;
+
+pub trait ATrait {
+    fn part (&self, part: i32) -> Option<&Part>;
+}
+
+impl ATrait for Assembly {
+    fn part (&self, part: i32) -> Option<&Part> {
+        self.get(&part)
+    }
+}
 
 impl Part {
     fn types (conn: &AppConn) -> Vec<PartTypes> {
@@ -134,7 +144,7 @@ impl Part {
             func(& mut self.distance, usage.distance);
             func(& mut self.climb, usage.climb);
             func(& mut self.descend, usage.descend);
-            func(& mut self.count, 1);
+            func(& mut self.count, usage.count);
 
             Ok(self.save_changes::<Part>(conn)?)
         } else {
