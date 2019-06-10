@@ -47,7 +47,7 @@ pub struct Activity {
     /// The athlete
     pub user_id: i32,
     /// The activity type
-    pub what: Option<i32>,
+    pub what: i32,
     /// This name of the activity.
     pub name: String,
     /// Start time
@@ -119,6 +119,27 @@ impl Activity {
         })
     }
 
+    fn check_geartype(&self, ass: Assembly, conn: &AppConn) -> TbResult<Assembly> {
+        use crate::schema::activity_types::dsl::*;
+        let actt = dbg!(activity_types.find(self.what).first::<ActivityType>(conn))?;
+        let gear_id = match self.gear {
+            Some(x) => x,
+            None => return Ok(ass)
+        };
+        let mygear = match ass.get(&gear_id) {
+            Some (x) => x,
+            None => return Err(MyError::AnyErr("Main gear not found in assembly".to_string()))
+        };
+
+        if mygear.what == actt.gear {
+            Ok(ass)
+        } else {
+            Err(MyError::BadRequest(
+                    format!("Gear type {} cannot be used for activity type {}", 
+                                mygear.what, self.what)))
+        }   
+    }
+
     fn create(act: NewActivity, user: &Person, conn: &AppConn) -> TbResult<(Activity, Assembly)> {
         if act.user_id != user.get_id() && !user.is_admin() {
             return Err(MyError::Forbidden(format!("user {} cannot create for user {}", user.get_id(), act.user_id)));
@@ -131,6 +152,7 @@ impl Activity {
             if let Some(gear) = new.gear {
                 part::Part::utilize(&mut res, new.usage(std::ops::AddAssign::add_assign), gear, user, conn)?;
             }
+            let res = new.check_geartype(res, conn)?;
             Ok((new, res))
         })
     }
@@ -152,7 +174,7 @@ impl Activity {
                 part::Part::utilize(&mut hash, new.usage(std::ops::AddAssign::add_assign), gear, user, conn)?;
             }
             
-            Ok(hash)
+            new.check_geartype(hash, conn)
         })
     }
 
@@ -189,7 +211,7 @@ impl Activity {
             }
             
             self.save_changes::<Activity>(conn)?;
-            Ok(hash)
+            self.check_geartype(hash, conn)
         })
     }
 

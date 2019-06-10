@@ -38,7 +38,7 @@ x-user-id: 2
 
 {
   "user_id": 2,
-  "what": 1,
+  "what": 2,
   "name": "Fahrt am Morgen",
   "start": "2019-04-24T08:55:12Z",
   "duration": 4868,
@@ -65,7 +65,7 @@ x-user-id: 2
   "climb": 52,
   "descend": 1000,
   "power": 154,
-  "gear": 1
+  "gear": 3
 }
 
 ###

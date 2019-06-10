@@ -13,7 +13,7 @@
             ser::Serialize
         };
 
-    use pretty_assertions::{assert_eq, assert_ne};
+    use pretty_assertions::assert_eq;
     
     fn reqjson<'c, 'u, T, B, U> (client: &'c Client, method: Method, uri: U, body: B, status: Status) -> T 
         where   for<'a> T: Deserialize<'a>, 
@@ -117,11 +117,11 @@
     fn post_and_delete_activity () {
         let client = Client::new(crate::ignite_rocket()).expect("valid rocket instance");
 
-        let act = NewActivity {
+        let mut act = NewActivity {
             user_id: 2,
             name:   String::from("test activity"),
-            what:   1,
-            gear:   Some(1),
+            what:   99,
+            gear:   Some(2),
             start:  Utc::now(),
             duration: 70,
             time:   Some(60),
@@ -131,11 +131,32 @@
             power: None,
         };
 
+       let response = client.req(Method::Post, "/activ/")
+            .header(Header::new("x-user-id", "2"))
+            .header(ContentType::JSON)
+            .body(serde_json::to_string(&act).unwrap())
+            .dispatch();
+        assert_eq!(response.status(), Status::BadRequest); 
+
+        act.what = 1;
+        act.gear = Some(2);        
+        let response = client.req(Method::Post, "/activ/")
+            .header(Header::new("x-user-id", "2"))
+            .header(ContentType::JSON)
+            .body(serde_json::to_string(&act).unwrap())
+            .dispatch();
+        assert_eq!(response.status(), Status::BadRequest);
+
+        act.gear = None;
         let  (mut act_new, ass): (Activity, Assembly) = reqjson(&client, Method::Post, "/activ/", &act, Status::Created);
-        assert_ne!(act_new.id, 0);
+        assert!(act_new.id != 0);
         assert_eq!(act_new.start, act.start);
+        assert!(ass.is_empty());
+        
+        act_new.gear = Some(1);
+        let ass: Assembly = reqjson(&client, Method::Put, format!("/activ/{}", act_new.id), &act_new, Status::Ok); //Should use response header?    
         let part1 = ass.part(1).unwrap();
-     
+
         act_new.descend = Some(555);
         let ass: Assembly = reqjson(&client, Method::Put, format!("/activ/{}", act_new.id), &act_new, Status::Ok); //Should use response header?
         let part2 = ass.part(1).unwrap();

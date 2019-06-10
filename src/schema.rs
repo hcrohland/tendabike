@@ -2,7 +2,7 @@ table! {
     activities (id) {
         id -> Int4,
         user_id -> Int4,
-        what -> Nullable<Int4>,
+        what -> Int4,
         name -> Text,
         start -> Timestamptz,
         duration -> Int4,
