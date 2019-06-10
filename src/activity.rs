@@ -102,7 +102,7 @@ impl Activity {
     }
 
     fn get(id: i32, person: &Person, conn: &AppConn) -> TbResult<Activity> {
-        let act = activities::table.find(id).first::<Activity>(conn)?;
+        let act = activities::table.find(id).for_update().first::<Activity>(conn)?;
         if act.user_id != person.get_id() && !person.is_admin() {
                 return Err(MyError::Forbidden(format!("User {} cannot access activity {}", person.get_id(), id)));
         }
@@ -218,12 +218,14 @@ impl Activity {
     }
 
     fn rescan (part: i32, ass: &mut Assembly, user: &Person, conn: &AppConn) -> TbResult<()> {
-        let activities = activities::table.filter(activities::gear.eq(part)).load::<Activity>(conn)?;
+        conn.transaction(|| {
+            let activities = activities::table.filter(activities::gear.eq(part)).for_update().load::<Activity>(conn)?;
 
-        for act in activities {
-            part::Part::utilize(ass, act.usage(std::ops::AddAssign::add_assign), part, user, conn)?
-        }
-        Ok(())
+            for act in activities {
+                part::Part::utilize(ass, act.usage(std::ops::AddAssign::add_assign), part, user, conn)?
+            }
+            Ok(())
+        })
     }
 }
 
@@ -262,22 +264,24 @@ fn delete (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
 #[patch("/<id>?<gear>")]
 fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
     info! ("register act {} to gear {:?}", id, gear);
-    
-    Activity::get(id, &user, &conn)
-        .map_or_else(
-            |err| Err(err),
-            |mut act| act.register(gear, &user, &conn).map(|x| Json(x))
-        )
+    conn.transaction(|| {
+        Activity::get(id, &user, &conn)
+            .map_or_else(
+                |err| Err(err),
+                |mut act| act.register(gear, &user, &conn).map(|x| Json(x))
+            )
+    })
 }
 
 #[patch("/all/<part>")]
 fn rescan (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
     let mut map = Assembly::new();
-
-    part::Part::utilize(&mut map, Usage::reset(), part, &user, &conn)?;
-    Activity::rescan(part, &mut map, &user, &conn)?;
+    conn.transaction(|| {
+        part::Part::utilize(&mut map, Usage::reset(), part, &user, &conn)?;
+        Activity::rescan(part, &mut map, &user, &conn)?;
     
-    Ok(Json(map))
+        Ok(Json(map))
+    })
 }
 
 pub fn routes () -> Vec<rocket::Route> {

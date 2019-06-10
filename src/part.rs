@@ -157,6 +157,7 @@ impl Part {
     fn attached_to(&self, _at_time: DateTime<Utc>, conn: &AppConn) -> TbResult<Vec<Part>> {
         Ok(Part::belonging_to(self)
                 .order_by(parts::id)  // need this for stable test results
+                .for_update()
                 .load::<Part>(conn)?)
     }
 
