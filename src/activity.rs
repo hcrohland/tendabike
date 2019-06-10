@@ -121,7 +121,7 @@ impl Activity {
 
     fn check_geartype(&self, ass: Assembly, conn: &AppConn) -> TbResult<Assembly> {
         use crate::schema::activity_types::dsl::*;
-        let actt = dbg!(activity_types.find(self.what).first::<ActivityType>(conn))?;
+        let actt = activity_types.find(self.what).first::<ActivityType>(conn)?;
         let gear_id = match self.gear {
             Some(x) => x,
             None => return Ok(ass)
@@ -158,12 +158,14 @@ impl Activity {
     }
 
     fn update (act_id: i32, act: NewActivity, user: &Person, conn: &AppConn) -> TbResult<Assembly> {
+        use std::ops::{SubAssign,AddAssign};
+
         conn.transaction(|| {
             let mut hash = Assembly::new();
 
             let old = Activity::get(act_id, user, conn)?;
             if let Some(gear) = old.gear {
-                part::Part::utilize(&mut hash, old.usage(std::ops::SubAssign::sub_assign), gear, user, conn)?;
+                part::Part::utilize(&mut hash, old.usage(SubAssign::sub_assign), gear, user, conn)?;
             }
 
             let new: Activity = diesel::update(activities::table)
@@ -171,7 +173,7 @@ impl Activity {
                 .set(&act)
                 .get_result(conn)?;
             if let Some(gear) = new.gear {
-                part::Part::utilize(&mut hash, new.usage(std::ops::AddAssign::add_assign), gear, user, conn)?;
+                part::Part::utilize(&mut hash, new.usage(AddAssign::add_assign), gear, user, conn)?;
             }
             
             new.check_geartype(hash, conn)

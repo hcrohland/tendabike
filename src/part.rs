@@ -154,10 +154,14 @@ impl Part {
         }
     }
 
-    fn traverse (self, map: & mut HashMap<i32, Part>, usage: &Usage, conn: &AppConn) -> TbResult<()> {
-        Part::belonging_to(&self)
+    fn attached_to(&self, _at_time: DateTime<Utc>, conn: &AppConn) -> TbResult<Vec<Part>> {
+        Ok(Part::belonging_to(self)
                 .order_by(parts::id)  // need this for stable test results
-                .load::<Part>(conn)?
+                .load::<Part>(conn)?)
+    }
+
+    fn traverse (self, map: & mut HashMap<i32, Part>, usage: &Usage, conn: &AppConn) -> TbResult<()> {
+        self.attached_to(usage.start, conn)?
                 .into_iter().map(|x| x.traverse(map, usage, conn))
                 .for_each(drop);
 

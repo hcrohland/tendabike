@@ -38,7 +38,7 @@ x-user-id: 2
 
 {
   "user_id": 2,
-  "what": 2,
+  "what": 1,
   "name": "Fahrt am Morgen",
   "start": "2019-04-24T08:55:12Z",
   "duration": 4868,
@@ -47,26 +47,26 @@ x-user-id: 2
   "climb": 52,
   "descend": 2000,
   "power": 154,
-  "gear": 1
+  "gear": null
 }
 ###
-Put {{host}}/activ/376
+Put {{host}}/activ/306
 x-user-id: 2
 
 {
-  "id": 373,
-  "user_id": 2,
-  "what": 1,
-  "name": "Fahrt am Morgen",
-  "start": "2019-04-24T08:55:12Z",
-  "duration": 4868,
-  "time": 3331,
-  "distance": 18032,
-  "climb": 52,
-  "descend": 1000,
-  "power": 154,
-  "gear": 3
-}
+    "id": 306,
+    "user_id": 2,
+    "what": 1,
+    "name": "Fahrt am Morgen",
+    "start": "2019-04-24T08:55:12Z",
+    "duration": 4868,
+    "time": 3331,
+    "distance": 18032,
+    "climb": 52,
+    "descend": 2000,
+    "power": 154,
+    "gear": null
+  }
 
 ###
 
