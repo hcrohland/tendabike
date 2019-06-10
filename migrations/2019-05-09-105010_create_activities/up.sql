@@ -8,7 +8,7 @@ CREATE TABLE activity_types (
 CREATE TABLE activities (
     id SERIAL PRIMARY KEY,
     user_id integer NOT NULL,
-    what integer REFERENCES activity_types(id),
+    what integer NOT NULL REFERENCES activity_types(id),
     name text NOT NULL,
     start timestamp with time zone NOT NULL DEFAULT now(),
     duration integer NOT NULL,
@@ -17,6 +17,5 @@ CREATE TABLE activities (
     climb integer,
     descend integer,
     power integer,
-    gear integer,
-    registered BOOLEAN NOT NULL DEFAULT FALSE
+    gear integer
 );

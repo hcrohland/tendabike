@@ -24,7 +24,7 @@ x-user-id: 2
 PATCH {{host}}/activ/342?gear=1
 x-user-id: 2
 ###
-PATCH  {{host}}/activ/scan/14 
+PATCH  {{host}}/activ/all/8
 x-user-id: 2
 ###
 GET    {{host}}/activ/362
