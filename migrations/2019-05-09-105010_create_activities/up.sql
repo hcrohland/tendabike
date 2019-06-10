@@ -19,3 +19,6 @@ CREATE TABLE activities (
     power integer,
     gear integer
 );
+
+ALTER SEQUENCE activities_id_seq RESTART WITH 300;
+ALTER SEQUENCE activitie_types_id_seq RESTART WITH 30;

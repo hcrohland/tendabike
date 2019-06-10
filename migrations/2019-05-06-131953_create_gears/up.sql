@@ -21,3 +21,5 @@ CREATE TABLE "parts" (
     "attached_to" integer REFERENCES parts(id),
     "count" integer NOT NULL DEFAULT '0'
 );
+
+ALTER SEQUENCE parts_id_seq RESTART WITH 300;
