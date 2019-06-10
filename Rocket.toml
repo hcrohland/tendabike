@@ -1,5 +1,3 @@
 [development]
 address = "::1"
 
-[global.databases.app_db]
-url = "postgres://localhost/tendabike"

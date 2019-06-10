@@ -59,6 +59,7 @@ impl Default for Config {
 }
 
 pub fn ignite_rocket () -> rocket::Rocket {
+    dotenv::dotenv().ok();
     // Initialize server
     rocket::ignite()
        // add config object
