@@ -19,19 +19,21 @@ use diesel::{
     RunQueryDsl,
 };
 
-/// The list of part types
-/// Includes the list of part types which can be attached to it as parts
-/// multiple parts are possible
+/// List of of all valid part types.
+/// 
+/// We distingish main parts from spares:
+/// - Main parts can be used for an activity - like a bike
+/// - Spares can be attached to other parts and are subparts of main parts
 #[derive(Clone, Debug, Serialize, Deserialize, Queryable, Identifiable, Associations, PartialEq)]
 #[table_name = "part_types"]
 pub struct PartTypes {
     /// The primary key
     pub id: i32,
-    /// The name
+    /// The display name
     pub name: String,
     /// Part types that can be attached
     pub hooks: Vec<i32>,
-    /// is it a main part?
+    /// is it a main part? I.e. can it be used for an activity?
     pub main: bool,
 }
 
