@@ -124,14 +124,6 @@ impl Usage {
             count: 0,
         }
     }
-
-    pub fn reset() -> Usage {
-        let mut usage = Usage::none();
-        usage.op = Some(std::ops::MulAssign::mul_assign); // Didn't find a pure Assign
-        usage.start = chrono::MIN_DATE.and_hms(0,0,0);
-        usage
-    }
-
 }
 
 mod error {

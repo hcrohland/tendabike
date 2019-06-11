@@ -1,10 +1,12 @@
 //use std::collections::HashMap;
 
+use std::ops::{SubAssign,AddAssign};
 use chrono::{
     Utc,
     DateTime,
 };
 
+use part::ATrait;
 use rocket_contrib::json::Json;
 
 use crate::schema::{activities, activity_types};
@@ -126,7 +128,7 @@ impl Activity {
             Some(x) => x,
             None => return Ok(ass)
         };
-        let mygear = match ass.get(&gear_id) {
+        let mygear = match ass.part(gear_id) {
             Some (x) => x,
             None => return Err(MyError::AnyErr("Main gear not found in assembly".to_string()))
         };
@@ -150,7 +152,7 @@ impl Activity {
                 .get_result(conn)?;
             let mut res = Assembly::new();
             if let Some(gear) = new.gear {
-                part::Part::utilize(&mut res, new.usage(std::ops::AddAssign::add_assign), gear, user, conn)?;
+                part::Part::utilize(&mut res, new.usage(AddAssign::add_assign), gear, user, conn)?;
             }
             let res = new.check_geartype(res, conn)?;
             Ok((new, res))
@@ -158,8 +160,6 @@ impl Activity {
     }
 
     fn update (act_id: i32, act: NewActivity, user: &Person, conn: &AppConn) -> TbResult<Assembly> {
-        use std::ops::{SubAssign,AddAssign};
-
         conn.transaction(|| {
             let mut hash = Assembly::new();
 
@@ -204,12 +204,12 @@ impl Activity {
             if let Some(gear) = self.gear {
                 info!("de-registering activity {} from gear {}", self.id, gear);
                 self.gear = None;
-                part::Part::utilize(&mut hash, self.usage(std::ops::SubAssign::sub_assign), gear, user, conn)?;
+                part::Part::utilize(&mut hash, self.usage(SubAssign::sub_assign), gear, user, conn)?;
             } 
             if let Some(new_gear) = gear {
                 info!("registering activity {} to gear {}", self.id, new_gear);
                 self.gear = gear;
-                part::Part::utilize(&mut hash, self.usage(std::ops::AddAssign::add_assign), new_gear, user, conn)?;
+                part::Part::utilize(&mut hash, self.usage(AddAssign::add_assign), new_gear, user, conn)?;
             }
             
             self.save_changes::<Activity>(conn)?;
@@ -217,14 +217,19 @@ impl Activity {
         })
     }
 
-    fn rescan (part: i32, ass: &mut Assembly, user: &Person, conn: &AppConn) -> TbResult<()> {
+    fn rescan (user: &Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction(|| {
-            let activities = activities::table.filter(activities::gear.eq(part)).for_update().load::<Activity>(conn)?;
+            let mut ass = Assembly::new();
+
+            let main_gears = part::Part::reset(user, conn)?;
+
+            let activities = activities::table.filter(activities::gear.eq_any(main_gears))
+                .load::<Activity>(conn)?;
 
             for act in activities {
-                part::Part::utilize(ass, act.usage(std::ops::AddAssign::add_assign), part, user, conn)?
+                part::Part::utilize(&mut ass, act.usage(AddAssign::add_assign), act.gear.unwrap(), user, conn)?
             }
-            Ok(())
+            Ok(ass)
         })
     }
 }
@@ -273,15 +278,9 @@ fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> TbResul
     })
 }
 
-#[patch("/all/<part>")]
-fn rescan (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
-    let mut map = Assembly::new();
-    conn.transaction(|| {
-        part::Part::utilize(&mut map, Usage::reset(), part, &user, &conn)?;
-        Activity::rescan(part, &mut map, &user, &conn)?;
-    
-        Ok(Json(map))
-    })
+#[patch("/rescan")]
+fn rescan (user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
+    Ok(Json(Activity::rescan(&user, &conn)?))
 }
 
 pub fn routes () -> Vec<rocket::Route> {

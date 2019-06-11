@@ -24,6 +24,16 @@ table! {
 }
 
 table! {
+    attachments (id) {
+        id -> Int4,
+        part_id -> Int4,
+        hook_id -> Int4,
+        attached -> Timestamptz,
+        detached -> Timestamptz,
+    }
+}
+
+table! {
     part_types (id) {
         id -> Int4,
         name -> Text,
@@ -45,7 +55,6 @@ table! {
         distance -> Int4,
         climb -> Int4,
         descend -> Int4,
-        attached_to -> Nullable<Int4>,
         count -> Int4,
     }
 }
@@ -57,6 +66,7 @@ joinable!(parts -> part_types (what));
 allow_tables_to_appear_in_same_query!(
     activities,
     activity_types,
+    attachments,
     part_types,
     parts,
 );

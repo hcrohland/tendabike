@@ -7,7 +7,7 @@ use chrono::{
 
 use rocket_contrib::json::Json;
 
-use self::schema::{parts, part_types};
+use self::schema::{parts, part_types, attachments};
 use crate::user::*;
 use crate::*;
 
@@ -44,7 +44,6 @@ pub struct PartTypes {
 #[primary_key(id)]
 #[table_name = "parts"]
 #[belongs_to(PartTypes, foreign_key = "what")]
-#[belongs_to(Part, foreign_key = "attached_to")]
 pub struct Part {
     /// The primary key
     pub id: i32,
@@ -68,11 +67,33 @@ pub struct Part {
     pub climb: i32,
     /// Overall descending
 	pub descend: i32,
-    /// Is the part attached to an assembly?
-    pub attached_to: Option<i32>,
     /// usage count
     pub count: i32,
 }
+
+/// Timeline of attachments
+/// 
+/// Every attachement of a part to another part (hook) is an entry
+/// Start and end time are noted
+/// 
+#[derive(Clone, Debug, PartialEq, 
+        Serialize, Deserialize, 
+        Queryable, Identifiable, Associations, AsChangeset)]
+#[primary_key(id)]
+#[belongs_to(Part, foreign_key = "hook_id")]
+struct Attachment {
+    // primary key
+    pub id: i32,
+    // the sub-part, which is attached to the hook
+    pub part_id: i32,
+    // the hook, to which part_id is attached
+    pub hook_id: i32,
+    // when it was attached
+    pub attached: DateTime<Utc>,
+    // when it was removed again
+    pub detached: DateTime<Utc>,
+}
+
 
 /*
 #[derive(Insertable, Debug, Clone)]
@@ -109,14 +130,21 @@ impl ATrait for Assembly {
 }
 
 impl Part {
+    /// list all part types
     fn types (conn: &AppConn) -> Vec<PartTypes> {
         part_types::table.order_by(part_types::id).load::<PartTypes>(conn).expect("error loading PartTypes")
     }
 
+    /// get the part with id part
     fn get (part: i32, _owner: &Person, conn: &AppConn) -> TbResult<Part> {
         Ok(parts::table.find(part).first(conn)?)
     }
 
+    /// retrieve the list of available parts for a user
+    /// 
+    /// it only returns parts which are not attached
+    /// if parameter main is true it returns all gear, which can be used for activities
+    /// If parameter main is false it returns the list of spares which can be attached to gear
     fn parts_by_user (user: &Person, main: bool, conn: &AppConn) -> TbResult<Vec<Part>>{
         use crate::schema::parts::dsl::*;
 
@@ -124,20 +152,19 @@ impl Part {
             .filter(part_types::main.eq(main))
             .load::<PartTypes>(conn)?;
 
-        Ok(Part::belonging_to(&types)
+        let plist = Part::belonging_to(&types) // only gear or spares
             .filter(owner.eq(user.get_id()))
-            .filter(attached_to.is_null())
             .order_by(id)
-            .load::<Part>(conn)?)
+            .load::<Part>(conn)?;
+        Ok(plist.into_iter()
+            .filter(|x| {
+                x.attached_to(Utc::now(), conn).is_none() // only parts which are not attached
+            }).collect())
     }
 
-   fn _parts_by_part (&self, conn: &AppConn) -> TbResult<HashMap<i32, Part>>{
-        use crate::schema::parts::dsl::*;
-
-        Ok(Part::belonging_to(self).order_by(id)
-            .load::<Part>(conn)?.into_iter().map(|x| {(x.id, x)}).collect())
-    }
-
+   /// apply a usage to a part
+   /// 
+   /// returns the changed part
    fn apply (mut self, usage: &Usage, conn: &AppConn) -> TbResult<Part> {
         if let Some(func) = usage.op {
             info!("Applying usage to part {}", self.id);
@@ -154,15 +181,40 @@ impl Part {
         }
     }
 
-    fn attached_to(&self, _at_time: DateTime<Utc>, conn: &AppConn) -> TbResult<Vec<Part>> {
-        Ok(Part::belonging_to(self)
-                .order_by(parts::id)  // need this for stable test results
-                .for_update()
-                .load::<Part>(conn)?)
+    /// Retrive the part self is attached to or none
+    /// 
+    /// panics on unexpected database behaviour
+    fn attached_to(&self, at_time: DateTime<Utc>, conn: &AppConn) -> Option<Part> {
+        use schema::attachments::dsl::*;
+
+        match attachments.select(hook_id) 
+            .filter(part_id.eq(self.id)) 
+            .filter(attached.lt(at_time)).filter(detached.ge(at_time))
+            .first::<i32>(conn) {
+                Ok(part) => Some(parts::table.find(part)
+                                .first::<Part>(conn).expect("Could not find attachment part")),
+                Err(diesel::result::Error::NotFound) => None,
+                _ => panic!("Could not read attachments")
+            }
     }
 
-    fn traverse (self, map: & mut HashMap<i32, Part>, usage: &Usage, conn: &AppConn) -> TbResult<()> {
-        self.attached_to(usage.start, conn)?
+    /// retrieve the vector of Subparts for self
+    /// 
+    /// panics on unexpected database error
+    fn subparts(&self, at_time: DateTime<Utc>, conn: &AppConn) -> Vec<Part> {
+        use schema::attachments::dsl::*;
+
+        let parts = attachments.select(part_id)
+            .filter(hook_id.eq(self.id))
+            .filter(attached.lt(at_time)).filter(detached.ge(at_time))
+            .load::<i32>(conn).expect("could not read attachments");
+
+        parts::table.filter(parts::id.eq_any(parts)).load::<Part>(conn)
+                .expect("Nonexistent parts referemced")
+    }
+
+    fn traverse (self, map: & mut Assembly, usage: &Usage, conn: &AppConn) -> TbResult<()> {
+        self.subparts(usage.start, conn)
                 .into_iter().map(|x| x.traverse(map, usage, conn))
                 .for_each(drop);
 
@@ -170,9 +222,27 @@ impl Part {
         Ok(())
     }
 
-    pub fn utilize (map: & mut HashMap<i32, Part>, usage: Usage, part_id: i32, user: &Person, conn: &AppConn) -> TbResult<()> {
+    pub fn utilize (map: & mut Assembly, usage: Usage, part_id: i32, user: &Person, conn: &AppConn) -> TbResult<()> {
         Part::get(part_id, user, conn)?
                 .traverse (map, &usage, conn)
+    }
+
+    pub fn reset (user: &Person, conn: &AppConn) -> TbResult<Vec<i32>> {
+        use schema::parts::dsl::*;
+        use std::collections::HashSet;
+        
+        let part_list = diesel::update(parts.filter(owner.eq(user.get_id())))
+            .set((  time.eq(0),
+                    climb.eq(0),
+                    descend.eq(0),
+                    distance.eq(0),
+                    count.eq(0)))
+            .get_results::<Part>(conn)?;
+
+        let mains: HashSet<i32> = part_types::table.select(part_types::id).filter(part_types::main.eq(true))
+            .load::<i32>(conn).expect("error loading PartTypes").into_iter().collect();
+
+        Ok(part_list.into_iter().filter(|x| mains.contains(&x.what)).map(|x| x.id).collect())
     }
 }
 
@@ -188,7 +258,7 @@ fn get (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Part>> {
 
 #[get("/<part>?assembly")]
 fn get_assembly (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
-    let mut map = HashMap::new();
+    let mut map = Assembly::new();
 
     Part::utilize(&mut map, Usage::none(), part, &user, &conn)?;
     
