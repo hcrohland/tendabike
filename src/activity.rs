@@ -67,7 +67,7 @@ pub struct Activity {
     /// average power output
     pub power: Option<i32>,
     /// Which gear did she use?
-    pub gear: Option<i32>,
+    pub gear: Option<PartId>,
 }
 
 #[derive(Debug, Clone, Insertable, AsChangeset, PartialEq, Serialize, Deserialize)]
@@ -94,7 +94,7 @@ pub struct NewActivity {
     /// average power output
     pub power: Option<i32>,
     /// Which gear did she use?
-    pub gear: Option<i32>,
+    pub gear: Option<PartId>,
 }
 
 
@@ -193,7 +193,7 @@ impl Activity {
         }
     }
 
-    fn register (& mut self, gear: Option<i32>, user: &Person, conn: &AppConn) -> TbResult<Assembly> {
+    fn register (& mut self, gear: Option<PartId>, user: &Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction(|| {
             let mut hash = Assembly::new();
 
@@ -269,6 +269,7 @@ fn delete (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
 #[patch("/<id>?<gear>")]
 fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
     info! ("register act {} to gear {:?}", id, gear);
+    let gear = gear.map(|x| PartId::from(x));
     conn.transaction(|| {
         Activity::get(id, &user, &conn)
             .map_or_else(

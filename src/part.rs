@@ -19,6 +19,17 @@ use diesel::{
     RunQueryDsl,
 };
 
+#[derive(NewType, DieselNewType)] 
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)] 
+pub struct PartId(i32);
+
+impl std::fmt::Display for PartId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+
 /// List of of all valid part types.
 /// 
 /// We distingish main parts from spares:
@@ -46,7 +57,7 @@ pub struct PartTypes {
 #[belongs_to(PartTypes, foreign_key = "what")]
 pub struct Part {
     /// The primary key
-    pub id: i32,
+    pub id: PartId,
     /// The owner
     pub owner: i32,
     /// The type of the part
@@ -85,9 +96,9 @@ struct Attachment {
     // primary key
     pub id: i32,
     // the sub-part, which is attached to the hook
-    pub part_id: i32,
+    pub part_id: PartId,
     // the hook, to which part_id is attached
-    pub hook_id: i32,
+    pub hook_id: PartId,
     // when it was attached
     pub attached: DateTime<Utc>,
     // when it was removed again
@@ -117,14 +128,14 @@ pub struct UpdatePart {
 */
 
 //#[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub type Assembly = HashMap<i32, Part>;
+pub type Assembly = HashMap<PartId, Part>;
 
 pub trait ATrait {
-    fn part (&self, part: i32) -> Option<&Part>;
+    fn part (&self, part: PartId) -> Option<&Part>;
 }
 
 impl ATrait for Assembly {
-    fn part (&self, part: i32) -> Option<&Part> {
+    fn part (&self, part: PartId) -> Option<&Part> {
         self.get(&part)
     }
 }
@@ -136,7 +147,7 @@ impl Part {
     }
 
     /// get the part with id part
-    fn get (part: i32, _owner: &Person, conn: &AppConn) -> TbResult<Part> {
+    fn get (part: PartId, _owner: &Person, conn: &AppConn) -> TbResult<Part> {
         Ok(parts::table.find(part).first(conn)?)
     }
 
@@ -222,12 +233,12 @@ impl Part {
         Ok(())
     }
 
-    pub fn utilize (map: & mut Assembly, usage: Usage, part_id: i32, user: &Person, conn: &AppConn) -> TbResult<()> {
+    pub fn utilize (map: & mut Assembly, usage: Usage, part_id: PartId, user: &Person, conn: &AppConn) -> TbResult<()> {
         Part::get(part_id, user, conn)?
                 .traverse (map, &usage, conn)
     }
 
-    pub fn reset (user: &Person, conn: &AppConn) -> TbResult<Vec<i32>> {
+    pub fn reset (user: &Person, conn: &AppConn) -> TbResult<Vec<PartId>> {
         use schema::parts::dsl::*;
         use std::collections::HashSet;
         
@@ -253,14 +264,14 @@ fn types(_user: User, conn: AppDbConn) -> Json<Vec<PartTypes>> {
 
 #[get("/<part>")]
 fn get (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Part>> {
-    Part::get(part, &user, &conn).map (|x| Json(x))
+    Part::get( PartId(part), &user, &conn).map (|x| Json(x))
 }
 
 #[get("/<part>?assembly")]
 fn get_assembly (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
     let mut map = Assembly::new();
 
-    Part::utilize(&mut map, Usage::none(), part, &user, &conn)?;
+    Part::utilize(&mut map, Usage::none(), PartId(part), &user, &conn)?;
     
     Ok(Json(map))
 }

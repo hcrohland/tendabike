@@ -6,9 +6,10 @@ extern crate serde_json;
 #[macro_use] extern crate rocket_contrib;
 
 #[macro_use] extern crate diesel;
+#[macro_use] extern crate diesel_derive_newtype;
 
-#[macro_use] 
-extern crate log;
+#[macro_use] extern crate newtype;
+#[macro_use] extern crate log;
 extern crate simplelog;
 extern crate chrono;
 
@@ -35,6 +36,7 @@ pub mod schema;
 pub mod user;
 //pub mod greetings;
 pub mod part;
+pub use part::PartId as PartId;
 pub mod activity;
 
 type AppConn = diesel::PgConnection;

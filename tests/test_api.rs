@@ -98,17 +98,17 @@
         // Deregister Activitiy from any gear
         patchjson::<Assembly,_>(&client, "/activ/9?gear=");
         let ass: Assembly = getjson(&client, "/part/1?assembly");
-        let part0 = ass.part(1).unwrap();
+        let part0 = ass.part(1.into()).unwrap();
         // Now register it to gear 1
         let ass: Assembly = patchjson(&client, "/activ/9?gear=1");
         // gear 1 has to be in the result. Get it!
-        let part1 = ass.part(1).unwrap();
+        let part1 = ass.part(1.into()).unwrap();
         // Make sure you get a NotFound wen trying to register to a non-existing gear
         let response = client.patch("/activ/9?gear=-1").header(Header::new("x-user-id", "2")).dispatch();
         assert_eq!(response.status(), Status::NotFound);
         // Make sure that the patch result matches the stored assembly
         let ass: Assembly = getjson(&client, format!("/part/{}?assembly", part1.id));
-        let part2 = ass.part(1).unwrap();
+        let part2 = ass.part(1.into()).unwrap();
         assert_eq!(part1, part2);
         assert_eq!(part0.count + 1, part1.count);
         assert_eq!(part0.time + act.time.unwrap_or(0), part1.time);
@@ -121,7 +121,7 @@
             user_id: 2,
             name:   String::from("test activity"),
             what:   99,
-            gear:   Some(2),
+            gear:   Some(2.into()),
             start:  Utc::now(),
             duration: 70,
             time:   Some(60),
@@ -139,7 +139,7 @@
         assert_eq!(response.status(), Status::BadRequest); 
 
         act.what = 1;
-        act.gear = Some(2);        
+        act.gear = Some(2.into());        
         let response = client.req(Method::Post, "/activ/")
             .header(Header::new("x-user-id", "2"))
             .header(ContentType::JSON)
@@ -153,17 +153,17 @@
         assert_eq!(act_new.start, act.start);
         assert!(ass.is_empty());
         
-        act_new.gear = Some(1);
-        let ass: Assembly = reqjson(&client, Method::Put, format!("/activ/{}", act_new.id), &act_new, Status::Ok); //Should use response header?    
-        let part1 = ass.part(1).unwrap();
+        act_new.gear = Some(1.into());
+        let ass: Assembly = reqjson(&client, Method::Put, format!("/activ/{:?}", act_new.id), &act_new, Status::Ok); //Should use response header?    
+        let part1 = ass.part(1.into()).unwrap();
 
         act_new.descend = Some(555);
-        let ass: Assembly = reqjson(&client, Method::Put, format!("/activ/{}", act_new.id), &act_new, Status::Ok); //Should use response header?
-        let part2 = ass.part(1).unwrap();
+        let ass: Assembly = reqjson(&client, Method::Put, format!("/activ/{:?}", act_new.id), &act_new, Status::Ok); //Should use response header?
+        let part2 = ass.part(1.into()).unwrap();
         assert_eq!(part1.climb, part2.climb);
         assert_eq!(part2.descend, part1.descend - 445);
 
-        let ass: Assembly = reqjson(&client, Method::Delete, format!("/activ/{}",act_new.id), "", Status::Ok);
-        let part3 = ass.part(1).unwrap();
+        let ass: Assembly = reqjson(&client, Method::Delete, format!("/activ/{:?}",act_new.id), "", Status::Ok);
+        let part3 = ass.part(1.into()).unwrap();
         assert_eq!(part3.time + 60, part1.time);
     }
