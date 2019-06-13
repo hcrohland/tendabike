@@ -1,6 +1,4 @@
-//use std::collections::HashMap;
 
-use std::ops::{SubAssign,AddAssign};
 use chrono::{
     Utc,
     DateTime,
@@ -144,7 +142,7 @@ impl Activity {
 
     fn create(act: NewActivity, user: &Person, conn: &AppConn) -> TbResult<(Activity, Assembly)> {
         if act.user_id != user.get_id() && !user.is_admin() {
-            return Err(MyError::Forbidden(format!("user {} cannot create for user {}", user.get_id(), act.user_id)));
+            return Err(MyError::Forbidden(format!("user {} cannot create activity for user {}", user.get_id(), act.user_id)));
         }
         conn.transaction(|| {
             let new: Activity = diesel::insert_into(activities::table)
@@ -152,7 +150,7 @@ impl Activity {
                 .get_result(conn)?;
             let mut res = Assembly::new();
             if let Some(gear) = new.gear {
-                part::Part::utilize(&mut res, new.usage(AddAssign::add_assign), gear, user, conn)?;
+                gear.utilize(&mut res, new.usage(1), user, conn)?;
             }
             let res = new.check_geartype(res, conn)?;
             Ok((new, res))
@@ -165,7 +163,7 @@ impl Activity {
 
             let old = Activity::get(act_id, user, conn)?;
             if let Some(gear) = old.gear {
-                part::Part::utilize(&mut hash, old.usage(SubAssign::sub_assign), gear, user, conn)?;
+                gear.utilize(&mut hash, old.usage(-1), user, conn)?;
             }
 
             let new: Activity = diesel::update(activities::table)
@@ -173,23 +171,22 @@ impl Activity {
                 .set(&act)
                 .get_result(conn)?;
             if let Some(gear) = new.gear {
-                part::Part::utilize(&mut hash, new.usage(AddAssign::add_assign), gear, user, conn)?;
+                gear.utilize(&mut hash, new.usage(1), user, conn)?;
             }
             
             new.check_geartype(hash, conn)
         })
     }
 
-    fn usage (&self, op: for<'r> fn(&'r mut i32, i32)) -> Usage {
+    fn usage (&self, factor: i32) -> Usage {
         Usage {
-            op: Some(op),
             start: self.start,
-            time: self.time.unwrap_or(0),
-            distance: self.distance.unwrap_or(0),
-            climb: self.climb.unwrap_or(0),
-            descend: self.descend.unwrap_or(self.climb.unwrap_or(0)),
-            power: self.power.unwrap_or(0),  
-            count: 1,          
+            time: self.time.unwrap_or(0) * factor,
+            distance: self.distance.unwrap_or(0) * factor,
+            climb: self.climb.unwrap_or(0) * factor,
+            descend: self.descend.unwrap_or(self.climb.unwrap_or(0)) * factor,
+            power: self.power.unwrap_or(0) * factor,  
+            count: 1 * factor,          
         }
     }
 
@@ -204,12 +201,12 @@ impl Activity {
             if let Some(gear) = self.gear {
                 info!("de-registering activity {} from gear {}", self.id, gear);
                 self.gear = None;
-                part::Part::utilize(&mut hash, self.usage(SubAssign::sub_assign), gear, user, conn)?;
+                gear.utilize(&mut hash, self.usage(-1), user, conn)?;
             } 
             if let Some(new_gear) = gear {
                 info!("registering activity {} to gear {}", self.id, new_gear);
                 self.gear = gear;
-                part::Part::utilize(&mut hash, self.usage(AddAssign::add_assign), new_gear, user, conn)?;
+                new_gear.utilize(&mut hash, self.usage(1), user, conn)?;
             }
             
             self.save_changes::<Activity>(conn)?;
@@ -217,6 +214,10 @@ impl Activity {
         })
     }
 
+    /// rescan all activites for a user
+    /// 
+    /// This will correct the urilization data for that user
+    ///  as long as no other users used her gear...
     fn rescan (user: &Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction(|| {
             let mut ass = Assembly::new();
@@ -227,7 +228,7 @@ impl Activity {
                 .load::<Activity>(conn)?;
 
             for act in activities {
-                part::Part::utilize(&mut ass, act.usage(AddAssign::add_assign), act.gear.unwrap(), user, conn)?
+                act.gear.unwrap().utilize(&mut ass, act.usage(1), user, conn)?
             }
             Ok(ass)
         })

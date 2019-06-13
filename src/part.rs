@@ -140,15 +140,95 @@ impl ATrait for Assembly {
     }
 }
 
+impl PartId {
+
+    /// get the part with id part
+    /// 
+    /// Assumes authorization checked
+    fn get (self, conn: &AppConn) -> TbResult<Part> {
+        Ok(parts::table.find(self).first(conn)?)
+    }
+
+    /// check if the given user is the owner or an admin.
+    /// Returns Forbidden if not.
+    fn checkuser (self, user: &Person, conn: &AppConn) -> TbResult<PartId> {
+        use schema::parts::dsl::*;
+        
+        if user.is_admin() {
+            return Ok(self)
+        }
+
+        let own = parts.find(self).filter(owner.eq(user.get_id())).select(owner).first::<i32>(conn)?;
+        if user.get_id() == own {
+            return Ok(self);
+        }
+
+        Err(MyError::Forbidden(format!("user {} cannot access part {}", user.get_id(), self)))
+    }
+
+    /// apply a usage to the part with given id
+    /// 
+    /// returns the changed part
+    fn apply (&self, usage: &Usage, conn: &AppConn) -> TbResult<Part> {
+        use schema::parts::dsl::*;
+
+        info!("Applying usage to part {}", self);
+        Ok(diesel::update(parts.find(self))
+            .set((  time.eq(time + usage.time),
+                    climb.eq(climb + usage.climb),
+                    descend.eq(descend + usage.descend),
+                    distance.eq(distance + usage.distance),
+                    count.eq(count + usage.count)))
+            .get_result::<Part>(conn)?)
+    }
+
+    /// Retrieve the part_id self is attached to or none
+    /// 
+    /// panics on unexpected database behaviour
+    fn attached_to(&self, at_time: DateTime<Utc>, conn: &AppConn) -> Option<PartId> {
+        use schema::attachments::dsl::*;
+
+        match attachments.select(hook_id) 
+            .filter(part_id.eq(self)) 
+            .filter(attached.lt(at_time)).filter(detached.ge(at_time))
+            .first::<PartId>(conn) {
+                Ok(part) => Some(part),
+                Err(diesel::result::Error::NotFound) => None,
+                _ => panic!("Could not read attachments")
+            }
+    }
+
+    /// retrieve the vector of Subparts for self
+    /// 
+    /// panics on unexpected database error
+    fn subparts(&self, at_time: DateTime<Utc>, conn: &AppConn) -> Vec<PartId> {
+        use schema::attachments::dsl::*;
+
+        attachments.select(part_id)
+            .filter(hook_id.eq(self))
+            .filter(attached.lt(at_time)).filter(detached.ge(at_time))
+            .load::<PartId>(conn).expect("could not read attachments")
+    }
+
+    fn traverse (self, map: & mut Assembly, usage: &Usage, conn: &AppConn) -> TbResult<()> {
+        self.subparts(usage.start, conn)
+                .into_iter().map(|x| x.traverse(map, usage, conn))
+                .for_each(drop);
+
+        map.insert(self, self.apply(usage, conn)?);
+        Ok(())
+    }
+
+
+    pub fn utilize (self, map: & mut Assembly, usage: Usage, user: &Person, conn: &AppConn) -> TbResult<()> {
+        self.checkuser(user, conn)?.traverse(map, &usage, conn)
+    }
+}
+
 impl Part {
     /// list all part types
     fn types (conn: &AppConn) -> Vec<PartTypes> {
         part_types::table.order_by(part_types::id).load::<PartTypes>(conn).expect("error loading PartTypes")
-    }
-
-    /// get the part with id part
-    fn get (part: PartId, _owner: &Person, conn: &AppConn) -> TbResult<Part> {
-        Ok(parts::table.find(part).first(conn)?)
     }
 
     /// retrieve the list of available parts for a user
@@ -169,73 +249,8 @@ impl Part {
             .load::<Part>(conn)?;
         Ok(plist.into_iter()
             .filter(|x| {
-                x.attached_to(Utc::now(), conn).is_none() // only parts which are not attached
+                x.id.attached_to(Utc::now(), conn).is_none() // only parts which are not attached
             }).collect())
-    }
-
-   /// apply a usage to a part
-   /// 
-   /// returns the changed part
-   fn apply (mut self, usage: &Usage, conn: &AppConn) -> TbResult<Part> {
-        if let Some(func) = usage.op {
-            info!("Applying usage to part {}", self.id);
-
-            func(& mut self.time, usage.time);
-            func(& mut self.distance, usage.distance);
-            func(& mut self.climb, usage.climb);
-            func(& mut self.descend, usage.descend);
-            func(& mut self.count, usage.count);
-
-            Ok(self.save_changes::<Part>(conn)?)
-        } else {
-            Ok(self)
-        }
-    }
-
-    /// Retrive the part self is attached to or none
-    /// 
-    /// panics on unexpected database behaviour
-    fn attached_to(&self, at_time: DateTime<Utc>, conn: &AppConn) -> Option<Part> {
-        use schema::attachments::dsl::*;
-
-        match attachments.select(hook_id) 
-            .filter(part_id.eq(self.id)) 
-            .filter(attached.lt(at_time)).filter(detached.ge(at_time))
-            .first::<i32>(conn) {
-                Ok(part) => Some(parts::table.find(part)
-                                .first::<Part>(conn).expect("Could not find attachment part")),
-                Err(diesel::result::Error::NotFound) => None,
-                _ => panic!("Could not read attachments")
-            }
-    }
-
-    /// retrieve the vector of Subparts for self
-    /// 
-    /// panics on unexpected database error
-    fn subparts(&self, at_time: DateTime<Utc>, conn: &AppConn) -> Vec<Part> {
-        use schema::attachments::dsl::*;
-
-        let parts = attachments.select(part_id)
-            .filter(hook_id.eq(self.id))
-            .filter(attached.lt(at_time)).filter(detached.ge(at_time))
-            .load::<i32>(conn).expect("could not read attachments");
-
-        parts::table.filter(parts::id.eq_any(parts)).load::<Part>(conn)
-                .expect("Nonexistent parts referemced")
-    }
-
-    fn traverse (self, map: & mut Assembly, usage: &Usage, conn: &AppConn) -> TbResult<()> {
-        self.subparts(usage.start, conn)
-                .into_iter().map(|x| x.traverse(map, usage, conn))
-                .for_each(drop);
-
-        map.insert(self.id, self.apply(usage, conn)?);
-        Ok(())
-    }
-
-    pub fn utilize (map: & mut Assembly, usage: Usage, part_id: PartId, user: &Person, conn: &AppConn) -> TbResult<()> {
-        Part::get(part_id, user, conn)?
-                .traverse (map, &usage, conn)
     }
 
     pub fn reset (user: &Person, conn: &AppConn) -> TbResult<Vec<PartId>> {
@@ -264,14 +279,16 @@ fn types(_user: User, conn: AppDbConn) -> Json<Vec<PartTypes>> {
 
 #[get("/<part>")]
 fn get (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Part>> {
-    Part::get( PartId(part), &user, &conn).map (|x| Json(x))
+    PartId(part).checkuser(&user, &conn)?
+        .get(&conn).map (|x| Json(x))
 }
 
 #[get("/<part>?assembly")]
 fn get_assembly (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
     let mut map = Assembly::new();
 
-    Part::utilize(&mut map, Usage::none(), PartId(part), &user, &conn)?;
+    PartId(part).checkuser(&user, &conn)?
+        .traverse(&mut map, &Usage::none(), &conn)?;
     
     Ok(Json(map))
 }

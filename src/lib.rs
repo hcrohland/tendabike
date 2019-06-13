@@ -37,6 +37,7 @@ pub mod user;
 //pub mod greetings;
 pub mod part;
 pub use part::PartId as PartId;
+pub use error::MyError as MyError;
 pub mod activity;
 
 type AppConn = diesel::PgConnection;
@@ -96,7 +97,6 @@ pub fn init_environment () -> () {
 }
 
 pub struct Usage {
-    pub op: Option<for<'r> fn(&'r mut i32, i32)>,
     // start time
     pub start: DateTime<Utc>,
     // usage time
@@ -116,7 +116,6 @@ pub struct Usage {
 impl Usage {
     pub fn none() -> Usage {
         Usage {
-            op: None,
             start: Utc::now(),
             time: 0,
             climb: 0,
