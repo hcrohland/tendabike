@@ -36,8 +36,8 @@ pub mod schema;
 pub mod user;
 //pub mod greetings;
 pub mod part;
-pub use part::PartId as PartId;
-pub use error::MyError as MyError;
+use part::PartId as PartId;
+use error::MyError as MyError;
 pub mod activity;
 
 type AppConn = diesel::PgConnection;

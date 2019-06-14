@@ -268,7 +268,9 @@ impl Part {
         let mains: HashSet<i32> = part_types::table.select(part_types::id).filter(part_types::main.eq(true))
             .load::<i32>(conn).expect("error loading PartTypes").into_iter().collect();
 
-        Ok(part_list.into_iter().filter(|x| mains.contains(&x.what)).map(|x| x.id).collect())
+        Ok(part_list.into_iter()
+            .filter(|x| mains.contains(&x.what)).map(|x| x.id)
+            .collect())
     }
 }
 

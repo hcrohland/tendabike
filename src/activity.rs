@@ -4,8 +4,8 @@ use chrono::{
     DateTime,
 };
 
-use part::ATrait;
 use rocket_contrib::json::Json;
+use rocket::response::status;
 
 use crate::schema::{activities, activity_types};
 use crate::user::*;
@@ -21,6 +21,7 @@ use diesel::{
 };
 
 use part::Assembly;
+use part::ATrait;
 
 
 /// The list of activity types
@@ -245,8 +246,6 @@ fn types(_user: User, conn: AppDbConn) -> Json<Vec<ActivityType>> {
 fn get (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Activity>> {
     Activity::get(id, &user, &conn).map(|x| Json(x))
 }
-
-use rocket::response::status;
 
 #[post("/", data="<activity>")]
 fn post (activity: Json<NewActivity>, user: User, conn: AppDbConn) 
