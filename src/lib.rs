@@ -77,7 +77,7 @@ pub fn ignite_rocket () -> rocket::Rocket {
 }
 
 fn init_logging (){
-    const LOGFILE_NAME: &'static str = "tendabike.log";
+    const LOGFILE_NAME: & str = "tendabike.log";
     CombinedLogger::init(vec![
         TermLogger::new(LevelFilter::Info, simplelog::Config::default()).expect("Couldn't get terminal logger"),
         WriteLogger::new(
@@ -90,7 +90,7 @@ fn init_logging (){
 
 }
 
-pub fn init_environment () -> () {
+pub fn init_environment () {
     dotenv::dotenv().ok();
 
     init_logging();       

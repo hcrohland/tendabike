@@ -39,7 +39,7 @@ pub struct PartTypes {
     /// The display name
     pub name: String,
     /// Part types that can be attached
-    pub hooks: Vec<i32>,
+    pub hooks: Vec<PartId>,
     /// is it a main part? I.e. can it be used for an activity?
     pub main: bool,
 }
@@ -147,7 +147,7 @@ impl PartId {
 
     /// check if the given user is the owner or an admin.
     /// Returns Forbidden if not.
-    fn checkuser (self, user: &Person, conn: &AppConn) -> TbResult<PartId> {
+    fn checkuser (self, user: &dyn Person, conn: &AppConn) -> TbResult<PartId> {
         use schema::parts::dsl::*;
         
         if user.is_admin() {
@@ -165,7 +165,7 @@ impl PartId {
     /// apply a usage to the part with given id
     /// 
     /// returns the changed part
-    fn apply (&self, usage: &Usage, conn: &AppConn) -> TbResult<Part> {
+    fn apply (self, usage: &Usage, conn: &AppConn) -> TbResult<Part> {
         use schema::parts::dsl::*;
 
         info!("Applying usage to part {}", self);
@@ -181,7 +181,7 @@ impl PartId {
     /// Retrieve the part_id self is attached to or none
     /// 
     /// panics on unexpected database behaviour
-    fn attached_to(&self, at_time: DateTime<Utc>, conn: &AppConn) -> Option<PartId> {
+    fn attached_to(self, at_time: DateTime<Utc>, conn: &AppConn) -> Option<PartId> {
         use schema::attachments::dsl::*;
 
         match attachments.select(hook_id) 
@@ -197,7 +197,7 @@ impl PartId {
     /// retrieve the vector of Subparts for self
     /// 
     /// panics on unexpected database error
-    fn subparts(&self, at_time: DateTime<Utc>, conn: &AppConn) -> Vec<PartId> {
+    fn subparts(self, at_time: DateTime<Utc>, conn: &AppConn) -> Vec<PartId> {
         use schema::attachments::dsl::*;
 
         attachments.select(part_id)
@@ -216,7 +216,7 @@ impl PartId {
     }
 
 
-    pub fn utilize (self, map: & mut Assembly, usage: Usage, user: &Person, conn: &AppConn) -> TbResult<()> {
+    pub fn utilize (self, map: & mut Assembly, usage: Usage, user: &dyn Person, conn: &AppConn) -> TbResult<()> {
         self.checkuser(user, conn)?.traverse(map, &usage, conn)
     }
 }
@@ -232,7 +232,7 @@ impl Part {
     /// it only returns parts which are not attached
     /// if parameter main is true it returns all gear, which can be used for activities
     /// If parameter main is false it returns the list of spares which can be attached to gear
-    fn parts_by_user (user: &Person, main: bool, conn: &AppConn) -> TbResult<Vec<Part>>{
+    fn parts_by_user (user: &dyn Person, main: bool, conn: &AppConn) -> TbResult<Vec<Part>>{
         use crate::schema::parts::dsl::*;
 
         let types = part_types::table
@@ -249,7 +249,7 @@ impl Part {
             }).collect())
     }
 
-    pub fn reset (user: &Person, conn: &AppConn) -> TbResult<Vec<PartId>> {
+    pub fn reset (user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartId>> {
         use schema::parts::dsl::*;
         use std::collections::HashSet;
         
@@ -278,7 +278,7 @@ fn types(_user: User, conn: AppDbConn) -> Json<Vec<PartTypes>> {
 #[get("/<part>")]
 fn get (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Part>> {
     PartId(part).checkuser(&user, &conn)?
-        .get(&conn).map (|x| Json(x))
+        .get(&conn).map (Json)
 }
 
 #[get("/<part>?assembly")]
@@ -293,12 +293,12 @@ fn get_assembly (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assemb
 
 #[get("/mygear")]
 fn mygear(user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {    
-    Part::parts_by_user(&user, true, &conn).map(|x| Json(x))
+    Part::parts_by_user(&user, true, &conn).map(Json)
 }
 
 #[get("/myspares")]
 fn myspares(user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {    
-    Part::parts_by_user(&user, false, &conn).map(|x| Json(x))
+    Part::parts_by_user(&user, false, &conn).map(Json)
 }
 
 pub fn routes () -> Vec<rocket::Route> {

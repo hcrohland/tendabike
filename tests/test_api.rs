@@ -49,7 +49,9 @@
             let client = Client::new(crate::ignite_rocket()).expect("valid rocket instance");
 
             let types: Vec<PartTypes> = getjson (&client, "/part/types");
-            assert_eq!(types[0], PartTypes{id:1,name: String::from("Bike"), main:true, hooks: vec!(2,4,5,7,8)});
+            assert_eq!(types[0], PartTypes{id:1,
+                    name: String::from("Bike"), main:true, 
+                    hooks: vec!(2,4,5,7,8).into_iter().map(PartId::from).collect()});
     }
     #[test]
     fn part () {

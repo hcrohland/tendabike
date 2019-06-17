@@ -102,7 +102,7 @@ impl Activity {
         activity_types::table.load::<ActivityType>(conn).expect("error loading ActivityTypes")
     }
 
-    fn get(id: i32, person: &Person, conn: &AppConn) -> TbResult<Activity> {
+    fn get(id: i32, person: &dyn Person, conn: &AppConn) -> TbResult<Activity> {
         let act = activities::table.find(id).for_update().first::<Activity>(conn)?;
         if act.user_id != person.get_id() && !person.is_admin() {
                 return Err(MyError::Forbidden(format!("User {} cannot access activity {}", person.get_id(), id)));
@@ -110,7 +110,7 @@ impl Activity {
         Ok(act)
     }
 
-    fn delete(act_id: i32, person: &Person, conn: &AppConn) -> TbResult<Assembly> {
+    fn delete(act_id: i32, person: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
         use crate::schema::activities::dsl::*;
         conn.transaction(|| {
             let mut act = Activity::get(act_id, person, conn)?;
@@ -141,7 +141,7 @@ impl Activity {
         }   
     }
 
-    fn create(act: NewActivity, user: &Person, conn: &AppConn) -> TbResult<(Activity, Assembly)> {
+    fn create(act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<(Activity, Assembly)> {
         if act.user_id != user.get_id() && !user.is_admin() {
             return Err(MyError::Forbidden(format!("user {} cannot create activity for user {}", user.get_id(), act.user_id)));
         }
@@ -158,7 +158,7 @@ impl Activity {
         })
     }
 
-    fn update (act_id: i32, act: NewActivity, user: &Person, conn: &AppConn) -> TbResult<Assembly> {
+    fn update (act_id: i32, act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction(|| {
             let mut hash = Assembly::new();
 
@@ -185,13 +185,13 @@ impl Activity {
             time: self.time.unwrap_or(0) * factor,
             distance: self.distance.unwrap_or(0) * factor,
             climb: self.climb.unwrap_or(0) * factor,
-            descend: self.descend.unwrap_or(self.climb.unwrap_or(0)) * factor,
+            descend: self.descend.unwrap_or_else(|| self.climb.unwrap_or(0)) * factor,
             power: self.power.unwrap_or(0) * factor,  
-            count: 1 * factor,          
+            count: factor,          
         }
     }
 
-    fn register (& mut self, gear: Option<PartId>, user: &Person, conn: &AppConn) -> TbResult<Assembly> {
+    fn register (& mut self, gear: Option<PartId>, user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction(|| {
             let mut hash = Assembly::new();
 
@@ -219,7 +219,7 @@ impl Activity {
     /// 
     /// This will correct the urilization data for that user
     ///  as long as no other users used her gear...
-    fn rescan (user: &Person, conn: &AppConn) -> TbResult<Assembly> {
+    fn rescan (user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction(|| {
             let mut ass = Assembly::new();
 
@@ -244,7 +244,7 @@ fn types(_user: User, conn: AppDbConn) -> Json<Vec<ActivityType>> {
 
 #[get("/<id>")]
 fn get (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Activity>> {
-    Activity::get(id, &user, &conn).map(|x| Json(x))
+    Activity::get(id, &user, &conn).map(Json)
 }
 
 #[post("/", data="<activity>")]
@@ -258,23 +258,23 @@ fn post (activity: Json<NewActivity>, user: User, conn: AppDbConn)
 
 #[put("/<id>", data="<activity>")]
 fn put (id: i32, activity: Json<NewActivity>, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
-    Activity::update(id, activity.0, &user, &conn).map(|x| Json(x))
+    Activity::update(id, activity.0, &user, &conn).map(Json)
 }
 
 #[delete("/<id>")]
 fn delete (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
-    Activity::delete(id, &user, &conn).map(|x| Json(x))
+    Activity::delete(id, &user, &conn).map(Json)
 }
 
 #[patch("/<id>?<gear>")]
 fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
     info! ("register act {} to gear {:?}", id, gear);
-    let gear = gear.map(|x| PartId::from(x));
+    let gear = gear.map(PartId::from);
     conn.transaction(|| {
         Activity::get(id, &user, &conn)
             .map_or_else(
-                |err| Err(err),
-                |mut act| act.register(gear, &user, &conn).map(|x| Json(x))
+                Err,
+                |mut act| act.register(gear, &user, &conn).map(Json)
             )
     })
 }
