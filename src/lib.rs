@@ -8,7 +8,7 @@ extern crate serde_json;
 #[macro_use] extern crate diesel;
 #[macro_use] extern crate diesel_derive_newtype;
 
-#[macro_use] extern crate newtype;
+#[macro_use] extern crate newtype_derive;
 #[macro_use] extern crate log;
 extern crate simplelog;
 extern crate chrono;

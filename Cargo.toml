@@ -9,7 +9,7 @@ rocket = "0.4.1"
 diesel = { version = "1.4.2", features = ["postgres", "chrono"] }
 diesel-derive-newtype = "0.1.2"
 
-newtype = "0.2.1"
+newtype_derive = "0.1.6"
 dotenv = "0.14.1"
 log = "0.4.6"  
 simplelog = "0.5.3"

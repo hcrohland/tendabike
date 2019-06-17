@@ -19,16 +19,12 @@ use diesel::{
     RunQueryDsl,
 };
 
-#[derive(NewType, DieselNewType)] 
+#[derive(DieselNewType)] 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)] 
 pub struct PartId(i32);
 
-impl std::fmt::Display for PartId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
+NewtypeDisplay! { () pub struct PartId(); }
+NewtypeFrom! { () pub struct PartId(i32); }
 
 /// List of of all valid part types.
 /// 
