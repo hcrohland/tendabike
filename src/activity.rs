@@ -104,7 +104,7 @@ pub struct NewActivity {
 }
 
 impl ActivityId {
-    fn get(self, person: &dyn Person, conn: &AppConn) -> TbResult<Activity> {
+    fn read(self, person: &dyn Person, conn: &AppConn) -> TbResult<Activity> {
         let act = activities::table.find(self).for_update().first::<Activity>(conn)?;
         if act.user_id != person.get_id() && !person.is_admin() {
                 return Err(MyError::Forbidden(format!("User {} cannot access activity {}", person.get_id(), self)));
@@ -115,7 +115,7 @@ impl ActivityId {
     fn delete(self, person: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
         use crate::schema::activities::dsl::*;
         conn.transaction(|| {
-            let res = self.get(person, conn)?
+            let res = self.read(person, conn)?
                         .register(None, person, conn)?;
             diesel::delete(activities.filter(id.eq(self))).execute(conn)?;
             Ok (res)
@@ -126,7 +126,7 @@ impl ActivityId {
         conn.transaction(|| {
             let mut hash = Assembly::new();
 
-            let old = self.get(user, conn)?;
+            let old = self.read(user, conn)?;
             if let Some(gear) = old.gear {
                 gear.utilize(&mut hash, old.usage(-1), user, conn)?;
             }
@@ -230,10 +230,9 @@ impl Activity {
     ///  as long as no other users used her gear...
     fn rescan (user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction(|| {
-            let mut ass = Assembly::new();
-
             let main_gears = part::Part::reset(user, conn)?;
 
+            let mut ass = Assembly::new();
             let activities = activities::table.filter(activities::gear.eq_any(main_gears))
                 .load::<Activity>(conn)?;
 
@@ -253,7 +252,7 @@ fn types(_user: User, conn: AppDbConn) -> Json<Vec<ActivityType>> {
 
 #[get("/<id>")]
 fn get (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Activity>> {
-    ActivityId(id).get(&user, &conn).map(Json)
+    ActivityId(id).read(&user, &conn).map(Json)
 }
 
 #[post("/", data="<activity>")]
@@ -279,9 +278,12 @@ fn delete (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
 #[patch("/<id>?<gear>")]
 fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
     info! ("register act {} to gear {:?}", id, gear);
-    let gear = gear.map(PartId::from);
+    let gear = match gear {
+            None => None,
+            Some(x) => Some(PartId::get(x, &user, &conn)?)
+        };
     conn.transaction(|| {
-        ActivityId(id).get(&user, &conn)
+        ActivityId(id).read(&user, &conn)
             .map_or_else(
                 Err,
                 |mut act| act.register(gear, &user, &conn).map(Json)

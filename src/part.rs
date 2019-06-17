@@ -137,11 +137,14 @@ impl ATrait for Assembly {
 }
 
 impl PartId {
+    pub fn get (id: i32, user: &dyn Person, conn: &AppConn) -> TbResult<PartId> {
+        PartId(id).checkuser(user, conn)
+    }
 
     /// get the part with id part
     /// 
     /// Assumes authorization checked
-    fn get (self, conn: &AppConn) -> TbResult<Part> {
+    fn read (self, conn: &AppConn) -> TbResult<Part> {
         Ok(parts::table.find(self).first(conn)?)
     }
 
@@ -206,6 +209,12 @@ impl PartId {
             .load::<PartId>(conn).expect("could not read attachments")
     }
 
+    /// account for usage of the assembly attached to self 
+    /// 
+    /// returns all parts affected
+    /// 
+    /// if the usage is Usage::none() it simply returns the assembly
+    /// it should not update the database in this case, but does for now.
     fn traverse (self, map: & mut Assembly, usage: &Usage, conn: &AppConn) -> TbResult<()> {
         self.subparts(usage.start, conn)
                 .into_iter().map(|x| x.traverse(map, usage, conn))
@@ -215,10 +224,15 @@ impl PartId {
         Ok(())
     }
 
-
+    /// account for usage of the assembly attached to self 
+    /// 
+    /// returns all parts affected
+    /// checks if the user is authorized
     pub fn utilize (self, map: & mut Assembly, usage: Usage, user: &dyn Person, conn: &AppConn) -> TbResult<()> {
         self.checkuser(user, conn)?.traverse(map, &usage, conn)
     }
+
+
 }
 
 impl Part {
@@ -249,10 +263,14 @@ impl Part {
             }).collect())
     }
 
+    /// reset all usage counters for all parts of a person
+    /// 
+    /// returns the list of main gears affected
     pub fn reset (user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartId>> {
         use schema::parts::dsl::*;
         use std::collections::HashSet;
         
+        // reset all counters for all parts of this user
         let part_list = diesel::update(parts.filter(owner.eq(user.get_id())))
             .set((  time.eq(0),
                     climb.eq(0),
@@ -261,9 +279,11 @@ impl Part {
                     count.eq(0)))
             .get_results::<Part>(conn)?;
 
+        // get the main types
         let mains: HashSet<i32> = part_types::table.select(part_types::id).filter(part_types::main.eq(true))
             .load::<i32>(conn).expect("error loading PartTypes").into_iter().collect();
 
+        // only return the main parts
         Ok(part_list.into_iter()
             .filter(|x| mains.contains(&x.what)).map(|x| x.id)
             .collect())
@@ -277,16 +297,14 @@ fn types(_user: User, conn: AppDbConn) -> Json<Vec<PartTypes>> {
 
 #[get("/<part>")]
 fn get (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Part>> {
-    PartId(part).checkuser(&user, &conn)?
-        .get(&conn).map (Json)
+    PartId::get(part, &user, &conn)?.read(&conn).map (Json)
 }
 
 #[get("/<part>?assembly")]
 fn get_assembly (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
     let mut map = Assembly::new();
 
-    PartId(part).checkuser(&user, &conn)?
-        .traverse(&mut map, &Usage::none(), &conn)?;
+    PartId::get(part, &user, &conn)?.traverse(&mut map, &Usage::none(), &conn)?;
     
     Ok(Json(map))
 }
