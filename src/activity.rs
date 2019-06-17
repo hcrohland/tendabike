@@ -24,6 +24,13 @@ use part::Assembly;
 use part::ATrait;
 
 
+#[derive(DieselNewType)] 
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)] 
+pub struct ActivityId(i32);
+
+NewtypeDisplay! { () pub struct ActivityId(); }
+NewtypeFrom! { () pub struct ActivityId(i32); }
+
 /// The list of activity types
 /// Includes the kind of gear which can be used for this activity
 /// multiple gears are possible
@@ -44,7 +51,7 @@ pub struct ActivityType {
 #[table_name = "activities"]
 pub struct Activity {
     /// The primary key
-    pub id: i32,
+    pub id: ActivityId,
     /// The athlete
     pub user_id: i32,
     /// The activity type
@@ -96,28 +103,51 @@ pub struct NewActivity {
     pub gear: Option<PartId>,
 }
 
-
-impl Activity {
-    fn types (conn: &AppConn) -> Vec<ActivityType> {
-        activity_types::table.load::<ActivityType>(conn).expect("error loading ActivityTypes")
-    }
-
-    fn get(id: i32, person: &dyn Person, conn: &AppConn) -> TbResult<Activity> {
-        let act = activities::table.find(id).for_update().first::<Activity>(conn)?;
+impl ActivityId {
+    fn get(self, person: &dyn Person, conn: &AppConn) -> TbResult<Activity> {
+        let act = activities::table.find(self).for_update().first::<Activity>(conn)?;
         if act.user_id != person.get_id() && !person.is_admin() {
-                return Err(MyError::Forbidden(format!("User {} cannot access activity {}", person.get_id(), id)));
+                return Err(MyError::Forbidden(format!("User {} cannot access activity {}", person.get_id(), self)));
         }
         Ok(act)
     }
 
-    fn delete(act_id: i32, person: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
+    fn delete(self, person: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
         use crate::schema::activities::dsl::*;
         conn.transaction(|| {
-            let mut act = Activity::get(act_id, person, conn)?;
-            let res = act.register(None, person, conn)?;
-            diesel::delete(activities.filter(id.eq(act_id))).execute(conn)?;
+            let res = self.get(person, conn)?
+                        .register(None, person, conn)?;
+            diesel::delete(activities.filter(id.eq(self))).execute(conn)?;
             Ok (res)
         })
+    }
+
+    fn update (self, act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
+        conn.transaction(|| {
+            let mut hash = Assembly::new();
+
+            let old = self.get(user, conn)?;
+            if let Some(gear) = old.gear {
+                gear.utilize(&mut hash, old.usage(-1), user, conn)?;
+            }
+
+            let new: Activity = diesel::update(activities::table)
+                .filter(activities::id.eq(self))
+                .set(&act)
+                .get_result(conn)?;
+            if let Some(gear) = new.gear {
+                gear.utilize(&mut hash, new.usage(1), user, conn)?;
+            }
+            
+            new.check_geartype(hash, conn)
+        })
+    }
+
+}
+
+impl Activity {
+    fn types (conn: &AppConn) -> Vec<ActivityType> {
+        activity_types::table.load::<ActivityType>(conn).expect("error loading ActivityTypes")
     }
 
     fn check_geartype(&self, ass: Assembly, conn: &AppConn) -> TbResult<Assembly> {
@@ -155,27 +185,6 @@ impl Activity {
             }
             let res = new.check_geartype(res, conn)?;
             Ok((new, res))
-        })
-    }
-
-    fn update (act_id: i32, act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
-        conn.transaction(|| {
-            let mut hash = Assembly::new();
-
-            let old = Activity::get(act_id, user, conn)?;
-            if let Some(gear) = old.gear {
-                gear.utilize(&mut hash, old.usage(-1), user, conn)?;
-            }
-
-            let new: Activity = diesel::update(activities::table)
-                .filter(activities::id.eq(act_id))
-                .set(&act)
-                .get_result(conn)?;
-            if let Some(gear) = new.gear {
-                gear.utilize(&mut hash, new.usage(1), user, conn)?;
-            }
-            
-            new.check_geartype(hash, conn)
         })
     }
 
@@ -244,7 +253,7 @@ fn types(_user: User, conn: AppDbConn) -> Json<Vec<ActivityType>> {
 
 #[get("/<id>")]
 fn get (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Activity>> {
-    Activity::get(id, &user, &conn).map(Json)
+    ActivityId(id).get(&user, &conn).map(Json)
 }
 
 #[post("/", data="<activity>")]
@@ -252,18 +261,19 @@ fn post (activity: Json<NewActivity>, user: User, conn: AppDbConn)
             -> TbResult<status::Created<Json<(Activity, Assembly)>>> {
 
     let (activity, assembly) = Activity::create(activity.0, &user, &conn)?;
-    let url = uri! (get: activity.id);
+    let id_raw: i32 = activity.id.into();
+    let url = uri! (get: id_raw);
     Ok (status::Created(url.to_string(), Some(Json((activity, assembly)))))
 }
 
 #[put("/<id>", data="<activity>")]
 fn put (id: i32, activity: Json<NewActivity>, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
-    Activity::update(id, activity.0, &user, &conn).map(Json)
+    ActivityId(id).update(activity.0, &user, &conn).map(Json)
 }
 
 #[delete("/<id>")]
 fn delete (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
-    Activity::delete(id, &user, &conn).map(Json)
+    ActivityId(id).delete(&user, &conn).map(Json)
 }
 
 #[patch("/<id>?<gear>")]
@@ -271,7 +281,7 @@ fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> TbResul
     info! ("register act {} to gear {:?}", id, gear);
     let gear = gear.map(PartId::from);
     conn.transaction(|| {
-        Activity::get(id, &user, &conn)
+        ActivityId(id).get(&user, &conn)
             .map_or_else(
                 Err,
                 |mut act| act.register(gear, &user, &conn).map(Json)

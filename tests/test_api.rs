@@ -151,21 +151,21 @@
 
         act.gear = None;
         let  (mut act_new, ass): (Activity, Assembly) = reqjson(&client, Method::Post, "/activ/", &act, Status::Created);
-        assert!(act_new.id != 0);
+        assert!(act_new.id != 0.into());
         assert_eq!(act_new.start, act.start);
         assert!(ass.is_empty());
         
         act_new.gear = Some(1.into());
-        let ass: Assembly = reqjson(&client, Method::Put, format!("/activ/{:?}", act_new.id), &act_new, Status::Ok); //Should use response header?    
+        let ass: Assembly = reqjson(&client, Method::Put, format!("/activ/{}", act_new.id), &act_new, Status::Ok); //Should use response header?    
         let part1 = ass.part(1.into()).unwrap();
 
         act_new.descend = Some(555);
-        let ass: Assembly = reqjson(&client, Method::Put, format!("/activ/{:?}", act_new.id), &act_new, Status::Ok); //Should use response header?
+        let ass: Assembly = reqjson(&client, Method::Put, format!("/activ/{}", act_new.id), &act_new, Status::Ok); //Should use response header?
         let part2 = ass.part(1.into()).unwrap();
         assert_eq!(part1.climb, part2.climb);
         assert_eq!(part2.descend, part1.descend - 445);
 
-        let ass: Assembly = reqjson(&client, Method::Delete, format!("/activ/{:?}",act_new.id), "", Status::Ok);
+        let ass: Assembly = reqjson(&client, Method::Delete, format!("/activ/{}",act_new.id), "", Status::Ok);
         let part3 = ass.part(1.into()).unwrap();
         assert_eq!(part3.time + 60, part1.time);
     }
