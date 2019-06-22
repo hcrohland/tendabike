@@ -24,8 +24,7 @@ table! {
 }
 
 table! {
-    attachments (id) {
-        id -> Int4,
+    attachments (part_id, attached) {
         part_id -> Int4,
         hook_id -> Int4,
         attached -> Timestamptz,

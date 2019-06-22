@@ -1,8 +1,11 @@
+use std::cmp::{max, min};
 use std::collections::HashMap;
 
 use chrono::{
     Utc,
+    Local,
     DateTime,
+    TimeZone
 };
 
 use rocket_contrib::json::Json;
@@ -86,11 +89,9 @@ pub struct Part {
 #[derive(Clone, Debug, PartialEq, 
         Serialize, Deserialize, 
         Queryable, Identifiable, Associations, AsChangeset)]
-#[primary_key(id)]
+#[primary_key(part_id, attached)]
 #[belongs_to(Part, foreign_key = "hook_id")]
 struct Attachment {
-    // primary key
-    pub id: i32,
     // the sub-part, which is attached to the hook
     pub part_id: PartId,
     // the hook, to which part_id is attached
@@ -181,22 +182,6 @@ impl PartId {
             .get_result::<Part>(conn)?)
     }
 
-    /// Retrieve the part_id self is attached to or none
-    /// 
-    /// panics on unexpected database behaviour
-    fn attached_to(self, at_time: DateTime<Utc>, conn: &AppConn) -> Option<PartId> {
-        use schema::attachments::dsl::*;
-
-        match attachments.select(hook_id) 
-            .filter(part_id.eq(self)) 
-            .filter(attached.lt(at_time)).filter(detached.ge(at_time))
-            .first::<PartId>(conn) {
-                Ok(part) => Some(part),
-                Err(diesel::result::Error::NotFound) => None,
-                _ => panic!("Could not read attachments")
-            }
-    }
-
     /// retrieve the vector of Subparts for self
     /// 
     /// panics on unexpected database error
@@ -214,7 +199,7 @@ impl PartId {
     /// returns all parts affected
     /// 
     /// if the usage is Usage::none() it simply returns the assembly
-    /// it should not update the database in this case, but does for now.
+    /// - It should not update the database in this case, but does for now.
     fn traverse (self, map: & mut Assembly, usage: &Usage, conn: &AppConn) -> TbResult<()> {
         self.subparts(usage.start, conn)
                 .into_iter().map(|x| x.traverse(map, usage, conn))
@@ -232,7 +217,57 @@ impl PartId {
         self.checkuser(user, conn)?.traverse(map, &usage, conn)
     }
 
+    
 
+    // fn attach (self, hook: PartId, time: DateTime<Utc>, user: &dyn Person, conn: &AppConn) -> TbResult<Part> {
+    //     // let part = self.read(conn)?;
+    //     let top = hook.find_top(time, conn);
+    //     let usage = Activity::find(top, time, conn);
+    //     self.apply(&usage, conn)
+
+
+    // }
+
+}
+
+impl Attachment {
+    /// Retrieve the attachments for self.hook_id in the timeframe defined by self
+    /// 
+    /// self.part_id is ignored!
+    /// panics on unexpected database behaviour
+    fn parents(&self, conn: &AppConn) -> Vec<Attachment> {
+        use schema::attachments::dsl::*;
+
+        attachments
+            .filter(part_id.eq(self.hook_id)) // We are looking for parents of hook_id!
+            .filter(attached.le(self.detached)).filter(detached.gt(self.attached)) // anything in our timeframe matches
+            .load(conn).expect("Could not read attachments")
+    }
+
+    /// retrieve the topmost part for self->hook_id
+    /// 
+    /// when explicitly called self.part_id should be set to self.hook_id
+    /// panics on unexpected database behaviour
+    fn ancestors (self, conn: &AppConn) -> Vec<Attachment> {
+        let mut res = Vec::new();
+        
+        let parents = self.parents(conn);
+
+        // if there are no parents, it is topmost
+        // but we ignore the starting point if it has part_id == hook_id.
+        // all other results will have them differing
+        if parents.is_empty() && self.part_id != self.hook_id { 
+            res.push(self); 
+        } else {
+            for mut p in parents {
+                // We only want to have the intersection of the parent and the given window!
+                p.attached = max(p.attached, self.attached);
+                p.detached = min(p.detached, self.detached);
+                res.append(&mut p.ancestors(conn))
+            }
+        }
+        res
+    }
 }
 
 impl Part {
@@ -259,7 +294,7 @@ impl Part {
             .load::<Part>(conn)?;
         Ok(plist.into_iter()
             .filter(|x| {
-                x.id.attached_to(Utc::now(), conn).is_none() // only parts which are not attached
+                Attachment{part_id: 0.into(), hook_id: x.id, attached: Utc::now(), detached: Utc::now()}.parents(conn).is_empty() // only parts which are not attached
             }).collect())
     }
 
@@ -300,6 +335,15 @@ fn get (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Part>> {
     PartId::get(part, &user, &conn)?.read(&conn).map (Json)
 }
 
+#[get("/top/<part>/<start>/<end>")]
+fn top (part: i32, start: String, end: String, _user: User, conn: AppDbConn) -> TbResult<Json<Vec<Attachment>>> {
+    Ok(Json(Attachment {
+        part_id: part.into(), hook_id: part.into(), 
+        attached: Local.datetime_from_str(&start, "%FT%T").expect("no start").with_timezone(&Utc), 
+        detached: Local.datetime_from_str(&end, "%FT%T").expect("no end").with_timezone(&Utc),
+    }.ancestors(&conn)))
+}
+
 #[get("/<part>?assembly")]
 fn get_assembly (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
     let mut map = Assembly::new();
@@ -320,5 +364,5 @@ fn myspares(user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {
 }
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![types, get, get_assembly, mygear, myspares]
+    routes![types, get, get_assembly, mygear, myspares, top]
 }
