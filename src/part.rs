@@ -9,6 +9,7 @@ use chrono::{
 };
 
 use rocket_contrib::json::Json;
+use rocket::response::status;
 
 use self::schema::{parts, part_types, attachments};
 use crate::user::*;
@@ -22,12 +23,6 @@ use diesel::{
     RunQueryDsl,
 };
 
-#[derive(DieselNewType)] 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)] 
-pub struct PartId(i32);
-
-NewtypeDisplay! { () pub struct PartId(); }
-NewtypeFrom! { () pub struct PartId(i32); }
 
 /// List of of all valid part types.
 /// 
@@ -81,28 +76,6 @@ pub struct Part {
     pub count: i32,
 }
 
-/// Timeline of attachments
-/// 
-/// Every attachement of a part to another part (hook) is an entry
-/// Start and end time are noted
-/// 
-#[derive(Clone, Debug, PartialEq, 
-        Serialize, Deserialize, 
-        Queryable, Identifiable, Associations, AsChangeset)]
-#[primary_key(part_id, attached)]
-#[belongs_to(Part, foreign_key = "hook_id")]
-struct Attachment {
-    // the sub-part, which is attached to the hook
-    pub part_id: PartId,
-    // the hook, to which part_id is attached
-    pub hook_id: PartId,
-    // when it was attached
-    pub attached: DateTime<Utc>,
-    // when it was removed again
-    pub detached: DateTime<Utc>,
-}
-
-
 /*
 #[derive(Insertable, Debug, Clone)]
 #[table_name = "parts"]
@@ -136,6 +109,12 @@ impl ATrait for Assembly {
         self.get(&part)
     }
 }
+#[derive(DieselNewType)] 
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)] 
+pub struct PartId(i32);
+
+NewtypeDisplay! { () pub struct PartId(); }
+NewtypeFrom! { () pub struct PartId(i32); }
 
 impl PartId {
     pub fn get (id: i32, user: &dyn Person, conn: &AppConn) -> TbResult<PartId> {
@@ -169,17 +148,21 @@ impl PartId {
     /// apply a usage to the part with given id
     /// 
     /// returns the changed part
-    fn apply (self, usage: &Usage, conn: &AppConn) -> TbResult<Part> {
+    fn apply (self, usage: &Usage, factor: i32, conn: &AppConn) -> TbResult<Part> {
         use schema::parts::dsl::*;
 
-        info!("Applying usage to part {}", self);
-        Ok(diesel::update(parts.find(self))
-            .set((  time.eq(time + usage.time),
-                    climb.eq(climb + usage.climb),
-                    descend.eq(descend + usage.descend),
-                    distance.eq(distance + usage.distance),
-                    count.eq(count + usage.count)))
-            .get_result::<Part>(conn)?)
+        if factor != 0 {
+            info!("Applying usage to part {}", self);
+            Ok(diesel::update(parts.find(self))
+                .set((  time.eq(time + usage.time * factor),
+                        climb.eq(climb + usage.climb * factor),
+                        descend.eq(descend + usage.descend * factor),
+                        distance.eq(distance + usage.distance * factor),
+                        count.eq(count + usage.count * factor)))
+                .get_result::<Part>(conn)?)
+        } else {
+            Ok (parts.find(self).first::<Part>(conn)?)
+        }
     }
 
     /// retrieve the vector of Subparts for self
@@ -200,12 +183,12 @@ impl PartId {
     /// 
     /// if the usage is Usage::none() it simply returns the assembly
     /// - It should not update the database in this case, but does for now.
-    fn traverse (self, map: & mut Assembly, usage: &Usage, conn: &AppConn) -> TbResult<()> {
+    fn traverse (self, map: & mut Assembly, usage: &Usage, factor: i32, conn: &AppConn) -> TbResult<()> {
         self.subparts(usage.start, conn)
-                .into_iter().map(|x| x.traverse(map, usage, conn))
+                .into_iter().map(|x| x.traverse(map, usage, factor, conn))
                 .for_each(drop);
 
-        map.insert(self, self.apply(usage, conn)?);
+        map.insert(self, self.apply(usage, factor, conn)?);
         Ok(())
     }
 
@@ -214,23 +197,47 @@ impl PartId {
     /// returns all parts affected
     /// checks if the user is authorized
     pub fn utilize (self, map: & mut Assembly, usage: Usage, user: &dyn Person, conn: &AppConn) -> TbResult<()> {
-        self.checkuser(user, conn)?.traverse(map, &usage, conn)
+        self.checkuser(user, conn)?.traverse(map, &usage, 1, conn)
     }
+}
 
-    
-
-    // fn attach (self, hook: PartId, time: DateTime<Utc>, user: &dyn Person, conn: &AppConn) -> TbResult<Part> {
-    //     // let part = self.read(conn)?;
-    //     let top = hook.find_top(time, conn);
-    //     let usage = Activity::find(top, time, conn);
-    //     self.apply(&usage, conn)
-
-
-    // }
-
+/// Timeline of attachments
+/// 
+/// Every attachement of a part to another part (hook) is an entry
+/// Start and end time are noted
+/// 
+#[derive(Clone, Copy, Debug, PartialEq, 
+        Serialize, Deserialize, 
+        Queryable, Identifiable, Associations, Insertable, AsChangeset)]
+#[primary_key(part_id, attached)]
+#[belongs_to(Part, foreign_key = "hook_id")]
+struct Attachment {
+    // the sub-part, which is attached to the hook
+    pub part_id: PartId,
+    // the hook, to which part_id is attached
+    pub hook_id: PartId,
+    // when it was attached
+    pub attached: DateTime<Utc>,
+    // when it was removed again
+    pub detached: DateTime<Utc>,
 }
 
 impl Attachment {
+    fn new<P> (part: P, hook: P, start: DateTime<Utc>, end: DateTime<Utc>) -> Attachment
+        where P: Into<PartId>
+    {
+        Attachment {
+            part_id: part.into(),
+            hook_id: hook.into(),
+            attached: start,
+            detached: end 
+        }
+    }
+
+    fn safe (&self, conn: &AppConn) -> TbResult<Attachment> {
+        Ok(diesel::insert_into(attachments::table).values(self).get_result(conn)?)
+    }
+
     /// Retrieve the attachments for self.hook_id in the timeframe defined by self
     /// 
     /// self.part_id is ignored!
@@ -268,6 +275,24 @@ impl Attachment {
         }
         res
     }
+
+    fn create (&self, conn: &AppConn) -> TbResult<Assembly> {
+        // let siblings = self.siblings(&att);
+
+        let att = self.safe(conn)?;
+
+        let tops = att.ancestors(conn);
+        let mut map = Assembly::new();
+
+        for top in tops {
+            let uses = Activity::find(top.hook_id, top.attached, top.detached, conn);
+            for usage in uses {
+                self.part_id.traverse(&mut map, &usage, 1, conn)?
+                // siblings.pick(&usage).traverse(&mut map, &usage, -1, conn)
+            }
+        }
+        Ok(map)
+    }
 }
 
 impl Part {
@@ -294,7 +319,7 @@ impl Part {
             .load::<Part>(conn)?;
         Ok(plist.into_iter()
             .filter(|x| {
-                Attachment{part_id: 0.into(), hook_id: x.id, attached: Utc::now(), detached: Utc::now()}.parents(conn).is_empty() // only parts which are not attached
+                Attachment::new(0.into(), x.id, Utc::now(),  Utc::now()).parents(conn).is_empty() // only parts which are not attached
             }).collect())
     }
 
@@ -323,6 +348,13 @@ impl Part {
             .filter(|x| mains.contains(&x.what)).map(|x| x.id)
             .collect())
     }
+
+    // fn siblings(&self, att: &Attachment, conn: &AppConn) -> Vec<Attachment> {
+    //     use schema::attachments::dsl::*;
+
+    //     attachments.filter(hook.eq(att.hook_id))
+    //         .filter(part_id.eq)
+    // }
 }
 
 #[get("/types")]
@@ -335,20 +367,30 @@ fn get (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Part>> {
     PartId::get(part, &user, &conn)?.read(&conn).map (Json)
 }
 
+#[post("/attach", data="<attachment>")]
+fn attach (attachment: Json<Attachment>, _user: User, conn: AppDbConn) 
+            -> TbResult<status::Created<Json<Assembly>>> {
+    Ok(conn.test_transaction::<_,MyError,_> (||{
+        let res = attachment.create(&conn)?;
+        let url = format!("/attach/{}/{}", attachment.part_id, attachment.attached);
+        Ok(status::Created(url, Some(Json(res))))
+    }))
+
+    
+} 
+
 #[get("/top/<part>/<start>/<end>")]
 fn top (part: i32, start: String, end: String, _user: User, conn: AppDbConn) -> TbResult<Json<Vec<Attachment>>> {
-    Ok(Json(Attachment {
-        part_id: part.into(), hook_id: part.into(), 
-        attached: Local.datetime_from_str(&start, "%FT%T").expect("no start").with_timezone(&Utc), 
-        detached: Local.datetime_from_str(&end, "%FT%T").expect("no end").with_timezone(&Utc),
-    }.ancestors(&conn)))
+    Ok(Json(Attachment::new(part, part, 
+        Local.datetime_from_str(&start, "%FT%T").expect("no start").with_timezone(&Utc), 
+        Local.datetime_from_str(&end, "%FT%T").expect("no end").with_timezone(&Utc)).ancestors(&conn)))
 }
 
 #[get("/<part>?assembly")]
 fn get_assembly (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
     let mut map = Assembly::new();
 
-    PartId::get(part, &user, &conn)?.traverse(&mut map, &Usage::none(), &conn)?;
+    PartId::get(part, &user, &conn)?.traverse(&mut map, &Usage::none(), 0, &conn)?;
     
     Ok(Json(map))
 }
@@ -364,5 +406,5 @@ fn myspares(user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {
 }
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![types, get, get_assembly, mygear, myspares, top]
+    routes![types, get, get_assembly, mygear, myspares, attach, top]
 }

@@ -27,18 +27,19 @@ use simplelog::{
     WriteLogger,
 };
 
-//use std::error;
 use std::env;
 use std::fs::File;
 
-//pub mod db;
 pub mod schema;
 pub mod user;
-//pub mod greetings;
+
 pub mod part;
 use part::PartId as PartId;
-use error::MyError as MyError;
+
 pub mod activity;
+use activity::Activity as Activity;
+
+use error::MyError as MyError;
 
 type AppConn = diesel::PgConnection;
 
@@ -125,6 +126,14 @@ impl Usage {
             count: 0,
         }
     }
+    // pub fn add (&mut self, rh: &Usage) {
+    //     self.time += rh.time;
+    //     self.climb += rh.climb;
+    //     self.descend += rh.descend;
+    //     self.power += rh.power;
+    //     self.distance += rh.distance;
+    //     self.count += rh.distance;
+    // }
 }
 
 mod error {

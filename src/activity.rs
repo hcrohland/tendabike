@@ -9,7 +9,6 @@ use rocket::response::status;
 
 use crate::schema::{activities, activity_types};
 use crate::user::*;
-use crate::error::MyError;
 use crate::*;
 
 use self::diesel::prelude::*;
@@ -224,9 +223,18 @@ impl Activity {
         })
     }
 
+    pub fn find (part: PartId, begin: DateTime<Utc>, end: DateTime<Utc>, conn: &AppConn) -> Vec<Usage> {
+        use schema::activities::dsl::{activities,gear,start};
+
+        let acts = activities.filter(gear.eq(Some(part)))
+                        .filter(start.ge(begin)).filter(start.lt(end))
+                        .load::<Activity>(conn).expect("could not read activities");
+        acts.into_iter().map(|x|x.usage(1)).collect()
+    }
+
     /// rescan all activites for a user
     /// 
-    /// This will correct the urilization data for that user
+    /// This will correct the utilization data for that user
     ///  as long as no other users used her gear...
     fn rescan (user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction(|| {
