@@ -74,7 +74,7 @@ PATCH {{host}}/activ/rescan
 x-user-id: 2
 
 ###
-{{host}}/part/top/301/2019-01-31T22:00:00/2019-02-03T00:00:00
+{{host}}/part/top/301/2019-01-30T22:00:00/2019-03-30T22:00:00
 x-user-id: 2
 ###
 POST {{host}}/part/attach

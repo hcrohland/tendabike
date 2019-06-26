@@ -40,7 +40,7 @@ pub struct ActivityType {
     /// The name
     pub name: String,
     /// Gears which can be used for this activity type
-    pub gear: i32,
+    pub gear_type: PartType,
 }
 
 
@@ -161,7 +161,7 @@ impl Activity {
             None => return Err(MyError::AnyErr("Main gear not found in assembly".to_string()))
         };
 
-        if mygear.what == actt.gear {
+        if mygear.what == actt.gear_type {
             Ok(ass)
         } else {
             Err(MyError::BadRequest(

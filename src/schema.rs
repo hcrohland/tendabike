@@ -19,7 +19,8 @@ table! {
     activity_types (id) {
         id -> Int4,
         name -> Text,
-        gear -> Int4,
+        #[sql_name = "gear"]
+        gear_type -> Int4,
     }
 }
 
@@ -59,7 +60,7 @@ table! {
 }
 
 joinable!(activities -> activity_types (what));
-joinable!(activity_types -> part_types (gear));
+joinable!(activity_types -> part_types (gear_type));
 joinable!(parts -> part_types (what));
 
 allow_tables_to_appear_in_same_query!(

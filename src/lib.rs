@@ -35,6 +35,7 @@ pub mod user;
 
 pub mod part;
 use part::PartId as PartId;
+use part::PartType as PartType;
 
 pub mod activity;
 use activity::Activity as Activity;

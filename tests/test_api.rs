@@ -77,7 +77,7 @@
             let client = Client::new(crate::ignite_rocket()).expect("valid rocket instance");
 
             let types: Vec<ActivityType> = getjson(&client, "/activ/types");
-            assert_eq!(types[0], ActivityType {id:1,name: String::from("Bike Ride"), gear: 1});
+            assert_eq!(types[0], ActivityType {id:1,name: String::from("Bike Ride"), gear_type: 1});
     }
     #[test]
     fn activities () {

@@ -23,6 +23,7 @@ use diesel::{
     RunQueryDsl,
 };
 
+pub type PartType = i32;
 
 /// List of of all valid part types.
 /// 
@@ -33,7 +34,7 @@ use diesel::{
 #[table_name = "part_types"]
 pub struct PartTypes {
     /// The primary key
-    pub id: i32,
+    pub id: PartType,
     /// The display name
     pub name: String,
     /// Part types that can be attached
@@ -55,7 +56,7 @@ pub struct Part {
     /// The owner
     pub owner: i32,
     /// The type of the part
-    pub what: i32,
+    pub what: PartType,
     /// This name of the part.
     pub name: String,
     /// The vendor name
@@ -75,27 +76,6 @@ pub struct Part {
     /// usage count
     pub count: i32,
 }
-
-/*
-#[derive(Insertable, Debug, Clone)]
-#[table_name = "parts"]
-pub struct NewPart {
-    pub owner: i32,
-    pub name: String,
-    pub vendor: String,
-    pub model: String
-}
-
-#[derive(AsChangeset, Debug, Clone)]
-#[table_name = "parts"]
-pub struct UpdatePart {
-    pub id: i32,
-    pub owner: i32,
-    pub name: Option<String>,
-    pub vendor: Option<String>,
-    pub model: Option<String>
-}
-*/
 
 //#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub type Assembly = HashMap<PartId, Part>;
@@ -223,17 +203,8 @@ struct Attachment {
 }
 
 impl Attachment {
-    fn new<P> (part: P, hook: P, start: DateTime<Utc>, end: DateTime<Utc>) -> Attachment
-        where P: Into<PartId>
-    {
-        Attachment {
-            part_id: part.into(),
-            hook_id: hook.into(),
-            attached: start,
-            detached: end 
-        }
-    }
 
+    /// Store the attachment in the database
     fn safe (&self, conn: &AppConn) -> TbResult<Attachment> {
         Ok(diesel::insert_into(attachments::table).values(self).get_result(conn)?)
     }
@@ -241,6 +212,7 @@ impl Attachment {
     /// Retrieve the attachments for self.hook_id in the timeframe defined by self
     /// 
     /// self.part_id is ignored!
+    /// parents are found in hook_id of the resulting attachments
     /// panics on unexpected database behaviour
     fn parents(&self, conn: &AppConn) -> Vec<Attachment> {
         use schema::attachments::dsl::*;
@@ -293,6 +265,19 @@ impl Attachment {
         }
         Ok(map)
     }
+
+    /// find other parts which are attached to the same hook as myself in the given timeframe
+    /// 
+    /// returns the full attachments for these parts.
+    fn siblings(&self, what: PartType, conn: &AppConn) -> Vec<Attachment> {
+        attachments::table
+                .inner_join(parts::table.on(parts::id.eq(attachments::part_id) // join corresponding part
+                                            .and(parts::what.eq(what))))  // where the part has my type
+                .filter(attachments::hook_id.eq(self.hook_id)) // ... and is hooked to the parent
+                .filter(attachments::attached.lt(self.detached).and(attachments::detached.ge(self.attached))) // ... and in the given time frame
+                .select(schema::attachments::all_columns) // return only the attachment
+                .load::<Attachment>(conn).expect("could not read attachments")
+    }
 }
 
 impl Part {
@@ -319,7 +304,7 @@ impl Part {
             .load::<Part>(conn)?;
         Ok(plist.into_iter()
             .filter(|x| {
-                Attachment::new(0.into(), x.id, Utc::now(),  Utc::now()).parents(conn).is_empty() // only parts which are not attached
+                x.attachment(x.id, Utc::now(), Utc::now()).parents(conn).is_empty() // only parts which are not attached
             }).collect())
     }
 
@@ -349,12 +334,19 @@ impl Part {
             .collect())
     }
 
-    // fn siblings(&self, att: &Attachment, conn: &AppConn) -> Vec<Attachment> {
-    //     use schema::attachments::dsl::*;
-
-    //     attachments.filter(hook.eq(att.hook_id))
-    //         .filter(part_id.eq)
-    // }
+    /// Instantiate a new Attachment object for Part self
+    /// 
+    /// This is not persisted in the database, but can be used for a lot of operations
+    fn attachment<P> (&self, hook: P, start: DateTime<Utc>, end: DateTime<Utc>) -> Attachment
+        where P: Into<PartId>
+    {
+        Attachment {
+            part_id: self.id,
+            hook_id: hook.into(),
+            attached: start,
+            detached: end 
+        }
+    }
 }
 
 #[get("/types")]
@@ -374,16 +366,18 @@ fn attach (attachment: Json<Attachment>, _user: User, conn: AppDbConn)
         let res = attachment.create(&conn)?;
         let url = format!("/attach/{}/{}", attachment.part_id, attachment.attached);
         Ok(status::Created(url, Some(Json(res))))
-    }))
-
-    
+    }))    
 } 
 
-#[get("/top/<part>/<start>/<end>")]
-fn top (part: i32, start: String, end: String, _user: User, conn: AppDbConn) -> TbResult<Json<Vec<Attachment>>> {
-    Ok(Json(Attachment::new(part, part, 
-        Local.datetime_from_str(&start, "%FT%T").expect("no start").with_timezone(&Utc), 
-        Local.datetime_from_str(&end, "%FT%T").expect("no end").with_timezone(&Utc)).ancestors(&conn)))
+#[get("/top/<part>/<hook>/<start>/<end>")]
+fn top (part: i32, hook: i32, start: String, end: String, user: User, conn: AppDbConn) -> TbResult<Json<Vec<Attachment>>> {
+    let start = Local.datetime_from_str(&start, "%FT%T").expect("no start").with_timezone(&Utc);
+    let end = Local.datetime_from_str(&end, "%FT%T").expect("no end").with_timezone(&Utc);
+
+    let part = PartId::get(part, &user, &conn)?.read(&conn)?;
+    Ok(Json(        
+            part.attachment(hook, start, end).siblings(part.what, &conn)
+    ))
 }
 
 #[get("/<part>?assembly")]
