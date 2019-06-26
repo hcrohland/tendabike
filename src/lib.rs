@@ -40,6 +40,8 @@ use part::PartType as PartType;
 pub mod activity;
 use activity::Activity as Activity;
 
+pub mod attachment;
+
 use error::MyError as MyError;
 
 type AppConn = diesel::PgConnection;
@@ -76,6 +78,7 @@ pub fn ignite_rocket () -> rocket::Rocket {
         .mount("/", rocket_contrib::serve::StaticFiles::from(concat!(env!("CARGO_MANIFEST_DIR"), "/www")))
         .mount("/part", part::routes())
         .mount("/activ", activity::routes())
+        .mount("/attach", attachment::routes())
 }
 
 fn init_logging (){
