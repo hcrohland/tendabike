@@ -223,12 +223,14 @@ impl Activity {
         })
     }
 
-    pub fn find (part: PartId, begin: DateTime<Utc>, end: DateTime<Utc>, conn: &AppConn) -> Vec<Usage> {
+    pub fn find (part: PartId, begin: DateTime<Utc>, end: Option<DateTime<Utc>>, conn: &AppConn) -> Vec<Usage> {
         use schema::activities::dsl::{activities,gear,start};
 
-        let acts = activities.filter(gear.eq(Some(part)))
-                        .filter(start.ge(begin)).filter(start.lt(end))
-                        .load::<Activity>(conn).expect("could not read activities");
+
+        let mut query = activities.filter(gear.eq(Some(part)))
+                        .filter(start.ge(begin)).into_boxed();
+        if let Some(end) = end { query = query.filter(start.lt(end)) }
+        let acts = query.load::<Activity>(conn).expect("could not read activities");
         acts.into_iter().map(|x|x.usage(1)).collect()
     }
 

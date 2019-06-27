@@ -44,7 +44,7 @@ struct Attachment {
     // when it was attached
     attached: DateTime<Utc>,
     // when it was removed again
-    detached: DateTime<Utc>,
+    detached: Option<DateTime<Utc>>,
 }
 
 pub fn subparts(part: PartId, at_time: DateTime<Utc>, conn: &AppConn) -> Vec<PartId> {
@@ -85,9 +85,9 @@ impl Attachment {
     fn parents(&self, conn: &AppConn) -> Vec<Attachment> {
         use schema::attachments::dsl::*;
 
-        attachments
-            .filter(part_id.eq(self.hook_id)) // We are looking for parents of hook_id!
-            .filter(attached.le(self.detached)).filter(detached.gt(self.attached)) // anything in our timeframe matches
+        let mut query = attachments.filter(part_id.eq(self.hook_id)).into_boxed(); // We are looking for parents of hook_id!
+        if let Some(x) = self.detached { query = query.filter(attached.le(x)) } 
+        query.filter(detached.is_null().or(detached.gt(self.attached))) // anything in our timeframe matches
             .load(conn).expect("Could not read attachments")
     }
 
@@ -138,11 +138,12 @@ impl Attachment {
     /// 
     /// returns the full attachments for these parts.
     fn siblings(&self, what: PartType, conn: &AppConn) -> Vec<Attachment> {
-        attachments::table
+        let mut query  = attachments::table
                 .inner_join(parts::table.on(parts::id.eq(attachments::part_id) // join corresponding part
                                             .and(parts::what.eq(what))))  // where the part has my type
-                .filter(attachments::hook_id.eq(self.hook_id)) // ... and is hooked to the parent
-                .filter(attachments::attached.lt(self.detached).and(attachments::detached.ge(self.attached))) // ... and in the given time frame
+                .filter(attachments::hook_id.eq(self.hook_id)).into_boxed(); // ... and is hooked to the parent
+        if let Some(detached) = self.detached { query = query.filter(attachments::attached.lt(detached)) }
+        query.filter(attachments::detached.is_null().or(attachments::detached.ge(self.attached))) // ... and in the given time frame
                 .select(schema::attachments::all_columns) // return only the attachment
                 .load::<Attachment>(conn).expect("could not read attachments")
     }
@@ -158,11 +159,11 @@ fn attach (attachment: Json<Attachment>, _user: User, conn: AppDbConn)
     }))    
 } 
 
-#[get("/<part_id>/<hook_id>/<start>/<end>")]
-fn top (part_id: i32, hook_id: i32, start: String, end: String, user: User, conn: AppDbConn) -> TbResult<Json<Vec<Attachment>>> {
+#[get("/<part_id>/<hook_id>/<start>?<end>")]
+fn top (part_id: i32, hook_id: i32, start: String, end: Option<String>, user: User, conn: AppDbConn) -> TbResult<Json<Vec<Attachment>>> {
     let att = Attachment {
         attached: Local.datetime_from_str(&start, "%FT%T").expect("no start").with_timezone(&Utc),
-        detached: Local.datetime_from_str(&end, "%FT%T").expect("no end").with_timezone(&Utc),
+        detached: end.map(|x| Local.datetime_from_str(&x, "%FT%T").expect("no end").with_timezone(&Utc)),
         part_id: part_id.into(),
         hook_id: hook_id.into(),
     };

@@ -29,7 +29,7 @@ table! {
         part_id -> Int4,
         hook_id -> Int4,
         attached -> Timestamptz,
-        detached -> Timestamptz,
+        detached -> Nullable<Timestamptz>,
     }
 }
 
