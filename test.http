@@ -1,6 +1,6 @@
 @host = http://[::1]:8000
 
-{{host}}/part/types 
+{{host}}/types/activity
 x-user-id: 2
 ###
 {{host}}/ 

@@ -7,6 +7,7 @@
     use tendabike::*;
 
     use tendabike::part::*;
+    use tendabike::types::*;
 
     use serde::{
             de::Deserialize,
@@ -48,8 +49,8 @@
     fn part_types () {
             let client = Client::new(crate::ignite_rocket()).expect("valid rocket instance");
 
-            let types: Vec<PartTypes> = getjson (&client, "/part/types");
-            assert_eq!(types[0], PartTypes{id:1,
+            let types: Vec<PartType> = getjson (&client, "/types/part");
+            assert_eq!(types[0], PartType{id:1.into(),
                     name: String::from("Bike"), main:true, 
                     hooks: vec!(2,4,5,7,8).into_iter().map(PartId::from).collect()});
     }
@@ -76,8 +77,8 @@
     fn activity_types () {
             let client = Client::new(crate::ignite_rocket()).expect("valid rocket instance");
 
-            let types: Vec<ActivityType> = getjson(&client, "/activ/types");
-            assert_eq!(types[0], ActivityType {id:1,name: String::from("Bike Ride"), gear_type: 1});
+            let types: Vec<ActivityType> = getjson(&client, "/types/activity");
+            assert_eq!(types[0], ActivityType {id:1.into(),name: String::from("Bike Ride"), gear_type: 1.into()});
     }
     #[test]
     fn activities () {
@@ -122,7 +123,7 @@
         let mut act = NewActivity {
             user_id: 2,
             name:   String::from("test activity"),
-            what:   99,
+            what:   99.into(),
             gear:   Some(2.into()),
             start:  Utc::now(),
             duration: 70,
@@ -140,7 +141,7 @@
             .dispatch();
         assert_eq!(response.status(), Status::BadRequest); 
 
-        act.what = 1;
+        act.what = 1.into();
         act.gear = Some(2.into());        
         let response = client.req(Method::Post, "/activ/")
             .header(Header::new("x-user-id", "2"))

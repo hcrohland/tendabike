@@ -20,40 +20,20 @@ use diesel::{
     RunQueryDsl,
 };
 
-pub type PartType = i32;
-
-/// List of of all valid part types.
-/// 
-/// We distingish main parts from spares:
-/// - Main parts can be used for an activity - like a bike
-/// - Spares can be attached to other parts and are subparts of main parts
-#[derive(Clone, Debug, Serialize, Deserialize, Queryable, Identifiable, Associations, PartialEq)]
-#[table_name = "part_types"]
-pub struct PartTypes {
-    /// The primary key
-    pub id: PartType,
-    /// The display name
-    pub name: String,
-    /// Part types that can be attached
-    pub hooks: Vec<PartId>,
-    /// is it a main part? I.e. can it be used for an activity?
-    pub main: bool,
-}
-
 /// The database's representation of a part. 
 #[derive(Clone, Debug, PartialEq, 
         Serialize, Deserialize, 
         Queryable, Identifiable, Associations, AsChangeset)]
 #[primary_key(id)]
 #[table_name = "parts"]
-#[belongs_to(PartTypes, foreign_key = "what")]
+#[belongs_to(PartType, foreign_key = "what")]
 pub struct Part {
     /// The primary key
     pub id: PartId,
     /// The owner
     pub owner: i32,
     /// The type of the part
-    pub what: PartType,
+    pub what: PartTypeId,
     /// This name of the part.
     pub name: String,
     /// The vendor name
@@ -183,11 +163,6 @@ impl PartId {
 }
 
 impl Part {
-    /// list all part types
-    fn types (conn: &AppConn) -> Vec<PartTypes> {
-        part_types::table.order_by(part_types::id).load::<PartTypes>(conn).expect("error loading PartTypes")
-    }
-
     /// retrieve the list of available parts for a user
     /// 
     /// it only returns parts which are not attached
@@ -198,7 +173,7 @@ impl Part {
 
         let types = part_types::table
             .filter(part_types::main.eq(main))
-            .load::<PartTypes>(conn)?;
+            .load::<PartType>(conn)?;
 
         let plist = Part::belonging_to(&types) // only gear or spares
             .filter(owner.eq(user.get_id()))
@@ -227,19 +202,14 @@ impl Part {
             .get_results::<Part>(conn)?;
 
         // get the main types
-        let mains: HashSet<i32> = part_types::table.select(part_types::id).filter(part_types::main.eq(true))
-            .load::<i32>(conn).expect("error loading PartTypes").into_iter().collect();
+        let mains: HashSet<PartTypeId> = part_types::table.select(part_types::id).filter(part_types::main.eq(true))
+            .load::<PartTypeId>(conn).expect("error loading PartType").into_iter().collect();
 
         // only return the main parts
         Ok(part_list.into_iter()
             .filter(|x| mains.contains(&x.what)).map(|x| x.id)
             .collect())
     }
-}
-
-#[get("/types")]
-fn types(_user: User, conn: AppDbConn) -> Json<Vec<PartTypes>> {
-    Json(Part::types(&conn))
 }
 
 #[get("/<part>")]
@@ -267,5 +237,5 @@ fn myspares(user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {
 }
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![types, get, get_assembly, mygear, myspares]
+    routes![get, get_assembly, mygear, myspares]
 }

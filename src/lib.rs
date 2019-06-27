@@ -33,12 +33,14 @@ use std::fs::File;
 pub mod schema;
 pub mod user;
 
+pub mod types;
+use types::*;
+
 pub mod part;
-use part::PartId as PartId;
-use part::PartType as PartType;
+use part::{PartId};
 
 pub mod activity;
-use activity::Activity as Activity;
+use activity::Activity;
 
 pub mod attachment;
 
@@ -76,6 +78,7 @@ pub fn ignite_rocket () -> rocket::Rocket {
 
         // mount all the endpoints from the module
         .mount("/", rocket_contrib::serve::StaticFiles::from(concat!(env!("CARGO_MANIFEST_DIR"), "/www")))
+        .mount("/types", types::routes())
         .mount("/part", part::routes())
         .mount("/activ", activity::routes())
         .mount("/attach", attachment::routes())

@@ -144,7 +144,7 @@ impl Attachment {
     /// find other parts which are attached to the same hook as myself in the given timeframe
     /// 
     /// returns the full attachments for these parts.
-    fn siblings(&self, what: PartType, conn: &AppConn) -> Vec<Attachment> {
+    fn siblings(&self, what: PartTypeId, conn: &AppConn) -> Vec<Attachment> {
         let mut query  = attachments::table
                 .inner_join(parts::table.on(parts::id.eq(attachments::part_id) // join corresponding part
                                             .and(parts::what.eq(what))))  // where the part has my type

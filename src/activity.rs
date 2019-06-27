@@ -7,7 +7,7 @@ use chrono::{
 use rocket_contrib::json::Json;
 use rocket::response::status;
 
-use crate::schema::{activities, activity_types};
+use crate::schema::activities;
 use crate::user::*;
 use crate::*;
 
@@ -30,20 +30,6 @@ pub struct ActivityId(i32);
 NewtypeDisplay! { () pub struct ActivityId(); }
 NewtypeFrom! { () pub struct ActivityId(i32); }
 
-/// The list of activity types
-/// Includes the kind of gear which can be used for this activity
-/// multiple gears are possible
-#[derive(Debug, Clone, Identifiable, Queryable, PartialEq, Serialize, Deserialize)]
-pub struct ActivityType {
-    /// The primary key
-    pub id: i32,
-    /// The name
-    pub name: String,
-    /// Gears which can be used for this activity type
-    pub gear_type: PartType,
-}
-
-
 /// The database's representation of an activity.
 #[derive(Debug, Clone, Identifiable, Queryable, AsChangeset, PartialEq, Serialize, Deserialize)]
 #[changeset_options(treat_none_as_null="true")]
@@ -54,7 +40,7 @@ pub struct Activity {
     /// The athlete
     pub user_id: i32,
     /// The activity type
-    pub what: i32,
+    pub what: ActTypeId,
     /// This name of the activity.
     pub name: String,
     /// Start time
@@ -81,7 +67,7 @@ pub struct Activity {
 pub struct NewActivity {
     pub user_id: i32,
     /// The activity type
-    pub what: i32,
+    pub what: ActTypeId,
     /// This name of the activity.
     pub name: String,
     /// Start time
@@ -145,10 +131,6 @@ impl ActivityId {
 }
 
 impl Activity {
-    fn types (conn: &AppConn) -> Vec<ActivityType> {
-        activity_types::table.load::<ActivityType>(conn).expect("error loading ActivityTypes")
-    }
-
     /// check if the gear is allowed for the activity
     fn check_geartype(&self, ass: Assembly, conn: &AppConn) -> TbResult<Assembly> {
         let gear_id = match self.gear {
@@ -160,14 +142,12 @@ impl Activity {
             None => return Err(MyError::AnyErr("Main gear not found in assembly".to_string()))
         };
 
-        let actt = activity_types::table.find(self.what).first::<ActivityType>(conn)?;
-        if mygear.what == actt.gear_type {
-            Ok(ass)
-        } else {
-            Err(MyError::BadRequest(
-                    format!("Gear type {} cannot be used for activity type {}", 
-                                mygear.what, self.what)))
-        }   
+        match mygear.what == self.what.get(conn)?.gear_type {
+            true => Ok(ass),
+            false => Err(MyError::BadRequest(
+                            format!("Gear type {} cannot be used for activity type {}", 
+                                    mygear.what, self.what)))
+        } 
     }
 
     /// create a new activity
@@ -269,12 +249,6 @@ impl Activity {
     }
 }
 
-
-#[get("/types")]
-fn types(_user: User, conn: AppDbConn) -> Json<Vec<ActivityType>> {
-    Json(Activity::types(&conn))
-}
-
 #[get("/<id>")]
 fn get (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Activity>> {
     ActivityId(id).read(&user, &conn).map(Json)
@@ -322,5 +296,5 @@ fn rescan (user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
 }
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![types, get, register, put, delete, post, rescan]
+    routes![get, register, put, delete, post, rescan]
 }
