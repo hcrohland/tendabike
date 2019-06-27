@@ -116,22 +116,29 @@ impl Attachment {
         res
     }
 
+    /// creates a new attachment with its side-effects
+    /// 
+    /// - recalculates the usage counters in the attached assembly
+    /// - persists everything into the database
+    ///  -returns all affected parts
+    /// 
+    /// does not check for collisions (yet?)
     fn create (&self, conn: &AppConn) -> TbResult<Assembly> {
         // let siblings = self.siblings(&att);
 
         let att = self.safe(conn)?;
 
-        let tops = att.ancestors(conn);
-        let mut map = Assembly::new();
+        let tops = att.ancestors(conn);  // we need the gear, but also get potential spare parts
 
+        let mut res = Assembly::new();
         for top in tops {
-            let uses = Activity::find(top.hook_id, top.attached, top.detached, conn);
-            for usage in uses {
-                self.part_id.traverse(&mut map, &usage, 1, conn)?
+            let acts = Activity::find(top.hook_id, top.attached, top.detached, conn);
+            for act in acts {
+                self.part_id.traverse(&mut res, &act.usage(), 1, conn)?
                 // siblings.pick(&usage).traverse(&mut map, &usage, -1, conn)
             }
         }
-        Ok(map)
+        Ok(res)
     }
 
     /// find other parts which are attached to the same hook as myself in the given timeframe

@@ -127,7 +127,7 @@ impl ActivityId {
 
             let old = self.read(user, conn)?;
             if let Some(gear) = old.gear {
-                gear.utilize(&mut hash, old.usage(-1), user, conn)?;
+                gear.utilize(&mut hash, old.usage(), -1, user, conn)?;
             }
 
             let new: Activity = diesel::update(activities::table)
@@ -135,7 +135,7 @@ impl ActivityId {
                 .set(&act)
                 .get_result(conn)?;
             if let Some(gear) = new.gear {
-                gear.utilize(&mut hash, new.usage(1), user, conn)?;
+                gear.utilize(&mut hash, new.usage(), 1, user, conn)?;
             }
             
             new.check_geartype(hash, conn)
@@ -149,9 +149,8 @@ impl Activity {
         activity_types::table.load::<ActivityType>(conn).expect("error loading ActivityTypes")
     }
 
+    /// check if the gear is allowed for the activity
     fn check_geartype(&self, ass: Assembly, conn: &AppConn) -> TbResult<Assembly> {
-        use crate::schema::activity_types::dsl::*;
-        let actt = activity_types.find(self.what).first::<ActivityType>(conn)?;
         let gear_id = match self.gear {
             Some(x) => x,
             None => return Ok(ass)
@@ -161,6 +160,7 @@ impl Activity {
             None => return Err(MyError::AnyErr("Main gear not found in assembly".to_string()))
         };
 
+        let actt = activity_types::table.find(self.what).first::<ActivityType>(conn)?;
         if mygear.what == actt.gear_type {
             Ok(ass)
         } else {
@@ -170,6 +170,10 @@ impl Activity {
         }   
     }
 
+    /// create a new activity
+    /// 
+    /// - returns the activity and all affected parts
+    /// - checks authorization
     fn create(act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<(Activity, Assembly)> {
         if act.user_id != user.get_id() && !user.is_admin() {
             return Err(MyError::Forbidden(format!("user {} cannot create activity for user {}", user.get_id(), act.user_id)));
@@ -180,25 +184,32 @@ impl Activity {
                 .get_result(conn)?;
             let mut res = Assembly::new();
             if let Some(gear) = new.gear {
-                gear.utilize(&mut res, new.usage(1), user, conn)?;
+                gear.utilize(&mut res, new.usage(), 1, user, conn)?;
             }
             let res = new.check_geartype(res, conn)?;
             Ok((new, res))
         })
     }
 
-    fn usage (&self, factor: i32) -> Usage {
+    /// Extract the usage out of an activity
+    /// 
+    /// If the descend value is missing, assume descend = climb
+    pub fn usage (&self) -> Usage {
         Usage {
             start: self.start,
-            time: self.time.unwrap_or(0) * factor,
-            distance: self.distance.unwrap_or(0) * factor,
-            climb: self.climb.unwrap_or(0) * factor,
-            descend: self.descend.unwrap_or_else(|| self.climb.unwrap_or(0)) * factor,
-            power: self.power.unwrap_or(0) * factor,  
-            count: factor,          
+            time: self.time.unwrap_or(0),
+            distance: self.distance.unwrap_or(0),
+            climb: self.climb.unwrap_or(0),
+            descend: self.descend.unwrap_or_else(|| self.climb.unwrap_or(0)),
+            power: self.power.unwrap_or(0),  
+            count: 1,          
         }
     }
 
+    /// register a (new) gear to an activity 
+    /// 
+    /// if there is already an gear attached, automatically deregister the old gear
+    /// returns all affected parts
     fn register (& mut self, gear: Option<PartId>, user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction(|| {
             let mut hash = Assembly::new();
@@ -208,30 +219,34 @@ impl Activity {
             }
 
             if let Some(gear) = self.gear {
-                info!("de-registering activity {} from gear {}", self.id, gear);
+                // info!("de-registering activity {} from gear {}", self.id, gear);
                 self.gear = None;
-                gear.utilize(&mut hash, self.usage(-1), user, conn)?;
+                gear.utilize(&mut hash, self.usage(), -1, user, conn)?;
             } 
             if let Some(new_gear) = gear {
-                info!("registering activity {} to gear {}", self.id, new_gear);
+                // info!("registering activity {} to gear {}", self.id, new_gear);
                 self.gear = gear;
-                new_gear.utilize(&mut hash, self.usage(1), user, conn)?;
+                new_gear.utilize(&mut hash, self.usage(), 1, user, conn)?;
             }
             
             self.save_changes::<Activity>(conn)?;
+            // we do optimistic checking
+            // now we have all data to check if we are allowed to do this
+            // if the check fails the database will roll back!
             self.check_geartype(hash, conn)
         })
     }
 
-    pub fn find (part: PartId, begin: DateTime<Utc>, end: Option<DateTime<Utc>>, conn: &AppConn) -> Vec<Usage> {
+    /// find all activities for gear part in the given time frame
+    /// 
+    /// if end is none it means for the whoel future
+    pub fn find (part: PartId, begin: DateTime<Utc>, end: Option<DateTime<Utc>>, conn: &AppConn) -> Vec<Activity> {
         use schema::activities::dsl::{activities,gear,start};
-
 
         let mut query = activities.filter(gear.eq(Some(part)))
                         .filter(start.ge(begin)).into_boxed();
         if let Some(end) = end { query = query.filter(start.lt(end)) }
-        let acts = query.load::<Activity>(conn).expect("could not read activities");
-        acts.into_iter().map(|x|x.usage(1)).collect()
+        query.load::<Activity>(conn).expect("could not read activities")
     }
 
     /// rescan all activites for a user
@@ -247,7 +262,7 @@ impl Activity {
                 .load::<Activity>(conn)?;
 
             for act in activities {
-                act.gear.unwrap().utilize(&mut ass, act.usage(1), user, conn)?
+                act.gear.unwrap().utilize(&mut ass, act.usage(), 1, user, conn)?
             }
             Ok(ass)
         })

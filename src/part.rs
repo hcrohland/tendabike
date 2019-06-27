@@ -177,8 +177,8 @@ impl PartId {
     /// 
     /// returns all parts affected
     /// checks if the user is authorized
-    pub fn utilize (self, map: & mut Assembly, usage: Usage, user: &dyn Person, conn: &AppConn) -> TbResult<()> {
-        self.checkuser(user, conn)?.traverse(map, &usage, 1, conn)
+    pub fn utilize (self, map: & mut Assembly, usage: Usage, factor: i32, user: &dyn Person, conn: &AppConn) -> TbResult<()> {
+        self.checkuser(user, conn)?.traverse(map, &usage, factor, conn)
     }
 }
 
