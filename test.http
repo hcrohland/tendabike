@@ -54,7 +54,7 @@ Put {{host}}/activ/306
 x-user-id: 2
 
 {
-    "id": 306,
+    "id": 466,
     "user_id": 2,
     "what": 1,
     "name": "Fahrt am Morgen",
@@ -83,6 +83,18 @@ x-user-id: 2
 {
   "part_id": 8,
   "hook_id": 301,
-  "detached": "2019-01-03T00:00:00Z",
   "attached": "2018-12-01T22:00:00Z"
 }
+###
+DELETE  {{host}}/attach
+x-user-id: 2
+
+{
+  "part_id": 8,
+  "hook_id": 301,
+  "detached": "2018-12-31T00:00:00Z",
+  "attached": "2018-12-01T22:00:00Z"
+}
+###
+GET  {{host}}/types/test
+x-user-id: 3

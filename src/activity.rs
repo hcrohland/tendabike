@@ -11,8 +11,6 @@ use crate::schema::activities;
 use crate::user::*;
 use crate::*;
 
-use self::diesel::prelude::*;
-
 use diesel::{
     self,
     QueryDsl,
@@ -142,11 +140,10 @@ impl Activity {
             None => return Err(MyError::AnyErr("Main gear not found in assembly".to_string()))
         };
 
-        match mygear.what == self.what.get(conn)?.gear_type {
-            true => Ok(ass),
-            false => Err(MyError::BadRequest(
-                            format!("Gear type {} cannot be used for activity type {}", 
-                                    mygear.what, self.what)))
+        if mygear.what == self.what.get(conn)?.gear_type {
+            Ok(ass) } 
+        else {
+            Err(MyError::BadRequest(format!("Gear type {} cannot be used for activity type {}", mygear.what, self.what)))
         } 
     }
 

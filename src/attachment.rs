@@ -16,8 +16,6 @@ use crate::*;
 
 use part::Assembly;
 
-use self::diesel::prelude::*;
-
 use diesel::{
     self,
     QueryDsl,
@@ -52,7 +50,7 @@ pub fn subparts(part: PartId, at_time: DateTime<Utc>, conn: &AppConn) -> Vec<Par
 
     attachments.select(part_id)
         .filter(hook_id.eq(part))
-        .filter(attached.lt(at_time)).filter(detached.ge(at_time))
+        .filter(attached.lt(at_time)).filter(detached.is_null().or(detached.ge(at_time)))
         .load::<PartId>(conn).expect("could not read attachments")
 }
 
@@ -62,7 +60,7 @@ pub fn is_attached(part: PartId, at_time: DateTime<Utc>, conn: &AppConn) -> bool
 
     match attachments.count()
         .filter(part_id.eq(part))
-        .filter(attached.lt(at_time)).filter(detached.ge(at_time))
+        .filter(attached.lt(at_time)).filter(detached.is_null().or(detached.ge(at_time)))
         .get_result(conn).expect("could not read attachments"){
             0 => false,
             1 => true,
@@ -70,13 +68,19 @@ pub fn is_attached(part: PartId, at_time: DateTime<Utc>, conn: &AppConn) -> bool
         }
 }
 
-impl Attachment {
-
-    /// Store the attachment in the database
-    fn safe (&self, conn: &AppConn) -> TbResult<Attachment> {
-        Ok(diesel::insert_into(attachments::table).values(self).get_result(conn)?)
+fn min_detached(a: Option<DateTime<Utc>>, b: Option<DateTime<Utc>>) -> Option<DateTime<Utc>> {
+    if let Some(a) = a {
+        if let Some(b) = b {
+            Some(min(a,b))
+        } else {
+            Some(a)
+        }
+    } else {
+        b
     }
+}
 
+impl Attachment {
     /// Retrieve the attachments for self.hook_id in the timeframe defined by self
     /// 
     /// self.part_id is ignored!
@@ -98,7 +102,7 @@ impl Attachment {
     fn ancestors (self, conn: &AppConn) -> Vec<Attachment> {
         let mut res = Vec::new();
         
-        let parents = self.parents(conn);
+        let parents = dbg!(self.parents(conn));
 
         // if there are no parents, it is topmost
         // but we ignore the starting point if it has part_id == hook_id.
@@ -109,11 +113,26 @@ impl Attachment {
             for mut p in parents {
                 // We only want to have the intersection of the parent and the given window!
                 p.attached = max(p.attached, self.attached);
-                p.detached = min(p.detached, self.detached);
+                p.detached = min_detached(p.detached, self.detached);
+                
                 res.append(&mut p.ancestors(conn))
             }
         }
         res
+    }
+
+    fn register (&self, factor: i32, conn: &AppConn) -> TbResult<Assembly> {
+
+        let tops = dbg!(self).ancestors(conn);  // we need the gear, but also get potential spare parts
+
+        let mut res = Assembly::new();
+        for top in tops {
+            let acts = Activity::find(top.hook_id, dbg!(top.attached), dbg!(top.detached), conn);
+            for act in acts {
+                self.part_id.traverse(&mut res, &act.usage(), factor, conn)?
+            }
+        }
+        Ok(res)
     }
 
     /// creates a new attachment with its side-effects
@@ -125,22 +144,22 @@ impl Attachment {
     /// does not check for collisions (yet?)
     fn create (&self, conn: &AppConn) -> TbResult<Assembly> {
         // let siblings = self.siblings(&att);
-
-        let att = self.safe(conn)?;
-
-        let tops = att.ancestors(conn);  // we need the gear, but also get potential spare parts
-
-        let mut res = Assembly::new();
-        for top in tops {
-            let acts = Activity::find(top.hook_id, top.attached, top.detached, conn);
-            for act in acts {
-                self.part_id.traverse(&mut res, &act.usage(), 1, conn)?
-                // siblings.pick(&usage).traverse(&mut map, &usage, -1, conn)
-            }
-        }
-        Ok(res)
+        conn.transaction (||{
+            diesel::insert_into(attachments::table) // Store the attachment in the database
+                    .values(self).get_result::<Attachment>(conn)?
+                    .register(1, conn)              // and register changes
+        })
     }
 
+    fn delete (self, conn: &AppConn) -> TbResult<Assembly> {
+        conn.transaction (||{
+            diesel::delete(attachments::table.find((self.part_id, self.attached))) // delete the attachment in the database
+                    .get_result::<Attachment>(conn)?
+                    .register(-1, conn)              // and register changes
+        })
+
+    }
+ 
     /// find other parts which are attached to the same hook as myself in the given timeframe
     /// 
     /// returns the full attachments for these parts.
@@ -159,11 +178,15 @@ impl Attachment {
 #[post("/", data="<attachment>")]
 fn attach (attachment: Json<Attachment>, _user: User, conn: AppDbConn) 
             -> TbResult<status::Created<Json<Assembly>>> {
-    Ok(conn.test_transaction::<_,MyError,_> (||{
-        let res = attachment.create(&conn)?;
-        let url = format!("/attach/{}/{}", attachment.part_id, attachment.attached);
-        Ok(status::Created(url, Some(Json(res))))
-    }))    
+    let res = attachment.create(&conn)?;
+    let url = format!("/attach/{}/{}", attachment.part_id, attachment.attached);
+    Ok(status::Created(url, Some(Json(res))))
+} 
+
+#[delete("/", data="<attachment>")]
+fn delete(attachment: Json<Attachment>, _user: User, conn: AppDbConn) 
+            -> TbResult<Json<Assembly>> {
+    Ok(Json(attachment.delete(&conn)?))
 } 
 
 #[get("/<part_id>/<hook_id>/<start>?<end>")]
@@ -181,5 +204,5 @@ fn top (part_id: i32, hook_id: i32, start: String, end: Option<String>, user: Us
 
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![top, attach]
+    routes![top, attach, delete]
 }

@@ -74,7 +74,11 @@ fn part(_user: User, conn: AppDbConn) -> Json<Vec<PartType>> {
     Json(part_types::table.order(part_types::id).load::<PartType>(&conn.0).expect("error loading PartType"))
 }
 
+#[get("/test")]
+fn test (_user: Admin, conn: AppDbConn) -> Result<(),diesel::result::Error>{
+    conn.0.begin_test_transaction()
+}
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![part, activity]
+    routes![part, activity, test]
 }

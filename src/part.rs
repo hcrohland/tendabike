@@ -12,8 +12,6 @@ use self::schema::{parts, part_types};
 use crate::user::*;
 use crate::*;
 
-use self::diesel::prelude::*;
-
 use diesel::{
     self,
     QueryDsl,
@@ -113,7 +111,7 @@ impl PartId {
         use schema::parts::dsl::*;
 
         if factor != 0 {
-            info!("Applying usage to part {}", self);
+            info!("Applying usage at {} to part {}", usage.start, self);
             Ok(diesel::update(parts.find(self))
                 .set((  time.eq(time + usage.time * factor),
                         climb.eq(climb + usage.climb * factor),

@@ -1,4 +1,5 @@
 #![feature(proc_macro_hygiene, decl_macro, result_map_or_else)]
+#![warn(clippy::all)]
 
 #[macro_use] extern crate serde_derive;
 extern crate serde_json;
@@ -19,6 +20,8 @@ use chrono::{
     Utc,
     DateTime,
 };
+
+use self::diesel::prelude::*;
 
 use simplelog::{
     CombinedLogger,
