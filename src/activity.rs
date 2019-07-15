@@ -111,7 +111,7 @@ impl ActivityId {
 
             let old = self.read(user, conn)?;
             if let Some(gear) = old.gear {
-                gear.utilize(&mut hash, old.usage(), -1, user, conn)?;
+                gear.utilize(&mut hash, old.usage(), Factor::Sub, user, conn)?;
             }
 
             let new: Activity = diesel::update(activities::table)
@@ -119,7 +119,7 @@ impl ActivityId {
                 .set(&act)
                 .get_result(conn)?;
             if let Some(gear) = new.gear {
-                gear.utilize(&mut hash, new.usage(), 1, user, conn)?;
+                gear.utilize(&mut hash, new.usage(), Factor::Add, user, conn)?;
             }
             
             new.check_geartype(hash, conn)
@@ -161,7 +161,7 @@ impl Activity {
                 .get_result(conn)?;
             let mut res = Assembly::new();
             if let Some(gear) = new.gear {
-                gear.utilize(&mut res, new.usage(), 1, user, conn)?;
+                gear.utilize(&mut res, new.usage(), Factor::Add, user, conn)?;
             }
             let res = new.check_geartype(res, conn)?;
             Ok((new, res))
@@ -198,12 +198,12 @@ impl Activity {
             if let Some(gear) = self.gear {
                 // info!("de-registering activity {} from gear {}", self.id, gear);
                 self.gear = None;
-                gear.utilize(&mut hash, self.usage(), -1, user, conn)?;
+                gear.utilize(&mut hash, self.usage(), Factor::Sub, user, conn)?;
             } 
             if let Some(new_gear) = gear {
                 // info!("registering activity {} to gear {}", self.id, new_gear);
                 self.gear = gear;
-                new_gear.utilize(&mut hash, self.usage(), 1, user, conn)?;
+                new_gear.utilize(&mut hash, self.usage(), Factor::Add, user, conn)?;
             }
             
             self.save_changes::<Activity>(conn)?;
@@ -239,7 +239,7 @@ impl Activity {
                 .load::<Activity>(conn)?;
 
             for act in activities {
-                act.gear.unwrap().utilize(&mut ass, act.usage(), 1, user, conn)?
+                act.gear.unwrap().utilize(&mut ass, act.usage(), Factor::Add, user, conn)?
             }
             Ok(ass)
         })

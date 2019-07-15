@@ -124,6 +124,13 @@ pub struct Usage {
     pub count: i32,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+pub enum Factor {
+    Add = 1,
+    Sub = -1,
+    No = 0,
+}
+
 impl Usage {
     pub fn none() -> Usage {
         Usage {
@@ -136,14 +143,6 @@ impl Usage {
             count: 0,
         }
     }
-    // pub fn add (&mut self, rh: &Usage) {
-    //     self.time += rh.time;
-    //     self.climb += rh.climb;
-    //     self.descend += rh.descend;
-    //     self.power += rh.power;
-    //     self.distance += rh.distance;
-    //     self.count += rh.distance;
-    // }
 }
 
 mod error {

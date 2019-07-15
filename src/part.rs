@@ -107,10 +107,11 @@ impl PartId {
     /// apply a usage to the part with given id
     /// 
     /// returns the changed part
-    fn apply (self, usage: &Usage, factor: i32, conn: &AppConn) -> TbResult<Part> {
+    fn apply (self, usage: &Usage, factor: Factor, conn: &AppConn) -> TbResult<Part> {
         use schema::parts::dsl::*;
 
-        if factor != 0 {
+        if factor != Factor::No {
+            let factor = factor as i32;
             info!("Applying usage at {} to part {}", usage.start, self);
             Ok(diesel::update(parts.find(self))
                 .set((  time.eq(time + usage.time * factor),
@@ -142,7 +143,7 @@ impl PartId {
     /// 
     /// if the usage is Usage::none() it simply returns the assembly
     /// - It should not update the database in this case, but does for now.
-    pub fn traverse (self, map: & mut Assembly, usage: &Usage, factor: i32, conn: &AppConn) -> TbResult<()> {
+    pub fn traverse (self, map: & mut Assembly, usage: &Usage, factor: Factor, conn: &AppConn) -> TbResult<()> {
         self.subparts(usage.start, conn)
                 .into_iter().map(|x| x.traverse(map, usage, factor, conn))
                 .for_each(drop);
@@ -155,7 +156,7 @@ impl PartId {
     /// 
     /// returns all parts affected
     /// checks if the user is authorized
-    pub fn utilize (self, map: & mut Assembly, usage: Usage, factor: i32, user: &dyn Person, conn: &AppConn) -> TbResult<()> {
+    pub fn utilize (self, map: & mut Assembly, usage: Usage, factor: Factor, user: &dyn Person, conn: &AppConn) -> TbResult<()> {
         self.checkuser(user, conn)?.traverse(map, &usage, factor, conn)
     }
 }
@@ -219,7 +220,7 @@ fn get (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Part>> {
 fn get_assembly (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
     let mut map = Assembly::new();
 
-    PartId::get(part, &user, &conn)?.traverse(&mut map, &Usage::none(), 0, &conn)?;
+    PartId::get(part, &user, &conn)?.traverse(&mut map, &Usage::none(), Factor::No, &conn)?;
     
     Ok(Json(map))
 }

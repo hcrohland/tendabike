@@ -77,24 +77,15 @@ x-user-id: 2
 GET {{host}}/attach/8/11/2018-01-30T22:00:00?end=2019-01-01T22:00:00
 x-user-id: 2
 ###
-POST {{host}}/attach
+PATCH {{host}}/attach
 x-user-id: 2
 
 {
   "part_id": 8,
   "hook_id": 301,
-  "attached": "2018-12-01T22:00:00Z"
-}
-###
-DELETE  {{host}}/attach
-x-user-id: 2
-
-{
-  "part_id": 8,
-  "hook_id": 301,
-  "detached": "2018-12-31T00:00:00Z",
-  "attached": "2018-12-01T22:00:00Z"
+  "detached": "2018-12-01T00:00:00+0100",
+  "attached": "2018-12-01T00:00:00+0100"
 }
 ###
 GET  {{host}}/types/test
-x-user-id: 3
+x-user-id: 1
