@@ -7,4 +7,10 @@
 8,"rear brake","{6}",FALSE
 9,"cassette","{}",FALSE
 5,"rear wheel","{3,9}",FALSE
+11,"saddle","{}",FALSE
+10,"seat post","{11}",FALSE
 1,"Bike","{2,4,5,7,8}",TRUE
+301,"Shoe","{}",TRUE
+302,"Snowboard","{}",TRUE
+303,"Ski","{}",TRUE
+304,"Whatever","{}",TRUE
