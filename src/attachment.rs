@@ -130,7 +130,7 @@ impl Attachment {
     fn ancestors (self, conn: &AppConn) -> Vec<Attachment> {
         let mut res = Vec::new();
         
-        let parents = dbg!(self.parents(conn));
+        let parents = self.parents(conn);
 
         // if there are no parents, it is topmost
         // but we ignore the starting point if it has part_id == hook_id.
@@ -152,7 +152,7 @@ impl Attachment {
 
     fn register (&self, factor: Factor, conn: &AppConn) -> TbResult<Assembly> {
 
-        let tops = dbg!(self).ancestors(conn);  // we need the gear, but also get potential spare parts
+        let tops = self.ancestors(conn);  // we need the gear, but also get potential spare parts
 
         let mut res = Assembly::new();
         for top in tops {
@@ -174,7 +174,7 @@ impl Attachment {
     fn create (&self, user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction (||{
             if !self.siblings(user,conn)?.is_empty() {
-                return Err(MyError::BadRequest("".into()));
+                return Err(MyError::Conflict(format!("Attachment collision for {:?}", self)));
             }
             diesel::insert_into(attachments::table) // Store the attachment in the database
                     .values(self).get_result::<Attachment>(conn)?
@@ -193,15 +193,16 @@ impl Attachment {
 
     fn patch (self, user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction (||{
-            let mut state = 
-            match attachments::table.find((self.part_id, self.attached))
+            let mut state = match attachments::table.find((self.part_id, self.attached))
                             .for_update().get_result::<Attachment>(conn) {
-                Err(diesel::result::Error::NotFound) => return self.create(user, conn),
-                Err(e) => return Err(e.into()),
-                Ok(x) => x,
-            };
+                        Err(diesel::result::Error::NotFound) => return self.create(user, conn),
+                        Err(e) => return Err(e.into()),
+                        Ok(x) => x,
+                    };
+
             if state.hook_id != self.hook_id {
-                return Err(MyError::NotFound(format!("part {} not attached to hook {}", self.part_id, self.hook_id)));
+                return Err(MyError::Conflict(
+                    format!("part {} attached to hook {}, not {}", self.part_id, state.hook_id, self.hook_id)));
             }
 
             if self.detached == state.detached { // No change!

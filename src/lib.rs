@@ -156,6 +156,7 @@ mod error {
         NotFound (String),
         Forbidden (String),
         BadRequest (String),
+        Conflict(String),
         AnyErr (String),
     }
 
@@ -166,6 +167,7 @@ mod error {
                 MyError::Forbidden(x)   => write!(f, "Forbiddenrequest: {}", x),
                 MyError::NotFound(x)    => write!(f, "Could not find object: {}", x),
                 MyError::BadRequest(x)  => write!(f, "Bad Request: {}", x),
+                MyError::Conflict(x)  => write!(f, "Conflict: {}", x),
                 MyError::AnyErr(x)      => write!(f, "Internal error detected: {}", x),
                 MyError::DbError(ref e) => e.fmt(f),
             }
@@ -195,6 +197,7 @@ mod error {
     impl<'r> Responder<'r> for MyError {
         fn respond_to(self, _: &Request) -> Result<Response<'r>, Status> {
             use diesel::result::DatabaseErrorKind::*;
+            warn!("{}", self);
             match self {
                 MyError::DbError(error) => {
                     match error  {
@@ -207,6 +210,7 @@ mod error {
                 MyError::NotAuth(_)  => Err(Status::Unauthorized),
                 MyError::Forbidden(_) => Err(Status::Forbidden),
                 MyError::BadRequest(_) => Err(Status::BadRequest),
+                MyError::Conflict(_) => Err(Status::Conflict),
                 _ => Err(Status::InternalServerError),
             }
         }
