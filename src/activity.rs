@@ -1,4 +1,11 @@
-
+//! Activity handling for the TendaBike backend
+//! 
+//! struct Activity captures all data of an athlete's activity
+//! 
+//! By assigning a gear to the activity it gets accounted with that gear and all it's parts attached 
+//! at the start time of the activity  
+//! Most operations are done on the ActivityId though  
+//! 
 use chrono::{
     Utc,
     DateTime,
@@ -20,7 +27,10 @@ use diesel::{
 use part::Assembly;
 use part::ATrait;
 
-
+/// The Id of an Activity
+/// 
+/// Most operations for activities are done on the Id alone
+/// 
 #[derive(DieselNewType)] 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)] 
 pub struct ActivityId(i32);
@@ -87,6 +97,10 @@ pub struct NewActivity {
 }
 
 impl ActivityId {
+
+    /// Read the activity with id self
+    /// 
+    /// checks authorization
     fn read(self, person: &dyn Person, conn: &AppConn) -> TbResult<Activity> {
         let act = activities::table.find(self).for_update().first::<Activity>(conn)?;
         if act.user_id != person.get_id() && !person.is_admin() {
@@ -95,6 +109,11 @@ impl ActivityId {
         Ok(act)
     }
 
+    /// Delete the activity with id self
+    /// and update part usage accordingly 
+    /// 
+    /// returns all affected parts  
+    /// checks authorization  
     fn delete(self, person: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
         use crate::schema::activities::dsl::*;
         conn.transaction(|| {
@@ -105,6 +124,11 @@ impl ActivityId {
         })
     }
 
+    /// Update the activity with id self according to the data in NewActivity
+    /// and update part usage accordingly 
+    ///
+    /// returns all affected parts  
+    /// checks authorization  
     fn update (self, act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction(|| {
             let mut hash = Assembly::new();
@@ -149,8 +173,8 @@ impl Activity {
 
     /// create a new activity
     /// 
-    /// - returns the activity and all affected parts
-    /// - checks authorization
+    /// returns the activity and all affected parts  
+    /// checks authorization  
     fn create(act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<(Activity, Assembly)> {
         if act.user_id != user.get_id() && !user.is_admin() {
             return Err(MyError::Forbidden(format!("user {} cannot create activity for user {}", user.get_id(), act.user_id)));
@@ -185,7 +209,7 @@ impl Activity {
 
     /// register a (new) gear to an activity 
     /// 
-    /// if there is already an gear attached, automatically deregister the old gear
+    /// if there is already a gear attached, automatically deregister the old gear  
     /// returns all affected parts
     fn register (& mut self, gear: Option<PartId>, user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction(|| {
@@ -216,7 +240,7 @@ impl Activity {
 
     /// find all activities for gear part in the given time frame
     /// 
-    /// if end is none it means for the whoel future
+    /// if end is none it means for the whole future
     pub fn find (part: PartId, begin: DateTime<Utc>, end: Option<DateTime<Utc>>, conn: &AppConn) -> Vec<Activity> {
         use schema::activities::dsl::{activities,gear,start};
 
@@ -246,11 +270,14 @@ impl Activity {
     }
 }
 
+
+/// web interface to read an activity
 #[get("/<id>")]
 fn get (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Activity>> {
     ActivityId(id).read(&user, &conn).map(Json)
 }
 
+/// web interface to create an activity
 #[post("/", data="<activity>")]
 fn post (activity: Json<NewActivity>, user: User, conn: AppDbConn) 
             -> TbResult<status::Created<Json<(Activity, Assembly)>>> {
@@ -261,16 +288,19 @@ fn post (activity: Json<NewActivity>, user: User, conn: AppDbConn)
     Ok (status::Created(url.to_string(), Some(Json((activity, assembly)))))
 }
 
+/// web interface to change an activity
 #[put("/<id>", data="<activity>")]
 fn put (id: i32, activity: Json<NewActivity>, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
     ActivityId(id).update(activity.0, &user, &conn).map(Json)
 }
 
+/// web interface to delete an activity
 #[delete("/<id>")]
 fn delete (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
     ActivityId(id).delete(&user, &conn).map(Json)
 }
 
+/// web interface to attach an activity to a gear
 #[patch("/<id>?<gear>")]
 fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
     info! ("register act {} to gear {:?}", id, gear);
@@ -287,6 +317,7 @@ fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> TbResul
     })
 }
 
+/// web interface to rescan all activities for a user
 #[patch("/rescan")]
 fn rescan (user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
     Ok(Json(Activity::rescan(&user, &conn)?))

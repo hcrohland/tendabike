@@ -1,3 +1,9 @@
+//! The list of all historical attachments. This is the central piece of TendaBike.  
+//! 
+//! Attachments can be hierarchical  
+//! They are identified by part_id and attached time  
+//! If detached is none the part is still attached  
+
 use std::cmp::max;
 
 use chrono::{
@@ -25,7 +31,7 @@ use diesel::{
 
 /// Timeline of attachments
 /// 
-/// Every attachement of a part to another part (hook) is an entry
+/// Every attachment of a part to another part (hook) is an entry
 /// Start and end time are noted
 /// 
 #[derive(Clone, Copy, Debug, PartialEq, 
@@ -35,16 +41,17 @@ use diesel::{
 #[changeset_options(treat_none_as_null = "true")]
 // #[belongs_to(Part, foreign_key = "hook_id")]
 struct Attachment {
-    // the sub-part, which is attached to the hook
+    /// the sub-part, which is attached to the hook
     part_id: PartId,
-    // the hook, to which part_id is attached
+    /// the hook, to which part_id is attached
     hook_id: PartId,
-    // when it was attached
+    /// when it was attached
     attached: DateTime<Utc>,
-    // when it was removed again
+    /// when it was removed again, "none" means "still attached"
     detached: Option<DateTime<Utc>>,
 }
 
+/// Find all parts attached to part at at_time
 pub fn subparts(part: PartId, at_time: DateTime<Utc>, conn: &AppConn) -> Vec<PartId> {
     use schema::attachments::dsl::*;
 
@@ -54,7 +61,7 @@ pub fn subparts(part: PartId, at_time: DateTime<Utc>, conn: &AppConn) -> Vec<Par
         .load::<PartId>(conn).expect("could not read attachments")
 }
 
-/// is the part attached to a hook?
+/// Was the part attached to a hook at at_time?
 pub fn is_attached(part: PartId, at_time: DateTime<Utc>, conn: &AppConn) -> bool {
     use schema::attachments::dsl::*;
 
@@ -68,6 +75,9 @@ pub fn is_attached(part: PartId, at_time: DateTime<Utc>, conn: &AppConn) -> bool
         }
 }
 
+/// is detached a less than b?
+/// 
+/// none means indefinitely in the future
 fn lt_detached (a: Option<DateTime<Utc>>, b: Option<DateTime<Utc>>) -> bool {
     if let Some(a) = a {
         if let Some(b) = b {
@@ -80,6 +90,7 @@ fn lt_detached (a: Option<DateTime<Utc>>, b: Option<DateTime<Utc>>) -> bool {
     } 
 }
 
+/// Return the minimum of two detached variables
 fn min_detached(a: Option<DateTime<Utc>>, b: Option<DateTime<Utc>>) -> Option<DateTime<Utc>> {
     if lt_detached(a, b) {
         a
@@ -150,6 +161,11 @@ impl Attachment {
         res
     }
 
+
+    /// register the given attachment according to the given factor.Attachment
+    /// 
+    /// This can both add or subtract activities from parts
+    /// All changed parts are returned
     fn register (&self, factor: Factor, conn: &AppConn) -> TbResult<Assembly> {
 
         let tops = self.ancestors(conn);  // we need the gear, but also get potential spare parts
@@ -168,9 +184,7 @@ impl Attachment {
     /// 
     /// - recalculates the usage counters in the attached assembly
     /// - persists everything into the database
-    ///  -returns all affected parts
-    /// 
-    /// does not check for collisions (yet?)
+    ///  -returns all affected parts or MyError::Conflict on collisions
     fn create (&self, user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction (||{
             if !self.siblings(user,conn)?.is_empty() {
@@ -182,6 +196,10 @@ impl Attachment {
         })
     }
 
+    /// deletes an attachment with its side-effects
+    /// 
+    /// - recalculates the usage counters in the attached assembly
+    /// -returns all affected parts
     fn delete (self, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction (||{
             diesel::delete(attachments::table.find((self.part_id, self.attached))) // delete the attachment in the database
@@ -191,6 +209,16 @@ impl Attachment {
 
     }
 
+    /// change an attachment identified by part_id and attached
+    /// 
+    /// This is the main function to manage attachments
+    /// - if the attachment does not exist, create the database object
+    /// - if detached <= attached delete the attachment
+    /// - if detached changed, change the database object
+    /// 
+    /// returns
+    /// - MyError::Conflict if the hook_id does not match
+    /// - all recalculated parts on success
     fn patch (self, user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction (||{
             let mut state = match attachments::table.find((self.part_id, self.attached))
@@ -252,8 +280,8 @@ fn patch(attachment: Json<Attachment>, user: User, conn: AppDbConn)
     Ok(Json(attachment.patch(&user, &conn)?))
 } 
 
-#[get("/<part_id>/<hook_id>/<start>?<end>")]
-fn top (part_id: i32, hook_id: i32, start: String, end: Option<String>, user: User, conn: AppDbConn) -> TbResult<Json<Vec<Attachment>>> {
+#[get("/check/<part_id>/<hook_id>/<start>?<end>")]
+fn check (part_id: i32, hook_id: i32, start: String, end: Option<String>, user: User, conn: AppDbConn) -> TbResult<Json<Vec<Attachment>>> {
     let att = Attachment {
         attached: Local.datetime_from_str(&start, "%FT%T").expect("no start").with_timezone(&Utc),
         detached: end.map(|x| Local.datetime_from_str(&x, "%FT%T").expect("no end").with_timezone(&Utc)),
@@ -264,6 +292,21 @@ fn top (part_id: i32, hook_id: i32, start: String, end: Option<String>, user: Us
     Ok(Json(att.siblings(&user, &conn)?))
 }
 
+/// All attachments for this part in the given time frame
+/// 
+#[get("/<part_id>?<start>&<end>")]
+fn read (part_id: i32, start: Option<String>, end: Option<String>, user: User, conn: AppDbConn) -> TbResult<Json<Vec<Attachment>>> {
+    let start = start.map(|x| Local.datetime_from_str(&x, "%FT%T").expect("malformed start").with_timezone(&Utc));
+    let end = end.map(|x| Local.datetime_from_str(&x, "%FT%T").expect("malformed end").with_timezone(&Utc));
+    let part = PartId::get(part_id, &user, &conn)?;
+    
+    let mut query  = attachments::table
+            .filter(attachments::part_id.eq(part)).into_boxed(); // ... and is hooked to the parent
+    if let Some(end) = end { query = query.filter(attachments::attached.lt(end)) }
+    if let Some(start) = start { query = query.filter(attachments::detached.is_null().or(attachments::detached.gt(start))) }
+    Ok(Json(query.load::<Attachment>(&conn.0)?))
+}
+
 pub fn routes () -> Vec<rocket::Route> {
-    routes![top, patch]
+    routes![read, check, patch]
 }
