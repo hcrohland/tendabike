@@ -187,7 +187,7 @@ impl Attachment {
     ///  -returns all affected parts or MyError::Conflict on collisions
     fn create (&self, user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction (||{
-            if !self.siblings(user,conn)?.is_empty() {
+            if !self.collisions(user,conn)?.is_empty() {
                 return Err(MyError::Conflict(format!("Attachment collision for {:?}", self)));
             }
             diesel::insert_into(attachments::table) // Store the attachment in the database
@@ -261,14 +261,14 @@ impl Attachment {
     /// find other parts which are attached to the same hook as myself in the given timeframe
     /// 
     /// returns the full attachments for these parts.
-    fn siblings(&self, user: &dyn Person, conn: &AppConn) -> TbResult<Vec<Attachment>> {
+    fn collisions(&self, user: &dyn Person, conn: &AppConn) -> TbResult<Vec<Attachment>> {
         let what = PartId::read(self.part_id.into(), user, conn)?.what;
         let mut query  = attachments::table
                 .inner_join(parts::table.on(parts::id.eq(attachments::part_id) // join corresponding part
                                             .and(parts::what.eq(what))))  // where the part has my type
                 .filter(attachments::hook_id.eq(self.hook_id)).into_boxed(); // ... and is hooked to the parent
         if let Some(detached) = self.detached { query = query.filter(attachments::attached.lt(detached)) }
-        Ok(query.filter(attachments::detached.is_null().or(attachments::detached.ge(self.attached))) // ... and in the given time frame
+        Ok(query.filter(attachments::detached.is_null().or(attachments::detached.gt(self.attached))) // ... and in the given time frame
                 .select(schema::attachments::all_columns) // return only the attachment
                 .load::<Attachment>(conn)?)
     }
@@ -289,7 +289,7 @@ fn check (part_id: i32, hook_id: i32, start: String, end: Option<String>, user: 
         hook_id: hook_id.into(),
     };
 
-    Ok(Json(att.siblings(&user, &conn)?))
+    Ok(Json(att.collisions(&user, &conn)?))
 }
 
 /// All attachments for this part in the given time frame
