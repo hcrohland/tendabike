@@ -11,13 +11,13 @@ diesel-derive-newtype = "0.1.2"
 
 newtype_derive = "0.1.6"
 dotenv = "0.14.1"
-log = "0.4.7"  
-simplelog = "0.6.0"
-serde = "1.0.95" 
-serde_derive = "1.0.95"
+log = "0.4.8"  
+simplelog = "0.7.2"
+serde = "1.0.100" 
+serde_derive = "1.0.100"
 serde_json = "1.0.40"
 
-chrono = { version = "0.4.7", features = ["serde"] }
+chrono = { version ="0.4.9", features = ["serde"] }
 
 pretty_assertions = "0.6.1"
 

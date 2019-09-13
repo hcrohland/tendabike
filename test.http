@@ -74,20 +74,19 @@ PATCH {{host}}/activ/rescan
 x-user-id: 2
 
 ###
-GET {{host}}/attach/check/8/11/2018-01-30T22:00:00?end=2019-03-01T22:00:00
+GET {{host}}/attach/check/316/315/2018-04-12T00:00:00?end=2018-12-01T00:00:01
 x-user-id: 2
 ###
 PATCH {{host}}/attach
 x-user-id: 2
 
 {
-  "part_id": 8,
-  "hook_id": 301,
-  "detached": "2018-12-01T00:00:00+0100",
-  "attached": "2018-12-01T00:00:00+0100"
+    "part_id": 324,
+    "hook_id": 1,
+    "attached": "2018-12-01T00:00:00Z"
 }
 ###
-GET {{host}}/attach/12?end=2019-02-02T00:00:01&start=2019-02-02T00:00:00
+GET {{host}}/attach/316
 x-user-id: 2
 ###
 GET  {{host}}/types/test
