@@ -166,11 +166,9 @@ impl Attachment {
     /// 
     /// This can both add or subtract activities from parts
     /// All changed parts are returned
-    fn register (&self, factor: Factor, conn: &AppConn) -> TbResult<Assembly> {
-
+    fn register (&self, factor: Factor, conn: &AppConn, mut res: Assembly) -> TbResult<Assembly> {
         let tops = self.ancestors(conn);  // we need the gear, but also get potential spare parts
-
-        let mut res = Assembly::new();
+        
         for top in tops {
             let acts = Activity::find(top.hook_id, top.attached, top.detached, conn);
             for act in acts {
@@ -187,12 +185,25 @@ impl Attachment {
     ///  -returns all affected parts or MyError::Conflict on collisions
     fn create (&self, user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
         conn.transaction (||{
-            if !self.collisions(user,conn)?.is_empty() {
+            let mut coll = self.collisions(user,conn)?;
+            if coll.len() > 1 {
                 return Err(MyError::Conflict(format!("Attachment collision for {:?}", self)));
             }
+            // if there is an exiting attachment, which started earlier and is not yet detached we detach it automatically
+            let res = if let Some(mut pred) = coll.pop() {
+                if pred.attached >= self.attached || pred.detached.is_some() {
+                    return Err(MyError::Conflict(format!("Attachment collision for {:?}", self)));
+                }
+                // predecessor gets detached
+                pred.detached = Some(self.attached); 
+                pred.patch(user, conn)?
+            } else {
+                Assembly::new()
+            };
+
             diesel::insert_into(attachments::table) // Store the attachment in the database
                     .values(self).get_result::<Attachment>(conn)?
-                    .register(Factor::Add, conn)              // and register changes
+                    .register (Factor::Add, conn, res)              // and register changes
         })
     }
 
@@ -204,7 +215,7 @@ impl Attachment {
         conn.transaction (||{
             diesel::delete(attachments::table.find((self.part_id, self.attached))) // delete the attachment in the database
                     .get_result::<Attachment>(conn)?
-                    .register(Factor::Sub, conn)              // and register changes
+                    .register(Factor::Sub, conn, Assembly::new())              // and register changes
         })
 
     }
@@ -253,7 +264,7 @@ impl Attachment {
             };
             
             self.save_changes::<Attachment>(conn)?;
-            state.register(factor, conn)              // and register changes
+            state.register(factor, conn, Assembly::new())              // and register changes
         })
 
     }
