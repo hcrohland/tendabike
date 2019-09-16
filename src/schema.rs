@@ -19,8 +19,7 @@ table! {
     activity_types (id) {
         id -> Int4,
         name -> Text,
-        #[sql_name = "gear"]
-        gear_type -> Int4,
+        gear -> Int4,
     }
 }
 
@@ -34,11 +33,30 @@ table! {
 }
 
 table! {
+    attachments2 (part_id, attached) {
+        part_id -> Int4,
+        attached -> Timestamptz,
+        detached -> Nullable<Timestamptz>,
+        gear -> Int4,
+        hook -> Int4,
+    }
+}
+
+table! {
     part_types (id) {
         id -> Int4,
         name -> Text,
         parts -> Array<Int4>,
         main -> Bool,
+    }
+}
+
+table! {
+    part_types2 (id) {
+        id -> Int4,
+        name -> Text,
+        main -> Int4,
+        hooks -> Array<Int4>,
     }
 }
 
@@ -60,13 +78,16 @@ table! {
 }
 
 joinable!(activities -> activity_types (what));
-joinable!(activity_types -> part_types (gear_type));
+joinable!(activity_types -> part_types (gear));
+joinable!(attachments2 -> part_types2 (hook));
 joinable!(parts -> part_types (what));
 
 allow_tables_to_appear_in_same_query!(
     activities,
     activity_types,
     attachments,
+    attachments2,
     part_types,
+    part_types2,
     parts,
 );

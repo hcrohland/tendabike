@@ -15,7 +15,7 @@ use chrono::{
 
 use rocket_contrib::json::Json;
 
-use self::schema::{parts, attachments};
+use self::schema::{parts, attachments, attachments2};
 use crate::user::*;
 use crate::*;
 
@@ -50,6 +50,33 @@ struct Attachment {
     /// when it was removed again, "none" means "still attached"
     detached: Option<DateTime<Utc>>,
 }
+
+/// Timeline of attachments
+/// 
+/// Every attachment of a part to a specified hook on a gear is an entry
+/// Start and end time are noted
+///
+#[derive(Clone, Copy, Debug, PartialEq, 
+        Serialize, Deserialize, 
+        Queryable, Identifiable, Associations, Insertable, AsChangeset)]
+#[primary_key(part_id, attached)]
+#[changeset_options(treat_none_as_null = "true")]
+#[table_name = "attachments2"]
+// #[belongs_to(Part, foreign_key = "hook_id")]
+struct Attachment2 {
+    /// the sub-part, which is attached to the hook
+    part_id: PartId,
+    /// when it was attached
+    attached: DateTime<Utc>,
+    /// The gear the part is attached to
+    gear: PartId,
+    /// the hook on that gear
+    hook: PartTypeId,
+    /// when it was removed again, "none" means "still attached"
+    detached: Option<DateTime<Utc>>,
+}
+
+
 
 /// Find all parts attached to part at at_time
 pub fn subparts(part: PartId, at_time: DateTime<Utc>, conn: &AppConn) -> Vec<PartId> {
@@ -317,6 +344,25 @@ fn read (part_id: i32, start: Option<String>, end: Option<String>, user: User, c
     if let Some(start) = start { query = query.filter(attachments::detached.is_null().or(attachments::detached.gt(start))) }
     Ok(Json(query.load::<Attachment>(&conn.0)?))
 }
+
+/* #[get("/migrate")]
+fn migrate (user: Admin, conn: AppDbConn) {
+    let conn: &AppConn = &conn;
+
+    let atts = attachments::table.get_results::<Attachment>(conn).unwrap();
+    for att in atts {
+        let att2 = Attachment2 {
+            part_id: att.part_id,
+            attached: att.attached,
+            detached: att.detached,
+            gear: att.ancestors(conn)[0].hook_id,
+            hook: PartId::read(att.hook_id.into(), &user, conn).unwrap().what,
+        };
+        diesel::insert_into(attachments2::table) // Store the attachment in the database
+                    .values(att2).execute(conn).unwrap();
+    }
+}
+*/
 
 pub fn routes () -> Vec<rocket::Route> {
     routes![read, check, patch]
