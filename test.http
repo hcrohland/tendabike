@@ -33,7 +33,7 @@ x-user-id: 2
 GET    {{host}}/activ/362
 x-user-id: 2
 ###
-DELETE {{host}}/activ/375
+DELETE {{host}}/activ/1674
 x-user-id: 2
 ###
 POST {{host}}/activ
@@ -43,7 +43,7 @@ x-user-id: 2
   "user_id": 2,
   "what": 1,
   "name": "Fahrt am Morgen",
-  "start": "2019-04-24T08:55:12Z",
+  "start": "2019-09-24T08:55:12Z",
   "duration": 4868,
   "time": 3331,
   "distance": 18032,
@@ -57,19 +57,18 @@ Put {{host}}/activ/1653
 x-user-id: 2
 
 {
-  "id": 1653,
-  "user_id": 2,
-  "what": 1,
-  "name": "Lenzerheide Worldcup",
-  "start": "2019-08-11T08:56:00Z",
-  "duration": 21366,
-  "time": 9029,
-  "distance": 41382,
-  "climb": 91,
-  "descend": 3571,
-  "power": null,
-  "gear": 1
-}
+    "user_id": 2,
+    "what": 1,
+    "name": "Lenzerheide Worldcup",
+    "start": "2019-08-11T10:56:00Z",
+    "duration": 21366,
+    "time": 9029,
+    "distance": 41382,
+    "climb": 91,
+    "descend": 3571,
+    "power": null,
+    "gear": 1
+ }
 
 ###
 
@@ -84,9 +83,10 @@ PATCH {{host}}/attach
 x-user-id: 2
 
  {
-    "part_id": 333,
-    "hook_id": 1,
-    "attached": "2019-09-08T00:00:00Z"
+    "part_id": 312,
+    "gear": 300,
+    "hook": 1,
+    "attached": "2019-09-04T00:00:00Z"
   }
 ###
 GET {{host}}/attach/332

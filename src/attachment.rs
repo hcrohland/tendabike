@@ -133,12 +133,12 @@ impl Attachment {
     /// 
     /// This can both add or subtract activities from a parts
     /// The changed parts are returned
-    fn register (&self, factor: Factor, conn: &AppConn) -> TbResult<Vec<Part>> {
+    fn register (&self, factor: Factor, conn: &AppConn) -> TbResult<Part> {
         
         let usage = Activity::find(self.gear, self.attached, self.detached, conn)
-                        .into_iter().fold(Usage::none(), |acc, x| acc.add_activity(&x));
+                        .into_iter().fold(Usage::none(), |acc, x| acc.add_activity(&x, factor));
         
-        self.part_id.apply(&usage, factor, conn)
+        self.part_id.apply(&usage, conn)
     }
 
     /// creates a new attachment with its side-effects
@@ -164,8 +164,8 @@ impl Attachment {
                 Vec::new()
             };
 
-            res.append(
-                &mut diesel::insert_into(attachments::table) // Store the attachment in the database
+            res.push(
+                diesel::insert_into(attachments::table) // Store the attachment in the database
                     .values(self).get_result::<Attachment>(conn)?
                     .register (Factor::Add, conn)?);         // and register changes
             Ok(res)
@@ -176,7 +176,7 @@ impl Attachment {
     /// 
     /// - recalculates the usage counters in the attached assembly
     /// - returns all affected parts
-    fn delete (self, conn: &AppConn) -> TbResult<Vec<Part>> {
+    fn delete (self, conn: &AppConn) -> TbResult<Part> {
         conn.transaction (||{
             diesel::delete(attachments::table.find((self.part_id, self.attached))) // delete the attachment in the database
                     .get_result::<Attachment>(conn)?
@@ -215,7 +215,7 @@ impl Attachment {
 
             if let Some(detached) = self.detached {
                 if detached <= state.attached { // 
-                    return self.delete(conn);
+                    return Ok(vec!(self.delete(conn)?));
                 }
             }
 
@@ -229,13 +229,25 @@ impl Attachment {
             };
             
             self.save_changes::<Attachment>(conn)?;
-            state.register(factor, conn)              // and register changes
+            Ok(vec!(state.register(factor, conn)?))             // and register changes
         })
 
     }
 
     fn collisions (self, user: &dyn Person, conn: &AppConn) -> TbResult<Vec<Attachment>> {
         collisions(self.gear, self.hook, self.part_id.what(user, conn)?, Some(self.attached), self.detached, conn)
+    }
+}
+
+pub fn parts_per_activity(act: &Activity, conn: &AppConn) -> Vec<PartId> {
+    use schema::attachments::dsl::*;
+
+    if let Some(act_gear) = act.gear {
+        attachments.filter(gear.eq(act_gear))
+            .filter(attached.lt(act.start)).filter(detached.is_null().or(detached.ge(act.start)))
+            .select(part_id).get_results::<PartId>(conn).expect("Error reading attachments")
+    } else {
+        Vec::new()
     }
 }
 

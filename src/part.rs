@@ -111,26 +111,17 @@ impl PartId {
     /// apply a usage to the part with given id
     /// 
     /// returns the changed part
-    pub fn apply (self, usage: &Usage, factor: Factor, conn: &AppConn) -> TbResult<Vec<Part>> {
+    pub fn apply (self, usage: &Usage, conn: &AppConn) -> TbResult<Part> {
         use schema::parts::dsl::*;
 
-        let factor = factor as i32;
         info!("Applying usage to part {}", self);
-        Ok(vec!(diesel::update(parts.find(self))
-            .set((  time.eq(time + usage.time * factor),
-                    climb.eq(climb + usage.climb * factor),
-                    descend.eq(descend + usage.descend * factor),
-                    distance.eq(distance + usage.distance * factor),
-                    count.eq(count + usage.count * factor)))
-            .get_result::<Part>(conn)?))
-    }
-
-    /// account for usage of the assembly attached to self 
-    /// 
-    /// returns all parts affected
-    /// checks if the user is authorized
-    pub fn utilize (self, map: & mut Assembly, usage: Usage, factor: Factor, user: &dyn Person, conn: &AppConn) -> TbResult<Vec<Part>> {
-        self.checkuser(user, conn)?.apply(&usage, factor, conn)
+        Ok(diesel::update(parts.find(self))
+            .set((  time.eq(time + usage.time),
+                    climb.eq(climb + usage.climb),
+                    descend.eq(descend + usage.descend),
+                    distance.eq(distance + usage.distance),
+                    count.eq(count + usage.count)))
+            .get_result::<Part>(conn)?)
     }
 }
 

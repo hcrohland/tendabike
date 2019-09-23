@@ -139,14 +139,16 @@ impl Usage {
     /// Add an activity to of a usage
     /// 
     /// If the descend value is missing, assume descend = climb
-    pub fn add_activity (self, act: &Activity) -> Usage {
+    pub fn add_activity (self, act: &Activity, factor: Factor) -> Usage {
+
+        let factor = factor as i32;
         Usage {
-            time: self.time + act.time.unwrap_or(0),
-            climb: self.climb + act.climb.unwrap_or(0),
-            descend: self.descend + act.descend.unwrap_or_else(|| act.climb.unwrap_or(0)),
-            power: self.power + act.power.unwrap_or(0),
-            distance: self.distance + act.distance.unwrap_or(0),
-            count: self.count + 1,
+            time: self.time + act.time.unwrap_or(0) * factor,
+            climb: self.climb + act.climb.unwrap_or(0) * factor,
+            descend: self.descend + act.descend.unwrap_or_else(|| act.climb.unwrap_or(0)) * factor,
+            power: self.power + act.power.unwrap_or(0) * factor,
+            distance: self.distance + act.distance.unwrap_or(0) * factor,
+            count: self.count + factor,
         }
     }
 }

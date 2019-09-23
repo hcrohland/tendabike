@@ -11,9 +11,12 @@ use chrono::{
     DateTime,
 };
 
+use std::collections::HashMap;
+
 use rocket_contrib::json::Json;
 use rocket::response::status;
 
+use crate::attachment;
 use crate::schema::activities;
 use crate::user::*;
 use crate::*;
@@ -24,8 +27,7 @@ use diesel::{
     RunQueryDsl,
 };
 
-use part::Assembly;
-use part::ATrait;
+use part::Part;
 
 /// The Id of an Activity
 /// 
@@ -114,11 +116,11 @@ impl ActivityId {
     /// 
     /// returns all affected parts  
     /// checks authorization  
-    fn delete(self, person: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
+    fn delete(self, person: &dyn Person, conn: &AppConn) -> TbResult<Vec<Part>> {
         use crate::schema::activities::dsl::*;
         conn.transaction(|| {
             let res = self.read(person, conn)?
-                        .register(None, person, conn)?;
+                         .register(Factor::Sub, conn)?;
             diesel::delete(activities.filter(id.eq(self))).execute(conn)?;
             Ok (res)
         })
@@ -129,53 +131,34 @@ impl ActivityId {
     ///
     /// returns all affected parts  
     /// checks authorization  
-    fn update (self, act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
+    fn update (self, act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<Vec<Part>> {
         conn.transaction(|| {
-            let mut hash = Assembly::new();
+            let mut res: HashMap<_, _> = 
+                self.read(user, conn)?.register(Factor::Sub, conn)?
+                    .into_iter().map(|x| (x.id, x))
+                    .collect();
 
-            let old = self.read(user, conn)?;
-            if let Some(gear) = old.gear {
-                gear.utilize(&mut hash, old.usage(), Factor::Sub, user, conn)?;
-            }
-
-            let new: Activity = diesel::update(activities::table)
+            let res2 = diesel::update(activities::table)
                 .filter(activities::id.eq(self))
                 .set(&act)
-                .get_result(conn)?;
-            if let Some(gear) = new.gear {
-                gear.utilize(&mut hash, new.usage(), Factor::Add, user, conn)?;
+                .get_result::<Activity>(conn)?
+                .register(Factor::Add, conn)?;
+
+            for part in res2 {
+                res.insert(part.id, part);
             }
-            
-            new.check_geartype(hash, conn)
+            Ok(res.into_iter().map(|(_, part)| part).collect())
         })
     }
 
 }
 
 impl Activity {
-    /// check if the gear is allowed for the activity
-    fn check_geartype(&self, ass: Assembly, conn: &AppConn) -> TbResult<Assembly> {
-        let gear_id = match self.gear {
-            Some(x) => x,
-            None => return Ok(ass)
-        };
-        let mygear = match ass.part(gear_id) {
-            Some (x) => x,
-            None => return Err(MyError::AnyErr("Main gear not found in assembly".to_string()))
-        };
-
-        if mygear.what == self.what.get(conn)?.gear_type {
-            Ok(ass) } 
-        else {
-            Err(MyError::BadRequest(format!("Gear type {} cannot be used for activity type {}", mygear.what, self.what)))
-        } 
-    }
-
     /// create a new activity
     /// 
     /// returns the activity and all affected parts  
     /// checks authorization  
-    fn create(act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<(Activity, Assembly)> {
+    fn create(act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<(Activity, Vec<Part>)> {
         if act.user_id != user.get_id() && !user.is_admin() {
             return Err(MyError::Forbidden(format!("user {} cannot create activity for user {}", user.get_id(), act.user_id)));
         }
@@ -183,58 +166,26 @@ impl Activity {
             let new: Activity = diesel::insert_into(activities::table)
                 .values(&act)
                 .get_result(conn)?;
-            let mut res = Assembly::new();
-            if let Some(gear) = new.gear {
-                gear.utilize(&mut res, new.usage(), Factor::Add, user, conn)?;
-            }
-            let res = new.check_geartype(res, conn)?;
-            Ok((new, res))
+            // let res = new.check_geartype(res, conn)?;
+            let parts = new.register(Factor::Add, conn)?;
+            Ok((new, parts))
         })
     }
 
     /// Extract the usage out of an activity
     /// 
     /// If the descend value is missing, assume descend = climb
-    pub fn usage (&self) -> Usage {
+    /// Account for Factor
+    pub fn usage (&self, factor: Factor) -> Usage {
+        let factor = factor as i32;
         Usage {
-            time: self.time.unwrap_or(0),
-            distance: self.distance.unwrap_or(0),
-            climb: self.climb.unwrap_or(0),
-            descend: self.descend.unwrap_or_else(|| self.climb.unwrap_or(0)),
-            power: self.power.unwrap_or(0),  
-            count: 1,          
+            time: self.time.unwrap_or(0) * factor,
+            distance: self.distance.unwrap_or(0) * factor,
+            climb: self.climb.unwrap_or(0) * factor,
+            descend: self.descend.unwrap_or_else(|| self.climb.unwrap_or(0)) * factor,
+            power: self.power.unwrap_or(0) * factor,  
+            count: factor,          
         }
-    }
-
-    /// register a (new) gear to an activity 
-    /// 
-    /// if there is already a gear attached, automatically deregister the old gear  
-    /// returns all affected parts
-    fn register (& mut self, gear: Option<PartId>, user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
-        conn.transaction(|| {
-            let mut hash = Assembly::new();
-
-            if self.gear == gear {
-                return Ok(hash)
-            }
-
-            if let Some(gear) = self.gear {
-                // info!("de-registering activity {} from gear {}", self.id, gear);
-                self.gear = None;
-                gear.utilize(&mut hash, self.usage(), Factor::Sub, user, conn)?;
-            } 
-            if let Some(new_gear) = gear {
-                // info!("registering activity {} to gear {}", self.id, new_gear);
-                self.gear = gear;
-                new_gear.utilize(&mut hash, self.usage(), Factor::Add, user, conn)?;
-            }
-            
-            self.save_changes::<Activity>(conn)?;
-            // we do optimistic checking
-            // now we have all data to check if we are allowed to do this
-            // if the check fails the database will roll back!
-            self.check_geartype(hash, conn)
-        })
     }
 
     /// find all activities for gear part in the given time frame
@@ -248,6 +199,11 @@ impl Activity {
         if let Some(end) = end { query = query.filter(start.lt(end)) }
         query.load::<Activity>(conn).expect("could not read activities")
     }
+
+    fn register (&self, factor: Factor, conn: &AppConn) -> TbResult<Vec<Part>> {
+        attachment::parts_per_activity(self, conn).iter()
+            .map(|x| x.apply(&self.usage(factor), conn)).collect()
+    }
 }
 
 
@@ -260,7 +216,7 @@ fn get (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Activity>> {
 /// web interface to create an activity
 #[post("/", data="<activity>")]
 fn post (activity: Json<NewActivity>, user: User, conn: AppDbConn) 
-            -> TbResult<status::Created<Json<(Activity, Assembly)>>> {
+            -> TbResult<status::Created<Json<(Activity, Vec<Part>)>>> {
 
     let (activity, assembly) = Activity::create(activity.0, &user, &conn)?;
     let id_raw: i32 = activity.id.into();
@@ -270,33 +226,16 @@ fn post (activity: Json<NewActivity>, user: User, conn: AppDbConn)
 
 /// web interface to change an activity
 #[put("/<id>", data="<activity>")]
-fn put (id: i32, activity: Json<NewActivity>, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
+fn put (id: i32, activity: Json<NewActivity>, user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {
     ActivityId(id).update(activity.0, &user, &conn).map(Json)
 }
 
 /// web interface to delete an activity
 #[delete("/<id>")]
-fn delete (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
+fn delete (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {
     ActivityId(id).delete(&user, &conn).map(Json)
 }
 
-/// web interface to attach an activity to a gear
-#[patch("/<id>?<gear>")]
-fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
-    info! ("register act {} to gear {:?}", id, gear);
-    let gear = match gear {
-            None => None,
-            Some(x) => Some(PartId::get(x, &user, &conn)?)
-        };
-    conn.transaction(|| {
-        ActivityId(id).read(&user, &conn)
-            .map_or_else(
-                Err,
-                |mut act| act.register(gear, &user, &conn).map(Json)
-            )
-    })
-}
-
 pub fn routes () -> Vec<rocket::Route> {
-    routes![get, register, put, delete, post]
+    routes![get, put, delete, post]
 }
