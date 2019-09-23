@@ -30,10 +30,10 @@ pub struct PartType {
     pub id: PartTypeId,
     /// The display name
     pub name: String,
-    /// Part types that can be attached
-    pub hooks: Vec<PartId>,
     /// is it a main part? I.e. can it be used for an activity?
-    pub main: bool,
+    pub main: PartTypeId,
+    /// Part types that can be attached
+    pub hooks: Vec<PartTypeId>,
 }
 
 #[derive(DieselNewType)] 

@@ -8,7 +8,7 @@ use chrono::{
 use rocket_contrib::json::Json;
 // use rocket::response::status;
 
-use self::schema::{parts, part_types};
+use self::schema::{parts,part_types};
 use crate::user::*;
 use crate::*;
 
@@ -77,14 +77,18 @@ impl PartId {
     }
 
     /// get the part with id part
-    pub fn read (id: i32, user: &dyn Person, conn: &AppConn) -> TbResult<Part> {
-        let part = parts::table.find(id).first::<Part>(conn)?;
+    pub fn part (self, user: &dyn Person, conn: &AppConn) -> TbResult<Part> {
+        let part = parts::table.find(self).first::<Part>(conn)?;
 
         if !user.is_admin() && part.owner != user.get_id() {
             return Err(MyError::Forbidden(format!("user {} cannot access part {}", user.get_id(), part.id)));
         }
 
         Ok(part)
+    }
+
+    pub fn what (self, user: &dyn Person, conn: &AppConn) -> TbResult<PartTypeId> {
+        Ok(self.part(user, conn)?.what)
     }
 
     /// check if the given user is the owner or an admin.
@@ -107,61 +111,31 @@ impl PartId {
     /// apply a usage to the part with given id
     /// 
     /// returns the changed part
-    fn apply (self, usage: &Usage, factor: Factor, conn: &AppConn) -> TbResult<Part> {
+    pub fn apply (self, usage: &Usage, factor: Factor, conn: &AppConn) -> TbResult<Vec<Part>> {
         use schema::parts::dsl::*;
 
-        if factor != Factor::No {
-            let factor = factor as i32;
-            info!("Applying usage at {} to part {}", usage.start, self);
-            Ok(diesel::update(parts.find(self))
-                .set((  time.eq(time + usage.time * factor),
-                        climb.eq(climb + usage.climb * factor),
-                        descend.eq(descend + usage.descend * factor),
-                        distance.eq(distance + usage.distance * factor),
-                        count.eq(count + usage.count * factor)))
-                .get_result::<Part>(conn)?)
-        } else {
-            Ok (parts.find(self).first::<Part>(conn)?)
-        }
-    }
-
-    /// retrieve the vector of Subparts for self
-    /// 
-    /// panics on unexpected database error
-    fn subparts(self, at_time: DateTime<Utc>, conn: &AppConn) -> Vec<PartId> {
-        attachment::subparts(self, at_time, conn)
-    }
-
-    /// is the part attached to a hook?
-    fn is_attached(self, at_time: DateTime<Utc>, conn: &AppConn) -> bool {
-        attachment::is_attached(self, at_time, conn)
-    }
-
-    /// account for usage of the assembly attached to self 
-    /// 
-    /// returns all parts affected
-    /// 
-    /// if the usage is Usage::none() it simply returns the assembly
-    /// - It should not update the database in this case, but does for now.
-    pub fn traverse (self, map: & mut Assembly, usage: &Usage, factor: Factor, conn: &AppConn) -> TbResult<()> {
-        self.subparts(usage.start, conn)
-                .into_iter().map(|x| x.traverse(map, usage, factor, conn))
-                .for_each(drop);
-
-        map.insert(self, self.apply(usage, factor, conn)?);
-        Ok(())
+        let factor = factor as i32;
+        info!("Applying usage to part {}", self);
+        Ok(vec!(diesel::update(parts.find(self))
+            .set((  time.eq(time + usage.time * factor),
+                    climb.eq(climb + usage.climb * factor),
+                    descend.eq(descend + usage.descend * factor),
+                    distance.eq(distance + usage.distance * factor),
+                    count.eq(count + usage.count * factor)))
+            .get_result::<Part>(conn)?))
     }
 
     /// account for usage of the assembly attached to self 
     /// 
     /// returns all parts affected
     /// checks if the user is authorized
-    pub fn utilize (self, map: & mut Assembly, usage: Usage, factor: Factor, user: &dyn Person, conn: &AppConn) -> TbResult<()> {
-        self.checkuser(user, conn)?.traverse(map, &usage, factor, conn)
+    pub fn utilize (self, map: & mut Assembly, usage: Usage, factor: Factor, user: &dyn Person, conn: &AppConn) -> TbResult<Vec<Part>> {
+        self.checkuser(user, conn)?.apply(&usage, factor, conn)
     }
 }
 
 impl Part {
+
     /// retrieve the list of available parts for a user
     /// 
     /// it only returns parts which are not attached
@@ -170,9 +144,15 @@ impl Part {
     fn parts_by_user (user: &dyn Person, main: bool, conn: &AppConn) -> TbResult<Vec<Part>>{
         use crate::schema::parts::dsl::*;
 
-        let types = part_types::table
-            .filter(part_types::main.eq(main))
-            .load::<PartType>(conn)?;
+        let types = if main {
+            part_types::table
+                .filter(part_types::main.eq(part_types::id))
+                .load::<PartType>(conn)?
+        } else {
+            part_types::table
+                .filter(part_types::main.ne(part_types::id))
+                .load::<PartType>(conn)?
+        };
 
         let plist = Part::belonging_to(&types) // only gear or spares
             .filter(owner.eq(user.get_id()))
@@ -180,8 +160,15 @@ impl Part {
             .load::<Part>(conn)?;
         Ok(plist.into_iter()
             .filter(|x| {
-                !x.id.is_attached(Utc::now(), conn) // only parts which are not attached
+                attachment::is_attached(x.id, Utc::now(), conn).is_none() // only parts which are not attached
             }).collect())
+    }
+
+    /// retrieve the vector of Subparts for self
+    /// 
+    /// panics on unexpected database error
+    fn subparts(& self, at_time: DateTime<Utc>, conn: &AppConn) -> Vec<Part> {
+        attachment::subparts(self, at_time, conn)
     }
 
     /// reset all usage counters for all parts of a person
@@ -201,7 +188,7 @@ impl Part {
             .get_results::<Part>(conn)?;
 
         // get the main types
-        let mains: HashSet<PartTypeId> = part_types::table.select(part_types::id).filter(part_types::main.eq(true))
+        let mains: HashSet<PartTypeId> = part_types::table.select(part_types::id).filter(part_types::main.eq(part_types::id))
             .load::<PartTypeId>(conn).expect("error loading PartType").into_iter().collect();
 
         // only return the main parts
@@ -211,18 +198,29 @@ impl Part {
     }
 }
 
+fn assembly (parts: &mut Vec<Part>, user: &dyn Person, conn: &AppConn) { 
+    for part in parts.clone() {
+        let mut subs = part.subparts(Utc::now(), conn);
+        assembly(&mut subs, user, conn);
+        parts.append(&mut subs)
+    }
+}
+
 #[get("/<part>")]
 fn get (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Part>> {
-    PartId::read(part, &user, &conn).map (Json)
+    PartId(part).part(&user, &conn).map(Json)
+}
+
+#[get("/<part>/subparts")]
+fn get_subparts (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {
+    Ok(Json(PartId(part).part(&user, &conn)?.subparts(Utc::now(), &conn)))
 }
 
 #[get("/<part>?assembly")]
-fn get_assembly (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
-    let mut map = Assembly::new();
-
-    PartId::get(part, &user, &conn)?.traverse(&mut map, &Usage::none(), Factor::No, &conn)?;
-    
-    Ok(Json(map))
+fn get_assembly (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {
+    let mut res = vec!(PartId::part(part.into(), &user, &conn)?);
+    assembly(&mut res, &user, &conn);
+    Ok(Json(res))
 }
 
 #[get("/mygear")]
@@ -236,5 +234,5 @@ fn myspares(user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {
 }
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![get, get_assembly, mygear, myspares]
+    routes![get, get_subparts, get_assembly, mygear, myspares]
 }

@@ -51,8 +51,8 @@
 
             let types: Vec<PartType> = getjson (&client, "/types/part");
             assert_eq!(types[0], PartType{id:1.into(),
-                    name: String::from("Bike"), main:true, 
-                    hooks: vec!(2,4,5,7,8,12).into_iter().map(PartId::from).collect()});
+                    name: String::from("Bike"), main:1.into(), 
+                    hooks: Vec::new()});
     }
     #[test]
     fn part () {

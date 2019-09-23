@@ -26,6 +26,16 @@ table! {
 table! {
     attachments (part_id, attached) {
         part_id -> Int4,
+        attached -> Timestamptz,
+        gear -> Int4,
+        hook -> Int4,
+        detached -> Nullable<Timestamptz>,
+    }
+}
+
+table! {
+    attachments3 (part_id, attached) {
+        part_id -> Int4,
         hook_id -> Int4,
         attached -> Timestamptz,
         detached -> Nullable<Timestamptz>,
@@ -33,30 +43,20 @@ table! {
 }
 
 table! {
-    attachments2 (part_id, attached) {
-        part_id -> Int4,
-        attached -> Timestamptz,
-        detached -> Nullable<Timestamptz>,
-        gear -> Int4,
-        hook -> Int4,
-    }
-}
-
-table! {
     part_types (id) {
-        id -> Int4,
-        name -> Text,
-        parts -> Array<Int4>,
-        main -> Bool,
-    }
-}
-
-table! {
-    part_types2 (id) {
         id -> Int4,
         name -> Text,
         main -> Int4,
         hooks -> Array<Int4>,
+    }
+}
+
+table! {
+    part_types3 (id) {
+        id -> Int4,
+        name -> Text,
+        parts -> Array<Int4>,
+        main -> Bool,
     }
 }
 
@@ -78,16 +78,16 @@ table! {
 }
 
 joinable!(activities -> activity_types (what));
-joinable!(activity_types -> part_types (gear));
-joinable!(attachments2 -> part_types2 (hook));
-joinable!(parts -> part_types (what));
+joinable!(activity_types -> part_types3 (gear));
+joinable!(attachments -> part_types (hook));
+joinable!(parts -> part_types3 (what));
 
 allow_tables_to_appear_in_same_query!(
     activities,
     activity_types,
     attachments,
-    attachments2,
+    attachments3,
     part_types,
-    part_types2,
+    part_types3,
     parts,
 );

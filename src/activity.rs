@@ -197,7 +197,6 @@ impl Activity {
     /// If the descend value is missing, assume descend = climb
     pub fn usage (&self) -> Usage {
         Usage {
-            start: self.start,
             time: self.time.unwrap_or(0),
             distance: self.distance.unwrap_or(0),
             climb: self.climb.unwrap_or(0),
@@ -249,25 +248,6 @@ impl Activity {
         if let Some(end) = end { query = query.filter(start.lt(end)) }
         query.load::<Activity>(conn).expect("could not read activities")
     }
-
-    /// rescan all activites for a user
-    /// 
-    /// This will correct the utilization data for that user
-    ///  as long as no other users used her gear...
-    fn rescan (user: &dyn Person, conn: &AppConn) -> TbResult<Assembly> {
-        conn.transaction(|| {
-            let main_gears = part::Part::reset(user, conn)?;
-
-            let mut ass = Assembly::new();
-            let activities = activities::table.filter(activities::gear.eq_any(main_gears))
-                .load::<Activity>(conn)?;
-
-            for act in activities {
-                act.gear.unwrap().utilize(&mut ass, act.usage(), Factor::Add, user, conn)?
-            }
-            Ok(ass)
-        })
-    }
 }
 
 
@@ -317,12 +297,6 @@ fn register (id: i32, gear: Option<i32>, user: User, conn: AppDbConn) -> TbResul
     })
 }
 
-/// web interface to rescan all activities for a user
-#[patch("/rescan")]
-fn rescan (user: User, conn: AppDbConn) -> TbResult<Json<Assembly>> {
-    Ok(Json(Activity::rescan(&user, &conn)?))
-}
-
 pub fn routes () -> Vec<rocket::Route> {
-    routes![get, register, put, delete, post, rescan]
+    routes![get, register, put, delete, post]
 }

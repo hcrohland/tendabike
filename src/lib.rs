@@ -16,11 +16,6 @@ extern crate chrono;
 
 extern crate dotenv;
 
-use chrono::{
-    Utc,
-    DateTime,
-};
-
 use self::diesel::prelude::*;
 
 use simplelog::{
@@ -108,8 +103,6 @@ pub fn init_environment () {
 }
 
 pub struct Usage {
-    // start time
-    pub start: DateTime<Utc>,
     // usage time
     pub time: i32,
     /// Usage distance
@@ -134,13 +127,26 @@ pub enum Factor {
 impl Usage {
     pub fn none() -> Usage {
         Usage {
-            start: Utc::now(),
             time: 0,
             climb: 0,
             descend: 0,
             power: 0,
             distance: 0,
             count: 0,
+        }
+    }
+
+    /// Add an activity to of a usage
+    /// 
+    /// If the descend value is missing, assume descend = climb
+    pub fn add_activity (self, act: &Activity) -> Usage {
+        Usage {
+            time: self.time + act.time.unwrap_or(0),
+            climb: self.climb + act.climb.unwrap_or(0),
+            descend: self.descend + act.descend.unwrap_or_else(|| act.climb.unwrap_or(0)),
+            power: self.power + act.power.unwrap_or(0),
+            distance: self.distance + act.distance.unwrap_or(0),
+            count: self.count + 1,
         }
     }
 }
