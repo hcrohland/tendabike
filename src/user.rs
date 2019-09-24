@@ -29,12 +29,12 @@ impl<'a, 'r> FromRequest<'a, 'r> for User {
         match keys.len() {
             0 => Outcome::Success(User(2)),
             1 => match keys[0].parse() {
-                    Ok(1) => Outcome::Failure((Status::BadRequest, 3)),
+                    // Ok(1) => Outcome::Failure((Status::BadRequest, 3)),
 
                     Ok(id) => Outcome::Success(User(id)),
-                    _ => Outcome::Failure((Status::BadRequest, 2)),
+                    _ => Outcome::Failure((Status::Unauthorized, 2)),
                 }
-            _ => Outcome::Failure((Status::BadRequest, 1)),
+            _ => Outcome::Failure((Status::Unauthorized, 1)),
         }
     }
 }
@@ -52,7 +52,7 @@ impl<'a, 'r> FromRequest<'a, 'r> for Admin {
                     Ok(1) => Outcome::Success(Admin(1)),
                     _ => Outcome::Forward(()),
                 }
-            _ => Outcome::Failure((Status::BadRequest, 1)),
+            _ => Outcome::Failure((Status::Unauthorized, 1)),
         }
     }
 }
