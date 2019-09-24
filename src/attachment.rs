@@ -6,9 +6,7 @@
 
 use chrono::{
     Utc,
-    Local,
     DateTime,
-    TimeZone
 };
 
 use rocket_contrib::json::Json;
@@ -275,10 +273,6 @@ fn collisions(gear: PartId, hook: PartTypeId, what: PartTypeId,
     Ok(query.select(schema::attachments::all_columns) // return only the attachment
             .order(attachments::attached)
             .load::<Attachment>(conn)?)
-}
-
-fn parse_time (time: Option<String>) -> Option<DateTime<Utc>> {
-    time.map(|time| Local.datetime_from_str(&time, "%FT%T").expect(&*format!("could not parse time {}", time)).with_timezone(&Utc))
 }
 
 #[patch("/", data="<attachment>")]

@@ -225,6 +225,18 @@ mod error {
     }
 }
 
+use chrono::{
+    Utc,
+    Local,
+    DateTime,
+    TimeZone
+};
+
+
+fn parse_time (time: Option<String>) -> Option<DateTime<Utc>> {
+    time.map(|time| Local.datetime_from_str(&time, "%FT%T").expect(&*format!("could not parse time {}", time)).with_timezone(&Utc))
+}
+
 pub type TbResult<T> = Result<T, error::MyError>;
 type PartList = Vec<part::Part>;
 

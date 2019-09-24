@@ -189,10 +189,11 @@ impl Part {
     }
 }
 
-fn assembly (parts: &mut PartList, user: &dyn Person, conn: &AppConn) { 
-    for part in parts.clone() {
-        let mut subs = part.subparts(Utc::now(), conn);
-        assembly(&mut subs, user, conn);
+fn assembly (parts: &mut Vec<(Part, PartTypeId)>, at_time: DateTime<Utc>, user: &dyn Person, conn: &AppConn) { 
+    for (part, _) in parts.clone() {
+        let mut subs = part.subparts(at_time, conn).into_iter()
+                            .zip(std::iter::repeat(part.what)).collect::<Vec<_>>();
+        assembly(&mut subs, at_time, user, conn);
         parts.append(&mut subs)
     }
 }
@@ -202,15 +203,17 @@ fn get (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Part>> {
     PartId(part).part(&user, &conn).map(Json)
 }
 
-#[get("/<part>/subparts")]
-fn get_subparts (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<PartList>> {
-    Ok(Json(PartId(part).part(&user, &conn)?.subparts(Utc::now(), &conn)))
+#[get("/<part>/subparts?<time>")]
+fn get_subparts (part: i32, time: Option<String>, user: User, conn: AppDbConn) -> TbResult<Json<PartList>> {
+    Ok(Json(PartId(part).part(&user, &conn)?.subparts(parse_time(time).unwrap_or_else(Utc::now), &conn)))
 }
 
-#[get("/<part>?assembly")]
-fn get_assembly (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<PartList>> {
-    let mut res = vec!(PartId::part(part.into(), &user, &conn)?);
-    assembly(&mut res, &user, &conn);
+#[get("/<part>?assembly&<time>")]
+fn get_assembly (part: i32, time: Option<String>, user: User, conn: AppDbConn) -> TbResult<Json<Vec<(Part, PartTypeId)>>> {
+    let part = PartId::part(part.into(), &user, &conn)?;
+    let what = part.what;
+    let mut res = vec!((part, what));
+    assembly(&mut res, parse_time(time).unwrap_or_else(Utc::now), &user, &conn);
     Ok(Json(res))
 }
 
