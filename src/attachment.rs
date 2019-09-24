@@ -242,13 +242,16 @@ impl Attachment {
 pub fn parts_per_activity(act: &Activity, conn: &AppConn) -> Vec<PartId> {
     use schema::attachments::dsl::*;
 
+    let mut res = Vec::new();
     if let Some(act_gear) = act.gear {
-        attachments.filter(gear.eq(act_gear))
-            .filter(attached.lt(act.start)).filter(detached.is_null().or(detached.ge(act.start)))
-            .select(part_id).get_results::<PartId>(conn).expect("Error reading attachments")
-    } else {
-        Vec::new()
-    }
+            res.push(act_gear); // We need the gear too!
+            res.append(&mut 
+                attachments.filter(gear.eq(act_gear))
+                    .filter(attached.lt(act.start)).filter(detached.is_null().or(detached.ge(act.start)))
+                    .select(part_id).get_results::<PartId>(conn).expect("Error reading attachments")
+            );
+    } 
+    res
 }
 
 /// find other parts which are attached to the same hook as myself in the given timeframe
