@@ -132,7 +132,7 @@ impl Part {
     /// it only returns parts which are not attached
     /// if parameter main is true it returns all gear, which can be used for activities
     /// If parameter main is false it returns the list of spares which can be attached to gear
-    fn parts_by_user (user: &dyn Person, main: bool, conn: &AppConn) -> TbResult<Vec<Part>>{
+    fn parts_by_user (user: &dyn Person, main: bool, conn: &AppConn) -> TbResult<PartList>{
         use crate::schema::parts::dsl::*;
 
         let types = if main {
@@ -158,7 +158,7 @@ impl Part {
     /// retrieve the vector of Subparts for self
     /// 
     /// panics on unexpected database error
-    fn subparts(& self, at_time: DateTime<Utc>, conn: &AppConn) -> Vec<Part> {
+    fn subparts(& self, at_time: DateTime<Utc>, conn: &AppConn) -> PartList {
         attachment::subparts(self, at_time, conn)
     }
 
@@ -189,7 +189,7 @@ impl Part {
     }
 }
 
-fn assembly (parts: &mut Vec<Part>, user: &dyn Person, conn: &AppConn) { 
+fn assembly (parts: &mut PartList, user: &dyn Person, conn: &AppConn) { 
     for part in parts.clone() {
         let mut subs = part.subparts(Utc::now(), conn);
         assembly(&mut subs, user, conn);
@@ -203,24 +203,24 @@ fn get (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Part>> {
 }
 
 #[get("/<part>/subparts")]
-fn get_subparts (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {
+fn get_subparts (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<PartList>> {
     Ok(Json(PartId(part).part(&user, &conn)?.subparts(Utc::now(), &conn)))
 }
 
 #[get("/<part>?assembly")]
-fn get_assembly (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {
+fn get_assembly (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<PartList>> {
     let mut res = vec!(PartId::part(part.into(), &user, &conn)?);
     assembly(&mut res, &user, &conn);
     Ok(Json(res))
 }
 
 #[get("/mygear")]
-fn mygear(user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {    
+fn mygear(user: User, conn: AppDbConn) -> TbResult<Json<PartList>> {    
     Part::parts_by_user(&user, true, &conn).map(Json)
 }
 
 #[get("/myspares")]
-fn myspares(user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {    
+fn myspares(user: User, conn: AppDbConn) -> TbResult<Json<PartList>> {    
     Part::parts_by_user(&user, false, &conn).map(Json)
 }
 

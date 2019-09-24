@@ -27,8 +27,6 @@ use diesel::{
     RunQueryDsl,
 };
 
-use part::Part;
-
 /// The Id of an Activity
 /// 
 /// Most operations for activities are done on the Id alone
@@ -116,7 +114,7 @@ impl ActivityId {
     /// 
     /// returns all affected parts  
     /// checks authorization  
-    fn delete(self, person: &dyn Person, conn: &AppConn) -> TbResult<Vec<Part>> {
+    fn delete(self, person: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
         use crate::schema::activities::dsl::*;
         conn.transaction(|| {
             let res = self.read(person, conn)?
@@ -131,7 +129,7 @@ impl ActivityId {
     ///
     /// returns all affected parts  
     /// checks authorization  
-    fn update (self, act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<Vec<Part>> {
+    fn update (self, act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
         conn.transaction(|| {
             let mut res: HashMap<_, _> = 
                 self.read(user, conn)?.register(Factor::Sub, conn)?
@@ -158,7 +156,7 @@ impl Activity {
     /// 
     /// returns the activity and all affected parts  
     /// checks authorization  
-    fn create(act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<(Activity, Vec<Part>)> {
+    fn create(act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<(Activity, PartList)> {
         if act.user_id != user.get_id() && !user.is_admin() {
             return Err(MyError::Forbidden(format!("user {} cannot create activity for user {}", user.get_id(), act.user_id)));
         }
@@ -200,7 +198,7 @@ impl Activity {
         query.load::<Activity>(conn).expect("could not read activities")
     }
 
-    fn register (&self, factor: Factor, conn: &AppConn) -> TbResult<Vec<Part>> {
+    fn register (&self, factor: Factor, conn: &AppConn) -> TbResult<PartList> {
         attachment::parts_per_activity(self, conn).iter()
             .map(|x| x.apply(&self.usage(factor), conn)).collect()
     }
@@ -216,7 +214,7 @@ fn get (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Activity>> {
 /// web interface to create an activity
 #[post("/", data="<activity>")]
 fn post (activity: Json<NewActivity>, user: User, conn: AppDbConn) 
-            -> TbResult<status::Created<Json<(Activity, Vec<Part>)>>> {
+            -> TbResult<status::Created<Json<(Activity, PartList)>>> {
 
     let (activity, assembly) = Activity::create(activity.0, &user, &conn)?;
     let id_raw: i32 = activity.id.into();
@@ -226,13 +224,13 @@ fn post (activity: Json<NewActivity>, user: User, conn: AppDbConn)
 
 /// web interface to change an activity
 #[put("/<id>", data="<activity>")]
-fn put (id: i32, activity: Json<NewActivity>, user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {
+fn put (id: i32, activity: Json<NewActivity>, user: User, conn: AppDbConn) -> TbResult<Json<PartList>> {
     ActivityId(id).update(activity.0, &user, &conn).map(Json)
 }
 
 /// web interface to delete an activity
 #[delete("/<id>")]
-fn delete (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Vec<Part>>> {
+fn delete (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<PartList>> {
     ActivityId(id).delete(&user, &conn).map(Json)
 }
 

@@ -50,7 +50,7 @@ pub struct Attachment {
 }
 
 /// Find all parts attached to part at at_time
-pub fn subparts(part: &Part, at_time: DateTime<Utc>, conn: &AppConn) -> Vec<Part> {
+pub fn subparts(part: &Part, at_time: DateTime<Utc>, conn: &AppConn) -> PartList {
     use schema::attachments::dsl::*;
 
     let att_gear = if let Some(att) = is_attached(part.id, at_time, conn) {
@@ -146,7 +146,7 @@ impl Attachment {
     /// - recalculates the usage counters in the attached assembly
     /// - persists everything into the database
     ///  -returns all affected parts or MyError::Conflict on collisions
-    fn create (&self, user: &dyn Person, conn: &AppConn) -> TbResult<Vec<Part>> {
+    fn create (&self, user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
         conn.transaction (||{
             let mut coll = self.collisions(user,conn)?;
             if coll.len() > 1 {
@@ -195,7 +195,7 @@ impl Attachment {
     /// returns
     /// - MyError::Conflict if the hook_id does not match
     /// - all recalculated parts on success
-    fn patch (self, user: &dyn Person, conn: &AppConn) -> TbResult<Vec<Part>> {
+    fn patch (self, user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
         conn.transaction (||{
             let mut state = match attachments::table.find((self.part_id, self.attached))
                             .for_update().get_result::<Attachment>(conn) {
@@ -280,7 +280,7 @@ fn parse_time (time: Option<String>) -> Option<DateTime<Utc>> {
 
 #[patch("/", data="<attachment>")]
 fn patch(attachment: Json<Attachment>, user: User, conn: AppDbConn) 
-            -> TbResult<Json<Vec<Part>>> {
+            -> TbResult<Json<PartList>> {
     attachment.patch(&user, &conn).map(Json)
 } 
 

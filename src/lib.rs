@@ -226,4 +226,5 @@ mod error {
 }
 
 pub type TbResult<T> = Result<T, error::MyError>;
+type PartList = Vec<part::Part>;
 
