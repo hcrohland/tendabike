@@ -18,6 +18,21 @@ use diesel::{
     RunQueryDsl,
 };
 
+// make rls happy for now. This is broken anyways...
+
+//#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub type Assembly = HashMap<PartId, Part>;
+
+pub trait ATrait {
+    fn part (&self, part: PartId) -> Option<&Part>;
+}
+
+impl ATrait for Assembly {
+    fn part (&self, part: PartId) -> Option<&Part> {
+        self.get(&part)
+    }
+}
+
 /// The database's representation of a part. 
 #[derive(Clone, Debug, PartialEq, 
         Serialize, Deserialize, 
@@ -67,19 +82,6 @@ pub struct NewPart {
     pub vendor: String,
     /// The model name
     pub model: String,
-}
-
-//#[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub type Assembly = HashMap<PartId, Part>;
-
-pub trait ATrait {
-    fn part (&self, part: PartId) -> Option<&Part>;
-}
-
-impl ATrait for Assembly {
-    fn part (&self, part: PartId) -> Option<&Part> {
-        self.get(&part)
-    }
 }
 
 #[derive(DieselNewType)] 
