@@ -1,0 +1,1 @@
+xsv join --right Datum $1 When $2 |xsv select "When,Type,Gear,Name,Dist km,Elapsed Time,Moving Time,Pwr W,Elv m,Negativer Höhenunterschied"

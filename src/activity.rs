@@ -166,6 +166,7 @@ impl Activity {
                 .get_result(conn)?;
             // let res = new.check_geartype(res, conn)?;
             let parts = new.register(Factor::Add, conn)?;
+            info!("created activity {}", new.id);
             Ok((new, parts))
         })
     }

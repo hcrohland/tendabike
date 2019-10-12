@@ -17,6 +17,7 @@ extern crate chrono;
 extern crate dotenv;
 
 use self::diesel::prelude::*;
+use rocket_contrib::templates::Template;
 
 use simplelog::{
     CombinedLogger,
@@ -42,7 +43,7 @@ use activity::Activity;
 
 pub mod attachment;
 
-use error::MyError as MyError;
+use error::MyError;
 
 type AppConn = diesel::PgConnection;
 
@@ -73,6 +74,8 @@ pub fn ignite_rocket () -> rocket::Rocket {
         .manage(Config::default())
         // add database pool
         .attach(AppDbConn::fairing())
+        .attach(Template::fairing())
+
 
         // mount all the endpoints from the module
         .mount("/", rocket_contrib::serve::StaticFiles::from(concat!(env!("CARGO_MANIFEST_DIR"), "/www")))

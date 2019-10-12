@@ -22,4 +22,5 @@
 
 # No log files
 *.log
+*.http
 
