@@ -15,6 +15,17 @@ x-user-id: 2
 {{host}}/part/14
 x-user-id: 2
 ###
+POST {{host}}/part
+x-user-id: 4
+
+{
+    "owner": 4,
+    "what": 1,
+    "name": "test",
+    "vendor": "test vendor",
+    "model": "test model"
+}
+###
 {{host}}/part/6/subparts?time=2018-11-21T02:00:00 
 x-user-id: 2
 ###

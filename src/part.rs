@@ -6,7 +6,7 @@ use chrono::{
 };
 
 use rocket_contrib::json::Json;
-// use rocket::response::status;
+use rocket::response::status;
 
 use self::schema::{parts,part_types};
 use crate::user::*;
@@ -52,6 +52,23 @@ pub struct Part {
     pub count: i32,
 }
 
+#[derive(Clone, Debug, PartialEq, 
+        Serialize, Deserialize, 
+        Insertable)]
+#[table_name = "parts"]
+pub struct NewPart {
+    /// The owner
+    pub owner: i32,
+    /// The type of the part
+    pub what: PartTypeId,
+    /// This name of the part.
+    pub name: String,
+    /// The vendor name
+    pub vendor: String,
+    /// The model name
+    pub model: String,
+}
+
 //#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub type Assembly = HashMap<PartId, Part>;
 
@@ -64,6 +81,7 @@ impl ATrait for Assembly {
         self.get(&part)
     }
 }
+
 #[derive(DieselNewType)] 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)] 
 pub struct PartId(i32);
@@ -198,10 +216,45 @@ fn assembly (parts: &mut Vec<(Part, PartTypeId)>, at_time: DateTime<Utc>, user: 
     }
 }
 
+impl NewPart {
+    fn create (self, user: &User, conn: &AppConn) -> TbResult<PartId> {
+        use schema::parts::dsl::*;
+
+        if !user.is_admin() && user.get_id() != self.owner {
+            return Err(MyError::Forbidden(format!("user {} cannot create this part", user.get_id())));
+        }
+
+        let values = (
+            owner.eq(self.owner),
+            what.eq(self.what),
+            name.eq(self.name),
+            vendor.eq(self.vendor),
+            model.eq(self.model),
+            purchase.eq(Utc::now()),
+            time.eq(0),
+            distance.eq(0),
+            climb.eq(0),
+            descend.eq(0),
+            count.eq(0),
+        );
+
+        let part: Part = diesel::insert_into(parts).values(values).get_result(conn)?;
+        Ok(part.id)
+    }
+}
+
 #[get("/<part>")]
 fn get (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Part>> {
     PartId(part).part(&user, &conn).map(Json)
 }
+
+#[post("/", data="<newpart>")]
+fn post(newpart: Json<NewPart>, user: User, conn: AppDbConn) 
+            -> TbResult<status::Created<Json<PartId>>> {
+    let id = newpart.clone().create(&user, &conn)?;
+    let url = uri! (get: i32::from(id));
+    Ok (status::Created(url.to_string(), Some(Json(id))))
+} 
 
 #[get("/<part>/subparts?<time>")]
 fn get_subparts (part: i32, time: Option<String>, user: User, conn: AppDbConn) -> TbResult<Json<PartList>> {
@@ -228,5 +281,5 @@ fn myspares(user: User, conn: AppDbConn) -> TbResult<Json<PartList>> {
 }
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![get, get_subparts, get_assembly, mygear, myspares]
+    routes![get, post, get_subparts, get_assembly, mygear, myspares]
 }
