@@ -10,7 +10,7 @@ edition = "2018"
 
 rocket = "0.4.2"
 reqwest = "0.9.22"
-diesel = { version = "1.4.2", features = ["postgres", "chrono"] }
+diesel = { version = "1.4.3", features = ["postgres", "chrono"] }
 rocket_oauth2 = "0.1.0"
  
 
@@ -19,7 +19,7 @@ diesel-derive-newtype = "0.1.2"
 newtype_derive = "0.1.6"
 dotenv = "0.14.1"
 log = "0.4.8"  
-simplelog = "0.7.3"
+simplelog = "0.7.4"
 lazy_static = "1.4.0"
 serde = "1.0.101" 
 serde_derive = "1.0.101"
