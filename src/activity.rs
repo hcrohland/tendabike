@@ -178,6 +178,7 @@ impl Activity {
     pub fn usage (&self, factor: Factor) -> Usage {
         let factor = factor as i32;
         Usage {
+            start: self.start,
             time: self.time.unwrap_or(0) * factor,
             distance: self.distance.unwrap_or(0) * factor,
             climb: self.climb.unwrap_or(0) * factor,

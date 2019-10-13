@@ -135,6 +135,11 @@ impl PartId {
         use schema::parts::dsl::*;
 
         info!("Applying usage to part {}", self);
+        // If the purchase date is newer than the usage, adjust it
+        diesel::update(parts.find(self))
+            .filter(purchase.gt(usage.start))
+            .set(purchase.eq(usage.start))
+            .execute(conn)?;
         Ok(diesel::update(parts.find(self))
             .set((  time.eq(time + usage.time),
                     climb.eq(climb + usage.climb),
