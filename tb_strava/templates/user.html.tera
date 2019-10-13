@@ -1,0 +1,41 @@
+{% extends "base" %}
+
+{% block content %}
+    <h1>Hi {{user.firstname}} {{user.lastname}}</h1>
+
+    <h2>Here are your activities:</h2>
+    
+    <table >
+        <tr>
+            <th>Name</th>
+            <th>Start time</th>
+            <th>Gear</th>
+        </tr>
+            {% for s in activities %}
+                <tr>
+                    <td> <a href="/user/plain/activity/{{ s.id }}"> {{ s.name }} </a>
+                    <td> {{ s.start_date_local | date(format="%A, %_d. %h %Y, %k:%M")}} 
+                    <td> 
+                    {% if s.gear_id %}
+                        <a href="/user/plain/gear/{{ s.gear_id }}"> {{gears[s.gear_id].name }} </a>
+                    {% endif %}
+                </tr>
+            {% endfor %}
+    </table> 
+
+    <ul>
+        {% for id, gear in gears %}
+            <li>
+                {% if gear.id %}
+                    <a href="/user/plain/gear/{{ gear.id }}">{{gear.name}}</a> is a {{gear.brand_name}} {{gear.model_name}} which you used for {{gear.distance / 1000 | round(method="floor", precision=0)}} km
+                {% endif %}
+            </li>
+        {% endfor%}
+    </ul>
+
+    {% if page > 1 %} 
+        <a href="?page={{page - 1}}"> Prev </a>
+    {% endif%}
+    <a href="?page={{page + 1}}"> Next </a>
+
+{% endblock content %}

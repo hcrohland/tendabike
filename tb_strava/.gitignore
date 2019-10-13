@@ -1,0 +1,7 @@
+/target
+**/*.rs.bk
+Strava.http
+.env
+*.log
+.vscode
+.DS_Store

@@ -1,0 +1,40 @@
+[package]
+name = "tb_strava"
+version = "0.1.0"
+authors = ["Christoph Rohland <hcrohland@users.noreply.github.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+rocket = "0.4.2"
+reqwest = "0.9.22"
+diesel = { version = "1.4.2", features = ["postgres", "chrono"] }
+rocket_oauth2 = "0.1.0"
+ 
+
+diesel-derive-newtype = "0.1.2"
+
+newtype_derive = "0.1.6"
+dotenv = "0.14.1"
+log = "0.4.8"  
+simplelog = "0.7.3"
+lazy_static = "1.4.0"
+serde = "1.0.101" 
+serde_derive = "1.0.101"
+serde_json = "1.0.41"
+
+chrono = { version ="0.4.9", features = ["serde"] }
+
+pretty_assertions = "0.6.1"
+
+quick-error = "1.2.2"
+error-chain = "0.12.1"
+time = "0.1.42"
+
+[dependencies.rocket_contrib]
+version = "0.4.2"
+default-features = false
+features = ["diesel_postgres_pool", "json", "serve", "tera_templates"]
+
