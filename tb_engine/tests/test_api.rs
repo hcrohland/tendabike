@@ -2,10 +2,10 @@
     use rocket::local::*;
     use rocket::http::{Header, Status, Method, ContentType};
     use chrono::Utc;
-    use tendabike::*;
+    use tb_engine::*;
 
-    use tendabike::part::*;
-    use tendabike::types::*;
+    use tb_engine::part::*;
+    use tb_engine::types::*;
 
     use serde::{
             de::Deserialize,
@@ -69,7 +69,7 @@
         assert_eq!(ass.get(&myparts[1].id).unwrap().name.to_string(), "Slide");
     }
 
-    use tendabike::activity::*;
+    use tb_engine::activity::*;
 
     #[test]
     fn activity_types () {
