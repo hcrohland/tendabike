@@ -86,4 +86,4 @@ mod error {
 
  
 pub use error::{Error};
-pub type MyResult<T> = Result<T, Error>;
+pub type TbResult<T> = Result<T, Error>;

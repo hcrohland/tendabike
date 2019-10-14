@@ -57,7 +57,7 @@ pub struct User{
 impl User {
     /// the get function reads the user from the cookie and other stores,
     /// if needed and possible it refreshes the access token 
-    fn get (request: &Request) -> MyResult<User> {
+    fn get (request: &Request) -> TbResult<User> {
         // Get user id
         let mut cookies = request.guard::<Cookies>().expect("request cookies");
         let id = cookies.get_private("id").ok_or(ErrorKind::Authorize("cookie id missing"))?
@@ -83,7 +83,7 @@ impl User {
 
     /// Updates the user data from a new token 
     /// Needs the cookies parameter to prevent two Cookie instance retrieval
-    fn store(request: &Request, mut cookies: Cookies, uid: i32, token: TokenResponse) -> MyResult<DbUser> {
+    fn store(request: &Request, mut cookies: Cookies, uid: i32, token: TokenResponse) -> TbResult<DbUser> {
         use schema::users::dsl::*;
         use time::*;
 
@@ -114,7 +114,7 @@ impl User {
 
     /// send an API call with an authenticated User
     /// 
-    pub fn request(&self, uri: &str) -> MyResult<String> {
+    pub fn request(&self, uri: &str) -> TbResult<String> {
         let client = reqwest::Client::new();
         Ok(client.get(&format!("{}{}", API_URI, uri))
             .bearer_auth(&self.user.access_token)
@@ -130,7 +130,7 @@ impl User {
         self.user.last_activity.unwrap_or(0)
     }
 
-    pub fn update_last(&self, time: i64) -> MyResult<i64> {
+    pub fn update_last(&self, time: i64) -> TbResult<i64> {
         if let Some(l) = self.user.last_activity { 
             if l >= time {
                 return Ok(l);
@@ -169,9 +169,9 @@ impl<'a, 'r> FromRequest<'a, 'r> for User {
 struct Callback;
 
 impl rocket_oauth2::Callback for Callback {
-    type Responder = MyResult<Redirect>;
+    type Responder = TbResult<Redirect>;
     fn callback(&self, request: &Request, token: TokenResponse)
-        -> MyResult<Redirect>
+        -> TbResult<Redirect>
     {
 
         info!("Callback got scope {:?}", token.scope);

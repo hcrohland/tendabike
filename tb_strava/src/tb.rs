@@ -6,7 +6,7 @@ use activity::*;
 
 use rocket_contrib::json::Json;
 
-fn next_activities(user: &User) -> MyResult<Vec<TbActivity>> {
+fn next_activities(user: &User) -> TbResult<Vec<TbActivity>> {
 
     let r = user.request(&format!("/activities?after={}&per_page=10", user.last_activity()))?;
     // let r = user.request("/activities?per_page=2")?;
@@ -16,17 +16,17 @@ fn next_activities(user: &User) -> MyResult<Vec<TbActivity>> {
 }
 
 #[get("/next")]
-fn next (user: User) -> MyResult<Json<Vec<TbActivity>>> {
+fn next (user: User) -> TbResult<Json<Vec<TbActivity>>> {
     Ok(Json(next_activities(&user)?))
 }
 
 #[get("/sync")]
-fn sync (user: User) -> MyResult<Json<Vec<String>>> {
+fn sync (user: User) -> TbResult<Json<Vec<String>>> {
     let acts = next_activities(&user)?;
    
     acts.into_iter()
         .map(|a| a.send_to_tb(&user))
-        .collect::<MyResult<Vec<String>>>()
+        .collect::<TbResult<Vec<String>>>()
         .map(Json)
 }
 

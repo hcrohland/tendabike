@@ -4,14 +4,14 @@ use rocket_contrib::templates::Template;
 use std::collections::HashMap;
 
 #[get("/plain")]
-fn overview (user: User) -> MyResult<content::Json<String>> {
+fn overview (user: User) -> TbResult<content::Json<String>> {
     let res = user.request("/athlete")?;
     Ok(content::Json(res))
 }
 
 #[allow(clippy::map_entry)]
 #[get("/?<page>&<after>")]
-fn read (page: Option<i32>, after: Option<i64>, user: User) -> MyResult<Template> {
+fn read (page: Option<i32>, after: Option<i64>, user: User) -> TbResult<Template> {
     use serde_json::Value;
     let mut map = HashMap::new();
 
@@ -39,19 +39,19 @@ fn read (page: Option<i32>, after: Option<i64>, user: User) -> MyResult<Template
 
 use rocket::response::content;
 #[get("/plain/activities")]
-fn activities(user: User) -> MyResult<content::Json<String>> {
+fn activities(user: User) -> TbResult<content::Json<String>> {
     let res = user.request("/athlete/activities?per_page=3")?;
     Ok(content::Json(res))
 }
 
 #[get("/plain/activity/<id>")]
-fn activity(id: u64, user: User) -> MyResult<content::Json<String>> {
+fn activity(id: u64, user: User) -> TbResult<content::Json<String>> {
     let res = user.request(&format!("/activities/{}", id))?;
     Ok(content::Json(res))
 }
 
 #[get("/activities")]
-fn activitiesh(user: User) -> MyResult<Template> {
+fn activitiesh(user: User) -> TbResult<Template> {
     let res = user.request("/athlete/activities?per_page=3")?;
     let res: serde_json::Value = serde_json::from_str(&res).chain_err(|| "No valid json received")?;
     let mut map = HashMap::new();
@@ -60,7 +60,7 @@ fn activitiesh(user: User) -> MyResult<Template> {
 }
 
 #[get("/gear/<id>")]
-fn gear(id: String, user: User) -> MyResult<Template> {
+fn gear(id: String, user: User) -> TbResult<Template> {
     let res = user.request(&format!("/gear/{}", &id))?;
     let res: serde_json::Value = serde_json::from_str(&res).chain_err(|| "No valid json received")?;
     let mut map = HashMap::new();
@@ -69,7 +69,7 @@ fn gear(id: String, user: User) -> MyResult<Template> {
 }
 
 #[get("/plain/gear/<id>")]
-fn gear_plain(id: String, user: User) -> MyResult<content::Json<String>> {
+fn gear_plain(id: String, user: User) -> TbResult<content::Json<String>> {
     let res = user.request(&format!("/gear/{}", &id))?;
     Ok(content::Json(res))
 }

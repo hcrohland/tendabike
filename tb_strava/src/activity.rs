@@ -54,7 +54,7 @@ pub struct TbActivity{
 
 
 impl StravaActivity {
-    pub fn into_tb(self, user: &User) -> MyResult<TbActivity> {
+    pub fn into_tb(self, user: &User) -> TbResult<TbActivity> {
         let what = self.what()?;
         let gear = 
             match self.gear_id {
@@ -77,7 +77,7 @@ impl StravaActivity {
     }
 
     /// map strava workout type strings to tendabike types
-    fn what(&self) -> MyResult<i32> {
+    fn what(&self) -> TbResult<i32> {
         let t = self.type_.as_str();
 
         match t {
@@ -125,7 +125,7 @@ impl StravaActivity {
 }
 
 impl TbActivity{ 
-    pub fn send_to_tb (&self, user: &User) -> MyResult<String> {
+    pub fn send_to_tb (&self, user: &User) -> TbResult<String> {
         let client = reqwest::Client::new();
 
         let res = client.post(&format!("{}{}", TB_URI, "/activ"))

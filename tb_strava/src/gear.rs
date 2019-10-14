@@ -60,7 +60,7 @@ pub struct Gear {
 
 
 impl StravaGear {
-    pub fn into_tb (self, user: &User) -> MyResult<TbGear> {
+    pub fn into_tb (self, user: &User) -> TbResult<TbGear> {
         Ok(TbGear {
             owner: user.id(),
             what: self.what(),
@@ -77,7 +77,7 @@ impl StravaGear {
         }
     }
 
-    fn request(id: &str, user: &User) -> MyResult<StravaGear> {
+    fn request(id: &str, user: &User) -> TbResult<StravaGear> {
         let r = user.request(&format!("/gear/{}", id))?;
         let res: StravaGear = serde_json::from_str(&r).chain_err(|| "Did not receive StravaGear format")?;
         Ok(res)
@@ -85,7 +85,7 @@ impl StravaGear {
 }
 
 impl TbGear {
-    fn send_to_tb (&self) -> MyResult<i32> {
+    fn send_to_tb (&self) -> TbResult<i32> {
         let client = reqwest::Client::new();
 
         let res: i32 = client.post(&format!("{}{}", TB_URI, "/part"))
@@ -104,7 +104,7 @@ impl TbGear {
 /// 
 /// If it does not exist create it at tb
 /// None will return None
-pub fn strava_to_tb(strava: String, user: &User) -> MyResult<i32> {
+pub fn strava_to_tb(strava: String, user: &User) -> TbResult<i32> {
     use schema::gears::dsl::*;
  
     let g = gears.find(&strava).select(tendabike_id).get_results::<i32>(user.conn()).chain_err(|| "Error reading database")?;
