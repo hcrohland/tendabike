@@ -1,0 +1,15 @@
+[package]
+name = "tb_common"
+version = "0.1.0"
+authors = ["Christoph Rohland <hcrohland@users.noreply.github.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+error-chain = "0.12.1"
+rocket = "0.4.2"
+rocket_contrib = "0.4.2"
+
+log = "0.4.8"  
+#simplelog = "0.7.4"

@@ -5,7 +5,6 @@ use std::io::Cursor;
 use rocket::http::{Status, ContentType};
 
 
-
 error_chain!{
     types {
         Error, ErrorKind, ResultExt;

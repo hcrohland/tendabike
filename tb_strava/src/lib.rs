@@ -12,7 +12,7 @@ extern crate rocket_oauth2;
 #[macro_use] extern crate lazy_static;
 extern crate time;
 #[macro_use] extern crate error_chain;
-
+extern crate tb_common;
 
 
 pub mod auth;
@@ -21,9 +21,8 @@ pub mod schema;
 pub mod tb;
 pub mod activity;
 pub mod gear;
-pub mod error;
 
-pub use error::*;
+pub use tb_common::error::*;
 
 const TB_URI: &str = "http://localhost:8000";
 

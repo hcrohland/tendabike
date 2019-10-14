@@ -1851,6 +1851,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tb_common"
+version = "0.1.0"
+dependencies = [
+ "error-chain 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rocket 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rocket_contrib 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "tb_engine"
 version = "0.1.0"
 dependencies = [
@@ -1913,6 +1923,7 @@ dependencies = [
  "serde_derive 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.41 (registry+https://github.com/rust-lang/crates.io-index)",
  "simplelog 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tb_common 0.1.0",
  "time 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
