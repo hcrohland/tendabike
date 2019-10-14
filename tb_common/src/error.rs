@@ -15,6 +15,30 @@ error_chain!{
             description("You need to authorize")
             display("No authorization due to {}", r)
         }
+        NotAuth(x: String) {
+            description("Not authorized")
+            display("Not authorized {}", x)
+        }
+        Forbidden(x: String) {
+            description("Forbidden request")
+            display("Forbidden request: {}", x)
+        }
+        NotFound(x: String) {
+            description("Object not found")
+            display("Could not find object: {}", x)
+        }
+        BadRequest(x: String) {
+            description("Bad request")
+            display("Bad Request: {}", x)
+        }
+        Conflict(x: String) {
+            description("Conflict")
+            display("Conflict: {}", x)
+        }
+    }
+
+    foreign_links {
+        DbError(diesel::result::Error);
     }
 }
 
@@ -45,3 +69,4 @@ impl<'r> Responder<'r> for Error {
 }
 
 pub type MyResult<T> = Result<T, Error>;
+pub type TbResult<T> = Result<T, Error>;

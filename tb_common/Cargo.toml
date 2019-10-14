@@ -10,6 +10,7 @@ edition = "2018"
 error-chain = "0.12.1"
 rocket = "0.4.2"
 rocket_contrib = "0.4.2"
+diesel = "1.4.3"
 
 log = "0.4.8"  
 #simplelog = "0.7.4"

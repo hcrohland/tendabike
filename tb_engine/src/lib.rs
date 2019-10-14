@@ -16,6 +16,8 @@ extern crate chrono;
 
 extern crate dotenv;
 
+extern crate tb_common;
+
 use std::cmp::min;
 use self::diesel::prelude::*;
 use rocket_contrib::templates::Template;
@@ -44,7 +46,7 @@ use activity::Activity;
 
 pub mod attachment;
 
-use error::MyError;
+use tb_common::error::*;
 
 type AppConn = diesel::PgConnection;
 
@@ -160,7 +162,7 @@ impl Usage {
         }
     }
 }
-
+/* 
 mod error {
     use std::fmt;
     use std::error;
@@ -232,6 +234,7 @@ mod error {
         }
     }
 }
+*/
 
 use chrono::{
     Utc,
@@ -245,6 +248,5 @@ fn parse_time (time: Option<String>) -> Option<DateTime<Utc>> {
     time.map(|time| Local.datetime_from_str(&time, "%FT%T").expect(&*format!("could not parse time {}", time)).with_timezone(&Utc))
 }
 
-pub type TbResult<T> = Result<T, error::MyError>;
 type PartList = Vec<part::Part>;
 

@@ -101,7 +101,7 @@ impl PartId {
         let part = parts::table.find(self).first::<Part>(conn)?;
 
         if !user.is_admin() && part.owner != user.get_id() {
-            return Err(MyError::Forbidden(format!("user {} cannot access part {}", user.get_id(), part.id)));
+            return Err(ErrorKind::Forbidden(format!("user {} cannot access part {}", user.get_id(), part.id)).into());
         }
 
         Ok(part)
@@ -125,7 +125,7 @@ impl PartId {
             return Ok(self);
         }
 
-        Err(MyError::Forbidden(format!("user {} cannot access part {}", user.get_id(), self)))
+        Err(ErrorKind::Forbidden(format!("user {} cannot access part {}", user.get_id(), self)).into())
     }
 
     /// apply a usage to the part with given id
@@ -228,7 +228,7 @@ impl NewPart {
         use schema::parts::dsl::*;
 
         if !user.is_admin() && user.get_id() != self.owner {
-            return Err(MyError::Forbidden(format!("user {} cannot create this part", user.get_id())));
+            return Err(ErrorKind::Forbidden(format!("user {} cannot create this part", user.get_id())).into());
         }
 
         let values = (

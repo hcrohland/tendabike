@@ -6,6 +6,7 @@ extern crate rocket;
 extern crate rocket_contrib;
 #[macro_use]
 extern crate log;
+extern crate diesel;
 
 pub mod error;
 

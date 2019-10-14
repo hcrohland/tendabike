@@ -5,6 +5,7 @@ authors = ["Christoph Rohland <hcrohland@users.noreply.github.com>"]
 edition = "2018"
 
 [dependencies]
+tb_common = { path = "../tb_common" }
 rocket = "0.4.2"
 diesel = { version = "1.4.3", features = ["postgres", "chrono"] }
 diesel-derive-newtype = "0.1.2"
