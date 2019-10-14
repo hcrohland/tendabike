@@ -92,7 +92,7 @@ impl StravaActivity {
             "Hike"          => Ok(4),
             "BackcountrySki" => Ok(10),
             "StandUpPaddling" => Ok(11),
-            _ => Err(Error::Mess(format!("unsupported activity {}", t)))
+            _ => bail!("unsupported activity {}", t)
 /*             "Rowing" => ,
             "Handcycle" => ,
             "Canoeing" => ,
@@ -131,11 +131,11 @@ impl TbActivity{
         let res = client.post(&format!("{}{}", TB_URI, "/activ"))
             .header("x-user-id", user.id())
             .json(self)
-            .send()?
-            .error_for_status()?
-            .text()?;
+            .send().chain_err(|| "unable to contact engine")?
+            .error_for_status().chain_err(|| "unable to contact engine")?
+            .text().chain_err(|| "cannot receive body")?;
 
-        user.update_last(self.start.timestamp())?;
+        user.update_last(self.start.timestamp()).chain_err(|| "unable to update user")?;
         Ok(res)
     }
 

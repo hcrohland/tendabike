@@ -23,7 +23,7 @@ const PROVIDER: rocket_oauth2::Provider = rocket_oauth2::Provider
     token_uri: std::borrow::Cow::Borrowed("https://www.strava.com/oauth/token")
 };
 
-pub const API_URI: &str = "https://www.strava.com/api/v3";
+const API_URI: &str = "https://www.strava.com/api/v3";
 
 lazy_static! {
     static ref CLIENT_ID: String = std::env::var("CLIENT_ID").expect("Couldn't read var CLIENT_ID");
@@ -60,12 +60,12 @@ impl User {
     fn get (request: &Request) -> MyResult<User> {
         // Get user id
         let mut cookies = request.guard::<Cookies>().expect("request cookies");
-        let id = cookies.get_private("id").ok_or(Error::Authorize("cookie id missing"))?
-                               .value().parse::<i32>().expect("parse error");
+        let id = cookies.get_private("id").ok_or(ErrorKind::Authorize("cookie id missing"))?
+                               .value().parse::<i32>().chain_err(|| "parse error")?;
 
         // Get the user
-        let conn = request.guard::<AppDbConn>().expect("db connection");
-        let user: DbUser = users::table.find(id).get_result(&conn.0)?;
+        let conn = request.guard::<AppDbConn>().expect("internal db missing");
+        let user: DbUser = users::table.find(id).get_result(&conn.0).chain_err(|| "user not registered")?;
 
         if user.expires_at > time::get_time().sec {
             return Ok(User {user, conn});
@@ -73,7 +73,7 @@ impl User {
 
         info! ("refreshing access token");
         let auth = request.guard::<State<OAuth>>().expect("oauth struct");
-        let tokenset = auth.refresh(&user.refresh_token)?;
+        let tokenset = auth.refresh(&user.refresh_token).map_err(|_| "could not refresh access token")?;
         
         Ok(User{
             user: User::store(request, cookies, user.id, tokenset)?,
@@ -102,11 +102,11 @@ impl User {
             diesel::insert_into(users).values(&user)
                     .on_conflict(id)
                     .do_update().set(&user)
-                    .get_result(conn)?;
+                    .get_result(conn).chain_err(|| "Could not store user")?;
         if db_user.tendabike_id.is_none() {
             db_user = diesel::update(&db_user)
                         .set(tendabike_id.eq(Some(0)))
-                        .get_result(conn)?;
+                        .get_result(conn).chain_err(||"Could not set the remote id")?;
         }
 
         Ok(db_user)
@@ -118,8 +118,8 @@ impl User {
         let client = reqwest::Client::new();
         Ok(client.get(&format!("{}{}", API_URI, uri))
             .bearer_auth(&self.user.access_token)
-            .send()?
-            .text()?)
+            .send().chain_err(|| "Could not reach strava")?
+            .text().chain_err(|| "Could not get response body")?)
     }
 
     pub fn id(&self) -> i32 {
@@ -140,7 +140,7 @@ impl User {
 
         diesel::update(users.find(self.user.id))
                         .set(last_activity.eq(Some(time)))
-                        .execute(&self.conn.0)?;
+                        .execute(&self.conn.0).chain_err(|| "Could not update last_activity")?;
         Ok(time)
     }
 
@@ -175,9 +175,9 @@ impl rocket_oauth2::Callback for Callback {
     {
 
         info!("Callback got scope {:?}", token.scope);
-        let athlete = token.extras.get("athlete").ok_or(Error::Authorize("token did not include athlete"))?;
+        let athlete = token.extras.get("athlete").ok_or(ErrorKind::Authorize("token did not include athlete"))?;
         info!("got athlete {} {}, with id {}", athlete["firstname"], athlete["lastname"], athlete["id"]);
-        let id = athlete["id"].as_i64().ok_or(Error::Authorize("athlet id id no int"))? as i32;
+        let id = athlete["id"].as_i64().ok_or(ErrorKind::Authorize("athlet id is no int"))? as i32;
         let cookies = request.guard::<Cookies>().expect("request cookies");
         User::store(request, cookies, id, token)?;
         Ok(Redirect::to("/user"))
