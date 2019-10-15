@@ -15,10 +15,6 @@ error_chain!{
             description("You need to authorize")
             display("No authorization due to {}", r)
         }
-        NotAuth(x: String) {
-            description("Not authorized")
-            display("Not authorized {}", x)
-        }
         Forbidden(x: String) {
             description("Forbidden request")
             display("Forbidden request: {}", x)
@@ -57,11 +53,27 @@ impl<'r> Responder<'r> for Error {
         }).to_string();
 
         error!("{}", rslt);
+        let status = match self {
+                Error(ErrorKind::DbError(error),_) => {
+                    use diesel::result::Error as DieselError;
+                    match error  {
+                        DieselError::NotFound => Status::NotFound,
+                        DieselError::DatabaseError(diesel::result::DatabaseErrorKind::ForeignKeyViolation,_) => Status::BadRequest,
+                        _ => Status::InternalServerError
+                    }
+                },
+                Error(ErrorKind::NotFound(_),_) => Status::NotFound,
+                Error(ErrorKind::Authorize(_),_)  => Status::Unauthorized,
+                Error(ErrorKind::Forbidden(_),_) => Status::Forbidden,
+                Error(ErrorKind::BadRequest(_),_) => Status::BadRequest,
+                Error(ErrorKind::Conflict(_),_) => Status::Conflict,
+                _ => Status::InternalServerError,
+            };
 
         // Respond. The `Ok` here is a bit of a misnomer. It means we
         // successfully created an error response
         Ok(Response::build()
-            .status(Status::BadRequest)
+            .status(status)
             .header(ContentType::JSON)
             .sized_body(Cursor::new(resp))
             .finalize())
