@@ -79,7 +79,7 @@ impl StravaGear {
 
     fn request(id: &str, user: &User) -> TbResult<StravaGear> {
         let r = user.request(&format!("/gear/{}", id))?;
-        let res: StravaGear = serde_json::from_str(&r).chain_err(|| "Did not receive StravaGear format")?;
+        let res: StravaGear = serde_json::from_str(&r).context("Did not receive StravaGear format")?;
         Ok(res)
     }
 }
@@ -91,9 +91,9 @@ impl TbGear {
         let res: i32 = client.post(&format!("{}{}", TB_URI, "/part"))
             .header("x-user-id", self.owner)
             .json(self)
-            .send().chain_err(|| "Cold not contact engine")?
-            .error_for_status().chain_err(|| "Engine returned error")?
-            .json().chain_err(|| "Could not parse result to integer")?;
+            .send().context("Cold not contact engine")?
+            .error_for_status().context("Engine returned error")?
+            .json().context("Could not parse result to integer")?;
         
         Ok(res)
     }
@@ -107,18 +107,18 @@ impl TbGear {
 pub fn strava_to_tb(strava: String, user: &User) -> TbResult<i32> {
     use schema::gears::dsl::*;
  
-    let g = gears.find(&strava).select(tendabike_id).get_results::<i32>(user.conn()).chain_err(|| "Error reading database")?;
+    let g = gears.find(&strava).select(tendabike_id).get_results::<i32>(user.conn()).context("Error reading database")?;
 
     if !g.is_empty() { 
         return Ok(g[0]) 
     }
 
     dbg!("New Gear");
-    let tbid = StravaGear::request(&strava, user).chain_err(|| "Couldn't map gear")?
-                .into_tb(user).chain_err(|| "Could map gear to tendabike format")?
-                .send_to_tb().chain_err(|| "Cound send gear to tb")?;
+    let tbid = StravaGear::request(&strava, user).context("Couldn't map gear")?
+                .into_tb(user).context("Could map gear to tendabike format")?
+                .send_to_tb().context("Cound send gear to tb")?;
     diesel::insert_into(gears)
         .values((id.eq(strava),tendabike_id.eq(tbid),user_id.eq(user.id())))
-        .execute(user.conn()).chain_err(|| "couldn't store gear")?;
+        .execute(user.conn()).context("couldn't store gear")?;
     Ok(tbid)
 }

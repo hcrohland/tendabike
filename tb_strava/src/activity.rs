@@ -131,11 +131,11 @@ impl TbActivity{
         let res = client.post(&format!("{}{}", TB_URI, "/activ"))
             .header("x-user-id", user.id())
             .json(self)
-            .send().chain_err(|| "unable to contact engine")?
-            .error_for_status().chain_err(|| "unable to contact engine")?
-            .text().chain_err(|| "cannot receive body")?;
+            .send().context("unable to contact backend")?
+            .error_for_status().context("backend responded with error")?
+            .text().context("malformed body body")?;
 
-        user.update_last(self.start.timestamp()).chain_err(|| "unable to update user")?;
+        user.update_last(self.start.timestamp()).context("unable to update user")?;
         Ok(res)
     }
 

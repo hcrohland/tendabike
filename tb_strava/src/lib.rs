@@ -11,9 +11,14 @@ extern crate reqwest;
 extern crate rocket_oauth2;
 #[macro_use] extern crate lazy_static;
 extern crate time;
-#[macro_use] extern crate error_chain;
-extern crate tb_common;
+#[macro_use] 
+extern crate anyhow;
+#[macro_use] 
+extern crate thiserror;
 
+
+pub(crate) use anyhow::Context;
+type TbResult<T> = anyhow::Result<T>;
 
 pub mod auth;
 pub mod user;
@@ -21,8 +26,6 @@ pub mod schema;
 pub mod tb;
 pub mod activity;
 pub mod gear;
-
-pub use tb_common::error::*;
 
 const TB_URI: &str = "http://localhost:8000";
 
@@ -47,3 +50,8 @@ impl Default for Config {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum StravaError {
+    #[error("authorization needed: {0}")]
+    Authorize(&'static str),
+}

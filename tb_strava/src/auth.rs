@@ -59,21 +59,20 @@ impl User {
     /// if needed and possible it refreshes the access token 
     fn get (request: &Request) -> TbResult<User> {
         // Get user id
-        let mut cookies = request.guard::<Cookies>().expect("request cookies");
-        let id = cookies.get_private("id").ok_or(ErrorKind::Authorize("cookie id missing"))?
-                               .value().parse::<i32>().chain_err(|| "parse error")?;
-
+        let mut cookies = request.guard::<Cookies>().expect("No request cookies!!!");
+        let id = cookies.get_private("id").ok_or(StravaError::Authorize("no id cookie"))?
+                .value().parse::<i32>()?;
         // Get the user
-        let conn = request.guard::<AppDbConn>().expect("internal db missing");
-        let user: DbUser = users::table.find(id).get_result(&conn.0).chain_err(|| "user not registered")?;
+        let conn = request.guard::<AppDbConn>().expect("internal db missing!!!");
+        let user: DbUser = users::table.find(id).get_result(&conn.0).context("user not registered")?;
 
         if user.expires_at > time::get_time().sec {
             return Ok(User {user, conn});
         }
 
         info! ("refreshing access token");
-        let auth = request.guard::<State<OAuth>>().expect("oauth struct");
-        let tokenset = auth.refresh(&user.refresh_token).chain_err(|| "could not refresh access token")?;
+        let auth = request.guard::<State<OAuth>>().expect("No oauth struct!!!");
+        let tokenset = auth.refresh(&user.refresh_token).context("could not refresh access token")?;
         
         Ok(User{
             user: User::store(request, cookies, user.id, tokenset)?,
@@ -97,16 +96,16 @@ impl User {
             expires_at: token.expires_in.unwrap() as i64 + get_time().sec - 300, // 5 Minutes buffer
             refresh_token: token.refresh_token.unwrap()
         };
-        let conn: &AppConn = &request.guard::<AppDbConn>().expect("db connection");
+        let conn: &AppConn = &request.guard::<AppDbConn>().expect("No db connection");
         let mut db_user: DbUser = 
             diesel::insert_into(users).values(&user)
                     .on_conflict(id)
                     .do_update().set(&user)
-                    .get_result(conn).chain_err(|| "Could not store user")?;
+                    .get_result(conn).context("Could not store user")?;
         if db_user.tendabike_id.is_none() {
             db_user = diesel::update(&db_user)
                         .set(tendabike_id.eq(Some(0)))
-                        .get_result(conn).chain_err(||"Could not set the remote id")?;
+                        .get_result(conn).context("Could not set the remote id")?;
         }
 
         Ok(db_user)
@@ -118,8 +117,8 @@ impl User {
         let client = reqwest::Client::new();
         Ok(client.get(&format!("{}{}", API_URI, uri))
             .bearer_auth(&self.user.access_token)
-            .send().chain_err(|| "Could not reach strava")?
-            .text().chain_err(|| "Could not get response body")?)
+            .send().context("Could not reach strava")?
+            .text().context("Could not get response body")?)
     }
 
     pub fn id(&self) -> i32 {
@@ -140,7 +139,7 @@ impl User {
 
         diesel::update(users.find(self.user.id))
                         .set(last_activity.eq(Some(time)))
-                        .execute(&self.conn.0).chain_err(|| "Could not update last_activity")?;
+                        .execute(&self.conn.0).context("Could not update last_activity")?;
         Ok(time)
     }
 
@@ -175,9 +174,9 @@ impl rocket_oauth2::Callback for Callback {
     {
 
         info!("Callback got scope {:?}", token.scope);
-        let athlete = token.extras.get("athlete").ok_or(ErrorKind::Authorize("token did not include athlete"))?;
+        let athlete = token.extras.get("athlete").ok_or(StravaError::Authorize("token did not include athlete"))?;
         info!("got athlete {} {}, with id {}", athlete["firstname"], athlete["lastname"], athlete["id"]);
-        let id = athlete["id"].as_i64().ok_or(ErrorKind::Authorize("athlet id is no int"))? as i32;
+        let id = athlete["id"].as_i64().ok_or(StravaError::Authorize("athlet id is no int"))? as i32;
         let cookies = request.guard::<Cookies>().expect("request cookies");
         User::store(request, cookies, id, token)?;
         Ok(Redirect::to("/user"))

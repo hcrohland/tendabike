@@ -15,25 +15,25 @@ fn read (page: Option<i32>, after: Option<i64>, user: User) -> TbResult<Template
     use serde_json::Value;
     let mut map = HashMap::new();
 
-    let res = serde_json::from_str(&user.request("/athlete")?).chain_err(|| "No valid json received")?;
+    let res = serde_json::from_str(&user.request("/athlete")?)?;
     map.insert("user", res);
     let page = page.unwrap_or(1);
     let res: Value = if let Some(after) = after {
-        serde_json::from_str(&user.request(&format!("/activities?after={}&per_page={}", after, page))?).chain_err(|| "No valid json received")?
+        serde_json::from_str(&user.request(&format!("/activities?after={}&per_page={}", after, page))?)?
     } else {
-        serde_json::from_str(&user.request(&format!("/activities?page={}", page))?).chain_err(|| "No valid json received")?
+        serde_json::from_str(&user.request(&format!("/activities?page={}", page))?)?
     };
     let mut gears = HashMap::new();
     for act in res.as_array().expect("No array") {
         let gear = act["gear_id"].as_str().unwrap_or("n/a");
         if !gears.contains_key(&gear){
-            let res: Value = serde_json::from_str(&user.request(&format!("/gear/{}", &gear))?).chain_err(|| "No valid json received")?;
+            let res: Value = serde_json::from_str(&user.request(&format!("/gear/{}", &gear))?)?;
             gears.insert(gear, res);
         }
     }
-    map.insert("gears", serde_json::to_value(gears).chain_err(|| "No valid json received")?);
+    map.insert("gears", serde_json::to_value(gears)?);
     map.insert("activities", res);
-    map.insert("page", serde_json::to_value(page).chain_err(|| "No valid json received")?);
+    map.insert("page", serde_json::to_value(page)?);
     Ok(Template::render("user", map))
 }
 
@@ -53,7 +53,7 @@ fn activity(id: u64, user: User) -> TbResult<content::Json<String>> {
 #[get("/activities")]
 fn activitiesh(user: User) -> TbResult<Template> {
     let res = user.request("/athlete/activities?per_page=3")?;
-    let res: serde_json::Value = serde_json::from_str(&res).chain_err(|| "No valid json received")?;
+    let res: serde_json::Value = serde_json::from_str(&res)?;
     let mut map = HashMap::new();
     map.insert("activities", res);
     Ok(Template::render("activities", map))
@@ -62,7 +62,7 @@ fn activitiesh(user: User) -> TbResult<Template> {
 #[get("/gear/<id>")]
 fn gear(id: String, user: User) -> TbResult<Template> {
     let res = user.request(&format!("/gear/{}", &id))?;
-    let res: serde_json::Value = serde_json::from_str(&res).chain_err(|| "No valid json received")?;
+    let res: serde_json::Value = serde_json::from_str(&res)?;
     let mut map = HashMap::new();
     map.insert("gear", res);
     Ok(Template::render("gear", map))
