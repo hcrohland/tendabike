@@ -73,7 +73,7 @@ impl User {
 
         info! ("refreshing access token");
         let auth = request.guard::<State<OAuth>>().expect("oauth struct");
-        let tokenset = auth.refresh(&user.refresh_token).map_err(|_| "could not refresh access token")?;
+        let tokenset = auth.refresh(&user.refresh_token).chain_err(|| "could not refresh access token")?;
         
         Ok(User{
             user: User::store(request, cookies, user.id, tokenset)?,
@@ -184,7 +184,7 @@ impl rocket_oauth2::Callback for Callback {
     }
 }
 
-type OAuth = OAuth2<HyperSyncRustlsAdapter, Callback>;
+type OAuth = OAuth2<Callback>;
 
 pub fn fairing () -> impl rocket::fairing::Fairing {
 

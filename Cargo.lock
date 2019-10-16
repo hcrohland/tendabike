@@ -1577,6 +1577,7 @@ dependencies = [
 [[package]]
 name = "rocket_oauth2"
 version = "0.1.0"
+source = "git+https://github.com/jebrosen/rocket_oauth2.git#cc0aa73f881fed7613c491feea7cd830220ba3e2"
 dependencies = [
  "hyper 0.10.16 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper-sync-rustls 0.3.0-rc.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1920,7 +1921,7 @@ dependencies = [
  "reqwest 0.9.22 (registry+https://github.com/rust-lang/crates.io-index)",
  "rocket 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rocket_contrib 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "rocket_oauth2 0.1.0",
+ "rocket_oauth2 0.1.0 (git+https://github.com/jebrosen/rocket_oauth2.git)",
  "serde 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.101 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.41 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2568,6 +2569,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum rocket_contrib 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "e0fa5c1392135adc0f96a02ba150ac4c765e27c58dbfd32aa40678e948f6e56f"
 "checksum rocket_contrib_codegen 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "343da6694fc3cfd901242fd6efafc823e7a3a7f4948017a7dda7311775055092"
 "checksum rocket_http 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "b1391457ee4e80b40d4b57fa5765c0f2836b20d73bcbee4e3f35d93cf3b80817"
+"checksum rocket_oauth2 0.1.0 (git+https://github.com/jebrosen/rocket_oauth2.git)" = "<none>"
 "checksum rust-argon2 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "4ca4eaef519b494d1f2848fc602d18816fed808a981aedf4f1f00ceb7c9d32cf"
 "checksum rustc-demangle 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)" = "4c691c0e608126e00913e33f0ccf3727d5fc84573623b8d65b2df340b5201783"
 "checksum rustc_version 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)" = "c5f5376ea5e30ce23c03eb77cbe4962b988deead10910c372b226388b594c084"

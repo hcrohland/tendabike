@@ -12,7 +12,7 @@ tb_common = { path = "../tb_common" }
 rocket = "0.4.2"
 reqwest = "0.9.22"
 diesel = { version = "1.4.3", features = ["postgres", "chrono"] }
-rocket_oauth2 = "0.1.0"
+rocket_oauth2 = {git = "https://github.com/jebrosen/rocket_oauth2.git"}
  
 
 diesel-derive-newtype = "0.1.2"

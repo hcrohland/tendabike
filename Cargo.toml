@@ -4,4 +4,4 @@ members = ["tb_*"]
 exclude = ["*.*"]
 
 [patch.crates-io]
-rocket_oauth2 = {path = "../rocket_oauth2"}
+#rocket_oauth2 = {path = "../rocket_oauth2"}
