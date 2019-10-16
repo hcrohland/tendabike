@@ -23,7 +23,8 @@ chrono = { version ="0.4.9", features = ["serde"] }
 
 pretty_assertions = "0.6.1"
 
-error-chain ="0.12.1"
+thiserror = "1"
+anyhow = "1"
 
 [dependencies.rocket_contrib]
 version = "0.4.2"

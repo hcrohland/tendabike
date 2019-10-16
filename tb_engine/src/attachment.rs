@@ -147,14 +147,12 @@ impl Attachment {
     fn create (&self, user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
         conn.transaction (||{
             let mut coll = self.collisions(user,conn)?;
-            if coll.len() > 1 {
-                return Err(ErrorKind::Conflict(format!("Attachment collision for {:?}", self)).into());
-            }
+            ensure! (coll.len() < 2, Error::Conflict(format!("Attachment collision for {:?}", self)));
+
             // if there is an exiting attachment, which started earlier and is not yet detached we detach it automatically
             let mut res = if let Some(mut pred) = coll.pop() {
-                if pred.attached >= self.attached || pred.detached.is_some() {
-                    return Err(ErrorKind::Conflict(format!("Attachment collision for {:?}", self)).into());
-                }
+                ensure! (pred.attached < self.attached && pred.detached.is_none() ,
+                            Error::Conflict(format!("Attachment collision for {:?}", self)));
                 // predecessor gets detached
                 pred.detached = Some(self.attached); 
                 pred.patch(user, conn)?
@@ -164,7 +162,7 @@ impl Attachment {
 
             res.push(
                 diesel::insert_into(attachments::table) // Store the attachment in the database
-                    .values(self).get_result::<Attachment>(conn).chain_err(|| "Could not insert attachment")?
+                    .values(self).get_result::<Attachment>(conn).context("Could not insert attachment")?
                     .register (Factor::Add, conn)?);         // and register changes
             Ok(res)
         })
@@ -177,7 +175,7 @@ impl Attachment {
     fn delete (self, conn: &AppConn) -> TbResult<Part> {
         conn.transaction (||{
             diesel::delete(attachments::table.find((self.part_id, self.attached))) // delete the attachment in the database
-                    .get_result::<Attachment>(conn).chain_err(|| "Could not delete attachment")?
+                    .get_result::<Attachment>(conn).context("Could not delete attachment")?
                     .register(Factor::Sub, conn)              // and register changes
         })
 
@@ -202,14 +200,12 @@ impl Attachment {
                         Ok(x) => x,
                     };
 
-            if state.hook != self.hook {
-                return Err(ErrorKind::Conflict(
-                    format!("part {} already attached to hook {}, instead of {}", self.part_id, state.hook, self.hook)).into());
-            }
+            ensure! (state.hook == self.hook,
+                    Error::Conflict(
+                        format!("part {} already attached to hook {}, instead of {}", self.part_id, state.hook, self.hook)));
 
-            if self.detached == state.detached { // No change!
-                return Err(ErrorKind::BadRequest(String::from("Attachment already exists")).into());
-            }
+            ensure! (self.detached != state.detached, // No change!
+                        Error::BadRequest(String::from("Attachment already exists")));
 
             if let Some(detached) = self.detached {
                 if detached <= state.attached { // 

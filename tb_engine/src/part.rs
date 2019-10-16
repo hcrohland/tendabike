@@ -100,9 +100,8 @@ impl PartId {
     pub fn part (self, user: &dyn Person, conn: &AppConn) -> TbResult<Part> {
         let part = parts::table.find(self).first::<Part>(conn)?;
 
-        if !user.is_admin() && part.owner != user.get_id() {
-            return Err(ErrorKind::Forbidden(format!("user {} cannot access part {}", user.get_id(), part.id)).into());
-        }
+        ensure! (user.is_admin() || part.owner == user.get_id(),
+                    Error::Forbidden(format!("user {} cannot access part {}", user.get_id(), part.id)));
 
         Ok(part)
     }
@@ -125,7 +124,7 @@ impl PartId {
             return Ok(self);
         }
 
-        Err(ErrorKind::Forbidden(format!("user {} cannot access part {}", user.get_id(), self)).into())
+        bail!(Error::Forbidden(format!("user {} cannot access part {}", user.get_id(), self)))
     }
 
     /// apply a usage to the part with given id
@@ -227,9 +226,8 @@ impl NewPart {
     fn create (self, user: &User, conn: &AppConn) -> TbResult<PartId> {
         use schema::parts::dsl::*;
 
-        if !user.is_admin() && user.get_id() != self.owner {
-            return Err(ErrorKind::Forbidden(format!("user {} cannot create this part", user.get_id())).into());
-        }
+        ensure! (user.is_admin() || user.get_id() == self.owner,
+                    Error::Forbidden(format!("user {} cannot create this part", user.get_id())));
 
         let values = (
             owner.eq(self.owner),

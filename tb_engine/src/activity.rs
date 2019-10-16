@@ -102,10 +102,9 @@ impl ActivityId {
     /// 
     /// checks authorization
     fn read(self, person: &dyn Person, conn: &AppConn) -> TbResult<Activity> {
-        let act = activities::table.find(self).for_update().first::<Activity>(conn).chain_err(|| "error reading activity")?;
-        if act.user_id != person.get_id() && !person.is_admin() {
-                return Err(ErrorKind::Forbidden(format!("User {} cannot access activity {}", person.get_id(), self)).into());
-        }
+        let act = activities::table.find(self).for_update().first::<Activity>(conn).context("error reading activity")?;
+        ensure!(act.user_id == person.get_id() || person.is_admin(),
+                Error::Forbidden(format!("User {} cannot access activity {}", person.get_id(), self)));
         Ok(act)
     }
 
@@ -117,13 +116,13 @@ impl ActivityId {
     fn delete(self, person: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
         use crate::schema::activities::dsl::*;
         let res: TbResult<PartList> = conn.transaction(|| {
-            let res = self.read(person, conn).chain_err(|| "Could not read user")?
-                         .register(Factor::Sub, conn).chain_err(|| "could not unregister activity")?;
-            diesel::delete(activities.filter(id.eq(self))).execute(conn).chain_err(|| "Error deleting activity")?;
+            let res = self.read(person, conn).context("Could not read user")?
+                         .register(Factor::Sub, conn).context("could not unregister activity")?;
+            diesel::delete(activities.filter(id.eq(self))).execute(conn).context("Error deleting activity")?;
             Ok (res)
         });
         
-        res //.chain_err(|| "database transaction failed")?)
+        res //.context("database transaction failed")?)
     }
 
     /// Update the activity with id self according to the data in NewActivity
@@ -141,8 +140,8 @@ impl ActivityId {
             let res2 = diesel::update(activities::table)
                 .filter(activities::id.eq(self))
                 .set(&act)
-                .get_result::<Activity>(conn).chain_err(|| "Error reading activity")?
-                .register(Factor::Add, conn).chain_err(|| "Could not register activity")?;
+                .get_result::<Activity>(conn).context("Error reading activity")?
+                .register(Factor::Add, conn).context("Could not register activity")?;
 
             for part in res2 {
                 res.insert(part.id, part);
@@ -159,15 +158,14 @@ impl Activity {
     /// returns the activity and all affected parts  
     /// checks authorization  
     fn create(act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<(Activity, PartList)> {
-        if act.user_id != user.get_id() && !user.is_admin() {
-            return Err(ErrorKind::Forbidden(format!("user {} cannot create activity for user {}", user.get_id(), act.user_id)).into());
-        }
+        ensure!(act.user_id == user.get_id() || user.is_admin(),
+                Error::Forbidden(format!("user {} cannot create activity for user {}", user.get_id(), act.user_id)));
         conn.transaction(|| {
             let new: Activity = diesel::insert_into(activities::table)
                 .values(&act)
-                .get_result(conn).chain_err(|| "Could not insert activity")?;
+                .get_result(conn).context("Could not insert activity")?;
             // let res = new.check_geartype(res, conn)?;
-            let parts = new.register(Factor::Add, conn).chain_err(|| "Could not register activity")?;
+            let parts = new.register(Factor::Add, conn).context("Could not register activity")?;
             info!("created activity {}", new.id);
             Ok((new, parts))
         })

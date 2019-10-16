@@ -11,6 +11,8 @@ extern crate serde_json;
 
 #[macro_use] extern crate newtype_derive;
 #[macro_use] extern crate log;
+#[macro_use] extern crate thiserror;
+#[macro_use] extern crate anyhow;
 extern crate simplelog;
 extern crate chrono;
 
@@ -46,7 +48,7 @@ use activity::Activity;
 
 pub mod attachment;
 
-use tb_common::error::*;
+use anyhow::Context;
 
 type AppConn = diesel::PgConnection;
 
@@ -177,3 +179,19 @@ fn parse_time (time: Option<String>) -> Option<DateTime<Utc>> {
 
 type PartList = Vec<part::Part>;
 
+
+#[derive(Debug, Error)]
+enum Error{
+    #[error("Forbidden request: {0}")]
+    Forbidden(String),
+    // #[error("Could not find object: {0}")]
+    // NotFound(String),
+    #[error("Bad Request: {0}")]
+    BadRequest(String),
+    #[error("Conflict: {0}")]
+    Conflict(String),
+    #[error("Database error: {0}")]
+    Database(#[from] diesel::result::Error)
+}
+
+type TbResult<T> = anyhow::Result<T>;
