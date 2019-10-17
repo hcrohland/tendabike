@@ -102,9 +102,9 @@ impl ActivityId {
     /// 
     /// checks authorization
     fn read(self, person: &dyn Person, conn: &AppConn) -> TbResult<Activity> {
-        let act = activities::table.find(self).for_update().first::<Activity>(conn).context("error reading activity")?;
+        let act = activities::table.find(self).for_update().first::<Activity>(conn).context(format!("No activity id {}", self))?;
         ensure!(act.user_id == person.get_id() || person.is_admin(),
-                Error::Forbidden(format!("User {} cannot access activity {}", person.get_id(), self)));
+                Error::NotFound(format!("User {} cannot access activity {}", person.get_id(), self)));
         Ok(act)
     }
 
@@ -206,11 +206,10 @@ impl Activity {
     }
 }
 
-
 /// web interface to read an activity
 #[get("/<id>")]
-fn get (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<Activity>> {
-    ActivityId(id).read(&user, &conn).map(Json)
+fn get (id: i32, user: User, conn: AppDbConn) -> ApiResult<Activity> {
+    tbapi(ActivityId(id).read(&user, &conn))
 }
 
 /// web interface to create an activity
@@ -226,14 +225,14 @@ fn post (activity: Json<NewActivity>, user: User, conn: AppDbConn)
 
 /// web interface to change an activity
 #[put("/<id>", data="<activity>")]
-fn put (id: i32, activity: Json<NewActivity>, user: User, conn: AppDbConn) -> TbResult<Json<PartList>> {
-    ActivityId(id).update(activity.0, &user, &conn).map(Json)
+fn put (id: i32, activity: Json<NewActivity>, user: User, conn: AppDbConn) -> ApiResult<PartList> {
+    tbapi(ActivityId(id).update(activity.0, &user, &conn))
 }
 
 /// web interface to delete an activity
 #[delete("/<id>")]
-fn delete (id: i32, user: User, conn: AppDbConn) -> TbResult<Json<PartList>> {
-    ActivityId(id).delete(&user, &conn).map(Json)
+fn delete (id: i32, user: User, conn: AppDbConn) -> ApiResult<PartList> {
+    tbapi(ActivityId(id).delete(&user, &conn))
 }
 
 pub fn routes () -> Vec<rocket::Route> {

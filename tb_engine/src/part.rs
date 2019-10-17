@@ -101,7 +101,7 @@ impl PartId {
         let part = parts::table.find(self).first::<Part>(conn)?;
 
         ensure! (user.is_admin() || part.owner == user.get_id(),
-                    Error::Forbidden(format!("user {} cannot access part {}", user.get_id(), part.id)));
+                    Error::NotFound(format!("user {} cannot access part {}", user.get_id(), part.id)));
 
         Ok(part)
     }
@@ -124,7 +124,7 @@ impl PartId {
             return Ok(self);
         }
 
-        bail!(Error::Forbidden(format!("user {} cannot access part {}", user.get_id(), self)))
+        bail!(Error::NotFound(format!("user {} cannot access part {}", user.get_id(), self)))
     }
 
     /// apply a usage to the part with given id
@@ -249,25 +249,25 @@ impl NewPart {
 }
 
 #[get("/<part>")]
-fn get (part: i32, user: User, conn: AppDbConn) -> TbResult<Json<Part>> {
-    PartId(part).part(&user, &conn).map(Json)
+fn get (part: i32, user: User, conn: AppDbConn) -> ApiResult<Part> {
+    Ok(Json(PartId(part).part(&user, &conn)?))
 }
 
 #[post("/", data="<newpart>")]
 fn post(newpart: Json<NewPart>, user: User, conn: AppDbConn) 
-            -> TbResult<status::Created<Json<PartId>>> {
+            -> Result<status::Created<Json<PartId>>, Error> {
     let id = newpart.clone().create(&user, &conn)?;
     let url = uri! (get: i32::from(id));
     Ok (status::Created(url.to_string(), Some(Json(id))))
 } 
 
 #[get("/<part>/subparts?<time>")]
-fn get_subparts (part: i32, time: Option<String>, user: User, conn: AppDbConn) -> TbResult<Json<PartList>> {
+fn get_subparts (part: i32, time: Option<String>, user: User, conn: AppDbConn) -> ApiResult<PartList> {
     Ok(Json(PartId(part).part(&user, &conn)?.subparts(parse_time(time).unwrap_or_else(Utc::now), &conn)))
 }
 
 #[get("/<part>?assembly&<time>")]
-fn get_assembly (part: i32, time: Option<String>, user: User, conn: AppDbConn) -> TbResult<Json<Vec<(Part, PartTypeId)>>> {
+fn get_assembly (part: i32, time: Option<String>, user: User, conn: AppDbConn) -> ApiResult<Vec<(Part, PartTypeId)>> {
     let part = PartId::part(part.into(), &user, &conn)?;
     let what = part.what;
     let mut res = vec!((part, what));
@@ -276,13 +276,13 @@ fn get_assembly (part: i32, time: Option<String>, user: User, conn: AppDbConn) -
 }
 
 #[get("/mygear")]
-fn mygear(user: User, conn: AppDbConn) -> TbResult<Json<PartList>> {    
-    Part::parts_by_user(&user, true, &conn).map(Json)
+fn mygear(user: User, conn: AppDbConn) -> ApiResult<PartList> {    
+    tbapi(Part::parts_by_user(&user, true, &conn))
 }
 
 #[get("/myspares")]
-fn myspares(user: User, conn: AppDbConn) -> TbResult<Json<PartList>> {    
-    Part::parts_by_user(&user, false, &conn).map(Json)
+fn myspares(user: User, conn: AppDbConn) -> ApiResult<PartList> {    
+    tbapi(Part::parts_by_user(&user, false, &conn))
 }
 
 pub fn routes () -> Vec<rocket::Route> {

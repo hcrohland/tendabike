@@ -18,8 +18,6 @@ extern crate chrono;
 
 extern crate dotenv;
 
-extern crate tb_common;
-
 use std::cmp::min;
 use self::diesel::prelude::*;
 use rocket_contrib::templates::Template;
@@ -47,6 +45,9 @@ pub mod activity;
 use activity::Activity;
 
 pub mod attachment;
+
+pub mod error;
+pub use error::*;
 
 use anyhow::Context;
 
@@ -178,20 +179,3 @@ fn parse_time (time: Option<String>) -> Option<DateTime<Utc>> {
 }
 
 type PartList = Vec<part::Part>;
-
-
-#[derive(Debug, Error)]
-enum Error{
-    #[error("Forbidden request: {0}")]
-    Forbidden(String),
-    // #[error("Could not find object: {0}")]
-    // NotFound(String),
-    #[error("Bad Request: {0}")]
-    BadRequest(String),
-    #[error("Conflict: {0}")]
-    Conflict(String),
-    #[error("Database error: {0}")]
-    Database(#[from] diesel::result::Error)
-}
-
-type TbResult<T> = anyhow::Result<T>;

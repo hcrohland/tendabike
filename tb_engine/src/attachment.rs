@@ -273,23 +273,27 @@ fn collisions(gear: PartId, hook: PartTypeId, what: PartTypeId,
 
 #[patch("/", data="<attachment>")]
 fn patch(attachment: Json<Attachment>, user: User, conn: AppDbConn) 
-            -> TbResult<Json<PartList>> {
-    attachment.patch(&user, &conn).map(Json)
+            -> ApiResult<PartList> {
+    tbapi(attachment.patch(&user, &conn))
 } 
 
 #[get("/check/<gear>/<hook>/<what>?<start>&<end>")]
 fn check (what: i32, gear: i32, hook: i32, start: Option<String>, end: Option<String>, user: User, conn: AppDbConn) 
-            -> TbResult<Json<Vec<Attachment>>> {
-    collisions(PartId::get(gear, &user, &conn)?, hook.into(), what.into(), parse_time(start), parse_time(end), &conn).map(Json)
+            -> ApiResult<Vec<Attachment>> {
+    tbapi(collisions(PartId::get(gear, &user, &conn)?, hook.into(), what.into(), parse_time(start), parse_time(end), &conn))
 }
 
 /// All attachments for this part in the given time frame
 /// 
 #[get("/<part_id>?<start>&<end>")]
-fn read (part_id: i32, start: Option<String>, end: Option<String>, user: User, conn: AppDbConn) -> TbResult<Json<Vec<Attachment>>> {
+fn get (part_id: i32, start: Option<String>, end: Option<String>, user: User, conn: AppDbConn) -> ApiResult<Vec<Attachment>> {
+    tbapi(read(part_id,start,end,&user, &conn))
+}
+
+fn read (part_id: i32, start: Option<String>, end: Option<String>, user: &User, conn: &AppConn) -> TbResult<Vec<Attachment>> {
     let start = parse_time(start);
     let end   = parse_time(end);
-    let part = PartId::get(part_id, &user, &conn)?;
+    let part = PartId::get(part_id, user, &conn)?;
     
     let mut query  = attachments::table
             .order(attachments::attached) // Ordered by time
@@ -302,11 +306,11 @@ fn read (part_id: i32, start: Option<String>, end: Option<String>, user: User, c
         query = query.filter(attachments::detached.is_null().or(attachments::detached.gt(start))) // detached after start
     }
 
-    Ok(Json(query.load::<Attachment>(&conn.0)?))
+    Ok(query.load::<Attachment>(conn)?)
 }
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![read, check, 
+    routes![get, check, 
     patch,
     ]
 }
