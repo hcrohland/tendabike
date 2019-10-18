@@ -255,7 +255,7 @@ fn get (part: i32, user: User, conn: AppDbConn) -> ApiResult<Part> {
 
 #[post("/", data="<newpart>")]
 fn post(newpart: Json<NewPart>, user: User, conn: AppDbConn) 
-            -> Result<status::Created<Json<PartId>>, Error> {
+            -> Result<status::Created<Json<PartId>>, ApiError> {
     let id = newpart.clone().create(&user, &conn)?;
     let url = uri! (get: i32::from(id));
     Ok (status::Created(url.to_string(), Some(Json(id))))

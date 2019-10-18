@@ -1,18 +1,25 @@
 #![feature(proc_macro_hygiene, decl_macro, result_map_or_else)]
 #![warn(clippy::all)]
 
-#[macro_use] extern crate serde_derive;
+#[macro_use] 
+extern crate serde_derive;
 extern crate serde_json;
-#[macro_use] extern crate rocket;
-#[macro_use] extern crate rocket_contrib;
+#[macro_use] 
+extern crate rocket;
+#[macro_use] 
+extern crate rocket_contrib;
 
-#[macro_use] extern crate diesel;
-#[macro_use] extern crate diesel_derive_newtype;
+#[macro_use] 
+extern crate diesel;
+#[macro_use] 
+extern crate diesel_derive_newtype;
 
-#[macro_use] extern crate newtype_derive;
-#[macro_use] extern crate log;
-#[macro_use] extern crate thiserror;
-#[macro_use] extern crate anyhow;
+#[macro_use] 
+extern crate newtype_derive;
+#[macro_use] 
+extern crate log;
+#[macro_use] 
+extern crate anyhow;
 extern crate simplelog;
 extern crate chrono;
 
@@ -46,8 +53,8 @@ use activity::Activity;
 
 pub mod attachment;
 
-pub mod error;
-pub use error::*;
+extern crate tb_common;
+pub use tb_common::error::*;
 
 use anyhow::Context;
 

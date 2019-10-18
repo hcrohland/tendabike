@@ -3,81 +3,78 @@ use rocket::request::Request;
 use rocket::response::{Response, Responder};
 use std::io::Cursor;
 use rocket::http::{Status, ContentType};
+use rocket_contrib::json::Json;
 
-
-error_chain!{
-    types {
-        Error, ErrorKind, ResultExt;
-    }
-
-    errors{
-        Authorize (r: &'static str) {
-            description("You need to authorize")
-            display("No authorization due to {}", r)
-        }
-        Forbidden(x: String) {
-            description("Forbidden request")
-            display("Forbidden request: {}", x)
-        }
-        NotFound(x: String) {
-            description("Object not found")
-            display("Could not find object: {}", x)
-        }
-        BadRequest(x: String) {
-            description("Bad request")
-            display("Bad Request: {}", x)
-        }
-        Conflict(x: String) {
-            description("Conflict")
-            display("Conflict: {}", x)
-        }
-    }
-
-    foreign_links {
-        DbError(diesel::result::Error);
-    }
+#[derive(Debug, Error, Responder)]
+pub enum Error{
+    #[response(status = 403)]
+    #[error("Forbidden request: {0}")]
+    Forbidden(String),
+    #[response(status = 404)]
+    #[error("Object not found")]
+    NotFound(String),
+    #[response(status = 400)]
+    #[error("Bad Request: {0}")]
+    BadRequest(String),
+    #[response(status = 409)]
+    #[error("Conflict: {0}")]
+    Conflict(String),
 }
 
-// Implement `Responder` for `error_chain`'s `Error` type
-// that we just generated
-impl<'r> Responder<'r> for Error {
-    fn respond_to(self, _: &Request) -> ::std::result::Result<Response<'r>, Status> {
-        // Render the whole error chain to a single string
-        let start = format!("Error: {}", self);
-        let rslt = self.iter().skip(1).fold(start.clone(), |acc, ce| acc + &format!(",\n\tcaused by: {}", ce));
+#[derive(Debug, Error)]
+#[error("{0}")]
+pub struct ApiError (#[from] anyhow::Error);
+
+macro_rules! respond_for {
+    ($rb:ident, $any:ident, $req:ident, [$($t:ty),+] ) => {
+        $( if $any.is::<$t>() {
+            let err = $any.downcast::<$t>().unwrap();
+            $rb.merge(err.respond_to($req)?);
+        } else )+
+        {}
+    };
+}
+
+impl<'r> Responder<'r> for ApiError {
+    fn respond_to(self, req: &Request) -> ::std::result::Result<Response<'r>, Status> {
+        use diesel::result::Error as DieselError;
+        let mut any = self.0;
+        let mut status = Status::InternalServerError;
+
+        warn!("{:?}", any);
+        match any.root_cause().downcast_ref::<DieselError>() {
+            Some(DieselError::NotFound) => { 
+                    // warn!("{}", any);
+                    any = Error::NotFound("Object not found".into()).into();
+                },
+            Some(DieselError::DatabaseError(diesel::result::DatabaseErrorKind::ForeignKeyViolation,_)) => status = Status::BadRequest,
+            _ =>   ()
+        }
 
         // Create JSON response
-        let resp = json!({
+        let body = json!({
             "status": "failure",
-            "message": start,
+            "message": &format!("Error: {}", any),
         }).to_string();
 
-        error!("{}", rslt);
-        let status = match self {
-                Error(ErrorKind::DbError(error),_) => {
-                    use diesel::result::Error as DieselError;
-                    match error  {
-                        DieselError::NotFound => Status::NotFound,
-                        DieselError::DatabaseError(diesel::result::DatabaseErrorKind::ForeignKeyViolation,_) => Status::BadRequest,
-                        _ => Status::InternalServerError
-                    }
-                },
-                Error(ErrorKind::NotFound(_),_) => Status::NotFound,
-                Error(ErrorKind::Authorize(_),_)  => Status::Unauthorized,
-                Error(ErrorKind::Forbidden(_),_) => Status::Forbidden,
-                Error(ErrorKind::BadRequest(_),_) => Status::BadRequest,
-                Error(ErrorKind::Conflict(_),_) => Status::Conflict,
-                _ => Status::InternalServerError,
-            };
-
+        let mut build = Response::build();
+        // set a default Status
+        build.status(status);
+        
+        respond_for!(build, any, req, [Error]);
+        // create a standard Body
+        build.header(ContentType::JSON).sized_body(Cursor::new(body));
+        
         // Respond. The `Ok` here is a bit of a misnomer. It means we
         // successfully created an error response
-        Ok(Response::build()
-            .status(status)
-            .header(ContentType::JSON)
-            .sized_body(Cursor::new(resp))
-            .finalize())
+        Ok(build.finalize())
     }
 }
 
-pub type TbResult<T> = Result<T, Error>;
+
+pub type TbResult<T> = Result<T,anyhow::Error>;
+pub type ApiResult<T> = Result<Json<T>,ApiError>;
+
+pub fn tbapi<T> (tb: TbResult<T>) -> ApiResult<T> {
+    tb.map(Json).map_err(ApiError::from)
+}

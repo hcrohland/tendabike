@@ -1,10 +1,12 @@
 
+extern crate anyhow;
 #[macro_use] 
-extern crate error_chain;
+extern crate thiserror;
+
 extern crate rocket;
 #[macro_use] 
 extern crate rocket_contrib;
-#[macro_use]
+#[macro_use] 
 extern crate log;
 extern crate diesel;
 
