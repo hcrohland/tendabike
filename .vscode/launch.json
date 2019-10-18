@@ -8,6 +8,12 @@
             "type": "lldb",
             "request": "attach",
             "name": "Attach",
+            "program": "${workspaceFolder}/target/debug/tb_engine"
+        },
+        {
+            "type": "lldb",
+            "request": "attach",
+            "name": "Attach",
             "pid": "${command:pickMyProcess}" // use ${command:pickProcess} to pick other users' processes
         },
         {
