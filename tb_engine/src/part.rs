@@ -98,11 +98,8 @@ impl PartId {
 
     /// get the part with id part
     pub fn part (self, user: &dyn Person, conn: &AppConn) -> TbResult<Part> {
-        let part = parts::table.find(self).first::<Part>(conn)?;
-
-        ensure! (user.is_admin() || part.owner == user.get_id(),
-                    Error::NotFound(format!("user {} cannot access part {}", user.get_id(), part.id)));
-
+        let part = parts::table.find(self).first::<Part>(conn).with_context(|| format!("part {} does not exist", self))?;
+        user.check_owner(part.owner, format!("user {} cannot access part {}", user.get_id(), part.id))?;
         Ok(part)
     }
 
@@ -226,8 +223,7 @@ impl NewPart {
     fn create (self, user: &User, conn: &AppConn) -> TbResult<PartId> {
         use schema::parts::dsl::*;
 
-        ensure! (user.is_admin() || user.get_id() == self.owner,
-                    Error::Forbidden(format!("user {} cannot create this part", user.get_id())));
+        user.check_owner(self.owner, format!("user {} cannot create this part", user.get_id()))?;
 
         let values = (
             owner.eq(self.owner),

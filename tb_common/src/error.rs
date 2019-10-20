@@ -5,13 +5,13 @@ use std::io::Cursor;
 use rocket::http::{Status, ContentType};
 use rocket_contrib::json::Json;
 
-#[derive(Debug, Error, Responder)]
+#[derive(Clone, Debug, Error, Responder)]
 pub enum Error{
     #[response(status = 403)]
     #[error("Forbidden request: {0}")]
     Forbidden(String),
     #[response(status = 404)]
-    #[error("Object not found")]
+    #[error("Object not found: {0}")]
     NotFound(String),
     #[response(status = 400)]
     #[error("Bad Request: {0}")]
@@ -21,47 +21,49 @@ pub enum Error{
     Conflict(String),
 }
 
-#[derive(Debug, Error)]
-#[error("{0}")]
-pub struct ApiError (#[from] anyhow::Error);
+pub type TbResult<T> = Result<T,anyhow::Error>;
 
-macro_rules! respond_for {
-    ($rb:ident, $any:ident, $req:ident, [$($t:ty),+] ) => {
-        $( if $any.is::<$t>() {
-            let err = $any.downcast::<$t>().unwrap();
-            $rb.merge(err.respond_to($req)?);
-        } else )+
-        {}
-    };
+#[derive(Debug)]
+pub struct ApiError (anyhow::Error);
+impl From<anyhow::Error> for ApiError {
+    fn from(i: anyhow::Error) -> Self {
+        ApiError(i)
+    }
+}
+
+pub type ApiResult<T> = Result<Json<T>,ApiError>;
+
+pub fn tbapi<T> (tb: TbResult<T>) -> ApiResult<T> {
+    tb.map(Json).map_err(ApiError::from)
 }
 
 impl<'r> Responder<'r> for ApiError {
     fn respond_to(self, req: &Request) -> ::std::result::Result<Response<'r>, Status> {
         use diesel::result::Error as DieselError;
         let mut any = self.0;
-        let mut status = Status::InternalServerError;
 
         warn!("{:?}", any);
+
+        // Create JSON response
+        let body = json!({
+            "status": "failure",
+            "message": &format!("{}", any),
+        }).to_string();
+
+        let mut build = Response::build();
+
         match any.root_cause().downcast_ref::<DieselError>() {
             Some(DieselError::NotFound) => { 
                     // warn!("{}", any);
                     any = Error::NotFound("Object not found".into()).into();
                 },
-            Some(DieselError::DatabaseError(diesel::result::DatabaseErrorKind::ForeignKeyViolation,_)) => status = Status::BadRequest,
-            _ =>   ()
+            Some(DieselError::DatabaseError(diesel::result::DatabaseErrorKind::ForeignKeyViolation,_)) 
+                    => {build.status(Status::BadRequest);},
+            _ => {build.status(Status::InternalServerError);}
         }
-
-        // Create JSON response
-        let body = json!({
-            "status": "failure",
-            "message": &format!("Error: {}", any),
-        }).to_string();
-
-        let mut build = Response::build();
-        // set a default Status
-        build.status(status);
-        
-        respond_for!(build, any, req, [Error]);
+        if let Some(err) = any.root_cause().downcast_ref::<Error>() {
+            build.merge(err.clone().respond_to(req)?);
+        }
         // create a standard Body
         build.header(ContentType::JSON).sized_body(Cursor::new(body));
         
@@ -69,12 +71,4 @@ impl<'r> Responder<'r> for ApiError {
         // successfully created an error response
         Ok(build.finalize())
     }
-}
-
-
-pub type TbResult<T> = Result<T,anyhow::Error>;
-pub type ApiResult<T> = Result<Json<T>,ApiError>;
-
-pub fn tbapi<T> (tb: TbResult<T>) -> ApiResult<T> {
-    tb.map(Json).map_err(ApiError::from)
 }

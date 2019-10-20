@@ -103,8 +103,7 @@ impl ActivityId {
     /// checks authorization
     fn read(self, person: &dyn Person, conn: &AppConn) -> TbResult<Activity> {
         let act = activities::table.find(self).for_update().first::<Activity>(conn).context(format!("No activity id {}", self))?;
-        ensure!(act.user_id == person.get_id() || person.is_admin(),
-                Error::NotFound(format!("User {} cannot access activity {}", person.get_id(), self)));
+        person.check_owner(act.user_id, format!("User {} cannot access activity {}", person.get_id(), self))?;
         Ok(act)
     }
 
@@ -158,8 +157,7 @@ impl Activity {
     /// returns the activity and all affected parts  
     /// checks authorization  
     fn create(act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<(Activity, PartList)> {
-        ensure!(act.user_id == user.get_id() || user.is_admin(),
-                Error::Forbidden(format!("user {} cannot create activity for user {}", user.get_id(), act.user_id)));
+        user.check_owner(act.user_id, format!("user {} cannot create activity for user {}", user.get_id(), act.user_id))?;
         conn.transaction(|| {
             let new: Activity = diesel::insert_into(activities::table)
                 .values(&act)
