@@ -151,6 +151,14 @@ impl User {
             .text().context("Could not get response body")?)
     }
 
+    pub fn request_json(&self, uri: &str) -> TbResult<Value> {
+        let client = reqwest::Client::new();
+        Ok(client.get(&format!("{}{}", API_URI, uri))
+            .bearer_auth(&self.user.access_token)
+            .send().context("Could not reach strava")?
+            .json().context("Could not parse response body")?)
+    }
+
     pub fn id(&self) -> i32 {
         self.user.tendabike_id
     }

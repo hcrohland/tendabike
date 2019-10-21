@@ -2,10 +2,6 @@ use crate::*;
 use auth::User;
 use activity::*;
 
-// use rocket_contrib::templates::Template;
-
-use rocket_contrib::json::Json;
-
 fn next_activities(user: &User) -> TbResult<Vec<TbActivity>> {
 
     let r = user.request(&format!("/activities?after={}&per_page=10", user.last_activity()))?;
@@ -16,18 +12,18 @@ fn next_activities(user: &User) -> TbResult<Vec<TbActivity>> {
 }
 
 #[get("/next")]
-fn next (user: User) -> TbResult<Json<Vec<TbActivity>>> {
-    Ok(Json(next_activities(&user)?))
+fn next (user: User) -> ApiResult<Vec<TbActivity>> {
+    tbapi(next_activities(&user))
 }
 
+use anyhow::Context;
 #[get("/sync")]
-fn sync (user: User) -> TbResult<Json<Vec<String>>> {
+fn sync (user: User) -> ApiResult<Vec<serde_json::Value>> {
     let acts = next_activities(&user)?;
    
-    acts.into_iter()
-        .map(|a| a.send_to_tb(&user))
-        .collect::<TbResult<Vec<String>>>()
-        .map(Json)
+    tbapi(acts.into_iter()
+        .map(|a| serde_json::from_str(&a.send_to_tb(&user)?).context("No Json received"))
+        .collect::<TbResult<Vec<_>>>())
 }
 
 pub fn routes () -> Vec<rocket::Route> {

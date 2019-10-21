@@ -4,9 +4,8 @@ use rocket_contrib::templates::Template;
 use std::collections::HashMap;
 
 #[get("/plain")]
-fn overview (user: User) -> TbResult<content::Json<String>> {
-    let res = user.request("/athlete")?;
-    Ok(content::Json(res))
+fn overview (user: User) -> ApiResult<String> {
+    tbapi(user.request("/athlete"))
 }
 
 #[allow(clippy::map_entry)]
@@ -37,17 +36,15 @@ fn read (page: Option<i32>, after: Option<i64>, user: User) -> TbResult<Template
     Ok(Template::render("user", map))
 }
 
-use rocket::response::content;
+use serde_json::Value;
 #[get("/plain/activities")]
-fn activities(user: User) -> TbResult<content::Json<String>> {
-    let res = user.request("/athlete/activities?per_page=3")?;
-    Ok(content::Json(res))
+fn activities(user: User) -> ApiResult<Value> {
+    tbapi(user.request_json("/athlete/activities?per_page=3"))
 }
 
 #[get("/plain/activity/<id>")]
-fn activity(id: u64, user: User) -> TbResult<content::Json<String>> {
-    let res = user.request(&format!("/activities/{}", id))?;
-    Ok(content::Json(res))
+fn activity(id: u64, user: User) -> ApiResult<Value> {
+    tbapi(user.request_json(&format!("/activities/{}", id)))
 }
 
 #[get("/activities")]
@@ -69,9 +66,8 @@ fn gear(id: String, user: User) -> TbResult<Template> {
 }
 
 #[get("/plain/gear/<id>")]
-fn gear_plain(id: String, user: User) -> TbResult<content::Json<String>> {
-    let res = user.request(&format!("/gear/{}", &id))?;
-    Ok(content::Json(res))
+fn gear_plain(id: String, user: User) -> ApiResult<Value> {
+    tbapi(user.request_json(&format!("/gear/{}", &id)))
 }
 
 pub fn routes () -> Vec<rocket::Route> {
