@@ -1,0 +1,23 @@
+{% extends "base" %}
+
+{% block content %}
+    <h1>Hi You</h1>
+
+    <h2>Here is your gear:</h2>
+    
+    <table >
+        <tr>
+            <th>Name</th>
+            <th>Distance</th>
+            <th>Hours</th>
+        </tr>
+            {% for s in gear %}
+                <tr>
+                    <td> <a href="/user/plain/activity/{{ s.id }}"> {{ s.name }} </a>
+                    <td align="right"> {{ s.distance / 1000 | round (precision=1)}} 
+                    <td align="right"> {{ s.time / 3600 | round (precision=1)}}
+                </tr>
+            {% endfor %}
+    </table> 
+
+{% endblock content %}

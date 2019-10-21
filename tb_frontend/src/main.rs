@@ -11,12 +11,17 @@ extern crate rocket_contrib;
 extern crate reqwest;
 // #[macro_use] extern crate lazy_static;
 extern crate time;
+extern crate anyhow;
+pub use anyhow::Context;
 
 extern crate tb_common;
-// use tb_common::*;
+use tb_common::*;
 
 pub mod user;
 pub use user::*;
+
+mod dashboard;
+
 
 pub struct Config {
 }
@@ -70,10 +75,8 @@ pub fn ignite_rocket () -> rocket::Rocket {
         .attach(Template::fairing())
         // mount all the endpoints from the module
         .mount("/", rocket_contrib::serve::StaticFiles::from(concat!(env!("CARGO_MANIFEST_DIR"), "/www")))
-        // .mount("/auth", auth::routes())
         .mount("/user", user::routes())
-        // .mount("/activ", activity::routes())
-        // .mount("/attach", attachment::routes())
+        .mount("/dashboard", dashboard::routes())
 }
 
 fn main() {
