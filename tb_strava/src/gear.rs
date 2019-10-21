@@ -99,7 +99,6 @@ impl TbGear {
     }
 }
 
-
 /// map strava gear_id to tb gear_id
 /// 
 /// If it does not exist create it at tb
@@ -113,10 +112,10 @@ pub fn strava_to_tb(strava: String, user: &User) -> TbResult<i32> {
         return Ok(g[0]) 
     }
 
-    dbg!("New Gear");
+    debug!("New Gear");
     let tbid = StravaGear::request(&strava, user).context("Couldn't map gear")?
-                .into_tb(user).context("Could map gear to tendabike format")?
-                .send_to_tb().context("Cound send gear to tb")?;
+                .into_tb(user).context("Could not map gear to tendabike format")?
+                .send_to_tb().context("Could not send gear to tb")?;
     diesel::insert_into(gears)
         .values((id.eq(strava),tendabike_id.eq(tbid),user_id.eq(user.id())))
         .execute(user.conn()).context("couldn't store gear")?;

@@ -3,7 +3,6 @@ table! {
         id -> Int8,
         tendabike_id -> Int4,
         user_id -> Int4,
-        gear_id -> Nullable<Text>,
     }
 }
 
@@ -25,9 +24,6 @@ table! {
         refresh_token -> Text,
     }
 }
-
-joinable!(activities -> gears (gear_id));
-joinable!(activities -> users (user_id));
 
 allow_tables_to_appear_in_same_query!(
     activities,

@@ -1,5 +1,6 @@
 use chrono::{DateTime,Utc};
 
+use diesel::prelude::*;
 use crate::*;
 use auth::User;
 
@@ -126,18 +127,39 @@ impl StravaActivity {
 
 }
 
-impl TbActivity{ 
-    pub fn send_to_tb (&self, user: &User) -> TbResult<String> {
-        let client = reqwest::Client::new();
+impl StravaActivity{ 
+    pub fn send_to_tb (self, user: &User) -> TbResult<serde_json::Value> {
+        use schema::activities::dsl::*;
 
-        let res = client.post(&format!("{}{}", TB_URI, "/activ"))
+        let client = reqwest::Client::new();
+        let strava_id = self.id;
+        let tb = self.into_tb(user)?;
+
+        let tb_id = activities.find(strava_id).select(tendabike_id).get_results::<i32>(user.conn())?.pop();
+        let client = if let Some(tb_id) = tb_id {
+            client.put(&format!("{}/{}/{}", TB_URI, "activ", tb_id))
+        } else {
+            client.post(&format!("{}{}", TB_URI, "/activ"))
+        };
+
+        let res: serde_json::Value = client
             .header("x-user-id", user.id())
-            .json(self)
+            .json(&tb)
             .send().context("unable to contact backend")?
             .error_for_status().context("backend responded with error")?
-            .text().context("malformed body body")?;
+            .json().context("malformed body")?;
 
-        user.update_last(self.start.timestamp()).context("unable to update user")?;
+        let new_id = res[0]["id"].as_i64().ok_or_else(|| anyhow!("id is no int {:?}", res[0]))? as i32;
+        if tb_id.is_none() {
+            diesel::insert_into(activities).values((
+                    id.eq(strava_id),
+                    tendabike_id.eq(new_id), 
+                    user_id.eq(tb.user_id))).execute(user.conn()
+                )?;
+        }
+
+        user.update_last(tb.start.timestamp()).context("unable to update user")?;
+
         Ok(res)
     }
 
