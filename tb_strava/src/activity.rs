@@ -88,12 +88,17 @@ impl StravaActivity {
             "Snowboard"     => Ok(2),
             "Run"           => Ok(3),
             "VirtualRun"    => Ok(3),
-            "Walk"          => Ok(8),
             "Hike"          => Ok(4),
+            "Walk"          => Ok(8),
+            "Workout"       => Ok(9),
             "BackcountrySki" => Ok(10),
             "StandUpPaddling" => Ok(11),
+            "Windsurf"      => Ok(12),
+            "Kitesurf"      => Ok(13),
+            "Rowing"        => Ok(14),
+            "WaterSport"    => Ok(15),
             _ => bail!("unsupported activity {}", t)
-/*             "Rowing" => ,
+/*  
             "Handcycle" => ,
             "Canoeing" => ,
             "Crossfit" => ,
@@ -102,7 +107,6 @@ impl StravaActivity {
             "IceSkate" => ,
             "InlineSkate" => ,
             "Kayaking" => ,
-            "Kitesurf" => ,
             "NordicSki" => ,
             "RockClimbing" => ,
             "RollerSki" => ,
@@ -116,8 +120,6 @@ impl StravaActivity {
             "Velomobile" => ,
             "WeightTraining" => ,
             "Wheelchair" => ,
-            "Windsurf" => ,
-            "Workout" => ,
             "Yoga" => */
         }
     }

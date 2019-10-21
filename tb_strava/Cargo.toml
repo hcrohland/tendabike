@@ -8,6 +8,8 @@ edition = "2018"
 
 [dependencies]
 
+tb_common = {path = "../tb_common"}
+
 rocket = "0.4.2"
 reqwest = "0.9.22"
 diesel = { version = "1.4.3", features = ["postgres", "chrono"] }

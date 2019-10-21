@@ -15,10 +15,10 @@ extern crate time;
 extern crate anyhow;
 #[macro_use] 
 extern crate thiserror;
-
+extern crate tb_common;
+use tb_common::*;
 
 pub(crate) use anyhow::Context;
-type TbResult<T> = anyhow::Result<T>;
 
 pub mod auth;
 pub mod user;
