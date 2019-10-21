@@ -6,6 +6,9 @@ use rocket::request::{self, Request, FromRequest};
 use rocket::response::Redirect;
 use rocket::*;
 use rocket::http::*;
+
+use serde_json::Value;
+
 use crate::*;
 
 use diesel::prelude::*;
@@ -30,15 +33,73 @@ lazy_static! {
     static ref CLIENT_SECRET: String = std::env::var("CLIENT_SECRET").expect("Couldn't read var CLIENT_SECRET");
 }
 
-#[derive(Queryable, Insertable, AsChangeset, Identifiable, Debug)]
+#[derive(Queryable, Insertable, Identifiable, Debug)]
 #[table_name = "users"]
 struct DbUser {
     id: i32,
-    tendabike_id: Option<i32>,
-    last_activity: Option<i64>,
+    tendabike_id: i32,
+    last_activity: i64,
     access_token: String,
     expires_at: i64,
     refresh_token: String
+}
+
+impl DbUser {
+    fn retrieve (request: &Request, athlete: &serde_json::value::Value) -> TbResult<Self> {    
+        info!("got athlete {} {}, with id {}", athlete["firstname"], athlete["lastname"], athlete["id"]);
+        let conn = request.guard::<AppDbConn>().expect("internal db missing!!!").0;
+        let strava_id = athlete["id"].as_i64().ok_or(StravaError::Authorize("athlet id is no int"))? as i32;
+
+        let user = users::table.find(strava_id).get_result::<DbUser>(&conn);
+        match user {
+            Ok(x) => return Ok(x),
+            Err(diesel::NotFound) => (),
+            Err(x) => panic! (format!("database error: {}", x))
+        }
+        let client = reqwest::Client::new();
+
+        let user = client.post(&format!("{}{}", TB_URI, "/user"))
+            .json(athlete)
+            .send().context("unable to contact backend")?
+            .error_for_status().context("backend responded with error")?
+            .json::<Value>().context("malformed Json")?;
+        let tendabike_id = user["id"].as_i64().ok_or_else(|| anyhow!("athlet id is no int"))? as i32;
+
+        let user = DbUser {
+            id: strava_id,
+            tendabike_id,
+            access_token: "".into(),
+            refresh_token: "".into(),
+            expires_at: 0,
+            last_activity: 0
+        };
+        Ok(diesel::insert_into(users::table).values(&user).get_result(&conn)?)
+    }
+
+    /// Updates the user data from a new token 
+    fn store(self, request: &Request, token: TokenResponse) -> TbResult<Self> {
+        use schema::users::dsl::*;
+        use time::*;
+
+        let conn: &AppConn = &request.guard::<AppDbConn>().expect("No db connection");
+        let db_user: DbUser = 
+            diesel::update(users.find(self.id))
+                    .set((
+                        access_token.eq(token.access_token),
+                        expires_at.eq(token.expires_in.unwrap() as i64 + get_time().sec - 300), // 5 Minutes buffer
+                        refresh_token.eq(token.refresh_token.unwrap())
+                    ))
+                    .get_result(conn).context("Could not store user")?;
+
+        let cookie = Cookie::build("id", db_user.tendabike_id.to_string())
+                        .same_site(SameSite::Lax)
+                        .max_age(Duration::days(1))
+                        .finish();
+        request.guard::<Cookies>().expect("request cookies")
+                .add_private(cookie);
+
+        Ok(db_user)
+    }
 }
 
 pub struct User{
@@ -75,44 +136,9 @@ impl User {
         let tokenset = auth.refresh(&user.refresh_token).context("could not refresh access token")?;
         
         Ok(User{
-            user: User::store(request, user.id, tokenset)?,
+            user: user.store(request, tokenset)?,
             conn
         })
-    }
-
-    /// Updates the user data from a new token 
-    fn store(request: &Request, uid: i32, token: TokenResponse) -> TbResult<DbUser> {
-        use schema::users::dsl::*;
-        use time::*;
-
-        let user = DbUser {
-            id: uid,
-            tendabike_id: None,
-            last_activity: None,
-            access_token: token.access_token,
-            expires_at: token.expires_in.unwrap() as i64 + get_time().sec - 300, // 5 Minutes buffer
-            refresh_token: token.refresh_token.unwrap()
-        };
-        let conn: &AppConn = &request.guard::<AppDbConn>().expect("No db connection");
-        let mut db_user: DbUser = 
-            diesel::insert_into(users).values(&user)
-                    .on_conflict(id)
-                    .do_update().set(&user)
-                    .get_result(conn).context("Could not store user")?;
-        if db_user.tendabike_id.is_none() {
-            db_user = diesel::update(&db_user)
-                        .set(tendabike_id.eq(Some(0)))
-                        .get_result(conn).context("Could not set the remote id")?;
-        }
-
-        let cookie = Cookie::build("id", db_user.tendabike_id.unwrap().to_string())
-                        .same_site(SameSite::Lax)
-                        .max_age(Duration::days(1))
-                        .finish();
-        request.guard::<Cookies>().expect("request cookies")
-                .add_private(cookie);
-
-        Ok(db_user)
     }
 
     /// send an API call with an authenticated User
@@ -126,23 +152,21 @@ impl User {
     }
 
     pub fn id(&self) -> i32 {
-        self.user.tendabike_id.expect("Tendabike_id missing")
+        self.user.tendabike_id
     }
 
     pub fn last_activity(&self) -> i64 {
-        self.user.last_activity.unwrap_or(0)
+        self.user.last_activity
     }
 
     pub fn update_last(&self, time: i64) -> TbResult<i64> {
-        if let Some(l) = self.user.last_activity { 
-            if l >= time {
-                return Ok(l);
-            } 
-        }
+        if self.user.last_activity >= time {
+                return Ok(self.user.last_activity);
+        } 
         use schema::users::dsl::*;
 
         diesel::update(users.find(self.user.id))
-                        .set(last_activity.eq(Some(time)))
+                        .set(last_activity.eq(time))
                         .execute(&self.conn.0).context("Could not update last_activity")?;
         Ok(time)
     }
@@ -176,12 +200,11 @@ impl rocket_oauth2::Callback for Callback {
     fn callback(&self, request: &Request, token: TokenResponse)
         -> TbResult<Redirect>
     {
-
         info!("Callback got scope {:?}", token.scope);
         let athlete = token.extras.get("athlete").ok_or(StravaError::Authorize("token did not include athlete"))?;
-        info!("got athlete {} {}, with id {}", athlete["firstname"], athlete["lastname"], athlete["id"]);
-        let id = athlete["id"].as_i64().ok_or(StravaError::Authorize("athlet id is no int"))? as i32;
-        User::store(request, id, token)?;
+    
+        DbUser::retrieve(request, athlete)?
+                    .store(request, token)?;
         Ok(Redirect::to("/user"))
     }
 }

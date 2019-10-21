@@ -18,8 +18,8 @@ table! {
 table! {
     users (id) {
         id -> Int4,
-        tendabike_id -> Nullable<Int4>,
-        last_activity -> Nullable<Int8>,
+        tendabike_id -> Int4,
+        last_activity -> Int8,
         access_token -> Text,
         expires_at -> Int8,
         refresh_token -> Text,
