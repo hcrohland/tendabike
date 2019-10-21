@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-
+tb_common = {path = "../tb_common"}
 rocket = "0.4.2"
 reqwest = "0.9.22"
 dotenv = "0.14.1"

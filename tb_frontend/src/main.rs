@@ -1,4 +1,35 @@
+#![feature(proc_macro_hygiene, decl_macro)]
+#![warn(clippy::all)]
+
 extern crate simplelog;
+// #[macro_use] extern crate log;
+
+#[macro_use] 
+extern crate rocket;
+// #[macro_use] 
+extern crate rocket_contrib;
+extern crate reqwest;
+// #[macro_use] extern crate lazy_static;
+extern crate time;
+
+extern crate tb_common;
+// use tb_common::*;
+
+pub mod user;
+pub use user::*;
+
+pub struct Config {
+}
+
+impl Default for Config {
+    fn default() -> Config {
+        // use std::env;
+
+        Config {
+        }
+    }
+}
+
 
 use simplelog::{
     CombinedLogger,
@@ -7,9 +38,6 @@ use simplelog::{
     WriteLogger,
 };
 use rocket_contrib::templates::Template;
-
-extern crate tb_frontend;
-use tb_frontend::*;
 
 fn init_logging (){
     use std::fs::File;
