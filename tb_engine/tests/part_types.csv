@@ -1,16 +1,23 @@
-"id","name","parts","main"
-3,"tire","{}",FALSE
-4,"chain","{}",FALSE
-2,"front wheel","{3}",FALSE
-6,"brake pads","{}",FALSE
-7,"front brake","{6}",FALSE
-8,"rear brake","{6}",FALSE
-9,"cassette","{}",FALSE
-5,"rear wheel","{3,9}",FALSE
-11,"saddle","{}",FALSE
-10,"seat post","{11}",FALSE
-1,"Bike","{2,4,5,7,8}",TRUE
-301,"Shoe","{}",TRUE
-302,"Snowboard","{}",TRUE
-303,"Ski","{}",TRUE
-304,"Whatever","{}",TRUE
+"id","name","main","hooks"
+2,"front wheel",1,"{1}"
+11,"saddle",1,"{10}"
+3,"tire",1,"{2,5}"
+9,"cassette",1,"{5}"
+4,"chain",1,"{1}"
+7,"front brake",1,"{1}"
+8,"rear brake",1,"{1}"
+5,"rear wheel",1,"{1}"
+10,"seat post",1,"{1}"
+12,"derailleur",1,"{1}"
+6,"brake pads",1,"{7,8}"
+303,"Ski",303,"{}"
+301,"Shoe",301,"{}"
+304,"Whatever",304,"{}"
+302,"Snowboard",302,"{}"
+1,"Bike",1,"{}"
+13,"cranks",1,"{1}"
+14,"chainring",1,"{13}"
+305,"SUP board",305,"{}"
+306,"Windsurf Board",306,"{}"
+307,"Kite Board",307,"{}"
+308,"Rowing boat",308,"{}"

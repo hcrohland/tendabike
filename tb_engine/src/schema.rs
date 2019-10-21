@@ -34,29 +34,11 @@ table! {
 }
 
 table! {
-    attachments3 (part_id, attached) {
-        part_id -> Int4,
-        hook_id -> Int4,
-        attached -> Timestamptz,
-        detached -> Nullable<Timestamptz>,
-    }
-}
-
-table! {
     part_types (id) {
         id -> Int4,
         name -> Text,
         main -> Int4,
         hooks -> Array<Int4>,
-    }
-}
-
-table! {
-    part_types3 (id) {
-        id -> Int4,
-        name -> Text,
-        parts -> Array<Int4>,
-        main -> Bool,
     }
 }
 
@@ -95,9 +77,7 @@ allow_tables_to_appear_in_same_query!(
     activities,
     activity_types,
     attachments,
-    attachments3,
     part_types,
-    part_types3,
     parts,
     users,
 );

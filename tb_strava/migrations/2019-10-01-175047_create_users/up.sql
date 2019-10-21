@@ -1,6 +1,6 @@
 CREATE TABLE users (
     id integer PRIMARY KEY,
-    tendabike_id integer UNIQUE,
+    tendabike_id integer NOT NULL UNIQUE,
     last_activity bigint Not Null,
     access_token text NOT NULL,
     expires_at bigint NOT NULL,

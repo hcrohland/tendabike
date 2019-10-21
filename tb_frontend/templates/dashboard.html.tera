@@ -10,12 +10,15 @@
             <th>Name</th>
             <th>Distance</th>
             <th>Hours</th>
+            <th>Since</th>
         </tr>
             {% for s in gear %}
                 <tr>
                     <td> <a href="/user/plain/activity/{{ s.id }}"> {{ s.name }} </a>
                     <td align="right"> {{ s.distance / 1000 | round (precision=1)}} 
                     <td align="right"> {{ s.time / 3600 | round (precision=1)}}
+                    <td> {{s.purchase | date(format="%A, %_d. %h %Y, %k:%M") }} </td>
+
                 </tr>
             {% endfor %}
     </table> 

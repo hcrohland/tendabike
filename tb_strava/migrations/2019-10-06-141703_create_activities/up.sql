@@ -1,7 +1,7 @@
 -- Your SQL goes here
 CREATE TABLE activities (
     id bigint PRIMARY KEY,
-    tendabike_id integer,
+    tendabike_id integer NOT NULL,
     user_id integer NOT NULL REFERENCES users(id),
     gear_id text REFERENCES gears(id)
 );

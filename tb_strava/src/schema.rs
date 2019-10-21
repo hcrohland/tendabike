@@ -1,7 +1,7 @@
 table! {
     activities (id) {
         id -> Int8,
-        tendabike_id -> Nullable<Int4>,
+        tendabike_id -> Int4,
         user_id -> Int4,
         gear_id -> Nullable<Text>,
     }
@@ -28,7 +28,6 @@ table! {
 
 joinable!(activities -> gears (gear_id));
 joinable!(activities -> users (user_id));
-joinable!(gears -> users (user_id));
 
 allow_tables_to_appear_in_same_query!(
     activities,
