@@ -7,6 +7,9 @@ use rocket_contrib::json::Json;
 
 #[derive(Clone, Debug, Error, Responder)]
 pub enum Error{
+    #[response(status = 401)]
+    #[error("User not authenticated")]
+    NotAuth(&'static str),
     #[response(status = 403)]
     #[error("Forbidden request: {0}")]
     Forbidden(String),
