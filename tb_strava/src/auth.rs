@@ -59,12 +59,12 @@ impl User {
     /// if needed and possible it refreshes the access token 
     fn get (request: &Request) -> TbResult<User> {
         // Get user id
-        let mut cookies = request.guard::<Cookies>().expect("No request cookies!!!");
-        let id = cookies.get_private("id").ok_or(StravaError::Authorize("no id cookie"))?
-                .value().parse::<i32>()?;
+        let id = request.guard::<Cookies>().expect("No request cookies!!!")
+                        .get_private("id").ok_or(StravaError::Authorize("no id cookie"))?
+                        .value().parse::<i32>()?;
         // Get the user
         let conn = request.guard::<AppDbConn>().expect("internal db missing!!!");
-        let user: DbUser = users::table.find(id).get_result(&conn.0).context("user not registered")?;
+        let user: DbUser = users::table.filter(users::tendabike_id.eq(id)).get_result(&conn.0).context("user not registered")?;
 
         if user.expires_at > time::get_time().sec {
             return Ok(User {user, conn});
@@ -75,18 +75,15 @@ impl User {
         let tokenset = auth.refresh(&user.refresh_token).context("could not refresh access token")?;
         
         Ok(User{
-            user: User::store(request, cookies, user.id, tokenset)?,
+            user: User::store(request, user.id, tokenset)?,
             conn
         })
     }
 
     /// Updates the user data from a new token 
-    /// Needs the cookies parameter to prevent two Cookie instance retrieval
-    fn store(request: &Request, mut cookies: Cookies, uid: i32, token: TokenResponse) -> TbResult<DbUser> {
+    fn store(request: &Request, uid: i32, token: TokenResponse) -> TbResult<DbUser> {
         use schema::users::dsl::*;
         use time::*;
-
-        cookies.add_private(Cookie::build("id", uid.to_string()).same_site(SameSite::Lax).finish());
 
         let user = DbUser {
             id: uid,
@@ -107,6 +104,13 @@ impl User {
                         .set(tendabike_id.eq(Some(0)))
                         .get_result(conn).context("Could not set the remote id")?;
         }
+
+        let cookie = Cookie::build("id", db_user.tendabike_id.unwrap().to_string())
+                        .same_site(SameSite::Lax)
+                        .max_age(Duration::days(1))
+                        .finish();
+        request.guard::<Cookies>().expect("request cookies")
+                .add_private(cookie);
 
         Ok(db_user)
     }
@@ -177,8 +181,7 @@ impl rocket_oauth2::Callback for Callback {
         let athlete = token.extras.get("athlete").ok_or(StravaError::Authorize("token did not include athlete"))?;
         info!("got athlete {} {}, with id {}", athlete["firstname"], athlete["lastname"], athlete["id"]);
         let id = athlete["id"].as_i64().ok_or(StravaError::Authorize("athlet id is no int"))? as i32;
-        let cookies = request.guard::<Cookies>().expect("request cookies");
-        User::store(request, cookies, id, token)?;
+        User::store(request, id, token)?;
         Ok(Redirect::to("/user"))
     }
 }
