@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>TendaBike Strava Connector</title>
+    <title>TendaBike Web Frontend</title>
   </head>
   <body>
     {% block content %}{% endblock content %}
