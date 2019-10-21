@@ -206,16 +206,16 @@ impl Activity {
 
 /// web interface to read an activity
 #[get("/<id>")]
-fn get (id: i32, user: User, conn: AppDbConn) -> ApiResult<Activity> {
-    tbapi(ActivityId(id).read(&user, &conn))
+fn get (id: i32, user: &User, conn: AppDbConn) -> ApiResult<Activity> {
+    tbapi(ActivityId(id).read(user, &conn))
 }
 
 /// web interface to create an activity
 #[post("/", data="<activity>")]
-fn post (activity: Json<NewActivity>, user: User, conn: AppDbConn) 
+fn post (activity: Json<NewActivity>, user: &User, conn: AppDbConn) 
             -> TbResult<status::Created<Json<(Activity, PartList)>>> {
 
-    let (activity, assembly) = Activity::create(activity.0, &user, &conn)?;
+    let (activity, assembly) = Activity::create(activity.0, user, &conn)?;
     let id_raw: i32 = activity.id.into();
     let url = uri! (get: id_raw);
     Ok (status::Created(url.to_string(), Some(Json((activity, assembly)))))
@@ -223,14 +223,14 @@ fn post (activity: Json<NewActivity>, user: User, conn: AppDbConn)
 
 /// web interface to change an activity
 #[put("/<id>", data="<activity>")]
-fn put (id: i32, activity: Json<NewActivity>, user: User, conn: AppDbConn) -> ApiResult<PartList> {
-    tbapi(ActivityId(id).update(activity.0, &user, &conn))
+fn put (id: i32, activity: Json<NewActivity>, user: &User, conn: AppDbConn) -> ApiResult<PartList> {
+    tbapi(ActivityId(id).update(activity.0, user, &conn))
 }
 
 /// web interface to delete an activity
 #[delete("/<id>")]
-fn delete (id: i32, user: User, conn: AppDbConn) -> ApiResult<PartList> {
-    tbapi(ActivityId(id).delete(&user, &conn))
+fn delete (id: i32, user: &User, conn: AppDbConn) -> ApiResult<PartList> {
+    tbapi(ActivityId(id).delete(user, &conn))
 }
 
 pub fn routes () -> Vec<rocket::Route> {

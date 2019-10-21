@@ -77,10 +77,19 @@ table! {
     }
 }
 
+table! {
+    users (id) {
+        id -> Int4,
+        name -> Text,
+        firstname -> Text,
+        is_admin -> Bool,
+    }
+}
+
 joinable!(activities -> activity_types (what));
-joinable!(activity_types -> part_types3 (gear));
+joinable!(activity_types -> part_types (gear));
 joinable!(attachments -> part_types (hook));
-joinable!(parts -> part_types3 (what));
+joinable!(parts -> part_types (what));
 
 allow_tables_to_appear_in_same_query!(
     activities,
@@ -90,4 +99,5 @@ allow_tables_to_appear_in_same_query!(
     part_types,
     part_types3,
     parts,
+    users,
 );

@@ -64,21 +64,16 @@ impl ActTypeId {
 }
 
 #[get("/activity")]
-fn activity(_user: User, conn: AppDbConn) -> Json<Vec<ActivityType>> {
+fn activity(_user: &User, conn: AppDbConn) -> Json<Vec<ActivityType>> {
     Json(activity_types::table.order(activity_types::id).load::<ActivityType>(&conn.0).expect("error loading ActivityTypes"))
 }
 
 
 #[get("/part")]
-fn part(_user: User, conn: AppDbConn) -> Json<Vec<PartType>> {
+fn part(_user: &User, conn: AppDbConn) -> Json<Vec<PartType>> {
     Json(part_types::table.order(part_types::id).load::<PartType>(&conn.0).expect("error loading PartType"))
 }
 
-#[get("/test")]
-fn test (_user: Admin, conn: AppDbConn) -> Result<(),diesel::result::Error>{
-    conn.0.begin_test_transaction()
-}
-
 pub fn routes () -> Vec<rocket::Route> {
-    routes![part, activity, test]
+    routes![part, activity]
 }

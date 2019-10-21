@@ -245,40 +245,40 @@ impl NewPart {
 }
 
 #[get("/<part>")]
-fn get (part: i32, user: User, conn: AppDbConn) -> ApiResult<Part> {
-    Ok(Json(PartId(part).part(&user, &conn)?))
+fn get (part: i32, user: &User, conn: AppDbConn) -> ApiResult<Part> {
+    Ok(Json(PartId(part).part(user, &conn)?))
 }
 
 #[post("/", data="<newpart>")]
-fn post(newpart: Json<NewPart>, user: User, conn: AppDbConn) 
+fn post(newpart: Json<NewPart>, user: &User, conn: AppDbConn) 
             -> Result<status::Created<Json<PartId>>, ApiError> {
-    let id = newpart.clone().create(&user, &conn)?;
+    let id = newpart.clone().create(user, &conn)?;
     let url = uri! (get: i32::from(id));
     Ok (status::Created(url.to_string(), Some(Json(id))))
 } 
 
 #[get("/<part>/subparts?<time>")]
-fn get_subparts (part: i32, time: Option<String>, user: User, conn: AppDbConn) -> ApiResult<PartList> {
-    Ok(Json(PartId(part).part(&user, &conn)?.subparts(parse_time(time).unwrap_or_else(Utc::now), &conn)))
+fn get_subparts (part: i32, time: Option<String>, user: &User, conn: AppDbConn) -> ApiResult<PartList> {
+    Ok(Json(PartId(part).part(user, &conn)?.subparts(parse_time(time).unwrap_or_else(Utc::now), &conn)))
 }
 
 #[get("/<part>?assembly&<time>")]
-fn get_assembly (part: i32, time: Option<String>, user: User, conn: AppDbConn) -> ApiResult<Vec<(Part, PartTypeId)>> {
-    let part = PartId::part(part.into(), &user, &conn)?;
+fn get_assembly (part: i32, time: Option<String>, user: &User, conn: AppDbConn) -> ApiResult<Vec<(Part, PartTypeId)>> {
+    let part = PartId::part(part.into(), user, &conn)?;
     let what = part.what;
     let mut res = vec!((part, what));
-    assembly(&mut res, parse_time(time).unwrap_or_else(Utc::now), &user, &conn);
+    assembly(&mut res, parse_time(time).unwrap_or_else(Utc::now), user, &conn);
     Ok(Json(res))
 }
 
 #[get("/mygear")]
-fn mygear(user: User, conn: AppDbConn) -> ApiResult<PartList> {    
-    tbapi(Part::parts_by_user(&user, true, &conn))
+fn mygear(user: &User, conn: AppDbConn) -> ApiResult<PartList> {    
+    tbapi(Part::parts_by_user(user, true, &conn))
 }
 
 #[get("/myspares")]
-fn myspares(user: User, conn: AppDbConn) -> ApiResult<PartList> {    
-    tbapi(Part::parts_by_user(&user, false, &conn))
+fn myspares(user: &User, conn: AppDbConn) -> ApiResult<PartList> {    
+    tbapi(Part::parts_by_user(user, false, &conn))
 }
 
 pub fn routes () -> Vec<rocket::Route> {

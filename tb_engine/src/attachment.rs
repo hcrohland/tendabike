@@ -272,22 +272,22 @@ fn collisions(gear: PartId, hook: PartTypeId, what: PartTypeId,
 }
 
 #[patch("/", data="<attachment>")]
-fn patch(attachment: Json<Attachment>, user: User, conn: AppDbConn) 
+fn patch(attachment: Json<Attachment>, user: &User, conn: AppDbConn) 
             -> ApiResult<PartList> {
-    tbapi(attachment.patch(&user, &conn))
+    tbapi(attachment.patch(user, &conn))
 } 
 
 #[get("/check/<gear>/<hook>/<what>?<start>&<end>")]
-fn check (what: i32, gear: i32, hook: i32, start: Option<String>, end: Option<String>, user: User, conn: AppDbConn) 
+fn check (what: i32, gear: i32, hook: i32, start: Option<String>, end: Option<String>, user: &User, conn: AppDbConn) 
             -> ApiResult<Vec<Attachment>> {
-    tbapi(collisions(PartId::get(gear, &user, &conn)?, hook.into(), what.into(), parse_time(start), parse_time(end), &conn))
+    tbapi(collisions(PartId::get(gear, user, &conn)?, hook.into(), what.into(), parse_time(start), parse_time(end), &conn))
 }
 
 /// All attachments for this part in the given time frame
 /// 
 #[get("/<part_id>?<start>&<end>")]
-fn get (part_id: i32, start: Option<String>, end: Option<String>, user: User, conn: AppDbConn) -> ApiResult<Vec<Attachment>> {
-    tbapi(read(part_id,start,end,&user, &conn))
+fn get (part_id: i32, start: Option<String>, end: Option<String>, user: &User, conn: AppDbConn) -> ApiResult<Vec<Attachment>> {
+    tbapi(read(part_id,start,end,user, &conn))
 }
 
 fn read (part_id: i32, start: Option<String>, end: Option<String>, user: &User, conn: &AppConn) -> TbResult<Vec<Attachment>> {
