@@ -11,7 +11,7 @@ diesel = { version = "1.4.3", features = ["postgres", "chrono"] }
 diesel-derive-newtype = "0.1.2"
 
 newtype_derive = "0.1.6"
-dotenv = "0.14.1"
+dotenv = "0.15.0"
 log = "0.4.8"  
 simplelog = "0.7.4"
 serde = "1.0.101" 

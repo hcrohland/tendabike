@@ -20,7 +20,7 @@ use diesel::{
 
 use schema::users;
 
-const PROVIDER: rocket_oauth2::Provider = rocket_oauth2::Provider 
+const PROVIDER: rocket_oauth2::StaticProvider = rocket_oauth2::StaticProvider 
 {
     auth_uri: std::borrow::Cow::Borrowed("https://www.strava.com/oauth/authorize"),
     token_uri: std::borrow::Cow::Borrowed("https://www.strava.com/oauth/token")
@@ -85,9 +85,9 @@ impl DbUser {
         let db_user: DbUser = 
             diesel::update(users.find(self.id))
                     .set((
-                        access_token.eq(token.access_token),
-                        expires_at.eq(token.expires_in.unwrap() as i64 + get_time().sec - 300), // 5 Minutes buffer
-                        refresh_token.eq(token.refresh_token.unwrap())
+                        access_token.eq(token.access_token()),
+                        expires_at.eq(token.expires_in().unwrap() as i64 + get_time().sec - 300), // 5 Minutes buffer
+                        refresh_token.eq(token.refresh_token().unwrap())
                     ))
                     .get_result(conn).context("Could not store user")?;
 
@@ -208,8 +208,8 @@ impl rocket_oauth2::Callback for Callback {
     fn callback(&self, request: &Request, token: TokenResponse)
         -> TbResult<Redirect>
     {
-        info!("Callback got scope {:?}", token.scope);
-        let athlete = token.extras.get("athlete").ok_or(StravaError::Authorize("token did not include athlete"))?;
+        info!("Callback got scope {:?}", token.scope());
+        let athlete = token.as_value().get("athlete").ok_or(StravaError::Authorize("token did not include athlete"))?;
     
         DbUser::retrieve(request, athlete)?
                     .store(request, token)?;
