@@ -16,12 +16,12 @@ impl User {
 
     /// send an API call with an authenticated User
     /// 
-    pub fn request(&self, uri: &str) -> TbResult<String> {
+    pub fn request(&self, uri: &str) -> TbResult<serde_json::Value> {
         let client = reqwest::Client::new();
         Ok(client.get(&format!("{}{}", ENGINE_URI, uri))
             .header("x-user-id", self.0)
             .send().context("Could not reach engine")?
-            .text().context("Could not get response body")?)
+            .json().context("Could not get response body")?)
     }
 }
 
