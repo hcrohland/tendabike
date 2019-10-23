@@ -4,11 +4,6 @@
 //! They are identified by part_id and attached time  
 //! If detached is none the part is still attached  
 
-use chrono::{
-    Utc,
-    DateTime,
-};
-
 use rocket_contrib::json::Json;
 
 use self::schema::{parts,attachments};

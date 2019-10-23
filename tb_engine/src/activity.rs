@@ -6,10 +6,6 @@
 //! at the start time of the activity  
 //! Most operations are done on the ActivityId though  
 //! 
-use chrono::{
-    Utc,
-    DateTime,
-};
 
 use std::collections::HashMap;
 

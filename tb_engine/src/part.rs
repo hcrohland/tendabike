@@ -1,10 +1,5 @@
 use std::collections::HashMap;
 
-use chrono::{
-    Utc,
-    DateTime,
-};
-
 use rocket_contrib::json::Json;
 use rocket::response::status;
 

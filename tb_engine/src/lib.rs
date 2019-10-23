@@ -55,8 +55,16 @@ pub mod attachment;
 
 extern crate tb_common;
 pub use tb_common::error::*;
+pub use tb_common::*;
 
 use anyhow::Context;
+
+use chrono::{
+    Utc,
+    Local,
+    DateTime,
+    TimeZone
+};
 
 type AppConn = diesel::PgConnection;
 
@@ -172,18 +180,6 @@ impl Usage {
             count: self.count + factor,
         }
     }
-}
-
-use chrono::{
-    Utc,
-    Local,
-    DateTime,
-    TimeZone
-};
-
-
-fn parse_time (time: Option<String>) -> Option<DateTime<Utc>> {
-    time.map(|time| Local.datetime_from_str(&time, "%FT%T").expect(&*format!("could not parse time {}", time)).with_timezone(&Utc))
 }
 
 type PartList = Vec<part::Part>;

@@ -1,5 +1,6 @@
 use crate::*;
 use std::collections::HashMap;
+use chrono::Utc;
 
 #[get("/")]
 fn dash (user: User) -> TbResult<Template> {
@@ -14,12 +15,13 @@ fn dash (user: User) -> TbResult<Template> {
 }
 
 
-#[get("/part/<id>")]
-fn part (id:i32, user: User) -> TbResult<Template> {
+#[get("/part/<id>?<time>")]
+fn part (id:i32, time: Option<String>, user: User) -> TbResult<Template> {
     let mut map = HashMap::new();
 
+    let param = parse_time(time).unwrap_or_else(Utc::now).format("%Y-%m-%dT%H:%M:%S").to_string();
     map.insert("types", user.request("/types/part")?);
-    map.insert("gear", user.request(&format!("/part/{}?assembly", id))?);
+    map.insert("gear", user.request(&format!("/part/{}?assembly&time={}", id, param))?);
     
     Ok(Template::render("part", map))
 }
