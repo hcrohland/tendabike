@@ -115,3 +115,9 @@ POST  {{host}}/user
   "lastname": "Müller",
   "firstname": "Hänschen"
 }
+###
+POST {{host}}/activ/descend HTTP/1.1
+x-user-id: 2
+
+start, descend
+###
