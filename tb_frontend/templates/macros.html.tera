@@ -1,0 +1,20 @@
+
+{% macro part_row(part) %}
+        <td> <a href="/part/{{ part.id }}"> {{ part.name }} </a>
+        <td align="right"> {{ part.count}}
+        <td align="right"> {{ part.distance / 1000 | round (precision=1)}} 
+        <td align="right"> {{ part.time / 3600 | round (precision=1)}}
+        <td align="right"> {{ part.climb}}
+        <td align="right"> {{ part.descend}}
+        <td align="right"> {{ part.purchase | date(format="%A, %_d. %h %Y") }} </td>
+{% endmacro part_row %}
+
+{% macro part_header() %}
+                <th>Name</th>
+                <th>Used #</th>
+                <th>Distance</th>
+                <th>Hours</th>
+                <th>Climb</th>
+                <th>Descend</th>
+                <th>Since</th>
+{% endmacro part_header %}

@@ -1,6 +1,7 @@
 {% extends "base" %}
 
 {% block content %}
+
     <h1>Hi {{user.firstname}} {{user.name}} </h1>
 
     {% for w, gears in gear | group_by(attribute="what") %}
@@ -9,43 +10,37 @@
         
         <table>
             <tr>
-                <th>Name</th>
-                <th>Distance</th>
-                <th>Hours</th>
-                <th>Since</th>
+                {{ macros::part_header() }}
             </tr>
-                {% for s in gears | sort(attribute="what") %}
-                    
-                    <tr>
-                        <td> <a href="/part/{{ s.id }}"> {{ s.name }} </a>
-                        <td align="right"> {{ s.distance / 1000 | round (precision=1)}} 
-                        <td align="right"> {{ s.time / 3600 | round (precision=1)}}
-                        <td align="center"> {{s.purchase | date(format="%A, %_d. %h %Y, %k:%M") }} </td>
-
-                    </tr>
-                {% endfor %}
-        </table> 
-    {% endfor %}
-{% if spares | length > 0 %}
-    <h2>Here are your spares:</h2>
-
-    <table>
-        <tr>
-            <th>Name</th>
-            <th>Distance</th>
-            <th>Hours</th>
-            <th>Since</th>
-        </tr>
-            {% for s in spares %}
+            {% for s in gears %}
                 <tr>
-                    <td> <a href="/user/plain/activity/{{ s.id }}"> {{ s.name }} </a>
-                    <td align="right"> {{ s.distance / 1000 | round (precision=1)}} 
-                    <td align="right"> {{ s.time / 3600 | round (precision=1)}}
-                    <td align="right"> {{s.purchase | date(format="%A, %_d. %h %Y, %k:%M") }} </td>
-
+                    {{ macros::part_row(part=s) }}
                 </tr>
             {% endfor %}
-    </table> 
+        </table> 
+    {% endfor %}
+    {% if spares | length > 0 %}
+        <h2>Here are your spares:</h2>
+
+        <table>
+            <tr>
+                <th>Type</th>
+                {{ macros::part_header() }}
+            </tr>
+            {% for w, spares in spares | group_by(attribute="what") %}
+                {% set type = types | filter(attribute="id", value=spares[0].what) | first %}
+                {% set_global len = spares | length %}
+                {% for s in spares %}
+                    <tr>
+                        {% if len > 0 %}
+                            <td rowspan={{len}}> {{type.name}} </td>
+                            {% set_global len = 0 %}
+                        {% endif %}
+                        {{ macros::part_row(part=s) }}
+                    </tr>
+                {% endfor %}
+            {% endfor %}
+        </table> 
     {% endif %}
 
 {% endblock content %}

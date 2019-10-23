@@ -74,9 +74,8 @@ pub fn ignite_rocket () -> rocket::Rocket {
         // add Template support
         .attach(Template::fairing())
         // mount all the endpoints from the module
-        .mount("/", rocket_contrib::serve::StaticFiles::from(concat!(env!("CARGO_MANIFEST_DIR"), "/www")))
         .mount("/user", user::routes())
-        .mount("/dashboard", dashboard::routes())
+        .mount("/", dashboard::routes())
 }
 
 fn main() {
