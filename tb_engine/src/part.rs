@@ -97,6 +97,13 @@ impl PartId {
         user.check_owner(part.owner, format!("user {} cannot access part {}", user.get_id(), part.id))?;
         Ok(part)
     }
+    
+    /// get the name of the part
+    /// 
+    /// does not check ownership. This is needed for rentals.
+    pub fn name (self, conn: &AppConn) -> TbResult<String> {
+        parts::table.find(self).select(parts::name).first::<String>(conn).with_context(|| format!("part {} does not exist", self))
+    }
 
     pub fn what (self, user: &dyn Person, conn: &AppConn) -> TbResult<PartTypeId> {
         Ok(self.part(user, conn)?.what)

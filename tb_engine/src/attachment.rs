@@ -281,8 +281,12 @@ fn check (what: i32, gear: i32, hook: i32, start: Option<String>, end: Option<St
 /// All attachments for this part in the given time frame
 /// 
 #[get("/<part_id>?<start>&<end>")]
-fn get (part_id: i32, start: Option<String>, end: Option<String>, user: &User, conn: AppDbConn) -> ApiResult<Vec<Attachment>> {
-    tbapi(read(part_id,start,end,user, &conn))
+fn get (part_id: i32, start: Option<String>, end: Option<String>, user: &User, conn: AppDbConn) -> ApiResult<Vec<(Attachment, String)>> {
+    let mut res = Vec::new();
+    for a in read(part_id,start,end,user, &conn)? {
+        res.push((a, a.gear.name(&conn)?));
+    }
+    Ok(Json(res))
 }
 
 fn read (part_id: i32, start: Option<String>, end: Option<String>, user: &User, conn: &AppConn) -> TbResult<Vec<Attachment>> {
