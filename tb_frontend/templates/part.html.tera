@@ -1,0 +1,22 @@
+{% extends "base" %}
+
+{% block content %}
+    <table>
+        <tr>
+            <th> type </th>
+            {{ macros::part_header() }}
+        </tr>
+
+        {% for hook, gears in gear | group_by(attribute="0") %}
+            {% set hook = types | filter(attribute="id", value=gears[0].0) | first %}
+            {% set hook = hook.name | split(pat=" ") | first %}
+                {% for s in gears %}
+                    {% set type = types | filter(attribute="id", value=s.1.what) | first %}
+                    <tr>
+                        <td> {% if hook != "Bike" %} {{hook}} {%endif%} {{ type.name }} </td>
+                        {{ macros::part_row(part=s.1) }} 
+                    </tr>
+                {% endfor %}
+        {% endfor %}
+    </table> 
+{% endblock content %}
