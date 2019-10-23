@@ -210,10 +210,10 @@ impl Part {
     }
 }
 
-fn assembly (parts: &mut Vec<(Part, PartTypeId)>, at_time: DateTime<Utc>, user: &dyn Person, conn: &AppConn) { 
-    for (part, _) in parts.clone() {
-        let mut subs = part.subparts(at_time, conn).into_iter()
-                            .zip(std::iter::repeat(part.what)).collect::<Vec<_>>();
+fn assembly (parts: &mut Vec<(PartTypeId, Part)>, at_time: DateTime<Utc>, user: &dyn Person, conn: &AppConn) { 
+    for (_, part) in parts.clone() {
+        let mut subs = std::iter::repeat(part.what)
+                            .zip(part.subparts(at_time, conn).into_iter()).collect::<Vec<_>>();
         assembly(&mut subs, at_time, user, conn);
         parts.append(&mut subs)
     }
@@ -263,10 +263,10 @@ fn get_subparts (part: i32, time: Option<String>, user: &User, conn: AppDbConn) 
 }
 
 #[get("/<part>?assembly&<time>")]
-fn get_assembly (part: i32, time: Option<String>, user: &User, conn: AppDbConn) -> ApiResult<Vec<(Part, PartTypeId)>> {
+fn get_assembly (part: i32, time: Option<String>, user: &User, conn: AppDbConn) -> ApiResult<Vec<(PartTypeId, Part)>> {
     let part = PartId::part(part.into(), user, &conn)?;
     let what = part.what;
-    let mut res = vec!((part, what));
+    let mut res = vec!((what, part));
     assembly(&mut res, parse_time(time).unwrap_or_else(Utc::now), user, &conn);
     Ok(Json(res))
 }
