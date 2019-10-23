@@ -1,6 +1,6 @@
 
-{% macro part_row(part) %}
-        <td> <a href="/part/{{ part.id }}"> {{ part.name }} </a>
+{% macro part_row(part, link="/part/") %}
+        <td> <a href={{ link }}{{ part.id }}> {{ part.name }} </a>
         <td align="right"> {{ part.count}}
         <td align="right"> {{ part.distance / 1000 | round (precision=1)}} 
         <td align="right"> {{ part.time / 3600 | round (precision=1)}}

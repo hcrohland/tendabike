@@ -26,9 +26,19 @@ fn part (id:i32, time: Option<String>, user: User) -> TbResult<Template> {
     Ok(Template::render("part", map))
 }
 
+#[get("/part/history/<id>")]
+fn part_hist (id:i32, user: User) -> TbResult<Template> {
+    let mut map = HashMap::new();
+
+    map.insert("types", user.request("/types/part")?);
+    map.insert("attach", user.request(&format!("/attach/{}", id))?);
+    
+    Ok(Template::render("part_hist", map))
+}
+
 
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![dash, part
+    routes![dash, part, part_hist
     ]
 }

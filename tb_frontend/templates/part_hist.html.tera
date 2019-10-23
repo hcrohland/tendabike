@@ -1,0 +1,22 @@
+{% extends "base" %}
+
+{% block content %}
+    <table>
+        <tr>
+            <th> gear </th>
+            <th> hook </th>
+            <th> start </th>
+            <th> end </th>
+        </tr>
+
+        {% for a in attach  %}
+            {% set hook = types | filter(attribute="id", value=a.hook) | first %}
+            <tr>
+                <td>  {{ a.gear }} </td>
+                <td>  {{ hook.name }} </td>
+                <td>  {{ a.attached | date(format="%A, %_d. %h %Y")}} </td>
+                <td>  {% if a.detached %} {{ a.detached | date(format="%A, %_d. %h %Y")}} {% endif %} </td>
+            </tr>
+        {% endfor %}
+    </table> 
+{% endblock content %}

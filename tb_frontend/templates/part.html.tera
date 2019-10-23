@@ -14,7 +14,7 @@
                     {% set type = types | filter(attribute="id", value=s.1.what) | first %}
                     <tr>
                         <td> {% if hook != "Bike" %} {{hook}} {%endif%} {{ type.name }} </td>
-                        {{ macros::part_row(part=s.1) }} 
+                        {{ macros::part_row(part=s.1, link="/part/history/") }} 
                     </tr>
                 {% endfor %}
         {% endfor %}
