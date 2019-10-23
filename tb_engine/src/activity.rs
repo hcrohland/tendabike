@@ -204,6 +204,40 @@ impl Activity {
     }
 }
 
+fn csv2descend (data: rocket::data::Data, user: &User, conn: &AppConn) -> TbResult<String> {
+    use schema::activities::dsl::*;
+    #[derive(Debug, Deserialize)]
+    struct Result {
+        start: String,
+        descend: i32
+    };
+    
+    let mut rdr = csv::Reader::from_reader(data.open());
+
+    for result in rdr.deserialize() {
+        // The iterator yields Result<StringRecord, Error>, so we check the
+        // error here.
+        let record: Result = result?;
+        info!("{:?}", record);
+        let rstart = Local.datetime_from_str(&record.start, "%Y-%m-%d %H:%M:%S")?;
+
+        conn.transaction(|| {
+            let act: Activity = activities
+                        .filter(user_id.eq(user.get_id()))
+                        .filter(start.eq(rstart))
+                        .get_result(conn)?;
+            act.register(Factor::Sub, conn)?;                    
+            diesel::update(activities.find(act.id))
+                .set(descend.eq(record.descend))
+                .get_result::<Activity>(conn).context("Error reading activity")?
+                .register(Factor::Add, conn).context("Could not register activity")
+        })?;
+    }
+
+    Ok("success".into())
+}
+
+
 /// web interface to read an activity
 #[get("/<id>")]
 fn get (id: i32, user: &User, conn: AppDbConn) -> ApiResult<Activity> {
@@ -233,6 +267,11 @@ fn delete (id: i32, user: &User, conn: AppDbConn) -> ApiResult<PartList> {
     tbapi(ActivityId(id).delete(user, &conn))
 }
 
+#[post("/descend", data="<data>")]
+fn descend(data: rocket::data::Data, user: &User, conn: AppDbConn) -> Result<String, ApiError> {
+    Ok(csv2descend(data, user, &conn)?)
+}
+
 pub fn routes () -> Vec<rocket::Route> {
-    routes![get, put, delete, post]
+    routes![get, put, delete, post, descend]
 }
