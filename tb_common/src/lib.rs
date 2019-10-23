@@ -13,6 +13,7 @@ extern crate diesel;
 
 pub mod error;
 pub use error::*;
+use anyhow::Context;
 
 #[cfg(test)]
 mod tests {
@@ -24,14 +25,13 @@ mod tests {
 
 use chrono::{
     Utc,
-    Local,
     DateTime,
     TimeZone
 };
 
-
-pub fn parse_time (time: Option<String>) -> Option<DateTime<Utc>> {
-    time.map(|time| Local.datetime_from_str(&time, "%FT%T").expect(&*format!("could not parse time {}", time)).with_timezone(&Utc))
+pub fn parse_time (time: Option<String>) -> TbResult<Option<DateTime<Utc>>> {
+    if let Some(time) = time {
+        return Ok(Some(DateTime::parse_from_rfc3339(&time).context("could not parse time")?.with_timezone(&Utc)))
+    }
+    Ok(None)
 }
-
-

@@ -19,7 +19,7 @@ fn dash (user: User) -> TbResult<Template> {
 fn part (id:i32, time: Option<String>, user: User) -> TbResult<Template> {
     let mut map = HashMap::new();
 
-    let param = parse_time(time).unwrap_or_else(Utc::now).format("%Y-%m-%dT%H:%M:%S").to_string();
+    let param = parse_time(time)?.unwrap_or_else(Utc::now).format("%Y-%m-%dT%H:%M:%S").to_string();
     map.insert("types", user.request("/types/part")?);
     map.insert("gear", user.request(&format!("/part/{}?assembly&time={}", id, param))?);
     

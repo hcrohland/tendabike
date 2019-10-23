@@ -261,7 +261,7 @@ fn post(newpart: Json<NewPart>, user: &User, conn: AppDbConn)
 
 #[get("/<part>/subparts?<time>")]
 fn get_subparts (part: i32, time: Option<String>, user: &User, conn: AppDbConn) -> ApiResult<PartList> {
-    Ok(Json(PartId(part).part(user, &conn)?.subparts(parse_time(time).unwrap_or_else(Utc::now), &conn)))
+    Ok(Json(PartId(part).part(user, &conn)?.subparts(parse_time(time)?.unwrap_or_else(Utc::now), &conn)))
 }
 
 #[get("/<part>?assembly&<time>")]
@@ -269,7 +269,7 @@ fn get_assembly (part: i32, time: Option<String>, user: &User, conn: AppDbConn) 
     let part = PartId::part(part.into(), user, &conn)?;
     let what = part.what;
     let mut res = vec!((what, part));
-    assembly(&mut res, parse_time(time).unwrap_or_else(Utc::now), user, &conn);
+    assembly(&mut res, parse_time(time)?.unwrap_or_else(Utc::now), user, &conn);
     Ok(Json(res))
 }
 

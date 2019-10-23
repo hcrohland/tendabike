@@ -275,7 +275,7 @@ fn patch(attachment: Json<Attachment>, user: &User, conn: AppDbConn)
 #[get("/check/<gear>/<hook>/<what>?<start>&<end>")]
 fn check (what: i32, gear: i32, hook: i32, start: Option<String>, end: Option<String>, user: &User, conn: AppDbConn) 
             -> ApiResult<Vec<Attachment>> {
-    tbapi(collisions(PartId::get(gear, user, &conn)?, hook.into(), what.into(), parse_time(start), parse_time(end), &conn))
+    tbapi(collisions(PartId::get(gear, user, &conn)?, hook.into(), what.into(), parse_time(start)?, parse_time(end)?, &conn))
 }
 
 /// All attachments for this part in the given time frame
@@ -290,8 +290,8 @@ fn get (part_id: i32, start: Option<String>, end: Option<String>, user: &User, c
 }
 
 fn read (part_id: i32, start: Option<String>, end: Option<String>, user: &User, conn: &AppConn) -> TbResult<Vec<Attachment>> {
-    let start = parse_time(start);
-    let end   = parse_time(end);
+    let start = parse_time(start)?;
+    let end   = parse_time(end)?;
     let part = PartId::get(part_id, user, &conn)?;
     
     let mut query  = attachments::table
