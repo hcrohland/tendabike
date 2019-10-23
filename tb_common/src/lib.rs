@@ -26,7 +26,6 @@ mod tests {
 use chrono::{
     Utc,
     DateTime,
-    TimeZone
 };
 
 pub fn parse_time (time: Option<String>) -> TbResult<Option<DateTime<Utc>>> {
