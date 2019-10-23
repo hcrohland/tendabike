@@ -128,6 +128,7 @@ impl PartId {
 
     /// apply a usage to the part with given id
     /// 
+    /// If the stored purchase date is later than the usage date, it will adjust the purchase date
     /// returns the changed part
     pub fn apply (self, usage: &Usage, conn: &AppConn) -> TbResult<Part> {
         use schema::parts::dsl::*;

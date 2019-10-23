@@ -25,7 +25,6 @@ extern crate chrono;
 
 extern crate dotenv;
 
-use std::cmp::min;
 use self::diesel::prelude::*;
 use rocket_contrib::templates::Template;
 
@@ -152,9 +151,9 @@ pub enum Factor {
 }
 
 impl Usage {
-    pub fn none() -> Usage {
+    pub fn none(time: DateTime<Utc>) -> Usage {
         Usage {
-            start: Utc::now(),
+            start: time,
             time: 0,
             climb: 0,
             descend: 0,
@@ -171,7 +170,7 @@ impl Usage {
 
         let factor = factor as i32;
         Usage {
-            start: min(self.start, act.start),
+            start: self.start,
             time: self.time + act.time.unwrap_or(0) * factor,
             climb: self.climb + act.climb.unwrap_or(0) * factor,
             descend: self.descend + act.descend.unwrap_or_else(|| act.climb.unwrap_or(0)) * factor,

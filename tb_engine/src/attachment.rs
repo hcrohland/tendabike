@@ -124,12 +124,12 @@ impl Attachment {
 
     /// register the given attachment according to the given factor.
     /// 
-    /// This can both add or subtract activities from a parts
+    /// This can both add or subtract activities from a part
     /// The changed parts are returned
     fn register (&self, factor: Factor, conn: &AppConn) -> TbResult<Part> {
         
         let usage = Activity::find(self.gear, self.attached, self.detached, conn)
-                        .into_iter().fold(Usage::none(), |acc, x| acc.add_activity(&x, factor));
+                        .into_iter().fold(Usage::none(self.attached), |acc, x| acc.add_activity(&x, factor));
         
         self.part_id.apply(&usage, conn)
     }
