@@ -1,22 +1,65 @@
 {% extends "base" %}
 
 {% block content %}
+    {% set main = gear | first %}
     <table>
         <tr>
+            {% set type = types | filter(attribute="id", value=main.1.what) | first %}
+            <th colspan=7> Overview of {{ type.name }} </th>
+        </tr>
+        <tr>
+            {{ macros::part_header() }}
+        </tr>
+        <tr>
+            {{ macros::part_row(part=main.1, link="/part/") }}
+        </tr>
+    </table>
+    {% if gear | length > 1 %}
+    <table>
+        <tr>
+            <th colspan=8> Attached parts at {{time | date(format="%_d. %h %Y")}} </th>
+        </tr><tr>
             <th> type </th>
             {{ macros::part_header() }}
         </tr>
 
-        {% for hook, gears in gear | group_by(attribute="0") %}
+        {% for hook, gears in gear | slice(start=1) | group_by(attribute="0") %}
             {% set hook = types | filter(attribute="id", value=gears[0].0) | first %}
-            {% set hook = hook.name | split(pat=" ") | first %}
+            {% set hookname = hook.name | split(pat=" ") | first %}
                 {% for s in gears %}
                     {% set type = types | filter(attribute="id", value=s.1.what) | first %}
                     <tr>
-                        <td> {% if hook != "Bike" %} {{hook}} {%endif%} {{ type.name }} </td>
-                        {{ macros::part_row(part=s.1, link="/part/history/") }} 
+                        <td> 
+                            <a href="/attached/{{main.1.id}}/{{s.1.what}}"> 
+                                {% if hook.id != main.1.id %} {{hookname}} {%endif%} {{ type.name }} 
+                            </a>
+                        </td>
+                        {{ macros::part_row(part=s.1, link="/part/") }} 
                     </tr>
                 {% endfor %}
         {% endfor %}
     </table> 
+    {% endif %}
+    {% if attach | length > 0 %}
+    <h2> Attachment history </h2>
+
+    <table>
+        <tr>
+            <th> gear </th>
+            <th> hook </th>
+            <th> start </th>
+            <th> end </th>
+        </tr>
+
+        {% for a in attach  %}
+            {% set hook = types | filter(attribute="id", value=a.0.hook) | first %}
+            <tr>
+                <td>  {{ a.1 }} </td>
+                <td>  {{ hook.name }} </td>
+                <td>  {{ a.0.attached | date(format="%A, %_d. %h %Y")}} </td>
+                <td>  {% if a.0.detached %} {{ a.0.detached | date(format="%A, %_d. %h %Y")}} {% endif %} </td>
+            </tr>
+        {% endfor %}
+    </table> 
+    {% endif %}
 {% endblock content %}

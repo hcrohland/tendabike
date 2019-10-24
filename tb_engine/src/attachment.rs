@@ -224,7 +224,7 @@ impl Attachment {
     }
 
     fn collisions (self, user: &dyn Person, conn: &AppConn) -> TbResult<Vec<Attachment>> {
-        collisions(self.gear, self.hook, self.part_id.what(user, conn)?, Some(self.attached), self.detached, conn)
+        collisions(self.gear, Some(self.hook), self.part_id.what(user, conn)?, Some(self.attached), self.detached, conn)
     }
 }
 
@@ -247,19 +247,21 @@ pub fn parts_per_activity(act: &Activity, conn: &AppConn) -> Vec<PartId> {
 /// 
 /// part_id is actually ignored
 /// returns the full attachments for these parts.
-fn collisions(gear: PartId, hook: PartTypeId, what: PartTypeId, 
+fn collisions(gear: PartId, hook: Option<PartTypeId>, what: PartTypeId, 
                 attached: Option<DateTime<Utc>>, detached: Option<DateTime<Utc>>,
                 conn: &AppConn) -> TbResult<Vec<Attachment>> {
     let mut query  = attachments::table
             .inner_join(parts::table.on(parts::id.eq(attachments::part_id) // join corresponding part
                                                 .and(parts::what.eq(what))))  // where the part has my type
-            .filter(attachments::gear.eq(gear))
-            .filter(attachments::hook.eq(hook)).into_boxed();
+            .filter(attachments::gear.eq(gear)).into_boxed();
+    if let Some(hook) = hook {     
+        query = query.filter(attachments::hook.eq(hook));
+    }
     if let Some(attached) = attached { 
-        query = query.filter(attachments::detached.is_null().or(attachments::detached.gt(attached))) 
+        query = query.filter(attachments::detached.is_null().or(attachments::detached.gt(attached)));
     }        
     if let Some(detached) = detached { 
-        query = query.filter(attachments::attached.lt(detached)) 
+        query = query.filter(attachments::attached.lt(detached));
     }
     Ok(query.select(schema::attachments::all_columns) // return only the attachment
             .order(attachments::attached)
@@ -272,10 +274,16 @@ fn patch(attachment: Json<Attachment>, user: &User, conn: AppDbConn)
     tbapi(attachment.patch(user, &conn))
 } 
 
-#[get("/check/<gear>/<hook>/<what>?<start>&<end>")]
-fn check (what: i32, gear: i32, hook: i32, start: Option<String>, end: Option<String>, user: &User, conn: AppDbConn) 
-            -> ApiResult<Vec<Attachment>> {
-    tbapi(collisions(PartId::get(gear, user, &conn)?, hook.into(), what.into(), parse_time(start)?, parse_time(end)?, &conn))
+#[get("/check/<gear>/<what>?<hook>&<start>&<end>")]
+fn check (what: i32, gear: i32, hook: Option<i32>, start: Option<String>, end: Option<String>, user: &User, conn: AppDbConn) 
+            -> ApiResult<Vec<(Attachment, String)>> {
+    let mut res = Vec::new();
+    let gear = PartId::get(gear, user, &conn)?;
+    let hook = hook.map(PartTypeId::from);
+    for a in collisions(gear, hook, what.into(), parse_time(start)?, parse_time(end)?, &conn)? {
+        res.push((a, a.part_id.name(&conn)?));
+    }
+    Ok(Json(res))
 }
 
 /// All attachments for this part in the given time frame

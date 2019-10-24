@@ -33,7 +33,7 @@
                 {% for s in spares %}
                     <tr>
                         {% if len > 0 %}
-                            <td rowspan={{len}}> {{type.name}} </td>
+                            <td rowspan={{len}}> <a href="/type/{{ type.id }}"> {{type.name}} </a> </td>
                             {% set_global len = 0 %}
                         {% endif %}
                         {{ macros::part_row(part=s) }}

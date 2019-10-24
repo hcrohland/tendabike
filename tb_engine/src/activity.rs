@@ -221,6 +221,7 @@ fn csv2descend (data: rocket::data::Data, user: &User, conn: &AppConn) -> TbResu
             let act: Activity = activities
                         .filter(user_id.eq(user.get_id()))
                         .filter(start.eq(rstart))
+                        .for_update()
                         .get_result(conn)?;
             act.register(Factor::Sub, conn)?;                    
             diesel::update(activities.find(act.id))

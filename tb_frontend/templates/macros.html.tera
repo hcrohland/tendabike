@@ -16,5 +16,5 @@
                 <th>Hours</th>
                 <th>Climb</th>
                 <th>Descend</th>
-                <th>Since</th>
+                <th>Purchase</th>
 {% endmacro part_header %}

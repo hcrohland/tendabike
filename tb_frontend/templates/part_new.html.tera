@@ -1,0 +1,26 @@
+{% extends "base" %}
+
+{% block content %}
+<div class="container">
+    <form method="POST">
+        <label for="what">Part type</label> 
+        <select name="what">
+            {% for t in types %}
+                <option value="{{t.id}}">{{t.name}}</option>
+            {% endfor %}
+        </select> 
+        <label for="name">Name</label> 
+        <input type="text" name="name" id="name" placeholder="Give it a name..">
+        <label for="vendor">Vendor</label> 
+        <input type="text" name="vendor" id="vendor" placeholder="Your parts vendor..">
+        <label for="model">Model</label> 
+        <input type="text" name="model" id="model">
+        <label for="purchase">Purchase date</label> 
+        <input type="date" name="purchase" id="purchase">
+
+       
+        <input type="submit" value="Create"> 
+    </form>
+</div>
+
+{% endblock content %}

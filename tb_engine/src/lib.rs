@@ -37,6 +37,7 @@ use simplelog::{
 
 use std::env;
 use std::fs::File;
+use std::cmp::min;
 
 pub mod schema;
 pub mod user;
@@ -170,7 +171,7 @@ impl Usage {
 
         let factor = factor as i32;
         Usage {
-            start: self.start,
+            start: min(self.start, act.start),
             time: self.time + act.time.unwrap_or(0) * factor,
             climb: self.climb + act.climb.unwrap_or(0) * factor,
             descend: self.descend + act.descend.unwrap_or_else(|| act.climb.unwrap_or(0)) * factor,

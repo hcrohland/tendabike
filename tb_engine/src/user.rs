@@ -115,6 +115,12 @@ fn post (user: Json<NewUser>, conn: AppDbConn)
     Ok(status::Created("/".to_string(), Some(Json(user))))
 }
 
+#[post("/echo", data="<user>")]
+fn echo (user: String) -> String {
+    user
+}
+
+
 #[get("/test")]
 fn test (_user: Admin, conn: AppDbConn) -> Result<&'static str,diesel::result::Error>{
     conn.0.begin_test_transaction()?;
@@ -124,5 +130,5 @@ fn test (_user: Admin, conn: AppDbConn) -> Result<&'static str,diesel::result::E
 }
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![getuser, post, test]
+    routes![getuser, post, test, echo]
 }

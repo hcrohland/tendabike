@@ -77,6 +77,7 @@ pub struct NewPart {
     pub vendor: String,
     /// The model name
     pub model: String,
+    pub purchase: DateTime<Utc>,
 }
 
 #[derive(DieselNewType)] 
@@ -234,7 +235,7 @@ impl NewPart {
             name.eq(self.name),
             vendor.eq(self.vendor),
             model.eq(self.model),
-            purchase.eq(Utc::now()),
+            purchase.eq(self.purchase),
             time.eq(0),
             distance.eq(0),
             climb.eq(0),
@@ -245,6 +246,11 @@ impl NewPart {
         let part: Part = diesel::insert_into(parts).values(values).get_result(conn)?;
         Ok(part.id)
     }
+}
+
+fn parts_per_type (w: PartTypeId, user: &User, conn: &AppConn) -> TbResult<PartList> {
+    use schema::parts::dsl::*;
+    Ok(parts.filter(what.eq(w)).filter(owner.eq(user.get_id())).get_results(conn)?)
 }
 
 #[get("/<part>")]
@@ -284,6 +290,12 @@ fn myspares(user: &User, conn: AppDbConn) -> ApiResult<PartList> {
     tbapi(Part::parts_by_user(user, false, &conn))
 }
 
+#[get("/type/<id>")]
+fn mytype(id: i32,  user: &User, conn: AppDbConn) -> ApiResult<PartList> {
+    tbapi(parts_per_type(id.into(), user, &conn))
+}
+
 pub fn routes () -> Vec<rocket::Route> {
-    routes![get, post, get_subparts, get_assembly, mygear, myspares]
+    routes![get, post, get_subparts, get_assembly, mygear, myspares, mytype
+    ]
 }

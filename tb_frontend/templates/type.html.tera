@@ -1,0 +1,19 @@
+{% extends "base" %}
+
+{% block content %}
+    {% set s = parts | first %}
+    <table>
+        <tr>
+            {% set type = types | filter(attribute="id", value=s.what) | first %}
+            <th colspan=7> All your {{ type.name }}s </th>
+        </tr>
+        <tr>
+            {{ macros::part_header() }}
+        </tr>
+        {% for p in parts%}
+            <tr>
+                {{ macros::part_row(part=p) }}
+            </tr>
+        {% endfor %}
+    </table>
+{% endblock content %}

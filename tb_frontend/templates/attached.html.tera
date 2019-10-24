@@ -1,0 +1,34 @@
+{% extends "base" %}
+
+{% block content %}
+    <table>
+        {% set type = types | filter(attribute="id", value=what) | first %}
+        {% if type.hooks | length > 1 %}
+            {% set extra = 1 %}
+        {% endif %}
+        <tr>
+            <th colspan=7> all {{ type.name }}s at {{main.name}} </th>
+        </tr>
+
+        <tr>
+            <th> {{type.name}} </th>
+            {% if extra %} <th> location </th> {% endif %}
+            <th> start </th>
+            <th> end </th>
+        </tr>
+
+        {% for a in attach  %}
+            <tr>
+                <td> <a href="/part/{{a.0.part_id}}"> 
+                    {{ a.1 }} 
+                </a> </td>
+                {% if extra %} 
+                    {% set hook = types | filter(attribute="id", value=a.0.hook) | first %}
+                    <td> {{hook.name}} </td> 
+                {% endif %}
+                <td>  {{ a.0.attached | date(format="%A, %_d. %h %Y")}} </td>
+                <td>  {% if a.0.detached %} {{ a.0.detached | date(format="%A, %_d. %h %Y")}} {% endif %} </td>
+            </tr>
+        {% endfor %}
+    </table> 
+{% endblock content %}
