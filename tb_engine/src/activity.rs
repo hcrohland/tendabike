@@ -125,23 +125,22 @@ impl ActivityId {
     ///
     /// returns all affected parts  
     /// checks authorization  
-    fn update (self, act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
+    fn update (self, act: NewActivity, user: &dyn Person, conn: &AppConn) -> TbResult<(Activity, PartList)> {
         conn.transaction(|| {
             let mut res: HashMap<_, _> = 
                 self.read(user, conn)?.register(Factor::Sub, conn)?
                     .into_iter().map(|x| (x.id, x))
                     .collect();
 
-            let res2 = diesel::update(activities::table)
+            let act = diesel::update(activities::table)
                 .filter(activities::id.eq(self))
                 .set(&act)
-                .get_result::<Activity>(conn).context("Error reading activity")?
-                .register(Factor::Add, conn).context("Could not register activity")?;
+                .get_result::<Activity>(conn).context("Error reading activity")?;
 
-            for part in res2 {
+            for part in act.register(Factor::Add, conn).context("Could not register activity")? {
                 res.insert(part.id, part);
             }
-            Ok(res.into_iter().map(|(_, part)| part).collect())
+            Ok((act, res.into_iter().map(|(_, part)| part).collect()))
         })
     }
 
@@ -244,7 +243,7 @@ fn get (id: i32, user: &User, conn: AppDbConn) -> ApiResult<Activity> {
 /// web interface to create an activity
 #[post("/", data="<activity>")]
 fn post (activity: Json<NewActivity>, user: &User, conn: AppDbConn) 
-            -> TbResult<status::Created<Json<(Activity, PartList)>>> {
+            -> Result<status::Created<Json<(Activity, PartList)>>,ApiError> {
 
     let (activity, assembly) = Activity::create(activity.0, user, &conn)?;
     let id_raw: i32 = activity.id.into();
@@ -254,7 +253,8 @@ fn post (activity: Json<NewActivity>, user: &User, conn: AppDbConn)
 
 /// web interface to change an activity
 #[put("/<id>", data="<activity>")]
-fn put (id: i32, activity: Json<NewActivity>, user: &User, conn: AppDbConn) -> ApiResult<PartList> {
+fn put (id: i32, activity: Json<NewActivity>, user: &User, conn: AppDbConn) 
+            -> Result<Json<(Activity, PartList)>,ApiError> {
     tbapi(ActivityId(id).update(activity.0, user, &conn))
 }
 
