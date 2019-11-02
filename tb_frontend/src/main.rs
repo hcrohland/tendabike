@@ -82,6 +82,7 @@ pub fn ignite_rocket () -> rocket::Rocket {
         // mount all the endpoints from the module
         .mount("/user", user::routes())
         .mount("/", dashboard::routes())
+        .mount("/", rocket_contrib::serve::StaticFiles::from(concat!(env!("CARGO_MANIFEST_DIR"), "/www")))
 }
 
 fn main() {
