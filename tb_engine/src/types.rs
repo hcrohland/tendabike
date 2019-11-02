@@ -1,4 +1,5 @@
 use rocket_contrib::json::Json;
+use std::collections::HashMap;
 
 use crate::schema::{activity_types, part_types};
 use crate::*;
@@ -64,14 +65,16 @@ impl ActTypeId {
 }
 
 #[get("/activity")]
-fn activity(_user: &User, conn: AppDbConn) -> Json<Vec<ActivityType>> {
-    Json(activity_types::table.order(activity_types::id).load::<ActivityType>(&conn.0).expect("error loading ActivityTypes"))
+fn activity(_user: &User, conn: AppDbConn) -> Json<HashMap<ActTypeId,ActivityType>> {
+    let types = activity_types::table.order(activity_types::id).load::<ActivityType>(&conn.0).expect("error loading ActivityTypes");
+    Json(types.into_iter().map(|x| (x.id, x)).collect())
 }
 
 
 #[get("/part")]
-fn part(_user: &User, conn: AppDbConn) -> Json<Vec<PartType>> {
-    Json(part_types::table.order(part_types::id).load::<PartType>(&conn.0).expect("error loading PartType"))
+fn part(_user: &User, conn: AppDbConn) -> Json<HashMap<PartTypeId,PartType>> {
+    let types = part_types::table.order(part_types::id).load::<PartType>(&conn.0).expect("error loading PartType");
+    Json(types.into_iter().map(|x| (x.id, x)).collect())
 }
 
 pub fn routes () -> Vec<rocket::Route> {

@@ -4,11 +4,11 @@
     {% set main = gear | first %}
     <table>
         <tr>
-            {% set type = types | filter(attribute="id", value=main.1.what) | first %}
-            <th colspan=7> Overview of {{ type.name }} </th>
+            {% set type = types[main.1.what] %}
+            <th colspan=7> <h2>Overview of {{main.1.vendor }} {{ main.1.model }} </h2> </th>
         </tr>
         <tr>
-            {{ macros::part_header() }}
+            {{ macros::part_header(title=type.name) }}
         </tr>
         <tr>
             {{ macros::part_row(part=main.1, link="/part/") }}
@@ -17,23 +17,33 @@
     {% if gear | length > 1 %}
     <table>
         <tr>
-            <th colspan=8> Attached parts at {{time | date(format="%_d. %h %Y")}} </th>
+            <th colspan=9> Attached parts at {{time | date(format="%_d. %h %Y")}} </th>
         </tr><tr>
-            <th> type </th>
+            <th colspan=2> type </th>
             {{ macros::part_header() }}
         </tr>
 
         {% for hook, gears in gear | slice(start=1) | group_by(attribute="0") %}
-            {% set hook = types | filter(attribute="id", value=gears[0].0) | first %}
+            {% set hook = types[gears[0].0] %}
             {% set hookname = hook.name | split(pat=" ") | first %}
                 {% for s in gears %}
-                    {% set type = types | filter(attribute="id", value=s.1.what) | first %}
+                    {% set type = types[s.1.what] %}
                     <tr>
                         <td> 
                             <a href="/attached/{{main.1.id}}/{{s.1.what}}"> 
                                 {% if hook.id != main.1.id %} {{hookname}} {%endif%} {{ type.name }} 
                             </a>
                         </td>
+                        <td align="center">
+                            <div class="dropdown">
+                            <button class="btn">⟱</button>
+                            <div class="dropdown-content">
+                                    <a href="#">detach</a>
+                                    <a href="#">replace</a>
+                            </div>
+                            </div>
+                        </td>
+
                         {{ macros::part_row(part=s.1, link="/part/") }} 
                     </tr>
                 {% endfor %}
@@ -52,9 +62,9 @@
         </tr>
 
         {% for a in attach  %}
-            {% set hook = types | filter(attribute="id", value=a.0.hook) | first %}
+            {% set hook = types[a.0.hook] %}
             <tr>
-                <td>  {{ a.1 }} </td>
+                <td> <a href="/part/{{a.0.gear}}"> {{ a.1 }} </a> </td>
                 <td>  {{ hook.name }} </td>
                 <td>  {{ a.0.attached | date(format="%A, %_d. %h %Y")}} </td>
                 <td>  {% if a.0.detached %} {{ a.0.detached | date(format="%A, %_d. %h %Y")}} {% endif %} </td>
@@ -62,4 +72,7 @@
         {% endfor %}
     </table> 
     {% endif %}
+{# 
+    <!-- Load our React component. -->
+    <script src="/js/like_button.js"></script> #}
 {% endblock content %}

@@ -5,8 +5,8 @@
     <form method="POST">
         <label for="what">Part type</label> 
         <select name="what">
-            {% for t in types %}
-                <option value="{{t.id}}">{{t.name}}</option>
+            {% for id, t in types %}
+                <option value="{{id}}">{{t.name}}</option>
             {% endfor %}
         </select> 
         <label for="name">Name</label> 

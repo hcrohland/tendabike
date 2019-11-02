@@ -2,7 +2,7 @@
 
 {% block content %}
     <table>
-        {% set type = types | filter(attribute="id", value=what) | first %}
+        {% set type = types[what] %}
         {% if type.hooks | length > 1 %}
             {% set extra = 1 %}
         {% endif %}
@@ -23,7 +23,7 @@
                     {{ a.1 }} 
                 </a> </td>
                 {% if extra %} 
-                    {% set hook = types | filter(attribute="id", value=a.0.hook) | first %}
+                    {% set hook = types[a.0.hook] %}
                     <td> {{hook.name}} </td> 
                 {% endif %}
                 <td>  {{ a.0.attached | date(format="%A, %_d. %h %Y")}} </td>

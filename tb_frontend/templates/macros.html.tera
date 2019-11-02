@@ -6,11 +6,11 @@
         <td align="right"> {{ part.time / 3600 | round (precision=1)}}
         <td align="right"> {{ part.climb}}
         <td align="right"> {{ part.descend}}
-        <td align="right"> {{ part.purchase | date(format="%A, %_d. %h %Y") }} </td>
+        <td align="right"> {{ part.purchase | date(format="%_d. %h %Y") }} </td>
 {% endmacro part_row %}
 
-{% macro part_header() %}
-                <th>Name</th>
+{% macro part_header(title="Name") %}
+                <th>{{title}}</th>
                 <th>Used #</th>
                 <th>Distance</th>
                 <th>Hours</th>

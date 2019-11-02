@@ -2,15 +2,17 @@
 
 {% block content %}
 
-    <h1>Hi {{user.firstname}} {{user.name}} </h1>
-
+    
+    <table>
+            <tr>
+                <th><h2>{{user.firstname}} {{user.name}}'s toys and spares </h2></th>
+            </tr>
+    </table>
     {% for w, gears in gear | group_by(attribute="what") %}
-        {% set type = types | filter(attribute="id", value=gears[0].what) | first %}
-        <h2>Here are your {{type.name}}s:</h2>
-        
+        {% set type = types[gears[0].what] %}
         <table>
             <tr>
-                {{ macros::part_header() }}
+                {{ macros::part_header(title=type.name) }}
             </tr>
             {% for s in gears %}
                 <tr>
@@ -20,15 +22,15 @@
         </table> 
     {% endfor %}
     {% if spares | length > 0 %}
-        <h2>Here are your spares:</h2>
 
         <table>
             <tr>
-                <th>Type</th>
+                <th>Spares</th>
                 {{ macros::part_header() }}
+                <th/>
             </tr>
             {% for w, spares in spares | group_by(attribute="what") %}
-                {% set type = types | filter(attribute="id", value=spares[0].what) | first %}
+                {% set type = types[spares[0].what] %}
                 {% set_global len = spares | length %}
                 {% for s in spares %}
                     <tr>
@@ -37,6 +39,14 @@
                             {% set_global len = 0 %}
                         {% endif %}
                         {{ macros::part_row(part=s) }}
+                        <td align="center">
+                            <div class="dropdown">
+                            <button class="btn">⟱</button>
+                                <div class="dropdown-content">
+                                        <a href="/part/attach/{{s.id}}">attach</a>
+                                </div>
+                            </div>
+                        </td>
                     </tr>
                 {% endfor %}
             {% endfor %}
