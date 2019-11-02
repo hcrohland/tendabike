@@ -139,21 +139,26 @@ impl Attachment {
     /// - recalculates the usage counters in the attached assembly
     /// - persists everything into the database
     ///  -returns all affected parts or MyError::Conflict on collisions
-    fn create (&self, user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
+    fn create (mut self, user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
         conn.transaction (||{
             let mut coll = self.collisions(user,conn)?;
             ensure! (coll.len() < 2, Error::Conflict(format!("Attachment collision for {:?}", self)));
 
             // if there is an exiting attachment, which started earlier and is not yet detached we detach it automatically
-            let mut res = if let Some(mut pred) = coll.pop() {
-                ensure! (pred.attached < self.attached && pred.detached.is_none() ,
-                            Error::Conflict(format!("Attachment collision for {:?}", self)));
-                // predecessor gets detached
-                pred.detached = Some(self.attached); 
-                pred.patch(user, conn)?
-            } else {
-                Vec::new()
-            };
+            let mut res = Vec::new();
+            if let Some(mut pred) = coll.pop() {
+                if pred.attached < self.attached && pred.detached.is_none() {
+                    // predecessor gets detached
+                    debug!("detaching predecessor");
+                    pred.detached = Some(self.attached); 
+                    res = pred.patch(user, conn)?;
+                } else if self.detached.is_none() && pred.attached > self.attached {
+                    debug!("Adjusting detach time");
+                    self.detached = Some(pred.attached);
+                } else {
+                    return Err(Error::Conflict(format!("Attachment collision for {:?}", self)).into());
+                }
+            }
 
             res.push(
                 diesel::insert_into(attachments::table) // Store the attachment in the database
