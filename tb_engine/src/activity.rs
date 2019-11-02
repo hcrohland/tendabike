@@ -203,8 +203,10 @@ fn csv2descend (data: rocket::data::Data, user: &User, conn: &AppConn) -> TbResu
     use schema::activities::dsl::*;
     #[derive(Debug, Deserialize)]
     struct Result {
+        #[serde(rename="Datum")]
         start: String,
-        descend: i32
+        #[serde(alias="Negativer Höhenunterschied")]
+        descend: String
     };
     
     let mut rdr = csv::Reader::from_reader(data.open());
@@ -215,19 +217,20 @@ fn csv2descend (data: rocket::data::Data, user: &User, conn: &AppConn) -> TbResu
         let record: Result = result?;
         info!("{:?}", record);
         let rstart = Local.datetime_from_str(&record.start, "%Y-%m-%d %H:%M:%S")?;
-
-        conn.transaction(|| {
-            let act: Activity = activities
-                        .filter(user_id.eq(user.get_id()))
-                        .filter(start.eq(rstart))
-                        .for_update()
-                        .get_result(conn)?;
-            act.register(Factor::Sub, conn)?;                    
-            diesel::update(activities.find(act.id))
-                .set(descend.eq(record.descend))
-                .get_result::<Activity>(conn).context("Error reading activity")?
-                .register(Factor::Add, conn).context("Could not register activity")
-        })?;
+        if let Ok(rdescend) = record.descend.replace(".", "").parse::<i32>() {
+            conn.transaction(|| {
+                let act: Activity = activities
+                            .filter(user_id.eq(user.get_id()))
+                            .filter(start.eq(rstart))
+                            .for_update()
+                            .get_result(conn)?;
+                act.register(Factor::Sub, conn)?;                    
+                diesel::update(activities.find(act.id))
+                    .set(descend.eq(rdescend))
+                    .get_result::<Activity>(conn).context("Error reading activity")?
+                    .register(Factor::Add, conn).context("Could not register activity")
+            })?;
+        }
     }
 
     Ok("success".into())

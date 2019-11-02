@@ -94,10 +94,10 @@ PATCH {{host}}/attach
 x-user-id: 2
 
  {
-    "part_id": 312,
-    "gear": 300,
-    "hook": 1,
-    "attached": "2019-09-04T00:00:00Z"
+    "part_id": 357,
+    "gear": 1,
+    "hook": 7,
+    "attached": "2019-09-30T08:00:00Z"
   }
 ###
 GET {{host}}/attach/332
@@ -119,5 +119,5 @@ POST  {{host}}/user
 POST {{host}}/activ/descend HTTP/1.1
 x-user-id: 2
 
-start, descend
+< /users/christoph/Downloads/Activities_g1.csv
 ###
