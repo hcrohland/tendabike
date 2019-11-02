@@ -1,7 +1,7 @@
 use rocket::Outcome;
 use rocket::http::{Status, Cookies};
 use rocket::request::{self, Request, FromRequest};
-use reqwest::Body;
+use reqwest::{Body, Method};
 use crate::*;
 
 const ENGINE_URI: &str = "http://localhost:8000";
@@ -26,9 +26,9 @@ impl User {
             .json().context("Could not get response body")?)
     }
 
-    pub fn post_request<T: Into<Body>>(&self, uri: &str, body: T) -> TbResult<serde_json::Value> {
+    pub fn request<T: Into<Body>>(&self, method: Method, uri: &str, body: T) -> TbResult<serde_json::Value> {
         let client = reqwest::Client::new();
-        Ok(client.post(&format!("{}{}", ENGINE_URI, uri))
+        Ok(client.request(method, &format!("{}{}", ENGINE_URI, uri))
             .header("x-user-id", self.0)
             .body(body)
             .send().context("Could not reach engine")?
