@@ -140,7 +140,10 @@ impl Attachment {
     /// - persists everything into the database
     ///  -returns all affected parts or MyError::Conflict on collisions
     fn create (mut self, user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
-        conn.transaction (||{
+        conn.transaction (||{ 
+            if !read(self.part_id, Some(self.attached), self.detached, conn)?.is_empty() {
+                return Err(Error::Conflict(format!("Part is already attached {:?}", self)).into())
+            }
             let mut coll = self.collisions(user,conn)?;
             ensure! (coll.len() < 2, Error::Conflict(format!("Attachment collision for {:?}", self)));
 
@@ -296,29 +299,34 @@ fn check (what: i32, gear: i32, hook: Option<i32>, start: Option<String>, end: O
 #[get("/<part_id>?<start>&<end>")]
 fn get (part_id: i32, start: Option<String>, end: Option<String>, user: &User, conn: AppDbConn) -> ApiResult<Vec<(Attachment, String)>> {
     let mut res = Vec::new();
-    for a in read(part_id,start,end,user, &conn)? {
+    let part = PartId::get(part_id, user, &conn)?;
+    let start = parse_time(start)?;
+    let end   = parse_time(end)?;
+
+    for a in read(part, start, end, &conn)? {
         res.push((a, a.gear.name(&conn)?));
     }
     Ok(Json(res))
 }
 
-fn read (part_id: i32, start: Option<String>, end: Option<String>, user: &User, conn: &AppConn) -> TbResult<Vec<Attachment>> {
-    let start = parse_time(start)?;
-    let end   = parse_time(end)?;
-    let part = PartId::get(part_id, user, &conn)?;
+fn read (part: PartId, start: Option<DateTime<Utc>>, end: Option<DateTime<Utc>>, conn: &AppConn) 
+            -> TbResult<Vec<Attachment>> {
     
-    let mut query  = attachments::table
+    let mut atts = attachments::table
             .order(attachments::attached) // Ordered by time
             .filter(attachments::part_id.eq(part)) // is the right part
-            .into_boxed(); 
+            .for_update() // cannot be boxed!
+            .get_results::<Attachment>(conn)?;
+
+    
     if let Some(end) = end { 
-        query = query.filter(attachments::attached.lt(end)) // attached before end
+        atts.retain(|&a| a.attached < end); // attached before end
     }
     if let Some(start) = start { 
-        query = query.filter(attachments::detached.is_null().or(attachments::detached.gt(start))) // detached after start
+        atts.retain(|&a| a.detached.is_none() || a.detached.unwrap() > start); // detached after start
     }
 
-    Ok(query.load::<Attachment>(conn)?)
+    Ok(atts)
 }
 
 pub fn routes () -> Vec<rocket::Route> {
