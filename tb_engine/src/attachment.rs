@@ -141,21 +141,19 @@ impl Attachment {
     ///  -returns all affected parts or MyError::Conflict on collisions
     fn create (mut self, user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
         conn.transaction (||{ 
-            if !read(self.part_id, Some(self.attached), self.detached, conn)?.is_empty() {
-                return Err(Error::Conflict(format!("Part is already attached {:?}", self)).into())
-            }
-            let mut coll = self.collisions(user,conn)?;
-            ensure! (coll.len() < 2, Error::Conflict(format!("Attachment collision for {:?}", self)));
+            let mut colls = self.collisions(user,conn)?;
+            colls.append(&mut read(self.part_id, Some(self.attached), self.detached, conn)?);
 
             // if there is an exiting attachment, which started earlier and is not yet detached we detach it automatically
             let mut res = Vec::new();
-            if let Some(mut pred) = coll.pop() {
-                if pred.attached < self.attached && pred.detached.is_none() {
+            for mut pred in colls.into_iter() {
+                if pred.detached.is_none() && pred.attached <= self.attached  {
                     // predecessor gets detached
                     debug!("detaching predecessor");
                     pred.detached = Some(self.attached); 
                     res = pred.patch(user, conn)?;
                 } else if self.detached.is_none() && pred.attached > self.attached {
+                    // this attachment ends
                     debug!("Adjusting detach time");
                     self.detached = Some(pred.attached);
                 } else {
