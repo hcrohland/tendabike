@@ -42,37 +42,37 @@ pub struct Attachment {
     detached: Option<DateTime<Utc>>,
 }
 
-/// Find all parts attached to part at at_time
-pub fn subparts(part: &Part, at_time: DateTime<Utc>, conn: &AppConn) -> PartList {
+fn assembly (part: Part, at_time: DateTime<Utc>, conn: &AppConn) 
+    -> TbResult<Vec<(Part,Attachment)>> { 
     use schema::attachments::dsl::*;
+    use diesel::dsl::any;
 
-    let att_gear = if let Some(att) = is_attached(part.id, at_time, conn) {
-        att.gear
-    } else {
-        part.id
-    };
+    let main = attached_to(part.id, at_time, &conn);
+    let types = part.what.subtypes(conn);
 
-    attachments
+    Ok(attachments
         .inner_join(parts::table.on(parts::id.eq(part_id))) 
-        .filter(gear.eq(att_gear))
-        .filter(hook.eq(part.what))
+        .filter(gear.eq(main))
+        .filter(hook.eq(any(types)))
         .filter(attached.lt(at_time)).filter(detached.is_null().or(detached.ge(at_time)))
-        .select(schema::parts::all_columns) // return only the Parts
-        .load::<Part>(conn).expect("could not read attachments")
+        .order(parts::what)
+        .order(hook)
+        .select((schema::parts::all_columns,schema::attachments::all_columns)) // return only the Parts
+        .load::<(Part,Attachment)>(conn)?)
 }
 
 /// Was the part attached to a hook at at_time?
-pub fn is_attached(part: PartId, at_time: DateTime<Utc>, conn: &AppConn) -> Option<Attachment> {
+pub fn attached_to(part: PartId, at_time: DateTime<Utc>, conn: &AppConn) -> PartId {
     use schema::attachments::dsl::*;
 
     let atts = attachments
         .filter(part_id.eq(part))
         .filter(attached.lt(at_time)).filter(detached.is_null().or(detached.ge(at_time)))
-        .get_results(conn).expect("Error reading attachments");
+        .get_results::<Attachment>(conn).expect("Error reading attachments");
 
     match atts.len() {
-        0 => None,
-        1 => Some(atts[0]),
+        0 => part,
+        1 => atts[0].gear,
         _ => panic!(format!("multiple attaches {:?}", atts)),
     }
 }
@@ -307,6 +307,13 @@ fn get (part_id: i32, start: Option<String>, end: Option<String>, user: &User, c
     Ok(Json(res))
 }
 
+#[get("/assembly/<part>?<time>")]
+fn get_assembly (part: i32, time: Option<String>, user: &User, conn: AppDbConn) -> ApiResult<Vec<(Part,Attachment)>> {
+    let part = PartId::part(part.into(), user, &conn)?;
+    let time = parse_time(time)?.unwrap_or_else(Utc::now);
+    Ok(Json(assembly(part, time, &conn)?))
+}
+
 fn read (part: PartId, start: Option<DateTime<Utc>>, end: Option<DateTime<Utc>>, conn: &AppConn) 
             -> TbResult<Vec<Attachment>> {
     
@@ -328,7 +335,6 @@ fn read (part: PartId, start: Option<DateTime<Utc>>, end: Option<DateTime<Utc>>,
 }
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![get, check, 
-    patch,
+    routes![get, check, patch, get_assembly
     ]
 }

@@ -12,7 +12,7 @@ x-user-id: 2
 {{host}}/part/myspares 
 x-user-id: 2
 ###
-{{host}}/part/14?assembly
+{{host}}/attach/assembly/1
 x-user-id: 2
 ###
 POST {{host}}/part
@@ -25,9 +25,6 @@ x-user-id: 1
     "vendor": "test vendor",
     "model": "test model"
 }
-###
-{{host}}/part/6/subparts?time=2018-11-21T02:00:00 
-x-user-id: 2
 ###
 {{host}}/part/302?assembly&time=2018-11-21T02:00:00
 x-user-id: 2
@@ -102,6 +99,9 @@ x-user-id: 2
 ###
 GET {{host}}/attach/3?start=2019-09-30T00:00:00Z
 #&end=2019-03-30T11:00:00Z
+x-user-id: 2
+###
+GET {{host}}/attach/assembly/11
 x-user-id: 2
 ###
 GET  {{host}}/user/test

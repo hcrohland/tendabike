@@ -1,11 +1,10 @@
 {% extends "base" %}
 
 {% block content %}
-    {% set main = gear | first %}
     <table>
         <tr>
-            {% set type = types[main.1.what] %}
-            <th> <h2>Overview of {{main.1.vendor }} {{ main.1.model }} </h2> </th>
+            {% set type = types[main.what] %}
+            <th> <h2>Overview of {{main.vendor }} {{ main.model }} </h2> </th>
         </tr>
     </table>
     <table>
@@ -13,54 +12,53 @@
             {{ macros::part_header(title=type.name) }}
         </tr>
         <tr>
-            {{ macros::part_row(part=main.1, link="/part/") }}
+            {{ macros::part_row(part=main, link="/part/") }}
             {% if type.hooks | length > 0 %}
                 <td align="center">
                             <div class="dropdown">
                             <button class="btn">⟱</button>
                             <div class="dropdown-content">
-                                    <a href="/part/attach/{{main.1.id}}">attach</a>
+                                    <a href="/part/attach/{{main.id}}">attach</a>
                             </div>
                             </div>
                         </td>
             {% endif %}
         </tr>
     </table>
-    {% if gear | length > 1 %}
-    <table>
-        <tr>
-            <th colspan=9> Attached parts at {{time | date(format="%_d. %h %Y")}} </th>
-        </tr><tr>
-            <th colspan=2> type </th>
-            {{ macros::part_header() }}
-        </tr>
+    {% if parts | length > 0  %}
+        <table>
+            <tr>
+                <th colspan=9> Attached parts at {{time | date(format="%_d. %h %Y")}} </th>
+            </tr><tr>
+                <th colspan=2> type </th>
+                {{ macros::part_header() }}
+            </tr>
 
-        {% for hook, gears in gear | slice(start=1) | group_by(attribute="0") %}
-            {% set hook = types[gears[0].0] %}
-            {% set hookname = hook.name | split(pat=" ") | first %}
-                {% for s in gears %}
-                    {% set type = types[s.1.what] %}
-                    <tr>
-                        <td> 
-                            <a href="/attached/{{main.1.id}}/{{s.1.what}}"> 
-                                {% if hook.id != main.1.id %} {{hookname}} {%endif%} {{ type.name }} 
-                            </a>
-                        </td>
-                        <td align="center">
-                            <div class="dropdown">
+            {% for p in parts %}
+                {% set attachment = p.1 %}
+                {% set part = p.0 %}
+                {% set hook = types[attachment.hook] %}
+                {% set location = hook.name | split(pat=" ") | first %}
+                {% set type = types[part.what] %}
+                <tr>
+                    <td> 
+                        <a href="/attached/{{main.id}}/{{part.what}}"> 
+                            {% if type.hooks | length > 1 %} {{location}} {%endif%} {{ type.name }} 
+                        </a>
+                    </td>
+                    <td align="center">
+                        <div class="dropdown">
                             <button class="btn">⟱</button>
                             <div class="dropdown-content">
                                     <a href="#">detach</a>
                                     <a href="#">replace</a>
                             </div>
-                            </div>
-                        </td>
-
-                        {{ macros::part_row(part=s.1, link="/part/") }} 
-                    </tr>
-                {% endfor %}
-        {% endfor %}
-    </table> 
+                        </div>
+                    </td>
+                     {{ macros::part_row(part=part, link="/part/") }}  
+                </tr>
+            {% endfor %}
+</table> 
     {% endif %}
     {% if attach | length > 0 %}
     <h2> Attachment history </h2>
@@ -82,9 +80,7 @@
                 <td>  {% if a.0.detached %} {{ a.0.detached | date(format="%A, %_d. %h %Y")}} {% endif %} </td>
             </tr>
         {% endfor %}
-    </table> 
+    </table>  
     {% endif %}
-{# 
-    <!-- Load our React component. -->
-    <script src="/js/like_button.js"></script> #}
+
 {% endblock content %}

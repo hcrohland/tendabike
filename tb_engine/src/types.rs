@@ -72,7 +72,7 @@ fn activity(_user: &User, conn: AppDbConn) -> Json<HashMap<ActTypeId,ActivityTyp
 
 impl PartTypeId{
     fn filter_types(self, types: &mut Vec<PartType>) -> Vec<Self> {
-        let mut res = types.drain_filter(|x| x.hooks.contains(&self)).map(|x| x.id).collect::<Vec<_>>();
+        let mut res = types.drain_filter(|x| x.hooks.contains(&self) || x.id == self ).map(|x| x.id).collect::<Vec<_>>();
         for t in res.clone().iter() {
             res.append(&mut t.filter_types(types));
         }

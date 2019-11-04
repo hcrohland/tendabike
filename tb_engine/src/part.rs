@@ -176,15 +176,8 @@ impl Part {
             .load::<Part>(conn)?;
         Ok(plist.into_iter()
             .filter(|x| {
-                attachment::is_attached(x.id, Utc::now(), conn).is_none() // only parts which are not attached
+                attachment::attached_to(x.id, Utc::now(), conn) == x.id // only parts which are not attached
             }).collect())
-    }
-
-    /// retrieve the vector of Subparts for self
-    /// 
-    /// panics on unexpected database error
-    fn subparts(& self, at_time: DateTime<Utc>, conn: &AppConn) -> PartList {
-        attachment::subparts(self, at_time, conn)
     }
 
     /// reset all usage counters for all parts of a person
@@ -214,14 +207,6 @@ impl Part {
     }
 }
 
-fn assembly (parts: &mut Vec<(PartTypeId, Part)>, at_time: DateTime<Utc>, user: &dyn Person, conn: &AppConn) { 
-    for (_, part) in parts.clone() {
-        let mut subs = std::iter::repeat(part.what)
-                            .zip(part.subparts(at_time, conn).into_iter()).collect::<Vec<_>>();
-        assembly(&mut subs, at_time, user, conn);
-        parts.append(&mut subs)
-    }
-}
 
 impl NewPart {
     fn create (self, user: &User, conn: &AppConn) -> TbResult<PartId> {
@@ -266,20 +251,6 @@ fn post(newpart: Json<NewPart>, user: &User, conn: AppDbConn)
     Ok (status::Created(url.to_string(), Some(Json(id))))
 } 
 
-#[get("/<part>/subparts?<time>")]
-fn get_subparts (part: i32, time: Option<String>, user: &User, conn: AppDbConn) -> ApiResult<PartList> {
-    Ok(Json(PartId(part).part(user, &conn)?.subparts(parse_time(time)?.unwrap_or_else(Utc::now), &conn)))
-}
-
-#[get("/<part>?assembly&<time>")]
-fn get_assembly (part: i32, time: Option<String>, user: &User, conn: AppDbConn) -> ApiResult<Vec<(PartTypeId, Part)>> {
-    let part = PartId::part(part.into(), user, &conn)?;
-    let what = part.what;
-    let mut res = vec!((what, part));
-    assembly(&mut res, parse_time(time)?.unwrap_or_else(Utc::now), user, &conn);
-    Ok(Json(res))
-}
-
 #[get("/mygear")]
 fn mygear(user: &User, conn: AppDbConn) -> ApiResult<PartList> {    
     tbapi(Part::parts_by_user(user, true, &conn))
@@ -296,6 +267,6 @@ fn mytype(id: i32,  user: &User, conn: AppDbConn) -> ApiResult<PartList> {
 }
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![get, post, get_subparts, get_assembly, mygear, myspares, mytype
+    routes![get, post, mygear, myspares, mytype
     ]
 }

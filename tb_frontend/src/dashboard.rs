@@ -22,11 +22,12 @@ fn dash (user: User) -> TbResult<Template> {
 fn part (id:i32, time: Option<String>, user: User) -> TbResult<Template> {
     let mut map = HashMap::new();
 
-    let param = parse_time(time)?.unwrap_or_else(Utc::now).to_rfc3339_opts(SecondsFormat::Secs, true);
 
-    map.insert("time", json!(param));
+    let time = parse_time(time)?.unwrap_or_else(Utc::now).to_rfc3339_opts(SecondsFormat::Secs, true);
+    map.insert("time", json!(time));
     map.insert("types", user.get_request("/types/part")?);
-    map.insert("gear", user.get_request(&format!("/part/{}?assembly&time={}", id, param))?);
+    map.insert("main", user.get_request(&format!("/part/{}", id))?);
+    map.insert("parts", user.get_request(&format!("/attach/assembly/{}?time={}", id, time))?);
     map.insert("attach", user.get_request(&format!("/attach/{}", id))?);
     
     Ok(Template::render("part", map))
