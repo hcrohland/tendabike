@@ -1,6 +1,6 @@
 @host = http://[::1]:8000
 
-{{host}}/types/activity
+{{host}}/types/part/2
 x-user-id: 2
 ###
 {{host}}/ 
@@ -12,7 +12,7 @@ x-user-id: 2
 {{host}}/part/myspares 
 x-user-id: 2
 ###
-{{host}}/part/14
+{{host}}/part/14?assembly
 x-user-id: 2
 ###
 POST {{host}}/part
@@ -100,7 +100,8 @@ x-user-id: 2
     "attached": "2019-09-30T08:00:00Z"
   }
 ###
-GET {{host}}/attach/332
+GET {{host}}/attach/3?start=2019-09-30T00:00:00Z
+#&end=2019-03-30T11:00:00Z
 x-user-id: 2
 ###
 GET  {{host}}/user/test

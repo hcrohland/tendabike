@@ -70,6 +70,20 @@ fn activity(_user: &User, conn: AppDbConn) -> Json<HashMap<ActTypeId,ActivityTyp
     Json(types.into_iter().map(|x| (x.id, x)).collect())
 }
 
+impl PartTypeId{
+    fn filter_types(self, types: &mut Vec<PartType>) -> Vec<Self> {
+        let mut res = types.drain_filter(|x| x.hooks.contains(&self)).map(|x| x.id).collect::<Vec<_>>();
+        for t in res.clone().iter() {
+            res.append(&mut t.filter_types(types));
+        }
+        res
+    }
+    pub fn subtypes(self, conn: &AppConn) -> Vec<Self> {
+        use schema::part_types::dsl::*;
+        let mut types = part_types.load::<PartType>(conn).expect("Error loading parttypes");
+        self.filter_types(&mut types)
+    }
+}
 
 #[get("/part")]
 fn part(_user: &User, conn: AppDbConn) -> Json<HashMap<PartTypeId,PartType>> {
@@ -77,6 +91,11 @@ fn part(_user: &User, conn: AppDbConn) -> Json<HashMap<PartTypeId,PartType>> {
     Json(types.into_iter().map(|x| (x.id, x)).collect())
 }
 
+#[get("/part/<id>")]
+fn subs(id: i32, _user: &User, conn: AppDbConn) -> Json<Vec<PartTypeId>> {
+    Json(PartTypeId::from(id).subtypes(&conn))
+}
+
 pub fn routes () -> Vec<rocket::Route> {
-    routes![part, activity]
+    routes![part, activity, subs]
 }
