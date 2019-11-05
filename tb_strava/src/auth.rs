@@ -213,7 +213,7 @@ impl rocket_oauth2::Callback for Callback {
     
         DbUser::retrieve(request, athlete)?
                     .store(request, token)?;
-        Ok(Redirect::to("/user"))
+        Ok(Redirect::to("/"))
     }
 }
 
