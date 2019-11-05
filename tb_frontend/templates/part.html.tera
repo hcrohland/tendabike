@@ -1,13 +1,13 @@
 {% extends "base" %}
 
 {% block content %}
-    <table>
+    <table class="table table-success">
         <tr>
             {% set type = types[main.what] %}
             <th> <h2>Overview of {{main.vendor }} {{ main.model }} </h2> </th>
         </tr>
     </table>
-    <table>
+    <table class="container table table-striped">
         <tr>
             {{ macros::part_header(title=type.name) }}
         </tr>
@@ -15,22 +15,22 @@
             {{ macros::part_row(part=main, link="/part/") }}
             {% if type.hooks | length > 0 %}
                 <td align="center">
-                            <div class="dropdown">
-                            <button class="btn">⟱</button>
-                            <div class="dropdown-content">
-                                    <a href="/part/attach/{{main.id}}">attach</a>
-                            </div>
-                            </div>
-                        </td>
+                     <div class="dropdown">
+                        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown"></button>
+                        <div class="dropdown-menu">
+                            <a class="dropdown-item" href="/part/attach/{{main.id}}">attach</a>
+                        </div>
+                    </div> 
+                </td>
             {% endif %}
         </tr>
     </table>
     {% if parts | length > 0  %}
-        <table>
+        <table class="container table table-striped">
             <tr>
-                <th colspan=9> Attached parts at {{time | date(format="%_d. %h %Y")}} </th>
+                <th class="table-success" colspan=9> Attached parts at {{time | date(format="%_d. %h %Y")}} </th>
             </tr><tr>
-                <th colspan=2> type </th>
+                <th colspan=1> type </th>
                 {{ macros::part_header() }}
             </tr>
 
@@ -41,19 +41,19 @@
                 {% set location = hook.name | split(pat=" ") | first %}
                 {% set type = types[part.what] %}
                 <tr>
-                    <td> 
+                    <td class="d-flex justify-content-between align-items-center"> 
                         <a href="/attached/{{main.id}}/{{part.what}}"> 
                             {% if type.hooks | length > 1 %} {{location}} {%endif%} {{ type.name }} 
                         </a>
-                    </td>
-                    <td align="center">
+            
+                    <span>
                         <div class="dropdown">
-                            <button class="btn">⟱</button>
-                            <div class="dropdown-content">
-                                    <a href="#">detach</a>
-                                    <a href="#">replace</a>
-                            </div>
+                        <button type="button" class="btn-xs btn-secondary dropdown-toggle" data-toggle="dropdown"></button>
+                        <div class="dropdown-menu">
+                            <a class="dropdown-item" href="#">detach</a>
+                            <a class="dropdown-item" href="#">replace</a>
                         </div>
+                    </span>
                     </td>
                      {{ macros::part_row(part=part, link="/part/") }}  
                 </tr>
@@ -63,7 +63,7 @@
     {% if attach | length > 0 %}
     <h2> Attachment history </h2>
 
-    <table>
+    <table class="table table-striped">
         <tr>
             <th> gear </th>
             <th> hook </th>

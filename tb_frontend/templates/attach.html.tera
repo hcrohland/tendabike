@@ -1,42 +1,72 @@
 {% extends "base" %}
 
 {% block content %}
-     <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
     {% set type = types[part.what] %}
-    <h2> Attach {{type.name}} {{ part.name}} ({{part.vendor}} {{part.model}})</h2>
-    
-        <div width=50%%>
-    <form action="/part/attach" method="post">
-        to {{types[type.main].name}}:<br>
-        <select name="gear" required>
-            {% for g in gears | filter(attribute="what", value=types[part.what].main)%}
-                <option hidden value> -- select one -- </option>
-                <option value={{g.id}}>{{g.name}}</option>
-            {% endfor %}
-        </select> 
-        <div width=50%%>
-        {% if type.hooks | length > 1 %}
-            at
-            <select name="hook" required>
-                {% for h in type.hooks %}
-                    <option hidden value> -- select one -- </option>
-                    <option value={{h}}>{{types[h].name}}</option>
-                {% endfor%}
-            </select>
-        {% else %}
-            <input type="hidden" name="hook" value={{type.hooks.0}}>
-        {% endif %}
-        </div>
-
-        since
-        <input type="date" name="attached">
-        <input type="time" name="time">
-        <input type="hidden" name="tz" value={{ now() | date(format="%:z")}}>
-        <input type="hidden" name="part_id" value={{ part.id }}>
-
-        <input type="reset" value="Reset">    
-        <input type="submit" value="Submit">
-    </form> 
-        </div>
+    <div class="container">
+        <h4> Attach {{type.name}} {{ part.name}} ({{part.vendor}} {{part.model}})</h2>
+        
+        <form action="/part/attach" method="post">
+            <div class="row">
+                <div class="coll">
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                        <span class="input-group-text">to</span>
+                    </div>
+                    <select name="gear" class="form-control" required>
+                        {% for g in gears | filter(attribute="what", value=types[part.what].main)%}
+                            <option hidden value> -- select one -- </option>
+                            <option value={{g.id}}>{{g.name}}</option>
+                        {% endfor %}
+                    </select> 
+                    {% if type.hooks | length > 1 %}
+                </div>
+                </div>
+                <div class="coll">
+                <div class="input-group">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text">at</span>
+                        </div>
+                        <select name="hook" class="form-control" required>
+                            {% for h in type.hooks %}
+                                <option hidden value> -- select one -- </option>
+                                <option value={{h}}>{{types[h].name}}</option>
+                            {% endfor%}
+                        </select>
+                    {% else %}
+                        <input type="hidden" name="hook" value={{type.hooks.0}}>
+                    {% endif %}
+                </div>
+                </div>
+            </div> <br>
+            <div class="row">
+            <div class="coll">
+            <div class="input-group">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">date</span>
+                </div>
+                <input type="date" class="form-control" name="attached">
+            </div>
+            </div>
+            <div class="coll">
+            <div class="input-group">
+                <div class="input-group-prepend">
+                    <span class="input-group-text">time</span>
+                </div>
+                <input type="time" class="form-control" name="time">
+            </div>
+            </div>
+            </div>
+            <input type="hidden" name="tz" value={{ now() | date(format="%:z")}}>
+            <input type="hidden" name="part_id" value={{ part.id }}>
+            <br>
+            <div class="row">
+            <div class="coll">
+                <input type="submit" class="btn btn-primary" value="Submit">
+                <input type="reset" class="btn btn-danger" value="Reset">    
+            </div>
+            </div>
+            </div>  
+        </form> 
+    </div>
 
     {% endblock content %}

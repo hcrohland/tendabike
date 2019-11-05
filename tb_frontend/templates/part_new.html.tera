@@ -2,24 +2,24 @@
 
 {% block content %}
 <div class="container">
+    <br>
     <form method="POST">
-        <label for="what">Part type</label> 
+        <label for="what"><h2>New </h2></label> 
         <select name="what">
+            <option hidden value> -- select type -- </option>
             {% for id, t in types %}
                 <option value="{{id}}">{{t.name}}</option>
             {% endfor %}
         </select> 
-        <label for="name">Name</label> 
-        <input type="text" name="name" id="name" placeholder="Give it a name..">
+        <input type="text" class="form-control" required name="name" id="name" placeholder="Give it a name..">
         <label for="vendor">Vendor</label> 
-        <input type="text" name="vendor" id="vendor" placeholder="Your parts vendor..">
+        <input type="text" class="form-control" name="vendor" id="vendor" placeholder="Your parts vendor..">
         <label for="model">Model</label> 
-        <input type="text" name="model" id="model">
+        <input type="text" class="form-control" name="model" id="model" placeholder="The model name">
         <label for="purchase">Purchase date</label> 
-        <input type="date" name="purchase" id="purchase">
-
-       
-        <input type="submit" value="Create"> 
+        <input type="date" class="form-control" required name="purchase" id="purchase">
+        <br>
+        <input type="submit" class="btn btn-primary" value="Create">
     </form>
 </div>
 
