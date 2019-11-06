@@ -1,14 +1,16 @@
 {% extends "base" %}
 
 {% block content %}
-    <table>
-        {% set type = types[what] %}
+    {% set type = types[what] %}
+    <br>
+    <div class="alert alert-success" role="alert">
+        <h3> all {{ type.name }}s at {{main.name}} </h3>
+    </div>
+    <div class="container">
+    <table class="table table-striped">
         {% if type.hooks | length > 1 %}
             {% set extra = 1 %}
         {% endif %}
-        <tr>
-            <th colspan=7> all {{ type.name }}s at {{main.name}} </th>
-        </tr>
 
         <tr>
             <th> {{type.name}} </th>
@@ -31,4 +33,5 @@
             </tr>
         {% endfor %}
     </table> 
+    </div>
 {% endblock content %}

@@ -1,22 +1,23 @@
 {% extends "base" %}
 
 {% block content %}
-    <table class="table table-success">
-        <tr>
-            {% set type = types[main.what] %}
-            <th> <h2>Overview of {{main.vendor }} {{ main.model }} </h2> </th>
-        </tr>
-    </table>
-    <table class="container table table-striped">
+    {% set type = types[main.what] %}
+    <br>
+    <div class="alert alert-success" role="alert">
+        <h2>Overview of {{main.vendor }} {{ main.model }} </h2>
+    </div>
+    <div class="container">
+    <table class="table table-striped">
         <tr>
             {{ macros::part_header(title=type.name) }}
+            {% if type.hooks | length > 0 %} <th></th> {%endif%}
         </tr>
         <tr>
             {{ macros::part_row(part=main, link="/part/") }}
             {% if type.hooks | length > 0 %}
                 <td align="center">
                      <div class="dropdown">
-                        <button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown"></button>
+                        <button type="button" class="btn-xs btn-secondary dropdown-toggle" data-toggle="dropdown"></button>
                         <div class="dropdown-menu">
                             <a class="dropdown-item" href="/part/attach/{{main.id}}">attach</a>
                         </div>
@@ -26,10 +27,11 @@
         </tr>
     </table>
     {% if parts | length > 0  %}
+        <div class="alert alert-success" role="alert">
+            <h4> Attached parts at {{time | date(format="%_d. %h %Y")}} </h4>   
+        </div>
         <table class="container table table-striped">
             <tr>
-                <th class="table-success" colspan=9> Attached parts at {{time | date(format="%_d. %h %Y")}} </th>
-            </tr><tr>
                 <th colspan=1> type </th>
                 {{ macros::part_header() }}
             </tr>
@@ -61,8 +63,10 @@
 </table> 
     {% endif %}
     {% if attach | length > 0 %}
+    <br>
+    <div class="alert alert-success" role="alert">
     <h2> Attachment history </h2>
-
+    </div>
     <table class="table table-striped">
         <tr>
             <th> gear </th>
@@ -82,5 +86,5 @@
         {% endfor %}
     </table>  
     {% endif %}
-
+</div>
 {% endblock content %}

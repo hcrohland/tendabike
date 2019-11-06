@@ -3,8 +3,12 @@
 {% block content %}
     {% set type = types[part.what] %}
     <div class="container">
-        <h4> Attach {{type.name}} {{ part.name}} ({{part.vendor}} {{part.model}})</h2>
-        
+        <br>
+        <div class="alert alert-success" role="alert">
+            <h4> Attach {{type.name}} {{ part.name}} ({{part.vendor}} {{part.model}})</h2>
+        </div> 
+
+    <div class="container">
         <form action="/part/attach" method="post">
             <div class="row">
                 <div class="coll">
@@ -67,6 +71,7 @@
             </div>
             </div>  
         </form> 
+        </div>
     </div>
 
     {% endblock content %}

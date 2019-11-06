@@ -4,13 +4,18 @@
 <div class="container">
     <br>
     <form method="POST">
-        <label for="what"><h2>New </h2></label> 
-        <select name="what">
+        <br>
+        <div class="alert alert-success" role="alert">
+        <h2>
+        <label for="what">New </label> 
+        <select class="alert-success" name="what">
             <option hidden value> -- select type -- </option>
             {% for id, t in types %}
                 <option value="{{id}}">{{t.name}}</option>
             {% endfor %}
         </select> 
+        </h2>
+        </div>
         <input type="text" class="form-control" required name="name" id="name" placeholder="Give it a name..">
         <label for="vendor">Vendor</label> 
         <input type="text" class="form-control" name="vendor" id="vendor" placeholder="Your parts vendor..">

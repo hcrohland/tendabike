@@ -2,11 +2,13 @@
 
 {% block content %}
     {% set s = parts | first %}
-    <table>
-        <tr>
-            {% set type = types[s.what] %}
-            <th colspan=7> All your {{ type.name }}s </th>
-        </tr>
+    {% set type = types[s.what] %}
+    <br>
+    <div class="alert alert-success" role="alert">
+        <h2> All your {{ type.name }}s
+    </div>
+    <div class="container">
+    <table class="table table-striped">
         <tr>
             {{ macros::part_header() }}
         </tr>
@@ -16,4 +18,5 @@
             </tr>
         {% endfor %}
     </table>
+    </div>
 {% endblock content %}
