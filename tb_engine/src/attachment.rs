@@ -155,7 +155,7 @@ impl Attachment {
                     // this attachment ends
                     debug!("Adjusting detach time");
                     self.detached = Some(pred.attached);
-                } else {
+                } else if self.detached.is_some() && pred.attached < self.detached.unwrap() {
                     return Err(Error::Conflict(format!("{:?} collides with {:?}", self, pred)).into());
                 }
             }
