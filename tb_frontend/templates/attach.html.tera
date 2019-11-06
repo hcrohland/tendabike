@@ -52,7 +52,7 @@
                 </div>
             </div>
             {% if type.hooks | length <2 %}
-                <input type="hidden" name="hook1" value={{type.hooks.0}}>
+                <input type="hidden" name="hook" value={{type.hooks.0}}>
             {% endif %}
                 <input type="hidden" name="tz" value={{ now() | date(format="%:z")}}>
                 <input type="hidden" name="part_id" value={{ part.id }}>
