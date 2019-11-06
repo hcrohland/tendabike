@@ -71,14 +71,14 @@ fn activity(_user: &User, conn: AppDbConn) -> Json<HashMap<ActTypeId,ActivityTyp
 }
 
 impl PartTypeId{
-    fn filter_types(self, types: &mut Vec<PartType>) -> Vec<Self> {
-        let mut res = types.drain_filter(|x| x.hooks.contains(&self) || x.id == self ).map(|x| x.id).collect::<Vec<_>>();
+    fn filter_types(self, types: &mut Vec<PartType>) -> Vec<PartType> {
+        let mut res = types.drain_filter(|x| x.hooks.contains(&self) || x.id == self ).collect::<Vec<_>>();
         for t in res.clone().iter() {
-            res.append(&mut t.filter_types(types));
+            res.append(&mut t.id.filter_types(types));
         }
         res
     }
-    pub fn subtypes(self, conn: &AppConn) -> Vec<Self> {
+    pub fn subtypes(self, conn: &AppConn) -> Vec<PartType> {
         use schema::part_types::dsl::*;
         let mut types = part_types.load::<PartType>(conn).expect("Error loading parttypes");
         self.filter_types(&mut types)
@@ -92,7 +92,7 @@ fn part(_user: &User, conn: AppDbConn) -> Json<HashMap<PartTypeId,PartType>> {
 }
 
 #[get("/part/<id>")]
-fn subs(id: i32, _user: &User, conn: AppDbConn) -> Json<Vec<PartTypeId>> {
+fn subs(id: i32, _user: &User, conn: AppDbConn) -> Json<Vec<PartType>> {
     Json(PartTypeId::from(id).subtypes(&conn))
 }
 

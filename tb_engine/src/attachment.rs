@@ -28,6 +28,7 @@ use diesel::{
         Queryable, Identifiable, Associations, Insertable, AsChangeset)]
 #[primary_key(part_id, attached)]
 #[changeset_options(treat_none_as_null = "true")]
+#[belongs_to(PartType, foreign_key = "hook")]
 // #[belongs_to(Part, foreign_key = "hook_id")]
 pub struct Attachment {
     /// the sub-part, which is attached to the hook
@@ -45,15 +46,13 @@ pub struct Attachment {
 fn assembly (part: Part, at_time: DateTime<Utc>, conn: &AppConn) 
     -> TbResult<Vec<(Part,Attachment)>> { 
     use schema::attachments::dsl::*;
-    use diesel::dsl::any;
 
     let main = attached_to(part.id, at_time, &conn);
     let types = part.what.subtypes(conn);
 
-    Ok(attachments
+    Ok(Attachment::belonging_to(&types)
         .inner_join(parts::table.on(parts::id.eq(part_id))) 
         .filter(gear.eq(main))
-        .filter(hook.eq(any(types)))
         .filter(attached.lt(at_time)).filter(detached.is_null().or(detached.ge(at_time)))
         .order(parts::what)
         .order(hook)
