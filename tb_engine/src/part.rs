@@ -112,7 +112,7 @@ impl PartId {
 
     /// check if the given user is the owner or an admin.
     /// Returns Forbidden if not.
-    fn checkuser (self, user: &dyn Person, conn: &AppConn) -> TbResult<PartId> {
+    pub fn checkuser (self, user: &dyn Person, conn: &AppConn) -> TbResult<PartId> {
         use schema::parts::dsl::*;
         
         if user.is_admin() {

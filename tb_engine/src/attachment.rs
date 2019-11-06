@@ -156,7 +156,7 @@ impl Attachment {
                     debug!("Adjusting detach time");
                     self.detached = Some(pred.attached);
                 } else {
-                    return Err(Error::Conflict(format!("Attachment collision for {:?}", self)).into());
+                    return Err(Error::Conflict(format!("{:?} collides with {:?}", self, pred)).into());
                 }
             }
 
@@ -192,6 +192,7 @@ impl Attachment {
     /// - MyError::Conflict if the hook_id does not match
     /// - all recalculated parts on success
     fn patch (self, user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
+        self.part_id.checkuser(user,conn)?;
         conn.transaction (||{
             let mut state = match attachments::table.find((self.part_id, self.attached))
                             .for_update().get_result::<Attachment>(conn) {
@@ -313,6 +314,9 @@ fn get_assembly (part: i32, time: Option<String>, user: &User, conn: AppDbConn) 
     Ok(Json(assembly(part, time, &conn)?))
 }
 
+/// Return all attachment for this part in the given time Frame
+/// 
+/// Start == None means from the beginning of time
 fn read (part: PartId, start: Option<DateTime<Utc>>, end: Option<DateTime<Utc>>, conn: &AppConn) 
             -> TbResult<Vec<Attachment>> {
     
