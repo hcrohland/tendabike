@@ -18,8 +18,8 @@
                         </div>
                     {% if type.hooks | length > 1 %}
                         <select name="hook" class="form-control" required>
+                            <option hidden value> -- select one -- </option>
                             {% for h in type.hooks %}
-                                <option hidden value> -- select one -- </option>
                                 <option value={{h}}>{{types[h].name}}</option>
                             {% endfor%}
                         </select>
@@ -30,8 +30,8 @@
                         </div>
                     {% endif %}
                     <select name="gear" class="form-control" required>
+                        <option hidden value> -- select one -- </option>
                         {% for g in gears | filter(attribute="what", value=types[part.what].main)%}
-                            <option hidden value> -- select one -- </option>
                             <option value={{g.id}}>{{g.name}}</option>
                         {% endfor %}
                     </select> 
