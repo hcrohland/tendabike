@@ -82,27 +82,24 @@ impl DbUser {
         use time::*;
 
         let conn: &AppConn = &request.guard::<AppDbConn>().expect("No db connection");
+        let iat = get_time().sec;
+        let exp = token.expires_in().unwrap() as i64 + iat - 300; // 5 Minutes buffer
         let db_user: DbUser = 
             diesel::update(users.find(self.id))
                     .set((
                         access_token.eq(token.access_token()),
-                        expires_at.eq(token.expires_in().unwrap() as i64 + get_time().sec - 300), // 5 Minutes buffer
+                        expires_at.eq(exp),
                         refresh_token.eq(token.refresh_token().unwrap())
                     ))
                     .get_result(conn).context("Could not store user")?;
 
-        let cookie = Cookie::build("id", db_user.tendabike_id.to_string())
-                        .same_site(SameSite::Lax)
-                        .max_age(Duration::days(1))
-                        .finish();
-        request.guard::<Cookies>().expect("request cookies")
-                .add_private(cookie);
-
+        token::store(request, db_user.tendabike_id, iat, exp);
+                
         Ok(db_user)
     }
 }
 
-pub struct User{
+pub struct User {
     user: DbUser,
     conn: AppDbConn
 }

@@ -13,8 +13,7 @@ tb_common = {path = "../tb_common"}
 rocket = "0.4.2"
 reqwest = "0.9.22"
 diesel = { version = "1.4.3", features = ["postgres", "chrono"] }
-rocket_oauth2 = {git = "https://github.com/jebrosen/rocket_oauth2.git" }#, rev = "c3be4803477a1cf7a00ff40ff57f9d04d1388b13"}
- 
+rocket_oauth2 = "0.2.0-rc.1"
 
 diesel-derive-newtype = "0.1.2"
 
@@ -23,16 +22,16 @@ dotenv = "0.15.0"
 log = "0.4.8"  
 simplelog = "0.7.4"
 lazy_static = "1.4.0"
-serde = "1.0.101" 
-serde_derive = "1.0.101"
-serde_json = "1.0.41"
+serde = "1.0" 
+serde_derive = "1.0"
+serde_json = "1.0"
 
 chrono = { version ="0.4.9", features = ["serde"] }
 
 pretty_assertions = "0.6.1"
 
-anyhow = "1.0.17"
-thiserror = "1.0.3"
+anyhow = "1.0"
+thiserror = "1.0"
 time = "0.1.42"
 
 [dependencies.rocket_contrib]

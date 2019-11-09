@@ -1,22 +1,23 @@
 @host = http://[::1]:8000
+@token = eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE1NzMyOTczNzEsImV4cCI6MTU3MzMxODY1OCwiaWQiOjJ9.WvkOr5TK1NdERqkB28MrDwvg0Rgx5315BLlPXzXxM3U
 
 {{host}}/types/part/2
-x-user-id: 2
+Authorization: Bearer {{token}}
 ###
 {{host}}/ 
-x-user-id: 2
+Authorization: Bearer {{token}}
 ###
 {{host}}/part/mygear 
-x-user-id: 2
+Authorization: Bearer {{token}}
 ###
 {{host}}/part/myspares 
-x-user-id: 2
+Authorization: Bearer {{token}}
 ###
 {{host}}/attach/assembly/1
-x-user-id: 2
+Authorization: Bearer {{token}}
 ###
 POST {{host}}/part
-x-user-id: 1
+Authorization: Bearer {{token}}
 
 {
     "owner": 2,
@@ -27,25 +28,25 @@ x-user-id: 1
 }
 ###
 {{host}}/part/302?assembly&time=2018-11-21T02:00:00
-x-user-id: 2
+Authorization: Bearer {{token}}
 ###
 Get {{host}}/activ/1653
-x-user-id: 3
+Authorization: Bearer {{token}}
 ###
 PATCH {{host}}/activ/44?gear=1
-x-user-id: 2
+Authorization: Bearer {{token}}
 ###
 PATCH  {{host}}/activ/all/8
-x-user-id: 2
+Authorization: Bearer {{token}}
 ###
 GET    {{host}}/activ/362
-x-user-id: 2
+Authorization: Bearer {{token}}
 ###
 DELETE {{host}}/activ/1695
-x-user-id: 2
+Authorization: Bearer {{token}}
 ###
 POST {{host}}/activ
-x-user-id: 2
+Authorization: Bearer {{token}}
 
 {
   "user_id": 2,
@@ -62,7 +63,7 @@ x-user-id: 2
 }
 ###
 Put {{host}}/activ/1653
-x-user-id: 2
+Authorization: Bearer {{token}}
 
 {
     "user_id": 2,
@@ -81,14 +82,14 @@ x-user-id: 2
 ###
 
 PATCH {{host}}/activ/rescan
-x-user-id: 2
+Authorization: Bearer {{token}}
 
 ###
-GET {{host}}/attach/check/1/1/10?start=2018-12-01T02:00:00-08:00
-x-user-id: 2
+GET {{host}}/attach/check/6/10?start=2018-05-30T02:00:00-08:00
+Authorization: Bearer {{token}}
 ###
 PATCH {{host}}/attach
-x-user-id: 2
+Authorization: Bearer {{token}}
 
  {
     "part_id": 357,
@@ -97,18 +98,19 @@ x-user-id: 2
     "attached": "2019-09-30T08:00:00Z"
   }
 ###
-GET {{host}}/attach/3?start=2019-09-30T00:00:00Z
+GET {{host}}/attach/332
+#?start=2019-09-30T00:00:00Z
 #&end=2019-03-30T11:00:00Z
-x-user-id: 2
+Authorization: Bearer {{token}}
 ###
 GET {{host}}/attach/assembly/11
-x-user-id: 2
+Authorization: Bearer {{token}}
 ###
 GET  {{host}}/user/test
-x-user-id: 1
+Authorization: Bearer {{token}}
 ###
 GET  {{host}}/user/
-x-user-id: 4
+Authorization: Bearer {{token}}
 ###
 POST  {{host}}/user
 
@@ -118,7 +120,7 @@ POST  {{host}}/user
 }
 ###
 POST {{host}}/activ/descend HTTP/1.1
-x-user-id: 2
+Authorization: Bearer {{token}}
 
 < /users/christoph/Downloads/Activities_g1.csv
 ###

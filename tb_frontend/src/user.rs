@@ -1,18 +1,16 @@
 use rocket::Outcome;
-use rocket::http::{Status, Cookies};
+use rocket::http::{Status};
 use rocket::request::{self, Request, FromRequest};
 use reqwest::{Body, Method};
 use crate::*;
 
 const ENGINE_URI: &str = "http://localhost:8000";
 
-pub struct User (pub i32);
+pub struct User (pub String);
 impl User {
     fn get(request: &Request) -> TbResult<User> {
-        let mut cookies = request.guard::<Cookies>().expect("No request cookies!!!");
-        let id = cookies.get_private("id").ok_or(Error::NotAuth("no id cookie"))?
-                .value().parse::<i32>()?;
-        Ok(User(id))
+        let token = token::token(request)?;
+        Ok(User(token))
     }
 
     /// send an API call with an authenticated User
@@ -20,7 +18,7 @@ impl User {
     pub fn get_request(&self, uri: &str) -> TbResult<serde_json::Value> {
         let client = reqwest::Client::new();
         Ok(client.get(&format!("{}{}", ENGINE_URI, uri))
-            .header("x-user-id", self.0)
+            .bearer_auth(&self.0)
             .send().context("Could not reach engine")?
             .error_for_status()?
             .json().context("Could not get response body")?)
@@ -29,7 +27,7 @@ impl User {
     pub fn request<T: Into<Body>>(&self, method: Method, uri: &str, body: T) -> TbResult<serde_json::Value> {
         let client = reqwest::Client::new();
         Ok(client.request(method, &format!("{}{}", ENGINE_URI, uri))
-            .header("x-user-id", self.0)
+            .bearer_auth(&self.0)
             .body(body)
             .send().context("Could not reach engine")?
             .error_for_status()?
@@ -47,9 +45,6 @@ impl<'a, 'r> FromRequest<'a, 'r> for User {
         }
     }
 }
-
-
-
 
 pub fn routes () -> Vec<rocket::Route> {
     routes![

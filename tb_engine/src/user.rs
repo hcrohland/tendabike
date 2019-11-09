@@ -29,9 +29,7 @@ pub struct User{
 
 impl User {
     fn read(request: &Request) -> TbResult<Self> {
-        let keys: Vec<_> = request.headers().get("x-user-id").collect();
-        ensure! (keys.len() == 1, "user key missing");
-        let id: i32 = keys[0].parse()?;
+        let id = token::id(request)?;
         let conn = request.guard::<AppDbConn>().expect("No db request guard").0;
         Ok(users::table.find(id).get_result(&conn)?)
     }

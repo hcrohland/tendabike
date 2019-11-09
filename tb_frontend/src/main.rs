@@ -2,7 +2,6 @@
 #![warn(clippy::all)]
 
 extern crate simplelog;
-// #[macro_use] extern crate log;
 
 #[macro_use] 
 extern crate serde_derive;
@@ -14,8 +13,6 @@ extern crate rocket;
 // #[macro_use] 
 extern crate rocket_contrib;
 extern crate reqwest;
-// #[macro_use] extern crate lazy_static;
-extern crate time;
 #[macro_use] 
 extern crate anyhow;
 pub use anyhow::Context;
@@ -23,9 +20,8 @@ pub use anyhow::Context;
 extern crate tb_common;
 use tb_common::*;
 
-pub mod user;
-pub use user::*;
-
+mod user;
+use user::*;
 mod dashboard;
 
 
