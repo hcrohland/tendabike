@@ -9,6 +9,7 @@ extern crate serde_json;
 extern crate rocket;
 #[macro_use] 
 extern crate rocket_contrib;
+extern crate rocket_cors;
 
 #[macro_use] 
 extern crate diesel;
@@ -89,18 +90,31 @@ impl Default for Config {
 }
 
 pub fn ignite_rocket () -> rocket::Rocket {
+    use rocket_cors::*;
     dotenv::dotenv().ok();
     // Initialize server
+
+    let allowed_origins = AllowedOrigins::some_exact(&["http://localhost:5000", "http://127.0.0.1:5000"]);
+
+    // You can also deserialize this
+    let cors = rocket_cors::CorsOptions {
+        allowed_origins,
+        // allowed_methods: vec![Method::Get].into_iter().map(From::from).collect(),
+        // allowed_headers: AllowedHeaders::some(&["Authorization", "Accept"]),
+        allow_credentials: true,
+        ..Default::default()
+    }
+    .to_cors().expect("Could not set CORS options");
+
     rocket::ignite()
        // add config object
         .manage(Config::default())
         // add database pool
         .attach(AppDbConn::fairing())
         .attach(Template::fairing())
-
-
+        .attach(cors)
         // mount all the endpoints from the module
-        .mount("/", rocket_contrib::serve::StaticFiles::from(concat!(env!("CARGO_MANIFEST_DIR"), "/www")))
+        .mount("/", rocket_contrib::serve::StaticFiles::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../tb-svelte/public")))
         .mount("/user", user::routes())
         .mount("/types", types::routes())
         .mount("/part", part::routes())
