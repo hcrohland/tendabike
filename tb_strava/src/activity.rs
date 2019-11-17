@@ -143,7 +143,7 @@ impl StravaActivity{
         };
 
         let res: serde_json::Value = client
-            .header("x-user-id", user.id())
+            .bearer_auth(&user.token)
             .json(&tb)
             .send().context("unable to contact backend")?
             .error_for_status().context("backend responded with error")?

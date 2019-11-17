@@ -96,16 +96,17 @@ pub mod token {
         bail!("No token provided")
     }
 
-    pub fn store (request: &Request, id: i32, iat: i64, exp: i64) {
+    pub fn store (request: &Request, id: i32, iat: i64, exp: i64) -> String{
 
         let my_claims = UserToken {iat, exp, id};
         let jwt = encode(&Header::default(), &my_claims, MY_SECRET).expect("Could not encode jwt");
-        let token = Cookie::build("token", dbg!(jwt))
+        let token = Cookie::build("token", jwt.clone())
                         .same_site(SameSite::Lax)
                         .max_age(Duration::days(90))
                         .finish();
         
-        let mut store = request.guard::<Cookies>().expect("request cookies");
-        store.add(token);
+        let mut cookie_store = request.guard::<Cookies>().expect("request cookies");
+        cookie_store.add(token);
+        jwt
     }
 }

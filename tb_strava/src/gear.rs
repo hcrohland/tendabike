@@ -85,13 +85,13 @@ impl StravaGear {
 }
 
 impl TbGear {
-    fn send_to_tb (&self) -> TbResult<i32> {
+    fn send_to_tb (&self, user: &User) -> TbResult<i32> {
         let client = reqwest::Client::new();
 
         let res: i32 = client.post(&format!("{}{}", TB_URI, "/part"))
-            .header("x-user-id", self.owner)
+            .bearer_auth(&user.token)
             .json(self)
-            .send().context("Cold not contact engine")?
+            .send().context("Could not contact engine")?
             .error_for_status().context("Engine returned error")?
             .json().context("Could not parse result to integer")?;
         
@@ -115,7 +115,7 @@ pub fn strava_to_tb(strava: String, user: &User) -> TbResult<i32> {
     debug!("New Gear");
     let tbid = StravaGear::request(&strava, user).context("Couldn't map gear")?
                 .into_tb(user).context("Could not map gear to tendabike format")?
-                .send_to_tb().context("Could not send gear to tb")?;
+                .send_to_tb(user).context("Could not send gear to tb")?;
     diesel::insert_into(gears)
         .values((id.eq(strava),tendabike_id.eq(tbid),user_id.eq(user.id())))
         .execute(user.conn()).context("couldn't store gear")?;

@@ -77,7 +77,7 @@ impl DbUser {
     }
 
     /// Updates the user data from a new token 
-    fn store(self, request: &Request, token: TokenResponse) -> TbResult<Self> {
+    fn store(self, request: &Request, token: TokenResponse) -> TbResult<(Self, String)> {
         use schema::users::dsl::*;
         use time::*;
 
@@ -93,15 +93,16 @@ impl DbUser {
                     ))
                     .get_result(conn).context("Could not store user")?;
 
-        token::store(request, db_user.tendabike_id, iat, exp);
+        let token = token::store(request, db_user.tendabike_id, iat, exp);
                 
-        Ok(db_user)
+        Ok((db_user, token))
     }
 }
 
 pub struct User {
     user: DbUser,
-    conn: AppDbConn
+    conn: AppDbConn,
+    pub token: String
 }
 
 /// User request guard
@@ -117,23 +118,25 @@ impl User {
     /// if needed and possible it refreshes the access token 
     fn get (request: &Request) -> TbResult<User> {
         // Get user id
-        let id = request.guard::<Cookies>().expect("No request cookies!!!")
-                        .get_private("id").ok_or(StravaError::Authorize("no id cookie"))?
-                        .value().parse::<i32>()?;
+        let token = token::token(request)?;
+        let id = token::id_unsafe(&token)?;
         // Get the user
         let conn = request.guard::<AppDbConn>().expect("internal db missing!!!");
         let user: DbUser = users::table.filter(users::tendabike_id.eq(id)).get_result(&conn.0).context("user not registered")?;
 
         if user.expires_at > time::get_time().sec {
-            return Ok(User {user, conn});
+            return Ok(User {user, conn, token});
         }
 
         info! ("refreshing access token");
         let auth = request.guard::<State<OAuth>>().expect("No oauth struct!!!");
         let tokenset = auth.refresh(&user.refresh_token).context("could not refresh access token")?;
         
+        let (user,token) = user.store(request, tokenset)?;
+
         Ok(User{
-            user: user.store(request, tokenset)?,
+            user,
+            token,
             conn
         })
     }
