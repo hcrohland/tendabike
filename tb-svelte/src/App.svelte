@@ -1,32 +1,28 @@
 <script>
-	import {types, gear, category, parts, categories} from "./store.js";
+	import _ from 'lodash';
+
+	import {types} from "./store.js";
 	import ToyGroup from "./ToyGroup.svelte"
 	import Bar from "./Bar.svelte"
 
-	import { onMount, setContext } from 'svelte';
-	import _ from 'lodash';
-
-	let w_types = fetch('http://localhost:8000/types/part')
-		.then(response => response.json())
-		.then(data => types.set(data));
+	let data_w = Promise.all([
+		fetch('http://localhost:8000/types/part')
+				.then(response => response.json())
+				.then(data => types.set(data)),
+			fetch(`http://localhost:8000/part/mygear`)
+				.then(response => response.json())
+				.then(data => gear = _.groupBy(data, "what"))
+	])
+				
+	let gear = [];
+	let category = "1";
+	$: categories = Object.keys(gear) || [];
+	$: parts = gear[category] || []
 </script>
 
-
-<style>
-
-</style>
-	
-<!-- <ul>
-{#each Object.entries(types) as [id, type]}
-	<li>  {id} - {type.name}
-{/each}
-<li> </li>
-</ul>
- -->
-{#await w_types}
-	loading
+{#await data_w}
+	loading data...
 {:then data}
-	<Bar />
-
-		<ToyGroup group={$category} parts={$parts} />
+	<Bar bind:category {categories}/>
+	<ToyGroup {parts} />
 {/await}
