@@ -27,7 +27,8 @@
     <!-- <Collapse {isOpen}> -->
     <div transition:slide>
     <CardBody>
-     is a {part.vendor} {part.model}
+     is a {part.vendor} {part.model} which you used <strong>{part.count}</strong> times for <strong>{Math.floor(part.time /3600)}:{Math.floor(part.time/60)%60}</strong> hours
+     <p> You climbed {part.climb} and descended {part.descend} meters </p>
     </CardBody>
     </div>
     <!-- </Collapse> -->
