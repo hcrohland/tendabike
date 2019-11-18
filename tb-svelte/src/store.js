@@ -3,7 +3,7 @@ import _ from 'lodash';
 
 export const types = writable([]);
 
-export const category = writable(1);
+export const category = writable("1");
 
 async function fetchGear(set) {
     console.log("fetchgear");

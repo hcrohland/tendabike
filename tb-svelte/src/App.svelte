@@ -9,8 +9,6 @@
 	let w_types = fetch('http://localhost:8000/types/part')
 		.then(response => response.json())
 		.then(data => types.set(data));
-
-	category.set(1);
 </script>
 
 
