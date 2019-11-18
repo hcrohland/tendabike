@@ -37,9 +37,9 @@
   <!-- <NavbarBrand href="/">TendABike</NavbarBrand> -->
   <!-- <NavbarToggler on:click={() => (isOpen = !isOpen)} /> -->
   <!-- <Collapse {isOpen} navbar expand="md" on:update={handleUpdate}> -->
-    <Nav class="nav-tabs navprimary">
-    {  #each $categories as cat}
-            <NavItem class="navcat-primary">
+    <Nav class="nav-tabs">
+    {#each $categories as cat}
+            <NavItem>
                 <button class="navlink" class:active="{$category === cat}" on:click="{() => $category = cat}">
                    <h3>
                      {$types[cat].name}s
