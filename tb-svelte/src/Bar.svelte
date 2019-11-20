@@ -1,6 +1,5 @@
 <script>
   import {types} from './store.js';
-  import {Nav, NavItem} from 'sveltestrap';
 
   export let categories;
   export let category;
@@ -11,25 +10,24 @@
       background-color: white;
       color: rgb(152, 152, 152);
   }
-  button {
-      padding-left: 2rem;
-      padding-right: 2rem;
+
+  .notactive:hover {
+    background-color: lightgray;
   }
   h3 {
     font-weight: inherit;
+    color: primary;
   } 
 </style>
 
-<Nav expand="md">
-   <Nav class="nav-tabs">
-    {#each categories as cat}
-      <NavItem>
-        <button class="navlink" class:notactive="{category !== cat}" on:click="{() => category = cat}">
-          <h3>
-            {$types[cat].name}s
-          </h3>
-        </button>
-      </NavItem>
-    {/each}
-  </Nav>
-</Nav>
+<ul class="nav nav-tabs">
+  {#each categories as cat}
+    <li class="nav-item">
+      <button class="navlink mr-0 mr-sm-2 mr-md-4 px-2 px-sm-4" class:notactive="{category !== cat}" on:click="{() => category = cat}">
+        <h3>
+          {$types[cat].name}s
+        </h3>
+      </button>
+    </li>
+  {/each}
+</ul>

@@ -1,12 +1,13 @@
 <script>
-    import Gear from './Gear.svelte';
-    export let parts;
+  import Gear from './Gear.svelte';
+  
+  export let parts;
 </script>
 
-<div class="card">
-    <div class="cardbody">
-        {#each parts as part (part.id)}
-            <Gear {part} />
-        {/each}
+<div class="row border m-0 p-sm-2">
+  {#each parts as part (part.id)}
+    <div class="col-md-6 p-0 p-sm-2">
+      <Gear {part} />
     </div>
+  {/each}
 </div>
