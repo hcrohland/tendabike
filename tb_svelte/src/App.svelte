@@ -34,6 +34,14 @@
 {#await data_w}
 	loading data...
 {:then data}
+		<div class="navbar navbar-expand-md bg-secondary mb-3">
+			<div class="navbar-brand">
+				TendAGear
+			</div>
+			<button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+    		<span class="navbar-toggler-icon"></span>
+  		</button>	
+		</div>
 		<Bar bind:category {categories}/>
 		<ToyGroup {parts} />
 {:catch error}

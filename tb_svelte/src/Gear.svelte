@@ -19,17 +19,20 @@
 <div class="card">
   <div class="header">
     <div class="card-header" on:click={() => (isOpen = !isOpen)}>
-      <h5> {part.name} </h5>
+      <h5 class="mb-0"> 
+        {part.name} 
+      </h5>
     </div>
   </div>
   {#if isOpen}
     <div transition:slide>
       <div class="card-body">
         is a <span class="param">{part.vendor} {part.model}</span> 
-        which you used <span class=param>{part.count}</span> times 
-        for <span class="param">{Math.floor(part.time /3600)}:{Math.floor(part.time/60)%60}</span> hours
-        <p> You covered <span class="param">{(part.distance / 1000).toFixed(1)}</span> km 
-        climbing <span class="param">{part.climb}</span> and descending <span class="param">{part.descend}</span> meters </p>
+        which you used <span class=param>{part.count.toLocaleString()}</span> times 
+        for <span class="param">{Math.floor(part.time /3600).toLocaleString()}:{String(Math.floor(part.time/60)%60).padStart(2, '0')
+}</span> hours
+        <p> You covered <span class="param">{parseFloat((part.distance / 1000).toFixed(1)).toLocaleString()}</span> km 
+        climbing <span class="param">{part.climb.toLocaleString()}</span> and descending <span class="param">{part.descend.toLocaleString()}</span> meters </p>
       </div>
     </div>
   {/if}
