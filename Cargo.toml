@@ -1,7 +1,7 @@
 [workspace]
 members = ["tb_*"]
 
-exclude = ["*.*"]
+exclude = ["tb_svelte", "*.*"]
 
 [patch.crates-io]
 #rocket_oauth2 = {path = "../rocket_oauth2"}

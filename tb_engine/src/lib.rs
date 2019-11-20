@@ -114,7 +114,7 @@ pub fn ignite_rocket () -> rocket::Rocket {
         .attach(Template::fairing())
         .attach(cors)
         // mount all the endpoints from the module
-        .mount("/", rocket_contrib::serve::StaticFiles::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../tb-svelte/public")))
+        .mount("/", rocket_contrib::serve::StaticFiles::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../tb_svelte/public")))
         .mount("/user", user::routes())
         .mount("/types", types::routes())
         .mount("/part", part::routes())
