@@ -1,12 +1,10 @@
 <script>
-	import {beforeUpdate, onDestroy} from 'svelte'
 	import {gear, category} from "./store.js";
 	import ToyGroup from "./ToyGroup.svelte"
 				
 	export let params = {};
 
-	beforeUpdate (() => category.set(params.cat))
-	onDestroy (() => category.set(null))
+	$: category.set(params.cat)
 </script>
 {#if $gear[params.cat]}
 	<ToyGroup parts={$gear[params.cat]} />
