@@ -5,11 +5,11 @@
 	import Category from "./Category.svelte"
 	import Header from "./Header.svelte"
 	import About from "./About.svelte"
-	import fetch_store from './store.js'
+	import fetch_store, {category} from './store.js'
 
 	const routes = {
 		'/about': About,
-    '/:cat?': Category
+    '/': Category
 	}
 
 	let prom = fetch_store();
