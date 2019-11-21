@@ -1,9 +1,8 @@
 <script>
   import {push} from 'svelte-spa-router'
   import active from 'svelte-spa-router/active'
-  import {types, gear} from "./store.js";
+  import {types, gear, category} from "./store.js";
   $: categories = Object.keys($gear) || [];
-  let category;
 </script>
 
 <nav class="navbar navbar-expand-sm navbar-light bg-light mb-2 ">
@@ -15,8 +14,8 @@
   <div class="collapse navbar-collapse" id="navbarSupportedContent">
     <div class="btn-group" role="group" aria-label="Basic example">
       {#each categories as cat}
-        <button class="btn btn-lg btn-secondary {category === cat ? 'active': ''}" 
-                    on:click={() => {category = cat ; push("/" + cat)}}>
+        <button class="btn btn-lg btn-secondary {$category === cat ? 'active': ''}" 
+                    on:click={() => {$category = cat ; push("/" + cat)}}>
           {$types[cat].name || cat}
         </button>
       {/each}
@@ -27,7 +26,7 @@
           <span class="navbar-toggler-icon"></span>
         </a>
         <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdown">
-          <button class="dropdown-item" on:click={() => {category = null ; push("/About")}}> About</button>
+          <button class="dropdown-item" on:click={() => {$category = null ; push("/About")}}> About</button>
           <!-- <a class="dropdown-item" href="#">Another action</a>
           <div class="dropdown-divider"></div>
           <a class="dropdown-item" href="#">Something else here</a> -->

@@ -23,6 +23,7 @@ export default function fetch_store () {
 
 export const types = writable([]);
 export const gear = writable([]);
+export const category = writable(undefined);
 
 
 
