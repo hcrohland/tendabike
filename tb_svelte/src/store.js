@@ -10,11 +10,11 @@ function handleErrors(response) {
 
 export default function fetch_store () { 
     return Promise.all([
-		fetch('http://localhost:8000/types/part')
+		fetch('/types/part')
 			.then(handleErrors)
 			.then(response => response.json())
 			.then(data => types.set(data)),
-		fetch(`http://localhost:8000/part/mygear`)
+		fetch(`/part/mygear`)
 			.then(handleErrors)
 			.then(response => response.json())
             .then(data => gear.set(_.groupBy(data, "what")))
