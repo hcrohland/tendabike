@@ -15,11 +15,11 @@
 	let prom = fetch_store();
 </script>
 
-<Header />
 
 {#await prom}
 	loading data...
 {:then data}
+	<Header/>
 	<div class="container">
 		<Router {routes} />
 	</div>
