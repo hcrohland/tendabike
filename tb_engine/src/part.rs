@@ -150,61 +150,59 @@ impl PartId {
     }
 }
 
-impl Part {
+fn categories (user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartTypeId>> {
+    use crate::schema::parts::dsl::*;
+    let types = types::main_types(conn)?;
 
-    /// retrieve the list of available parts for a user
-    /// 
-    /// it only returns parts which are not attached
-    /// if parameter main is true it returns all gear, which can be used for activities
-    /// If parameter main is false it returns the list of spares which can be attached to gear
-    fn parts_by_user (user: &dyn Person, main: bool, conn: &AppConn) -> TbResult<PartList>{
-        use crate::schema::parts::dsl::*;
+    Ok(Part::belonging_to(&types).filter(owner.eq(user.get_id())).select(what).distinct().get_results(conn)?)
+}
 
-        let types = if main {
-            part_types::table
-                .filter(part_types::main.eq(part_types::id))
-                .load::<PartType>(conn)?
-        } else {
-            part_types::table
-                .filter(part_types::main.ne(part_types::id))
-                .load::<PartType>(conn)?
-        };
+/// retrieve the list of available parts for a user
+/// 
+/// it only returns parts which are not attached
+/// if parameter main is true it returns all gear, which can be used for activities
+/// If parameter main is false it returns the list of spares which can be attached to gear
+fn parts_by_user (cat: Option<PartTypeId>, main: bool, user: &dyn Person, conn: &AppConn) -> TbResult<PartList>{
+    use crate::schema::parts::dsl::*;
 
-        let plist = Part::belonging_to(&types) // only gear or spares
-            .filter(owner.eq(user.get_id()))
-            .order_by(id)
-            .load::<Part>(conn)?;
-        Ok(plist.into_iter()
-            .filter(|x| {
-                attachment::attached_to(x.id, Utc::now(), conn) == x.id // only parts which are not attached
-            }).collect())
+    let mut types = if main {types::main_types(conn)?} else {types::spare_types(conn)?};
+    if let Some(cat) = cat {
+        types.retain(|x| {x.main == cat});
     }
+    let plist = Part::belonging_to(&types) // only gear or spares
+        .filter(owner.eq(user.get_id()))
+        .order_by(id)
+        .load::<Part>(conn)?;
+    Ok(plist.into_iter()
+        .filter(|x| {
+            attachment::attached_to(x.id, Utc::now(), conn) == x.id // only parts which are not attached
+        }).collect())
+}
 
-    /// reset all usage counters for all parts of a person
-    /// 
-    /// returns the list of main gears affected
-    pub fn reset (user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartId>> {
-        use schema::parts::dsl::*;
-        use std::collections::HashSet;
-        
-        // reset all counters for all parts of this user
-        let part_list = diesel::update(parts.filter(owner.eq(user.get_id())))
-            .set((  time.eq(0),
-                    climb.eq(0),
-                    descend.eq(0),
-                    distance.eq(0),
-                    count.eq(0)))
-            .get_results::<Part>(conn)?;
+/// reset all usage counters for all parts of a person
+/// 
+/// returns the list of main gears affected
+pub fn reset (user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartId>> {
+    use schema::parts::dsl::*;
+    use std::collections::HashSet;
+    
+    // reset all counters for all parts of this user
+    let part_list = diesel::update(parts.filter(owner.eq(user.get_id())))
+        .set((  time.eq(0),
+                climb.eq(0),
+                descend.eq(0),
+                distance.eq(0),
+                count.eq(0)))
+        .get_results::<Part>(conn)?;
 
-        // get the main types
-        let mains: HashSet<PartTypeId> = part_types::table.select(part_types::id).filter(part_types::main.eq(part_types::id))
-            .load::<PartTypeId>(conn).expect("error loading PartType").into_iter().collect();
+    // get the main types
+    let mains: HashSet<PartTypeId> = part_types::table.select(part_types::id).filter(part_types::main.eq(part_types::id))
+        .load::<PartTypeId>(conn).expect("error loading PartType").into_iter().collect();
 
-        // only return the main parts
-        Ok(part_list.into_iter()
-            .filter(|x| mains.contains(&x.what)).map(|x| x.id)
-            .collect())
-    }
+    // only return the main parts
+    Ok(part_list.into_iter()
+        .filter(|x| mains.contains(&x.what)).map(|x| x.id)
+        .collect())
 }
 
 
@@ -251,14 +249,29 @@ fn post(newpart: Json<NewPart>, user: &User, conn: AppDbConn)
     Ok (status::Created(url.to_string(), Some(Json(id))))
 } 
 
+#[get("/categories")]
+fn mycats(user: &User, conn: AppDbConn) -> ApiResult<Vec<PartTypeId>> {
+    tbapi(categories(user, &conn))
+}
+
 #[get("/mygear")]
-fn mygear(user: &User, conn: AppDbConn) -> ApiResult<PartList> {    
-    tbapi(Part::parts_by_user(user, true, &conn))
+fn allgear(user: &User, conn: AppDbConn) -> ApiResult<PartList> {    
+    tbapi(parts_by_user(None, true, user, &conn))
 }
 
 #[get("/myspares")]
-fn myspares(user: &User, conn: AppDbConn) -> ApiResult<PartList> {    
-    tbapi(Part::parts_by_user(user, false, &conn))
+fn allspares(user: &User, conn: AppDbConn) -> ApiResult<PartList> {    
+    tbapi(parts_by_user(None, false, user, &conn))
+}
+
+#[get("/gear/<cat>")]
+fn mygear(cat: i32, user: &User, conn: AppDbConn) -> ApiResult<PartList> {    
+    tbapi(parts_by_user(Some(cat.into()), true, user, &conn))
+}
+
+#[get("/spares/<cat>")]
+fn myspares(cat: i32, user: &User, conn: AppDbConn) -> ApiResult<PartList> {    
+    tbapi(parts_by_user(Some(cat.into()), false, user, &conn))
 }
 
 #[get("/type/<id>")]
@@ -267,6 +280,6 @@ fn mytype(id: i32,  user: &User, conn: AppDbConn) -> ApiResult<PartList> {
 }
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![get, post, mygear, myspares, mytype
+    routes![get, post, mygear, myspares, mytype, mycats, allgear, allspares
     ]
 }

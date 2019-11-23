@@ -85,6 +85,19 @@ impl PartTypeId{
     }
 }
 
+
+pub(crate) fn main_types (conn: &AppConn) -> TbResult<Vec<PartType>> {
+    Ok(part_types::table
+        .filter(part_types::main.eq(part_types::id))
+        .load(conn)?)
+}
+
+pub(crate) fn spare_types (conn: &AppConn) -> TbResult<Vec<PartType>> {
+    Ok(part_types::table
+        .filter(part_types::main.ne(part_types::id))
+        .load(conn)?)
+}
+
 #[get("/part")]
 fn part(_user: &User, conn: AppDbConn) -> Json<HashMap<PartTypeId,PartType>> {
     let types = part_types::table.order(part_types::id).load::<PartType>(&conn.0).expect("error loading PartType");

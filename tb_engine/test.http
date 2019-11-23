@@ -1,15 +1,18 @@
 @host = http://[::1]:8000
-@token = eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE1NzM3MzU2MzIsImV4cCI6MTU3Mzc1NjkzMiwiaWQiOjJ9.vLxuJS4EFCI5E_M7gm6nNNrv8gKvPcKXHyWMemHlcAM
+@token = eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE1NzQ1MjQ1MjUsImV4cCI6MTU3NDU0NTgyNSwiaWQiOjJ9.-IfZKBgZGX_9yCzMxF_RoRtGCsoinxX1Aj8zGjlbaFA
 {{host}}/types/part/2
 Authorization: Bearer {{token}}
 ###
 {{host}}/user
 Authorization: Bearer {{token}}
 ###
-{{host}}/part/mygear 
+{{host}}/part/categories 
 Authorization: Bearer {{token}}
 ###
-{{host}}/part/myspares 
+{{host}}/part/gear/301
+Authorization: Bearer {{token}}
+###
+{{host}}/part/spares/1
 Authorization: Bearer {{token}}
 ###
 {{host}}/attach/assembly/1
