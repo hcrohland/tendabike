@@ -1,5 +1,4 @@
 import {writable} from "svelte/store";
-import _ from 'lodash';
 
 function handleErrors(response) {
     if (!response.ok) {
@@ -8,21 +7,13 @@ function handleErrors(response) {
     return response;
 	}
 
-export default function fetch_store () { 
-    return Promise.all([
-		fetch('/types/part')
-			.then(handleErrors)
-			.then(response => response.json())
-			.then(data => types.set(data)),
-		fetch(`/part/mygear`)
-			.then(handleErrors)
-			.then(response => response.json())
-            .then(data => gear.set(_.groupBy(data, "what")))
-    ])
+export default function myfetch (url) {
+	return fetch(url)
+		.then(handleErrors)
+		.then(response => response.json())
 }
 
 export const types = writable([]);
-export const gear = writable([]);
 export const category = writable(undefined);
 
 

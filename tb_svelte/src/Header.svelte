@@ -1,27 +1,22 @@
 <script>
   import {link, push} from 'svelte-spa-router'
-  import {types, gear, category} from "./store.js";
-  $: categories = Object.keys($gear) || [];
+  import {types, category} from "./store.js";
 </script>
 
 <nav class="navbar navbar-expand-sm navbar-light bg-light mb-2 ">
+    <a class="navbar-brand" href="#/">
+      Tend a 
+      {#if $category}
+       <strong>
+       {$types[$category].name}
+       </strong>
+      {:else}
+        Gear
+      {/if}
+    </a>
   <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
     <span class="navbar-toggler-icon"></span>
   </button>
-  <div class="collapse navbar-collapse" id="navbarSupportedContent">
-    <a class="navbar-brand" href="#/">Tend your </a>
-  </div>
-
-  <!-- Category selector -->
-  <div class="btn-group mr-auto">
-    <select bind:value={$category} class="border-0 custom-select custom-select-lg bg-secondary" id="exampleFormControlSelect1">
-      <option hidden selected> what?</option>
-      {#each categories as cat}
-        <option value="{cat}"> {$types[cat].name}s </option>
-      {/each}
-    </select>
-  </div>
-  
   <!-- More links -->
   <div class="collapse navbar-collapse" id="navbarSupportedContent">
     <ul class="navbar-nav ml-auto">

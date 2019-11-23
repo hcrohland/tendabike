@@ -2,21 +2,24 @@
 	import _ from 'lodash';
 	import Router from 'svelte-spa-router';
 
-	import Category from "./Category.svelte"
+	import ToyGroup from "./ToyGroup.svelte"
 	import Header from "./Header.svelte"
+	import Home from "./Home.svelte"
 	import About from "./About.svelte"
-	import fetch_store, {category} from './store.js'
+	import myfetch, {types} from './store.js'
 
 	const routes = {
 		'/about': About,
-    '/': Category
+		'/': Home,
+    '/:category': ToyGroup
 	}
 
-	let prom = fetch_store();
+	let promise = myfetch('/types/part')
+			.then(data => types.set(data));
 </script>
 
 
-{#await prom}
+{#await promise}
 	loading data...
 {:then data}
 	<Header/>
