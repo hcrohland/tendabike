@@ -1,14 +1,18 @@
 <script>
-  import {link, push} from 'svelte-spa-router'
-  import {types, category} from "./store.js";
+  import {link, push, location} from 'svelte-spa-router'
+  import {types} from "./store.js";
+
+  let crumbs;
+  $: crumbs = $location.split('/');
 </script>
 
 <nav class="navbar navbar-expand-sm navbar-light bg-light mb-2 ">
     <a class="navbar-brand" href="#/">
       Tend a 
-      {#if $category}
+
+      {#if $types[crumbs[1]]}
        <strong>
-       {$types[$category].name}
+       {$types[crumbs[1]].name}
        </strong>
       {:else}
         Gear

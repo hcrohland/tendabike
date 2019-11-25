@@ -1,8 +1,7 @@
 <script>
-import myfetch, {types, icons, category} from './store.js';
+import myfetch, {types, icons} from './store.js';
 
 let promise = myfetch('/part/categories')
-$category = null;
 </script>
 
 {#await promise}

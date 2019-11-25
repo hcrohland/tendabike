@@ -1,12 +1,11 @@
 <script>
   import Gear from './Gear.svelte';
-  import myfetch, {category} from './store.js';
+  import myfetch from './store.js';
   
   export let params;
 
   let promise = myfetch("/part/gear/" + params.category)
 
-  $: $category = params.category;
 </script>
 
 {#await promise}

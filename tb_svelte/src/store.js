@@ -14,7 +14,6 @@ export default function myfetch (url) {
 }
 
 export const types = writable([]);
-export const category = writable(undefined);
 export const icons = {
     "1": "flaticon-mountain-bike",
     "301": "flaticon-run",
