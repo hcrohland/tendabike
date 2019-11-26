@@ -1,4 +1,4 @@
-{% extends "base" %}
+{% extends "base_s" %}
 
 {% block content %}
     <h1>Hi {{user.firstname}} {{user.lastname}}</h1>
@@ -13,11 +13,11 @@
         </tr>
             {% for s in activities %}
                 <tr>
-                    <td> <a href="/user/plain/activity/{{ s.id }}"> {{ s.name }} </a>
+                    <td> <a href="/plain/activity/{{ s.id }}"> {{ s.name }} </a>
                     <td> {{ s.start_date_local | date(format="%A, %_d. %h %Y, %k:%M")}} 
                     <td> 
                     {% if s.gear_id %}
-                        <a href="/user/plain/gear/{{ s.gear_id }}"> {{gears[s.gear_id].name }} </a>
+                        <a href="/plain/gear/{{ s.gear_id }}"> {{gears[s.gear_id].name }} </a>
                     {% endif %}
                 </tr>
             {% endfor %}

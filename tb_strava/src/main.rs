@@ -32,7 +32,7 @@ const TB_URI: &str = "http://localhost:8000";
 type AppConn = diesel::PgConnection;
 
 #[database("strava_db")]
-pub struct AppDbConn(AppConn);
+pub struct StravaDbConn(AppConn);
 
 pub struct Config {
     pub client_id: String,
@@ -83,6 +83,7 @@ fn init_logging (){
 
 fn init_environment () {
     dotenv::dotenv().expect("Couldn't read environment");
+    dotenv::from_filename(".secrets").expect("Couldn't read secrets");
 
     init_logging();       
 }
@@ -94,7 +95,7 @@ pub fn ignite_rocket () -> rocket::Rocket {
         // add config object
         .manage(Config::default())
         // add database pool
-        .attach(AppDbConn::fairing())
+        .attach(StravaDbConn::fairing())
         // add oauth2 flow
         .attach(auth::fairing())
         // add Template support
