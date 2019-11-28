@@ -1,9 +1,9 @@
-{% extends "base_s" %}
+{% extends "strava_base" %}
 
 {% block content %}
-    <h1>Hi {{user.firstname}} {{user.lastname}}</h1>
+    <h2>Hi <a href="user">{{user.firstname}} {{user.lastname}}</a></h2>
 
-    <h2>Here are your activities:</h2>
+    <h3>Here are your activities:</h3>
     
     <table >
         <tr>
@@ -13,21 +13,22 @@
         </tr>
             {% for s in activities %}
                 <tr>
-                    <td> <a href="/plain/activity/{{ s.id }}"> {{ s.name }} </a>
+                    <td> <a href="activity/{{ s.id }}"> {{ s.name }} </a>
                     <td> {{ s.start_date_local | date(format="%A, %_d. %h %Y, %k:%M")}} 
                     <td> 
                     {% if s.gear_id %}
-                        <a href="/plain/gear/{{ s.gear_id }}"> {{gears[s.gear_id].name }} </a>
+                        <a href="gear/{{ s.gear_id }}"> {{gears[s.gear_id].name }} </a>
                     {% endif %}
                 </tr>
             {% endfor %}
     </table> 
 
+    <p>
     <ul>
         {% for id, gear in gears %}
             <li>
                 {% if gear.id %}
-                    <a href="/user/plain/gear/{{ gear.id }}">{{gear.name}}</a> is a {{gear.brand_name}} {{gear.model_name}} which you used for {{gear.distance / 1000 | round(method="floor", precision=0)}} km
+                    <a href="gear/{{ gear.id }}">{{gear.name}}</a> is a {{gear.brand_name}} {{gear.model_name}} which you used for {{gear.distance / 1000 | round(method="floor", precision=0)}} km
                 {% endif %}
             </li>
         {% endfor%}

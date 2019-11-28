@@ -21,9 +21,8 @@ use tb_common::*;
 pub(crate) use anyhow::Context;
 
 pub mod auth;
-pub mod user;
+pub mod ui;
 pub mod schema;
-pub mod tb;
 pub mod activity;
 pub mod gear;
 
@@ -105,8 +104,7 @@ pub fn ignite_rocket () -> rocket::Rocket {
         // mount all the endpoints from the module
         .mount("/", rocket_contrib::serve::StaticFiles::from(concat!(env!("CARGO_MANIFEST_DIR"), "/www")))
         // .mount("/auth", auth::routes())
-        .mount("/", user::routes())
-        .mount("/", tb::routes())
+        .mount("/", ui::routes())
         // .mount("/activ", activity::routes())
         // .mount("/attach", attachment::routes())
 }
