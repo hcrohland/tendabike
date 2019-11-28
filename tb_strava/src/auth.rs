@@ -184,6 +184,14 @@ impl User {
     }
 }
 
+pub(crate) fn strava_url (who: i32, user: &User) -> TbResult<String> {
+    use schema::users::dsl::*;
+ 
+    let g: i32 = users.filter(tendabike_id.eq(who)).select(id).first(user.conn())?;
+    
+    Ok(format!("https://strava.com/athletes/{}", &g))
+}
+
 impl<'a, 'r> FromRequest<'a, 'r> for User {
     type Error = Redirect;
 

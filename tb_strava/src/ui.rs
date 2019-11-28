@@ -3,6 +3,7 @@ use auth::User;
 use rocket_contrib::templates::Template;
 use std::collections::HashMap;
 use activity::*;
+use rocket::response::Redirect;
 
 fn next_activities(user: &User, per_page: Option<i32>) -> TbResult<Vec<StravaActivity>> {
 
@@ -10,6 +11,31 @@ fn next_activities(user: &User, per_page: Option<i32>) -> TbResult<Vec<StravaAct
     // let r = user.request("/activities?per_page=2")?;
     let acts: Vec<StravaActivity> = serde_json::from_str(&r)?;
     Ok(acts)
+}
+
+
+#[get("/bikes/<id>")]
+fn redirect_gear (id: i32, user: User) -> Option<Redirect> {
+    gear::strava_url(id, &user).map_or_else(
+        |_| None, 
+        |x| Some(Redirect::permanent(x))
+    )
+}
+
+#[get("/activities/<id>")]
+fn redirect_act (id: i32, user: User) -> Option<Redirect> {
+    activity::strava_url(id, &user).map_or_else(
+        |_| None, 
+        |x| Some(Redirect::permanent(x))
+    )
+}
+
+#[get("/users/<id>")]
+fn redirect_user (id: i32, user: User) -> Option<Redirect> {
+    auth::strava_url(id, &user).map_or_else(
+        |_| None, 
+        |x| Some(Redirect::permanent(x))
+    )
 }
 
 #[get("/next?<batch>")]
@@ -76,6 +102,6 @@ fn gear(id: String, user: User) -> ApiResult<Value> {
 }
 
 pub fn routes () -> Vec<rocket::Route> {
-    routes![read, activities, gear, activity, overview, sync, next
+    routes![read, activities, gear, activity, overview, sync, next, redirect_gear, redirect_act, redirect_user
     ]
 }

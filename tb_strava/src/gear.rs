@@ -58,6 +58,16 @@ pub struct Gear {
         user_id: i32,
 }
 
+pub(crate) fn strava_url (gear: i32, user: &User) -> TbResult<String> {
+    use schema::gears::dsl::*;
+ 
+    let mut g: String = gears.filter(tendabike_id.eq(gear)).select(id).first(user.conn())?;
+    if g.remove(0) != 'b' {
+        bail!("Not found");
+    }
+
+    Ok(format!("https://strava.com/bikes/{}", &g))
+}
 
 impl StravaGear {
     pub fn into_tb (self, user: &User) -> TbResult<TbGear> {

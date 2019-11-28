@@ -165,3 +165,10 @@ impl StravaActivity{
 
 }
 
+pub(crate) fn strava_url (act: i32, user: &User) -> TbResult<String> {
+    use schema::activities::dsl::*;
+ 
+    let g: i64 = activities.filter(tendabike_id.eq(act)).select(id).first(user.conn())?;
+
+    Ok(format!("https://strava.com/activities/{}", &g))
+}
