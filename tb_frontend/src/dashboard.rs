@@ -58,7 +58,6 @@ fn part_post (data: Form<NewPart>, user: User) -> TbResult<Redirect> {
     data.purchase.push_str("T12:00:00Z");
     let id = token::id_unsafe(&user.0)?;
     data.owner = Some(id);
-    dbg!(&data);
     let res = user.request(Method::POST, "/part", serde_json::to_string(&data)?)?.as_i64().ok_or_else(|| anyhow!("No id returned)"))?;
     Ok(Redirect::to(format!("/part/{}", res)))
 }
