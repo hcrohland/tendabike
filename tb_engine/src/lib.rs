@@ -1,4 +1,4 @@
-#![feature(proc_macro_hygiene, decl_macro, result_map_or_else)]
+#![feature(proc_macro_hygiene, decl_macro)]
 #![feature(drain_filter)]
 #![warn(clippy::all)]
 
