@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 tb_common = { path = "../tb_common" }
+tb_strava = { path = "../tb_strava" }
 rocket = "0.4.2"
 rocket_cors = "0.5"
 diesel = { version = "1.4.3", features = ["postgres", "chrono"] }

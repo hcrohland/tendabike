@@ -56,6 +56,7 @@ use activity::Activity;
 pub mod attachment;
 
 extern crate tb_common;
+extern crate tb_strava;
 pub use tb_common::error::*;
 pub use tb_common::*;
 
@@ -106,7 +107,7 @@ pub fn ignite_rocket () -> rocket::Rocket {
     }
     .to_cors().expect("Could not set CORS options");
 
-    rocket::ignite()
+    let ship = rocket::ignite()
        // add config object
         .manage(Config::default())
         // add database pool
@@ -119,7 +120,8 @@ pub fn ignite_rocket () -> rocket::Rocket {
         .mount("/types", types::routes())
         .mount("/part", part::routes())
         .mount("/activ", activity::routes())
-        .mount("/attach", attachment::routes())
+        .mount("/attach", attachment::routes());
+    tb_strava::attach_rocket(ship)
 }
 
 fn init_logging (){

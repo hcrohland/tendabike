@@ -221,7 +221,7 @@ type OAuth = OAuth2<Callback>;
 
 pub fn fairing () -> impl rocket::fairing::Fairing {
 
-    let config = OAuthConfig::new(PROVIDER, CLIENT_ID.to_string(), CLIENT_SECRET.to_string(), "http://localhost:8001/token".into());
+    let config = OAuthConfig::new(PROVIDER, CLIENT_ID.to_string(), CLIENT_SECRET.to_string(), "http://localhost:8000/token".into());
 
     // Strava uses "," instead of the standard Space as a delimter for scopes :-(
     OAuth2::custom(HyperSyncRustlsAdapter, Callback {}, config, "/token", Some(("/login", vec!["activity:read_all,profile:read_all".to_string()])))
