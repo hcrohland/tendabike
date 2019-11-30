@@ -124,7 +124,7 @@ impl User {
         let user: DbUser = users::table.filter(users::tendabike_id.eq(id)).get_result(&conn.0).context("user not registered")?;
 
         if user.expires_at > time::get_time().sec {
-            return Ok(User {user: user, conn});
+            return Ok(User {user, conn});
         }
 
         info! ("refreshing access token");
