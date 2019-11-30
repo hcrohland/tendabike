@@ -236,12 +236,3 @@ pub fn fairing () -> impl rocket::fairing::Fairing {
     // Strava uses "," instead of the standard Space as a delimter for scopes :-(
     OAuth2::custom(HyperSyncRustlsAdapter, Callback {}, config, "/token", Some(("/login", vec!["activity:read_all,profile:read_all".to_string()])))
 }
-
-#[catch(401)]
-fn not_authorized(_req: &Request) -> Redirect { 
-    Redirect::to("/login")
-}
-
-pub fn catchers () -> Vec<Catcher> {
-    catchers![not_authorized]
-}

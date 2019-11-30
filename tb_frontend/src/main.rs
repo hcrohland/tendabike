@@ -17,6 +17,9 @@ extern crate reqwest;
 extern crate anyhow;
 pub use anyhow::Context;
 
+use rocket::request::Request;
+use rocket::response::Redirect;
+
 extern crate tb_common;
 use tb_common::*;
 
@@ -67,6 +70,12 @@ fn init_environment () {
     init_logging();       
 }
 
+#[catch(401)]
+fn not_authorized(_req: &Request) -> Redirect { 
+    Redirect::to("/login")
+}
+
+
 pub fn ignite_rocket () -> rocket::Rocket {
     dotenv::dotenv().ok();
     // Initialize server
@@ -75,6 +84,8 @@ pub fn ignite_rocket () -> rocket::Rocket {
         .manage(Config::default())
         // add Template support
         .attach(Template::fairing())
+        // redirects catcher
+        .register(catchers![not_authorized])
         // mount all the endpoints from the module
         .mount("/user", user::routes())
         .mount("/", dashboard::routes())

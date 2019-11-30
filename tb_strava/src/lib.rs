@@ -57,7 +57,5 @@ pub fn attach_rocket (ship: rocket::Rocket) -> rocket::Rocket {
         .attach(StravaDbConn::fairing())
         // add oauth2 flow
         .attach(auth::fairing())
-        // redirects catcher
-        .register(auth::catchers())
         .mount("/strava", ui::routes())
 }
