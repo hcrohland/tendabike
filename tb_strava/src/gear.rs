@@ -99,7 +99,7 @@ impl TbGear {
         let client = reqwest::Client::new();
 
         let res: i32 = client.post(&format!("{}{}", TB_URI, "/part"))
-            .bearer_auth(&user.token)
+            .bearer_auth(user.token())
             .json(self)
             .send().context("Could not contact engine")?
             .error_for_status().context("Engine returned error")?

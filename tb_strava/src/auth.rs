@@ -77,7 +77,7 @@ impl DbUser {
     }
 
     /// Updates the user data from a new token 
-    fn store(self, request: &Request, token: TokenResponse) -> TbResult<(Self, String)> {
+    fn store(self, request: &Request, token: TokenResponse) -> TbResult<Self> {
         use schema::users::dsl::*;
         use time::*;
 
@@ -93,16 +93,15 @@ impl DbUser {
                     ))
                     .get_result(conn).context("Could not store user")?;
 
-        let token = token::store(request, db_user.tendabike_id, iat, exp);
+        token::store(request, db_user.tendabike_id, iat, exp);
                 
-        Ok((db_user, token))
+        Ok(db_user)
     }
 }
 
 pub struct User {
     user: DbUser,
     conn: StravaDbConn,
-    pub token: String
 }
 
 /// User request guard
@@ -125,20 +124,23 @@ impl User {
         let user: DbUser = users::table.filter(users::tendabike_id.eq(id)).get_result(&conn.0).context("user not registered")?;
 
         if user.expires_at > time::get_time().sec {
-            return Ok(User {user, conn, token});
+            return Ok(User {user: user, conn});
         }
 
         info! ("refreshing access token");
         let auth = request.guard::<State<OAuth>>().expect("No oauth struct!!!");
         let tokenset = auth.refresh(&user.refresh_token).context("could not refresh access token")?;
         
-        let (user,token) = user.store(request, tokenset)?;
+        let user = user.store(request, tokenset)?;
 
         Ok(User{
             user,
-            token,
             conn
         })
+    }
+
+    pub fn token(&self) -> &str {
+        &self.user.access_token
     }
 
     /// send an API call with an authenticated User
@@ -146,7 +148,7 @@ impl User {
     pub fn request(&self, uri: &str) -> TbResult<String> {
         let client = reqwest::Client::new();
         Ok(client.get(&format!("{}{}", API_URI, uri))
-            .bearer_auth(&self.user.access_token)
+            .bearer_auth(self.token())
             .send().context("Could not reach strava")?
             .text().context("Could not get response body")?)
     }
@@ -154,7 +156,7 @@ impl User {
     pub fn request_json(&self, uri: &str) -> TbResult<Value> {
         let client = reqwest::Client::new();
         Ok(client.get(&format!("{}{}", API_URI, uri))
-            .bearer_auth(&self.user.access_token)
+            .bearer_auth(self.token())
             .send().context("Could not reach strava")?
             .json().context("Could not parse response body")?)
     }
