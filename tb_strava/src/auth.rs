@@ -20,17 +20,17 @@ use diesel::{
 
 use schema::users;
 
-const PROVIDER: rocket_oauth2::StaticProvider = rocket_oauth2::StaticProvider 
+const STRAVA: rocket_oauth2::StaticProvider = rocket_oauth2::StaticProvider 
 {
     auth_uri: std::borrow::Cow::Borrowed("https://www.strava.com/oauth/authorize"),
     token_uri: std::borrow::Cow::Borrowed("https://www.strava.com/oauth/token")
 };
 
-const API_URI: &str = "https://www.strava.com/api/v3";
+const STRAVA_URI: &str = "https://www.strava.com/api/v3";
 
 lazy_static! {
-    static ref CLIENT_ID: String = std::env::var("CLIENT_ID").expect("Couldn't read var CLIENT_ID");
-    static ref CLIENT_SECRET: String = std::env::var("CLIENT_SECRET").expect("Couldn't read var CLIENT_SECRET");
+    static ref STRAVA_ID: String = std::env::var("STRAVA_ID").expect("Couldn't read var STRAVA_ID");
+    static ref STRAVA_SECRET: String = std::env::var("STRAVA_SECRET").expect("Couldn't read var STRAVA_SECRET");
 }
 
 #[derive(Queryable, Insertable, Identifiable, Debug)]
@@ -147,7 +147,7 @@ impl User {
     /// 
     pub fn request(&self, uri: &str) -> TbResult<String> {
         let client = reqwest::Client::new();
-        Ok(client.get(&format!("{}{}", API_URI, uri))
+        Ok(client.get(&format!("{}{}", STRAVA_URI, uri))
             .bearer_auth(self.token())
             .send().context("Could not reach strava")?
             .text().context("Could not get response body")?)
@@ -155,7 +155,7 @@ impl User {
 
     pub fn request_json(&self, uri: &str) -> TbResult<Value> {
         let client = reqwest::Client::new();
-        Ok(client.get(&format!("{}{}", API_URI, uri))
+        Ok(client.get(&format!("{}{}", STRAVA_URI, uri))
             .bearer_auth(self.token())
             .send().context("Could not reach strava")?
             .json().context("Could not parse response body")?)
@@ -208,17 +208,17 @@ impl<'a, 'r> FromRequest<'a, 'r> for User {
 }
 
 
-// We need a struct Callback to identify its type
+// We need a struct Strava to identify its type
 // which is needed to retrieve the request guard
 #[derive(Debug)]
-struct Callback;
+struct Strava;
 
-impl rocket_oauth2::Callback for Callback {
+impl rocket_oauth2::Callback for Strava {
     type Responder = TbResult<Redirect>;
     fn callback(&self, request: &Request, token: TokenResponse)
         -> TbResult<Redirect>
     {
-        info!("Callback got scope {:?}", token.scope());
+        info!("Strava got scope {:?}", token.scope());
         let athlete = token.as_value().get("athlete").ok_or(StravaError::Authorize("token did not include athlete"))?;
     
         DbUser::retrieve(request, athlete)?
@@ -227,12 +227,12 @@ impl rocket_oauth2::Callback for Callback {
     }
 }
 
-type OAuth = OAuth2<Callback>;
+type OAuth = OAuth2<Strava>;
 
 pub fn fairing () -> impl rocket::fairing::Fairing {
 
-    let config = OAuthConfig::new(PROVIDER, CLIENT_ID.to_string(), CLIENT_SECRET.to_string(), "http://localhost:8000/token".into());
+    let config = OAuthConfig::new(STRAVA, STRAVA_ID.to_string(), STRAVA_SECRET.to_string(), "http://localhost:8000/token".into());
 
     // Strava uses "," instead of the standard Space as a delimter for scopes :-(
-    OAuth2::custom(HyperSyncRustlsAdapter, Callback {}, config, "/token", Some(("/login", vec!["activity:read_all,profile:read_all".to_string()])))
+    OAuth2::custom(HyperSyncRustlsAdapter, Strava {}, config, "/token", Some(("/login", vec!["activity:read_all,profile:read_all".to_string()])))
 }
