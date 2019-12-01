@@ -96,7 +96,7 @@ pub mod token {
         bail!("No token provided")
     }
 
-    pub fn store (request: &Request, id: i32, iat: i64, exp: i64) {
+    pub fn store (request: &Request, id: i32, iat: i64, exp: i64) -> String{
 
         let my_claims = UserToken {iat, exp, id};
         let jwt = encode(&Header::default(), &my_claims, MY_SECRET).expect("Could not encode jwt");
@@ -107,5 +107,6 @@ pub mod token {
         
         let mut cookie_store = request.guard::<Cookies>().expect("request cookies");
         cookie_store.add(token);
+        jwt
     }
 }
