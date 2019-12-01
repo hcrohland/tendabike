@@ -19,10 +19,10 @@
 </script>
 
 
+<Header/>
 {#await promise}
 	loading data...
 {:then data}
-	<Header/>
 	<div class="container">
 		<Router {routes} />
 	</div>
