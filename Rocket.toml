@@ -6,5 +6,5 @@ secret_key="8two500UmM6efszt3zcVt6WDhmWOZwvVItuM9LF33iE="
 
 [global.databases]
 app_db={url="postgres://localhost/tendabike3"}
-strava_db={url="postgres://localhost/strava"}
+auth_db={url="postgres://localhost/strava"}
 

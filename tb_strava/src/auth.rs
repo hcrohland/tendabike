@@ -33,8 +33,8 @@ struct DbUser {
 impl DbUser {
     fn retrieve (request: &Request, athlete: &serde_json::value::Value) -> TbResult<Self> {    
         info!("got athlete {} {}, with id {}", athlete["firstname"], athlete["lastname"], athlete["id"]);
-        let conn = request.guard::<StravaDbConn>().expect("internal db missing!!!").0;
-        let strava_id = athlete["id"].as_i64().ok_or(StravaError::Authorize("athlet id is no int"))? as i32;
+        let conn = request.guard::<AppDbConn>().expect("internal db missing!!!").0;
+        let strava_id = athlete["id"].as_i64().ok_or(OAuthError::Authorize("athlet id is no int"))? as i32;
 
         let user = users::table.find(strava_id).get_result::<DbUser>(&conn);
         match user {
@@ -67,7 +67,7 @@ impl DbUser {
         use schema::users::dsl::*;
         use time::*;
 
-        let conn: &AppConn = &request.guard::<StravaDbConn>().expect("No db connection");
+        let conn: &AppConn = &request.guard::<AppDbConn>().expect("No db connection");
         let iat = get_time().sec;
         let exp = token.expires_in().unwrap() as i64 + iat - 300; // 5 Minutes buffer
         let db_user: DbUser = 
@@ -87,7 +87,7 @@ impl DbUser {
 
 pub struct User {
     user: DbUser,
-    conn: StravaDbConn,
+    conn: AppDbConn,
 }
 
 /// User request guard
@@ -106,7 +106,7 @@ impl User {
         let token = token::token(request)?;
         let id = token::id_unsafe(&token)?;
         // Get the user
-        let conn = request.guard::<StravaDbConn>().expect("internal db missing!!!");
+        let conn = request.guard::<AppDbConn>().expect("internal db missing!!!");
         let user: DbUser = users::table.filter(users::tendabike_id.eq(id)).get_result(&conn.0).context("user not registered")?;
 
         if user.expires_at > time::get_time().sec {
@@ -225,7 +225,7 @@ pub mod strava {
         -> TbResult<Redirect>
         {
             info!("Strava got scope {:?}", token.scope());
-            let athlete = token.as_value().get("athlete").ok_or(StravaError::Authorize("token did not include athlete"))?;
+            let athlete = token.as_value().get("athlete").ok_or(OAuthError::Authorize("token did not include athlete"))?;
             
             auth::DbUser::retrieve(request, athlete)?
                 .store(request, token)?;

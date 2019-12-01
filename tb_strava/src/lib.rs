@@ -30,11 +30,11 @@ const TB_URI: &str = "http://localhost:8000";
 
 type AppConn = diesel::PgConnection;
 
-#[database("strava_db")]
-pub struct StravaDbConn(AppConn);
+#[database("auth_db")]
+pub struct AppDbConn(AppConn);
 
 #[derive(Error, Debug)]
-pub enum StravaError {
+pub enum OAuthError {
     #[error("authorization needed: {0}")]
     Authorize(&'static str),
 }
@@ -43,7 +43,7 @@ pub fn attach_rocket (ship: rocket::Rocket) -> rocket::Rocket {
     dotenv::from_filename(".secrets").expect("Couldn't read secrets");
     ship
         // add database pool
-        .attach(StravaDbConn::fairing())
+        .attach(AppDbConn::fairing())
         // add oauth2 flow
         .attach(auth::strava::fairing())
         .mount("/strava", ui::routes())
