@@ -209,6 +209,7 @@ pub mod strava {
     lazy_static! {
         static ref CLIENT_ID: String = std::env::var("STRAVA_ID").expect("Couldn't read var STRAVA_ID");
         static ref CLIENT_SECRET: String = std::env::var("STRAVA_SECRET").expect("Couldn't read var STRAVA_SECRET");
+        static ref CLIENT_CALLBACK: String = std::env::var("STRAVA_CALLBACK").expect("Couldn't read var STRAVA_SECRET");
     }
     
     
@@ -235,7 +236,7 @@ pub mod strava {
     
     pub fn fairing () -> impl rocket::fairing::Fairing {
         
-        let config = OAuthConfig::new(PROVIDER, CLIENT_ID.to_string(), CLIENT_SECRET.to_string(), "http://localhost:8000/token".into());
+        let config = OAuthConfig::new(PROVIDER, CLIENT_ID.to_string(), CLIENT_SECRET.to_string(), CLIENT_CALLBACK.to_string());
         
         // Strava uses "," instead of the standard Space as a delimter for scopes :-(
             OAuth2::custom(HyperSyncRustlsAdapter, Strava {}, config, "/token", Some(("/login", vec!["activity:read_all,profile:read_all".to_string()])))
