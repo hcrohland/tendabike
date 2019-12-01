@@ -19,7 +19,6 @@ extern crate tb_common;
 use tb_common::*;
 
 pub(crate) use anyhow::Context;
-use std::env;
 
 pub mod auth;
 pub mod ui;
@@ -34,11 +33,6 @@ type AppConn = diesel::PgConnection;
 #[database("strava_db")]
 pub struct StravaDbConn(AppConn);
 
-pub struct Config {
-    pub client_id: String,
-    pub client_secret: String,
-}
-
 #[derive(Error, Debug)]
 pub enum StravaError {
     #[error("authorization needed: {0}")]
@@ -48,14 +42,9 @@ pub enum StravaError {
 pub fn attach_rocket (ship: rocket::Rocket) -> rocket::Rocket {
     dotenv::from_filename(".secrets").expect("Couldn't read secrets");
     ship
-        // add config object
-        .manage(Config {
-            client_id:      env::var("CLIENT_ID").expect("Couldn't read var CLIENT_ID"),
-            client_secret:  env::var("CLIENT_SECRET").expect("Couldn't read var CLIENT_SECRET"),
-        })
         // add database pool
         .attach(StravaDbConn::fairing())
         // add oauth2 flow
-        .attach(auth::fairing())
+        .attach(auth::strava::fairing())
         .mount("/strava", ui::routes())
 }
