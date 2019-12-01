@@ -1,11 +1,15 @@
 import {writable} from "svelte/store";
 
 function handleErrors(response) {
-    if (!response.ok) {
-        throw Error(response.status + ' "' + response.statusText + '" accessing ' + response.url);
+    if (response.ok) {
+        return response;
     }
-    return response;
-	}
+
+    if (response.status === 401) {
+        window.location.replace("/login");
+    }
+    throw Error(response.status + ' "' + response.statusText + '" accessing ' + response.url);
+}
 
 export default function myfetch (url) {
 	return fetch(url)
