@@ -2,44 +2,39 @@
 #![feature(drain_filter)]
 #![warn(clippy::all)]
 
-#[macro_use] 
+#[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
-#[macro_use] 
+#[macro_use]
 extern crate rocket;
-#[macro_use] 
+#[macro_use]
 extern crate rocket_contrib;
 extern crate rocket_cors;
 
-#[macro_use] 
+#[macro_use]
 extern crate diesel;
-#[macro_use] 
+#[macro_use]
 extern crate diesel_derive_newtype;
 
-#[macro_use] 
+#[macro_use]
 extern crate newtype_derive;
-#[macro_use] 
+#[macro_use]
 extern crate log;
-#[macro_use] 
+#[macro_use]
 extern crate anyhow;
-extern crate simplelog;
 extern crate chrono;
+extern crate simplelog;
 
 extern crate dotenv;
 
 use self::diesel::prelude::*;
 use rocket_contrib::templates::Template;
 
-use simplelog::{
-    CombinedLogger,
-    LevelFilter,
-    TermLogger,
-    WriteLogger,
-};
+use simplelog::{CombinedLogger, LevelFilter, TermLogger, WriteLogger};
 
+use std::cmp::min;
 use std::env;
 use std::fs::File;
-use std::cmp::min;
 
 pub mod schema;
 pub mod user;
@@ -48,7 +43,7 @@ pub mod types;
 use types::*;
 
 pub mod part;
-use part::{PartId};
+use part::PartId;
 
 pub mod activity;
 use activity::Activity;
@@ -62,12 +57,7 @@ pub use tb_common::*;
 
 use anyhow::Context;
 
-use chrono::{
-    Utc,
-    Local,
-    DateTime,
-    TimeZone
-};
+use chrono::{DateTime, Local, TimeZone, Utc};
 
 type AppConn = diesel::PgConnection;
 
@@ -84,18 +74,17 @@ impl Default for Config {
             Ok(val) => val,
             Err(_e) => String::from("Hello, want to tend your bikes?"),
         };
-        Config {
-            greeting: greet,
-        }
+        Config { greeting: greet }
     }
 }
 
-pub fn ignite_rocket () -> rocket::Rocket {
+pub fn ignite_rocket() -> rocket::Rocket {
     use rocket_cors::*;
     dotenv::dotenv().ok();
     // Initialize server
 
-    let allowed_origins = AllowedOrigins::some_exact(&["http://localhost:5000", "http://127.0.0.1:5000"]);
+    let allowed_origins =
+        AllowedOrigins::some_exact(&["http://localhost:5000", "http://127.0.0.1:5000"]);
 
     // You can also deserialize this
     let cors = rocket_cors::CorsOptions {
@@ -105,17 +94,24 @@ pub fn ignite_rocket () -> rocket::Rocket {
         allow_credentials: true,
         ..Default::default()
     }
-    .to_cors().expect("Could not set CORS options");
+    .to_cors()
+    .expect("Could not set CORS options");
 
     let ship = rocket::ignite()
-       // add config object
+        // add config object
         .manage(Config::default())
         // add database pool
         .attach(AppDbConn::fairing())
         .attach(Template::fairing())
         .attach(cors)
         // mount all the endpoints from the module
-        .mount("/", rocket_contrib::serve::StaticFiles::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../tb_svelte/public")))
+        .mount(
+            "/",
+            rocket_contrib::serve::StaticFiles::from(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../tb_svelte/public"
+            )),
+        )
         .mount("/user", user::routes())
         .mount("/types", types::routes())
         .mount("/part", part::routes())
@@ -124,10 +120,15 @@ pub fn ignite_rocket () -> rocket::Rocket {
     tb_strava::attach_rocket(ship)
 }
 
-fn init_logging (){
-    const LOGFILE_NAME: & str = "tendabike.log";
+fn init_logging() {
+    const LOGFILE_NAME: &str = "tendabike.log";
     CombinedLogger::init(vec![
-        TermLogger::new(LevelFilter::Info, simplelog::Config::default(), simplelog::TerminalMode::Stdout).expect("Couldn't get terminal logger"),
+        TermLogger::new(
+            LevelFilter::Info,
+            simplelog::Config::default(),
+            simplelog::TerminalMode::Stdout,
+        )
+        .expect("Couldn't get terminal logger"),
         WriteLogger::new(
             LevelFilter::Debug,
             simplelog::Config::default(),
@@ -135,13 +136,12 @@ fn init_logging (){
         ),
     ])
     .expect("Can't get logger.");
-
 }
 
-pub fn init_environment () {
+pub fn init_environment() {
     dotenv::dotenv().ok();
 
-    init_logging();       
+    init_logging();
 }
 
 pub struct Usage {
@@ -150,13 +150,13 @@ pub struct Usage {
     // usage time
     pub time: i32,
     /// Usage distance
-	pub distance: i32,
-	/// Overall climbing
+    pub distance: i32,
+    /// Overall climbing
     pub climb: i32,
     /// Overall descending
-	pub descend: i32,
+    pub descend: i32,
     /// Overall descending
-	pub power: i32,
+    pub power: i32,
     /// number of activities
     pub count: i32,
 }
@@ -182,10 +182,9 @@ impl Usage {
     }
 
     /// Add an activity to of a usage
-    /// 
+    ///
     /// If the descend value is missing, assume descend = climb
-    pub fn add_activity (self, act: &Activity, factor: Factor) -> Usage {
-
+    pub fn add_activity(self, act: &Activity, factor: Factor) -> Usage {
         let factor = factor as i32;
         Usage {
             start: min(self.start, act.start),
