@@ -16,6 +16,13 @@ use schema::users;
 
 pub mod strava;
 
+/// check user id from the request
+/// 
+/// Will refresh token if possible
+pub fn get_id(request: &Request) -> TbResult<i32> {
+    User::get(request).map(|u| u.user.tendabike_id)
+}
+
 #[derive(Queryable, Insertable, Identifiable, Debug)]
 #[table_name = "users"]
 struct DbUser {
