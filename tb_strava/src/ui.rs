@@ -1,65 +1,65 @@
 use crate::*;
+use activity::*;
 use auth::User;
+use rocket::response::Redirect;
 use rocket_contrib::templates::Template;
 use std::collections::HashMap;
-use activity::*;
-use rocket::response::Redirect;
 
 fn next_activities(user: &User, per_page: Option<i32>) -> TbResult<Vec<StravaActivity>> {
-
-    let r = user.request(&format!("/activities?after={}&per_page={}", user.last_activity(), per_page.unwrap_or(10)))?;
+    let r = user.request(&format!(
+        "/activities?after={}&per_page={}",
+        user.last_activity(),
+        per_page.unwrap_or(10)
+    ))?;
     // let r = user.request("/activities?per_page=2")?;
     let acts: Vec<StravaActivity> = serde_json::from_str(&r)?;
     Ok(acts)
 }
 
-
 #[get("/bikes/<id>")]
-fn redirect_gear (id: i32, user: User) -> Option<Redirect> {
-    gear::strava_url(id, &user).map_or_else(
-        |_| None, 
-        |x| Some(Redirect::permanent(x))
-    )
+fn redirect_gear(id: i32, user: User) -> Option<Redirect> {
+    gear::strava_url(id, &user).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
 }
 
 #[get("/activities/<id>")]
-fn redirect_act (id: i32, user: User) -> Option<Redirect> {
-    activity::strava_url(id, &user).map_or_else(
-        |_| None, 
-        |x| Some(Redirect::permanent(x))
-    )
+fn redirect_act(id: i32, user: User) -> Option<Redirect> {
+    activity::strava_url(id, &user).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
 }
 
 #[get("/users/<id>")]
-fn redirect_user (id: i32, user: User) -> Option<Redirect> {
-    auth::strava_url(id, &user).map_or_else(
-        |_| None, 
-        |x| Some(Redirect::permanent(x))
-    )
+fn redirect_user(id: i32, user: User) -> Option<Redirect> {
+    auth::strava_url(id, &user).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
 }
 
 #[get("/next?<batch>")]
-fn next (batch: Option<i32>, user: User) -> ApiResult<Vec<TbActivity>> {
-    tbapi(next_activities(&user, batch)?.into_iter().map(|a| a.into_tb(&user)).collect())
+fn next(batch: Option<i32>, user: User) -> ApiResult<Vec<TbActivity>> {
+    tbapi(
+        next_activities(&user, batch)?
+            .into_iter()
+            .map(|a| a.into_tb(&user))
+            .collect(),
+    )
 }
 
 #[get("/sync?<batch>")]
-fn sync (batch: Option<i32>, user: User) -> ApiResult<Vec<serde_json::Value>> {
+fn sync(batch: Option<i32>, user: User) -> ApiResult<Vec<serde_json::Value>> {
     let acts = next_activities(&user, batch)?;
-   
-    tbapi(acts.into_iter()
-        .map(|a| a.send_to_tb(&user))
-        .collect::<TbResult<Vec<_>>>())
+
+    tbapi(
+        acts.into_iter()
+            .map(|a| a.send_to_tb(&user))
+            .collect::<TbResult<Vec<_>>>(),
+    )
 }
 
 #[get("/user")]
-fn overview (user: User) -> ApiResult<serde_json::Value> {
+fn overview(user: User) -> ApiResult<serde_json::Value> {
     tbapi(user.request_json("/athlete"))
 }
 
 #[allow(clippy::map_entry)]
 #[get("/?<page>&<after>")]
-fn read (page: Option<i32>, after: Option<i64>, user: User) -> TbResult<Template> {
+fn read(page: Option<i32>, after: Option<i64>, user: User) -> TbResult<Template> {
     use serde_json::Value;
     let mut map = HashMap::new();
 
@@ -67,14 +67,16 @@ fn read (page: Option<i32>, after: Option<i64>, user: User) -> TbResult<Template
     map.insert("user", res);
     let page = page.unwrap_or(1);
     let res: Value = if let Some(after) = after {
-        serde_json::from_str(&user.request(&format!("/activities?after={}&per_page={}", after, page))?)?
+        serde_json::from_str(
+            &user.request(&format!("/activities?after={}&per_page={}", after, page))?,
+        )?
     } else {
         serde_json::from_str(&user.request(&format!("/activities?page={}", page))?)?
     };
     let mut gears = HashMap::new();
     for act in res.as_array().expect("No array") {
         let gear = act["gear_id"].as_str().unwrap_or("n/a");
-        if !gears.contains_key(&gear){
+        if !gears.contains_key(&gear) {
             let res: Value = serde_json::from_str(&user.request(&format!("/gear/{}", &gear))?)?;
             gears.insert(gear, res);
         }
@@ -101,7 +103,17 @@ fn gear(id: String, user: User) -> ApiResult<Value> {
     tbapi(user.request_json(&format!("/gear/{}", &id)))
 }
 
-pub fn routes () -> Vec<rocket::Route> {
-    routes![read, activities, gear, activity, overview, sync, next, redirect_gear, redirect_act, redirect_user
+pub fn routes() -> Vec<rocket::Route> {
+    routes![
+        read,
+        activities,
+        gear,
+        activity,
+        overview,
+        sync,
+        next,
+        redirect_gear,
+        redirect_act,
+        redirect_user
     ]
 }

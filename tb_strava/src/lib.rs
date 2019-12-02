@@ -1,30 +1,36 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 #![warn(clippy::all)]
 
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 
-#[macro_use] extern crate diesel;
-#[macro_use] extern crate rocket;
-#[macro_use] extern crate rocket_contrib;
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate diesel;
+#[macro_use]
+extern crate rocket;
+#[macro_use]
+extern crate rocket_contrib;
+#[macro_use]
+extern crate serde_derive;
 extern crate reqwest;
 extern crate rocket_oauth2;
-#[macro_use] extern crate lazy_static;
+#[macro_use]
+extern crate lazy_static;
 extern crate time;
-#[macro_use] 
+#[macro_use]
 extern crate anyhow;
-#[macro_use] 
+#[macro_use]
 extern crate thiserror;
 extern crate tb_common;
 use tb_common::*;
 
 pub(crate) use anyhow::Context;
 
-pub mod auth;
-pub mod ui;
-pub mod schema;
 pub mod activity;
+pub mod auth;
 pub mod gear;
+pub mod schema;
+pub mod ui;
 
 const TB_URI: &str = "http://localhost:8000";
 
@@ -39,7 +45,7 @@ pub enum OAuthError {
     Authorize(&'static str),
 }
 
-pub fn attach_rocket (ship: rocket::Rocket) -> rocket::Rocket {
+pub fn attach_rocket(ship: rocket::Rocket) -> rocket::Rocket {
     dotenv::from_filename(".secrets").expect("Couldn't read secrets");
     ship
         // add database pool

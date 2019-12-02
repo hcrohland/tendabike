@@ -1,10 +1,5 @@
-
 use diesel::prelude::*;
-use diesel::{
-    self,
-    QueryDsl,
-    RunQueryDsl,
-};
+use diesel::{self, QueryDsl, RunQueryDsl};
 
 use schema::gears;
 
@@ -34,34 +29,36 @@ pub struct TbGear {
     pub vendor: String,
     /// The model name
     pub model: String,
-/*  
-    /// purchase date
-    pub purchase: DateTime<Utc>,
-    /// usage time
-   	pub time: i32,
-    /// Usage distance
-	pub distance: i32,
-	/// Overall climbing
-    pub climb: i32,
-    /// Overall descending
-	pub descend: i32,
-    /// usage count
-    pub count: i32,
- */
-    }
-
-#[derive(Serialize, Deserialize, Debug)]
-#[derive(Queryable, Insertable)]
-pub struct Gear {
-        id: String,
-        tendabike_id: i32,
-        user_id: i32,
+    /*
+       /// purchase date
+       pub purchase: DateTime<Utc>,
+       /// usage time
+          pub time: i32,
+       /// Usage distance
+       pub distance: i32,
+       /// Overall climbing
+       pub climb: i32,
+       /// Overall descending
+       pub descend: i32,
+       /// usage count
+       pub count: i32,
+    */
 }
 
-pub(crate) fn strava_url (gear: i32, user: &User) -> TbResult<String> {
+#[derive(Serialize, Deserialize, Debug, Queryable, Insertable)]
+pub struct Gear {
+    id: String,
+    tendabike_id: i32,
+    user_id: i32,
+}
+
+pub(crate) fn strava_url(gear: i32, user: &User) -> TbResult<String> {
     use schema::gears::dsl::*;
- 
-    let mut g: String = gears.filter(tendabike_id.eq(gear)).select(id).first(user.conn())?;
+
+    let mut g: String = gears
+        .filter(tendabike_id.eq(gear))
+        .select(id)
+        .first(user.conn())?;
     if g.remove(0) != 'b' {
         bail!("Not found");
     }
@@ -70,7 +67,7 @@ pub(crate) fn strava_url (gear: i32, user: &User) -> TbResult<String> {
 }
 
 impl StravaGear {
-    pub fn into_tb (self, user: &User) -> TbResult<TbGear> {
+    pub fn into_tb(self, user: &User) -> TbResult<TbGear> {
         Ok(TbGear {
             owner: user.id(),
             what: self.what(),
@@ -79,55 +76,61 @@ impl StravaGear {
             model: self.model_name.unwrap_or_else(|| String::from("")),
         })
     }
-    
+
     fn what(&self) -> i32 {
         match self.frame_type {
-            None => 301, // shoes
+            None => 301,  // shoes
             Some(_) => 1, // bikes
         }
     }
 
     fn request(id: &str, user: &User) -> TbResult<StravaGear> {
         let r = user.request(&format!("/gear/{}", id))?;
-        let res: StravaGear = serde_json::from_str(&r).context("Did not receive StravaGear format")?;
+        let res: StravaGear =
+            serde_json::from_str(&r).context("Did not receive StravaGear format")?;
         Ok(res)
     }
 }
 
 impl TbGear {
-    fn send_to_tb (&self, user: &User) -> TbResult<i32> {
+    fn send_to_tb(&self, user: &User) -> TbResult<i32> {
         let client = reqwest::Client::new();
 
-        let res: i32 = client.post(&format!("{}{}", TB_URI, "/part"))
+        let res: i32 = client
+            .post(&format!("{}{}", TB_URI, "/part"))
             .bearer_auth(&user.token)
             .json(self)
             .send().context("Could not contact engine")?
             .error_for_status().context("Engine returned error")?
             .json().context("Could not parse result to integer")?;
-        
+
         Ok(res)
     }
 }
 
 /// map strava gear_id to tb gear_id
-/// 
+///
 /// If it does not exist create it at tb
 /// None will return None
 pub fn strava_to_tb(strava: String, user: &User) -> TbResult<i32> {
     use schema::gears::dsl::*;
- 
-    let g = gears.find(&strava).select(tendabike_id).get_results::<i32>(user.conn()).context("Error reading database")?;
 
-    if !g.is_empty() { 
-        return Ok(g[0]) 
+    let g = gears
+        .find(&strava)
+        .select(tendabike_id)
+        .get_results::<i32>(user.conn()).context("Error reading database")?;
+
+    if !g.is_empty() {
+        return Ok(g[0]);
     }
 
     debug!("New Gear");
-    let tbid = StravaGear::request(&strava, user).context("Couldn't map gear")?
-                .into_tb(user).context("Could not map gear to tendabike format")?
-                .send_to_tb(user).context("Could not send gear to tb")?;
+    let tbid = StravaGear::request(&strava, user)
+        .context("Couldn't map gear")?
+        .into_tb(user).context("Could not map gear to tendabike format")?
+        .send_to_tb(user).context("Could not send gear to tb")?;
     diesel::insert_into(gears)
-        .values((id.eq(strava),tendabike_id.eq(tbid),user_id.eq(user.id())))
+        .values((id.eq(strava), tendabike_id.eq(tbid), user_id.eq(user.id())))
         .execute(user.conn()).context("couldn't store gear")?;
     Ok(tbid)
 }

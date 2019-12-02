@@ -1,8 +1,8 @@
-use chrono::{DateTime,Utc};
+use chrono::{DateTime, Utc};
 
-use diesel::prelude::*;
 use crate::*;
 use auth::User;
+use diesel::prelude::*;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaActivity {
@@ -17,10 +17,10 @@ pub struct StravaActivity {
     /// End time
     pub elapsed_time: i32,
     /// activity time
-   	pub moving_time: i32,
+    pub moving_time: i32,
     /// Covered distance
-	pub distance: f64,
-	/// Total climbing
+    pub distance: f64,
+    /// Total climbing
     pub total_elevation_gain: f64,
     /// average power output
     pub average_watts: Option<f64>,
@@ -29,7 +29,7 @@ pub struct StravaActivity {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct TbActivity{
+pub struct TbActivity {
     pub user_id: i32,
     /// The activity type
     pub what: i32,
@@ -40,31 +40,29 @@ pub struct TbActivity{
     /// End time
     pub duration: i32,
     /// activity time
-   	pub time: i32,
+    pub time: i32,
     /// Covered distance
-	pub distance: i32,
-	/// Total climbing
+    pub distance: i32,
+    /// Total climbing
     pub climb: i32,
     /// Total descending
-	pub descend: Option<i32>,
+    pub descend: Option<i32>,
     /// average power output
     pub power: Option<i32>,
     /// Which gear did she use?
-    pub gear: Option<i32>
+    pub gear: Option<i32>,
 }
-
 
 impl StravaActivity {
     pub fn into_tb(self, user: &User) -> TbResult<TbActivity> {
         let what = self.what()?;
-        let gear = 
-            match self.gear_id {
-                Some(x) => Some(gear::strava_to_tb(x, user)?),
-                None => None
-            };
-        Ok (TbActivity {
-            what, 
-            gear, 
+        let gear = match self.gear_id {
+            Some(x) => Some(gear::strava_to_tb(x, user)?),
+            None => None,
+        };
+        Ok(TbActivity {
+            what,
+            gear,
             user_id: user.id(),
             name: self.name,
             start: self.start_date,
@@ -124,18 +122,21 @@ impl StravaActivity {
             "Yoga" => */
         }
     }
-
 }
 
-impl StravaActivity{ 
-    pub fn send_to_tb (self, user: &User) -> TbResult<serde_json::Value> {
+impl StravaActivity {
+    pub fn send_to_tb(self, user: &User) -> TbResult<serde_json::Value> {
         use schema::activities::dsl::*;
 
         let client = reqwest::Client::new();
         let strava_id = self.id;
         let tb = self.into_tb(user)?;
 
-        let tb_id = activities.find(strava_id).select(tendabike_id).get_results::<i32>(user.conn())?.pop();
+        let tb_id = activities
+            .find(strava_id)
+            .select(tendabike_id)
+            .get_results::<i32>(user.conn())?
+            .pop();
         let client = if let Some(tb_id) = tb_id {
             client.put(&format!("{}/{}/{}", TB_URI, "activ", tb_id))
         } else {
@@ -149,26 +150,33 @@ impl StravaActivity{
             .error_for_status().context("backend responded with error")?
             .json().context("malformed body")?;
 
-        let new_id = res[0]["id"].as_i64().ok_or_else(|| anyhow!("id is no int {:?}", res[0]))? as i32;
+        let new_id = res[0]["id"]
+            .as_i64()
+            .ok_or_else(|| anyhow!("id is no int {:?}", res[0]))? as i32;
         if tb_id.is_none() {
-            diesel::insert_into(activities).values((
+            diesel::insert_into(activities)
+                .values((
                     id.eq(strava_id),
-                    tendabike_id.eq(new_id), 
-                    user_id.eq(tb.user_id))).execute(user.conn()
-                )?;
+                    tendabike_id.eq(new_id),
+                    user_id.eq(tb.user_id),
+                ))
+                .execute(user.conn())?;
         }
 
-        user.update_last(tb.start.timestamp()).context("unable to update user")?;
+        user.update_last(tb.start.timestamp())
+            .context("unable to update user")?;
 
         Ok(res)
     }
-
 }
 
-pub(crate) fn strava_url (act: i32, user: &User) -> TbResult<String> {
+pub(crate) fn strava_url(act: i32, user: &User) -> TbResult<String> {
     use schema::activities::dsl::*;
- 
-    let g: i64 = activities.filter(tendabike_id.eq(act)).select(id).first(user.conn())?;
+
+    let g: i64 = activities
+        .filter(tendabike_id.eq(act))
+        .select(id)
+        .first(user.conn())?;
 
     Ok(format!("https://strava.com/activities/{}", &g))
 }
