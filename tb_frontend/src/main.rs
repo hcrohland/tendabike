@@ -72,7 +72,7 @@ fn init_environment () {
 
 #[catch(401)]
 fn not_authorized(_req: &Request) -> Redirect { 
-    Redirect::to("/login")
+    Redirect::to("http://localhost:8000/login")
 }
 
 

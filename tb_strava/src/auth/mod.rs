@@ -120,7 +120,7 @@ impl User {
     fn get(request: &Request) -> TbResult<User> {
         // Get user id
         let token = token::token(request)?;
-        let id = token::id_unsafe(&token)?;
+        let id = token::id(&token, token::LEEWAY)?;
         // Get the user
         let conn = request
             .guard::<AppDbConn>()
