@@ -79,7 +79,7 @@ pub struct NewPart {
     pub vendor: String,
     /// The model name
     pub model: String,
-    pub purchase: DateTime<Utc>,
+    pub purchase: Option<DateTime<Utc>>,
 }
 
 #[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -265,7 +265,7 @@ impl NewPart {
             name.eq(self.name),
             vendor.eq(self.vendor),
             model.eq(self.model),
-            purchase.eq(self.purchase),
+            purchase.eq(self.purchase.unwrap_or_else(Utc::now)),
             time.eq(0),
             distance.eq(0),
             climb.eq(0),
