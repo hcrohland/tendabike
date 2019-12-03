@@ -96,6 +96,7 @@ impl StravaActivity {
             "Kitesurf"      => Ok(13),
             "Rowing"        => Ok(14),
             "WaterSport"    => Ok(15),
+            "RockClimbing"  => Ok(16),
             _ => bail!("unsupported activity {}", t)
 /*  
             "Handcycle" => ,
@@ -107,7 +108,6 @@ impl StravaActivity {
             "InlineSkate" => ,
             "Kayaking" => ,
             "NordicSki" => ,
-            "RockClimbing" => ,
             "RollerSki" => ,
             "Sail" => ,
             "Skateboard" => ,
