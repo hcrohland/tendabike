@@ -1,7 +1,7 @@
 <script>
 import myfetch, {types, icons} from './store.js';
 
-let promise = myfetch('/part/categories')
+let promise = myfetch('/activ/categories')
 </script>
 
 {#await promise}

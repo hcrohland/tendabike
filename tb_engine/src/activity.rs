@@ -242,6 +242,27 @@ impl Activity {
     }
 }
 
+fn categories(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartTypeId>> {
+    use crate::schema::activities::dsl::*;
+    use crate::schema::activity_types;
+
+    let act_types = activities
+        .filter(user_id.eq(user.get_id()))
+        .select(what)
+        .distinct()
+        .get_results::<ActTypeId>(conn)?;
+
+    let p_types = activity_types::table
+        .filter(activity_types::id.eq_any(act_types))
+        .select(activity_types::gear)
+        .distinct()
+        .get_results(conn)?;
+
+    Ok(p_types)
+
+}
+
+
 fn csv2descend(data: rocket::data::Data, user: &User, conn: &AppConn) -> TbResult<String> {
     use schema::activities::dsl::*;
     #[derive(Debug, Deserialize)]
@@ -325,6 +346,11 @@ fn descend(data: rocket::data::Data, user: &User, conn: AppDbConn) -> Result<Str
     Ok(csv2descend(data, user, &conn)?)
 }
 
+#[get("/categories")]
+fn mycats(user: &User, conn: AppDbConn) -> ApiResult<Vec<PartTypeId>> {
+    tbapi(categories(user, &conn))
+}
+
 pub fn routes() -> Vec<rocket::Route> {
-    routes![get, put, delete, post, descend]
+    routes![get, put, delete, post, descend, mycats]
 }

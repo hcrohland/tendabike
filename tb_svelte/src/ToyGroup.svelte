@@ -1,6 +1,6 @@
 <script>
   import Gear from './Gear.svelte';
-  import myfetch from './store.js';
+  import myfetch, {types} from './store.js';
   
   export let params;
 
@@ -16,6 +16,8 @@
       <div class="col-md-6 p-0 p-sm-2">
         <Gear {part} />
       </div>
+    {:else}
+      You have not {$types[params.category].name }s to tend 😱
     {/each}
   </div>
 {:catch error}
