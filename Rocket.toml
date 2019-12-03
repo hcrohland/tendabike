@@ -5,6 +5,6 @@ template_dir="templates"
 secret_key="8two500UmM6efszt3zcVt6WDhmWOZwvVItuM9LF33iE="
 
 [global.databases]
-app_db={url="postgres://localhost/tendabike3"}
+app_db={url="postgres://localhost/tendabike"}
 auth_db={url="postgres://localhost/strava"}
 
