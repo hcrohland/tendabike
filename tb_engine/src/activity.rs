@@ -254,6 +254,7 @@ fn categories(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartTypeId>> {
 
     let p_types = activity_types::table
         .filter(activity_types::id.eq_any(act_types))
+        .filter(activity_types::id.ne(0)) // catch-all unsupported
         .select(activity_types::gear)
         .distinct()
         .get_results(conn)?;
