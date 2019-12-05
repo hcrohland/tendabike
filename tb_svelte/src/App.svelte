@@ -1,4 +1,4 @@
-<script>
+<script context="module">
 	import _ from 'lodash';
 	import Router from 'svelte-spa-router';
 
@@ -22,7 +22,7 @@
 <Header/>
 {#await promise}
 	loading data...
-{:then data}
+{:then}
 	<div class="container">
 		<Router {routes} />
 	</div>

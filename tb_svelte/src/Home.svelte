@@ -1,4 +1,4 @@
-<script>
+<script context="module">
 import myfetch, {types, icons} from './store.js';
 
 let promise = myfetch('/activ/categories')
