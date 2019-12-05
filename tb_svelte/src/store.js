@@ -1,4 +1,4 @@
-import {writable} from "svelte/store";
+import {writable, readable, derived} from "svelte/store";
 
 function handleErrors(response) {
     if (response.ok) {
@@ -20,6 +20,19 @@ export default function myfetch (url) {
 export const category = writable(undefined)
 export const parts = writable(new Object);
 export const types = writable(new Object);
+export const catname = derived(
+	[types, category],
+	([$types, $category]) => {
+        if ($types && $category) 
+        {
+            return $types[$category].name
+        } 
+        else 
+        {
+            return undefined
+        }
+    }
+);
 export const icons = {
     "1": "flaticon-mountain-bike",
     "301": "flaticon-run",
