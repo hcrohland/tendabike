@@ -17,15 +17,14 @@ export default function myfetch (url) {
 		.then(response => response.json())
 }
 
-export const types = writable([]);
+export const category = writable(undefined)
+export const parts = writable(new Object);
+export const types = writable(new Object);
 export const icons = {
     "1": "flaticon-mountain-bike",
     "301": "flaticon-run",
     "302": "flaticon-snow",
     "303": "flaticon-ski",
-    "306": "flaticon-windsurf",
-    "307": "flaticon-kitesurfing",
-    "308": "flaticon-rowing"
 }
 
 
