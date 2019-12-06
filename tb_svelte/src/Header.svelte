@@ -1,14 +1,14 @@
 <script>
   import {link, push, location} from 'svelte-spa-router'
-  import {types, catname} from "./store.js";
+  import {types, category} from "./store.js";
 </script>
 
 <nav class="navbar navbar-expand-sm navbar-light bg-light mb-2 ">
     <a class="navbar-brand" href="#/">
       Tend a 
 
-      {#if $catname}
-        <strong> {$catname} </strong>
+      {#if $category}
+        <strong> {$category.name} </strong>
       {:else}
         Gear
       {/if}
