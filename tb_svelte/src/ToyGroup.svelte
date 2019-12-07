@@ -1,6 +1,7 @@
 <script>
   import { onDestroy } from 'svelte';
   import Gear from './Gear.svelte';
+  import Await from './Await.svelte';
   import myfetch, {types, parts, category} from './store.js';
   
   export let params;
@@ -10,9 +11,7 @@
   onDestroy(() => category.set(undefined));
 </script>
 
-{#await promise}
-  loading
-{:then}
+<Await {promise}>
   <div class="row border p-sm-2">
     {#each $parts as part (part.id)}
       <div class="col-md-6 p-0 p-sm-2">
@@ -22,6 +21,4 @@
       You have no {$category.name}s to tend 😱
     {/each}
   </div>
-{:catch error}
-  {error}
-{/await}
+</Await>

@@ -3,6 +3,7 @@
 	import Router from 'svelte-spa-router';
 
 	import ToyGroup from "./ToyGroup.svelte"
+	import Await from "./Await.svelte"
 	import Header from "./Header.svelte"
 	import Home from "./Home.svelte"
 	import About from "./About.svelte"
@@ -20,16 +21,8 @@
 
 
 <Header/>
-{#await promise}
-	loading data...
-{:then}
+<Await {promise}>
 	<div class="container">
 		<Router {routes} />
 	</div>
-{:catch error}
-	<div class="alert alert-warning" role="alert">
-		<h2>
-			{error}
-		</h2>
-	</div>
-{/await}
+</Await>
