@@ -18,8 +18,27 @@ export default function myfetch (url) {
 }
 
 export const category = writable(undefined)
-export const parts = writable(new Object);
-export const types = writable(new Object);
+export const parts = mapable("id");
+export const types = mapable("id");
+
+function mapField (field) {
+    return (map, obj) => {
+            map[obj[field]] = obj;
+            return map;
+        }
+}
+
+function mapable(fn) {
+	const { subscribe, set, update } = writable({});
+
+	return {
+        subscribe,
+        setMap: (arr) => {set(arr.reduce(mapField(fn),{}))},
+		updateMap: (arr) => update(n => arr.reduce(mapField(fn), n)),
+	};
+}
+
+
 
 export const icons = {
     "1": "flaticon-mountain-bike",

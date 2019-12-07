@@ -7,13 +7,13 @@
   export let params;
 
   category.set($types[params.category]);
-  let promise = myfetch("/part/gear/" + params.category).then(data => parts.set(data))
+  let promise = myfetch("/part/gear/" + params.category).then(data => parts.setMap(data))
   onDestroy(() => category.set(undefined));
 </script>
 
 <Await {promise}>
   <div class="row border p-sm-2">
-    {#each $parts as part (part.id)}
+    {#each Object.values($parts) as part (part.id)}
       <div class="col-md-6 p-0 p-sm-2">
         <Gear {part} />
       </div>

@@ -16,7 +16,7 @@
 	}
 
 	let promise = myfetch('/types/part')
-			.then(data => types.set(data));
+			.then(data => types.setMap(data));
 </script>
 
 

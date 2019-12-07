@@ -5,11 +5,33 @@ use rocket::request::Form;
 use rocket::response::Redirect;
 use reqwest::Method;
 
-#[get("/")]
-fn dash (user: User) -> TbResult<Template> {
+type PartTypeId = i32;
+
+#[derive(Deserialize, Serialize)]
+struct PartType {
+    /// The primary key
+    pub id: PartTypeId,
+    /// The display name
+    pub name: String,
+    /// is it a main part? I.e. can it be used for an activity?
+    pub main: PartTypeId,
+    /// Part types that can be attached
+    pub hooks: Vec<PartTypeId>,
+}
+
+fn gettypes(user: &User) -> TbResult<HashMap<&str, serde_json::Value>> {
     let mut map = HashMap::new();
 
-    map.insert("types", user.get_request("/types/part")?);
+    let types: Vec<PartType> = serde_json::from_value(user.get_request("/types/part")?).unwrap();
+    let types: HashMap<PartTypeId,PartType> = types.into_iter().map(|x| (x.id,x)).collect();
+    map.insert("types", json!(types));
+    Ok(map)
+}
+
+#[get("/")]
+fn dash (user: User) -> TbResult<Template> {
+    let mut map = gettypes(&user)?;
+
     map.insert("user", user.get_request("/user")?);
     map.insert("gear", user.get_request("/part/mygear")?);
     map.insert("spares", user.get_request("/part/myspares")?);
@@ -20,12 +42,10 @@ fn dash (user: User) -> TbResult<Template> {
 
 #[get("/part/<id>?<time>")]
 fn part (id:i32, time: Option<String>, user: User) -> TbResult<Template> {
-    let mut map = HashMap::new();
-
+    let mut map = gettypes(&user)?;
 
     let time = parse_time(time)?.unwrap_or_else(Utc::now).to_rfc3339_opts(SecondsFormat::Secs, true);
     map.insert("time", json!(time));
-    map.insert("types", user.get_request("/types/part")?);
     map.insert("main", user.get_request(&format!("/part/{}", id))?);
     map.insert("parts", user.get_request(&format!("/attach/assembly/{}?time={}", id, time))?);
     map.insert("attach", user.get_request(&format!("/attach/{}", id))?);
@@ -35,10 +55,7 @@ fn part (id:i32, time: Option<String>, user: User) -> TbResult<Template> {
 
 #[get("/part/create")]
 fn part_create (user: User) -> TbResult<Template> {
-    let mut map = HashMap::new();
-
-    map.insert("types", user.get_request("/types/part")?);
-
+    let map = gettypes(&user)?;
     Ok(Template::render("part_new", map))
 }
 
@@ -94,10 +111,8 @@ fn part_attach (data: Form<Attachment>, user: User) -> TbResult<Redirect> {
 
 #[get("/part/attach/<part>")]
 fn create_attach (part: i32, user: User) -> TbResult<Template> {
-    let mut map = HashMap::new();
-
+    let mut map = gettypes(&user)?;
     map.insert("part", user.get_request(&format!("/part/{}", part))?);
-    map.insert("types", user.get_request("/types/part")?);
     map.insert("gears", user.get_request("/part/mygear")?);
     
     Ok(Template::render("attach", map))
@@ -105,8 +120,7 @@ fn create_attach (part: i32, user: User) -> TbResult<Template> {
 
 #[get("/type/<id>")]
 fn parts_per_type (id:i32, user: User) -> TbResult<Template> {
-    let mut map = HashMap::new();
-    map.insert("types", user.get_request("/types/part")?);
+    let mut map = gettypes(&user)?;
     map.insert("parts", user.get_request(&format!("/part/type/{}", id))?);
     
     Ok(Template::render("type", map))
@@ -114,9 +128,8 @@ fn parts_per_type (id:i32, user: User) -> TbResult<Template> {
 
 #[get("/attached/<gear>/<what>")]
 fn get_attached(gear: i32, what: i32, user: User) -> TbResult<Template> {
-    let mut map = HashMap::new();
+    let mut map = gettypes(&user)?;
     map.insert("what", json!(what));
-    map.insert("types", user.get_request("/types/part")?);
     map.insert("main", user.get_request(&format!("/part/{}", gear))?);
     map.insert("attach", user.get_request(&format!("/attach/check/{}/{}", gear, what))?);
     
