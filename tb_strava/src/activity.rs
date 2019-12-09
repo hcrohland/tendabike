@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use std::collections::HashMap;
 
 use crate::*;
 use auth::User;
@@ -149,10 +150,10 @@ impl StravaActivity {
             .error_for_status().context("backend responded with error")?
             .json().context("malformed body")?;
 
-        let new_id = res[0]["id"]
-            .as_i64()
-            .ok_or_else(|| anyhow!("id is no int {:?}", res[0]))? as i32;
         if tb_id.is_none() {
+            let new_id = res[0]["id"]
+                .as_i64()
+                .ok_or_else(|| anyhow!("id is no int {:?}", res[0]))? as i32;
             diesel::insert_into(activities)
                 .values((
                     id.eq(strava_id),
@@ -178,4 +179,42 @@ pub(crate) fn strava_url(act: i32, user: &User) -> TbResult<String> {
         .first(user.conn())?;
 
     Ok(format!("https://strava.com/activities/{}", &g))
+}
+
+pub(crate) fn next_activities(user: &User, per_page: usize, start: Option<i64>) -> TbResult<Vec<StravaActivity>> {
+    let r = user.request(&format!(
+        "/activities?after={}&per_page={}",
+        start.unwrap_or_else(|| user.last_activity()),
+        per_page
+    ))?;
+    // let r = user.request("/activities?per_page=2")?;
+    let acts: Vec<StravaActivity> = serde_json::from_str(&r)?;
+    Ok(acts)
+}
+
+pub(crate) fn sync(batch: usize, user: &User) -> TbResult<(Vec<serde_json::Value>,Vec<serde_json::Value>)> {
+    // let mut len = batch;
+    let mut start = user.last_activity();
+    let mut activities = Vec::new();
+    let mut parts = HashMap::new();
+
+    // while len == batch 
+    {
+        let acts = next_activities(&user, batch, Some(start))?;
+        // len = acts.len();
+        for a in acts {
+            start = std::cmp::max(start, a.start_date.timestamp());
+            let r = a.send_to_tb(&user)?;
+            let (act, ps): (serde_json::Value, Vec<serde_json::Value>) = serde_json::from_value(r)?;
+            activities.push(act);
+            for part in ps {
+                parts.insert(part["id"].as_i64(), part);
+            }
+
+        }
+    }
+
+    let parts = parts.drain().map(|(_,v)| v).collect();
+
+    Ok((activities,parts))
 }

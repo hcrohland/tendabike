@@ -5,17 +5,6 @@ use rocket::response::Redirect;
 use rocket_contrib::templates::Template;
 use std::collections::HashMap;
 
-fn next_activities(user: &User, per_page: usize, start: Option<i64>) -> TbResult<Vec<StravaActivity>> {
-    let r = user.request(&format!(
-        "/activities?after={}&per_page={}",
-        start.unwrap_or_else(|| user.last_activity()),
-        per_page
-    ))?;
-    // let r = user.request("/activities?per_page=2")?;
-    let acts: Vec<StravaActivity> = serde_json::from_str(&r)?;
-    Ok(acts)
-}
-
 #[get("/bikes/<id>")]
 fn redirect_gear(id: i32, user: User) -> Option<Redirect> {
     gear::strava_url(id, &user).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
@@ -35,7 +24,7 @@ fn redirect_user(id: i32, user: User) -> Option<Redirect> {
 fn next(batch: Option<usize>, user: User) -> ApiResult<Vec<TbActivity>> {
     let batch = batch.unwrap_or(10);
     tbapi(
-        next_activities(&user, batch, None)?
+        activity::next_activities(&user, batch, None)?
             .into_iter()
             .map(|a| a.into_tb(&user))
             .collect(),
@@ -43,26 +32,8 @@ fn next(batch: Option<usize>, user: User) -> ApiResult<Vec<TbActivity>> {
 }
 
 #[get("/sync?<batch>")]
-fn sync(batch: Option<usize>, user: User) -> ApiResult<Vec<serde_json::Value>> {
-    let batch = batch.unwrap_or(100);
-    let mut res = Vec::new();
-    let mut len = batch;
-    let mut start = user.last_activity();
-
-    while len == batch {
-        
-        let acts = next_activities(&user, batch, Some(start))?;
-        len = acts.len();
-        res.append(&mut 
-            acts.into_iter()
-            .map(|a| {
-                start = a.start_date.timestamp();
-                a.send_to_tb(&user)
-            })
-            .collect::<TbResult<Vec<_>>>()?
-        )
-    }
-    tbapi(Ok(res))
+fn sync(batch: Option<usize>, user: User) -> ApiResult<(Vec<serde_json::Value>, Vec<serde_json::Value>)> {
+    tbapi(activity::sync(batch.unwrap_or(10), &user))
 }
 
 #[get("/user")]
