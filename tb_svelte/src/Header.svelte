@@ -1,6 +1,17 @@
 <script>
   import {link, push, location} from 'svelte-spa-router'
-  import {types, category} from "./store.js";
+  import myfetch, {types, category, parts} from "./store.js";
+  import Await from './Await.svelte';
+
+  let disabled = false;
+  let promise = undefined;
+
+  async function synchronize() {
+    disabled = true;
+    promise = myfetch('/strava/sync')
+      .then(data => parts.updateMap(data[1]))
+      .then(() => disabled = false)
+  }
 </script>
 
 <nav class="navbar navbar-expand-sm navbar-light bg-light mb-2 ">
@@ -24,7 +35,11 @@
           <span class="navbar-toggler-icon"></span>
         </a>
         <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdown"> -->
-          <a href="/strava/sync" class="dropdown-item">Sync</a>
+          <button on:click={synchronize} {disabled} class="dropdown-item">
+            <Await {promise}>
+              Sync 
+            </Await>
+          </button>
           <a href="/about" use:link class="dropdown-item">About</a>
           <!-- <a class="dropdown-item" href="#">Another action</a>
           <div class="dropdown-divider"></div>
