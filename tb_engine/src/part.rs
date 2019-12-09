@@ -182,6 +182,16 @@ fn categories(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartTypeId>> {
         .get_results(conn)?)
 }
 
+
+fn allparts(user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
+    use schema::parts::dsl::*;
+
+    Ok(parts
+        .filter(owner.eq(user.get_id()))
+        .order_by(id)
+        .load::<Part>(conn)?)
+}
+
 /// retrieve the list of available parts for a user
 ///
 /// it only returns parts which are not attached
@@ -307,6 +317,11 @@ fn mycats(user: &User, conn: AppDbConn) -> ApiResult<Vec<PartTypeId>> {
     tbapi(categories(user, &conn))
 }
 
+#[get("/all")]
+fn myparts(user: &User, conn: AppDbConn) -> ApiResult<PartList> {
+    tbapi(allparts(user, &conn))
+}
+
 #[get("/mygear")]
 fn allgear(user: &User, conn: AppDbConn) -> ApiResult<PartList> {
     tbapi(parts_by_user(None, true, user, &conn))
@@ -318,13 +333,17 @@ fn allspares(user: &User, conn: AppDbConn) -> ApiResult<PartList> {
 }
 
 #[get("/gear/<cat>")]
-fn mygear(cat: i32, user: &User, conn: AppDbConn) -> ApiResult<PartList> {
-    tbapi(parts_by_user(Some(cat.into()), true, user, &conn))
+fn mygear(cat: i32, user: &User, conn: AppDbConn) -> ApiResult<Vec<PartId>> {
+    let parts = parts_by_user(Some(cat.into()), true, user, &conn)?;
+    let partids = parts.into_iter().map(|x| x.id).collect();
+    Ok(Json(partids))
 }
 
 #[get("/spares/<cat>")]
-fn myspares(cat: i32, user: &User, conn: AppDbConn) -> ApiResult<PartList> {
-    tbapi(parts_by_user(Some(cat.into()), false, user, &conn))
+fn myspares(cat: i32, user: &User, conn: AppDbConn) -> ApiResult<Vec<PartId>> {
+    let parts = parts_by_user(Some(cat.into()), false, user, &conn)?;
+    let partids = parts.into_iter().map(|x| x.id).collect();
+    Ok(Json(partids))
 }
 
 #[get("/type/<id>")]
@@ -333,5 +352,5 @@ fn mytype(id: i32, user: &User, conn: AppDbConn) -> ApiResult<PartList> {
 }
 
 pub fn routes() -> Vec<rocket::Route> {
-    routes![get, post, mygear, myspares, mytype, mycats, allgear, allspares]
+    routes![get, post, mygear, myspares, mytype, mycats, allgear, allspares, myparts]
 }

@@ -7,7 +7,7 @@
 	import Header from "./Header.svelte"
 	import Home from "./Home.svelte"
 	import About from "./About.svelte"
-	import myfetch, {types} from './store.js'
+	import myfetch, {types, parts} from './store.js'
 
 	const routes = {
 		'/about': About,
@@ -15,8 +15,12 @@
     '/:category': ToyGroup
 	}
 
-	let promise = myfetch('/types/part')
-			.then(data => types.setMap(data));
+	let promise = Promise.all([
+			myfetch('/types/part')
+				.then(data => types.setMap(data)),
+			myfetch('/part/all')
+				.then(data => parts.setMap(data))
+	])
 </script>
 
 
