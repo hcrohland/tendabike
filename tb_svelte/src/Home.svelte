@@ -1,8 +1,9 @@
-<script context="module">
-import myfetch, {types, icons} from './store.js';
+<script>
+import myfetch, {types, icons, parts} from './store.js';
 import Await from './Await.svelte'
 
-let promise = myfetch('/activ/categories')
+let promise; 
+$: { $parts; promise = myfetch('/activ/categories') }
 </script>
 
 <Await {promise} let:data={categories}>

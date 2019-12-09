@@ -7,18 +7,20 @@
   export let params;
 
   category.set($types[params.category]);
-  let promise = myfetch("/part/gear/" + params.category)
+  
+  $:  gears = Object.values($parts).filter(
+          (p) => { return p.what.toString() === params.category}
+        );
+
   onDestroy(() => category.set(undefined));
 </script>
 
-<Await {promise} let:data={gears}>
   <div class="row border p-sm-2">
-    {#each gears as gear (gear)}
+    {#each gears as gear (gear.id)}
       <div class="col-md-6 p-0 p-sm-2">
-        <Gear part={$parts[gear]} />
+        <Gear part={$parts[gear.id]} />
       </div>
     {:else}
       You have no {$category.name}s to tend 😱
     {/each}
   </div>
-</Await>
