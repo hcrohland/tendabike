@@ -1,5 +1,5 @@
-@host = http://[::1]:8000
-@token = eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE1NzQ1MjQ1MjUsImV4cCI6MTU3NDU0NTgyNSwiaWQiOjJ9.-IfZKBgZGX_9yCzMxF_RoRtGCsoinxX1Aj8zGjlbaFA
+@host = http://[localhost]:8000
+@token = eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE1NzU5MDIxNjgsImV4cCI6MTU3NTkyMzQ2OCwiaWQiOjJ9.QRXwS1SeJOkTN096fEEvxmNptqxEu45XyuPDBbaLhJI
 {{host}}/types/part/2
 Authorization: Bearer {{token}}
 ###
@@ -44,7 +44,7 @@ Authorization: Bearer {{token}}
 GET    {{host}}/activ/362
 Authorization: Bearer {{token}}
 ###
-DELETE {{host}}/activ/1695
+DELETE {{host}}/activ/5849
 Authorization: Bearer {{token}}
 ###
 POST {{host}}/activ
