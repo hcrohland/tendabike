@@ -117,8 +117,9 @@ fn echo(user: String) -> String {
 }
 
 #[get("/test")]
-fn test(_user: Admin, conn: AppDbConn) -> Result<&'static str, diesel::result::Error> {
+fn test(_user: Admin, conn: AppDbConn, conn2: tb_strava::AppDbConn) -> Result<&'static str, diesel::result::Error> {
     conn.0.begin_test_transaction()?;
+    conn2.0.begin_test_transaction()?;
     let msg = "Test Transaction started";
     warn!("{}", msg);
     Ok(msg)
