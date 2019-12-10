@@ -1,5 +1,5 @@
 <script>
-import myfetch, {types, icons, parts} from './store.js';
+import {myfetch, types, icons, parts} from './store.js';
 import Await from './Await.svelte'
 
 let promise; 

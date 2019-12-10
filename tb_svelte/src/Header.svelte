@@ -1,6 +1,6 @@
 <script>
   import {link, push, location} from 'svelte-spa-router'
-  import myfetch, {types, category, parts} from "./store.js";
+  import {myfetch, types, category, parts} from "./store.js";
   import Await from './Await.svelte';
 
   let disabled = false;

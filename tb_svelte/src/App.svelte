@@ -7,7 +7,7 @@
 	import Header from "./Header.svelte"
 	import Home from "./Home.svelte"
 	import About from "./About.svelte"
-	import myfetch, {types, parts} from './store.js'
+	import {myfetch, types, parts} from './store.js'
 
 	const routes = {
 		'/about': About,

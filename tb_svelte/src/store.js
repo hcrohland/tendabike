@@ -11,13 +11,16 @@ function handleErrors(response) {
     throw Error(response.status + ' "' + response.statusText + '" accessing ' + response.url);
 }
 
-export default function myfetch (url) {
+export function myfetch (url) {
 	return fetch(url)
 		.then(handleErrors)
 		.then(response => response.json())
-}
+};
+export function filterValues(map, fn) { 
+    return Object.values(map).filter(fn)
+};
 
-export const category = writable(undefined)
+export const category = writable(undefined);
 export const parts = mapable("id");
 export const types = mapable("id");
 
