@@ -1,6 +1,8 @@
 <script>
-import {myfetch, types, icons, parts} from './store.js';
+import {myfetch, types, icons, parts, category} from './store.js';
 import Await from './Await.svelte'
+
+category.set(undefined);
 
 let promise; 
 $: { $parts; promise = myfetch('/activ/categories') }
