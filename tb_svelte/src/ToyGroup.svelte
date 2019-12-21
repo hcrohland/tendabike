@@ -16,9 +16,9 @@
 
 {#if cat }
   <div class="row border p-sm-2">
-    {#each gears() as part (part.id)}
+    {#each gears() as {id} (id)}
       <div class="col-md-6 p-0 p-sm-2">
-        <Gear {part} />
+        <Gear {id} />
       </div>
     {:else}
       You have no {cat.name} to tend 😱
