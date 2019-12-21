@@ -5,6 +5,7 @@
 	import ToyGroup from "./ToyGroup.svelte"
 	import Await from "./Await.svelte"
 	import Header from "./Header.svelte"
+	import Part from "./Part.svelte"
 	import Home from "./Home.svelte"
 	import About from "./About.svelte"
 	import {myfetch, types, parts} from './store.js'
@@ -12,7 +13,8 @@
 	const routes = {
 		'/about': About,
 		'/': Home,
-    '/:category': ToyGroup
+    '/cat/:category': ToyGroup,
+    '/part/:id': Part
 	}
 
 	let promise = Promise.all([

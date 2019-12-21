@@ -21,9 +21,15 @@
 <div class="card">
   <div class="header">
     <div class="card-header" on:click={() => (isOpen = !isOpen)}>
-      <h5 class="mb-0"> 
+      <span class="h5 mb-0"> 
         {part.name} 
-      </h5>
+      </span>
+     {#if isOpen}
+          <a href="#/part/{part.id}" type="button" class="float-right">
+            Details
+          </a>
+      {/if}
+      
     </div>
   </div>
   {#if isOpen}
@@ -35,7 +41,9 @@
 }</span> hours
         <p> You covered <span class="param">{parseFloat((part.distance / 1000).toFixed(1)).toLocaleString()}</span> km 
         climbing <span class="param">{part.climb.toLocaleString()}</span> and descending <span class="param">{part.descend.toLocaleString()}</span> meters </p>
+        
       </div>
     </div>
+
   {/if}
 </div>
