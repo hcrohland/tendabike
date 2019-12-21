@@ -11,14 +11,14 @@
   let cat = $types[params.category]
   category.set(cat);
   
-  const gears = () => filterValues($parts, (p) => p.what == params.category)
+  $: gears = () => filterValues($parts, (p) => p.what == params.category)
 </script>
 
 {#if cat }
   <div class="row border p-sm-2">
-    {#each gears() as {id} (id)}
+    {#each gears() as part (part.id)}
       <div class="col-md-6 p-0 p-sm-2">
-        <Gear {id} />
+        <Gear {part} />
       </div>
     {:else}
       You have no {cat.name} to tend 😱

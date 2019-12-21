@@ -1,10 +1,8 @@
 <script>
   import { slide } from 'svelte/transition';
-  import {parts} from './store.js';
 
-  export let id;
+  export let part;
 
-  $: part = $parts[id]
   let isOpen = false;
 </script>
 
