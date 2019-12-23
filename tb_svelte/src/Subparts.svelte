@@ -1,0 +1,46 @@
+<script>
+import {types} from './store.js'
+import Usage from './Usage.svelte'
+
+export let hook;
+export let subparts;
+export let level = undefined;
+
+let part
+
+</script>
+{#if subparts.length > 0}
+{#if level === undefined}
+  <table class="table table-hover">
+  <thead>
+    <tr>
+      <th scope="col">Part</th>
+      <th scope="col">Name</th>
+      <th scope="col" class="text-right">Attached</th>
+      <Usage />
+    </tr>
+  </thead>
+  <tbody>
+    <svelte:self {hook} {subparts} level={0}></svelte:self>
+  </tbody>
+  </table>
+  
+{:else}
+
+  {#each subparts
+      .filter((a) => a.hook == hook)
+      .sort((a,b) => a.what > b.what)
+    as {what, name, part_id, attached} (part_id)}
+    <tr>
+      <th scope="row"> {'|'.repeat(level)} {$types[what].name} </th>
+      <td>{name}</td>
+      <td class="text-right"> {new Date(attached).toLocaleDateString()} </td >
+      <Usage {part_id} />
+    </tr>
+    <svelte:self hook={what} {subparts} level={level+1}></svelte:self>
+  {/each}
+
+{/if}
+{:else}
+   No subparts maintained!
+{/if}

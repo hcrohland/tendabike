@@ -49,6 +49,22 @@ pub struct Attachment {
     detached: Option<DateTime<Utc>>,
 }
 
+#[derive(Queryable, Serialize)]
+pub struct AttachmentDetail {
+    /// the sub-part, which is attached to the hook
+    part_id: PartId,
+    name: String,
+    what: PartTypeId,
+    /// the hook on that gear
+    hook: PartTypeId,
+    /// The gear the part is attached to
+    gear: PartId,
+    /// when it was attached
+    attached: DateTime<Utc>,
+    /// when it was removed again, "none" means "still attached"
+    detached: Option<DateTime<Utc>>,
+}
+
 fn assembly(
     part: Part,
     at_time: DateTime<Utc>,
@@ -331,6 +347,20 @@ fn collisions(
         .load::<Attachment>(conn)?)
 }
 
+fn attachees (gear_id: PartId, time: DateTime<Utc>, conn: &AppConn) -> TbResult<Vec<AttachmentDetail>> {
+    use schema::attachments::dsl::*;
+    use schema::parts::dsl::{parts,id,name,what};
+  
+    Ok(attachments
+        .filter(gear.eq(gear_id))
+        .filter(attached.lt(time))
+        .filter(detached.is_null().or(detached.ge(time)))
+        .inner_join(parts.on(id.eq(part_id)))
+        .select((part_id,name,what,hook,gear,attached,detached))
+        .get_results::<AttachmentDetail>(conn)?
+    )
+}
+
 #[patch("/", data = "<attachment>")]
 fn patch(attachment: Json<Attachment>, user: &User, conn: AppDbConn) -> ApiResult<PartList> {
     tbapi(attachment.patch(user, &conn))
@@ -362,7 +392,21 @@ fn check(
     Ok(Json(res))
 }
 
-/// All attachments for this part in the given time frame
+#[get("/to/<gear_id>?<time>")]
+fn to(
+    gear_id: i32,
+    time: Option<String>,
+    user: &User,
+    conn: AppDbConn,
+) -> ApiResult<Vec<AttachmentDetail>> {
+    let gear_id = PartId::get(gear_id, user, &conn)?;
+    let time = parse_time(time)?.unwrap_or_else(Utc::now);
+    let conn = &conn.0;
+
+    tbapi(attachees(gear_id, time, conn))
+}
+
+/// Where was this part attached in the given time frame?
 ///
 #[get("/<part_id>?<start>&<end>")]
 fn get(
@@ -421,5 +465,5 @@ fn read(
 }
 
 pub fn routes() -> Vec<rocket::Route> {
-    routes![get, check, patch, get_assembly]
+    routes![get, check, patch, get_assembly, to]
 }

@@ -1,16 +1,24 @@
 <script>
-  import {parts} from './store.js'
+  import {myfetch, types, parts, category} from './store.js'
+  import Await from './Await.svelte'
+  import Subparts from './Subparts.svelte'
+  import Usage from './Usage.svelte'
  
   export let params;
   let gear = $parts[params.id]
+  category.set($types[gear.what])
+
+  let promise; 
+  promise = myfetch('/attach/to/' + gear.id) 
 </script>
 
 <table class="table">
   <thead>
     <tr>
-      <th scope="col">Name</th>
+      <th scope="col">{$types[gear.what].name}</th>
       <th scope="col">Brand</th>
       <th scope="col">Model</th>
+      <Usage />
     </tr>
   </thead>
   <tbody>
@@ -18,6 +26,10 @@
       <td>{gear.name}</td>
       <td>{gear.vendor}</td>
       <td>{gear.model}</td>
+      <Usage part_id={gear.id} />
     </tr>
   </tbody>
 </table>
+<Await {promise} let:data={subparts}>
+  <Subparts hook={gear.what} {subparts} />
+</Await>
