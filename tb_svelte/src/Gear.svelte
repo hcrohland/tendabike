@@ -4,6 +4,7 @@
   export let part;
 
   let isOpen = false;
+  let showLink = false;
 </script>
 
 <style>
@@ -18,13 +19,13 @@
 
 <div class="card">
   <div class="header">
-    <div class="card-header" on:click={() => (isOpen = !isOpen)}>
+    <div class="card-header" on:click={() => (isOpen = !isOpen)} on:mouseenter={()=> showLink = true} on:mouseleave={()=> showLink = false}>
       <span class="h5 mb-0"> 
         {part.name} 
       </span>
-     {#if isOpen}
+     {#if showLink}
           <a href="#/part/{part.id}" type="button" class="float-right">
-            Details
+            &mdash;&GreaterGreater;
           </a>
       {/if}
       
