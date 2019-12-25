@@ -29,6 +29,8 @@ pub struct PartType {
     pub main: PartTypeId,
     /// Part types that can be attached
     pub hooks: Vec<PartTypeId>,
+    /// the order for displaying types
+    pub order: i32,
 }
 
 #[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]

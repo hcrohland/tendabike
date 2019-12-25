@@ -30,8 +30,8 @@ let part
 {:else}
 
   {#each subparts
+      .sort((a,b) => $types[a.what].order > $types[b.what].order)
       .filter((a) => a.hook == hook)
-      .sort((a,b) => a.what > b.what)
     as {what, name, part_id, attached} (part_id)}
     <tr>
       <th scope="row" class="text-nowrap"> {'| '.repeat(level)+$types[what].name} </th>

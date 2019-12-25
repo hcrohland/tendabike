@@ -39,6 +39,7 @@ table! {
         name -> Text,
         main -> Int4,
         hooks -> Array<Int4>,
+        order -> Int4,
     }
 }
 

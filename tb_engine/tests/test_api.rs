@@ -62,7 +62,8 @@ fn part_types() {
             id: 1.into(),
             name: String::from("Bike"),
             main: 1.into(),
-            hooks: Vec::new()
+            hooks: Vec::new(),
+            order: 999
         }
     );
 }
