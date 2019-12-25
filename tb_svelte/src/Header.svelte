@@ -1,10 +1,13 @@
 <script>
-  import {link, push, location} from 'svelte-spa-router'
+  import {Collapse, NavbarToggler, NavbarBrand} from 'sveltestrap';
+  import {link, push, location} from 'svelte-spa-router';
   import {myfetch, types, category, parts} from "./store.js";
   import Await from './Await.svelte';
 
   let disabled = false;
   let promise = undefined;
+
+  let isOpen = false;
 
   async function synchronize() {
     disabled = true;
@@ -12,30 +15,30 @@
       .then(data => parts.updateMap(data[1]))
       .then(() => disabled = false)
   }
+  function handleUpdate(event) {
+    isOpen = event.detail.isOpen;
+  }
+
 </script>
 
-<nav class="navbar navbar-expand-sm navbar-light bg-light mb-2 ">
-    <a class="navbar-brand" href="#/">
-      Tend a 
-
-      {#if $category}
-        <strong> {$category.name} </strong>
-      {:else}
-        Gear
-      {/if}
-    </a>
-  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-    <span class="navbar-toggler-icon"></span>
-  </button>
-
-  <div class="collapse navbar-collapse" id="navbarSupportedContent">
-    <ul class="navbar-nav ml-auto">
-          <button on:click={synchronize} {disabled} class="dropdown-item">
-            <Await {promise}>
-              Sync 
-            </Await>
-          </button>
-          <a href="/about" use:link class="dropdown-item">About</a>
+<nav class="navbar navbar-expand-sm navbar-light bg-light mb-2">
+  <a class="navbar-brand" href="#/">
+    Tend a 
+    {#if $category}
+      <strong> {$category.name} </strong>
+    {:else}
+      Gear
+    {/if}
+  </a>
+  <NavbarToggler on:click={() => (isOpen = !isOpen)} />
+  <Collapse {isOpen} navbar expand="md" on:update={handleUpdate}>
+    <ul class="navbar-nav ml-auto float-right">
+      <button on:click={synchronize} {disabled} class="dropdown-item">
+        <Await {promise}>
+          Sync 
+        </Await>
+      </button>
+      <a href="/about" use:link class="dropdown-item">About</a>
     </ul>
-  </div>
+  </Collapse>
 </nav>
