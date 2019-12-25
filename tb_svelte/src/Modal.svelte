@@ -43,7 +43,7 @@
 
 <div class="svmodal" role="dialog" aria-modal="true" bind:this={modal}>
 	<slot name="header"></slot>
-  <span type="button" class="float-right" on:click={close}>&times;</span>
+  <span type="button" class="border-0 float-right" on:click={close}>&times;</span>
 
 	<hr>
 	<slot></slot>
@@ -69,16 +69,12 @@
 		left: 50%;
 		top: 50%;
 		width: calc(100vw - 4em);
-		max-width: 32em;
+		max-width: 40em;
 		max-height: calc(100vh - 4em);
 		overflow: auto;
 		transform: translate(-50%,-50%);
 		padding: 1em;
 		border-radius: 0.2em;
 		background: white;
-	}
-
-	button {
-		display: block;
 	}
 </style>
