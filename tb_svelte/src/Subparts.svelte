@@ -1,6 +1,7 @@
 <script>
 import {types} from './store.js'
 import Usage from './Usage.svelte'
+import NewPart from './NewPart.svelte'
 
 export let hook;
 export let subparts;
@@ -18,6 +19,7 @@ let part
       <th scope="col">Name</th>
       <th scope="col" class="text-right">Attached</th>
       <Usage />
+      <th></th>
     </tr>
   </thead>
   <tbody>
@@ -32,10 +34,11 @@ let part
       .sort((a,b) => a.what > b.what)
     as {what, name, part_id, attached} (part_id)}
     <tr>
-      <th scope="row"> {'|'.repeat(level)} {$types[what].name} </th>
+      <th scope="row" class="text-nowrap"> {'| '.repeat(level)+$types[what].name} </th>
       <td>{name}</td>
       <td class="text-right"> {new Date(attached).toLocaleDateString()} </td >
       <Usage {part_id} />
+      <th> <NewPart title='New' cat={$types[what]}/></th>
     </tr>
     <svelte:self hook={what} {subparts} level={level+1}></svelte:self>
   {/each}
