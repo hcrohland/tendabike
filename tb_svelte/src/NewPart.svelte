@@ -25,7 +25,7 @@
 
 </script>
 
-<span type="button" on:click="{() => showModal = true}">
+<span type="button" class="float-right" on:click="{() => showModal = true}">
   {title}
 </span>
 
@@ -46,7 +46,7 @@
         <input type="text" class="form-control" id="inputBrand" bind:value={vendor} placeholder="Brand">
       </div>
       <div class="form-group col-md-6">
-        <label for="inputModel"> &nbsp </label>
+        <label class="d-none d-md-block" for="inputModel"> &nbsp </label>
         <input type="text" class="form-control" id="inputModel" bind:value={model} placeholder="Model">
       </div>
       </div>
