@@ -1,31 +1,84 @@
 <script>
-export let submit
-export let save = 'Save Changes'
-export let title
+	import { createEventDispatcher, onDestroy } from 'svelte';
 
+	const dispatch = createEventDispatcher();
+	const close = () => dispatch('close');
+
+	let modal;
+
+	const handle_keydown = e => {
+		if (e.key === 'Escape') {
+			close();
+			return;
+		}
+
+		if (e.key === 'Tab') {
+			// trap focus
+			const nodes = svmodal.querySelectorAll('*');
+			const tabbable = Array.from(nodes).filter(n => n.tabIndex >= 0);
+
+			let index = tabbable.indexOf(document.activeElement);
+			if (index === -1 && e.shiftKey) index = 0;
+
+			index += tabbable.length + (e.shiftKey ? -1 : 1);
+			index %= tabbable.length;
+
+			tabbable[index].focus();
+			e.preventDefault();
+		}
+	};
+
+	const previously_focused = typeof document !== 'undefined' && document.activeElement;
+
+	if (previously_focused) {
+		onDestroy(() => {
+			previously_focused.focus();
+		});
+	}
 </script>
-<!-- Button trigger modal -->
-<button type="button" class="btn btn-primary" data-toggle="modal" data-target="#exampleModal">
-  {title}
-</button>
 
-<!-- Modal -->
-<div class="modal fade" id="exampleModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
-  <div class="modal-dialog" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="exampleModalLabel">{title}</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-      <div class="modal-body">
-        <slot />
-      </div>
-      <div class="modal-footer">
-        <!-- <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button> -->
-        <button type="submit" class="btn btn-primary" on:click={submit} data-dismiss="modal">{save}</button>
-      </div>
-    </div>
-  </div>
+<svelte:window on:keydown={handle_keydown}/>
+
+<div class="svmodal-background" on:click={close}></div>
+
+<div class="svmodal" role="dialog" aria-modal="true" bind:this={modal}>
+	<slot name="header"></slot>
+  <span type="button" class="float-right" on:click={close}>&times;</span>
+
+	<hr>
+	<slot></slot>
+	<hr>
+  <span>
+    <slot name="footer"></slot>
+  </span>
+	<!-- svelte-ignore a11y-autofocus -->
 </div>
+
+<style>
+	.svmodal-background {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		background: rgba(0,0,0,0.3);
+	}
+
+	.svmodal {
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		width: calc(100vw - 4em);
+		max-width: 32em;
+		max-height: calc(100vh - 4em);
+		overflow: auto;
+		transform: translate(-50%,-50%);
+		padding: 1em;
+		border-radius: 0.2em;
+		background: white;
+	}
+
+	button {
+		display: block;
+	}
+</style>

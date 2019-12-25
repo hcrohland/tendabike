@@ -4,11 +4,14 @@
   import {myfetch, filterValues, types, parts} from './store.js';
   
   export let cat;
+  export let title = 'New ' + cat.name;
 
   let name;
   let vendor;
   let model;
   let purchase;
+
+  let showModal = false;
 
   function savePart () {
     if (name) {
@@ -22,40 +25,40 @@
 
 </script>
 
-<Modal title='New {cat.name}' submit={savePart} save="Create">
+<span type="button" on:click="{() => showModal = true}">
+  {title}
+</span>
 
-<form>
-  <div class="form-row">
-    <div class="form-group col-md-12">
-      <label for="inputName">You call your new {cat}</label>
-      <input type="text" class="form-control" id="inputName" bind:value={name} required placeholder="Name">
-    </div>
-  </div>
-  <div class="form-row">
+{#if showModal}
+  <Modal save="Create" on:close="{() => showModal = false}">
+    <span slot="header"> New {cat.name} </span>
+    <form>
+      <div class="form-row">
+        <div class="form-group col-md-12">
+          <label for="inputName">You call it</label>
+          <input type="text" class="form-control" id="inputName" bind:value={name} required placeholder="Name">
+        </div>
+      </div>
+      <div class="form-row">
 
-  <div class="form-group col-md-6">
-    <label for="inputBrand">and it is a</label>
-    <input type="text" class="form-control" id="inputBrand" bind:value={vendor} placeholder="Brand">
-  </div>
-  <div class="form-group col-md-6">
-    <label for="inputModel"> &nbsp </label>
-    <input type="text" class="form-control" id="inputModel" bind:value={model} placeholder="Model">
-  </div>
-  </div>
-  <div class="form-row">
-    <div class="form-group col-md-6">
-      <label for="inputDate">New {cat.name} day was at</label>
-      <input type="date" class="form-control" id="inputDate" bind:value={purchase} required>
-    </div>
-  </div>
-  <!-- <div class="form-group">
-    <div class="form-check">
-      <input class="form-check-input" type="checkbox" id="gridCheck">
-      <label class="form-check-label" for="gridCheck">
-        Check me out
-      </label>
-    </div>
-  </div> -->
-  <!-- <button type="submit" class="btn btn-primary">Create</button> -->
-</form>
-</Modal>
+      <div class="form-group col-md-6">
+        <label for="inputBrand">and it is a</label>
+        <input type="text" class="form-control" id="inputBrand" bind:value={vendor} placeholder="Brand">
+      </div>
+      <div class="form-group col-md-6">
+        <label for="inputModel"> &nbsp </label>
+        <input type="text" class="form-control" id="inputModel" bind:value={model} placeholder="Model">
+      </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group col-md-6">
+          <label for="inputDate">New {cat.name} day was at</label>
+          <input type="date" class="form-control" id="inputDate" bind:value={purchase} required>
+        </div>
+      </div>
+    </form>
+    <span slot="footer">
+      <button type="submit" class="btn btn-primary float-right" on:click={savePart}>Create {cat.name}</button>
+    </span>
+  </Modal>
+{/if}
