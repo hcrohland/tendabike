@@ -24,7 +24,7 @@
     {/each}
   </div>
   <div class="container">
-      <div class="row p-sm-2">
+      <div class="row p-sm-2 float-right">
         <NewPart {cat}/>
       </div>
   </div>

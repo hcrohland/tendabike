@@ -24,7 +24,7 @@
 
 </script>
 
-<span type="button" class="float-right" on:click="{() => showModal = true}">
+<span type="button" class="badge badge-secondary float-right" on:click="{() => showModal = true}">
   {title}
 </span>
 
