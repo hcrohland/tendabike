@@ -6,6 +6,7 @@
 	import Await from "./Await.svelte"
 	import Header from "./Header.svelte"
 	import Gear from "./Gear.svelte"
+	import Spares from "./Spares.svelte"
 	import Home from "./Home.svelte"
 	import About from "./About.svelte"
 	import {myfetch, types, parts} from './store.js'
@@ -14,7 +15,8 @@
 		'/about': About,
 		'/': Home,
     '/cat/:category': ToyGroup,
-    '/gear/:id': Gear
+		'/gear/:id': Gear,
+		'/spares/:category': Spares
 	}
 
 	let promise = Promise.all([

@@ -21,7 +21,7 @@
 
 </script>
 
-<nav class="navbar navbar-expand-sm navbar-light bg-light mb-2">
+<nav class="navbar navbar-expand-md navbar-light bg-light mb-2">
   <a class="navbar-brand" href="#/">
     Tend a 
     {#if $category}
@@ -32,13 +32,19 @@
   </a>
   <NavbarToggler on:click={() => (isOpen = !isOpen)} />
   <Collapse {isOpen} navbar expand="md" on:update={handleUpdate}>
+    <ul class="navbar-nav ml-auto float-left">
+      {#if $category}
+         <a href="/cat/{$category.id}" use:link class="dropdown-item text-reset">{$category.name}s</a>
+         <a href="/spares/{$category.id}" use:link class="dropdown-item text-reset">Spare parts</a>
+      {/if}
+    </ul>
     <ul class="navbar-nav ml-auto float-right">
       <button on:click={synchronize} {disabled} class="dropdown-item">
         <Await {promise}>
           Sync 
         </Await>
       </button>
-      <a href="/about" use:link class="dropdown-item">About</a>
+      <a href="/about" use:link class="dropdown-item text-reset">About</a>
     </ul>
   </Collapse>
 </nav>
