@@ -1,48 +1,44 @@
 <script>
-  import { slide } from 'svelte/transition';
-  import formatSeconds from './store.js';
+  import {myfetch, types, parts, category} from './store.js'
+  import Await from './Await.svelte'
+  import Subparts from './Subparts.svelte'
+  import Usage from './Usage.svelte'
+ 
+  export let params;
+  let gear = $parts[params.id]
+  category.set($types[gear.what])
 
-  export let part;
-
-  let isOpen = false;
-  let showLink = false;
+  let promise; 
+  promise = myfetch('/attach/to/' + gear.id) 
 </script>
 
 <style>
-  .header:hover {
-    background-color: lightgray;
-  }
-
-  .param {
-      font-weight: bold;
-  }
+.scroll-x {
+  width: 100%;
+  overflow-x: scroll;
+}
 </style>
 
-<div class="card">
-  <div class="header">
-    <div class="card-header" on:click={() => (isOpen = !isOpen)} on:mouseenter={()=> showLink = true} on:mouseleave={()=> showLink = false}>
-      <span class="h5 mb-0"> 
-        {part.name} 
-      </span>
-     {#if showLink}
-          <a href="#/part/{part.id}" class="badge badge-secondary float-right text-reset">
-            &mdash;&GreaterGreater;
-          </a>
-      {/if}
-      
-    </div>
-  </div>
-  {#if isOpen}
-    <div transition:slide>
-      <div class="card-body">
-        is a <span class="param">{part.vendor} {part.model}</span> 
-        which you used <span class=param>{part.count.toLocaleString()}</span> times 
-        for <span class="param">{formatSeconds(part.time)}</span> hours
-        <p> You covered <span class="param">{parseFloat((part.distance / 1000).toFixed(1)).toLocaleString()}</span> km 
-        climbing <span class="param">{part.climb.toLocaleString()}</span> and descending <span class="param">{part.descend.toLocaleString()}</span> meters </p>
-        
-      </div>
-    </div>
-
-  {/if}
+<div class="scroll-x">
+  <table class="table">
+    <thead>
+      <tr>
+        <th scope="col">{$types[gear.what].name}</th>
+        <th scope="col">Brand</th>
+        <th scope="col">Model</th>
+        <Usage />
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{gear.name}</td>
+        <td>{gear.vendor}</td>
+        <td>{gear.model}</td>
+        <Usage part_id={gear.id} />
+      </tr>
+    </tbody>
+  </table>
+  <Await {promise} let:data={subparts}>
+    <Subparts hook={gear.what} {subparts} />
+  </Await>
 </div>

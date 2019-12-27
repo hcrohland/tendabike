@@ -1,6 +1,5 @@
 <script>
-  import Gear from './Gear.svelte';
-  import Await from './Await.svelte';
+  import GearCard from './GearCard.svelte';
   import NewPart from './NewPart.svelte';
   import {filterValues, types, parts, category} from './store.js';
   
@@ -18,7 +17,7 @@
   <div class="row border p-sm-2">
     {#each gears() as part (part.id)}
       <div class="col-md-6 p-0 p-sm-2">
-        <Gear {part} />
+        <GearCard {part} />
       </div>
     {:else}
       You have no {cat.name} to tend 😱
