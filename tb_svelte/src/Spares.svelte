@@ -1,5 +1,5 @@
 <script>
-import {myfetch, types, parts, category} from './store.js'
+import {myfetch, filterValues, types, parts, category} from './store.js'
 import Usage from './Usage.svelte'
 import Await from './Await.svelte'
 import NewPart from './NewPart.svelte'
@@ -14,12 +14,16 @@ category.set(cat);
 let spares
 
 let promise; 
-promise = myfetch('/part/spares/' + cat.id) 
+promise = myfetch('/part/spares/' + cat.id)
 </script>
 
+<style>
+ .border-2 {
+   border-width: 4px;
+ }
+</style>
 
 <Await {promise} let:data={spares}>
-  {#if spares.length > 0}
     <table class="table table-hover">
       <thead>
         <tr>
@@ -30,21 +34,23 @@ promise = myfetch('/part/spares/' + cat.id)
         </tr>
       </thead>
       <tbody>
-        {#each spares
+      {#each filterValues($types, (t) => t.main == cat.id && t.id != cat.id) as type}
+        <tr>
+            <th colspan=2 scope="col" class="border-2 text-nowrap"> {type.name}s </th>
+            <th colspan=5 class="border-2"> <NewPart title='New' cat={type}/></th>
+            </tr>
+          
+         {#each spares
             .map((s) => $parts[s])
-            .sort((a,b) => $types[a.what].order > $types[b.what].order)
+            .filter((p) => p.what == type.id)
           as part (part.id)}
           <tr>
-            <th scope="row" class="text-nowrap"> {$types[part.what].name} </th>
+           <td class="border-0"></td>
             <td>{part.name}</td>
             <Usage part_id={part.id} />
-            <th> <NewPart title='New' cat={$types[part.what]}/></th>
           </tr>
         {/each}
+      {/each}
       </tbody>
     </table>
-
-  {:else}
-    You have no {cat.name} spares!
-  {/if}
 </Await>
