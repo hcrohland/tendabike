@@ -1,5 +1,4 @@
 <script>
-  import Await from './Await.svelte';
   import Modal from './Modal.svelte';
   import {myfetch, filterValues, types, parts} from './store.js';
   

@@ -3,9 +3,6 @@ import {parts, formatSeconds} from './store.js'
  
 export let part_id = undefined;
 
-let part;
-let date = new Date(null); 
-
 $: part = $parts[part_id]
 
 </script>
