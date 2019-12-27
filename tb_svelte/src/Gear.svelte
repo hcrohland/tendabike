@@ -1,5 +1,6 @@
 <script>
   import { slide } from 'svelte/transition';
+  import formatSeconds from './store.js';
 
   export let part;
 
@@ -24,7 +25,7 @@
         {part.name} 
       </span>
      {#if showLink}
-          <a href="#/part/{part.id}" type="button" class="float-right">
+          <a href="#/part/{part.id}" class="badge badge-secondary float-right text-reset">
             &mdash;&GreaterGreater;
           </a>
       {/if}
@@ -36,8 +37,7 @@
       <div class="card-body">
         is a <span class="param">{part.vendor} {part.model}</span> 
         which you used <span class=param>{part.count.toLocaleString()}</span> times 
-        for <span class="param">{Math.floor(part.time /3600).toLocaleString()}:{String(Math.floor(part.time/60)%60).padStart(2, '0')
-}</span> hours
+        for <span class="param">{formatSeconds(part.time)}</span> hours
         <p> You covered <span class="param">{parseFloat((part.distance / 1000).toFixed(1)).toLocaleString()}</span> km 
         climbing <span class="param">{part.climb.toLocaleString()}</span> and descending <span class="param">{part.descend.toLocaleString()}</span> meters </p>
         
