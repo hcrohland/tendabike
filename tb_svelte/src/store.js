@@ -11,6 +11,21 @@ function handleErrors(response) {
     throw Error(response.status + ' "' + response.statusText + '" accessing ' + response.url);
 }
 
+export function mypatch (url, data) {
+    let option = {
+            method: 'PATCH', // *GET, POST, PUT, DELETE, etc.
+            credentials: 'include', // include, *same-origin, omit
+            headers: {
+              'Content-Type': 'application/json'
+              // 'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: JSON.stringify(data) // body data type must match "Content-Type" header
+          };
+	return fetch(url, option)
+		.then(handleErrors)
+		.then(response => response.json())
+};
+
 export function myfetch (url) {
 	return fetch(url)
 		.then(handleErrors)

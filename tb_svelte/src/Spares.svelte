@@ -15,7 +15,10 @@ category.set(cat);
 let spares
 
 let promise; 
-promise = myfetch('/part/spares/' + cat.id)
+
+update();
+
+function update() {promise = myfetch('/part/spares/' + cat.id)}
 </script>
 
 <style>
@@ -48,7 +51,7 @@ promise = myfetch('/part/spares/' + cat.id)
            <td class="border-0"></td>
             <td>{part.name}</td>
             <Usage part_id={part.id} />
-            <td> <Attach {part}/></td>
+            <td> <Attach {part} on:refresh={update}/></td>
           </tr>
         {/each}
       {/each}
