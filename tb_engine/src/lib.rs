@@ -84,7 +84,11 @@ pub fn ignite_rocket() -> rocket::Rocket {
     // Initialize server
 
     let allowed_origins =
-        AllowedOrigins::some_exact(&["http://localhost:5000", "http://127.0.0.1:5000"]);
+        AllowedOrigins::some_exact(&[
+            "http://localhost:5000", 
+            "http://127.0.0.1:5000", 
+            "http://localhost:8000", 
+            "http://127.0.0.1:8000"]);
 
     // You can also deserialize this
     let cors = rocket_cors::CorsOptions {
