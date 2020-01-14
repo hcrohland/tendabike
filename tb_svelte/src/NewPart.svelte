@@ -1,6 +1,7 @@
 <script>
   import Modal from './Modal.svelte';
-  import {myfetch, filterValues, types, parts} from './store.js';
+  import DateTime from './DateTime.svelte';
+  import {myfetch, types, parts} from './store.js';
   
   export let cat;
   export let title = 'New ' + cat.name;
@@ -24,7 +25,7 @@
 
 </script>
 
-<span type="button" class="badge badge-secondary float-right" on:click="{() => showModal = true}">
+<span type="button" class="badge badge-secondary" on:click="{() => showModal = true}">
   {title}
 </span>
 
@@ -52,7 +53,7 @@
       <div class="form-row">
         <div class="form-group col-md-6">
           <label for="inputDate">New {cat.name} day was at</label>
-          <input type="date" class="form-control" id="inputDate" bind:value={purchase} required>
+          <DateTime id="inputDate" bind:date={purchase} required/>
         </div>
       </div>
     </form>
