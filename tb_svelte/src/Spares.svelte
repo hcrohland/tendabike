@@ -2,6 +2,7 @@
 import {myfetch, filterValues, types, parts, category} from './store.js'
 import Usage from './Usage.svelte'
 import Await from './Await.svelte'
+import Attach from './Attach.svelte'
 import NewPart from './NewPart.svelte'
 
 export let params;
@@ -36,9 +37,8 @@ promise = myfetch('/part/spares/' + cat.id)
       <tbody>
       {#each filterValues($types, (t) => t.main == cat.id && t.id != cat.id) as type}
         <tr>
-            <th colspan=2 scope="col" class="border-2 text-nowrap"> {type.name}s </th>
-            <th colspan=5 class="border-2"> <NewPart title='New' cat={type}/></th>
-            </tr>
+            <th colspan=8 scope="col" class="border-2 text-nowrap"> {type.name}s <NewPart title='New' cat={type}/></th>
+        </tr>
           
          {#each spares
             .map((s) => $parts[s])
@@ -48,6 +48,7 @@ promise = myfetch('/part/spares/' + cat.id)
            <td class="border-0"></td>
             <td>{part.name}</td>
             <Usage part_id={part.id} />
+            <td> <Attach {part}/></td>
           </tr>
         {/each}
       {/each}
