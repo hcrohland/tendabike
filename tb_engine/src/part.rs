@@ -261,7 +261,7 @@ pub fn reset(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartId>> {
 }
 
 impl NewPart {
-    fn create(self, user: &User, conn: &AppConn) -> TbResult<PartId> {
+    fn create(self, user: &User, conn: &AppConn) -> TbResult<Part> {
         use schema::parts::dsl::*;
 
         user.check_owner(
@@ -284,7 +284,7 @@ impl NewPart {
         );
 
         let part: Part = diesel::insert_into(parts).values(values).get_result(conn)?;
-        Ok(part.id)
+        Ok(part)
     }
 }
 
@@ -306,10 +306,10 @@ fn post(
     newpart: Json<NewPart>,
     user: &User,
     conn: AppDbConn,
-) -> Result<status::Created<Json<PartId>>, ApiError> {
-    let id = newpart.clone().create(user, &conn)?;
-    let url = uri!(get: i32::from(id));
-    Ok(status::Created(url.to_string(), Some(Json(id))))
+) -> Result<status::Created<Json<Part>>, ApiError> {
+    let part = newpart.clone().create(user, &conn)?;
+    let url = uri!(get: i32::from(part.id));
+    Ok(status::Created(url.to_string(), Some(Json(part))))
 }
 
 #[get("/categories")]

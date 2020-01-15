@@ -75,8 +75,9 @@ fn part_post (data: Form<NewPart>, user: User) -> TbResult<Redirect> {
     data.purchase.push_str("T12:00:00Z");
     let id = token::id(&user.0, 0)?;
     data.owner = Some(id);
-    let res = user.request(Method::POST, "/part", serde_json::to_string(&data)?)?.as_i64().ok_or_else(|| anyhow!("No id returned)"))?;
-    Ok(Redirect::to(format!("/part/{}", res)))
+    let id = user.request(Method::POST, "/part", serde_json::to_string(&data)?)?["id"]
+        .as_i64().ok_or_else(|| anyhow!("No part returned)"))?;
+    Ok(Redirect::to(format!("/part/{}", id)))
 }
 
 #[derive(Debug, FromForm, Serialize)]
