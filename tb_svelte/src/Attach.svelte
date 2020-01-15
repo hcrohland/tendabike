@@ -1,7 +1,7 @@
 <script>
   import Modal from './Modal.svelte';
   import DateTime from './DateTime.svelte';
-  import {mypatch, filterValues, types, parts} from './store.js';
+  import {myfetch, filterValues, types, parts} from './store.js';
   
   import { createEventDispatcher } from 'svelte';
 	const dispatch = createEventDispatcher();
@@ -23,7 +23,7 @@
   async function attachPart () {
     disabled = true;
     try {
-      await mypatch('/attach/', attach)
+      await myfetch('/attach/', 'PATCH', attach)
         .then(data => parts.updateMap(data))
         .then(dispatch('refresh'))
         .then(reset)
@@ -52,17 +52,17 @@
 </span>
 
 {#if showModal}
-  <Modal save="Attach" on:reset={reset}>
+  <Modal save="Attach" on:close={reset}>
     <span slot="header"> Attach {type.name} {part.name} {part.vendor} {part.model} </span>
     <form>
-      <div class="form-inline">
         <div class="form-inline">
           <div class="input-group mb-0 mr-sm-2 mb-sm-2">
             <div class="input-group-prepend">
               <span class="input-group-text">to</span>
             </div>
             {#if type.hooks.length > 1}
-              <select name="hook" class="form-control" required bind:value={attach.hook}>
+              <!-- svelte-ignore a11y-autofocus -->
+              <select name="hook" class="form-control" autofocus required bind:value={attach.hook}>
                 <option hidden value={undefined}> -- select one -- </option>
                 {#each type.hooks as h}
                   <option value={h}>{$types[h].name}</option>
@@ -81,13 +81,16 @@
               {/each}
             </select> 
           </div>  
-        </div>  
-        <div class="form-inline ">
+        <!-- </div>  
+        <div class="form-inline "> -->
           <!-- <input type="hidden" name="tz" value={{ now() | date(format="%:z")}}> -->
-          <br>
-          <DateTime bind:date={attach.attached}/> 
+          <div class="input-group mb-0 mr-sm-2 mb-sm-2">
+          <div class="input-group-prepend">
+              <span class="input-group-text">at</span>
+          </div>
+          <DateTime class="input-group-text" bind:date={attach.attached}/> 
         </div>
-      </div>
+        </div>
     </form> 
     <span slot="footer">
       <button type="submit" class="btn btn-primary float-right" {disabled} on:click={attachPart}>Attach</button>

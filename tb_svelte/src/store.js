@@ -11,26 +11,23 @@ function handleErrors(response) {
     throw Error(response.status + ' "' + response.statusText + '" accessing ' + response.url);
 }
 
-export function mypatch (url, data) {
-    let option = {
-            method: 'PATCH', // *GET, POST, PUT, DELETE, etc.
+export function myfetch (url, method, data) {
+    let option
+    if (method) {
+        option = {
+            method: method, // *GET, POST, PUT, DELETE, etc.
             credentials: 'include', // include, *same-origin, omit
             headers: {
-              'Content-Type': 'application/json'
-              // 'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify(data) // body data type must match "Content-Type" header
-          };
+        };
+    }
 	return fetch(url, option)
 		.then(handleErrors)
 		.then(response => response.json())
 };
 
-export function myfetch (url) {
-	return fetch(url)
-		.then(handleErrors)
-		.then(response => response.json())
-};
 export function filterValues(map, fn) { 
     return Object.values(map).filter(fn)
 };
