@@ -18,7 +18,9 @@ let promise;
 
 update();
 
-function update() {promise = myfetch('/part/spares/' + cat.id)}
+function update() {
+  promise = myfetch('/part/spares/' + cat.id).then((d) => spares = d)
+}
 </script>
 
 <style>
@@ -27,7 +29,7 @@ function update() {promise = myfetch('/part/spares/' + cat.id)}
  }
 </style>
 
-<Await {promise} let:data={spares}>
+<Await {promise}>
     <table class="table table-hover">
       <thead>
         <tr>
@@ -40,7 +42,7 @@ function update() {promise = myfetch('/part/spares/' + cat.id)}
       <tbody>
       {#each filterValues($types, (t) => t.main == cat.id && t.id != cat.id) as type}
         <tr>
-            <th colspan=8 scope="col" class="border-2 text-nowrap"> {type.name}s <NewPart title='New' cat={type}/></th>
+            <th colspan=8 scope="col" class="border-2 text-nowrap"> {type.name}s <NewPart title='New' cat={type} on:saved={update}/></th>
         </tr>
           
          {#each spares
@@ -51,7 +53,7 @@ function update() {promise = myfetch('/part/spares/' + cat.id)}
            <td class="border-0"></td>
             <td>{part.name}</td>
             <Usage part_id={part.id} />
-            <td> <Attach {part} on:refresh={update}/></td>
+            <td> <Attach {part} on:saved={update}/></td>
           </tr>
         {/each}
       {/each}

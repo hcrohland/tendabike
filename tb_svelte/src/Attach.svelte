@@ -25,8 +25,8 @@
     try {
       await myfetch('/attach/', 'PATCH', attach)
         .then(data => parts.updateMap(data))
-        .then(dispatch('refresh'))
         .then(reset)
+        .then(dispatch('saved'))
     } catch (e) {
       alert (e)
       location.reload()
