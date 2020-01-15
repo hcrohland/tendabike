@@ -46,6 +46,7 @@ export function formatSeconds(sec_num) {
 export const category = writable(undefined);
 export const parts = mapable("id");
 export const types = mapable("id");
+export const user = writable();
 
 function mapField (field) {
     return (map, obj) => {

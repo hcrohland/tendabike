@@ -9,7 +9,7 @@
 	import Spares from "./Spares.svelte"
 	import Home from "./Home.svelte"
 	import About from "./About.svelte"
-	import {myfetch, types, parts} from './store.js'
+	import {myfetch, types, parts, user} from './store.js'
 
 	const routes = {
 		'/about': About,
@@ -23,7 +23,9 @@
 			myfetch('/types/part')
 				.then(data => types.setMap(data)),
 			myfetch('/part/all')
-				.then(data => parts.setMap(data))
+				.then(data => parts.setMap(data)),
+			myfetch('/user')
+				.then(data => user.set(data))
 	])
 </script>
 

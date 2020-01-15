@@ -1,7 +1,7 @@
 <script>
   import {Collapse, NavbarToggler, NavbarBrand} from 'sveltestrap';
   import {link, push, location} from 'svelte-spa-router';
-  import {myfetch, types, category, parts} from "./store.js";
+  import {myfetch, types, category, parts, user} from "./store.js";
   import Await from './Await.svelte';
 
   let disabled = false;
@@ -45,6 +45,13 @@
         </Await>
       </button>
       <a href="/about" use:link class="dropdown-item text-reset">About</a>
+      {#if $user}
+      <a href="/user" use:link class="dropdown-item text-reset">
+        {$user.firstname}
+      </a> 
+      {:else}
+         <!-- else content here -->
+      {/if}
     </ul>
   </Collapse>
 </nav>
