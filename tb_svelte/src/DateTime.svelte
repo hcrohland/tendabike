@@ -5,7 +5,7 @@
 	const props = Object.assign({}, $$props);
 	delete props.date;
 
-	let mydate = new Date(date);
+	let mydate = roundTime(new Date(date))
 
 	$: date = mydate.toISOString();
   import Flatpickr from 'svelte-flatpickr'
@@ -27,6 +27,13 @@
 		// 	console.log('Options onChange handler', dateStr)
 		// }
 	}
+	export function roundTime(date, minutes) {
+    if (!minutes) minutes = 15
+    date.setMinutes(Math.floor(date.getMinutes()/15)*15)
+    date.setSeconds(0)
+    date.setMilliseconds(0)
+    return date
+	}	
 </script>
 
 <form>
