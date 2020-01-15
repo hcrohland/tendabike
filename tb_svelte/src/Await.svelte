@@ -1,5 +1,10 @@
 <script>
 export let promise;
+
+function handleError(e) {
+  alert(e)
+  location.reload(); 
+}
 </script>
 
 
@@ -12,5 +17,5 @@ export let promise;
 {:then data}
     <slot {data}></slot>
 {:catch error}
-  {error}
+  {handleError(error)}
 {/await}

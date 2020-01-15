@@ -3,17 +3,17 @@
   import DateTime from './DateTime.svelte';
   import {mypatch, filterValues, types, parts} from './store.js';
   
-  export let part;
   import { createEventDispatcher } from 'svelte';
-
 	const dispatch = createEventDispatcher();
 
-
-  let type = $types[part.what];
+  export let part;
 
   let attach;
   let showModal;
-  close();
+  
+  let type = $types[part.what];
+
+  reset();
 
   if (type.hooks.length == 1) attach.hook = type.hooks[0];
 
@@ -22,13 +22,18 @@
 
   async function attachPart () {
     disabled = true;
-    await mypatch('/attach/', attach)
-      .then(data => parts.updateMap(data))
-      .then(dispatch('refresh'))
-      .then(close)
+    try {
+      await mypatch('/attach/', attach)
+        .then(data => parts.updateMap(data))
+        .then(dispatch('refresh'))
+        .then(reset)
+    } catch (e) {
+      alert (e)
+      location.reload()
+    }
   }
 
-  function close () {
+  function reset () {
     showModal = false;
     attach = {
       part_id: part.id,
@@ -47,7 +52,7 @@
 </span>
 
 {#if showModal}
-  <Modal save="Attach" on:close={close}>
+  <Modal save="Attach" on:reset={reset}>
     <span slot="header"> Attach {type.name} {part.name} {part.vendor} {part.model} </span>
     <form>
       <div class="form-inline">
