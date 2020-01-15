@@ -51,7 +51,7 @@ function update() {
           as part (part.id)}
           <tr>
            <td class="border-0"></td>
-            <td>{part.name}</td>
+            <td title={part.vendor + ' ' + part.model + ' ' + new Date(part.purchase).toLocaleString()}>{part.name}</td>
             <Usage part_id={part.id} />
             <td> <Attach {part} on:saved={update}/></td>
           </tr>
