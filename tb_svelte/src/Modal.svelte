@@ -4,7 +4,7 @@
 	const dispatch = createEventDispatcher();
 	const close = () => dispatch('close');
 
-	let modal;
+	let svmodal;
 
 	const handle_keydown = e => {
 		if (e.key === 'Escape') {
@@ -41,7 +41,7 @@
 
 <div class="svmodal-background" on:click={close}></div>
 
-<div class="svmodal" role="dialog" aria-modal="true" bind:this={modal}>
+<div class="svmodal" role="dialog" aria-modal="true" bind:this={svmodal}>
 	<slot name="header"></slot>
   <span type="button" class="border-0 float-right" on:click={close}>&times;</span>
 
