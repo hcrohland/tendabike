@@ -6,8 +6,13 @@ import NewPart from './NewPart.svelte'
 export let hook;
 export let subparts;
 export let level = undefined;
+export let prefix = undefined;
 
 let part
+
+if (prefix) {
+  prefix = prefix.split(' ').reverse()[1] // The first word iff there were two (hack!)
+} 
 
 let hooks = filterValues($types, (a) => a.hooks.includes(hook)).sort((a,b) => a.order - b.order)
 </script>
@@ -29,27 +34,24 @@ let hooks = filterValues($types, (a) => a.hooks.includes(hook)).sort((a,b) => a.
     </table>
     
   {:else}
-    {#each hooks as type}
-      {#each subparts.filter((a) => a.what == type.id && a.hook == hook)
-        as {what, name, part_id, attached} (part_id)}
-        <slot />  
+    {#each hooks as type (type.id)}
+      {#if part = subparts.find((a) => a.what == type.id && a.hook == hook)}
         <tr>
-          <th scope="row" class="text-nowrap"> {'| '.repeat(level)+type.name} </th>
-          <td>{name}</td>
-          <td class="text-right"> {new Date(attached).toLocaleDateString()} </td >
-          <Usage {part_id} />
-          <th> <NewPart title='New' cat={type}/></th>
+          <th scope="row" class="text-nowrap"> 
+            {'| '.repeat(level)}
+            {#if prefix && type.hooks.length > 1}
+              {prefix} 
+            {/if}
+            {type.name} 
+          </th>
+          <td>{part.name}</td>
+          <td class="text-right"> {new Date(part.attached).toLocaleDateString()} </td >
+          <Usage part_id={part.part_id} />
         </tr>
-        
-        <svelte:self hook={type.id} {subparts} level={level+1}></svelte:self>
+        <svelte:self hook={type.id} {subparts} level={level+1} /> 
       {:else}
-        <svelte:self hook={type.id} {subparts} level={level+1}>
-          <tr>
-            <th scope="row" class="text-nowrap"> {'| '.repeat(level)+type.name} </th>
-          </tr>
-        </svelte:self>
-      
-      {/each}
+        <svelte:self hook={type.id} {subparts} {level} prefix={type.name} />
+      {/if}
     {/each}
   {/if}
 {:else}
