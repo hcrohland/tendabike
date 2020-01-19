@@ -47,6 +47,16 @@ pub struct Attachment {
     hook: PartTypeId,
     /// when it was removed again, "none" means "still attached"
     detached: Option<DateTime<Utc>>,
+    /// usage count
+    pub count: i32,
+    /// usage time
+    pub time: i32,
+    /// Usage distance
+    pub distance: i32,
+    /// Overall climbing
+    pub climb: i32,
+    /// Overall descending
+    pub descend: i32,
 }
 
 #[derive(Queryable, Serialize)]
@@ -289,6 +299,52 @@ impl Attachment {
     }
 }
 
+pub fn register(act: &Activity, factor: Factor, conn: &AppConn) -> Vec<Attachment> {
+    use schema::attachments::dsl::*;
+
+    let usage = act.usage(factor);
+    if let Some(act_gear) = act.gear {
+        diesel::update(
+            attachments
+                .filter(gear.eq(act_gear))
+                .filter(attached.lt(act.start))
+                .filter(detached.is_null().or(detached.ge(act.start)))
+        )
+        .set((
+            time.eq(time + usage.time),
+            climb.eq(climb + usage.climb),
+            descend.eq(descend + usage.descend),
+            distance.eq(distance + usage.distance),
+            count.eq(count + usage.count),
+        ))
+        .get_results::<Attachment>(conn).expect("Database Error")
+    } else {
+        Vec::new()
+    }
+}
+
+fn rescan_activities(conn: &AppConn) {
+    use schema::attachments::dsl::*;
+
+    conn.transaction::<_,anyhow::Error,_> (|| {
+        diesel::update(attachments)
+        .set((
+            time.eq(0),
+            climb.eq(0),
+            descend.eq(0),
+            distance.eq(0),
+            count.eq(0),
+        )).execute(conn)?;
+
+        let acts = schema::activities::table.get_results::<Activity>(conn).expect("Could not read activities");
+
+        for act in acts {
+            register(&act, Factor::Add, conn);
+        }
+        Ok(())
+    }).expect("Transaction failed");
+}
+
 pub fn parts_per_activity(act: &Activity, conn: &AppConn) -> Vec<PartId> {
     use schema::attachments::dsl::*;
 
@@ -347,14 +403,14 @@ fn collisions(
         .load::<Attachment>(conn)?)
 }
 
-fn attachees (gear_id: PartId, time: DateTime<Utc>, conn: &AppConn) -> TbResult<Vec<AttachmentDetail>> {
+fn attachees (gear_id: PartId, attime: DateTime<Utc>, conn: &AppConn) -> TbResult<Vec<AttachmentDetail>> {
     use schema::attachments::dsl::*;
     use schema::parts::dsl::{parts,id,name,what};
   
     Ok(attachments
         .filter(gear.eq(gear_id))
-        .filter(attached.lt(time))
-        .filter(detached.is_null().or(detached.ge(time)))
+        .filter(attached.lt(attime))
+        .filter(detached.is_null().or(detached.ge(attime)))
         .inner_join(parts.on(id.eq(part_id)))
         .select((part_id,name,what,hook,gear,attached,detached))
         .get_results::<AttachmentDetail>(conn)?
@@ -464,6 +520,14 @@ fn read(
     Ok(atts)
 }
 
+#[get("/rescan")]
+fn rescan(
+    _user: Admin,
+    conn: AppDbConn,
+) {
+    rescan_activities(&conn)
+}
+
 pub fn routes() -> Vec<rocket::Route> {
-    routes![get, check, patch, get_assembly, to]
+    routes![get, check, patch, get_assembly, to, rescan]
 }

@@ -30,6 +30,11 @@ table! {
         gear -> Int4,
         hook -> Int4,
         detached -> Nullable<Timestamptz>,
+        count -> Int4,
+        time -> Int4,
+        distance -> Int4,
+        climb -> Int4,
+        descend -> Int4,
     }
 }
 

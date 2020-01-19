@@ -235,6 +235,7 @@ impl Activity {
     }
 
     fn register(&self, factor: Factor, conn: &AppConn) -> TbResult<PartList> {
+        attachment::register(self, factor, conn);
         attachment::parts_per_activity(self, conn)
             .iter()
             .map(|x| x.apply(&self.usage(factor), conn))
