@@ -40,6 +40,11 @@ export function formatSeconds(sec_num) {
     return hours+':'+minutes;
 }
 
+export function handleError(e) {
+    alert(e)
+    location.reload(); 
+}
+
 export const category = writable(undefined);
 export const parts = mapable("id");
 export const types = mapable("id");

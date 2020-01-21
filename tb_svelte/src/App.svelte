@@ -9,7 +9,7 @@
 	import Spares from "./Spares.svelte"
 	import Home from "./Home.svelte"
 	import About from "./About.svelte"
-	import {myfetch, types, parts, user} from './store.js'
+	import {myfetch, handleError, types, parts, user} from './store.js'
 
 	const routes = {
 		'/about': About,
@@ -31,8 +31,12 @@
 
 
 <Header/>
-<Await {promise}>
+{#await promise}
+	<Await />
+{:then value}
 	<div class="container">
 		<Router {routes} />
 	</div>
-</Await>
+{:catch error}
+	{handleError(error)}
+{/await}

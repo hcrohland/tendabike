@@ -20,7 +20,7 @@
       await myfetch('/part/', 'POST', part)
         .then(data => parts.updateMap([data]))
         .then(reset)
-        .then(dispatch('saved'))
+        .then(dispatch('created'))
     } catch (e) {
       alert (e)
       location.reload()

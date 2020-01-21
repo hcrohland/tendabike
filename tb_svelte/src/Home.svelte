@@ -1,5 +1,5 @@
 <script>
-import {myfetch, types, icons, parts, category} from './store.js';
+import {myfetch, handleError, types, icons, parts, category} from './store.js';
 import Await from './Await.svelte'
 
 category.set(undefined);
@@ -8,7 +8,9 @@ let promise;
 $: { $parts; promise = myfetch('/activ/categories') }
 </script>
 
-<Await {promise} let:data={categories}>
+{#await promise}
+	<Await />
+{:then categories}
 	<div class="row justify-content-around m-0 p-0">
 		{#each categories as cat}
 			<div class="col text-center p-0 p-sm-2 {icons[cat] ? 'order-1' : 'col-12 order-2'}">
@@ -26,4 +28,6 @@ $: { $parts; promise = myfetch('/activ/categories') }
 			</div>
 		{/each}
 	</div>
-</Await>
+{:catch error}
+	{handleError(error)}
+{/await}
