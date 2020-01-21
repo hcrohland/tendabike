@@ -1,7 +1,7 @@
 <script>
   import {Collapse, NavbarToggler, NavbarBrand} from 'sveltestrap';
   import {link, push, location} from 'svelte-spa-router';
-  import {myfetch, types, category, parts, user} from "./store.js";
+  import {myfetch, handleError, types, category, parts, user} from "./store.js";
   import Await from './Await.svelte';
 
   let disabled = false;
@@ -40,9 +40,13 @@
     </ul>
     <ul class="navbar-nav ml-auto float-right">
       <button on:click={synchronize} {disabled} class="dropdown-item">
-        <Await {promise}>
+        {#await promise}
+          <Await />
+        {:then value}
           Sync 
-        </Await>
+        {:catch error}
+          handleError(error)
+        {/await}
       </button>
       <a href="/about" use:link class="dropdown-item text-reset">About</a>
       {#if $user}

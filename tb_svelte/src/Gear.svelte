@@ -1,5 +1,5 @@
 <script>
-  import {myfetch, types, parts, category} from './store.js'
+  import {myfetch, handleError, types, parts, category} from './store.js'
   import Await from './Await.svelte'
   import Subparts from './Subparts.svelte'
   import Usage from './Usage.svelte'
@@ -38,7 +38,11 @@
       </tr>
     </tbody>
   </table>
-  <Await {promise} let:data={subparts}>
+  {#await promise}
+    <Await />
+  {:then subparts}
     <Subparts hook={gear.what} {subparts} />
-  </Await>
+  {:catch error}
+    handleError(error)
+  {/await}
 </div>

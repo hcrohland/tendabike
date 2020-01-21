@@ -1,5 +1,5 @@
 <script>
-import {myfetch, filterValues, types, parts, category} from './store.js'
+import {myfetch, handleError, filterValues, types, parts, category} from './store.js'
 import Usage from './Usage.svelte'
 import Await from './Await.svelte'
 import Attach from './Attach.svelte'
@@ -19,8 +19,10 @@ let promise;
 update();
 
 function update() {
+  console.log("update")
   promise = myfetch('/part/spares/' + cat.id).then((d) => spares = d)
 }
+
 </script>
 
 <style>
@@ -29,7 +31,10 @@ function update() {
  }
 </style>
 
-<Await {promise}>
+
+{#await promise}
+	<Await />
+{:then}
     <table class="table table-hover">
       <thead>
         <tr>
@@ -42,7 +47,7 @@ function update() {
       <tbody>
       {#each filterValues($types, (t) => t.main == cat.id && t.id != cat.id) as type}
         <tr>
-            <th colspan=8 scope="col" class="border-2 text-nowrap"> {type.name}s <NewPart title='New' cat={type} on:saved={update}/></th>
+            <th colspan=8 scope="col" class="border-2 text-nowrap"> {type.name}s <NewPart title='New' cat={type} on:created={update}/></th>
         </tr>
           
          {#each spares
@@ -59,4 +64,6 @@ function update() {
       {/each}
       </tbody>
     </table>
-</Await>
+{:catch error}
+  {handleError(error)}
+{/await}
