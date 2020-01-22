@@ -52,7 +52,7 @@ function update() {
           
          {#each spares
             .map((s) => $parts[s])
-            .filter((p) => p.what == type.id)
+            .filter((p) => p.what == type.id).sort((a,b) => a.purchase < b.purchase)
           as part (part.id)}
           <tr>
            <td class="border-0"></td>
