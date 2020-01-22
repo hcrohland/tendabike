@@ -15,7 +15,7 @@
 
 {#if cat }
   <div class="row border p-sm-2">
-    {#each gears() as part (part.id)}
+    {#each gears().sort((a,b) => a.purchase < b.purchase) as part (part.id)}
       <div class="col-md-6 p-0 p-sm-2">
         <GearCard {part} />
       </div>
