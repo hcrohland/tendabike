@@ -284,7 +284,8 @@ impl Attachment {
             } else {
                 state.attached = state.detached.unwrap();
                 state.detached = self.detached;
-                Factor::Add
+                // Factor::Add
+                unimplemented!("check for collisions missing!");
             };
 
             self.save_changes::<Attachment>(conn)?;
