@@ -48,14 +48,19 @@ pub struct Attachment {
     /// when it was removed again, "none" means "still attached"
     detached: Option<DateTime<Utc>>,
     /// usage count
+    #[serde(default)]
     pub count: i32,
     /// usage time
+    #[serde(default)]
     pub time: i32,
     /// Usage distance
+    #[serde(default)]
     pub distance: i32,
     /// Overall climbing
+    #[serde(default)]
     pub climb: i32,
     /// Overall descending
+    #[serde(default)]
     pub descend: i32,
 }
 
