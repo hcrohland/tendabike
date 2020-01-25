@@ -299,10 +299,9 @@ impl Attachment {
     }
 }
 
-pub fn register(act: &Activity, factor: Factor, conn: &AppConn) -> Vec<Attachment> {
+pub fn register(act: &Activity, usage: &Usage, conn: &AppConn) -> Vec<Attachment> {
     use schema::attachments::dsl::*;
 
-    let usage = act.usage(factor);
     if let Some(act_gear) = act.gear {
         diesel::update(
             attachments
@@ -339,7 +338,7 @@ fn rescan_activities(conn: &AppConn) {
         let acts = schema::activities::table.get_results::<Activity>(conn).expect("Could not read activities");
 
         for act in acts {
-            register(&act, Factor::Add, conn);
+            register(&act, &act.usage(Factor::Add), conn);
         }
         Ok(())
     }).expect("Transaction failed");

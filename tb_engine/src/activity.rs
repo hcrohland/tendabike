@@ -235,10 +235,11 @@ impl Activity {
     }
 
     fn register(&self, factor: Factor, conn: &AppConn) -> TbResult<PartList> {
-        attachment::register(self, factor, conn);
+        let usage = self.usage(factor);
+        attachment::register(self, &usage, conn);
         attachment::parts_per_activity(self, conn)
             .iter()
-            .map(|x| x.apply(&self.usage(factor), conn))
+            .map(|x| x.apply(&usage, conn))
             .collect()
     }
 }
