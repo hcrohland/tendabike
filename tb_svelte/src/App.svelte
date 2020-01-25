@@ -23,7 +23,7 @@
 			myfetch('/types/part')
 				.then(data => types.setMap(data)),
 			myfetch('/part/all')
-				.then(data => parts.setMap(data)),
+				.then(data => parts.setMap(data.parts)),
 			myfetch('/user')
 				.then(data => user.set(data))
 	])

@@ -24,7 +24,7 @@
     disabled = true;
     try {
       await myfetch('/attach/', 'PATCH', attach)
-        .then(data => parts.updateMap(data))
+        .then(data => parts.updateMap(data.parts))
         .then(reset)
         .then(dispatch('saved'))
     } catch (e) {

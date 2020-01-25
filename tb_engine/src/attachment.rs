@@ -163,17 +163,25 @@ fn test_detached() {
 }
 
 impl Attachment {
+    fn add_usage(&mut self, usage: &Usage) {
+        self.count += usage.climb;
+        self.time += usage.time;
+        self.distance += usage.distance;
+        self.climb += usage.climb;
+        self.descend += usage.descend;
+    }
+
     /// register the given attachment according to the given factor.
     ///
     /// This can both add or subtract activities from a part
     /// The changed parts are returned
-    fn register(&self, factor: Factor, conn: &AppConn) -> TbResult<Part> {
+    fn register(&mut self, factor: Factor, conn: &AppConn) -> TbResult<Part> {
         let usage = Activity::find(self.gear, self.attached, self.detached, conn)
             .into_iter()
             .fold(Usage::none(self.attached), |acc, x| {
                 acc.add_activity(&x, factor)
             });
-
+        self.add_usage(&usage);
         self.part_id.apply(&usage, conn)
     }
 
@@ -182,10 +190,10 @@ impl Attachment {
     /// - recalculates the usage counters in the attached assembly
     /// - persists everything into the database
     ///  -returns all affected parts or MyError::Conflict on collisions
-    fn create(mut self, user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
+    fn create(mut self, user: &dyn Person, conn: &AppConn) -> TbResult<PartAttach> {
         conn.transaction(|| {
-            let mut colls = self.collisions(user, conn)?;
-            colls.append(&mut read(
+            let mut attachments = self.collisions(user, conn)?;
+            attachments.append(&mut read(
                 self.part_id,
                 Some(self.attached),
                 self.detached,
@@ -193,8 +201,8 @@ impl Attachment {
             )?);
 
             // if there is an exiting attachment, which started earlier and is not yet detached we detach it automatically
-            let mut res = Vec::new();
-            for mut pred in colls.into_iter() {
+            let mut res = PartAttach::default();
+            for mut pred in attachments.into_iter() {
                 if pred.detached.is_none() && pred.attached <= self.attached {
                     // predecessor gets detached
                     debug!("detaching predecessor");
@@ -211,13 +219,12 @@ impl Attachment {
                 }
             }
 
-            res.push(
-                diesel::insert_into(attachments::table) // Store the attachment in the database
-                    .values(self)
-                    .get_result::<Attachment>(conn)
-                    .context("Could not insert attachment")?
-                    .register(Factor::Add, conn)?,
-            ); // and register changes
+            res.parts.push(self.register(Factor::Add, conn)?); // and register changes
+            let att = diesel::insert_into(attachments::table) // Store the attachment in the database
+                .values(self)
+                .get_result::<Attachment>(conn)
+                .context("Could not insert attachment")?;
+            res.attachments.push(att);
             Ok(res)
         })
     }
@@ -245,7 +252,7 @@ impl Attachment {
     /// returns
     /// - MyError::Conflict if the hook_id does not match
     /// - all recalculated parts on success
-    fn patch(self, user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
+    fn patch(self, user: &dyn Person, conn: &AppConn) -> TbResult<PartAttach> {
         self.part_id.checkuser(user, conn)?;
         conn.transaction(|| {
             let mut state = match attachments::table
@@ -274,7 +281,10 @@ impl Attachment {
             if let Some(detached) = self.detached {
                 if detached <= state.attached {
                     //
-                    return Ok(vec![self.delete(conn)?]);
+                    return Ok(PartAttach {
+                        parts: vec![self.delete(conn)?],
+                        attachments: vec![self]
+                    })
                 }
             }
 
@@ -288,8 +298,9 @@ impl Attachment {
                 unimplemented!("check for collisions missing!");
             };
 
-            self.save_changes::<Attachment>(conn)?;
-            Ok(vec![state.register(factor, conn)?]) // and register changes
+            let attachments = vec![self.save_changes::<Attachment>(conn)?];
+            let parts = vec![state.register(factor, conn)?]; // and register changes
+            Ok(PartAttach {parts, attachments})
         })
     }
 
@@ -348,6 +359,20 @@ fn rescan_activities(conn: &AppConn) {
         }
         Ok(())
     }).expect("Transaction failed");
+}
+
+pub fn for_parts(parts: Vec<Part>, conn: &AppConn) -> TbResult<PartAttach> {
+    use schema::attachments::dsl::*;
+    let ids: Vec<_> = parts.iter().map(|p| p.id).collect();
+    let atts = attachments
+        .filter(part_id.eq_any(ids.clone()))
+        .or_filter(gear.eq_any(ids))
+        .get_results::<Attachment>(conn)?;
+
+    Ok(PartAttach {
+        parts,
+        attachments: atts
+    })
 }
 
 pub fn parts_per_activity(act: &Activity, conn: &AppConn) -> Vec<PartId> {
@@ -423,7 +448,7 @@ fn attachees (gear_id: PartId, attime: DateTime<Utc>, conn: &AppConn) -> TbResul
 }
 
 #[patch("/", data = "<attachment>")]
-fn patch(attachment: Json<Attachment>, user: &User, conn: AppDbConn) -> ApiResult<PartList> {
+fn patch(attachment: Json<Attachment>, user: &User, conn: AppDbConn) -> ApiResult<PartAttach> {
     tbapi(attachment.patch(user, &conn))
 }
 

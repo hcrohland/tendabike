@@ -7,8 +7,6 @@
 //! Most operations are done on the ActivityId though
 //!
 
-use std::collections::HashMap;
-
 use rocket::response::status;
 use rocket_contrib::json::Json;
 
@@ -109,9 +107,9 @@ impl ActivityId {
     ///
     /// returns all affected parts  
     /// checks authorization  
-    fn delete(self, person: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
+    fn delete(self, person: &dyn Person, conn: &AppConn) -> TbResult<PartAttach> {
         use crate::schema::activities::dsl::*;
-        let res: TbResult<PartList> = conn.transaction(|| {
+        let res: TbResult<PartAttach> = conn.transaction(|| {
             let res = self
                 .read(person, conn)
                 .context("Could not read user")?
@@ -136,14 +134,11 @@ impl ActivityId {
         act: NewActivity,
         user: &dyn Person,
         conn: &AppConn,
-    ) -> TbResult<(Activity, PartList)> {
+    ) -> TbResult<(Activity, PartAttach)> {
         conn.transaction(|| {
-            let mut res: HashMap<_, _> = self
+            self
                 .read(user, conn)?
-                .register(Factor::Sub, conn)?
-                .into_iter()
-                .map(|x| (x.id, x))
-                .collect();
+                .register(Factor::Sub, conn)?;
 
             let act = diesel::update(activities::table)
                 .filter(activities::id.eq(self))
@@ -151,13 +146,9 @@ impl ActivityId {
                 .get_result::<Activity>(conn)
                 .context("Error reading activity")?;
 
-            for part in act
-                .register(Factor::Add, conn)
-                .context("Could not register activity")?
-            {
-                res.insert(part.id, part);
-            }
-            Ok((act, res.into_iter().map(|(_, part)| part).collect()))
+            let res = act.register(Factor::Add, conn)
+                            .context("Could not register activity")?;
+            Ok((act, res))
         })
     }
 }
@@ -171,7 +162,7 @@ impl Activity {
         act: NewActivity,
         user: &dyn Person,
         conn: &AppConn,
-    ) -> TbResult<(Activity, PartList)> {
+    ) -> TbResult<(Activity, PartAttach)> {
         user.check_owner(
             act.user_id,
             format!(
@@ -234,13 +225,18 @@ impl Activity {
             .expect("could not read activities")
     }
 
-    fn register(&self, factor: Factor, conn: &AppConn) -> TbResult<PartList> {
+    fn register(&self, factor: Factor, conn: &AppConn) -> TbResult<PartAttach> {
         let usage = self.usage(factor);
-        attachment::register(self, &usage, conn);
-        attachment::parts_per_activity(self, conn)
-            .iter()
-            .map(|x| x.apply(&usage, conn))
-            .collect()
+
+        Ok(
+            PartAttach {
+                parts: attachment::parts_per_activity(self, conn)
+                    .iter()
+                    .map(|x| x.apply(&usage, conn))
+                    .collect::<TbResult<_>>()?,
+                attachments: attachment::register(self, &usage, conn)
+            }
+        )
     }
 }
 
@@ -317,7 +313,7 @@ fn post(
     activity: Json<NewActivity>,
     user: &User,
     conn: AppDbConn,
-) -> Result<status::Created<Json<(Activity, PartList)>>, ApiError> {
+) -> Result<status::Created<Json<(Activity, PartAttach)>>, ApiError> {
     let (activity, assembly) = Activity::create(activity.0, user, &conn)?;
     let id_raw: i32 = activity.id.into();
     let url = uri!(get: id_raw);
@@ -334,13 +330,13 @@ fn put(
     activity: Json<NewActivity>,
     user: &User,
     conn: AppDbConn,
-) -> Result<Json<(Activity, PartList)>, ApiError> {
+) -> Result<Json<(Activity, PartAttach)>, ApiError> {
     tbapi(ActivityId(id).update(activity.0, user, &conn))
 }
 
 /// web interface to delete an activity
 #[delete("/<id>")]
-fn delete(id: i32, user: &User, conn: AppDbConn) -> ApiResult<PartList> {
+fn delete(id: i32, user: &User, conn: AppDbConn) -> ApiResult<PartAttach> {
     tbapi(ActivityId(id).delete(user, &conn))
 }
 

@@ -318,8 +318,8 @@ fn mycats(user: &User, conn: AppDbConn) -> ApiResult<Vec<PartTypeId>> {
 }
 
 #[get("/all")]
-fn myparts(user: &User, conn: AppDbConn) -> ApiResult<PartList> {
-    tbapi(allparts(user, &conn))
+fn myparts(user: &User, conn: AppDbConn) -> ApiResult<PartAttach> {
+    tbapi(attachment::for_parts(allparts(user, &conn)?,&conn))
 }
 
 #[get("/mygear")]
