@@ -262,12 +262,14 @@ fn categories(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartTypeId>> {
 }
 
 
-fn csv2descend(data: rocket::data::Data, user: &User, conn: &AppConn) -> TbResult<String> {
+fn csv2descend(data: rocket::data::Data, offset: Option<i32>, user: &User, conn: &AppConn) -> TbResult<String> {
     use schema::activities::dsl::*;
     #[derive(Debug, Deserialize)]
     struct Result {
         #[serde(rename = "Datum")]
         start: String,
+        #[serde(rename = "Titel")]
+        titel: String,
         #[serde(alias = "Negativer Höhenunterschied")]
         descend: String,
     };
@@ -275,18 +277,22 @@ fn csv2descend(data: rocket::data::Data, user: &User, conn: &AppConn) -> TbResul
     let mut rdr = csv::Reader::from_reader(data.open());
 
     for result in rdr.deserialize() {
+        use chrono::Local;
         // The iterator yields Result<StringRecord, Error>, so we check the
         // error here.
-        let record: Result = result?;
+        let record: Result = result.context("record")?;
         info!("{:?}", record);
-        let rstart = Local.datetime_from_str(&record.start, "%Y-%m-%d %H:%M:%S")?;
+        let rstart = match offset {
+            Some(offset) => chrono::FixedOffset::east(offset * 3600).datetime_from_str(&record.start, "%Y-%m-%d %H:%M:%S")?.with_timezone(&Local),
+            None         => Local.datetime_from_str(&record.start, "%Y-%m-%d %H:%M:%S")?
+        };
         if let Ok(rdescend) = record.descend.replace(".", "").parse::<i32>() {
             conn.transaction(|| {
                 let act: Activity = activities
                     .filter(user_id.eq(user.get_id()))
                     .filter(start.eq(rstart))
                     .for_update()
-                    .get_result(conn)?;
+                    .get_result(conn).context(format!("Activitiy {}", record.start))?;
                 act.register(Factor::Sub, conn)?;
                 diesel::update(activities.find(act.id))
                     .set(descend.eq(rdescend))
@@ -294,7 +300,7 @@ fn csv2descend(data: rocket::data::Data, user: &User, conn: &AppConn) -> TbResul
                     .context("Error reading activity")?
                     .register(Factor::Add, conn)
                     .context("Could not register activity")
-            })?;
+            }).unwrap_or_else(|_| {warn!("skipped {} {}", record.start, record.titel); PartAttach::default()});
         }
     }
 
@@ -340,9 +346,9 @@ fn delete(id: i32, user: &User, conn: AppDbConn) -> ApiResult<PartAttach> {
     tbapi(ActivityId(id).delete(user, &conn))
 }
 
-#[post("/descend", data = "<data>")]
-fn descend(data: rocket::data::Data, user: &User, conn: AppDbConn) -> Result<String, ApiError> {
-    Ok(csv2descend(data, user, &conn)?)
+#[post("/descend?<offset>", data = "<data>")]
+fn descend(data: rocket::data::Data, offset: Option<i32>, user: &User, conn: AppDbConn) -> Result<String, ApiError> {
+    Ok(csv2descend(data, offset, user, &conn)?)
 }
 
 #[get("/categories")]

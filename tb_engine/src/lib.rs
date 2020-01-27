@@ -57,7 +57,7 @@ pub use tb_common::*;
 
 use anyhow::Context;
 
-use chrono::{DateTime, Local, TimeZone, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 
 type AppConn = diesel::PgConnection;
 
