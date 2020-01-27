@@ -1,15 +1,15 @@
 <script>
-  import {myfetch, handleError, types, parts, category} from './store.js'
+  import {myfetch, handleError, filterValues, types, parts, isAttached, attachments, category} from './store.js'
   import Await from './Await.svelte'
   import Subparts from './Subparts.svelte'
   import Usage from './Usage.svelte'
  
   export let params;
+  
+  let time = new Date();
   let gear = $parts[params.id]
   category.set($types[gear.what])
 
-  let promise; 
-  promise = myfetch('/attach/to/' + gear.id) 
 </script>
 
 <style>
@@ -38,11 +38,5 @@
       </tr>
     </tbody>
   </table>
-  {#await promise}
-    <Await />
-  {:then subparts}
-    <Subparts hook={gear.what} {subparts} />
-  {:catch error}
-    {handleError(error)}
-  {/await}
+  <Subparts hook={gear.what} attachees={filterValues($attachments, (a) => a.gear == gear.id && isAttached(a, time))} />
 </div>

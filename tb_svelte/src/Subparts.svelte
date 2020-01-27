@@ -1,22 +1,32 @@
 <script>
-import {types, filterValues} from './store.js'
+import {types, parts, filterValues} from './store.js'
 import Usage from './Usage.svelte'
 import NewPart from './NewPart.svelte'
 
 export let hook;
-export let subparts;
+export let attachees;
 export let level = undefined;
 export let prefix = undefined;
 
-let part
+let part;
+const hooks = filterValues($types, (a) => a.hooks.includes(hook)).sort((a,b) => a.order - b.order);
 
 if (prefix) {
   prefix = prefix.split(' ').reverse()[1] // The first word iff there were two (hack!)
 } 
 
-let hooks = filterValues($types, (a) => a.hooks.includes(hook)).sort((a,b) => a.order - b.order)
+function findIt(atts, ps, type) {
+  let att = atts.find((a) =>  ps[a.part_id].what == type.id && a.hook == hook)
+  if (att) {
+    let part = $parts[att.part_id];
+    part.attached = att.attached;
+    return part
+  }
+  return undefined
+}
+
 </script>
-{#if subparts.length > 0}
+{#if attachees.length > 0}
   {#if level === undefined}
     <table class="table table-hover">
     <thead>
@@ -29,13 +39,13 @@ let hooks = filterValues($types, (a) => a.hooks.includes(hook)).sort((a,b) => a.
       </tr>
     </thead>
     <tbody>
-      <svelte:self {hook} {subparts} level={0}></svelte:self>
+      <svelte:self {hook} {attachees} level={0}></svelte:self>
     </tbody>
     </table>
     
   {:else}
     {#each hooks as type (type.id)}
-      {#if part = subparts.find((a) => a.what == type.id && a.hook == hook)}
+      {#if part = findIt (attachees, $parts, type)}
         <tr>
           <th scope="row" class="text-nowrap"> 
             {'| '.repeat(level)}
@@ -46,11 +56,11 @@ let hooks = filterValues($types, (a) => a.hooks.includes(hook)).sort((a,b) => a.
           </th>
           <td>{part.name}</td>
           <td class="text-right"> {new Date(part.attached).toLocaleDateString()} </td >
-          <Usage part_id={part.part_id} />
+          <Usage part_id={part.id} />
         </tr>
-        <svelte:self hook={type.id} {subparts} level={level+1} /> 
+        <svelte:self hook={type.id} {attachees} level={level+1} /> 
       {:else}
-        <svelte:self hook={type.id} {subparts} {level} prefix={type.name} />
+        <svelte:self hook={type.id} {attachees} {level} prefix={type.name} />
       {/if}
     {/each}
   {/if}
