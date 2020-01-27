@@ -1,7 +1,7 @@
 <script>
   import {Collapse, NavbarToggler, NavbarBrand} from 'sveltestrap';
   import {link, push, location} from 'svelte-spa-router';
-  import {myfetch, handleError, types, category, parts, user} from "./store.js";
+  import {myfetch, handleError, updatePartAttach, category, user} from "./store.js";
   import Await from './Await.svelte';
 
   let disabled = false;
@@ -12,7 +12,7 @@
   async function synchronize() {
     disabled = true;
     promise = myfetch('/strava/sync?batch=100')
-      .then(data => parts.updateMap(data[1]["parts"]))
+      .then(data => updatePartAttach(data[1]))
       .then(() => disabled = false)
   }
   function handleUpdate(event) {

@@ -85,6 +85,11 @@ function setPartAttach(data) {
     attachments.setMap(data.attachments)
 }
 
+export function updatePartAttach(data) {
+    parts.updateMap(data.parts)
+    attachments.updateMap(data.attachments)
+}
+
 export const category = writable(undefined);
 export const parts = mapable((o) => o["id"]);
 export const types = mapable((o) => o["id"]);
