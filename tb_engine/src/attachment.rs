@@ -101,7 +101,7 @@ fn assembly(
         .load::<(Part, Attachment)>(conn)?)
 }
 
-/// Was the part attached to a hook at at_time?
+/// Return the gear the part was attached to at at_time
 pub fn attached_to(part: PartId, at_time: DateTime<Utc>, conn: &AppConn) -> PartId {
     use schema::attachments::dsl::*;
 
