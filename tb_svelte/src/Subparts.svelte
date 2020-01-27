@@ -16,7 +16,7 @@ if (prefix) {
 } 
 
 function findIt(atts, ps, type) {
-  let att = atts.find((a) =>  ps[a.part_id].what == type.id && a.hook == hook)
+  let att = atts.find((a) => a.hook == hook && ps[a.part_id] && ps[a.part_id].what == type.id)
   if (att) {
     let part = $parts[att.part_id];
     part.attached = att.attached;
