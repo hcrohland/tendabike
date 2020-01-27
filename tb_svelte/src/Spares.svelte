@@ -1,5 +1,5 @@
 <script>
-import {filterValues, types, parts, attachments, category} from './store.js'
+import {filterValues, types, parts, attachments, isAttached, category} from './store.js'
 import Usage from './Usage.svelte'
 import Await from './Await.svelte'
 import Attach from './Attach.svelte'
@@ -16,7 +16,7 @@ category.set(cat);
 let spareTypes = filterValues($types, (t) => t.main == cat.id && t.id != cat.id)
 
 function attachedTo(atts, partId, time) {
-    let att = filterValues(atts, (x) => x.part_id === partId && time >= new Date(x.attached) && (!x.detached || time < new Date(x.detached) ))
+    let att = filterValues(atts, (x) => x.part_id === partId && isAttached(x, time))
     return att.pop()
 }
 
@@ -47,7 +47,7 @@ function subparts(type, parts) {
         <th colspan=8 scope="col" class="border-2 text-nowrap"> {type.name}s <NewPart title='New' cat={type}/></th>
     </tr>
       {#each subparts(type, $parts).filter((p) => !attachedTo($attachments, p.id, date))
-      as part (part.id)}
+        as part (part.id)}
       <tr>
         <td class="border-0"></td>
         <td title={part.vendor + ' ' + part.model + ' ' + new Date(part.purchase).toLocaleDateString()}>{part.name}</td>
