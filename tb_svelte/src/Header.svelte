@@ -45,7 +45,7 @@
         {:then value}
           Sync 
         {:catch error}
-          handleError(error)
+          {handleError(error)}
         {/await}
       </button>
       <a href="/about" use:link class="dropdown-item text-reset">About</a>

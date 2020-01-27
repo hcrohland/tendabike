@@ -43,6 +43,6 @@
   {:then subparts}
     <Subparts hook={gear.what} {subparts} />
   {:catch error}
-    handleError(error)
+    {handleError(error)}
   {/await}
 </div>
