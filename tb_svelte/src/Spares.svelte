@@ -11,6 +11,7 @@ export let date = new Date;
 // Cannot use category directly since it 
 // is unset during destroy and the router gets confused
 let cat = $types[params.category]
+let show_all = false;
 category.set(cat);
 
 let spareTypes = filterValues($types, (t) => t.main == cat.id && t.id != cat.id)
@@ -38,7 +39,10 @@ function subparts(type, parts) {
       <th scope="col">Part</th>
       <th scope="col">Name</th>
       <Usage />
-      <th></th>
+      <td><span class="badge float-right">
+        Show all <input type="checkbox" name="Show all" id="" bind:checked={show_all}>  
+        </span>
+      </td>
     </tr>
   </thead>
   <tbody>
@@ -46,7 +50,7 @@ function subparts(type, parts) {
     <tr>
         <th colspan=8 scope="col" class="border-2 text-nowrap"> {type.name}s <NewPart title='New' cat={type}/></th>
     </tr>
-      {#each subparts(type, $parts).filter((p) => !attachedTo($attachments, p.id, date))
+      {#each subparts(type, $parts).filter((p) => show_all || !attachedTo($attachments, p.id, date))
         as part (part.id)}
       <tr>
         <td class="border-0"></td>
