@@ -1,7 +1,7 @@
 <script>
   import Modal from './Modal.svelte';
   import DateTime from './DateTime.svelte';
-  import {myfetch, types, parts, user} from './store.js';
+  import {myfetch, types, initData, parts, user} from './store.js';
   import { createEventDispatcher } from 'svelte';
 	const dispatch = createEventDispatcher();
 
@@ -23,7 +23,7 @@
         .then(dispatch('created'))
     } catch (e) {
       alert (e)
-      location.reload()
+      initData()
     }
   }
 
