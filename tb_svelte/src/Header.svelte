@@ -12,7 +12,7 @@
   async function synchronize() {
     disabled = true;
     promise = myfetch('/strava/sync?batch=100')
-      .then(data => parts.updateMap(data[1]))
+      .then(data => parts.updateMap(data[1]["parts"]))
       .then(() => disabled = false)
   }
   function handleUpdate(event) {

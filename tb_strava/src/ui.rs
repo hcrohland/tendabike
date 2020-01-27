@@ -32,7 +32,7 @@ fn next(batch: Option<usize>, user: User) -> ApiResult<Vec<TbActivity>> {
 }
 
 #[get("/sync?<batch>")]
-fn sync(batch: Option<usize>, user: User) -> ApiResult<(Vec<serde_json::Value>, Vec<serde_json::Value>)> {
+fn sync(batch: Option<usize>, user: User) -> ApiResult<(Vec<serde_json::Value>, activity::PartAttach)> {
     tbapi(activity::sync(batch.unwrap_or(10), &user))
 }
 

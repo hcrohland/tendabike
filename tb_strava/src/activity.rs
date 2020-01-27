@@ -192,11 +192,18 @@ pub(crate) fn next_activities(user: &User, per_page: usize, start: Option<i64>) 
     Ok(acts)
 }
 
-pub(crate) fn sync(batch: usize, user: &User) -> TbResult<(Vec<serde_json::Value>,Vec<serde_json::Value>)> {
+#[derive(Deserialize, Serialize)]
+pub struct PartAttach {
+    parts: Vec<serde_json::Value>,
+    attachments: Vec<serde_json::Value>
+}
+
+pub(crate) fn sync(batch: usize, user: &User) -> TbResult<(Vec<serde_json::Value>,PartAttach)> {
     // let mut len = batch;
     let mut start = user.last_activity();
     let mut activities = Vec::new();
     let mut parts = HashMap::new();
+    let mut atts = HashMap::new();
 
     // while len == batch 
     {
@@ -205,16 +212,19 @@ pub(crate) fn sync(batch: usize, user: &User) -> TbResult<(Vec<serde_json::Value
         for a in acts {
             start = std::cmp::max(start, a.start_date.timestamp());
             let r = a.send_to_tb(&user)?;
-            let (act, ps): (serde_json::Value, Vec<serde_json::Value>) = serde_json::from_value(r)?;
+            let (act, ps): (serde_json::Value, PartAttach) = serde_json::from_value(r)?;
             activities.push(act);
-            for part in ps {
+            for part in ps.parts {
                 parts.insert(part["id"].as_i64(), part);
             }
-
+            for att in ps.attachments {
+                atts.insert(format!("{}{}",att["part_id"],att["attached"]), att);
+            }
         }
     }
 
     let parts = parts.drain().map(|(_,v)| v).collect();
+    let attachments = atts.drain().map(|(_,v)| v).collect();
 
-    Ok((activities,parts))
+    Ok((activities,PartAttach{parts, attachments}))
 }
