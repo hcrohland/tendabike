@@ -9,7 +9,7 @@
 	import Spares from "./Spares.svelte"
 	import Home from "./Home.svelte"
 	import About from "./About.svelte"
-	import {myfetch, handleError, types, parts, user} from './store.js'
+	import {handleError, initData} from './store.js'
 
 	const routes = {
 		'/about': About,
@@ -19,19 +19,11 @@
 		'/spares/:category': Spares
 	}
 
-	let promise = Promise.all([
-			myfetch('/types/part')
-				.then(data => types.setMap(data)),
-			myfetch('/part/all')
-				.then(data => parts.setMap(data.parts)),
-			myfetch('/user')
-				.then(data => user.set(data))
-	])
 </script>
 
 
 <Header/>
-{#await promise}
+{#await initData()}
 	<Await />
 {:then value}
 	<div class="container">

@@ -1,6 +1,6 @@
 import {writable, readable, derived} from "svelte/store";
 
-function handleErrors(response) {
+function checkStatus(response) {
     if (response.ok) {
         return response;
     }
@@ -24,7 +24,7 @@ export function myfetch (url, method, data) {
         };
     }
 	return fetch(url, option)
-		.then(handleErrors)
+		.then(checkStatus)
 		.then(response => response.json())
 };
 
@@ -45,29 +45,22 @@ export function handleError(e) {
     location.reload(); 
 }
 
-export const category = writable(undefined);
-export const parts = mapable("id");
-export const types = mapable("id");
-export const user = writable();
-
-function mapField (field) {
+function mapObject (fn) {
     return (map, obj) => {
-            map[obj[field]] = obj;
+            map[fn(obj)] = obj;
             return map;
         }
 }
 
 function mapable(fn) {
-	const { subscribe, set, update } = writable({});
+    const { subscribe, set, update } = writable({});
 
 	return {
         subscribe,
-        setMap: (arr) => {set(arr.reduce(mapField(fn),{}))},
-		updateMap: (arr) => update(n => arr.reduce(mapField(fn), n)),
-	};
+        setMap: (arr) => {set(arr.reduce(mapObject(fn),{}))},
+		updateMap: (arr) => update(n => arr.reduce(mapObject(fn), n)),
+	};  
 }
-
-
 
 export const icons = {
     "1": "flaticon-mountain-bike",
@@ -76,4 +69,24 @@ export const icons = {
     "303": "flaticon-ski",
 }
 
+export function initData () {
+    return Promise.all([
+        myfetch('/types/part')
+            .then(types.setMap),
+        myfetch('/part/all')
+            .then(setPartAttach),
+        myfetch('/user')
+            .then(user.set)
+])
+}
 
+function setPartAttach(data) {
+    parts.setMap(data.parts)
+    attachments.setMap(data.attachments)
+}
+
+export const category = writable(undefined);
+export const parts = mapable((o) => o["id"]);
+export const types = mapable((o) => o["id"]);
+export const user = writable();
+export const attachments = mapable((o) => o["part_id"] + o["attached"])
