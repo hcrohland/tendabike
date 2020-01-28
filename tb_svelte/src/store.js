@@ -86,12 +86,12 @@ export function isAttached (att, time) {
 
 function setPartAttach(data) {
     parts.setMap(data.parts)
-    attachments.setMap(data.attachments)
+    attachments.setMap(data.attachments.map(a => {a.a.name = a.name; a.a.what=a.what; return a.a}))
 }
 
 export function updatePartAttach(data) {
     parts.updateMap(data.parts)
-    attachments.updateMap(data.attachments)
+    attachments.updateMap(data.attachments.map(a => {a.a.name = a.name; a.a.what=a.what; return a.a}))
 }
 
 export const category = writable(undefined);

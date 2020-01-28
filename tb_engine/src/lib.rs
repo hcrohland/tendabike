@@ -207,5 +207,5 @@ type PartList = Vec<part::Part>;
 #[derive(Serialize, Debug, Default)]
 pub struct PartAttach {
     parts: Vec<part::Part>,
-    attachments: Vec<attachment::Attachment>
+    attachments: Vec<attachment::AttachmentDetail>
 }

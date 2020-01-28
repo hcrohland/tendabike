@@ -64,20 +64,11 @@ pub struct Attachment {
     pub descend: i32,
 }
 
-#[derive(Queryable, Serialize)]
+#[derive(Queryable, Serialize, Deserialize, Debug)]
 pub struct AttachmentDetail {
-    /// the sub-part, which is attached to the hook
-    part_id: PartId,
+    a: Attachment,
     name: String,
     what: PartTypeId,
-    /// the hook on that gear
-    hook: PartTypeId,
-    /// The gear the part is attached to
-    gear: PartId,
-    /// when it was attached
-    attached: DateTime<Utc>,
-    /// when it was removed again, "none" means "still attached"
-    detached: Option<DateTime<Utc>>,
 }
 
 fn assembly(
@@ -219,12 +210,13 @@ impl Attachment {
                 }
             }
 
-            res.parts.push(self.register(Factor::Add, conn)?); // and register changes
+            let part = self.register(Factor::Add, conn)?;
             let att = diesel::insert_into(attachments::table) // Store the attachment in the database
                 .values(self)
                 .get_result::<Attachment>(conn)
                 .context("Could not insert attachment")?;
-            res.attachments.push(att);
+            res.attachments.push(att.add_details(part.name.clone(), part.what));
+            res.parts.push(part); // and register changes
             Ok(res)
         })
     }
@@ -283,7 +275,7 @@ impl Attachment {
                     //
                     return Ok(PartAttach {
                         parts: vec![self.delete(conn)?],
-                        attachments: vec![self]
+                        attachments: vec![AttachmentDetail {a: self, name: "".into(), what: 0.into()}]
                     })
                 }
             }
@@ -298,9 +290,10 @@ impl Attachment {
                 unimplemented!("check for collisions missing!");
             };
 
-            let attachments = vec![self.save_changes::<Attachment>(conn)?];
-            let parts = vec![state.register(factor, conn)?]; // and register changes
-            Ok(PartAttach {parts, attachments})
+            let a = self.save_changes::<Attachment>(conn)?;
+            let part = state.register(factor, conn)?; // and register changes
+            let attachment = AttachmentDetail {a, name: part.name.clone(), what: part.what};
+            Ok(PartAttach {parts: vec![part], attachments: vec![attachment]})
         })
     }
 
@@ -314,9 +307,27 @@ impl Attachment {
             conn,
         )
     }
+
+    fn add_details(self, name: String, what: PartTypeId) -> AttachmentDetail {
+        AttachmentDetail {
+            name,
+            what,
+            a: self
+        }
+    }
+
+    fn enrich(self, conn: &AppConn) -> TbResult<AttachmentDetail> {
+        use schema::parts::dsl::{parts,name,what};
+        
+        let (n, w) = parts
+            .find(self.part_id)
+            .select((name,what))
+            .get_result::<(String,PartTypeId)>(conn)?;
+        Ok(self.add_details(n, w))
+    }
 }
 
-pub fn register(act: &Activity, usage: &Usage, conn: &AppConn) -> Vec<Attachment> {
+pub fn register(act: &Activity, usage: &Usage, conn: &AppConn) -> Vec<AttachmentDetail> {
     use schema::attachments::dsl::*;
 
     if let Some(act_gear) = act.gear {
@@ -334,6 +345,9 @@ pub fn register(act: &Activity, usage: &Usage, conn: &AppConn) -> Vec<Attachment
             count.eq(count + usage.count),
         ))
         .get_results::<Attachment>(conn).expect("Database Error")
+        .into_iter()
+        .map(|a| a.enrich(conn).expect("couldn't enrich attachment"))
+        .collect::<Vec<_>>()
     } else {
         Vec::new()
     }
@@ -361,16 +375,19 @@ fn rescan_activities(conn: &AppConn) {
     }).expect("Transaction failed");
 }
 
-pub fn for_parts(parts: Vec<Part>, conn: &AppConn) -> TbResult<PartAttach> {
+pub fn for_parts(partlist: Vec<Part>, conn: &AppConn) -> TbResult<PartAttach> {
     use schema::attachments::dsl::*;
-    let ids: Vec<_> = parts.iter().map(|p| p.id).collect();
+    use schema::parts::dsl::{parts,id,name,what};
+    let ids: Vec<_> = partlist.iter().map(|p| p.id).collect();
     let atts = attachments
         .filter(part_id.eq_any(ids.clone()))
         .or_filter(gear.eq_any(ids))
-        .get_results::<Attachment>(conn)?;
+        .inner_join(parts.on(id.eq(part_id)))
+        .select((schema::attachments::all_columns,name,what))
+        .get_results::<AttachmentDetail>(conn)?;
 
     Ok(PartAttach {
-        parts,
+        parts: partlist,
         attachments: atts
     })
 }
@@ -442,7 +459,7 @@ fn attachees (gear_id: PartId, attime: DateTime<Utc>, conn: &AppConn) -> TbResul
         .filter(attached.lt(attime))
         .filter(detached.is_null().or(detached.ge(attime)))
         .inner_join(parts.on(id.eq(part_id)))
-        .select((part_id,name,what,hook,gear,attached,detached))
+        .select(((schema::attachments::all_columns),name,what))
         .get_results::<AttachmentDetail>(conn)?
     )
 }
