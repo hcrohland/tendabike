@@ -40,6 +40,10 @@ export function formatSeconds(sec_num) {
     return hours+':'+minutes;
 }
 
+export function by(field) {
+    return (a,b) => a[field] < b[field]
+}
+
 export function handleError(e) {
     alert(e)
     location.reload(); 

@@ -1,7 +1,7 @@
 <script>
   import GearCard from './GearCard.svelte';
   import NewPart from './NewPart.svelte';
-  import {filterValues, types, parts, category} from './store.js';
+  import {filterValues, by, types, parts, category} from './store.js';
   
   export let params;
   
@@ -15,7 +15,7 @@
 
 {#if cat }
   <div class="row border p-sm-2">
-    {#each gears().sort((a,b) => a.purchase < b.purchase) as part (part.id)}
+    {#each gears().sort(by("purchase")) as part (part.id)}
       <div class="col-md-6 p-0 p-sm-2">
         <GearCard {part} />
       </div>
