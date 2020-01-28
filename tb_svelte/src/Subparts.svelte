@@ -1,5 +1,5 @@
 <script>
-import {types, parts, filterValues} from './store.js'
+import {types, parts, filterValues, by} from './store.js'
 import Usage from './Usage.svelte'
 import NewPart from './NewPart.svelte'
 
@@ -18,7 +18,7 @@ if (prefix) {
 function findIt(ps, type) {
   let atts = attachees.filter((a) => a.hook == hook && a.what == type.id)
   atts.forEach(att => att.part = $parts[att.part_id]); 
-  return atts.sort((a,b) => a.attached < b.attached)
+  return atts.sort(by("attached"))
 }
 
 </script>
@@ -54,7 +54,15 @@ function findIt(ps, type) {
               |
             {/if}
           </th>
-          <td>{att.name}</td>
+          <td>
+          {#if att.part}
+          <a href="#/part/{att.part_id}" disabled={att.part===null} class="text-reset">
+            {att.name}
+          </a>
+          {:else}
+            {att.name}
+          {/if}
+          </td>
           <td class="text-right"> {new Date(att.attached).toLocaleDateString()} </td >
           <Usage part={att} />
         </tr>

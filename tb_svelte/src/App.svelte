@@ -6,6 +6,7 @@
 	import Await from "./Await.svelte"
 	import Header from "./Header.svelte"
 	import Gear from "./Gear.svelte"
+	import Part from "./Part.svelte"
 	import Spares from "./Spares.svelte"
 	import Home from "./Home.svelte"
 	import About from "./About.svelte"
@@ -16,7 +17,8 @@
 		'/': Home,
     '/cat/:category': ToyGroup,
 		'/gear/:id': Gear,
-		'/spares/:category': Spares
+		'/spares/:category': Spares,
+		'/part/:id': Part
 	}
 
 </script>
