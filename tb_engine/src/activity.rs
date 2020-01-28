@@ -109,7 +109,7 @@ impl ActivityId {
     /// checks authorization  
     fn delete(self, person: &dyn Person, conn: &AppConn) -> TbResult<PartAttach> {
         use crate::schema::activities::dsl::*;
-        let res: TbResult<PartAttach> = conn.transaction(|| {
+        conn.transaction(|| {
             let res = self
                 .read(person, conn)
                 .context("Could not read user")?
@@ -119,9 +119,7 @@ impl ActivityId {
                 .execute(conn)
                 .context("Error deleting activity")?;
             Ok(res)
-        });
-
-        res //.context("database transaction failed")?)
+        })
     }
 
     /// Update the activity with id self according to the data in NewActivity
