@@ -6,6 +6,7 @@
  
   export let params;
   
+  let show_all = false;
   let time = new Date();
   let gear = $parts[params.id]
   category.set($types[gear.what])
@@ -18,7 +19,9 @@
   overflow-x: scroll;
 }
 </style>
-
+<span class="badge float-right">
+  Show history <input type="checkbox" name="Show all" id="" bind:checked={show_all}>  
+</span>
 <div class="scroll-x">
   <table class="table">
     <thead>
@@ -26,7 +29,7 @@
         <th scope="col">{$types[gear.what].name}</th>
         <th scope="col">Brand</th>
         <th scope="col">Model</th>
-        <Usage />
+        <Usage header/>
       </tr>
     </thead>
     <tbody>
@@ -34,9 +37,9 @@
         <td>{gear.name}</td>
         <td>{gear.vendor}</td>
         <td>{gear.model}</td>
-        <Usage part_id={gear.id} />
+        <Usage part={gear} />
       </tr>
     </tbody>
   </table>
-  <Subparts hook={gear.what} attachees={filterValues($attachments, (a) => a.gear == gear.id && isAttached(a, time))} />
+  <Subparts hook={gear.what} attachees={filterValues($attachments, (a) => a.gear == gear.id && (show_all || isAttached(a, time)))} />
 </div>

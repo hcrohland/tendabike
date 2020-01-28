@@ -1,13 +1,12 @@
 <script>
 import {parts, formatSeconds} from './store.js'
  
-export let part_id = undefined;
-
-$: part = $parts[part_id]
+export let header = false
+export let part = undefined;
 
 </script>
 
-{#if part_id}
+{#if !header}
   {#if part}
     <td class="text-right"> 
       {part.count.toLocaleString()}

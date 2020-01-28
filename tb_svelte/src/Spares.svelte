@@ -38,7 +38,7 @@ function subparts(type, parts) {
     <tr>
       <th scope="col">Part</th>
       <th scope="col">Name</th>
-      <Usage />
+      <Usage header/>
       <td><span class="badge float-right">
         Show all <input type="checkbox" name="Show all" id="" bind:checked={show_all}>  
         </span>
@@ -55,7 +55,7 @@ function subparts(type, parts) {
       <tr>
         <td class="border-0"></td>
         <td title={part.vendor + ' ' + part.model + ' ' + new Date(part.purchase).toLocaleDateString()}>{part.name}</td>
-        <Usage part_id={part.id} />
+        <Usage {part} />
         <td> <Attach {part}/></td>
       </tr>
     {/each}

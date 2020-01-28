@@ -15,14 +15,10 @@ if (prefix) {
   prefix = prefix.split(' ').reverse()[1] // The first word iff there were two (hack!)
 } 
 
-function findIt(atts, ps, type) {
-  let att = atts.find((a) => a.hook == hook && ps[a.part_id] && ps[a.part_id].what == type.id)
-  if (att) {
-    let part = $parts[att.part_id];
-    part.attached = att.attached;
-    return part
-  }
-  return undefined
+function findIt(ps, type) {
+  let atts = attachees.filter((a) => a.hook == hook && a.what == type.id)
+  atts.forEach(att => att.part = $parts[att.part_id]); 
+  return atts.sort((a,b) => a.attached < b.attached)
 }
 
 </script>
@@ -34,7 +30,7 @@ function findIt(atts, ps, type) {
         <th scope="col">Part</th>
         <th scope="col">Name</th>
         <th scope="col" class="text-right">Attached</th>
-        <Usage />
+        <Usage header/>
         <th></th>
       </tr>
     </thead>
@@ -45,23 +41,27 @@ function findIt(atts, ps, type) {
     
   {:else}
     {#each hooks as type (type.id)}
-      {#if part = findIt (attachees, $parts, type)}
+      {#each findIt ($parts, type) as att,i (att.attached)}
         <tr>
           <th scope="row" class="text-nowrap"> 
             {'| '.repeat(level)}
             {#if prefix && type.hooks.length > 1}
               {prefix} 
             {/if}
-            {type.name} 
+            {#if i == 0}
+              {type.name} 
+            {:else}
+              |
+            {/if}
           </th>
-          <td>{part.name}</td>
-          <td class="text-right"> {new Date(part.attached).toLocaleDateString()} </td >
-          <Usage part_id={part.id} />
+          <td>{att.name}</td>
+          <td class="text-right"> {new Date(att.attached).toLocaleDateString()} </td >
+          <Usage part={att} />
         </tr>
         <svelte:self hook={type.id} {attachees} level={level+1} /> 
       {:else}
         <svelte:self hook={type.id} {attachees} {level} prefix={type.name} />
-      {/if}
+      {/each}
     {/each}
   {/if}
 {:else}
