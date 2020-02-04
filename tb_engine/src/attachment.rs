@@ -66,6 +66,7 @@ pub struct Attachment {
 
 #[derive(Queryable, Serialize, Deserialize, Debug)]
 pub struct AttachmentDetail {
+    #[serde(flatten)]
     a: Attachment,
     name: String,
     what: PartTypeId,
