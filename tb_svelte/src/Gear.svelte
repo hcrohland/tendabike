@@ -8,8 +8,15 @@
   
   let show_all = false;
   let time = new Date();
-  let gear = $parts[params.id]
-  category.set($types[gear.what])
+  let hook = $parts[params.id].what
+  category.set($types[hook])
+
+  $: gear = $parts[params.id]; 
+  $: attachees = filterValues(
+    $attachments, 
+    (a) => a.gear == gear.id && (show_all || isAttached(a, time))
+  )
+  
 
 </script>
 
@@ -26,7 +33,7 @@
   <table class="table">
     <thead>
       <tr>
-        <th scope="col">{$types[gear.what].name}</th>
+        <th scope="col">{$types[hook].name}</th>
         <th scope="col">Brand</th>
         <th scope="col">Model</th>
         <Usage header/>
@@ -41,5 +48,5 @@
       </tr>
     </tbody>
   </table>
-  <Subparts hook={gear.what} attachees={filterValues($attachments, (a) => a.gear == gear.id && (show_all || isAttached(a, time)))} />
+  <Subparts {hook} {attachees} />
 </div>
