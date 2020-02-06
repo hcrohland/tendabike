@@ -5,8 +5,12 @@
  
   export let params;
   
-  let part = $parts[params.id]
-  category.set($types[$types[part.what].main])
+  let part 
+  
+  $: { 
+    part = $parts[params.id]
+    category.set($types[$types[part.what].main])
+  }
 
   $: atts = filterValues($attachments, (a) => a.part_id == part.id).sort(by("attached"))
   

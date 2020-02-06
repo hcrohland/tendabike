@@ -8,10 +8,12 @@
   
   let show_all = false;
   let time = new Date();
-  let hook = $parts[params.id].what
-  category.set($types[hook])
-
-  $: gear = $parts[params.id]; 
+  let hook, gear
+  $: {
+    gear = $parts[params.id]; 
+    hook = gear.what
+    category.set($types[hook])
+  }
   $: attachees = filterValues(
     $attachments, 
     (a) => a.gear == gear.id && (show_all || isAttached(a, time))
