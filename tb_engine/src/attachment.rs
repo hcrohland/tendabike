@@ -156,7 +156,7 @@ fn test_detached() {
 
 impl Attachment {
     fn add_usage(&mut self, usage: &Usage) {
-        self.count += 1;
+        self.count += usage.count;
         self.time += usage.time;
         self.distance += usage.distance;
         self.climb += usage.climb;
