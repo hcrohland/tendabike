@@ -451,63 +451,9 @@ fn collisions(
         .load::<Attachment>(conn)?)
 }
 
-fn attachees (gear_id: PartId, attime: DateTime<Utc>, conn: &AppConn) -> TbResult<Vec<AttachmentDetail>> {
-    use schema::attachments::dsl::*;
-    use schema::parts::dsl::{parts,id,name,what};
-  
-    Ok(attachments
-        .filter(gear.eq(gear_id))
-        .filter(attached.lt(attime))
-        .filter(detached.is_null().or(detached.ge(attime)))
-        .inner_join(parts.on(id.eq(part_id)))
-        .select(((schema::attachments::all_columns),name,what))
-        .get_results::<AttachmentDetail>(conn)?
-    )
-}
-
 #[patch("/", data = "<attachment>")]
 fn patch(attachment: Json<Attachment>, user: &User, conn: AppDbConn) -> ApiResult<PartAttach> {
     tbapi(attachment.patch(user, &conn))
-}
-
-#[get("/check/<gear>/<what>?<hook>&<start>&<end>")]
-fn check(
-    what: i32,
-    gear: i32,
-    hook: Option<i32>,
-    start: Option<String>,
-    end: Option<String>,
-    user: &User,
-    conn: AppDbConn,
-) -> ApiResult<Vec<(Attachment, String)>> {
-    let mut res = Vec::new();
-    let gear = PartId::get(gear, user, &conn)?;
-    let hook = hook.map(PartTypeId::from);
-    for a in collisions(
-        gear,
-        hook,
-        what.into(),
-        parse_time(start)?,
-        parse_time(end)?,
-        &conn,
-    )? {
-        res.push((a, a.part_id.name(&conn)?));
-    }
-    Ok(Json(res))
-}
-
-#[get("/to/<gear_id>?<time>")]
-fn to(
-    gear_id: i32,
-    time: Option<String>,
-    user: &User,
-    conn: AppDbConn,
-) -> ApiResult<Vec<AttachmentDetail>> {
-    let gear_id = PartId::get(gear_id, user, &conn)?;
-    let time = parse_time(time)?.unwrap_or_else(Utc::now);
-    let conn = &conn.0;
-
-    tbapi(attachees(gear_id, time, conn))
 }
 
 /// Where was this part attached in the given time frame?
@@ -577,5 +523,5 @@ fn rescan(
 }
 
 pub fn routes() -> Vec<rocket::Route> {
-    routes![get, check, patch, get_assembly, to, rescan]
+    routes![get, patch, get_assembly, rescan]
 }

@@ -87,18 +87,6 @@ impl PartTypeId {
     }
 }
 
-pub(crate) fn main_types(conn: &AppConn) -> TbResult<Vec<PartType>> {
-    Ok(part_types::table
-        .filter(part_types::main.eq(part_types::id))
-        .load(conn)?)
-}
-
-pub(crate) fn spare_types(conn: &AppConn) -> TbResult<Vec<PartType>> {
-    Ok(part_types::table
-        .filter(part_types::main.ne(part_types::id))
-        .load(conn)?)
-}
-
 #[get("/part")]
 fn part(_user: &User, conn: AppDbConn) -> Json<Vec<PartType>> {
     Json(part_types::table
@@ -107,11 +95,6 @@ fn part(_user: &User, conn: AppDbConn) -> Json<Vec<PartType>> {
         .expect("error loading PartType"))
 }
 
-#[get("/part/<id>")]
-fn subs(id: i32, _user: &User, conn: AppDbConn) -> Json<Vec<PartType>> {
-    Json(PartTypeId::from(id).subtypes(&conn))
-}
-
 pub fn routes() -> Vec<rocket::Route> {
-    routes![part, activity, subs]
+    routes![part, activity]
 }

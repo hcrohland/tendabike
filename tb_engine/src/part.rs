@@ -171,18 +171,6 @@ impl PartId {
     }
 }
 
-fn categories(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartTypeId>> {
-    use crate::schema::parts::dsl::*;
-    let types = types::main_types(conn)?;
-
-    Ok(Part::belonging_to(&types)
-        .filter(owner.eq(user.get_id()))
-        .select(what)
-        .distinct()
-        .get_results(conn)?)
-}
-
-
 fn allparts(user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
     use schema::parts::dsl::*;
 
@@ -190,39 +178,6 @@ fn allparts(user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
         .filter(owner.eq(user.get_id()))
         .order_by(id)
         .load::<Part>(conn)?)
-}
-
-/// retrieve the list of available parts for a user
-///
-/// it only returns parts which are not attached
-/// if parameter main is true it returns all gear, which can be used for activities
-/// If parameter main is false it returns the list of spares which can be attached to gear
-fn parts_by_user(
-    cat: Option<PartTypeId>,
-    main: bool,
-    user: &dyn Person,
-    conn: &AppConn,
-) -> TbResult<PartList> {
-    use crate::schema::parts::dsl::*;
-
-    let mut types = if main {
-        types::main_types(conn)?
-    } else {
-        types::spare_types(conn)?
-    };
-    if let Some(cat) = cat {
-        types.retain(|x| x.main == cat);
-    }
-    let plist = Part::belonging_to(&types) // only gear or spares
-        .filter(owner.eq(user.get_id()))
-        .order_by(id)
-        .load::<Part>(conn)?;
-    Ok(plist
-        .into_iter()
-        .filter(|x| {
-            attachment::attached_to(x.id, Utc::now(), conn) == x.id // only parts which are not attached
-        })
-        .collect())
 }
 
 /// reset all usage counters for all parts of a person
@@ -288,14 +243,6 @@ impl NewPart {
     }
 }
 
-fn parts_per_type(w: PartTypeId, user: &User, conn: &AppConn) -> TbResult<PartList> {
-    use schema::parts::dsl::*;
-    Ok(parts
-        .filter(what.eq(w))
-        .filter(owner.eq(user.get_id()))
-        .get_results(conn)?)
-}
-
 #[get("/<part>")]
 fn get(part: i32, user: &User, conn: AppDbConn) -> ApiResult<Part> {
     Ok(Json(PartId(part).part(user, &conn)?))
@@ -312,45 +259,11 @@ fn post(
     Ok(status::Created(url.to_string(), Some(Json(part))))
 }
 
-#[get("/categories")]
-fn mycats(user: &User, conn: AppDbConn) -> ApiResult<Vec<PartTypeId>> {
-    tbapi(categories(user, &conn))
-}
-
 #[get("/all")]
 fn myparts(user: &User, conn: AppDbConn) -> ApiResult<PartAttach> {
     tbapi(attachment::for_parts(allparts(user, &conn)?,&conn))
 }
 
-#[get("/mygear")]
-fn allgear(user: &User, conn: AppDbConn) -> ApiResult<PartList> {
-    tbapi(parts_by_user(None, true, user, &conn))
-}
-
-#[get("/myspares")]
-fn allspares(user: &User, conn: AppDbConn) -> ApiResult<PartList> {
-    tbapi(parts_by_user(None, false, user, &conn))
-}
-
-#[get("/gear/<cat>")]
-fn mygear(cat: i32, user: &User, conn: AppDbConn) -> ApiResult<Vec<PartId>> {
-    let parts = parts_by_user(Some(cat.into()), true, user, &conn)?;
-    let partids = parts.into_iter().map(|x| x.id).collect();
-    Ok(Json(partids))
-}
-
-#[get("/spares/<cat>")]
-fn myspares(cat: i32, user: &User, conn: AppDbConn) -> ApiResult<Vec<PartId>> {
-    let parts = parts_by_user(Some(cat.into()), false, user, &conn)?;
-    let partids = parts.into_iter().map(|x| x.id).collect();
-    Ok(Json(partids))
-}
-
-#[get("/type/<id>")]
-fn mytype(id: i32, user: &User, conn: AppDbConn) -> ApiResult<PartList> {
-    tbapi(parts_per_type(id.into(), user, &conn))
-}
-
 pub fn routes() -> Vec<rocket::Route> {
-    routes![get, post, mygear, myspares, mytype, mycats, allgear, allspares, myparts]
+    routes![get, post, myparts]
 }
