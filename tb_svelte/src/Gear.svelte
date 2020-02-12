@@ -38,6 +38,7 @@
         <th scope="col">{$types[hook].name}</th>
         <th scope="col">Brand</th>
         <th scope="col">Model</th>
+        <th scope="col">Purchase</th>
         <Usage header/>
       </tr>
     </thead>
@@ -46,6 +47,7 @@
         <td>{gear.name}</td>
         <td>{gear.vendor}</td>
         <td>{gear.model}</td>
+        <td>{new Date(gear.purchase).toLocaleDateString()}</td>
         <Usage part={gear} />
       </tr>
     </tbody>

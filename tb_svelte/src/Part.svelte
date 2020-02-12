@@ -30,6 +30,7 @@
         <th scope="col">{$types[part.what].name}</th>
         <th scope="col">Brand</th>
         <th scope="col">Model</th>
+        <th scope="col">Purchase</th>
         <Usage header/>
       </tr>
     </thead>
@@ -38,6 +39,7 @@
         <td>{part.name}</td>
         <td>{part.vendor}</td>
         <td>{part.model}</td>
+        <td>{new Date(part.purchase).toLocaleDateString()}</td>
         <Usage {part} />
       </tr>
     </tbody>

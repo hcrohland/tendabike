@@ -35,9 +35,10 @@
   {#if isOpen}
     <div transition:slide>
       <div class="card-body">
-        is a <span class="param">{part.vendor} {part.model}</span> 
-        which you used <span class=param>{part.count.toLocaleString()}</span> times 
-        for <span class="param">{formatSeconds(part.time)}</span> hours
+        is a <span class="param">{part.vendor} {part.model}</span>
+        purchased <span class="param">{new Date(part.purchase).toLocaleDateString()}</span>
+        <p>which you used <span class=param>{part.count.toLocaleString()}</span> times 
+        for <span class="param">{formatSeconds(part.time)}</span> hours 
         <p> You covered <span class="param">{parseFloat((part.distance / 1000).toFixed(1)).toLocaleString()}</span> km 
         climbing <span class="param">{part.climb.toLocaleString()}</span> and descending <span class="param">{part.descend.toLocaleString()}</span> meters </p>
         
