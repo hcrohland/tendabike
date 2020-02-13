@@ -1,3 +1,6 @@
+<script context="module">
+  let show_all_m = false;
+</script>
 <script>
 import {filterValues, by, types, parts, attachments, isAttached, category} from './store.js'
 import Usage from './Usage.svelte'
@@ -10,7 +13,9 @@ export let date = new Date;
 // Cannot use category directly since it 
 // is unset during destroy and the router gets confused
 let cat = $types[params.category]
-let show_all = false;
+let show_all = show_all_m;
+$: show_all_m = show_all;
+
 category.set(cat);
 
 let spareTypes = filterValues($types, (t) => t.main == cat.id && t.id != cat.id)

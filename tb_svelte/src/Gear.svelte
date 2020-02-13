@@ -1,3 +1,6 @@
+<script context="module">
+  let show_hist_m = false;
+</script>
 <script>
   import {myfetch, handleError, filterValues, types, parts, isAttached, attachments, category} from './store.js'
   import Await from './Await.svelte'
@@ -5,8 +8,9 @@
   import Usage from './Usage.svelte'
  
   export let params;
-  
-  let show_all = false;
+  let show_hist = show_hist_m;
+  $: show_hist_m = show_hist;
+
   let time = new Date();
   let hook, gear
   $: {
@@ -16,10 +20,8 @@
   }
   $: attachees = filterValues(
     $attachments, 
-    (a) => a.gear == gear.id && (show_all || isAttached(a, time))
+    (a) => a.gear == gear.id && (show_hist || isAttached(a, time))
   )
-  
-
 </script>
 
 <style>
@@ -29,7 +31,7 @@
 }
 </style>
 <span class="badge float-right">
-  Show history <input type="checkbox" name="Show all" id="" bind:checked={show_all}>  
+  Show history <input type="checkbox" name="Show history" id="" bind:checked={show_hist}>  
 </span>
 <div class="scroll-x">
   <table class="table">
