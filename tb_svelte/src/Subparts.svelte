@@ -45,10 +45,10 @@ function findIt(ps, type) {
         <tr>
           <th scope="row" class="text-nowrap"> 
             {'| '.repeat(level)}
-            {#if prefix && type.hooks.length > 1}
-              {prefix} 
-            {/if}
             {#if i == 0}
+              {#if prefix && type.hooks.length > 1}
+                {prefix} 
+              {/if}
               {type.name} 
             {:else}
               |
