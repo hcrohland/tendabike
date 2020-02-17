@@ -1,75 +1,40 @@
 <script>
 import {types, parts, filterValues, by} from './store.js'
+import SubType from './SubType.svelte'
 import Usage from './Usage.svelte'
 import NewPart from './NewPart.svelte'
 
 export let hook;
 export let attachees;
-export let level = undefined;
-export let prefix = undefined;
+export let level = -1;
+export let parent = false;
 
-let part;
-const hooks = filterValues($types, (a) => a.hooks.includes(hook)).sort((a,b) => a.order - b.order);
+if (parent) level += 1;
 
-if (prefix) {
-  prefix = prefix.split(' ').reverse()[1] // The first word iff there were two (hack!)
-} 
-
-function findIt(ps, type) {
-  let atts = attachees.filter((a) => a.hook == hook && a.what == type.id)
+const hooks = filterValues($types, (a) => a.hooks.includes(hook.id)).sort((a,b) => a.order - b.order);
+  
+function findIt(ps, as, type) {
+  let atts = as.filter((a) => a.hook == hook.id && a.what == type.id)
   atts.forEach(att => att.part = $parts[att.part_id]); 
   return atts.sort(by("attached"))
 }
 
 </script>
 {#if attachees.length > 0}
-  {#if level === undefined}
+  {#if level === -1}
     <table class="table table-hover">
     <thead>
-      <tr>
-        <th scope="col">Part</th>
-        <th scope="col">Name</th>
-        <th scope="col" class="text-right">Attached</th>
-        <Usage header/>
-        <th></th>
-      </tr>
+      <SubType header/>
     </thead>
     <tbody>
-      <svelte:self {hook} {attachees} level={0}></svelte:self>
+      <svelte:self {hook} {attachees} {level} parent></svelte:self>
     </tbody>
     </table>
     
   {:else}
     {#each hooks as type (type.id)}
-      {#each findIt ($parts, type) as att,i (att.attached)}
-        <tr>
-          <th scope="row" class="text-nowrap"> 
-            {'| '.repeat(level)}
-            {#if i == 0}
-              {#if prefix && type.hooks.length > 1}
-                {prefix} 
-              {/if}
-              {type.name} 
-            {:else}
-              |
-            {/if}
-          </th>
-          <td>
-          {#if att.part}
-          <a href="#/part/{att.part_id}" disabled={att.part===null} class="text-reset">
-            {att.name}
-          </a>
-          {:else}
-            {att.name}
-          {/if}
-          </td>
-          <td class="text-right"> {new Date(att.attached).toLocaleDateString()} </td >
-          <Usage part={att} />
-        </tr>
-        <svelte:self hook={type.id} {attachees} level={level+1} /> 
-      {:else}
-        <svelte:self hook={type.id} {attachees} {level} prefix={type.name} />
-      {/each}
+      <SubType subs={findIt($parts, attachees, type)} {type} {level} bind:parent/>
+      <svelte:self hook={type} {attachees} {level} {parent} />
     {/each}
   {/if}
 {:else}
