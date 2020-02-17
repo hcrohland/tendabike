@@ -2,8 +2,7 @@
   let show_hist_m = false;
 </script>
 <script>
-  import {myfetch, handleError, filterValues, types, parts, isAttached, attachments, category} from './store.js'
-  import Await from './Await.svelte'
+  import {filterValues, types, parts, isAttached, attachments, category} from './store.js'
   import Subparts from './Subparts.svelte'
   import Usage from './Usage.svelte'
  
@@ -15,8 +14,8 @@
   let hook, gear
   $: {
     gear = $parts[params.id]; 
-    hook = gear.what
-    category.set($types[hook])
+    hook = $types[gear.what];
+    category.set(hook)
   }
   $: attachees = filterValues(
     $attachments, 
@@ -37,7 +36,7 @@
   <table class="table">
     <thead>
       <tr>
-        <th scope="col">{$types[hook].name}</th>
+        <th scope="col">{hook.name}</th>
         <th scope="col">Brand</th>
         <th scope="col">Model</th>
         <th scope="col">Purchase</th>
