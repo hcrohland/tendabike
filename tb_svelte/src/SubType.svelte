@@ -6,17 +6,8 @@ import PartHist from './PartHist.svelte'
 
 export let header = false;
 export let type = undefined;
-export let subs = [];
 export let level = undefined;
-export let parent = true ;
-
-let prefix = undefined;
-
-if (!parent) {
-  prefix = type["name"].split(' ').reverse()[1] // The first word iff there were two (hack!)
-} 
-
-parent = subs.length != 0;
+export let prefix = "";
 
 </script>
 
@@ -29,24 +20,21 @@ parent = subs.length != 0;
         <th></th>
       </tr>    
   {:else}
-      {#each subs as att,i (att.attached)}
+      {#each type.subs as att,i (att.attached)}
         <tr>
           <th scope="row" class="text-nowrap"> 
             {'| '.repeat(level)}
             {#if i == 0}
-              {#if prefix && type.hooks.length > 1}
-                {prefix} 
-              {/if}
-              {type.name} 
+              {prefix +  " " + type.name}
             {:else}
               |
             {/if}
           </th>
           <td>
           {#if att.part}
-                <a href="#/part/{att.part_id}" disabled={att.part===null} class="text-reset">
-                  {att.name}
-                </a>  
+            <a href="#/part/{att.part_id}" class="text-reset">
+              {att.name}
+            </a>  
           {:else}
             {att.name}
           {/if}

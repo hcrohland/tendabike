@@ -11,11 +11,11 @@
   $: show_hist_m = show_hist;
 
   let time = new Date();
-  let hook, gear
+  let type, gear
   $: {
     gear = $parts[params.id]; 
-    hook = $types[gear.what];
-    category.set(hook)
+    type = $types[gear.what];
+    category.set(type)
   }
   $: attachees = filterValues(
     $attachments, 
@@ -36,7 +36,7 @@
   <table class="table">
     <thead>
       <tr>
-        <th scope="col">{hook.name}</th>
+        <th scope="col">{type.name}</th>
         <th scope="col">Brand</th>
         <th scope="col">Model</th>
         <th scope="col">Purchase</th>
@@ -53,5 +53,5 @@
       </tr>
     </tbody>
   </table>
-  <Subparts {hook} {attachees} />
+  <Subparts {type} {attachees} />
 </div>
