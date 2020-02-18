@@ -8,38 +8,33 @@
 
   export let part;
 
-  let attach;
-  let showModal;
+  let attach, showModal, disabled;
   
-  let type = $types[part.what];
+  const type = $types[part.what];
 
   reset();
-
-  if (type.hooks.length == 1) attach.hook = type.hooks[0];
-
-  let disabled = true; 
-
 
   async function attachPart () {
     disabled = true;
     try {
       await myfetch('/attach/', 'PATCH', attach)
         .then(data => updatePartAttach(data))
-        .then(reset)
         .then(dispatch('saved'))
     } catch (e) {
       alert (e)
       initData()
     }
+    reset()
   }
 
   function reset () {
     showModal = false;
+    disabled = true;
     attach = {
       part_id: part.id,
       attached: part.purchase,
       gear: undefined,
-      hook: undefined,
+      hook: (type.hooks.length == 1) ? type.hooks[0] : undefined,
     } 
   }
 
