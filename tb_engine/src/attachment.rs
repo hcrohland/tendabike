@@ -273,7 +273,6 @@ impl Attachment {
 
             if let Some(detached) = self.detached {
                 if detached <= state.attached {
-                    //
                     return Ok(PartAttach {
                         parts: vec![self.delete(conn)?],
                         attachments: vec![AttachmentDetail {a: self, name: "".into(), what: 0.into()}]
@@ -287,8 +286,12 @@ impl Attachment {
             } else {
                 state.attached = state.detached.unwrap();
                 state.detached = self.detached;
-                // Factor::Add
-                unimplemented!("check for collisions missing!");
+                let coll = state.collisions(user, conn)?;
+                ensure!(
+                    coll.is_empty(),
+                    Error::BadRequest(format!("Attachment collision with {:?}", coll))
+                );
+                Factor::Add
             };
 
             let a = self.save_changes::<Attachment>(conn)?;
@@ -298,7 +301,7 @@ impl Attachment {
         })
     }
 
-    fn collisions(self, user: &dyn Person, conn: &AppConn) -> TbResult<Vec<Attachment>> {
+    fn collisions(&self, user: &dyn Person, conn: &AppConn) -> TbResult<Vec<Attachment>> {
         collisions(
             self.gear,
             Some(self.hook),
