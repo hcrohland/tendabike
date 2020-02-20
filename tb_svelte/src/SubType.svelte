@@ -5,9 +5,11 @@ import NewPart from './NewPart.svelte'
 import PartHist from './PartHist.svelte'
 
 export let header = false;
-export let type = undefined;
+export let attachments = undefined;
 export let level = undefined;
 export let prefix = "";
+export let type = "";
+export const hook = "";
 
 </script>
 
@@ -20,7 +22,7 @@ export let prefix = "";
         <th></th>
       </tr>    
   {:else}
-      {#each type.subs as att,i (att.attached)}
+      {#each attachments as att,i (att.attached)}
         <tr>
           <th scope="row" class="text-nowrap"> 
             {'| '.repeat(level)}
@@ -31,7 +33,7 @@ export let prefix = "";
             {/if}
           </th>
           <td>
-          {#if att.part}
+          {#if $parts[att.part_id]}
             <a href="#/part/{att.part_id}" class="text-reset">
               {att.name}
             </a>  
@@ -40,7 +42,7 @@ export let prefix = "";
           {/if}
           </td>
           <td class="text-right"> {new Date(att.attached).toLocaleDateString()} </td >
-          <Usage part={att.part || att} />
+          <Usage part={$parts[att.part_id] || att} />
         </tr>
       {/each}
   {/if}
