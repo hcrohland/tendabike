@@ -9,7 +9,9 @@ export let attachments = undefined;
 export let level = undefined;
 export let prefix = "";
 export let type = "";
-export const hook = "";
+export let hook = "";
+
+let show_hist = false; 
 
 </script>
 
@@ -23,11 +25,21 @@ export const hook = "";
       </tr>    
   {:else}
       {#each attachments as att,i (att.attached)}
+        {#if i == 0 || show_hist}
         <tr>
           <th scope="row" class="text-nowrap"> 
             {'| '.repeat(level)}
-            {#if i == 0}
+            {#if i == 0 }
               {prefix +  " " + type.name}
+              {#if attachments.length > 1}
+                <button class="btn" on:click={() => show_hist = !show_hist}>
+                  {#if show_hist}
+                    &#9650;
+                  {:else}
+                    ...
+                  {/if}
+                </button>
+              {/if}
             {:else}
               |
             {/if}
@@ -44,5 +56,6 @@ export const hook = "";
           <td class="text-right"> {new Date(att.attached).toLocaleDateString()} </td >
           <Usage part={$parts[att.part_id] || att} />
         </tr>
+        {/if}
       {/each}
   {/if}

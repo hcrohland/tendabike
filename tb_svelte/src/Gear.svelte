@@ -7,9 +7,7 @@
   import Usage from './Usage.svelte'
  
   export let params;
-  let show_hist = show_hist_m;
-  $: show_hist_m = show_hist;
-
+  
   let time = new Date();
   let type, gear
   $: {
@@ -19,7 +17,7 @@
   }
   $: attachees = filterValues(
     $attachments, 
-    (a) => a.gear == gear.id && (show_hist || isAttached(a, time))
+    (a) => a.gear == gear.id
   )
 </script>
 
@@ -29,9 +27,6 @@
   overflow-x: scroll;
 }
 </style>
-<span class="badge float-right">
-  Show history <input type="checkbox" name="Show history" id="" bind:checked={show_hist}>  
-</span>
 <div class="scroll-x">
   <table class="table">
     <thead>
