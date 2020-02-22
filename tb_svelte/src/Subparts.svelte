@@ -4,7 +4,7 @@ import SubType from './SubType.svelte'
 import Usage from './Usage.svelte'
 import NewPart from './NewPart.svelte'
 
-export let type;
+export let hook;
 export let attachees;
 
 function buildList (list, hook, attachees, level, prefix) {
@@ -30,8 +30,8 @@ function buildList (list, hook, attachees, level, prefix) {
       <SubType header/>
     </thead>
     <tbody>
-      {#each buildList([], type, attachees, 0, "") as type (type.hook.id + "." + type.type.id )}
-        <SubType {...type} />
+      {#each buildList([], hook, attachees, 0, "") as item (item.hook.id + "." + item.type.id )}
+        <SubType {...item } />
       {/each}
     </tbody>
     </table>

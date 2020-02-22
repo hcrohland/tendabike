@@ -8,12 +8,11 @@
  
   export let params;
   
-  let time = new Date();
-  let type, gear
+  let hook, gear;
   $: {
     gear = $parts[params.id]; 
-    type = $types[gear.what];
-    category.set(type)
+    hook = $types[gear.what];
+    category.set(hook)
   }
   $: attachees = filterValues(
     $attachments, 
@@ -31,7 +30,7 @@
   <table class="table">
     <thead>
       <tr>
-        <th scope="col">{type.name}</th>
+        <th scope="col">{hook.name}</th>
         <th scope="col">Brand</th>
         <th scope="col">Model</th>
         <th scope="col">Purchase</th>
@@ -48,5 +47,5 @@
       </tr>
     </tbody>
   </table>
-  <Subparts {type} {attachees} />
+  <Subparts {hook} {attachees} />
 </div>
