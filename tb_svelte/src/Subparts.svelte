@@ -1,8 +1,6 @@
 <script>
 import {types, filterValues, by} from './store.js'
 import SubType from './SubType.svelte'
-import Usage from './Usage.svelte'
-import NewPart from './NewPart.svelte'
 
 export let hook;
 export let attachees;

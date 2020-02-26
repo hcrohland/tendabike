@@ -1,7 +1,6 @@
 <script>
 import {parts, by} from './store.js'
 import Usage from './Usage.svelte'
-import NewPart from './NewPart.svelte'
 import PartHist from './PartHist.svelte'
 
 export let header = false;
