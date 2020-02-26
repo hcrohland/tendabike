@@ -5,8 +5,8 @@
   import { createEventDispatcher } from 'svelte';
 	const dispatch = createEventDispatcher();
 
-  export let cat;
-  export let title = 'New ' + cat.name;
+  export let type;
+  export let title = 'New ' + type.name;
 
   let part;
   let enabled = false;
@@ -28,7 +28,7 @@
   function popup(){
     part = {
       owner: $user.id, 
-      what: cat.id, 
+      what: type.id, 
       count:0, climb:0, descend:0, distance:0, time: 0,
       name: "", 
       vendor: "", 
@@ -46,7 +46,7 @@
 
 {#if showModal}
   <Modal save="Create" on:close="{() => showModal = false}">
-    <span slot="header"> New {cat.name} </span>
+    <span slot="header"> New {type.name} </span>
     <form>
       <div class="form-row">
         <div class="form-group col-md-12">
@@ -68,13 +68,13 @@
       </div>
       <div class="form-row">
         <div class="form-group col-md-6">
-          <label for="inputDate">New {cat.name} day was at</label>
+          <label for="inputDate">New {type.name} day was at</label>
           <DateTime id="inputDate" class="input-group-text" bind:date={part.purchase} required/>
         </div>
       </div>
     </form>
     <span slot="footer">
-      <button type="submit" {disabled} class="btn btn-primary float-right" on:click={savePart}>Create {cat.name}</button>
+      <button type="submit" {disabled} class="btn btn-primary float-right" on:click={savePart}>Create {type.name}</button>
     </span>
   </Modal>
 {/if}

@@ -51,7 +51,7 @@ function subparts(type, parts) {
   <tbody>
   {#each spareTypes as type (type.id)}
     <tr>
-        <th colspan=80 scope="col" class="border-2 text-nowrap"> {type.name}s <NewPart title='New' cat={type}/></th>
+        <th colspan=80 scope="col" class="border-2 text-nowrap"> {type.name}s <NewPart title='New' {type}/></th>
     </tr>
       {#each subparts(type, $parts).filter((p) => show_all || !attachedTo($attachments, p.id, date))
         as part (part.id)}
