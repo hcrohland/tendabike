@@ -1,7 +1,7 @@
 <script>
   import Modal from './Modal.svelte';
   import DateTime from './DateTime.svelte';
-  import {myfetch, updatePartAttach, attachments, initData, filterValues, types, parts} from './store.js';
+  import {myfetch, updatePartAttach, attachments, initData, filterValues, types, parts, by} from './store.js';
   
   import { createEventDispatcher } from 'svelte';
 	const dispatch = createEventDispatcher();
@@ -12,7 +12,16 @@
   
   const type = $types[part.what];
 
-  reset();
+
+  function lastDetach(part) {
+    let last = filterValues($attachments, (a) => a.part_id == part.id).sort(by("attached"))[0]
+    
+    if (last) {
+      return last.detached ? last.detached : last.attached
+    }else {
+      return part.purchase
+    }
+  }
 
   async function attachPart () {
     disabled = true;
@@ -24,30 +33,30 @@
       alert (e)
       initData()
     }
-    reset()
+    showModal = false;
   }
 
-  function reset () {
-    showModal = false;
+  function popup () {
+    showModal = true;
     disabled = true;
     attach = {
       part_id: part.id,
-      attached: part.purchase,
+      attached: lastDetach(part),
       gear: undefined,
       hook: (type.hooks.length == 1) ? type.hooks[0] : undefined,
     } 
   }
 
   // $: if (showModal) console.log(attach)
-  $: disabled = !($types[attach.hook] && $parts[attach.gear])
+  $: disabled = attach && !($types[attach.hook] && $parts[attach.gear])
 </script>
 
-<span type="button" class="badge badge-secondary float-right" on:click={() => showModal = true}>
+<span type="button" class="badge badge-secondary float-right" on:click={popup}>
   attach
 </span>
 
 {#if showModal}
-  <Modal save="Attach" on:close={reset}>
+  <Modal save="Attach" on:close={() => showModal = false}>
     <span slot="header"> Attach {type.name} {part.name} {part.vendor} {part.model} </span>
     <form>
         <div class="form-inline">
