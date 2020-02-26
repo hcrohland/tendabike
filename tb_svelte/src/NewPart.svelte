@@ -12,23 +12,20 @@
   let enabled = false;
   let showModal = false;
 
-  reset()
-
   async function savePart () {
     disabled = true;
     try {
       await myfetch('/part/', 'POST', part)
         .then(data => parts.updateMap([data]))
-        .then(reset)
         .then(dispatch('created'))
     } catch (e) {
       alert (e)
       initData()
     }
-  }
+    showModal = false;
+}
 
-  function reset(){
-    showModal = false
+  function popup(){
     part = {
       owner: $user.id, 
       what: cat.id, 
@@ -38,16 +35,17 @@
       model: "", 
       purchase: new Date()
     };
+    showModal = true;
   }
 
-  $: disabled = !(part.name.length > 0 && part.vendor.length > 0 && part.model.length > 0)
+  $: disabled = !(part && part.name.length > 0 && part.vendor.length > 0 && part.model.length > 0)
 </script>
-<span type="button" class="badge badge-secondary" on:click="{() => showModal = true}">
+<span type="button" class="badge badge-secondary" on:click="{popup}">
   {title}
 </span>
 
 {#if showModal}
-  <Modal save="Create" on:close="{reset}">
+  <Modal save="Create" on:close="{() => showModal = false}">
     <span slot="header"> New {cat.name} </span>
     <form>
       <div class="form-row">
