@@ -111,10 +111,11 @@ pub fn ignite_rocket() -> rocket::Rocket {
         // mount all the endpoints from the module
         .mount(
             "/",
-            rocket_contrib::serve::StaticFiles::from(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/../tb_svelte/public"
-            )),
+            rocket_contrib::serve::StaticFiles::from(
+                env::var("STATIC_WWW").unwrap_or_else(|_|
+                    concat!(env!("CARGO_MANIFEST_DIR"),"/../tb_svelte/public").into()
+                )
+            )
         )
         .mount("/user", user::routes())
         .mount("/types", types::routes())

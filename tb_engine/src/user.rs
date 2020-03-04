@@ -111,11 +111,6 @@ fn post(user: Json<NewUser>, conn: AppDbConn) -> Result<status::Created<Json<Use
     Ok(status::Created("/".to_string(), Some(Json(user))))
 }
 
-#[post("/echo", data = "<user>")]
-fn echo(user: String) -> String {
-    user
-}
-
 pub fn routes() -> Vec<rocket::Route> {
-    routes![getuser, post, echo]
+    routes![getuser, post]
 }
