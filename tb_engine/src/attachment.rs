@@ -517,12 +517,15 @@ fn read(
     Ok(atts)
 }
 
+use rocket::http::Status;
+
 #[get("/rescan")]
 fn rescan(
     _user: Admin,
     conn: AppDbConn,
-) {
-    rescan_activities(&conn)
+) -> Status {
+    rescan_activities(&conn);
+    Status::Ok
 }
 
 pub fn routes() -> Vec<rocket::Route> {
