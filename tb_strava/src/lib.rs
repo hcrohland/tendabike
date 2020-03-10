@@ -32,7 +32,7 @@ pub mod gear;
 pub mod schema;
 pub mod ui;
 
-const TB_URI: &str = "http://localhost:8000";
+const TB_URL: &str = "http://localhost";
 
 type AppConn = diesel::PgConnection;
 

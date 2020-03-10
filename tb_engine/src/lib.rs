@@ -63,19 +63,7 @@ type AppConn = diesel::PgConnection;
 #[database("app_db")]
 pub struct AppDbConn(AppConn);
 
-pub struct Config {
-    pub greeting: String,
-}
 
-impl Default for Config {
-    fn default() -> Config {
-        let greet = match env::var("TENDER_GREETING") {
-            Ok(val) => val,
-            Err(_e) => String::from("Hello, want to tend your bikes?"),
-        };
-        Config { greeting: greet }
-    }
-}
 
 pub fn ignite_rocket() -> rocket::Rocket {
     use rocket_cors::*;
@@ -101,8 +89,6 @@ pub fn ignite_rocket() -> rocket::Rocket {
     .expect("Could not set CORS options");
 
     let ship = rocket::ignite()
-        // add config object
-        .manage(Config::default())
         // add database pool
         .attach(AppDbConn::fairing())
         .attach(cors)
@@ -120,6 +106,8 @@ pub fn ignite_rocket() -> rocket::Rocket {
         .mount("/part", part::routes())
         .mount("/activ", activity::routes())
         .mount("/attach", attachment::routes());
+    let config = ship.config().clone();
+    let ship = ship.manage(config);
     tb_strava::attach_rocket(ship)
 }
 

@@ -97,7 +97,7 @@ impl TbGear {
         let client = reqwest::blocking::Client::new();
 
         let res: i32 = client
-            .post(&format!("{}{}", TB_URI, "/part"))
+            .post(&format!("{}/{}", user.url, "part"))
             .bearer_auth(&user.token)
             .json(self)
             .send().context("Could not contact engine")?

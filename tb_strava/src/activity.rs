@@ -138,9 +138,9 @@ impl StravaActivity {
             .get_results::<i32>(user.conn())?
             .pop();
         let client = if let Some(tb_id) = tb_id {
-            client.put(&format!("{}/{}/{}", TB_URI, "activ", tb_id))
+            client.put(&format!("{}/{}/{}", user.url, "activ", tb_id))
         } else {
-            client.post(&format!("{}{}", TB_URI, "/activ"))
+            client.post(&format!("{}/{}", user.url, "activ"))
         };
 
         let res: serde_json::Value = client

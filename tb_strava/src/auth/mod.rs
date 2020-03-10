@@ -44,6 +44,9 @@ impl DbUser {
         let conn = request
             .guard::<AppDbConn>().expect("internal db missing!!!")
             .0;
+        let config = request
+            .guard::<State<Config>>()
+            .expect("Config missing!!!");
         let strava_id = athlete["id"]
             .as_i64()
             .ok_or(OAuthError::Authorize("athlet id is no int"))? as i32;
@@ -57,7 +60,7 @@ impl DbUser {
         let client = reqwest::blocking::Client::new();
 
         let user = client
-            .post(&format!("{}{}", TB_URI, "/user"))
+            .post(&format!("{}:{}/{}", TB_URL, config.port,"user"))
             .json(athlete)
             .send().context("unable to contact backend")?
             .error_for_status().context("backend responded with error")?
@@ -105,6 +108,7 @@ pub struct User {
     user: DbUser,
     conn: AppDbConn,
     pub token: String,
+    pub url: String,
 }
 
 /// User request guard
@@ -126,13 +130,17 @@ impl User {
         let conn = request
             .guard::<AppDbConn>()
             .expect("internal db missing!!!");
+        let port = request
+            .guard::<State<Config>>()
+            .expect("Config missing!!!").port;
+        let url = format!("{}:{}", TB_URL, port);
         let user: DbUser = users::table
             .filter(users::tendabike_id.eq(id))
             .get_result(&conn.0)
             .context("user not registered")?;
 
         if user.expires_at > time::get_time().sec {
-            return Ok(User { user, conn, token });
+            return Ok(User { user, conn, token, url });
         }
 
         info!("refreshing access token");
@@ -144,9 +152,10 @@ impl User {
 
         let (user, token) = user.store(request, tokenset)?;
 
-        Ok(User { user, token, conn })
-    }
+        Ok(User { user, token, conn, url })
 
+    }
+    
     /// send an API call with an authenticated User
     ///
     pub fn request(&self, uri: &str) -> TbResult<String> {
