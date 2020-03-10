@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 tb_common = { path = "../tb_common" }
 tb_strava = { path = "../tb_strava" }
-rocket = "0.4.2"
+rocket = "0.4"
 rocket_cors = "0.5"
 diesel = { version = "1.4.3", features = ["postgres", "chrono"] }
 diesel-derive-newtype = "0.1.2"
@@ -29,6 +29,6 @@ thiserror = "1"
 anyhow = "1"
 
 [dependencies.rocket_contrib]
-version = "0.4.2"
+version = "0.4"
 default-features = false
 features = ["diesel_postgres_pool", "json", "serve"]

@@ -16,6 +16,7 @@ use schema::users;
 
 pub mod strava;
 
+
 /// check user id from the request
 /// 
 /// Will refresh token if possible
@@ -53,7 +54,7 @@ impl DbUser {
             Err(diesel::NotFound) => (),
             Err(x) => panic!(format!("database error: {}", x)),
         }
-        let client = reqwest::Client::new();
+        let client = reqwest::blocking::Client::new();
 
         let user = client
             .post(&format!("{}{}", TB_URI, "/user"))
@@ -149,7 +150,7 @@ impl User {
     /// send an API call with an authenticated User
     ///
     pub fn request(&self, uri: &str) -> TbResult<String> {
-        let client = reqwest::Client::new();
+        let client = reqwest::blocking::Client::new();
         Ok(client
             .get(&format!("{}{}", strava::API, uri))
             .bearer_auth(&self.user.access_token)
@@ -158,7 +159,7 @@ impl User {
     }
 
     pub fn request_json(&self, uri: &str) -> TbResult<Value> {
-        let client = reqwest::Client::new();
+        let client = reqwest::blocking::Client::new();
         Ok(client
             .get(&format!("{}{}", strava::API, uri))
             .bearer_auth(&self.user.access_token)

@@ -94,7 +94,7 @@ impl StravaGear {
 
 impl TbGear {
     fn send_to_tb(&self, user: &User) -> TbResult<i32> {
-        let client = reqwest::Client::new();
+        let client = reqwest::blocking::Client::new();
 
         let res: i32 = client
             .post(&format!("{}{}", TB_URI, "/part"))

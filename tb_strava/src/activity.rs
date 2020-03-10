@@ -128,7 +128,7 @@ impl StravaActivity {
     pub fn send_to_tb(self, user: &User) -> TbResult<serde_json::Value> {
         use schema::activities::dsl::*;
 
-        let client = reqwest::Client::new();
+        let client = reqwest::blocking::Client::new();
         let strava_id = self.id;
         let tb = self.into_tb(user)?;
 
