@@ -2,8 +2,6 @@ use crate::*;
 use activity::*;
 use auth::User;
 use rocket::response::Redirect;
-use rocket_contrib::templates::Template;
-use std::collections::HashMap;
 
 #[get("/bikes/<id>")]
 fn redirect_gear(id: i32, user: User) -> Option<Redirect> {
@@ -40,7 +38,7 @@ fn sync(batch: Option<usize>, user: User) -> ApiResult<(Vec<serde_json::Value>, 
 fn overview(user: User) -> ApiResult<serde_json::Value> {
     tbapi(user.request_json("/athlete"))
 }
-
+/* 
 #[allow(clippy::map_entry)]
 #[get("/?<page>&<after>")]
 fn read(page: Option<i32>, after: Option<i64>, user: User) -> TbResult<Template> {
@@ -70,7 +68,7 @@ fn read(page: Option<i32>, after: Option<i64>, user: User) -> TbResult<Template>
     map.insert("page", serde_json::to_value(page)?);
     Ok(Template::render("strava_ui", map))
 }
-
+ */
 use serde_json::Value;
 #[get("/activities")]
 fn activities(user: User) -> ApiResult<Value> {
@@ -89,7 +87,7 @@ fn gear(id: String, user: User) -> ApiResult<Value> {
 
 pub fn routes() -> Vec<rocket::Route> {
     routes![
-        read,
+        // read,
         activities,
         gear,
         activity,

@@ -31,4 +31,4 @@ anyhow = "1"
 [dependencies.rocket_contrib]
 version = "0.4.2"
 default-features = false
-features = ["diesel_postgres_pool", "json", "serve", "tera_templates"]
+features = ["diesel_postgres_pool", "json", "serve"]

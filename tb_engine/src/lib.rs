@@ -28,7 +28,6 @@ extern crate simplelog;
 extern crate dotenv;
 
 use self::diesel::prelude::*;
-use rocket_contrib::templates::Template;
 
 use simplelog::{CombinedLogger, LevelFilter, TermLogger, WriteLogger};
 
@@ -106,7 +105,6 @@ pub fn ignite_rocket() -> rocket::Rocket {
         .manage(Config::default())
         // add database pool
         .attach(AppDbConn::fairing())
-        .attach(Template::fairing())
         .attach(cors)
         // mount all the endpoints from the module
         .mount(
