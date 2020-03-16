@@ -66,27 +66,13 @@ pub struct AppDbConn(AppConn);
 
 
 pub fn ignite_rocket() -> rocket::Rocket {
-    use rocket_cors::*;
     dotenv::dotenv().ok();
     // Initialize server
 
-    let allowed_origins =
-        AllowedOrigins::some_exact(&[
-            "http://localhost:5000", 
-            "http://127.0.0.1:5000", 
-            "http://localhost:8000", 
-            "http://127.0.0.1:8000"]);
-
     // You can also deserialize this
-    let cors = rocket_cors::CorsOptions {
-        allowed_origins,
-        // allowed_methods: vec![Method::Get].into_iter().map(From::from).collect(),
-        // allowed_headers: AllowedHeaders::some(&["Authorization", "Accept"]),
-        allow_credentials: true,
-        ..Default::default()
-    }
-    .to_cors()
-    .expect("Could not set CORS options");
+    let cors = rocket_cors::CorsOptions::default()
+        .to_cors()
+        .expect("Could not set CORS options");
 
     let ship = rocket::ignite()
         // add database pool
