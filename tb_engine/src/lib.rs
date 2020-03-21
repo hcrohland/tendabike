@@ -121,6 +121,7 @@ pub fn init_environment() {
     init_logging();
 }
 
+#[derive(Debug)]
 pub struct Usage {
     // oldest activity
     pub start: DateTime<Utc>,

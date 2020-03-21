@@ -155,26 +155,24 @@ fn test_detached() {
 }
 
 impl Attachment {
-    fn add_usage(&mut self, usage: &Usage) {
+    /// add the given usage to the attachement
+    fn apply_usage(&mut self, usage: &Usage, conn: &AppConn) -> TbResult<Part> {
+        debug!("Applying usage {:?} to attachment {:?}", usage, self);
         self.count += usage.count;
         self.time += usage.time;
         self.distance += usage.distance;
         self.climb += usage.climb;
         self.descend += usage.descend;
+        self.part_id.apply(usage, conn)
     }
 
-    /// register the given attachment according to the given factor.
-    ///
-    /// This can both add or subtract activities from a part
-    /// The changed parts are returned
-    fn register(&mut self, factor: Factor, conn: &AppConn) -> TbResult<Part> {
-        let usage = Activity::find(self.gear, self.attached, self.detached, conn)
+    /// return the usage of the attachment
+    fn usage(&self, factor: Factor, conn: &AppConn) -> Usage {
+        Activity::find(self.gear, self.attached, self.detached, conn)
             .into_iter()
             .fold(Usage::none(self.attached), |acc, x| {
                 acc.add_activity(&x, factor)
-            });
-        self.add_usage(&usage);
-        self.part_id.apply(&usage, conn)
+            })
     }
 
     /// creates a new attachment with its side-effects
@@ -211,7 +209,8 @@ impl Attachment {
                 }
             }
 
-            let part = self.register(Factor::Add, conn)?;
+            let usage = self.usage(Factor::Add, conn);
+            let part = self.apply_usage(&usage, conn)?;
             let att = diesel::insert_into(attachments::table) // Store the attachment in the database
                 .values(self)
                 .get_result::<Attachment>(conn)
@@ -228,10 +227,12 @@ impl Attachment {
     /// - returns all affected parts
     fn delete(self, conn: &AppConn) -> TbResult<Part> {
         conn.transaction(|| {
-            diesel::delete(attachments::table.find((self.part_id, self.attached))) // delete the attachment in the database
+            let mut att = diesel::delete(attachments::table.find((self.part_id, self.attached))) // delete the attachment in the database
                 .get_result::<Attachment>(conn)
-                .context("Could not delete attachment")?
-                .register(Factor::Sub, conn) // and register changes
+                .context("Could not delete attachment")?;
+            
+            let usage = att.usage(Factor::Sub, conn);
+            att.apply_usage(&usage,conn)
         })
     }
 
@@ -245,7 +246,7 @@ impl Attachment {
     /// returns
     /// - MyError::Conflict if the hook_id does not match
     /// - all recalculated parts on success
-    fn patch(self, user: &dyn Person, conn: &AppConn) -> TbResult<PartAttach> {
+    fn patch(mut self, user: &dyn Person, conn: &AppConn) -> TbResult<PartAttach> {
         self.part_id.checkuser(user, conn)?;
         conn.transaction(|| {
             let mut state = match attachments::table
@@ -280,9 +281,10 @@ impl Attachment {
                 }
             }
 
-            let factor = if lt_detached(self.detached, state.detached) {
+            let factor;
+            if lt_detached(self.detached, state.detached) {
                 state.attached = self.detached.unwrap();
-                Factor::Sub
+                factor = Factor::Sub
             } else {
                 state.attached = state.detached.unwrap();
                 state.detached = self.detached;
@@ -291,12 +293,16 @@ impl Attachment {
                     coll.is_empty(),
                     Error::BadRequest(format!("Attachment collision with {:?}", coll))
                 );
-                Factor::Add
+                factor = Factor::Add
             };
 
-            let a = self.save_changes::<Attachment>(conn)?;
-            let part = state.register(factor, conn)?; // and register changes
-            let attachment = AttachmentDetail {a, name: part.name.clone(), what: part.what};
+            let usage = state.usage(factor, conn);
+            let part = self.apply_usage(&usage, conn)?; // and register changes
+            let attachment = AttachmentDetail {
+                    a: self.save_changes::<Attachment>(conn)?,
+                    name: part.name.clone(), 
+                    what: part.what
+                };
             Ok(PartAttach {parts: vec![part], attachments: vec![attachment]})
         })
     }
