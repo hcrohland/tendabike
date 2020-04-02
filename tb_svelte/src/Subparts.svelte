@@ -14,7 +14,7 @@ function buildList (list, hook, attachees, level, prefix) {
     if (attachments.length > 0) {
       buildList(list, type, attachees, level + 1, "");
     } else {
-      let prefix = type.name.split(' ').reverse()[1] // The first word iff there were two (hack!)
+      let prefix = type.name.split(' ').reverse()[1] || '' // The first word iff there were two (hack!)
       buildList(list, type, attachees, level, prefix)
     }
   })
