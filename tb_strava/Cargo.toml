@@ -12,15 +12,15 @@ tb_common = {path = "../tb_common"}
 
 rocket = "0.4"
 reqwest = { version = "0.10", features = ["blocking", "json"] }
-diesel = { version = "1.4.3", features = ["postgres", "chrono"] }
-rocket_oauth2 = "0.2.0-rc.1"
+diesel = { version = "1.4", features = ["postgres", "chrono"] }
+rocket_oauth2 = "0.2"
 
 diesel-derive-newtype = "0.1.2"
 
 newtype_derive = "0.1.6"
 dotenv = "0.15.0"
-log = "0.4.8"  
-simplelog = "0.7.4"
+log = "0.4"  
+simplelog = "0.7"
 lazy_static = "1.4.0"
 serde = "1.0" 
 serde_derive = "1.0"
