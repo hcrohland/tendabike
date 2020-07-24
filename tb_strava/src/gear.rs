@@ -87,7 +87,7 @@ impl StravaGear {
     fn request(id: &str, user: &User) -> TbResult<StravaGear> {
         let r = user.request(&format!("/gear/{}", id))?;
         let res: StravaGear =
-            serde_json::from_str(&r).context("Did not receive StravaGear format")?;
+            serde_json::from_str(&r).context(format!("Did not receive StravaGear format: {:?}", r))?;
         Ok(res)
     }
 }
@@ -96,13 +96,17 @@ impl TbGear {
     fn send_to_tb(&self, user: &User) -> TbResult<i32> {
         let client = reqwest::blocking::Client::new();
 
-        let res: i32 = client
+        #[derive(Deserialize, Debug)]
+        struct Id {id:i32}
+
+        let res = client
             .post(&format!("{}/{}", user.url, "part"))
             .bearer_auth(&user.token)
             .json(self)
             .send().context("Could not contact engine")?
-            .error_for_status().context("Engine returned error")?
-            .json().context("Could not parse result to integer")?;
+            .error_for_status().context(format!("Engine returned error for {:?}", self))?
+            .json::<Id>().context("Could not parse result to integer")?
+            .id;
 
         Ok(res)
     }
