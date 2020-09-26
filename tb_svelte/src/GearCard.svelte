@@ -5,7 +5,7 @@
   export let part;
   export let display = false;
 
-  let isOpen = false;
+  export let isOpen = false;
   let showLink = false;
 </script>
 
