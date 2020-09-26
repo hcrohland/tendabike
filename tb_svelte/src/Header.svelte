@@ -5,7 +5,7 @@
 
   let running = false;
   let number = 0;
-  let promise = undefined;
+  let promise = getdata();
   let data = undefined;
 
   let isOpen = false;
