@@ -268,8 +268,6 @@ fn csv2descend(data: rocket::data::Data, offset: Option<i32>, user: &User, conn:
         start: String,
         #[serde(rename = "Titel")]
         titel: String,
-        #[serde(alias = "Positiver Höhenunterschied")]
-        climb: String,
         #[serde(alias = "Negativer Höhenunterschied")]
         descend: String,
     };
@@ -286,7 +284,6 @@ fn csv2descend(data: rocket::data::Data, offset: Option<i32>, user: &User, conn:
             Some(offset) => chrono::FixedOffset::east(offset * 3600).datetime_from_str(&record.start, "%Y-%m-%d %H:%M:%S")?.with_timezone(&Local),
             None         => Local.datetime_from_str(&record.start, "%Y-%m-%d %H:%M:%S")?
         };
-        let rclimb = record.climb.replace(".", "").parse::<i32>().context("Could not parse climb")?;
         let rdescend = record.descend.replace(".", "").parse::<i32>().context("Could not parse descend")?;
         conn.transaction(|| {
             let act: Activity = activities
@@ -296,7 +293,7 @@ fn csv2descend(data: rocket::data::Data, offset: Option<i32>, user: &User, conn:
                 .get_result(conn).context(format!("Activitiy {}", record.start))?;
             act.register(Factor::Sub, conn)?;
             diesel::update(activities.find(act.id))
-                .set((descend.eq(rdescend),climb.eq(rclimb)))
+                .set(descend.eq(rdescend))
                 .get_result::<Activity>(conn)
                 .context("Error reading activity")?
                 .register(Factor::Add, conn)
