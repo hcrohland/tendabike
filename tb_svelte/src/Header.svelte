@@ -2,18 +2,32 @@
   import {Collapse, NavbarToggler, NavbarBrand} from 'sveltestrap';
   import {link, push, location} from 'svelte-spa-router';
   import {myfetch, handleError, updatePartAttach, category, user} from "./store.js";
-  import Await from './Await.svelte';
 
-  let disabled = false;
+  let running = false;
+  let number = 0;
   let promise = undefined;
+  let data = undefined;
 
   let isOpen = false;
 
-  async function synchronize() {
-    disabled = true;
-    promise = myfetch('/strava/sync?batch=100')
-      .then(data => updatePartAttach(data[1]))
-      .then(() => disabled = false)
+  function synchronize () {
+    if (running) {
+      running = false
+    } else {
+      promise = getdata();
+    } 
+  }
+
+  async function getdata() {
+    running = true;
+    const batch = 10;
+    number = batch;
+    do {
+      data = await myfetch('/strava/sync?batch=' + batch)
+      updatePartAttach(data[1]);
+      number += data[0].length;
+    } while (running && data[0].length == batch)
+    running = false;
   }
   function handleUpdate(event) {
     isOpen = event.detail.isOpen;
@@ -39,9 +53,9 @@
       {/if}
     </ul>
     <ul class="navbar-nav ml-auto float-right">
-      <button on:click={synchronize} {disabled} class="dropdown-item">
+      <button on:click={synchronize} class="dropdown-item">
         {#await promise}
-          <Await />
+          Syncing {number}...
         {:then value}
           Sync 
         {:catch error}
