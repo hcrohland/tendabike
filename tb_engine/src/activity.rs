@@ -10,7 +10,10 @@
 use rocket::response::status;
 use rocket_contrib::json::Json;
 
+use std::collections::HashMap;
+
 use crate::attachment;
+use crate::part::Part;
 use crate::schema::activities;
 use crate::user::*;
 use crate::*;
@@ -260,7 +263,8 @@ fn categories(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartTypeId>> {
 }
 
 
-fn csv2descend(data: rocket::data::Data, offset: Option<i32>, user: &User, conn: &AppConn) -> TbResult<String> {
+fn garmin2descend(data: rocket::data::Data, offset: Option<i32>, user: &User, conn: &AppConn) 
+    -> TbResult<Vec<Part>> {
     use schema::activities::dsl::*;
     #[derive(Debug, Deserialize)]
     struct Result {
@@ -272,6 +276,7 @@ fn csv2descend(data: rocket::data::Data, offset: Option<i32>, user: &User, conn:
         descend: String,
     };
 
+    let mut map = HashMap::new();
     let mut rdr = csv::Reader::from_reader(data.open());
 
     for result in rdr.deserialize() {
@@ -285,23 +290,27 @@ fn csv2descend(data: rocket::data::Data, offset: Option<i32>, user: &User, conn:
             None         => Local.datetime_from_str(&record.start, "%Y-%m-%d %H:%M:%S")?
         };
         let rdescend = record.descend.replace(".", "").parse::<i32>().context("Could not parse descend")?;
-        conn.transaction(|| {
+        conn.transaction::<_,anyhow::Error,_>(|| {
             let act: Activity = activities
                 .filter(user_id.eq(user.get_id()))
                 .filter(start.eq(rstart))
                 .for_update()
                 .get_result(conn).context(format!("Activitiy {}", record.start))?;
             act.register(Factor::Sub, conn)?;
-            diesel::update(activities.find(act.id))
+            let res = diesel::update(activities.find(act.id))
                 .set(descend.eq(rdescend))
                 .get_result::<Activity>(conn)
                 .context("Error reading activity")?
                 .register(Factor::Add, conn)
-                .context("Could not register activity")
-        }).unwrap_or_else(|_| {warn!("skipped {} {}", record.start, record.titel); PartAttach::default()});
+                .context("Could not register activity")?;
+            for p in res.parts {
+                map.insert(p.id, p);
+            }
+            Ok(())
+        }).unwrap_or_else(|_| {warn!("skipped {} {}", record.start, record.titel); ()});
     }
 
-    Ok("success".into())
+    Ok(map.into_iter().map(|(_,v)| v).collect())
 }
 
 /// web interface to read an activity
@@ -344,8 +353,8 @@ fn delete(id: i32, user: &User, conn: AppDbConn) -> ApiResult<PartAttach> {
 }
 
 #[post("/descend?<offset>", data = "<data>")]
-fn descend(data: rocket::data::Data, offset: Option<i32>, user: &User, conn: AppDbConn) -> Result<String, ApiError> {
-    Ok(csv2descend(data, offset, user, &conn)?)
+fn descend(data: rocket::data::Data, offset: Option<i32>, user: &User, conn: AppDbConn) -> ApiResult<Vec<Part>> {
+    tbapi(garmin2descend(data, offset, user, &conn))
 }
 
 #[get("/categories")]
