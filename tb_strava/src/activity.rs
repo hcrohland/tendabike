@@ -223,8 +223,8 @@ pub(crate) fn sync(batch: usize, user: &User) -> TbResult<(Vec<serde_json::Value
         }
     }
 
-    let parts = parts.drain().map(|(_,v)| v).collect();
-    let attachments = atts.drain().map(|(_,v)| v).collect();
+    let parts = parts.into_iter().map(|(_,v)| v).collect();
+    let attachments = atts.into_iter().map(|(_,v)| v).collect();
 
     Ok((activities,PartAttach{parts, attachments}))
 }
