@@ -1,14 +1,25 @@
 <script>
   import {Collapse, NavbarToggler, NavbarBrand} from 'sveltestrap';
+  import {
+    Dropdown,
+    DropdownItem,
+    DropdownMenu,
+    DropdownToggle
+  } from 'sveltestrap';
+
+  let menuOpen = false;
+
   import {link, push, location} from 'svelte-spa-router';
   import {myfetch, handleError, updatePartAttach, category, user} from "./store.js";
 
   let running = false;
   let number = 0;
-  let promise = getdata();
+  let promise;
   let data = undefined;
 
   let isOpen = false;
+
+  $: if ($user) {promise = getdata()}
 
   function synchronize () {
     if (running) {
@@ -44,32 +55,38 @@
       Gear
     {/if}
   </a>
-  <NavbarToggler on:click={() => (isOpen = !isOpen)} />
-  <Collapse {isOpen} navbar expand="md" on:update={handleUpdate}>
-    <ul class="navbar-nav ml-auto float-left">
-      {#if $category}
-         <a href="/cat/{$category.id}" use:link class="dropdown-item text-reset">{$category.name}s</a>
-         <a href="/spares/{$category.id}" use:link class="dropdown-item text-reset">Spare parts</a>
-      {/if}
-    </ul>
+  {#if $user}
+    <NavbarToggler on:click={() => (isOpen = !isOpen)} />
+    <Collapse {isOpen} navbar expand="md" on:update={handleUpdate}>
+      <ul class="navbar-nav ml-auto float-left">
+        {#if $category}
+          <a href="/cat/{$category.id}" use:link class="dropdown-item text-reset">{$category.name}s</a>
+          <a href="/spares/{$category.id}" use:link class="dropdown-item text-reset">Spare parts</a>
+        {/if}
+      </ul>
+      <ul class="navbar-nav ml-auto float-right">
+        <button on:click={synchronize} class="dropdown-item">
+          {#await promise}
+            Syncing {number}...
+          {:then value}
+            Sync 
+          {:catch error}
+            {handleError(error)}
+          {/await}
+        </button>
+        <Dropdown navBar isOpen={menuOpen} toggle={() => (menuOpen = !menuOpen)}>
+          <DropdownToggle nav caret>{$user.firstname}</DropdownToggle>
+          <DropdownMenu right>
+            <DropdownItem><a href="/strava/logout" class="btn text-reset">Logout</a></DropdownItem>
+            <DropdownItem divider />
+            <DropdownItem><a href="/about" use:link class="btn text-reset">About</a></DropdownItem>
+          </DropdownMenu>
+        </Dropdown>
+      </ul>
+    </Collapse>
+  {:else}
     <ul class="navbar-nav ml-auto float-right">
-      <button on:click={synchronize} class="dropdown-item">
-        {#await promise}
-          Syncing {number}...
-        {:then value}
-          Sync 
-        {:catch error}
-          {handleError(error)}
-        {/await}
-      </button>
-      <a href="/about" use:link class="dropdown-item text-reset">About</a>
-      {#if $user}
-      <a href="/user" use:link class="dropdown-item text-reset">
-        {$user.firstname}
-      </a> 
-      {:else}
-         <!-- else content here -->
-      {/if}
+      <a href="/strava/login">Login with Strava</a>
     </ul>
-  </Collapse>
+  {/if}
 </nav>

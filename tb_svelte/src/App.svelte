@@ -1,5 +1,4 @@
 <script context="module">
-	import _ from 'lodash';
 	import Router from 'svelte-spa-router';
 
 	import ToyGroup from "./ToyGroup.svelte"
@@ -10,7 +9,7 @@
 	import Spares from "./Spares.svelte"
 	import Home from "./Home.svelte"
 	import About from "./About.svelte"
-	import {handleError, initData} from './store.js'
+	import {initData} from './store.js'
 
 	const routes = {
 		'/about': About,
@@ -25,12 +24,12 @@
 
 
 <Header/>
-{#await initData()}
-	<Await />
-{:then value}
-	<div class="container">
+<div class="container">
+	{#await initData()}
+		<Await />
+	{:then}
 		<Router {routes} />
-	</div>
-{:catch error}
-	{handleError(error)}
-{/await}
+	{:catch error}
+		<About />
+	{/await}
+</div>

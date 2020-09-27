@@ -5,9 +5,6 @@ function checkStatus(response) {
         return response;
     }
 
-    if (response.status === 401) {
-        window.location.replace("/strava/login");
-    }
     throw Error(response.status + ' "' + response.statusText + '" accessing ' + response.url);
 }
 
@@ -23,8 +20,8 @@ export function myfetch (url, method, data) {
             body: JSON.stringify(data) // body data type must match "Content-Type" header
         };
     }
-	return fetch(url, option)
-		.then(checkStatus)
+    return fetch(url, option)
+        .then(checkStatus)
 		.then(response => response.json())
 };
 
@@ -73,14 +70,18 @@ export const icons = {
     "303": "flaticon-ski",
 }
 
-export function initData () {
+export async function initData () {
+    var u = await myfetch('/user')
+    if (u) {
+        user.set(u)
+    } else {
+        return
+    }
     return Promise.all([
         myfetch('/types/part')
             .then(types.setMap),
         myfetch('/part/all')
             .then(setPartAttach),
-        myfetch('/user')
-            .then(user.set)
 ])
 }
 
