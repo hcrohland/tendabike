@@ -2,9 +2,14 @@
 address = "0.0.0.0"
 port = 8000
 template_dir="templates"
-secret_key="8two500UmM6efszt3zcVt6WDhmWOZwvVItuM9LF33iE="
+secret_key="...="
 
 [global.databases]
 app_db={url="postgres://localhost/tendabike"}
 auth_db={url="postgres://localhost/strava"}
 
+[global.oauth.strava]
+provider = {auth_uri = "https://www.strava.com/oauth/authorize", token_uri = "https://www.strava.com/oauth/token"}
+client_id = "..."
+client_secret = "..."
+redirect_uri = "http://localhost:8000/strava/token"

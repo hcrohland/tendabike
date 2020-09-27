@@ -120,15 +120,6 @@ dependencies = [
 
 [[package]]
 name = "base64"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b25d992356d2eb0ed82172f5248873db5560c4721f564b13cb5193bda5e668e"
-dependencies = [
- "byteorder",
-]
-
-[[package]]
-name = "base64"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3441f0f7b02788e948e47f457ca01f1d7e6d92c693bc132c22b087d3141c03ff"
@@ -1590,15 +1581,15 @@ dependencies = [
 
 [[package]]
 name = "rocket_oauth2"
-version = "0.2.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afe8bcec0d4436212d776bd9c468da1a6c20cb30019827de9d6c24c045dbc85b"
+checksum = "ee8d685f84c5873e507b97325f08fb8797c7e146fc068ee1d4aac56942d365a6"
 dependencies = [
- "base64 0.10.1",
+ "base64 0.12.3",
  "hyper 0.10.16",
  "hyper-sync-rustls",
  "log 0.4.11",
- "ring",
+ "rand",
  "rocket",
  "serde_json",
  "url 2.1.1",

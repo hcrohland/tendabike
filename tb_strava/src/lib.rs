@@ -14,8 +14,6 @@ extern crate rocket_contrib;
 extern crate serde_derive;
 extern crate reqwest;
 extern crate rocket_oauth2;
-#[macro_use]
-extern crate lazy_static;
 extern crate time;
 #[macro_use]
 extern crate anyhow;
@@ -47,10 +45,12 @@ pub enum OAuthError {
 
 pub fn attach_rocket(ship: rocket::Rocket) -> rocket::Rocket {
     dotenv::from_filename(".secrets").expect("Couldn't read secrets");
+    let config = ship.config().clone();
+
     ship
         // add database pool
         .attach(AppDbConn::fairing())
         // add oauth2 flow
-        .attach(auth::strava::fairing())
+        .attach(auth::fairing(&config))
         .mount("/strava", ui::routes())
 }

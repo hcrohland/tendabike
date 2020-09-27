@@ -38,6 +38,12 @@ fn sync(batch: Option<usize>, user: User) -> ApiResult<(Vec<serde_json::Value>, 
 fn overview(user: User) -> ApiResult<serde_json::Value> {
     tbapi(user.request_json("/athlete"))
 }
+
+#[get("/logout")]
+fn logout(user: User) -> TbResult<Redirect> {
+    user.logout()?;
+    Ok(Redirect::to("/"))
+}
 /* 
 #[allow(clippy::map_entry)]
 #[get("/?<page>&<after>")]
@@ -96,6 +102,9 @@ pub fn routes() -> Vec<rocket::Route> {
         next,
         redirect_gear,
         redirect_act,
-        redirect_user
+        redirect_user,
+        logout,
+        auth::login,
+        auth::callback
     ]
 }

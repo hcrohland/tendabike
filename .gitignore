@@ -25,3 +25,4 @@
 *.http
 .vscode/*
 .secrets
+Rocket.toml

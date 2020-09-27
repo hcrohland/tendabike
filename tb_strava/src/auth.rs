@@ -1,21 +1,21 @@
-use rocket_oauth2::TokenResponse;
-
 use rocket::http::*;
-use rocket::request::{self, FromRequest, Request};
+use rocket::request::{self, FromRequest, Request, State};
 use rocket::response::Redirect;
 use rocket::*;
+use crate::*;
+use rocket::Config;
+
+pub use rocket_oauth2::HyperSyncRustlsAdapter;
+use rocket_oauth2::{OAuth2, TokenResponse, OAuthConfig};
 
 use serde_json::Value;
-
-use crate::*;
 
 use diesel::prelude::*;
 use diesel::{self, QueryDsl, RunQueryDsl};
 
 use schema::users;
 
-pub mod strava;
-
+pub(crate) const API: &str = "https://www.strava.com/api/v3";
 
 /// check user id from the request
 /// 
@@ -36,22 +36,16 @@ struct DbUser {
 }
 
 impl DbUser {
-    fn retrieve(request: &Request, athlete: &serde_json::value::Value) -> TbResult<Self> {
+    fn retrieve(conn: &AppConn, config: &Config, athlete: &serde_json::value::Value) -> TbResult<Self> {
         info!(
             "got athlete {} {}, with id {}",
             athlete["firstname"], athlete["lastname"], athlete["id"]
         );
-        let conn = request
-            .guard::<AppDbConn>().expect("internal db missing!!!")
-            .0;
-        let config = request
-            .guard::<State<Config>>()
-            .expect("Config missing!!!");
         let strava_id = athlete["id"]
             .as_i64()
             .ok_or(OAuthError::Authorize("athlet id is no int"))? as i32;
 
-        let user = users::table.find(strava_id).get_result::<DbUser>(&conn);
+        let user = users::table.find(strava_id).get_result::<DbUser>(conn);
         match user {
             Ok(x) => return Ok(x),
             Err(diesel::NotFound) => (),
@@ -79,15 +73,14 @@ impl DbUser {
         };
         Ok(diesel::insert_into(users::table)
             .values(&user)
-            .get_result(&conn)?)
+            .get_result(conn)?)
     }
 
     /// Updates the user data from a new token
-    fn store(self, request: &Request, token: TokenResponse) -> TbResult<(Self, String)> {
+    fn store(self, conn: &AppConn, cookies: &mut Cookies, token: TokenResponse<Strava>) -> TbResult<(Self, String)> {
         use schema::users::dsl::*;
         use time::*;
 
-        let conn: &AppConn = &request.guard::<AppDbConn>().expect("No db connection");
         let iat = get_time().sec;
         let exp = token.expires_in().unwrap() as i64 + iat - 300; // 5 Minutes buffer
         let db_user: DbUser = diesel::update(users.find(self.id))
@@ -98,7 +91,7 @@ impl DbUser {
             ))
             .get_result(conn).context("Could not store user")?;
 
-        let token = token::store(request, db_user.tendabike_id, iat, exp);
+        let token = token::store(cookies, db_user.tendabike_id, iat, exp);
 
         Ok((db_user, token))
     }
@@ -145,12 +138,15 @@ impl User {
 
         info!("refreshing access token");
         let auth = request
-            .guard::<State<strava::OAuth>>()
+            .guard::<OAuth>()
             .expect("No oauth struct!!!");
         let tokenset = auth
             .refresh(&user.refresh_token).context("could not refresh access token")?;
 
-        let (user, token) = user.store(request, tokenset)?;
+        let mut cookies = request
+            .guard::<Cookies>()
+            .expect("Could not get Cookie store!!!");
+        let (user, token) = user.store(&conn, &mut cookies, tokenset)?;
 
         Ok(User { user, token, conn, url })
 
@@ -161,7 +157,7 @@ impl User {
     pub fn request(&self, uri: &str) -> TbResult<String> {
         let client = reqwest::blocking::Client::new();
         Ok(client
-            .get(&format!("{}{}", strava::API, uri))
+            .get(&format!("{}{}", API, uri))
             .bearer_auth(&self.user.access_token)
             .send().context("Could not reach strava")?
             .text().context("Could not get response body")?)
@@ -170,7 +166,7 @@ impl User {
     pub fn request_json(&self, uri: &str) -> TbResult<Value> {
         let client = reqwest::blocking::Client::new();
         Ok(client
-            .get(&format!("{}{}", strava::API, uri))
+            .get(&format!("{}{}", API, uri))
             .bearer_auth(&self.user.access_token)
             .send().context("Could not reach strava")?
             .json().context("Could not parse response body")?)
@@ -199,6 +195,16 @@ impl User {
     pub fn conn(&self) -> &AppConn {
         &self.conn
     }
+
+    pub fn logout(&self) -> TbResult<()> {
+        use schema::users::dsl::*;
+
+        diesel::update(users.find(self.user.id))
+            .set((access_token.eq(""), expires_at.eq(0), refresh_token.eq("")))
+            .execute(&self.conn.0).context("Could not update last_activity")?;
+            warn!("user logged out");
+        Ok(())
+    }
 }
 
 pub(crate) fn strava_url(who: i32, user: &User) -> TbResult<String> {
@@ -226,4 +232,39 @@ impl<'a, 'r> FromRequest<'a, 'r> for User {
             }
         }
     }
+}
+
+
+// We need a struct Strava to identify its type
+// which is needed to retrieve the request guard
+#[derive(Debug)]
+pub struct Strava;
+
+#[get("/login")]
+pub(crate) fn login(oauth2: OAuth2<Strava>, mut cookies: Cookies<'_>) -> TbResult<Redirect> {
+    // We want the "user:read" scope. For some providers, scopes may be
+    // pre-selected or restricted during application registration. We could
+    // use `&[]` instead to not request any scopes, but usually scopes
+    // should be requested during registation, in the redirect, or both.
+    Ok(oauth2.get_redirect(&mut cookies, &["activity:read_all,profile:read_all"])?)
+}
+
+#[get("/token")]
+pub(crate) fn callback(token: TokenResponse<Strava>, conn: AppDbConn, config: State<Config>, mut cookies: Cookies<'_>) -> TbResult<Redirect> {
+    info!("Strava got scope {:?}", token.scope());
+    let athlete = token
+        .as_value()
+        .get("athlete")
+        .ok_or(OAuthError::Authorize("token did not include athlete"))?;
+
+    auth::DbUser::retrieve(&conn, &config, athlete)?.store(&conn, &mut cookies, token)?;
+    Ok(Redirect::to("/"))
+}
+
+pub type OAuth = OAuth2<Strava>;
+
+pub fn fairing(config: &Config) -> impl rocket::fairing::Fairing {
+    let config = OAuthConfig::from_config(config, "strava").expect("OAuth provider not configured in Rocket.toml");
+    OAuth2::<Strava>::custom(
+                HyperSyncRustlsAdapter::default().basic_auth(false), config)
 }

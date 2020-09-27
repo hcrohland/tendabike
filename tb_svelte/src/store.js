@@ -6,7 +6,7 @@ function checkStatus(response) {
     }
 
     if (response.status === 401) {
-        window.location.replace("/login");
+        window.location.replace("/strava/login");
     }
     throw Error(response.status + ' "' + response.statusText + '" accessing ' + response.url);
 }
