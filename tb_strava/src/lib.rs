@@ -44,7 +44,7 @@ pub enum OAuthError {
 }
 
 pub fn attach_rocket(ship: rocket::Rocket) -> rocket::Rocket {
-    dotenv::from_filename(".secrets").expect("Couldn't read secrets");
+    dotenv::dotenv().ok();
     let config = ship.config().clone();
 
     ship
