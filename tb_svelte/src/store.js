@@ -89,7 +89,7 @@ export function isAttached (att, time) {
     return time >= new Date(att.attached) && (!att.detached || time < new Date(att.detached))
 }
 
-function setPartAttach(data) {
+export function setPartAttach(data) {
     parts.setMap(data.parts)
     attachments.setMap(data.attachments)
 }
