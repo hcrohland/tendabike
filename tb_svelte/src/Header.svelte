@@ -32,7 +32,7 @@
   async function getdata() {
     running = true;
     const batch = 10;
-    number = batch;
+    number = 0;
     do {
       data = await myfetch('/strava/sync?batch=' + batch)
       updatePartAttach(data[1]);
@@ -67,8 +67,12 @@
       <ul class="navbar-nav ml-auto float-right">
         <button on:click={synchronize} class="dropdown-item">
           {#await promise}
-            Syncing {number}...
-          {:then value}
+            {#if number}
+              Synced {number} ...
+            {:else}
+              Syncing...
+            {/if}
+          {:then}
             Sync 
           {:catch error}
             {handleError(error)}
