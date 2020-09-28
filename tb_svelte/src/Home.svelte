@@ -1,6 +1,6 @@
 <script>
 import {myfetch, handleError, types, icons, parts, category} from './store.js';
-import Await from './Await.svelte'
+import {Spinner} from 'sveltestrap'
 
 category.set(undefined);
 
@@ -9,7 +9,7 @@ $: { $parts; promise = myfetch('/activ/categories') }
 </script>
 
 {#await promise}
-	<Await />
+	<Spinner />
 {:then categories}
 	<div class="row justify-content-around m-0 p-0">
 		{#each categories as cat}

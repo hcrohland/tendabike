@@ -1,8 +1,8 @@
 <script context="module">
+	import {Spinner} from "sveltestrap"
 	import Router from 'svelte-spa-router';
 
 	import ToyGroup from "./ToyGroup.svelte"
-	import Await from "./Await.svelte"
 	import Header from "./Header.svelte"
 	import Gear from "./Gear.svelte"
 	import Part from "./Part.svelte"
@@ -26,7 +26,7 @@
 <Header/>
 <div class="container">
 	{#await initData()}
-		<Await />
+		<Spinner />
 	{:then}
 		<Router {routes} />
 	{:catch error}
