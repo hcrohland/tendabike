@@ -13,11 +13,12 @@
 
 	const routes = {
 		'/about': About,
-		'/': Home,
+		'/': ToyGroup,
     '/cat/:category': ToyGroup,
 		'/gear/:id': Gear,
 		'/spares/:category': Spares,
-		'/part/:id': Part
+		'/part/:id': Part,
+		'/switch': Home
 	}
 
 </script>
@@ -28,7 +29,7 @@
 	{#await initData()}
 		<Spinner />
 	{:then}
-		<Router {routes} />
+		<Router {routes} restoreScrollState={true}/>
 	{:catch error}
 		<About />
 	{/await}

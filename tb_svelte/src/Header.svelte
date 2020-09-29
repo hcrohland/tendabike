@@ -53,7 +53,7 @@
 <Garmin bind:toggle={garmin} />
 
 <Navbar expand="md" color="light" light mb-2>
-  <NavbarBrand href="#/">
+  <NavbarBrand href="#/switch">
     Tend a 
     {#if $category}
       <strong> {$category.name} </strong>

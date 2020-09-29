@@ -1,16 +1,20 @@
 <script>
   import GearCard from './GearCard.svelte';
-  import NewPart from './NewPart.svelte';
   import {filterValues, by, types, parts, category} from './store.js';
   
   export let params;
   
   // Cannot use category directly since it 
   // is unset during destroy and the router gets confused
-  let type = $types[params.category]
+  let type;
+  if (params) {
+    type = $types[params.category];
+  } else {
+    type = $types[1];
+  }
   category.set(type);
   
-  $: gears = () => filterValues($parts, (p) => p.what == params.category)
+  $: gears = () => filterValues($parts, (p) => p.what == type.id)
 </script>
 
 {#if type }
