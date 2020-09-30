@@ -54,11 +54,12 @@
 
 <Navbar expand="md" color="light" light mb-2>
   <NavbarBrand href="#/switch">
-    Tend a 
+    <img src="favicon.png" alt="TendaBike" title="TendaBike" width=70>
+    &nbsp; Tend a 
     {#if $category}
-      <strong> {$category.name} </strong>
+    <strong> {$category.name} </strong>
     {:else}
-      Gear
+    Gear
     {/if}
   </NavbarBrand>
   {#if $user}
