@@ -1,12 +1,20 @@
 <script>
   import { slide } from 'svelte/transition';
-  import {formatSeconds} from './store.js';
+  import {category, formatSeconds} from './store.js';
 
   export let part;
   export let display = false;
 
   export let isOpen = false;
   let showLink = false;
+
+  function model(part) {
+    if (part.model =='' && part.vendor == '') {
+      return 'unknown model'
+    } else {
+      return part.vendor + ' '  + part.model
+    }
+  }
 </script>
 
 <style>
@@ -36,7 +44,7 @@
   {#if isOpen || display}
     <div transition:slide>
       <div class="card-body">
-        is a <span class="param">{part.vendor} {part.model}</span>
+        is a <span class="param">{model(part)}</span>
         purchased <span class="param">{new Date(part.purchase).toLocaleDateString()}</span>
         <br>which you used <span class=param>{part.count.toLocaleString()}</span> times 
         for <span class="param">{formatSeconds(part.time)}</span> hours.
