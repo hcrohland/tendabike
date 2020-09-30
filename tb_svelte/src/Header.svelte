@@ -53,14 +53,14 @@
 <Garmin bind:toggle={garmin} />
 
 <Navbar expand="md" color="light" light mb-2>
-  <NavbarBrand href="#/switch">
+  <NavbarBrand href="#/cat/1">
     <img src="favicon.png" alt="TendaBike" title="TendaBike" width=70>
-    &nbsp; Tend a 
-    {#if $category}
-    <strong> {$category.name} </strong>
+    &nbsp; Tend a Bike
+    <!-- {#if $category}
+      <strong> {$category.name} </strong>
     {:else}
-    Gear
-    {/if}
+      Gear
+    {/if} -->
   </NavbarBrand>
   {#if $user}
     <NavbarToggler on:click={() => (isOpen = !isOpen)} />
