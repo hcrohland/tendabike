@@ -1,7 +1,7 @@
 # Use latest because we need nightly
 FROM rust:latest AS build-engine
 
-ENV DEBIAN_FRONTED=noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 # install nighlty toolchain
 RUN rustup update nightly && rustup default nightly
 
@@ -14,7 +14,7 @@ RUN cargo build --release
 
 RUN mkdir -p /build-out
 
-RUN cp target/release/tb-engine Rocket.toml /build-out
+RUN cp target/release/tb_engine Rocket.toml /build-out
 
 
 FROM node:12-buster AS build-frontend
@@ -39,4 +39,4 @@ COPY --from=build-frontend /build-out/* /
 
 USER tendabike
 
-ENTRYPOINT [ "/tb-engine" ]
+ENTRYPOINT [ "/tb_engine" ]
