@@ -53,9 +53,11 @@
 <Garmin bind:toggle={garmin} />
 
 <Navbar expand="md" color="light" light mb-2>
+  <img src="favicon.png" alt="TendaBike" title="TendaBike" width=60 class="rounded-circle">
   <NavbarBrand href="#/cat/1">
-    <img src="favicon.png" alt="TendaBike" title="TendaBike" width=70>
-    &nbsp; Tend a Bike
+    <div class="d-none d-md-block">
+      &nbsp; Tend a Bike
+    </div>
     <!-- {#if $category}
       <strong> {$category.name} </strong>
     {:else}
