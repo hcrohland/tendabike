@@ -1,0 +1,15 @@
+# Use latest because we need nightly
+FROM rust:latest
+
+ENV DEBIAN_FRONTEND=noninteractive
+# install nighlty toolchain
+RUN rustup update nightly && rustup default nightly
+
+# install dependencies
+RUN apt-get update && apt-get install -y libpq-dev libssl-dev
+
+RUN cargo install diesel_cli --no-default-features --features postgres
+
+COPY ./ ./
+
+RUN cargo build --release --lib
