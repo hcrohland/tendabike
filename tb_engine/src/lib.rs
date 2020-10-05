@@ -29,11 +29,10 @@ extern crate dotenv;
 
 use self::diesel::prelude::*;
 
-use simplelog::{CombinedLogger, LevelFilter, TermLogger, WriteLogger};
+use simplelog::*;
 
 use std::cmp::min;
 use std::env;
-use std::fs::File;
 
 pub mod schema;
 pub mod user;
@@ -98,21 +97,13 @@ pub fn ignite_rocket() -> rocket::Rocket {
 }
 
 fn init_logging() {
-    const LOGFILE_NAME: &str = "tendabike.log";
-    CombinedLogger::init(vec![
-        TermLogger::new(
+        if let Err(_) = TermLogger::init(
             LevelFilter::Info,
             simplelog::Config::default(),
-            simplelog::TerminalMode::Stdout,
-        )
-        .expect("Couldn't get terminal logger"),
-        WriteLogger::new(
-            LevelFilter::Debug,
-            simplelog::Config::default(),
-            File::create(LOGFILE_NAME).expect("Couldn't create logfile"),
-        ),
-    ])
-    .expect("Can't get logger.");
+            simplelog::TerminalMode::Stdout) 
+        {
+            SimpleLogger::init(LevelFilter::Info, Config::default()).expect ("could not get logger");
+        }
 }
 
 pub fn init_environment() {
