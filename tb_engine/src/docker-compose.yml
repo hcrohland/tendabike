@@ -1,0 +1,18 @@
+version: '3'
+
+services:
+  database:
+    image: postgres
+    restart: always
+    volumes:
+      - /home/christoph/db/data:/var/lib/postgresql/data
+
+  app:
+    image: tendabike
+    ports:
+      - 80:8000
+    links:
+      - database
+    restart: always
+    volumes: 
+      - /home/christoph/Rocket.toml:/tendabike/Rocket.toml
