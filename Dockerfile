@@ -4,8 +4,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 COPY ./ ./
 
-RUN cd tb_engine &&  diesel migration run
-RUN cd tb_strava &&  diesel migration run
+RUN cd tb_engine &&  diesel migration run || true
+RUN cd tb_strava &&  diesel migration run || true
 
 RUN cargo build --release
 
@@ -31,7 +31,7 @@ FROM debian:buster
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y libpq5 libssl1.1
+RUN apt-get update && apt-get install -y libpq5 libssl1.1 ca-certificates
 
 RUN useradd --system tendabike
 USER tendabike
