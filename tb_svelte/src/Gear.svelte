@@ -40,7 +40,7 @@
     <tbody>
       <tr>
         <td>{gear.name} 
-          <a href={"/strava/bikes/" + gear.id} alt="Show on Strava" target="_blank"><img src="strava.png" alt="Strava logo" title="Show on Strava" > </a> 
+          <a href={"/strava/bikes/" + gear.id} alt="View on Strava" target="_blank"><img src="strava.png" alt="View on Strava" title="View on Strava" > </a> 
         </td>
         <td>{gear.vendor}</td>
         <td>{gear.model}</td>

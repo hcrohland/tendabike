@@ -19,7 +19,9 @@
       <h2>
         Tend your bike for a happy ride
         <div class="float-right">
-          <img src="compatible_with_strava.svg" alt="compatible with Strava" height="50"> 
+          <a href="http://www.strava.com" target="_blank">
+            <img src="api_logo_pwrdBy_strava.png" alt="powered by Strava" height="50"> 
+          </a>
         </div>
       </h2>
       Know how long your parts last and when to maintain them
