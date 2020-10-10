@@ -113,7 +113,7 @@
     </Collapse>
   {:else}
     <Nav class="ml-auto float-right" navbar>
-      <a href="/strava/login">Login with Strava</a>
+      <a href="/strava/login"><img src="connect_with_strava.png" alt="Login with Strava"></a>
     </Nav>
   {/if}
   </Navbar>

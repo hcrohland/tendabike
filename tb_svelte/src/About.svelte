@@ -18,6 +18,9 @@
     <CardHeader>
       <h2>
         Tend your bike for a happy ride
+        <div class="float-right">
+          <img src="compatible_with_strava.svg" alt="compatible with Strava" height="50"> 
+        </div>
       </h2>
       Know how long your parts last and when to maintain them
     </CardHeader>
@@ -56,8 +59,8 @@
       <p></p>  
     </CardBody>
     <CardFooter>
-      © Christoph Rohland 2019-2020 - 
-      Icons made by <a href="https://www.flaticon.com/authors/freepik" title="Freepik">Freepik</a> 
+      © Christoph Rohland 2019-2020
+      - Icons made by <a href="https://www.flaticon.com/authors/freepik" title="Freepik">Freepik</a> 
       from <a href="https://www.flaticon.com/" title="Flaticon">www.flaticon.com</a>
     </CardFooter>
   </Card>
