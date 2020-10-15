@@ -2,7 +2,7 @@
   import GearCard from './GearCard.svelte';
   import {filterValues, by, types, parts, category} from './store.js';
   
-  export let params;
+  export let params = {category: 1};
   
   // Cannot use category directly since it 
   // is unset during destroy and the router gets confused
