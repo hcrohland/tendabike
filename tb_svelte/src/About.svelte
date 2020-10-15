@@ -53,7 +53,7 @@
         This is what you can do:
       </p>
       <ol>
-        <li>Stop recording in lifts and shuttles. By that strava should not track the elevation gain for the shuttle</li>
+        <li>Stop recording in lifts and shuttles. By that Strava should not track the elevation gain for the shuttle</li>
         <li>Download the list of activities from the Garmin Connect website with German language settings. 
           <br> The resulting file will include the elevation loss
         </li>
