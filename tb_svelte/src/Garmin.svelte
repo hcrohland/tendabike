@@ -22,7 +22,7 @@
 
   async function sendFile () {
     var body = await files[0].text();
-    return fetch('/activ/descend?tz=a' + timezone, {
+    return fetch('/activ/descend?tz=' + timezone, {
             method: 'POST',
             credentials: 'include',
             body
