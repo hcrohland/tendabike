@@ -5,7 +5,6 @@ extern crate thiserror;
 
 extern crate chrono;
 extern crate rocket;
-#[macro_use] 
 extern crate rocket_contrib;
 extern crate reqwest;
 #[macro_use] 

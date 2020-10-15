@@ -2,10 +2,13 @@ import {writable, readable, derived} from "svelte/store";
 
 export function checkStatus(response) {
     if (response.ok) {
-        return response;
+        return response.json()
     }
 
-    throw Error(response.status + ' "' + response.statusText + '" accessing ' + response.url);
+    return response.text()
+        .then((text) => {
+            return Promise.reject(response.statusText + ': ' + text + ' accessing ' + response.url);
+        })
 }
 
 export function myfetch (url, method, data) {
@@ -22,7 +25,6 @@ export function myfetch (url, method, data) {
     }
     return fetch(url, option)
         .then(checkStatus)
-		.then(response => response.json())
 };
 
 export function filterValues(map, fn) { 

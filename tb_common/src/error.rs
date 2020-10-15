@@ -1,8 +1,7 @@
 
 use rocket::request::Request;
 use rocket::response::{Response, Responder};
-use std::io::Cursor;
-use rocket::http::{Status, ContentType};
+use rocket::http::{Status};
 use rocket_contrib::json::Json;
 
 #[derive(Clone, Debug, Error, Responder)]
@@ -47,12 +46,6 @@ impl<'r> Responder<'r> for ApiError {
 
         warn!("{:?}", any);
 
-        // Create JSON response
-        let body = json!({
-            "status": "failure",
-            "message": &format!("{}", any),
-        }).to_string();
-
         let mut build = Response::build();
 
         match any.root_cause().downcast_ref::<DieselError>() {
@@ -68,7 +61,7 @@ impl<'r> Responder<'r> for ApiError {
             build.merge(err.clone().respond_to(req)?);
         }
         // create a standard Body
-        build.header(ContentType::JSON).sized_body(Cursor::new(body));
+        // build.header(ContentType::JSON).sized_body(Cursor::new(body));
         
         // Respond. The `Ok` here is a bit of a misnomer. It means we
         // successfully created an error response

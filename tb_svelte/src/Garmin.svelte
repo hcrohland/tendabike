@@ -28,7 +28,6 @@
             body
         })
         .then(checkStatus)
-		    .then(response => response.json())
         .then(parts.updateMap)
         .then(toggle)
   };
