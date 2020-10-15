@@ -4,9 +4,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 COPY ./ ./
 
-RUN cd tb_engine &&  diesel migration run || true
-RUN cd tb_strava &&  diesel migration run || true
-
 RUN cargo build --release
 
 RUN mkdir -p /build-out
