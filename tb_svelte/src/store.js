@@ -1,6 +1,6 @@
 import {writable, readable, derived} from "svelte/store";
 
-function checkStatus(response) {
+export function checkStatus(response) {
     if (response.ok) {
         return response;
     }

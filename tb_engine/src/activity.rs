@@ -263,7 +263,7 @@ fn categories(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartTypeId>> {
 }
 
 
-fn garmin2descend(data: rocket::data::Data, offset: Option<i32>, user: &User, conn: &AppConn) 
+fn garmin2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn) 
     -> TbResult<Vec<Part>> {
     use schema::activities::dsl::*;
     #[derive(Debug, Deserialize)]
@@ -278,17 +278,15 @@ fn garmin2descend(data: rocket::data::Data, offset: Option<i32>, user: &User, co
 
     let mut map = HashMap::new();
     let mut rdr = csv::Reader::from_reader(data.open());
+    let tz = tz.parse::<chrono_tz::Tz>()
+                .map_err(|_| Error::BadRequest(format!("Unknown timezone {}",tz)))?;
 
     for result in rdr.deserialize() {
-        use chrono::Local;
         // The iterator yields Result<StringRecord, Error>, so we check the
         // error here.
         let record: Result = result.context("record")?;
         info!("{:?}", record);
-        let rstart = match offset {
-            Some(offset) => chrono::FixedOffset::east(offset * 3600).datetime_from_str(&record.start, "%Y-%m-%d %H:%M:%S")?.with_timezone(&Local),
-            None         => Local.datetime_from_str(&record.start, "%Y-%m-%d %H:%M:%S")?
-        };
+        let rstart = tz.datetime_from_str(&record.start, "%Y-%m-%d %H:%M:%S")?;
         let rdescend = record.descend.replace(".", "").parse::<i32>().context("Could not parse descend")?;
         conn.transaction::<_,anyhow::Error,_>(|| {
             let act: Activity = activities
@@ -352,9 +350,9 @@ fn delete(id: i32, user: &User, conn: AppDbConn) -> ApiResult<PartAttach> {
     tbapi(ActivityId(id).delete(user, &conn))
 }
 
-#[post("/descend?<offset>", data = "<data>")]
-fn descend(data: rocket::data::Data, offset: Option<i32>, user: &User, conn: AppDbConn) -> ApiResult<Vec<Part>> {
-    tbapi(garmin2descend(data, offset, user, &conn))
+#[post("/descend?<tz>", data = "<data>")]
+fn descend(data: rocket::data::Data, tz: String, user: &User, conn: AppDbConn) -> ApiResult<Vec<Part>> {
+    tbapi(garmin2descend(data, tz, user, &conn))
 }
 
 #[get("/categories")]

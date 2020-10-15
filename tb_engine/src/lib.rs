@@ -23,6 +23,7 @@ extern crate log;
 #[macro_use]
 extern crate anyhow;
 extern crate chrono;
+extern crate chrono_tz;
 extern crate simplelog;
 
 extern crate dotenv;

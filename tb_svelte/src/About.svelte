@@ -54,10 +54,13 @@
       </p>
       <ol>
         <li>Stop recording in lifts and shuttles. By that strava should not track the elevation gain for the shuttle</li>
-        <li>Download the list of activities from the Garmin Connect website. The resulting file will include the elevation loss</li>
-        <li>Upload this file to TendaBike via 'Sync' &rightarrow; 'Garmin' </li>
+        <li>Download the list of activities from the Garmin Connect website with German language settings. 
+          <br> The resulting file will include the elevation loss
+        </li>
+        <li>Upload this file to TendaBike via 'Sync' &rightarrow; 'Garmin' 
+          <br>You can set the timezone of the uploaded activities. It applies to all activities in the file
+        </li>
       </ol>
-      Caveat: You have to download from Garmin Connect with German language settings. And it only works right now for rides done in the CET timezone. 
       <p></p>  
     </CardBody>
     <CardFooter>
