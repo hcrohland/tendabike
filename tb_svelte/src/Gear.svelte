@@ -39,9 +39,7 @@
     </thead>
     <tbody>
       <tr>
-        <td>{gear.name} 
-          <a href={"/strava/bikes/" + gear.id} alt="View on Strava" target="_blank"><img src="strava.png" alt="View on Strava" title="View on Strava" > </a> 
-        </td>
+        <td>{gear.name}</td>
         <td>{gear.vendor}</td>
         <td>{gear.model}</td>
         <td>{new Date(gear.purchase).toLocaleDateString()}</td>

@@ -33,10 +33,14 @@
       <span class="h5 mb-0"> 
         {part.name} 
       </span>
-     {#if showLink && !display}
-          <a href="#/gear/{part.id}" class="badge badge-secondary float-right text-reset">
-            &mdash;&GreaterGreater;
+      {#if showLink && !display}
+        <div class="float-right text-reset">
+
+          <a href={"/strava/bikes/" + part.id} alt="View on Strava" target="_blank"><img src="strava.png" alt="View on Strava" title="View on Strava" > </a> 
+          <a href="#/gear/{part.id}" class="badge badge-secondary" title={"View "+ $category.name.toLowerCase() + " details"}>
+            &Longrightarrow;
           </a>
+        </div>
       {/if}
       
     </div>
