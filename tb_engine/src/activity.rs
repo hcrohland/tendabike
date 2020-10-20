@@ -32,7 +32,6 @@ NewtypeFrom! { () pub struct ActivityId(i32); }
 
 /// The database's representation of an activity.
 #[derive(Debug, Clone, Identifiable, Queryable, AsChangeset, PartialEq, Serialize, Deserialize)]
-#[changeset_options(treat_none_as_null = "true")]
 #[table_name = "activities"]
 pub struct Activity {
     /// The primary key
