@@ -263,19 +263,21 @@ fn categories(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartTypeId>> {
 }
 
 
-fn garmin2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn) 
-    -> TbResult<Vec<Part>> {
+fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn) 
+    -> TbResult<(Vec<Part>,Vec<String>, Vec<String>)> {
     use schema::activities::dsl::*;
     #[derive(Debug, Deserialize)]
     struct Result {
         #[serde(rename = "Datum")]
         start: String,
         #[serde(rename = "Titel")]
-        titel: String,
+        title: String,
         #[serde(alias = "Negativer Höhenunterschied")]
         descend: String,
     };
 
+    let mut good = Vec::new();
+    let mut bad = Vec::new();
     let mut map = HashMap::new();
     let mut rdr = csv::Reader::from_reader(data.open());
     let tz = tz.parse::<chrono_tz::Tz>()
@@ -286,6 +288,7 @@ fn garmin2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppC
         // error here.
         let record: Result = result.context("record")?;
         info!("{:?}", record);
+        let description = format!("{} at {}", &record.title, &record.start);
         let rstart = tz.datetime_from_str(&record.start, "%Y-%m-%d %H:%M:%S")?;
         let rdescend = record.descend.replace(".", "").parse::<i32>().context("Could not parse descend")?;
         conn.transaction::<_,anyhow::Error,_>(|| {
@@ -304,11 +307,16 @@ fn garmin2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppC
             for p in res.parts {
                 map.insert(p.id, p);
             }
+            good.push(description.clone());
             Ok(())
-        }).unwrap_or_else(|_| {warn!("skipped {} {}", record.start, record.titel); ()});
+        }).unwrap_or_else(|_| {
+                    warn!("skipped {}", description); 
+                    bad.push(description)
+                }
+            );
     }
 
-    Ok(map.into_iter().map(|(_,v)| v).collect())
+    Ok((map.into_iter().map(|(_,v)| v).collect(),good, bad))
 }
 
 /// web interface to read an activity
@@ -351,8 +359,8 @@ fn delete(id: i32, user: &User, conn: AppDbConn) -> ApiResult<PartAttach> {
 }
 
 #[post("/descend?<tz>", data = "<data>")]
-fn descend(data: rocket::data::Data, tz: String, user: &User, conn: AppDbConn) -> ApiResult<Vec<Part>> {
-    tbapi(garmin2descend(data, tz, user, &conn))
+fn descend(data: rocket::data::Data, tz: String, user: &User, conn: AppDbConn) -> ApiResult<(Vec<Part>,Vec<String>, Vec<String>)> {
+    tbapi(csv2descend(data, tz, user, &conn))
 }
 
 #[get("/categories")]
