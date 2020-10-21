@@ -105,6 +105,7 @@ pub fn routes() -> Vec<rocket::Route> {
         redirect_user,
         logout,
         auth::login,
-        auth::callback
+        auth::callback,
+        webhook::validate_subscription,
     ]
 }

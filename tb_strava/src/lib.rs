@@ -29,6 +29,7 @@ pub mod auth;
 pub mod gear;
 pub mod schema;
 pub mod ui;
+pub mod webhook;
 
 const TB_URL: &str = "http://localhost";
 
