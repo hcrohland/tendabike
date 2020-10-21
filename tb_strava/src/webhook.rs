@@ -1,19 +1,31 @@
-const VERIFY_TOKEN: &str = "tendabike_strava";
 
-struct _Event {
+// use diesel::prelude::*;
+use diesel::{self, RunQueryDsl};
+
+use crate::*;
+use schema::events;
+
+#[derive(Debug, Serialize, Deserialize, Queryable, Insertable)]
+pub struct Event {
     object_type: String,
     object_id: i64,
-    aspect_type: String, 	// Always "create," "update," or "delete."
-    updates: String,  // hash 	For activity update events, keys can contain "title," "type," and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone). For app deauthorization events, there is always an "authorized" : "false" key-value pair.
-    owner_id: i32, // The athlete's ID.
-    subscription_id: i32, // The push subscription ID that is receiving this event.
-    event_time: i64, // The time that the event occurred.
+    // Always "create," "update," or "delete."
+    aspect_type: String, 	
+    // hash 	For activity update events, keys can contain "title," "type," and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone). For app deauthorization events, there is always an "authorized" : "false" key-value pair.
+    updates: Option<String>,  
+    // The athlete's ID.
+    owner_id: i32,
+    // The push subscription ID that is receiving this event.
+    subscription_id: i32, 
+    // The time that the event occurred.
+    event_time: i64,
 }
 
 use rocket::request::Form;
-use tb_common::*;
+use rocket_contrib::json::Json;
 use anyhow::ensure;
 
+// compicated way to have query parameters with dots in the name
 #[derive(FromForm, Serialize)]
 pub struct Hub {
     #[form(field = "hub.mode")]
@@ -27,6 +39,8 @@ pub struct Hub {
     verify_token: String,
 }
 
+const VERIFY_TOKEN: &str = "tendabike_strava";
+
 fn validate(hub: Hub) -> TbResult<Hub> {
     ensure!(
         hub.verify_token == VERIFY_TOKEN, 
@@ -37,6 +51,14 @@ fn validate(hub: Hub) -> TbResult<Hub> {
         Error::BadRequest(format!("Unknown mode {}", hub.mode))
     );
     Ok(hub)
+}
+
+#[post("/callback", format = "json", data="<event>")]
+pub fn create_event(event: Json<Event>, conn: AppDbConn) -> TbResult<()> {
+    use schema::events::dsl::*;
+    let event = event.into_inner();
+    diesel::insert_into(events).values(&event).execute(&conn.0)?;
+    Ok(())
 }
 
 #[get("/callback?<hub..>")]
