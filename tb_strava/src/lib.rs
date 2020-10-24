@@ -7,6 +7,8 @@ extern crate log;
 #[macro_use]
 extern crate diesel;
 #[macro_use]
+extern crate diesel_migrations;
+#[macro_use]
 extern crate rocket;
 #[macro_use]
 extern crate rocket_contrib;
@@ -33,16 +35,33 @@ pub mod webhook;
 
 const TB_URL: &str = "http://localhost";
 
-type AppConn = diesel::PgConnection;
-
-#[database("auth_db")]
-pub struct AppDbConn(AppConn);
-
 #[derive(Error, Debug)]
 pub enum OAuthError {
     #[error("authorization needed: {0}")]
     Authorize(&'static str),
 }
+
+type AppConn = diesel::PgConnection;
+
+#[database("auth_db")]
+pub struct AppDbConn(AppConn);
+
+embed_migrations!();
+
+use rocket::Rocket;
+
+fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
+    let conn = AppDbConn::get_one(&rocket).expect("database connection");
+    match embedded_migrations::run(&*conn) {
+        Ok(()) => Ok(rocket),
+        Err(e) => {
+            error!("Failed to run database migrations: {:?}", e);
+            Err(rocket)
+        }
+    }
+}
+
+use rocket::fairing::AdHoc;
 
 pub fn attach_rocket(ship: rocket::Rocket) -> rocket::Rocket {
     dotenv::dotenv().ok();
@@ -51,6 +70,8 @@ pub fn attach_rocket(ship: rocket::Rocket) -> rocket::Rocket {
     ship
         // add database pool
         .attach(AppDbConn::fairing())
+        // run database migrations
+        .attach(AdHoc::on_attach("Strava Database Migrations", run_db_migrations))
         // add oauth2 flow
         .attach(auth::fairing(&config))
         .mount("/strava", ui::routes())

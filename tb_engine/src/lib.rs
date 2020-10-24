@@ -15,6 +15,8 @@ extern crate rocket_cors;
 extern crate diesel;
 #[macro_use]
 extern crate diesel_derive_newtype;
+#[macro_use]
+extern crate diesel_migrations;
 
 #[macro_use]
 extern crate newtype_derive;
@@ -63,7 +65,22 @@ type AppConn = diesel::PgConnection;
 #[database("app_db")]
 pub struct AppDbConn(AppConn);
 
+embed_migrations!();
 
+use rocket::Rocket;
+
+fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
+    let conn = AppDbConn::get_one(&rocket).expect("database connection");
+    match embedded_migrations::run(&*conn) {
+        Ok(()) => Ok(rocket),
+        Err(e) => {
+            error!("Failed to run database migrations: {:?}", e);
+            Err(rocket)
+        }
+    }
+}
+
+use rocket::fairing::AdHoc;
 
 pub fn ignite_rocket() -> rocket::Rocket {
     dotenv::dotenv().ok();
@@ -77,6 +94,8 @@ pub fn ignite_rocket() -> rocket::Rocket {
     let ship = rocket::ignite()
         // add database pool
         .attach(AppDbConn::fairing())
+        // run database migrations
+        .attach(AdHoc::on_attach("TendaBike Database Migrations", run_db_migrations))
         .attach(cors)
         // mount all the endpoints from the module
         .mount(

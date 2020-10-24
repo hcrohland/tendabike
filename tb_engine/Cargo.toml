@@ -10,6 +10,7 @@ tb_strava = { path = "../tb_strava" }
 rocket = "0.4"
 rocket_cors = "0.5"
 diesel = { version = "1.4", features = ["postgres", "chrono"] }
+diesel_migrations = "1.4"
 diesel-derive-newtype = "0.1.2"
 
 newtype_derive = "0.1.6"
