@@ -86,8 +86,9 @@ fn validate(hub: Hub) -> TbResult<Hub> {
 #[post("/callback", format = "json", data="<event>")]
 pub fn create_event(event: Json<InEvent>, conn: AppDbConn) -> TbResult<()> {
     use schema::events::dsl::*;
+    let event = event.into_inner();
     info!("received {:?}", event);
-    let event: Event = event.into_inner().into();
+    let event: Event = event.into();
     diesel::insert_into(events).values(&event).execute(&conn.0)?;
     Ok(())
 }
