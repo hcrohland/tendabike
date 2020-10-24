@@ -117,13 +117,14 @@ pub fn ignite_rocket() -> rocket::Rocket {
 }
 
 fn init_logging() {
-        if let Err(_) = TermLogger::init(
-            LevelFilter::Info,
-            simplelog::Config::default(),
-            simplelog::TerminalMode::Stdout) 
-        {
-            SimpleLogger::init(LevelFilter::Info, Config::default()).expect ("could not get logger");
-        }
+    let config = simplelog::ConfigBuilder::new().set_time_format("%F %T".to_string()).build();
+    if let Err(_) = TermLogger::init(
+        LevelFilter::Info,
+        config.clone(),
+        simplelog::TerminalMode::Stdout) 
+    {
+        SimpleLogger::init(LevelFilter::Info, config).expect ("could not get logger");
+    }
 }
 
 pub fn init_environment() {
