@@ -26,7 +26,7 @@ use rocket_contrib::json::Json;
 use anyhow::ensure;
 
 // compicated way to have query parameters with dots in the name
-#[derive(FromForm, Serialize)]
+#[derive(Debug, FromForm, Serialize)]
 pub struct Hub {
     #[form(field = "hub.mode")]
     #[serde(skip_serializing)]
@@ -57,11 +57,14 @@ fn validate(hub: Hub) -> TbResult<Hub> {
 pub fn create_event(event: Json<Event>, conn: AppDbConn) -> TbResult<()> {
     use schema::events::dsl::*;
     let event = event.into_inner();
+    info!("received {:?}", event);
     diesel::insert_into(events).values(&event).execute(&conn.0)?;
     Ok(())
 }
 
 #[get("/callback?<hub..>")]
 pub(crate) fn validate_subscription (hub: Form<Hub>) -> ApiResult<Hub> {
-    tbapi(validate(hub.into_inner()))
+    let hub = hub.into_inner();
+    info!("Received validation callback {:?}", hub);
+    tbapi(validate(hub))
 }
