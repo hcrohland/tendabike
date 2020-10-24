@@ -4,7 +4,23 @@ use diesel::{self, RunQueryDsl};
 
 use crate::*;
 use schema::events;
+use std::collections::HashMap;
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InEvent {
+    object_type: String,
+    object_id: i64,
+    // Always "create," "update," or "delete."
+    aspect_type: String, 	
+    // hash 	For activity update events, keys can contain "title," "type," and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone). For app deauthorization events, there is always an "authorized" : "false" key-value pair.
+    updates: HashMap<String,String>,  
+    // The athlete's ID.
+    owner_id: i32,
+    // The push subscription ID that is receiving this event.
+    subscription_id: i32, 
+    // The time that the event occurred.
+    event_time: i64,
+}
 #[derive(Debug, Serialize, Deserialize, Queryable, Insertable)]
 pub struct Event {
     object_type: String,
@@ -12,13 +28,27 @@ pub struct Event {
     // Always "create," "update," or "delete."
     aspect_type: String, 	
     // hash 	For activity update events, keys can contain "title," "type," and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone). For app deauthorization events, there is always an "authorized" : "false" key-value pair.
-    updates: Option<String>,  
+    updates: String,  
     // The athlete's ID.
     owner_id: i32,
     // The push subscription ID that is receiving this event.
     subscription_id: i32, 
     // The time that the event occurred.
     event_time: i64,
+}
+
+impl From<InEvent> for Event {
+    fn from(event: InEvent) -> Self {
+        Self {
+            object_type: event.object_type,
+            object_id: event.object_id,
+            aspect_type: event.aspect_type,
+            owner_id: event.owner_id,
+            subscription_id: event.subscription_id,
+            event_time: event.event_time,
+            updates: serde_json::to_string(&event.updates).unwrap_or_else(|e|{ format!("{:?}", e)}),
+        }
+    }
 }
 
 use rocket::request::Form;
@@ -54,10 +84,10 @@ fn validate(hub: Hub) -> TbResult<Hub> {
 }
 
 #[post("/callback", format = "json", data="<event>")]
-pub fn create_event(event: Json<Event>, conn: AppDbConn) -> TbResult<()> {
+pub fn create_event(event: Json<InEvent>, conn: AppDbConn) -> TbResult<()> {
     use schema::events::dsl::*;
-    let event = event.into_inner();
     info!("received {:?}", event);
+    let event: Event = event.into_inner().into();
     diesel::insert_into(events).values(&event).execute(&conn.0)?;
     Ok(())
 }
