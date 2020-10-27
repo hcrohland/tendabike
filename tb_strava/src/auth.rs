@@ -172,8 +172,12 @@ impl User {
             .json().context("Could not parse response body")?)
     }
 
-    pub fn id(&self) -> i32 {
+    pub fn tb_id(&self) -> i32 {
         self.user.tendabike_id
+    }
+
+    pub fn strava_id(&self) -> i32 {
+        self.user.id
     }
 
     pub fn last_activity(&self) -> i64 {

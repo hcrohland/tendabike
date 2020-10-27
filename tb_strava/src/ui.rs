@@ -34,6 +34,11 @@ fn sync(batch: Option<usize>, user: User) -> ApiResult<(Vec<serde_json::Value>, 
     tbapi(activity::sync(batch.unwrap_or(10), &user))
 }
 
+#[get("/hooks")]
+fn hooks(user: User) -> ApiResult<activity::PartAttach> {
+    tbapi(activity::process_webhooks(&user))
+}
+
 #[get("/user")]
 fn overview(user: User) -> ApiResult<serde_json::Value> {
     tbapi(user.request_json("/athlete"))
@@ -108,5 +113,6 @@ pub fn routes() -> Vec<rocket::Route> {
         auth::callback,
         webhook::validate_subscription,
         webhook::create_event,
+        hooks,
     ]
 }

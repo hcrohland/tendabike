@@ -69,7 +69,7 @@ pub(crate) fn strava_url(gear: i32, user: &User) -> TbResult<String> {
 impl StravaGear {
     pub fn into_tb(self, user: &User) -> TbResult<TbGear> {
         Ok(TbGear {
-            owner: user.id(),
+            owner: user.tb_id(),
             what: self.what(),
             name: self.name,
             vendor: self.brand_name.unwrap_or_else(|| String::from("")),
@@ -134,7 +134,7 @@ pub fn strava_to_tb(strava: String, user: &User) -> TbResult<i32> {
         .into_tb(user).context("Could not map gear to tendabike format")?
         .send_to_tb(user).context("Could not send gear to tb")?;
     diesel::insert_into(gears)
-        .values((id.eq(strava), tendabike_id.eq(tbid), user_id.eq(user.id())))
+        .values((id.eq(strava), tendabike_id.eq(tbid), user_id.eq(user.tb_id())))
         .execute(user.conn()).context("couldn't store gear")?;
     Ok(tbid)
 }

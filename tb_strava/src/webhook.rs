@@ -1,6 +1,7 @@
 
 // use diesel::prelude::*;
 use diesel::{self, RunQueryDsl};
+use diesel::prelude::*;
 
 use crate::*;
 use schema::events;
@@ -23,10 +24,11 @@ pub struct InEvent {
 }
 #[derive(Debug, Serialize, Deserialize, Queryable, Insertable)]
 pub struct Event {
-    object_type: String,
-    object_id: i64,
+    id: Option<i32>,
+    pub object_type: String,
+    pub object_id: i64,
     // Always "create," "update," or "delete."
-    aspect_type: String, 	
+    pub aspect_type: String, 	
     // hash 	For activity update events, keys can contain "title," "type," and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone). For app deauthorization events, there is always an "authorized" : "false" key-value pair.
     updates: String,  
     // The athlete's ID.
@@ -40,6 +42,7 @@ pub struct Event {
 impl From<InEvent> for Event {
     fn from(event: InEvent) -> Self {
         Self {
+            id: None,
             object_type: event.object_type,
             object_id: event.object_id,
             aspect_type: event.aspect_type,
@@ -67,6 +70,23 @@ pub struct Hub {
     #[form(field = "hub.verify_token")]
     #[serde(skip_serializing)]
     verify_token: String,
+}
+
+impl Event {
+    pub fn delete (self, conn: &AppConn) -> TbResult<()> {
+        use schema::events::dsl::*;
+        diesel::delete(events).filter(id.eq(self.id)).execute(conn)?;
+        Ok(())
+    }
+}
+
+pub fn get_events(user: &auth::User) -> TbResult<Vec<Event>> {
+    use schema::events::dsl::*;
+    Ok(events
+        .filter(owner_id.eq(user.strava_id()))
+        .order(event_time.asc())
+        .load::<Event>(user.conn())?
+    )
 }
 
 const VERIFY_TOKEN: &str = "tendabike_strava";

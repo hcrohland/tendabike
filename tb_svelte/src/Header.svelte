@@ -36,11 +36,11 @@
     running = true;
     const batch = 10;
     number = 0;
-    do {
-      data = await myfetch('/strava/sync?batch=' + batch)
-      updatePartAttach(data[1]);
-      number += data[0].length;
-    } while (running && data[0].length == batch)
+    // do {
+      data = await myfetch('/strava/hooks')
+      updatePartAttach(data);
+    //   number += data[0].length;
+    // } while (running && data[0].length > 0)
     running = false;
     number = 0;
   }
