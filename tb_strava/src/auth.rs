@@ -45,12 +45,13 @@ impl DbUser {
             .as_i64()
             .ok_or(OAuthError::Authorize("athlet id is no int"))? as i32;
 
-        let user = users::table.find(strava_id).get_result::<DbUser>(conn);
-        match user {
-            Ok(x) => return Ok(x),
-            Err(diesel::NotFound) => (),
-            Err(x) => panic!(format!("database error: {}", x)),
+        let user = users::table.find(strava_id).get_result::<DbUser>(conn).optional()?;
+        if let Some(x) = user {
+            return Ok(x);
         }
+
+        // create user!
+
         let client = reqwest::blocking::Client::new();
 
         let user = client
@@ -71,6 +72,7 @@ impl DbUser {
             expires_at: 0,
             last_activity: 0,
         };
+        webhook::insert_sync(strava_id, conn)?;
         Ok(diesel::insert_into(users::table)
             .values(&user)
             .get_result(conn)?)

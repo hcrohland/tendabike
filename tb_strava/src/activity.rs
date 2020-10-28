@@ -5,14 +5,6 @@ use crate::*;
 use auth::User;
 use diesel::prelude::*;
 
-use serde_json::Value as jValue;
-
-#[derive(Debug, Default, Deserialize, Serialize)]
-pub struct JSummary {
-    activities: Vec<jValue>,
-    parts: Vec<jValue>,
-    attachments: Vec<jValue>
-}
 #[derive(Debug, Default)]
 struct SumHash {
     activities: HashMap<Option<i64>, jValue>,
@@ -162,7 +154,7 @@ impl StravaActivity {
 }
 
 impl StravaActivity {
-    pub fn send_to_tb(self, user: &User) -> TbResult<jValue> {
+    pub fn send_to_tb(self, user: &User) -> TbResult<JSummary> {
         use schema::activities::dsl::*;
 
         let client = reqwest::blocking::Client::new();
@@ -172,15 +164,15 @@ impl StravaActivity {
         let tb_id = activities
             .find(strava_id)
             .select(tendabike_id)
-            .get_results::<i32>(user.conn())?
-            .pop();
+            .get_result::<i32>(user.conn())
+            .optional()?;
         let client = if let Some(tb_id) = tb_id {
             client.put(&format!("{}/{}/{}", user.url, "activ", tb_id))
         } else {
             client.post(&format!("{}/{}", user.url, "activ"))
         };
 
-        let res: jValue = client
+        let res: JSummary = client
             .bearer_auth(&user.token)
             .json(&tb)
             .send().context("unable to contact backend")?
@@ -188,9 +180,10 @@ impl StravaActivity {
             .json().context("malformed body")?;
 
         if tb_id.is_none() {
-            let new_id = res[0]["id"]
+            let act = &res.activities[0];
+            let new_id = act["id"]
                 .as_i64()
-                .ok_or_else(|| anyhow!("id is no int {:?}", res[0]))? as i32;
+                .ok_or_else(|| anyhow!("id is no int {:?}", act))? as i32;
             diesel::insert_into(activities)
                 .values((
                     id.eq(strava_id),
@@ -227,35 +220,24 @@ fn get_activity(id: i64, user: &User) -> TbResult<StravaActivity> {
 
 fn upsert_activity(id: i64, user: &User) -> TbResult<JSummary> {
     let act = get_activity(id, user)?;
-    let json = act.send_to_tb(user)?;
-    let ps: JSummary = serde_json::from_value(json)?;
+    let ps = act.send_to_tb(user)?;
     Ok(ps)
 }
 
-pub fn process_webhooks (user: &User) -> TbResult<JSummary> {
-    let mut hash = SumHash::default();
-    for e in webhook::get_events(user)?.into_iter() {
-        if e.object_type != "activity" {
-             warn!("skipping event {:?}", e);
-             continue;
+pub fn activity_hooks(e: webhook::Event, user: &User) -> TbResult<JSummary>{
+    info!("Processing event {:?}", e);
+    let res = match e.aspect_type.as_str() {
+        "create" | "update" => upsert_activity(e.object_id, user)?,
+        // "delete" => delete_activity(e.object_id, user),
+        "sync" =>  return sync(e, user),
+        _ => {
+            warn!("Skipping unknown aspect_type {:?}", e);
+            JSummary::default()
         }
-        let res = match e.aspect_type.as_str() {
-            "create" | "update" => {
-                info!("Processing event {:?}", e);
-                upsert_activity(e.object_id, user)?
-            },
-            // "delete" => delete_activity(e.object_id, user),
-            _ => {
-                warn!("Skipping unknown aspect_type {:?}", e);
-                continue;
-            }
-        };
-        e.delete(user.conn())?;
-        hash.merge(res);
-    }
-    Ok(hash.collect())
+    };
+    e.delete(user)?;
+    Ok(res)
 }
-
 
 pub(crate) fn next_activities(user: &User, per_page: usize, start: Option<i64>) -> TbResult<Vec<StravaActivity>> {
     let r = user.request(&format!(
@@ -266,20 +248,22 @@ pub(crate) fn next_activities(user: &User, per_page: usize, start: Option<i64>) 
     Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)
 }
 
-pub(crate) fn sync(batch: usize, user: &User) -> TbResult<JSummary> {
+pub(crate) fn sync(e: webhook::Event, user: &User) -> TbResult<JSummary> {
     // let mut len = batch;
     let mut start = user.last_activity();
     let mut hash = SumHash::default();
 
     // while len == batch 
     {
-        let acts = next_activities(&user, batch, Some(start))?;
-        // len = acts.len();
-        for a in acts {
-            start = std::cmp::max(start, a.start_date.timestamp());
-            let r = a.send_to_tb(&user)?;
-            let ps: JSummary = serde_json::from_value(r)?;
-            hash.merge(ps);
+        let acts = next_activities(&user, 10, Some(start))?;
+        if acts.len() == 0 {
+            e.delete(user)?;
+        } else {
+            for a in acts {
+                start = std::cmp::max(start, a.start_date.timestamp());
+                let ps = a.send_to_tb(&user)?;
+                hash.merge(ps);
+            }
         }
     }
 

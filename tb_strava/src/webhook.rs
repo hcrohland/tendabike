@@ -22,7 +22,7 @@ pub struct InEvent {
     // The time that the event occurred.
     event_time: i64,
 }
-#[derive(Debug, Serialize, Deserialize, Queryable, Insertable)]
+#[derive(Debug, Default, Serialize, Deserialize, Queryable, Insertable)]
 pub struct Event {
     id: Option<i32>,
     pub object_type: String,
@@ -36,7 +36,7 @@ pub struct Event {
     // The push subscription ID that is receiving this event.
     subscription_id: i32, 
     // The time that the event occurred.
-    event_time: i64,
+    pub event_time: i64,
 }
 
 impl From<InEvent> for Event {
@@ -73,20 +73,33 @@ pub struct Hub {
 }
 
 impl Event {
-    pub fn delete (self, conn: &AppConn) -> TbResult<()> {
+    pub fn delete (self, user: &auth::User) -> TbResult<()> {
         use schema::events::dsl::*;
-        diesel::delete(events).filter(id.eq(self.id)).execute(conn)?;
+        diesel::delete(events).filter(id.eq(self.id)).execute(user.conn())?;
         Ok(())
     }
 }
 
-pub fn get_events(user: &auth::User) -> TbResult<Vec<Event>> {
+pub fn insert_sync(owner_id: i32, conn: &AppConn) -> TbResult<()> {
+    let e = Event {
+        owner_id,
+        object_type: "activity".to_string(),
+        aspect_type: "sync".to_string(),
+        ..Default::default()
+    };
+    diesel::insert_into(schema::events::table)
+        .values(dbg!(e))
+        .execute(conn)?;
+    Ok(())
+}
+
+pub fn get_event(user: &auth::User) -> TbResult<Option<Event>> {
     use schema::events::dsl::*;
     Ok(events
         .filter(owner_id.eq(user.strava_id()))
         .order(event_time.asc())
-        .limit(1)
-        .load::<Event>(user.conn())?
+        .first(user.conn())
+        .optional()?
     )
 }
 
@@ -102,6 +115,25 @@ fn validate(hub: Hub) -> TbResult<Hub> {
         Error::BadRequest(format!("Unknown mode {}", hub.mode))
     );
     Ok(hub)
+}
+
+#[get("/hooks")]
+pub fn process (user: auth::User) -> ApiResult<JSummary> {
+    let e = get_event(&user)?;
+    if e.is_none() {
+        return tbapi(Ok(JSummary::default()));
+    };
+    let e= e.unwrap();
+    tbapi(Ok(
+        match e.object_type.as_str() {
+            "activity" => activity::activity_hooks(e, &user)?,
+            _ => {
+                warn!("skipping event {:?}", e);
+                e.delete(&user)?;
+                JSummary::default()
+            }
+        }
+    ))
 }
 
 #[post("/callback", format = "json", data="<event>")]

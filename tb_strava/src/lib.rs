@@ -41,6 +41,15 @@ pub enum OAuthError {
     Authorize(&'static str),
 }
 
+use serde_json::Value as jValue;
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct JSummary {
+    activities: Vec<jValue>,
+    parts: Vec<jValue>,
+    attachments: Vec<jValue>
+}
+
 type AppConn = diesel::PgConnection;
 
 #[database("auth_db")]
