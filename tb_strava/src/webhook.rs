@@ -85,6 +85,7 @@ pub fn get_events(user: &auth::User) -> TbResult<Vec<Event>> {
     Ok(events
         .filter(owner_id.eq(user.strava_id()))
         .order(event_time.asc())
+        .limit(1)
         .load::<Event>(user.conn())?
     )
 }

@@ -180,7 +180,7 @@ impl Attachment {
     /// - recalculates the usage counters in the attached assembly
     /// - persists everything into the database
     ///  -returns all affected parts or MyError::Conflict on collisions
-    fn create(mut self, user: &dyn Person, conn: &AppConn) -> TbResult<PartAttach> {
+    fn create(mut self, user: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
         conn.transaction(|| {
             let mut attachments = self.collisions(user, conn)?;
             attachments.append(&mut read(
@@ -191,7 +191,7 @@ impl Attachment {
             )?);
 
             // if there is an exiting attachment, which started earlier and is not yet detached we detach it automatically
-            let mut res = PartAttach::default();
+            let mut res = Summary::default();
             for mut pred in attachments.into_iter() {
                 if pred.detached.is_none() && pred.attached <= self.attached {
                     // predecessor gets detached
@@ -246,7 +246,7 @@ impl Attachment {
     /// returns
     /// - MyError::Conflict if the hook_id does not match
     /// - all recalculated parts on success
-    fn patch(mut self, user: &dyn Person, conn: &AppConn) -> TbResult<PartAttach> {
+    fn patch(mut self, user: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
         self.part_id.checkuser(user, conn)?;
         conn.transaction(|| {
             let mut state = match attachments::table
@@ -274,9 +274,10 @@ impl Attachment {
 
             if let Some(detached) = self.detached {
                 if detached <= state.attached {
-                    return Ok(PartAttach {
+                    return Ok(Summary {
                         parts: vec![self.delete(conn)?],
-                        attachments: vec![AttachmentDetail {a: self, name: "".into(), what: 0.into()}]
+                        attachments: vec![AttachmentDetail {a: self, name: "".into(), what: 0.into()}],
+                        ..Default::default()
                     })
                 }
             }
@@ -303,7 +304,11 @@ impl Attachment {
                     name: part.name.clone(), 
                     what: part.what
                 };
-            Ok(PartAttach {parts: vec![part], attachments: vec![attachment]})
+            Ok(Summary {
+                parts: vec![part], 
+                attachments: vec![attachment],
+                ..Default::default()
+            })
         })
     }
 
@@ -385,7 +390,7 @@ fn rescan_activities(conn: &AppConn) {
     }).expect("Transaction failed");
 }
 
-pub fn for_parts(partlist: Vec<Part>, conn: &AppConn) -> TbResult<PartAttach> {
+pub fn for_parts(partlist: Vec<Part>, conn: &AppConn) -> TbResult<Summary> {
     use schema::attachments::dsl::*;
     use schema::parts::dsl::{parts,id,name,what};
     let ids: Vec<_> = partlist.iter().map(|p| p.id).collect();
@@ -396,9 +401,10 @@ pub fn for_parts(partlist: Vec<Part>, conn: &AppConn) -> TbResult<PartAttach> {
         .select((schema::attachments::all_columns,name,what))
         .get_results::<AttachmentDetail>(conn)?;
 
-    Ok(PartAttach {
+    Ok(Summary {
         parts: partlist,
-        attachments: atts
+        attachments: atts,
+        ..Default::default()
     })
 }
 
@@ -461,7 +467,7 @@ fn collisions(
 }
 
 #[patch("/", data = "<attachment>")]
-fn patch(attachment: Json<Attachment>, user: &User, conn: AppDbConn) -> ApiResult<PartAttach> {
+fn patch(attachment: Json<Attachment>, user: &User, conn: AppDbConn) -> ApiResult<Summary> {
     tbapi(attachment.patch(user, &conn))
 }
 

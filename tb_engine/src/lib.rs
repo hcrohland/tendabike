@@ -191,7 +191,8 @@ impl Usage {
 type PartList = Vec<part::Part>;
 
 #[derive(Serialize, Debug, Default)]
-pub struct PartAttach {
+pub struct Summary {
+    activities: Vec<activity::Activity>,
     parts: Vec<part::Part>,
     attachments: Vec<attachment::AttachmentDetail>
 }

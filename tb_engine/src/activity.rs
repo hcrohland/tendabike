@@ -109,7 +109,7 @@ impl ActivityId {
     ///
     /// returns all affected parts  
     /// checks authorization  
-    fn delete(self, person: &dyn Person, conn: &AppConn) -> TbResult<PartAttach> {
+    fn delete(self, person: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
         use crate::schema::activities::dsl::*;
         conn.transaction(|| {
             let res = self
@@ -134,7 +134,7 @@ impl ActivityId {
         act: NewActivity,
         user: &dyn Person,
         conn: &AppConn,
-    ) -> TbResult<(Activity, PartAttach)> {
+    ) -> TbResult<Summary> {
         conn.transaction(|| {
             self
                 .read(user, conn)?
@@ -148,7 +148,7 @@ impl ActivityId {
 
             let res = act.register(Factor::Add, conn)
                             .context("Could not register activity")?;
-            Ok((act, res))
+            Ok(res)
         })
     }
 }
@@ -162,7 +162,7 @@ impl Activity {
         act: NewActivity,
         user: &dyn Person,
         conn: &AppConn,
-    ) -> TbResult<(Activity, PartAttach)> {
+    ) -> TbResult<Summary> {
         user.check_owner(
             act.user_id,
             format!(
@@ -177,11 +177,11 @@ impl Activity {
                 .get_result(conn)
                 .context("Could not insert activity")?;
             // let res = new.check_geartype(res, conn)?;
-            let parts = new
+            info!("creating activity {}", new.id);
+            Ok(new
                 .register(Factor::Add, conn)
-                .context("Could not register activity")?;
-            info!("created activity {}", new.id);
-            Ok((new, parts))
+                .context("Could not register activity")?
+            )
         })
     }
 
@@ -225,16 +225,17 @@ impl Activity {
             .expect("could not read activities")
     }
 
-    fn register(&self, factor: Factor, conn: &AppConn) -> TbResult<PartAttach> {
+    fn register(self, factor: Factor, conn: &AppConn) -> TbResult<Summary> {
         let usage = self.usage(factor);
 
         Ok(
-            PartAttach {
-                parts: attachment::parts_per_activity(self, conn)
+            Summary {
+                parts: attachment::parts_per_activity(&self, conn)
                     .iter()
                     .map(|x| x.apply(&usage, conn))
                     .collect::<TbResult<_>>()?,
-                attachments: attachment::register(self, &usage, conn)
+                attachments: attachment::register(&self, &usage, conn),
+                activities: vec![self]
             }
         )
     }
@@ -296,8 +297,8 @@ fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn
                 .filter(start.eq(rstart))
                 .for_update()
                 .get_result(conn).context(format!("Activitiy {}", record.start))?;
-            act.register(Factor::Sub, conn)?;
-            let res = diesel::update(activities.find(act.id))
+            let act_id = act.register(Factor::Sub, conn)?.activities[0].id;
+            let res = diesel::update(activities.find(act_id))
                 .set(descend.eq(rdescend))
                 .get_result::<Activity>(conn)
                 .context("Error reading activity")?
@@ -330,13 +331,13 @@ fn post(
     activity: Json<NewActivity>,
     user: &User,
     conn: AppDbConn,
-) -> Result<status::Created<Json<(Activity, PartAttach)>>, ApiError> {
-    let (activity, assembly) = Activity::create(activity.0, user, &conn)?;
-    let id_raw: i32 = activity.id.into();
+) -> Result<status::Created<Json<Summary>>, ApiError> {
+    let assembly = Activity::create(activity.0, user, &conn)?;
+    let id_raw: i32 = assembly.activities[0].id.into();
     let url = uri!(get: id_raw);
     Ok(status::Created(
         url.to_string(),
-        Some(Json((activity, assembly))),
+        Some(Json(assembly)),
     ))
 }
 
@@ -347,13 +348,13 @@ fn put(
     activity: Json<NewActivity>,
     user: &User,
     conn: AppDbConn,
-) -> Result<Json<(Activity, PartAttach)>, ApiError> {
+) -> Result<Json<Summary>, ApiError> {
     tbapi(ActivityId(id).update(activity.0, user, &conn))
 }
 
 /// web interface to delete an activity
 #[delete("/<id>")]
-fn delete(id: i32, user: &User, conn: AppDbConn) -> ApiResult<PartAttach> {
+fn delete(id: i32, user: &User, conn: AppDbConn) -> ApiResult<Summary> {
     tbapi(ActivityId(id).delete(user, &conn))
 }
 

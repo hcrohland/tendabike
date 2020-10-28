@@ -260,7 +260,7 @@ fn post(
 }
 
 #[get("/all")]
-fn myparts(user: &User, conn: AppDbConn) -> ApiResult<PartAttach> {
+fn myparts(user: &User, conn: AppDbConn) -> ApiResult<Summary> {
     tbapi(attachment::for_parts(allparts(user, &conn)?,&conn))
 }
 

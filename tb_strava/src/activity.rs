@@ -5,21 +5,26 @@ use crate::*;
 use auth::User;
 use diesel::prelude::*;
 
-use serde_json::Value;
+use serde_json::Value as jValue;
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct PartAttach {
-    parts: Vec<Value>,
-    attachments: Vec<Value>
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct JSummary {
+    activities: Vec<jValue>,
+    parts: Vec<jValue>,
+    attachments: Vec<jValue>
 }
 #[derive(Debug, Default)]
-struct PAHash {
-    parts: HashMap<Option<i64>, Value>,
-    atts: HashMap<String, Value>,
+struct SumHash {
+    activities: HashMap<Option<i64>, jValue>,
+    parts: HashMap<Option<i64>, jValue>,
+    atts: HashMap<String, jValue>,
 }
 
-impl PAHash {
-    fn merge(&mut self, ps: PartAttach)  {
+impl SumHash {
+    fn merge(&mut self, ps: JSummary)  {
+        for act in ps.activities {
+            self.activities.insert(act["id"].as_i64(), act);
+        }
         for part in ps.parts {
             self.parts.insert(part["id"].as_i64(), part);
         }
@@ -28,8 +33,9 @@ impl PAHash {
         }
     }
 
-    fn collect(self) -> PartAttach {
-        PartAttach {
+    fn collect(self) -> JSummary {
+        JSummary {
+            activities: self.activities.into_iter().map(|(_,v)| v).collect(),
             parts: self.parts.into_iter().map(|(_,v)| v).collect(),
             attachments: self.atts.into_iter().map(|(_,v)| v).collect(),
         }
@@ -156,7 +162,7 @@ impl StravaActivity {
 }
 
 impl StravaActivity {
-    pub fn send_to_tb(self, user: &User) -> TbResult<Value> {
+    pub fn send_to_tb(self, user: &User) -> TbResult<jValue> {
         use schema::activities::dsl::*;
 
         let client = reqwest::blocking::Client::new();
@@ -174,7 +180,7 @@ impl StravaActivity {
             client.post(&format!("{}/{}", user.url, "activ"))
         };
 
-        let res: Value = client
+        let res: jValue = client
             .bearer_auth(&user.token)
             .json(&tb)
             .send().context("unable to contact backend")?
@@ -219,21 +225,21 @@ fn get_activity(id: i64, user: &User) -> TbResult<StravaActivity> {
     Ok(act)
 }
 
-fn upsert_activity(id: i64, user: &User) -> TbResult<PartAttach> {
+fn upsert_activity(id: i64, user: &User) -> TbResult<JSummary> {
     let act = get_activity(id, user)?;
     let json = act.send_to_tb(user)?;
-    let (_, ps): (Value, PartAttach) = serde_json::from_value(json)?;
+    let ps: JSummary = serde_json::from_value(json)?;
     Ok(ps)
 }
 
-pub fn process_webhooks (user: &User) -> TbResult<PartAttach> {
-    let mut hash = PAHash::default();
+pub fn process_webhooks (user: &User) -> TbResult<JSummary> {
+    let mut hash = SumHash::default();
     for e in webhook::get_events(user)?.into_iter() {
         if e.object_type != "activity" {
              warn!("skipping event {:?}", e);
              continue;
         }
-        let partattach = match e.aspect_type.as_str() {
+        let res = match e.aspect_type.as_str() {
             "create" | "update" => {
                 info!("Processing event {:?}", e);
                 upsert_activity(e.object_id, user)?
@@ -245,7 +251,7 @@ pub fn process_webhooks (user: &User) -> TbResult<PartAttach> {
             }
         };
         e.delete(user.conn())?;
-        hash.merge(partattach);
+        hash.merge(res);
     }
     Ok(hash.collect())
 }
@@ -257,16 +263,13 @@ pub(crate) fn next_activities(user: &User, per_page: usize, start: Option<i64>) 
         start.unwrap_or_else(|| user.last_activity()),
         per_page
     ))?;
-    // let r = user.request("/activities?per_page=2")?;
-    let acts: Vec<StravaActivity> = serde_json::from_str(&r)?;
-    Ok(acts)
+    Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)
 }
 
-pub(crate) fn sync(batch: usize, user: &User) -> TbResult<(Vec<Value>,PartAttach)> {
+pub(crate) fn sync(batch: usize, user: &User) -> TbResult<JSummary> {
     // let mut len = batch;
     let mut start = user.last_activity();
-    let mut activities = Vec::new();
-    let mut hash = PAHash::default();
+    let mut hash = SumHash::default();
 
     // while len == batch 
     {
@@ -275,11 +278,10 @@ pub(crate) fn sync(batch: usize, user: &User) -> TbResult<(Vec<Value>,PartAttach
         for a in acts {
             start = std::cmp::max(start, a.start_date.timestamp());
             let r = a.send_to_tb(&user)?;
-            let (act, ps): (Value, PartAttach) = serde_json::from_value(r)?;
-            activities.push(act);
+            let ps: JSummary = serde_json::from_value(r)?;
             hash.merge(ps);
         }
     }
 
-    Ok((activities,hash.collect()))
+    Ok(hash.collect())
 }
