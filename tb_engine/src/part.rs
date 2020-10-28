@@ -153,7 +153,7 @@ impl PartId {
     pub fn apply(self, usage: &Usage, conn: &AppConn) -> TbResult<Part> {
         use schema::parts::dsl::*;
 
-        info!("Applying usage to part {}", self);
+        debug!("Applying usage to part {}", self);
         // If the purchase date is newer than the usage, adjust it
         diesel::update(parts.find(self))
             .filter(purchase.gt(usage.start))

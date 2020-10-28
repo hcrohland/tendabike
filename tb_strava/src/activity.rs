@@ -224,8 +224,8 @@ fn upsert_activity(id: i64, user: &User) -> TbResult<JSummary> {
     Ok(ps)
 }
 
-pub fn activity_hooks(e: webhook::Event, user: &User) -> TbResult<JSummary>{
-    info!("Processing event {:?}", e);
+pub fn process_hook(e: webhook::Event, user: &User) -> TbResult<JSummary>{
+    debug!("Processing event {:?}", e);
     let res = match e.aspect_type.as_str() {
         "create" | "update" => upsert_activity(e.object_id, user)?,
         // "delete" => delete_activity(e.object_id, user),

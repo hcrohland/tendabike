@@ -1,6 +1,6 @@
 [package]
 name = "tb_strava"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Christoph Rohland <hcrohland@users.noreply.github.com>"]
 edition = "2018"
 
@@ -21,7 +21,7 @@ diesel-derive-newtype = "0.1.2"
 newtype_derive = "0.1.6"
 dotenv = "0.15.0"
 log = "0.4"  
-simplelog = "0.7"
+simplelog = "0.8.0"
 lazy_static = "1.4.0"
 serde = "1.0" 
 serde_derive = "1.0"

@@ -126,9 +126,9 @@ pub fn process (user: auth::User) -> ApiResult<JSummary> {
     let e= e.unwrap();
     tbapi(Ok(
         match e.object_type.as_str() {
-            "activity" => activity::activity_hooks(e, &user)?,
+            "activity" => activity::process_hook(e, &user)?,
             _ => {
-                warn!("skipping event {:?}", e);
+                warn!("skipping {:?}", e);
                 e.delete(&user)?;
                 JSummary::default()
             }
