@@ -247,7 +247,6 @@ fn delete_activity(sid: i64, user: &User) -> TbResult<JSummary> {
 }
 
 pub fn process_hook(e: webhook::Event, user: &User) -> TbResult<JSummary>{
-    debug!("Processing event {:?}", e);
     let res = match e.aspect_type.as_str() {
         "create" | "update" => upsert_activity(e.object_id, user)?,
         "delete" => delete_activity(e.object_id, user)?,

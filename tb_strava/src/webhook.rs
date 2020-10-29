@@ -135,6 +135,7 @@ pub fn process (user: auth::User) -> ApiResult<JSummary> {
         return tbapi(Ok(JSummary::default()));
     };
     let e= e.unwrap();
+    info!("Processing {:?}", e);
     tbapi(Ok(
         match e.object_type.as_str() {
             "activity" => activity::process_hook(e, &user)?,
@@ -160,7 +161,6 @@ fn store_event(event: Event, conn: &AppConn) -> TbResult<()>{
 
 #[post("/callback", format = "json", data="<event>")]
 pub fn create_event(event: Json<InEvent>, conn: AppDbConn) -> Result<(),ApiError> {
-    
     let event = event.into_inner();
     info!("received {:?}", event);
     Ok(store_event(event.try_into()?, &conn)?)
