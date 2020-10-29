@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use crate::*;
 use auth::User;
 use diesel::prelude::*;
+use reqwest::blocking::Client;
 
 #[derive(Debug, Default)]
 struct SumHash {
@@ -157,7 +158,7 @@ impl StravaActivity {
     pub fn send_to_tb(self, user: &User) -> TbResult<JSummary> {
         use schema::activities::dsl::*;
 
-        let client = reqwest::blocking::Client::new();
+        let client = Client::new();
         let strava_id = self.id;
         let tb = self.into_tb(user)?;
 
@@ -224,11 +225,32 @@ fn upsert_activity(id: i64, user: &User) -> TbResult<JSummary> {
     Ok(ps)
 }
 
+fn delete_activity(sid: i64, user: &User) -> TbResult<JSummary> {
+    use schema::activities::dsl::*;
+
+    user.conn().transaction(||{
+        let tid: Option<i32> = activities.select(tendabike_id).find(sid).for_update().first(user.conn()).optional()?;
+        if let Some(tid) = tid {
+            diesel::delete(activities.find(sid)).execute(user.conn())?;
+            return Ok(
+                Client::new()   
+                    .delete(&format!("{}/{}/{}", user.url, "activ", tid))
+                    .bearer_auth(&user.token)
+                    .send().context("unable to contact backend")?
+                    .error_for_status().context("backend responded with error")?
+                    .json().context("malformed body")?
+            );
+        } else {
+            return Ok(JSummary::default());
+        };
+    })
+}
+
 pub fn process_hook(e: webhook::Event, user: &User) -> TbResult<JSummary>{
     debug!("Processing event {:?}", e);
     let res = match e.aspect_type.as_str() {
         "create" | "update" => upsert_activity(e.object_id, user)?,
-        // "delete" => delete_activity(e.object_id, user),
+        "delete" => delete_activity(e.object_id, user)?,
         "sync" =>  return sync(e, user),
         _ => {
             warn!("Skipping unknown aspect_type {:?}", e);
