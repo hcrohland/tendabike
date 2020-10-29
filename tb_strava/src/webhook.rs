@@ -147,14 +147,23 @@ pub fn process (user: auth::User) -> ApiResult<JSummary> {
     ))
 }
 
+fn store_event(event: Event, conn: &AppConn) -> TbResult<()>{
+    ensure!(
+        schema::users::table.find(event.owner_id).execute(conn) == Ok(1),
+        Error::BadRequest(format!("unknown event received: {:?}", event))
+    );
+    
+    diesel::insert_into(schema::events::table).values(&event).execute(conn)?;
+    Ok(())
+}
+
+
 #[post("/callback", format = "json", data="<event>")]
 pub fn create_event(event: Json<InEvent>, conn: AppDbConn) -> Result<(),ApiError> {
-    use schema::events::dsl::*;
+    
     let event = event.into_inner();
     info!("received {:?}", event);
-    let event: Event = event.try_into()?;
-    diesel::insert_into(events).values(&event).execute(&conn.0).map_err(anyhow::Error::from)?;
-    Ok(())
+    Ok(store_event(event.try_into()?, &conn)?)
 }
 
 #[get("/callback?<hub..>")]
