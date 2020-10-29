@@ -6,6 +6,7 @@ use diesel::prelude::*;
 use crate::*;
 use schema::events;
 use std::collections::HashMap;
+use std::convert::TryInto;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InEvent {
@@ -39,9 +40,19 @@ pub struct Event {
     pub event_time: i64,
 }
 
-impl From<InEvent> for Event {
-    fn from(event: InEvent) -> Self {
-        Self {
+impl std::convert::TryFrom<InEvent> for Event {
+    type Error = anyhow::Error;
+
+    fn try_from(event: InEvent) -> Result<Self, Self::Error> {
+        let objects = ["activity", "athlete"];
+        let aspects = ["create", "update", "delete"];
+
+        ensure!(
+            objects.contains(&event.object_type.as_str()) && aspects.contains(&event.aspect_type.as_str()),
+            Error::BadRequest(format!("unknown event received: {:?}", event))
+        );
+
+        Ok(Self {
             id: None,
             object_type: event.object_type,
             object_id: event.object_id,
@@ -50,7 +61,7 @@ impl From<InEvent> for Event {
             subscription_id: event.subscription_id,
             event_time: event.event_time,
             updates: serde_json::to_string(&event.updates).unwrap_or_else(|e|{ format!("{:?}", e)}),
-        }
+        })
     }
 }
 
@@ -137,12 +148,12 @@ pub fn process (user: auth::User) -> ApiResult<JSummary> {
 }
 
 #[post("/callback", format = "json", data="<event>")]
-pub fn create_event(event: Json<InEvent>, conn: AppDbConn) -> TbResult<()> {
+pub fn create_event(event: Json<InEvent>, conn: AppDbConn) -> Result<(),ApiError> {
     use schema::events::dsl::*;
     let event = event.into_inner();
     info!("received {:?}", event);
-    let event: Event = event.into();
-    diesel::insert_into(events).values(&event).execute(&conn.0)?;
+    let event: Event = event.try_into()?;
+    diesel::insert_into(events).values(&event).execute(&conn.0).map_err(anyhow::Error::from)?;
     Ok(())
 }
 
