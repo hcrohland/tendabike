@@ -61,7 +61,6 @@ pub struct Activity {
 }
 
 #[derive(Debug, Clone, Insertable, AsChangeset, PartialEq, Serialize, Deserialize)]
-#[changeset_options(treat_none_as_null = "true")]
 #[table_name = "activities"]
 pub struct NewActivity {
     pub user_id: i32,
