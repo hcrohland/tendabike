@@ -220,7 +220,7 @@ fn get_activity(id: i64, user: &User) -> TbResult<StravaActivity> {
 }
 
 fn upsert_activity(id: i64, user: &User) -> TbResult<JSummary> {
-    let act = get_activity(id, user)?;
+    let act = get_activity(id, user).context(format!("strava activity id {}", id))?;
     let ps = act.send_to_tb(user)?;
     Ok(ps)
 }
@@ -246,7 +246,7 @@ fn delete_activity(sid: i64, user: &User) -> TbResult<JSummary> {
     })
 }
 
-pub fn process_hook(e: webhook::Event, user: &User) -> TbResult<JSummary>{
+pub fn process_hook(e: &webhook::Event, user: &User) -> TbResult<JSummary>{
     let res = match e.aspect_type.as_str() {
         "create" | "update" => upsert_activity(e.object_id, user)?,
         "delete" => delete_activity(e.object_id, user)?,
@@ -269,7 +269,7 @@ pub(crate) fn next_activities(user: &User, per_page: usize, start: Option<i64>) 
     Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)
 }
 
-pub(crate) fn sync(e: webhook::Event, user: &User) -> TbResult<JSummary> {
+pub(crate) fn sync(e: &webhook::Event, user: &User) -> TbResult<JSummary> {
     // let mut len = batch;
     let mut start = user.last_activity();
     let mut hash = SumHash::default();

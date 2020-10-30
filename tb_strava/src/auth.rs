@@ -154,23 +154,38 @@ impl User {
 
     }
     
+    fn get_strava(&self, uri: &str) -> TbResult<reqwest::blocking::Response> {
+        use reqwest::StatusCode;
+        let resp = reqwest::blocking::Client::new()
+            .get(&format!("{}{}", API, uri))
+            .bearer_auth(&self.user.access_token)
+            .send().context("Could not reach strava")?;
+
+        let status = resp.status();
+        if status.is_success() { return Ok(resp) }
+
+        match status {
+            StatusCode::TOO_MANY_REQUESTS | 
+            StatusCode::BAD_GATEWAY | 
+            StatusCode::SERVICE_UNAVAILABLE | 
+            StatusCode::GATEWAY_TIMEOUT => {
+                bail!(Error::TryAgain(status.canonical_reason().unwrap()))
+            },
+            _ => bail!(Error::BadRequest(
+                    format!("Strava request error: {}", status.canonical_reason().unwrap_or("Unknown status received"))
+                ))
+        }
+    }
+
     /// send an API call with an authenticated User
     ///
     pub fn request(&self, uri: &str) -> TbResult<String> {
-        let client = reqwest::blocking::Client::new();
-        Ok(client
-            .get(&format!("{}{}", API, uri))
-            .bearer_auth(&self.user.access_token)
-            .send().context("Could not reach strava")?
+        Ok(self.get_strava(uri)?
             .text().context("Could not get response body")?)
     }
 
     pub fn request_json(&self, uri: &str) -> TbResult<Value> {
-        let client = reqwest::blocking::Client::new();
-        Ok(client
-            .get(&format!("{}{}", API, uri))
-            .bearer_auth(&self.user.access_token)
-            .send().context("Could not reach strava")?
+        Ok(self.get_strava(uri)?
             .json().context("Could not parse response body")?)
     }
 

@@ -69,7 +69,7 @@ use rocket::request::Form;
 use rocket_contrib::json::Json;
 use anyhow::ensure;
 
-// compicated way to have query parameters with dots in the name
+// complicated way to have query parameters with dots in the name
 #[derive(Debug, FromForm, Serialize)]
 pub struct Hub {
     #[form(field = "hub.mode")]
@@ -84,11 +84,21 @@ pub struct Hub {
 }
 
 impl Event {
-    pub fn delete (self, user: &auth::User) -> TbResult<()> {
+    pub fn delete (&self, user: &auth::User) -> TbResult<()> {
         use schema::events::dsl::*;
         diesel::delete(events).filter(id.eq(self.id)).execute(user.conn())?;
         Ok(())
     }
+}
+
+fn store_event(event: Event, conn: &AppConn) -> TbResult<()>{
+    ensure!(
+        schema::users::table.find(event.owner_id).execute(conn) == Ok(1),
+        Error::BadRequest(format!("unknown event received: {:?}", event))
+    );
+    
+    diesel::insert_into(schema::events::table).values(&event).execute(conn)?;
+    Ok(())
 }
 
 pub fn insert_sync(owner_id: i32, conn: &AppConn) -> TbResult<()> {
@@ -96,22 +106,53 @@ pub fn insert_sync(owner_id: i32, conn: &AppConn) -> TbResult<()> {
         owner_id,
         object_type: "activity".to_string(),
         aspect_type: "sync".to_string(),
+        event_time: 10,
         ..Default::default()
     };
     diesel::insert_into(schema::events::table)
-        .values(dbg!(e))
+        .values(e)
+        .execute(conn)?;
+    Ok(())
+}
+
+pub fn insert_stop(conn: &AppConn) -> TbResult<()> {
+    let e = Event {
+        object_type: "stop".to_string(),
+        object_id: chrono::offset::Utc::now().timestamp() + 900,
+        ..Default::default()
+    };
+    diesel::insert_into(schema::events::table)
+        .values(e)
         .execute(conn)?;
     Ok(())
 }
 
 pub fn get_event(user: &auth::User) -> TbResult<Option<Event>> {
     use schema::events::dsl::*;
-    Ok(events
-        .filter(owner_id.eq(user.strava_id()))
+
+    let event: Option<Event> = events
+        .filter(owner_id.eq_any(vec![0,user.strava_id()]))
         .order(event_time.asc())
         .first(user.conn())
-        .optional()?
-    )
+        .optional()?;
+    let event = match event {
+        Some(event) => event,
+        None => return Ok(None),
+    };
+    if event.object_type.as_str() != "stop" { 
+        return Ok(Some(event))
+    };
+
+    // rate limit event
+    if event.event_time > chrono::offset::Utc::now().timestamp() {
+        // still rate limited!
+        return Ok(None);
+    }
+    // remove stop event
+    warn!("Starting hooks again");
+    event.delete(user)?;
+    // get next event
+    return get_event(user)
 }
 
 const VERIFY_TOKEN: &str = "tendabike_strava";
@@ -134,30 +175,33 @@ pub fn process (user: auth::User) -> ApiResult<JSummary> {
     if e.is_none() {
         return tbapi(Ok(JSummary::default()));
     };
-    let e= e.unwrap();
+    let e = e.unwrap();
+
     info!("Processing {:?}", e);
-    tbapi(Ok(
-        match e.object_type.as_str() {
-            "activity" => activity::process_hook(e, &user)?,
-            _ => {
-                warn!("skipping {:?}", e);
-                e.delete(&user)?;
-                JSummary::default()
-            }
-        }
-    ))
-}
-
-fn store_event(event: Event, conn: &AppConn) -> TbResult<()>{
-    ensure!(
-        schema::users::table.find(event.owner_id).execute(conn) == Ok(1),
-        Error::BadRequest(format!("unknown event received: {:?}", event))
-    );
+    if e.object_type.as_str() != "activity" {
+        warn!("skipping {:?}", e);
+        e.delete(&user)?;
+        return tbapi(Ok(JSummary::default()));
+    }
     
-    diesel::insert_into(schema::events::table).values(&event).execute(conn)?;
-    Ok(())
-}
+    let err = match activity::process_hook(&e, &user) {
+        Ok(res) => return tbapi(Ok(res)),
+        Err(err) => err
+    };
 
+    // Keep events for temporary failure - delete others
+    tbapi(match err.downcast_ref::<Error>() {
+        Some(&Error::TryAgain(_)) => {
+                warn!("stopping hooks for 15 minutes {:?}", err);
+                webhook::insert_stop(user.conn())?;
+                Ok(JSummary::default())
+            },
+        _ => {
+            e.delete(&user)?;
+            Err(err)
+        }
+    })
+}
 
 #[post("/callback", format = "json", data="<event>")]
 pub fn create_event(event: Json<InEvent>, conn: AppDbConn) -> Result<(),ApiError> {
