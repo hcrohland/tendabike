@@ -26,13 +26,11 @@ extern crate log;
 extern crate anyhow;
 extern crate chrono;
 extern crate chrono_tz;
-extern crate simplelog;
+extern crate env_logger;
 
 extern crate dotenv;
 
 use self::diesel::prelude::*;
-
-use simplelog::*;
 
 use std::cmp::min;
 use std::env;
@@ -57,8 +55,10 @@ pub use tb_common::error::*;
 pub use tb_common::*;
 
 use anyhow::Context;
-
 use chrono::{DateTime, TimeZone, Utc};
+
+use rocket::Rocket;
+use rocket::fairing::AdHoc;
 
 type AppConn = diesel::PgConnection;
 
@@ -66,8 +66,6 @@ type AppConn = diesel::PgConnection;
 pub struct AppDbConn(AppConn);
 
 embed_migrations!();
-
-use rocket::Rocket;
 
 fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
     let conn = AppDbConn::get_one(&rocket).expect("database connection");
@@ -80,10 +78,7 @@ fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
     }
 }
 
-use rocket::fairing::AdHoc;
-
 pub fn ignite_rocket() -> rocket::Rocket {
-    dotenv::dotenv().ok();
     // Initialize server
 
     // You can also deserialize this
@@ -116,21 +111,13 @@ pub fn ignite_rocket() -> rocket::Rocket {
     tb_strava::attach_rocket(ship)
 }
 
-fn init_logging() {
-    let config = simplelog::ConfigBuilder::new().set_time_format("%F %T".to_string()).build();
-    if let Err(_) = TermLogger::init(
-        LevelFilter::Info,
-        config.clone(),
-        simplelog::TerminalMode::Stdout) 
-    {
-        SimpleLogger::init(LevelFilter::Info, config).expect ("could not get logger");
-    }
-}
-
 pub fn init_environment() {
     dotenv::dotenv().ok();
 
-    init_logging();
+    // Default log level is warn
+    env_logger::Builder::from_env(
+    env_logger::Env::default().default_filter_or("warn")
+    ).init();
 }
 
 #[derive(Debug)]
