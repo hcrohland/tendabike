@@ -82,8 +82,6 @@ pub fn attach_rocket(ship: rocket::Rocket) -> rocket::Rocket {
         .attach(AppDbConn::fairing())
         // run database migrations
         .attach(AdHoc::on_attach("Strava Database Migrations", run_db_migrations))
-        // launch worker thread
-        .attach(AdHoc::on_attach("Event Worker Thread", webhook::launch_event_worker))
         // add oauth2 flow
         .attach(auth::fairing(&config))
         .mount("/strava", ui::routes())

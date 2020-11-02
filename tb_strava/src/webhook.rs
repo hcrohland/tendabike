@@ -9,7 +9,6 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 
 use rocket::request::Form;
-use rocket::request::State;
 use rocket_contrib::json::Json;
 use anyhow::ensure;
 
@@ -187,33 +186,6 @@ fn validate(hub: Hub) -> TbResult<Hub> {
     Ok(hub)
 }
 
-use crossbeam::sync::{Parker};
-pub struct Wakeup(crossbeam::sync::Unparker);
-
-fn process_events(p: Parker, conn: & AppConn) {
-    loop{
-        p.park();
-        info!("Wakeup received");
-        // This will be a "while" loop!
-        if let Ok(Some(e)) = get_event(conn) {
-            info! ("Would process {:?}",e);
-            // dbg!(e).delete(conn).expect("event delete failed");
-        }
-    }
-}
-
-use std::thread;
-pub fn launch_event_worker(rocket: Rocket) -> Result<Rocket,Rocket> {
-
-    let p = Parker::new();
-    let u = Wakeup(p.unparker().clone());
-    let conn = AppDbConn::get_one(&rocket).expect("database connection");
-    thread::spawn(move || {
-        process_events(p, &conn);
-    });
-    Ok(rocket.manage(u))
-}
-
 #[get("/hooks")]
 pub fn process (user: auth::User) -> ApiResult<JSummary> {
     let e = get_event(user.conn())?;
@@ -249,11 +221,10 @@ pub fn process (user: auth::User) -> ApiResult<JSummary> {
 }
 
 #[post("/callback", format = "json", data="<event>")]
-pub fn create_event(event: Json<InEvent>, w: State<Wakeup>, conn: AppDbConn) -> Result<(),ApiError> {
+pub fn create_event(event: Json<InEvent>, conn: AppDbConn) -> Result<(),ApiError> {
     let event = event.into_inner();
     info!("received {:?}", event);
     store_event(event.try_into()?, &conn)?;
-    w.0.unpark();
     Ok(())
 }
 
