@@ -144,7 +144,7 @@ pub fn get_event(conn: &AppConn) -> TbResult<Option<Event>> {
     use schema::events::dsl::*;
 
     let event: Option<Event> = events
-        // .filter(owner_id.eq_any(vec![0,user.strava_id()]))
+        .filter(owner_id.eq_any(vec![0,user.strava_id()]))
         .order(event_time.asc())
         .first(conn)
         .optional()?;
