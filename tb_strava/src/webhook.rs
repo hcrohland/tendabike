@@ -127,7 +127,7 @@ pub fn insert_stop(conn: &AppConn) -> TbResult<()> {
     Ok(())
 }
 
-fn rate_limit(event: Event, conn: &AppConn) -> TbResult<Option<Event>> {
+fn rate_limit(event: Event, user: &auth::User) -> TbResult<Option<Event>> {
     // rate limit event
     if event.event_time > chrono::offset::Utc::now().timestamp() {
         // still rate limited!
@@ -135,13 +135,14 @@ fn rate_limit(event: Event, conn: &AppConn) -> TbResult<Option<Event>> {
     }
     // remove stop event
     warn!("Starting hooks again");
-    event.delete(conn)?;
+    event.delete(user.conn())?;
     // get next event
-    return get_event(conn)
+    return get_event(user)
 }
 
-pub fn get_event(conn: &AppConn) -> TbResult<Option<Event>> {
+pub fn get_event(user: &auth::User) -> TbResult<Option<Event>> {
     use schema::events::dsl::*;
+    let conn = user.conn();
 
     let event: Option<Event> = events
         .filter(owner_id.eq_any(vec![0,user.strava_id()]))
@@ -153,7 +154,7 @@ pub fn get_event(conn: &AppConn) -> TbResult<Option<Event>> {
         None => return Ok(None),
     };
     if event.object_type.as_str() == "stop" { 
-        return rate_limit(event, conn);
+        return rate_limit(event, user);
     }
 
     // Prevent unneeded calls to Strava
@@ -190,7 +191,7 @@ fn validate(hub: Hub) -> TbResult<Hub> {
 
 #[get("/hooks")]
 pub fn process (user: auth::User) -> ApiResult<JSummary> {
-    let e = get_event(user.conn())?;
+    let e = get_event(&user)?;
     if e.is_none() {
         return tbapi(Ok(JSummary::default()));
     };
