@@ -160,14 +160,16 @@ pub fn get_event(conn: &AppConn) -> TbResult<Option<Event>> {
     // only the latest event for an object is interesting
     let mut list = events
             .filter(object_id.eq(event.object_id))
-            .order(event_time.desc())
+            .order(event_time.asc())
             .get_results::<Event>(conn)?;
     let res = list.pop();
 
-    for event in list {
-        info!("skipping {:?}", event);
-        event.delete(conn)?;
-    }
+    info!("dropping {:#?}", list);
+    diesel::delete(events)
+        .filter(id.eq_any(
+            list.into_iter().map(|l| l.id).collect::<Vec<_>>())
+        )
+        .execute(conn)?;
 
     return Ok(res)
 }
@@ -194,9 +196,9 @@ pub fn process (user: auth::User) -> ApiResult<JSummary> {
     };
     let e = e.unwrap();
 
-    info!("Processing {:?}", e);
+    info!("Processing {:#?}", e);
     if e.object_type.as_str() != "activity" {
-        warn!("skipping {:?}", e);
+        warn!("skipping {:#?}", e);
         e.delete(user.conn())?;
         return tbapi(Ok(JSummary::default()));
     }
@@ -223,7 +225,7 @@ pub fn process (user: auth::User) -> ApiResult<JSummary> {
 #[post("/callback", format = "json", data="<event>")]
 pub fn create_event(event: Json<InEvent>, conn: AppDbConn) -> Result<(),ApiError> {
     let event = event.into_inner();
-    info!("received {:?}", event);
+    info!("received {:#?}", event);
     store_event(event.try_into()?, &conn)?;
     Ok(())
 }
