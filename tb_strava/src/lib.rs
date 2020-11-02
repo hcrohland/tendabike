@@ -21,7 +21,6 @@ extern crate time;
 extern crate anyhow;
 #[macro_use]
 extern crate thiserror;
-extern crate crossbeam;
 extern crate tb_common;
 use tb_common::*;
 

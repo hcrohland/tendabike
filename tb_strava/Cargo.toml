@@ -17,7 +17,6 @@ diesel_migrations = "1.4"
 rocket_oauth2 = "0.4.1"
 
 diesel-derive-newtype = "0.1.2"
-crossbeam = "0.8"
 
 newtype_derive = "0.1.6"
 dotenv = "0.15.0"
