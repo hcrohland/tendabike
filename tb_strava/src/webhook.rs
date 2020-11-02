@@ -8,6 +8,11 @@ use schema::events;
 use std::collections::HashMap;
 use std::convert::TryInto;
 
+use rocket::request::Form;
+use rocket::request::State;
+use rocket_contrib::json::Json;
+use anyhow::ensure;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InEvent {
     object_type: String,
@@ -65,10 +70,6 @@ impl std::convert::TryFrom<InEvent> for Event {
     }
 }
 
-use rocket::request::Form;
-use rocket_contrib::json::Json;
-use anyhow::ensure;
-
 // complicated way to have query parameters with dots in the name
 #[derive(Debug, FromForm, Serialize)]
 pub struct Hub {
@@ -84,9 +85,9 @@ pub struct Hub {
 }
 
 impl Event {
-    pub fn delete (&self, user: &auth::User) -> TbResult<()> {
+    pub fn delete (&self, conn: &AppConn) -> TbResult<()> {
         use schema::events::dsl::*;
-        diesel::delete(events).filter(id.eq(self.id)).execute(user.conn())?;
+        diesel::delete(events).filter(id.eq(self.id)).execute(conn)?;
         Ok(())
     }
 }
@@ -127,7 +128,7 @@ pub fn insert_stop(conn: &AppConn) -> TbResult<()> {
     Ok(())
 }
 
-fn rate_limit(event: Event, user: &auth::User) -> TbResult<Option<Event>> {
+fn rate_limit(event: Event, conn: &AppConn) -> TbResult<Option<Event>> {
     // rate limit event
     if event.event_time > chrono::offset::Utc::now().timestamp() {
         // still rate limited!
@@ -135,25 +136,25 @@ fn rate_limit(event: Event, user: &auth::User) -> TbResult<Option<Event>> {
     }
     // remove stop event
     warn!("Starting hooks again");
-    event.delete(user)?;
+    event.delete(conn)?;
     // get next event
-    return get_event(user)
+    return get_event(conn)
 }
 
-pub fn get_event(user: &auth::User) -> TbResult<Option<Event>> {
+pub fn get_event(conn: &AppConn) -> TbResult<Option<Event>> {
     use schema::events::dsl::*;
 
     let event: Option<Event> = events
-        .filter(owner_id.eq_any(vec![0,user.strava_id()]))
+        // .filter(owner_id.eq_any(vec![0,user.strava_id()]))
         .order(event_time.asc())
-        .first(user.conn())
+        .first(conn)
         .optional()?;
     let event = match event {
         Some(event) => event,
         None => return Ok(None),
     };
     if event.object_type.as_str() == "stop" { 
-        return rate_limit(event, user);
+        return rate_limit(event, conn);
     }
 
     // Prevent unneeded calls to Strava
@@ -161,12 +162,12 @@ pub fn get_event(user: &auth::User) -> TbResult<Option<Event>> {
     let mut list = events
             .filter(object_id.eq(event.object_id))
             .order(event_time.desc())
-            .get_results::<Event>(user.conn())?;
+            .get_results::<Event>(conn)?;
     let res = list.pop();
 
     for event in list {
         info!("skipping {:?}", event);
-        event.delete(user)?;
+        event.delete(conn)?;
     }
 
     return Ok(res)
@@ -186,9 +187,36 @@ fn validate(hub: Hub) -> TbResult<Hub> {
     Ok(hub)
 }
 
+use crossbeam::sync::{Parker};
+pub struct Wakeup(crossbeam::sync::Unparker);
+
+fn process_events(p: Parker, conn: & AppConn) {
+    loop{
+        p.park();
+        info!("Wakeup received");
+        // This will be a "while" loop!
+        if let Ok(Some(e)) = get_event(conn) {
+            info! ("Would process {:?}",e);
+            // dbg!(e).delete(conn).expect("event delete failed");
+        }
+    }
+}
+
+use std::thread;
+pub fn launch_event_worker(rocket: Rocket) -> Result<Rocket,Rocket> {
+
+    let p = Parker::new();
+    let u = Wakeup(p.unparker().clone());
+    let conn = AppDbConn::get_one(&rocket).expect("database connection");
+    thread::spawn(move || {
+        process_events(p, &conn);
+    });
+    Ok(rocket.manage(u))
+}
+
 #[get("/hooks")]
 pub fn process (user: auth::User) -> ApiResult<JSummary> {
-    let e = get_event(&user)?;
+    let e = get_event(user.conn())?;
     if e.is_none() {
         return tbapi(Ok(JSummary::default()));
     };
@@ -197,7 +225,7 @@ pub fn process (user: auth::User) -> ApiResult<JSummary> {
     info!("Processing {:?}", e);
     if e.object_type.as_str() != "activity" {
         warn!("skipping {:?}", e);
-        e.delete(&user)?;
+        e.delete(user.conn())?;
         return tbapi(Ok(JSummary::default()));
     }
     
@@ -214,17 +242,19 @@ pub fn process (user: auth::User) -> ApiResult<JSummary> {
                 Ok(JSummary::default())
             },
         _ => {
-            e.delete(&user)?;
+            e.delete(user.conn())?;
             Err(err)
         }
     })
 }
 
 #[post("/callback", format = "json", data="<event>")]
-pub fn create_event(event: Json<InEvent>, conn: AppDbConn) -> Result<(),ApiError> {
+pub fn create_event(event: Json<InEvent>, w: State<Wakeup>, conn: AppDbConn) -> Result<(),ApiError> {
     let event = event.into_inner();
     info!("received {:?}", event);
-    Ok(store_event(event.try_into()?, &conn)?)
+    store_event(event.try_into()?, &conn)?;
+    w.0.unpark();
+    Ok(())
 }
 
 #[get("/callback?<hub..>")]

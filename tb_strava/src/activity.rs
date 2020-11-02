@@ -256,7 +256,7 @@ pub fn process_hook(e: &webhook::Event, user: &User) -> TbResult<JSummary>{
             JSummary::default()
         }
     };
-    e.delete(user)?;
+    e.delete(user.conn())?;
     Ok(res)
 }
 
@@ -278,7 +278,7 @@ pub(crate) fn sync(e: &webhook::Event, user: &User) -> TbResult<JSummary> {
     {
         let acts = next_activities(&user, 10, Some(start))?;
         if acts.len() == 0 {
-            e.delete(user)?;
+            e.delete(user.conn())?;
         } else {
             for a in acts {
                 start = std::cmp::max(start, a.start_date.timestamp());
