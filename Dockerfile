@@ -4,7 +4,7 @@ FROM rust:latest as base
 # To ensure a reproducible build consider pinning 
 # the cargo-chef version with `--version X.X.X`
 
-WORKDIR app
+WORKDIR /app
 # install dependencies
 RUN apt-get update && apt-get install -y libpq-dev libssl-dev
 
