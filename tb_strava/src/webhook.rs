@@ -127,6 +127,19 @@ pub fn insert_stop(conn: &AppConn) -> TbResult<()> {
     Ok(())
 }
 
+fn rate_limit(event: Event, user: &auth::User) -> TbResult<Option<Event>> {
+    // rate limit event
+    if event.event_time > chrono::offset::Utc::now().timestamp() {
+        // still rate limited!
+        return Ok(None);
+    }
+    // remove stop event
+    warn!("Starting hooks again");
+    event.delete(user)?;
+    // get next event
+    return get_event(user)
+}
+
 pub fn get_event(user: &auth::User) -> TbResult<Option<Event>> {
     use schema::events::dsl::*;
 
@@ -139,20 +152,24 @@ pub fn get_event(user: &auth::User) -> TbResult<Option<Event>> {
         Some(event) => event,
         None => return Ok(None),
     };
-    if event.object_type.as_str() != "stop" { 
-        return Ok(Some(event))
-    };
-
-    // rate limit event
-    if event.event_time > chrono::offset::Utc::now().timestamp() {
-        // still rate limited!
-        return Ok(None);
+    if event.object_type.as_str() == "stop" { 
+        return rate_limit(event, user);
     }
-    // remove stop event
-    warn!("Starting hooks again");
-    event.delete(user)?;
-    // get next event
-    return get_event(user)
+
+    // Prevent unneeded calls to Strava
+    // only the latest event for an object is interesting
+    let mut list = events
+            .filter(object_id.eq(event.object_id))
+            .order(event_time.desc())
+            .get_results::<Event>(user.conn())?;
+    let res = list.pop();
+
+    for event in list {
+        info!("skipping {:?}", event);
+        event.delete(user)?;
+    }
+
+    return Ok(res)
 }
 
 const VERIFY_TOKEN: &str = "tendabike_strava";
