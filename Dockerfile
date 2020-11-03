@@ -31,10 +31,7 @@ COPY ./ ./
 
 RUN cargo build --release
 
-RUN mkdir -p /build-out && cp target/release/tb_engine /build-out
-
-
-FROM node:12-buster AS build-frontend
+FROM node:15-alpine AS build-frontend
 
 COPY tb_svelte/ /tb_svelte
 
@@ -44,9 +41,7 @@ RUN npm install
 
 RUN npm run build
 
-RUN mkdir -p /build-out && cp -R public /build-out
-
-FROM debian:buster
+FROM debian:buster-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -57,7 +52,7 @@ USER tendabike
 WORKDIR /tendabike
 ENV STATIC_WWW="/tendabike/public"
 
-COPY --from=build-engine /build-out/* ./
-COPY --from=build-frontend /build-out/* ./public/
+COPY --from=build-engine /app/target/release/tb_engine ./
+COPY --from=build-frontend /tb_svelte/public/* ./public/
 
 ENTRYPOINT [ "./tb_engine" ]
