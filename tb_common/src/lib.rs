@@ -90,17 +90,27 @@ pub mod token {
         bail!("No token provided")
     }
 
+    fn cookie<T> (value: T) -> Cookie<'static>
+        where T: Into<std::borrow::Cow<'static, str>>
+    {
+        Cookie::build("token", value)
+                        .same_site(SameSite::Lax)
+                        .path("/")
+                        .max_age(Duration::seconds(LEEWAY))
+                        .finish()
+    }
+
     pub fn store (cookie_store: &mut Cookies, id: i32, iat: i64, exp: i64) -> String{
 
         let my_claims = UserToken {iat, exp, id};
         let jwt = encode(&Header::default(), &my_claims, MY_SECRET).expect("Could not encode jwt");
-        let token = Cookie::build("token", jwt.clone())
-                        .same_site(SameSite::Lax)
-                        .path("/")
-                        .max_age(Duration::seconds(LEEWAY))
-                        .finish();
+        let token = cookie(jwt.clone());
         
         cookie_store.add(token);
         jwt
+    }
+
+    pub fn remove (mut cookie_store: Cookies) {
+        cookie_store.remove(cookie(""))
     }
 }

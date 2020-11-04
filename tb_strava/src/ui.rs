@@ -37,9 +37,9 @@ fn overview(user: User) -> ApiResult<jValue> {
 }
 
 #[get("/logout")]
-fn logout(user: User) -> TbResult<Redirect> {
-    user.logout()?;
-    Ok(Redirect::to("/"))
+fn logout(user: User, cookies: rocket::http::Cookies) -> Redirect {
+    user.logout(cookies);
+    Redirect::to("/")
 }
 
 #[get("/activities")]

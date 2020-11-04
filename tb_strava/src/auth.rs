@@ -217,14 +217,8 @@ impl User {
         &self.conn
     }
 
-    pub fn logout(&self) -> TbResult<()> {
-        use schema::users::dsl::*;
-
-        diesel::update(users.find(self.user.id))
-            .set((access_token.eq(""), expires_at.eq(0), refresh_token.eq("")))
-            .execute(&self.conn.0).context("Could not update last_activity")?;
-            warn!("user logged out");
-        Ok(())
+    pub fn logout(&self,  cookies: Cookies)  {
+        token::remove(cookies);
     }
 }
 
