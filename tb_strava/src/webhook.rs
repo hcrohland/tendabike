@@ -197,30 +197,37 @@ pub fn process (user: auth::User) -> ApiResult<JSummary> {
     };
     let e = e.unwrap();
 
-    info!("Processing {:#?}", e);
-    if e.object_type.as_str() != "activity" {
-        warn!("skipping {:#?}", e);
-        e.delete(user.conn())?;
-        return tbapi(Ok(JSummary::default()));
-    }
-    
-    let err = match activity::process_hook(&e, &user) {
-        Ok(res) => return tbapi(Ok(res)),
-        Err(err) => err
-    };
-
-    // Keep events for temporary failure - delete others
-    tbapi(match err.downcast_ref::<Error>() {
-        Some(&Error::TryAgain(_)) => {
-                warn!("stopping hooks for 15 minutes {:?}", err);
-                webhook::insert_stop(user.conn())?;
-                Ok(JSummary::default())
-            },
+    tbapi(match e.object_type.as_str() {
+        "activity" => process_activity(e, user),
+        // "athlete" => process_user(e, user),
         _ => {
+            warn!("skipping {:#?}", e);
             e.delete(user.conn())?;
-            Err(err)
+            Ok(JSummary::default())
         }
     })
+}
+
+fn process_activity (e:Event, user: auth::User) -> TbResult<JSummary> {
+    info!("Processing {:#?}", e);
+    
+    match activity::process_hook(&e, &user) {
+        Ok(res) => return Ok(res),
+        Err(err) => {
+            // Keep events for temporary failure - delete others
+            match err.downcast_ref::<Error>() {
+                Some(&Error::TryAgain(_)) => {
+                    warn!("stopping hooks for 15 minutes {:?}", err);
+                    webhook::insert_stop(user.conn())?;
+                    Ok(JSummary::default())
+                },
+                _ => {
+                    e.delete(user.conn())?;
+                    Err(err)
+                }
+            }
+        }
+    }
 }
 
 #[post("/callback", format = "json", data="<event>")]
