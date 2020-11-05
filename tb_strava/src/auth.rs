@@ -36,6 +36,7 @@ struct DbUser {
 }
 
 impl DbUser {
+    /// Get the user data from the Strava OAuth callback
     fn retrieve(conn: &AppConn, config: &Config, athlete: &serde_json::value::Value) -> TbResult<Self> {
         info!(
             "got athlete {} {}, with id {}",
@@ -78,7 +79,7 @@ impl DbUser {
             .get_result(conn)?)
     }
 
-    /// Updates the user data from a new token
+    /// Updates the user database from a new token
     fn store(self, conn: &AppConn, cookies: &mut Cookies, token: TokenResponse<Strava>) -> TbResult<(Self, String)> {
         use schema::users::dsl::*;
         use time::*;
@@ -138,6 +139,8 @@ impl User {
             return Ok(User { user, conn, token, url });
         }
 
+        ensure!(user.expires_at != 0, Error::NotAuth("Missing Strava Authorization"));
+
         info!("refreshing access token");
         let auth = request
             .guard::<OAuth>()
@@ -154,6 +157,21 @@ impl User {
 
     }
     
+    /// disable a user 
+    fn disable(&self, message: &'static str) -> anyhow::Error {
+        use schema::users::dsl::*;
+
+        diesel::update(users.find(self.user.id))
+            .set((expires_at.eq(0), access_token.eq("")))
+            .execute(&self.conn.0).context("Could not update last_activity")
+            .unwrap_or_else(|err| {error!("Could not update user: {:?}", err); 0});
+        anyhow!(Error::NotAuth(message))
+    }
+
+    /// request information from the Strava API
+    ///
+    /// will return Error::TryAgain on certain error conditions
+    /// will disable the User if Strava responds with NOT_AUTH
     fn get_strava(&self, uri: &str) -> TbResult<reqwest::blocking::Response> {
         use reqwest::StatusCode;
         let resp = reqwest::blocking::Client::new()
@@ -171,6 +189,7 @@ impl User {
             StatusCode::GATEWAY_TIMEOUT => {
                 bail!(Error::TryAgain(status.canonical_reason().unwrap()))
             },
+            StatusCode::UNAUTHORIZED => bail!(self.disable("Strava request authorization withdrawn")),
             _ => bail!(Error::BadRequest(
                     format!("Strava request error: {}", status.canonical_reason().unwrap_or("Unknown status received"))
                 ))
