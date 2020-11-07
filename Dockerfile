@@ -13,7 +13,6 @@ RUN cargo install cargo-chef
 # install nighlty toolchain
 RUN rustup update nightly && rustup default nightly
 
-
 FROM base as planner
 
 COPY . .
@@ -27,7 +26,11 @@ RUN cargo chef cook --release --recipe-path recipe.json
 
 FROM cacher as build-engine
 
-COPY ./ ./
+# do not copy tb_svelte!
+COPY Cargo.toml Cargo.lock ./
+COPY tb_engine/ ./tb_engine/
+COPY tb_common/ ./tb_common/
+COPY tb_strava/ ./tb_strava/
 
 RUN cargo build --release
 
@@ -35,11 +38,10 @@ FROM node:15-alpine AS build-frontend
 
 WORKDIR /tb_svelte
 
-ADD tb_svelte/package.json /tb_svelte/
+COPY tb_svelte/package.json /tb_svelte/
 RUN npm install
 
 COPY tb_svelte/ /tb_svelte
-
 RUN npm run build
 
 FROM debian:buster-slim
