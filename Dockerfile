@@ -33,11 +33,12 @@ RUN cargo build --release
 
 FROM node:15-alpine AS build-frontend
 
-COPY tb_svelte/ /tb_svelte
-
 WORKDIR /tb_svelte
 
+ADD tb_svelte/package.json /tb_svelte/
 RUN npm install
+
+COPY tb_svelte/ /tb_svelte
 
 RUN npm run build
 
