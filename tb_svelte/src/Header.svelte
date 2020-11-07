@@ -10,7 +10,7 @@
   let userOpen = false;
   let syncOpen = false;
 
-  import {link, push, location} from 'svelte-spa-router';
+  import {link} from 'svelte-spa-router';
   import {myfetch, handleError, setPartAttach, updatePartAttach, category, user} from "./store.js";
   import Garmin from "./Garmin.svelte"
 
@@ -21,16 +21,9 @@
 
   let isOpen = false;
 
-  $: if ($user) {promise = getdata()}
+  $: if ($user) {poll(() => new Promise(() => {promise = getdata()}), 60000)}
 
   function refresh () {promise = myfetch('/part/all').then(setPartAttach)}
-  function synchronize () {
-    if (running) {
-      running = false
-    } else {
-      promise = getdata();
-    } 
-  }
 
   async function getdata() {
     running = true;
@@ -48,6 +41,12 @@
     isOpen = event.detail.isOpen;
   }
   let garmin
+
+  var sleep = time => new Promise(resolve => setTimeout(resolve, time))
+  export var poll = (promiseFn, time) => promiseFn().then(
+              sleep(time).then(() => poll(promiseFn, time)))
+
+
 </script>
 
 <Garmin bind:toggle={garmin} />
@@ -90,20 +89,13 @@
             {/await}
           </DropdownToggle>
           <DropdownMenu right>
-            <DropdownItem on:click={synchronize}>
-              {#if running}
-                Stop Syncing
-              {:else}
-                Strava
-              {/if}
-            </DropdownItem>
             <DropdownItem on:click={garmin}>Garmin</DropdownItem>
-            <DropdownItem on:click={refresh}>Refresh</DropdownItem>
           </DropdownMenu>
         </Dropdown>
         <Dropdown nav isOpen={userOpen} toggle={() => (userOpen = !userOpen)}>
           <DropdownToggle nav caret>{$user.firstname}</DropdownToggle>
           <DropdownMenu right>
+            <DropdownItem on:click={refresh}>Refresh</DropdownItem>
             <DropdownItem href="/strava/logout">Logout</DropdownItem>
             <DropdownItem divider />
             <DropdownItem href="/#/about">About</DropdownItem>
