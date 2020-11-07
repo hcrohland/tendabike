@@ -38,7 +38,7 @@ FROM node:15-alpine AS build-frontend
 
 WORKDIR /tb_svelte
 
-COPY tb_svelte/package.json /tb_svelte/
+COPY tb_svelte/package.json tb_svelte/package-lock.json /tb_svelte/
 RUN npm install
 
 COPY tb_svelte/ /tb_svelte
