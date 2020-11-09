@@ -19,7 +19,7 @@
 
 {#if type }
   <div class="row border p-sm-2">
-    {#each gears().sort(by("purchase")) as part, i  (part.id)}
+    {#each gears().sort(by("last_used")) as part, i  (part.id)}
       <div class="col-md-6 p-0 p-sm-2">
         <GearCard {part} isOpen={i<4}/>
       </div>

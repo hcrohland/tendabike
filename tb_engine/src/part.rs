@@ -64,6 +64,10 @@ pub struct Part {
     pub descend: i32,
     /// usage count
     pub count: i32,
+    /// last time it was used
+    pub last_used: DateTime<Utc>,
+    /// Was it disposed? If yes, when?
+    pub disposed_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Insertable)]
@@ -154,20 +158,21 @@ impl PartId {
         use schema::parts::dsl::*;
 
         debug!("Applying usage to part {}", self);
-        // If the purchase date is newer than the usage, adjust it
-        diesel::update(parts.find(self))
-            .filter(purchase.gt(usage.start))
-            .set(purchase.eq(usage.start))
-            .execute(conn)?;
-        Ok(diesel::update(parts.find(self))
-            .set((
-                time.eq(time + usage.time),
-                climb.eq(climb + usage.climb),
-                descend.eq(descend + usage.descend),
-                distance.eq(distance + usage.distance),
-                count.eq(count + usage.count),
-            ))
-            .get_result::<Part>(conn)?)
+
+        Ok(conn.transaction(|| {
+            let part: Part = parts.find(self).for_update().get_result(conn)?;
+            diesel::update(parts.find(self))
+                .set((
+                    time.eq(time + usage.time),
+                    climb.eq(climb + usage.climb),
+                    descend.eq(descend + usage.descend),
+                    distance.eq(distance + usage.distance),
+                    count.eq(count + usage.count),
+                    purchase.eq(min(part.purchase, usage.start)),
+                    last_used.eq(max(part.last_used, usage.start))
+                ))
+                .get_result::<Part>(conn)
+        })?)
     }
 }
 
@@ -176,7 +181,7 @@ fn allparts(user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
 
     Ok(parts
         .filter(owner.eq(user.get_id()))
-        .order_by(id)
+        .order_by(last_used)
         .load::<Part>(conn)?)
 }
 
@@ -195,6 +200,7 @@ pub fn reset(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartId>> {
             descend.eq(0),
             distance.eq(0),
             count.eq(0),
+            last_used.eq(purchase)
         ))
         .get_results::<Part>(conn)?;
 
@@ -236,6 +242,7 @@ impl NewPart {
             climb.eq(0),
             descend.eq(0),
             count.eq(0),
+            last_used.eq(self.purchase.unwrap_or_else(Utc::now))
         );
 
         let part: Part = diesel::insert_into(parts).values(values).get_result(conn)?;

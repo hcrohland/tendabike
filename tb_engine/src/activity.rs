@@ -318,6 +318,18 @@ fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn
     Ok((map.into_iter().map(|(_,v)| v).collect(),good, bad))
 }
 
+#[get("/rescan")]
+fn rescan(_u: Admin, conn: AppDbConn) -> TbResult<()>{
+    use schema::activities::dsl::*;
+
+    let conn = &conn.0;
+    for a in activities.get_results::<Activity>(conn)? {
+        a.clone().register(Factor::Sub, conn)?;
+        a.register(Factor::Add, conn)?;
+    }
+    Ok(())
+}
+
 /// web interface to read an activity
 #[get("/<id>")]
 fn get(id: i32, user: &User, conn: AppDbConn) -> ApiResult<Activity> {
@@ -368,5 +380,5 @@ fn mycats(user: &User, conn: AppDbConn) -> ApiResult<Vec<PartTypeId>> {
 }
 
 pub fn routes() -> Vec<rocket::Route> {
-    routes![get, put, delete, post, descend, mycats]
+    routes![get, put, delete, post, descend, mycats, rescan]
 }

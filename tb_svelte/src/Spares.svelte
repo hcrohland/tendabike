@@ -27,7 +27,7 @@ function attachedTo(atts, partId, time) {
 
 function subparts(type, parts) {
   return filterValues(parts, (p) => p.what == type.id)
-            .sort(by("purchase"))
+            .sort(by("last_used"))
 }
 </script>
 

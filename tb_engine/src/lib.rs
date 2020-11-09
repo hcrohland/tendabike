@@ -32,7 +32,7 @@ extern crate dotenv;
 
 use self::diesel::prelude::*;
 
-use std::cmp::min;
+use std::cmp::{max,min};
 use std::env;
 
 pub mod schema;

@@ -62,6 +62,8 @@ table! {
         climb -> Int4,
         descend -> Int4,
         count -> Int4,
+        last_used -> Timestamptz,
+        disposed_at -> Nullable<Timestamptz>,
     }
 }
 
