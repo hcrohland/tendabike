@@ -88,7 +88,7 @@ impl PartTypeId {
 }
 
 #[get("/part")]
-fn part(_user: &User, conn: AppDbConn) -> Json<Vec<PartType>> {
+fn part(conn: AppDbConn) -> Json<Vec<PartType>> {
     Json(part_types::table
         .order(part_types::id)
         .load::<PartType>(&conn.0)
