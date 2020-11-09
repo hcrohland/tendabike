@@ -48,7 +48,7 @@ FROM debian:buster-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y libpq5 libssl1.1 ca-certificates
+RUN apt-get update && apt-get install -y libpq5 libssl1.1 ca-certificates curl
 
 RUN useradd --system tendabike
 USER tendabike
