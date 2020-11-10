@@ -1,7 +1,7 @@
 <script>
-import {parts, by} from './store.js'
+import {parts} from './store.js'
 import Usage from './Usage.svelte'
-import PartHist from './PartHist.svelte'
+import ReplacePart from './ReplacePart.svelte'
 
 export let header = false;
 export let attachments = undefined;
@@ -54,6 +54,10 @@ let show_hist = false;
         </td>
         <td class="text-right"> {new Date(att.attached).toLocaleDateString()} </td >
         <Usage part={$parts[att.part_id] || att} />
+        {#if i == 0}
+           <td> <ReplacePart oldpart={$parts[att.part_id]} {att}/></td>
+        {/if}
+
       </tr>
     {/if}
   {/each}

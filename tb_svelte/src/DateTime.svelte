@@ -1,6 +1,7 @@
 <script>
   
   export let date = Date.now();
+	export let mindate = undefined;
 
 	const props = Object.assign({}, $$props);
 	delete props.date;
@@ -23,6 +24,7 @@
 		enableTime: true,
 		minuteIncrement: 15,
 		formatDate: dateObj =>  dateObj.toLocaleString(undefined, options),
+		minDate: mindate,
 		// onChange: (selectedDates, dateStr, instance) => {
 		// 	console.log('Options onChange handler', dateStr)
 		// }
