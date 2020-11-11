@@ -52,7 +52,7 @@ let show_hist = false;
           {att.name}
         {/if}
         </td>
-        <td class="text-right"> {new Date(att.attached).toLocaleDateString()} </td >
+        <td class="text-right"> {new Date(att.attached).toLocaleDateString(navigator.language)} </td >
         <Usage part={$parts[att.part_id] || att} />
         {#if i == 0}
            <td> <ReplacePart oldpart={$parts[att.part_id]} {att}/></td>

@@ -65,7 +65,7 @@ function subparts(type, parts) {
         as part (part.id)}
       <tr>
         <td class="border-0"></td>
-        <td title={part.vendor + ' ' + part.model + ' ' + new Date(part.purchase).toLocaleDateString()}>
+        <td title={part.vendor + ' ' + part.model + ' ' + new Date(part.purchase).toLocaleDateString(navigator.language)}>
           <a href="#/part/{part.id}" class="text-reset">
             {part.name}
           </a>

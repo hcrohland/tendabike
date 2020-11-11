@@ -23,7 +23,7 @@
 		time_24hr: true,
 		enableTime: true,
 		minuteIncrement: 15,
-		formatDate: dateObj =>  dateObj.toLocaleString(undefined, options),
+		formatDate: dateObj =>  dateObj.toLocaleString(navigator.language, options),
 		minDate: mindate,
 		// onChange: (selectedDates, dateStr, instance) => {
 		// 	console.log('Options onChange handler', dateStr)

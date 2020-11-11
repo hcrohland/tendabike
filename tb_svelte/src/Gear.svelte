@@ -42,7 +42,7 @@
         <td>{gear.name}</td>
         <td>{gear.vendor}</td>
         <td>{gear.model}</td>
-        <td>{new Date(gear.purchase).toLocaleDateString()}</td>
+        <td>{new Date(gear.purchase).toLocaleDateString(navigator.language)}</td>
         <Usage part={gear} />
       </tr>
     </tbody>

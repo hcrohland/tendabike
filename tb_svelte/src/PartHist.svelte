@@ -36,10 +36,10 @@
           {:else}
             N/A
           {/if}
-          <td>{new Date(att.attached).toLocaleDateString()}</td>
+          <td>{new Date(att.attached).toLocaleDateString(navigator.language)}</td>
           <td>
             {#if att.detached}
-              {new Date(att.detached).toLocaleDateString()}
+              {new Date(att.detached).toLocaleDateString(navigator.language)}
             {/if}
           </td>
           <Usage part={att} />
