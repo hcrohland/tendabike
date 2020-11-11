@@ -49,11 +49,11 @@
     <div transition:slide>
       <div class="card-body">
         is a <span class="param">{model(part)}</span>
-        purchased <span class="param">{new Date(part.purchase).toLocaleDateString()}</span>
-        <br>which you used <span class=param>{part.count.toLocaleString()}</span> times 
+        purchased <span class="param">{new Date(part.purchase).toLocaleDateString(navigator.language)}</span>
+        <br>which you used <span class=param>{part.count.toLocaleString(navigator.language)}</span> times 
         for <span class="param">{formatSeconds(part.time)}</span> hours.
-        <p> You covered <span class="param">{parseFloat((part.distance / 1000).toFixed(1)).toLocaleString()}</span> km 
-        climbing <span class="param">{part.climb.toLocaleString()}</span> and descending <span class="param">{part.descend.toLocaleString()}</span> meters </p>
+        <p> You covered <span class="param">{parseFloat((part.distance / 1000).toFixed(1)).toLocaleString(navigator.language)}</span> km 
+        climbing <span class="param">{part.climb.toLocaleString(navigator.language)}</span> and descending <span class="param">{part.descend.toLocaleString(navigator.language)}</span> meters </p>
         
       </div>
     </div>
