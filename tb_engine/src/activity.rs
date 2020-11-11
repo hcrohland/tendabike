@@ -319,16 +319,44 @@ fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn
 }
 
 #[get("/rescan")]
-fn rescan(_u: Admin, conn: AppDbConn) -> TbResult<()>{
-    use schema::activities::dsl::*;
-
+fn rescan(_u: Admin, conn: AppDbConn) -> TbResult<()> {
     let conn = &conn.0;
-    for a in activities.get_results::<Activity>(conn)? {
-        a.clone().register(Factor::Sub, conn)?;
-        a.register(Factor::Add, conn)?;
-    }
-    Ok(())
+
+    conn.transaction(|| {
+        {
+            use schema::parts::dsl::*;
+            warn!("resetting all parts");
+            diesel::update(parts).set((
+                time.eq(0),
+                distance.eq(0),
+                climb.eq(0),
+                descend.eq(0),
+                count.eq(0),
+            )).execute(conn)?;
+        }
+        {
+            use schema::attachments::dsl::*;
+            warn!("resetting all attachments");
+            diesel::update(attachments).set((
+                time.eq(0),
+                distance.eq(0),
+                climb.eq(0),
+                descend.eq(0),
+                count.eq(0),
+            )).execute(conn)?;
+        }
+        {
+            use schema::activities::dsl::*;
+            for a in activities.get_results::<Activity>(conn)? {
+                warn!("registering activity {}", a.id);
+
+                a.register(Factor::Add, conn)?;
+            }
+        }
+        Ok(())
+    })
 }
+
 
 /// web interface to read an activity
 #[get("/<id>")]
