@@ -21,8 +21,9 @@ category.set(cat);
 let spareTypes = filterValues($types, (t) => t.main == cat.id && t.id != cat.id)
 
 function attachedTo(atts, partId, time) {
-    let att = filterValues(atts, (x) => x.part_id === partId && isAttached(x, time))
-    return att.pop()
+    let att = filterValues(atts, (x) => x.part_id === partId && isAttached(x, time)).pop()
+    if (att == undefined) return
+    return $parts[att.gear].name
 }
 
 function subparts(type, parts) {
@@ -36,16 +37,23 @@ function subparts(type, parts) {
    border-width: 4px;
  }
 </style>
-<span class="badge float-right">
-  show attached <input type="checkbox" name="Show all" id="" bind:checked={show_all}>  
-</span>
+
 <table class="table table-hover">
   <thead>
     <tr>
       <th scope="col">Part</th>
       <th scope="col">Name</th>
       <Usage header/>
-      <td></td>
+      {#if show_all}
+        <th>
+          Attached to
+        </th>
+      {/if}
+      <td>
+        <span class="badge float-right">
+          show attached <input type="checkbox" name="Show all" id="" bind:checked={show_all}>  
+        </span>
+      </td>
     </tr>
   </thead>
   <tbody>
@@ -63,6 +71,11 @@ function subparts(type, parts) {
           </a>
         </td>
         <Usage {part} />
+        {#if show_all}
+          <td>
+            {attachedTo($attachments, part.id, date) || '-'}
+          </td>
+        {/if}
         <td> <Attach {part}/></td>
       </tr>
     {/each}
