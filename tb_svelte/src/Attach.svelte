@@ -56,7 +56,7 @@
 </span>
 
 {#if showModal}
-  <Modal save="Attach" on:close={() => showModal = false}>
+  <Modal on:close={() => showModal = false}>
     <span slot="header"> Attach {type.name} {part.name} {part.vendor} {part.model} </span>
     <form>
         <div class="form-inline">

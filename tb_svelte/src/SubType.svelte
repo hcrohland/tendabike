@@ -2,6 +2,7 @@
 import {parts} from './store.js'
 import Usage from './Usage.svelte'
 import ReplacePart from './ReplacePart.svelte'
+import Attach from './Attach.svelte'
 
 export let header = false;
 export let attachments = undefined;
@@ -56,6 +57,8 @@ let show_hist = false;
         <Usage part={$parts[att.part_id] || att} />
         {#if i == 0}
            <td> <ReplacePart oldpart={$parts[att.part_id]} {att}/></td>
+        {:else if $parts[att.part_id]}
+          <td> <Attach part={$parts[att.part_id]}/> </td>
         {/if}
 
       </tr>
