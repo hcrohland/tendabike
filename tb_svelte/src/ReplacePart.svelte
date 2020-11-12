@@ -78,7 +78,7 @@
       <div class="form-row">
         <div class="form-group col-md-6">
           <label for="inputDate">New {type.name} day was at</label>
-          <DateTime id="inputDate" class="input-group-text" bind:date={part.purchase} mindate={oldpart.purchase} required/>
+          <DateTime id="inputDate" class="input-group-text" bind:date={part.purchase} mindate={att.attached} required/>
         </div>
       </div>
     </form>
