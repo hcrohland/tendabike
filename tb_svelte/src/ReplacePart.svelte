@@ -49,7 +49,7 @@
   $: disabled = !(part && part.name.length > 0 && part.vendor.length > 0 && part.model.length > 0)
   
 </script>
-<span type="button" class="badge badge-secondary" on:click="{popup}">
+<span type="button" class="badge badge-secondary float-right" on:click="{popup}">
   {title}
 </span>
 
