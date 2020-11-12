@@ -7,6 +7,7 @@
 	const dispatch = createEventDispatcher();
 
   export let part;
+  export let title = "attach";
 
   let attach, showModal, disabled;
   
@@ -52,7 +53,7 @@
 </script>
 
 <span type="button" class="badge badge-secondary float-right" on:click={popup}>
-  attach
+  {title}
 </span>
 
 {#if showModal}

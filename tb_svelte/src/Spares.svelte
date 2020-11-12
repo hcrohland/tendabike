@@ -76,7 +76,7 @@ function subparts(type, parts) {
             {attachedTo($attachments, part.id, date) || '-'}
           </td>
         {/if}
-        <td> <Attach {part}/></td>
+        <td> <Attach title={attachedTo($attachments, part.id, date)?"move":"attach"} {part}/></td>
       </tr>
     {/each}
   {/each}
