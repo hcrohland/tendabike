@@ -1,7 +1,7 @@
 <script>
   import Modal from './Modal.svelte';
   import DateTime from './DateTime.svelte';
-  import {myfetch, updatePartAttach, attachments, initData, filterValues, types, parts, by} from './store.js';
+  import {myfetch, updatePartAttach, attachments, initData, filterValues, types, parts, by} from './store';
   
   import { createEventDispatcher } from 'svelte';
 	const dispatch = createEventDispatcher();
@@ -29,7 +29,7 @@
     try {
       await myfetch('/attach/', 'PATCH', attach)
         .then(data => updatePartAttach(data))
-        .then(dispatch('saved'))
+      dispatch('saved')
     } catch (e) {
       alert (e)
       initData()

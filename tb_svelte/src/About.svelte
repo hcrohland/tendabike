@@ -1,13 +1,9 @@
-<script>
-  import {Jumbotron} from 'sveltestrap';
+<script lang="ts">
   import {
     Card,
     CardBody,
     CardFooter,
     CardHeader,
-    CardSubtitle,
-    CardText,
-    CardTitle
   } from 'sveltestrap';
 
 </script>

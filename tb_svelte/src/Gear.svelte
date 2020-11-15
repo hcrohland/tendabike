@@ -1,8 +1,8 @@
-<script context="module">
+<script lang="ts" context="module">
   let show_hist_m = false;
 </script>
-<script>
-  import {filterValues, types, parts, isAttached, attachments, category} from './store.js'
+<script lang="ts">
+  import {filterValues, types, parts, isAttached, attachments, category} from './store'
   import Subparts from './Subparts.svelte'
   import Usage from './Usage.svelte'
  

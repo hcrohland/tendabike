@@ -1,6 +1,6 @@
 <script>
   import GearCard from './GearCard.svelte';
-  import {filterValues, by, types, parts, category} from './store.js';
+  import {filterValues, by, types, parts, category} from './store';
   
   export let params = {category: 1};
   

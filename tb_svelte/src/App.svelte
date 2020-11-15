@@ -1,4 +1,4 @@
-<script context="module">
+<script lang="ts" context="module">
 	import {Spinner} from "sveltestrap"
 	import Router from 'svelte-spa-router';
 
@@ -9,7 +9,7 @@
 	import Spares from "./Spares.svelte"
 	import Home from "./Home.svelte"
 	import About from "./About.svelte"
-	import {initData} from './store.js'
+	import {initData} from './store'
 
 	const routes = {
 		'/about': About,

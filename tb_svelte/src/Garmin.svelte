@@ -9,7 +9,7 @@
     ListGroup,
     ListGroupItem,
   } from 'sveltestrap';
-  import {checkStatus, parts} from "./store.js";
+  import {checkStatus, parts} from "./store";
   import TimezonePicker from 'svelte-timezone-picker';
  
   let timezone  ;

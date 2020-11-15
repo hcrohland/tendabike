@@ -1,5 +1,5 @@
 <script>
-import {types, filterValues, by} from './store.js'
+import {types, filterValues, by} from './store'
 import SubType from './SubType.svelte'
 
 export let hook;

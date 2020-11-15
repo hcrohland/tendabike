@@ -1,6 +1,6 @@
-<script>
+<script lang="ts">
   import { slide } from 'svelte/transition';
-  import {category, formatSeconds} from './store.js';
+  import {category, formatSeconds} from './store';
 
   export let part;
   export let display = false;

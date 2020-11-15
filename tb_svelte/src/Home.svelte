@@ -1,5 +1,5 @@
 <script>
-import {myfetch, handleError, types, icons, parts, category} from './store.js';
+import {myfetch, handleError, types, icons, parts, category} from './store';
 import {Spinner} from 'sveltestrap'
 
 category.set(undefined);

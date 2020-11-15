@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import {Collapse, Navbar, Nav, NavbarToggler, NavbarBrand} from 'sveltestrap';
   import {
     Dropdown,
@@ -11,7 +11,7 @@
   let syncOpen = false;
 
   import {link} from 'svelte-spa-router';
-  import {myfetch, handleError, setPartAttach, updatePartAttach, category, user} from "./store.js";
+  import {myfetch, handleError, setPartAttach, updatePartAttach, category, user} from "./store";
   import Garmin from "./Garmin.svelte"
 
   let running = false;

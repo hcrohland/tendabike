@@ -1,5 +1,5 @@
 <script>
-  import {filterValues, parts, attachments, by} from './store.js'
+  import {filterValues, parts, attachments, by} from './store'
   import Usage from './Usage.svelte'
  
   export let id;

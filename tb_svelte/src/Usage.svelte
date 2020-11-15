@@ -1,5 +1,5 @@
-<script>
-import {parts, formatSeconds} from './store.js'
+<script lang="ts">
+import {parts, formatSeconds} from './store'
  
 export let header = false
 export let part = undefined;

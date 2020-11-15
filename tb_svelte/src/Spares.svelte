@@ -2,7 +2,7 @@
   let show_all_m = false;
 </script>
 <script>
-import {filterValues, by, types, parts, attachments, isAttached, category} from './store.js'
+import {filterValues, by, types, parts, attachments, isAttached, category} from './store'
 import Usage from './Usage.svelte'
 import Attach from './Attach.svelte'
 import NewPart from './NewPart.svelte'

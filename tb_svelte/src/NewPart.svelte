@@ -1,7 +1,7 @@
-<script>
+<script lang="ts">
   import Modal from './Modal.svelte';
   import DateTime from './DateTime.svelte';
-  import {myfetch, types, initData, parts, user} from './store.js';
+  import {myfetch, types, initData, parts, user} from './store';
   import { createEventDispatcher } from 'svelte';
 	const dispatch = createEventDispatcher();
 
@@ -17,7 +17,7 @@
     try {
       await myfetch('/part/', 'POST', part)
         .then(data => parts.updateMap([data]))
-        .then(dispatch('created'))
+      dispatch('created')
     } catch (e) {
       alert (e)
       initData()
@@ -45,7 +45,7 @@
 </span>
 
 {#if showModal}
-  <Modal save="Create" on:close="{() => showModal = false}">
+  <Modal on:close="{() => showModal = false}">
     <span slot="header"> New {type.name} </span>
     <form>
       <div class="form-row">

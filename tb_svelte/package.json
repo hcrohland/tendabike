@@ -10,7 +10,13 @@
     "rollup-plugin-svelte": "^5.2.3",
     "rollup-plugin-terser": "^5.3.1",
     "svelte": "^3.29.4",
-    "sveltestrap": "^3.9.5"
+    "sveltestrap": "^3.9.5",
+    "svelte-check": "^1.0.0",
+    "svelte-preprocess": "^4.0.0",
+    "@rollup/plugin-typescript": "^6.0.0",
+    "typescript": "^3.9.3",
+    "tslib": "^2.0.0",
+    "@tsconfig/svelte": "^1.0.0"
   },
   "dependencies": {
     "lodash": "^4.17.20",
@@ -23,6 +29,7 @@
     "build": "rollup -c",
     "dev": "rollup -c -w",
     "start": "sirv public --single",
-    "start:dev": "sirv public --single --dev"
+    "start:dev": "sirv public --single --dev",
+    "validate": "svelte-check"
   }
 }

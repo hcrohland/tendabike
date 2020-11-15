@@ -1,7 +1,7 @@
-<script>
+<script lang="ts">
   import Modal from './Modal.svelte';
   import DateTime from './DateTime.svelte';
-  import {myfetch, types, initData, parts, user, updatePartAttach} from './store.js';
+  import {myfetch, types, initData, parts, user, updatePartAttach} from './store';
   import { createEventDispatcher } from 'svelte';
 	const dispatch = createEventDispatcher();
 
@@ -25,7 +25,7 @@
     try {
       await myfetch('/part/', 'POST', part)
         .then(attachPart)
-        .then(dispatch('replaced'))
+      dispatch('replaced')
     } catch (e) {
       alert (e)
       initData()

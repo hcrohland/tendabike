@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   
   export let date = Date.now();
 	export let mindate = undefined;
@@ -29,7 +29,7 @@
 		// 	console.log('Options onChange handler', dateStr)
 		// }
 	}
-	export function roundTime(date, minutes) {
+	export function roundTime(date, minutes?) {
     if (!minutes) minutes = 15
     date.setMinutes(Math.floor(date.getMinutes()/15)*15)
     date.setSeconds(0)

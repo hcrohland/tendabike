@@ -1,5 +1,5 @@
-<script>
-  import {filterValues, types, parts, attachments, category, by} from './store.js'
+<script lang="ts">
+  import {filterValues, types, parts, attachments, category, by} from './store'
   import PartHist from './PartHist.svelte'
   import GearCard from './GearCard.svelte'
  

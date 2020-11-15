@@ -1,4 +1,5 @@
 import {writable, readable, derived} from "svelte/store";
+import {Part, Attach} from './types'; 
 
 export function checkStatus(response) {
     if (response.ok) {
@@ -11,7 +12,7 @@ export function checkStatus(response) {
         })
 }
 
-export function myfetch (url, method, data) {
+export function myfetch (url, method?, data?) {
     let option
     if (method) {
         option = {
@@ -28,12 +29,12 @@ export function myfetch (url, method, data) {
 };
 
 export function filterValues(map, fn) { 
-    return Object.values(map).filter(fn)
+    return (<any>Object).values(map).filter(fn)
 };
 
 export function formatSeconds(sec_num) {
     var hours   = Math.floor(sec_num / 3600);
-    var minutes = Math.floor((sec_num - (hours * 3600)) / 60);
+    var minutes: number | string = Math.floor((sec_num - (hours * 3600)) / 60);
 
     if (minutes < 10) {minutes = "0"+minutes;}
     return hours+':'+minutes;
@@ -56,7 +57,7 @@ function mapObject (fn) {
 }
 
 function mapable(fn) {
-    const { subscribe, set, update } = writable({});
+    const { subscribe, set, update } = writable([]);
 
 	return {
         subscribe,
@@ -102,7 +103,7 @@ export function updatePartAttach(data) {
 }
 
 export const category = writable(undefined);
-export const parts = mapable((o) => o["id"]);
+export const parts = mapable((o: Part) => o["id"]);
 export const types = mapable((o) => o["id"]);
-export const user = writable();
-export const attachments = mapable((o) => o["part_id"] + o["attached"])
+export const user = writable(undefined);
+export const attachments = mapable((o:Attach) => o["part_id"].toString() + o["attached"].toString())

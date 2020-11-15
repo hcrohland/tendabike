@@ -1,5 +1,5 @@
 <script>
-import {parts} from './store.js'
+import {parts} from './store'
 import Usage from './Usage.svelte'
 import ReplacePart from './ReplacePart.svelte'
 import Attach from './Attach.svelte'
