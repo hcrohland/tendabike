@@ -9,10 +9,10 @@ import type { replace } from 'svelte-spa-router';
 
 export let header = false;
 export let attachments: Attachment[] = [];
-export let level: number;
+export let level: number = 0;
 export let prefix = "";
-export let type: Type;
-export let hook: Type;
+export let type: Type | undefined = undefined;
+export let hook: Type | undefined = undefined;
 void(hook) // get rid of warning...
 
 let show_hist = false; 
