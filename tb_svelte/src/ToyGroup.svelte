@@ -1,7 +1,8 @@
-<script>
+<script lang="ts">
   import GearCard from './GearCard.svelte';
   import {filterValues, by, types, parts, category} from './store';
-  
+  import type { Part } from './types';
+
   export let params = {category: 1};
   
   // Cannot use category directly since it 
@@ -14,7 +15,7 @@
   }
   category.set(type);
   
-  $: gears = () => filterValues($parts, (p) => p.what == type.id)
+  $: gears = () => filterValues($parts, (p) => p.what == type.id) as Part[]
 </script>
 
 {#if type }

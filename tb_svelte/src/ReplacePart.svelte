@@ -1,17 +1,22 @@
 <script lang="ts">
-  import Modal from './Modal.svelte';
+  import {
+    Button,
+    Modal,
+    ModalBody,
+    ModalFooter,
+    ModalHeader,
+    Spinner,
+  } from 'sveltestrap';
   import DateTime from './DateTime.svelte';
+  import type {Attachment, Part, Type} from './types';
   import {myfetch, types, initData, parts, user, updatePartAttach} from './store';
-  import { createEventDispatcher } from 'svelte';
-	const dispatch = createEventDispatcher();
 
-  export let att;
-  export let oldpart;
-  let part;
-  let type = $types[oldpart.what];
-  let prefix = $types[att.hook].name.split(' ').reverse()[1] || '' // The first word iff there were two (hack!)
-  let title = 'Replace';
-  let showModal = false;
+  let part: Part;
+  let type: Type;
+  let prefix: string;
+  let att: Attachment;
+  let isOpen = false;
+  let promise;
 
   async function attachPart (part) {
     att.part_id = part.id;
@@ -25,15 +30,19 @@
     try {
       await myfetch('/part/', 'POST', part)
         .then(attachPart)
-      dispatch('replaced')
+      isOpen = false;
     } catch (e) {
       alert (e)
       initData()
     }
-    showModal = false;
+    isOpen = false;
 }
 
-  function popup(){
+export const popup = (attl: Attachment) => {
+    let oldpart = $parts[attl.part_id];
+    att = {...attl};
+    type = $types[oldpart.what];
+    prefix = $types[attl.hook].name.split(' ').reverse()[1] || '' // The first word iff there were two (hack!)
     part = {
       owner: $user.id, 
       what: oldpart.what, 
@@ -41,21 +50,20 @@
       name: oldpart.name, 
       vendor: oldpart.vendor, 
       model: oldpart.model, 
-      purchase: new Date()
+      purchase: new Date(),
+      last_used: new Date()
     };
-    showModal = true;
+    isOpen = true;
   }
+  const toggle = () => {isOpen = !isOpen}
 
   $: disabled = !(part && part.name.length > 0 && part.vendor.length > 0 && part.model.length > 0)
   
 </script>
-<span type="button" class="badge badge-secondary float-right" on:click="{popup}">
-  {title}
-</span>
 
-{#if showModal}
-  <Modal on:close="{() => showModal = false}">
-    <span slot="header"> New {prefix} {type.name} for {$parts[att.gear].name}</span>
+<Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
+  <ModalHeader {toggle}> New {prefix} {type.name} for {$parts[att.gear].name} </ModalHeader>
+  <ModalBody>
     <form>
       <div class="form-row">
         <div class="form-group col-md-12">
@@ -65,15 +73,15 @@
         </div>
       </div>
       <div class="form-row">
-
-      <div class="form-group col-md-6">
-        <label for="inputBrand">and it is a</label>
-        <input type="text" class="form-control" id="inputBrand" bind:value={part.vendor} placeholder="Brand">
-      </div>
-      <div class="form-group col-md-6">
-        <label class="d-none d-md-block" for="inputModel"> &nbsp </label>
-        <input type="text" class="form-control" id="inputModel" bind:value={part.model} placeholder="Model">
-      </div>
+        
+        <div class="form-group col-md-6">
+          <label for="inputBrand">and it is a</label>
+          <input type="text" class="form-control" id="inputBrand" bind:value={part.vendor} placeholder="Brand">
+        </div>
+        <div class="form-group col-md-6">
+          <label class="d-none d-md-block" for="inputModel"> &nbsp </label>
+          <input type="text" class="form-control" id="inputModel" bind:value={part.model} placeholder="Model">
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group col-md-6">
@@ -82,8 +90,15 @@
         </div>
       </div>
     </form>
-    <span slot="footer">
-      <button type="submit" {disabled} class="btn btn-primary float-right" on:click={savePart}>Replace {type.name}</button>
-    </span>
-  </Modal>
-{/if}
+  </ModalBody>
+  <ModalFooter>
+    <Button color="secondary" on:click={toggle}>Cancel</Button>
+    <Button color="primary" {disabled} on:click={() => (promise = savePart())}>
+      {#await promise}
+        <Spinner />
+      {:then} 
+        Replace
+      {/await}
+    </Button>
+  </ModalFooter>
+</Modal>

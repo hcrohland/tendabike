@@ -1,52 +1,56 @@
 <script lang="ts">
-  import Modal from './Modal.svelte';
+  import {
+    Button,
+    Modal,
+    ModalBody,
+    ModalFooter,
+    ModalHeader,
+    Spinner,
+  } from 'sveltestrap';
   import DateTime from './DateTime.svelte';
-  import {myfetch, types, initData, parts, user} from './store';
-  import { createEventDispatcher } from 'svelte';
-	const dispatch = createEventDispatcher();
+  import {myfetch, initData, parts, user} from './store';
+  import type {Type, Part} from './types'
 
-  export let type;
-  export let title = 'New ' + type.name;
+  const toggle = () => isOpen = !isOpen
 
-  let part;
-  let enabled = false;
-  let showModal = false;
+  let part: Part;
+  let type: Type;
+  let isOpen = false;
+  let promise;
 
   async function savePart () {
     disabled = true;
     try {
       await myfetch('/part/', 'POST', part)
         .then(data => parts.updateMap([data]))
-      dispatch('created')
     } catch (e) {
       alert (e)
       initData()
     }
-    showModal = false;
-}
+    isOpen = false;
+  }
 
-  function popup(){
+  export const popup = (t: Type) => {
+    type = t;
     part = {
-      owner: $user.id, 
-      what: type.id, 
+      owner: $user.id,
+      what: type.id,
       count:0, climb:0, descend:0, distance:0, time: 0,
-      name: "", 
-      vendor: "", 
-      model: "", 
-      purchase: new Date()
+      name: "",
+      vendor: "",
+      model: "",
+      purchase: new Date(),
+      last_used: new Date()
     };
-    showModal = true;
+    isOpen = true;
   }
 
   $: disabled = !(part && part.name.length > 0 && part.vendor.length > 0 && part.model.length > 0)
 </script>
-<span type="button" class="badge badge-secondary" on:click="{popup}">
-  {title}
-</span>
 
-{#if showModal}
-  <Modal on:close="{() => showModal = false}">
-    <span slot="header"> New {type.name} </span>
+<Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
+  <ModalHeader {toggle}> New {type.name} </ModalHeader>
+  <ModalBody>
     <form>
       <div class="form-row">
         <div class="form-group col-md-12">
@@ -56,15 +60,15 @@
         </div>
       </div>
       <div class="form-row">
-
-      <div class="form-group col-md-6">
-        <label for="inputBrand">and it is a</label>
-        <input type="text" class="form-control" id="inputBrand" bind:value={part.vendor} placeholder="Brand">
-      </div>
-      <div class="form-group col-md-6">
-        <label class="d-none d-md-block" for="inputModel"> &nbsp </label>
-        <input type="text" class="form-control" id="inputModel" bind:value={part.model} placeholder="Model">
-      </div>
+        
+        <div class="form-group col-md-6">
+          <label for="inputBrand">and it is a</label>
+          <input type="text" class="form-control" id="inputBrand" bind:value={part.vendor} placeholder="Brand">
+        </div>
+        <div class="form-group col-md-6">
+          <label class="d-none d-md-block" for="inputModel"> &nbsp </label>
+          <input type="text" class="form-control" id="inputModel" bind:value={part.model} placeholder="Model">
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group col-md-6">
@@ -73,8 +77,17 @@
         </div>
       </div>
     </form>
-    <span slot="footer">
-      <button type="submit" {disabled} class="btn btn-primary float-right" on:click={savePart}>Create {type.name}</button>
-    </span>
-  </Modal>
-{/if}
+  </ModalBody>
+  <ModalFooter>
+    <Button color="secondary" on:click={toggle}>Cancel</Button>
+    <Button color="primary" {disabled} on:click={() => (promise = savePart())}>
+      {#await promise}
+        <Spinner />
+      {:then} 
+        Attach
+      {:catch error}
+        {error}
+      {/await}
+    </Button>
+  </ModalFooter>
+</Modal>

@@ -1,5 +1,5 @@
-export interface Part {
-    id: number | undefined;
+export type Part = {
+    id?: number;
     owner: number;
     what: number; 
     count: number;
@@ -10,12 +10,24 @@ export interface Part {
     name: string; 
     vendor: string; 
     model: string; 
-    purchase: number;
+    purchase: Date;
+    last_used: Date;
 }
 
-export interface Attach {
+export type Attachment = {
     part_id: number;
-    attached: number;
-    gear: number | undefined,
-    hook: number | undefined,
+    attached: Date;
+    gear: number | undefined;
+    hook: number | undefined;
+    detached?: Date;
+    what?: number;
+    name?: string;
+  }
+
+export type Type = {
+    id: number;
+    name: string;
+    main: number;
+    hooks: Array<number>;
+    order: number;
   }

@@ -1,10 +1,11 @@
-<script>
+<script lang="ts">
   import {filterValues, parts, attachments, by} from './store'
+  import type { Attachment } from './types';
   import Usage from './Usage.svelte'
  
   export let id;
   
-  $: atts = filterValues($attachments, (a) => a.part_id == id).sort(by("attached"))
+  $: atts = filterValues<Attachment>($attachments, (a) => a.part_id == id).sort(by("attached"))
   
 </script>
 

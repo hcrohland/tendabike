@@ -1,7 +1,7 @@
 import {writable, readable, derived} from "svelte/store";
-import {Part, Attach} from './types'; 
+import type {Part, Attachment, Type} from './types'; 
 
-export function checkStatus(response) {
+export function checkStatus<T>(response) {
     if (response.ok) {
         return response.json()
     }
@@ -28,8 +28,8 @@ export function myfetch (url, method?, data?) {
         .then(checkStatus)
 };
 
-export function filterValues(map, fn) { 
-    return (<any>Object).values(map).filter(fn)
+export function filterValues<T>(map, fn) { 
+    return Object.values(map).filter(fn) as T[]
 };
 
 export function formatSeconds(sec_num) {
@@ -40,8 +40,8 @@ export function formatSeconds(sec_num) {
     return hours+':'+minutes;
 }
 
-export function by(field) {
-    return (a,b) => a[field] < b[field]
+export function by<T>(field: keyof T) {
+    return (a: T,b: T) => a[field] < b[field]? 1 : -1
 }
 
 export function handleError(e) {
@@ -104,6 +104,7 @@ export function updatePartAttach(data) {
 
 export const category = writable(undefined);
 export const parts = mapable((o: Part) => o["id"]);
-export const types = mapable((o) => o["id"]);
+export const types = mapable((o: Type) => o["id"]);
 export const user = writable(undefined);
-export const attachments = mapable((o:Attach) => o["part_id"].toString() + o["attached"].toString())
+export const attachments = mapable((o:Attachment) => o["part_id"].toString() + o["attached"].toString())
+export const state = writable({ show_all_spares: false});

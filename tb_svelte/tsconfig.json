@@ -1,4 +1,9 @@
 {
+  "compilerOptions": {
+    "lib": ["es2017", "dom"],
+    "sourceMap": true
+  },
+
   "extends": "@tsconfig/svelte/tsconfig.json",
 
   "include": ["src/**/*"],

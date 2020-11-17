@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import {
     Button,
     Modal,
@@ -18,8 +18,8 @@
   let isOpen = false;
   let files;
   let result;
-  export const toggle = () => {isOpen = !isOpen; reset()};
-  export const close = (e) => {isOpen = false; reset(); alert(e)};
+  export const toggle = () => {reset(); isOpen = !isOpen};
+  export const close = (e) => {reset(); alert(e); isOpen = false};
 
   const reset = () => {
     files=undefined; 
@@ -49,8 +49,7 @@
   };
 </script>
 
-<div>
-  <Modal {isOpen} {toggle}>
+  <Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
     <ModalHeader {toggle}>Upload Garmin activities file</ModalHeader>
     {#if result}
       <ModalBody>
@@ -91,5 +90,3 @@
         </ModalFooter>
     {/if}
   </Modal>
-</div>
-

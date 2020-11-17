@@ -1,65 +1,79 @@
-<script>
-  import Modal from './Modal.svelte';
+<script lang="ts">
+  import {
+    Button,
+    Modal,
+    ModalBody,
+    ModalFooter,
+    ModalHeader,
+    Spinner,
+  } from 'sveltestrap';
   import DateTime from './DateTime.svelte';
   import {myfetch, updatePartAttach, attachments, initData, filterValues, types, parts, by} from './store';
+  import type {Attachment, Type, Part} from './types';  
+
+  let attach: Attachment;
   
-  import { createEventDispatcher } from 'svelte';
-	const dispatch = createEventDispatcher();
-
-  export let part;
-  export let title = "attach";
-
-  let attach, showModal, disabled;
-  
-  const type = $types[part.what];
-
+  let type: Type;
 
   function lastDetach(part) {
-    let last = filterValues($attachments, (a) => a.part_id == part.id).sort(by("attached"))[0]
+    let last = filterValues<Attachment>($attachments, (a) => a.part_id == part.id).sort(by("attached"))[0]
     
     if (last) {
       return last.detached ? last.detached : last.attached
-    }else {
+    } else {
       return part.purchase
     }
   }
 
   async function attachPart () {
     disabled = true;
-    try {
-      await myfetch('/attach/', 'PATCH', attach)
-        .then(data => updatePartAttach(data))
-      dispatch('saved')
-    } catch (e) {
-      alert (e)
-      initData()
-    }
-    showModal = false;
+    await myfetch('/attach/', 'PATCH', attach)
+      .then(data => updatePartAttach(data))
+    isOpen = false;
   }
 
-  function popup () {
-    showModal = true;
-    disabled = true;
+  
+  let options: Part[];
+  let promise;
+  let isOpen = false;
+  let result;
+  let header;
+  
+  export const popup = (part: Part) => {
+    type = $types[part.what]; 
     attach = {
       part_id: part.id,
       attached: lastDetach(part),
       gear: undefined,
       hook: (type.hooks.length == 1) ? type.hooks[0] : undefined,
-    } 
-  }
+      detached: null,
+    }   
+    header = ["Attach",type.name,part.name,part.vendor,part.model].join(' ');
+    options = filterValues<Part>($parts, (p) => type.main == p.what)
+    isOpen = true
+  };
 
-  // $: if (showModal) console.log(attach)
+  const toggle = () => {isOpen = !isOpen; result = undefined}
+
+  let disabled = true;
+
   $: disabled = attach && !($types[attach.hook] && $parts[attach.gear])
 </script>
 
-<span type="button" class="badge badge-secondary float-right" on:click={popup}>
-  {title}
-</span>
 
-{#if showModal}
-  <Modal on:close={() => showModal = false}>
-    <span slot="header"> Attach {type.name} {part.name} {part.vendor} {part.model} </span>
-    <form>
+
+<Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
+  <ModalHeader {toggle}>{header}</ModalHeader>
+  {#if result}
+    <ModalBody>
+      Attached
+    </ModalBody>
+    <ModalFooter>
+      <Button color="primary" on:click={toggle}>Close</Button>
+    </ModalFooter>
+  {:else}
+     <ModalBody>      
+      <form>
         <div class="form-inline">
           <div class="input-group mb-0 mr-sm-2 mb-sm-2">
             <div class="input-group-prepend">
@@ -81,7 +95,7 @@
             {/if}
             <select name="gear" class="form-control" required bind:value={attach.gear}>
               <option hidden value> -- select one -- </option>
-              {#each filterValues($parts, (p) => type.main == p.what) as gear}
+              {#each options as gear}
                 <option value={gear.id}>{gear.name}</option>
               {/each}
             </select> 
@@ -97,8 +111,18 @@
         </div>
         </div>
     </form> 
-    <span slot="footer">
-      <button type="submit" class="btn btn-primary float-right" {disabled} on:click={attachPart}>Attach</button>
-    </span>
-  </Modal>
-{/if}
+      </ModalBody>
+      <ModalFooter>
+        <Button color="secondary" on:click={toggle}>Cancel</Button>
+        <Button color="primary" {disabled} on:click={() => (promise = attachPart())}>
+          {#await promise}
+            <Spinner />
+          {:then} 
+            Attach
+          {:catch error}
+            {error}
+          {/await}
+        </Button>
+      </ModalFooter>
+  {/if}
+</Modal>

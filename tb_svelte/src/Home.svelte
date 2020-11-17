@@ -1,16 +1,16 @@
-<script>
+<script lang="ts">
 import {myfetch, handleError, types, icons, parts, category} from './store';
 import {Spinner} from 'sveltestrap'
 
 category.set(undefined);
 
-let promise; 
-$: { $parts; promise = myfetch('/activ/categories') }
+let promise, categories: number[]; 
+$: { $parts; promise = myfetch('/activ/categories').then(data => categories = data) }
 </script>
 
 {#await promise}
 	<Spinner />
-{:then categories}
+{:then}
 	<div class="row justify-content-around m-0 p-0">
 		{#each categories as cat}
 			<div class="col text-center p-0 p-sm-2 {icons[cat] ? 'order-1' : 'col-12 order-2'}">

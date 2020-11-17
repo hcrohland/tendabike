@@ -1,14 +1,14 @@
-<script lang="ts" context="module">
-  let show_hist_m = false;
-</script>
 <script lang="ts">
+  import {Button} from 'sveltestrap'
   import {filterValues, types, parts, isAttached, attachments, category} from './store'
   import Subparts from './Subparts.svelte'
   import Usage from './Usage.svelte'
+  import type {Attachment} from './types'
  
   export let params;
   
   let hook, gear;
+
   $: {
     gear = $parts[params.id]; 
     hook = $types[gear.what];
@@ -17,7 +17,7 @@
   $: attachees = filterValues(
     $attachments, 
     (a) => a.gear == gear.id
-  )
+  ) as Attachment[]
 </script>
 
 <style>

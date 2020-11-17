@@ -1,18 +1,22 @@
-<script>
+<script lang="ts">
+import {Button} from 'sveltestrap';
 import {parts} from './store'
 import Usage from './Usage.svelte'
 import ReplacePart from './ReplacePart.svelte'
 import Attach from './Attach.svelte'
+import type {Attachment, Type} from './types';
+import type { replace } from 'svelte-spa-router';
 
 export let header = false;
-export let attachments = undefined;
-export let level = undefined;
+export let attachments: Attachment[] = [];
+export let level: number;
 export let prefix = "";
-export let type = "";
-export let hook = false;
+export let type: Type;
+export let hook: Type;
 void(hook) // get rid of warning...
 
 let show_hist = false; 
+let attach, replacepart;
 </script>
 
 {#if header}
@@ -24,7 +28,7 @@ let show_hist = false;
     <th></th>
   </tr>    
 {:else}
-  {#each attachments as att,i (att.attached)}
+  {#each attachments as att,i (att.part_id + "/" + att.attached)}
     {#if i == 0 || show_hist}
       <tr>
         <th scope="row" class="text-nowrap"> 
@@ -55,13 +59,17 @@ let show_hist = false;
         </td>
         <td class="text-right"> {new Date(att.attached).toLocaleDateString(navigator.language)} </td >
         <Usage part={$parts[att.part_id] || att} />
-        {#if i == 0}
-           <td> <ReplacePart oldpart={$parts[att.part_id]} {att}/></td>
-        {:else if $parts[att.part_id]}
-          <td> <Attach part={$parts[att.part_id]}/> </td>
-        {/if}
+        <td>
+          {#if i == 0}
+            <Button class="badge badge-secondary float-right" on:click={() => replacepart(att)}> replace </Button>
+          {:else if $parts[att.part_id]}
+            <Button class="badge badge-secondary float-right" on:click={() => attach($parts[att.part_id])}> attach </Button>
+          {/if}
+        </td>
 
       </tr>
     {/if}
   {/each}
 {/if}
+<Attach bind:popup={attach}/> 
+<ReplacePart bind:popup={replacepart}/>

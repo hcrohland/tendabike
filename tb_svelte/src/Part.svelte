@@ -2,7 +2,8 @@
   import {filterValues, types, parts, attachments, category, by} from './store'
   import PartHist from './PartHist.svelte'
   import GearCard from './GearCard.svelte'
- 
+  import type {Attachment} from './types'
+
   export let params;
   
   let part 
@@ -12,7 +13,7 @@
     category.set($types[$types[part.what].main])
   }
 
-  $: atts = filterValues($attachments, (a) => a.part_id == part.id).sort(by("attached"))
+  $: atts = filterValues($attachments, (a) => a.part_id == part.id).sort(by<Attachment>("attached"))
   
 </script>
 

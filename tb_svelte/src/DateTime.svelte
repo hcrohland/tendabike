@@ -1,6 +1,6 @@
 <script lang="ts">
   
-  export let date = Date.now();
+  export let date = new Date;
 	export let mindate = undefined;
 
 	const props = Object.assign({}, $$props);
@@ -25,9 +25,6 @@
 		minuteIncrement: 15,
 		formatDate: dateObj =>  dateObj.toLocaleString(navigator.language, options),
 		minDate: mindate,
-		// onChange: (selectedDates, dateStr, instance) => {
-		// 	console.log('Options onChange handler', dateStr)
-		// }
 	}
 	export function roundTime(date, minutes?) {
     if (!minutes) minutes = 15
