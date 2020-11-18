@@ -1,7 +1,7 @@
 <script lang="ts">
-import type {Attachment, Type} from './types';
+import type {Attachment, Type} from '../types';
 
-import {types, filterValues, by} from './store'
+import {types, filterValues, by} from '../store'
 import SubType from './SubType.svelte'
 
 export let hook: Type;
