@@ -36,11 +36,11 @@ let attach, replacepart;
           {#if i == 0 }
             {prefix +  " " + type.name}
             {#if attachments.length > 1}
-              <button class="btn" on:click={() => show_hist = !show_hist}>
+              <button class="btn badge" on:click={() => show_hist = !show_hist}>
                 {#if show_hist}
                   &#9650;
                 {:else}
-                  ...
+                  &#9660;
                 {/if}
               </button>
             {/if}
