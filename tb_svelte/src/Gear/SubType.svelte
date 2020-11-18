@@ -12,7 +12,8 @@ export let attachments: Attachment[] = [];
 export let level: number = 0;
 export let prefix = "";
 export let type: Type | undefined = undefined;
-export const hook: Type | undefined = undefined;
+export let hook: Type | undefined = undefined;
+void(hook) // get rid of warning...
 
 let show_hist = false; 
 let attach, replacepart;
