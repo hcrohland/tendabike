@@ -1,22 +1,17 @@
 <script lang="ts">
   import {
-    Button,
     Modal,
     ModalBody,
-    ModalFooter,
     ModalHeader,
-    Spinner,
   } from 'sveltestrap';
   import DateTime from './DateTime.svelte';
-  import {myfetch, initData, parts, user} from './store';
-  import type {Type, Part} from './types'
-
-  const toggle = () => isOpen = !isOpen
+  import {myfetch, initData, parts, user} from '../store';
+  import ModalFooter from './ModalFooter.svelte'
+  import type {Type, Part} from '../types'
 
   let part: Part;
   let type: Type;
   let isOpen = false;
-  let promise;
 
   async function savePart () {
     disabled = true;
@@ -46,6 +41,7 @@
   }
 
   $: disabled = !(part && part.name.length > 0 && part.vendor.length > 0 && part.model.length > 0)
+  const toggle = () => isOpen = false
 </script>
 
 <Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
@@ -78,16 +74,5 @@
       </div>
     </form>
   </ModalBody>
-  <ModalFooter>
-    <Button color="secondary" on:click={toggle}>Cancel</Button>
-    <Button color="primary" {disabled} on:click={() => (promise = savePart())}>
-      {#await promise}
-        <Spinner />
-      {:then} 
-        Attach
-      {:catch error}
-        {error}
-      {/await}
-    </Button>
-  </ModalFooter>
+  <ModalFooter {toggle} {disabled} action={savePart} button={'Attach'}/>
 </Modal>

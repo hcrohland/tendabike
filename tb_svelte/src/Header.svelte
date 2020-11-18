@@ -6,19 +6,17 @@
     DropdownMenu,
     DropdownToggle
   } from 'sveltestrap';
+  import {link} from 'svelte-spa-router';
+  import {myfetch, handleError, setPartAttach, updatePartAttach, category, user} from "./store";
+  import Garmin from "./Actions/Garmin.svelte"
 
   let userOpen = false;
   let syncOpen = false;
-
-  import {link} from 'svelte-spa-router';
-  import {myfetch, handleError, setPartAttach, updatePartAttach, category, user} from "./store";
-  import Garmin from "./Garmin.svelte"
-
   let running = false;
   let number = 0;
   let promise;
   let data = undefined;
-
+  let garmin
   let isOpen = false;
 
   $: if ($user) {poll(() => new Promise(() => {promise = getdata()}), 60000)}
@@ -40,7 +38,6 @@
   function handleUpdate(event) {
     isOpen = event.detail.isOpen;
   }
-  let garmin
 
   var sleep = time => new Promise(resolve => setTimeout(resolve, time))
   export var poll = (promiseFn, time) => promiseFn().then(
@@ -49,7 +46,7 @@
 
 </script>
 
-<Garmin bind:toggle={garmin} />
+<Garmin bind:popup={garmin} />
 
 <Navbar expand="md" color="light" light mb-2>
   <img src="favicon.png" alt="TendaBike" title="TendaBike" width=60 class="rounded-circle">
@@ -108,4 +105,4 @@
       <a href="/strava/login"><img src="connect_with_strava.png" alt="Login with Strava"></a>
     </Nav>
   {/if}
-  </Navbar>
+</Navbar>

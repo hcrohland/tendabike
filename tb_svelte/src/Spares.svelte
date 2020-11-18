@@ -2,8 +2,8 @@
 import {filterValues, by, types, parts, state, attachments, isAttached, category} from './store'
 import {Button} from 'sveltestrap'
 import Usage from './Usage.svelte'
-import Attach from './Attach.svelte'
-import NewPart from './NewPart.svelte'
+import Attach from './Actions/Attach.svelte'
+import NewPart from './Actions/NewPart.svelte'
 import type {Attachment, Part, Type} from './types'
 
 export let params;

@@ -2,8 +2,8 @@
 import {Button} from 'sveltestrap';
 import {parts} from './store'
 import Usage from './Usage.svelte'
-import ReplacePart from './ReplacePart.svelte'
-import Attach from './Attach.svelte'
+import ReplacePart from './Actions/ReplacePart.svelte'
+import Attach from './Actions/Attach.svelte'
 import type {Attachment, Type} from './types';
 import type { replace } from 'svelte-spa-router';
 
