@@ -17,8 +17,8 @@ export type Part = {
 export type Attachment = {
     part_id: number;
     attached: Date;
-    gear: number | undefined;
-    hook: number | undefined;
+    gear?: number;
+    hook?: number;
     detached?: Date;
     what?: number;
     name?: string;

@@ -6,15 +6,16 @@
     ModalHeader,
     ModalBody
   } from 'sveltestrap';
-  import DateTime from './DateTime.svelte';
   import type {Attachment, Part, Type} from '../types';
   import {myfetch, types, initData, parts, user, updatePartAttach} from '../store';
   import ModalFooter from './ModalFooter.svelte'
+  import NewForm from './NewForm.svelte';
 
   let part: Part;
   let type: Type;
   let prefix: string;
   let att: Attachment;
+  let disabled = true;
   let isOpen = false;
   const toggle = () => isOpen = false
 
@@ -56,38 +57,13 @@ export const popup = (attl: Attachment) => {
     isOpen = true;
   }
 
-  $: disabled = !(part && part.name.length > 0 && part.vendor.length > 0 && part.model.length > 0)
   
 </script>
 
 <Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
   <ModalHeader {toggle}>  New {prefix} {type.name} for {$parts[att.gear].name} </ModalHeader>
   <ModalBody>
-    <Form>
-      <FormGroup row>
-        <FormGroup class="col-md-12">
-          <label for="inputName">You call it</label>
-          <!-- svelte-ignore a11y-autofocus -->
-          <input type="text" class="form-control" id="inputName" bind:value={part.name} autofocus required placeholder="Name">
-        </FormGroup>
-      </FormGroup>
-      <FormGroup row>
-        <FormGroup class="col-md-6">
-          <label for="inputBrand">and it is a</label>
-          <input type="text" class="form-control" id="inputBrand" bind:value={part.vendor} placeholder="Brand">
-        </FormGroup>
-        <FormGroup class="col-md-6">
-          <label class="d-none d-md-block" for="inputModel"> &nbsp </label>
-          <input type="text" class="form-control" id="inputModel" bind:value={part.model} placeholder="Model">
-        </FormGroup>
-      </FormGroup>
-      <FormGroup row>
-        <FormGroup class="col-md-6">
-          <label for="inputDate">New {type.name} day was at</label>
-          <DateTime id="inputDate" class="input-group-text" bind:date={part.purchase} mindate={att.attached} required/>
-        </FormGroup>
-      </FormGroup>
-    </Form>
+    <NewForm bind:part bind:disabled {type}/>
   </ModalBody>
   <ModalFooter {action} {toggle} {disabled} button={'Replace'} />
 </Modal>
