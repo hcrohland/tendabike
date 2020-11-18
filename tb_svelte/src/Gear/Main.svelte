@@ -1,13 +1,15 @@
 <script lang="ts">
   import {Button} from 'sveltestrap'
-  import {filterValues, types, parts, isAttached, attachments, category} from './store'
+  import {filterValues, types, parts, attachments, category} from '../store'
   import Subparts from './Subparts.svelte'
-  import Usage from './Usage.svelte'
-  import type {Attachment} from './types'
+  import Usage from '../Usage.svelte'
+  import type {Attachment} from '../types'
+  import InstallPart from '../Actions/InstallPart.svelte'
  
   export let params;
   
   let hook, gear;
+  let popup;
 
   $: {
     gear = $parts[params.id]; 
@@ -35,6 +37,7 @@
         <th scope="col">Model</th>
         <th scope="col">Purchase</th>
         <Usage header/>
+        <th></th>
       </tr>
     </thead>
     <tbody>
@@ -44,8 +47,12 @@
         <td>{gear.model}</td>
         <td>{new Date(gear.purchase).toLocaleDateString(navigator.language)}</td>
         <Usage part={gear} />
+        <td>
+          <Button class="badge badge-secondary float-right" on:click={() => popup(gear)}> New part </Button>
+        </td>
       </tr>
     </tbody>
   </table>
   <Subparts {hook} {attachees} />
 </div>
+<InstallPart bind:popup />
