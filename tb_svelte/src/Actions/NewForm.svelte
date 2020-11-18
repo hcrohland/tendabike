@@ -1,4 +1,7 @@
 <script lang="ts">
+  import {
+    Form, Input, FormGroup, Label,
+  } from 'sveltestrap'
   import DateTime from './DateTime.svelte';
   import type {Type, Part} from '../types'
 
@@ -10,30 +13,28 @@
   
 </script>
 
-
-<form>
-  <div class="form-row">
-    <div class="form-group col-md-12">
-      <label for="inputName">You call it</label>
+<Form>
+  <FormGroup row>
+    <FormGroup class="col-md-12">
+      <Label for="inputName">You call it</Label>
       <!-- svelte-ignore a11y-autofocus -->
-      <input type="text" class="form-control" id="inputName" bind:value={part.name} autofocus required placeholder="Name">
-    </div>
-  </div>
-  <div class="form-row">
-    
-    <div class="form-group col-md-6">
-      <label for="inputBrand">and it is a</label>
-      <input type="text" class="form-control" id="inputBrand" bind:value={part.vendor} placeholder="Brand">
-    </div>
-    <div class="form-group col-md-6">
-      <label class="d-none d-md-block" for="inputModel"> &nbsp </label>
-      <input type="text" class="form-control" id="inputModel" bind:value={part.model} placeholder="Model">
-    </div>
-  </div>
-  <div class="form-row">
-    <div class="form-group col-md-6">
-      <label for="inputDate">New {type && type.name} day was at</label>
-      <DateTime id="inputDate" class="input-group-text" bind:date={part.purchase} required/>
-    </div>
-  </div>
-</form>
+      <Input type="text" class="form-control" id="inputName" bind:value={part.name} autofocus required placeholder="Name" />
+    </FormGroup>
+  </FormGroup>
+  <FormGroup row>
+    <FormGroup class="col-md-6">
+      <Label for="inputBrand">and it is a</Label>
+      <Input type="text" class="form-control" id="inputBrand" bind:value={part.vendor} placeholder="Brand"/>
+    </FormGroup>
+    <FormGroup class=" col-md-6">
+      <Label for="inputModel"> &nbsp. </Label>
+      <Input type="text" class="form-control" id="inputModel" bind:value={part.model} placeholder="Model"/>
+    </FormGroup>
+  </FormGroup>
+  <FormGroup row>
+    <FormGroup class="col-md-6">
+      <Label for="inputDate">New {type && type.name} day was at</Label>
+      <DateTime id="inputDate" class="Input-group-text" bind:date={part.purchase} required/>
+    </FormGroup>
+  </FormGroup>
+</Form>

@@ -1,4 +1,7 @@
 <script lang="ts">
+  import {
+    Form, InputGroup, InputGroupAddon, InputGroupText
+  } from 'sveltestrap'
   import DateTime from './DateTime.svelte';
   import {attachments, filterValues, types, parts, by} from '../store';
   import type {Attachment, Type, Part} from '../types';  
@@ -32,12 +35,12 @@
   $: disabled = attach && !($types[attach.hook] && $parts[attach.gear])
 </script>
 
-<form>
+<Form>
   <div class="form-inline">
-    <div class="input-group mb-0 mr-sm-2 mb-sm-2">
-      <div class="input-group-prepend">
-        <span class="input-group-text">to</span>
-      </div>
+    <InputGroup class="mb-0 mr-sm-2 mb-sm-2">
+      <InputGroupAddon addonType="prepend">
+        <InputGroupText>to</InputGroupText>
+      </InputGroupAddon>
       {#if type.hooks.length > 1}
         <!-- svelte-ignore a11y-autofocus -->
         <select name="hook" class="form-control" required bind:value={attach.hook}>
@@ -46,22 +49,22 @@
             <option value={h}>{$types[h].name}</option>
           {/each}
         </select>
-        <div class="input-group-prepend">
-          <span class="input-group-text">of</span>
-        </div>
+        <InputGroupAddon addonType="prepend">
+          <InputGroupText>of</InputGroupText>
+        </InputGroupAddon>
       {/if}
-      <select name="gear" class="custom-select" required bind:value={attach.gear}>
+      <select name="gear" class="form-control" required bind:value={attach.gear}>
         <option hidden value> -- select one -- </option>
         {#each options as gear}
           <option value={gear.id}>{gear.name}</option>
         {/each}
       </select> 
-    </div>  
-    <div class="input-group mb-0 mr-sm-2 mb-sm-2">
-      <div class="input-group-prepend">
-        <span class="input-group-text">at</span>
-      </div>
+    </InputGroup>  
+    <InputGroup class="mb-0 mr-sm-2 mb-sm-2">
+      <InputGroupAddon addonType="prepend">
+        <InputGroupText>at</InputGroupText>
+      </InputGroupAddon>
       <DateTime class="input-group-text" bind:date={attach.attached}/> 
-    </div>
+    </InputGroup>
   </div>
-</form> 
+</Form> 

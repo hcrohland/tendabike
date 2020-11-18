@@ -1,10 +1,8 @@
 <script lang="ts">
   import {
-    Modal,
-    ModalBody,
-    ModalHeader,
-    ListGroup,
-    ListGroupItem,
+    Modal, ModalBody, ModalHeader,
+    ListGroup, ListGroupItem, Input,
+    Row, Col, Container
   } from 'sveltestrap';
   import {checkStatus, parts} from "../store";
   import TimezonePicker from 'svelte-timezone-picker';
@@ -66,11 +64,26 @@
     </ModalBody>
   {:else}
     <ModalBody>      
-      <input type="file" bind:files accept="text/csv">
+      <Input 
+        type="file" 
+        bind:files 
+        accept="text/csv" 
+        title="Upload a CSV file exported from Garmin connect activities. 
+It will match activities based on the start time. 
+If there is no match it will skip the activity - maybe it was in another timezone? 
+You can upload multiple times" 
+      />
       <br>
-      <div class="container"> 
-        Timezone of activities: <TimezonePicker bind:timezone />
-      </div>
+      <Container border>
+        <Row class='border m-10 '> 
+          <Col xs='auto'>
+            Timezone of activities: 
+          </Col>
+          <Col>
+            <TimezonePicker bind:timezone />
+          </Col>
+        </Row>
+      </Container>
     </ModalBody>
   {/if}
   <ModalFooter {toggle} {disabled} action={sendFile} {button}/>
