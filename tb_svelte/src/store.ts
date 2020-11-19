@@ -56,13 +56,13 @@ function mapObject (fn) {
         }
 }
 
-function mapable(fn) {
-    const { subscribe, set, update } = writable([]);
+function mapable<K,V>(fn: (v: V) => K) {
+    const { subscribe, set, update } = writable<V[]>([]);
 
 	return {
         subscribe,
-        setMap: (arr) => {set(arr.reduce(mapObject(fn),{}))},
-		updateMap: (arr) => update(n => arr.reduce(mapObject(fn), n)),
+        setMap: (arr: V[]) => {set(arr.reduce(mapObject(fn),{}))},
+		updateMap: (arr: V[]) => update(n => arr.reduce(mapObject(fn), n)),
 	};  
 }
 
