@@ -27,7 +27,8 @@
       </tr>
     </thead>
     <tbody>
-      {#each atts as att (att.attached)}
+      <!-- attached >= detached means deleted! -->
+      {#each atts.filter((a) => a.detached == undefined || a.attached < a.detached) as att (att.attached)}
         <tr>
           <td>
           {#if $parts[att.gear]}

@@ -183,3 +183,11 @@ pub struct Summary {
     parts: Vec<part::Part>,
     attachments: Vec<attachment::AttachmentDetail>
 }
+
+impl Summary {
+    pub fn append(&mut self, new: &mut Self) {
+        self.activities.append(&mut new.activities);
+        self.parts.append(&mut new.parts);
+        self.attachments.append(&mut new.attachments);
+    }
+}

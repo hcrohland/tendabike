@@ -175,6 +175,19 @@ impl Attachment {
             })
     }
 
+    /// 
+    fn try_merge(&mut self, pred: &Self) -> bool {
+        if self.part_id != pred.part_id {
+            return false;
+        }
+        self.attached = min(self.attached, pred.attached);
+        match (self.detached, pred.detached) {
+            (None, _) | (_, None) => self.detached = None,
+            (Some(s), Some(p)) => self.detached = Some(max(s,p))
+        }
+        true
+    }
+
     /// creates a new attachment with its side-effects
     ///
     /// - recalculates the usage counters in the attached assembly
@@ -182,27 +195,29 @@ impl Attachment {
     ///  -returns all affected parts or MyError::Conflict on collisions
     fn create(mut self, user: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
         conn.transaction(|| {
-            let mut attachments = self.collisions(user, conn)?;
-            attachments.append(&mut read(
-                self.part_id,
-                Some(self.attached),
-                self.detached,
-                conn,
-            )?);
+            let attachments = self.collisions(user, conn)?;
 
             // if there is an exiting attachment, which started earlier and is not yet detached we detach it automatically
             let mut res = Summary::default();
             for mut pred in attachments.into_iter() {
-                if pred.detached.is_none() && pred.attached <= self.attached {
+                if lt_detached(self.detached, Some(pred.attached)) {
+                    continue;
+                }
+
+                if self.try_merge(&pred) {
+                    // extend attachment
+                    debug!("merging predecessor");
+                    res.append(&mut pred.delete(conn)?);
+                } else if pred.attached <= self.attached {
                     // predecessor gets detached
                     debug!("detaching predecessor");
                     pred.detached = Some(self.attached);
-                    res = pred.patch(user, conn)?;
+                    res.append(&mut pred.patch(user, conn)?);
                 } else if self.detached.is_none() && pred.attached > self.attached {
                     // this attachment ends
                     debug!("Adjusting detach time");
                     self.detached = Some(pred.attached);
-                } else if self.detached.is_some() && pred.attached < self.detached.unwrap() {
+                } else {
                     return Err(
                         Error::Conflict(format!("{:?} collides with {:?}", self, pred)).into(),
                     );
@@ -225,14 +240,21 @@ impl Attachment {
     ///
     /// - recalculates the usage counters in the attached assembly
     /// - returns all affected parts
-    fn delete(self, conn: &AppConn) -> TbResult<Part> {
+    fn delete(self, conn: &AppConn) -> TbResult<Summary> {
         conn.transaction(|| {
+            let ctx = format!("Could not delete attachment {:#?}", self);
             let mut att = diesel::delete(attachments::table.find((self.part_id, self.attached))) // delete the attachment in the database
                 .get_result::<Attachment>(conn)
-                .context("Could not delete attachment")?;
+                .context(ctx)?;
             
             let usage = att.usage(Factor::Sub, conn);
-            att.apply_usage(&usage,conn)
+            let part = att.apply_usage(&usage,conn)?;
+            att.detached = Some(att.attached);
+            return Ok(Summary{
+                attachments: vec![att.add_details("".into(), 0.into())],
+                parts: vec![part],
+                activities: vec![]
+            })
         })
     }
 
@@ -258,7 +280,7 @@ impl Attachment {
                 Err(e) => return Err(e.into()),
                 Ok(x) => x,
             };
-
+            
             ensure!(
                 state.hook == self.hook,
                 Error::Conflict(format!(
@@ -274,11 +296,7 @@ impl Attachment {
 
             if let Some(detached) = self.detached {
                 if detached <= state.attached {
-                    return Ok(Summary {
-                        parts: vec![self.delete(conn)?],
-                        attachments: vec![AttachmentDetail {a: self, name: "".into(), what: 0.into()}],
-                        ..Default::default()
-                    })
+                    return self.delete(conn)
                 }
             }
 
