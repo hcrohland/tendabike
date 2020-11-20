@@ -5,7 +5,7 @@
     ModalBody
   } from 'sveltestrap';
   import type {Attachment, Part, Type} from '../types';
-  import {myfetch, initData, user, updatePartAttach} from '../store';
+  import {myfetch, initData, user, updatePartAttach, attachments, filterValues} from '../store';
   import ModalFooter from './ModalFooter.svelte'
   import NewForm from './NewForm.svelte';
   import TypeForm from './TypeForm.svelte';
@@ -46,7 +46,18 @@
       initData()
     }
     isOpen = false;
-}
+  }
+
+  function guessDate(g: Part, t: Type, hook: number) {
+    let last = filterValues<Attachment>($attachments, (a) => a.gear == g.id && a.what == t.id && a.hook == hook)
+    if (last.length) {
+      //I t is a replacement
+      return new Date()
+    } else {
+      // It is the first part of that type
+      return new Date(g.purchase)
+    }
+  }
 
   part = {
       owner: $user.id, 
@@ -60,12 +71,16 @@
     };
 
 
-  $: {part.what = type && type.id}
+  $: if (type && attach.hook) {
+    part.what = type && type.id;
+    part.purchase = guessDate(gear, type, attach.hook)
+    part.last_used = part.purchase
+  }
 </script>
 
 <Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
   <ModalHeader {toggle}>  
-    <TypeForm bind:type bind:hook={attach.hook} {gear}/>
+    <TypeForm bind:type bind:attach {gear}/>
   </ModalHeader>
   <ModalBody>
     <NewForm bind:part bind:disabled {type}/>

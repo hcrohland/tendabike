@@ -6,9 +6,6 @@
 	const props = Object.assign({}, $$props);
 	delete props.date;
 
-	let mydate = roundTime(new Date(date))
-
-	$: date = mydate.toISOString();
   import Flatpickr from 'svelte-flatpickr'
 
 	import 'flatpickr/dist/flatpickr.css'
@@ -26,19 +23,25 @@
 		formatDate: dateObj =>  dateObj.toLocaleString(navigator.language, options),
 		minDate: mindate,
 	}
-	export function roundTime(date, minutes?) {
+	export function roundTime(date: Date, minutes?: number) {
     if (!minutes) minutes = 15
     date.setMinutes(Math.floor(date.getMinutes()/15)*15)
     date.setSeconds(0)
     date.setMilliseconds(0)
     return date
 	}	
+
+	function handleChange(event) {
+		const [ selectedDates ] = event.detail;
+		date = selectedDates[0] as Date
+	}
 </script>
 
 <form>
   <div>
     <Flatpickr options={ flatpickrOptions } 
-      bind:value={mydate}
+			value={roundTime(date)}
+			on:change={handleChange}
 			{...props}
     /> 
   </div>

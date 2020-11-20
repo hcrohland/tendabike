@@ -2,17 +2,18 @@
   import {
     Form, InputGroup, InputGroupAddon, InputGroupText, Input, FormGroup, Label,
   } from 'sveltestrap'
-  import type {Type, Part} from '../types'
+  import type {Type, Part, Attachment} from '../types'
   import {types, category, filterValues} from '../store'
 
   export let type: Type = undefined;
   export let gear: Part;
-  export let hook;
+  export let attach: Attachment;
 
-  let typeList = filterValues($types, (a: Type) => a.main == 1 && a.id != a.main).sort((a: Type,b: Type) => a.order - b.order) as Type[];
+  let typeList = filterValues($types, (a: Type) => a.main == $category || 1 && a.id != a.main).sort((a: Type,b: Type) => a.order - b.order) as Type[];
 
   function updatehook() {
-    hook = (type.hooks.length == 1) ? type.hooks[0] : undefined
+    attach.hook = (type.hooks.length == 1) ? type.hooks[0] : undefined
+    attach.what = type.id
   }
 
 </script>
@@ -35,7 +36,7 @@
         <InputGroupText>for </InputGroupText>
       </InputGroupAddon>
       <!-- svelte-ignore a11y-autofocus -->
-      <select name="hook" class="form-control" required bind:value={hook}>
+      <select name="hook" class="form-control" required bind:value={attach.hook}>
         <option hidden value={undefined}> -- select one -- </option>
         {#each type.hooks as h}
           <option value={h}>{$types[h].name}</option>

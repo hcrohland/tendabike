@@ -10,7 +10,6 @@
   export let disabled = true;
 
   $: disabled = !(part && part.name.length > 0 && part.vendor.length > 0 && part.model.length > 0)
-  
 </script>
 
 <Form>
@@ -33,7 +32,7 @@
   </FormGroup>
   <FormGroup row>
     <FormGroup class="col-md-6">
-      <Label for="inputDate">New {type && type.name} day was at</Label>
+      <Label for="inputDate">New {type && type.name} day was </Label>
       <DateTime id="inputDate" class="Input-group-text" bind:date={part.purchase} required/>
     </FormGroup>
   </FormGroup>
