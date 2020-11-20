@@ -65,6 +65,11 @@ pub mod token {
         Ok(token_data.claims.id)
     }
 
+    #[cfg(debug_assertions)]
+    const TOKEN: &str = "tendabike_debug";
+    #[cfg(not(debug_assertions))]
+    const TOKEN: &str = "tendabike_token";
+    
     pub fn token(request: &Request) -> TbResult<String> {
         let mut headers = request.headers().get("Authorization"); 
 
@@ -83,7 +88,7 @@ pub mod token {
         }
 
         let cookies = request.guard::<Cookies>().unwrap();
-        if let Some(cookie) = cookies.get("token") {
+        if let Some(cookie) = cookies.get(TOKEN) {
             return Ok(String::from(cookie.value()))
         }
         
@@ -93,7 +98,7 @@ pub mod token {
     fn cookie<T> (value: T) -> Cookie<'static>
         where T: Into<std::borrow::Cow<'static, str>>
     {
-        Cookie::build("token", value)
+        Cookie::build(TOKEN, value)
                         .same_site(SameSite::Lax)
                         .path("/")
                         .max_age(Duration::seconds(LEEWAY))
