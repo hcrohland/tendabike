@@ -11,9 +11,9 @@
     let last = filterValues<Attachment>($attachments, (a) => a.part_id == part.id).sort(by("attached"))[0]
       
     if (last) {
-      return last.detached ? last.detached : last.attached
+      return new Date(last.detached ? last.detached : last.attached)
     } else {
-      return part.purchase
+      return new Date(part.purchase)
     }
   }
     
