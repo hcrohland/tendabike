@@ -157,7 +157,7 @@ fn test_detached() {
 impl Attachment {
     /// add the given usage to the attachement
     fn apply_usage(&mut self, usage: &Usage, conn: &AppConn) -> TbResult<Part> {
-        debug!("Applying usage {:?} to attachment {:?}", usage, self);
+        debug!("Applying usage {:?} \nto attachment {:?}", usage, self);
         self.count += usage.count;
         self.time += usage.time;
         self.distance += usage.distance;
@@ -177,9 +177,10 @@ impl Attachment {
 
     /// 
     fn try_merge(&mut self, pred: &Self) -> bool {
-        if self.part_id != pred.part_id {
+        if self.part_id != pred.part_id || self.hook != pred.hook {
             return false;
         }
+        debug!("merging {:?} and {:?}", self, pred);
         self.attached = min(self.attached, pred.attached);
         match (self.detached, pred.detached) {
             (None, _) | (_, None) => self.detached = None,
@@ -195,7 +196,16 @@ impl Attachment {
     ///  -returns all affected parts or MyError::Conflict on collisions
     fn create(mut self, user: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
         conn.transaction(|| {
-            let attachments = self.collisions(user, conn)?;
+            let mut attachments = self.collisions(conn)?;
+            attachments.append(&mut read(
+                self.part_id,
+                Some(self.attached),
+                self.detached,
+                conn,
+            )?);
+            attachments.sort_by_key(|a|  a.attached);
+            // self collisions and self.read do find both own attachment to this hook
+            attachments.dedup();
 
             // if there is an exiting attachment, which started earlier and is not yet detached we detach it automatically
             let mut res = Summary::default();
@@ -273,6 +283,7 @@ impl Attachment {
         conn.transaction(|| {
             let mut state = match attachments::table
                 .find((self.part_id, self.attached))
+                .filter(attachments::gear.eq(self.gear))
                 .for_update()
                 .get_result::<Attachment>(conn)
             {
@@ -307,7 +318,7 @@ impl Attachment {
             } else {
                 state.attached = state.detached.unwrap();
                 state.detached = self.detached;
-                let coll = state.collisions(user, conn)?;
+                let coll = state.collisions(conn)?;
                 ensure!(
                     coll.is_empty(),
                     Error::BadRequest(format!("Attachment collision with {:?}", coll))
@@ -330,15 +341,29 @@ impl Attachment {
         })
     }
 
-    fn collisions(&self, user: &dyn Person, conn: &AppConn) -> TbResult<Vec<Attachment>> {
-        collisions(
-            self.gear,
-            Some(self.hook),
-            self.part_id.what(user, conn)?,
-            Some(self.attached),
-            self.detached,
-            conn,
-        )
+    /// find other parts which are attached to the same hook as myself in the given timeframe
+    ///
+    /// part_id is actually ignored
+    /// returns the full attachments for these parts.
+    fn collisions(&self, conn: &AppConn) -> TbResult<Vec<Attachment>> {
+        let what= self.part_id.what(conn)?;
+        let mut query = attachments::table
+            .inner_join(
+                parts::table.on(parts::id
+                    .eq(attachments::part_id) // join corresponding part
+                    .and(parts::what.eq(what))),
+            ) // where the part has my type
+            .filter(attachments::gear.eq(self.gear))
+            .filter(attachments::hook.eq(self.hook))
+            .filter(attachments::detached.is_null().or(attachments::detached.gt(self.attached)),)       
+            .into_boxed();
+        if let Some(detached) = self.detached {
+            query = query.filter(attachments::attached.lt(detached));
+        }
+        Ok(query
+            .select(schema::attachments::all_columns) // return only the attachment
+            .order(attachments::attached)
+            .load::<Attachment>(conn)?)
     }
 
     fn add_details(self, name: String, what: PartTypeId) -> AttachmentDetail {
@@ -443,45 +468,6 @@ pub fn parts_per_activity(act: &Activity, conn: &AppConn) -> Vec<PartId> {
         );
     }
     res
-}
-
-/// find other parts which are attached to the same hook as myself in the given timeframe
-///
-/// part_id is actually ignored
-/// returns the full attachments for these parts.
-fn collisions(
-    gear: PartId,
-    hook: Option<PartTypeId>,
-    what: PartTypeId,
-    attached: Option<DateTime<Utc>>,
-    detached: Option<DateTime<Utc>>,
-    conn: &AppConn,
-) -> TbResult<Vec<Attachment>> {
-    let mut query = attachments::table
-        .inner_join(
-            parts::table.on(parts::id
-                .eq(attachments::part_id) // join corresponding part
-                .and(parts::what.eq(what))),
-        ) // where the part has my type
-        .filter(attachments::gear.eq(gear))
-        .into_boxed();
-    if let Some(hook) = hook {
-        query = query.filter(attachments::hook.eq(hook));
-    }
-    if let Some(attached) = attached {
-        query = query.filter(
-            attachments::detached
-                .is_null()
-                .or(attachments::detached.gt(attached)),
-        );
-    }
-    if let Some(detached) = detached {
-        query = query.filter(attachments::attached.lt(detached));
-    }
-    Ok(query
-        .select(schema::attachments::all_columns) // return only the attachment
-        .order(attachments::attached)
-        .load::<Attachment>(conn)?)
 }
 
 #[patch("/", data = "<attachment>")]

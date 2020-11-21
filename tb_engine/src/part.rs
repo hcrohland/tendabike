@@ -117,12 +117,16 @@ impl PartId {
         parts::table
             .find(self)
             .select(parts::name)
-            .first::<String>(conn)
+            .first(conn)
             .with_context(|| format!("part {} does not exist", self))
     }
 
-    pub fn what(self, user: &dyn Person, conn: &AppConn) -> TbResult<PartTypeId> {
-        Ok(self.part(user, conn)?.what)
+    pub fn what(self, conn: &AppConn) -> TbResult<PartTypeId> {
+        parts::table
+            .find(self)
+            .select(parts::what)
+            .first(conn)
+            .with_context(|| format!("part {} does not exist", self))
     }
 
     /// check if the given user is the owner or an admin.
