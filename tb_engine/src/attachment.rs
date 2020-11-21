@@ -157,7 +157,8 @@ fn test_detached() {
 impl Attachment {
     /// add the given usage to the attachement
     fn apply_usage(&mut self, usage: &Usage, conn: &AppConn) -> TbResult<Part> {
-        debug!("Applying usage {:?} \nto attachment {:?}", usage, self);
+        debug!("Applying usage {:?}",usage);
+        debug!("to attachment {:?}", self);
         self.count += usage.count;
         self.time += usage.time;
         self.distance += usage.distance;
@@ -180,12 +181,14 @@ impl Attachment {
         if self.part_id != pred.part_id || self.hook != pred.hook {
             return false;
         }
-        debug!("merging {:?} and {:?}", self, pred);
+        debug!("merging {:?}", self);
+        debug!("and {:?}", pred);
         self.attached = min(self.attached, pred.attached);
-        match (self.detached, pred.detached) {
-            (None, _) | (_, None) => self.detached = None,
-            (Some(s), Some(p)) => self.detached = Some(max(s,p))
-        }
+        self.detached = match (self.detached, pred.detached) {
+            (None, _) | (_, None) =>  None,
+            (Some(s), Some(p)) =>  Some(max(s,p))
+        };
+        debug!("to {:#?}", self);
         true
     }
 
