@@ -57,8 +57,12 @@ let attach, replacepart;
           {att.name}
         {/if}
         </td>
-        <td class="text-right"> {new Date(att.attached).toLocaleDateString(navigator.language)} </td >
-        <Usage part={$parts[att.part_id] || att} />
+        <td class="text-right"> {new Date(att.attached).toLocaleDateString(navigator.language)} 
+          {#if att.detached}
+            -
+            {new Date(att.detached).toLocaleDateString(navigator.language)}
+          {/if}
+        </td><Usage part={$parts[att.part_id] || att} />
         <td>
           {#if i == 0}
             <Button class="badge badge-secondary float-right" on:click={() => replacepart(att)}> replace </Button>
