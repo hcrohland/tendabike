@@ -20,7 +20,7 @@ let spareTypes = filterValues<Type>($types, (t) => t.main == cat.id && t.id != c
 function attachedTo(atts: Attachment[], partId: number, time: Date) {
     let att = filterValues<Attachment>(atts, (x) => x.part_id === partId && isAttached(x, time)).pop()
     if (att == undefined) return
-    return $parts[att.gear].name
+      return $parts[att.gear].name + ' ' + ($types[att.what].name.split(' ').reverse()[1] || '')
 }
 
 function subparts(type: Type, parts) {

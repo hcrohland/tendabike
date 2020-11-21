@@ -1,5 +1,5 @@
 <script lang="ts">
-  import {filterValues, parts, attachments, by} from './store'
+  import {filterValues, parts, attachments, types, by} from './store'
   import type { Attachment } from './types';
   import Usage from './Usage.svelte'
  
@@ -33,7 +33,8 @@
           <td>
           {#if $parts[att.gear]}
             <a href="#/gear/{att.gear}" class="text-reset">
-            {$parts[att.gear].name}
+              {$parts[att.gear].name} 
+              {$types[att.hook].name.split(' ').reverse()[1] || ''}
             </a>
           {:else}
             N/A
