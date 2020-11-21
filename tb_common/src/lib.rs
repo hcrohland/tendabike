@@ -99,7 +99,7 @@ pub mod token {
         where T: Into<std::borrow::Cow<'static, str>>
     {
         Cookie::build(TOKEN, value)
-                        .same_site(SameSite::Lax)
+                        .same_site(SameSite::Strict)
                         .path("/")
                         .max_age(Duration::seconds(LEEWAY))
                         .finish()
