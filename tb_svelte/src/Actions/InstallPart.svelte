@@ -24,6 +24,16 @@
       gear: g.id,
       attached: new Date,
     }
+    part = {
+      owner: $user.id, 
+      what: undefined, 
+      count:0, climb:0, descend:0, distance:0, time: 0,
+      name: '', 
+      vendor: '', 
+      model: '', 
+      purchase: new Date(),
+      last_used: new Date()
+    };
     type = undefined;
     isOpen = true
   }
