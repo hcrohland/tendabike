@@ -22,8 +22,9 @@
   async function attachPart (part) {
     att.part_id = part.id;
     att.attached = part.purchase;
-      await myfetch('/attach/', 'PATCH', att)
-        .then(data => updatePartAttach(data))
+    att.detached = null
+    await myfetch('/attach/', 'PATCH', att)
+      .then(data => updatePartAttach(data))
   }
 
   async function action () {
