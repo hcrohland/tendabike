@@ -198,6 +198,8 @@ impl Attachment {
     /// - persists everything into the database
     ///  -returns all affected parts or MyError::Conflict on collisions
     fn create(mut self, user: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
+        ensure!(!lt_detached(self.detached,Some(self.attached)), 
+                Error::BadRequest(format!(" detached < attached: {:?}", self)));
         conn.transaction(|| {
             let mut attachments = self.collisions(conn)?;
             attachments.append(&mut read(
