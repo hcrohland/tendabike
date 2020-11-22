@@ -9,7 +9,7 @@
   import type {Type, Part} from '../types'
   import NewForm from './NewForm.svelte';
 
-  let part: Part;
+  let part, newpart: Part;
   let type: Type;
   let isOpen = false;
   let disabled = true;
@@ -17,7 +17,7 @@
   async function savePart () {
     disabled = true;
     try {
-      await myfetch('/part/', 'POST', part)
+      await myfetch('/part/', 'POST', newpart)
         .then(data => parts.updateMap([data]))
     } catch (e) {
       alert (e)
@@ -43,10 +43,7 @@
 
   const toggle = () => isOpen = false
   const setPart = (e) => {
-    part.name = e.detail.name
-    part.vendor = e.detail.vendor
-    part.model = e.detail.model
-    part.purchase = e.detail.purchase
+    newpart = e.detail
     disabled = false
   }
 </script>

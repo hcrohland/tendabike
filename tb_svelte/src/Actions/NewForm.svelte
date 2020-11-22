@@ -12,8 +12,10 @@
   let {name, vendor, model, purchase} = part
 
   $: if (type && name.length > 0 && vendor.length > 0 && model.length > 0) {
-    dispatch ("change", {name, vendor, model, purchase})  
-  }
+      part = {...part, name, vendor, model, purchase}
+      part.last_used = purchase
+      dispatch ("change", part)  
+    }
 </script>
 
 <Form>
@@ -37,7 +39,7 @@
   <FormGroup row>
     <FormGroup class="col-md-6">
       <Label for="inputDate">New {type && type.name || ''} day was </Label>
-      <DateTime id="inputDate" class="Input-group-text" bind:date={part.purchase} required/>
+      <DateTime id="inputDate" class="Input-group-text" bind:date={purchase} required/>
     </FormGroup>
   </FormGroup>
 </Form>

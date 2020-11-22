@@ -11,7 +11,7 @@
   import ModalFooter from './ModalFooter.svelte'
   import NewForm from './NewForm.svelte';
 
-  let part: Part;
+  let part, newpart: Part;
   let type: Type;
   let prefix: string;
   let att: Attachment;
@@ -30,7 +30,7 @@
   async function action () {
     disabled = true;
     try {
-      await myfetch('/part/', 'POST', part)
+      await myfetch('/part/', 'POST', newpart)
         .then(attachPart)
       isOpen = false;
     } catch (e) {
@@ -59,11 +59,8 @@ export const popup = (attl: Attachment) => {
   }
 
   const setPart = (e) => {
-    part.name = e.detail.name
-    part.vendor = e.detail.vendor
-    part.model = e.detail.model
-    part.purchase = e.detail.purchase
-    part.last_used = part.purchase
+    newpart = e.detail
+    console.log(newpart)
     disabled = false
   }
   

@@ -10,7 +10,7 @@
   import NewForm from './NewForm.svelte';
   import TypeForm from './TypeForm.svelte';
 
-  let part: Part;
+  let part, newpart: Part;
   let gear: Part;
   let type: Type;
   let attach: Attachment;
@@ -49,7 +49,7 @@
   async function action () {
     disabled = true;
     try {
-      await myfetch('/part/', 'POST', part)
+      await myfetch('/part/', 'POST', newpart)
         .then(attachPart)
       isOpen = false;
     } catch (e) {
@@ -90,11 +90,7 @@
     part.purchase = guessDate(gear, type, attach.hook)
   }
   const setPart = (e) => {
-    part.name = e.detail.name
-    part.vendor = e.detail.vendor
-    part.model = e.detail.model
-    part.purchase = e.detail.purchase
-    part.last_used = part.purchase
+    newpart = e.detail
     disabled = false
   }
 
