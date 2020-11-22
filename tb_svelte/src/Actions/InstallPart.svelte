@@ -34,6 +34,7 @@
       purchase: new Date(),
       last_used: new Date()
     };
+    disabled = true;
     type = undefined;
     isOpen = true
   }
@@ -59,6 +60,7 @@
   }
 
   function guessDate(g: Part, t: Type, hook: number) {
+    if (!t) return new Date();
     let last = filterValues<Attachment>($attachments, (a) => a.gear == g.id && a.what == t.id && a.hook == hook)
     if (last.length) {
       //I t is a replacement
@@ -80,20 +82,30 @@
       last_used: new Date()
     };
 
-
-  $: if (type && attach.hook) {
-    part.what = type && type.id;
+  const setType = (e) => {
+    type = e.detail.type;
+    attach.hook = e.detail.hook;
+    attach.what = type.id;
+    part.what = type.id;
     part.purchase = guessDate(gear, type, attach.hook)
-    part.last_used = part.purchase
   }
-</script>
+  const setPart = (e) => {
+    part.name = e.detail.name
+    part.vendor = e.detail.vendor
+    part.model = e.detail.model
+    part.purchase = e.detail.purchase
+    part.last_used = part.purchase
+    disabled = false
+  }
 
+</script>
+{type && type.name}
 <Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
   <ModalHeader {toggle}>  
-    <TypeForm bind:type bind:attach {gear}/>
+    <TypeForm {gear} on:change={setType}/>
   </ModalHeader>
   <ModalBody>
-    <NewForm bind:part bind:disabled {type}/>
+    <NewForm {type} {part} on:change={setPart}/>
   </ModalBody>
-  <ModalFooter {action} {toggle} disabled={disabled || attach.hook == undefined} button={'Install'} />
+  <ModalFooter {action} {toggle} {disabled} button={'Install'} />
 </Modal>

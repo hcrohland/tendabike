@@ -1,23 +1,27 @@
 <script lang="ts">
+  import { createEventDispatcher } from 'svelte';
   import {
     Form, InputGroup, InputGroupAddon, InputGroupText, Input, FormGroup, Label,
   } from 'sveltestrap'
   import type {Type, Part, Attachment} from '../types'
   import {types, category, filterValues} from '../store'
 
-  export let type: Type = undefined;
   export let gear: Part;
-  export let attach: Attachment;
 
-  let typeList = filterValues($types, (a: Type) => a.main == $category || 1 && a.id != a.main).sort((a: Type,b: Type) => a.order - b.order) as Type[];
+  let type: Type;
+  let hook: number;
+  const dispatch = createEventDispatcher();
+
+
+  let typeList = filterValues<Type>($types, (t) => t.main == $category.id && t.id != t.main)
+          .sort((a,b) => a.order - b.order);
 
   function updatehook() {
-    attach.hook = (type.hooks.length == 1) ? type.hooks[0] : undefined
-    attach.what = type.id
+    hook = (type.hooks.length == 1) ? type.hooks[0] : undefined
   }
 
+  $: if (hook && type) dispatch("change", {type, hook})
 </script>
-
 
 <Form>
   <InputGroup class="col-md-12">
@@ -36,7 +40,7 @@
         <InputGroupText>for </InputGroupText>
       </InputGroupAddon>
       <!-- svelte-ignore a11y-autofocus -->
-      <select name="hook" class="form-control" required bind:value={attach.hook}>
+      <select name="hook" class="form-control" required bind:value={hook}>
         <option hidden value={undefined}> -- select one -- </option>
         {#each type.hooks as h}
           <option value={h}>{$types[h].name}</option>

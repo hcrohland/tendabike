@@ -57,13 +57,21 @@ export const popup = (attl: Attachment) => {
     isOpen = true;
   }
 
+  const setPart = (e) => {
+    part.name = e.detail.name
+    part.vendor = e.detail.vendor
+    part.model = e.detail.model
+    part.purchase = e.detail.purchase
+    part.last_used = part.purchase
+    disabled = false
+  }
   
 </script>
 
 <Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
   <ModalHeader {toggle}>  New {prefix} {type.name} for {$parts[att.gear].name} </ModalHeader>
   <ModalBody>
-    <NewForm bind:part bind:disabled {type}/>
+    <NewForm {type} {part} on:change={setPart}/>
   </ModalBody>
   <ModalFooter {action} {toggle} {disabled} button={'Replace'} />
 </Modal>

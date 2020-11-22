@@ -42,12 +42,19 @@
   }
 
   const toggle = () => isOpen = false
+  const setPart = (e) => {
+    part.name = e.detail.name
+    part.vendor = e.detail.vendor
+    part.model = e.detail.model
+    part.purchase = e.detail.purchase
+    disabled = false
+  }
 </script>
 
 <Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
   <ModalHeader {toggle}> New {type.name} </ModalHeader>
   <ModalBody>
-    <NewForm bind:part bind:disabled {type} />
+    <NewForm {type} {part} on:change={setPart}/>
   </ModalBody>
   <ModalFooter {toggle} {disabled} action={savePart} button={'Attach'}/>
 </Modal>
