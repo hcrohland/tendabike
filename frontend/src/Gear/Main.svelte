@@ -48,7 +48,7 @@
         <td>{new Date(gear.purchase).toLocaleDateString(navigator.language)}</td>
         <Usage part={gear} />
         <td>
-          <Button class="badge badge-secondary float-right" on:click={() => popup(gear)}> New part </Button>
+          <Button class="float-right" size="sm" on:click={() => popup(gear)}> New part </Button>
         </td>
       </tr>
     </tbody>

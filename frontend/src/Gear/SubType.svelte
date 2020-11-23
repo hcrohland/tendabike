@@ -1,11 +1,17 @@
 <script lang="ts">
-import {Button} from 'sveltestrap';
+
+import {
+  Dropdown,
+  DropdownItem,
+  DropdownMenu,
+  DropdownToggle,
+  Button
+} from 'sveltestrap';
 import {parts} from '../store'
 import Usage from '../Usage.svelte'
 import ReplacePart from '../Actions/ReplacePart.svelte'
 import Attach from '../Actions/Attach.svelte'
 import type {Attachment, Type} from '../types';
-import type { replace } from 'svelte-spa-router';
 
 export let header = false;
 export let attachments: Attachment[] = [];
@@ -15,6 +21,7 @@ export let type: Type | undefined = undefined;
 export let hook: Type | undefined = undefined;
 void(hook) // get rid of warning...
 
+let isOpen = false;
 let show_hist = false; 
 let attach, replacepart;
 </script>
@@ -65,9 +72,16 @@ let attach, replacepart;
         </td><Usage part={$parts[att.part_id] || att} />
         <td>
           {#if i == 0}
-            <Button class="badge badge-secondary float-right" on:click={() => replacepart(att)}> replace </Button>
+            <Dropdown {isOpen} toggle={() => (isOpen = !isOpen)} size="sm">
+              <DropdownToggle caret ></DropdownToggle>
+              <DropdownMenu right>
+                <DropdownItem on:click={() => replacepart(att)}> replace </DropdownItem>
+                <DropdownItem on:click={() => attach($parts[att.part_id])}> move </DropdownItem>
+              </DropdownMenu>
+            </Dropdown>
+          
           {:else if $parts[att.part_id]}
-            <Button class="badge badge-secondary float-right" on:click={() => attach($parts[att.part_id])}> attach </Button>
+            <Button class="float-right" size="sm" on:click={() => attach($parts[att.part_id])}> attach </Button>
           {/if}
         </td>
 
