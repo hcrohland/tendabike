@@ -52,15 +52,14 @@ export const popup = (attl: Attachment) => {
       name: oldpart.name, 
       vendor: oldpart.vendor, 
       model: oldpart.model, 
-      purchase: new Date(),
-      last_used: new Date()
+      purchase: att.detached || new Date(),
+      last_used: undefined
     };
     isOpen = true;
   }
 
   const setPart = (e) => {
     newpart = e.detail
-    console.log(newpart)
     disabled = false
   }
   

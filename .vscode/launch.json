@@ -8,7 +8,7 @@
             "type": "lldb",
             "request": "attach",
             "name": "Attach",
-            "program": "${workspaceFolder}/target/debug/tb_engine"
+            "program": "${workspaceFolder}/target/debug/tendabike"
         },
         {
             "type": "lldb",

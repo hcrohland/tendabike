@@ -25,7 +25,7 @@
 	}
 	export function roundTime(date: Date, minutes?: number) {
 		if (!minutes) minutes = 15
-		date = new Date(date)
+		date = date ? new Date(date) : new Date()
     date.setMinutes(Math.floor(date.getMinutes()/15)*15)
     date.setSeconds(0)
     date.setMilliseconds(0)

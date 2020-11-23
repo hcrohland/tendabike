@@ -95,7 +95,6 @@
   }
 
 </script>
-{type && type.name}
 <Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
   <ModalHeader {toggle}>  
     <TypeForm {gear} on:change={setType}/>
