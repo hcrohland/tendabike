@@ -97,7 +97,7 @@ pub fn ignite_rocket() -> rocket::Rocket {
             "/",
             rocket_contrib::serve::StaticFiles::from(
                 env::var("STATIC_WWW").unwrap_or_else(|_|
-                    concat!(env!("CARGO_MANIFEST_DIR"),"/../tb_svelte/public").into()
+                    concat!(env!("CARGO_MANIFEST_DIR"),"/../frontend/public").into()
                 )
             )
         )

@@ -1887,33 +1887,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tb_engine"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "chrono",
- "chrono-tz",
- "csv",
- "diesel",
- "diesel-derive-newtype",
- "diesel_migrations",
- "dotenv",
- "env_logger",
- "log 0.4.11",
- "newtype_derive",
- "pretty_assertions",
- "rocket",
- "rocket_contrib",
- "rocket_cors",
- "serde",
- "serde_derive",
- "serde_json",
- "tb_common",
- "tb_strava",
- "thiserror",
-]
-
-[[package]]
 name = "tb_strava"
 version = "0.2.0"
 dependencies = [
@@ -1952,6 +1925,33 @@ dependencies = [
  "redox_syscall",
  "remove_dir_all",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "tendabike"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "chrono-tz",
+ "csv",
+ "diesel",
+ "diesel-derive-newtype",
+ "diesel_migrations",
+ "dotenv",
+ "env_logger",
+ "log 0.4.11",
+ "newtype_derive",
+ "pretty_assertions",
+ "rocket",
+ "rocket_contrib",
+ "rocket_cors",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "tb_common",
+ "tb_strava",
+ "thiserror",
 ]
 
 [[package]]

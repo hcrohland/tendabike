@@ -2,10 +2,10 @@
 use chrono::Utc;
 use rocket::http::{ContentType, Header, Method, Status};
 use rocket::local::*;
-use tb_engine::*;
+use tendabike::*;
 
-use tb_engine::part::*;
-use tb_engine::types::*;
+use tendabike::part::*;
+use tendabike::types::*;
 
 use serde::{de::Deserialize, ser::Serialize};
 
@@ -87,7 +87,7 @@ fn part() {
     assert_eq!(ass.get(&myparts[1].id).unwrap().name.to_string(), "Slide");
 }
 
-use tb_engine::activity::*;
+use tendabike::activity::*;
 
 #[test]
 fn activity_types() {

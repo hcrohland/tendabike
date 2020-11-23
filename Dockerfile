@@ -26,9 +26,9 @@ RUN cargo chef cook --release --recipe-path recipe.json
 
 FROM cacher as build-engine
 
-# do not copy tb_svelte!
+# do not copy frontend!
 COPY Cargo.toml Cargo.lock ./
-COPY tb_engine/ ./tb_engine/
+COPY server/ ./server/
 COPY tb_common/ ./tb_common/
 COPY tb_strava/ ./tb_strava/
 
@@ -36,12 +36,12 @@ RUN cargo build --release
 
 FROM node:15-alpine AS build-frontend
 
-WORKDIR /tb_svelte
+WORKDIR /frontend
 
-COPY tb_svelte/package.json tb_svelte/package-lock.json /tb_svelte/
+COPY frontend/package.json frontend/package-lock.json /frontend/
 RUN npm install
 
-COPY tb_svelte/ /tb_svelte
+COPY frontend/ /frontend
 RUN npm run build
 
 FROM debian:buster-slim
@@ -55,7 +55,7 @@ USER tendabike
 WORKDIR /tendabike
 ENV STATIC_WWW="/tendabike/public"
 
-COPY --from=build-engine /app/target/release/tb_engine ./
-COPY --from=build-frontend /tb_svelte/public/* ./public/
+COPY --from=build-engine /app/target/release/tendabike ./
+COPY --from=build-frontend /frontend/public/* ./public/
 
-ENTRYPOINT [ "./tb_engine" ]
+ENTRYPOINT [ "./tendabike" ]
