@@ -1,5 +1,4 @@
 <script lang="ts">
-
 import {
   Dropdown,
   DropdownItem,
@@ -11,6 +10,7 @@ import {parts} from '../store'
 import Usage from '../Usage.svelte'
 import ReplacePart from '../Actions/ReplacePart.svelte'
 import Attach from '../Actions/Attach.svelte'
+import Detach from '../Actions/Detach.svelte'
 import type {Attachment, Type} from '../types';
 
 export let header = false;
@@ -23,7 +23,7 @@ void(hook) // get rid of warning...
 
 let isOpen = false;
 let show_hist = false; 
-let attach, replacepart;
+let detach, attach, replacepart;
 </script>
 
 {#if header}
@@ -77,6 +77,7 @@ let attach, replacepart;
               <DropdownMenu right>
                 <DropdownItem on:click={() => replacepart(att)}> replace </DropdownItem>
                 <DropdownItem on:click={() => attach($parts[att.part_id])}> move </DropdownItem>
+                <DropdownItem on:click={() => detach(att)}> detach </DropdownItem>
               </DropdownMenu>
             </Dropdown>
           
@@ -91,3 +92,4 @@ let attach, replacepart;
 {/if}
 <Attach bind:popup={attach}/> 
 <ReplacePart bind:popup={replacepart}/>
+<Detach bind:popup={detach}/> 
