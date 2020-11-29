@@ -1869,7 +1869,7 @@ dependencies = [
 
 [[package]]
 name = "tb_common"
-version = "0.2.0"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1888,7 +1888,7 @@ dependencies = [
 
 [[package]]
 name = "tb_strava"
-version = "0.2.0"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1929,7 +1929,7 @@ dependencies = [
 
 [[package]]
 name = "tendabike"
-version = "0.2.0"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "chrono",
