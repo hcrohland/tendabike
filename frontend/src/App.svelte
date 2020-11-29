@@ -1,5 +1,5 @@
 <script lang="ts" context="module">
-	import {Spinner} from "sveltestrap"
+	import {Spinner, Container} from "sveltestrap"
 	import Router from 'svelte-spa-router';
 
 	import ToyGroup from "./ToyGroup.svelte"
@@ -25,7 +25,7 @@
 
 
 <Header/>
-<div class="container">
+<Container class="mt-2">
 	{#await initData()}
 		<Spinner />
 	{:then}
@@ -33,4 +33,4 @@
 	{:catch error}
 		<About />
 	{/await}
-</div>
+</Container>
