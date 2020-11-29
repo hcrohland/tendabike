@@ -4,7 +4,6 @@ import {
   DropdownItem,
   DropdownMenu,
   DropdownToggle,
-  Button
 } from 'sveltestrap';
 import {parts} from '../store'
 import Usage from '../Usage.svelte'
@@ -72,22 +71,18 @@ let detach, attach, replacePart, changePart;
           {/if}
         </td><Usage part={$parts[att.part_id] || att} />
         <td>
-          {#if i == 0}
-            <Dropdown {isOpen} toggle={() => (isOpen = !isOpen)} size="sm">
-              <DropdownToggle caret ></DropdownToggle>
-              <DropdownMenu right>
-                <DropdownItem on:click={() => changePart(att)}> Change details </DropdownItem>
+          <Dropdown {isOpen} toggle={() => (isOpen = !isOpen)} size="sm">
+            <DropdownToggle caret ></DropdownToggle>
+            <DropdownMenu right>
+              <DropdownItem on:click={() => changePart($parts[att.part_id])}> Change details </DropdownItem>
+              <DropdownItem on:click={() => attach($parts[att.part_id])}> Move part</DropdownItem>
+              {#if i == 0}
                 <DropdownItem on:click={() => replacePart(att)}> Replace part</DropdownItem>
-                <DropdownItem on:click={() => attach($parts[att.part_id])}> Move part</DropdownItem>
                 <DropdownItem on:click={() => detach(att)}> Detach part</DropdownItem>
-              </DropdownMenu>
-            </Dropdown>
-          
-          {:else if $parts[att.part_id]}
-            <Button class="float-right" size="sm" on:click={() => attach($parts[att.part_id])}> attach </Button>
-          {/if}
+              {/if}
+            </DropdownMenu>
+          </Dropdown>
         </td>
-
       </tr>
     {/if}
   {/each}
