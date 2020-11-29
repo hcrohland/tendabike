@@ -1,6 +1,6 @@
 <script lang="ts">
 import {DropdownItem} from 'sveltestrap';
-import {parts} from '../store'
+import {parts, isAttached} from '../store'
 import Usage from '../Usage.svelte'
 import ReplacePart from '../Actions/ReplacePart.svelte'
 import AttachPart from '../Actions/AttachPart.svelte'
@@ -68,10 +68,12 @@ let detachPart, attachPart, replacePart, changePart;
         <td>
           <Menu>
             <DropdownItem on:click={() => changePart($parts[att.part_id])}> Change details </DropdownItem>
-            <DropdownItem on:click={() => attachPart($parts[att.part_id])}> Move part</DropdownItem>
-            {#if i == 0}
+            {#if isAttached(att, new Date)}
+              <DropdownItem on:click={() => attachPart($parts[att.part_id])}> Move part</DropdownItem>
               <DropdownItem on:click={() => replacePart(att)}> Replace part</DropdownItem>
               <DropdownItem on:click={() => detachPart(att)}> Detach part</DropdownItem>
+            {:else}
+              <DropdownItem on:click={() => attachPart($parts[att.part_id])}> Attach part</DropdownItem>
             {/if}
           </Menu>
         </td>
