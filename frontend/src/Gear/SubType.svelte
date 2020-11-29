@@ -71,7 +71,7 @@ let detach, attach, replacePart, changePart;
           {/if}
         </td><Usage part={$parts[att.part_id] || att} />
         <td>
-          <Dropdown {isOpen} toggle={() => (isOpen = !isOpen)} size="sm">
+          <Dropdown style="position:absolute" {isOpen} toggle={() => (isOpen = !isOpen)} size="sm">
             <DropdownToggle caret ></DropdownToggle>
             <DropdownMenu right>
               <DropdownItem on:click={() => changePart($parts[att.part_id])}> Change details </DropdownItem>

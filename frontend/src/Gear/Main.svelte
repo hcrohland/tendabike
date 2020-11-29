@@ -49,7 +49,7 @@
         <td>{new Date(gear.purchase).toLocaleDateString(navigator.language)}</td>
         <Usage part={gear} />
         <td>
-          <Dropdown {isOpen} toggle={() => (isOpen = !isOpen)} size="sm">
+          <Dropdown {isOpen} toggle={() => (isOpen = !isOpen)} size="sm" style="position:absolute">
             <DropdownToggle caret ></DropdownToggle>
             <DropdownMenu right>
               <DropdownItem on:click={() => changePart(gear)}> Change details </DropdownItem>
