@@ -58,8 +58,8 @@ let detach, attach, replacePart, changePart;
         <td>
         {#if $parts[att.part_id]}
           <a href="#/part/{att.part_id}" class="text-reset">
-            {att.name}
-          </a>  
+            {$parts[att.part_id].name}
+          </a>
         {:else}
           {att.name}
         {/if}
