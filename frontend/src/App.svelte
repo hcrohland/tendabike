@@ -6,7 +6,7 @@
 	import Header from "./Header.svelte"
 	import Gear from "./Gear/Main.svelte"
 	import Part from "./Part.svelte"
-	import Spares from "./Spares.svelte"
+	import Spares from "./Spares/Spares.svelte"
 	import Home from "./Home.svelte"
 	import About from "./About.svelte"
 	import {initData} from './store'
