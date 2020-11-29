@@ -39,7 +39,7 @@ function subparts(type: Type, parts) {
 <tr>
   <th colspan=6 scope="col" class="border-2 text-nowrap"> 
     {type.name}s 
-    <Button class="badge" 
+    <button class="btn badge" 
             on:click={() => show_all = !show_all} 
             title={show_all?"hide attached":"show attached"}>
       {#if show_all}
@@ -47,7 +47,7 @@ function subparts(type: Type, parts) {
       {:else}
         &#9660;
       {/if}
-    </Button>
+    </button>
   </th>
   <th class="border-2 text-nowrap" colspan=80>
     <Button class="badge badge-secondary float-right" on:click={() => newPart(type)}> New {type.name}</Button>
