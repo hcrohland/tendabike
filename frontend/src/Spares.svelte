@@ -1,13 +1,17 @@
 <script lang="ts">
 import {filterValues, by, types, parts, state, attachments, isAttached, category} from './store'
-import {Button} from 'sveltestrap'
+import {Button, DropdownItem} from 'sveltestrap'
 import Usage from './Usage.svelte'
 import Attach from './Actions/Attach.svelte'
 import NewPart from './Actions/NewPart.svelte'
 import type {Attachment, Part, Type} from './types'
+import ChangePart from './Actions/ChangePart.svelte';
+import Menu from './Menu.svelte'
 
 export let params;
 export let date = new Date;
+
+let attach, newPart, changePart;
 
 // Cannot use category directly since it 
 // is unset during destroy and the router gets confused
@@ -28,8 +32,6 @@ function subparts(type: Type, parts) {
             .sort(by("last_used"))
 }
 
-let attach: (newpart: Part) => void;
-let newpart: (type: Type) => void;
 </script>
 
 <style>
@@ -39,7 +41,8 @@ let newpart: (type: Type) => void;
 </style>
 
 <Attach bind:popup={attach} />
-<NewPart bind:popup={newpart}/>
+<NewPart bind:popup={newPart}/>
+<ChangePart bind:popup={changePart}/>
 
 <table class="table table-hover">
   <thead>
@@ -52,18 +55,19 @@ let newpart: (type: Type) => void;
           Attached to
         </th>
       {/if}
-      <td>
+      <th>
         <span class="badge float-right">
           show attached <input type="checkbox" name="Show all" id="" bind:checked={$state.show_all_spares}>  
         </span>
-      </td>
+      </th>
     </tr>
   </thead>
   <tbody>
   {#each spareTypes as type (type.id)}
     <tr>
       <th colspan=80 scope="col" class="border-2 text-nowrap"> {type.name}s 
-          <Button class="badge badge-secondary float-right" on:click={() => newpart(type)}> New {type.name}</Button>
+          <Button class="badge badge-secondary float-right" on:click={() => newPart(type)}> New {type.name}</Button>
+      </th>
     </tr>
       {#each subparts(type, $parts).filter((p) => $state.show_all_spares || !attachedTo($attachments, p.id, date))
         as part (part.id)}
@@ -81,9 +85,12 @@ let newpart: (type: Type) => void;
           </td>
         {/if}
         <td> 
-          <span type="button" class="badge badge-secondary float-right" on:click={() => attach(part)}>
-            {attachedTo($attachments, part.id, date)?"move":"attach"}
-          </span>
+          <Menu>
+            <DropdownItem on:click={() => changePart(part)}> Change details </DropdownItem>
+            <DropdownItem on:click={() => attach(part)}> 
+              {attachedTo($attachments, part.id, date)?"Move Part":"Attach Part"}
+            </DropdownItem>
+          </Menu>
         </td>
       </tr>
     {/each}
