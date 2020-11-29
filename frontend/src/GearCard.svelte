@@ -1,5 +1,6 @@
 <script lang="ts">
   import { slide } from 'svelte/transition';
+  import {Card, CardBody, CardHeader} from 'sveltestrap';
   import {category, formatSeconds} from './store';
 
   export let part;
@@ -27,9 +28,9 @@
   }
 </style>
 
-<div class="card">
-  <div class="header">
-    <div class="card-header" on:click={() => (isOpen = !isOpen)} on:mouseenter={()=> showLink = true} on:mouseleave={()=> showLink = false}>
+<Card>
+  <div class="header" on:mouseenter={()=> showLink = true} on:mouseleave={()=> showLink = false}>
+    <CardHeader on:click={() => (isOpen = !isOpen)} >
       <span class="h5 mb-0"> 
         {part.name} 
       </span>
@@ -42,12 +43,11 @@
           </a>
         </div>
       {/if}
-      
-    </div>
+    </CardHeader>
   </div>
   {#if isOpen || display}
     <div transition:slide>
-      <div class="card-body">
+      <CardBody>
         is a <span class="param">{model(part)}</span>
         purchased <span class="param">{new Date(part.purchase).toLocaleDateString(navigator.language)}</span>
         <br>which you used <span class=param>{part.count.toLocaleString(navigator.language)}</span> times 
@@ -55,8 +55,8 @@
         <p> You covered <span class="param">{parseFloat((part.distance / 1000).toFixed(1)).toLocaleString(navigator.language)}</span> km 
         climbing <span class="param">{part.climb.toLocaleString(navigator.language)}</span> and descending <span class="param">{part.descend.toLocaleString(navigator.language)}</span> meters </p>
         
-      </div>
+      </CardBody>
     </div>
 
   {/if}
-</div>
+</Card>
