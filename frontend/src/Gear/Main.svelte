@@ -1,15 +1,16 @@
 <script lang="ts">
-  import {Button} from 'sveltestrap'
+  import {Dropdown, DropdownMenu, DropdownToggle, DropdownItem} from 'sveltestrap'
   import {filterValues, types, parts, attachments, category} from '../store'
   import Subparts from './Subparts.svelte'
   import Usage from '../Usage.svelte'
   import type {Attachment} from '../types'
   import InstallPart from '../Actions/InstallPart.svelte'
+  import ChangePart from '../Actions/ChangePart.svelte'
  
   export let params;
   
   let hook, gear;
-  let popup;
+  let installPart, changePart, isOpen;
 
   $: {
     gear = $parts[params.id]; 
@@ -48,11 +49,18 @@
         <td>{new Date(gear.purchase).toLocaleDateString(navigator.language)}</td>
         <Usage part={gear} />
         <td>
-          <Button class="float-right" size="sm" on:click={() => popup(gear)}> New part </Button>
+          <Dropdown {isOpen} toggle={() => (isOpen = !isOpen)} size="sm">
+            <DropdownToggle caret ></DropdownToggle>
+            <DropdownMenu right>
+              <DropdownItem on:click={() => changePart(gear)}> Change details </DropdownItem>
+              <DropdownItem on:click={() => installPart(gear)}> Attach new part </DropdownItem>
+            </DropdownMenu>
+          </Dropdown>
         </td>
       </tr>
     </tbody>
   </table>
   <Subparts {hook} {attachees} />
 </div>
-<InstallPart bind:popup />
+<InstallPart bind:popup={installPart} />
+<ChangePart bind:popup={changePart} />

@@ -12,6 +12,7 @@ import ReplacePart from '../Actions/ReplacePart.svelte'
 import Attach from '../Actions/Attach.svelte'
 import Detach from '../Actions/Detach.svelte'
 import type {Attachment, Type} from '../types';
+import ChangePart from '../Actions/ChangePart.svelte';
 
 export let header = false;
 export let attachments: Attachment[] = [];
@@ -23,7 +24,7 @@ void(hook) // get rid of warning...
 
 let isOpen = false;
 let show_hist = false; 
-let detach, attach, replacepart;
+let detach, attach, replacePart, changePart;
 </script>
 
 {#if header}
@@ -75,9 +76,10 @@ let detach, attach, replacepart;
             <Dropdown {isOpen} toggle={() => (isOpen = !isOpen)} size="sm">
               <DropdownToggle caret ></DropdownToggle>
               <DropdownMenu right>
-                <DropdownItem on:click={() => replacepart(att)}> replace </DropdownItem>
-                <DropdownItem on:click={() => attach($parts[att.part_id])}> move </DropdownItem>
-                <DropdownItem on:click={() => detach(att)}> detach </DropdownItem>
+                <DropdownItem on:click={() => changePart(att)}> Change details </DropdownItem>
+                <DropdownItem on:click={() => replacePart(att)}> Replace part</DropdownItem>
+                <DropdownItem on:click={() => attach($parts[att.part_id])}> Move part</DropdownItem>
+                <DropdownItem on:click={() => detach(att)}> Detach part</DropdownItem>
               </DropdownMenu>
             </Dropdown>
           
@@ -90,6 +92,7 @@ let detach, attach, replacepart;
     {/if}
   {/each}
 {/if}
+<ChangePart bind:popup={changePart}/> 
 <Attach bind:popup={attach}/> 
-<ReplacePart bind:popup={replacepart}/>
+<ReplacePart bind:popup={replacePart}/>
 <Detach bind:popup={detach}/> 
