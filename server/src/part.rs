@@ -72,11 +72,26 @@ pub struct Part {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Insertable)]
 #[table_name = "parts"]
-pub struct NewPart {
+struct NewPart {
     /// The owner
     pub owner: i32,
     /// The type of the part
     pub what: PartTypeId,
+    /// This name of the part.
+    pub name: String,
+    /// The vendor name
+    pub vendor: String,
+    /// The model name
+    pub model: String,
+    pub purchase: Option<DateTime<Utc>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize, AsChangeset)]
+#[table_name = "parts"]
+struct ChangePart {
+    pub id: PartId,
+    /// The owner
+    pub owner: i32,
     /// This name of the part.
     pub name: String,
     /// The vendor name
@@ -241,15 +256,29 @@ impl NewPart {
             vendor.eq(self.vendor),
             model.eq(self.model),
             purchase.eq(self.purchase.unwrap_or_else(Utc::now)),
+            last_used.eq(self.purchase.unwrap_or_else(Utc::now)),
             time.eq(0),
             distance.eq(0),
             climb.eq(0),
             descend.eq(0),
             count.eq(0),
-            last_used.eq(self.purchase.unwrap_or_else(Utc::now))
         );
 
         let part: Part = diesel::insert_into(parts).values(values).get_result(conn)?;
+        Ok(part)
+    }
+}
+
+impl ChangePart {
+    fn change(&self, user: &User, conn: &AppConn) -> TbResult<Part> {
+        use schema::parts::dsl::*;
+
+        user.check_owner(
+            self.owner,
+            format!("user {} cannot create this part", user.get_id()),
+        )?;
+
+        let part: Part = diesel::update(parts.filter(id.eq(self.id))).set(self).get_result(conn)?;
         Ok(part)
     }
 }
@@ -265,9 +294,20 @@ fn post(
     user: &User,
     conn: AppDbConn,
 ) -> Result<status::Created<Json<Part>>, ApiError> {
+    info!("Post {:?}", newpart);
     let part = newpart.clone().create(user, &conn)?;
     let url = uri!(get: i32::from(part.id));
     Ok(status::Created(url.to_string(), Some(Json(part))))
+}
+
+#[put("/", data = "<part>")]
+fn put(
+    part: Json<ChangePart>,
+    user: &User,
+    conn: AppDbConn,
+) -> ApiResult<Part> {
+    info!("Put {:?}", part);
+    tbapi(part.change(user, &conn))
 }
 
 #[get("/all")]
@@ -276,5 +316,5 @@ fn myparts(user: &User, conn: AppDbConn) -> ApiResult<Summary> {
 }
 
 pub fn routes() -> Vec<rocket::Route> {
-    routes![get, post, myparts]
+    routes![get, post, put, myparts]
 }
