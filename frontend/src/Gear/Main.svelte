@@ -1,16 +1,17 @@
 <script lang="ts">
-  import {Dropdown, DropdownMenu, DropdownToggle, DropdownItem} from 'sveltestrap'
+  import {DropdownItem} from 'sveltestrap'
   import {filterValues, types, parts, attachments, category} from '../store'
   import Subparts from './Subparts.svelte'
   import Usage from '../Usage.svelte'
   import type {Attachment} from '../types'
   import InstallPart from '../Actions/InstallPart.svelte'
   import ChangePart from '../Actions/ChangePart.svelte'
+  import Menu from '../Menu.svelte'
  
   export let params;
   
   let hook, gear;
-  let installPart, changePart, isOpen;
+  let installPart, changePart;
 
   $: {
     gear = $parts[params.id]; 
@@ -49,13 +50,10 @@
         <td>{new Date(gear.purchase).toLocaleDateString(navigator.language)}</td>
         <Usage part={gear} />
         <td>
-          <Dropdown {isOpen} toggle={() => (isOpen = !isOpen)} size="sm" style="position:absolute">
-            <DropdownToggle caret ></DropdownToggle>
-            <DropdownMenu right>
-              <DropdownItem on:click={() => changePart(gear)}> Change details </DropdownItem>
-              <DropdownItem on:click={() => installPart(gear)}> Attach new part </DropdownItem>
-            </DropdownMenu>
-          </Dropdown>
+          <Menu>
+            <DropdownItem on:click={() => changePart(gear)}> Change details </DropdownItem>
+            <DropdownItem on:click={() => installPart(gear)}> Attach new part </DropdownItem>
+          </Menu>
         </td>
       </tr>
     </tbody>

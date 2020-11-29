@@ -1,10 +1,5 @@
 <script lang="ts">
-import {
-  Dropdown,
-  DropdownItem,
-  DropdownMenu,
-  DropdownToggle,
-} from 'sveltestrap';
+import {DropdownItem} from 'sveltestrap';
 import {parts} from '../store'
 import Usage from '../Usage.svelte'
 import ReplacePart from '../Actions/ReplacePart.svelte'
@@ -12,6 +7,7 @@ import Attach from '../Actions/Attach.svelte'
 import Detach from '../Actions/Detach.svelte'
 import type {Attachment, Type} from '../types';
 import ChangePart from '../Actions/ChangePart.svelte';
+import Menu from '../Menu.svelte';
 
 export let header = false;
 export let attachments: Attachment[] = [];
@@ -21,7 +17,6 @@ export let type: Type | undefined = undefined;
 export let hook: Type | undefined = undefined;
 void(hook) // get rid of warning...
 
-let isOpen = false;
 let show_hist = false; 
 let detach, attach, replacePart, changePart;
 </script>
@@ -71,17 +66,14 @@ let detach, attach, replacePart, changePart;
           {/if}
         </td><Usage part={$parts[att.part_id] || att} />
         <td>
-          <Dropdown style="position:absolute" {isOpen} toggle={() => (isOpen = !isOpen)} size="sm">
-            <DropdownToggle caret ></DropdownToggle>
-            <DropdownMenu right>
-              <DropdownItem on:click={() => changePart($parts[att.part_id])}> Change details </DropdownItem>
-              <DropdownItem on:click={() => attach($parts[att.part_id])}> Move part</DropdownItem>
-              {#if i == 0}
-                <DropdownItem on:click={() => replacePart(att)}> Replace part</DropdownItem>
-                <DropdownItem on:click={() => detach(att)}> Detach part</DropdownItem>
-              {/if}
-            </DropdownMenu>
-          </Dropdown>
+          <Menu>
+            <DropdownItem on:click={() => changePart($parts[att.part_id])}> Change details </DropdownItem>
+            <DropdownItem on:click={() => attach($parts[att.part_id])}> Move part</DropdownItem>
+            {#if i == 0}
+              <DropdownItem on:click={() => replacePart(att)}> Replace part</DropdownItem>
+              <DropdownItem on:click={() => detach(att)}> Detach part</DropdownItem>
+            {/if}
+          </Menu>
         </td>
       </tr>
     {/if}
