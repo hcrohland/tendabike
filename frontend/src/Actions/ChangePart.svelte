@@ -26,7 +26,7 @@
     isOpen = false;
   }
 
-  export const popup = (p: Part) => {
+  export const changePart = (p: Part) => {
     part = p;
     type = $types[part.what];
     isOpen = true;

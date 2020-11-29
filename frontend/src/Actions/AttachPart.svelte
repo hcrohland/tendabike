@@ -18,7 +18,7 @@
     isOpen = false;  
   }  
   
-  export const popup = (p: Part) => {
+  export const attachPart = (p: Part) => {
     part = p;
     isOpen = true
   };  

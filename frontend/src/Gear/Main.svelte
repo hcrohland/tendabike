@@ -60,5 +60,5 @@
   </table>
   <Subparts {hook} {attachees} />
 </div>
-<InstallPart bind:popup={installPart} />
-<ChangePart bind:popup={changePart} />
+<InstallPart bind:installPart />
+<ChangePart bind:changePart />

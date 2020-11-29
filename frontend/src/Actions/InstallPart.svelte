@@ -17,7 +17,7 @@
   let disabled = true;
   let isOpen = false;
   const toggle = () => isOpen = false
-  export const popup = (g: Part) => {
+  export const installPart = (g: Part) => {
     gear = g;
     attach = {
       part_id: undefined,

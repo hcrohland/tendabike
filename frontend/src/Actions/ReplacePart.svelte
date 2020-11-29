@@ -40,7 +40,7 @@
     isOpen = false;
 }
 
-export const popup = (attl: Attachment) => {
+export const replacePart = (attl: Attachment) => {
     let oldpart = $parts[attl.part_id];
     att = {...attl};
     type = $types[oldpart.what];

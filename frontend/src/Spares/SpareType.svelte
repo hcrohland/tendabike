@@ -2,7 +2,7 @@
 import {filterValues, by, types, parts, state, attachments, isAttached, category} from '../store'
 import {Button, DropdownItem} from 'sveltestrap'
 import Usage from '../Usage.svelte'
-import Attach from '../Actions/Attach.svelte'
+import AttachPart from '../Actions/AttachPart.svelte'
 import NewPart from '../Actions/NewPart.svelte'
 import type {Attachment, Part, Type} from '../types'
 import ChangePart from '../Actions/ChangePart.svelte';
@@ -11,7 +11,7 @@ import Menu from '../Menu.svelte'
 export let type: Type;
 export let date = new Date;
 
-let attach, newPart, changePart, show_all;
+let attachPart, newPart, changePart, show_all;
 
 function attachedTo(atts: Attachment[], partId: number, time: Date) {
     let att = filterValues<Attachment>(atts, (x) => x.part_id === partId && isAttached(x, time)).pop()
@@ -32,9 +32,9 @@ function subparts(type: Type, parts) {
  }
 </style>
 
-<Attach bind:popup={attach} />
-<NewPart bind:popup={newPart}/>
-<ChangePart bind:popup={changePart}/>
+<AttachPart bind:attachPart />
+<NewPart bind:newPart/>
+<ChangePart bind:changePart/>
 
 <tr>
   <th colspan=6 scope="col" class="border-2 text-nowrap"> 
@@ -69,7 +69,7 @@ function subparts(type: Type, parts) {
     <td> 
       <Menu>
         <DropdownItem on:click={() => changePart(part)}> Change details </DropdownItem>
-        <DropdownItem on:click={() => attach(part)}> 
+        <DropdownItem on:click={() => attachPart(part)}> 
           {attachedTo($attachments, part.id, date)?"Move Part":"Attach Part"}
         </DropdownItem>
       </Menu>

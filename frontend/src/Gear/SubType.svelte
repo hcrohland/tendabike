@@ -3,8 +3,8 @@ import {DropdownItem} from 'sveltestrap';
 import {parts} from '../store'
 import Usage from '../Usage.svelte'
 import ReplacePart from '../Actions/ReplacePart.svelte'
-import Attach from '../Actions/Attach.svelte'
-import Detach from '../Actions/Detach.svelte'
+import AttachPart from '../Actions/AttachPart.svelte'
+import DetachPart from '../Actions/DetachPart.svelte'
 import type {Attachment, Type} from '../types';
 import ChangePart from '../Actions/ChangePart.svelte';
 import Menu from '../Menu.svelte';
@@ -18,7 +18,7 @@ export let hook: Type | undefined = undefined;
 void(hook) // get rid of warning...
 
 let show_hist = false; 
-let detach, attach, replacePart, changePart;
+let detachPart, attachPart, replacePart, changePart;
 </script>
 
 {#if header}
@@ -68,10 +68,10 @@ let detach, attach, replacePart, changePart;
         <td>
           <Menu>
             <DropdownItem on:click={() => changePart($parts[att.part_id])}> Change details </DropdownItem>
-            <DropdownItem on:click={() => attach($parts[att.part_id])}> Move part</DropdownItem>
+            <DropdownItem on:click={() => attachPart($parts[att.part_id])}> Move part</DropdownItem>
             {#if i == 0}
               <DropdownItem on:click={() => replacePart(att)}> Replace part</DropdownItem>
-              <DropdownItem on:click={() => detach(att)}> Detach part</DropdownItem>
+              <DropdownItem on:click={() => detachPart(att)}> Detach part</DropdownItem>
             {/if}
           </Menu>
         </td>
@@ -79,7 +79,7 @@ let detach, attach, replacePart, changePart;
     {/if}
   {/each}
 {/if}
-<ChangePart bind:popup={changePart}/> 
-<Attach bind:popup={attach}/> 
-<ReplacePart bind:popup={replacePart}/>
-<Detach bind:popup={detach}/> 
+<ChangePart bind:changePart/> 
+<AttachPart bind:attachPart/> 
+<ReplacePart bind:replacePart/>
+<DetachPart bind:detachPart/> 

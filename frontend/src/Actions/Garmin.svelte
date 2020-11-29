@@ -16,7 +16,7 @@
   let button;
   const toggle = () => isOpen = false
 
-  export const popup = () => {
+  export const garmin = () => {
     files = undefined; 
     timezone = undefined;
     result = undefined;

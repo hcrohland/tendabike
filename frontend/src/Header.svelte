@@ -46,7 +46,7 @@
 
 </script>
 
-<Garmin bind:popup={garmin} />
+<Garmin bind:garmin />
 
 <Navbar expand="md" color="light" light mb-2>
   <img src="favicon.png" alt="TendaBike" title="TendaBike" width=60 class="rounded-circle">

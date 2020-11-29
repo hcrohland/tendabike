@@ -28,11 +28,6 @@
       You have no {type.name} to tend 😱
     {/each}
   </div>
-  <!-- <div class="container">
-      <div class="row p-sm-2 float-right">
-        <NewPart {type}/>
-      </div>
-  </div> -->
 {:else}
      Error: Category not found!
 {/if}

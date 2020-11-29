@@ -26,7 +26,7 @@
     isOpen = false;
   }
 
-  export const popup = (t: Type) => {
+  export const newPart = (t: Type) => {
     type = t;
     part = {
       owner: $user.id,
