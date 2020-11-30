@@ -28,7 +28,8 @@
     const batch = 10;
     number = 0;
     do {
-      data = await myfetch('/strava/hooks')
+      data = await myfetch('/strava/hooks').catch((err) => { console.log(err);})
+      if (!data) break;
       updatePartAttach(data);
       number += data["activities"].length;
     } while (running && data["activities"].length > 0)
