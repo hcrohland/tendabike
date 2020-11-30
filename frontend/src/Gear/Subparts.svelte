@@ -1,6 +1,7 @@
 <script lang="ts">
 import type {Attachment, Type} from '../types';
 
+import {Table} from 'sveltestrap'
 import {types, filterValues, by} from '../store'
 import SubType from './SubType.svelte'
 
@@ -33,7 +34,7 @@ function buildList (list: MyList[], hook: Type, attachees: Attachment[], level: 
 
 </script>
 {#if attachees.length > 0}
-    <table class="table table-hover">
+    <Table hover>
     <thead>
       <SubType header/>
     </thead>
@@ -42,7 +43,7 @@ function buildList (list: MyList[], hook: Type, attachees: Attachment[], level: 
         <SubType {...item} />
       {/each}
     </tbody>
-    </table>
+    </Table>
 {:else}
    No subparts maintained!
 {/if}

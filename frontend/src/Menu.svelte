@@ -1,4 +1,4 @@
-<Dropdown style="position:absolute" {isOpen} toggle={() => (isOpen = !isOpen)} size="sm">
+<Dropdown {isOpen} toggle={() => (isOpen = !isOpen)} size="sm">
   <DropdownToggle caret/>
   <DropdownMenu right>
     <slot />
