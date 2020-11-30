@@ -21,8 +21,9 @@
 # Custom rules (everything added below won't be overriden by 'Generate .gitignore File' if you use 'Update' option)
 
 # No log files
-*.log
+**/*.log
 *.http
 .vscode/*
 .secrets
 Rocket.toml
+**/.env
