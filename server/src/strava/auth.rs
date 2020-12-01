@@ -2,19 +2,16 @@ use rocket::http::*;
 use rocket::request::{self, FromRequest, Request, State};
 use rocket::response::Redirect;
 use rocket::*;
-use super::*;
-use crate::token;
 use rocket::Config;
-
 pub use rocket_oauth2::HyperSyncRustlsAdapter;
 use rocket_oauth2::{OAuth2, TokenResponse, OAuthConfig};
 
 use serde_json::Value;
-
-use diesel::prelude::*;
 use diesel::{self, QueryDsl, RunQueryDsl};
 
-use super::schema::users;
+use super::*;
+use schema::strava_users;
+
 
 pub(crate) const API: &str = "https://www.strava.com/api/v3";
 
@@ -26,7 +23,7 @@ pub fn get_id(request: &Request) -> TbResult<i32> {
 }
 
 #[derive(Queryable, Insertable, Identifiable, Debug)]
-#[table_name = "users"]
+#[table_name = "strava_users"]
 struct DbUser {
     id: i32,
     tendabike_id: i32,
@@ -47,7 +44,7 @@ impl DbUser {
             .as_i64()
             .ok_or(OAuthError::Authorize("athlet id is no int"))? as i32;
 
-        let user = users::table.find(strava_id).get_result::<DbUser>(conn).optional()?;
+        let user = strava_users::table.find(strava_id).get_result::<DbUser>(conn).optional()?;
         if let Some(x) = user {
             return Ok(x);
         }
@@ -75,19 +72,19 @@ impl DbUser {
             last_activity: 0,
         };
         webhook::insert_sync(strava_id, conn)?;
-        Ok(diesel::insert_into(users::table)
+        Ok(diesel::insert_into(strava_users::table)
             .values(&user)
             .get_result(conn)?)
     }
 
     /// Updates the user database from a new token
     fn store(self, conn: &AppConn, cookies: &mut Cookies, token: TokenResponse<Strava>) -> TbResult<(Self, String)> {
-        use schema::users::dsl::*;
+        use schema::strava_users::dsl::*;
         use time::*;
 
         let iat = get_time().sec;
         let exp = token.expires_in().unwrap() as i64 + iat - 300; // 5 Minutes buffer
-        let db_user: DbUser = diesel::update(users.find(self.id))
+        let db_user: DbUser = diesel::update(strava_users.find(self.id))
             .set((
                 access_token.eq(token.access_token()),
                 expires_at.eq(exp),
@@ -131,8 +128,8 @@ impl User {
             .guard::<State<Config>>()
             .expect("Config missing!!!").port;
         let url = format!("{}:{}", TB_URL, port);
-        let user: DbUser = users::table
-            .filter(users::tendabike_id.eq(id))
+        let user: DbUser = strava_users::table
+            .filter(strava_users::tendabike_id.eq(id))
             .get_result(&conn.0)
             .context("user not registered")?;
 
@@ -160,9 +157,9 @@ impl User {
     
     /// disable a user 
     fn disable(&self, message: &'static str) -> anyhow::Error {
-        use schema::users::dsl::*;
+        use schema::strava_users::dsl::*;
 
-        diesel::update(users.find(self.user.id))
+        diesel::update(strava_users.find(self.user.id))
             .set((expires_at.eq(0), access_token.eq("")))
             .execute(&self.conn.0).context("Could not update last_activity")
             .unwrap_or_else(|err| {error!("Could not update user: {:?}", err); 0});
@@ -225,9 +222,9 @@ impl User {
         if self.user.last_activity >= time {
             return Ok(self.user.last_activity);
         }
-        use schema::users::dsl::*;
+        use schema::strava_users::dsl::*;
 
-        diesel::update(users.find(self.user.id))
+        diesel::update(strava_users.find(self.user.id))
             .set(last_activity.eq(time))
             .execute(&self.conn.0).context("Could not update last_activity")?;
         Ok(time)
@@ -243,9 +240,9 @@ impl User {
 }
 
 pub(crate) fn strava_url(who: i32, user: &User) -> TbResult<String> {
-    use schema::users::dsl::*;
+    use schema::strava_users::dsl::*;
 
-    let g: i32 = users
+    let g: i32 = strava_users
         .filter(tendabike_id.eq(who))
         .select(id)
         .first(user.conn())?;

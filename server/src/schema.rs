@@ -77,11 +77,11 @@ table! {
 
 table! {
     strava_events (id) {
-        id -> Int4,
+        id -> Nullable<Int4>,
         object_type -> Text,
         object_id -> Int8,
         aspect_type -> Text,
-        updates -> Nullable<Text>,
+        updates -> Text,
         owner_id -> Int4,
         subscription_id -> Int4,
         event_time -> Int8,

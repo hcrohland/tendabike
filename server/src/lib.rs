@@ -70,7 +70,7 @@ use rocket::fairing::AdHoc;
 
 pub use serde_json::Value as jValue;
 
-type AppConn = diesel::PgConnection;
+pub type AppConn = diesel::PgConnection;
 
 #[database("app_db")]
 pub struct AppDbConn(AppConn);

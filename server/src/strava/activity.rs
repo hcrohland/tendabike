@@ -1,13 +1,9 @@
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
-
-use crate::*;
-use super::*;
-
-use super::schema as schema;
-
-use strava::auth::User;
 use reqwest::blocking::Client;
+
+use super::*;
+use strava::auth::User;
 
 #[derive(Debug, Default)]
 struct SumHash {
@@ -159,13 +155,13 @@ impl StravaActivity {
 
 impl StravaActivity {
     pub fn send_to_tb(self, user: &User) -> TbResult<JSummary> {
-        use schema::activities::dsl::*;
+        use schema::strava_activities::dsl::*;
 
         let client = Client::new();
         let strava_id = self.id;
         let tb = self.into_tb(user)?;
 
-        let tb_id = activities
+        let tb_id = strava_activities
             .find(strava_id)
             .select(tendabike_id)
             .get_result::<i32>(user.conn())
@@ -188,7 +184,7 @@ impl StravaActivity {
             let new_id = act["id"]
                 .as_i64()
                 .ok_or_else(|| anyhow!("id is no int {:?}", act))? as i32;
-            diesel::insert_into(activities)
+            diesel::insert_into(strava_activities)
                 .values((
                     id.eq(strava_id),
                     tendabike_id.eq(new_id),
@@ -205,9 +201,9 @@ impl StravaActivity {
 }
 
 pub(crate) fn strava_url(act: i32, user: &User) -> TbResult<String> {
-    use schema::activities::dsl::*;
+    use schema::strava_activities::dsl::*;
 
-    let g: i64 = activities
+    let g: i64 = strava_activities
         .filter(tendabike_id.eq(act))
         .select(id)
         .first(user.conn())?;
@@ -229,12 +225,12 @@ fn upsert_activity(id: i64, user: &User) -> TbResult<JSummary> {
 }
 
 fn delete_activity(sid: i64, user: &User) -> TbResult<JSummary> {
-    use schema::activities::dsl::*;
+    use schema::strava_activities::dsl::*;
 
     user.conn().transaction(||{
-        let tid: Option<i32> = activities.select(tendabike_id).find(sid).for_update().first(user.conn()).optional()?;
+        let tid: Option<i32> = strava_activities.select(tendabike_id).find(sid).for_update().first(user.conn()).optional()?;
         if let Some(tid) = tid {
-            diesel::delete(activities.find(sid)).execute(user.conn())?;
+            diesel::delete(strava_activities.find(sid)).execute(user.conn())?;
             return Ok(
                 Client::new()   
                     .delete(&format!("{}/{}/{}", user.url, "activ", tid))

@@ -1,10 +1,8 @@
-use diesel::prelude::*;
 use diesel::{self, QueryDsl, RunQueryDsl};
-
-use schema::gears;
 
 use super::*;
 use auth::User;
+use schema::strava_gears;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaGear {
@@ -46,6 +44,7 @@ pub struct TbGear {
 }
 
 #[derive(Serialize, Deserialize, Debug, Queryable, Insertable)]
+#[table_name = "strava_gears"]
 pub struct Gear {
     id: String,
     tendabike_id: i32,
@@ -53,9 +52,9 @@ pub struct Gear {
 }
 
 pub(crate) fn strava_url(gear: i32, user: &User) -> TbResult<String> {
-    use schema::gears::dsl::*;
+    use schema::strava_gears::dsl::*;
 
-    let mut g: String = gears
+    let mut g: String = strava_gears
         .filter(tendabike_id.eq(gear))
         .select(id)
         .first(user.conn())?;
@@ -117,9 +116,9 @@ impl TbGear {
 /// If it does not exist create it at tb
 /// None will return None
 pub fn strava_to_tb(strava: String, user: &User) -> TbResult<i32> {
-    use schema::gears::dsl::*;
+    use schema::strava_gears::dsl::*;
 
-    let g = gears
+    let g = strava_gears
         .find(&strava)
         .select(tendabike_id)
         .get_results::<i32>(user.conn()).context("Error reading database")?;
@@ -133,7 +132,7 @@ pub fn strava_to_tb(strava: String, user: &User) -> TbResult<i32> {
         .context("Couldn't map gear")?
         .into_tb(user).context("Could not map gear to tendabike format")?
         .send_to_tb(user).context("Could not send gear to tb")?;
-    diesel::insert_into(gears)
+    diesel::insert_into(strava_gears)
         .values((id.eq(strava), tendabike_id.eq(tbid), user_id.eq(user.tb_id())))
         .execute(user.conn()).context("couldn't store gear")?;
     Ok(tbid)

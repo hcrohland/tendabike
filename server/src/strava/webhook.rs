@@ -1,10 +1,3 @@
-
-// use diesel::prelude::*;
-use diesel::{self, RunQueryDsl};
-use diesel::prelude::*;
-
-use super::*;
-use super::schema::events;
 use std::collections::HashMap;
 use std::convert::TryInto;
 
@@ -12,13 +5,19 @@ use rocket::request::Form;
 use rocket_contrib::json::Json;
 use anyhow::ensure;
 
+use diesel::{self, RunQueryDsl};
+use diesel::prelude::*;
+
+use super::*;
+use schema::strava_events;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InEvent {
     object_type: String,
     object_id: i64,
     // Always "create," "update," or "delete."
     aspect_type: String, 	
-    // hash 	For activity update events, keys can contain "title," "type," and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone). For app deauthorization events, there is always an "authorized" : "false" key-value pair.
+    // hash 	For activity update strava_events, keys can contain "title," "type," and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone). For app deauthorization events, there is always an "authorized" : "false" key-value pair.
     updates: HashMap<String,String>,  
     // The athlete's ID.
     owner_id: i32,
@@ -28,6 +27,7 @@ pub struct InEvent {
     event_time: i64,
 }
 #[derive(Debug, Default, Serialize, Deserialize, Queryable, Insertable)]
+#[table_name = "strava_events"]
 pub struct Event {
     id: Option<i32>,
     pub object_type: String,
@@ -85,19 +85,19 @@ pub struct Hub {
 
 impl Event {
     pub fn delete (&self, conn: &AppConn) -> TbResult<()> {
-        use schema::events::dsl::*;
-        diesel::delete(events).filter(id.eq(self.id)).execute(conn)?;
+        use schema::strava_events::dsl::*;
+        diesel::delete(strava_events).filter(id.eq(self.id)).execute(conn)?;
         Ok(())
     }
 }
 
 fn store_event(event: Event, conn: &AppConn) -> TbResult<()>{
     ensure!(
-        schema::users::table.find(event.owner_id).execute(conn) == Ok(1),
+        schema::strava_users::table.find(event.owner_id).execute(conn) == Ok(1),
         Error::BadRequest(format!("unknown event received: {:?}", event))
     );
     
-    diesel::insert_into(schema::events::table).values(&event).execute(conn)?;
+    diesel::insert_into(schema::strava_events::table).values(&event).execute(conn)?;
     Ok(())
 }
 
@@ -109,7 +109,7 @@ pub fn insert_sync(owner_id: i32, conn: &AppConn) -> TbResult<()> {
         event_time: 10,
         ..Default::default()
     };
-    diesel::insert_into(schema::events::table)
+    diesel::insert_into(schema::strava_events::table)
         .values(e)
         .execute(conn)?;
     Ok(())
@@ -121,7 +121,7 @@ pub fn insert_stop(conn: &AppConn) -> TbResult<()> {
         object_id: chrono::offset::Utc::now().timestamp() + 900,
         ..Default::default()
     };
-    diesel::insert_into(schema::events::table)
+    diesel::insert_into(schema::strava_events::table)
         .values(e)
         .execute(conn)?;
     Ok(())
@@ -141,10 +141,10 @@ fn rate_limit(event: Event, user: &auth::User) -> TbResult<Option<Event>> {
 }
 
 pub fn get_event(user: &auth::User) -> TbResult<Option<Event>> {
-    use schema::events::dsl::*;
+    use schema::strava_events::dsl::*;
     let conn = user.conn();
 
-    let event: Option<Event> = events
+    let event: Option<Event> = strava_events
         .filter(owner_id.eq_any(vec![0,user.strava_id()]))
         .order(event_time.asc())
         .first(conn)
@@ -159,14 +159,14 @@ pub fn get_event(user: &auth::User) -> TbResult<Option<Event>> {
 
     // Prevent unneeded calls to Strava
     // only the latest event for an object is interesting
-    let mut list = events
+    let mut list = strava_events
             .filter(object_id.eq(event.object_id))
             .order(event_time.asc())
             .get_results::<Event>(conn)?;
     let res = list.pop();
 
     info!("dropping {:#?}", list);
-    diesel::delete(events)
+    diesel::delete(strava_events)
         .filter(id.eq_any(
             list.into_iter().map(|l| l.id).collect::<Vec<_>>())
         )
