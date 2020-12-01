@@ -422,28 +422,6 @@ pub fn register(act: &Activity, usage: &Usage, conn: &AppConn) -> Vec<Attachment
     }
 }
 
-fn rescan_activities(conn: &AppConn) {
-    use schema::attachments::dsl::*;
-
-    conn.transaction::<_,anyhow::Error,_> (|| {
-        diesel::update(attachments)
-        .set((
-            time.eq(0),
-            climb.eq(0),
-            descend.eq(0),
-            distance.eq(0),
-            count.eq(0),
-        )).execute(conn)?;
-
-        let acts = schema::activities::table.get_results::<Activity>(conn).expect("Could not read activities");
-
-        for act in acts {
-            register(&act, &act.usage(Factor::Add), conn);
-        }
-        Ok(())
-    }).expect("Transaction failed");
-}
-
 pub fn for_parts(partlist: Vec<Part>, conn: &AppConn) -> TbResult<Summary> {
     use schema::attachments::dsl::*;
     use schema::parts::dsl::{parts,id,name,what};
@@ -544,17 +522,7 @@ fn read(
     Ok(atts)
 }
 
-use rocket::http::Status;
-
-#[get("/rescan")]
-fn rescan(
-    _user: Admin,
-    conn: AppDbConn,
-) -> Status {
-    rescan_activities(&conn);
-    Status::Ok
-}
 
 pub fn routes() -> Vec<rocket::Route> {
-    routes![get, patch, get_assembly, rescan]
+    routes![get, patch, get_assembly]
 }
