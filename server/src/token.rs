@@ -6,9 +6,9 @@ use time::*;
 
 use rocket::http::Cookies;
 use rocket::request::Request;
-use jsonwebtoken::{Header, encode, decode, Validation};
+use jsonwebtoken::{DecodingKey, decode, Validation, encode, EncodingKey, Header};
 
-pub const LEEWAY: i64 = 60 * 60 * 24 * 21; // 21 days
+pub const LEEWAY: u64 = 60 * 60 * 24 * 21; // 21 days
 
 const MY_SECRET: &[u8] = b"9bjh34g2jh5hgjg";
 
@@ -21,8 +21,9 @@ struct UserToken {
     id: i32
 }
 
-pub fn id(token: &str, leeway: i64) -> TbResult<i32> {
-    let token_data = decode::<UserToken>(token, MY_SECRET, &Validation {leeway, ..Default::default()})?;
+pub fn id(token: &str, leeway: u64) -> TbResult<i32> {
+
+    let token_data = decode::<UserToken>(token, &DecodingKey::from_secret(MY_SECRET), &Validation {leeway, ..Default::default()})?;
     Ok(token_data.claims.id)
 }
 
@@ -62,14 +63,14 @@ fn cookie<T> (value: T) -> Cookie<'static>
     Cookie::build(TOKEN, value)
                     .same_site(SameSite::Strict)
                     .path("/")
-                    .max_age(Duration::seconds(LEEWAY))
+                    .max_age(Duration::seconds(LEEWAY as i64))
                     .finish()
 }
 
 pub fn store (cookie_store: &mut Cookies, id: i32, iat: i64, exp: i64) {
 
     let my_claims = UserToken {iat, exp, id};
-    let jwt = encode(&Header::default(), &my_claims, MY_SECRET).expect("Could not encode jwt");
+    let jwt = encode(&Header::default(), &my_claims, &EncodingKey::from_secret(MY_SECRET)).expect("Could not encode jwt");
     let token = cookie(jwt.clone());
     
     cookie_store.add(token);
