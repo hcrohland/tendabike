@@ -2,7 +2,8 @@ use rocket::http::*;
 use rocket::request::{self, FromRequest, Request, State};
 use rocket::response::Redirect;
 use rocket::*;
-use crate::*;
+use super::*;
+use crate::token;
 use rocket::Config;
 
 pub use rocket_oauth2::HyperSyncRustlsAdapter;
@@ -13,7 +14,7 @@ use serde_json::Value;
 use diesel::prelude::*;
 use diesel::{self, QueryDsl, RunQueryDsl};
 
-use schema::users;
+use super::schema::users;
 
 pub(crate) const API: &str = "https://www.strava.com/api/v3";
 

@@ -30,11 +30,22 @@ extern crate env_logger;
 
 extern crate dotenv;
 
+#[macro_use]
+extern crate thiserror;
+
+extern crate reqwest;
+extern crate jsonwebtoken;
+
+
+
 use self::diesel::prelude::*;
 
 use std::cmp::{max,min};
 use std::env;
 
+pub mod token;
+pub mod error;
+pub mod strava;
 pub mod schema;
 pub mod user;
 
@@ -49,16 +60,15 @@ use activity::Activity;
 
 pub mod attachment;
 
-extern crate tb_common;
-extern crate tb_strava;
-pub use tb_common::error::*;
-pub use tb_common::*;
+pub use error::*;
 
 use anyhow::Context;
 use chrono::{DateTime, TimeZone, Utc};
 
 use rocket::Rocket;
 use rocket::fairing::AdHoc;
+
+pub use serde_json::Value as jValue;
 
 type AppConn = diesel::PgConnection;
 
@@ -108,7 +118,7 @@ pub fn ignite_rocket() -> rocket::Rocket {
         .mount("/attach", attachment::routes());
     let config = ship.config().clone();
     let ship = ship.manage(config);
-    tb_strava::attach_rocket(ship)
+    strava::attach_rocket(ship)
 }
 
 pub fn init_environment() {
@@ -118,6 +128,13 @@ pub fn init_environment() {
     env_logger::Builder::from_env(
     env_logger::Env::default().default_filter_or("warn")
     ).init();
+}
+
+pub fn parse_time (time: Option<String>) -> TbResult<Option<DateTime<Utc>>> {
+    if let Some(time) = time {
+        return Ok(Some(DateTime::parse_from_rfc3339(&time).context("could not parse time")?.with_timezone(&Utc)))
+    }
+    Ok(None)
 }
 
 #[derive(Debug)]

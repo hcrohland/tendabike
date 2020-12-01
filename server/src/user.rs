@@ -1,4 +1,4 @@
-use crate::*;
+use super::*;
 use anyhow::Context;
 use rocket::http::Status;
 use rocket::request::{self, FromRequest, Request};
@@ -29,7 +29,7 @@ pub struct User {
 
 impl User {
     fn read(request: &Request) -> TbResult<Self> {
-        let id = tb_strava::auth::get_id(request)?;
+        let id = strava::auth::get_id(request)?;
         let conn = request.guard::<AppDbConn>().expect("No db request guard").0;
         Ok(users::table.find(id).get_result(&conn)?)
     }

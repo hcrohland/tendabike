@@ -3,7 +3,7 @@ use diesel::{self, QueryDsl, RunQueryDsl};
 
 use schema::gears;
 
-use crate::*;
+use super::*;
 use auth::User;
 
 #[derive(Serialize, Deserialize, Debug)]

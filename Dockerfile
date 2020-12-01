@@ -15,7 +15,7 @@ RUN rustup update nightly && rustup default nightly
 
 FROM base as planner
 
-COPY . .
+COPY server/. .
 RUN cargo chef prepare --recipe-path recipe.json
 
 
@@ -27,10 +27,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 FROM cacher as build-engine
 
 # do not copy frontend!
-COPY Cargo.toml Cargo.lock ./
-COPY server/ ./server/
-COPY tb_common/ ./tb_common/
-COPY tb_strava/ ./tb_strava/
+COPY server/ .
 
 RUN cargo build --release
 

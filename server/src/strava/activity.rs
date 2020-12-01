@@ -2,8 +2,11 @@ use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 
 use crate::*;
-use auth::User;
-use diesel::prelude::*;
+use super::*;
+
+use super::schema as schema;
+
+use strava::auth::User;
 use reqwest::blocking::Client;
 
 #[derive(Debug, Default)]

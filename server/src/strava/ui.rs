@@ -1,4 +1,4 @@
-use crate::*;
+use super::*;
 use activity::*;
 use auth::User;
 use rocket::response::Redirect;

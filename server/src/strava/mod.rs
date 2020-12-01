@@ -1,28 +1,6 @@
-#![feature(proc_macro_hygiene, decl_macro)]
 #![warn(clippy::all)]
 
-#[macro_use]
-extern crate log;
-
-#[macro_use]
-extern crate diesel;
-#[macro_use]
-extern crate diesel_migrations;
-#[macro_use]
-extern crate rocket;
-#[macro_use]
-extern crate rocket_contrib;
-#[macro_use]
-extern crate serde_derive;
-extern crate reqwest;
-extern crate rocket_oauth2;
-extern crate time;
-#[macro_use]
-extern crate anyhow;
-#[macro_use]
-extern crate thiserror;
-extern crate tb_common;
-use tb_common::*;
+use crate::error::*;
 
 pub(crate) use anyhow::Context;
 
@@ -55,7 +33,7 @@ type AppConn = diesel::PgConnection;
 #[database("auth_db")]
 pub struct AppDbConn(AppConn);
 
-embed_migrations!();
+embed_migrations!("migrations");
 
 use rocket::Rocket;
 

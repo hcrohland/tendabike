@@ -3,8 +3,8 @@
 use diesel::{self, RunQueryDsl};
 use diesel::prelude::*;
 
-use crate::*;
-use schema::events;
+use super::*;
+use super::schema::events;
 use std::collections::HashMap;
 use std::convert::TryInto;
 
