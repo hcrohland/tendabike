@@ -33,7 +33,7 @@ type AppConn = diesel::PgConnection;
 #[database("auth_db")]
 pub struct AppDbConn(AppConn);
 
-embed_migrations!("migrations");
+embed_migrations!("src/strava/migrations");
 
 use rocket::Rocket;
 
