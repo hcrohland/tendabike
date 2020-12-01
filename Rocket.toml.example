@@ -6,7 +6,6 @@ secret_key="...="
 
 [global.databases]
 app_db={url="postgres://localhost/tendabike"}
-auth_db={url="postgres://localhost/strava"}
 
 [global.oauth.strava]
 provider = {auth_uri = "https://www.strava.com/oauth/authorize", token_uri = "https://www.strava.com/oauth/token"}
