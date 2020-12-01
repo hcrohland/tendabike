@@ -72,6 +72,12 @@ pub struct AttachmentDetail {
     what: PartTypeId,
 }
 
+impl AttachmentDetail {
+    pub fn idx(&self) -> String {
+        format!("{}{}", self.a.part_id, self.a.attached)
+    }
+}
+
 fn assembly(
     part: Part,
     at_time: DateTime<Utc>,

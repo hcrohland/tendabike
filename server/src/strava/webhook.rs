@@ -190,10 +190,10 @@ fn validate(hub: Hub) -> TbResult<Hub> {
 }
 
 #[get("/hooks")]
-pub fn process (user: auth::User) -> ApiResult<JSummary> {
+pub fn process (user: auth::User) -> ApiResult<Summary> {
     let e = get_event(&user)?;
     if e.is_none() {
-        return tbapi(Ok(JSummary::default()));
+        return tbapi(Ok(Summary::default()));
     };
     let e = e.unwrap();
 
@@ -203,12 +203,12 @@ pub fn process (user: auth::User) -> ApiResult<JSummary> {
         _ => {
             warn!("skipping {:#?}", e);
             e.delete(user.conn())?;
-            Ok(JSummary::default())
+            Ok(Summary::default())
         }
     })
 }
 
-fn process_activity (e:Event, user: auth::User) -> TbResult<JSummary> {
+fn process_activity (e:Event, user: auth::User) -> TbResult<Summary> {
     info!("Processing {:#?}", e);
     
     match activity::process_hook(&e, &user) {
@@ -219,7 +219,7 @@ fn process_activity (e:Event, user: auth::User) -> TbResult<JSummary> {
                 Some(&Error::TryAgain(_)) => {
                     warn!("stopping hooks for 15 minutes {:?}", err);
                     webhook::insert_stop(user.conn())?;
-                    Ok(JSummary::default())
+                    Ok(Summary::default())
                 },
                 _ => {
                     e.delete(user.conn())?;

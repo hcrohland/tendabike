@@ -72,7 +72,7 @@ pub struct Part {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Insertable)]
 #[table_name = "parts"]
-struct NewPart {
+pub struct NewPart {
     /// The owner
     pub owner: i32,
     /// The type of the part
@@ -241,7 +241,7 @@ pub fn reset(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartId>> {
 }
 
 impl NewPart {
-    fn create(self, user: &User, conn: &AppConn) -> TbResult<Part> {
+    pub fn create(self, user: &dyn Person, conn: &AppConn) -> TbResult<Part> {
         use schema::parts::dsl::*;
 
         user.check_owner(

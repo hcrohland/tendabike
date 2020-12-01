@@ -108,7 +108,7 @@ impl ActivityId {
     ///
     /// returns all affected parts  
     /// checks authorization  
-    fn delete(self, person: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
+    pub fn delete(self, person: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
         use crate::schema::activities::dsl::*;
         conn.transaction(|| {
             let res = self
@@ -128,9 +128,9 @@ impl ActivityId {
     ///
     /// returns all affected parts  
     /// checks authorization  
-    fn update(
+    pub fn update(
         self,
-        act: NewActivity,
+        act: &NewActivity,
         user: &dyn Person,
         conn: &AppConn,
     ) -> TbResult<Summary> {
@@ -141,7 +141,7 @@ impl ActivityId {
 
             let act = diesel::update(activities::table)
                 .filter(activities::id.eq(self))
-                .set(&act)
+                .set(act)
                 .get_result::<Activity>(conn)
                 .context("Error reading activity")?;
 
@@ -157,8 +157,8 @@ impl Activity {
     ///
     /// returns the activity and all affected parts  
     /// checks authorization  
-    fn create(
-        act: NewActivity,
+    pub fn create(
+        act: &NewActivity,
         user: &dyn Person,
         conn: &AppConn,
     ) -> TbResult<Summary> {
@@ -172,7 +172,7 @@ impl Activity {
         )?;
         conn.transaction(|| {
             let new: Activity = diesel::insert_into(activities::table)
-                .values(&act)
+                .values(act)
                 .get_result(conn)
                 .context("Could not insert activity")?;
             // let res = new.check_geartype(res, conn)?;
@@ -371,7 +371,7 @@ fn post(
     user: &User,
     conn: AppDbConn,
 ) -> Result<status::Created<Json<Summary>>, ApiError> {
-    let assembly = Activity::create(activity.0, user, &conn)?;
+    let assembly = Activity::create(&activity, user, &conn)?;
     let id_raw: i32 = assembly.activities[0].id.into();
     let url = uri!(get: id_raw);
     Ok(status::Created(
@@ -388,7 +388,7 @@ fn put(
     user: &User,
     conn: AppDbConn,
 ) -> Result<Json<Summary>, ApiError> {
-    tbapi(ActivityId(id).update(activity.0, user, &conn))
+    tbapi(ActivityId(id).update(&activity, user, &conn))
 }
 
 /// web interface to delete an activity

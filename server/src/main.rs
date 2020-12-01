@@ -68,27 +68,13 @@ use chrono::{DateTime, TimeZone, Utc};
 use rocket::Rocket;
 use rocket::fairing::AdHoc;
 
-pub use serde_json::Value as jValue;
-
 pub type AppConn = diesel::PgConnection;
 
-#[database("app_db")]
-pub struct AppDbConn(AppConn);
+fn main() {
+    // setup environment. Includes Config and logging
+    init_environment();
 
-embed_migrations!();
-
-fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
-    let conn = AppDbConn::get_one(&rocket).expect("database connection");
-    match embedded_migrations::run(&*conn) {
-        Ok(()) => Ok(rocket),
-        Err(e) => {
-            error!("Failed to run database migrations: {:?}", e);
-            Err(rocket)
-        }
-    }
-}
-
-pub fn ignite_rocket() -> rocket::Rocket {
+    // start the server
     // Initialize server
 
     // You can also deserialize this
@@ -115,10 +101,32 @@ pub fn ignite_rocket() -> rocket::Rocket {
         .mount("/types", types::routes())
         .mount("/part", part::routes())
         .mount("/activ", activity::routes())
-        .mount("/attach", attachment::routes());
-    let config = ship.config().clone();
-    let ship = ship.manage(config);
-    strava::attach_rocket(ship)
+        .mount("/attach", attachment::routes())
+        .mount("/strava", strava::ui::routes());
+        
+        // add oauth2 flow
+        let config = ship.config().clone();
+        ship.attach(strava::auth::fairing(&config))
+            .attach(rocket::fairing::AdHoc::on_launch("Launch Message", |rocket| {
+                let c = rocket.config();
+                eprintln!("\nInfo: TendaBike running on {}:{}\n", c.address, c.port);
+            }))
+            .launch();
+}
+#[database("app_db")]
+pub struct AppDbConn(AppConn);
+
+embed_migrations!();
+
+fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
+    let conn = AppDbConn::get_one(&rocket).expect("database connection");
+    match embedded_migrations::run(&*conn) {
+        Ok(()) => Ok(rocket),
+        Err(e) => {
+            error!("Failed to run database migrations: {:?}", e);
+            Err(rocket)
+        }
+    }
 }
 
 pub fn init_environment() {

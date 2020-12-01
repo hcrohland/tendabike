@@ -1,5 +1,3 @@
-#![warn(clippy::all)]
-
 pub(crate) use anyhow::Context;
 
 pub mod activity;

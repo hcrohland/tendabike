@@ -1,19 +1,18 @@
 use rocket::http::*;
-use rocket::request::{self, FromRequest, Request, State};
+use rocket::request::{self, FromRequest, Request};
 use rocket::response::Redirect;
 use rocket::*;
 use rocket::Config;
-pub use rocket_oauth2::HyperSyncRustlsAdapter;
+use rocket_oauth2::HyperSyncRustlsAdapter;
 use rocket_oauth2::{OAuth2, TokenResponse, OAuthConfig};
 
-use serde_json::Value;
 use diesel::{self, QueryDsl, RunQueryDsl};
 
 use super::*;
 use schema::strava_users;
+use user::Person;
 
-
-pub(crate) const API: &str = "https://www.strava.com/api/v3";
+const API: &str = "https://www.strava.com/api/v3";
 
 /// check user id from the request
 /// 
@@ -22,7 +21,7 @@ pub fn get_id(request: &Request) -> TbResult<i32> {
     User::get(request).map(|u| u.user.tendabike_id)
 }
 
-#[derive(Queryable, Insertable, Identifiable, Debug)]
+#[derive(Queryable, Insertable, Identifiable, Debug, Default)]
 #[table_name = "strava_users"]
 struct DbUser {
     id: i32,
@@ -33,52 +32,42 @@ struct DbUser {
     refresh_token: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct StravaAthlete {
+    firstname: String,
+    lastname: String,
+    id: i32
+}
+
 impl DbUser {
     /// Get the user data from the Strava OAuth callback
-    fn retrieve(conn: &AppConn, config: &Config, athlete: &serde_json::value::Value) -> TbResult<Self> {
-        info!(
-            "got athlete {} {}, with id {}",
-            athlete["firstname"], athlete["lastname"], athlete["id"]
-        );
-        let strava_id = athlete["id"]
-            .as_i64()
-            .ok_or(OAuthError::Authorize("athlet id is no int"))? as i32;
 
-        let user = strava_users::table.find(strava_id).get_result::<DbUser>(conn).optional()?;
+    fn retrieve(conn: &AppConn, athlete: StravaAthlete) -> TbResult<Self> {
+        info!("got {:?}", athlete);
+
+        let user = strava_users::table.find(athlete.id).get_result::<DbUser>(conn).optional()?;
         if let Some(x) = user {
             return Ok(x);
         }
 
         // create user!
 
-        let client = reqwest::blocking::Client::new();
-
-        let user = client
-            .post(&format!("{}:{}/{}", TB_URL, config.port,"user"))
-            .json(athlete)
-            .send().context("unable to contact backend")?
-            .error_for_status().context("backend responded with error")?
-            .json::<Value>().context("malformed Json")?;
-        let tendabike_id = user["id"]
-            .as_i64()
-            .ok_or_else(|| anyhow!("athlet id is no int"))? as i32;
+        let tendabike_id = crate::user::create(athlete.firstname, athlete.lastname, conn)?;
 
         let user = DbUser {
-            id: strava_id,
+            id: athlete.id,
             tendabike_id,
-            access_token: "".into(),
-            refresh_token: "".into(),
-            expires_at: 0,
-            last_activity: 0,
+            ..Default::default()
         };
-        webhook::insert_sync(strava_id, conn)?;
+
+        webhook::insert_sync(athlete.id, conn)?;
         Ok(diesel::insert_into(strava_users::table)
             .values(&user)
             .get_result(conn)?)
     }
 
     /// Updates the user database from a new token
-    fn store(self, conn: &AppConn, cookies: &mut Cookies, token: TokenResponse<Strava>) -> TbResult<(Self, String)> {
+    fn store(self, conn: &AppConn, cookies: &mut Cookies, token: TokenResponse<Strava>) -> TbResult<Self> {
         use schema::strava_users::dsl::*;
         use time::*;
 
@@ -92,17 +81,24 @@ impl DbUser {
             ))
             .get_result(conn).context("Could not store user")?;
 
-        let token = token::store(cookies, db_user.tendabike_id, iat, exp);
+        token::store(cookies, db_user.tendabike_id, iat, exp);
 
-        Ok((db_user, token))
+        Ok(db_user)
     }
 }
 
 pub struct User {
     user: DbUser,
     conn: AppDbConn,
-    pub token: String,
-    pub url: String,
+}
+
+impl Person for User {
+    fn get_id(&self) -> i32 {
+        self.user.tendabike_id
+    }
+    fn is_admin(&self) -> bool {
+        false
+    }
 }
 
 /// User request guard
@@ -124,17 +120,13 @@ impl User {
         let conn = request
             .guard::<AppDbConn>()
             .expect("internal db missing!!!");
-        let port = request
-            .guard::<State<Config>>()
-            .expect("Config missing!!!").port;
-        let url = format!("{}:{}", TB_URL, port);
         let user: DbUser = strava_users::table
             .filter(strava_users::tendabike_id.eq(id))
             .get_result(&conn.0)
             .context("user not registered")?;
 
         if user.expires_at > time::get_time().sec {
-            return Ok(User { user, conn, token, url });
+            return Ok(User { user, conn });
         }
 
         ensure!(user.expires_at != 0, Error::NotAuth("Missing Strava Authorization"));
@@ -149,9 +141,9 @@ impl User {
         let mut cookies = request
             .guard::<Cookies>()
             .expect("Could not get Cookie store!!!");
-        let (user, token) = user.store(&conn, &mut cookies, tokenset)?;
+        let user = user.store(&conn, &mut cookies, tokenset)?;
 
-        Ok(User { user, token, conn, url })
+        Ok(User { user, conn })
 
     }
     
@@ -201,11 +193,6 @@ impl User {
             .text().context("Could not get response body")?)
     }
 
-    pub fn request_json(&self, uri: &str) -> TbResult<Value> {
-        Ok(self.get_strava(uri)?
-            .json().context("Could not parse response body")?)
-    }
-
     pub fn tb_id(&self) -> i32 {
         self.user.tendabike_id
     }
@@ -239,7 +226,7 @@ impl User {
     }
 }
 
-pub(crate) fn strava_url(who: i32, user: &User) -> TbResult<String> {
+pub fn strava_url(who: i32, user: &User) -> TbResult<String> {
     use schema::strava_users::dsl::*;
 
     let g: i32 = strava_users
@@ -273,7 +260,7 @@ impl<'a, 'r> FromRequest<'a, 'r> for User {
 pub struct Strava;
 
 #[get("/login")]
-pub(crate) fn login(oauth2: OAuth2<Strava>, mut cookies: Cookies<'_>) -> TbResult<Redirect> {
+pub fn login(oauth2: OAuth2<Strava>, mut cookies: Cookies<'_>) -> TbResult<Redirect> {
     // We want the "user:read" scope. For some providers, scopes may be
     // pre-selected or restricted during application registration. We could
     // use `&[]` instead to not request any scopes, but usually scopes
@@ -281,16 +268,32 @@ pub(crate) fn login(oauth2: OAuth2<Strava>, mut cookies: Cookies<'_>) -> TbResul
     Ok(oauth2.get_redirect(&mut cookies, &["activity:read_all,profile:read_all"])?)
 }
 
-#[get("/token")]
-pub(crate) fn callback(token: TokenResponse<Strava>, conn: AppDbConn, config: State<Config>, mut cookies: Cookies<'_>) -> TbResult<Redirect> {
+#[derive(Error, Debug)]
+pub enum OAuthError {
+    #[error("authorization needed: {0}")]
+    Authorize(&'static str),
+}
+
+fn process_callback(token: TokenResponse<Strava>, conn: &AppConn, mut cookies: Cookies<'_>) -> TbResult<()>
+{
     info!("Strava got scope {:?}", token.scope());
     let athlete = token
         .as_value()
         .get("athlete")
         .ok_or(OAuthError::Authorize("token did not include athlete"))?;
 
-    auth::DbUser::retrieve(&conn, &config, athlete)?.store(&conn, &mut cookies, token)?;
-    Ok(Redirect::to("/"))
+    let athlete = serde_json::from_value(athlete.clone())?;
+
+    auth::DbUser::retrieve(&conn, athlete)?.store(&conn, &mut cookies, token)?;
+    Ok(())
+}
+
+#[get("/token")]
+pub fn callback(token: TokenResponse<Strava>, conn: AppDbConn, cookies: Cookies<'_>) -> Result<Redirect,String> {
+    match process_callback(token, &conn, cookies) {
+        Err(e) => {error!("{:#?}", e); return Err(format!("{:#?}", e))},
+        _ => Ok(Redirect::to("/"))
+    }
 }
 
 pub type OAuth = OAuth2<Strava>;

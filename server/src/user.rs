@@ -2,7 +2,6 @@ use super::*;
 use anyhow::Context;
 use rocket::http::Status;
 use rocket::request::{self, FromRequest, Request};
-use rocket::response::status;
 use rocket::Outcome;
 use rocket_contrib::json::Json;
 use schema::*;
@@ -89,28 +88,20 @@ fn getuser(user: &User) -> Json<&User> {
     Json(user)
 }
 
-#[derive(Deserialize)]
-struct NewUser {
-    #[serde(alias = "lastname")]
-    name: String,
-    firstname: String,
-}
-
-#[post("/", data = "<user>")]
-fn post(user: Json<NewUser>, conn: AppDbConn) -> Result<status::Created<Json<User>>, ApiError> {
-    use schema::users::dsl::*;
+pub fn create(forename: String, lastname: String, conn: &AppConn) -> TbResult<i32> {
+    use crate::schema::users::dsl::*;
 
     let user: User = diesel::insert_into(users)
         .values((
-            name.eq(&user.name),
-            firstname.eq(&user.firstname),
+            firstname.eq(forename),
+            name.eq(lastname),
             is_admin.eq(false),
         ))
-        .get_result(&conn.0)
+        .get_result(conn)
         .context("Could not create user")?;
-    Ok(status::Created("/".to_string(), Some(Json(user))))
+    Ok(user.id)
 }
 
 pub fn routes() -> Vec<rocket::Route> {
-    routes![getuser, post]
+    routes![getuser]
 }
