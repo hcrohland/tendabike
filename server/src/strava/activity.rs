@@ -130,37 +130,39 @@ impl StravaActivity {
 
 impl StravaActivity {
     fn send_to_tb(self, user: &User) -> TbResult<Summary> {
-        use schema::strava_activities::dsl::*;
+        user.conn().transaction(||{
+            use schema::strava_activities::dsl::*;
 
-        let strava_id = self.id;
-        let tb = self.into_tb(user)?;
+            let strava_id = self.id;
+            let tb = self.into_tb(user)?;
 
-        let tb_id = strava_activities
-            .find(strava_id)
-            .select(tendabike_id)
-            .for_update()
-            .get_result::<ActivityId>(user.conn())
-            .optional()?;
+            let tb_id = strava_activities
+                .find(strava_id)
+                .select(tendabike_id)
+                .for_update()
+                .get_result::<ActivityId>(user.conn())
+                .optional()?;
 
-        let res; 
-        if let Some(tb_id) = tb_id {
-            res = tb_id.update(&tb, user, user.conn())?
-        } else {
-            res = Activity::create(&tb, user, user.conn())?;
-            let new_id = &res.activities[0].id;
-            diesel::insert_into(strava_activities)
-                .values((
-                    id.eq(strava_id),
-                    tendabike_id.eq(new_id),
-                    user_id.eq(tb.user_id),
-                ))
-                .execute(user.conn())?;
-        }
+            let res; 
+            if let Some(tb_id) = tb_id {
+                res = tb_id.update(&tb, user, user.conn())?
+            } else {
+                res = Activity::create(&tb, user, user.conn())?;
+                let new_id = &res.activities[0].id;
+                diesel::insert_into(strava_activities)
+                    .values((
+                        id.eq(strava_id),
+                        tendabike_id.eq(new_id),
+                        user_id.eq(tb.user_id),
+                    ))
+                    .execute(user.conn())?;
+            }
 
-        user.update_last(tb.start.timestamp())
-            .context("unable to update user")?;
+            user.update_last(tb.start.timestamp())
+                .context("unable to update user")?;
 
-        Ok(res)
+            Ok(res)
+        })
     }
 }
 
@@ -184,8 +186,7 @@ fn get_activity(id: i64, user: &User) -> TbResult<StravaActivity> {
 
 fn upsert_activity(id: i64, user: &User) -> TbResult<Summary> {
     let act = get_activity(id, user).context(format!("strava activity id {}", id))?;
-    let ps = act.send_to_tb(user)?;
-    Ok(ps)
+    act.send_to_tb(user)
 }
 
 fn delete_activity(sid: i64, user: &User) -> TbResult<Summary> {

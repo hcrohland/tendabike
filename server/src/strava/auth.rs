@@ -51,19 +51,20 @@ impl DbUser {
         }
 
         // create user!
+        conn.transaction(||{
+            let tendabike_id = crate::user::create(athlete.firstname, athlete.lastname, conn)?;
 
-        let tendabike_id = crate::user::create(athlete.firstname, athlete.lastname, conn)?;
+            let user = DbUser {
+                id: athlete.id,
+                tendabike_id,
+                ..Default::default()
+            };
 
-        let user = DbUser {
-            id: athlete.id,
-            tendabike_id,
-            ..Default::default()
-        };
-
-        webhook::insert_sync(athlete.id, conn)?;
-        Ok(diesel::insert_into(strava_users::table)
-            .values(&user)
-            .get_result(conn)?)
+            webhook::insert_sync(athlete.id, conn)?;
+            Ok(diesel::insert_into(strava_users::table)
+                .values(&user)
+                .get_result(conn)?)
+        })
     }
 
     /// Updates the user database from a new token
