@@ -165,12 +165,14 @@ pub fn get_event(user: &auth::User) -> TbResult<Option<Event>> {
             .get_results::<Event>(conn)?;
     let res = list.pop();
 
-    info!("dropping {:#?}", list);
-    diesel::delete(strava_events)
+    if list.len() > 0 {
+        info!("dropping {:#?}", list);
+        diesel::delete(strava_events)
         .filter(id.eq_any(
             list.into_iter().map(|l| l.id).collect::<Vec<_>>())
         )
         .execute(conn)?;
+    }
 
     return Ok(res)
 }
