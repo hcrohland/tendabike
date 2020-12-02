@@ -13,13 +13,17 @@
   let userOpen = false;
   let syncOpen = false;
   let running = false;
+  let polling = false;
   let number = 0;
   let promise;
   let data = undefined;
   let garmin
   let isOpen = false;
 
-  $: if ($user) {poll(() => new Promise(() => {promise = getdata()}), 60000)}
+  $: if ($user && !polling) {
+    polling = true;
+    poll(() => new Promise(() => {promise = getdata()}), 60000)
+  }
 
   function refresh () {promise = myfetch('/part/all').then(setPartAttach)}
 
