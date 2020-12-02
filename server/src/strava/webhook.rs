@@ -161,6 +161,7 @@ pub fn get_event(user: &auth::User) -> TbResult<Option<Event>> {
     // only the latest event for an object is interesting
     let mut list = strava_events
             .filter(object_id.eq(event.object_id))
+            .filter(owner_id.eq(event.owner_id))
             .order(event_time.asc())
             .get_results::<Event>(conn)?;
     let res = list.pop();
@@ -191,29 +192,10 @@ fn validate(hub: Hub) -> TbResult<Hub> {
     Ok(hub)
 }
 
-#[get("/hooks")]
-pub fn process (user: auth::User) -> ApiResult<Summary> {
-    let e = get_event(&user)?;
-    if e.is_none() {
-        return tbapi(Ok(Summary::default()));
-    };
-    let e = e.unwrap();
-
-    tbapi(match e.object_type.as_str() {
-        "activity" => process_activity(e, user),
-        // "athlete" => process_user(e, user),
-        _ => {
-            warn!("skipping {:#?}", e);
-            e.delete(user.conn())?;
-            Ok(Summary::default())
-        }
-    })
-}
-
-fn process_activity (e:Event, user: auth::User) -> TbResult<Summary> {
+fn process_activity (e:Event, user: &auth::User) -> TbResult<Summary> {
     info!("Processing {:#?}", e);
     
-    match activity::process_hook(&e, &user) {
+    match activity::process_hook(&e, user) {
         Ok(res) => return Ok(res),
         Err(err) => {
             // Keep events for temporary failure - delete others
@@ -230,6 +212,32 @@ fn process_activity (e:Event, user: auth::User) -> TbResult<Summary> {
             }
         }
     }
+}
+
+pub fn process (user: &auth::User) -> TbResult<Summary> {
+    let e = get_event(user)?;
+    if e.is_none() {
+        return Ok(Summary::default());
+    };
+    let e = e.unwrap();
+    
+    match e.object_type.as_str() {
+        "activity" => process_activity(e, user),
+        // "athlete" => process_user(e, user),
+        _ => {
+            warn!("skipping {:#?}", e);
+            e.delete(user.conn())?;
+            Ok(Summary::default())
+        }
+    }
+}
+
+#[get("/hooks")]
+pub fn hooks (user: auth::User) -> ApiResult<Summary> {
+    user.lock()?;
+    let res = process(&user);
+    user.unlock()?;
+    tbapi(res)
 }
 
 #[post("/callback", format = "json", data="<event>")]

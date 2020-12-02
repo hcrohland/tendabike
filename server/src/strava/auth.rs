@@ -6,7 +6,7 @@ use rocket::Config;
 use rocket_oauth2::HyperSyncRustlsAdapter;
 use rocket_oauth2::{OAuth2, TokenResponse, OAuthConfig};
 
-use diesel::{self, QueryDsl, RunQueryDsl};
+use diesel::{self, QueryDsl, RunQueryDsl, sql_query};
 
 use super::*;
 use schema::strava_users;
@@ -186,6 +186,27 @@ impl User {
                 ))
         }
     }
+
+    pub fn lock (&self) -> TbResult<()> {
+        use diesel::sql_types::Bool;
+        #[derive(QueryableByName, Debug)]
+        struct Lock {
+            #[sql_type = "Bool"]
+            #[column_name = "pg_try_advisory_lock"]
+            lock: bool
+        }
+    
+        ensure!(
+            sql_query(format!("SELECT pg_try_advisory_lock({});", self.strava_id())).get_result::<Lock>(self.conn())?.lock,
+            Error::Conflict(format!("Two sessions for user {}", self.strava_id()))
+        );
+        Ok(())
+    }
+    
+    pub fn unlock(&self) -> TbResult<()> {
+        sql_query(format!("SELECT pg_advisory_unlock({});", self.strava_id())).execute(self.conn())?;
+        Ok(())
+    }        
 
     /// send an API call with an authenticated User
     ///
