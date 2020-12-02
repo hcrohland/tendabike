@@ -13,17 +13,10 @@
   let userOpen = false;
   let syncOpen = false;
   let running = false;
-  let polling = false;
   let number = 0;
   let promise;
   let data = undefined;
   let garmin
-  let isOpen = false;
-
-  $: if ($user && !polling) {
-    polling = true;
-    poll(() => new Promise(() => {promise = getdata()}), 60000)
-  }
 
   function refresh () {promise = myfetch('/part/all').then(setPartAttach)}
 
@@ -40,14 +33,24 @@
     running = false;
     number = 0;
   }
-  function handleUpdate(event) {
+
+  let isOpen = false;
+  function navbarUpdate(event) {
     isOpen = event.detail.isOpen;
   }
 
-  var sleep = time => new Promise(resolve => setTimeout(resolve, time))
-  export var poll = (promiseFn, time) => promiseFn().then(
-              sleep(time).then(() => poll(promiseFn, time)))
+  let polling = false;
+  async function poll (promiseFn, time) {
+    if (polling) return
+    polling = true;
+    while (true){
+      promise = promiseFn()
+      await promise
+      await new Promise(resolve => setTimeout(resolve, time))
+    }
+  }
 
+  $: if ($user) poll(getdata, 60000)
 
 </script>
 
@@ -67,7 +70,7 @@
   </NavbarBrand>
   {#if $user}
     <NavbarToggler on:click={() => (isOpen = !isOpen)} />
-    <Collapse {isOpen} navbar expand="md" on:update={handleUpdate}>
+    <Collapse {isOpen} navbar expand="md" on:update={navbarUpdate}>
       <Nav class="ml-auto float-left" navbar>
         {#if $category}
           <a href="/cat/{$category.id}" use:link class="dropdown-item text-reset">{$category.name}s</a>
