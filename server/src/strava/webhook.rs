@@ -8,6 +8,7 @@ use diesel::{self, RunQueryDsl};
 use diesel::prelude::*;
 
 use super::*;
+use auth::User;
 use schema::strava_events;
 
 // complicated way to have query parameters with dots in the name
@@ -146,7 +147,7 @@ pub fn insert_stop(conn: &AppConn) -> TbResult<()> {
     Ok(())
 }
 
-fn rate_limit(event: Event, user: &auth::User) -> TbResult<Option<Event>> {
+fn rate_limit(event: Event, user: &User) -> TbResult<Option<Event>> {
     // rate limit event
     if event.event_time > chrono::offset::Utc::now().timestamp() {
         // still rate limited!
@@ -159,7 +160,7 @@ fn rate_limit(event: Event, user: &auth::User) -> TbResult<Option<Event>> {
     return get_event(user)
 }
 
-pub fn get_event(user: &auth::User) -> TbResult<Option<Event>> {
+pub fn get_event(user: &User) -> TbResult<Option<Event>> {
     use schema::strava_events::dsl::*;
     let conn = user.conn();
 
@@ -223,7 +224,7 @@ fn check_try_again(err: anyhow::Error, conn: &AppConn) -> TbResult<Summary> {
     }
 }
 
-fn process_activity (e:Event, user: &auth::User) -> TbResult<Summary> {
+fn process_activity (e:Event, user: &User) -> TbResult<Summary> {
     match activity::process_hook(&e, user).or_else(|e| check_try_again(e, user.conn()))    {
         Ok(res) => return Ok(res),
         Err(err) => {
@@ -233,7 +234,7 @@ fn process_activity (e:Event, user: &auth::User) -> TbResult<Summary> {
     }
 }
 
-pub fn process (user: &auth::User) -> TbResult<Summary> {
+pub fn process (user: &User) -> TbResult<Summary> {
     let e = get_event(user)?;
     if e.is_none() {
         return Ok(Summary::default());
@@ -254,7 +255,7 @@ pub fn process (user: &auth::User) -> TbResult<Summary> {
 }
 
 #[get("/hooks")]
-pub fn hooks (user: auth::User) -> ApiResult<Summary> {
+pub fn hooks (user: User) -> ApiResult<Summary> {
     user.lock()?;
     let res = process(&user);
     user.unlock()?;
