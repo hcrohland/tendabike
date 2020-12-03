@@ -2,6 +2,7 @@
   
   export let date = new Date;
 	export let mindate = undefined;
+	export let maxdate = undefined;
 
 	const props = Object.assign({}, $$props);
 	delete props.date;
@@ -22,6 +23,7 @@
 		minuteIncrement: 15,
 		formatDate: dateObj =>  dateObj.toLocaleString(navigator.language, options),
 		minDate: mindate,
+		maxDate: maxdate
 	}
 	export function roundTime(date: Date, minutes?: number) {
 		if (!minutes) minutes = 15

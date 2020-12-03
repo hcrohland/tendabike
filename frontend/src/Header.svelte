@@ -9,6 +9,7 @@
   import {link} from 'svelte-spa-router';
   import {myfetch, handleError, setPartAttach, updatePartAttach, category, user} from "./store";
   import Garmin from "./Actions/Garmin.svelte"
+  import CreateSync from "./Actions/CreateSync.svelte"
 
   let userOpen = false;
   let syncOpen = false;
@@ -17,6 +18,7 @@
   let promise;
   let data = undefined;
   let garmin
+  let createSync
 
   function refresh () {promise = myfetch('/part/all').then(setPartAttach)}
 
@@ -55,6 +57,7 @@
 </script>
 
 <Garmin bind:garmin />
+<CreateSync bind:createSync />
 
 <Navbar expand="md" color="light" light mb-2>
   <img src="favicon.png" alt="TendaBike" title="TendaBike" width=60 class="rounded-circle">
@@ -95,6 +98,10 @@
           </DropdownToggle>
           <DropdownMenu right>
             <DropdownItem on:click={garmin}>Garmin</DropdownItem>
+            {#if $user.is_admin}
+              <DropdownItem divider />
+              <DropdownItem on:click={createSync}> Create Sync Event </DropdownItem>
+            {/if}
           </DropdownMenu>
         </Dropdown>
         <Dropdown nav isOpen={userOpen} toggle={() => (userOpen = !userOpen)}>
