@@ -176,7 +176,7 @@ impl PartId {
     pub fn apply(self, usage: &Usage, conn: &AppConn) -> TbResult<Part> {
         use schema::parts::dsl::*;
 
-        debug!("Applying usage to part {}", self);
+        trace!("Applying usage to part {}", self);
 
         Ok(conn.transaction(|| {
             let part: Part = parts.find(self).for_update().get_result(conn)?;

@@ -110,6 +110,7 @@ impl ActivityId {
     /// checks authorization  
     pub fn delete(self, person: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
         use crate::schema::activities::dsl::*;
+        info!("Deleting {:?}", self);
         conn.transaction(|| {
             let res = self
                 .read(person, conn)
@@ -138,12 +139,14 @@ impl ActivityId {
             self
                 .read(user, conn)?
                 .register(Factor::Sub, conn)?;
-
+                
             let act = diesel::update(activities::table)
                 .filter(activities::id.eq(self))
                 .set(act)
                 .get_result::<Activity>(conn)
                 .context("Error reading activity")?;
+
+            info!("Updating {:?}", act);
 
             let res = act.register(Factor::Add, conn)
                             .context("Could not register activity")?;
@@ -170,13 +173,13 @@ impl Activity {
                 act.user_id
             ),
         )?;
+        info!("Creating {:?}", act);
         conn.transaction(|| {
             let new: Activity = diesel::insert_into(activities::table)
                 .values(act)
                 .get_result(conn)
                 .context("Could not insert activity")?;
             // let res = new.check_geartype(res, conn)?;
-            info!("creating activity {}", new.id);
             Ok(new
                 .register(Factor::Add, conn)
                 .context("Could not register activity")?
@@ -225,8 +228,9 @@ impl Activity {
     }
 
     fn register(self, factor: Factor, conn: &AppConn) -> TbResult<Summary> {
-        let usage = self.usage(factor);
+        trace!("{} {:?}", if factor == Factor::Add {"Registering"} else {"Unregistering"}, self);
 
+        let usage = self.usage(factor);
         Ok(
             Summary {
                 parts: attachment::parts_per_activity(&self, conn)
