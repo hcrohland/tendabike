@@ -266,8 +266,20 @@ pub fn create_event(event: Json<InEvent>, conn: AppDbConn) -> Result<(),ApiError
 }
 
 #[get("/callback?<hub..>")]
-pub(crate) fn validate_subscription (hub: Form<Hub>) -> ApiResult<Hub> {
+pub fn validate_subscription (hub: Form<Hub>) -> ApiResult<Hub> {
     let hub = hub.into_inner();
     info!("Received validation callback {:?}", hub);
     tbapi(validate(hub))
+}
+
+#[get("/sync?<time>&<user>")]
+pub fn sync_api (time: i64, user: Option<i32>, _user: user::Admin, conn: AppDbConn) -> Result<(),ApiError> {
+    let users = match user {
+        None => auth::getallusers(&conn)?,
+        Some(user) => vec![user]
+    };
+    for user in users.into_iter() {
+        insert_sync(user, time, &conn)?;
+    }
+    Ok(())
 }

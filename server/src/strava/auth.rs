@@ -259,6 +259,12 @@ pub fn strava_url(who: i32, user: &User) -> TbResult<String> {
     Ok(format!("https://strava.com/athletes/{}", &g))
 }
 
+/// Get the strava id for all users
+pub fn getallusers (conn: &AppConn) -> TbResult<Vec<i32>> {
+    use schema::strava_users::dsl::*;
+    Ok(strava_users.select(id).get_results(conn)?)
+}
+
 impl<'a, 'r> FromRequest<'a, 'r> for User {
     type Error = Redirect;
 
