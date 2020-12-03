@@ -207,7 +207,6 @@ pub fn process_hook(e: &webhook::Event, user: &User) -> TbResult<Summary>{
     let res = match e.aspect_type.as_str() {
         "create" | "update" => upsert_activity(e.object_id, user)?,
         "delete" => delete_activity(e.object_id, user)?,
-        "sync" =>  return sync(e, user),
         _ => {
             warn!("Skipping unknown aspect_type {:?}", e);
             Summary::default()
@@ -226,9 +225,9 @@ fn next_activities(user: &User, per_page: usize, start: Option<i64>) -> TbResult
     Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)
 }
 
-fn sync(e: &webhook::Event, user: &User) -> TbResult<Summary> {
+pub fn sync(mut e: webhook::Event, user: &User) -> TbResult<Summary> {
     // let mut len = batch;
-    let mut start = user.last_activity();
+    let mut start = e.event_time;
     let mut hash = SumHash::default();
 
     // while len == batch 
@@ -239,7 +238,9 @@ fn sync(e: &webhook::Event, user: &User) -> TbResult<Summary> {
         } else {
             for a in acts {
                 start = std::cmp::max(start, a.start_date.timestamp());
+                trace!("processing sync event at {}", start);
                 let ps = a.send_to_tb(&user)?;
+                e.setdate(start,  user.conn())?;
                 hash.merge(ps);
             }
         }

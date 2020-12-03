@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::convert::TryInto;
 
 use rocket::request::Form;
 use rocket_contrib::json::Json;
@@ -10,6 +9,20 @@ use diesel::prelude::*;
 
 use super::*;
 use schema::strava_events;
+
+// complicated way to have query parameters with dots in the name
+#[derive(Debug, FromForm, Serialize)]
+pub struct Hub {
+    #[form(field = "hub.mode")]
+    #[serde(skip_serializing)]
+    mode: String,
+    #[form(field = "hub.challenge")]
+    #[serde(rename(serialize = "hub.challenge"))]
+    challenge: String,
+    #[form(field = "hub.verify_token")]
+    #[serde(skip_serializing)]
+    verify_token: String,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InEvent {
@@ -26,6 +39,30 @@ pub struct InEvent {
     // The time that the event occurred.
     event_time: i64,
 }
+
+impl InEvent {
+    fn convert(self) -> TbResult<Event> {
+        let objects = ["activity", "athlete"];
+        let aspects = ["create", "update", "delete"];
+
+        ensure!(
+            objects.contains(&self.object_type.as_str()) && aspects.contains(&self.aspect_type.as_str()),
+            Error::BadRequest(format!("unknown event received: {:?}", self))
+        );
+
+        Ok(Event {
+            id: None,
+            object_type: self.object_type,
+            object_id: self.object_id,
+            aspect_type: self.aspect_type,
+            owner_id: self.owner_id,
+            subscription_id: self.subscription_id,
+            event_time: self.event_time,
+            updates: serde_json::to_string(&self.updates).unwrap_or_else(|e|{ format!("{:?}", e)}),
+        })
+    }
+}
+
 #[derive(Debug, Default, Serialize, Deserialize, Queryable, Insertable)]
 #[table_name = "strava_events"]
 pub struct Event {
@@ -44,75 +81,53 @@ pub struct Event {
     pub event_time: i64,
 }
 
-impl std::convert::TryFrom<InEvent> for Event {
-    type Error = anyhow::Error;
-
-    fn try_from(event: InEvent) -> Result<Self, Self::Error> {
-        let objects = ["activity", "athlete"];
-        let aspects = ["create", "update", "delete"];
-
-        ensure!(
-            objects.contains(&event.object_type.as_str()) && aspects.contains(&event.aspect_type.as_str()),
-            Error::BadRequest(format!("unknown event received: {:?}", event))
-        );
-
-        Ok(Self {
-            id: None,
-            object_type: event.object_type,
-            object_id: event.object_id,
-            aspect_type: event.aspect_type,
-            owner_id: event.owner_id,
-            subscription_id: event.subscription_id,
-            event_time: event.event_time,
-            updates: serde_json::to_string(&event.updates).unwrap_or_else(|e|{ format!("{:?}", e)}),
-        })
+impl std::fmt::Display for Event {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Event {}: {} {} {} at {}, owner:{}", 
+            self.id.unwrap_or(0), 
+            self.aspect_type,
+            self.object_type,
+            self.object_id,
+            self.event_time,
+            self.owner_id)
     }
-}
-
-// complicated way to have query parameters with dots in the name
-#[derive(Debug, FromForm, Serialize)]
-pub struct Hub {
-    #[form(field = "hub.mode")]
-    #[serde(skip_serializing)]
-    mode: String,
-    #[form(field = "hub.challenge")]
-    #[serde(rename(serialize = "hub.challenge"))]
-    challenge: String,
-    #[form(field = "hub.verify_token")]
-    #[serde(skip_serializing)]
-    verify_token: String,
 }
 
 impl Event {
     pub fn delete (&self, conn: &AppConn) -> TbResult<()> {
         use schema::strava_events::dsl::*;
+        debug!("Deleting {}", self);
         diesel::delete(strava_events).filter(id.eq(self.id)).execute(conn)?;
+        Ok(())
+    }
+
+    pub fn setdate(&mut self, time: i64, conn: &AppConn) -> TbResult<()> {
+        use schema::strava_events::dsl::*;
+        self.event_time = time;
+        diesel::update(strava_events).filter(id.eq(self.id)).set(event_time.eq(self.event_time)).execute(conn)?;
+        Ok(())
+    }
+
+    fn store(self, conn: &AppConn) -> TbResult<()>{
+        ensure!(
+            schema::strava_users::table.find(self.owner_id).execute(conn) == Ok(1),
+            Error::BadRequest(format!("Unknown event received: {}", self))
+        );
+        
+        info!("Received {}", 
+            diesel::insert_into(schema::strava_events::table).values(&self).get_result::<Event>(conn)?
+        );
         Ok(())
     }
 }
 
-fn store_event(event: Event, conn: &AppConn) -> TbResult<()>{
-    ensure!(
-        schema::strava_users::table.find(event.owner_id).execute(conn) == Ok(1),
-        Error::BadRequest(format!("unknown event received: {:?}", event))
-    );
-    
-    diesel::insert_into(schema::strava_events::table).values(&event).execute(conn)?;
-    Ok(())
-}
-
-pub fn insert_sync(owner_id: i32, conn: &AppConn) -> TbResult<()> {
-    let e = Event {
+pub fn insert_sync(owner_id: i32, event_time: i64, conn: &AppConn) -> TbResult<()> {
+    Event {
         owner_id,
-        object_type: "activity".to_string(),
-        aspect_type: "sync".to_string(),
-        event_time: 10,
+        event_time,
+        object_type: "sync".to_string(),
         ..Default::default()
-    };
-    diesel::insert_into(schema::strava_events::table)
-        .values(e)
-        .execute(conn)?;
-    Ok(())
+    }.store(conn)
 }
 
 pub fn insert_stop(conn: &AppConn) -> TbResult<()> {
@@ -167,7 +182,7 @@ pub fn get_event(user: &auth::User) -> TbResult<Option<Event>> {
     let res = list.pop();
 
     if list.len() > 0 {
-        info!("dropping {:#?}", list);
+        debug!("Dropping {:#?}", list);
         diesel::delete(strava_events)
         .filter(id.eq_any(
             list.into_iter().map(|l| l.id).collect::<Vec<_>>())
@@ -192,25 +207,25 @@ fn validate(hub: Hub) -> TbResult<Hub> {
     Ok(hub)
 }
 
+fn check_try_again(err: anyhow::Error, conn: &AppConn) -> TbResult<Summary> {
+    // Keep events for temporary failure - delete others
+    match err.downcast_ref::<Error>() {
+        Some(&Error::TryAgain(_)) => {
+            warn!("Stopping hooks for 15 minutes {:?}", err);
+            webhook::insert_stop(conn)?;
+            Ok(Summary::default())
+        },
+        _ => Err(err)
+    }
+}
+
 fn process_activity (e:Event, user: &auth::User) -> TbResult<Summary> {
-    info!("Processing {:#?}", e);
-    
-    match activity::process_hook(&e, user) {
+    match activity::process_hook(&e, user).or_else(|e| check_try_again(e, user.conn()))    {
         Ok(res) => return Ok(res),
         Err(err) => {
-            // Keep events for temporary failure - delete others
-            match err.downcast_ref::<Error>() {
-                Some(&Error::TryAgain(_)) => {
-                    warn!("stopping hooks for 15 minutes {:?}", err);
-                    webhook::insert_stop(user.conn())?;
-                    Ok(Summary::default())
-                },
-                _ => {
                     e.delete(user.conn())?;
                     Err(err)
                 }
-            }
-        }
     }
 }
 
@@ -220,12 +235,14 @@ pub fn process (user: &auth::User) -> TbResult<Summary> {
         return Ok(Summary::default());
     };
     let e = e.unwrap();
+    info!("Processing {}", e);
     
     match e.object_type.as_str() {
         "activity" => process_activity(e, user),
+        "sync" => activity::sync(e, user).or_else(|err| check_try_again(err, user.conn())),
         // "athlete" => process_user(e, user),
         _ => {
-            warn!("skipping {:#?}", e);
+            warn!("skipping {}", e);
             e.delete(user.conn())?;
             Ok(Summary::default())
         }
@@ -243,8 +260,8 @@ pub fn hooks (user: auth::User) -> ApiResult<Summary> {
 #[post("/callback", format = "json", data="<event>")]
 pub fn create_event(event: Json<InEvent>, conn: AppDbConn) -> Result<(),ApiError> {
     let event = event.into_inner();
-    info!("received {:#?}", event);
-    store_event(event.try_into()?, &conn)?;
+    trace!("Received {:#?}", event);
+    event.convert()?.store(&conn)?;
     Ok(())
 }
 
