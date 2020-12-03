@@ -122,6 +122,10 @@ impl Event {
 }
 
 pub fn insert_sync(owner_id: i32, event_time: i64, conn: &AppConn) -> TbResult<()> {
+    ensure!(
+        event_time <= time::get_time().sec, 
+        Error::BadRequest(format!("eventtime {} > now!", event_time))
+    );
     Event {
         owner_id,
         event_time,
@@ -273,7 +277,7 @@ pub fn validate_subscription (hub: Form<Hub>) -> ApiResult<Hub> {
 }
 
 #[get("/sync?<time>&<user>")]
-pub fn sync_api (time: i64, user: Option<i32>, _user: user::Admin, conn: AppDbConn) -> Result<(),ApiError> {
+pub fn sync_api (time: i64, user: Option<i32>, _user: user::Admin, conn: AppDbConn) -> ApiResult<()> {
     let users = match user {
         None => auth::getallusers(&conn)?,
         Some(user) => vec![user]
@@ -281,5 +285,5 @@ pub fn sync_api (time: i64, user: Option<i32>, _user: user::Admin, conn: AppDbCo
     for user in users.into_iter() {
         insert_sync(user, time, &conn)?;
     }
-    Ok(())
+    tbapi(Ok(()))
 }
