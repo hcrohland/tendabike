@@ -1,3 +1,4 @@
+
 <script lang="ts">
 import {filterValues, by, types, parts, state, attachments, isAttached, category} from '../store'
 import {Button, DropdownItem} from 'sveltestrap'
@@ -10,6 +11,8 @@ import Menu from '../Menu.svelte'
 
 export let type: Type;
 export let date = new Date;
+export let update;
+export let attachee: number
 
 let attachPart, newPart, changePart, show_all;
 
@@ -40,7 +43,7 @@ function subparts(type: Type, parts) {
   <th colspan=6 scope="col" class="border-2 text-nowrap"> 
     {type.name}s 
     <button class="btn badge" 
-            on:click={() => show_all = !show_all} 
+            on:click={() => {show_all = !show_all; update(show_all)}} 
             title={show_all?"hide attached":"show attached"}>
       {#if show_all}
         &#9650;
@@ -63,9 +66,11 @@ function subparts(type: Type, parts) {
       </a>
     </td>
     <Usage {part} />
-    <td>
-      {attachedTo($attachments, part.id, date) || '-'}
-    </td>
+    {#if attachee > 0 }
+      <td>
+        {attachedTo($attachments, part.id, date) || '-'}
+      </td>
+    {/if}
     <td> 
       <Menu>
         <DropdownItem on:click={() => changePart(part)}> Change details </DropdownItem>
