@@ -9,6 +9,7 @@
 
   export let type: Type;
   export let part: Part;
+  export let maxdate = undefined;
   let {name, vendor, model, purchase} = part
 
   $: if (type && name.length > 0 && vendor.length > 0 && model.length > 0) {
@@ -40,6 +41,6 @@
     <Label for="inputDate" right> New {type && type.name || ''} day was </Label>
   </Col>
   <Col>
-    <DateTime id="inputDate" bind:date={purchase} required/>
+    <DateTime id="inputDate" bind:date={purchase} {maxdate} required/>
   </Col>
 </FormGroup>

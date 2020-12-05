@@ -33,7 +33,7 @@
           <td>
           {#if $parts[att.gear]}
             <a href="#/gear/{att.gear}" 
-                style={$parts[att.part_id].disposed_at ? "text-decoration: line-through;" : ""} 
+                style={$parts[att.gear].disposed_at ? "text-decoration: line-through;" : ""} 
                 class="text-reset">
               {$parts[att.gear].name} 
               {$types[att.hook].name.split(' ').reverse()[1] || ''}

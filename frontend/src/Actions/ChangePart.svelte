@@ -3,66 +3,91 @@
     Modal, ModalBody, ModalHeader,
     FormGroup, InputGroup, Form
   } from 'sveltestrap';
-  import {myfetch, initData, parts, types, attachments, filterValues} from '../store';
+  import {myfetch, parts, types, updatePartAttach, attachments, filterValues, by} from '../store';
   import ModalFooter from './ModalFooter.svelte'
   import type {Type, Part, Attachment} from '../types'
   import NewForm from './NewForm.svelte';
   import Dispose from './Dispose.svelte';
   import DateTime from './DateTime.svelte';
-
+  import Switch from './Switch.svelte';
+  
+  let atts: Attachment[]
+  let last: Attachment, start;
   let part: Part, newpart: Part;
   let type: Type;
   let isOpen = false;
-  let disabled = true;
+  let disabled = true, detach, part_changed;
   let dispose = false, date;
 
   async function savePart () {
     disabled = true;
     if (dispose) newpart.disposed_at = date
-    try {
+    if (detach) {
+      last.detached = date
+      await myfetch('/attach/', 'PATCH', last)
+        .then(data => updatePartAttach(data))
+    }
+    if (dispose || part_changed){
       await myfetch('/part/', 'PUT', newpart)
         .then(data => parts.updateMap([data]))
-    } catch (e) {
-      alert (e)
-      initData()
     }
+
     isOpen = false;
   }
 
   export const changePart = (p: Part) => {
     part = p;
     newpart = p;
-    if (dispose) part.disposed_at = date;
     type = $types[part.what];
+    atts = filterValues($attachments, (a) => a.part_id == part.id).sort(by("attached"))
+    start = atts[0] ? atts[0].attached : undefined;
+    last = atts[atts.length - 1];
+    date = undefined
+    detach = false
+    dispose = false
+    part_changed = false
     isOpen = true;
-  }
-
-  function isAttached(part:Part) {
-    return filterValues($attachments, (a) => a.part_id == part.id && !a.detached).pop()
   }
 
   const toggle = () => isOpen = false
   const setPart = (e) => {
     newpart = e.detail
-    disabled = false
+    part_changed = true;
   }
 
-  $: if (dispose) disabled = false
+  $: disabled = (detach || dispose || part_changed) ? false : true 
+
 </script>
 
 <Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
   <ModalHeader {toggle}> Change {type.name} details </ModalHeader>
   <ModalBody>
     <Form>
-      <NewForm {type} {part} on:change={setPart}/>
+      <NewForm {type} {part} on:change={setPart} maxdate={start}/>
       <FormGroup>
-        {#if !isAttached(part)}
-        <InputGroup>
-          <Dispose bind:dispose/>
-          {#if dispose}
-          <DateTime bind:date />
+        {#if last}
+          {#if last.detached}
+          <InputGroup>
+            <Dispose bind:dispose/>
+            {#if dispose}
+            <DateTime bind:date mindate={last.detached}/>
+            {/if}
+          </InputGroup>
+          {:else}
+          <InputGroup>
+            <Switch bind:checked={detach}>
+              {#if detach}
+              detached at
+              {:else}
+              detach?
+              {/if}
+            </Switch>
+            {#if detach}
+               <DateTime bind:date mindate={last.attached}/>
+               <Dispose bind:dispose>  {type.name} when detached </Dispose>
+            {/if}
+          </InputGroup>
           {/if}
-        </InputGroup>
         {/if}
       </FormGroup>
     </Form>

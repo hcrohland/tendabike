@@ -4,9 +4,7 @@ import {parts, isAttached, fmtDate} from '../store'
 import Usage from '../Usage.svelte'
 import ReplacePart from '../Actions/ReplacePart.svelte'
 import AttachPart from '../Actions/AttachPart.svelte'
-import DetachPart from '../Actions/DetachPart.svelte'
 import type {Attachment, Type} from '../types';
-import ChangePart from '../Actions/ChangePart.svelte';
 import Menu from '../Menu.svelte';
 
 export let header = false;
@@ -18,7 +16,7 @@ export let hook: Type | undefined = undefined;
 void(hook) // get rid of warning...
 
 let show_hist = false; 
-let detachPart, attachPart, replacePart, changePart;
+let attachPart, replacePart;
 </script>
 
 {#if header}
@@ -73,11 +71,9 @@ let detachPart, attachPart, replacePart, changePart;
             {#if isAttached(att, new Date)}
             <DropdownItem on:click={() => replacePart(att)}> Replace part</DropdownItem>
             <DropdownItem on:click={() => attachPart($parts[att.part_id])}> Move part</DropdownItem>
-            <DropdownItem on:click={() => detachPart(att)}> Detach part</DropdownItem>
             {:else}
             <DropdownItem on:click={() => attachPart($parts[att.part_id])}> Attach part</DropdownItem>
             {/if}
-            <DropdownItem on:click={() => changePart($parts[att.part_id])}> Change details </DropdownItem>
           </Menu>
           {/if}
         </td>
@@ -85,7 +81,5 @@ let detachPart, attachPart, replacePart, changePart;
     {/if}
   {/each}
 {/if}
-<ChangePart bind:changePart/> 
 <AttachPart bind:attachPart/> 
 <ReplacePart bind:replacePart/>
-<DetachPart bind:detachPart/> 

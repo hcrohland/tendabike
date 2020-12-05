@@ -1,20 +1,11 @@
-  <InputGroupAddon addonType="prepend">
-    <InputGroupText>
-      <CustomInput
-      type="switch"
-      id="custominputneedsone"
-      name="customSwitch"
-      bind:checked={dispose}>
-      {#if dispose}
-        disposing <slot />
-      {:else}
-        dispose <slot />?
-      {/if}
-      </CustomInput>
-    </InputGroupText>
-  </InputGroupAddon>
-
+<Switch id="dispose" bind:checked={dispose}>
+  {#if dispose}
+    disposing <slot />
+  {:else}
+    dispose <slot />?
+  {/if}
+</Switch>
 <script lang="ts">
-  import {InputGroupText, InputGroupAddon, CustomInput} from 'sveltestrap'
- export let dispose
+  import Switch from '../Actions/Switch.svelte'
+  export let dispose
 </script>

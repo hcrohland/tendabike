@@ -309,14 +309,9 @@ fn put(
     part: Json<ChangePart>,
     user: &User,
     conn: AppDbConn,
-) -> ApiResult<Summary> {
+) -> ApiResult<Part> {
 
-    tbapi(Ok(
-        Summary {
-            parts: vec![part.change(user, &conn)?],
-            ..Default::default()
-        }
-    ))
+    tbapi(part.change(user, &conn))
 }
 
 #[get("/all")]

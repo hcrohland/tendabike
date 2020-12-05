@@ -15,7 +15,7 @@ export let date = new Date;
 export let update;
 export let attachee: number
 
-let attachPart, newPart, changePart, recoverPart, show_all;
+let attachPart, newPart, show_all;
 
 function attachedTo(atts: Attachment[], partId: number, time: Date) {
     let att = filterValues(atts, (x) => x.part_id === partId && isAttached(x, time)).pop()
@@ -38,8 +38,6 @@ function subparts(type: Type, parts: Part[]) {
 
 <AttachPart bind:attachPart />
 <NewPart bind:newPart/>
-<ChangePart bind:changePart/>
-<RecoverPart bind:recoverPart/>
 
 <tr>
   <th colspan=6 scope="col" class="border-2 text-nowrap"> 
@@ -81,16 +79,9 @@ function subparts(type: Type, parts: Part[]) {
     {/if}
     <td> 
       <Menu>
-        {#if part.disposed_at}
-        <DropdownItem on:click={() => recoverPart(part)}> Recover part </DropdownItem>
-        {:else}
         <DropdownItem on:click={() => attachPart(part)}>
-          {#if attachedTo($attachments, part.id, date)} Move part {:else} Attach part {/if}
+          {#if attachedTo($attachments, part.id, date)} Move {:else} Attach {/if} {type.name}
         </DropdownItem>
-        <DropdownItem on:click={() => changePart(part)}> 
-          Change details 
-        </DropdownItem>
-        {/if}
       </Menu>
     </td>
   </tr>
