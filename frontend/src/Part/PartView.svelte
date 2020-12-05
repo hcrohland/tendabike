@@ -1,8 +1,7 @@
 <script lang="ts">
-  import {filterValues, types, parts, attachments, category, by} from './store'
+  import {filterValues, types, parts, attachments, category, by} from '../store'
   import PartHist from './PartHist.svelte'
   import GearCard from './GearCard.svelte'
-  import type {Attachment} from './types'
 
   export let params;
   

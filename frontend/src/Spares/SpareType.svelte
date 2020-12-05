@@ -63,7 +63,9 @@ function subparts(type: Type, parts: Part[]) {
   <tr>
     <td class="border-0"></td>
     <td title={part.vendor + ' ' + part.model + ' ' + fmtDate(part.purchase)}>
-      <a href="#/part/{part.id}" class="text-reset">
+      <a href="#/part/{part.id}" 
+          style={part.disposed_at ? "text-decoration: line-through;" : ""} 
+          class="text-reset">
         {part.name}
       </a>
     </td>

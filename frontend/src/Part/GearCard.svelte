@@ -1,8 +1,8 @@
 <script lang="ts">
   import { slide } from 'svelte/transition';
   import {Card, CardBody, CardHeader} from 'sveltestrap';
-  import {category, fmtSeconds, fmtDate, fmtNumber} from './store';
-  import type {Part} from './types'
+  import {category, fmtSeconds, fmtDate, fmtNumber} from '../store';
+  import type {Part} from '../types'
 
   export let part: Part;
   export let display = false;

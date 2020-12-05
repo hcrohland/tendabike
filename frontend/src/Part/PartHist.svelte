@@ -1,7 +1,7 @@
 <script lang="ts">
-  import {filterValues, parts, attachments, types, by, fmtDate} from './store'
-  import type { Attachment } from './types';
-  import Usage from './Usage.svelte'
+  import {filterValues, parts, attachments, types, by, fmtDate} from '../store'
+  import type { Attachment } from '../types';
+  import Usage from '../Usage.svelte'
  
   export let id;
   
@@ -32,7 +32,9 @@
         <tr>
           <td>
           {#if $parts[att.gear]}
-            <a href="#/gear/{att.gear}" class="text-reset">
+            <a href="#/gear/{att.gear}" 
+                style={$parts[att.part_id].disposed_at ? "text-decoration: line-through;" : ""} 
+                class="text-reset">
               {$parts[att.gear].name} 
               {$types[att.hook].name.split(' ').reverse()[1] || ''}
             </a>
