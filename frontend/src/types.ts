@@ -30,6 +30,14 @@ export type Attachment = {
     time?:  number;
   }
 
+export interface Usage {
+  count: number;
+  climb: number; 
+  descend: number; 
+  distance: number; 
+  time:  number;   
+}
+
 export type Type = {
     id: number;
     name: string;

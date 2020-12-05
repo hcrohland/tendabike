@@ -1,9 +1,9 @@
 <script lang="ts">
 import {fmtSeconds, fmtNumber} from './store'
-import type {Attachment, Part} from './types'
+import type {Usage} from './types'
  
 export let header = false
-export let usage: Part|Attachment = undefined;
+export let usage: Usage = undefined;
 
 </script>
 
