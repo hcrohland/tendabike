@@ -48,7 +48,7 @@
     attach = a;
     part = $parts[attach.part_id]
     isOpen = true
-    last = filterValues<Attachment>(
+    last = filterValues(
         $attachments, 
         (a) => a.gear == attach.gear && a.hook == attach.hook && a.what == attach.what && a.attached > attach.attached
       ).length == 0

@@ -3,26 +3,26 @@ import {fmtSeconds, fmtNumber} from './store'
 import type {Attachment, Part} from './types'
  
 export let header = false
-export let part: Part|Attachment = undefined;
+export let usage: Part|Attachment = undefined;
 
 </script>
 
 {#if !header}
-  {#if part}
+  {#if usage}
     <td class="text-right"> 
-      {fmtNumber(part.count)}
+      {fmtNumber(usage.count)}
     </td>
     <td class="text-right"> 
-      {fmtSeconds(part.time)}
+      {fmtSeconds(usage.time)}
     </td>
     <td class="text-right"> 
-      {fmtNumber(Math.round(part.distance / 1000))}
+      {fmtNumber(Math.round(usage.distance / 1000))}
     </td>
     <td class="text-right"> 
-      {fmtNumber(part.climb)}
+      {fmtNumber(usage.climb)}
     </td>
     <td class="text-right"> 
-      {fmtNumber(part.descend)}
+      {fmtNumber(usage.descend)}
     </td>
   {:else}
     <td class="text-right">N/A</td>

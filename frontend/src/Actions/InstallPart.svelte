@@ -62,7 +62,7 @@
 
   function guessDate(g: Part, t: Type, hook: number) {
     if (!t) return new Date();
-    let last = filterValues<Attachment>($attachments, (a) => a.gear == g.id && a.what == t.id && a.hook == hook)
+    let last = filterValues($attachments, (a) => a.gear == g.id && a.what == t.id && a.hook == hook)
     if (last.length) {
       //I t is a replacement
       return new Date()

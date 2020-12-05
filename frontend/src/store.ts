@@ -36,7 +36,7 @@ export function myfetch (url, method?, data?) {
         .then(checkStatus)
 };
 
-export function filterValues<T>(map, fn: (t: T) => boolean) { 
+export function filterValues<T>(map: T[], fn: (t: T) => boolean) { 
     return Object.values(map).filter(fn) as T[]
 };
 

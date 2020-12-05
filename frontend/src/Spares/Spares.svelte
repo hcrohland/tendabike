@@ -13,7 +13,7 @@ let attachee = 0;
 
 category.set(cat);
 
-let spareTypes = filterValues<Type>($types, (t) => t.main == cat.id && t.id != cat.id)
+let spareTypes = filterValues($types, (t) => t.main == cat.id && t.id != cat.id)
 
 function update(show: boolean) {
   show ? attachee++ : attachee--

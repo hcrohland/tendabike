@@ -5,7 +5,7 @@
  
   export let id;
   
-  $: atts = filterValues<Attachment>($attachments, (a) => a.part_id == id).sort(by("attached"))
+  $: atts = filterValues($attachments, (a) => a.part_id == id).sort(by("attached"))
   
 </script>
 
@@ -45,7 +45,7 @@
               {fmtDate(att.detached)}
             {/if}
           </td>
-          <Usage part={att} />
+          <Usage usage={att} />
         </tr>
       {/each}
     </tbody>

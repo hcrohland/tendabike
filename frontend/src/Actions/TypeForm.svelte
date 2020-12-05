@@ -13,7 +13,7 @@
   const dispatch = createEventDispatcher();
 
 
-  let typeList = filterValues<Type>($types, (t) => t.main == $category.id && t.id != t.main)
+  let typeList = filterValues($types, (t) => t.main == $category.id && t.id != t.main)
           .sort((a,b) => a.order - b.order);
 
   function updatehook() {

@@ -46,7 +46,7 @@
            - {fmtDate(gear.disposed_at)}
         {/if}
       </td>
-      <Usage part={gear} />
+      <Usage usage={gear} />
       <td>
         <Menu>
           <DropdownItem on:click={() => installPart(gear)}> Attach new part </DropdownItem>

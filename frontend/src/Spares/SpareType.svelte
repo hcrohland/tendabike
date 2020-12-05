@@ -18,13 +18,13 @@ export let attachee: number
 let attachPart, newPart, changePart, recoverPart, show_all;
 
 function attachedTo(atts: Attachment[], partId: number, time: Date) {
-    let att = filterValues<Attachment>(atts, (x) => x.part_id === partId && isAttached(x, time)).pop()
+    let att = filterValues(atts, (x) => x.part_id === partId && isAttached(x, time)).pop()
     if (att == undefined) return
       return $parts[att.gear].name + ' ' + ($types[att.hook].name.split(' ').reverse()[1] || '')
 }
 
-function subparts(type: Type, parts) {
-  return filterValues<Part>(parts, (p) => p.what == type.id)
+function subparts(type: Type, parts: Part[]) {
+  return filterValues(parts, (p) => p.what == type.id)
             .sort(by("last_used"))
 }
 
@@ -67,7 +67,7 @@ function subparts(type: Type, parts) {
         {part.name}
       </a>
     </td>
-    <Usage {part} />
+    <Usage usage={part} />
     {#if attachee > 0 }
       <td>
         {#if part.disposed_at}

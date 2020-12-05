@@ -17,7 +17,7 @@ type MyList = {
 }
 
 function buildList (list: MyList[], hook: Type, attachees: Attachment[], level: number, prefix: string) {
-  const typeList = filterValues($types, (a: Type) => a.hooks.includes(hook.id)).sort((a: Type,b: Type) => a.order - b.order) as Type[];
+  const typeList = filterValues($types, (a: Type) => a.hooks.includes(hook.id)).sort((a: Type,b: Type) => a.order - b.order);
   typeList.forEach((type) => {
     let attachments = attachees.filter((a: Attachment) => { return a.hook == hook.id && a.what == type.id});
     attachments.sort(by("attached"));

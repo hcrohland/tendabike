@@ -8,7 +8,7 @@
 
   
   function lastDetach(part) {
-    let last = filterValues<Attachment>($attachments, (a) => a.part_id == part.id).sort(by("attached"))[0]
+    let last = filterValues($attachments, (a) => a.part_id == part.id).sort(by("attached"))[0]
       
     if (last) {
       return new Date(last.detached ? last.detached : last.attached)
@@ -22,7 +22,7 @@
   export let disabled = true;
 
   let type: Type = $types[part.what]; 
-  let options: Part[] = filterValues($parts, (p) => type.main == p.what);
+  let options = filterValues($parts, (p) => type.main == p.what);
   
   attach = {
     part_id: part.id,

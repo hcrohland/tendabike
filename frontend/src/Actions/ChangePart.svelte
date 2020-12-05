@@ -38,7 +38,7 @@
   }
 
   function isAttached(part:Part) {
-    return filterValues<Attachment>($attachments, (a) => a.part_id == part.id && !a.detached).pop()
+    return filterValues($attachments, (a) => a.part_id == part.id && !a.detached).pop()
   }
 
   const toggle = () => isOpen = false

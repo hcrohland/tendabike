@@ -13,7 +13,7 @@
     category.set($types[$types[part.what].main])
   }
 
-  $: atts = filterValues($attachments, (a) => a.part_id == part.id).sort(by<Attachment>("attached"))
+  $: atts = filterValues($attachments, (a) => a.part_id == part.id).sort(by("attached"))
   
 </script>
 

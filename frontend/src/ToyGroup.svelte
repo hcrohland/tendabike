@@ -15,7 +15,7 @@
   }
   category.set(type);
   
-  $: gears = () => filterValues($parts, (p) => p.what == type.id) as Part[]
+  $: gears = () => filterValues($parts, (p) => p.what == type.id)
 </script>
 
 {#if type }

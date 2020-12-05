@@ -23,11 +23,11 @@ export type Attachment = {
     detached?: Date;
     what?: number;
     name?: string;
-    count: number;
-    climb: number; 
-    descend: number; 
-    distance: number; 
-    time:  number;
+    count?: number;
+    climb?: number; 
+    descend?: number; 
+    distance?: number; 
+    time?:  number;
   }
 
 export type Type = {

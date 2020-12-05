@@ -66,7 +66,7 @@ let detachPart, attachPart, replacePart, changePart;
             -
             {fmtDate(att.detached)}
           {/if}
-        </td><Usage part={$parts[att.part_id] || att} />
+        </td><Usage usage={$parts[att.part_id] || att} />
         <td>
           {#if !$parts[att.part_id].disposed_at}
           <Menu>
