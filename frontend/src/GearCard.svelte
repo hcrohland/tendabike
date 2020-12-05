@@ -50,11 +50,15 @@
     <div transition:slide>
       <CardBody>
         is a <span class="param">{model(part)}</span>
+        {#if !part.disposed_at}
         purchased <span class="param">{fmtDate(part.purchase)}</span>
-        {#if part.disposed_at}
-          and disposed at <span class="param">{fmtDate(part.disposed_at)}</span>
+        <br> which
+        {:else}
+          <br> you owned from <span class="param">{fmtDate(part.purchase)}</span>
+          until <span class="param">{fmtDate(part.disposed_at)}</span>
+          <br> and 
         {/if}
-        <br>which you used <span class=param>{fmtNumber(part.count)}</span> times 
+        you used <span class=param>{fmtNumber(part.count)}</span> times 
         for <span class="param">{fmtSeconds(part.time)}</span> hours.
         <p> You covered <span class="param">{fmtNumber(parseFloat((part.distance / 1000).toFixed(1)))}</span> km 
         climbing <span class="param">{fmtNumber(part.climb)}</span> and descending <span class="param">{fmtNumber(part.descend)}</span> meters </p>

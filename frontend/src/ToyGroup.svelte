@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Col, Row } from 'sveltestrap';
   import GearCard from './GearCard.svelte';
   import {filterValues, by, types, parts, category} from './store';
   import type { Part } from './types';
@@ -7,7 +8,7 @@
   
   // Cannot use category directly since it 
   // is unset during destroy and the router gets confused
-  let type;
+  let type, show_hist;
   if (params) {
     type = $types[params.category];
   } else {
@@ -15,19 +16,41 @@
   }
   category.set(type);
   
-  $: gears = () => filterValues($parts, (p) => p.what == type.id)
+  $: gears = filterValues($parts, (p) => p.what == type.id && ! p.disposed_at).sort(by("last_used"))
+  $: bin = filterValues($parts, (p) => p.what == type.id && p.disposed_at != undefined).sort(by("last_used"))
 </script>
 
 {#if type }
-  <div class="row border p-sm-2">
-    {#each gears().sort(by("last_used")) as part, i  (part.id)}
-      <div class="col-md-6 p-0 p-sm-2">
+  <Row border class="p-sm-2">
+    {#each gears as part, i  (part.id)}
+      <Col md=6 class="p-0 p-sm-2">
         <GearCard {part} isOpen={i<4}/>
-      </div>
+      </Col>
     {:else}
       You have no {type.name} to tend 😱
     {/each}
-  </div>
+  </Row>
+  
+  {#if bin.length > 0}
+  <button class="btn badge" on:click={() => show_hist = !show_hist}>
+    {#if show_hist}
+    &#9650; Hide disposed
+    {:else}
+    &#9660; Show disposed 
+    {/if}
+  </button>
+  {#if show_hist}
+    <Row>
+      
+    {#each bin as part, i  (part.id)}
+    <Col md=6 class="p-0 p-sm-2">
+      <GearCard {part} isOpen={i<4}/>
+    </Col>
+    {/each}
+
+  </Row>
+    {/if}
+  {/if}
 {:else}
      Error: Category not found!
 {/if}

@@ -7,11 +7,12 @@
   import InstallPart from '../Actions/InstallPart.svelte'
   import ChangePart from '../Actions/ChangePart.svelte'
   import Menu from '../Menu.svelte'
+  import RecoverPart from '../Actions/RecoverPart.svelte';
  
   export let params;
   
   let hook, gear: Part;
-  let installPart, changePart;
+  let installPart, changePart, recoverPart;
 
   $: {
     gear = $parts[params.id]; 
@@ -30,7 +31,13 @@
       <th scope="col">{hook.name}</th>
       <th scope="col">Brand</th>
       <th scope="col">Model</th>
-      <th scope="col">Purchase</th>
+      <th scope="col">
+        {#if gear.disposed_at}
+           Owned
+        {:else}
+           Purchase
+        {/if}
+      </th>
       <Usage header/>
       <th></th>
     </tr>
@@ -49,8 +56,13 @@
       <Usage usage={gear} />
       <td>
         <Menu>
+        {#if gear.disposed_at}
+        <DropdownItem on:click={() => recoverPart(gear)}> Recover part </DropdownItem>
+          
+        {:else}
           <DropdownItem on:click={() => installPart(gear)}> Attach new part </DropdownItem>
           <DropdownItem on:click={() => changePart(gear)}> Change details </DropdownItem>
+        {/if}
         </Menu>
       </td>
     </tr>
@@ -60,3 +72,4 @@
 
 <InstallPart bind:installPart />
 <ChangePart bind:changePart />
+<RecoverPart bind:recoverPart />
