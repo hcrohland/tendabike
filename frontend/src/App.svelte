@@ -4,7 +4,7 @@
 
 	import ToyGroup from "./ToyGroup.svelte"
 	import Header from "./Header.svelte"
-	import Gear from "./Gear/Main.svelte"
+	import Gear from "./Gear/Gear.svelte"
 	import Part from "./Part/PartView.svelte"
 	import Spares from "./Spares/Spares.svelte"
 	import Home from "./Home.svelte"

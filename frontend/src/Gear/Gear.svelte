@@ -57,7 +57,7 @@
       <td>
         <Menu>
         {#if gear.disposed_at}
-        <DropdownItem on:click={() => recoverPart(gear)}> Recover part </DropdownItem>
+        <DropdownItem on:click={() => recoverPart(gear)}> Recover {hook.name} </DropdownItem>
           
         {:else}
           <DropdownItem on:click={() => installPart(gear)}> Attach new part </DropdownItem>
