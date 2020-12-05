@@ -31,11 +31,11 @@ export type Attachment = {
   }
 
 export interface Usage {
-  count: number;
-  climb: number; 
-  descend: number; 
-  distance: number; 
-  time:  number;   
+  count?: number;
+  climb?: number; 
+  descend?: number; 
+  distance?: number; 
+  time?:  number;   
 }
 
 export type Type = {
