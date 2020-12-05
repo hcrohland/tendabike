@@ -1,7 +1,6 @@
 <script lang="ts">
   import {
     Form,
-    FormGroup,
     Modal,
     ModalHeader,
     ModalBody
@@ -10,12 +9,14 @@
   import {myfetch, types, initData, parts, user, updatePartAttach} from '../store';
   import ModalFooter from './ModalFooter.svelte'
   import NewForm from './NewForm.svelte';
+  import Dispose from './Dispose.svelte';
 
-  let part, newpart: Part;
+  let part: Part, oldpart: Part, newpart: Part;
   let type: Type;
   let prefix: string;
   let att: Attachment;
   let disabled = true;
+  let dispose = false;
   let isOpen = false;
   const toggle = () => isOpen = false
 
@@ -24,7 +25,13 @@
     att.attached = part.purchase;
     att.detached = null
     await myfetch('/attach/', 'PATCH', att)
-      .then(data => updatePartAttach(data))
+      .then(updatePartAttach);
+    
+    if (dispose) {
+      oldpart.disposed_at = part.purchase;
+      await myfetch('/part', 'PUT', oldpart)
+        .then(updatePartAttach)
+    }
   }
 
   async function action () {
@@ -41,7 +48,7 @@
 }
 
 export const replacePart = (attl: Attachment) => {
-    let oldpart = $parts[attl.part_id];
+    oldpart = $parts[attl.part_id];
     att = {...attl};
     type = $types[oldpart.what];
     prefix = $types[attl.hook].name.split(' ').reverse()[1] || '' // The first word iff there were two (hack!)
@@ -68,7 +75,10 @@ export const replacePart = (attl: Attachment) => {
 <Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
   <ModalHeader {toggle}>  New {prefix} {type.name} for {$parts[att.gear].name} </ModalHeader>
   <ModalBody>
-    <NewForm {type} {part} on:change={setPart}/>
+    <Form>
+      <NewForm {type} {part} on:change={setPart}/>
+      <Dispose bind:dispose> old {oldpart.name} </Dispose>
+    </Form>
   </ModalBody>
   <ModalFooter {action} {toggle} {disabled} button={'Replace'} />
 </Modal>

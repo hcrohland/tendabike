@@ -1,6 +1,6 @@
 <script lang="ts">
 import {DropdownItem} from 'sveltestrap';
-import {parts, isAttached} from '../store'
+import {parts, isAttached, fmtDate} from '../store'
 import Usage from '../Usage.svelte'
 import ReplacePart from '../Actions/ReplacePart.svelte'
 import AttachPart from '../Actions/AttachPart.svelte'
@@ -52,30 +52,34 @@ let detachPart, attachPart, replacePart, changePart;
         </th>
         <td>
         {#if $parts[att.part_id]}
-          <a href="#/part/{att.part_id}" class="text-reset">
+          <a href="#/part/{att.part_id}" 
+            style={$parts[att.part_id].disposed_at ? "text-decoration: line-through;" : ""} 
+            class="text-reset">
             {$parts[att.part_id].name}
           </a>
         {:else}
           {att.name}
         {/if}
         </td>
-        <td class="text-right"> {new Date(att.attached).toLocaleDateString(navigator.language)} 
+        <td class="text-right"> {fmtDate(att.attached)} 
           {#if att.detached}
             -
-            {new Date(att.detached).toLocaleDateString(navigator.language)}
+            {fmtDate(att.detached)}
           {/if}
         </td><Usage part={$parts[att.part_id] || att} />
         <td>
+          {#if !$parts[att.part_id].disposed_at}
           <Menu>
-            <DropdownItem on:click={() => changePart($parts[att.part_id])}> Change details </DropdownItem>
             {#if isAttached(att, new Date)}
-              <DropdownItem on:click={() => attachPart($parts[att.part_id])}> Move part</DropdownItem>
-              <DropdownItem on:click={() => replacePart(att)}> Replace part</DropdownItem>
-              <DropdownItem on:click={() => detachPart(att)}> Detach part</DropdownItem>
+            <DropdownItem on:click={() => replacePart(att)}> Replace part</DropdownItem>
+            <DropdownItem on:click={() => attachPart($parts[att.part_id])}> Move part</DropdownItem>
+            <DropdownItem on:click={() => detachPart(att)}> Detach part</DropdownItem>
             {:else}
-              <DropdownItem on:click={() => attachPart($parts[att.part_id])}> Attach part</DropdownItem>
+            <DropdownItem on:click={() => attachPart($parts[att.part_id])}> Attach part</DropdownItem>
             {/if}
+            <DropdownItem on:click={() => changePart($parts[att.part_id])}> Change details </DropdownItem>
           </Menu>
+          {/if}
         </td>
       </tr>
     {/if}

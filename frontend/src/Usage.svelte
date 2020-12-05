@@ -1,27 +1,28 @@
 <script lang="ts">
-import {parts, formatSeconds} from './store'
+import {fmtSeconds, fmtNumber} from './store'
+import type {Attachment, Part} from './types'
  
 export let header = false
-export let part = undefined;
+export let part: Part|Attachment = undefined;
 
 </script>
 
 {#if !header}
   {#if part}
     <td class="text-right"> 
-      {part.count.toLocaleString(navigator.language)}
+      {fmtNumber(part.count)}
     </td>
     <td class="text-right"> 
-      {formatSeconds(part.time)}
+      {fmtSeconds(part.time)}
     </td>
     <td class="text-right"> 
-      {Math.round(part.distance / 1000).toLocaleString(navigator.language)}
+      {fmtNumber(Math.round(part.distance / 1000))}
     </td>
     <td class="text-right"> 
-      {part.climb.toLocaleString(navigator.language)}
+      {fmtNumber(part.climb)}
     </td>
     <td class="text-right"> 
-      {part.descend.toLocaleString(navigator.language)}
+      {fmtNumber(part.descend)}
     </td>
   {:else}
     <td class="text-right">N/A</td>

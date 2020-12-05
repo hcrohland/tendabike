@@ -2,7 +2,8 @@
   import {
     Modal,
     ModalHeader,
-    ModalBody
+    ModalBody,
+    Form
   } from 'sveltestrap';
   import type {Attachment, Part, Type} from '../types';
   import {myfetch, initData, user, updatePartAttach, attachments, filterValues} from '../store';
@@ -100,7 +101,9 @@
     <TypeForm {gear} on:change={setType}/>
   </ModalHeader>
   <ModalBody>
-    <NewForm {type} {part} on:change={setPart}/>
+    <Form>
+      <NewForm {type} {part} on:change={setPart}/>
+    </Form>
   </ModalBody>
   <ModalFooter {action} {toggle} {disabled} button={'Install'} />
 </Modal>

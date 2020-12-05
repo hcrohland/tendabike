@@ -1,5 +1,5 @@
 <script lang="ts">
-  import {filterValues, parts, attachments, types, by} from './store'
+  import {filterValues, parts, attachments, types, by, fmtDate} from './store'
   import type { Attachment } from './types';
   import Usage from './Usage.svelte'
  
@@ -39,10 +39,10 @@
           {:else}
             N/A
           {/if}
-          <td>{new Date(att.attached).toLocaleDateString(navigator.language)}</td>
+          <td>{fmtDate(att.attached)}</td>
           <td>
             {#if att.detached}
-              {new Date(att.detached).toLocaleDateString(navigator.language)}
+              {fmtDate(att.detached)}
             {/if}
           </td>
           <Usage part={att} />

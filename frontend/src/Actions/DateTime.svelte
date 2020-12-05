@@ -40,12 +40,8 @@
 	}
 </script>
 
-<form>
-  <div>
-    <Flatpickr options={ flatpickrOptions } 
-			value={roundTime(date)}
-			on:change={handleChange}
-			{...props}
-    /> 
-  </div>
-</form> 
+	<Flatpickr options={ flatpickrOptions } 
+		value={roundTime(date)}
+		on:change={handleChange}
+		{...props}
+	/> 

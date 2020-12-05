@@ -1,4 +1,4 @@
-import {writable, readable, derived} from "svelte/store";
+import {writable} from "svelte/store";
 import type {Part, Attachment, Type} from './types'; 
 
 export function checkStatus<T>(response) {
@@ -10,6 +10,14 @@ export function checkStatus<T>(response) {
         .then((text) => {
             return Promise.reject(response.statusText + ': ' + text + ' accessing ' + response.url);
         })
+}
+
+export function fmtDate(date) {
+    return new Date(date).toLocaleDateString(navigator.language)
+}
+
+export function fmtNumber(number: number) {
+    return number.toLocaleString(navigator.language)
 }
 
 export function myfetch (url, method?, data?) {
@@ -28,11 +36,11 @@ export function myfetch (url, method?, data?) {
         .then(checkStatus)
 };
 
-export function filterValues<T>(map, fn) { 
+export function filterValues<T>(map, fn: (t: T) => boolean) { 
     return Object.values(map).filter(fn) as T[]
 };
 
-export function formatSeconds(sec_num) {
+export function fmtSeconds(sec_num) {
     var hours   = Math.floor(sec_num / 3600);
     var minutes: number | string = Math.floor((sec_num - (hours * 3600)) / 60);
 

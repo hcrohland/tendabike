@@ -12,6 +12,7 @@ export type Part = {
     model: string; 
     purchase: Date;
     last_used: Date;
+    disposed_at?: Date;
 }
 
 export type Attachment = {
@@ -22,6 +23,11 @@ export type Attachment = {
     detached?: Date;
     what?: number;
     name?: string;
+    count: number;
+    climb: number; 
+    descend: number; 
+    distance: number; 
+    time:  number;
   }
 
 export type Type = {

@@ -1,13 +1,12 @@
 <script lang="ts">
   import {
-    Modal,
-    ModalBody,
-    ModalHeader,
+    Modal, ModalBody, ModalHeader,
+    Form
   } from 'sveltestrap';
-  import {myfetch, initData, parts, user} from '../store';
-  import ModalFooter from './ModalFooter.svelte'
-  import type {Type, Part} from '../types'
   import NewForm from './NewForm.svelte';
+  import ModalFooter from './ModalFooter.svelte'
+  import {myfetch, initData, parts, user} from '../store';
+  import type {Type, Part} from '../types'
 
   let part, newpart: Part;
   let type: Type;
@@ -51,7 +50,9 @@
 <Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
   <ModalHeader {toggle}> New {type.name} </ModalHeader>
   <ModalBody>
-    <NewForm {type} {part} on:change={setPart}/>
+    <Form>
+      <NewForm {type} {part} on:change={setPart}/>
+    </Form>
   </ModalBody>
   <ModalFooter {toggle} {disabled} action={savePart} button={'Attach'}/>
 </Modal>

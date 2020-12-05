@@ -234,7 +234,7 @@ fn process_activity (e:Event, user: &User) -> TbResult<Summary> {
     }
 }
 
-pub fn process (user: &User) -> TbResult<Summary> {
+fn process (user: &User) -> TbResult<Summary> {
     let e = get_event(user)?;
     if e.is_none() {
         return Ok(Summary::default());

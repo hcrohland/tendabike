@@ -1,9 +1,10 @@
 <script lang="ts">
   import { slide } from 'svelte/transition';
   import {Card, CardBody, CardHeader} from 'sveltestrap';
-  import {category, formatSeconds} from './store';
+  import {category, fmtSeconds, fmtDate, fmtNumber} from './store';
+  import type {Part} from './types'
 
-  export let part;
+  export let part: Part;
   export let display = false;
 
   export let isOpen = false;
@@ -49,14 +50,15 @@
     <div transition:slide>
       <CardBody>
         is a <span class="param">{model(part)}</span>
-        purchased <span class="param">{new Date(part.purchase).toLocaleDateString(navigator.language)}</span>
-        <br>which you used <span class=param>{part.count.toLocaleString(navigator.language)}</span> times 
-        for <span class="param">{formatSeconds(part.time)}</span> hours.
-        <p> You covered <span class="param">{parseFloat((part.distance / 1000).toFixed(1)).toLocaleString(navigator.language)}</span> km 
-        climbing <span class="param">{part.climb.toLocaleString(navigator.language)}</span> and descending <span class="param">{part.descend.toLocaleString(navigator.language)}</span> meters </p>
-        
+        purchased <span class="param">{fmtDate(part.purchase)}</span>
+        {#if part.disposed_at}
+          and disposed at <span class="param">{fmtDate(part.disposed_at)}</span>
+        {/if}
+        <br>which you used <span class=param>{fmtNumber(part.count)}</span> times 
+        for <span class="param">{fmtSeconds(part.time)}</span> hours.
+        <p> You covered <span class="param">{fmtNumber(parseFloat((part.distance / 1000).toFixed(1)))}</span> km 
+        climbing <span class="param">{fmtNumber(part.climb)}</span> and descending <span class="param">{fmtNumber(part.descend)}</span> meters </p>
       </CardBody>
     </div>
-
   {/if}
 </Card>

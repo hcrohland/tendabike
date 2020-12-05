@@ -64,7 +64,7 @@
       <InputGroupAddon addonType="prepend">
         <InputGroupText>at</InputGroupText>
       </InputGroupAddon>
-      <DateTime class="input-group-text" bind:date={attach.attached}/> 
+      <DateTime bind:date={attach.attached}/> 
     </InputGroup>
   </div>
 </Form> 

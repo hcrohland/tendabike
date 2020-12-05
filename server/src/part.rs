@@ -88,6 +88,7 @@ pub struct NewPart {
 
 #[derive(Clone, Debug, PartialEq, Deserialize, AsChangeset)]
 #[table_name = "parts"]
+#[changeset_options(treat_none_as_null = "true")]
 struct ChangePart {
     pub id: PartId,
     /// The owner
@@ -98,7 +99,9 @@ struct ChangePart {
     pub vendor: String,
     /// The model name
     pub model: String,
-    pub purchase: Option<DateTime<Utc>>,
+    pub purchase: DateTime<Utc>,
+    /// Was it disposed? If yes, when?
+    pub disposed_at: Option<DateTime<Utc>>,
 }
 
 #[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -243,6 +246,7 @@ pub fn reset(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartId>> {
 impl NewPart {
     pub fn create(self, user: &dyn Person, conn: &AppConn) -> TbResult<Part> {
         use schema::parts::dsl::*;
+        info!("Create {:?}", self);
 
         user.check_owner(
             self.owner,
@@ -272,6 +276,7 @@ impl NewPart {
 impl ChangePart {
     fn change(&self, user: &User, conn: &AppConn) -> TbResult<Part> {
         use schema::parts::dsl::*;
+        info!("Change {:?}", self);
 
         user.check_owner(
             self.owner,
@@ -294,7 +299,6 @@ fn post(
     user: &User,
     conn: AppDbConn,
 ) -> Result<status::Created<Json<Part>>, ApiError> {
-    info!("Post {:?}", newpart);
     let part = newpart.clone().create(user, &conn)?;
     let url = uri!(get: i32::from(part.id));
     Ok(status::Created(url.to_string(), Some(Json(part))))
@@ -305,9 +309,14 @@ fn put(
     part: Json<ChangePart>,
     user: &User,
     conn: AppDbConn,
-) -> ApiResult<Part> {
-    info!("Put {:?}", part);
-    tbapi(part.change(user, &conn))
+) -> ApiResult<Summary> {
+
+    tbapi(Ok(
+        Summary {
+            parts: vec![part.change(user, &conn)?],
+            ..Default::default()
+        }
+    ))
 }
 
 #[get("/all")]
