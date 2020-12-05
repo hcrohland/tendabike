@@ -1,8 +1,7 @@
 <script lang="ts">
   import { Col, Row } from 'sveltestrap';
-  import GearCard from './Part/GearCard.svelte';
+  import MainCard from './Part/MainCard.svelte';
   import {filterValues, by, types, parts, category} from './store';
-  import type { Part } from './types';
 
   export let params = {category: 1};
   
@@ -24,7 +23,7 @@
   <Row border class="p-sm-2">
     {#each gears as part, i  (part.id)}
       <Col md=6 class="p-0 p-sm-2">
-        <GearCard {part} isOpen={i<4}/>
+        <MainCard {part} isOpen={i<4} />
       </Col>
     {:else}
       You have no {type.name} to tend 😱
@@ -41,14 +40,12 @@
   </button>
   {#if show_hist}
     <Row>
-      
     {#each bin as part, i  (part.id)}
     <Col md=6 class="p-0 p-sm-2">
-      <GearCard {part} isOpen={i<4}/>
+      <MainCard {part} isOpen={i<2} />
     </Col>
     {/each}
-
-  </Row>
+  </Row>Í
     {/if}
   {/if}
 {:else}

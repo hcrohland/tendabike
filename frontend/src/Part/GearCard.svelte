@@ -1,6 +1,6 @@
 <script lang="ts">
   import { slide } from 'svelte/transition';
-  import {Card, CardBody, CardHeader} from 'sveltestrap';
+  import {Card, CardBody, CardHeader, Row, Col} from 'sveltestrap';
   import {category, fmtSeconds, fmtDate, fmtNumber} from '../store';
   import type {Part} from '../types'
 
@@ -31,19 +31,17 @@
 
 <Card>
   <div class="header" on:mouseenter={()=> showLink = true} on:mouseleave={()=> showLink = false}>
-    <CardHeader on:click={() => (isOpen = !isOpen)} >
-      <span class="h5 mb-0"> 
-        {part.name} 
-      </span>
-      {#if showLink && !display}
-        <div class="float-right text-reset">
-
-          <a href={"/strava/bikes/" + part.id} alt="View on Strava" target="_blank"><img src="strava.png" alt="View on Strava" title="View on Strava" > </a> 
-          <a href="#/gear/{part.id}" class="badge badge-secondary" title={"View "+ $category.name.toLowerCase() + " details"}>
-            &Longrightarrow;
-          </a>
-        </div>
-      {/if}
+    <CardHeader class="h5 mb-0" on:click={() => (isOpen = !isOpen)} >
+      <Row>
+        <Col>
+          {part.name} 
+        </Col>
+        {#if showLink || display}
+        <Col>
+          <slot />
+        </Col>
+        {/if}
+      </Row>
     </CardHeader>
   </div>
   {#if isOpen || display}
