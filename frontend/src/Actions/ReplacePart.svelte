@@ -30,7 +30,7 @@
     if (dispose) {
       oldpart.disposed_at = part.purchase;
       await myfetch('/part', 'PUT', oldpart)
-        .then(updatePartAttach)
+        .then((data) => parts.updateMap([data]))
     }
   }
 
@@ -77,7 +77,7 @@ export const replacePart = (attl: Attachment) => {
   <ModalBody>
     <Form>
       <NewForm {type} {part} on:change={setPart}/>
-      <Dispose bind:dispose> old {oldpart.name} </Dispose>
+      <Dispose bind:dispose> old {type.name} </Dispose>
     </Form>
   </ModalBody>
   <ModalFooter {action} {toggle} {disabled} button={'Replace'} />
