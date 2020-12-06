@@ -43,7 +43,7 @@
     atts = filterValues($attachments, (a) => a.part_id == part.id).sort(by("attached"))
     start = atts[0] ? atts[0].attached : undefined;
     last = atts[atts.length - 1];
-    date = undefined
+    date = new Date
     detach = false
     dispose = false
     part_changed = false
