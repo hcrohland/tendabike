@@ -304,14 +304,6 @@ impl Attachment {
             };
             
             ensure!(
-                state.hook == self.hook,
-                Error::Conflict(format!(
-                    "part {} already attached to hook {}, instead of {}",
-                    self.part_id, state.hook, self.hook
-                ))
-            );
-
-            ensure!(
                 self.detached != state.detached, // No change!
                 Error::BadRequest(String::from("Attachment already exists"))
             );
