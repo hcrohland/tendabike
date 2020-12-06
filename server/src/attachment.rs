@@ -255,6 +255,43 @@ impl Attachment {
         Ok(res)
     }
 
+    fn update(mut self, mut state: Self, conn: &AppConn) -> TbResult<Summary> {
+        debug!("update {:?}",self);
+        if let Some(detached) = self.detached {
+            if detached <= state.attached {
+                return self.delete(conn)
+            }
+        }
+
+        let factor;
+        if lt_detached(self.detached, state.detached) {
+            state.attached = self.detached.unwrap();
+            factor = Factor::Sub
+        } else {
+            state.attached = state.detached.unwrap();
+            state.detached = self.detached;
+            let coll = state.collisions(conn)?;
+            ensure!(
+                coll.is_empty(),
+                Error::BadRequest(format!("Attachment collision with {:?}", coll))
+            );
+            factor = Factor::Add
+        };
+
+        let usage = state.usage(factor, conn);
+        let part = self.apply_usage(&usage, conn)?; // and register changes
+        let attachment = AttachmentDetail {
+                a: self.save_changes::<Attachment>(conn)?,
+                name: part.name.clone(), 
+                what: part.what
+            };
+        Ok(Summary {
+            parts: vec![part], 
+            attachments: vec![attachment],
+            ..Default::default()
+        })
+    }
+
     /// deletes an attachment with its side-effects
     ///
     /// - recalculates the usage counters in the attached assembly
@@ -284,6 +321,7 @@ impl Attachment {
     /// returns
     /// - all recalculated parts on success
     fn patch(self, user: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
+        info!("patch {:?}", &self);
         // check user
         let part = self.part_id.part(user, conn)?;
         // and types
@@ -294,11 +332,17 @@ impl Attachment {
         );
 
         conn.transaction(|| {
-            if lt_detached(self.detached,Some(self.attached)) {
-                self.delete(conn)
-            } else {
-                self.create(user, conn)
-        }
+            match attachments::table
+            .find((self.part_id, self.attached))
+            .filter(attachments::gear.eq(self.gear))
+            .filter(attachments::hook.eq(self.hook))
+            .for_update()
+            .get_result::<Attachment>(conn)
+            {
+                Err(diesel::result::Error::NotFound) => self.create(user, conn),
+                Err(e) =>  Err(e.into()),
+                Ok(state) => self.update(state, conn)
+            }
         })
     }
 
