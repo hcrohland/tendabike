@@ -37,12 +37,12 @@
   </ShowAll>
   {#if show_hist}
     <Row>
-    {#each bin as part, i  (part.id)}
-    <Col md=6 class="p-0 p-sm-2">
-      <MainCard {part} isOpen={i<2} />
-    </Col>
-    {/each}
-  </Row>Í
+      {#each bin as part, i  (part.id)}
+      <Col md=6 class="p-0 p-sm-2">
+        <MainCard {part} isOpen={i<2} />
+      </Col>
+     {/each}
+    </Row>
     {/if}
   {/if}
 {:else}
