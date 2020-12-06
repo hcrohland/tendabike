@@ -14,7 +14,8 @@
   let atts: Attachment[]
   let last: Attachment, start;
   let part: Part, newpart: Part;
-  let type: Type;
+  let type: Type = $types[1];
+  let isGear = false
   let isOpen = false;
   let disabled = true, detach, part_changed;
   let dispose = false, date;
@@ -47,6 +48,7 @@
     dispose = false
     part_changed = false
     isOpen = true;
+    isGear = (part.what == type.main)
   }
 
   const toggle = () => isOpen = false
@@ -65,7 +67,14 @@
     <Form>
       <NewForm {type} {part} on:change={setPart} maxdate={start}/>
       <FormGroup>
-        {#if last}
+        {#if isGear}
+          <InputGroup>
+            <Dispose bind:dispose/>
+            {#if dispose}
+            <DateTime bind:date mindate={part.purchase}/>
+            {/if}
+          </InputGroup>
+        {:else if last}
           {#if last.detached}
           <InputGroup>
             <Dispose bind:dispose/>
