@@ -8,7 +8,7 @@
   import type {Type, Part, Attachment} from '../types'
   import NewForm from './NewForm.svelte';
   import Dispose from '../Widgets/Dispose.svelte';
-  import DateTime from './DateTime.svelte';
+  import DateTime from '../Widgets/DateTime.svelte';
   import Switch from '../Widgets/Switch.svelte';
   
   let atts: Attachment[]

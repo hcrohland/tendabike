@@ -1,8 +1,8 @@
 <script lang="ts">
   import {
-    Input, FormGroup, Label, Col
+    Input, InputGroup, FormGroup, Label, Col
   } from 'sveltestrap'
-  import DateTime from './DateTime.svelte';
+  import DateTime from '../Widgets/DateTime.svelte';
   import type {Type, Part} from '../types'
   import { createEventDispatcher } from 'svelte';
   const dispatch = createEventDispatcher()
@@ -40,7 +40,9 @@
   <Col>
     <Label for="inputDate" right> New {type && type.name || ''} day was </Label>
   </Col>
-  <Col>
+  <Col xs=auto>
+    <InputGroup>
     <DateTime id="inputDate" bind:date={part.purchase} {maxdate} required/>
+    </InputGroup>
   </Col>
 </FormGroup>

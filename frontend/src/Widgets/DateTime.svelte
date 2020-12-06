@@ -45,3 +45,18 @@
 		on:change={handleChange}
 		{...props}
 	/> 
+	{#if mindate}
+		<button on:click={() => date = mindate}> 
+			&#706;
+		</button>
+	{/if}
+	{#if (!maxdate || (new Date(maxdate) >= new Date)) && (!mindate || (new Date(mindate) <= new Date)) }
+		 <button on:click={() => date = new Date()}> 
+			&#8226;
+		</button>
+	{/if}
+	{#if maxdate}
+		<button on:click={() => date = maxdate}> 
+			&#707;
+		</button>
+	{/if}

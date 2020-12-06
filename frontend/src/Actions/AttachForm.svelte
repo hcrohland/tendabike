@@ -2,7 +2,7 @@
   import {
     Form, InputGroup, InputGroupAddon, InputGroupText
   } from 'sveltestrap'
-  import DateTime from './DateTime.svelte';
+  import DateTime from '../Widgets/DateTime.svelte';
   import {attachments, filterValues, types, parts, by} from '../store';
   import type {Attachment, Type, Part} from '../types';  
 

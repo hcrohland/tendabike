@@ -5,7 +5,7 @@
         } from 'sveltestrap';
   import ModalFooter from './ModalFooter.svelte'
   import {myfetch, updatePartAttach, types} from '../store';
-  import DateTime from './DateTime.svelte'
+  import DateTime from '../Widgets/DateTime.svelte'
 
   let user: string;
   let one_user = false;
