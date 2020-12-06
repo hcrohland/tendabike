@@ -50,11 +50,11 @@
         is a <span class="param">{model(part)}</span>
         {#if !part.disposed_at}
         purchased <span class="param">{fmtDate(part.purchase)}</span>
-        <br> which
+         which
         {:else}
-          <br> you owned from <span class="param">{fmtDate(part.purchase)}</span>
+          you owned from <span class="param">{fmtDate(part.purchase)}</span>
           until <span class="param">{fmtDate(part.disposed_at)}</span>
-          <br> and 
+          and 
         {/if}
         you used <span class=param>{fmtNumber(part.count)}</span> times 
         for <span class="param">{fmtSeconds(part.time)}</span> hours.
