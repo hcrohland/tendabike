@@ -6,9 +6,8 @@ import Usage from '../Usage.svelte'
 import AttachPart from '../Actions/AttachPart.svelte'
 import NewPart from '../Actions/NewPart.svelte'
 import type {Attachment, Part, Type} from '../types'
-import ChangePart from '../Actions/ChangePart.svelte';
-import RecoverPart from '../Actions/RecoverPart.svelte';
 import Menu from '../Menu.svelte'
+import ShowAll from '../Widgets/ShowHist.svelte'
 
 export let type: Type;
 export let date = new Date;
@@ -42,15 +41,7 @@ function subparts(type: Type, parts: Part[]) {
 <tr>
   <th colspan=6 scope="col" class="border-2 text-nowrap"> 
     {type.name}s 
-    <button class="btn badge" 
-            on:click={() => {show_all = !show_all; update(show_all)}} 
-            title={show_all?"hide attached":"show attached"}>
-      {#if show_all}
-        &#9650;
-      {:else}
-        &#9660;
-      {/if}
-    </button>
+    <ShowAll on:toggle={(e) => {{show_all = e.detail; update(show_all)}}}/>
   </th>
   <th class="border-2 text-nowrap" colspan=80>
     <Button class="badge badge-secondary float-right" on:click={() => newPart(type)}> New {type.name}</Button>

@@ -96,7 +96,8 @@ export async function initData () {
 ])
 }
 
-export function isAttached (att, time) {
+export function isAttached (att, time?) {
+    if (!time) time = new Date()
     return time >= new Date(att.attached) && (!att.detached || time < new Date(att.detached))
 }
 

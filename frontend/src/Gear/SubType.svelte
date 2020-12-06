@@ -7,6 +7,7 @@ import ReplacePart from '../Actions/ReplacePart.svelte'
 import AttachPart from '../Actions/AttachPart.svelte'
 import type {Attachment, Type} from '../types';
 import Menu from '../Menu.svelte';
+import ShowAll from '../Widgets/ShowHist.svelte';
 
 export let header = false;
 export let attachments: Attachment[] = [];
@@ -18,6 +19,7 @@ void(hook) // get rid of warning...
 
 let show_hist = false; 
 let attachPart, replacePart, recoverPart;
+
 </script>
 
 {#if header}
@@ -30,20 +32,31 @@ let attachPart, replacePart, recoverPart;
   </tr>    
 {:else}
   {#each attachments as att,i (att.part_id + "/" + att.attached)}
-    {#if i == 0 || show_hist}
+    {#if i == 0 && !isAttached(att)}
+    <tr>
+      <th scope="row" class="text-nowrap"> 
+        {'| '.repeat(level)}
+        {#if i == 0 }
+          {prefix +  " " + type.name}
+          {#if attachments.length > 1}
+            <ShowAll bind:show_hist/>
+          {/if}
+        {:else}
+          |
+        {/if}
+      </th>
+      <th colspan=80>
+      </th>
+    </tr>
+    {/if}
+    {#if (i == 0 && isAttached(att))|| show_hist }
       <tr>
         <th scope="row" class="text-nowrap"> 
           {'| '.repeat(level)}
-          {#if i == 0 }
+          {#if i == 0 && isAttached(att) }
             {prefix +  " " + type.name}
             {#if attachments.length > 1}
-              <button class="btn badge" on:click={() => show_hist = !show_hist}>
-                {#if show_hist}
-                  &#9650;
-                {:else}
-                  &#9660;
-                {/if}
-              </button>
+              <ShowAll bind:show_hist/>
             {/if}
           {:else}
             |
@@ -69,8 +82,10 @@ let attachPart, replacePart, recoverPart;
         <td>
           <Menu>
           {#if !$parts[att.part_id].disposed_at}
-            {#if isAttached(att, new Date)}
+            {#if i == 0}
             <DropdownItem on:click={() => replacePart(att)}> Replace part</DropdownItem>
+            {/if}
+            {#if isAttached(att, new Date)}
             <DropdownItem on:click={() => attachPart($parts[att.part_id])}> Move part</DropdownItem>
             {:else}
             <DropdownItem on:click={() => attachPart($parts[att.part_id])}> Attach part</DropdownItem>

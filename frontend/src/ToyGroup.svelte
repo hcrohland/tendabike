@@ -2,6 +2,7 @@
   import { Col, Row } from 'sveltestrap';
   import MainCard from './Part/MainCard.svelte';
   import {filterValues, by, types, parts, category} from './store';
+  import ShowAll from './Widgets/ShowHist.svelte';
 
   export let params = {category: 1};
   
@@ -31,13 +32,9 @@
   </Row>
   
   {#if bin.length > 0}
-  <button class="btn badge" on:click={() => show_hist = !show_hist}>
-    {#if show_hist}
-    &#9650; Hide disposed
-    {:else}
-    &#9660; Show disposed 
-    {/if}
-  </button>
+  <ShowAll bind:show_hist>
+     Show disposed 
+  </ShowAll>
   {#if show_hist}
     <Row>
     {#each bin as part, i  (part.id)}
