@@ -206,55 +206,53 @@ impl Attachment {
     fn create(mut self, user: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
         ensure!(!lt_detached(self.detached,Some(self.attached)), 
                 Error::BadRequest(format!(" detached < attached: {:?}", self)));
-        conn.transaction(|| {
-            let mut attachments = self.collisions(conn)?;
-            attachments.append(&mut read(
-                self.part_id,
-                Some(self.attached),
-                self.detached,
-                conn,
-            )?);
-            attachments.sort_by_key(|a|  a.attached);
-            // self collisions and self.read do find both own attachment to this hook
-            attachments.dedup();
+        let mut attachments = self.collisions(conn)?;
+        attachments.append(&mut read(
+            self.part_id,
+            Some(self.attached),
+            self.detached,
+            conn,
+        )?);
+        attachments.sort_by_key(|a|  a.attached);
+        // self collisions and self.read do find both own attachment to this hook
+        attachments.dedup();
 
-            // if there is an exiting attachment, which started earlier and is not yet detached we detach it automatically
-            let mut res = Summary::default();
-            for mut pred in attachments.into_iter() {
-                if lt_detached(self.detached, Some(pred.attached)) {
-                    continue;
-                }
-
-                if self.try_merge(&pred) {
-                    // extend attachment
-                    debug!("merging predecessor");
-                    res.append(&mut pred.delete(conn)?);
-                } else if pred.attached <= self.attached {
-                    // predecessor gets detached
-                    debug!("detaching predecessor");
-                    pred.detached = Some(self.attached);
-                    res.append(&mut pred.patch(user, conn)?);
-                } else if self.detached.is_none() && pred.attached > self.attached {
-                    // this attachment ends
-                    debug!("Adjusting detach time");
-                    self.detached = Some(pred.attached);
-                } else {
-                    return Err(
-                        Error::Conflict(format!("{:?} collides with {:?}", self, pred)).into(),
-                    );
-                }
+        // if there is an exiting attachment, which started earlier and is not yet detached we detach it automatically
+        let mut res = Summary::default();
+        for mut pred in attachments.into_iter() {
+            if lt_detached(self.detached, Some(pred.attached)) {
+                continue;
             }
 
-            let usage = self.usage(Factor::Add, conn);
-            let part = self.apply_usage(&usage, conn)?;
-            let att = diesel::insert_into(attachments::table) // Store the attachment in the database
-                .values(self)
-                .get_result::<Attachment>(conn)
-                .context("Could not insert attachment")?;
-            res.attachments.push(att.add_details(part.name.clone(), part.what));
-            res.parts.push(part); // and register changes
-            Ok(res)
-        })
+            if self.try_merge(&pred) {
+                // extend attachment
+                debug!("merging predecessor");
+                res.append(&mut pred.delete(conn)?);
+            } else if pred.attached <= self.attached {
+                // predecessor gets detached
+                debug!("detaching predecessor");
+                pred.detached = Some(self.attached);
+                res.append(&mut pred.patch(user, conn)?);
+            } else if self.detached.is_none() && pred.attached > self.attached {
+                // this attachment ends
+                debug!("Adjusting detach time");
+                self.detached = Some(pred.attached);
+            } else {
+                return Err(
+                    Error::Conflict(format!("{:?} collides with {:?}", self, pred)).into(),
+                );
+            }
+        }
+
+        let usage = self.usage(Factor::Add, conn);
+        let part = self.apply_usage(&usage, conn)?;
+        let att = diesel::insert_into(attachments::table) // Store the attachment in the database
+            .values(self)
+            .get_result::<Attachment>(conn)
+            .context("Could not insert attachment")?;
+        res.attachments.push(att.add_details(part.name.clone(), part.what));
+        res.parts.push(part); // and register changes
+        Ok(res)
     }
 
     /// deletes an attachment with its side-effects
@@ -262,85 +260,45 @@ impl Attachment {
     /// - recalculates the usage counters in the attached assembly
     /// - returns all affected parts
     fn delete(self, conn: &AppConn) -> TbResult<Summary> {
-        conn.transaction(|| {
-            let ctx = format!("Could not delete attachment {:#?}", self);
-            let mut att = diesel::delete(attachments::table.find((self.part_id, self.attached))) // delete the attachment in the database
-                .get_result::<Attachment>(conn)
-                .context(ctx)?;
-            
-            let usage = att.usage(Factor::Sub, conn);
-            let part = att.apply_usage(&usage,conn)?;
-            att.detached = Some(att.attached);
-            return Ok(Summary{
-                attachments: vec![att.add_details("".into(), 0.into())],
-                parts: vec![part],
-                activities: vec![]
-            })
+        let ctx = format!("Could not delete attachment {:#?}", self);
+        let mut att = diesel::delete(attachments::table.find((self.part_id, self.attached))) // delete the attachment in the database
+            .get_result::<Attachment>(conn)
+            .context(ctx)?;
+        
+        let usage = att.usage(Factor::Sub, conn);
+        let part = att.apply_usage(&usage,conn)?;
+        att.detached = Some(att.attached);
+        return Ok(Summary{
+            attachments: vec![att.add_details("".into(), 0.into())],
+            parts: vec![part],
+            activities: vec![]
         })
     }
 
     /// change an attachment identified by part_id and attached
     ///
     /// This is the main function to manage attachments
-    /// - if the attachment does not exist, create the database object
     /// - if detached <= attached delete the attachment
-    /// - if detached changed, change the database object
+    /// - else squeeze new attachment in
     ///
     /// returns
-    /// - MyError::Conflict if the hook_id does not match
     /// - all recalculated parts on success
-    fn patch(mut self, user: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
-        self.part_id.checkuser(user, conn)?;
+    fn patch(self, user: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
+        // check user
+        let part = self.part_id.part(user, conn)?;
+        // and types
+        let mytype = part.what.get(conn)?;
+        ensure!(
+            mytype.hooks.contains(&self.hook),
+            Error::BadRequest(format!("Type {} cannot be attached to hook {}", mytype.name, self.hook))
+        );
+
         conn.transaction(|| {
-            let mut state = match attachments::table
-                .find((self.part_id, self.attached))
-                .filter(attachments::gear.eq(self.gear))
-                .for_update()
-                .get_result::<Attachment>(conn)
-            {
-                Err(diesel::result::Error::NotFound) => return self.create(user, conn),
-                Err(e) => return Err(e.into()),
-                Ok(x) => x,
-            };
-            
-            ensure!(
-                self.detached != state.detached, // No change!
-                Error::BadRequest(String::from("Attachment already exists"))
-            );
-
-            if let Some(detached) = self.detached {
-                if detached <= state.attached {
-                    return self.delete(conn)
-                }
-            }
-
-            let factor;
-            if lt_detached(self.detached, state.detached) {
-                state.attached = self.detached.unwrap();
-                factor = Factor::Sub
+            if lt_detached(self.detached,Some(self.attached)) {
+                self.delete(conn)
             } else {
-                state.attached = state.detached.unwrap();
-                state.detached = self.detached;
-                let coll = state.collisions(conn)?;
-                ensure!(
-                    coll.is_empty(),
-                    Error::BadRequest(format!("Attachment collision with {:?}", coll))
-                );
-                factor = Factor::Add
-            };
-
-            let usage = state.usage(factor, conn);
-            let part = self.apply_usage(&usage, conn)?; // and register changes
-            let attachment = AttachmentDetail {
-                    a: self.save_changes::<Attachment>(conn)?,
-                    name: part.name.clone(), 
-                    what: part.what
-                };
-            Ok(Summary {
-                parts: vec![part], 
-                attachments: vec![attachment],
-                ..Default::default()
-            })
+                self.create(user, conn)
+        }
         })
     }
 

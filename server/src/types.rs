@@ -69,6 +69,13 @@ fn activity(_user: &User, conn: AppDbConn) -> Json<Vec<ActivityType>> {
 }
 
 impl PartTypeId {
+    pub fn get (self, conn: &AppConn) -> TbResult<PartType> {
+        use schema::part_types::dsl::*;
+        Ok(part_types
+            .find(self)
+            .get_result::<PartType>(conn)?)
+    }
+
     fn filter_types(self, types: &mut Vec<PartType>) -> Vec<PartType> {
         let mut res = types
             .drain_filter(|x| x.hooks.contains(&self) || x.id == self)
