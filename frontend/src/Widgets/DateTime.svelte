@@ -11,7 +11,7 @@
 
 	import 'flatpickr/dist/flatpickr.css'
 	import 'flatpickr/dist/themes/light.css'
-
+	
 	const options = {
 		year: 'numeric', month: 'short', day: 'numeric',
 		hour: 'numeric', minute: 'numeric'
@@ -46,17 +46,17 @@
 		{...props}
 	/> 
 	{#if mindate}
-		<button on:click={() => date = mindate}> 
+		<button on:click|preventDefault={() => date = mindate}> 
 			&#706;
 		</button>
 	{/if}
 	{#if (!maxdate || (new Date(maxdate) >= new Date)) && (!mindate || (new Date(mindate) <= new Date)) }
-		 <button on:click={() => date = new Date()}> 
+		 <button on:click|preventDefault={() => date = new Date()}> 
 			&#8226;
 		</button>
 	{/if}
 	{#if maxdate}
-		<button on:click={() => date = maxdate}> 
+		<button on:click|preventDefault={() => date = maxdate}> 
 			&#707;
 		</button>
 	{/if}
