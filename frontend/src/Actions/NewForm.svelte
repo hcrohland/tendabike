@@ -1,6 +1,6 @@
 <script lang="ts">
   import {
-    Form, Input, FormGroup, Label, Col
+    Input, FormGroup, Label, Col
   } from 'sveltestrap'
   import DateTime from './DateTime.svelte';
   import type {Type, Part} from '../types'
@@ -10,11 +10,11 @@
   export let type: Type;
   export let part: Part;
   export let maxdate = undefined;
-  let {name, vendor, model, purchase} = part
+  let {name, vendor, model} = part
 
   $: if (type && name.length > 0 && vendor.length > 0 && model.length > 0) {
-      part = {...part, name, vendor, model, purchase}
-      part.last_used = purchase
+      part = {...part, name, vendor, model}
+      part.last_used = part.purchase
       dispatch ("change", part)  
     }
 </script>
@@ -41,6 +41,6 @@
     <Label for="inputDate" right> New {type && type.name || ''} day was </Label>
   </Col>
   <Col>
-    <DateTime id="inputDate" bind:date={purchase} {maxdate} required/>
+    <DateTime id="inputDate" bind:date={part.purchase} {maxdate} required/>
   </Col>
 </FormGroup>
