@@ -1,13 +1,12 @@
 <script lang="ts">
-  import {DropdownItem, Table} from 'sveltestrap'
-  import {filterValues, types, parts, attachments, category, fmtDate} from '../store'
+  import {Button, ButtonGroup} from 'sveltestrap'
+  import {filterValues, types, parts, attachments, category} from '../store'
   import Subparts from './Subparts.svelte'
-  import Usage from '../Usage.svelte'
   import type {Attachment, Part} from '../types'
   import InstallPart from '../Actions/InstallPart.svelte'
   import ChangePart from '../Actions/ChangePart.svelte'
-  import Menu from '../Widgets/Menu.svelte'
   import RecoverPart from '../Actions/RecoverPart.svelte';
+  import GearCard from '../Part/GearCard.svelte'
  
   export let params;
   
@@ -25,48 +24,16 @@
   ) as Attachment[]
 </script>
 
-<Table>
-  <thead>
-    <tr>
-      <th scope="col">{hook.name}</th>
-      <th scope="col">Brand</th>
-      <th scope="col">Model</th>
-      <th scope="col">
-        {#if gear.disposed_at}
-           Owned
-        {:else}
-           Purchase
-        {/if}
-      </th>
-      <Usage header/>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>{gear.name}</td>
-      <td>{gear.vendor}</td>
-      <td>{gear.model}</td>
-      <td>
-        {fmtDate(gear.purchase)}
-        {#if gear.disposed_at}
-           - {fmtDate(gear.disposed_at)}
-        {/if}
-      </td>
-      <Usage usage={gear} />
-      <td>
-        <Menu>
-        {#if gear.disposed_at}
-          <DropdownItem on:click={() => recoverPart(gear)}> Recover {hook.name} </DropdownItem>
-        {:else}
-          <DropdownItem on:click={() => installPart(gear)}> Install new part </DropdownItem>
-          <DropdownItem on:click={() => changePart(gear)}> Change details </DropdownItem>
-        {/if}
-        </Menu>
-      </td>
-    </tr>
-  </tbody>
-</Table>
+<GearCard part={gear} display>
+  <ButtonGroup class="float-right">
+      {#if gear.disposed_at}
+      <Button on:click={() => recoverPart(gear)}> Recover gear </Button>
+      {:else}
+      <Button on:click={() => installPart(gear)}>  Install new part </Button>
+      <Button on:click={() => changePart(gear)}>  Change details </Button>
+      {/if}
+    </ButtonGroup>
+</GearCard>
 <Subparts {hook} {attachees} />
 
 <InstallPart bind:installPart />
