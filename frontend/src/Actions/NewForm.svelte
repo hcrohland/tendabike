@@ -10,6 +10,7 @@
   export let type: Type;
   export let part: Part;
   export let maxdate = undefined;
+  export let mindate = undefined;
   let {name, vendor, model} = part
 
   $: if (type && name.length > 0 && vendor.length > 0 && model.length > 0) {
@@ -42,7 +43,7 @@
   </Col>
   <Col xs=auto>
     <InputGroup>
-    <DateTime id="inputDate" bind:date={part.purchase} {maxdate} required/>
+    <DateTime id="inputDate" bind:date={part.purchase} {maxdate} {mindate} required/>
     </InputGroup>
   </Col>
 </FormGroup>

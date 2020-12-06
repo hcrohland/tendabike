@@ -96,7 +96,7 @@
   </ModalHeader>
   <ModalBody>
     <Form>
-      <NewForm {type} {part} on:change={setPart}/>
+      <NewForm {type} {part} mindate={gear.purchase} on:change={setPart}/>
     </Form>
   </ModalBody>
   <ModalFooter {action} {toggle} {disabled} button={'Install'} />

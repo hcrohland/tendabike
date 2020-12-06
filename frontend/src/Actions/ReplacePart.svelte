@@ -76,7 +76,7 @@ export const replacePart = (attl: Attachment) => {
   <ModalHeader {toggle}>  New {prefix} {type.name} for {$parts[att.gear].name} </ModalHeader>
   <ModalBody>
     <Form>
-      <NewForm {type} {part} on:change={setPart}/>
+      <NewForm {type} {part} mindate={att.attached} on:change={setPart}/>
       <Dispose bind:dispose> old {type.name} </Dispose>
     </Form>
   </ModalBody>
