@@ -80,20 +80,22 @@ let attachPart, replacePart, recoverPart;
           {/if}
         </td><Usage usage={$parts[att.part_id] || att} />
         <td>
-          <Menu>
-          {#if !$parts[att.part_id].disposed_at}
-            {#if i == 0}
-            <DropdownItem on:click={() => replacePart(att)}> Replace part</DropdownItem>
+          {#if $parts[att.part_id]}
+             <Menu>
+               {#if !$parts[att.part_id].disposed_at}
+               {#if i == 0}
+               <DropdownItem on:click={() => replacePart(att)}> Replace part</DropdownItem>
+               {/if}
+               {#if isAttached(att, new Date)}
+               <DropdownItem on:click={() => attachPart($parts[att.part_id])}> Move part</DropdownItem>
+               {:else}
+               <DropdownItem on:click={() => attachPart($parts[att.part_id])}> Attach part</DropdownItem>
+               {/if}
+               {:else}
+               <DropdownItem on:click={() => recoverPart($parts[att.part_id])}> Recover part</DropdownItem>
+               {/if}
+              </Menu>
             {/if}
-            {#if isAttached(att, new Date)}
-            <DropdownItem on:click={() => attachPart($parts[att.part_id])}> Move part</DropdownItem>
-            {:else}
-            <DropdownItem on:click={() => attachPart($parts[att.part_id])}> Attach part</DropdownItem>
-            {/if}
-          {:else}
-            <DropdownItem on:click={() => recoverPart($parts[att.part_id])}> Recover part</DropdownItem>
-            {/if}
-          </Menu>
         </td>
       </tr>
     {/if}
