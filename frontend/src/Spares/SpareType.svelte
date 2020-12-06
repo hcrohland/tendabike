@@ -6,7 +6,7 @@ import Usage from '../Usage.svelte'
 import AttachPart from '../Actions/AttachPart.svelte'
 import NewPart from '../Actions/NewPart.svelte'
 import type {Attachment, Part, Type} from '../types'
-import Menu from '../Menu.svelte'
+import Menu from '../Widgets/Menu.svelte'
 import ShowAll from '../Widgets/ShowHist.svelte'
 
 export let type: Type;

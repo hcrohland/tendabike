@@ -6,6 +6,6 @@
   {/if}
 </Switch>
 <script lang="ts">
-  import Switch from '../Actions/Switch.svelte'
+  import Switch from '../Widgets/Switch.svelte'
   export let dispose
 </script>

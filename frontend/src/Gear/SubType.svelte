@@ -6,7 +6,7 @@ import RecoverPart from '../Actions/RecoverPart.svelte'
 import ReplacePart from '../Actions/ReplacePart.svelte'
 import AttachPart from '../Actions/AttachPart.svelte'
 import type {Attachment, Type} from '../types';
-import Menu from '../Menu.svelte';
+import Menu from '../Widgets/Menu.svelte';
 import ShowAll from '../Widgets/ShowHist.svelte';
 
 export let header = false;

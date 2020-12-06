@@ -6,7 +6,7 @@
   import type {Attachment, Part} from '../types'
   import InstallPart from '../Actions/InstallPart.svelte'
   import ChangePart from '../Actions/ChangePart.svelte'
-  import Menu from '../Menu.svelte'
+  import Menu from '../Widgets/Menu.svelte'
   import RecoverPart from '../Actions/RecoverPart.svelte';
  
   export let params;

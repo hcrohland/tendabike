@@ -9,7 +9,7 @@
   import {myfetch, types, initData, parts, user, updatePartAttach} from '../store';
   import ModalFooter from './ModalFooter.svelte'
   import NewForm from './NewForm.svelte';
-  import Dispose from './Dispose.svelte';
+  import Dispose from '../Widgets/Dispose.svelte';
 
   let part: Part, oldpart: Part, newpart: Part;
   let type: Type;
