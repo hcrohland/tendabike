@@ -22,7 +22,7 @@
   export let disabled = true;
 
   let type: Type = $types[part.what]; 
-  let options = filterValues($parts, (p) => type.main == p.what);
+  let options = filterValues($parts, (p) => (type.main == p.what && ! p.disposed_at));
   
   attach = {
     part_id: part.id,
