@@ -41,9 +41,9 @@
     newpart = p;
     type = $types[part.what];
     atts = filterValues($attachments, (a) => a.part_id == part.id).sort(by("attached"))
-    start = atts[0] ? atts[0].attached : undefined;
-    last = atts[atts.length - 1];
-    date = last.detached ? last.detached : new Date
+    last = atts[0];
+    start = atts.length > 0 ? atts[atts.length-1].attached : undefined
+    date = last && last.detached ? new Date(last.detached) : new Date()
     detach = false
     dispose = false
     part_changed = false
@@ -85,15 +85,11 @@
           {:else}
           <InputGroup>
             <Switch bind:checked={detach}>
-              {#if detach}
-              detached at
-              {:else}
-              detach?
-              {/if}
+              {#if detach} detached at {:else} detach? {/if}
             </Switch>
             {#if detach}
-               <DateTime bind:date mindate={last.attached}/>
-               <Dispose bind:dispose>  {type.name} when detached </Dispose>
+              <DateTime bind:date mindate={last.attached}/>
+              <Dispose bind:dispose> {type.name} when detached </Dispose>
             {/if}
           </InputGroup>
           {/if}
