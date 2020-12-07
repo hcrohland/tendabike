@@ -46,7 +46,7 @@ pub struct Attachment {
     /// the hook on that gear
     hook: PartTypeId,
     /// when it was removed again, "none" means "still attached"
-    detached: Option<DateTime<Utc>>,
+    detached: MyTime,
     // we do not accept theses values from the client!
     /// usage count
     #[serde(skip_deserializing)]
@@ -118,27 +118,47 @@ pub fn attached_to(part: PartId, at_time: DateTime<Utc>, conn: &AppConn) -> Part
     }
 }
 
-/// is detached a less than b?
+/// 
 ///
-/// none means indefinitely in the future
-fn lt_detached(a: Option<DateTime<Utc>>, b: Option<DateTime<Utc>>) -> bool {
-    match (a,b) {
-        (Some(_),None) => true,
-        (None,_) => false,
-        (a,b) => a < b
+#[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MyTime(Option<DateTime<Utc>>);
+
+NewtypeFrom! { () pub struct MyTime(Option<DateTime<Utc>>); }
+impl std::convert::From<DateTime<Utc>> for MyTime {
+    fn from(t: DateTime<Utc>) -> Self {
+        Self(Some(t))
+    }
+} 
+
+use std::cmp::Ordering;
+impl std::cmp::PartialOrd for MyTime {
+
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some (match (self.0,other.0) {
+            (Some(_),None) => Ordering::Less,
+            (None,Some(_)) => Ordering::Greater,
+            (a,b) => a.cmp(&b)
+        })
     }
 }
 
+impl MyTime {
+    pub fn infinite(&self) -> bool {
+        self.0.is_none()
+    }
+}
 
 #[test]
-fn test_detached() {
-    let b = Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)); // `2014-07-08T09:10:11Z`
-    let c = Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 10)); // `2014-07-08T09:10:10Z`
-    assert!(lt_detached(c, b));
-    assert!(!lt_detached(b, c));
-    assert!(!lt_detached(b, b));
-    assert!(!lt_detached(None, c));
-    assert!(lt_detached(b, None));
+fn test_mytime() {
+    let b: MyTime = Utc.ymd(2014, 7, 8).and_hms(9, 10, 11).into(); // `2014-07-08T09:10:11Z`
+    let c: MyTime = Utc.ymd(2014, 7, 8).and_hms(9, 10, 10).into(); // `2014-07-08T09:10:10Z`
+    assert!(c < b);
+    assert!(!(b < c));
+    assert!(!(b == c));
+    assert!((b == b));
+    assert!(!(b < b));
+    assert!(!(c > None.into()));
+    assert!((b < None.into()));
 }
 
 impl Attachment {
@@ -169,7 +189,7 @@ impl Attachment {
 
     /// return the usage for the attachment
     fn usage(&self, factor: Factor, conn: &AppConn) -> Usage {
-        Activity::find(self.gear, self.attached, self.detached, conn)
+        Activity::find(self.gear, self.attached, self.detached.0, conn)
             .into_iter()
             .fold(Usage::none(self.attached), |acc, x| {
                 acc.add_activity(&x, factor)
@@ -187,10 +207,10 @@ impl Attachment {
         trace!("merging {:?}", self);
         trace!("and {:?}", pred);
         self.attached = min(self.attached, pred.attached);
-        self.detached = match (self.detached, pred.detached) {
+        self.detached = match (self.detached.0, pred.detached.0) {
             (None, _) | (_, None) =>  None,
             (Some(s), Some(p)) =>  Some(max(s,p))
-        };
+        }.into();
         trace!("to {:#?}", self);
         true
     }
@@ -216,7 +236,7 @@ impl Attachment {
         // if there is an exiting attachment, which started earlier and is not yet detached we detach it automatically
         let mut res = Summary::default();
         for pred in attachments.into_iter() {
-            if lt_detached(self.detached, Some(pred.attached)) {
+            if self.detached < pred.attached.into() {
                 continue;
             }
 
@@ -228,10 +248,10 @@ impl Attachment {
                 // predecessor gets detached
                 debug!("detaching predecessor");
                 res.append(&mut pred.update(self.attached, conn)?);
-            } else if self.detached.is_none() && pred.attached > self.attached {
+            } else if self.detached.infinite() && pred.attached > self.attached {
                 // this attachment ends
                 debug!("Adjusting detach time");
-                self.detached = Some(pred.attached);
+                self.detached = pred.attached.into();
             } else {
                 return Err(
                     Error::Conflict(format!("{:?} collides with {:?}", self, pred)).into(),
@@ -261,7 +281,7 @@ impl Attachment {
         info!("update {:?}",self);
         
         self.remove(conn)?;
-        self.detached = Some(detached);
+        self.detached = detached.into();
         let part = self.add(conn)?; // and register changes
         let attachment = AttachmentDetail {
                 a: self.save_changes::<Attachment>(conn)?,
@@ -288,7 +308,7 @@ impl Attachment {
         
         let part = att.remove(conn)?;
         // mark as deleted for client!
-        att.detached = Some(att.attached);
+        att.detached = att.attached.into();
         return Ok(Summary{
             attachments: vec![att.add_details("".into(), 0.into())],
             parts: vec![part],
@@ -313,8 +333,8 @@ impl Attachment {
             mytype.hooks.contains(&self.hook),
             Error::BadRequest(format!("Type {} cannot be attached to hook {}", mytype.name, self.hook))
         );
-        if lt_detached(self.detached,Some(self.attached)) { 
-            self.detached = Some(self.attached) 
+        if self.detached < self.attached.into() { 
+            self.detached = self.attached.into()
         }
 
         conn.transaction(|| {
@@ -338,7 +358,7 @@ impl Attachment {
             .filter(attachments::hook.eq(self.hook))
             .filter(attachments::detached.is_null().or(attachments::detached.gt(self.attached)),)       
             .into_boxed();
-        if let Some(detached) = self.detached {
+        if let Some(detached) = self.detached.0 {
             query = query.filter(attachments::attached.lt(detached));
         }
         Ok(query
@@ -451,7 +471,7 @@ fn get(
     let start = parse_time(start)?;
     let end = parse_time(end)?;
 
-    for a in read(part, start, end, &conn)? {
+    for a in read(part, start, end.into(), &conn)? {
         res.push((a, a.gear.name(&conn)?));
     }
     Ok(Json(res))
@@ -475,7 +495,7 @@ fn get_assembly(
 fn read(
     part: PartId,
     start: Option<DateTime<Utc>>,
-    end: Option<DateTime<Utc>>,
+    end: MyTime,
     conn: &AppConn,
 ) -> TbResult<Vec<Attachment>> {
     let mut atts = attachments::table
@@ -484,11 +504,11 @@ fn read(
         .for_update() // cannot be boxed!
         .get_results::<Attachment>(conn)?;
 
-    if let Some(end) = end {
+    if let Some(end) = end.0 {
         atts.retain(|&a| a.attached < end); // attached before end
     }
     if let Some(start) = start {
-        atts.retain(|&a| a.detached.is_none() || a.detached.unwrap() > start); // detached after start
+        atts.retain(|&a| a.detached > start.into()); // detached after start
     }
 
     Ok(atts)
