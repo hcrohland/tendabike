@@ -129,15 +129,7 @@ fn lt_detached(a: Option<DateTime<Utc>>, b: Option<DateTime<Utc>>) -> bool {
     }
 }
 
-/* /// Return the minimum of two detached variables
-fn min_detached(a: Option<DateTime<Utc>>, b: Option<DateTime<Utc>>) -> Option<DateTime<Utc>> {
-    if lt_detached(a, b) {
-        a
-    } else {
-        b
-    }
-}
- */
+
 #[test]
 fn test_detached() {
     let b = Some(Utc.ymd(2014, 7, 8).and_hms(9, 10, 11)); // `2014-07-08T09:10:11Z`
@@ -147,18 +139,11 @@ fn test_detached() {
     assert!(!lt_detached(b, b));
     assert!(!lt_detached(None, c));
     assert!(lt_detached(b, None));
-
-    /*    assert_eq!(min_detached(c, b),c);
-     assert_eq!(min_detached(b, c),c);
-     assert_eq!(min_detached(c, c),c);
-     assert_eq!(min_detached(c, None),c);
-     assert_eq!(min_detached(None, c),c);
-     assert_eq!(min_detached(None, None), None);
-    */
 }
 
 impl Attachment {
-    /// add the given usage to the attachement
+
+    /// remove the corresponding usage from part and reset attachment
     fn remove(&mut self, conn: &AppConn) -> TbResult<Part> {
         trace!("remove attachment {:?}", self);
         let usage = self.usage(Factor::Sub, conn);
@@ -167,8 +152,10 @@ impl Attachment {
         self.distance = 0;
         self.climb = 0;
         self.descend = 0;
-        self.part_id.apply(&usage, conn)
+        self.part_id.apply_usage(&usage, conn)
     }
+
+    /// add the corresponding usage to part and set it in attachment
     fn add(&mut self, conn: &AppConn) -> TbResult<Part> {
         trace!("add attachment {:?}", self);
         let usage = self.usage(Factor::Add, conn);
@@ -177,10 +164,10 @@ impl Attachment {
         self.distance = usage.distance;
         self.climb = usage.climb;
         self.descend = usage.descend;
-        self.part_id.apply(&usage, conn)
+        self.part_id.apply_usage(&usage, conn)
     }
 
-    /// return the usage of the attachment
+    /// return the usage for the attachment
     fn usage(&self, factor: Factor, conn: &AppConn) -> Usage {
         Activity::find(self.gear, self.attached, self.detached, conn)
             .into_iter()
@@ -189,7 +176,10 @@ impl Attachment {
             })
     }
 
-    /// 
+    /// check if self pred can be merged into self
+    /// modifies self 
+    ///
+    /// returns bool if it was possible
     fn try_merge(&mut self, pred: &Self) -> bool {
         if self.part_id != pred.part_id || self.hook != pred.hook {
             return false;
@@ -237,7 +227,7 @@ impl Attachment {
             } else if pred.attached <= self.attached {
                 // predecessor gets detached
                 debug!("detaching predecessor");
-                res.append(&mut pred.shorten(self.attached, conn)?);
+                res.append(&mut pred.update(self.attached, conn)?);
             } else if self.detached.is_none() && pred.attached > self.attached {
                 // this attachment ends
                 debug!("Adjusting detach time");
@@ -259,7 +249,10 @@ impl Attachment {
         Ok(res)
     }
 
-    fn shorten(mut self, detached: DateTime<Utc>, conn: &AppConn) -> TbResult<Summary> {
+    /// change detached time for attachment
+    ///
+    /// deletes the attachment for detached < attached
+    fn update(mut self, detached: DateTime<Utc>, conn: &AppConn) -> TbResult<Summary> {
 
         if self.attached >= detached {
             return self.delete(conn)
@@ -354,6 +347,7 @@ impl Attachment {
             .load::<Attachment>(conn)?)
     }
 
+    /// add redundant details for client simplicity
     fn add_details(self, name: String, what: PartTypeId) -> AttachmentDetail {
         AttachmentDetail {
             name,
@@ -362,6 +356,7 @@ impl Attachment {
         }
     }
 
+    /// read and add redundant details for client simplicity
     fn enrich(self, conn: &AppConn) -> TbResult<AttachmentDetail> {
         use schema::parts::dsl::{parts,name,what};
         

@@ -235,7 +235,7 @@ impl Activity {
             Summary {
                 parts: attachment::parts_per_activity(&self, conn)
                     .iter()
-                    .map(|x| x.apply(&usage, conn))
+                    .map(|x| x.apply_usage(&usage, conn))
                     .collect::<TbResult<_>>()?,
                 attachments: attachment::register(&self, &usage, conn),
                 activities: vec![self]
