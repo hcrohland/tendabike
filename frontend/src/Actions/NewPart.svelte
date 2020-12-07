@@ -5,7 +5,7 @@
   } from 'sveltestrap';
   import NewForm from './NewForm.svelte';
   import ModalFooter from './ModalFooter.svelte'
-  import {myfetch, initData, parts, user} from '../store';
+  import {myfetch, handleError, initData, parts, user} from '../store';
   import type {Type, Part} from '../types'
 
   let part, newpart: Part;
@@ -15,13 +15,9 @@
 
   async function savePart () {
     disabled = true;
-    try {
-      await myfetch('/part/', 'POST', newpart)
-        .then(data => parts.updateMap([data]))
-    } catch (e) {
-      alert (e)
-      initData()
-    }
+    await myfetch('/part/', 'POST', newpart)
+      .then(data => parts.updateMap([data]))
+      .catch(handleError)
     isOpen = false;
   }
 

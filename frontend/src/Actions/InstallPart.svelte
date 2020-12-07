@@ -6,7 +6,7 @@
     Form
   } from 'sveltestrap';
   import type {Attachment, Part, Type} from '../types';
-  import {myfetch, initData, user, updatePartAttach, attachments, filterValues} from '../store';
+  import {myfetch, handleError, user, updatePartAttach, attachments, filterValues} from '../store';
   import ModalFooter from './ModalFooter.svelte'
   import NewForm from './NewForm.svelte';
   import TypeForm from './TypeForm.svelte';
@@ -44,13 +44,15 @@
     attach.part_id = part.id;
     attach.attached = part.purchase;
     await myfetch('/attach/', 'PATCH', attach)
-        .then(data => updatePartAttach(data))
+        .then(updatePartAttach)
+        .catch(handleError)
   }
 
   async function action () {
     disabled = true;
     await myfetch('/part/', 'POST', newpart)
       .then(attachPart)
+      .catch(handleError)
     isOpen = false;
   }
 

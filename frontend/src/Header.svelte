@@ -10,6 +10,7 @@
   import {myfetch, handleError, setPartAttach, updatePartAttach, category, user} from "./store";
   import Garmin from "./Actions/Garmin.svelte"
   import CreateSync from "./Actions/CreateSync.svelte"
+  import Message from './Message.svelte'
 
   let userOpen = false;
   let syncOpen = false;
@@ -27,7 +28,7 @@
     const batch = 10;
     number = 0;
     do {
-      data = await myfetch('/strava/hooks').catch((err) => { console.log(err);})
+      data = await myfetch('/strava/hooks').catch(handleError)
       if (!data) break;
       updatePartAttach(data);
       number += data["activities"].length;
@@ -47,12 +48,12 @@
     polling = true;
     while (true){
       promise = promiseFn()
-      await promise
+      await promise.catch(handleError)
       await new Promise(resolve => setTimeout(resolve, time))
     }
   }
 
-  $: if ($user) poll(getdata, 60000)
+  $: if ($user) poll(getdata, 6000)
 
 </script>
 
@@ -121,3 +122,5 @@
     </Nav>
   {/if}
 </Navbar>
+
+<Message />

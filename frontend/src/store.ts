@@ -8,7 +8,8 @@ export function checkStatus<T>(response) {
 
     return response.text()
         .then((text) => {
-            return Promise.reject(response.statusText + ': ' + text + ' accessing ' + response.url);
+            message.set({active: true, status: response.statusText, message: text})
+            return Promise.reject(text)
         })
 }
 
@@ -53,8 +54,11 @@ export function by<T>(field: keyof T) {
 }
 
 export function handleError(e) {
-    alert(e)
-    location.reload(); 
+    message.update(m => {
+        m.message = e; 
+        m.active=true; 
+        return m
+    })
 }
 
 function mapObject (fn) {
@@ -117,3 +121,4 @@ export const types = mapable((o: Type) => o["id"]);
 export const user = writable(undefined);
 export const attachments = mapable((o:Attachment) => o["part_id"].toString() + o["attached"].toString())
 export const state = writable({ show_all_spares: false});
+export const message = writable({active: false, message: "No message", status: ""})

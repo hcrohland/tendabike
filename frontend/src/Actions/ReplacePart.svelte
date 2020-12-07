@@ -6,7 +6,7 @@
     ModalBody
   } from 'sveltestrap';
   import type {Attachment, Part, Type} from '../types';
-  import {myfetch, types, initData, parts, user, updatePartAttach} from '../store';
+  import {myfetch, handleError, types, initData, parts, user, updatePartAttach} from '../store';
   import ModalFooter from './ModalFooter.svelte'
   import NewForm from './NewForm.svelte';
   import Dispose from '../Widgets/Dispose.svelte';
@@ -25,25 +25,23 @@
     att.attached = part.purchase;
     att.detached = null
     await myfetch('/attach/', 'PATCH', att)
-      .then(updatePartAttach);
+      .then(updatePartAttach)
+      .catch(handleError)
     
     if (dispose) {
       oldpart.disposed_at = part.purchase;
       await myfetch('/part', 'PUT', oldpart)
         .then((data) => parts.updateMap([data]))
+        .catch(handleError)
     }
   }
 
   async function action () {
     disabled = true;
-    try {
-      await myfetch('/part/', 'POST', newpart)
-        .then(attachPart)
-      isOpen = false;
-    } catch (e) {
-      alert (e)
-      initData()
-    }
+    await myfetch('/part/', 'POST', newpart)
+      .then(attachPart)
+      .catch(handleError)
+    isOpen = false;
     isOpen = false;
 }
 
