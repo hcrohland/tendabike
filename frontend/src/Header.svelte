@@ -53,7 +53,7 @@
     }
   }
 
-  $: if ($user) poll(getdata, 6000)
+  $: if ($user) poll(getdata, 60000)
 
 </script>
 
