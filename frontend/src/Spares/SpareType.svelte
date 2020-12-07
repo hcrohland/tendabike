@@ -69,11 +69,13 @@ function subparts(type: Type, parts: Part[]) {
       </td>
     {/if}
     <td> 
+      {#if !part.disposed_at}
       <Menu>
         <DropdownItem on:click={() => attachPart(part)}>
           {#if attachedTo($attachments, part.id, date)} Move {:else} Attach {/if} {type.name}
         </DropdownItem>
       </Menu>
+      {/if}
     </td>
   </tr>
 {/each}
