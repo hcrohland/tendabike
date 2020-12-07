@@ -62,6 +62,7 @@ export const replacePart = (attl: Attachment) => {
       purchase: att.detached || new Date(),
       last_used: undefined
     };
+    dispose = false;
     isOpen = true;
   }
 
