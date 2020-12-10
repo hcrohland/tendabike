@@ -10,7 +10,6 @@
   import {myfetch, handleError, setPartAttach, updatePartAttach, category, user} from "./store";
   import Garmin from "./Actions/Garmin.svelte"
   import CreateSync from "./Actions/CreateSync.svelte"
-  import Message from './Message.svelte'
 
   let userOpen = false;
   let syncOpen = false;
@@ -122,5 +121,3 @@
     </Nav>
   {/if}
 </Navbar>
-
-<Message />

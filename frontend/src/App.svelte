@@ -9,6 +9,7 @@
 	import Spares from "./Spares/Spares.svelte"
 	import Home from "./Home.svelte"
 	import About from "./About.svelte"
+  import Message from './Message.svelte'
 	import {initData} from './store'
 
 	const routes = {
@@ -29,6 +30,7 @@
 	{#await initData()}
 		<Spinner />
 	{:then}
+	  <Message />
 		<Router {routes} restoreScrollState={true}/>
 	{:catch error}
 		<About />
