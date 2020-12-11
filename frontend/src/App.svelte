@@ -10,6 +10,7 @@
 	import Home from "./Home.svelte"
 	import About from "./About.svelte"
   import Message from './Message.svelte'
+  import Admin from './Admin.svelte'
 	import {initData} from './store'
 
 	const routes = {
@@ -19,7 +20,8 @@
 		'/gear/:id': Gear,
 		'/spares/:category': Spares,
 		'/part/:id': Part,
-		'/switch': Home
+		'/switch': Home,
+		'/admin': Admin
 	}
 
 </script>
