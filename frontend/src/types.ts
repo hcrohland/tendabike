@@ -45,3 +45,11 @@ export type Type = {
     hooks: Array<number>;
     order: number;
   }
+
+export type User = {
+  id: number,
+  firstname: string,
+  name: string,
+  is_admin: boolean
+}
+  

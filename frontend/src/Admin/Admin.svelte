@@ -1,14 +1,8 @@
 <script lang="ts" >
 import { Button, ButtonGroup, Table } from 'sveltestrap';
-import About from './About.svelte';
-import {handleError, message, myfetch, user} from './store'
-
-type User = {
-  id: number,
-  firstname: string,
-  name: string,
-  is_admin: boolean
-}
+import {handleError, myfetch} from '../store'
+import type {User} from '../types'
+import Actions from './Actions.svelte';
 
 let count, promise
 let request:Promise<User[]> = myfetch('/user/all')
@@ -43,15 +37,7 @@ async function getdata(id) {
        <td> {user.firstname} {user.name} </td>
        <td> {user.is_admin ? "Admin" : "User"}</td>
        <td>
-         <ButtonGroup>
-           <Button on:click={() => sync(user.id)}> 
-            {#await promise}
-              Syncing {count} ...
-            {:then}
-              Sync
-            {/await} </Button>
-           <!-- <Button> Disable</Button> -->
-         </ButtonGroup>
+         <Actions {user} />
        </td>
       </tr>
       {/each}

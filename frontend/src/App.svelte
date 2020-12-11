@@ -10,7 +10,7 @@
 	import Home from "./Home.svelte"
 	import About from "./About.svelte"
   import Message from './Message.svelte'
-  import Admin from './Admin.svelte'
+  import Admin from './Admin/Admin.svelte'
 	import {initData} from './store'
 
 	const routes = {
