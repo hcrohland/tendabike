@@ -98,16 +98,18 @@
           </DropdownToggle>
           <DropdownMenu right>
             <DropdownItem on:click={garmin}>Garmin</DropdownItem>
-            {#if $user.is_admin}
-              <DropdownItem divider />
-              <DropdownItem on:click={createSync}> Create Sync Event </DropdownItem>
-            {/if}
           </DropdownMenu>
         </Dropdown>
         <Dropdown nav isOpen={userOpen} toggle={() => (userOpen = !userOpen)}>
           <DropdownToggle nav caret>{$user.firstname}</DropdownToggle>
           <DropdownMenu right>
             <DropdownItem on:click={refresh}>Refresh</DropdownItem>
+            {#if $user.is_admin}
+              <DropdownItem divider />
+              <DropdownItem href="/#/admin" > Admin </DropdownItem>
+              <DropdownItem on:click={createSync}> Create Sync Event </DropdownItem>
+              <DropdownItem divider />
+            {/if}
             <DropdownItem href="/strava/logout">Logout</DropdownItem>
             <DropdownItem divider />
             <DropdownItem href="/#/about">About</DropdownItem>
