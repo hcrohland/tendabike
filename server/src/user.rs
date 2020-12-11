@@ -83,11 +83,6 @@ impl Person for Admin<'_> {
     }
 }
 
-#[get("/")]
-fn getuser(user: &User) -> Json<&User> {
-    Json(user)
-}
-
 pub fn create(forename: String, lastname: String, conn: &AppConn) -> TbResult<i32> {
     use crate::schema::users::dsl::*;
 
@@ -102,6 +97,20 @@ pub fn create(forename: String, lastname: String, conn: &AppConn) -> TbResult<i3
     Ok(user.id)
 }
 
+fn get_all (conn: &AppConn) -> TbResult<Vec<User>>{
+    Ok(users::table.get_results::<User>(conn)?)
+}
+
+#[get("/")]
+fn getuser(user: &User) -> Json<&User> {
+    Json(user)
+}
+
+#[get("/all")]
+fn userlist(_u: Admin, conn: AppDbConn) -> ApiResult<Vec<User>> {
+    tbapi(get_all(&conn))
+}
+
 pub fn routes() -> Vec<rocket::Route> {
-    routes![getuser]
+    routes![getuser, userlist]
 }
