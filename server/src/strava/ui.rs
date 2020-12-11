@@ -32,6 +32,7 @@ pub fn routes() -> Vec<rocket::Route> {
         logout,
         auth::login,
         auth::callback,
+        auth::sync,
         webhook::validate_subscription,
         webhook::create_event,
         webhook::hooks,

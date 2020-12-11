@@ -41,50 +41,55 @@ struct StravaAthlete {
 
 impl DbUser {
     /// Get the user data from the Strava OAuth callback
-
     fn retrieve(conn: &AppConn, athlete: StravaAthlete) -> TbResult<Self> {
         info!("got {:?}", athlete);
 
         let user = strava_users::table.find(athlete.id).get_result::<DbUser>(conn).optional()?;
-        if let Some(x) = user {
-            return Ok(x);
+        if let Some(user) = user {
+            return Ok(user);
         }
 
         // create user!
-        conn.transaction(||{
-            let tendabike_id = crate::user::create(athlete.firstname, athlete.lastname, conn)?;
+        let tendabike_id = crate::user::create(athlete.firstname, athlete.lastname, conn)?;
 
-            let user = DbUser {
-                id: athlete.id,
-                tendabike_id,
-                ..Default::default()
-            };
+        let user = DbUser {
+            id: athlete.id,
+            tendabike_id,
+            ..Default::default()
+        };
 
-            webhook::insert_sync(athlete.id, 0, conn)?;
-            Ok(diesel::insert_into(strava_users::table)
-                .values(&user)
-                .get_result(conn)?)
-        })
+        webhook::insert_sync(athlete.id, 0, conn)?;
+        let user = diesel::insert_into(strava_users::table)
+            .values(&user)
+            .get_result(conn)?;
+        Ok(user)
     }
 
-    /// Updates the user database from a new token
-    fn store(self, conn: &AppConn, cookies: &mut Cookies, token: TokenResponse<Strava>) -> TbResult<Self> {
+    fn refresh_token(&self, oauth: OAuth2<Strava>) -> TbResult<TokenResponse<Strava>>{
+        info!("refreshing access token");
+
+        ensure!(self.expires_at != 0, Error::NotAuth("Missing Strava Authorization"));
+        
+        Ok(oauth
+            .refresh(&self.refresh_token).context("could not refresh access token")?)
+    
+    }
+
+    fn update(self, tokenset: TokenResponse<Strava>, conn: &AppConn) -> TbResult<Self> {
         use schema::strava_users::dsl::*;
         use time::*;
-
+        
         let iat = get_time().sec;
-        let exp = token.expires_in().unwrap() as i64 + iat - 300; // 5 Minutes buffer
-        let db_user: DbUser = diesel::update(strava_users.find(self.id))
+        let exp = tokenset.expires_in().unwrap() as i64 + iat - 300; // 5 Minutes buffer
+        let user: DbUser = diesel::update(strava_users.find(self.id))
             .set((
-                access_token.eq(token.access_token()),
+                access_token.eq(tokenset.access_token()),
                 expires_at.eq(exp),
-                refresh_token.eq(token.refresh_token().unwrap()),
+                refresh_token.eq(tokenset.refresh_token().unwrap()),
             ))
             .get_result(conn).context("Could not store user")?;
-
-        jwt::store(cookies, db_user.tendabike_id, iat, exp);
-
-        Ok(db_user)
+        
+        Ok(user)
     }
 }
 
@@ -127,31 +132,41 @@ impl User {
             .context("user not registered")?;
 
         if user.expires_at > time::get_time().sec {
-            return Ok(User { user, conn });
+            return Ok(Self {user, conn});
         }
-
-        ensure!(user.expires_at != 0, Error::NotAuth("Missing Strava Authorization"));
-
-        info!("refreshing access token");
-        let auth = request
+        let oauth = request
             .guard::<OAuth>()
             .expect("No oauth struct!!!");
-        let tokenset = auth
-            .refresh(&user.refresh_token).context("could not refresh access token")?;
-
+        let tokenset = user.refresh_token(oauth)?;
+        let user = user.update(tokenset, &conn.0)?;
         let mut cookies = request
             .guard::<Cookies>()
             .expect("Could not get Cookie store!!!");
-        let user = user.store(&conn, &mut cookies, tokenset)?;
 
-        Ok(User { user, conn })
+        jwt::store(&mut cookies, user.tendabike_id, user.expires_at);
 
+        Ok(Self{user,conn})
+    }
+
+    pub fn from_tb(id: i32, conn: AppDbConn, oauth: OAuth2<Strava>) -> TbResult<Self> {
+        let user: DbUser = strava_users::table
+            .filter(strava_users::tendabike_id.eq(id))
+            .get_result(&conn.0)
+            .context("user not registered")?;
+
+        if user.expires_at > time::get_time().sec {
+            return Ok(Self {user,conn});
+        }
+        let tokenset = user.refresh_token(oauth)?;
+        let user = user.update(tokenset, &conn.0)?;
+        Ok(Self{user,conn})
     }
     
     /// disable a user 
     fn disable(&self, message: &'static str) -> anyhow::Error {
         use schema::strava_users::dsl::*;
 
+        info!("disabling user {}", self.user.id);
         diesel::update(strava_users.find(self.user.id))
             .set((expires_at.eq(0), access_token.eq("")))
             .execute(&self.conn.0).context("Could not update last_activity")
@@ -302,18 +317,22 @@ pub enum OAuthError {
     Authorize(&'static str),
 }
 
-fn process_callback(token: TokenResponse<Strava>, conn: &AppConn, mut cookies: Cookies<'_>) -> TbResult<()>
+fn process_callback(tokenset: TokenResponse<Strava>, conn: &AppConn, mut cookies: Cookies<'_>) -> TbResult<()>
 {
-    info!("Strava got scope {:?}", token.scope());
-    let athlete = token
+    info!("Strava sent scope {:?}", tokenset.scope());
+    let athlete = tokenset
         .as_value()
         .get("athlete")
         .ok_or(OAuthError::Authorize("token did not include athlete"))?;
 
     let athlete = serde_json::from_value(athlete.clone())?;
 
-    auth::DbUser::retrieve(&conn, athlete)?.store(&conn, &mut cookies, token)?;
-    Ok(())
+    conn.transaction(|| {
+        let user = DbUser::retrieve(conn, athlete)?;
+        let user = user.update(tokenset, conn)?;
+        jwt::store(&mut cookies, user.tendabike_id, user.expires_at);
+        Ok(())
+    })
 }
 
 #[get("/token")]
@@ -330,4 +349,11 @@ pub fn fairing(config: &Config) -> impl rocket::fairing::Fairing {
     let config = OAuthConfig::from_config(config, "strava").expect("OAuth provider not configured in Rocket.toml");
     OAuth2::<Strava>::custom(
                 HyperSyncRustlsAdapter::default().basic_auth(false), config)
+}
+
+#[get("/sync/<id>")]
+pub fn sync(id: i32, _u: user::Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<Summary> {
+    let user = User::from_tb(id, conn, oauth)?;
+    
+    strava::webhook::hooks(user)
 }

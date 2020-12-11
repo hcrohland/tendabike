@@ -67,13 +67,13 @@ fn cookie<T> (value: T) -> Cookie<'static>
                     .finish()
 }
 
-pub fn store (cookie_store: &mut Cookies, id: i32, iat: i64, exp: i64) {
+pub fn store (cookie_store: &mut Cookies, id: i32, exp: i64) {
 
+    let iat = get_time().sec;
     let my_claims = UserToken {iat, exp, id};
     let jwt = encode(&Header::default(), &my_claims, &EncodingKey::from_secret(MY_SECRET)).expect("Could not encode jwt");
-    let token = cookie(jwt.clone());
     
-    cookie_store.add(token);
+    cookie_store.add(cookie(jwt));
 }
 
 pub fn remove (mut cookie_store: Cookies) {
