@@ -82,7 +82,7 @@ impl DbUser {
             ))
             .get_result(conn).context("Could not store user")?;
 
-        token::store(cookies, db_user.tendabike_id, iat, exp);
+        jwt::store(cookies, db_user.tendabike_id, iat, exp);
 
         Ok(db_user)
     }
@@ -115,8 +115,8 @@ impl User {
     /// if needed and possible it refreshes the access token
     fn get(request: &Request) -> TbResult<User> {
         // Get user id
-        let token = token::token(request)?;
-        let id = token::id(&token, token::LEEWAY)?;
+        let token = jwt::token(request)?;
+        let id = jwt::id(&token, jwt::LEEWAY)?;
         // Get the user
         let conn = request
             .guard::<AppDbConn>()
@@ -244,7 +244,7 @@ impl User {
     }
 
     pub fn logout(&self,  cookies: Cookies)  {
-        token::remove(cookies);
+        jwt::remove(cookies);
     }
 }
 

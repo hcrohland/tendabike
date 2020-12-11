@@ -43,7 +43,7 @@ use self::diesel::prelude::*;
 use std::cmp::{max,min};
 use std::env;
 
-pub mod token;
+pub mod jwt;
 pub mod error;
 pub mod strava;
 pub mod schema;
