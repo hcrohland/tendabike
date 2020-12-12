@@ -112,7 +112,7 @@ impl Event {
     fn store(self, conn: &AppConn) -> TbResult<()>{
         ensure!(
             schema::strava_users::table.find(self.owner_id).execute(conn) == Ok(1),
-            Error::BadRequest(format!("Unknown event received: {}", self))
+            Error::BadRequest(format!("Unknown event owner received: {}", self))
         );
         
         info!("Received {}", 
@@ -279,10 +279,7 @@ pub fn validate_subscription (hub: Form<Hub>) -> ApiResult<Hub> {
 
 #[get("/sync?<time>&<user>")]
 pub fn sync_api (time: i64, user: Option<i32>, _user: user::Admin, conn: AppDbConn) -> ApiResult<()> {
-    let users = match user {
-        None => auth::getallusers(&conn)?,
-        Some(user) => vec![user]
-    };
+    let users = auth::getusers(user, &conn)?;
     for user in users.into_iter() {
         insert_sync(user, time, &conn)?;
     }

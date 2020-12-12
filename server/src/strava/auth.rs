@@ -66,9 +66,9 @@ impl DbUser {
     }
 
     fn refresh_token(&self, oauth: OAuth2<Strava>) -> TbResult<TokenResponse<Strava>>{
-        info!("refreshing access token");
+        info!("refreshing access token for strava id {}", self.id);
 
-        ensure!(self.expires_at != 0, Error::NotAuth("Missing Strava Authorization"));
+        ensure!(self.expires_at != 0, Error::NotAuth("User needs to authenticate"));
         
         Ok(oauth
             .refresh(&self.refresh_token).context("could not refresh access token")?)
@@ -275,9 +275,15 @@ pub fn strava_url(who: i32, user: &User) -> TbResult<String> {
 }
 
 /// Get the strava id for all users
-pub fn getallusers (conn: &AppConn) -> TbResult<Vec<i32>> {
+pub fn getusers (user: Option<i32>, conn: &AppConn) -> TbResult<Vec<i32>> {
     use schema::strava_users::dsl::*;
-    Ok(strava_users.select(id).get_results(conn)?)
+
+    Ok(
+        match user {
+            Some(user ) => strava_users.filter(tendabike_id.eq(user)).select(id).get_results(conn)?,
+            None => strava_users.select(id).get_results(conn)?
+        }
+    )
 }
 
 impl<'a, 'r> FromRequest<'a, 'r> for User {
