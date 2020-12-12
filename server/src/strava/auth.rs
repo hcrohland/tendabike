@@ -148,6 +148,18 @@ impl User {
         Ok(Self{user,conn})
     }
 
+    pub fn get_event_count(tbid: i32, conn: &AppConn) -> TbResult<i64> {
+        let user: i32 = strava_users::table
+            .select(strava_users::id)
+            .filter(strava_users::tendabike_id.eq(tbid))
+            .get_result(conn)
+            .context("user not registered")?;
+
+        use schema::strava_events::dsl::*;
+    
+        Ok(strava_events.count().filter(owner_id.eq(user)).first(conn)?)
+    }
+
     pub fn from_tb(id: i32, conn: AppDbConn, oauth: OAuth2<Strava>) -> TbResult<Self> {
         let user: DbUser = strava_users::table
             .filter(strava_users::tendabike_id.eq(id))

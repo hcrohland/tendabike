@@ -26,12 +26,38 @@ pub struct User {
     is_admin: bool,
 }
 
+#[derive(Debug, Serialize)]
+struct Stat {
+    user: User,
+    parts: i64,
+    activities: i64,
+    events: i64
+}
+
 impl User {
     fn read(request: &Request) -> TbResult<Self> {
         let id = strava::auth::get_id(request)?;
         let conn = request.guard::<AppDbConn>().expect("No db request guard").0;
         Ok(users::table.find(id).get_result(&conn)?)
     }
+
+    fn get_stat(self, conn: &AppConn) -> TbResult<Stat> {
+        let parts = {
+            use schema::parts::dsl::{parts, owner};
+            parts.count().filter(owner.eq(self.id)).first(conn)?
+        };
+        let activities = {
+            use schema::activities::dsl::*;
+            activities.count().filter(user_id.eq(self.id)).first(conn)?
+        };
+        let  events = strava::auth::User::get_event_count(self.id, conn)?;
+        Ok(Stat{user: self, parts, activities, events})
+    }
+
+    fn get_all (conn: &AppConn) -> TbResult<Vec<Stat>> {
+        let users = users::table.get_results::<User>(conn)?;
+        users.into_iter().map(|u| u.get_stat(conn)).collect::<TbResult<_>>()
+    }    
 }
 
 impl Person for User {
@@ -97,18 +123,14 @@ pub fn create(forename: String, lastname: String, conn: &AppConn) -> TbResult<i3
     Ok(user.id)
 }
 
-fn get_all (conn: &AppConn) -> TbResult<Vec<User>>{
-    Ok(users::table.get_results::<User>(conn)?)
-}
-
 #[get("/")]
 fn getuser(user: &User) -> Json<&User> {
     Json(user)
 }
 
 #[get("/all")]
-fn userlist(_u: Admin, conn: AppDbConn) -> ApiResult<Vec<User>> {
-    tbapi(get_all(&conn))
+fn userlist(_u: Admin, conn: AppDbConn) -> ApiResult<Vec<Stat>> {
+    tbapi(User::get_all(&conn))
 }
 
 pub fn routes() -> Vec<rocket::Route> {
