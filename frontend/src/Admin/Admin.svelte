@@ -1,25 +1,17 @@
 <script lang="ts" >
-import { Button, ButtonGroup, Table } from 'sveltestrap';
+import { Button, ButtonGroup, Spinner, Table } from 'sveltestrap';
 import {handleError, myfetch} from '../store'
 import type {User} from '../types'
 import Sync from './Sync.svelte';
 import CreateSync from "./CreateSync.svelte"
 
-let count, promise, createSync;
+let promise, createSync;
 let request:Promise<User[]> = myfetch('/user/all')
       .catch(handleError)
 
-const sync = (id) => {promise = getdata(id)}
-async function getdata(id) {
-    let data
-    count = 0;
-    do {
-      data = await myfetch('/strava/sync/' + id).catch(handleError)
-      if (!data) break;
-      count += data["activities"].length;
-    } while (data["activities"].length > 0)
-    count = 0;
-  }
+async function rescan() {
+      promise = myfetch('/activ/rescan/').catch(handleError)
+}
 
 </script>
 {#await request}
@@ -47,7 +39,14 @@ async function getdata(id) {
   {/each}
 </Table>
 <ButtonGroup>
-  <Button on:click={() => createSync()}> Add Sync Event for all</Button>
+  <Button on:click={createSync}> Add Sync Event for all</Button>
+  <Button on:click={rescan}> 
+  {#await promise}
+    <Spinner />
+  {:then value}
+    Rescan all activities
+  {/await}
+  </Button>
 </ButtonGroup>
 
 {/await}

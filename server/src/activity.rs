@@ -323,13 +323,13 @@ fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn
 }
 
 #[get("/rescan")]
-fn rescan(_u: Admin, conn: AppDbConn) -> TbResult<()> {
+fn rescan(_u: Admin, conn: AppDbConn) -> ApiResult<()> {
     let conn = &conn.0;
-
-    conn.transaction(|| {
+    warn!("rescanning all activities!");
+    let res = conn.transaction(|| {
         {
             use schema::parts::dsl::*;
-            warn!("resetting all parts");
+            debug!("resetting all parts");
             diesel::update(parts).set((
                 time.eq(0),
                 distance.eq(0),
@@ -340,7 +340,7 @@ fn rescan(_u: Admin, conn: AppDbConn) -> TbResult<()> {
         }
         {
             use schema::attachments::dsl::*;
-            warn!("resetting all attachments");
+            debug!("resetting all attachments");
             diesel::update(attachments).set((
                 time.eq(0),
                 distance.eq(0),
@@ -351,14 +351,15 @@ fn rescan(_u: Admin, conn: AppDbConn) -> TbResult<()> {
         }
         {
             use schema::activities::dsl::*;
-            for a in activities.get_results::<Activity>(conn)? {
-                warn!("registering activity {}", a.id);
-
+            for a in activities.order_by(id).get_results::<Activity>(conn)? {
+                debug!("registering activity {}", a.id);
                 a.register(Factor::Add, conn)?;
             }
         }
         Ok(())
-    })
+    });
+    warn!("Done rescanning");
+    tbapi(res)
 }
 
 
