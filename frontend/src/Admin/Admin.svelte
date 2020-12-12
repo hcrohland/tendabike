@@ -2,9 +2,10 @@
 import { Button, ButtonGroup, Table } from 'sveltestrap';
 import {handleError, myfetch} from '../store'
 import type {User} from '../types'
-import Actions from './Actions.svelte';
+import Sync from './Sync.svelte';
+import CreateSync from "./CreateSync.svelte"
 
-let count, promise
+let count, promise, createSync;
 let request:Promise<User[]> = myfetch('/user/all')
       .catch(handleError)
 
@@ -24,26 +25,30 @@ async function getdata(id) {
 {#await request}
 ...
 {:then userlist}
-   <Table>
-     <tr>
-       <th>Id</th>
-       <th>Name</th>
-       <th>Role</th>
-       <th></th>
-     </tr>
-     {#each userlist as user (user.id)}
-     <tr>
-       <td> {user.id}</td>
-       <td> {user.firstname} {user.name} </td>
-       <td> {user.is_admin ? "Admin" : "User"}</td>
-       <td>
-         <Actions {user} />
-       </td>
-      </tr>
-      {/each}
-    </Table>
-    <!-- <ButtonGroup>
-      <Button> Disable Webhook</Button>
-      <Button> Stop Server</Button>
-    </ButtonGroup> -->
+  <Table>
+    <tr>
+      <th>Id</th>
+      <th>Name</th>
+      <th>Role</th>
+      <th></th>
+    </tr>
+    {#each userlist as user (user.id)}
+    <tr>
+      <td> {user.id}</td>
+      <td> {user.firstname} {user.name} </td>
+      <td> {user.is_admin ? "Admin" : "User"}</td>
+      <td>
+      <ButtonGroup>
+        <Button on:click={() => createSync(user)}> Add Sync Event</Button>
+        <Sync {user} />
+      </ButtonGroup>
+    </td>
+  </tr>
+  {/each}
+</Table>
+<ButtonGroup>
+  <Button on:click={() => createSync()}> Add Sync Event for all</Button>
+</ButtonGroup>
+
 {/await}
+<CreateSync bind:createSync />

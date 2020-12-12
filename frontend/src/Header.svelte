@@ -9,7 +9,6 @@
   import {link} from 'svelte-spa-router';
   import {myfetch, handleError, setPartAttach, updatePartAttach, category, user} from "./store";
   import Garmin from "./Actions/Garmin.svelte"
-  import CreateSync from "./Actions/CreateSync.svelte"
 
   let userOpen = false;
   let syncOpen = false;
@@ -18,7 +17,6 @@
   let promise;
   let data = undefined;
   let garmin
-  let createSync
 
   function refresh () {promise = myfetch('/part/all').then(setPartAttach)}
 
@@ -57,7 +55,6 @@
 </script>
 
 <Garmin bind:garmin />
-<CreateSync bind:createSync />
 
 <Navbar expand="md" color="light" light mb-2>
   <img src="favicon.png" alt="TendaBike" title="TendaBike" width=60 class="rounded-circle">
@@ -104,15 +101,13 @@
           <DropdownToggle nav caret>{$user.firstname}</DropdownToggle>
           <DropdownMenu right>
             <DropdownItem on:click={refresh}>Refresh</DropdownItem>
-            {#if $user.is_admin}
-              <DropdownItem divider />
-              <DropdownItem href="/#/admin" > Admin </DropdownItem>
-              <DropdownItem on:click={createSync}> Create Sync Event </DropdownItem>
-              <DropdownItem divider />
-            {/if}
             <DropdownItem href="/strava/logout">Logout</DropdownItem>
             <DropdownItem divider />
             <DropdownItem href="/#/about">About</DropdownItem>
+            {#if $user.is_admin}
+              <DropdownItem divider />
+              <DropdownItem href="/#/admin" > Admin </DropdownItem>
+            {/if}
           </DropdownMenu>
         </Dropdown>
       </Nav>

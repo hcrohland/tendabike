@@ -1,5 +1,5 @@
 <script lang="ts" >
-import { Button, ButtonGroup } from 'sveltestrap';
+import { Button } from 'sveltestrap';
 import {handleError, myfetch} from '../store'
 import type {User} from '../types'
 
@@ -21,12 +21,11 @@ async function getdata(id) {
 
 </script>
 
-<ButtonGroup>
-  <Button on:click={() => sync(user.id)}> 
+<Button on:click={() => sync(user.id)}> 
   {#await promise}
-    Syncing {count} ...
+    Processed {count} ...
   {:then}
-    Sync
-  {/await} </Button>
-  <!-- <Button> Disable</Button> -->
-</ButtonGroup>
+    Process Event Queue
+  {/await} 
+</Button>
+  

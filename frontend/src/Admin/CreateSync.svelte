@@ -1,0 +1,55 @@
+<script lang="ts">
+  import { Modal, ModalHeader, ModalBody, 
+          Form, FormGroup, 
+          InputGroup, InputGroupAddon, InputGroupText
+        } from 'sveltestrap';
+  import ModalFooter from '../Actions/ModalFooter.svelte'
+  import {handleError, myfetch} from '../store';
+  import type { User } from '../types';
+  import DateTime from '../Widgets/DateTime.svelte'
+
+  let user: User;
+  let date = new Date;
+  let isOpen = false;
+  let userParam: string;
+  const toggle = () => isOpen = false
+
+  async function action () {
+    await myfetch('/strava/sync?time=' + (date.getTime()/1000).toFixed(0) + userParam)
+      .catch(handleError)
+    isOpen = false;  
+  }  
+  
+  export const createSync = (id?: User) => {
+    user = id
+    if (id) {
+      userParam = '&user=' + user.id
+    } else {
+      userParam = ''
+    }
+    isOpen = true
+  };  
+
+</script>
+
+<Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
+  <ModalHeader {toggle}> 
+    Create sync Event
+    {#if user}
+       for {user.firstname} {user.name} ({user.id})
+    {/if}
+  </ModalHeader>
+  <ModalBody>
+    <Form>
+      <FormGroup check>
+        <InputGroup>
+          <InputGroupAddon addonType="prepend">
+            <InputGroupText>Start</InputGroupText>
+          </InputGroupAddon>
+          <DateTime maxdate={new Date} bind:date/> 
+        </InputGroup>
+      </FormGroup>
+    </Form>
+  </ModalBody>
+  <ModalFooter {toggle} {action} button={'Sync'} />
+</Modal>
