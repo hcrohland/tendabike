@@ -414,7 +414,7 @@ pub fn register(act: &Activity, usage: &Usage, conn: &AppConn) -> Vec<Attachment
     }
 }
 
-pub fn for_parts(partlist: Vec<Part>, conn: &AppConn) -> TbResult<Summary> {
+pub fn for_parts(partlist: &Vec<Part>, conn: &AppConn) -> TbResult<Vec<AttachmentDetail>> {
     use schema::attachments::dsl::*;
     use schema::parts::dsl::{parts,id,name,what};
     let ids: Vec<_> = partlist.iter().map(|p| p.id).collect();
@@ -425,11 +425,7 @@ pub fn for_parts(partlist: Vec<Part>, conn: &AppConn) -> TbResult<Summary> {
         .select((schema::attachments::all_columns,name,what))
         .get_results::<AttachmentDetail>(conn)?;
 
-    Ok(Summary {
-        parts: partlist,
-        attachments: atts,
-        ..Default::default()
-    })
+    Ok(atts)
 }
 
 pub fn parts_per_activity(act: &Activity, conn: &AppConn) -> Vec<PartId> {

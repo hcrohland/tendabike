@@ -133,6 +133,15 @@ fn userlist(_u: Admin, conn: AppDbConn) -> ApiResult<Vec<Stat>> {
     tbapi(User::get_all(&conn))
 }
 
+#[get("/summary")]
+fn summary(user: &User, conn: AppDbConn) -> ApiResult<Summary> {
+    let parts = part::get_all(user, &conn)?;
+    let attachments = attachment::for_parts(&parts,&conn)?;
+    let activities = Activity::get_all(user, &conn)?;
+    tbapi(Ok(Summary{parts,attachments,activities}))
+}
+
+
 pub fn routes() -> Vec<rocket::Route> {
-    routes![getuser, userlist]
+    routes![getuser, userlist, summary]
 }

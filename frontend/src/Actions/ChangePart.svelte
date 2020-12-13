@@ -3,7 +3,7 @@
     Modal, ModalBody, ModalHeader,
     FormGroup, InputGroup, Form
   } from 'sveltestrap';
-  import {myfetch, handleError, parts, types, updatePartAttach, attachments, filterValues, by} from '../store';
+  import {myfetch, handleError, parts, types, updateSummary, attachments, filterValues, by} from '../store';
   import ModalFooter from './ModalFooter.svelte'
   import type {Type, Part, Attachment} from '../types'
   import NewForm from './NewForm.svelte';
@@ -26,7 +26,7 @@
     if (detach) {
       last.detached = date
       await myfetch('/attach/', 'PATCH', last)
-        .then(updatePartAttach)
+        .then(updateSummary)
         .catch(handleError)
     }
     if (dispose || part_changed){

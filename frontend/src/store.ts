@@ -1,5 +1,5 @@
 import {writable} from "svelte/store";
-import type {Part, Attachment, Type} from './types'; 
+import type {Part, Attachment, Type, Activity} from './types'; 
 
 export function checkStatus<T>(response) {
     if (response.ok) {
@@ -95,8 +95,8 @@ export async function initData () {
     return Promise.all([
         myfetch('/types/part')
             .then(types.setMap),
-        myfetch('/part/all')
-            .then(setPartAttach),
+        myfetch('/user/summary')
+            .then(setSummary),
 ])
 }
 
@@ -105,20 +105,23 @@ export function isAttached (att, time?) {
     return time >= new Date(att.attached) && (!att.detached || time < new Date(att.detached))
 }
 
-export function setPartAttach(data) {
+export function setSummary(data) {
     parts.setMap(data.parts)
     attachments.setMap(data.attachments)
+    activities.setMap(data.activities)
 }
 
-export function updatePartAttach(data) {
+export function updateSummary(data) {
     parts.updateMap(data.parts)
     attachments.updateMap(data.attachments)
+    activities.updateMap(data.activities)
 }
 
 export const category = writable(undefined);
-export const parts = mapable((o: Part) => o["id"]);
-export const types = mapable((o: Type) => o["id"]);
+export const parts = mapable((o: Part) => o.id);
+export const types = mapable((o: Type) => o.id);
 export const user = writable(undefined);
-export const attachments = mapable((o:Attachment) => o["part_id"].toString() + o["attached"].toString())
+export const activities = mapable((o:Activity) => o.id)
+export const attachments = mapable((o:Attachment) => o.part_id.toString() + o.attached.toString())
 export const state = writable({ show_all_spares: false});
 export const message = writable({active: false, message: "No message", status: ""})

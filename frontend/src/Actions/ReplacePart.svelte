@@ -6,7 +6,7 @@
     ModalBody
   } from 'sveltestrap';
   import type {Attachment, Part, Type} from '../types';
-  import {myfetch, handleError, types, initData, parts, user, updatePartAttach} from '../store';
+  import {myfetch, handleError, types, initData, parts, user, updateSummary} from '../store';
   import ModalFooter from './ModalFooter.svelte'
   import NewForm from './NewForm.svelte';
   import Dispose from '../Widgets/Dispose.svelte';
@@ -25,7 +25,7 @@
     att.attached = part.purchase;
     att.detached = null
     await myfetch('/attach/', 'PATCH', att)
-      .then(updatePartAttach)
+      .then(updateSummary)
       .catch(handleError)
     
     if (dispose) {

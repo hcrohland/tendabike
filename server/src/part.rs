@@ -198,7 +198,7 @@ impl PartId {
     }
 }
 
-fn allparts(user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
+pub fn get_all(user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
     use schema::parts::dsl::*;
 
     Ok(parts
@@ -314,11 +314,6 @@ fn put(
     tbapi(part.change(user, &conn))
 }
 
-#[get("/all")]
-fn myparts(user: &User, conn: AppDbConn) -> ApiResult<Summary> {
-    tbapi(attachment::for_parts(allparts(user, &conn)?,&conn))
-}
-
 pub fn routes() -> Vec<rocket::Route> {
-    routes![get, post, put, myparts]
+    routes![get, post, put]
 }

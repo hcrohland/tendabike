@@ -6,7 +6,7 @@
     Form
   } from 'sveltestrap';
   import type {Attachment, Part, Type} from '../types';
-  import {myfetch, handleError, user, updatePartAttach, attachments, filterValues} from '../store';
+  import {myfetch, handleError, user, updateSummary, attachments, filterValues} from '../store';
   import ModalFooter from './ModalFooter.svelte'
   import NewForm from './NewForm.svelte';
   import TypeForm from './TypeForm.svelte';
@@ -44,7 +44,7 @@
     attach.part_id = part.id;
     attach.attached = part.purchase;
     await myfetch('/attach/', 'PATCH', attach)
-        .then(updatePartAttach)
+        .then(updateSummary)
         .catch(handleError)
   }
 

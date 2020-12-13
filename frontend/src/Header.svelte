@@ -7,7 +7,7 @@
     DropdownToggle
   } from 'sveltestrap';
   import {link} from 'svelte-spa-router';
-  import {myfetch, handleError, setPartAttach, updatePartAttach, category, user} from "./store";
+  import {myfetch, handleError, setSummary, updateSummary, category, user} from "./store";
   import Garmin from "./Actions/Garmin.svelte"
 
   let userOpen = false;
@@ -18,7 +18,7 @@
   let data = undefined;
   let garmin
 
-  function refresh () {promise = myfetch('/part/all').then(setPartAttach)}
+  function refresh () {promise = myfetch('/part/all').then(setSummary)}
 
   async function getdata() {
     running = true;
@@ -27,7 +27,7 @@
     do {
       data = await myfetch('/strava/hooks').catch(handleError)
       if (!data) break;
-      updatePartAttach(data);
+      updateSummary(data);
       number += data["activities"].length;
     } while (running && data["activities"].length > 0)
     running = false;

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Modal, ModalHeader, ModalBody } from 'sveltestrap';
   import ModalFooter from './ModalFooter.svelte'
-  import {myfetch, handleError, updatePartAttach, types} from '../store';
+  import {myfetch, handleError, updateSummary, types} from '../store';
   import type {Attachment, Part} from '../types';  
   import AttachForm from './AttachForm.svelte';
 
@@ -14,7 +14,7 @@
   async function action () {
     disabled = true;
     await myfetch('/attach/', 'PATCH', attach)
-      .then(updatePartAttach)
+      .then(updateSummary)
       .catch(handleError)
     isOpen = false;  
   }  

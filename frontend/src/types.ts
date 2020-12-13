@@ -52,4 +52,30 @@ export type User = {
   name: string,
   is_admin: boolean
 }
+
+export type Activity = {
+  id: number,
+  /// The athlete
+  user_id: number,
+  /// The activity type
+  what: number,
+  /// This name of the activity.
+  name: string,
+  /// Start time
+  start: Date,
+  /// End time
+  duration: number,
+  /// activity time
+  time?: number,
+  /// Covered distance
+  distance?: number,
+  /// Total climbing
+  climb?: number,
+  /// Total descending
+  descend?: number,
+  /// average power output
+  power?: number,
+  /// Which gear did she use?
+  gear?: number,
+}
   

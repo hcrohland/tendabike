@@ -112,7 +112,7 @@ impl ActivityId {
         use crate::schema::activities::dsl::*;
         info!("Deleting {:?}", self);
         conn.transaction(|| {
-            let res = self
+            let mut res = self
                 .read(person, conn)
                 .context("Could not read user")?
                 .register(Factor::Sub, conn)
@@ -120,6 +120,13 @@ impl ActivityId {
             diesel::delete(activities.filter(id.eq(self)))
                 .execute(conn)
                 .context("Error deleting activity")?;
+            res.activities[0].gear=None;
+            res.activities[0].duration=0;
+            res.activities[0].time=None;
+            res.activities[0].distance=None;
+            res.activities[0].climb=None;
+            res.activities[0].descend=None;
+            res.activities[0].power=None;
             Ok(res)
         })
     }
@@ -241,6 +248,15 @@ impl Activity {
                 activities: vec![self]
             }
         )
+    }
+
+    pub fn get_all(user: &User, conn: &AppConn) -> TbResult<Vec<Activity>> {
+        use schema::activities::dsl::*;
+        let acts = activities
+            .filter(user_id.eq(user.get_id()))
+            .get_results::<Activity>(conn)
+            .context(format!("Error reading activities for user {}", user.get_id()))?; 
+        Ok(acts)
     }
 }
 
