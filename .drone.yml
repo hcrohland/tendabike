@@ -7,3 +7,4 @@ steps:
   image: alpine
   commands:
   -  docker build .
+  
