@@ -7,5 +7,5 @@ steps:
   image: debian:latest
   commands:
   - apt-get update
-  - apt-get install docker
+  - apt-get -y install docker
   - docker build .
