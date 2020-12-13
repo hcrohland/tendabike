@@ -4,8 +4,6 @@ name: default
 
 steps:
 - name: build
-  image: debian:latest
+  image: docker
   commands:
-  - apt-get update
-  - apt-get -y install docker
   - docker build .
