@@ -76,7 +76,7 @@ let config = {responsive: true}
             
 </script>
 <Row border class="p-sm-2">
-  <Col xs=3 class="p-0 p-sm-2">
+  <Col xs="auto" class="p-0 p-sm-2">
   <FormGroup inline>
     <InputGroup>
       <InputGroupAddon addonType="prepend">
