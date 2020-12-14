@@ -82,10 +82,10 @@ function get_trace (cum: Day[], field: keyof Usage, title?: string, field2?: key
 
 $: cummulative = get_cum(year, months); 
 
-let layout =  {showlegend:true, legend:{"orientation": "h"},
-xaxis: {
-      tickformat: months ? '%b %y' : undefined
-}}
+let layout =  {
+  legend:{"orientation": "h"},
+  yaxis: {hoverformat: '.3r'}
+}
 let config = {responsive: true}
             
 </script>
@@ -124,7 +124,7 @@ let config = {responsive: true}
        <Plotly 
           title="Time (h)" 
           data={[get_trace(cummulative, "time", "moving time"),get_trace(cummulative, "duration", "pause", "time")]} 
-          layout={{legend:{"orientation": "h"},barmode: 'stack'}} 
+          layout={{legend:{"orientation": "h"},barmode: 'stack', yaxis: {hoverformat: '.3r'}}} 
           {config} />
     {:else}
        <Plotly 
