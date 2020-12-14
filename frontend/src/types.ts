@@ -35,7 +35,8 @@ export interface Usage {
   climb?: number; 
   descend?: number; 
   distance?: number; 
-  time?:  number;   
+  time?:  number;  
+  duration?: number; 
 }
 
 export type Type = {
