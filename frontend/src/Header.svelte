@@ -101,6 +101,7 @@
           <DropdownToggle nav caret>{$user.firstname}</DropdownToggle>
           <DropdownMenu right>
             <DropdownItem on:click={refresh}>Refresh</DropdownItem>
+            <DropdownItem href="/#/stats">Statistics</DropdownItem>
             <DropdownItem href="/strava/logout">Logout</DropdownItem>
             <DropdownItem divider />
             <DropdownItem href="/#/about">About</DropdownItem>

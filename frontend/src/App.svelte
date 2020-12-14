@@ -12,6 +12,7 @@
   import Message from './Message.svelte'
   import Admin from './Admin/Admin.svelte'
 	import {initData} from './store'
+import Statistics from "./Statistics.svelte";
 
 	const routes = {
 		'/about': About,
@@ -21,7 +22,8 @@
 		'/spares/:category': Spares,
 		'/part/:id': Part,
 		'/switch': Home,
-		'/admin': Admin
+		'/admin': Admin,
+		'/stats': Statistics
 	}
 
 </script>
