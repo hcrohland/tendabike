@@ -70,12 +70,12 @@ function get_cum(year: number, months: Boolean){
                   }, []);
 }
 
-function get_trace (cum: Day[], field: keyof Usage, field2?: keyof Usage) {
+function get_trace (cum: Day[], field: keyof Usage, title?: string, field2?: keyof Usage) {
   return {
     x: cum.map((a)=>a.date),
     y: cum.map((a)=>a[field]-(field2? a[field2] : 0)),
     type: months ? 'bar' : 'scatter',
-    name: field2? field + '-' + field2 : field,
+    name: title ? title : field2? field + '-' + field2 : field,
     line: {shape: 'hv'},
   }
 }
@@ -120,6 +120,18 @@ let config = {responsive: true}
     <Plotly title="Distance (km)" data={[get_trace(cummulative, "distance" )]} {layout} {config} />
   </Col>
   <Col md=6 xs=12 class="p-0 p-sm-2">
-    <Plotly title="Time (h)" data={[get_trace(cummulative, "time"),get_trace(cummulative, "time", "duration")]} {layout} {config} />
+    {#if months}
+       <Plotly 
+          title="Time (h)" 
+          data={[get_trace(cummulative, "time", "moving time"),get_trace(cummulative, "duration", "pause", "time")]} 
+          layout={{legend:{"orientation": "h"},barmode: 'stack'}} 
+          {config} />
+    {:else}
+       <Plotly 
+          title="Time (h)" 
+          data={[get_trace(cummulative, "time", "moving time"),get_trace(cummulative, "duration", "outdoor time")]} 
+          {layout} 
+          {config} />
+    {/if}
   </Col>
 </Row>
