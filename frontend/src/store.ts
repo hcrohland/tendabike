@@ -49,8 +49,8 @@ export function fmtSeconds(sec_num) {
     return hours+':'+minutes;
 }
 
-export function by<T>(field: keyof T) {
-    return (a: T,b: T) => a[field] < b[field]? 1 : -1
+export function by<T>(field: keyof T, asc?: boolean) {
+    return (a: T,b: T) => (a[field] < b[field]? 1 : -1) * (asc ? -1 : 1)
 }
 
 export function handleError(e) {
