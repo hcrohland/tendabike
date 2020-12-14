@@ -3,15 +3,24 @@ import {activities, by, filterValues} from './store'
 import {Row, Col, FormGroup, InputGroup, InputGroupAddon, InputGroupText} from 'sveltestrap'
 import type { Usage, Activity } from './types';
 import Plotly from './Widgets/Plotly.svelte';
+import Switch from './Widgets/Switch.svelte'
 export let year = new Date().getFullYear();
 
-function daysIntoYear(day){
-    var date = new Date(day)
-    return (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - Date.UTC(date.getFullYear(), 0, 0)) / 24 / 60 / 60 / 1000;
+let months = false;
+
+function getday(date){
+    var day = new Date(date)
+    day.setHours(0,0,0,0);
+    return day
+}
+
+function getmonth(date) {
+  let month = getday(date)
+  month.setDate(1)
+  return month
 }
 
 type Day = {
-  day: number,
   date: Date,
   acts: Activity[],
   distance: number,
@@ -24,17 +33,17 @@ type Day = {
 let minyear = new Date(Object.values($activities).sort(by("start")).pop().start).getFullYear()
 let thisyear = new Date().getFullYear()
 
-function get_cum(year){
+function get_cum(year: number, months: Boolean){
   let acts = filterValues($activities, (a) => new Date(a.start).getFullYear() == year && a.what == 1)
       .sort(by("start", true))
 
   let days = Object.values(
     acts.reduce<{ [s: string]: Day; }>((acc, a: Activity) => {
-      var diy = daysIntoYear (a.start)
+      let date = months ? getmonth (a.start) : getday (a.start)
+      let diy = date.toString()
       if (!acc[diy]) {
-        acc[diy] = {day: diy, date: new Date(a.start), acts:[],climb: 0,descend: 0, time :0, duration:0, distance:0}
+        acc[diy] = {date, acts:[],climb: 0,descend: 0, time :0, duration:0, distance:0}
       }
-      acc[diy].day = diy
       acc[diy].acts.push(a)
       acc[diy].distance += a.distance / 1000
       acc[diy].climb += a.climb
@@ -45,6 +54,8 @@ function get_cum(year){
       return acc
       }, {})
   )
+  
+  if (months) return days
 
   return days.reduce<Day[]>(function(r, a) {
                     if (r.length > 0){
@@ -63,15 +74,18 @@ function get_trace (cum: Day[], field: keyof Usage, field2?: keyof Usage) {
   return {
     x: cum.map((a)=>a.date),
     y: cum.map((a)=>a[field]-(field2? a[field2] : 0)),
-    type: 'scatter',
+    type: months ? 'bar' : 'scatter',
     name: field2? field + '-' + field2 : field,
     line: {shape: 'hv'},
   }
 }
 
-$: cummulative = get_cum(year)
+$: cummulative = get_cum(year, months); 
 
-let layout =  {showlegend:true, legend:{"orientation": "h"}}
+let layout =  {showlegend:true, legend:{"orientation": "h"},
+xaxis: {
+      tickformat: months ? '%b %y' : undefined
+}}
 let config = {responsive: true}
             
 </script>
@@ -86,10 +100,12 @@ let config = {responsive: true}
       </InputGroupAddon>
       <select class="custom-select" bind:value={year}>
         {#each Array(thisyear-minyear) as item, i}
-        <!-- content here -->
         <option value={thisyear-i}>{thisyear-i}</option>
         {/each}
       </select>
+      <Switch id="dispose" bind:checked={months}>
+        Per Month
+      </Switch>
     </InputGroup>
   </FormGroup>
 </Col>
