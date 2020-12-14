@@ -18,7 +18,7 @@
   let data = undefined;
   let garmin
 
-  function refresh () {promise = myfetch('/part/all').then(setSummary)}
+  function refresh () {promise = myfetch('/user/summary').then(setSummary)}
 
   async function getdata() {
     running = true;
