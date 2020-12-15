@@ -1,12 +1,16 @@
-export type Part = {
+export type Usage = {
+  count?: number;
+  climb?: number; 
+  descend?: number; 
+  distance?: number; 
+  time?:  number;  
+  duration?: number; 
+}
+
+export type Part = Usage & {
     id?: number;
     owner: number;
     what: number; 
-    count: number;
-    climb: number; 
-    descend: number; 
-    distance: number; 
-    time:  number;
     name: string; 
     vendor: string; 
     model: string; 
@@ -15,7 +19,7 @@ export type Part = {
     disposed_at?: Date;
 }
 
-export type Attachment = {
+export type Attachment = Usage & {
     part_id: number;
     attached: Date;
     gear?: number;
@@ -23,21 +27,8 @@ export type Attachment = {
     detached?: Date;
     what?: number;
     name?: string;
-    count?: number;
-    climb?: number; 
-    descend?: number; 
-    distance?: number; 
-    time?:  number;
   }
 
-export interface Usage {
-  count?: number;
-  climb?: number; 
-  descend?: number; 
-  distance?: number; 
-  time?:  number;  
-  duration?: number; 
-}
 
 export type Type = {
     id: number;
@@ -54,7 +45,7 @@ export type User = {
   is_admin: boolean
 }
 
-export type Activity = {
+export type Activity = Usage & {
   id: number,
   /// The athlete
   user_id: number,
@@ -64,18 +55,6 @@ export type Activity = {
   name: string,
   /// Start time
   start: Date,
-  /// End time
-  duration: number,
-  /// activity time
-  time?: number,
-  /// Covered distance
-  distance?: number,
-  /// Total climbing
-  climb?: number,
-  /// Total descending
-  descend?: number,
-  /// average power output
-  power?: number,
   /// Which gear did she use?
   gear?: number,
 }
