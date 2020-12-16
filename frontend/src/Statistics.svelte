@@ -21,8 +21,7 @@ function getmonth(date) {
 }
 
 type Day = {
-  date: Date,
-  acts: Activity[],
+  start: Date,
   distance: number,
   climb: number,
   descend: number,
@@ -30,21 +29,14 @@ type Day = {
   time: number
 }
 
-let minyear = new Date(Object.values($activities).sort(by("start")).pop().start).getFullYear()
-let thisyear = new Date().getFullYear()
-
-function get_cum(year: number, months: Boolean){
-  let acts = filterValues($activities, (a) => new Date(a.start).getFullYear() == year && a.what == 1)
-      .sort(by("start", true))
-
-  let days = Object.values(
-    acts.reduce<{ [s: string]: Day; }>((acc, a: Activity) => {
-      let date = months ? getmonth (a.start) : getday (a.start)
-      let diy = date.toString()
+function groupByMonth (arr: Activity[]) {
+  return Object.values(
+    arr.reduce<{ [s: string]: Day; }>((acc, a: Activity) => {
+      let start = months ? getmonth (a.start) : getday (a.start)
+      let diy = start.toString()
       if (!acc[diy]) {
-        acc[diy] = {date, acts:[],climb: 0,descend: 0, time :0, duration:0, distance:0}
+        acc[diy] = {start,climb: 0,descend: 0, time :0, duration:0, distance:0}
       }
-      acc[diy].acts.push(a)
       acc[diy].distance += a.distance / 1000
       acc[diy].climb += a.climb
       acc[diy].descend += a.descend ? a.descend : a.climb
@@ -54,25 +46,37 @@ function get_cum(year: number, months: Boolean){
       return acc
       }, {})
   )
-  
-  if (months) return days
+}
 
-  return days.reduce<Day[]>(function(r, a) {
+function sumUp (arr: Activity[]) {
+  return arr.reduce(function(r, a) {
                     if (r.length > 0){
                       a.distance += r[r.length - 1].distance;
+                      a.descend = r[r.length - 1].descend + (a.descend == undefined ? a.climb : a.descend);
                       a.climb += r[r.length - 1].climb;
-                      a.descend += r[r.length - 1].descend;
+                      a.time = r[r.length - 1].time + (a.time == undefined ? a.duration : a.time);
                       a.duration += r[r.length - 1].duration;
-                      a.time += r[r.length - 1].time;
                     }
                     r.push(a);
                     return r;
                   }, []);
 }
 
+let minyear = new Date(Object.values($activities).sort(by("start")).pop().start).getFullYear()
+let thisyear = new Date().getFullYear()
+
+function get_cum(year: number, months: Boolean){
+  let acts = filterValues($activities, (a) => new Date(a.start).getFullYear() == year && a.what == 1)
+      .sort(by("start", true))
+  if (months)
+    return groupByMonth(acts)
+  else
+    return sumUp(acts)
+}
+
 function get_trace (cum: Day[], field: keyof Usage, title?: string, field2?: keyof Usage) {
   return {
-    x: cum.map((a)=>a.date),
+    x: cum.map((a)=>a.start),
     y: cum.map((a)=>a[field]-(field2? a[field2] : 0)),
     type: months ? 'bar' : 'scatter',
     name: title ? title : field2? field + '-' + field2 : field,
