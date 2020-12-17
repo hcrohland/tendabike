@@ -21,7 +21,7 @@
 		time_24hr: true,
 		enableTime: true,
 		minuteIncrement: 15,
-		formatDate: dateObj =>  dateObj.toLocaleString(navigator.language, options),
+    dateFormat: "j. M Y H:i",
 		minDate: mindate,
 		maxDate: maxdate
 	}
