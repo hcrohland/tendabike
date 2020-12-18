@@ -36,6 +36,7 @@ export type Type = {
     main: number;
     hooks: Array<number>;
     order: number;
+    group?: string;
   }
 
 export type User = {

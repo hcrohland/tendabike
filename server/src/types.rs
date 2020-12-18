@@ -31,6 +31,8 @@ pub struct PartType {
     pub hooks: Vec<PartTypeId>,
     /// the order for displaying types
     pub order: i32,
+    /// Potential group
+    pub group: Option<String>
 }
 
 #[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]

@@ -45,6 +45,7 @@ table! {
         main -> Int4,
         hooks -> Array<Int4>,
         order -> Int4,
+        group -> Nullable<Text>,
     }
 }
 
