@@ -1,8 +1,8 @@
 <script lang="ts">
   import {Button, ButtonGroup} from 'sveltestrap'
-  import {filterValues, types, parts, attachments, category} from '../store'
+  import {types, parts, category} from '../store'
   import Subparts from './Subparts.svelte'
-  import type {Attachment, Part} from '../types'
+  import type {Part} from '../types'
   import InstallPart from '../Actions/InstallPart.svelte'
   import ChangePart from '../Actions/ChangePart.svelte'
   import RecoverPart from '../Actions/RecoverPart.svelte';
@@ -18,10 +18,7 @@
     hook = $types[gear.what];
     category.set(hook)
   }
-  $: attachees = filterValues(
-    $attachments, 
-    (a) => a.gear == gear.id
-  ) as Attachment[]
+  
 </script>
 
 <GearCard part={gear} display>
@@ -34,7 +31,7 @@
       {/if}
     </ButtonGroup>
 </GearCard>
-<Subparts {hook} {attachees} />
+<Subparts {hook} {gear} />
 
 <InstallPart bind:installPart />
 <ChangePart bind:changePart />

@@ -2,11 +2,15 @@
 import type {Attachment, Type} from '../types';
 
 import {Table} from 'sveltestrap'
-import {types, filterValues, by} from '../store'
+import {attachments, types, filterValues, by} from '../store'
 import SubType from './SubType.svelte'
 
+export let gear;
 export let hook: Type;
-export let attachees: Attachment[];
+$: attachees = filterValues(
+    $attachments, 
+    (a) => a.gear == gear.id
+  ) as Attachment[]
 
 type MyList = {
   attachments: Attachment[];
