@@ -4,9 +4,11 @@ import type {Attachment, Type} from '../types';
 import {Table} from 'sveltestrap'
 import {attachments, types, filterValues, by} from '../store'
 import SubType from './SubType.svelte'
+import Wizard from './Wizard.svelte';
 
 export let gear;
 export let hook: Type;
+
 $: attachees = filterValues(
     $attachments, 
     (a) => a.gear == gear.id
@@ -49,5 +51,5 @@ function buildList (list: MyList[], hook: Type, attachees: Attachment[], level: 
     </tbody>
     </Table>
 {:else}
-   No subparts maintained!
+   <Wizard {gear}/>
 {/if}
