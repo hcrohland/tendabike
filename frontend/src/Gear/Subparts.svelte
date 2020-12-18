@@ -1,12 +1,12 @@
 <script lang="ts">
-import type {Attachment, Type} from '../types';
+import type {Attachment, Type, Part} from '../types';
 
 import {Table} from 'sveltestrap'
 import {attachments, types, filterValues, by} from '../store'
 import SubType from './SubType.svelte'
 import Wizard from './Wizard.svelte';
 
-export let gear;
+export let gear: Part;
 export let hook: Type;
 
 $: attachees = filterValues(
@@ -51,4 +51,6 @@ function buildList (list: MyList[], hook: Type, attachees: Attachment[], level: 
     </tbody>
     </Table>
 {/if}
-<Wizard {gear} {attachees}/>
+{#if gear.disposed_at == null}
+   <Wizard {gear} {attachees}/>
+{/if}
