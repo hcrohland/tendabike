@@ -50,6 +50,5 @@ function buildList (list: MyList[], hook: Type, attachees: Attachment[], level: 
       {/each}
     </tbody>
     </Table>
-{:else}
-   <Wizard {gear}/>
 {/if}
+<Wizard {gear} {attachees}/>

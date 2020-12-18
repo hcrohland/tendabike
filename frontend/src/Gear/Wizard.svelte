@@ -6,6 +6,7 @@ import type {Attachment, Part, Type} from '../types'
 import {category, filterValues, types, handleError, updateSummary, myfetch} from '../store'
 
 export let gear: Part;
+export let attachees: Attachment[];
 
 type Group = {
   group: string;
@@ -22,7 +23,18 @@ const groupBy = function(xs: Type[]) {
   }, []);
 };
 
-let groups = Object.values(groupBy(filterValues($types, (t) => t.group && t.main == $category.id)))
+function groupAvailable(group: Group) {
+  let res = true
+  group.types.forEach(t => {
+    if (attachees.find((a) => {return a.what == t.id})) {
+        res = false
+      }
+  });
+  return res
+}
+
+let allgroups = Object.values(groupBy(filterValues($types, (t) => t.group && t.main == $category.id)))
+let groups = allgroups.filter(groupAvailable)
 
 // Vendor needs to be set for any enabled group
 $: disabled = !groups.reduce((r: boolean, v: Group) => {
@@ -37,7 +49,6 @@ async function attachPart (part, hook) {
      hook: hook,
      detached: null
     }
-    console.log(attach);
     
     await myfetch('/attach/', 'PATCH', attach)
         .then(updateSummary)
@@ -55,7 +66,6 @@ function setGroup (g: Group) {
   if (!g.enabled) return;
 
   let p: Part = Object.assign({}, gear);
-  console.log(p);
   
   p.id = undefined;
   p.name = g.vendor + ' ' + g.model
@@ -73,33 +83,41 @@ function save () {
   groups.forEach(g => {
     if (g.enabled) setGroup(g)
   });
+  show_button = true
 }
+let show_button = (groups.length != allgroups.length)
 </script>
 
-
-
+{#if groups.length > 0}
 <Container>
-  <Table borderless>
-    <tr>
-      <th colspan=80>
-        Describe your bike components:
-      </th>
-    </tr>
-    {#each groups as g, i}
-    <tr>
-      <th style="vertical-align: middle">
-        <CustomInput type="switch" id={g.group} name="customSwitch" bind:checked={g.enabled}> 
-          {g.group}:
-        </CustomInput>
-      </th>
-      <td>
-        <InputGroup>
-          <Input type="text" class="form-control" id="inputBrand" bind:value={g.vendor} placeholder="Brand" disabled={!g.enabled}/>
-          <Input type="text" class="form-control" id="inputModel" bind:value={g.model} placeholder="Model" disabled={!g.enabled}/>
-        </InputGroup>
-      </td>
-    </tr>
-    {/each}
-  </Table>
-  <Button {disabled} on:click={save}> Set </Button>
-</Container>
+  {#if show_button}
+    <Button on:click={() => show_button = false}>
+      Add more component groups
+    </Button>
+  {:else}
+    <Table borderless>
+      <tr>
+        <th colspan=80>
+          Add components groups:
+        </th>
+      </tr>
+      {#each groups as g, i}
+      <tr>
+        <th style="vertical-align: middle">
+          <CustomInput type="switch" id={g.group} name="customSwitch" bind:checked={g.enabled}> 
+            {g.group}:
+          </CustomInput>
+        </th>
+        <td>
+          <InputGroup>
+            <Input type="text" class="form-control" id="inputBrand" bind:value={g.vendor} placeholder="Brand" disabled={!g.enabled}/>
+            <Input type="text" class="form-control" id="inputModel" bind:value={g.model} placeholder="Model" disabled={!g.enabled}/>
+          </InputGroup>
+        </td>
+      </tr>
+      {/each}
+    </Table>
+    <Button {disabled} on:click={save}> Set </Button>
+  {/if}
+  </Container>
+{/if}
