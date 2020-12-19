@@ -1,39 +1,10 @@
-use crate::activity::ActivityId;
 use chrono::{DateTime, Utc};
-use std::collections::HashMap;
 
 use super::*;
+use crate::activity::ActivityId;
 use crate::activity::NewActivity;
 use strava::auth::User;
 
-#[derive(Debug, Default)]
-struct SumHash {
-    activities: HashMap<ActivityId, Activity>,
-    parts: HashMap<PartId, part::Part>,
-    atts: HashMap<String, attachment::AttachmentDetail>,
-}
-
-impl SumHash {
-    fn merge(&mut self, ps: Summary)  {
-        for act in ps.activities {
-            self.activities.insert(act.id, act);
-        }
-        for part in ps.parts {
-            self.parts.insert(part.id, part);
-        }
-        for att in ps.attachments {
-            self.atts.insert(att.idx(), att);
-        }
-    }
-
-    fn collect(self) -> Summary {
-        Summary {
-            activities: self.activities.into_iter().map(|(_,v)| v).collect(),
-            parts: self.parts.into_iter().map(|(_,v)| v).collect(),
-            attachments: self.atts.into_iter().map(|(_,v)| v).collect(),
-        }
-    }
-}
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaActivity {
     pub id: i64,
