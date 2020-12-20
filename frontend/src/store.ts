@@ -1,5 +1,5 @@
 import {writable} from "svelte/store";
-import type {Part, Attachment, Type, Activity} from './types'; 
+import type {Part, Attachment, Type, Activity, ActType} from './types'; 
 
 export function checkStatus<T>(response) {
     if (response.ok) {
@@ -95,6 +95,8 @@ export async function initData () {
     return Promise.all([
         myfetch('/types/part')
             .then(types.setMap),
+        myfetch('/types/activity')
+            .then(act_types.setMap),
         myfetch('/user/summary')
             .then(setSummary),
 ])
@@ -107,7 +109,7 @@ export function isAttached (att, time?) {
 
 export function setSummary(data) {
     parts.setMap(data.parts)
-    attachments.setMap(data.attachments)
+    attachments.setMap(data.attachments) 
     activities.setMap(data.activities)
 }
 
@@ -120,6 +122,7 @@ export function updateSummary(data) {
 export const category = writable(undefined);
 export const parts = mapable((o: Part) => o.id);
 export const types = mapable((o: Type) => o.id);
+export const act_types = mapable((o: ActType) => o.id);
 export const user = writable(undefined);
 export const activities = mapable((o:Activity) => o.id)
 export const attachments = mapable((o:Attachment) => o.part_id.toString() + o.attached.toString())

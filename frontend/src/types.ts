@@ -59,4 +59,10 @@ export type Activity = Usage & {
   /// Which gear did she use?
   gear?: number,
 }
+
+export type ActType = {
+  id: number,
+  name: string,
+  gear_type: number
+}
   
