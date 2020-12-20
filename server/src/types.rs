@@ -94,6 +94,15 @@ impl PartTypeId {
             .expect("Error loading parttypes");
         self.filter_types(&mut types)
     }
+
+    pub fn act_types(&self, conn: &AppConn) -> TbResult<Vec<ActTypeId>> {
+        use schema::activity_types::dsl::*;
+
+        Ok(activity_types
+            .filter(gear.eq(self))
+            .select(id)
+            .get_results(conn)?)
+    }
 }
 
 #[get("/part")]

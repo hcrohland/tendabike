@@ -338,6 +338,33 @@ fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn
     Ok((map.into_iter().map(|(_,v)| v).collect(),good, bad))
 }
 
+fn def_part(partid: &PartId, user: & User, conn: &AppConn) -> TbResult<Summary> {
+    use schema::activities::dsl::*;
+    let part = partid.part(user, conn)?;
+    let types = part.what.act_types(conn)?;
+
+    let acts =
+    diesel::update(activities)
+        .filter(gear.is_null())
+        .filter(what.eq_any(types))
+        .set(gear.eq(partid))
+        .get_results::<Activity>(conn)
+        .context("Error updating activities")?;
+
+    let mut hash = SumHash::default();
+    for act in acts.into_iter() {
+        hash.merge(act.register(Factor::Add, conn)?)
+    }
+    Ok(hash.collect())
+}
+
+#[post("/defaultgear", data="<gearid>")]
+fn def_part_api (gearid: Json<PartId>, user: &User, conn: AppDbConn) -> ApiResult<Summary> {
+    tbapi(conn.transaction(|| {
+        Ok(def_part(&gearid, user, &conn)?)
+    }))
+}
+
 #[get("/rescan")]
 fn rescan(_u: Admin, conn: AppDbConn) -> ApiResult<()> {
     let conn = &conn.0;
@@ -429,5 +456,5 @@ fn mycats(user: &User, conn: AppDbConn) -> ApiResult<Vec<PartTypeId>> {
 }
 
 pub fn routes() -> Vec<rocket::Route> {
-    routes![get, put, delete, post, descend, mycats, rescan]
+    routes![get, put, delete, post, descend, mycats, rescan, def_part_api]
 }
