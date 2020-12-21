@@ -4,6 +4,8 @@ import {Row, Col, FormGroup, InputGroup, InputGroupAddon, InputGroupText} from '
 import type { Usage, Activity } from './types';
 import Plotly from './Widgets/Plotly.svelte';
 import Switch from './Widgets/Switch.svelte'
+import _ from 'lodash';
+
 export let year = new Date().getFullYear();
 
 let months = false;
@@ -66,7 +68,7 @@ let minyear = new Date(Object.values($activities).sort(by("start")).pop().start)
 let thisyear = new Date().getFullYear()
 
 function get_cum(year: number, months: Boolean){
-  let acts = filterValues($activities, (a) => new Date(a.start).getFullYear() == year && a.what == 1)
+  let acts = _.cloneDeep(filterValues($activities, (a) => new Date(a.start).getFullYear() == year && a.what == 1))
       .sort(by("start", true))
   if (months)
     return groupByMonth(acts)
