@@ -36,6 +36,7 @@ FROM node:15-alpine AS build-frontend
 WORKDIR /frontend
 
 COPY frontend/package.json frontend/package-lock.json /frontend/
+RUN npm install -g npm@7
 RUN npm install
 
 COPY frontend/ /frontend
