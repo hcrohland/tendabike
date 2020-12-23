@@ -175,15 +175,33 @@ impl User {
     }
     
     /// disable a user 
-    fn disable(&self, message: &'static str) -> anyhow::Error {
+    fn disable(&self) -> TbResult<()> {
         use schema::strava_users::dsl::*;
 
         info!("disabling user {}", self.user.id);
+        webhook::insert_sync(self.user.id, time::get_time().sec, &self.conn.0)
+            .context(format!("Could insert sync for user: {:?}", self.user.id))?;
         diesel::update(strava_users.find(self.user.id))
             .set((expires_at.eq(0), access_token.eq("")))
-            .execute(&self.conn.0).context("Could not update last_activity")
-            .unwrap_or_else(|err| {error!("Could not update user: {:?}", err); 0});
-        anyhow!(Error::NotAuth(message))
+            .execute(&self.conn.0).context(format!("Could not disable record for user {}",self.user.id))?;
+        Ok(())
+    }
+
+    fn my_disable(self) -> TbResult<()> {
+        let conn = self.conn();
+    
+        ensure! (User::get_event_count(self.tb_id(), conn)? == 0,
+            Error::BadRequest(String::from("user has open events!")));
+        
+        reqwest::blocking::Client::new()
+            .post("https://www.strava.com/oauth/deauthorize")
+            .query(&[("access_token" , &self.user.access_token)])
+            .bearer_auth(&self.user.access_token)
+            .send().context("Could not reach strava")?
+            .error_for_status()?;
+
+        warn!("User {} disabled by admin", self.tb_id());
+        self.disable()
     }
 
     /// request information from the Strava API
@@ -207,7 +225,10 @@ impl User {
             StatusCode::GATEWAY_TIMEOUT => {
                 bail!(Error::TryAgain(status.canonical_reason().unwrap()))
             },
-            StatusCode::UNAUTHORIZED => bail!(self.disable("Strava request authorization withdrawn")),
+            StatusCode::UNAUTHORIZED => {
+                self.disable()?;
+                bail!(Error::NotAuth("Strava request authorization withdrawn"))
+            },
             _ => bail!(Error::BadRequest(
                     format!("Strava request error: {}", status.canonical_reason().unwrap_or("Unknown status received"))
                 ))
@@ -369,9 +390,14 @@ pub fn fairing(config: &Config) -> impl rocket::fairing::Fairing {
                 HyperSyncRustlsAdapter::default().basic_auth(false), config)
 }
 
-#[get("/sync/<id>")]
-pub fn sync(id: i32, _u: user::Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<Summary> {
-    let user = User::from_tb(id, conn, oauth)?;
+#[get("/sync/<tbid>")]
+pub fn sync(tbid: i32, _u: user::Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<Summary> {
+    let user = User::from_tb(tbid, conn, oauth)?;
     
     strava::webhook::hooks(user)
+}
+
+#[post("/disable/<tbid>")]
+pub fn disable(tbid: i32, _u: user::Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<()> {
+    tbapi(User::from_tb(tbid, conn, oauth)?.my_disable())
 }

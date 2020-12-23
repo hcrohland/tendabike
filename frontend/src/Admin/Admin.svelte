@@ -19,6 +19,10 @@ function rescan() {
       promise = myfetch('/activ/rescan/').catch(handleError)
 }
 
+function disable(user) {
+  myfetch('/strava/disable/' + user.id, 'POST')
+    .catch(handleError)
+}
 </script>
 {#await request}
 ...
@@ -45,6 +49,7 @@ function rescan() {
       <ButtonGroup>
         <Button on:click={() => createSync(user)}> Add Sync Event</Button>
         <Sync {user} />
+        <Button disabled={events>0} on:click={() => disable(user)}> Disable user</Button>
       </ButtonGroup>
     </td>
   </tr>
