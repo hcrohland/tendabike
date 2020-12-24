@@ -39,11 +39,11 @@ function groupByMonth (arr: Activity[]) {
       if (!acc[diy]) {
         acc[diy] = {start,climb: 0,descend: 0, time :0, duration:0, distance:0}
       }
-      acc[diy].distance += a.distance / 1000
+      acc[diy].distance += a.distance
       acc[diy].climb += a.climb
       acc[diy].descend += a.descend ? a.descend : a.climb
-      acc[diy].duration += a.duration /3600
-      acc[diy].time += (a.time ? a.time : a.duration) /3600
+      acc[diy].duration += a.duration
+      acc[diy].time += (a.time ? a.time : a.duration)
 
       return acc
       }, {})
@@ -53,11 +53,11 @@ function groupByMonth (arr: Activity[]) {
 function sumUp (arr: Activity[]) {
   return arr.reduce(function(r, a) {
                     if (r.length > 0){
-                      a.distance += r[r.length - 1].distance;
-                      a.descend = r[r.length - 1].descend + (a.descend == undefined ? a.climb : a.descend);
-                      a.climb += r[r.length - 1].climb;
-                      a.time = r[r.length - 1].time + (a.time == undefined ? a.duration : a.time);
-                      a.duration += r[r.length - 1].duration;
+                      a.distance  += r[r.length - 1].distance;
+                      a.descend   += r[r.length - 1].descend;
+                      a.climb     += r[r.length - 1].climb;
+                      a.time      += r[r.length - 1].time;
+                      a.duration  += r[r.length - 1].duration;
                     }
                     r.push(a);
                     return r;
@@ -69,7 +69,16 @@ let thisyear = new Date().getFullYear()
 
 function get_cum(year: number, months: Boolean){
   let acts = _.cloneDeep(filterValues($activities, (a) => new Date(a.start).getFullYear() == year && a.what == 1))
+      .map((a) => {
+        a.distance /= 1000;
+        a.time = (a.time ?  a.time : a.duration) /3600;
+        a.duration /= 3600;
+        a.descend = a.descend ? a.descend : a.climb;
+        return a
+      })
       .sort(by("start", true))
+      console.log(acts);
+      
   if (months)
     return groupByMonth(acts)
   else
