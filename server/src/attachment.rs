@@ -235,7 +235,7 @@ impl Attachment {
 
         // if there is an exiting attachment, which started earlier and is not yet detached we detach it automatically
         let mut res = Summary::default();
-        for pred in attachments.into_iter() {
+        for pred in attachments {
             if self.detached < pred.attached.into() {
                 continue;
             }
