@@ -448,14 +448,14 @@ pub fn parts_per_activity(act: &Activity, conn: &AppConn) -> Vec<PartId> {
 }
 
 #[patch("/", data = "<attachment>")]
-fn patch(attachment: Json<Attachment>, user: &User, conn: AppDbConn) -> ApiResult<Summary> {
+fn patch_rt(attachment: Json<Attachment>, user: &User, conn: AppDbConn) -> ApiResult<Summary> {
     tbapi(attachment.patch(user, &conn))
 }
 
 /// Where was this part attached in the given time frame?
 ///
 #[get("/<part_id>?<start>&<end>")]
-fn get(
+fn get_rt(
     part_id: i32,
     start: Option<String>,
     end: Option<String>,
@@ -474,7 +474,7 @@ fn get(
 }
 
 #[get("/assembly/<part>?<time>")]
-fn get_assembly(
+fn get_assembly_rt(
     part: i32,
     time: Option<String>,
     user: &User,
@@ -512,5 +512,5 @@ fn read(
 
 
 pub fn routes() -> Vec<rocket::Route> {
-    routes![get, patch, get_assembly]
+    routes![get_rt, patch_rt, get_assembly_rt]
 }
