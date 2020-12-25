@@ -212,7 +212,7 @@ pub fn sync(mut e: webhook::Event, user: &User) -> TbResult<Summary> {
                 trace!("processing sync event at {}", start);
                 let ps = a.send_to_tb(&user)?;
                 e.setdate(start,  user.conn())?;
-                hash.merge(ps);
+                hash = hash.merge(ps);
             }
         }
     }

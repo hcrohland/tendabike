@@ -216,6 +216,10 @@ impl Summary {
         self.parts.append(&mut new.parts);
         self.attachments.append(&mut new.attachments);
     }
+
+    pub fn merge(self, new: Summary) -> Summary {
+        SumHash::new(self).merge(new).collect()
+    }
 }
 
 #[derive(Debug, Default)]
@@ -226,7 +230,11 @@ pub struct SumHash {
 }
 
 impl SumHash {
-    pub fn merge(&mut self, ps: Summary)  {
+    pub fn new(sum: Summary) -> Self {
+        SumHash::default().merge(sum)
+    }
+
+    pub fn merge(mut self, ps: Summary) -> Self {
         for act in ps.activities {
             self.activities.insert(act.id, act);
         }
@@ -236,6 +244,7 @@ impl SumHash {
         for att in ps.attachments {
             self.atts.insert(att.idx(), att);
         }
+        self
     }
 
     pub fn collect(self) -> Summary {
