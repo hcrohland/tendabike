@@ -36,20 +36,14 @@ let attachPart, replacePart, recoverPart;
     <tr>
       <th scope="row" class="text-nowrap"> 
         {'| '.repeat(level)}
-        {#if i == 0 }
           {prefix +  " " + type.name}
-          {#if attachments.length > 1}
             <ShowAll bind:show_hist/>
-          {/if}
-        {:else}
-          |
-        {/if}
       </th>
       <th colspan=80>
       </th>
     </tr>
     {/if}
-    {#if (i == 0 && isAttached(att))|| show_hist }
+    {#if show_hist || ( i == 0 && isAttached(att) ) }
       <tr>
         <th scope="row" class="text-nowrap"> 
           {'| '.repeat(level)}
