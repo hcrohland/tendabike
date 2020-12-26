@@ -12,11 +12,8 @@ use rocket_contrib::json::Json;
 
 use std::collections::HashMap;
 
-use crate::attachment::Attachment;
-use crate::part::Part;
-use crate::schema::activities;
-use crate::user::*;
 use crate::*;
+use schema::activities;
 
 use diesel::{self, QueryDsl, RunQueryDsl};
 

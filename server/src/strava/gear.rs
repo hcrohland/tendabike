@@ -3,8 +3,7 @@ use diesel::{self, QueryDsl, RunQueryDsl};
 use super::*;
 use auth::User;
 use schema::strava_gears;
-pub use crate::part::NewPart;
-use crate::part::PartId;
+use part::NewPart;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaGear {

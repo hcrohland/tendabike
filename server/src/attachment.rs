@@ -4,14 +4,10 @@
 //! They are identified by part_id and attached time
 
 use rocket_contrib::json::Json;
-
-use self::schema::{attachments, parts};
-use crate::user::*;
-use crate::*;
-
-use part::Part;
-
 use diesel::{self, QueryDsl, RunQueryDsl};
+
+use crate::*;
+use schema::attachments;
 
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
@@ -41,8 +37,10 @@ impl Event {
             mytype.main == gear.what,
             Error::BadRequest(format!("Type {} cannot be attached to gear {}", mytype.name, gear.what))
         );
-        
-        unimplemented!()
+        conn.transaction(|| {
+
+            unimplemented!()
+        })
     }
 
     fn detach(self, user: &dyn Person, conn: & AppConn) -> TbResult<Summary> {
@@ -54,7 +52,9 @@ impl Event {
             self.part_id == att.part_id && self.hook == att.hook && self.gear == att.gear,
             Error::BadRequest(format!("{:?} does not match attachment", self))
         );
-        att.detach(self.time, conn)
+        conn.transaction(|| {
+            att.set_detach(self.time, conn)
+        })  
     }
 }
 /// Timeline of attachments
@@ -117,24 +117,6 @@ impl AttachmentDetail {
     }
 }
 
-/// Return the gear the part was attached to at at_time
-pub fn attached_to(part: PartId, at_time: DateTime<Utc>, conn: &AppConn) -> PartId {
-    use schema::attachments::dsl::*;
-
-    let atts = attachments
-        .filter(part_id.eq(part))
-        .filter(attached.lt(at_time))
-        .filter(detached.ge(at_time))
-        .get_results::<Attachment>(conn)
-        .expect("Error reading attachments");
-
-    match atts.len() {
-        0 => part,
-        1 => atts[0].gear,
-        _ => panic!(format!("multiple attaches {:?}", atts)),
-    }
-}
-
 impl Attachment {
     fn get(part: PartId, etime: DateTime<Utc> ,conn: &AppConn) -> TbResult<Self> {
         use schema::attachments::dsl::*;
@@ -181,26 +163,11 @@ impl Attachment {
             })
     }
 
-    /// check if self pred can be merged into self
-    /// modifies self 
-    ///
-    /// returns bool if it was possible
-    fn try_merge(&mut self, pred: &Self) -> bool {
-        if self.part_id != pred.part_id || self.hook != pred.hook {
-            return false;
-        }
-        trace!("merging {:?}", self);
-        trace!("and {:?}", pred);
-        self.attached = min(self.attached, pred.attached);
-        self.detached = max(self.detached, pred.detached);
-        trace!("to {:#?}", self);
-        true
-    }
-
     /// change detached time for attachment
     ///
     /// deletes the attachment for detached < attached
-    fn detach(mut self, detached: DateTime<Utc>, conn: &AppConn) -> TbResult<Summary> {
+    /// Does not check for collisions
+    fn set_detach(mut self, detached: DateTime<Utc>, conn: &AppConn) -> TbResult<Summary> {
 
         if self.attached >= detached {
             return self.delete(conn)
@@ -246,27 +213,6 @@ impl Attachment {
         
     }
    
-    /// find other parts which are attached to the same hook as myself in the given timeframe
-    ///
-    /// part_id is actually ignored
-    /// returns the full attachments for these parts.
-    fn collisions(&self, conn: &AppConn) -> TbResult<Vec<Attachment>> {
-        let what= self.part_id.what(conn)?;
-        Ok(attachments::table
-            .inner_join(
-                parts::table.on(parts::id
-                    .eq(attachments::part_id) // join corresponding part
-                    .and(parts::what.eq(what))),
-            ) // where the part has my type
-            .filter(attachments::gear.eq(self.gear))
-            .filter(attachments::hook.eq(self.hook))
-            .filter(attachments::detached.gt(self.attached))
-            .filter(attachments::attached.lt(self.detached))
-            .select(schema::attachments::all_columns) // return only the attachment
-            .order(attachments::attached)
-            .load::<Attachment>(conn)?)
-    }
-
     /// add redundant details for client simplicity
     fn add_details(self, name: String, what: PartTypeId) -> AttachmentDetail {
         AttachmentDetail {
@@ -331,21 +277,20 @@ impl Attachment {
             Vec::new()
         }
     }    
-}
-
-
-pub fn for_parts(partlist: &Vec<Part>, conn: &AppConn) -> TbResult<Vec<AttachmentDetail>> {
-    use schema::attachments::dsl::*;
-    use schema::parts::dsl::{parts,id,name,what};
-    let ids: Vec<_> = partlist.iter().map(|p| p.id).collect();
-    let atts = attachments
+    
+    pub fn for_parts(partlist: &Vec<Part>, conn: &AppConn) -> TbResult<Vec<AttachmentDetail>> {
+        use schema::attachments::dsl::*;
+        use schema::parts::dsl::{parts,id,name,what};
+        let ids: Vec<_> = partlist.iter().map(|p| p.id).collect();
+        let atts = attachments
         .filter(part_id.eq_any(ids.clone()))
         .or_filter(gear.eq_any(ids))
         .inner_join(parts.on(id.eq(part_id)))
         .select((schema::attachments::all_columns,name,what))
         .get_results::<AttachmentDetail>(conn)?;
-
-    Ok(atts)
+        
+        Ok(atts)
+    }
 }
 
 

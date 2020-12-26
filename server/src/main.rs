@@ -46,24 +46,25 @@ use std::collections::HashMap;
 
 pub mod jwt;
 pub mod error;
+use error::*;
+
 pub mod strava;
 pub mod schema;
 pub mod user;
+use user::{Person, User, Admin};
 
 pub mod types;
 use types::*;
 
 pub mod part;
-use part::PartId;
+use part::{Part, PartId};
 
 pub mod activity;
-use activity::Activity;
+use activity::{Activity, ActivityId};
 
 pub mod attachment;
+use attachment::{Attachment, AttachmentDetail};
 
-pub use error::*;
-
-use anyhow::Context;
 use chrono::{DateTime, TimeZone, Utc};
 
 use rocket::Rocket;
@@ -210,13 +211,11 @@ impl Usage {
     }
 }
 
-type PartList = Vec<part::Part>;
-
 #[derive(Serialize, Debug, Default)]
 pub struct Summary {
     activities: Vec<activity::Activity>,
-    parts: Vec<part::Part>,
-    attachments: Vec<attachment::AttachmentDetail>
+    parts: Vec<Part>,
+    attachments: Vec<AttachmentDetail>
 }
 
 impl Summary {
@@ -233,9 +232,9 @@ impl Summary {
 
 #[derive(Debug, Default)]
 pub struct SumHash {
-    activities: HashMap<activity::ActivityId, Activity>,
-    parts: HashMap<PartId, part::Part>,
-    atts: HashMap<String, attachment::AttachmentDetail>,
+    activities: HashMap<ActivityId, Activity>,
+    parts: HashMap<PartId, Part>,
+    atts: HashMap<String, AttachmentDetail>,
 }
 
 impl SumHash {
