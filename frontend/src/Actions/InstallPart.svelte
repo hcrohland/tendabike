@@ -43,6 +43,8 @@
   async function attachPart (part) {
     attach.part_id = part.id;
     attach.attached = part.purchase;
+    attach.detached = null;
+    attach.what = undefined;
     await myfetch('/attach/', 'PATCH', attach)
         .then(updateSummary)
         .catch(handleError)
