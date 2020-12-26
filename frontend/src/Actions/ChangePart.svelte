@@ -42,7 +42,7 @@
     part = p;
     newpart = p;
     type = $types[part.what];
-    atts = filterValues($attachments, (a) => a.part_id == part.id).sort(by("attached"))
+    atts = filterValues($attachments, (a) => a.part_id == part.id && a.attached != a.detached).sort(by("attached"))
     last = atts[0];
     start = atts.length > 0 ? atts[atts.length-1].attached : undefined
     date = last && last.detached ? new Date(last.detached) : new Date()
