@@ -101,8 +101,8 @@ fn main() {
         .mount("/user", user::routes())
         .mount("/types", types::routes())
         .mount("/part", part::routes())
+        .mount("/part", attachment::routes())
         .mount("/activ", activity::routes())
-        .mount("/attach", attachment::routes())
         .mount("/strava", strava::ui::routes());
         
         // add oauth2 flow
@@ -121,6 +121,14 @@ embed_migrations!();
 
 fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
     let conn = AppDbConn::get_one(&rocket).expect("database connection");
+    use schema::attachments::dsl::*;
+
+    diesel::update(attachments)
+        .filter(detached.is_null())
+        .set(detached.eq(chrono::MAX_DATETIME))
+        .execute(&conn.0)
+        .expect("rewrite detached failed");
+
     match embedded_migrations::run(&*conn) {
         Ok(()) => Ok(rocket),
         Err(e) => {
@@ -128,6 +136,7 @@ fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
             Err(rocket)
         }
     }
+
 }
 
 pub fn init_environment() {

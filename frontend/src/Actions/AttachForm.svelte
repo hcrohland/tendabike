@@ -3,21 +3,21 @@
     Form, InputGroup, InputGroupAddon, InputGroupText
   } from 'sveltestrap'
   import DateTime from '../Widgets/DateTime.svelte';
-  import {attachments, filterValues, types, parts, by} from '../store';
-  import type {Attachment, Type, Part} from '../types';  
+  import {attachments, filterValues, types, parts, by, maxDate} from '../store';
+  import type {AttEvent, Type, Part} from '../types';  
 
   
   function lastDetach(part) {
     let last = filterValues($attachments, (a) => a.part_id == part.id).sort(by("attached"))[0]
       
     if (last) {
-      return new Date(last.detached ? last.detached : last.attached)
+      return new Date(last.detached < maxDate ? last.detached : last.attached)
     } else {
       return new Date(part.purchase)
     }
   }
     
-  export let attach: Attachment;
+  export let attach: AttEvent;
   export let part: Part;
   export let disabled = true;
 
@@ -26,10 +26,9 @@
   
   attach = {
     part_id: part.id,
-    attached: lastDetach(part),
+    time: lastDetach(part),
     gear: undefined,
     hook: (type.hooks.length == 1) ? type.hooks[0] : undefined,
-    detached: null,
   } 
   
   $: disabled = attach && !($types[attach.hook] && $parts[attach.gear])
@@ -64,7 +63,7 @@
       <InputGroupAddon addonType="prepend">
         <InputGroupText>at</InputGroupText>
       </InputGroupAddon>
-      <DateTime bind:date={attach.attached}/> 
+      <DateTime bind:date={attach.time}/> 
     </InputGroup>
   </div>
 </Form> 

@@ -3,9 +3,9 @@
     Modal, ModalBody, ModalHeader,
     FormGroup, InputGroup, Form
   } from 'sveltestrap';
-  import {myfetch, handleError, parts, types, updateSummary, attachments, filterValues, by} from '../store';
+  import {myfetch, handleError, parts, types, updateSummary, attachments, filterValues, by, maxDate} from '../store';
   import ModalFooter from './ModalFooter.svelte'
-  import type {Type, Part, Attachment} from '../types'
+  import type {AttEvent, Type, Part, Attachment} from '../types'
   import NewForm from './NewForm.svelte';
   import Dispose from '../Widgets/Dispose.svelte';
   import DateTime from '../Widgets/DateTime.svelte';
@@ -24,8 +24,13 @@
     disabled = true;
     if (dispose) newpart.disposed_at = date
     if (detach) {
-      last.detached = date
-      await myfetch('/attach/', 'PATCH', last)
+      let evt: AttEvent = {
+        part_id: last.part_id,
+        gear: last.gear,
+        hook: last.hook,
+        time: date  
+      }
+      await myfetch('/part/detach', 'POST', evt)
         .then(updateSummary)
         .catch(handleError)
     }
@@ -45,7 +50,7 @@
     atts = filterValues($attachments, (a) => a.part_id == part.id).sort(by("attached"))
     last = atts[0];
     start = atts.length > 0 ? atts[atts.length-1].attached : undefined
-    date = last && last.detached ? new Date(last.detached) : new Date()
+    date = last && last.detached < maxDate ? new Date(last.detached) : new Date()
     detach = false
     dispose = false
     part_changed = false
@@ -77,7 +82,7 @@
             {/if}
           </InputGroup>
         {:else if last}
-          {#if last.detached}
+          {#if last.detached < maxDate}
           <InputGroup>
             <Dispose bind:dispose/>
             {#if dispose}

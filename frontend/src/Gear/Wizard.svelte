@@ -2,7 +2,7 @@
 import {
     Input, InputGroup, CustomInput, Table, Container, Button
   } from 'sveltestrap';
-import type {Attachment, Part, Type} from '../types'
+import type {AttEvent, Attachment, Part, Type} from '../types'
 import {category, filterValues, types, handleError, updateSummary, myfetch} from '../store'
 
 export let gear: Part;
@@ -42,15 +42,14 @@ $: disabled = !groups.reduce((r: boolean, v: Group) => {
 }, true)
 
 async function attachPart (part, hook) {
-    let attach : Attachment = {
+    let attach : AttEvent = {
      part_id: part.id,
-     attached: part.purchase,
+     time: part.purchase,
      gear: gear.id,
      hook: hook,
-     detached: null
     }
     
-    await myfetch('/attach/', 'PATCH', attach)
+    await myfetch('/part/attach', 'POST', attach)
         .then(updateSummary)
         .catch(handleError)
   }

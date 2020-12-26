@@ -5,7 +5,7 @@
     ModalBody,
     Form
   } from 'sveltestrap';
-  import type {Attachment, Part, Type} from '../types';
+  import type {AttEvent, Part, Type} from '../types';
   import {myfetch, handleError, user, updateSummary, attachments, filterValues} from '../store';
   import ModalFooter from './ModalFooter.svelte'
   import NewForm from './NewForm.svelte';
@@ -14,17 +14,13 @@
   let part, newpart: Part;
   let gear: Part;
   let type: Type;
-  let attach: Attachment;
+  let attach: AttEvent;
   let disabled = true;
   let isOpen = false;
   const toggle = () => isOpen = false
   export const installPart = (g: Part) => {
     gear = g;
-    attach = {
-      part_id: undefined,
-      gear: g.id,
-      attached: new Date,
-    }
+    attach.gear = g.id;
     part = {
       owner: $user.id, 
       what: undefined, 
@@ -42,8 +38,8 @@
 
   async function attachPart (part) {
     attach.part_id = part.id;
-    attach.attached = part.purchase;
-    await myfetch('/attach/', 'PATCH', attach)
+    attach.time = part.purchase;
+    await myfetch('/part/attach', 'POST', attach)
         .then(updateSummary)
         .catch(handleError)
   }
@@ -82,7 +78,6 @@
   const setType = (e) => {
     type = e.detail.type;
     attach.hook = e.detail.hook;
-    attach.what = type.id;
     part.what = type.id;
     part.purchase = guessDate(gear, type, attach.hook)
   }

@@ -2,6 +2,7 @@
 //!
 //! Attachments can be hierarchical
 //! They are identified by part_id and attached time
+//! If detached is none the part is still attached
 
 use rocket_contrib::json::Json;
 
@@ -48,13 +49,9 @@ impl Event {
     fn detach(self, user: &dyn Person, conn: & AppConn) -> TbResult<Summary> {
         // check user
         self.part_id.checkuser(user, conn)?;
-        let att = Attachment::get(self.part_id, self.time, conn)?;
+        let _att = Attachment::get(self.part_id, self.time, conn)?;
         
-        ensure!(
-            self.part_id == att.part_id && self.hook == att.hook && self.gear == att.gear,
-            Error::BadRequest(format!("{:?} does not match attachment", self))
-        );
-        att.detach(self.time, conn)
+        unimplemented!()
     }
 }
 /// Timeline of attachments
@@ -89,7 +86,7 @@ pub struct Attachment {
     /// the hook on that gear
     hook: PartTypeId,
     /// when it was removed again, "none" means "still attached"
-    detached: DateTime<Utc>,
+    detached: MyTime,
     // we do not accept theses values from the client!
     /// usage count
     pub count: i32,
@@ -117,6 +114,27 @@ impl AttachmentDetail {
     }
 }
 
+fn assembly(
+    part: Part,
+    at_time: DateTime<Utc>,
+    conn: &AppConn,
+) -> TbResult<Vec<(Part, Attachment)>> {
+    use schema::attachments::dsl::*;
+
+    let main = attached_to(part.id, at_time, &conn);
+    let types = part.what.subtypes(conn);
+
+    Ok(Attachment::belonging_to(&types)
+        .inner_join(parts::table.on(parts::id.eq(part_id)))
+        .filter(gear.eq(main))
+        .filter(attached.lt(at_time))
+        .filter(detached.is_null().or(detached.ge(at_time)))
+        .order(parts::what)
+        .order(hook)
+        .select((schema::parts::all_columns, schema::attachments::all_columns)) // return only the Parts
+        .load::<(Part, Attachment)>(conn)?)
+}
+
 /// Return the gear the part was attached to at at_time
 pub fn attached_to(part: PartId, at_time: DateTime<Utc>, conn: &AppConn) -> PartId {
     use schema::attachments::dsl::*;
@@ -124,7 +142,7 @@ pub fn attached_to(part: PartId, at_time: DateTime<Utc>, conn: &AppConn) -> Part
     let atts = attachments
         .filter(part_id.eq(part))
         .filter(attached.lt(at_time))
-        .filter(detached.ge(at_time))
+        .filter(detached.is_null().or(detached.ge(at_time)))
         .get_results::<Attachment>(conn)
         .expect("Error reading attachments");
 
@@ -135,17 +153,64 @@ pub fn attached_to(part: PartId, at_time: DateTime<Utc>, conn: &AppConn) -> Part
     }
 }
 
+/// 
+///
+#[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MyTime(Option<DateTime<Utc>>);
+
+NewtypeFrom! { () pub struct MyTime(Option<DateTime<Utc>>); }
+impl std::convert::From<DateTime<Utc>> for MyTime {
+    fn from(t: DateTime<Utc>) -> Self {
+        Self(Some(t))
+    }
+} 
+
+use std::{cmp::Ordering, unimplemented};
+impl std::cmp::PartialOrd for MyTime {
+
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some (match (self.0,other.0) {
+            (Some(_),None) => Ordering::Less,
+            (None,Some(_)) => Ordering::Greater,
+            (a,b) => a.cmp(&b)
+        })
+    }
+}
+
+impl MyTime {
+    pub fn infinite(&self) -> bool {
+        self.0.is_none()
+    }
+}
+
+#[test]
+fn test_mytime() {
+    let b: MyTime = Utc.ymd(2014, 7, 8).and_hms(9, 10, 11).into(); // `2014-07-08T09:10:11Z`
+    let c: MyTime = Utc.ymd(2014, 7, 8).and_hms(9, 10, 10).into(); // `2014-07-08T09:10:10Z`
+    assert!(c < b);
+    assert!(!(b < c));
+    assert!(!(b == c));
+    assert!((b == b));
+    assert!(!(b < b));
+    assert!(!(c > None.into()));
+    assert!((b < None.into()));
+}
+
 impl Attachment {
-    fn get(part: PartId, etime: DateTime<Utc> ,conn: &AppConn) -> TbResult<Self> {
+    fn get(part: PartId, etime: DateTime<Utc> ,conn: &AppConn) -> TbResult<Option<Self>> {
         use schema::attachments::dsl::*;
 
-        Ok(attachments
+        let att = attachments
             .order(attached.desc()) // Ordered by time
             .filter(part_id.eq(part)) // is the right part
-            .filter(attached.le(etime))
-            .filter(detached.gt(etime))
+            .filter(attached.lt(etime))
             .for_update() // cannot be boxed!
-            .first::<Attachment>(conn)?)
+            .first::<Attachment>(conn)
+            .optional()?;
+        Ok(match att {
+            Some(att) if att.detached < etime.into() => None,
+            x => x
+        })
     }
 
     /// remove the corresponding usage from part and reset attachment
@@ -174,7 +239,7 @@ impl Attachment {
 
     /// return the usage for the attachment
     fn usage(&self, factor: Factor, conn: &AppConn) -> Usage {
-        Activity::find(self.gear, self.attached, self.detached, conn)
+        Activity::find(self.gear, self.attached, self.detached.0, conn)
             .into_iter()
             .fold(Usage::none(self.attached), |acc, x| {
                 acc.add_activity(&x, factor)
@@ -192,36 +257,92 @@ impl Attachment {
         trace!("merging {:?}", self);
         trace!("and {:?}", pred);
         self.attached = min(self.attached, pred.attached);
-        self.detached = max(self.detached, pred.detached);
+        self.detached = match (self.detached.0, pred.detached.0) {
+            (None, _) | (_, None) =>  None,
+            (Some(s), Some(p)) =>  Some(max(s,p))
+        }.into();
         trace!("to {:#?}", self);
         true
+    }
+
+    /// creates a new attachment with its side-effects
+    ///
+    /// - recalculates the usage counters in the attached assembly
+    /// - persists everything into the database
+    ///  -returns all affected parts or MyError::Conflict on collisions
+    fn create(mut self, conn: &AppConn) -> TbResult<Summary> {
+        info!("create {:?}", &self);
+        let mut attachments = self.collisions(conn)?;
+        attachments.append(&mut read(
+            self.part_id,
+            Some(self.attached),
+            self.detached,
+            conn,
+        )?);
+        attachments.sort_by_key(|a|  a.attached);
+        // self collisions and self.read do find both own attachment to this hook
+        attachments.dedup();
+
+        // if there is an exiting attachment, which started earlier and is not yet detached we detach it automatically
+        let mut res = Summary::default();
+        for pred in attachments {
+            if self.detached < pred.attached.into() {
+                continue;
+            }
+
+            if self.try_merge(&pred) {
+                // extend attachment
+                debug!("merging predecessor");
+                res.append(&mut pred.delete(conn)?);
+            } else if pred.attached <= self.attached {
+                // predecessor gets detached
+                debug!("detaching predecessor");
+                res.append(&mut pred.update(self.attached, conn)?);
+            } else if self.detached.infinite() && pred.attached > self.attached {
+                // this attachment ends
+                debug!("Adjusting detach time");
+                self.detached = pred.attached.into();
+            } else {
+                return Err(
+                    Error::Conflict(format!("{:?} collides with {:?}", self, pred)).into(),
+                );
+            }
+        }
+
+        let part = self.add(conn)?;
+        let att = diesel::insert_into(attachments::table) // Store the attachment in the database
+            .values(self)
+            .get_result::<Attachment>(conn)
+            .context("Could not insert attachment")?;
+        res.attachments.push(att.add_details(part.name.clone(), part.what));
+        res.parts.push(part); // and register changes
+        Ok(res)
     }
 
     /// change detached time for attachment
     ///
     /// deletes the attachment for detached < attached
-    fn detach(mut self, detached: DateTime<Utc>, conn: &AppConn) -> TbResult<Summary> {
+    fn update(mut self, detached: DateTime<Utc>, conn: &AppConn) -> TbResult<Summary> {
 
         if self.attached >= detached {
             return self.delete(conn)
         }
 
-        info!("detach {:?}",self);
+        info!("update {:?}",self);
         
         self.remove(conn)?;
-        self.detached = detached;
+        self.detached = detached.into();
         let part = self.add(conn)?; // and register changes
         let attachment = AttachmentDetail {
                 a: self.save_changes::<Attachment>(conn)?,
                 name: part.name.clone(), 
                 what: part.what
             };
-        dbg!(
         Ok(Summary {
             parts: vec![part], 
             attachments: vec![attachment],
             ..Default::default()
-        }))
+        })
     }
 
     /// deletes an attachment with its side-effects
@@ -246,13 +367,22 @@ impl Attachment {
         
     }
    
+    /// change an attachment identified by part_id and attached
+    ///
+    /// This is the main function to manage attachments
+    /// - if detached <= attached delete the attachment
+    /// - else squeeze new attachment in
+    ///
+    /// returns
+    /// - all recalculated parts on success
+    
     /// find other parts which are attached to the same hook as myself in the given timeframe
     ///
     /// part_id is actually ignored
     /// returns the full attachments for these parts.
     fn collisions(&self, conn: &AppConn) -> TbResult<Vec<Attachment>> {
         let what= self.part_id.what(conn)?;
-        Ok(attachments::table
+        let mut query = attachments::table
             .inner_join(
                 parts::table.on(parts::id
                     .eq(attachments::part_id) // join corresponding part
@@ -260,8 +390,12 @@ impl Attachment {
             ) // where the part has my type
             .filter(attachments::gear.eq(self.gear))
             .filter(attachments::hook.eq(self.hook))
-            .filter(attachments::detached.gt(self.attached))
-            .filter(attachments::attached.lt(self.detached))
+            .filter(attachments::detached.is_null().or(attachments::detached.gt(self.attached)),)       
+            .into_boxed();
+        if let Some(detached) = self.detached.0 {
+            query = query.filter(attachments::attached.lt(detached));
+        }
+        Ok(query
             .select(schema::attachments::all_columns) // return only the attachment
             .order(attachments::attached)
             .load::<Attachment>(conn)?)
@@ -314,7 +448,7 @@ impl Attachment {
                 attachments
                     .filter(gear.eq(act_gear))
                     .filter(attached.lt(act.start))
-                    .filter(detached.ge(act.start))
+                    .filter(detached.is_null().or(detached.ge(act.start)))
             )
             .set((
                 time.eq(time + usage.time),
@@ -344,6 +478,32 @@ pub fn for_parts(partlist: &Vec<Part>, conn: &AppConn) -> TbResult<Vec<Attachmen
         .inner_join(parts.on(id.eq(part_id)))
         .select((schema::attachments::all_columns,name,what))
         .get_results::<AttachmentDetail>(conn)?;
+
+    Ok(atts)
+}
+
+
+/// Return all attachment for this part in the given time Frame
+///
+/// Start == None means from the beginning of time
+fn read(
+    part: PartId,
+    start: Option<DateTime<Utc>>,
+    end: MyTime,
+    conn: &AppConn,
+) -> TbResult<Vec<Attachment>> {
+    let mut atts = attachments::table
+        .order(attachments::attached) // Ordered by time
+        .filter(attachments::part_id.eq(part)) // is the right part
+        .for_update() // cannot be boxed!
+        .get_results::<Attachment>(conn)?;
+
+    if let Some(end) = end.0 {
+        atts.retain(|&a| a.attached < end); // attached before end
+    }
+    if let Some(start) = start {
+        atts.retain(|&a| a.detached > start.into()); // detached after start
+    }
 
     Ok(atts)
 }

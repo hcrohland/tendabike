@@ -29,7 +29,7 @@ table! {
         attached -> Timestamptz,
         gear -> Int4,
         hook -> Int4,
-        detached -> Nullable<Timestamptz>,
+        detached -> Timestamptz,
         count -> Int4,
         time -> Int4,
         distance -> Int4,

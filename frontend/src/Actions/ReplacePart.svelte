@@ -5,8 +5,8 @@
     ModalHeader,
     ModalBody
   } from 'sveltestrap';
-  import type {Attachment, Part, Type} from '../types';
-  import {myfetch, handleError, types, initData, parts, user, updateSummary} from '../store';
+  import type {AttEvent, Attachment, Part, Type} from '../types';
+  import {myfetch, handleError, types, parts, user, updateSummary, maxDate} from '../store';
   import ModalFooter from './ModalFooter.svelte'
   import NewForm from './NewForm.svelte';
   import Dispose from '../Widgets/Dispose.svelte';
@@ -14,17 +14,17 @@
   let part: Part, oldpart: Part, newpart: Part;
   let type: Type;
   let prefix: string;
-  let att: Attachment;
+  let evt: AttEvent;
   let disabled = true;
   let dispose = false;
   let isOpen = false;
+  let mindate;
   const toggle = () => isOpen = false
 
   async function attachPart (part) {
-    att.part_id = part.id;
-    att.attached = part.purchase;
-    att.detached = null
-    await myfetch('/attach/', 'PATCH', att)
+    evt.part_id = part.id;
+    evt.time = part.purchase;
+    await myfetch('/part/attach', 'POST', evt)
       .then(updateSummary)
       .catch(handleError)
     
@@ -47,7 +47,9 @@
 
 export const replacePart = (attl: Attachment) => {
     oldpart = $parts[attl.part_id];
-    att = {...attl};
+    evt.hook = attl.hook;
+    evt.gear = attl.gear;
+    mindate = attl.attached;
     type = $types[oldpart.what];
     prefix = $types[attl.hook].name.split(' ').reverse()[1] || '' // The first word iff there were two (hack!)
     part = {
@@ -57,7 +59,7 @@ export const replacePart = (attl: Attachment) => {
       name: oldpart.name, 
       vendor: oldpart.vendor, 
       model: oldpart.model, 
-      purchase: att.detached || new Date(),
+      purchase: attl.detached < maxDate ? attl.detached : new Date(),
       last_used: undefined
     };
     dispose = false;
@@ -72,10 +74,10 @@ export const replacePart = (attl: Attachment) => {
 </script>
 
 <Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
-  <ModalHeader {toggle}>  New {prefix} {type.name} for {$parts[att.gear].name} </ModalHeader>
+  <ModalHeader {toggle}>  New {prefix} {type.name} for {$parts[evt.gear].name} </ModalHeader>
   <ModalBody>
     <Form>
-      <NewForm {type} {part} mindate={att.attached} on:change={setPart}/>
+      <NewForm {type} {part} {mindate} on:change={setPart}/>
       <Dispose bind:dispose> old {type.name} </Dispose>
     </Form>
   </ModalBody>

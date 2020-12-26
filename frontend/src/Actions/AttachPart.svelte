@@ -2,10 +2,10 @@
   import { Modal, ModalHeader, ModalBody } from 'sveltestrap';
   import ModalFooter from './ModalFooter.svelte'
   import {myfetch, handleError, updateSummary, types} from '../store';
-  import type {Attachment, Part} from '../types';  
+  import type {AttEvent, Part} from '../types';  
   import AttachForm from './AttachForm.svelte';
 
-  let attach: Attachment;
+  let attach: AttEvent;
   let part: Part;
   let isOpen = false;
   let disabled = true;
@@ -13,7 +13,7 @@
 
   async function action () {
     disabled = true;
-    await myfetch('/attach/', 'PATCH', attach)
+    await myfetch('/part/attach', 'POST', attach)
       .then(updateSummary)
       .catch(handleError)
     isOpen = false;  
