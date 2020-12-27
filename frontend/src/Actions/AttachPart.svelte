@@ -9,7 +9,7 @@
   let part: Part;
   let isOpen = false;
   let disabled = true;
-  const toggle = () => isOpen = false
+  const toggle = () => {part= undefined; isOpen = false}
 
   async function action () {
     disabled = true;
