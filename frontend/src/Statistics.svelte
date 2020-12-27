@@ -107,7 +107,8 @@ function getPlot(cummulative, fields, addlayout?) {
       tickformat: '%b',
       dtick: 30 * 24 * 60 * 60 * 1000,
       hoverformat: months ? '%b' : '%e %b',
-      fixedrange: true
+      fixedrange: true,
+      range: [new Date (year+'-01-01'), new Date(year+'-12-31')]
     },
     annotations: []
   }, addlayout)
@@ -120,8 +121,7 @@ function getPlot(cummulative, fields, addlayout?) {
     if (!months){
       let ann = d.y[d.y.length-1];
       let result2 = {
-      xref: 'paper',
-      x: 1,
+      x: d.x[d.x.length-1],
       y: ann,
       xanchor: 'left',
       yanchor: 'middle',
