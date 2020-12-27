@@ -99,11 +99,15 @@ function getPlot(cummulative, fields, addlayout?) {
   let data = [];
   let layout =  Object.assign({
     legend:{"orientation": "h"},
-    yaxis: {hoverformat: '.3r'},
+    yaxis: {
+      hoverformat: '.3r',
+      fixedrange: true
+    },
     xaxis: {
       tickformat: '%b',
       dtick: 30 * 24 * 60 * 60 * 1000,
-      ticklabelposition: 'outside right'
+      hoverformat: months ? '%b' : '%e %b',
+      fixedrange: true
     },
     annotations: []
   }, addlayout)
