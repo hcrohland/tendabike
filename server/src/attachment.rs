@@ -44,7 +44,7 @@ impl Event {
             let mut end = MAX_DATETIME;
 
             // make sure that no other part is attached at hook
-            if let Some(prev) = self.prev(part.what, conn)?
+            if let Some(prev) = self.occupant(part.what, conn)?
             {
                 trace!("predecessor {:?}", prev);
                 hash.merge(prev.set_detach(self.time, conn)?);
@@ -75,7 +75,7 @@ impl Event {
                 }
             }
 
-            if let Some(prev) = self.before(conn)?
+            if let Some(prev) = self.at(conn)?
             {
                 // the current part is already attached
                 if prev.gear == self.gear && prev.hook == self.hook {
@@ -90,7 +90,16 @@ impl Event {
                     hash.merge(prev.set_detach(self.time, conn)?);
                 }
             }
-            hash.merge(self.attachment(end).create(conn)?);
+
+            // try to merge previous attachment
+            if let Some(prev) = self.adjacent(conn)?
+            {
+                trace!("adjacent {:?}", prev);
+                hash.merge(prev.set_detach(end, conn)?)
+            } else {
+                hash.merge(self.attachment(end).create(conn)?);
+            }
+
             Ok(hash.collect())
         })
     }
@@ -112,7 +121,7 @@ impl Event {
     }
 
     /// find other parts attached to same hook at Event
-    fn prev(&self, what: PartTypeId, conn: & AppConn) -> TbResult<Option<Attachment>> {
+    fn occupant(&self, what: PartTypeId, conn: & AppConn) -> TbResult<Option<Attachment>> {
         use schema::parts;
         use schema::attachments::dsl::*;
         Ok(attachments
@@ -151,7 +160,7 @@ impl Event {
     }
 
     /// is self.part_id attached somewhere at the event
-    fn before(&self, conn: &AppConn) -> TbResult<Option<Attachment>> {
+    fn at(&self, conn: &AppConn) -> TbResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         Ok(attachments.for_update()
                 .filter(part_id.eq(self.part_id))
@@ -166,6 +175,17 @@ impl Event {
             .filter(part_id.eq(self.part_id))
             .filter(attached.gt(self.time))
             .order(attached)
+            .first::<Attachment>(conn).optional()?)
+    }
+
+    /// is self.part_id already attached just before self.time
+    fn adjacent(&self, conn: &AppConn) -> TbResult<Option<Attachment>> {
+        use schema::attachments::dsl::*;
+        Ok(attachments.for_update()
+            .filter(part_id.eq(self.part_id))
+            .filter(gear.eq(self.gear))
+            .filter(hook.eq(self.hook))
+            .filter(detached.eq(self.time))
             .first::<Attachment>(conn).optional()?)
     }
 
