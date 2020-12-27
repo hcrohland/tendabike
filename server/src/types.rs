@@ -1,8 +1,7 @@
 use rocket_contrib::json::Json;
 
-use crate::schema::{activity_types, part_types};
-use crate::user::*;
 use crate::*;
+use schema::{activity_types, part_types};
 
 // use self::diesel::prelude::*;
 

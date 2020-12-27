@@ -12,11 +12,8 @@ use rocket_contrib::json::Json;
 
 use std::collections::HashMap;
 
-use crate::attachment;
-use crate::part::Part;
-use crate::schema::activities;
-use crate::user::*;
 use crate::*;
+use schema::activities;
 
 use diesel::{self, QueryDsl, RunQueryDsl};
 
@@ -217,19 +214,15 @@ impl Activity {
     pub fn find(
         part: PartId,
         begin: DateTime<Utc>,
-        end: Option<DateTime<Utc>>,
+        end: DateTime<Utc>,
         conn: &AppConn,
     ) -> Vec<Activity> {
         use schema::activities::dsl::{activities, gear, start};
 
-        let mut query = activities
+        activities
             .filter(gear.eq(Some(part)))
             .filter(start.ge(begin))
-            .into_boxed();
-        if let Some(end) = end {
-            query = query.filter(start.lt(end))
-        }
-        query
+            .filter(start.lt(end))
             .load::<Activity>(conn)
             .expect("could not read activities")
     }
@@ -240,11 +233,11 @@ impl Activity {
         let usage = self.usage(factor);
         Ok(
             Summary {
-                parts: attachment::parts_per_activity(&self, conn)
+                parts: Attachment::parts_per_activity(&self, conn)
                     .iter()
                     .map(|x| x.apply_usage(&usage, conn))
                     .collect::<TbResult<_>>()?,
-                attachments: attachment::register(&self, &usage, conn),
+                attachments: Attachment::register(&self, &usage, conn),
                 activities: vec![self]
             }
         )
@@ -352,8 +345,8 @@ fn def_part(partid: &PartId, user: & User, conn: &AppConn) -> TbResult<Summary> 
         .context("Error updating activities")?;
 
     let mut hash = SumHash::default();
-    for act in acts {
-        hash = hash.merge(act.register(Factor::Add, conn)?)
+    for act in acts.into_iter() {
+        hash.merge(act.register(Factor::Add, conn)?)
     }
     Ok(hash.collect())
 }

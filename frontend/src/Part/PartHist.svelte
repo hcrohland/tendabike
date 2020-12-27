@@ -1,5 +1,5 @@
 <script lang="ts">
-  import {filterValues, parts, attachments, types, by, fmtDate} from '../store'
+  import {filterValues, parts, attachments, types, by, fmtDate, maxDate} from '../store'
   import type { Attachment } from '../types';
   import Usage from '../Usage.svelte'
  
@@ -28,7 +28,7 @@
     </thead>
     <tbody>
       <!-- attached >= detached means deleted! -->
-      {#each atts.filter((a) => a.detached == undefined || a.attached < a.detached) as att (att.attached)}
+      {#each atts.filter((a) => a.attached < a.detached) as att (att.attached)}
         <tr>
           <td>
           {#if $parts[att.gear]}
@@ -43,7 +43,7 @@
           {/if}
           <td>{fmtDate(att.attached)}</td>
           <td>
-            {#if att.detached}
+            {#if att.detached < maxDate}
               {fmtDate(att.detached)}
             {/if}
           </td>

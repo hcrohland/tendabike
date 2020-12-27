@@ -4,7 +4,6 @@ use rocket::response::status;
 use rocket_contrib::json::Json;
 
 use self::schema::{part_types, parts};
-use crate::user::*;
 use crate::*;
 
 use diesel::{self, QueryDsl, RunQueryDsl};
@@ -198,49 +197,51 @@ impl PartId {
     }
 }
 
-pub fn get_all(user: &dyn Person, conn: &AppConn) -> TbResult<PartList> {
-    use schema::parts::dsl::*;
+impl Part {
+    pub fn get_all(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<Part>> {
+        use schema::parts::dsl::*;
 
-    Ok(parts
-        .filter(owner.eq(user.get_id()))
-        .order_by(last_used)
-        .load::<Part>(conn)?)
-}
+        Ok(parts
+            .filter(owner.eq(user.get_id()))
+            .order_by(last_used)
+            .load::<Part>(conn)?)
+    }
 
-/// reset all usage counters for all parts of a person
-///
-/// returns the list of main gears affected
-pub fn reset(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartId>> {
-    use schema::parts::dsl::*;
-    use std::collections::HashSet;
+    /// reset all usage counters for all parts of a person
+    ///
+    /// returns the list of main gears affected
+    pub fn reset(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartId>> {
+        use schema::parts::dsl::*;
+        use std::collections::HashSet;
 
-    // reset all counters for all parts of this user
-    let part_list = diesel::update(parts.filter(owner.eq(user.get_id())))
-        .set((
-            time.eq(0),
-            climb.eq(0),
-            descend.eq(0),
-            distance.eq(0),
-            count.eq(0),
-            last_used.eq(purchase)
-        ))
-        .get_results::<Part>(conn)?;
+        // reset all counters for all parts of this user
+        let part_list = diesel::update(parts.filter(owner.eq(user.get_id())))
+            .set((
+                time.eq(0),
+                climb.eq(0),
+                descend.eq(0),
+                distance.eq(0),
+                count.eq(0),
+                last_used.eq(purchase)
+            ))
+            .get_results::<Part>(conn)?;
 
-    // get the main types
-    let mains: HashSet<PartTypeId> = part_types::table
-        .select(part_types::id)
-        .filter(part_types::main.eq(part_types::id))
-        .load::<PartTypeId>(conn)
-        .expect("error loading PartType")
-        .into_iter()
-        .collect();
+        // get the main types
+        let mains: HashSet<PartTypeId> = part_types::table
+            .select(part_types::id)
+            .filter(part_types::main.eq(part_types::id))
+            .load::<PartTypeId>(conn)
+            .expect("error loading PartType")
+            .into_iter()
+            .collect();
 
-    // only return the main parts
-    Ok(part_list
-        .into_iter()
-        .filter(|x| mains.contains(&x.what))
-        .map(|x| x.id)
-        .collect())
+        // only return the main parts
+        Ok(part_list
+            .into_iter()
+            .filter(|x| mains.contains(&x.what))
+            .map(|x| x.id)
+            .collect())
+    }
 }
 
 impl NewPart {

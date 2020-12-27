@@ -1,6 +1,6 @@
 <script lang="ts">
 import {DropdownItem} from 'sveltestrap';
-import {parts, isAttached, fmtDate} from '../store'
+import {parts, isAttached, fmtDate, maxDate} from '../store'
 import Usage from '../Usage.svelte'
 import RecoverPart from '../Actions/RecoverPart.svelte'
 import ReplacePart from '../Actions/ReplacePart.svelte'
@@ -37,7 +37,7 @@ let attachPart, replacePart, recoverPart;
       <th scope="row" class="text-nowrap"> 
         {'| '.repeat(level)}
           {prefix +  " " + type.name}
-            <ShowAll bind:show_hist/>
+          <ShowAll bind:show_hist/>
       </th>
       <th colspan=80>
       </th>
@@ -68,7 +68,7 @@ let attachPart, replacePart, recoverPart;
         {/if}
         </td>
         <td class="text-right"> {fmtDate(att.attached)} 
-          {#if att.detached}
+          {#if att.detached < maxDate}
             -
             {fmtDate(att.detached)}
           {/if}

@@ -1,6 +1,7 @@
 import {writable} from "svelte/store";
 import type {Part, Attachment, Type, Activity, ActType} from './types'; 
 
+export const maxDate = new Date("9999-12-31");
 export function checkStatus<T>(response) {
     if (response.ok) {
         return response.json()
@@ -102,21 +103,27 @@ export async function initData () {
 ])
 }
 
-export function isAttached (att, time?) {
+export function isAttached (att: Attachment, time?) {
     if (!time) time = new Date()
-    return time >= new Date(att.attached) && (!att.detached || time < new Date(att.detached))
+    return att.attached <= time && time < att.detached
 }
 
+
+function prepParts (a: Part) { a.purchase = new Date(a.purchase); return a}
+function prepAtts (a: Attachment) { a.attached = new Date(a.attached); a.detached = new Date (a.detached); return a}
+function prepActs (a: Activity) { a.start = new Date(a.start); return a}
+
+
 export function setSummary(data) {
-    parts.setMap(data.parts)
-    attachments.setMap(data.attachments) 
-    activities.setMap(data.activities)
+    parts.setMap(data.parts.map(prepParts))
+    attachments.setMap(data.attachments.map(prepAtts)) 
+    activities.setMap(data.activities.map(prepActs))
 }
 
 export function updateSummary(data) {
-    parts.updateMap(data.parts)
-    attachments.updateMap(data.attachments)
-    activities.updateMap(data.activities)
+    parts.updateMap(data.parts.map(prepParts))
+    attachments.updateMap(data.attachments.map(prepAtts))
+    activities.updateMap(data.activities.map(prepActs))
 }
 
 export const category = writable(undefined);

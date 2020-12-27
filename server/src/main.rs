@@ -46,24 +46,25 @@ use std::collections::HashMap;
 
 pub mod jwt;
 pub mod error;
+use error::*;
+
 pub mod strava;
 pub mod schema;
 pub mod user;
+use user::{Person, User, Admin};
 
 pub mod types;
 use types::*;
 
 pub mod part;
-use part::PartId;
+use part::{Part, PartId};
 
 pub mod activity;
-use activity::Activity;
+use activity::{Activity, ActivityId};
 
 pub mod attachment;
+use attachment::{Attachment, AttachmentDetail};
 
-pub use error::*;
-
-use anyhow::Context;
 use chrono::{DateTime, TimeZone, Utc};
 
 use rocket::Rocket;
@@ -101,8 +102,8 @@ fn main() {
         .mount("/user", user::routes())
         .mount("/types", types::routes())
         .mount("/part", part::routes())
+        .mount("/part", attachment::routes())
         .mount("/activ", activity::routes())
-        .mount("/attach", attachment::routes())
         .mount("/strava", strava::ui::routes());
         
         // add oauth2 flow
@@ -121,6 +122,14 @@ embed_migrations!();
 
 fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
     let conn = AppDbConn::get_one(&rocket).expect("database connection");
+    use schema::attachments::dsl::*;
+
+    diesel::update(attachments)
+        .filter(detached.is_null())
+        .set(detached.eq(chrono::MAX_DATETIME))
+        .execute(&conn.0)
+        .expect("rewrite detached failed");
+
     match embedded_migrations::run(&*conn) {
         Ok(()) => Ok(rocket),
         Err(e) => {
@@ -128,6 +137,7 @@ fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
             Err(rocket)
         }
     }
+
 }
 
 pub fn init_environment() {
@@ -201,13 +211,11 @@ impl Usage {
     }
 }
 
-type PartList = Vec<part::Part>;
-
 #[derive(Serialize, Debug, Default)]
 pub struct Summary {
     activities: Vec<activity::Activity>,
-    parts: Vec<part::Part>,
-    attachments: Vec<attachment::AttachmentDetail>
+    parts: Vec<Part>,
+    attachments: Vec<AttachmentDetail>
 }
 
 impl Summary {
@@ -218,23 +226,27 @@ impl Summary {
     }
 
     pub fn merge(self, new: Summary) -> Summary {
-        SumHash::new(self).merge(new).collect()
+        let mut hash = SumHash::new(self);
+        hash.merge(new);
+        hash.collect()
     }
 }
 
 #[derive(Debug, Default)]
 pub struct SumHash {
-    activities: HashMap<activity::ActivityId, Activity>,
-    parts: HashMap<PartId, part::Part>,
-    atts: HashMap<String, attachment::AttachmentDetail>,
+    activities: HashMap<ActivityId, Activity>,
+    parts: HashMap<PartId, Part>,
+    atts: HashMap<String, AttachmentDetail>,
 }
 
 impl SumHash {
     pub fn new(sum: Summary) -> Self {
-        SumHash::default().merge(sum)
+        let mut hash = SumHash::default();
+        hash.merge(sum);
+        hash
     }
 
-    pub fn merge(mut self, ps: Summary) -> Self {
+    pub fn merge(&mut self, ps: Summary)  {
         for act in ps.activities {
             self.activities.insert(act.id, act);
         }
@@ -244,7 +256,6 @@ impl SumHash {
         for att in ps.attachments {
             self.atts.insert(att.idx(), att);
         }
-        self
     }
 
     pub fn collect(self) -> Summary {

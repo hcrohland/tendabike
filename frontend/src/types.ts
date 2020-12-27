@@ -65,4 +65,11 @@ export type ActType = {
   name: string,
   gear_type: number
 }
+
+export type AttEvent = {
+  part_id: number;
+  time: Date;
+  gear: number;
+  hook: number;
+}
   

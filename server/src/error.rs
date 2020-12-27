@@ -4,6 +4,9 @@ use rocket::response::{Response, Responder};
 use rocket::http::{Status};
 use rocket_contrib::json::Json;
 
+pub use anyhow::Context;
+
+
 #[derive(Clone, Debug, Error, Responder)]
 pub enum Error{
     #[response(status = 401)]

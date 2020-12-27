@@ -135,8 +135,8 @@ fn userlist(_u: Admin, conn: AppDbConn) -> ApiResult<Vec<Stat>> {
 
 #[get("/summary")]
 fn summary(user: &User, conn: AppDbConn) -> ApiResult<Summary> {
-    let parts = part::get_all(user, &conn)?;
-    let attachments = attachment::for_parts(&parts,&conn)?;
+    let parts = Part::get_all(user, &conn)?;
+    let attachments = Attachment::for_parts(&parts,&conn)?;
     let activities = Activity::get_all(user, &conn)?;
     tbapi(Ok(Summary{parts,attachments,activities}))
 }
