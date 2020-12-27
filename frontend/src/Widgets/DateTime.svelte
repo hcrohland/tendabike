@@ -30,7 +30,9 @@
 		date = date ? new Date(date) : new Date()
     date.setMinutes(Math.floor(date.getMinutes()/15)*15)
     date.setSeconds(0)
-    date.setMilliseconds(0)
+		date.setMilliseconds(0)
+		if (date < mindate) date = mindate
+		if (date > maxdate) date = maxdate
     return date
 	}	
 
