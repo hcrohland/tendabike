@@ -40,66 +40,53 @@ impl Event {
             Error::BadRequest(format!("Type {} cannot be attached to gear {}", mytype.name, gear.what))
         );
         conn.transaction(|| {
-            use schema::parts;
-            use schema::attachments::dsl::*;
             let mut hash = SumHash::default();
+            let mut end = MAX_DATETIME;
 
             // make sure that no other part is attached at hook
-            hash = hash.merge(self.detach_other(conn)?);
-            
-            let mut end = MAX_DATETIME;
-            if let Some(next) = attachments
-                .inner_join(
-                    parts::table.on(parts::id
-                        .eq(part_id) // join corresponding part
-                        .and(parts::what.eq(part.what))),
-                ) // where the part has my type
-                .filter(gear.eq(self.gear))
-                .filter(hook.eq(self.hook))
-                .select(schema::attachments::all_columns) // return only the attachment
-                .filter(attached.gt(self.time))
-                .order(attached)
-                .first::<Attachment>(conn).optional()? 
+            if let Some(prev) = self.prev(part.what, conn)?
             {
-                //something is already attached to the hook
-                if next.part_id == self.part_id {
-                    debug!("pred found {:?}", next);
-                    // the next attachment gets an earlier start
-                    // but the end stays the same!
+                trace!("predecessor {:?}", prev);
+                hash = hash.merge(prev.set_detach(self.time, conn)?);
+            } 
+
+            if let Some(next) = self.next(part.what, conn)?
+            {
+                trace!("successor {:?}", next);
+                // something else is already attached to the hook
+                // the new attachment ends when the next starts
+                end = next.attached;
+            } 
+            
+            if let Some(next) =  self.after(conn)?
+            {
+                if next.gear == self.gear && next.hook == self.hook {
+                    trace!("still attached {:?}", next);
+                    // next will be superseded by self
+                    // but the end is taken from next
                     end = next.detached;
-                    hash = hash.merge(next.delete(conn)?);
+                    let sum = next.delete(conn)?;
+                    hash = hash.merge(sum);
                 } else {
-                    debug!("adding to the front of {:?}", next);
+                    trace!("changing hook {:?}", next);
+                    // it is attached to a different hook later
                     // the new attachment ends when the next starts
                     end = next.attached;
                 }
-            } else if let Some(next) = attachments.for_update()
-                .filter(part_id.eq(self.part_id))
-                .filter(attached.gt(self.time))
-                .order(attached)
-                .first::<Attachment>(conn).optional()? 
-            {
-                debug!("successor found {:?}", next);
-                // the current part is attached somewhere else
-                // in the future
-                // so the attachment ends when the next starts
-                end = next.attached;
             }
 
-            if let Some(prev) = attachments.for_update()
-                .filter(part_id.eq(self.part_id))
-                .filter(attached.le(self.time)).filter(detached.gt(self.time))
-                .first::<Attachment>(conn).optional()?
+            if let Some(prev) = self.before(conn)?
             {
-                debug!("prolonging {:?}", prev);
                 // the current part is already attached
                 if prev.gear == self.gear && prev.hook == self.hook {
+                    trace!("prolonging {:?}", prev);
                     // the same part is already attached at the target hook
                     // so we need to adjust the end time
                     // and do not need to create a new attachment
                     let sum = prev.set_detach(end, conn)?;
                     return Ok(hash.merge(sum).collect());
                 } else {
+                    trace!("changing hook {:?}", prev);
                     hash = hash.merge(prev.set_detach(self.time, conn)?);
                 }
             }
@@ -124,6 +111,64 @@ impl Event {
         }
     }
 
+    /// find other parts attached to same hook at Event
+    fn prev(&self, what: PartTypeId, conn: & AppConn) -> TbResult<Option<Attachment>> {
+        use schema::parts;
+        use schema::attachments::dsl::*;
+        Ok(attachments
+            .inner_join(
+                parts::table.on(parts::id
+                    .eq(part_id) // join corresponding part
+                    .and(parts::what.eq(what))),
+            ) // where the part has my type
+            .filter(gear.eq(self.gear))
+            .filter(hook.eq(self.hook))
+            .filter(part_id.ne(self.part_id))
+            .select(schema::attachments::all_columns) // return only the attachment
+            .filter(attached.le(self.time)).filter(detached.gt(self.time))
+            .first::<Attachment>(conn).optional()?)
+    }
+    
+    /// find other parts attached to same hook after the Event
+    fn next(&self, what: PartTypeId, conn: &AppConn) -> TbResult<Option<Attachment>> {
+        use schema::parts;
+        use schema::attachments::dsl::*;
+        
+        Ok(attachments
+            .for_update()
+            .inner_join(
+                parts::table.on(parts::id
+                    .eq(part_id) // join corresponding part
+                    .and(parts::what.eq(what))),
+            ) // where the part has my type
+            .filter(gear.eq(self.gear))
+            .filter(hook.eq(self.hook))
+            .filter(part_id.ne(self.part_id))
+            .select(schema::attachments::all_columns) // return only the attachment
+            .filter(attached.gt(self.time))
+            .order(attached)
+            .first::<Attachment>(conn).optional()?)
+    }
+
+    /// is self.part_id attached somewhere at the event
+    fn before(&self, conn: &AppConn) -> TbResult<Option<Attachment>> {
+        use schema::attachments::dsl::*;
+        Ok(attachments.for_update()
+                .filter(part_id.eq(self.part_id))
+                .filter(attached.le(self.time)).filter(detached.gt(self.time))
+                .first::<Attachment>(conn).optional()?)
+    }
+
+    /// is self.part_id attached somewhere after the event
+    fn after(&self, conn: &AppConn) -> TbResult<Option<Attachment>> {
+        use schema::attachments::dsl::*;
+        Ok(attachments.for_update()
+            .filter(part_id.eq(self.part_id))
+            .filter(attached.gt(self.time))
+            .order(attached)
+            .first::<Attachment>(conn).optional()?)
+    }
+
     fn detach(self, user: &dyn Person, conn: & AppConn) -> TbResult<Summary> {
         info!("detach {:?}", self);
         // check user
@@ -137,28 +182,6 @@ impl Event {
         conn.transaction(|| {
             att.set_detach(self.time, conn)
         })  
-    }
-
-    /// iff there is another part attached at Event, detach it
-    fn detach_other(&self, conn: & AppConn) -> TbResult<Summary> {
-        use schema::parts;
-        use schema::attachments::dsl::*;
-        let what= self.part_id.what(conn)?;
-        match attachments
-            .inner_join(
-                parts::table.on(parts::id
-                    .eq(part_id) // join corresponding part
-                    .and(parts::what.eq(what))),
-            ) // where the part has my type
-            .filter(gear.eq(self.gear))
-            .filter(hook.eq(self.hook))
-            .select(schema::attachments::all_columns) // return only the attachment
-            .filter(attached.le(self.time)).filter(detached.gt(self.time))
-            .first::<Attachment>(conn).optional()? 
-        {
-            Some(prev) => prev.set_detach(self.time, conn),
-            None => Ok(Summary::default())
-        } 
     }
 }
 /// Timeline of attachments
@@ -234,30 +257,6 @@ impl Attachment {
             .first::<Attachment>(conn)?)
     }
 
-    /// remove the corresponding usage from part and reset attachment
-    fn remove(&mut self, conn: &AppConn) -> TbResult<Part> {
-        trace!("remove attachment {:?}", self);
-        let usage = self.usage(Factor::Sub, conn);
-        self.count = 0;
-        self.time = 0;
-        self.distance = 0;
-        self.climb = 0;
-        self.descend = 0;
-        self.part_id.apply_usage(&usage, conn)
-    }
-
-    /// add the corresponding usage to part and set it in attachment
-    fn add(&mut self, conn: &AppConn) -> TbResult<Part> {
-        trace!("add attachment {:?}", self);
-        let usage = self.usage(Factor::Add, conn);
-        self.count = usage.count;
-        self.time = usage.time;
-        self.distance = usage.distance;
-        self.climb = usage.climb;
-        self.descend = usage.descend;
-        self.part_id.apply_usage(&usage, conn)
-    }
-
     /// return the usage for the attachment
     fn usage(&self, factor: Factor, conn: &AppConn) -> Usage {
         Activity::find(self.gear, self.attached, self.detached, conn)
@@ -272,7 +271,7 @@ impl Attachment {
     /// deletes the attachment for detached < attached
     /// Does not check for collisions
     fn set_detach(mut self, detached: DateTime<Utc>, conn: &AppConn) -> TbResult<Summary> {
-        debug!("detaching {:?} at {:?}", self, detached);
+        trace!("detaching {:?} at {:?}", self, detached);
         
         let del = self.delete(conn)?;
         if self.attached >= detached {
@@ -288,7 +287,14 @@ impl Attachment {
     fn create(mut self, conn: &AppConn) -> TbResult<Summary>
     {
         debug!("Create {:?}", self);
-        let part = self.add(conn)?; // and register changes
+        let usage = self.usage(Factor::Add, conn);
+        self.count = usage.count;
+        self.time = usage.time;
+        self.distance = usage.distance;
+        self.climb = usage.climb;
+        self.descend = usage.descend;
+        let part = self.part_id.apply_usage(&usage, conn)?;
+
         let a = self.insert_into(attachments::table)
             .get_result(conn).context("insert into attachments")?;
         let attachment = AttachmentDetail {
@@ -314,7 +320,14 @@ impl Attachment {
             .get_result::<Attachment>(conn)
             .context(ctx)?;
         
-        let part = att.remove(conn)?;
+        let usage = att.usage(Factor::Sub, conn);
+        att.count = 0;
+        att.time = 0;
+        att.distance = 0;
+        att.climb = 0;
+        att.descend = 0;
+        let part = att.part_id.apply_usage(&usage, conn)?;
+
         // mark as deleted for client!
         att.detached = att.attached;
         return Ok(Summary{
