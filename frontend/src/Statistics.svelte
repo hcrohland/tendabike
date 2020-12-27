@@ -99,6 +99,10 @@ function getPlot(cummulative, fields, addlayout?) {
   let layout =  Object.assign({
     legend:{"orientation": "h"},
     yaxis: {hoverformat: '.3r'},
+    xaxis: {
+      tickformat: '%b',
+      dtick: 30 * 24 * 60 * 60 * 1000
+    },
     annotations: []
   }, addlayout)
   let config = {responsive: true}
@@ -116,11 +120,6 @@ function getPlot(cummulative, fields, addlayout?) {
       xanchor: 'left',
       yanchor: 'middle',
       text: Math.round(ann),
-      font: {
-        family: 'Arial',
-        size: 16,
-        color: 'black'
-      },
       showarrow: false
     };
 
