@@ -77,8 +77,7 @@ function get_cum(year: number, months: Boolean){
         return a
       })
       .sort(by("start", true))
-      console.log(acts);
-      
+
   if (months)
     return groupByMonth(acts)
   else
@@ -95,14 +94,47 @@ function get_trace (cum: Day[], field: keyof Usage, title?: string, field2?: key
   }
 }
 
-$: cummulative = get_cum(year, months); 
+function getPlot(cummulative, fields, addlayout?) {
+  let data = [];
+  let layout =  Object.assign({
+    legend:{"orientation": "h"},
+    yaxis: {hoverformat: '.3r'},
+    annotations: []
+  }, addlayout)
+  let config = {responsive: true}
+  
+  fields.forEach(f => {
+    let d = get_trace(cummulative, f[0], f[1], f[2]);
+    data.push(d);
+    
+    if (!months){
+      let ann = d.y[d.y.length-1];
+      let result2 = {
+      xref: 'paper',
+      x: 1,
+      y: ann,
+      xanchor: 'left',
+      yanchor: 'middle',
+      text: Math.round(ann),
+      font: {
+        family: 'Arial',
+        size: 16,
+        color: 'black'
+      },
+      showarrow: false
+    };
 
-let layout =  {
-  legend:{"orientation": "h"},
-  yaxis: {hoverformat: '.3r'}
+    layout.annotations.push( result2);
+  }
+  });
+  return {
+    data,config, layout
+  }
 }
-let config = {responsive: true}
-            
+   
+   
+$: cumm = get_cum(year, months); 
+
 </script>
 <Row border class="p-sm-2">
   <Col xs="auto" class="p-0 p-sm-2">
@@ -127,26 +159,18 @@ let config = {responsive: true}
 </Row>
 <Row border class="p-sm-2">
   <Col class="p-0 p-sm-2">
-    <Plotly title="Elevation (m)" data={[get_trace(cummulative, "climb"),get_trace(cummulative, "descend")]} {layout} {config} />
+    <Plotly title="Elevation (m)" {...getPlot(cumm, [["climb"], ["descend"]])}  />
   </Col>
 </Row>
 <Row>
   <Col md=6 xs=12 class="p-0 p-sm-2">
-    <Plotly title="Distance (km)" data={[get_trace(cummulative, "distance" )]} {layout} {config} />
+    <Plotly title="Distance (km)" {...getPlot(cumm, [["distance"]])} />
   </Col>
   <Col md=6 xs=12 class="p-0 p-sm-2">
     {#if months}
-       <Plotly 
-          title="Time (h)" 
-          data={[get_trace(cummulative, "time", "moving time"),get_trace(cummulative, "duration", "pause", "time")]} 
-          layout={{legend:{"orientation": "h"},barmode: 'stack', yaxis: {hoverformat: '.3r'}}} 
-          {config} />
+      <Plotly title="Time (h)" {...getPlot(cumm, [[ "time", "moving time"], ["duration", "pause", "time"]], {barmode: 'stack'})} />
     {:else}
-       <Plotly 
-          title="Time (h)" 
-          data={[get_trace(cummulative, "time", "moving time"),get_trace(cummulative, "duration", "outdoor time")]} 
-          {layout} 
-          {config} />
+      <Plotly title="Time (h)" {...getPlot(cumm, [[ "time", "moving time"], ["duration", "outdoor time"]])} />
     {/if}
   </Col>
 </Row>
