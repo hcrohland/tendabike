@@ -35,7 +35,7 @@ function groupByMonth (arr: Activity[]) {
   return Object.values(
     arr.reduce<{ [s: string]: Day; }>((acc, a: Activity) => {
       let start = months ? getmonth (a.start) : getday (a.start)
-      start.setDate(20)
+      start.setDate(13)
       let diy = start.toString()
       if (!acc[diy]) {
         acc[diy] = {start, climb: 0,descend: 0, time :0, duration:0, distance:0}
