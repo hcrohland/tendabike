@@ -35,9 +35,10 @@ function groupByMonth (arr: Activity[]) {
   return Object.values(
     arr.reduce<{ [s: string]: Day; }>((acc, a: Activity) => {
       let start = months ? getmonth (a.start) : getday (a.start)
+      start.setDate(20)
       let diy = start.toString()
       if (!acc[diy]) {
-        acc[diy] = {start,climb: 0,descend: 0, time :0, duration:0, distance:0}
+        acc[diy] = {start, climb: 0,descend: 0, time :0, duration:0, distance:0}
       }
       acc[diy].distance += a.distance
       acc[diy].climb += a.climb
@@ -101,7 +102,8 @@ function getPlot(cummulative, fields, addlayout?) {
     yaxis: {hoverformat: '.3r'},
     xaxis: {
       tickformat: '%b',
-      dtick: 30 * 24 * 60 * 60 * 1000
+      dtick: 30 * 24 * 60 * 60 * 1000,
+      ticklabelposition: 'outside right'
     },
     annotations: []
   }, addlayout)
