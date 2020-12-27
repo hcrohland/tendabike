@@ -114,7 +114,7 @@ let config = {responsive: true}
         </InputGroupText>
       </InputGroupAddon>
       <select class="custom-select" bind:value={year}>
-        {#each Array(thisyear-minyear) as item, i}
+        {#each Array(thisyear-minyear+1) as item, i}
         <option value={thisyear-i}>{thisyear-i}</option>
         {/each}
       </select>
