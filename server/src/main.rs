@@ -226,7 +226,9 @@ impl Summary {
     }
 
     pub fn merge(self, new: Summary) -> Summary {
-        SumHash::new(self).merge(new).collect()
+        let mut hash = SumHash::new(self);
+        hash.merge(new);
+        hash.collect()
     }
 }
 
@@ -239,10 +241,12 @@ pub struct SumHash {
 
 impl SumHash {
     pub fn new(sum: Summary) -> Self {
-        SumHash::default().merge(sum)
+        let mut hash = SumHash::default();
+        hash.merge(sum);
+        hash
     }
 
-    pub fn merge(mut self, ps: Summary) -> Self {
+    pub fn merge(&mut self, ps: Summary)  {
         for act in ps.activities {
             self.activities.insert(act.id, act);
         }
@@ -252,7 +256,6 @@ impl SumHash {
         for att in ps.attachments {
             self.atts.insert(att.idx(), att);
         }
-        self
     }
 
     pub fn collect(self) -> Summary {

@@ -345,8 +345,8 @@ fn def_part(partid: &PartId, user: & User, conn: &AppConn) -> TbResult<Summary> 
         .context("Error updating activities")?;
 
     let mut hash = SumHash::default();
-    for act in acts {
-        hash = hash.merge(act.register(Factor::Add, conn)?)
+    for act in acts.into_iter() {
+        hash.merge(act.register(Factor::Add, conn)?)
     }
     Ok(hash.collect())
 }

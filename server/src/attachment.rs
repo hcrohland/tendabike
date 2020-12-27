@@ -47,7 +47,7 @@ impl Event {
             if let Some(prev) = self.prev(part.what, conn)?
             {
                 trace!("predecessor {:?}", prev);
-                hash = hash.merge(prev.set_detach(self.time, conn)?);
+                hash.merge(prev.set_detach(self.time, conn)?);
             } 
 
             if let Some(next) = self.next(part.what, conn)?
@@ -66,7 +66,7 @@ impl Event {
                     // but the end is taken from next
                     end = next.detached;
                     let sum = next.delete(conn)?;
-                    hash = hash.merge(sum);
+                    hash.merge(sum);
                 } else {
                     trace!("changing hook {:?}", next);
                     // it is attached to a different hook later
@@ -83,15 +83,15 @@ impl Event {
                     // the same part is already attached at the target hook
                     // so we need to adjust the end time
                     // and do not need to create a new attachment
-                    let sum = prev.set_detach(end, conn)?;
-                    return Ok(hash.merge(sum).collect());
+                    hash.merge(prev.set_detach(end, conn)?);
+                    return Ok(hash.collect());
                 } else {
                     trace!("changing hook {:?}", prev);
-                    hash = hash.merge(prev.set_detach(self.time, conn)?);
+                    hash.merge(prev.set_detach(self.time, conn)?);
                 }
             }
-            let sum = self.attachment(end).create(conn)?;
-            Ok(hash.merge(sum).collect())
+            hash.merge(self.attachment(end).create(conn)?);
+            Ok(hash.collect())
         })
     }
 
