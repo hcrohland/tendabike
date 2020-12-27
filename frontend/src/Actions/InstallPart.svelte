@@ -14,13 +14,12 @@
   let part, newpart: Part;
   let gear: Part;
   let type: Type;
-  let attach: AttEvent;
+  let hook: number;
   let disabled = true;
   let isOpen = false;
   const toggle = () => isOpen = false
   export const installPart = (g: Part) => {
     gear = g;
-    attach.gear = g.id;
     part = {
       owner: $user.id, 
       what: undefined, 
@@ -37,8 +36,12 @@
   }
 
   async function attachPart (part) {
-    attach.part_id = part.id;
-    attach.time = part.purchase;
+    let attach: AttEvent = {
+      part_id: part.id,
+      time: part.purchase,
+      gear: gear.id,
+      hook
+    }
     await myfetch('/part/attach', 'POST', attach)
         .then(updateSummary)
         .catch(handleError)
@@ -77,9 +80,9 @@
 
   const setType = (e) => {
     type = e.detail.type;
-    attach.hook = e.detail.hook;
+    hook = e.detail.hook;
     part.what = type.id;
-    part.purchase = guessDate(gear, type, attach.hook)
+    part.purchase = guessDate(gear, type, hook)
   }
   const setPart = (e) => {
     newpart = e.detail
