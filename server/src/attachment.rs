@@ -51,7 +51,7 @@ impl Event {
             // make sure that no other part is attached at hook
             if let Some(prev) = self.occupant(part.what, conn)? {
                 trace!("predecessor {:?}", prev);
-                hash.merge(prev.set_detach(self.time, conn)?);
+                hash.merge(prev.detach(self.time, conn)?);
             }
 
             if let Some(next) = self.next(part.what, conn)? {
@@ -84,18 +84,18 @@ impl Event {
                     // the same part is already attached at the target hook
                     // so we need to adjust the end time
                     // and do not need to create a new attachment
-                    hash.merge(prev.set_detach(end, conn)?);
+                    hash.merge(prev.detach(end, conn)?);
                     return Ok(hash.collect());
                 } else {
                     trace!("changing hook {:?}", prev);
-                    hash.merge(prev.set_detach(self.time, conn)?);
+                    hash.merge(prev.detach(self.time, conn)?);
                 }
             }
 
             // try to merge previous attachment
             if let Some(prev) = self.adjacent(conn)? {
                 trace!("adjacent {:?}", prev);
-                hash.merge(prev.set_detach(end, conn)?)
+                hash.merge(prev.detach(end, conn)?)
             } else {
                 hash.merge(self.attachment(end).create(conn)?);
             }
@@ -209,7 +209,7 @@ impl Event {
             self.part_id == att.part_id && self.hook == att.hook && self.gear == att.gear,
             Error::BadRequest(format!("{:?} does not match attachment", self))
         );
-        conn.transaction(|| att.set_detach(self.time, conn))
+        conn.transaction(|| att.detach(self.time, conn))
     }
 }
 /// Timeline of attachments
@@ -298,7 +298,7 @@ impl Attachment {
     ///
     /// deletes the attachment for detached < attached
     /// Does not check for collisions
-    fn set_detach(mut self, detached: DateTime<Utc>, conn: &AppConn) -> TbResult<Summary> {
+    fn detach(mut self, detached: DateTime<Utc>, conn: &AppConn) -> TbResult<Summary> {
         trace!("detaching {:?} at {:?}", self, detached);
 
         let del = self.delete(conn)?;
