@@ -62,20 +62,23 @@ export function handleError(e) {
     })
 }
 
-function mapObject (fn) {
+function mapObject (fn, del?) {
     return (map, obj) => {
-            map[fn(obj)] = obj;
+            if (del && del(obj))
+                delete map[fn(obj)]
+            else
+                map[fn(obj)] = obj;
             return map;
         }
 }
 
-function mapable<K,V>(fn: (v: V) => K) {
+function mapable<K,V>(fn: (v: V) => K, delfn?: (v: V) => boolean) {
     const { subscribe, set, update } = writable<V[]>([]);
 
 	return {
         subscribe,
-        setMap: (arr: V[]) => {set(arr.reduce(mapObject(fn),{}))},
-		updateMap: (arr: V[]) => update(n => arr.reduce(mapObject(fn), n)),
+        setMap: (arr: V[]) => {set(arr.reduce(mapObject(fn, delfn),{}))},
+		updateMap: (arr: V[]) => update(n => arr.reduce(mapObject(fn, delfn), n)),
 	};  
 }
 
@@ -132,6 +135,9 @@ export const types = mapable((o: Type) => o.id);
 export const act_types = mapable((o: ActType) => o.id);
 export const user = writable(undefined);
 export const activities = mapable((o:Activity) => o.id)
-export const attachments = mapable((o:Attachment) => o.part_id.toString() + o.attached.toString())
+export const attachments = mapable(
+        (o:Attachment) => o.part_id.toString() + o.attached.toString(), 
+        (o) => o.attached.getTime() == o.detached.getTime()
+    )
 export const state = writable({ show_all_spares: false});
 export const message = writable({active: false, message: "No message", status: ""})

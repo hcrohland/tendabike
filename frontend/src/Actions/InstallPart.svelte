@@ -63,7 +63,7 @@
       return new Date()
     } else {
       // It is the first part of that type
-      return new Date(g.purchase)
+      return g.purchase
     }
   }
 

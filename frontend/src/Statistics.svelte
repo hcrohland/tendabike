@@ -65,11 +65,11 @@ function sumUp (arr: Activity[]) {
                   }, []);
 }
 
-let minyear = new Date(Object.values($activities).sort(by("start")).pop().start).getFullYear()
+let minyear = Object.values($activities).sort(by("start")).pop().start.getFullYear()
 let thisyear = new Date().getFullYear()
 
 function get_cum(year: number, months: Boolean){
-  let acts = _.cloneDeep(filterValues($activities, (a) => new Date(a.start).getFullYear() == year && a.what == 1))
+  let acts = _.cloneDeep(filterValues($activities, (a) => a.start.getFullYear() == year && a.what == 1))
       .map((a) => {
         a.distance /= 1000;
         a.time = (a.time ?  a.time : a.duration) /3600;

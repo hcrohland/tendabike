@@ -11,9 +11,9 @@
     let last = filterValues($attachments, (a) => a.part_id == part.id).sort(by("attached"))[0]
       
     if (last) {
-      return new Date(last.detached < maxDate ? last.detached : last.attached)
+      return last.detached < maxDate ? last.detached : last.attached
     } else {
-      return new Date(part.purchase)
+      return part.purchase
     }
   }
     
