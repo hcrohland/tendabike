@@ -21,24 +21,25 @@
   let dispose = false, date;
 
   async function savePart () {
-    disabled = true;
-    if (dispose) newpart.disposed_at = date
-    if (detach) {
-      let evt: AttEvent = {
-        part_id: last.part_id,
-        gear: last.gear,
-        hook: last.hook,
-        time: date  
+    try {
+      disabled = true;
+      if (dispose) newpart.disposed_at = date
+      if (detach) {
+        let evt: AttEvent = {
+          part_id: last.part_id,
+          gear: last.gear,
+          hook: last.hook,
+          time: date  
+        }
+        await myfetch('/part/detach', 'POST', evt)
+          .then(updateSummary)
       }
-      await myfetch('/part/detach', 'POST', evt)
-        .then(updateSummary)
-        .catch(handleError)
+      if (dispose || part_changed){
+        await myfetch('/part/', 'PUT', newpart)
+          .then(data => parts.updateMap([data]))
+      }
     }
-    if (dispose || part_changed){
-      await myfetch('/part/', 'PUT', newpart)
-        .then(data => parts.updateMap([data]))
-        .catch(handleError)
-    }
+    catch(e) {handleError(e) }
 
     isOpen = false;
   }

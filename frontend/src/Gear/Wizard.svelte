@@ -51,7 +51,6 @@ async function attachPart (part, hook) {
     
     await myfetch('/part/attach', 'POST', attach)
         .then(updateSummary)
-        .catch(handleError)
   }
 
   async function installPart (newpart:Part, hook: number) {
