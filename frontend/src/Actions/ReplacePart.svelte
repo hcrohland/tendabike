@@ -14,7 +14,8 @@
   let part: Part, oldpart: Part, newpart: Part;
   let type: Type;
   let prefix: string;
-  let evt: AttEvent;
+  let gear: number;
+  let hook: number;
   let disabled = true;
   let dispose = false;
   let isOpen = false;
@@ -22,17 +23,19 @@
   const toggle = () => isOpen = false
 
   async function attachPart (part) {
-    evt.part_id = part.id;
-    evt.time = part.purchase;
+    let evt: AttEvent = {
+      gear,
+      hook,
+      part_id: part.id,
+      time: part.purchase,
+    }
     await myfetch('/part/attach', 'POST', evt)
       .then(updateSummary)
-      .catch(handleError)
     
     if (dispose) {
       oldpart.disposed_at = part.purchase;
       await myfetch('/part', 'PUT', oldpart)
         .then((data) => parts.updateMap([data]))
-        .catch(handleError)
     }
   }
 
@@ -47,8 +50,8 @@
 
 export const replacePart = (attl: Attachment) => {
     oldpart = $parts[attl.part_id];
-    evt.hook = attl.hook;
-    evt.gear = attl.gear;
+    hook = attl.hook;
+    gear= attl.gear;
     mindate = attl.attached;
     type = $types[oldpart.what];
     prefix = $types[attl.hook].name.split(' ').reverse()[1] || '' // The first word iff there were two (hack!)
@@ -74,7 +77,7 @@ export const replacePart = (attl: Attachment) => {
 </script>
 
 <Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
-  <ModalHeader {toggle}>  New {prefix} {type.name} for {$parts[evt.gear].name} </ModalHeader>
+  <ModalHeader {toggle}>  New {prefix} {type.name} for {$parts[gear].name} </ModalHeader>
   <ModalBody>
     <Form>
       <NewForm {type} {part} {mindate} on:change={setPart}/>
