@@ -97,7 +97,7 @@ function get_trace (cum: Day[], field: keyof Usage, title?: string, field2?: key
 
 function getPlot(cummulative, title, fields, addlayout?) {
   let data = [];
-  let layout =  Object.assign({
+  let layout =  {
     title: {text: title},
     legend:{"orientation": "h"},
     yaxis: {
@@ -112,8 +112,9 @@ function getPlot(cummulative, title, fields, addlayout?) {
       range: [new Date (year+'-01-01T00:00:00'), new Date(year+'-12-31T23:59:59')]
     },
     annotations: []
-  }, addlayout)
-  let config = {responsive: true}
+  };
+  Object.assign(layout, addlayout);
+  let config = {responsive: true};
   
   fields.forEach(f => {
     let d = get_trace(cummulative, f[0], f[1], f[2]);
