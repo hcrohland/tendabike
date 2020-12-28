@@ -95,9 +95,10 @@ function get_trace (cum: Day[], field: keyof Usage, title?: string, field2?: key
   }
 }
 
-function getPlot(cummulative, fields, addlayout?) {
+function getPlot(cummulative, title, fields, addlayout?) {
   let data = [];
   let layout =  Object.assign({
+    title: {text: title},
     legend:{"orientation": "h"},
     yaxis: {
       hoverformat: '.3r',
@@ -164,18 +165,18 @@ $: cumm = get_cum(year, months);
 </Row>
 <Row border class="p-sm-2">
   <Col class="p-0 p-sm-2">
-    <Plotly title="Elevation (m)" {...getPlot(cumm, [["climb"], ["descend"]])}  />
+    <Plotly {...getPlot(cumm, "Elevation (m)", [["climb"], ["descend"]])}  />
   </Col>
 </Row>
 <Row>
   <Col md=6 xs=12 class="p-0 p-sm-2">
-    <Plotly title="Distance (km)" {...getPlot(cumm, [["distance"]])} />
+    <Plotly {...getPlot(cumm, "Distance (km)", [["distance"]])} />
   </Col>
   <Col md=6 xs=12 class="p-0 p-sm-2">
     {#if months}
-      <Plotly title="Time (h)" {...getPlot(cumm, [[ "time", "moving time"], ["duration", "pause", "time"]], {barmode: 'stack'})} />
+      <Plotly {...getPlot(cumm, "Time (h)", [[ "time", "moving time"], ["duration", "pause", "time"]], {barmode: 'stack'})} />
     {:else}
-      <Plotly title="Time (h)" {...getPlot(cumm, [[ "time", "moving time"], ["duration", "outdoor time"]])} />
+      <Plotly {...getPlot(cumm, "Time (h)", [[ "time", "moving time"], ["duration", "outdoor time"]])} />
     {/if}
   </Col>
 </Row>
