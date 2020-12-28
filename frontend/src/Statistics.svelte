@@ -108,7 +108,7 @@ function getPlot(cummulative, fields, addlayout?) {
       dtick: 30 * 24 * 60 * 60 * 1000,
       hoverformat: months ? '%b' : '%e %b',
       fixedrange: true,
-      range: [new Date (year+'-01-01'), new Date(year+'-12-31')]
+      range: [new Date (year+'-01-01T00:00:00'), new Date(year+'-12-31T23:59:59')]
     },
     annotations: []
   }, addlayout)
