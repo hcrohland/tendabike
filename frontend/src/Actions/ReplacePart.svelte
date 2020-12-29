@@ -54,7 +54,7 @@ export const replacePart = (attl: Attachment) => {
     gear= attl.gear;
     mindate = attl.attached;
     type = $types[oldpart.what];
-    prefix = $types[attl.hook].name.split(' ').reverse()[1] || '' // The first word iff there were two (hack!)
+    prefix = $types[attl.hook].prefix;
     part = {
       owner: $user.id, 
       what: oldpart.what, 

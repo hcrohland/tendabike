@@ -98,6 +98,7 @@ export async function initData () {
     }
     return Promise.all([
         myfetch('/types/part')
+            .then((data) => data.map(prepTypes))
             .then(types.setMap),
         myfetch('/types/activity')
             .then(act_types.setMap),
@@ -111,7 +112,10 @@ export function isAttached (att: Attachment, time?) {
     return att.attached <= time && time < att.detached
 }
 
-
+function prepTypes (t: Type) { 
+    t.prefix = t.name.split(' ').reverse()[1] || '';  // The first word iff there were two (hack!)
+    return t
+}
 function prepParts (a: Part) { a.purchase = new Date(a.purchase); return a}
 function prepAtts (a: Attachment) { a.attached = new Date(a.attached); a.detached = new Date (a.detached); return a}
 function prepActs (a: Activity) { a.start = new Date(a.start); return a}

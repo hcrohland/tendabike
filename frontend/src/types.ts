@@ -37,6 +37,7 @@ export type Type = {
     hooks: Array<number>;
     order: number;
     group?: string;
+    prefix: string;
   }
 
 export type User = {

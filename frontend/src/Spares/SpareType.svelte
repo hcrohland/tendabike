@@ -19,7 +19,7 @@ let attachPart, newPart, show_all;
 function attachedTo(atts: Attachment[], partId: number, time: Date) {
     let att = filterValues(atts, (x) => x.part_id === partId && isAttached(x, time)).pop()
     if (att == undefined) return
-      return $parts[att.gear].name + ' ' + ($types[att.hook].name.split(' ').reverse()[1] || '')
+      return $parts[att.gear].name + ' ' + $types[att.hook].prefix
 }
 
 $: subparts = filterValues($parts, (p) => p.what == type.id).sort(by("last_used"))

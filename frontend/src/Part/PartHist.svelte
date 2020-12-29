@@ -35,7 +35,7 @@
                 style={$parts[att.gear].disposed_at ? "text-decoration: line-through;" : ""} 
                 class="text-reset">
               {$parts[att.gear].name} 
-              {$types[att.hook].name.split(' ').reverse()[1] || ''}
+              {$types[att.hook].prefix}
             </a>
           {:else}
             N/A
