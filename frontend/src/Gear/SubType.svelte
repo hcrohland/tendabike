@@ -76,13 +76,13 @@ let attachPart, replacePart, recoverPart;
         <td>
           {#if $parts[att.part_id] && !$parts[att.part_id].disposed_at}
             <Menu>
-              {#if i == 0}
-              <DropdownItem on:click={() => replacePart(att)}> Replace part</DropdownItem>
-              {/if}
               {#if isAttached(att, new Date)}
               <DropdownItem on:click={() => attachPart($parts[att.part_id])}> Move part</DropdownItem>
               {:else}
               <DropdownItem on:click={() => attachPart($parts[att.part_id])}> Attach part</DropdownItem>
+              {/if}
+              {#if i == 0}
+              <DropdownItem on:click={() => replacePart(att)}> Replace part</DropdownItem>
               {/if}
             </Menu>
           {/if}
