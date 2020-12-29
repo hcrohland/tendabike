@@ -1,6 +1,6 @@
 [package]
 name = "tendabike"
-version = "0.2.2"
+version = "0.3.0"
 authors = ["Christoph Rohland <tendabike@rohland.net>"]
 edition = "2018"
 
@@ -14,10 +14,10 @@ jsonwebtoken = "7.2"
 
 diesel = { version = "1.4", features = ["postgres", "chrono"] }
 diesel_migrations = "1.4"
-diesel-derive-newtype = "0.1.2"
+diesel-derive-newtype = "0.1"
 
-newtype_derive = "0.1.6"
-dotenv = "0.15.0"
+newtype_derive = "0.1"
+dotenv = "0.15"
 log = "0.4"  
 env_logger = "0.8"
 serde = "1.0" 
@@ -29,7 +29,7 @@ chrono = { version ="0.4", features = ["serde"] }
 chrono-tz = "0.5"
 time = "0.1"
 
-pretty_assertions = "0.6.1"
+pretty_assertions = "0.6"
 
 thiserror = "1.0"
 anyhow = "1.0"

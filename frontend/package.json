@@ -4,7 +4,7 @@
   "devDependencies": {
     "@rollup/plugin-typescript": "^6.1.0",
     "@tsconfig/svelte": "^1.0.10",
-    "@types/lodash": "^4.14.165",
+    "@types/lodash": "^4.14.166",
     "rollup": "^2.35.1",
     "rollup-plugin-commonjs": "^10.0.0",
     "rollup-plugin-livereload": "^2.0.0",
@@ -15,7 +15,7 @@
     "svelte": "^3.31.0",
     "svelte-check": "^1.1.23",
     "svelte-preprocess": "^4.6.1",
-    "sveltestrap": "^3.9.6",
+    "sveltestrap": "^3.10.0",
     "tslib": "^2.0.3",
     "typescript": "^4.1.3"
   },
