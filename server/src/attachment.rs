@@ -9,20 +9,24 @@ use rocket_contrib::json::Json;
 
 use crate::*;
 use schema::attachments;
-
+/// Description of an Attach or Detach request
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 pub struct Event {
-    /// the sub-part, which is attached to the hook
+    /// the part which should be change
     part_id: PartId,
-    /// when it was attached
+    /// when it the change happens
     time: DateTime<Utc>,
-    /// The gear the part will be attached to
+    /// The gear the part is or will be attached to
     gear: PartId,
     /// the hook on that gear
     hook: PartTypeId,
 }
 
 impl Event {
+    /// End an attachment for 'self.part' and all it's childs
+    ///
+    /// Check's authorization and taht the part is attached
+    ///
     fn detach(self, user: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
         info!("detach {:?}", self);
         // check user
@@ -41,27 +45,39 @@ impl Event {
         })
     }
 
+    /// detach the whole assembly pointed at by 'self'
+    ///
+    /// 'target' is the corresponding Attachment. handed in as an optimization
+    /// it must be the same as self.at(conn)
+    /// 
+    /// When the 'self.partid' has child parts they are attached to that part
+    ///
     fn detach_assembly(self, target: Attachment, conn: &AppConn) -> TbResult<Summary> {
         debug!("- detaching {}", target.part_id);
         let mut hash = SumHash::new(target.detach(self.time, conn)?);
         let subs = self.assembly(target.gear, conn)?;
-        for att in subs {
+        for sub in subs {
             let ev = Event {
-                part_id: att.part_id,
+                part_id: sub.part_id,
                 time: self.time,
                 gear: target.part_id,
-                hook: att.hook,
+                hook: sub.hook,
             };
             debug!(
                 "-- detaching {} from {} to {}",
-                att.part_id, target.gear, ev.gear
+                sub.part_id, target.gear, ev.gear
             );
-            hash.merge(att.detach(self.time, conn)?);
+            hash.merge(sub.detach(self.time, conn)?);
             hash.merge(ev.attach_one(conn)?);
         }
         Ok(hash.collect())
     }
 
+    /// Create an attachment for 'self.part' and all it's childs
+    /// It will detach any part - and childs therof - which art attached already
+    ///
+    /// When the detached part has child parts they are attached to that part
+    ///
     fn attach(self, user: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
         info!("attach {:?}", self);
         // check user
@@ -118,6 +134,13 @@ impl Event {
         })
     }
 
+    /// create Attachment for on part according to self
+    ///
+    /// * The part must not be attached somewhere at the event time
+    /// * Also the hook must not be occupied at the event time
+    /// * Detach time is adjusted according to later attachments
+    ///
+    /// If the part is attached already to the same hook, the attachments are merged
     fn attach_one(self, conn: &AppConn) -> TbResult<Summary> {
         let mut hash = SumHash::default();
         let mut end = MAX_DATETIME;
@@ -159,7 +182,7 @@ impl Event {
         Ok(hash.collect())
     }
 
-    /// create an attachment our of self with the given detached time
+    /// create an attachment of self with the given detached time
     fn attachment(self, detached: DateTime<Utc>) -> Attachment {
         Attachment {
             part_id: self.part_id,
@@ -175,7 +198,7 @@ impl Event {
         }
     }
 
-    /// find other parts attached to same hook at Event
+    /// Return Attachment if another part is attached to same hook at Event
     fn occupant(&self, conn: &AppConn) -> TbResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         use schema::parts;
@@ -196,7 +219,7 @@ impl Event {
             .optional()?)
     }
 
-    /// find other parts attached to same hook after the Event
+    /// Return Attachment if some other part is attached to same hook after the Event
     fn next(&self, what: PartTypeId, conn: &AppConn) -> TbResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         use schema::parts;
@@ -218,7 +241,7 @@ impl Event {
             .optional()?)
     }
 
-    /// is self.part_id attached somewhere at the event
+    /// Return Attachment if self.part_id is attached somewhere at the event
     fn at(&self, conn: &AppConn) -> TbResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         Ok(attachments
@@ -230,7 +253,7 @@ impl Event {
             .optional()?)
     }
 
-    /// is self.part_id attached somewhere after the event
+    /// Return Attachment if self.part_id is attached somewhere after the event
     fn after(&self, conn: &AppConn) -> TbResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         Ok(attachments
@@ -242,7 +265,7 @@ impl Event {
             .optional()?)
     }
 
-    /// is self.part_id already attached just before self.time
+    /// Iff self.part_id already attached just before self.time return that attachment
     fn adjacent(&self, conn: &AppConn) -> TbResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         Ok(attachments
@@ -255,6 +278,7 @@ impl Event {
             .optional()?)
     }
 
+    /// find all subparts of self which are attached to target at self.time
     fn assembly(&self, target: PartId, conn: &AppConn) -> TbResult<Vec<Attachment>> {
         use schema::attachments::dsl::*;
 
@@ -271,8 +295,8 @@ impl Event {
 }
 /// Timeline of attachments
 ///
-/// Every attachment of a part to a specified hook on a gear is an entry
-/// Start and end time are noted
+/// * Every attachment of a part to a specified hook on a gear is an entry
+/// * Start and end time are noted
 ///
 #[derive(
     Clone,
@@ -314,7 +338,11 @@ pub struct Attachment {
     /// Overall descending
     pub descend: i32,
 }
-
+/// Attachment with additional details
+///
+/// * the name is needed for attachments to parts which were sold
+/// since the part will not be send to the client
+/// * 'what' is an optimization
 #[derive(Queryable, Serialize, Deserialize, Debug)]
 pub struct AttachmentDetail {
     #[serde(flatten)]
@@ -324,6 +352,7 @@ pub struct AttachmentDetail {
 }
 
 impl AttachmentDetail {
+    /// create a unique index for the attachment
     pub fn idx(&self) -> String {
         format!("{}{}", self.a.part_id, self.a.attached)
     }
@@ -341,8 +370,8 @@ impl Attachment {
 
     /// change detached time for attachment
     ///
-    /// deletes the attachment for detached < attached
-    /// Does not check for collisions
+    /// * deletes the attachment for detached < attached
+    /// * Does not check for collisions
     fn detach(mut self, detached: DateTime<Utc>, conn: &AppConn) -> TbResult<Summary> {
         trace!("detaching {} at {}", self.part_id, detached);
 
@@ -357,6 +386,9 @@ impl Attachment {
     }
 
     /// register and store a new attachment
+    //
+    /// - recalculates the usage counters in the attached assembly
+    /// - returns all affected parts
     fn create(mut self, conn: &AppConn) -> TbResult<Summary> {
         trace!("create {:?}", self);
         let usage = self.usage(Factor::Add, conn);
@@ -367,15 +399,12 @@ impl Attachment {
         self.descend = usage.descend;
         let part = self.part_id.apply_usage(&usage, conn)?;
 
-        let a = self
+        let attachment = self
             .insert_into(attachments::table)
-            .get_result(conn)
-            .context("insert into attachments")?;
-        let attachment = AttachmentDetail {
-            a,
-            name: part.name.clone(),
-            what: part.what,
-        };
+            .get_result::<Attachment>(conn)
+            .context("insert into attachments")?
+            .add_details(&part.name, part.what);
+
         Ok(Summary {
             parts: vec![part],
             attachments: vec![attachment],
@@ -412,25 +441,26 @@ impl Attachment {
     }
 
     /// add redundant details for client simplicity
-    fn add_details(self, name: String, what: PartTypeId) -> AttachmentDetail {
+    fn add_details(self, name: &str, what: PartTypeId) -> AttachmentDetail {
         AttachmentDetail {
-            name,
+            name: name.to_string(),
             what,
             a: self,
         }
     }
 
-    /// read and add redundant details for client simplicity
-    fn detail(self, conn: &AppConn) -> TbResult<AttachmentDetail> {
+    /// add redundant details from database for client simplicity
+    fn read_details(self, conn: &AppConn) -> TbResult<AttachmentDetail> {
         use schema::parts::dsl::{name, parts, what};
 
         let (n, w) = parts
             .find(self.part_id)
             .select((name, what))
             .get_result::<(String, PartTypeId)>(conn)?;
-        Ok(self.add_details(n, w))
+        Ok(self.add_details(&n, w))
     }
 
+    /// return all parts which are affected byActivity 'act'
     pub fn parts_per_activity(act: &Activity, conn: &AppConn) -> Vec<PartId> {
         use schema::attachments::dsl::*;
 
@@ -450,6 +480,9 @@ impl Attachment {
         res
     }
 
+    /// apply usage to all attachments affected by activity
+    ///
+    /// returns the list of Attechments - including the redundant details
     pub fn register(act: &Activity, usage: &Usage, conn: &AppConn) -> Vec<AttachmentDetail> {
         use schema::attachments::dsl::*;
 
@@ -470,13 +503,14 @@ impl Attachment {
             .get_results::<Attachment>(conn)
             .expect("Database Error")
             .into_iter()
-            .map(|a| a.detail(conn).expect("couldn't enrich attachment"))
+            .map(|a| a.read_details(conn).expect("couldn't enrich attachment"))
             .collect::<Vec<_>>()
         } else {
             Vec::new()
         }
     }
 
+    /// return all attachments with details for the parts in 'partlist'
     pub fn for_parts(partlist: &Vec<Part>, conn: &AppConn) -> TbResult<Vec<AttachmentDetail>> {
         use schema::attachments::dsl::*;
         use schema::parts::dsl::{id, name, parts, what};
@@ -492,11 +526,13 @@ impl Attachment {
     }
 }
 
+/// route for attach API
 #[post("/attach", data = "<event>")]
 fn attach_rt(event: Json<Event>, user: &User, conn: AppDbConn) -> ApiResult<Summary> {
     tbapi(event.into_inner().attach(user, &conn))
 }
 
+/// route for detach API
 #[post("/detach", data = "<event>")]
 fn detach_rt(event: Json<Event>, user: &User, conn: AppDbConn) -> ApiResult<Summary> {
     tbapi(event.into_inner().detach(user, &conn))
