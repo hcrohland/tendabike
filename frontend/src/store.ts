@@ -72,13 +72,14 @@ function mapObject (fn, del?) {
         }
 }
 
-function mapable<K,V>(fn: (v: V) => K, delfn?: (v: V) => boolean) {
+function mapable<K,V>(fn: (v: V) => K, mapfn?: (v: any) => V, delfn?: (v: V) => boolean) {
+    if (! mapfn) mapfn = (v) => v;
     const { subscribe, set, update } = writable<V[]>([]);
 
 	return {
         subscribe,
-        setMap: (arr: V[]) => {set(arr.reduce(mapObject(fn, delfn),{}))},
-		updateMap: (arr: V[]) => update(n => arr.reduce(mapObject(fn, delfn), n)),
+        setMap: (arr: V[]) => {set(arr.map(mapfn).reduce(mapObject(fn, delfn),{}))},
+		updateMap: (arr: V[]) => update(n => arr.map(mapfn).reduce(mapObject(fn, delfn), n)),
 	};  
 }
 
@@ -98,7 +99,6 @@ export async function initData () {
     }
     return Promise.all([
         myfetch('/types/part')
-            .then((data) => data.map(prepTypes))
             .then(types.setMap),
         myfetch('/types/activity')
             .then(act_types.setMap),
@@ -122,25 +122,26 @@ function prepActs (a: Activity) { a.start = new Date(a.start); return a}
 
 
 export function setSummary(data) {
-    parts.setMap(data.parts.map(prepParts))
-    attachments.setMap(data.attachments.map(prepAtts)) 
-    activities.setMap(data.activities.map(prepActs))
+    parts.setMap(data.parts);
+    attachments.setMap(data.attachments);
+    activities.setMap(data.activities);
 }
 
 export function updateSummary(data) {
-    parts.updateMap(data.parts.map(prepParts))
-    attachments.updateMap(data.attachments.map(prepAtts))
-    activities.updateMap(data.activities.map(prepActs))
+    parts.updateMap(data.parts);
+    attachments.updateMap(data.attachments);
+    activities.updateMap(data.activities);
 }
 
 export const category = writable(undefined);
-export const parts = mapable((o: Part) => o.id);
-export const types = mapable((o: Type) => o.id);
+export const parts = mapable((o: Part) => o.id, prepParts);
+export const types = mapable((o: Type) => o.id, prepTypes);
 export const act_types = mapable((o: ActType) => o.id);
 export const user = writable(undefined);
-export const activities = mapable((o:Activity) => o.id)
+export const activities = mapable((o:Activity) => o.id, prepActs)
 export const attachments = mapable(
         (o:Attachment) => o.part_id.toString() + o.attached.toString(), 
+        prepAtts,
         (o) => o.attached.getTime() == o.detached.getTime()
     )
 export const state = writable({ show_all_spares: false});
