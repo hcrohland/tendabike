@@ -1,6 +1,6 @@
 {
   "name": "tendabike-app",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "devDependencies": {
     "@rollup/plugin-typescript": "^6.1.0",
     "@tsconfig/svelte": "^1.0.10",
