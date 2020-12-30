@@ -5,7 +5,7 @@
   } from 'sveltestrap';
   import {myfetch, handleError, parts, types, updateSummary, attachments, filterValues, by, maxDate} from '../store';
   import ModalFooter from './ModalFooter.svelte'
-  import type {AttEvent, Type, Part, Attachment} from '../types'
+  import type {AttEvent, Part, Attachment} from '../types'
   import NewForm from './NewForm.svelte';
   import Dispose from '../Widgets/Dispose.svelte';
   import DateTime from '../Widgets/DateTime.svelte';
@@ -14,7 +14,7 @@
   let atts: Attachment[]
   let last: Attachment, start;
   let part: Part, newpart: Part;
-  let type: Type = $types[1];
+  let type = types[1]; // will be set later
   let isGear = false
   let isOpen = false;
   let disabled = true, detach, part_changed;
@@ -47,7 +47,7 @@
   export const changePart = (p: Part) => {
     part = p;
     newpart = p;
-    type = $types[part.what];
+    type = types[part.what];
     atts = filterValues($attachments, (a) => a.part_id == part.id).sort(by("attached"))
     last = atts[0];
     start = atts.length > 0 ? atts[atts.length-1].attached : undefined

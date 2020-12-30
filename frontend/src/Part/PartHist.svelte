@@ -1,6 +1,5 @@
 <script lang="ts">
   import {filterValues, parts, attachments, types, by, fmtDate, maxDate} from '../store'
-  import type { Attachment } from '../types';
   import Usage from '../Usage.svelte'
  
   export let id;
@@ -15,7 +14,7 @@
   overflow-x: scroll;
 }
 </style>
-
+{#if atts.length > 0}
 <div class="scroll-x">
   <table class="table">
     <thead>
@@ -35,7 +34,7 @@
                 style={$parts[att.gear].disposed_at ? "text-decoration: line-through;" : ""} 
                 class="text-reset">
               {$parts[att.gear].name} 
-              {$types[att.hook].prefix}
+              {types[att.hook].prefix}
             </a>
           {:else}
             N/A
@@ -52,3 +51,4 @@
     </tbody>
   </table>
 </div>
+{/if}

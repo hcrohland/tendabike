@@ -38,8 +38,8 @@ export function myfetch (url, method?, data?) {
         .then(checkStatus)
 };
 
-export function filterValues<T>(map: T[], fn: (t: T) => boolean) { 
-    return Object.values(map).filter(fn) as T[]
+export function filterValues<T>(map: {[key: string]: T}, fn: (t: T) => boolean) { 
+    return Object.values(map).filter(fn)
 };
 
 export function fmtSeconds(sec_num) {
@@ -62,7 +62,7 @@ export function handleError(e) {
     })
 }
 
-function mapObject (fn, del?) {
+function mapObject<T> (fn, del?): (a,b) => {[key: string]: T} {
     return (map, obj) => {
             if (del && del(obj))
                 delete map[fn(obj)]
@@ -72,9 +72,9 @@ function mapObject (fn, del?) {
         }
 }
 
-function mapable<K,V>(fn: (v: V) => K, mapfn?: (v: any) => V, delfn?: (v: V) => boolean) {
+function mapable<K,V>(fn: (v: V) => string, mapfn?: (v: any) => V, delfn?: (v: V) => boolean) {
     if (! mapfn) mapfn = (v) => v;
-    const { subscribe, set, update } = writable<V[]>([]);
+    const { subscribe, set, update } = writable<{[key: string]: V}>({});
 
 	return {
         subscribe,
@@ -82,6 +82,13 @@ function mapable<K,V>(fn: (v: V) => K, mapfn?: (v: any) => V, delfn?: (v: V) => 
 		updateMap: (arr: V[]) => update(n => arr.map(mapfn).reduce(mapObject(fn, delfn), n)),
 	};  
 }
+
+const groupBy = function<V>(xs: V[], key: string) : {[key: string]: V[]}  {
+    return xs.reduce(function(rv, x) {
+      (rv[x[key]] = rv[x[key]] || []).push(x);
+      return rv;
+    }, {});
+  };
 
 export const icons = {
     "1": "flaticon-mountain-bike",
@@ -99,12 +106,15 @@ export async function initData () {
     }
     return Promise.all([
         myfetch('/types/part')
-            .then(types.setMap),
+            .then((data)=> data.map(prepTypes).reduce(mapObject((t) => t.id),{}))
+            .then((t) => types = t)
+            .then(() => console.log(types)),
         myfetch('/types/activity')
-            .then(act_types.setMap),
+            .then((a: ActType[]) => groupBy(a, "gear_type"))
+            .then((a) => act_types = a),
         myfetch('/user/summary')
             .then(setSummary),
-])
+    ])
 }
 
 export function isAttached (att: Attachment, time?) {
@@ -120,7 +130,6 @@ function prepParts (a: Part) { a.purchase = new Date(a.purchase); return a}
 function prepAtts (a: Attachment) { a.attached = new Date(a.attached); a.detached = new Date (a.detached); return a}
 function prepActs (a: Activity) { a.start = new Date(a.start); return a}
 
-
 export function setSummary(data) {
     parts.setMap(data.parts);
     attachments.setMap(data.attachments);
@@ -134,11 +143,11 @@ export function updateSummary(data) {
 }
 
 export const category = writable(undefined);
-export const parts = mapable((o: Part) => o.id, prepParts);
-export const types = mapable((o: Type) => o.id, prepTypes);
-export const act_types = mapable((o: ActType) => o.id);
+export const parts = mapable((o: Part) => o.id as unknown as string, prepParts);
+export let types: {[key: number]: Type};
+export let act_types: {[key: number]: ActType[]};
 export const user = writable(undefined);
-export const activities = mapable((o:Activity) => o.id, prepActs)
+export const activities = mapable((o:Activity) => o.id as unknown as string, prepActs)
 export const attachments = mapable(
         (o:Attachment) => o.part_id.toString() + o.attached.toString(), 
         prepAtts,

@@ -7,6 +7,7 @@
   import ChangePart from '../Actions/ChangePart.svelte'
   import RecoverPart from '../Actions/RecoverPart.svelte';
   import GearCard from '../Part/GearCard.svelte'
+  import PartHist from '../Part/PartHist.svelte'
  
   export let params;
   
@@ -15,13 +16,12 @@
 
   $: {
     gear = $parts[params.id]; 
-    hook = $types[gear.what];
+    hook = types[gear.what];
     category.set(hook)
   }
 
-  function unattached(acts: Activity[], g: Part){
-    let myActTypes = filterValues($act_types, (t) => t.gear_type == g.what); 
-    return Object.values($activities).some((a) => a.gear == null && myActTypes.some((t) => t.gear_type == a.what));
+  function unattached(acts: {[key: string]: Activity}, g: Part){
+    return Object.values($activities).some((a) => a.gear == null && act_types[g.what].some((t) => t.gear_type == a.what));
   }
   
   function defaultGear(g: Part) {
@@ -44,6 +44,8 @@
       {/if}
     </ButtonGroup>
 </GearCard>
+<PartHist id={gear.id} />
+
 <Subparts {hook} {gear} />
 
 <InstallPart bind:installPart />

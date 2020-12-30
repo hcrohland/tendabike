@@ -27,7 +27,7 @@
 
 <Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
   <ModalHeader {toggle}> 
-    Attach {$types[part.what].name} {part.name} {part.vendor} {part.model}
+    Attach {types[part.what].name} {part.name} {part.vendor} {part.model}
   </ModalHeader>
   <ModalBody>
     <AttachForm bind:attach bind:disabled {part} />

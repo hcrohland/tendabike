@@ -21,7 +21,7 @@
   export let part: Part;
   export let disabled = true;
 
-  let type: Type = $types[part.what]; 
+  let type = types[part.what]; 
   let options = filterValues($parts, (p) => (type.main == p.what && ! p.disposed_at));
   
   attach = {
@@ -31,7 +31,7 @@
     hook: (type.hooks.length == 1) ? type.hooks[0] : undefined,
   } 
   
-  $: disabled = attach && !($types[attach.hook] && $parts[attach.gear])
+  $: disabled = attach && !(types[attach.hook] && $parts[attach.gear])
 </script>
 
 <Form>
@@ -45,7 +45,7 @@
         <select name="hook" class="form-control" required bind:value={attach.hook}>
           <option hidden value={undefined}> -- select one -- </option>
           {#each type.hooks as h}
-            <option value={h}>{$types[h].name}</option>
+            <option value={h}>{types[h].name}</option>
           {/each}
         </select>
         <InputGroupAddon addonType="prepend">

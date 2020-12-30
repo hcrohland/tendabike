@@ -16,8 +16,8 @@ let type: Type;
   
 $: { 
   part = $parts[params.id]
-  type = $types[part.what]
-  category.set($types[type.main])
+  type = types[part.what]
+  category.set(types[type.main])
 }
  
 </script>

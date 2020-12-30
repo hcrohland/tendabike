@@ -33,7 +33,7 @@ function groupAvailable(group: Group) {
   return res
 }
 
-let allgroups = Object.values(groupBy(filterValues($types, (t) => t.group && t.main == $category.id)))
+let allgroups = Object.values(groupBy(filterValues(types, (t) => t.group && t.main == $category.id)))
 let groups = allgroups.filter(groupAvailable)
 
 // Vendor needs to be set for any enabled group

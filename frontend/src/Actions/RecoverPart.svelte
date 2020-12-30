@@ -26,7 +26,7 @@
 
 <Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
   <ModalHeader {toggle}> 
-    Do you really have {$types[part.what].name} {part.name} {part.vendor} {part.model} back?
+    Do you really have {types[part.what].name} {part.name} {part.vendor} {part.model} back?
   </ModalHeader>
   <ModalBody>
     You binned it on {fmtDate(part.disposed_at)}

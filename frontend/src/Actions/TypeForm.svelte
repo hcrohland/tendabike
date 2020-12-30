@@ -13,7 +13,7 @@
   const dispatch = createEventDispatcher();
 
 
-  let typeList = filterValues($types, (t) => t.main == $category.id && t.id != t.main)
+  let typeList = filterValues(types, (t) => t.main == $category.id && t.id != t.main)
           .sort((a,b) => a.order - b.order);
 
   function updatehook() {
@@ -43,7 +43,7 @@
       <select name="hook" class="form-control" required bind:value={hook}>
         <option hidden value={undefined}> -- select one -- </option>
         {#each type.hooks as h}
-          <option value={h}>{$types[h].name}</option>
+          <option value={h}>{types[h].name}</option>
         {/each}
       </select>
       <InputGroupText>of {gear.name}</InputGroupText>

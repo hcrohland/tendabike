@@ -10,9 +10,9 @@
   // is unset during destroy and the router gets confused
   let type, show_hist;
   if (params) {
-    type = $types[params.category];
+    type = types[params.category];
   } else {
-    type = $types[1];
+    type = types[1];
   }
   category.set(type);
   
