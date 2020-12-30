@@ -72,7 +72,7 @@ function mapObject<T> (fn, del?): (a,b) => {[key: string]: T} {
         }
 }
 
-function mapable<K,V>(fn: (v: V) => string, mapfn?: (v: any) => V, delfn?: (v: V) => boolean) {
+function mapable<K,V>(fn: (v: V) => any, mapfn?: (v: any) => V, delfn?: (v: V) => boolean) {
     if (! mapfn) mapfn = (v) => v;
     const { subscribe, set, update } = writable<{[key: string]: V}>({});
 
@@ -82,13 +82,6 @@ function mapable<K,V>(fn: (v: V) => string, mapfn?: (v: any) => V, delfn?: (v: V
 		updateMap: (arr: V[]) => update(n => arr.map(mapfn).reduce(mapObject(fn, delfn), n)),
 	};  
 }
-
-const groupBy = function<V>(xs: V[], key: string) : {[key: string]: V[]}  {
-    return xs.reduce(function(rv, x) {
-      (rv[x[key]] = rv[x[key]] || []).push(x);
-      return rv;
-    }, {});
-  };
 
 export const icons = {
     "1": "flaticon-mountain-bike",
@@ -127,15 +120,6 @@ export function isAttached (att: Attachment, time?) {
     return att.attached <= time && time < att.detached
 }
 
-function prepTypes (t: Type) { 
-    t.prefix = t.name.split(' ').reverse()[1] || '';  // The first word iff there were two (hack!)
-    t.acts = [];
-    return t
-}
-function prepParts (a: Part) { a.purchase = new Date(a.purchase); return a}
-function prepAtts (a: Attachment) { a.attached = new Date(a.attached); a.detached = new Date (a.detached); return a}
-function prepActs (a: Activity) { a.start = new Date(a.start); return a}
-
 export function setSummary(data) {
     parts.setMap(data.parts);
     attachments.setMap(data.attachments);
@@ -148,15 +132,23 @@ export function updateSummary(data) {
     activities.updateMap(data.activities);
 }
 
-export const category = writable(undefined);
-export const parts = mapable((o: Part) => o.id as unknown as string, prepParts);
 export let types: {[key: number]: Type};
+function prepTypes (t: Type) { 
+    t.prefix = t.name.split(' ').reverse()[1] || '';  // The first word iff there were two (hack!)
+    t.acts = [];
+    return t
+}
+
+export const category = writable(undefined);
 export const user = writable(undefined);
-export const activities = mapable((o:Activity) => o.id as unknown as string, prepActs)
-export const attachments = mapable(
-        (o:Attachment) => o.part_id.toString() + o.attached.toString(), 
-        prepAtts,
-        (o) => o.attached.getTime() == o.detached.getTime()
-    )
+
+export const parts = mapable((o: Part) => o.id, prepParts);
+export const activities = mapable((o:Activity) => o.id, prepActs)
+export const attachments = mapable((o:Attachment) => o.part_id.toString() + o.attached.toString(), prepAtts, delAtt)
+function prepParts (a: Part) { a.purchase = new Date(a.purchase); return a}
+function prepActs (a: Activity) { a.start = new Date(a.start); return a}
+function prepAtts (a: Attachment) { a.attached = new Date(a.attached); a.detached = new Date (a.detached); return a}
+function delAtt (o) {return o.attached.getTime() == o.detached.getTime()}
+    
 export const state = writable({ show_all_spares: false});
 export const message = writable({active: false, message: "No message", status: ""})
