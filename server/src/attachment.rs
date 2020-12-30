@@ -155,18 +155,20 @@ impl Event {
         }
 
         if let Some(next) = self.after(conn)? {
-            if next.gear == self.gear && next.hook == self.hook {
-                trace!("still attached until {}", next.detached);
-                // next will be superseded by self
-                // but the end is taken from next
-                end = next.detached;
-                let sum = next.delete(conn)?;
-                hash.merge(sum);
-            } else {
-                trace!("changing hook {}", next.hook);
-                // it is attached to a different hook later
-                // the new attachment ends when the next starts
-                end = next.attached;
+            if end > next.attached { // is this attachment earlier than the previous one?
+                if next.gear == self.gear && next.hook == self.hook {
+                    trace!("still attached until {}", next.detached);
+                    // next will be superseded by self
+                    // but the end is taken from next
+                    end = next.detached;
+                    let sum = next.delete(conn)?;
+                    hash.merge(sum);
+                } else {
+                    trace!("changing hook {}", next.hook);
+                    // it is attached to a different hook later
+                    // the new attachment ends when the next starts
+                    end = next.attached;
+                }
             }
         }
 
