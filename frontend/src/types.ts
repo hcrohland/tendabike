@@ -38,7 +38,8 @@ export type Type = {
     order: number;
     group?: string;
     prefix: string;
-  }
+    acts: ActType[];
+}
 
 export type User = {
   id: number,

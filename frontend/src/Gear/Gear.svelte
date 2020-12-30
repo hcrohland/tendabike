@@ -1,8 +1,7 @@
 <script lang="ts">
   import {Button, ButtonGroup} from 'sveltestrap'
-  import {types, parts, category, activities, filterValues, act_types, myfetch, updateSummary, handleError} from '../store'
+  import {types, parts, category, activities, myfetch, updateSummary, handleError} from '../store'
   import Subparts from './Subparts.svelte'
-  import type {Part, Activity} from '../types'
   import InstallPart from '../Actions/InstallPart.svelte'
   import ChangePart from '../Actions/ChangePart.svelte'
   import RecoverPart from '../Actions/RecoverPart.svelte';
@@ -11,21 +10,18 @@
  
   export let params;
   
-  let hook, gear: Part;
   let installPart, changePart, recoverPart;
 
-  $: {
-    gear = $parts[params.id]; 
-    hook = types[gear.what];
-    category.set(hook)
-  }
+  $: category.set(hook)
 
-  function unattached(acts: {[key: string]: Activity}, g: Part){
-    return Object.values($activities).some((a) => a.gear == null && act_types[g.what].some((t) => t.gear_type == a.what));
-  }
+  $: gear = $parts[params.id]; 
+  $: hook = types[gear.what];
+  $: unassigned = Object
+      .values($activities)
+      .some((a) => a.gear == null && hook.acts.some((t) => t.gear_type == a.what))
   
-  function defaultGear(g: Part) {
-    myfetch('/activ/defaultgear', 'POST', g.id)
+  function defaultGear(id: number) {
+    myfetch('/activ/defaultgear', 'POST', id)
       .then(updateSummary)
       .catch(handleError)
   }
@@ -38,8 +34,8 @@
       {:else}
       <Button on:click={() => installPart(gear)}>  Install new part </Button>
       <Button on:click={() => changePart(gear)}>  Change details </Button>
-      {#if unattached($activities, gear)}
-        <Button on:click={() => defaultGear(gear)}>  Assign this {$category.name.toLowerCase()} to activities without a {$category.name.toLowerCase()} </Button>
+      {#if unassigned}
+        <Button on:click={() => defaultGear(gear.id)}>  Assign this {hook.name.toLowerCase()} to activities without a {hook.name.toLowerCase()} </Button>
       {/if}
       {/if}
     </ButtonGroup>

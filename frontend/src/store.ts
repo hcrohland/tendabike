@@ -106,15 +106,20 @@ export async function initData () {
     }
     return Promise.all([
         myfetch('/types/part')
-            .then((data)=> data.map(prepTypes).reduce(mapObject((t) => t.id),{}))
-            .then((t) => types = t)
-            .then(() => console.log(types)),
-        myfetch('/types/activity')
-            .then((a: ActType[]) => groupBy(a, "gear_type"))
-            .then((a) => act_types = a),
+            .then((data)=> data.map(prepTypes).reduce(mapObject((t) => t.id),{})),
+        myfetch('/types/activity'),
         myfetch('/user/summary')
             .then(setSummary),
     ])
+    .then((t) => {
+        types = t[1].reduce( 
+            (acc, a: ActType) => {
+                (acc[a.gear_type] as Type).acts.push(a); 
+                return acc
+            },
+            t[0]
+        );
+    })
 }
 
 export function isAttached (att: Attachment, time?) {
@@ -124,6 +129,7 @@ export function isAttached (att: Attachment, time?) {
 
 function prepTypes (t: Type) { 
     t.prefix = t.name.split(' ').reverse()[1] || '';  // The first word iff there were two (hack!)
+    t.acts = [];
     return t
 }
 function prepParts (a: Part) { a.purchase = new Date(a.purchase); return a}
@@ -145,7 +151,6 @@ export function updateSummary(data) {
 export const category = writable(undefined);
 export const parts = mapable((o: Part) => o.id as unknown as string, prepParts);
 export let types: {[key: number]: Type};
-export let act_types: {[key: number]: ActType[]};
 export const user = writable(undefined);
 export const activities = mapable((o:Activity) => o.id as unknown as string, prepActs)
 export const attachments = mapable(
