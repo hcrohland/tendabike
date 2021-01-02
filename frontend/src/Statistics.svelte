@@ -102,7 +102,8 @@ function getPlot(cummulative, title, fields, addlayout?) {
     legend:{"orientation": "h"},
     yaxis: {
       hoverformat: '.3r',
-      fixedrange: true
+      fixedrange: true,
+      rangemode: 'tozero',
     },
     xaxis: {
       tickformat: '%b',
