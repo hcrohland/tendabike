@@ -16,7 +16,7 @@ export let attachee: number
 
 let attachPart, newPart, show_all;
 
-function attachedTo(atts: Attachment[], partId: number, time: Date) {
+function attachedTo(atts: {[key: string]: Attachment}, partId: number, time: Date) {
     let att = filterValues(atts, (x) => x.part_id === partId && isAttached(x, time)).pop()
     if (att == undefined) return
       return $parts[att.gear].name + ' ' + types[att.hook].prefix
