@@ -54,21 +54,10 @@ impl Event {
     ///
     fn detach_assembly(self, target: Attachment, conn: &AppConn) -> TbResult<Summary> {
         debug!("- detaching {}", target.part_id);
-        let mut hash = SumHash::new(target.detach(self.time, conn)?);
         let subs = self.assembly(target.gear, conn)?;
-        for sub in subs {
-            let ev = Event {
-                part_id: sub.part_id,
-                time: self.time,
-                gear: target.part_id,
-                hook: sub.hook,
-            };
-            debug!(
-                "-- detaching {} from {} to {}",
-                sub.part_id, target.gear, ev.gear
-            );
-            hash.merge(sub.detach(self.time, conn)?);
-            hash.merge(ev.attach_one(conn)?);
+        let mut hash = SumHash::new(target.detach(self.time, conn)?);
+        for sub in subs { 
+            sub.shift(self.time, target.part_id, &mut hash, conn)?;
         }
         Ok(hash.collect())
     }
@@ -118,56 +107,66 @@ impl Event {
             // reattach the assembly
             info!("attaching assembly");
             debug!("- attaching {}", self.part_id);
-            hash.merge(self.attach_one(conn)?);
+            let (sum, det) = self.attach_one(conn)?;
+            hash.merge(sum);
             for att in subs {
-                let ev = Event {
-                    part_id: att.part_id,
-                    gear: self.gear,
-                    time: self.time,
-                    hook: att.hook,
-                };
-                debug!("-- moving {} from {} to {}", att.part_id, att.gear, ev.gear);
-                hash.merge(att.detach(self.time, conn)?);
-                hash.merge(ev.attach_one(conn)?);
+                let sub_det = att.shift(self.time, self.gear, &mut hash, conn)?;
+                if sub_det == det && det < att.detached {
+                    trace!("reattaching {} to {} at {}", att.part_id, self.part_id, det);
+                    let ev = Event {
+                        part_id: att.part_id,
+                        hook: att.hook,
+                        gear: self.part_id,
+                        time: det,
+                    };
+                    let (sum, _) = ev.attach_one(conn)?;
+                    hash.merge(sum);
+                } 
             }
             Ok(hash.collect())
         })
     }
 
-    /// create Attachment for on part according to self
+    /// create Attachment for one part according to self
     ///
     /// * The part must not be attached somewhere at the event time
     /// * Also the hook must not be occupied at the event time
     /// * Detach time is adjusted according to later attachments
     ///
     /// If the part is attached already to the same hook, the attachments are merged
-    fn attach_one(self, conn: &AppConn) -> TbResult<Summary> {
+    fn attach_one(self, conn: &AppConn) -> TbResult<(Summary, DateTime<Utc>)> {
         let mut hash = SumHash::default();
-        let mut end = MAX_DATETIME;
+        // when does the current attachment end
+        let mut end = MAX_DATETIME; 
+        // the time the current part will be detached
+        // we need this to reattach subparts
+        let mut det = MAX_DATETIME; 
 
         let what = self.part_id.what(conn)?;
 
         if let Some(next) = self.next(what, conn)? {
-            trace!("successor at {}", next.detached);
+            trace!("successor at {}", next.attached);
             // something else is already attached to the hook
             // the new attachment ends when the next starts
             end = next.attached;
+            det = next.attached;
         }
 
         if let Some(next) = self.after(conn)? {
             if end > next.attached { // is this attachment earlier than the previous one?
                 if next.gear == self.gear && next.hook == self.hook {
                     trace!("still attached until {}", next.detached);
-                    // next will be superseded by self
-                    // but the end is taken from next
+                    // the previous one is the real next so we keep 'det'!
+                    // 'next' will be replaced by 'self' but 'end' is taken from 'next'
                     end = next.detached;
                     let sum = next.delete(conn)?;
                     hash.merge(sum);
                 } else {
-                    trace!("changing hook {}", next.hook);
+                    trace!("changing gear/hook from {}/{} to {}/{}", self.gear, self.hook, next.gear, next.hook);
                     // it is attached to a different hook later
                     // the new attachment ends when the next starts
                     end = next.attached;
+                    det = next.attached
                 }
             }
         }
@@ -177,11 +176,11 @@ impl Event {
             trace!("adjacent starting {}", prev.attached);
             hash.merge(prev.detach(end, conn)?)
         } else {
-            debug!("create {:?}\n", self);
+            trace!("create {:?}\n", self);
             hash.merge(self.attachment(end).create(conn)?);
         }
 
-        Ok(hash.collect())
+        Ok((hash.collect(), det))
     }
 
     /// create an attachment of self with the given detached time
@@ -370,6 +369,20 @@ impl Attachment {
             })
     }
 
+    fn shift (&self, at_time: DateTime<Utc>, target: PartId, hash: &mut SumHash, conn: &AppConn) -> TbResult<DateTime<Utc>> {
+        debug!("-- moving {} to {}", self.part_id, target);
+        let ev = Event {
+            time: at_time,
+            gear: target,
+            part_id: self.part_id,
+            hook: self.hook,
+        };
+        hash.merge(self.detach(at_time, conn)?);
+        let (sum, det) = ev.attach_one(conn)?;
+        hash.merge(sum);
+        Ok(det)
+    }
+        
     /// change detached time for attachment
     ///
     /// * deletes the attachment for detached < attached
