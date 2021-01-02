@@ -51,18 +51,23 @@ function groupByMonth (arr: Activity[]) {
   )
 }
 
-function sumUp (arr: Activity[]) {
+function sumUp (arr: Activity[]) : Day[]{
   return arr.reduce(function(r, a) {
-                    if (r.length > 0){
                       a.distance  += r[r.length - 1].distance;
                       a.descend   += r[r.length - 1].descend;
                       a.climb     += r[r.length - 1].climb;
                       a.time      += r[r.length - 1].time;
                       a.duration  += r[r.length - 1].duration;
-                    }
-                    r.push(a);
+                    r.push(a as Day);
                     return r;
-                  }, []);
+                  }, [{
+                      start: new Date(year + '-01-01T00:00:00'), 
+                      distance: 0,
+                      descend:0,
+                      climb: 0,
+                      time: 0,
+                      duration: 0
+                }]);
 }
 
 let minyear = Object.values($activities).sort(by("start")).pop().start.getFullYear()
@@ -103,7 +108,6 @@ function getPlot(cummulative, title, fields, addlayout?) {
     yaxis: {
       hoverformat: '.3r',
       fixedrange: true,
-      rangemode: 'tozero',
     },
     xaxis: {
       tickformat: '%b',
