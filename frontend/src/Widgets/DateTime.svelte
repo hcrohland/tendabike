@@ -47,6 +47,8 @@
 		on:change={handleChange}
 		{...props}
 	/> 
+	<!-- hack to prevent spurious button clicks -->
+	<button hidden on:click|preventDefault|stopPropagation={() => {}} tabindex="-1" /> 
 	{#if mindate}
 		<button on:click|preventDefault={() => date = mindate}> 
 			&#706;
