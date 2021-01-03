@@ -58,10 +58,10 @@ impl DbUser {
             ..Default::default()
         };
 
-        webhook::insert_sync(athlete.id, 0, conn)?;
         let user = diesel::insert_into(strava_users::table)
             .values(&user)
             .get_result(conn)?;
+        webhook::insert_sync(athlete.id, 0, conn)?;
         Ok(user)
     }
 
