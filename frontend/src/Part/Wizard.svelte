@@ -33,10 +33,8 @@ function groupAvailable(group: Group) {
   return res
 }
 
-let groups = []
-let allgroups = []
-$: allgroups = Object.values(groupBy(filterValues(types, (t) => t.group && t.main == gear.what)))
-$: groups = allgroups.filter(groupAvailable)
+let allgroups = Object.values(groupBy(filterValues(types, (t) => t.group && t.main == gear.what)))
+let groups = allgroups.filter(groupAvailable)
 
 // Vendor needs to be set for any enabled group
 $: disabled = !groups.reduce((r: boolean, v: Group) => {
