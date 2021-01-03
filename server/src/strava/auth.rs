@@ -148,16 +148,16 @@ impl User {
         Ok(Self{user,conn})
     }
 
-    pub fn get_event_count(tbid: i32, conn: &AppConn) -> TbResult<i64> {
-        let user: i32 = strava_users::table
-            .select(strava_users::id)
+    pub fn get_stats(tbid: i32, conn: &AppConn) -> TbResult<(i64, bool)> {
+        use schema::strava_events::dsl::*;
+
+        let user: DbUser = strava_users::table
             .filter(strava_users::tendabike_id.eq(tbid))
             .get_result(conn)
             .context("user not registered")?;
 
-        use schema::strava_events::dsl::*;
-    
-        Ok(strava_events.count().filter(owner_id.eq(user)).first(conn)?)
+        let events = strava_events.count().filter(owner_id.eq(user.tendabike_id)).first(conn)?;
+        return Ok((events, user.expires_at == 0))
     }
 
     pub fn from_tb(id: i32, conn: AppDbConn, oauth: OAuth2<Strava>) -> TbResult<Self> {
@@ -190,9 +190,11 @@ impl User {
     fn my_disable(self) -> TbResult<()> {
         let conn = self.conn();
     
-        ensure! (User::get_event_count(self.tb_id(), conn)? == 0,
-            Error::BadRequest(String::from("user has open events!")));
-        
+        let (events, disabled) = User::get_stats(self.tb_id(), conn)?;
+
+        if events > 0 { bail!(Error::BadRequest(String::from("user has open events!"))) }
+        if disabled { bail!(Error::BadRequest(String::from("user already disabled!"))) }
+
         reqwest::blocking::Client::new()
             .post("https://www.strava.com/oauth/deauthorize")
             .query(&[("access_token" , &self.user.access_token)])

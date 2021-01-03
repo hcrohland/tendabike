@@ -37,20 +37,22 @@ function disable(user) {
       <th>Events</th>
       <th></th>
     </tr>
-    {#each list as {user, parts, activities, events} (user.id)}
+    {#each list as {user, parts, activities, events, disabled} (user.id)}
     <tr>
       <td> {user.id}</td>
       <td> {user.firstname} {user.name} </td>
-      <td> {user.is_admin ? "Admin" : "User"}</td>
+      <td> {disabled? "Disabled" : user.is_admin ? "Admin" : "User"}</td>
       <td> {parts}</td>
       <td> {activities}</td>
       <td> {events}</td>
       <td>
-      <ButtonGroup>
-        <Button on:click={() => createSync(user)}> Add Sync Event</Button>
-        <Sync {user} />
-        <Button disabled={events>0} on:click={() => disable(user)}> Disable user</Button>
-      </ButtonGroup>
+        {#if !disabled}
+          <ButtonGroup>
+            <Button on:click={() => createSync(user)}> Add Sync Event</Button>
+            <Sync {user} />
+            <Button disabled={events>0} on:click={() => disable(user)}> Disable user</Button>
+          </ButtonGroup>
+        {/if}
     </td>
   </tr>
   {/each}

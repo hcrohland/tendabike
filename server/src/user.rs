@@ -31,7 +31,8 @@ struct Stat {
     user: User,
     parts: i64,
     activities: i64,
-    events: i64
+    events: i64,
+    disabled: bool,
 }
 
 impl User {
@@ -50,8 +51,8 @@ impl User {
             use schema::activities::dsl::*;
             activities.count().filter(user_id.eq(self.id)).first(conn)?
         };
-        let  events = strava::auth::User::get_event_count(self.id, conn)?;
-        Ok(Stat{user: self, parts, activities, events})
+        let  (events, disabled) = strava::auth::User::get_stats(self.id, conn)?;
+        Ok(Stat{user: self, parts, activities, events, disabled})
     }
 
     fn get_all (conn: &AppConn) -> TbResult<Vec<Stat>> {
