@@ -94,13 +94,13 @@
             {/await}
           </DropdownToggle>
           <DropdownMenu right>
-            <DropdownItem on:click={garmin}>Garmin</DropdownItem>
+            <DropdownItem on:click={refresh}>Refresh data</DropdownItem>
+            <DropdownItem on:click={garmin}>With CSV File</DropdownItem>
           </DropdownMenu>
         </Dropdown>
         <Dropdown nav isOpen={userOpen} toggle={() => (userOpen = !userOpen)}>
           <DropdownToggle nav caret>{$user.firstname}</DropdownToggle>
           <DropdownMenu right>
-            <DropdownItem on:click={refresh}>Refresh</DropdownItem>
             <DropdownItem href="/#/stats">Statistics</DropdownItem>
             <DropdownItem href="/strava/logout">Logout</DropdownItem>
             <DropdownItem divider />

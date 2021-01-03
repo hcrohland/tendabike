@@ -53,7 +53,7 @@
         <li>Download the list of activities from the Garmin Connect website with German language settings. 
           <br> The resulting file will include the elevation loss
         </li>
-        <li>Upload this file to TendaBike via 'Sync' &rightarrow; 'Garmin' 
+        <li>Upload this file to TendaBike via 'Sync' &rightarrow; 'With CSV file' 
           <br>You can set the timezone of the uploaded activities. It applies to all activities in the file
         </li>
       </ol>
