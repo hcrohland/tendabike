@@ -49,7 +49,7 @@
 }
 
 export const replacePart = (attl: Attachment) => {
-    oldpart = $parts[attl.part_id];
+    oldpart = attl.part;
     hook = attl.hook;
     gear= attl.gear;
     mindate = attl.attached;

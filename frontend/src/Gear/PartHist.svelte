@@ -1,5 +1,5 @@
 <script lang="ts">
-  import {filterValues, parts, attachments, types, by, fmtDate, maxDate} from '../store'
+  import {filterValues, parts, attachments, types, by, attTime} from '../store'
   import Usage from '../Usage.svelte'
  
   export let id;
@@ -20,8 +20,7 @@
     <thead>
       <tr>
         <th scope="col">attached to</th>
-        <th scope="col">from </th>
-        <th scope="col">until</th>
+        <th scope="col">time </th>
         <Usage header/>
       </tr>
     </thead>
@@ -39,12 +38,7 @@
           {:else}
             N/A
           {/if}
-          <td>{fmtDate(att.attached)}</td>
-          <td>
-            {#if att.detached < maxDate}
-              {fmtDate(att.detached)}
-            {/if}
-          </td>
+          <td>{attTime(att)}</td>
           <Usage usage={att} />
         </tr>
       {/each}

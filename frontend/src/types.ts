@@ -22,11 +22,13 @@ export type Part = Usage & {
 export type Attachment = Usage & {
     part_id: number;
     attached: Date;
-    gear?: number;
-    hook?: number;
-    detached?: Date;
-    what?: number;
-    name?: string;
+    gear: number;
+    hook: number;
+    detached: Date;
+    what: number;
+    name: string;
+    part: Part;
+    idx: string;
   }
 
 
