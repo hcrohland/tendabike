@@ -50,6 +50,4 @@ function buildList (list: MyList[], hook: Type, attachees: Attachment[], level: 
     </tbody>
     </Table>
 {/if}
-{#if gear.disposed_at == null}
-   <Wizard {gear} {attachees}/>
-{/if}
+<Wizard {gear} {attachees}/>

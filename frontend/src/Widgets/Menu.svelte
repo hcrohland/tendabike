@@ -1,4 +1,4 @@
-<Dropdown {isOpen} toggle={() => (isOpen = !isOpen)} size="sm">
+<Dropdown {isOpen} toggle={() => (isOpen = !isOpen)} size="sm" class="float-right">
   <DropdownToggle caret/>
   <DropdownMenu right>
     <slot />
@@ -6,7 +6,7 @@
 </Dropdown>
 
 <script>
-import {Dropdown, DropdownToggle, DropdownMenu, ButtonDropdown} from 'sveltestrap'
+import {Dropdown, DropdownToggle, DropdownMenu} from 'sveltestrap'
 
 let isOpen
 

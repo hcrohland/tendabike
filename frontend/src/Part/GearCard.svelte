@@ -1,7 +1,7 @@
 <script lang="ts">
   import { slide } from 'svelte/transition';
   import {Card, CardBody, CardHeader, Row, Col} from 'sveltestrap';
-  import {category, fmtSeconds, fmtDate, fmtNumber} from '../store';
+  import {types, fmtSeconds, fmtDate, fmtNumber} from '../store';
   import type {Part} from '../types'
 
   export let part: Part;
@@ -34,7 +34,7 @@
     <CardHeader class="h5 mb-0" on:click={() => (isOpen = !isOpen)} >
       <Row>
         <Col>
-          {part.name} 
+          {part.name}
         </Col>
         {#if showLink || display}
         <Col>
@@ -48,6 +48,9 @@
     <div transition:slide>
       <CardBody>
         is a <span class="param">{model(part)}</span>
+        {#if part.what != types[part.what].main}
+            {types[part.what].name.toLowerCase()} 
+        {/if}
         {#if !part.disposed_at}
         purchased <span class="param">{fmtDate(part.purchase)}</span>
          which

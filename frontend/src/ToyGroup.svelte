@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Col, Row } from 'sveltestrap';
-  import MainCard from './Gear/MainCard.svelte';
+  import MainCard from './Part/MainCard.svelte';
   import {filterValues, by, types, parts, category} from './store';
   import ShowAll from './Widgets/ShowHist.svelte';
 

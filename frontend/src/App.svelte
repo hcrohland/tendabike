@@ -4,8 +4,7 @@
 
 	import ToyGroup from "./ToyGroup.svelte"
 	import Header from "./Header.svelte"
-	import Gear from "./Gear/Gear.svelte"
-	import Part from "./Gear/PartView.svelte"
+	import Gear from "./Part/Part.svelte"
 	import Spares from "./Spares/Spares.svelte"
 	import Home from "./Home.svelte"
 	import About from "./About.svelte"
@@ -18,9 +17,8 @@
 		'/about': About,
 		'/': ToyGroup,
     '/cat/:category': ToyGroup,
-		'/gear/:id': Gear,
+		'/part/:id': Gear,
 		'/spares/:category': Spares,
-		'/part/:id': Part,
 		'/switch': Home,
 		'/admin': Admin,
 		'/stats': Statistics

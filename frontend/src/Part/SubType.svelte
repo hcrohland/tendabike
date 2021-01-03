@@ -24,7 +24,7 @@ let attachPart, replacePart, recoverPart;
 
 {#if header}
   <tr>
-    <th scope="col">Part</th>
+    <th scope="col">Attached parts</th>
     <th scope="col">Name</th>
     <th scope="col">Attached</th>
     <Usage header/>
@@ -44,7 +44,7 @@ let attachPart, replacePart, recoverPart;
         {#if isAttached(att)}
           <td>
             {#if att.part}
-              <a href="#/gear/{att.part.id}" 
+              <a href="#/part/{att.part.id}" 
                 style={att.part.disposed_at ? "text-decoration: line-through;" : ""} 
                 class="text-reset">
                 {att.part.name}

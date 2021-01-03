@@ -19,8 +19,8 @@
   <table class="table">
     <thead>
       <tr>
-        <th scope="col">attached to</th>
-        <th scope="col">time </th>
+        <th scope="col">Attached to</th>
+        <th scope="col"> </th>
         <Usage header/>
       </tr>
     </thead>
@@ -29,7 +29,7 @@
         <tr>
           <td>
           {#if $parts[att.gear]}
-            <a href="#/gear/{att.gear}" 
+            <a href="#/part/{att.gear}" 
                 style={$parts[att.gear].disposed_at ? "text-decoration: line-through;" : ""} 
                 class="text-reset">
               {$parts[att.gear].name} 

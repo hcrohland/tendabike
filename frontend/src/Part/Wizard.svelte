@@ -33,8 +33,10 @@ function groupAvailable(group: Group) {
   return res
 }
 
-let allgroups = Object.values(groupBy(filterValues(types, (t) => t.group && t.main == $category.id)))
-let groups = allgroups.filter(groupAvailable)
+let groups = []
+let allgroups = []
+$: allgroups = Object.values(groupBy(filterValues(types, (t) => t.group && t.main == gear.what)))
+$: groups = allgroups.filter(groupAvailable)
 
 // Vendor needs to be set for any enabled group
 $: disabled = !groups.reduce((r: boolean, v: Group) => {
@@ -84,9 +86,10 @@ function save () {
   show_button = true
 }
 let show_button = (groups.length != allgroups.length)
+
 </script>
 
-{#if groups.length > 0}
+{#if gear.disposed_at == null && groups.length > 0}
 <Container>
   {#if show_button}
     <Button on:click={() => show_button = false}>
