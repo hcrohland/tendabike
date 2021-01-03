@@ -338,6 +338,7 @@ fn def_part(partid: &PartId, user: & User, conn: &AppConn) -> TbResult<Summary> 
 
     let acts =
     diesel::update(activities)
+        .filter(user_id.eq(user.get_id()))
         .filter(gear.is_null())
         .filter(what.eq_any(types))
         .set(gear.eq(partid))
