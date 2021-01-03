@@ -5,8 +5,8 @@
   import InstallPart from '../Actions/InstallPart.svelte'
   import ChangePart from '../Actions/ChangePart.svelte'
   import RecoverPart from '../Actions/RecoverPart.svelte';
-  import GearCard from '../Part/GearCard.svelte'
-  import PartHist from '../Part/PartHist.svelte'
+  import GearCard from './GearCard.svelte'
+  import PartHist from './PartHist.svelte'
  
   export let params;
   
