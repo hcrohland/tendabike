@@ -192,8 +192,8 @@ impl User {
     
         let (events, disabled) = User::get_stats(self.tb_id(), conn)?;
 
-        if events > 0 { bail!(Error::BadRequest(String::from("user has open events!"))) }
         if disabled { bail!(Error::BadRequest(String::from("user already disabled!"))) }
+        if events > 0 { bail!(Error::BadRequest(String::from("user has open events!"))) }
 
         reqwest::blocking::Client::new()
             .post("https://www.strava.com/oauth/deauthorize")
