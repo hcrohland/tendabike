@@ -114,6 +114,7 @@ export async function initData() {
                 t[0]
             );
         })
+        .then(() => category.set(types[1]))
 }
 
 export function isAttached(att: Attachment, time?) {
