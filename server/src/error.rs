@@ -11,7 +11,7 @@ pub use anyhow::Context;
 pub enum Error{
     #[response(status = 401)]
     #[error("User not authenticated: {0}")]
-    NotAuth(&'static str),
+    NotAuth(String),
     #[response(status = 403)]
     #[error("Forbidden request: {0}")]
     Forbidden(String),

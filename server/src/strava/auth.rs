@@ -68,7 +68,7 @@ impl DbUser {
     fn refresh_token(&self, oauth: OAuth2<Strava>) -> TbResult<TokenResponse<Strava>>{
         info!("refreshing access token for strava id {}", self.id);
 
-        ensure!(self.expires_at != 0, Error::NotAuth("User needs to authenticate"));
+        ensure!(self.expires_at != 0, Error::NotAuth("User needs to authenticate".to_string()));
         
         Ok(oauth
             .refresh(&self.refresh_token).context("could not refresh access token")?)
@@ -229,7 +229,7 @@ impl User {
             },
             StatusCode::UNAUTHORIZED => {
                 self.disable()?;
-                bail!(Error::NotAuth("Strava request authorization withdrawn"))
+                bail!(Error::NotAuth("Strava request authorization withdrawn".to_string()))
             },
             _ => bail!(Error::BadRequest(
                     format!("Strava request error: {}", status.canonical_reason().unwrap_or("Unknown status received"))
@@ -352,19 +352,15 @@ pub fn login(oauth2: OAuth2<Strava>, mut cookies: Cookies<'_>) -> TbResult<Redir
     Ok(oauth2.get_redirect(&mut cookies, &["activity:read_all,profile:read_all"])?)
 }
 
-#[derive(Error, Debug)]
-pub enum OAuthError {
-    #[error("authorization needed: {0}")]
-    Authorize(&'static str),
-}
-
 fn process_callback(tokenset: TokenResponse<Strava>, conn: &AppConn, mut cookies: Cookies<'_>) -> TbResult<()>
 {
-    info!("Strava sent scope {:?}", tokenset.scope());
+    if tokenset.scope().unwrap_or("") != "read,activity:read_all,profile:read_all" {
+        bail!(Error::NotAuth(format!("Insufficient authorization {:?}", tokenset.scope())))
+    }
     let athlete = tokenset
         .as_value()
         .get("athlete")
-        .ok_or(OAuthError::Authorize("token did not include athlete"))?;
+        .ok_or(Error::NotAuth("token did not include athlete".to_string()))?;
 
     let athlete = serde_json::from_value(athlete.clone())?;
 
