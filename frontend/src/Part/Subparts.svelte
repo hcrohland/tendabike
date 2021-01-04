@@ -50,4 +50,6 @@ function buildList (list: MyList[], hook: Type, attachees: Attachment[], level: 
     </tbody>
     </Table>
 {/if}
-<Wizard {gear} {attachees}/>
+{#if gear.what == types[gear.what].main}
+   <Wizard {gear} {attachees}/>
+{/if}

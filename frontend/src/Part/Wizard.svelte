@@ -80,7 +80,9 @@ function setGroup (g: Group) {
 function save () {
   groups.forEach(g => {
     if (g.enabled) setGroup(g)
+
   });
+  groups = groups.filter((g) => ! g.enabled)
   show_button = true
 }
 let show_button = (groups.length != allgroups.length)
