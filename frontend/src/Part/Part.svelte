@@ -1,6 +1,6 @@
 <script lang="ts">
   import {ButtonGroup, Button} from 'sveltestrap'
-  import {types, parts, activities, myfetch, updateSummary, handleError} from '../store'
+  import {types, parts} from '../store'
   import InstallPart  from '../Actions/InstallPart.svelte'
   import ChangePart   from '../Actions/ChangePart.svelte'
   import RecoverPart  from '../Actions/RecoverPart.svelte';
@@ -15,15 +15,7 @@
 
   $: part = $parts[params.id]; 
   $: hook = types[part.what];
-  $: unassigned = Object
-      .values($activities)
-      .some((a) => a.gear == null && hook.acts.some((t) => t.gear_type == a.what))
   
-  function defaultGear(id: number) {
-    myfetch('/activ/defaultgear', 'POST', id)
-      .then(updateSummary)
-      .catch(handleError)
-  }
 </script>
 
 <GearCard {part} display>
@@ -31,9 +23,6 @@
       {#if part.disposed_at}
       <Button on:click={() => recoverPart(part)}> Recover gear </Button>
       {:else}
-      {#if unassigned}
-        <Button on:click={() => defaultGear(part.id)}>  Assign this {hook.name.toLowerCase()} to activities without a {hook.name.toLowerCase()} </Button>
-      {/if}
       {#if part.what == hook.main}
          <Button on:click={() => installPart(part)}>  Install new part </Button>
       {:else}
