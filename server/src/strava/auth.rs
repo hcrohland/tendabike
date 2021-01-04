@@ -129,7 +129,7 @@ impl User {
         let user: DbUser = strava_users::table
             .filter(strava_users::tendabike_id.eq(id))
             .get_result(&conn.0)
-            .context("user not registered")?;
+            .context(format!("User::get: user {} not registered", id))?;
 
         if user.expires_at > time::get_time().sec {
             return Ok(Self {user, conn});
@@ -154,7 +154,7 @@ impl User {
         let user: DbUser = strava_users::table
             .filter(strava_users::tendabike_id.eq(tbid))
             .get_result(conn)
-            .context("user not registered")?;
+            .context(format!("get_stats: tb user {} not registered", tbid))?;
 
         let events = strava_events.count().filter(owner_id.eq(user.tendabike_id)).first(conn)?;
         return Ok((events, user.expires_at == 0))
@@ -164,7 +164,7 @@ impl User {
         let user: DbUser = strava_users::table
             .filter(strava_users::tendabike_id.eq(id))
             .get_result(&conn.0)
-            .context("user not registered")?;
+            .context(format!("from_tb: user {} not registered", id))?;
 
         if user.expires_at > time::get_time().sec {
             return Ok(Self {user,conn});
