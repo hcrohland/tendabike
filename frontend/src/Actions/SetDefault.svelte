@@ -1,12 +1,13 @@
 <script lang="ts">
-import { Button, Col, InputGroup, InputGroupAddon, InputGroupText, Row } from "sveltestrap";
+import { Button, Col, InputGroup, InputGroupAddon, Row } from "sveltestrap";
 
-import { activities, filterValues, handleError, myfetch, parts, types, updateSummary } from "../store";
-
+import { activities, filterValues, handleError, myfetch, parts, updateSummary } from "../store";
 import type { Type } from "../types";
+import ActivityList from "../Widgets/ActivityList.svelte";
 
 export let type: Type
 
+let isOpen = false
 let value;
 
 function defaultGear(id: number) {
@@ -22,7 +23,9 @@ $: unassigned = filterValues($activities, (a) => !a.gear && type.acts.some((t) =
   <Row>
     <InputGroup>
       <InputGroupAddon addonType="prepend">
-        <InputGroupText>Assign {unassigned.length} unassigned activities to</InputGroupText>
+        <button on:click={() => isOpen = true}>
+          Assign {unassigned.length} unassigned activities to
+        </button>
       </InputGroupAddon>
       <select name="gear" class="form-control" required bind:value>
         <option hidden value> -- select one -- </option>
@@ -34,4 +37,5 @@ $: unassigned = filterValues($activities, (a) => !a.gear && type.acts.some((t) =
     </InputGroup>
   </Row>
 </Col>
+<ActivityList activities={unassigned} bind:isOpen></ActivityList>
 {/if}
