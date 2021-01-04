@@ -48,6 +48,9 @@
     <div transition:slide>
       <CardBody>
         is a <span class="param">{model(part)}</span>
+        {#if part.what == 1}
+           <a href={"/strava/bikes/" + part.id} alt="View on Strava" target="_blank"><img src="strava_grey.png" alt="View on Strava" title="View on Strava" > </a> 
+        {/if}
         {#if part.what != types[part.what].main}
             {types[part.what].name.toLowerCase()} 
         {/if}
@@ -62,7 +65,7 @@
         you used <span class=param>{fmtNumber(part.count)}</span> times 
         for <span class="param">{fmtSeconds(part.time)}</span> hours.
         <p> You covered <span class="param">{fmtNumber(parseFloat((part.distance / 1000).toFixed(1)))}</span> km 
-        climbing <span class="param">{fmtNumber(part.climb)}</span> and descending <span class="param">{fmtNumber(part.descend)}</span> meters </p>
+        climbing <span class="param">{fmtNumber(part.climb)}</span> and descending <span class="param">{fmtNumber(part.descend)}</span> meters 
       </CardBody>
     </div>
   {/if}
