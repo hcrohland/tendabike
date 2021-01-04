@@ -1,14 +1,16 @@
 <script lang="ts">
   import { Col, Row } from 'sveltestrap';
   import MainCard from './Part/MainCard.svelte';
-  import {filterValues, by, types, parts, category} from './store';
+  import {filterValues, by, types, parts, category, activities} from './store';
   import ShowAll from './Widgets/ShowHist.svelte';
+  import type {Type} from './types';
+import SetDefault from './Actions/SetDefault.svelte';
 
-  export let params = {category: 1};
+  export let params;
   
   // Cannot use category directly since it 
   // is unset during destroy and the router gets confused
-  let type, show_hist;
+  let type: Type, show_hist;
   if (params) {
     type = types[params.category];
   } else {
@@ -21,13 +23,18 @@
 </script>
 
 {#if type }
+  <SetDefault {type}></SetDefault>
   <Row border class="p-sm-2">
     {#each gears as part, i  (part.id)}
       <Col md=6 class="p-0 p-sm-2">
         <MainCard {part} isOpen={i<4} />
       </Col>
     {:else}
-      You have no {type.name} to tend 😱
+      {#if filterValues($activities, (a) => type.acts.some((t) => t.id == a.what)).length == 0}
+         We did not find any {type.name} activities on Strava (yet). 
+      {:else}
+         You have no {type.name} assigned to any activity on Strava. Please do so to get started.
+      {/if}
     {/each}
   </Row>
   
