@@ -1,6 +1,6 @@
-<GearCard {part} {isOpen}>
+<GearCard {part} {isOpen} display>
   <div class="float-right">
-    <a href={"/strava/bikes/" + part.id} alt="View on Strava" target="_blank"><img src="strava.png" alt="View on Strava" title="View on Strava" > </a> 
+    <a href={"/strava/bikes/" + part.id} alt="View on Strava" target="_blank"><img src="strava_grey.png" alt="View on Strava" title="View on Strava" > </a> 
     <a href="#/part/{part.id}" class="badge badge-secondary" title={"View "+ $category.name.toLowerCase() + " details"}>
       &Longrightarrow;
     </a>
