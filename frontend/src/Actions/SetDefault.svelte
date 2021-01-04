@@ -1,7 +1,7 @@
 <script lang="ts">
 import { Button, Col, InputGroup, InputGroupAddon, InputGroupText, Row } from "sveltestrap";
 
-import { activities, filterValues, handleError, myfetch, parts, updateSummary } from "../store";
+import { activities, filterValues, handleError, myfetch, parts, types, updateSummary } from "../store";
 
 import type { Type } from "../types";
 
@@ -15,7 +15,7 @@ function defaultGear(id: number) {
       .catch(handleError)
   }
 
-$: unassigned = filterValues($activities, (a) => !a.gear)
+$: unassigned = filterValues($activities, (a) => !a.gear && type.acts.some((t) => t.id == a.what))
 </script>
 {#if unassigned.length > 0}
 <Col md=8 lg=6>
