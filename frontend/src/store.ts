@@ -92,7 +92,7 @@ export const icons = {
 }
 
 export async function initData() {
-    var u = await myfetch('/user')
+    let u = await myfetch('/user')
     if (u) {
         user.set(u)
     } else {
