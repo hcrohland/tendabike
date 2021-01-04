@@ -31,15 +31,15 @@
       {#if part.disposed_at}
       <Button on:click={() => recoverPart(part)}> Recover gear </Button>
       {:else}
+      {#if unassigned}
+        <Button on:click={() => defaultGear(part.id)}>  Assign this {hook.name.toLowerCase()} to activities without a {hook.name.toLowerCase()} </Button>
+      {/if}
       {#if part.what == hook.main}
          <Button on:click={() => installPart(part)}>  Install new part </Button>
       {:else}
          <Button on:click={() => attachPart(part)}>  Attach part </Button>
       {/if}
       <Button on:click={() => changePart(part)}>  Change details </Button>
-      {#if unassigned}
-        <Button on:click={() => defaultGear(part.id)}>  Assign this {hook.name.toLowerCase()} to activities without a {hook.name.toLowerCase()} </Button>
-      {/if}
       {/if}
   </ButtonGroup>
 </GearCard>
