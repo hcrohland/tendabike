@@ -1,6 +1,6 @@
 <GearCard {part} {isOpen} display>
   <div class="float-right">
-    <a href="#/part/{part.id}" class="badge badge-secondary" title={"View "+ $category.name.toLowerCase() + " details"}>
+    <a href="#/part/{part.id}" class="badge badge-secondary text-reset" title={"View "+ $category.name.toLowerCase() + " details"}>
       &Longrightarrow;
     </a>
   </div>
