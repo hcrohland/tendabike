@@ -2,6 +2,28 @@ use super::*;
 use auth::User;
 use rocket::response::Redirect;
 
+pub fn update_user(user: &User) -> TbResult<Vec<PartId>> {
+    #[derive(Deserialize, Debug)]
+    struct Gear {
+        id: String,
+    }
+
+    #[derive(Deserialize, Debug)]
+    struct Athlete {
+        firstname: String,
+        lastname: String,
+        bikes: Vec<Gear>,
+        shoes: Vec<Gear>,
+    }
+
+    let r = user.request("/athlete")?;
+    let ath: Athlete = serde_json::from_str(&r)?;
+    let parts = ath.bikes.into_iter()
+        .chain(ath.shoes)
+        .map(|gear| gear::strava_to_tb(gear.id, user))
+        .collect::<TbResult<_>>()?;
+    Ok(parts)
+}
 
 #[get("/bikes/<id>")]
 fn redirect_gear(id: i32, user: User) -> Option<Redirect> {

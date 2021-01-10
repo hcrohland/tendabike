@@ -243,7 +243,7 @@ impl Activity {
         )
     }
 
-    pub fn get_all(user: &User, conn: &AppConn) -> TbResult<Vec<Activity>> {
+    pub fn get_all(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<Activity>> {
         use schema::activities::dsl::*;
         let acts = activities
             .filter(user_id.eq(user.get_id()))
