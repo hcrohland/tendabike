@@ -37,5 +37,5 @@ $: unassigned = filterValues($activities, (a) => !a.gear && type.acts.some((t) =
     </InputGroup>
   </Row>
 </Col>
-<ActivityList activities={unassigned} bind:isOpen></ActivityList>
+<ActivityList activities={unassigned} bind:isOpen>Unassigned Activities</ActivityList>
 {/if}
