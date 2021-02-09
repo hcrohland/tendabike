@@ -286,7 +286,7 @@ fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn
         title: String,
         #[serde(alias = "Negativer Höhenunterschied")]
         descend: String,
-    };
+    }
 
     let mut good = Vec::new();
     let mut bad = Vec::new();

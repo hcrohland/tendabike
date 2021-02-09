@@ -2,7 +2,6 @@
 import {DropdownItem} from 'sveltestrap';
 import {isAttached, attTime} from '../store'
 import Usage from '../Usage.svelte'
-import RecoverPart from '../Actions/RecoverPart.svelte'
 import ReplacePart from '../Actions/ReplacePart.svelte'
 import AttachPart from '../Actions/AttachPart.svelte'
 import type {Attachment, Type} from '../types';
@@ -18,7 +17,7 @@ export let hook: Type | undefined = undefined;
 void(hook) // get rid of warning...
 
 let show_hist = false; 
-let attachPart, replacePart, recoverPart;
+let attachPart, replacePart;
 
 </script>
 
@@ -98,4 +97,3 @@ let attachPart, replacePart, recoverPart;
 {/if}
 <AttachPart bind:attachPart/> 
 <ReplacePart bind:replacePart/>
-<RecoverPart bind:recoverPart/>
