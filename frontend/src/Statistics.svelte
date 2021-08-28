@@ -72,8 +72,8 @@ function buildYears():Year[] {
     ret.push(
       {
         year, 
-        days: aggregateDays (acts),
-        months: sumByMonths (acts)
+        months: sumByMonths (acts),
+        days: aggregateDays (acts), // Careful: aggregateDays modifies acts!
       } 
     )
   }
