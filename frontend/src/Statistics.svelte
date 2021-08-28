@@ -117,8 +117,8 @@ function getPlot(years: Year[], months, title, fields, addlayout?) {
     if (!year) break;
     fields.forEach(f => {
       let d = get_trace(months ? year.months : year.days, months, f[0], f[1]);
+      d.x.map((a) => a.setFullYear(years[0].year));
       if (comp) {
-        d.x.map((a) => a.setFullYear(comp));
         d.line.dash = 'dash';
         d.opacity = 0.5;
         d.name = d.name + ` (${year.year})`;
