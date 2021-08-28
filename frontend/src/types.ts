@@ -7,6 +7,26 @@ export type Usage = {
   duration?: number; 
 }
 
+export function newUsage(): Usage {
+  return {
+    count: 0,
+    climb: 0,
+    descend: 0,
+    distance: 0,
+    time: 0,
+    duration: 0
+  }
+}
+
+export function addToUsage (u: Usage, a: Usage) {
+  u.count += a.count;
+  u.climb += a.climb;
+  u.descend += a.descend ? a.descend : a.climb;
+  u.distance += a.distance;
+  u.time += a.time ? a.time : a.duration;
+  u.duration += a.duration;
+}
+
 export type Part = Usage & {
     id?: number;
     owner: number;
