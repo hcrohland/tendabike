@@ -497,7 +497,7 @@ impl Attachment {
 
     /// apply usage to all attachments affected by activity
     ///
-    /// returns the list of Attechments - including the redundant details
+    /// returns the list of Attachments - including the redundant details
     pub fn register(act: &Activity, usage: &Usage, conn: &AppConn) -> Vec<AttachmentDetail> {
         use schema::attachments::dsl::*;
 

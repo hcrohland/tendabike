@@ -61,6 +61,7 @@ impl ActTypeId {
     }
 }
 
+/// get all activity types
 #[get("/activity")]
 fn activity(_user: &User, conn: AppDbConn) -> Json<Vec<ActivityType>> {
     Json(activity_types::table
@@ -70,6 +71,8 @@ fn activity(_user: &User, conn: AppDbConn) -> Json<Vec<ActivityType>> {
 }
 
 impl PartTypeId {
+
+    /// get the full type for a type_id
     pub fn get (self, conn: &AppConn) -> TbResult<PartType> {
         use schema::part_types::dsl::*;
         Ok(part_types
@@ -77,6 +80,7 @@ impl PartTypeId {
             .get_result::<PartType>(conn)?)
     }
 
+    /// recursively look for subtypes to self in the PartType vector
     fn filter_types(self, types: &mut Vec<PartType>) -> Vec<PartType> {
         let mut res = types
             .drain_filter(|x| x.hooks.contains(&self) || x.id == self)
@@ -86,6 +90,8 @@ impl PartTypeId {
         }
         res
     }
+
+    /// get all the types you can attach - even indirectly - to this type_id
     pub fn subtypes(self, conn: &AppConn) -> Vec<PartType> {
         use schema::part_types::dsl::*;
         let mut types = part_types
@@ -94,6 +100,7 @@ impl PartTypeId {
         self.filter_types(&mut types)
     }
 
+    /// Get the activity types valid for this part_type
     pub fn act_types(&self, conn: &AppConn) -> TbResult<Vec<ActTypeId>> {
         use schema::activity_types::dsl::*;
 
@@ -104,6 +111,7 @@ impl PartTypeId {
     }
 }
 
+/// get all part types
 #[get("/part")]
 fn part(conn: AppDbConn) -> Json<Vec<PartType>> {
     Json(part_types::table
