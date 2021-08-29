@@ -33,8 +33,9 @@ function aggregateDays (arr: Day[]) : Day[]{
     .sort(by("start", true))
     .reduce(
       function(r, a) {
-        addToUsage( a, r[r.length - 1]);
-        r.push(a); 
+        let b = {...a}; // do not modify arr
+        addToUsage(b , r[r.length - 1]);
+        r.push(b); 
         return r;
       }, 
       [start]
@@ -72,8 +73,8 @@ function buildYears():Year[] {
     ret.push(
       {
         year, 
+        days: aggregateDays (acts),
         months: sumByMonths (acts),
-        days: aggregateDays (acts), // Careful: aggregateDays modifies acts!
       } 
     )
   }
