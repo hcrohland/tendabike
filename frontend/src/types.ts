@@ -19,12 +19,12 @@ export function newUsage(): Usage {
 }
 
 export function addToUsage (u: Usage, a: Usage) {
-  u.count += a.count;
-  u.climb += a.climb;
-  u.descend += a.descend ? a.descend : a.climb;
-  u.distance += a.distance;
-  u.time += a.time ? a.time : a.duration;
-  u.duration += a.duration;
+  u.count += a.count || 0;
+  u.climb += a.climb || 0;
+  u.descend += a.descend || u.climb;
+  u.distance += a.distance || 0;
+  u.time += a.time || a.duration || 0;
+  u.duration += a.duration || u.time;
 }
 
 export type Part = Usage & {
