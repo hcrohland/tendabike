@@ -6,6 +6,7 @@ import { addToUsage, newUsage } from './types';
 import Plotly from './Widgets/Plotly.svelte';
 import Switch from './Widgets/Switch.svelte';
 
+const colorway = ['#1B62A5', '#1ba51e', '#537da5', '#53a555']
 
 type Day = Usage & {
   start: Date,
@@ -83,8 +84,8 @@ function buildYears():Year[] {
 
 function get_trace (cum: Day[], months: boolean, field: keyof Usage, title?: string, field2?: keyof Usage) {
   return {
-    x: cum.map((a)=>a.start),
-    y: cum.map((a)=>a[field]-(field2? a[field2] : 0)),
+    x: cum.map( (a) => a.start ),
+    y: cum.map( (a) => field2 ? a[field]-a[field2] : a[field] ),
     type: months ? 'bar' : 'scatter',
     name: title ? title : field2? field + '-' + field2 : field,
     line: {dash: 'solid', shape: 'hv'},
@@ -108,7 +109,8 @@ function getPlot(years: Year[], months, title, fields, addlayout?) {
       fixedrange: true,
       range: [new Date (years[0].year, 0, 1), new Date(years[0].year, 11, 31, 23, 59)]
     },
-    annotations: []
+    annotations: [],
+    colorway
   };
   Object.assign(layout, addlayout);
   let config = {responsive: true};
@@ -194,7 +196,7 @@ let perMonths = false;
 </Row>
 <Row>
   <Col md=6 xs=12 class="p-0 p-sm-2">
-    <Plotly {...getPlot([cumm, comp], perMonths, "Distance (km)", [["distance"]])} />
+    <Plotly {...getPlot([cumm, comp], perMonths, "Distance (km)", [["distance"]], {colorway : [colorway[0], colorway[2]]})}/>
   </Col>
   <Col md=6 xs=12 class="p-0 p-sm-2">
     {#if perMonths}
