@@ -4,7 +4,7 @@
     ListGroup, ListGroupItem, Input,
     Row, Col, Container
   } from 'sveltestrap';
-  import {checkStatus, handleError, parts} from "../store";
+  import {attachments, checkStatus, handleError, parts} from "../store";
   import TimezonePicker from 'svelte-timezone-picker';
   import ModalFooter from './ModalFooter.svelte'
 
@@ -35,7 +35,8 @@
         })
         .then(checkStatus)
         .then((a) => {
-          parts.updateMap(a[0]); 
+          parts.updateMap(a[0].parts); 
+          attachments.updateMap(a[0].attachments);
           result = {
             good: a[1],
             bad: a[2]

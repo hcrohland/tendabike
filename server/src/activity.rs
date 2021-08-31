@@ -10,8 +10,6 @@
 use rocket::response::status;
 use rocket_contrib::json::Json;
 
-use std::collections::HashMap;
-
 use crate::*;
 use schema::activities;
 
@@ -148,7 +146,7 @@ impl ActivityId {
                 .filter(activities::id.eq(self))
                 .set(act)
                 .get_result::<Activity>(conn)
-                .context("Error reading activity")?;
+                .context("Error updating activity")?;
 
             info!("Updating {:?}", act);
 
@@ -276,7 +274,7 @@ fn categories(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartTypeId>> {
 
 
 fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn) 
-    -> TbResult<(Vec<Part>,Vec<String>, Vec<String>)> {
+    -> TbResult<(Summary, Vec<String>, Vec<String>)> {
     use schema::activities::dsl::*;
     #[derive(Debug, Deserialize)]
     struct Result {
@@ -290,7 +288,7 @@ fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn
 
     let mut good = Vec::new();
     let mut bad = Vec::new();
-    let mut map = HashMap::new();
+    let mut summary = Summary::default();
     let mut rdr = csv::Reader::from_reader(data.open());
     let tz = tz.parse::<chrono_tz::Tz>()
                 .map_err(|_| Error::BadRequest(format!("Unknown timezone {}",tz)))?;
@@ -303,32 +301,35 @@ fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn
         let description = format!("{} at {}", &record.title, &record.start);
         let rstart = tz.datetime_from_str(&record.start, "%Y-%m-%d %H:%M:%S")?;
         let rdescend = record.descend.replace(".", "").parse::<i32>().context("Could not parse descend")?;
-        conn.transaction::<_,anyhow::Error,_>(|| {
-            let act: Activity = activities
-                .filter(user_id.eq(user.get_id()))
-                .filter(start.eq(rstart))
-                .for_update()
-                .get_result(conn).context(format!("Activitiy {}", record.start))?;
-            let act_id = act.register(Factor::Sub, conn)?.activities[0].id;
-            let res = diesel::update(activities.find(act_id))
-                .set(descend.eq(rdescend))
-                .get_result::<Activity>(conn)
-                .context("Error reading activity")?
-                .register(Factor::Add, conn)
-                .context("Could not register activity")?;
-            for p in res.parts {
-                map.insert(p.id, p);
-            }
-            good.push(description.clone());
-            Ok(())
-        }).unwrap_or_else(|_| {
+        match 
+            conn.transaction::<_,anyhow::Error,_>(|| {
+                let act: Activity = activities
+                    .filter(user_id.eq(user.get_id()))
+                    .filter(start.eq(rstart))
+                    .for_update()
+                    .get_result(conn).context(format!("Activitiy {}", record.start))?;
+                let act_id = act.register(Factor::Sub, conn)?
+                    .activities[0].id;
+                let act = diesel::update(activities.find(act_id))
+                    .set(descend.eq(rdescend))
+                    .get_result::<Activity>(conn)
+                    .context("Error reading activity")?;
+                act.register(Factor::Add, conn)
+                    .context("Could not register activity")
+                }) 
+            {
+                Ok(res) => {
+                    summary = summary.merge(res);
+                    good.push(description);
+                },
+                Err(_) => {
                     warn!("skipped {}", description); 
-                    bad.push(description)
+                    bad.push(description);
                 }
-            );
-    }
+            }
+    }   
 
-    Ok((map.into_iter().map(|(_,v)| v).collect(),good, bad))
+    Ok((summary, good, bad))
 }
 
 fn def_part(partid: &PartId, user: & User, conn: &AppConn) -> TbResult<Summary> {
@@ -440,7 +441,7 @@ fn delete(id: i32, user: &User, conn: AppDbConn) -> ApiResult<Summary> {
 }
 
 #[post("/descend?<tz>", data = "<data>")]
-fn descend(data: rocket::data::Data, tz: String, user: &User, conn: AppDbConn) -> ApiResult<(Vec<Part>,Vec<String>, Vec<String>)> {
+fn descend(data: rocket::data::Data, tz: String, user: &User, conn: AppDbConn) -> ApiResult<(Summary, Vec<String>, Vec<String>)> {
     tbapi(csv2descend(data, tz, user, &conn))
 }
 
