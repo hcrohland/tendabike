@@ -6,7 +6,8 @@ import { addToUsage, newUsage } from './types';
 import Plotly from './Widgets/Plotly.svelte';
 import Switch from './Widgets/Switch.svelte';
 
-const colorway = ['#1B62A5', '#1ba51e', '#537da5', '#53a555']
+const colorway2 = ['steelblue', 'lightblue', 'limegreen', 'lightgreen'] 
+const colorway = [colorway2[0], colorway2[2]] 
 
 type Day = Usage & {
   start: Date,
@@ -115,35 +116,35 @@ function getPlot(years: Year[], months, title, fields, addlayout?) {
   Object.assign(layout, addlayout);
   let config = {responsive: true};
   
-  let comp = null
-  for (let year of years) {
-    if (!year) break;
-    fields.forEach(f => {
-      let d = get_trace(months ? year.months : year.days, months, f[0], f[1]);
-      d.x.map((a) => a.setFullYear(years[0].year));
-      if (comp) {
-        d.line.dash = 'dash';
-        d.opacity = 0.5;
-        d.name = d.name + ` (${year.year})`;
-      }
-      data.push(d);
-      
-      if (!months) {
-        let ann = d.y[d.y.length-1];
-        let result2 = {
-          x: d.x[d.x.length-1],
-          y: ann,
-          xanchor: 'left',
-          yanchor: 'middle',
-          text: Math.round(ann),
-          showarrow: false
-        };
+  for (let f of fields) {
+    let comp = false;
+    for (let year of years) {
+      if (!year) break;
+        let trace = get_trace(months ? year.months : year.days, months, f[0], f[1]);
+        trace.x.map((a) => a.setFullYear(years[0].year));
+        if (comp) {
+          trace.line.dash = 'dash';
+          trace.name = trace.name + ` (${year.year})`;
+          layout.colorway = colorway2;
+        }
+        data.push(trace);
         
-        layout.annotations.push( result2);
-      }
-    });
-    comp = year.year
-  }
+        if (!months) {
+          let ann = trace.y[trace.y.length-1];
+          let result2 = {
+            x: trace.x[trace.x.length-1],
+            y: ann,
+            xanchor: 'left',
+            yanchor: 'middle',
+            text: Math.round(ann),
+            showarrow: false
+          };
+          
+          layout.annotations.push( result2);
+        }
+        comp = true
+    }
+  };
   return {
     data, config, layout
   }
@@ -196,7 +197,7 @@ let perMonths = false;
 </Row>
 <Row>
   <Col md=6 xs=12 class="p-0 p-sm-2">
-    <Plotly {...getPlot([cumm, comp], perMonths, "Distance (km)", [["distance"]], {colorway : [colorway[0], colorway[2]]})}/>
+    <Plotly {...getPlot([cumm, comp], perMonths, "Distance (km)", [["distance"]])}/>
   </Col>
   <Col md=6 xs=12 class="p-0 p-sm-2">
     {#if perMonths}
