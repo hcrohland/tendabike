@@ -105,44 +105,42 @@ function getPlot(years: Year[], months, title, fields, addlayout?) {
     },
     xaxis: {
       tickformat: '%b',
-      dtick: 30 * 24 * 60 * 60 * 1000,
+      dtick: 30 * 24 * 60 * 60 * 1000, // One month
       hoverformat: '%e %b',
       fixedrange: true,
       range: [new Date (years[0].year, 0, 1), new Date(years[0].year, 11, 31, 23, 59)]
     },
     annotations: [],
-    colorway
+    colorway,
+    ...addlayout
   };
-  Object.assign(layout, addlayout);
   let config = {responsive: true};
   
-  for (let f of fields) {
-    let comp = false;
-    for (let year of years) {
+  for (const field of fields.values()) {
+    for (const [comp, year] of years.entries()) {
       if (!year) break;
-        let trace = get_trace(months ? year.months : year.days, months, f[0], f[1]);
-        trace.x.map((a) => a.setFullYear(years[0].year));
-        if (comp) {
-          trace.line.dash = 'dash';
-          trace.name = trace.name + ` (${year.year})`;
-          layout.colorway = colorway2;
-        }
-        data.push(trace);
+      let trace = get_trace(months ? year.months : year.days, months, field[0], field[1]);
+      trace.x.map((a) => a.setFullYear(years[0].year));
+      if (comp) {
+        trace.line.dash = 'dash';
+        trace.name = trace.name + ` (${year.year})`;
+        layout.colorway = colorway2;
+      }
+      data.push(trace);
+      
+      if (!months) {
+        let ann = trace.y[trace.y.length-1];
+        let result2 = {
+          x: trace.x[trace.x.length-1],
+          y: ann,
+          xanchor: 'left',
+          yanchor: 'middle',
+          text: Math.round(ann),
+          showarrow: false
+        };
         
-        if (!months) {
-          let ann = trace.y[trace.y.length-1];
-          let result2 = {
-            x: trace.x[trace.x.length-1],
-            y: ann,
-            xanchor: 'left',
-            yanchor: 'middle',
-            text: Math.round(ann),
-            showarrow: false
-          };
-          
-          layout.annotations.push( result2);
-        }
-        comp = true
+        layout.annotations.push( result2);
+      }
     }
   };
   return {
@@ -151,8 +149,8 @@ function getPlot(years: Year[], months, title, fields, addlayout?) {
 }
 
 let years = buildYears();
-let comp
-let cumm=years[0];
+let cumm = years[0];
+let comp = null;
 let perMonths = false;
 </script>
 <Row border class="p-sm-2">
