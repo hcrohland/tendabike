@@ -283,7 +283,9 @@ fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn
         #[serde(rename = "Titel")]
         title: String,
         #[serde(alias = "Negativer Höhenunterschied")]
+        #[serde(alias = "Total Descent")]
         descend: String,
+        climb: Option<String>,
     }
 
     let mut good = Vec::new();
@@ -301,19 +303,29 @@ fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn
         let description = format!("{} at {}", &record.title, &record.start);
         let rstart = tz.datetime_from_str(&record.start, "%Y-%m-%d %H:%M:%S")?;
         let rdescend = record.descend.replace(".", "").parse::<i32>().context("Could not parse descend")?;
+        let rclimb = match record.climb {
+            Some(rclimb) => Some(rclimb.replace(".", "").parse::<i32>().context("Could not parse climb")?),
+            None => None,
+        };
         match 
             conn.transaction::<_,anyhow::Error,_>(|| {
                 let act: Activity = activities
                     .filter(user_id.eq(user.get_id()))
                     .filter(start.eq(rstart))
                     .for_update()
-                    .get_result(conn).context(format!("Activitiy {}", record.start))?;
+                    .get_result(conn).context(format!("Activitiy {}", rstart))?;
                 let act_id = act.register(Factor::Sub, conn)?
                     .activities[0].id;
+                if let Some(rclimb) = rclimb {
+                    diesel::update(activities.find(act_id))
+                        .set(climb.eq(rclimb))
+                    .execute(conn)
+                    .context("Error updating climb")?;    
+                }
                 let act = diesel::update(activities.find(act_id))
                     .set(descend.eq(rdescend))
                     .get_result::<Activity>(conn)
-                    .context("Error reading activity")?;
+                    .context("Error updating descent")?;
                 act.register(Factor::Add, conn)
                     .context("Could not register activity")
                 }) 
