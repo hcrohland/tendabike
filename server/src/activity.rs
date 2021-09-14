@@ -283,6 +283,7 @@ fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn
         #[serde(rename = "Titel")]
         title: String,
         #[serde(alias = "Negativer Höhenunterschied")]
+        #[serde(alias = "Abstieg gesamt")]
         #[serde(alias = "Total Descent")]
         descend: String,
         climb: Option<String>,
