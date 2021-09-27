@@ -1,4 +1,4 @@
-<GearCard {part} {isOpen} display>
+<GearCard {part} {display}>
   <div class="float-right">
     <a href="#/part/{part.id}" class="badge badge-secondary text-reset" title={"View "+ $category.name.toLowerCase() + " details"}>
       &Longrightarrow;
@@ -12,6 +12,6 @@
   import {category} from '../store'
 
   export let part: Part
-  export let isOpen: boolean
+  export let display: boolean
 
 </script>

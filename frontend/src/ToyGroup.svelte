@@ -27,7 +27,7 @@ import SetDefault from './Actions/SetDefault.svelte';
   <Row border class="p-sm-2">
     {#each gears as part, i  (part.id)}
       <Col md=6 class="p-0 p-sm-2">
-        <MainCard {part} isOpen={i<4} />
+        <MainCard {part} display={i<4 || show_hist} />
       </Col>
     {:else}
       {#if filterValues($activities, (a) => type.acts.some((t) => t.id == a.what)).length == 0}
@@ -46,7 +46,7 @@ import SetDefault from './Actions/SetDefault.svelte';
     <Row>
       {#each bin as part, i  (part.id)}
       <Col md=6 class="p-0 p-sm-2">
-        <MainCard {part} isOpen={i<2} />
+        <MainCard {part} display />
       </Col>
      {/each}
     </Row>

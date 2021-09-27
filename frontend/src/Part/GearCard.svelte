@@ -7,7 +7,7 @@
   export let part: Part;
   export let display = false;
 
-  export let isOpen = false;
+  let isOpen = false;
   let showLink = false;
 
   function model(part) {
