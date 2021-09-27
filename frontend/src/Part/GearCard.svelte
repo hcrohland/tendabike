@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { slide } from 'svelte/transition';
+  // import { slide } from 'svelte/transition';
   import {Card, CardBody, CardHeader, Row, Col} from 'sveltestrap';
   import {types, fmtSeconds, fmtDate, fmtNumber} from '../store';
   import type {Part} from '../types'
@@ -45,7 +45,8 @@
     </CardHeader>
   </div>
   {#if isOpen || display}
-    <div transition:slide>
+    <!-- conflict with spa-router -->
+    <!-- <div transition:slide> -->
       <CardBody>
         is a <span class="param">{model(part)}</span>
         {#if part.what == 1}
@@ -67,6 +68,6 @@
         <p> You covered <span class="param">{fmtNumber(parseFloat((part.distance / 1000).toFixed(1)))}</span> km 
         climbing <span class="param">{fmtNumber(part.climb)}</span> and descending <span class="param">{fmtNumber(part.descend)}</span> meters 
       </CardBody>
-    </div>
+    <!-- </div> -->
   {/if}
 </Card>
