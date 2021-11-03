@@ -2,6 +2,8 @@ use super::*;
 use auth::User;
 use rocket::response::Redirect;
 
+
+/// Get list of gear for user from Strava
 pub fn update_user(user: &User) -> TbResult<Vec<PartId>> {
     #[derive(Deserialize, Debug)]
     struct Gear {
@@ -10,8 +12,8 @@ pub fn update_user(user: &User) -> TbResult<Vec<PartId>> {
 
     #[derive(Deserialize, Debug)]
     struct Athlete {
-        firstname: String,
-        lastname: String,
+        // firstname: String,
+        // lastname: String,
         bikes: Vec<Gear>,
         shoes: Vec<Gear>,
     }
