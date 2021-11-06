@@ -31,13 +31,13 @@ COPY server/ .
 
 RUN cargo build --release
 
-FROM node:15-alpine AS build-frontend
+FROM node:17-alpine AS build-frontend
 
 WORKDIR /frontend
 
 COPY frontend/package.json frontend/package-lock.json /frontend/
-RUN npm install -g npm@7.24.1
-RUN npm install
+RUN npm install -g npm@8.1.2
+RUN npm update
 
 COPY frontend/ /frontend
 RUN npm run build
