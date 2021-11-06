@@ -31,7 +31,7 @@ COPY server/ .
 
 RUN cargo build --release
 
-FROM node:17-alpine AS build-frontend
+FROM node:17 AS build-frontend
 
 WORKDIR /frontend
 
