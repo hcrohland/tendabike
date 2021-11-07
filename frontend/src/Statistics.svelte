@@ -10,6 +10,12 @@ type Day = Usage & {
   start: Date,
 }
 
+type Year = {
+  year: number, 
+  days: Day[], 
+  months: Day[]
+};
+
 function sumByMonths (arr: Day[]) {
   return Object.values(
     arr.reduce<{ [s: string]: Day; }>((acc, a: Activity) => {
@@ -55,8 +61,7 @@ function activity2Day (a: Activity) : Day {
     }
 }
 
-type Year = {year: number, days: Day[], months: Day[]};
-function buildYears(gear: Part[]):Year[] {
+function buildYears(select: Boolean, gear: Part[]):Year[] {
   const g = gear.map((g) => g.id);
   const minyear = Object.values($activities)
     .reduce((min, a) =>  min <= a.start ? min : a.start, new Date())
@@ -66,7 +71,7 @@ function buildYears(gear: Part[]):Year[] {
   let year: number;
   for (year = thisyear; year >= minyear; year--) {
     // get a copy of all bike activities for year year
-    let acts = filterValues($activities, (a) => a.start.getFullYear() == year && a.what == 1 && g.includes(a.gear))
+    let acts = filterValues($activities, (a) => a.start.getFullYear() == year && a.what == 1 && (select == false || g.includes(a.gear)))
       // and translate usage data to human readable form
       .map(activity2Day)
       
@@ -92,7 +97,7 @@ function get_trace (cum: Day[], months: boolean, field: keyof Usage, title?: str
   }
 }
 
-function getPlot(gear,ncumm: number, ncomp: number, months, title, fields, addlayout?) {
+function getPlot(_trigger, ncumm: number, ncomp: number, months, title, fields, addlayout?) {
   const colorway2 = ['steelblue', 'lightblue', 'limegreen', 'lightgreen'] 
   const colorway = [colorway2[0], colorway2[2]] 
 
@@ -155,11 +160,12 @@ function getPlot(gear,ncumm: number, ncomp: number, months, title, fields, addla
 
 const gears = filterValues($parts, (p) => p.what == 1).sort(by("last_used"))
 
+let selectBikes = false;
 let gear = [...gears];
 let cumm = 0;
 let comp = null;
 let perMonths = false;
-$: years = buildYears(gear);
+$: years = buildYears(selectBikes, gear);
 </script>
 <Row border class="p-sm-2">
   <Col xs="auto" class="p-0 p-sm-2">
@@ -170,8 +176,7 @@ $: years = buildYears(gear);
           Your statistics for
         </InputGroupText>
       </InputGroupAddon>
-      <select class="custom-select" bind:value={cumm} on:change={() => {if (cumm == comp) comp = null; console.log(comp);
-      }}>
+      <select class="custom-select" bind:value={cumm} on:change={() => {if (cumm == comp) comp = null}}>
         {#each years as item, i}
           <option value={i}>{item.year}</option>
         {/each}
@@ -196,37 +201,38 @@ $: years = buildYears(gear);
     </InputGroup>
     </FormGroup>
   </Col>
-  <Col>
-    <FormGroup>      
+  <Col class="p-0 p-sm-2" />
+  <Col xs="auto" class="p-0 p-sm-2" float="right">
+    <FormGroup inline>      
       <InputGroup>
-        <InputGroupAddon addonType="prepend">
-          <InputGroupText>
-              on
-          </InputGroupText>
-        </InputGroupAddon>
-        <select class="custom-select" multiple bind:value={gear}>
-          {#each gears as item, i}
+        <Switch id="bikes" bind:checked={selectBikes}>
+          {selectBikes ? "for" : "select"} bikes
+        </Switch>
+        {#if selectBikes}
+           <select class="custom-select" multiple bind:value={gear}>
+            {#each gears as item, i}
             <option value={item}>{item.name}</option>
-          {/each}
-        </select>
+            {/each}
+          </select>
+        {/if}
       </InputGroup>
     </FormGroup>
   </Col>
 </Row>
 <Row border class="p-sm-2">
   <Col class="p-0 p-sm-2">
-    <Plotly {...getPlot(gear, cumm, comp, perMonths, "Elevation (m)", [["climb"], ["descend"]])}  />
+    <Plotly {...getPlot(years, cumm, comp, perMonths, "Elevation (m)", [["climb"], ["descend"]])}  />
   </Col>
 </Row>
 <Row>
   <Col md=6 xs=12 class="p-0 p-sm-2">
-    <Plotly {...getPlot(gear, cumm, comp, perMonths, "Distance (km)", [["distance"]])}/>
+    <Plotly {...getPlot(years, cumm, comp, perMonths, "Distance (km)", [["distance"]])}/>
   </Col>
   <Col md=6 xs=12 class="p-0 p-sm-2">
     {#if perMonths}
-      <Plotly {...getPlot(gear, cumm, null, perMonths, "Time (h)", [[ "time", "moving time"], ["duration", "pause", "time"]], {barmode: 'stack'})} />
+      <Plotly {...getPlot(years, cumm, null, perMonths, "Time (h)", [[ "time", "moving time"], ["duration", "pause", "time"]], {barmode: 'stack'})} />
     {:else}
-      <Plotly {...getPlot(gear, cumm, comp, perMonths, "Time (h)", [[ "time", "moving time"], ["duration", "outdoor time"]])} />
+      <Plotly {...getPlot(years, cumm, comp, perMonths, "Time (h)", [[ "time", "moving time"], ["duration", "outdoor time"]])} />
     {/if}
   </Col>
 </Row>
