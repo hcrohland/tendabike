@@ -1,6 +1,6 @@
 <script lang="ts">
 import {DropdownItem} from 'sveltestrap';
-import {isAttached, attTime} from '../store'
+import {isAttached, attTime, parts} from '../store'
 import Usage from '../Usage.svelte'
 import ReplacePart from '../Actions/ReplacePart.svelte'
 import AttachPart from '../Actions/AttachPart.svelte'
@@ -30,33 +30,33 @@ let attachPart, replacePart;
     <th></th>
   </tr>    
 {:else}
-  {#each attachments as att,i (att.idx)}
+  {#each attachments.map(att => ({att, part: $parts[att.part_id]})) as {att, part},i (att.idx)}
     {#if i == 0}
       <tr>
         <th scope="row" class="text-nowrap"> 
           {'| '.repeat(level)}
           {prefix +  " " + type.name}
-          {#if attachments.length > 1 || (att.part && att.part.count != att.count) }
+          {#if attachments.length > 1 || (part && part.count != att.count) }
             <ShowAll bind:show_hist/>
           {/if}
         </th>  
         {#if isAttached(att)}
           <td>
-            {#if att.part}
-              <a href="#/part/{att.part.id}" 
-                style={att.part.disposed_at ? "text-decoration: line-through;" : ""} 
+            {#if part}
+              <a href="#/part/{part.id}" 
+                style={part.disposed_at ? "text-decoration: line-through;" : ""} 
                 class="text-reset">
-                {att.part.name}
+                {part.name}
               </a>
             {:else}
               {att.name}
             {/if}
           </td>
           <td> {attTime(att)} </td>  
-          <Usage usage={att.part} />
+          <Usage usage={part} />
           <td>
             <Menu>
-              <DropdownItem on:click={() => attachPart(att.part)}> Move part</DropdownItem>
+              <DropdownItem on:click={() => attachPart(part)}> Move part</DropdownItem>
               <DropdownItem on:click={() => replacePart(att)}> Replace part</DropdownItem>
             </Menu>
           </td>
@@ -66,17 +66,17 @@ let attachPart, replacePart;
       </tr>   
     {/if}
     {#if show_hist }
-      {#if !(i == 0 && att.part && att.part.count == att.count)}
+      {#if !(i == 0 && part && part.count == att.count)}
         <tr>
           <th scope="row" class="text-nowrap">
             {'| '.repeat(level+1)}&#9656;
           </th>
           <td>
-            {#if att.part}
-              <a href="#/part/{att.part.id}" 
-                style={att.part.disposed_at ? "text-decoration: line-through;" : ""} 
+            {#if part}
+              <a href="#/part/{part.id}" 
+                style={part.disposed_at ? "text-decoration: line-through;" : ""} 
                 class="text-reset">
-                {att.part.name}
+                {part.name}
               </a>
             {:else}
               {att.name}
@@ -86,7 +86,7 @@ let attachPart, replacePart;
           <Usage usage={att} />
           <td>
               <Menu>
-                <DropdownItem on:click={() => attachPart(att.part)}>Attach part</DropdownItem>
+                <DropdownItem on:click={() => attachPart(part)}>Attach part</DropdownItem>
                 <DropdownItem on:click={() => replacePart(att)}> Duplicate part</DropdownItem>
               </Menu>
             </td>

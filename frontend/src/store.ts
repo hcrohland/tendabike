@@ -158,7 +158,6 @@ export function attTime(att: Attachment) {
 function prepAtts(a: Attachment) {
     a.attached = new Date(a.attached);
     a.detached = new Date(a.detached);
-    a.part = get(parts)[a.part_id];
     a.idx = a.part_id + "/" + a.attached.getTime()
     return a
 }

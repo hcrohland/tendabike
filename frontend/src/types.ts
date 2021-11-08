@@ -47,7 +47,6 @@ export type Attachment = Usage & {
     detached: Date;
     what: number;
     name: string;
-    part: Part;
     idx: string;
   }
 
