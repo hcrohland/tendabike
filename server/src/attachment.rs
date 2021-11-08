@@ -364,7 +364,7 @@ impl Attachment {
     fn usage(&self, factor: Factor, conn: &AppConn) -> Usage {
         Activity::find(self.gear, self.attached, self.detached, conn)
             .into_iter()
-            .fold(Usage::none(self.attached), |acc, x| {
+            .fold(Usage::none(), |acc, x| {
                 acc.add_activity(&x, factor)
             })
     }
@@ -412,7 +412,7 @@ impl Attachment {
         self.distance = usage.distance;
         self.climb = usage.climb;
         self.descend = usage.descend;
-        let part = self.part_id.apply_usage(&usage, conn)?;
+        let part = self.part_id.apply_usage(&usage, self.attached, conn)?;
 
         let attachment = self
             .insert_into(attachments::table)
@@ -439,7 +439,7 @@ impl Attachment {
             .context(ctx)?;
 
         let usage = att.usage(Factor::Sub, conn);
-        let part = att.part_id.apply_usage(&usage, conn)?;
+        let part = att.part_id.apply_usage(&usage, att.attached, conn)?;
         att.count = 0;
         att.time = 0;
         att.distance = 0;

@@ -175,7 +175,7 @@ impl PartId {
     ///
     /// If the stored purchase date is later than the usage date, it will adjust the purchase date
     /// returns the changed part
-    pub fn apply_usage(self, usage: &Usage, conn: &AppConn) -> TbResult<Part> {
+    pub fn apply_usage(self, usage: &Usage, start: DateTime<Utc>, conn: &AppConn) -> TbResult<Part> {
         use schema::parts::dsl::*;
 
         trace!("Applying usage {:?} to part {}", usage, self);
@@ -189,8 +189,8 @@ impl PartId {
                     descend.eq(descend + usage.descend),
                     distance.eq(distance + usage.distance),
                     count.eq(count + usage.count),
-                    purchase.eq(min(part.purchase, usage.start)),
-                    last_used.eq(max(part.last_used, usage.start))
+                    purchase.eq(min(part.purchase, start)),
+                    last_used.eq(max(part.last_used, start))
                 ))
                 .get_result::<Part>(conn)
         })?)

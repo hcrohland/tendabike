@@ -196,7 +196,6 @@ impl Activity {
     pub fn usage(&self, factor: Factor) -> Usage {
         let factor = factor as i32;
         Usage {
-            start: self.start,
             time: self.time.unwrap_or(0) * factor,
             distance: self.distance.unwrap_or(0) * factor,
             climb: self.climb.unwrap_or(0) * factor,
@@ -233,7 +232,7 @@ impl Activity {
             Summary {
                 parts: Attachment::parts_per_activity(&self, conn)
                     .iter()
-                    .map(|x| x.apply_usage(&usage, conn))
+                    .map(|part| part.apply_usage(&usage, self.start, conn))
                     .collect::<TbResult<_>>()?,
                 attachments: Attachment::register(&self, &usage, conn),
                 activities: vec![self]

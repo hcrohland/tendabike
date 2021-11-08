@@ -158,8 +158,6 @@ pub fn parse_time (time: Option<String>) -> TbResult<Option<DateTime<Utc>>> {
 
 #[derive(Debug)]
 pub struct Usage {
-    // oldest activity
-    pub start: DateTime<Utc>,
     // usage time
     pub time: i32,
     /// Usage distance
@@ -182,9 +180,8 @@ pub enum Factor {
 }
 
 impl Usage {
-    pub fn none(time: DateTime<Utc>) -> Usage {
+    pub fn none() -> Usage {
         Usage {
-            start: time,
             time: 0,
             climb: 0,
             descend: 0,
@@ -200,7 +197,6 @@ impl Usage {
     pub fn add_activity(self, act: &Activity, factor: Factor) -> Usage {
         let factor = factor as i32;
         Usage {
-            start: min(self.start, act.start),
             time: self.time + act.time.unwrap_or(0) * factor,
             climb: self.climb + act.climb.unwrap_or(0) * factor,
             descend: self.descend + act.descend.unwrap_or_else(|| act.climb.unwrap_or(0)) * factor,
