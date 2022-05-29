@@ -2,7 +2,7 @@
 name = "tendabike"
 version = "0.3.0"
 authors = ["Christoph Rohland <tendabike@rohland.net>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 rocket = "0.4"
@@ -14,7 +14,7 @@ jsonwebtoken = "7.2"
 
 diesel = { version = "1.4", features = ["postgres", "chrono"] }
 diesel_migrations = "1.4"
-diesel-derive-newtype = "0.1"
+diesel-derive-newtype = "1"
 
 newtype_derive = "0.1"
 dotenv = "0.15"
@@ -26,10 +26,10 @@ serde_json = "1.0"
 csv = "1.1"
 
 chrono = { version ="0.4", features = ["serde"] }
-chrono-tz = "0.5"
+chrono-tz = "0.6"
 time = "0.1"
 
-pretty_assertions = "0.7"
+pretty_assertions = "1"
 
 thiserror = "1.0"
 anyhow = "1.0"
