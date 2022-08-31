@@ -7,27 +7,22 @@
 //! Most operations are done on the ActivityId though
 //!
 
-use rocket::response::status;
-use rocket_contrib::json::Json;
 
-use crate::*;
-use schema::activities;
-
-use diesel::{self, QueryDsl, RunQueryDsl};
+use super::*;
+use chrono::{DateTime, Utc};
 
 /// The Id of an Activity
 ///
 /// Most operations for activities are done on the Id alone
 ///
-#[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActivityId(i32);
 
 NewtypeDisplay! { () pub struct ActivityId(); }
 NewtypeFrom! { () pub struct ActivityId(i32); }
 
 /// The database's representation of an activity.
-#[derive(Debug, Clone, Identifiable, Queryable, AsChangeset, PartialEq, Serialize, Deserialize)]
-#[table_name = "activities"]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Activity {
     /// The primary key
     pub id: ActivityId,
@@ -51,12 +46,11 @@ pub struct Activity {
     pub descend: Option<i32>,
     /// average power output
     pub power: Option<i32>,
-    /// Which gear did she use?
-    pub gear: Option<PartId>,
+    /* /// Which gear did she use?
+    pub gear: Option<PartId>, */
 }
 
-#[derive(Debug, Clone, Insertable, AsChangeset, PartialEq, Serialize, Deserialize)]
-#[table_name = "activities"]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NewActivity {
     pub user_id: i32,
     /// The activity type
@@ -77,25 +71,24 @@ pub struct NewActivity {
     pub descend: Option<i32>,
     /// average power output
     pub power: Option<i32>,
-    /// Which gear did she use?
-    pub gear: Option<PartId>,
+    /* /// Which gear did she use?
+    pub gear: Option<PartId>, */
 }
 
 impl ActivityId {
     /// Read the activity with id self
     ///
     /// checks authorization
-    fn read(self, person: &dyn Person, conn: &AppConn) -> TbResult<Activity> {
-        let act = activities::table
-            .find(self)
-            .for_update()
-            .first::<Activity>(conn)
-            .context(format!("No activity id {}", self))?;
-        person.check_owner(
+    fn read(self, context: &Context) -> TbResult<Activity> {
+        // lookup activity
+        // for update!?!
+        unimplemented!();
+/*         person.check_owner(
             act.user_id,
             format!("User {} cannot access activity {}", person.get_id(), self),
         )?;
         Ok(act)
+ */
     }
 
     /// Delete the activity with id self
@@ -103,7 +96,7 @@ impl ActivityId {
     ///
     /// returns all affected parts  
     /// checks authorization  
-    pub fn delete(self, person: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
+    pub fn delete(self, context: &Context) -> TbResult<Summary> {
         use crate::schema::activities::dsl::*;
         info!("Deleting {:?}", self);
         conn.transaction(|| {

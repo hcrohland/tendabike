@@ -1,14 +1,6 @@
 use std::collections::HashMap;
 
-use rocket::response::status;
-use rocket_contrib::json::Json;
-
-use self::schema::{part_types, parts};
-use crate::*;
-
-use diesel::{self, QueryDsl, RunQueryDsl};
-
-// make rls happy for now. This is broken anyways...
+use super::*;
 
 //#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub type Assembly = HashMap<PartId, Part>;
@@ -27,17 +19,8 @@ impl ATrait for Assembly {
 #[derive(
     Clone,
     Debug,
-    PartialEq,
-    Serialize,
-    Deserialize,
-    Queryable,
-    Identifiable,
-    Associations,
-    AsChangeset,
+    PartialEq
 )]
-#[primary_key(id)]
-#[table_name = "parts"]
-#[belongs_to(PartType, foreign_key = "what")]
 pub struct Part {
     /// The primary key
     pub id: PartId,

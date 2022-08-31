@@ -1,13 +1,7 @@
-use rocket_contrib::json::Json;
+use super::*;
+use phf::{phf_map};
 
-use crate::*;
-use schema::{activity_types, part_types};
-
-// use self::diesel::prelude::*;
-
-use diesel::{self, QueryDsl, RunQueryDsl};
-
-#[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct PartTypeId(i32);
 
 NewtypeDisplay! { () pub struct PartTypeId(); }
@@ -18,7 +12,7 @@ NewtypeFrom! { () pub struct PartTypeId(i32); }
 /// We distingish main parts from spares:
 /// - Main parts can be used for an activity - like a bike
 /// - Spares can be attached to other parts and are subparts of main parts
-#[derive(Clone, Debug, Serialize, Deserialize, Queryable, Identifiable, Associations, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PartType {
     /// The primary key
     pub id: PartTypeId,
@@ -34,16 +28,25 @@ pub struct PartType {
     pub group: Option<String>
 }
 
-#[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct ActTypeId(i32);
 
 NewtypeDisplay! { () pub struct ActTypeId(); }
 NewtypeFrom! { () pub struct ActTypeId(i32); }
 
+
+static ACTIVITY_TYPES = phf::Map<&'static ActTypeId, &'static str> = phf_map! {
+    "US" => "United States",
+    "UK" => "United Kingdom",
+};
+
+
+
+
 /// The list of activity types
 /// Includes the kind of gear which can be used for this activity
 /// multiple gears are possible
-#[derive(Debug, Clone, Identifiable, Queryable, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ActivityType {
     /// The primary key
     pub id: ActTypeId,
@@ -61,23 +64,11 @@ impl ActTypeId {
     }
 }
 
-/// get all activity types
-#[get("/activity")]
-fn activity(_user: &User, conn: AppDbConn) -> Json<Vec<ActivityType>> {
-    Json(activity_types::table
-        .order(activity_types::id)
-        .load::<ActivityType>(&conn.0)
-        .expect("error loading ActivityTypes"))
-}
-
 impl PartTypeId {
 
     /// get the full type for a type_id
     pub fn get (self, conn: &AppConn) -> TbResult<PartType> {
-        use schema::part_types::dsl::*;
-        Ok(part_types
-            .find(self)
-            .get_result::<PartType>(conn)?)
+        unimplemented!()
     }
 
     /// recursively look for subtypes to self in the PartType vector
