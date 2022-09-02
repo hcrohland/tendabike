@@ -20,8 +20,8 @@ extern crate env_logger;
 
 extern crate dotenv;
 
-#[macro_use]
-extern crate thiserror;
+// #[macro_use]
+// extern crate thiserror;
 
 mod domain;
 

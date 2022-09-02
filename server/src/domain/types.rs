@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PartTypeId(i32);
 
 NewtypeDisplay! { () pub struct PartTypeId(); }
@@ -27,7 +27,7 @@ pub struct PartType {
     pub group: Option<String>
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ActTypeId(i32);
 
 NewtypeDisplay! { () pub struct ActTypeId(); }
@@ -129,9 +129,58 @@ pub struct ActivityType {
     pub gear_type: PartTypeId,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn get_a_bikeride () {
+        let id =  ActTypeId(1);
+        let bikeride = id.get();
+        assert_eq!(bikeride, Some(&ActivityType {id, name: "Bike Ride".to_string(), gear_type: PartTypeId(1) }))
+    }
+
+    #[test]
+    fn test_for_wrong_actid() {
+        let id = ActTypeId (1111);
+        assert!(id.get().is_none())
+    }
+}
+
 impl ActTypeId {
     pub fn get(&self) -> Option<&'static ActivityType> {
         ACTIVITY_TYPES.get(self)
+    }
+}
+
+#[cfg(test)]
+mod tests_parttype {
+    use super::*;
+
+    #[test]
+    fn get_a_bike () {
+        let id = PartTypeId (1);
+        assert!(id.get().unwrap().name == "Bike".to_string())
+    }
+
+    #[test]
+    fn get_bike_activities() {
+        let id = PartTypeId(1);
+
+        let mut acts = id.act_types();
+        acts.sort();
+
+        assert_eq!(acts, vec![ActTypeId(1), ActTypeId(5), ActTypeId(9)])
+    }
+
+    #[test]
+    fn get_frontwheel_parts () {
+        let mut types = PartTypeId(2).subtypes();
+        types.sort_by(|a,b| a.id.cmp(&b.id));
+        assert_eq!(
+            types,
+            vec![PartTypeId(2).get().unwrap(), PartTypeId(3).get().unwrap(), PartTypeId(15).get().unwrap()]
+        )
     }
 }
 
@@ -141,7 +190,7 @@ impl PartTypeId {
     pub fn act_types(&self) -> Vec<ActTypeId> {
         ACTIVITY_TYPES
             .values()
-            .filter(|x| x.gear_type != *self)
+            .filter(|x| x.gear_type == *self)
             .map (|x| x.id)
             .collect()
     }
