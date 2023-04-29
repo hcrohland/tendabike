@@ -193,7 +193,7 @@ dependencies = [
  "num-integer",
  "num-traits",
  "serde",
- "time",
+ "time 0.1.45",
  "wasm-bindgen",
  "winapi 0.3.9",
 ]
@@ -252,7 +252,7 @@ dependencies = [
  "percent-encoding 2.2.0",
  "rand 0.8.5",
  "sha2",
- "time",
+ "time 0.1.45",
 ]
 
 [[package]]
@@ -825,7 +825,7 @@ dependencies = [
  "log 0.3.9",
  "mime 0.2.6",
  "num_cpus",
- "time",
+ "time 0.1.45",
  "traitobject",
  "typeable",
  "unicase 1.4.2",
@@ -1753,7 +1753,7 @@ dependencies = [
  "rocket_codegen",
  "rocket_http",
  "state",
- "time",
+ "time 0.1.45",
  "toml",
  "version_check 0.9.4",
  "yansi",
@@ -1831,7 +1831,7 @@ dependencies = [
  "percent-encoding 1.0.1",
  "smallvec",
  "state",
- "time",
+ "time 0.1.45",
  "unicode-xid",
 ]
 
@@ -2166,7 +2166,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "thiserror",
- "time",
+ "time 0.2.0",
 ]
 
 [[package]]
@@ -2208,6 +2208,12 @@ dependencies = [
  "wasi 0.10.0+wasi-snapshot-preview1",
  "winapi 0.3.9",
 ]
+
+[[package]]
+name = "time"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcc26de0a81a07c8352b548977862908fa9863e0e6e4f0eb36b2a9f4f8845585"
 
 [[package]]
 name = "tinyvec"
