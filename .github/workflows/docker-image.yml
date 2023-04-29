@@ -15,4 +15,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Build the Docker image
-      run: docker build . --file Dockerfile.github --tag my-image-name:$(date +%s)
+      run: docker build . --file Dockerfile.github --tag tendabike:$(date +%s)
+    - name: Push image
+      run: docker push ghcr.io/hcrohland/tendabike:$(date +%s)
