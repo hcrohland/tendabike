@@ -1,4 +1,0 @@
-FROM busybox
-
-ENTRYPOINT [ "/bin/echo hello world" ]
-LABEL org.opencontainers.image.source = "https://github.com/hcrohland/tendabike"
