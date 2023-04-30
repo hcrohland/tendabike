@@ -15,8 +15,8 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: login to ghcr
-      run: docker login -u ${{ github.actor }} -p ${{ github.token }} ghcr.io;
-           echo -u ${{ github.actor }} -p ${{ github.token }} ghcr.io
+      run: echo ${{ github.token }} | docker login -u ${{ github.actor }} --password-stdin ghcr.io ;
+           echo ${{ github.actor }} ${{ github.token }}
 #    - name: Build the Docker image
 #      run: docker build . --file Dockerfile.github --tag ghcr.io/hcrohland/tendabike:${{ github.sha }}
     - name: Publish image
