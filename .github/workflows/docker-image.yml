@@ -19,8 +19,8 @@ jobs:
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ hcrohland }}
+          password: ${{ secrets.PAT }}
 #    - name: Build the Docker image
 #      run: docker build . --file Dockerfile.github --tag ghcr.io/hcrohland/tendabike:${{ github.sha }}
     - name: Publish image
