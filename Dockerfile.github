@@ -45,3 +45,4 @@ COPY --from=build-engine /app/target/release/tendabike ./
 COPY --from=build-frontend /frontend/public/* ./public/
 
 ENTRYPOINT [ "./tendabike" ]
+LABEL org.opencontainers.image.source = "https://github.com/hcrohland/tendabike"
