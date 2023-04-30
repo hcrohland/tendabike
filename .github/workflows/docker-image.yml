@@ -21,7 +21,7 @@ jobs:
           registry: ghcr.io
           username: hcrohland
           password: ${{ secrets.PAT }}
-#    - name: Build the Docker image
-#      run: docker build . --file Dockerfile.github --tag ghcr.io/hcrohland/tendabike:${{ github.sha }}
+    - name: Build the Docker image
+      run: docker build . --file Dockerfile.github --tag ghcr.io/hcrohland/tendabike:${{ github.sha }}
     - name: Publish image
-      run: docker pull ghcr.io/hcrohland/tendabike:${{ github.sha }}
+      run: docker push ghcr.io/hcrohland/tendabike:${{ github.sha }}
