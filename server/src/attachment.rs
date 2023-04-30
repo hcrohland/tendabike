@@ -3,7 +3,6 @@
 //! Attachments can be hierarchical
 //! They are identified by part_id and attached time
 
-use chrono::MAX_DATETIME;
 use diesel::{self, QueryDsl, RunQueryDsl};
 use rocket_contrib::json::Json;
 
@@ -137,10 +136,10 @@ impl Event {
     fn attach_one(self, conn: &AppConn) -> TbResult<(Summary, DateTime<Utc>)> {
         let mut hash = SumHash::default();
         // when does the current attachment end
-        let mut end = MAX_DATETIME; 
+        let mut end = DateTime::<Utc>::MAX_UTC; 
         // the time the current part will be detached
         // we need this to reattach subparts
-        let mut det = MAX_DATETIME; 
+        let mut det = DateTime::<Utc>::MAX_UTC; 
 
         let what = self.part_id.what(conn)?;
 

@@ -126,7 +126,7 @@ fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
 
     diesel::update(attachments)
         .filter(detached.is_null())
-        .set(detached.eq(chrono::MAX_DATETIME))
+        .set(detached.eq(DateTime::<Utc>::MAX_UTC))
         .execute(&conn.0)
         .expect("rewrite detached failed");
 
