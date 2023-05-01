@@ -33,7 +33,7 @@ jobs:
       run: echo ${{ github.event_name }}
       #docker tag ghcr.io/hcrohland/tendabike:${{ github.sha }} ghcr.io/hcrohland/tendabike:latest
     - name: Tag as latest if pushed
-      if: github.event_name == "push"
+      if: github.event_name == push
       run: docker tag ghcr.io/hcrohland/tendabike:${{ github.sha }} ghcr.io/hcrohland/tendabike:latest
     - name: Publish image
       run: docker push -a ghcr.io/hcrohland/tendabike
