@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y libpq-dev libssl-dev
 ENV DEBIAN_FRONTEND=noninteractive
 RUN cargo install cargo-chef 
 # install nighlty toolchain
-RUN rustup update nightly && rustup default nightly
+RUN rustup set profile minimal && rustup update nightly && rustup default nightly
 
 FROM base as planner
 
@@ -31,13 +31,12 @@ COPY server/ .
 
 RUN cargo build --release
 
-FROM node:17 AS build-frontend
+FROM node:20 AS build-frontend
 
 WORKDIR /frontend
 
 COPY frontend/package.json frontend/package-lock.json /frontend/
-RUN npm install -g npm@8.1.2
-RUN npm update
+RUN npm update rollup
 
 COPY frontend/ /frontend
 RUN npm run build
