@@ -28,8 +28,12 @@ jobs:
     - run: echo ${{ github.event_name }}
     - name: Build the Docker image
       run: docker build . --file Dockerfile --tag ghcr.io/hcrohland/tendabike:${{ github.sha }} 
+    - name: Tag pr if pull request
+      if: github.event_name == "pull_request"
+      run: echo ${{ github.event_name }}
+      #docker tag ghcr.io/hcrohland/tendabike:${{ github.sha }} ghcr.io/hcrohland/tendabike:latest
     - name: Tag as latest if pushed
-      if: ${{ github.event.name }} == push
+      if: github.event_name == "push"
       run: docker tag ghcr.io/hcrohland/tendabike:${{ github.sha }} ghcr.io/hcrohland/tendabike:latest
     - name: Publish image
       run: docker push -a ghcr.io/hcrohland/tendabike
