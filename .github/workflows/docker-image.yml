@@ -30,7 +30,7 @@ jobs:
       run: docker build . --file Dockerfile --tag ghcr.io/hcrohland/tendabike:${{ github.sha }} 
     - name: Tag pr if pull request
       if: github.event_name == 'pull_request'
-      run: echo ${{ github.event_name }}
+      run: echo PR_${{ github.event.pull_request.number }}
       #docker tag ghcr.io/hcrohland/tendabike:${{ github.sha }} ghcr.io/hcrohland/tendabike:latest
     - name: Tag as latest if pushed
       if: github.event_name == 'push'
