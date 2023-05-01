@@ -28,4 +28,4 @@ jobs:
     - name: Build the Docker image
       run: docker build . --file Dockerfile --tag hcrohland/tendabike:${{ github.sha }} --tag hcrohland/tendabike:latest
     - name: Publish image
-      run: docker push -a hcrohland/tendabike
+      run: docker push -a ghcr.io/hcrohland/tendabike
