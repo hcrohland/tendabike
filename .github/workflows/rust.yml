@@ -1,8 +1,8 @@
 name: Rust
 
 on:
-  push:
-    branches: [ "main" ]
+  #push:
+  #  branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
@@ -20,15 +20,15 @@ jobs:
       uses: actions-rs/toolchain@v1
       with:
           toolchain: nightly
+          profile: minimal
           override: true
-          components: rustfmt, clippy
+#          components: rustfmt, clippy
 
       # `cargo check` command here will use installed `nightly`
       # as it is set as an "override" for current directory
 
-    - name: Run cargo cross build
+    - name: Run cargo build
       uses: actions-rs/cargo@v1
       with:
-        use-cross: true
         command: build
-        args: --target aarch64-unknown-linux-gnu --release
+#        args: --release
