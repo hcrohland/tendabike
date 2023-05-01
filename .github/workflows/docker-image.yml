@@ -8,12 +8,13 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
 
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: Hobbes
 
     steps:
     - uses: actions/checkout@v3
