@@ -6,7 +6,7 @@ use time::*;
 
 use rocket::http::Cookies;
 use rocket::request::Request;
-use jsonwebtoken::{DecodingKey, decode, Validation, encode, EncodingKey, Header};
+use jsonwebtoken::{DecodingKey, decode, Validation, Algorithm, encode, EncodingKey, Header};
 
 pub const LEEWAY: u64 = 60 * 60 * 24 * 21; // 21 days
 
@@ -21,9 +21,9 @@ struct UserToken {
     id: i32
 }
 
-pub fn id(token: &str, leeway: u64) -> TbResult<i32> {
+pub fn id(token: &str) -> TbResult<i32> {
 
-    let token_data = decode::<UserToken>(token, &DecodingKey::from_secret(MY_SECRET), &Validation {leeway, ..Default::default()})?;
+    let token_data = decode::<UserToken>(token, &DecodingKey::from_secret(MY_SECRET), &Validation::new(Algorithm::HS256))?;
     Ok(token_data.claims.id)
 }
 

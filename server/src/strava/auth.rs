@@ -121,7 +121,7 @@ impl User {
     fn get(request: &Request) -> TbResult<User> {
         // Get user id
         let token = jwt::token(request)?;
-        let id = jwt::id(&token, jwt::LEEWAY)?;
+        let id = jwt::id(&token)?;
         // Get the user
         let conn = request
             .guard::<AppDbConn>()
