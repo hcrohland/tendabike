@@ -26,6 +26,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag ghcr.io/hcrohland/tendabike:${{ github.sha }} --tag ghcr.io/hcrohland/tendabike:latest
+      run: docker build . --file Dockerfile --tag ghcr.io/hcrohland/tendabike:${{ github.sha }} 
+    - name: Tag as latest if pushed
+      if: ${{ github.event.push }}
+      run: docker tag ghcr.io/hcrohland/tendabike:${{ github.sha }} ghcr.io/hcrohland/tendabike:latest
     - name: Publish image
       run: docker push -a ghcr.io/hcrohland/tendabike
