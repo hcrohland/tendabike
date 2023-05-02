@@ -53,16 +53,12 @@ pub mod schema;
 pub mod user;
 use user::{Person, User, Admin};
 
-pub mod types;
+
+pub mod services;
+use services::*;
 use types::*;
-
-pub mod part;
 use part::{Part, PartId};
-
-pub mod activity;
 use activity::{Activity, ActivityId};
-
-pub mod attachment;
 use attachment::{Attachment, AttachmentDetail};
 
 use chrono::{DateTime, TimeZone, Utc};
