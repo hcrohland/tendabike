@@ -48,18 +48,16 @@ pub mod jwt;
 pub mod error;
 use error::*;
 
-pub mod drivers;
 pub mod schema;
-pub mod user;
-use user::{Person, User, Admin};
 
-
+pub mod drivers;
 pub mod services;
 use services::*;
 use types::*;
 use part::{Part, PartId};
 use activity::{Activity, ActivityId};
 use attachment::{Attachment, AttachmentDetail};
+use user::{Person, User, Admin};
 
 use chrono::{DateTime, TimeZone, Utc};
 

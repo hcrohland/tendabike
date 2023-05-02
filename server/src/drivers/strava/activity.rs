@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use super::*;
 use crate::activity::ActivityId;
 use crate::activity::NewActivity;
-use strava::auth::User;
+use drivers::strava::auth::User;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaActivity {

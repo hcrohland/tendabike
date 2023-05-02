@@ -8,6 +8,7 @@ use rocket_oauth2::{OAuth2, TokenResponse, OAuthConfig};
 
 use diesel::{self, QueryDsl, RunQueryDsl, sql_query};
 
+use crate::*;
 use super::*;
 use schema::strava_users;
 use user::Person;
@@ -392,7 +393,7 @@ pub fn fairing(config: &Config) -> impl rocket::fairing::Fairing {
 pub fn sync(tbid: i32, _u: user::Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<Summary> {
     let user = User::from_tb(tbid, conn, oauth)?;
     
-    strava::webhook::hooks(user)
+    drivers::strava::webhook::hooks(user)
 }
 
 #[post("/disable/<tbid>")]
