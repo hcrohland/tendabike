@@ -5,6 +5,7 @@ use rocket::request::{self, FromRequest, Request};
 use rocket::Outcome;
 use rocket_contrib::json::Json;
 use schema::*;
+use drivers::strava;
 
 pub trait Person {
     fn get_id(&self) -> i32;

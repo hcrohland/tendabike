@@ -48,7 +48,7 @@ pub mod jwt;
 pub mod error;
 use error::*;
 
-pub mod strava;
+pub mod drivers;
 pub mod schema;
 pub mod user;
 use user::{Person, User, Admin};
@@ -100,11 +100,11 @@ fn main() {
         .mount("/part", part::routes())
         .mount("/part", attachment::routes())
         .mount("/activ", activity::routes())
-        .mount("/strava", strava::ui::routes());
+        .mount("/strava", drivers::strava::ui::routes());
         
         // add oauth2 flow
         let config = ship.config().clone();
-        ship.attach(strava::auth::fairing(&config))
+        ship.attach(drivers::strava::auth::fairing(&config))
             .attach(rocket::fairing::AdHoc::on_launch("Launch Message", |rocket| {
                 let c = rocket.config();
                 eprintln!("\nInfo: TendaBike running on {}:{}\n", c.address, c.port);
