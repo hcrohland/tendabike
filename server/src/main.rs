@@ -45,8 +45,6 @@ use std::env;
 use std::collections::HashMap;
 
 pub mod jwt;
-pub mod error;
-use error::*;
 
 pub mod schema;
 
@@ -58,6 +56,7 @@ use part::{Part, PartId};
 use activity::{Activity, ActivityId};
 use attachment::{Attachment, AttachmentDetail};
 use user::{Person, User, Admin};
+use error::*;
 
 use chrono::{DateTime, TimeZone, Utc};
 
