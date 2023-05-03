@@ -1,8 +1,6 @@
 use crate::*;
 use anyhow::Context;
-use rocket::http::Status;
-use rocket::request::{self, FromRequest, Request};
-use rocket::Outcome;
+use rocket::request::Request;
 use rocket_contrib::json::Json;
 use schema::*;
 use drivers::strava;
@@ -28,7 +26,7 @@ pub struct User {
 }
 
 #[derive(Debug, Serialize)]
-struct Stat {
+pub struct Stat {
     user: User,
     parts: i64,
     activities: i64,
@@ -37,7 +35,7 @@ struct Stat {
 }
 
 impl User {
-    fn read(request: &Request) -> TbResult<Self> {
+    pub fn read(request: &Request) -> TbResult<Self> {
         let id = strava::auth::get_id(request)?;
         let conn = request.guard::<AppDbConn>().expect("No db request guard").0;
         Ok(users::table.find(id).get_result(&conn)?)
@@ -68,46 +66,6 @@ impl Person for User {
     }
     fn is_admin(&self) -> bool {
         self.is_admin
-    }
-}
-
-impl<'a, 'r> FromRequest<'a, 'r> for &'a User {
-    type Error = &'a anyhow::Error;
-
-    fn from_request(request: &'a Request<'r>) -> request::Outcome<&'a User, &'a anyhow::Error> {
-        let user_result = request.local_cache(|| User::read(request));
-
-        match user_result.as_ref() {
-            Ok(x) => Outcome::Success(x),
-            Err(e) => Outcome::Failure((Status::Unauthorized, e)),
-        }
-    }
-}
-
-pub struct Admin<'a> {
-    user: &'a User,
-}
-
-impl<'a, 'r> FromRequest<'a, 'r> for Admin<'a> {
-    type Error = &'a anyhow::Error;
-
-    fn from_request(request: &'a Request<'r>) -> request::Outcome<Admin<'a>, &'a anyhow::Error> {
-        let user = request.guard::<&User>()?;
-
-        if user.is_admin {
-            Outcome::Success(Admin { user })
-        } else {
-            Outcome::Forward(())
-        }
-    }
-}
-
-impl Person for Admin<'_> {
-    fn get_id(&self) -> i32 {
-        self.user.id
-    }
-    fn is_admin(&self) -> bool {
-        true
     }
 }
 

@@ -48,6 +48,7 @@ pub mod jwt;
 
 pub mod schema;
 
+pub mod presentation;
 pub mod drivers;
 pub mod services;
 use services::*;
@@ -55,8 +56,10 @@ use types::*;
 use part::{Part, PartId};
 use activity::{Activity, ActivityId};
 use attachment::{Attachment, AttachmentDetail};
-use user::{Person, User, Admin};
+use user::{Person, User};
+use presentation::Admin;
 use error::*;
+use presentation::*;
 
 use chrono::{DateTime, TimeZone, Utc};
 

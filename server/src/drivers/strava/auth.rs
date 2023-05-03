@@ -390,13 +390,13 @@ pub fn fairing(config: &Config) -> impl rocket::fairing::Fairing {
 }
 
 #[get("/sync/<tbid>")]
-pub fn sync(tbid: i32, _u: user::Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<Summary> {
+pub fn sync(tbid: i32, _u: Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<Summary> {
     let user = User::from_tb(tbid, conn, oauth)?;
     
     drivers::strava::webhook::hooks(user)
 }
 
 #[post("/disable/<tbid>")]
-pub fn disable(tbid: i32, _u: user::Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<()> {
+pub fn disable(tbid: i32, _u: Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<()> {
     tbapi(User::from_tb(tbid, conn, oauth)?.my_disable())
 }
