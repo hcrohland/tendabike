@@ -36,12 +36,9 @@ extern crate thiserror;
 extern crate reqwest;
 extern crate jsonwebtoken;
 
-
-
 use self::diesel::prelude::*;
 
 use std::cmp::{max,min};
-use std::env;
 use std::collections::HashMap;
 
 pub mod jwt;
@@ -63,77 +60,28 @@ use presentation::*;
 
 use chrono::{DateTime, TimeZone, Utc};
 
-use rocket::Rocket;
-use rocket::fairing::AdHoc;
-
 pub type AppConn = diesel::PgConnection;
 
 fn main() {
     // setup environment. Includes Config and logging
     init_environment();
 
-    // start the server
-    // Initialize server
-
-    // You can also deserialize this
-    let cors = rocket_cors::CorsOptions::default()
-        .to_cors()
-        .expect("Could not set CORS options");
-
-    let ship = rocket::ignite()
-        // add database pool
-        .attach(AppDbConn::fairing())
-        // run database migrations
-        .attach(AdHoc::on_attach("TendaBike Database Migrations", run_db_migrations))
-        .attach(cors)
-        // mount all the endpoints from the module
-        .mount(
-            "/",
-            rocket_contrib::serve::StaticFiles::from(
-                env::var("STATIC_WWW").unwrap_or_else(|_|
-                    concat!(env!("CARGO_MANIFEST_DIR"),"/../frontend/public").into()
-                )
-            )
-        )
-        .mount("/user", user::routes())
-        .mount("/types", types::routes())
-        .mount("/part", part::routes())
-        .mount("/part", attachment::routes())
-        .mount("/activ", activity::routes())
-        .mount("/strava", drivers::strava::ui::routes());
-        
-        // add oauth2 flow
-        let config = ship.config().clone();
-        ship.attach(drivers::strava::auth::fairing(&config))
-            .attach(rocket::fairing::AdHoc::on_launch("Launch Message", |rocket| {
-                let c = rocket.config();
-                eprintln!("\nInfo: TendaBike running on {}:{}\n", c.address, c.port);
-            }))
-            .launch();
+    presentation::server::start()
 }
-#[database("app_db")]
-pub struct AppDbConn(AppConn);
 
 embed_migrations!();
 
-fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
-    let conn = AppDbConn::get_one(&rocket).expect("database connection");
+fn run_db_migrations (conn: &AppConn) {
     use schema::attachments::dsl::*;
 
     diesel::update(attachments)
         .filter(detached.is_null())
         .set(detached.eq(DateTime::<Utc>::MAX_UTC))
-        .execute(&conn.0)
+        .execute(conn)
         .expect("rewrite detached failed");
 
-    match embedded_migrations::run(&*conn) {
-        Ok(()) => Ok(rocket),
-        Err(e) => {
-            error!("Failed to run database migrations: {:?}", e);
-            Err(rocket)
-        }
-    }
-
+    embedded_migrations::run(conn)
+        .expect("Failed to run database migrations: {:?}");
 }
 
 pub fn init_environment() {
