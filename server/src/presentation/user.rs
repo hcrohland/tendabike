@@ -1,6 +1,6 @@
 use rocket::{Outcome, request::{FromRequest, self}, Request, http::Status};
 
-use crate::services::user::{User, Person};
+use crate::domain::user::{User, Person};
 
 impl<'a, 'r> FromRequest<'a, 'r> for &'a User {
     type Error = &'a anyhow::Error;

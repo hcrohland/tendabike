@@ -47,8 +47,8 @@ pub mod schema;
 
 pub mod presentation;
 pub mod drivers;
-pub mod services;
-use services::*;
+pub mod domain;
+use domain::*;
 use types::*;
 use part::{Part, PartId};
 use activity::{Activity, ActivityId};
