@@ -41,8 +41,6 @@ use self::diesel::prelude::*;
 use std::cmp::{max,min};
 use std::collections::HashMap;
 
-pub mod jwt;
-
 pub mod schema;
 
 pub mod presentation;

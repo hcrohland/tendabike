@@ -10,6 +10,7 @@ mod part;
 mod attachment;
 mod activity;
 mod error;
+pub mod jwt;
 pub use error::*;
 
 #[database("app_db")]

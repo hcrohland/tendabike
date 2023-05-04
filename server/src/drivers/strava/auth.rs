@@ -12,6 +12,7 @@ use crate::*;
 use super::*;
 use schema::strava_users;
 use user::Person;
+use presentation::jwt;
 
 const API: &str = "https://www.strava.com/api/v3";
 
