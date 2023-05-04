@@ -1,7 +1,5 @@
 use crate::*;
 use anyhow::Context;
-use rocket::request::Request;
-use rocket_contrib::json::Json;
 use schema::*;
 use drivers::strava;
 
@@ -35,10 +33,8 @@ pub struct Stat {
 }
 
 impl User {
-    pub fn read(request: &Request) -> TbResult<Self> {
-        let id = strava::auth::get_id(request)?;
-        let conn = request.guard::<AppDbConn>().expect("No db request guard").0;
-        Ok(users::table.find(id).get_result(&conn)?)
+    pub fn read(id:i32, conn: &AppConn) -> TbResult<Self> {
+        Ok(users::table.find(id).get_result(conn)?)
     }
 
     fn get_stat(self, conn: &AppConn) -> TbResult<Stat> {
@@ -82,6 +78,9 @@ pub fn create(forename: String, lastname: String, conn: &AppConn) -> TbResult<i3
         .context("Could not create user")?;
     Ok(user.id)
 }
+/* 
+use rocket::request::Request;
+use rocket_contrib::json::Json;
 
 #[get("/")]
 fn getuser(user: &User) -> Json<&User> {
@@ -106,3 +105,4 @@ fn summary(user: strava::auth::User, conn: AppDbConn) -> ApiResult<Summary> {
 pub fn routes() -> Vec<rocket::Route> {
     routes![getuser, userlist, summary]
 }
+ */

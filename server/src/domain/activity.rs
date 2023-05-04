@@ -7,9 +7,6 @@
 //! Most operations are done on the ActivityId though
 //!
 
-use rocket::response::status;
-use rocket_contrib::json::Json;
-
 use crate::*;
 use schema::activities;
 
@@ -250,7 +247,7 @@ impl Activity {
     }
 }
 
-fn categories(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartTypeId>> {
+pub fn categories(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartTypeId>> {
     use crate::schema::activities::dsl::*;
     use crate::schema::activity_types;
 
@@ -272,7 +269,7 @@ fn categories(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartTypeId>> {
 }
 
 
-fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn) 
+pub fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn) 
     -> TbResult<(Summary, Vec<String>, Vec<String>)> {
     use schema::activities::dsl::*;
     #[derive(Debug, Deserialize)]
@@ -344,7 +341,7 @@ fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn
     Ok((summary, good, bad))
 }
 
-fn def_part(partid: &PartId, user: & User, conn: &AppConn) -> TbResult<Summary> {
+pub fn def_part(partid: &PartId, user: & User, conn: &AppConn) -> TbResult<Summary> {
     use schema::activities::dsl::*;
     let part = partid.part(user, conn)?;
     let types = part.what.act_types(conn)?;
@@ -364,6 +361,9 @@ fn def_part(partid: &PartId, user: & User, conn: &AppConn) -> TbResult<Summary> 
     }
     Ok(hash.collect())
 }
+/* 
+use rocket::response::status;
+use rocket_contrib::json::Json;
 
 #[post("/defaultgear", data="<gearid>")]
 fn def_part_api (gearid: Json<PartId>, user: &User, conn: AppDbConn) -> ApiResult<Summary> {
@@ -465,3 +465,4 @@ fn mycats(user: &User, conn: AppDbConn) -> ApiResult<Vec<PartTypeId>> {
 pub fn routes() -> Vec<rocket::Route> {
     routes![get, put, delete, post, descend, mycats, rescan, def_part_api]
 }
+ */

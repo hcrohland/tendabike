@@ -1,8 +1,5 @@
 use std::collections::HashMap;
 
-use rocket::response::status;
-use rocket_contrib::json::Json;
-
 use self::schema::{part_types, parts};
 use crate::*;
 
@@ -88,7 +85,7 @@ pub struct NewPart {
 #[derive(Clone, Debug, PartialEq, Deserialize, AsChangeset)]
 #[table_name = "parts"]
 #[changeset_options(treat_none_as_null = "true")]
-struct ChangePart {
+pub struct ChangePart {
     pub id: PartId,
     /// The owner
     pub owner: i32,
@@ -275,7 +272,7 @@ impl NewPart {
 }
 
 impl ChangePart {
-    fn change(&self, user: &User, conn: &AppConn) -> TbResult<Part> {
+    pub fn change(&self, user: &User, conn: &AppConn) -> TbResult<Part> {
         use schema::parts::dsl::*;
         info!("Change {:?}", self);
 
@@ -288,6 +285,9 @@ impl ChangePart {
         Ok(part)
     }
 }
+/* 
+use rocket::response::status;
+use rocket_contrib::json::Json;
 
 #[get("/<part>")]
 fn get(part: i32, user: &User, conn: AppDbConn) -> ApiResult<Part> {
@@ -318,3 +318,4 @@ fn put(
 pub fn routes() -> Vec<rocket::Route> {
     routes![get, post, put]
 }
+ */

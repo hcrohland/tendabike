@@ -24,12 +24,13 @@ pub fn start () {
                 )
             )
         )
-        .mount("/user", user::routes())
-        .mount("/types", types::routes())
-        .mount("/part", part::routes())
-        .mount("/part", attachment::routes())
-        .mount("/activ", activity::routes())
-        .mount("/strava", drivers::strava::ui::routes());
+        // .mount("/user", user::routes())
+        // .mount("/types", types::routes())
+        // .mount("/part", part::routes())
+        // .mount("/part", attachment::routes())
+        // .mount("/activ", activity::routes())
+        // .mount("/strava", drivers::strava::ui::routes())
+        ;
         
         // add oauth2 flow
         let config = ship.config().clone();

@@ -1,5 +1,3 @@
-use rocket_contrib::json::Json;
-
 use crate::*;
 use schema::{activity_types, part_types};
 
@@ -61,15 +59,6 @@ impl ActTypeId {
     }
 }
 
-/// get all activity types
-#[get("/activity")]
-fn activity(_user: &User, conn: AppDbConn) -> Json<Vec<ActivityType>> {
-    Json(activity_types::table
-        .order(activity_types::id)
-        .load::<ActivityType>(&conn.0)
-        .expect("error loading ActivityTypes"))
-}
-
 impl PartTypeId {
 
     /// get the full type for a type_id
@@ -111,6 +100,18 @@ impl PartTypeId {
     }
 }
 
+/* 
+use rocket_contrib::json::Json;
+
+// get all activity types
+#[get("/activity")]
+fn activity(_user: &User, conn: AppDbConn) -> Json<Vec<ActivityType>> {
+    Json(activity_types::table
+        .order(activity_types::id)
+        .load::<ActivityType>(&conn.0)
+        .expect("error loading ActivityTypes"))
+}
+
 /// get all part types
 #[get("/part")]
 fn part(conn: AppDbConn) -> Json<Vec<PartType>> {
@@ -123,3 +124,4 @@ fn part(conn: AppDbConn) -> Json<Vec<PartType>> {
 pub fn routes() -> Vec<rocket::Route> {
     routes![part, activity]
 }
+ */
