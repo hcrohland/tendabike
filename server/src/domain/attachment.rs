@@ -538,22 +538,3 @@ impl Attachment {
         Ok(atts)
     }
 }
-/* 
-use rocket_contrib::json::Json;
-
-/// route for attach API
-#[post("/attach", data = "<event>")]
-fn attach_rt(event: Json<Event>, user: &User, conn: AppDbConn) -> ApiResult<Summary> {
-    tbapi(event.into_inner().attach(user, &conn))
-}
-
-/// route for detach API
-#[post("/detach", data = "<event>")]
-fn detach_rt(event: Json<Event>, user: &User, conn: AppDbConn) -> ApiResult<Summary> {
-    tbapi(event.into_inner().detach(user, &conn))
-}
-
-pub fn routes() -> Vec<rocket::Route> {
-    routes![attach_rt, detach_rt]
-}
- */

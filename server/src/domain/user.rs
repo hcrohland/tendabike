@@ -37,7 +37,7 @@ impl User {
         Ok(users::table.find(id).get_result(conn)?)
     }
 
-    fn get_stat(self, conn: &AppConn) -> TbResult<Stat> {
+    pub fn get_stat(self, conn: &AppConn) -> TbResult<Stat> {
         let parts = {
             use schema::parts::dsl::{parts, owner};
             parts.count().filter(owner.eq(self.id)).first(conn)?
@@ -50,7 +50,7 @@ impl User {
         Ok(Stat{user: self, parts, activities, events, disabled})
     }
 
-    fn get_all (conn: &AppConn) -> TbResult<Vec<Stat>> {
+    pub fn get_all (conn: &AppConn) -> TbResult<Vec<Stat>> {
         let users = users::table.get_results::<User>(conn)?;
         users.into_iter().map(|u| u.get_stat(conn)).collect::<TbResult<_>>()
     }    
@@ -78,31 +78,3 @@ pub fn create(forename: String, lastname: String, conn: &AppConn) -> TbResult<i3
         .context("Could not create user")?;
     Ok(user.id)
 }
-/* 
-use rocket::request::Request;
-use rocket_contrib::json::Json;
-
-#[get("/")]
-fn getuser(user: &User) -> Json<&User> {
-    Json(user)
-}
-
-#[get("/all")]
-fn userlist(_u: Admin, conn: AppDbConn) -> ApiResult<Vec<Stat>> {
-    tbapi(User::get_all(&conn))
-}
-
-#[get("/summary")]
-fn summary(user: strava::auth::User, conn: AppDbConn) -> ApiResult<Summary> {
-    strava::ui::update_user(&user)?;
-    let parts = Part::get_all(&user, &conn)?;
-    let attachments = Attachment::for_parts(&parts,&conn)?;
-    let activities = Activity::get_all(&user, &conn)?;
-    tbapi(Ok(Summary{parts,attachments,activities}))
-}
-
-
-pub fn routes() -> Vec<rocket::Route> {
-    routes![getuser, userlist, summary]
-}
- */

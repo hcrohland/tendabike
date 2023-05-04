@@ -1,51 +1,30 @@
-use rocket::{Outcome, request::{FromRequest, self}, Request, http::Status};
 
-use crate::{domain::user::{User, Person}, drivers::strava::error::TbResult};
+use domain::user::Stat;
+use rocket_contrib::json::Json;
+use crate::drivers::strava;
 
-struct RUser<'a> ( &'a User );
+use super::*;
 
-fn readuser (request: &Request) -> TbResult<User> {
-    let id = crate::drivers::strava::auth::get_id(request)?;
-    let conn = request.guard::<super::AppDbConn>().expect("No db request guard").0;
-    User::read(id, &conn)
+#[get("/")]
+fn getuser(user: RUser) -> Json<User> {
+    Json(user.0.clone())
 }
 
-impl<'a, 'r> FromRequest<'a, 'r> for RUser<'a> {
-    type Error = &'a anyhow::Error;
-
-    fn from_request(request: &'a Request<'r>) -> rocket::Outcome<RUser<'a>, (rocket::http::Status, &'a anyhow::Error), ()> {
-        let user_result = request.local_cache(|| readuser(request));
-
-        match user_result.as_ref() {
-            Ok(x) => Outcome::Success(RUser(x)),
-            Err(e) => Outcome::Failure((Status::Unauthorized, e)),
-        }
-    }
+#[get("/all")]
+fn userlist(_u: Admin, conn: AppDbConn) -> ApiResult<Vec<Stat>> {
+    tbapi(User::get_all(&conn))
 }
 
-pub struct Admin<'a> (&'a User);
-
-impl<'a, 'r> FromRequest<'a, 'r> for Admin<'a> {
-    type Error = &'a anyhow::Error;
-
-    fn from_request(request: &'a Request<'r>) -> request::Outcome<Admin<'a>, &'a anyhow::Error> {
-        let RUser(user) = request.guard::<RUser>()?;
-
-        if user.is_admin() {
-            Outcome::Success(Admin(user))
-        } else {
-            Outcome::Forward(())
-        }
-    }
+#[get("/summary")]
+fn summary(user: strava::auth::User, conn: AppDbConn) -> ApiResult<Summary> {
+    strava::ui::update_user(&user)?;
+    let parts = domain::part::Part::get_all(&user, &conn)?;
+    let attachments = Attachment::for_parts(&parts,&conn)?;
+    let activities = Activity::get_all(&user, &conn)?;
+    tbapi(Ok(Summary{parts,attachments,activities}))
 }
 
-impl Person for Admin<'_> {
-    fn get_id(&self) -> i32 {
-        self.0.get_id()
-    }
-    fn is_admin(&self) -> bool {
-        assert!(self.0.is_admin());
-        true
-    }
-}
 
+pub fn routes() -> Vec<rocket::Route> {
+    routes![getuser, userlist, summary]
+}

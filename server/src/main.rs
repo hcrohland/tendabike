@@ -54,7 +54,6 @@ use part::{Part, PartId};
 use activity::{Activity, ActivityId};
 use attachment::{Attachment, AttachmentDetail};
 use user::{Person, User};
-use presentation::Admin;
 use error::*;
 use presentation::*;
 
@@ -66,7 +65,7 @@ fn main() {
     // setup environment. Includes Config and logging
     init_environment();
 
-    presentation::server::start()
+    presentation::start()
 }
 
 embed_migrations!();
