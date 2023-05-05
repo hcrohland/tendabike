@@ -8,7 +8,7 @@ use diesel::{self, RunQueryDsl};
 use diesel::prelude::*;
 
 use super::*;
-use auth::User;
+use auth::StravaContext;
 use schema::strava_events;
 
 // complicated way to have query parameters with dots in the name
@@ -147,7 +147,7 @@ pub fn insert_stop(conn: &AppConn) -> TbResult<()> {
     Ok(())
 }
 
-fn rate_limit(event: Event, user: &User) -> TbResult<Option<Event>> {
+fn rate_limit(event: Event, context: &StravaContext) -> TbResult<Option<Event>> {
     // rate limit event
     if event.event_time > chrono::offset::Utc::now().timestamp() {
         // still rate limited!
@@ -155,17 +155,17 @@ fn rate_limit(event: Event, user: &User) -> TbResult<Option<Event>> {
     }
     // remove stop event
     warn!("Starting hooks again");
-    event.delete(user.conn())?;
+    event.delete(context.conn())?;
     // get next event
-    return get_event(user)
+    return get_event(context)
 }
 
-pub fn get_event(user: &User) -> TbResult<Option<Event>> {
+pub fn get_event(context: &StravaContext) -> TbResult<Option<Event>> {
     use schema::strava_events::dsl::*;
-    let conn = user.conn();
+    let conn = context.conn();
 
     let event: Option<Event> = strava_events
-        .filter(owner_id.eq_any(vec![0,user.strava_id()]))
+        .filter(owner_id.eq_any(vec![0,context.strava_id()]))
         .order(event_time.asc())
         .first(conn)
         .optional()?;
@@ -174,7 +174,7 @@ pub fn get_event(user: &User) -> TbResult<Option<Event>> {
         None => return Ok(None),
     };
     if event.object_type.as_str() == "stop" { 
-        return rate_limit(event, user);
+        return rate_limit(event, context);
     }
 
     // Prevent unneeded calls to Strava
@@ -224,18 +224,18 @@ fn check_try_again(err: anyhow::Error, conn: &AppConn) -> TbResult<Summary> {
     }
 }
 
-fn process_activity (e:Event, user: &User) -> TbResult<Summary> {
-    match activity::process_hook(&e, user).or_else(|e| check_try_again(e, user.conn()))    {
+fn process_activity (e:Event, context: &StravaContext) -> TbResult<Summary> {
+    match activity::process_hook(&e, context).or_else(|e| check_try_again(e, context.conn()))    {
         Ok(res) => return Ok(res),
         Err(err) => {
-                    e.delete(user.conn())?;
+                    e.delete(context.conn())?;
                     Err(err)
                 }
     }
 }
 
-fn process (user: &User) -> TbResult<Summary> {
-    let e = get_event(user)?;
+fn process (context: &StravaContext) -> TbResult<Summary> {
+    let e = get_event(context)?;
     if e.is_none() {
         return Ok(Summary::default());
     };
@@ -243,22 +243,22 @@ fn process (user: &User) -> TbResult<Summary> {
     info!("Processing {}", e);
     
     match e.object_type.as_str() {
-        "activity" => process_activity(e, user),
-        "sync" => activity::sync(e, user).or_else(|err| check_try_again(err, user.conn())),
+        "activity" => process_activity(e, context),
+        "sync" => activity::sync(e, context).or_else(|err| check_try_again(err, context.conn())),
         // "athlete" => process_user(e, user),
         _ => {
             warn!("skipping {}", e);
-            e.delete(user.conn())?;
+            e.delete(context.conn())?;
             Ok(Summary::default())
         }
     }
 }
 
 #[get("/hooks")]
-pub fn hooks (user: User) -> ApiResult<Summary> {
-    user.lock()?;
-    let res = process(&user);
-    user.unlock()?;
+pub fn hooks (context: StravaContext) -> ApiResult<Summary> {
+    context.lock()?;
+    let res = process(&context);
+    context.unlock()?;
     tbapi(res)
 }
 
@@ -277,11 +277,11 @@ pub fn validate_subscription (hub: Form<Hub>) -> ApiResult<Hub> {
     tbapi(validate(hub))
 }
 
-#[get("/sync?<time>&<user>")]
-pub fn sync_api (time: i64, user: Option<i32>, _user: Admin, conn: AppDbConn) -> ApiResult<()> {
-    let users = auth::getusers(user, &conn)?;
-    for user in users {
-        insert_sync(user, time, &conn)?;
+#[get("/sync?<time>&<user_id>")]
+pub fn sync_api (time: i64, user_id: Option<i32>, _u: Admin, conn: AppDbConn) -> ApiResult<()> {
+    let users = auth::getusers(user_id, &conn)?;
+    for user_id in users {
+        insert_sync(user_id, time, &conn)?;
     }
     tbapi(Ok(()))
 }

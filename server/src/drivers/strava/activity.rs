@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use super::*;
 use crate::activity::ActivityId;
 use crate::activity::NewActivity;
-use drivers::strava::auth::User;
+use drivers::strava::auth::StravaContext;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaActivity {
@@ -30,16 +30,16 @@ pub struct StravaActivity {
 }
 
 impl StravaActivity {
-    fn into_tb(self, user: &User) -> TbResult<NewActivity> {
+    fn into_tb(self, context: &StravaContext) -> TbResult<NewActivity> {
         let what = self.what()?;
         let gear = match self.gear_id {
-            Some(x) => Some(gear::strava_to_tb(x, user)?),
+            Some(x) => Some(gear::strava_to_tb(x, context)?),
             None => None,
         };
         Ok(NewActivity {
             what,
             gear,
-            user_id: user.tb_id(),
+            user_id: context.tb_id(),
             name: self.name,
             start: self.start_date,
             duration: self.elapsed_time,
@@ -100,25 +100,25 @@ impl StravaActivity {
 }
 
 impl StravaActivity {
-    fn send_to_tb(self, user: &User) -> TbResult<Summary> {
-        user.conn().transaction(||{
+    fn send_to_tb(self, context: &StravaContext) -> TbResult<Summary> {
+        context.conn().transaction(||{
             use schema::strava_activities::dsl::*;
 
             let strava_id = self.id;
-            let tb = self.into_tb(user)?;
+            let tb = self.into_tb(context)?;
 
             let tb_id = strava_activities
                 .find(strava_id)
                 .select(tendabike_id)
                 .for_update()
-                .get_result::<ActivityId>(user.conn())
+                .get_result::<ActivityId>(context.conn())
                 .optional()?;
 
             let res; 
             if let Some(tb_id) = tb_id {
-                res = tb_id.update(&tb, user, user.conn())?
+                res = tb_id.update(&tb, context, context.conn())?
             } else {
-                res = Activity::create(&tb, user, user.conn())?;
+                res = Activity::create(&tb, context, context.conn())?;
                 let new_id = &res.activities[0].id;
                 diesel::insert_into(strava_activities)
                     .values((
@@ -126,10 +126,10 @@ impl StravaActivity {
                         tendabike_id.eq(new_id),
                         user_id.eq(tb.user_id),
                     ))
-                    .execute(user.conn())?;
+                    .execute(context.conn())?;
             }
 
-            user.update_last(tb.start.timestamp())
+            context.update_last(tb.start.timestamp())
                 .context("unable to update user")?;
 
             Ok(res)
@@ -137,81 +137,81 @@ impl StravaActivity {
     }
 }
 
-pub fn strava_url(act: i32, user: &User) -> TbResult<String> {
+pub fn strava_url(act: i32, context: &StravaContext) -> TbResult<String> {
     use schema::strava_activities::dsl::*;
 
     let g: i64 = strava_activities
         .filter(tendabike_id.eq(act))
         .select(id)
-        .first(user.conn())?;
+        .first(context.conn())?;
 
     Ok(format!("https://strava.com/activities/{}", &g))
 }
 
-fn get_activity(id: i64, user: &User) -> TbResult<StravaActivity> {
-    let r = user.request(&format!("/activities/{}",id ))?;
+fn get_activity(id: i64, context: &StravaContext) -> TbResult<StravaActivity> {
+    let r = context.request(&format!("/activities/{}",id ))?;
     // let r = user.request("/activities?per_page=2")?;
     let act: StravaActivity = serde_json::from_str(&r)?;
     Ok(act)
 }
 
-fn upsert_activity(id: i64, user: &User) -> TbResult<Summary> {
-    let act = get_activity(id, user).context(format!("strava activity id {}", id))?;
-    act.send_to_tb(user)
+fn upsert_activity(id: i64, context: &StravaContext) -> TbResult<Summary> {
+    let act = get_activity(id, context).context(format!("strava activity id {}", id))?;
+    act.send_to_tb(context)
 }
 
-fn delete_activity(sid: i64, user: &User) -> TbResult<Summary> {
+fn delete_activity(sid: i64, context: &StravaContext) -> TbResult<Summary> {
     use schema::strava_activities::dsl::*;
 
-    user.conn().transaction(||{
-        let tid: Option<ActivityId> = strava_activities.select(tendabike_id).find(sid).for_update().first(user.conn()).optional()?;
+    context.conn().transaction(||{
+        let tid: Option<ActivityId> = strava_activities.select(tendabike_id).find(sid).for_update().first(context.conn()).optional()?;
         if let Some(tid) = tid {
-            diesel::delete(strava_activities.find(sid)).execute(user.conn())?;
-            tid.delete(user, user.conn())
+            diesel::delete(strava_activities.find(sid)).execute(context.conn())?;
+            tid.delete(context, context.conn())
         } else {
             Ok(Summary::default())
         }
     })
 }
 
-pub fn process_hook(e: &webhook::Event, user: &User) -> TbResult<Summary>{
+pub fn process_hook(e: &webhook::Event, context: &StravaContext) -> TbResult<Summary>{
     let res = match e.aspect_type.as_str() {
-        "create" | "update" => upsert_activity(e.object_id, user)?,
-        "delete" => delete_activity(e.object_id, user)?,
+        "create" | "update" => upsert_activity(e.object_id, context)?,
+        "delete" => delete_activity(e.object_id, context)?,
         _ => {
             warn!("Skipping unknown aspect_type {:?}", e);
             Summary::default()
         }
     };
-    e.delete(user.conn())?;
+    e.delete(context.conn())?;
     Ok(res)
 }
 
-fn next_activities(user: &User, per_page: usize, start: Option<i64>) -> TbResult<Vec<StravaActivity>> {
-    let r = user.request(&format!(
+fn next_activities(context: &StravaContext, per_page: usize, start: Option<i64>) -> TbResult<Vec<StravaActivity>> {
+    let r = context.request(&format!(
         "/activities?after={}&per_page={}",
-        start.unwrap_or_else(|| user.last_activity()),
+        start.unwrap_or_else(|| context.last_activity()),
         per_page
     ))?;
     Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)
 }
 
-pub fn sync(mut e: webhook::Event, user: &User) -> TbResult<Summary> {
+pub fn sync(mut e: webhook::Event, context: &StravaContext) -> TbResult<Summary> {
     // let mut len = batch;
     let mut start = e.event_time;
     let mut hash = SumHash::default();
 
     // while len == batch 
     {
-        let acts = next_activities(&user, 10, Some(start))?;
+        let acts = next_activities(&context, 10, Some(start))?;
         if acts.len() == 0 {
-            e.delete(user.conn())?;
+            e.delete(context.conn())?;
         } else {
             for a in acts {
                 start = std::cmp::max(start, a.start_date.timestamp());
                 trace!("processing sync event at {}", start);
-                let ps = a.send_to_tb(&user)?;
-                e.setdate(start,  user.conn())?;
+                let ps = a.send_to_tb(&context)?;
+                e.setdate(start,  context.conn())?;
                 hash.merge(ps);
             }
         }

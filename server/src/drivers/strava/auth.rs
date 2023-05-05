@@ -20,12 +20,12 @@ const API: &str = "https://www.strava.com/api/v3";
 /// 
 /// Will refresh token if possible
 pub fn get_id(request: &Request) -> TbResult<i32> {
-    User::get(request).map(|u| u.user.tendabike_id)
+    StravaContext::get(request).map(|u| u.user.tendabike_id)
 }
 
 #[derive(Queryable, Insertable, Identifiable, Debug, Default)]
 #[table_name = "strava_users"]
-struct DbUser {
+struct StravaUser {
     id: i32,
     tendabike_id: i32,
     last_activity: i64,
@@ -41,12 +41,12 @@ struct StravaAthlete {
     id: i32
 }
 
-impl DbUser {
+impl StravaUser {
     /// Get the user data from the Strava OAuth callback
     fn retrieve(conn: &AppConn, athlete: StravaAthlete) -> TbResult<Self> {
         info!("got {:?}", athlete);
 
-        let user = strava_users::table.find(athlete.id).get_result::<DbUser>(conn).optional()?;
+        let user = strava_users::table.find(athlete.id).get_result::<StravaUser>(conn).optional()?;
         if let Some(user) = user {
             return Ok(user);
         }
@@ -54,7 +54,7 @@ impl DbUser {
         // create user!
         let tendabike_id = crate::user::create(athlete.firstname, athlete.lastname, conn)?;
 
-        let user = DbUser {
+        let user = StravaUser {
             id: athlete.id,
             tendabike_id,
             ..Default::default()
@@ -83,7 +83,7 @@ impl DbUser {
         
         let iat = get_time().sec;
         let exp = tokenset.expires_in().unwrap() as i64 + iat - 300; // 5 Minutes buffer
-        let user: DbUser = diesel::update(strava_users.find(self.id))
+        let user: StravaUser = diesel::update(strava_users.find(self.id))
             .set((
                 access_token.eq(tokenset.access_token()),
                 expires_at.eq(exp),
@@ -93,14 +93,29 @@ impl DbUser {
         
         Ok(user)
     }
+
+    pub fn read (id: i32, conn: &AppConn) -> TbResult<Self> {
+        Ok(strava_users::table
+            .filter(strava_users::tendabike_id.eq(id))
+            .get_result(conn)
+            .context(format!("User::get: user {} not registered", id))?)
+    }
+
+    pub fn update_db(&self, conn: &AppConn) -> TbResult<()> {
+        use schema::strava_users::dsl::*;
+        diesel::update(strava_users.find(self.id))
+            .set((expires_at.eq(0), access_token.eq("")))
+            .execute(conn).context(format!("Could not disable record for user {}",self.id))?;
+        Ok(())
+    }
 }
 
-pub struct User {
-    user: DbUser,
+pub struct StravaContext {
+    user: StravaUser,
     conn: AppDbConn,
 }
 
-impl Person for User {
+impl Person for StravaContext {
     fn get_id(&self) -> i32 {
         self.user.tendabike_id
     }
@@ -117,10 +132,10 @@ impl Person for User {
 ///
 /// It retrieves the storage (cookies and database) from the request.
 /// By that the visible routes only need to use the User request guard to access Strava
-impl User {
+impl StravaContext {
     /// the get function reads the user from the cookie and other stores,
     /// if needed and possible it refreshes the access token
-    fn get(request: &Request) -> TbResult<User> {
+    fn get(request: &Request) -> TbResult<StravaContext> {
         // Get user id
         let token = jwt::token(request)?;
         let id = jwt::id(&token)?;
@@ -128,10 +143,7 @@ impl User {
         let conn = request
             .guard::<AppDbConn>()
             .expect("internal db missing!!!");
-        let user: DbUser = strava_users::table
-            .filter(strava_users::tendabike_id.eq(id))
-            .get_result(&conn.0)
-            .context(format!("User::get: user {} not registered", id))?;
+        let user = StravaUser::read(id, &conn)?;
 
         if user.expires_at > time::get_time().sec {
             return Ok(Self {user, conn});
@@ -150,49 +162,31 @@ impl User {
         Ok(Self{user,conn})
     }
 
-    pub fn get_stats(tbid: i32, conn: &AppConn) -> TbResult<(i64, bool)> {
-        use schema::strava_events::dsl::*;
-
-        let user: DbUser = strava_users::table
-            .filter(strava_users::tendabike_id.eq(tbid))
-            .get_result(conn)
-            .context(format!("get_stats: tb user {} not registered", tbid))?;
-
-        let events = strava_events.count().filter(owner_id.eq(user.tendabike_id)).first(conn)?;
-        return Ok((events, user.expires_at == 0))
-    }
-
-    pub fn from_tb(id: i32, conn: AppDbConn, oauth: OAuth2<Strava>) -> TbResult<Self> {
-        let user: DbUser = strava_users::table
-            .filter(strava_users::tendabike_id.eq(id))
-            .get_result(&conn.0)
-            .context(format!("from_tb: user {} not registered", id))?;
+    fn from_tb(id: i32, conn: AppDbConn, oauth: OAuth2<Strava>) -> TbResult<Self> {
+        let user = StravaUser::read(id, &conn)?;
 
         if user.expires_at > time::get_time().sec {
             return Ok(Self {user,conn});
         }
         let tokenset = user.refresh_token(oauth)?;
-        let user = user.update(tokenset, &conn.0)?;
+        let user = user.update(tokenset, &conn)?;
         Ok(Self{user,conn})
     }
     
     /// disable a user 
     fn disable(&self) -> TbResult<()> {
-        use schema::strava_users::dsl::*;
+        let conn = self.conn();
 
         info!("disabling user {}", self.user.id);
-        webhook::insert_sync(self.user.id, time::get_time().sec, &self.conn.0)
+        webhook::insert_sync(self.user.id, time::get_time().sec, conn)
             .context(format!("Could insert sync for user: {:?}", self.user.id))?;
-        diesel::update(strava_users.find(self.user.id))
-            .set((expires_at.eq(0), access_token.eq("")))
-            .execute(&self.conn.0).context(format!("Could not disable record for user {}",self.user.id))?;
-        Ok(())
+        self.user.update_db(conn)
     }
 
     fn my_disable(self) -> TbResult<()> {
         let conn = self.conn();
     
-        let (events, disabled) = User::get_stats(self.tb_id(), conn)?;
+        let (events, disabled) = get_stats(self.tb_id(), conn)?;
 
         if disabled { bail!(Error::BadRequest(String::from("user already disabled!"))) }
         if events > 0 { bail!(Error::BadRequest(String::from("user has open events!"))) }
@@ -300,36 +294,48 @@ impl User {
     }
 }
 
-pub fn strava_url(who: i32, user: &User) -> TbResult<String> {
+pub fn strava_url(who: i32, context: &StravaContext) -> TbResult<String> {
     use schema::strava_users::dsl::*;
 
     let g: i32 = strava_users
         .filter(tendabike_id.eq(who))
         .select(id)
-        .first(user.conn())?;
+        .first(context.conn())?;
 
     Ok(format!("https://strava.com/athletes/{}", &g))
 }
 
+pub fn get_stats(tbid: i32, conn: &AppConn) -> TbResult<(i64, bool)> {
+    use schema::strava_events::dsl::*;
+
+    let user: StravaUser = strava_users::table
+        .filter(strava_users::tendabike_id.eq(tbid))
+        .get_result(conn)
+        .context(format!("get_stats: tb user {} not registered", tbid))?;
+
+    let events = strava_events.count().filter(owner_id.eq(user.tendabike_id)).first(conn)?;
+    return Ok((events, user.expires_at == 0))
+}
+
 /// Get the strava id for all users
-pub fn getusers (user: Option<i32>, conn: &AppConn) -> TbResult<Vec<i32>> {
+pub fn getusers (user_id: Option<i32>, conn: &AppConn) -> TbResult<Vec<i32>> {
     use schema::strava_users::dsl::*;
 
     Ok(
-        match user {
+        match user_id {
             Some(user ) => strava_users.filter(tendabike_id.eq(user)).select(id).get_results(conn)?,
             None => strava_users.select(id).get_results(conn)?
         }
     )
 }
 
-impl<'a, 'r> FromRequest<'a, 'r> for User {
+impl<'a, 'r> FromRequest<'a, 'r> for StravaContext {
     type Error = Redirect;
 
     /// Get the current user
     /// Redirect to the login screen on failure
     fn from_request(request: &'a Request<'r>) -> request::Outcome<Self, Self::Error> {
-        match User::get(request) {
+        match StravaContext::get(request) {
             Ok(x) => Outcome::Success(x),
             Err(err) => {
                 warn!("{}", err);
@@ -367,7 +373,7 @@ fn process_callback(tokenset: TokenResponse<Strava>, conn: &AppConn, mut cookies
     let athlete = serde_json::from_value(athlete.clone())?;
 
     conn.transaction(|| {
-        let user = DbUser::retrieve(conn, athlete)?;
+        let user = StravaUser::retrieve(conn, athlete)?;
         let user = user.update(tokenset, conn)?;
         jwt::store(&mut cookies, user.tendabike_id, user.expires_at);
         Ok(())
@@ -392,12 +398,12 @@ pub fn fairing(config: &Config) -> impl rocket::fairing::Fairing {
 
 #[get("/sync/<tbid>")]
 pub fn sync(tbid: i32, _u: Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<Summary> {
-    let user = User::from_tb(tbid, conn, oauth)?;
+    let user = StravaContext::from_tb(tbid, conn, oauth)?;
     
     drivers::strava::webhook::hooks(user)
 }
 
 #[post("/disable/<tbid>")]
 pub fn disable(tbid: i32, _u: Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<()> {
-    tbapi(User::from_tb(tbid, conn, oauth)?.my_disable())
+    tbapi(StravaContext::from_tb(tbid, conn, oauth)?.my_disable())
 }

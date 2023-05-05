@@ -46,7 +46,7 @@ impl User {
             use schema::activities::dsl::*;
             activities.count().filter(user_id.eq(self.id)).first(conn)?
         };
-        let  (events, disabled) = strava::auth::User::get_stats(self.id, conn)?;
+        let  (events, disabled) = strava::auth::get_stats(self.id, conn)?;
         Ok(Stat{user: self, parts, activities, events, disabled})
     }
 

@@ -1,7 +1,7 @@
 use diesel::{self, QueryDsl, RunQueryDsl};
 
 use super::*;
-use auth::User;
+use auth::StravaContext;
 use schema::strava_gears;
 use part::NewPart;
 
@@ -23,13 +23,13 @@ pub struct Gear {
     user_id: i32,
 }
 
-pub fn strava_url(gear: i32, user: &User) -> TbResult<String> {
+pub fn strava_url(gear: i32, context: &StravaContext) -> TbResult<String> {
     use schema::strava_gears::dsl::*;
 
     let mut g: String = strava_gears
         .filter(tendabike_id.eq(gear))
         .select(id)
-        .first(user.conn())?;
+        .first(context.conn())?;
     if g.remove(0) != 'b' {
         bail!("Not found");
     }
@@ -38,9 +38,9 @@ pub fn strava_url(gear: i32, user: &User) -> TbResult<String> {
 }
 
 impl StravaGear {
-    pub fn into_tb(self, user: &User) -> TbResult<NewPart> {
+    pub fn into_tb(self, context: &StravaContext) -> TbResult<NewPart> {
         Ok(NewPart {
-            owner: user.tb_id(),
+            owner: context.tb_id(),
             what: self.what().into(),
             name: self.name,
             vendor: self.brand_name.unwrap_or_else(|| String::from("")),
@@ -56,22 +56,22 @@ impl StravaGear {
         }
     }
 
-    fn request(id: &str, user: &User) -> TbResult<StravaGear> {
-        let r = user.request(&format!("/gear/{}", id))?;
+    fn request(id: &str, context: &StravaContext) -> TbResult<StravaGear> {
+        let r = context.request(&format!("/gear/{}", id))?;
         let res: StravaGear =
             serde_json::from_str(&r).context(format!("Did not receive StravaGear format: {:?}", r))?;
         Ok(res)
     }
 }
 
-fn get_tbid(strava_id: &str, user: &User) -> TbResult<Option<PartId>> {
+fn get_tbid(strava_id: &str, context: &StravaContext) -> TbResult<Option<PartId>> {
     use schema::strava_gears::dsl::*;
     
     Ok(strava_gears
         .find(strava_id)
         .select(tendabike_id)
         .for_update()
-        .first(user.conn())
+        .first(context.conn())
         .optional().context("Error reading database")? )
 }
 
@@ -79,26 +79,26 @@ fn get_tbid(strava_id: &str, user: &User) -> TbResult<Option<PartId>> {
 ///
 /// If it does not exist create it at tb
 /// None will return None
-pub fn strava_to_tb(strava_id: String, user: &User) -> TbResult<PartId> {
+pub fn strava_to_tb(strava_id: String, context: &StravaContext) -> TbResult<PartId> {
     
-    if let Some(g) = get_tbid(&strava_id, user)? { return Ok(g) }
+    if let Some(g) = get_tbid(&strava_id, context)? { return Ok(g) }
 
     debug!("New Gear");
-    let part = StravaGear::request(&strava_id, user)
+    let part = StravaGear::request(&strava_id, context)
         .context("Couldn't map gear")?
-        .into_tb(user)?;
+        .into_tb(context)?;
 
-    user.conn().transaction(||{
+    context.conn().transaction(||{
         use schema::strava_gears::dsl::*;
 
         // maybe the gear was created by now?
-        if let Some(g) = get_tbid(&strava_id, user)? { return Ok(g) }
+        if let Some(g) = get_tbid(&strava_id, context)? { return Ok(g) }
 
-        let tbid = part.create(user, user.conn())?.id;
+        let tbid = part.create(context, context.conn())?.id;
     
         diesel::insert_into(strava_gears)
-            .values((id.eq(strava_id), tendabike_id.eq(tbid), user_id.eq(user.tb_id())))
-            .execute(user.conn()).context("couldn't store gear")?;
+            .values((id.eq(strava_id), tendabike_id.eq(tbid), user_id.eq(context.tb_id())))
+            .execute(context.conn()).context("couldn't store gear")?;
         Ok(tbid)
     })
 }
