@@ -36,10 +36,11 @@ impl StravaActivity {
             Some(x) => Some(gear::strava_to_tb(x, context)?),
             None => None,
         };
+        let (user, _) = context.disect();
         Ok(NewActivity {
             what,
             gear,
-            user_id: context.tb_id(),
+            user_id: user.tb_id(),
             name: self.name,
             start: self.start_date,
             duration: self.elapsed_time,
@@ -101,7 +102,8 @@ impl StravaActivity {
 
 impl StravaActivity {
     fn send_to_tb(self, context: &StravaContext) -> TbResult<Summary> {
-        context.conn().transaction(||{
+        let (user, conn) = context.disect();
+        conn.transaction(||{
             use schema::strava_activities::dsl::*;
 
             let strava_id = self.id;
@@ -111,14 +113,14 @@ impl StravaActivity {
                 .find(strava_id)
                 .select(tendabike_id)
                 .for_update()
-                .get_result::<ActivityId>(context.conn())
+                .get_result::<ActivityId>(conn)
                 .optional()?;
 
             let res; 
             if let Some(tb_id) = tb_id {
-                res = tb_id.update(&tb, context, context.conn())?
+                res = tb_id.update(&tb, user, conn)?
             } else {
-                res = Activity::create(&tb, context, context.conn())?;
+                res = Activity::create(&tb, user, conn)?;
                 let new_id = &res.activities[0].id;
                 diesel::insert_into(strava_activities)
                     .values((
@@ -126,7 +128,7 @@ impl StravaActivity {
                         tendabike_id.eq(new_id),
                         user_id.eq(tb.user_id),
                     ))
-                    .execute(context.conn())?;
+                    .execute(conn)?;
             }
 
             context.update_last(tb.start.timestamp())
@@ -163,11 +165,12 @@ fn upsert_activity(id: i64, context: &StravaContext) -> TbResult<Summary> {
 fn delete_activity(sid: i64, context: &StravaContext) -> TbResult<Summary> {
     use schema::strava_activities::dsl::*;
 
-    context.conn().transaction(||{
-        let tid: Option<ActivityId> = strava_activities.select(tendabike_id).find(sid).for_update().first(context.conn()).optional()?;
+    let (user, conn) = context.disect();
+    conn.transaction(||{
+        let tid: Option<ActivityId> = strava_activities.select(tendabike_id).find(sid).for_update().first(conn).optional()?;
         if let Some(tid) = tid {
-            diesel::delete(strava_activities.find(sid)).execute(context.conn())?;
-            tid.delete(context, context.conn())
+            diesel::delete(strava_activities.find(sid)).execute(conn)?;
+            tid.delete(user, conn)
         } else {
             Ok(Summary::default())
         }

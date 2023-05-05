@@ -25,7 +25,7 @@ pub fn get_id(request: &Request) -> TbResult<i32> {
 
 #[derive(Queryable, Insertable, Identifiable, Debug, Default)]
 #[table_name = "strava_users"]
-struct StravaUser {
+pub struct StravaUser {
     id: i32,
     tendabike_id: i32,
     last_activity: i64,
@@ -108,6 +108,9 @@ impl StravaUser {
             .execute(conn).context(format!("Could not disable record for user {}",self.id))?;
         Ok(())
     }
+    pub fn tb_id(&self) -> i32 {
+        self.tendabike_id
+    }
 }
 
 pub struct StravaContext {
@@ -115,9 +118,9 @@ pub struct StravaContext {
     conn: AppDbConn,
 }
 
-impl Person for StravaContext {
+impl Person for StravaUser {
     fn get_id(&self) -> i32 {
-        self.user.tendabike_id
+        self.tendabike_id
     }
     fn is_admin(&self) -> bool {
         false
@@ -175,30 +178,30 @@ impl StravaContext {
     
     /// disable a user 
     fn disable(&self) -> TbResult<()> {
-        let conn = self.conn();
+        let (user, conn) = self.disect();
 
-        info!("disabling user {}", self.user.id);
-        webhook::insert_sync(self.user.id, time::get_time().sec, conn)
-            .context(format!("Could insert sync for user: {:?}", self.user.id))?;
-        self.user.update_db(conn)
+        info!("disabling user {}", user.id);
+        webhook::insert_sync(user.id, time::get_time().sec, conn)
+            .context(format!("Could insert sync for user: {:?}", user.id))?;
+        user.update_db(conn)
     }
 
     fn my_disable(self) -> TbResult<()> {
-        let conn = self.conn();
+        let (user, conn) = self.disect();
     
-        let (events, disabled) = get_stats(self.tb_id(), conn)?;
+        let (events, disabled) = get_stats(user.tendabike_id, conn)?;
 
         if disabled { bail!(Error::BadRequest(String::from("user already disabled!"))) }
         if events > 0 { bail!(Error::BadRequest(String::from("user has open events!"))) }
 
         reqwest::blocking::Client::new()
             .post("https://www.strava.com/oauth/deauthorize")
-            .query(&[("access_token" , &self.user.access_token)])
-            .bearer_auth(&self.user.access_token)
+            .query(&[("access_token" , &user.access_token)])
+            .bearer_auth(&user.access_token)
             .send().context("Could not reach strava")?
             .error_for_status()?;
 
-        warn!("User {} disabled by admin", self.tb_id());
+        warn!("User {} disabled by admin", user.tendabike_id);
         self.disable()
     }
 
@@ -261,10 +264,6 @@ impl StravaContext {
             .text().context("Could not get response body")?)
     }
 
-    pub fn tb_id(&self) -> i32 {
-        self.user.tendabike_id
-    }
-
     pub fn strava_id(&self) -> i32 {
         self.user.id
     }
@@ -287,6 +286,10 @@ impl StravaContext {
 
     pub fn conn(&self) -> &AppConn {
         &self.conn
+    }
+
+    pub fn disect(&self) -> (&StravaUser, &AppConn) {
+        (&self.user, &self.conn)
     }
 
     pub fn logout(&self,  cookies: Cookies)  {

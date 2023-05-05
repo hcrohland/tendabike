@@ -39,8 +39,9 @@ pub fn strava_url(gear: i32, context: &StravaContext) -> TbResult<String> {
 
 impl StravaGear {
     pub fn into_tb(self, context: &StravaContext) -> TbResult<NewPart> {
+        let (user,_) = context.disect();
         Ok(NewPart {
-            owner: context.tb_id(),
+            owner: user.tb_id(),
             what: self.what().into(),
             name: self.name,
             vendor: self.brand_name.unwrap_or_else(|| String::from("")),
@@ -64,14 +65,14 @@ impl StravaGear {
     }
 }
 
-fn get_tbid(strava_id: &str, context: &StravaContext) -> TbResult<Option<PartId>> {
+fn get_tbid(strava_id: &str, conn: &AppConn) -> TbResult<Option<PartId>> {
     use schema::strava_gears::dsl::*;
     
     Ok(strava_gears
         .find(strava_id)
         .select(tendabike_id)
         .for_update()
-        .first(context.conn())
+        .first(conn)
         .optional().context("Error reading database")? )
 }
 
@@ -80,25 +81,27 @@ fn get_tbid(strava_id: &str, context: &StravaContext) -> TbResult<Option<PartId>
 /// If it does not exist create it at tb
 /// None will return None
 pub fn strava_to_tb(strava_id: String, context: &StravaContext) -> TbResult<PartId> {
+    let conn = context.conn();
     
-    if let Some(g) = get_tbid(&strava_id, context)? { return Ok(g) }
+    if let Some(g) = get_tbid(&strava_id, conn)? { return Ok(g) }
 
     debug!("New Gear");
     let part = StravaGear::request(&strava_id, context)
         .context("Couldn't map gear")?
         .into_tb(context)?;
 
-    context.conn().transaction(||{
+
+    conn.transaction(||{
         use schema::strava_gears::dsl::*;
-
+        let (user, conn) = context.disect();
         // maybe the gear was created by now?
-        if let Some(g) = get_tbid(&strava_id, context)? { return Ok(g) }
+        if let Some(g) = get_tbid(&strava_id, conn)? { return Ok(g) }
 
-        let tbid = part.create(context, context.conn())?.id;
+        let tbid = part.create(user, conn)?.id;
     
         diesel::insert_into(strava_gears)
-            .values((id.eq(strava_id), tendabike_id.eq(tbid), user_id.eq(context.tb_id())))
-            .execute(context.conn()).context("couldn't store gear")?;
+            .values((id.eq(strava_id), tendabike_id.eq(tbid), user_id.eq(user.tb_id())))
+            .execute(conn).context("couldn't store gear")?;
         Ok(tbid)
     })
 }

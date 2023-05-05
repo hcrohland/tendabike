@@ -16,11 +16,12 @@ fn userlist(_u: Admin, conn: AppDbConn) -> ApiResult<Vec<Stat>> {
 }
 
 #[get("/summary")]
-fn summary(context: strava::auth::StravaContext, conn: AppDbConn) -> ApiResult<Summary> {
+fn summary(context: strava::auth::StravaContext) -> ApiResult<Summary> {
     strava::ui::update_user(&context)?;
-    let parts = domain::part::Part::get_all(&context, &conn)?;
+    let (user, conn) = context.disect();
+    let parts = domain::part::Part::get_all(user, conn)?;
     let attachments = Attachment::for_parts(&parts,&conn)?;
-    let activities = Activity::get_all(&context, &conn)?;
+    let activities = Activity::get_all(user, conn)?;
     tbapi(Ok(Summary{parts,attachments,activities}))
 }
 
