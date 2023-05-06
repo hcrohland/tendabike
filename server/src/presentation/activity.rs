@@ -5,51 +5,15 @@ use rocket_contrib::json::Json;
 use super::*;
 use domain::activity::*;
 
-#[post("/defaultgear", data="<gearid>")]
-fn def_part_api (gearid: Json<PartId>, user: RUser, conn: AppDbConn) -> ApiResult<Summary> {
-    tbapi(conn.transaction(|| {
-        Ok(def_part(&gearid, user.0, &conn)?)
-    }))
+#[post("/defaultgear", data="<gear_id>")]
+fn def_part_api (gear_id: Json<PartId>, user: RUser, conn: AppDbConn) -> ApiResult<Summary> {
+    tbapi(set_default_part(*gear_id, user.0, &conn))
 }
 
 #[get("/rescan")]
 fn rescan(_u: Admin, conn: AppDbConn) -> ApiResult<()> {
     let conn = &conn.0;
-    warn!("rescanning all activities!");
-    let res = conn.transaction(|| {
-        {
-            use schema::parts::dsl::*;
-            debug!("resetting all parts");
-            diesel::update(parts).set((
-                time.eq(0),
-                distance.eq(0),
-                climb.eq(0),
-                descend.eq(0),
-                count.eq(0),
-            )).execute(conn)?;
-        }
-        {
-            use schema::attachments::dsl::*;
-            debug!("resetting all attachments");
-            diesel::update(attachments).set((
-                time.eq(0),
-                distance.eq(0),
-                climb.eq(0),
-                descend.eq(0),
-                count.eq(0),
-            )).execute(conn)?;
-        }
-        {
-            use schema::activities::dsl::*;
-            for a in activities.order_by(id).get_results::<Activity>(conn)? {
-                debug!("registering activity {}", a.id);
-                a.register(Factor::Add, conn)?;
-            }
-        }
-        Ok(())
-    });
-    warn!("Done rescanning");
-    tbapi(res)
+    tbapi(domain::activity::rescan_all(&conn))
 }
 
 

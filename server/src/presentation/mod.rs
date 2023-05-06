@@ -110,8 +110,3 @@ fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
     crate::run_db_migrations(&conn);
     Ok(rocket)
 }
-
-pub fn sync_user(id:i32, conn: &PgConnection) -> Result<(), anyhow::Error> {
-    strava::webhook::insert_sync(id, 0, conn)?;
-    Ok(())
-}

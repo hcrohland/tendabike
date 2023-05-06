@@ -345,7 +345,13 @@ pub fn csv2descend(data: impl std::io::Read, tz: String, user: &User, conn: &App
     Ok((summary, good, bad))
 }
 
-pub fn def_part(partid: &PartId, user: & User, conn: &AppConn) -> TbResult<Summary> {
+pub fn set_default_part (gear_id: PartId, user: &User, conn: &AppConn) -> TbResult<Summary>{
+    conn.transaction(|| {
+        Ok(def_part(&gear_id, user, &conn)?)
+    })
+}
+
+fn def_part(partid: &PartId, user: & User, conn: &AppConn) -> TbResult<Summary> {
     use schema::activities::dsl::*;
     let part = partid.part(user, conn)?;
     let types = part.what.act_types(conn)?;
@@ -364,4 +370,42 @@ pub fn def_part(partid: &PartId, user: & User, conn: &AppConn) -> TbResult<Summa
         hash.merge(act.register(Factor::Add, conn)?)
     }
     Ok(hash.collect())
+}
+
+pub fn rescan_all (conn: &AppConn) -> TbResult<()>{
+    warn!("rescanning all activities!");
+    let res = conn.transaction(|| {
+        {
+            use schema::parts::dsl::*;
+            debug!("resetting all parts");
+            diesel::update(parts).set((
+                time.eq(0),
+                distance.eq(0),
+                climb.eq(0),
+                descend.eq(0),
+                count.eq(0),
+            )).execute(conn)?;
+        }
+        {
+            use schema::attachments::dsl::*;
+            debug!("resetting all attachments");
+            diesel::update(attachments).set((
+                time.eq(0),
+                distance.eq(0),
+                climb.eq(0),
+                descend.eq(0),
+                count.eq(0),
+            )).execute(conn)?;
+        }
+        {
+            use schema::activities::dsl::*;
+            for a in activities.order_by(id).get_results::<Activity>(conn)? {
+                debug!("registering activity {}", a.id);
+                a.register(Factor::Add, conn)?;
+            }
+        }
+        Ok(())
+    });
+    warn!("Done rescanning");
+    res
 }

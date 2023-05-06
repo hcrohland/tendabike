@@ -1,4 +1,3 @@
-use diesel::sql_query;
 use rocket::http::*;
 use rocket::request::{self, FromRequest, Request};
 use rocket::response::Redirect;
@@ -66,7 +65,7 @@ impl StravaContext {
 
         let id = user.id();
         info!("disabling user {}", id);
-        webhook::insert_sync(id, time::get_time().sec, conn)
+        event::insert_sync(id, time::get_time().sec, conn)
             .context(format!("Could insert sync for user: {:?}", id))?;
         user.update_db(conn)
     }
@@ -120,27 +119,6 @@ impl StravaContext {
                 ))
         }
     }
-
-    pub fn lock (&self) -> TbResult<()> {
-        use diesel::sql_types::Bool;
-        #[derive(QueryableByName, Debug)]
-        struct Lock {
-            #[sql_type = "Bool"]
-            #[column_name = "pg_try_advisory_lock"]
-            lock: bool
-        }
-    
-        ensure!(
-            sql_query(format!("SELECT pg_try_advisory_lock({});", self.strava_id())).get_result::<Lock>(self.conn())?.lock,
-            Error::Conflict(format!("Two sessions for user {}", self.strava_id()))
-        );
-        Ok(())
-    }
-    
-    pub fn unlock(&self) -> TbResult<()> {
-        sql_query(format!("SELECT pg_advisory_unlock({});", self.strava_id())).execute(self.conn())?;
-        Ok(())
-    }        
 
     /// send an API call with an authenticated User
     ///

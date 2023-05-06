@@ -1,9 +1,10 @@
 use anyhow::Context;
-use diesel::{self, QueryDsl, RunQueryDsl};
+use diesel::{self, QueryDsl, RunQueryDsl, sql_query};
 use serde_json::Value as jValue;
 
 pub mod activity;
 pub mod gear;
+pub mod event;
 
 use crate::*;
 use crate::{AppConn, TbResult};
@@ -64,7 +65,7 @@ impl StravaAthlete {
         let user: StravaUser = diesel::insert_into(strava_users::table)
             .values(&user)
             .get_result(conn)?;
-        presentation::sync_user(user.id, conn)?;
+        drivers::strava::sync_users(Some(user.id), 0, conn)?;
         Ok(user)
     }
 }
@@ -129,6 +130,28 @@ impl StravaUser {
         
         Ok(user)
     }
+
+    pub fn lock (&self, conn: &AppConn) -> TbResult<()> {
+        use diesel::sql_types::Bool;
+        #[derive(QueryableByName, Debug)]
+        struct Lock {
+            #[sql_type = "Bool"]
+            #[column_name = "pg_try_advisory_lock"]
+            lock: bool
+        }
+    
+        ensure!(
+            sql_query(format!("SELECT pg_try_advisory_lock({});", self.id)).get_result::<Lock>(conn)?.lock,
+            Error::Conflict(format!("Two sessions for user {}", self.id))
+        );
+        Ok(())
+    }
+    
+    pub fn unlock(&self, conn: &AppConn) -> TbResult<()> {
+        sql_query(format!("SELECT pg_advisory_unlock({});", self.id)).execute(conn)?;
+        Ok(())
+    }        
+
 }
 
 impl Person for StravaUser {
@@ -164,13 +187,17 @@ pub fn get_stats(tbid: i32, conn: &AppConn) -> TbResult<(i64, bool)> {
 }
 
 /// Get the strava id for all users
-pub fn getusers (user_id: Option<i32>, conn: &AppConn) -> TbResult<Vec<i32>> {
+pub fn sync_users (user_id: Option<i32>, time: i64, conn: &AppConn) -> TbResult<()> {
     use schema::strava_users::dsl::*;
 
-    Ok(
+    let users =
         match user_id {
             Some(user ) => strava_users.filter(tendabike_id.eq(user)).select(id).get_results(conn)?,
             None => strava_users.select(id).get_results(conn)?
-        }
-    )
+        };
+        for user_id in users {
+            event::insert_sync(user_id, time, &conn)?;
+        };
+        Ok(())
 }
+
