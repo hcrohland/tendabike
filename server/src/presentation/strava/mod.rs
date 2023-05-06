@@ -1,7 +1,7 @@
-use rocket::http::*;
+use rocket::http::{Cookies, Status};
 use rocket::request::{self, FromRequest, Request};
 use rocket::response::Redirect;
-use rocket::*;
+use rocket::Outcome;
 
 use crate::*;
 use presentation::jwt;
@@ -10,6 +10,8 @@ use drivers::strava::*;
 pub mod ui;
 pub (super) mod webhook;
 mod oauth;
+
+pub use oauth::fairing;
 
 const API: &str = "https://www.strava.com/api/v3";
 
@@ -167,8 +169,4 @@ impl<'a, 'r> FromRequest<'a, 'r> for StravaContext {
             }
         }
     }
-}
-
-pub(super) fn oauth_fairing(config: &Config) -> impl rocket::fairing::Fairing {
-    oauth::fairing(config)
 }

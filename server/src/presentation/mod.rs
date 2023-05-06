@@ -97,7 +97,7 @@ pub fn start () {
         
         // add oauth2 flow
         let config = ship.config().clone();
-        ship.attach(strava::oauth_fairing(&config))
+        ship.attach(strava::fairing(&config))
             .attach(rocket::fairing::AdHoc::on_launch("Launch Message", |rocket| {
                 let c = rocket.config();
                 info!("\n\n TendaBike running on {}:{}\n\n", c.address, c.port);
