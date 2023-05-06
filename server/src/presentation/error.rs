@@ -14,12 +14,6 @@ impl From<anyhow::Error> for ApiError {
     }
 }
 
-pub type ApiResult<T> = Result<Json<T>,ApiError>;
-
-pub fn tbapi<T> (tb: TbResult<T>) -> ApiResult<T> {
-    tb.map(Json).map_err(ApiError::from)
-}
-
 impl<'r> Responder<'r> for ApiError {
     fn respond_to(self, req: &Request) -> ::std::result::Result<Response<'r>, Status> {
         use diesel::result::Error as DieselError;
@@ -49,3 +43,5 @@ impl<'r> Responder<'r> for ApiError {
         Ok(build.finalize())
     }
 }
+
+pub type ApiResult<T> = TbResult<Json<T>>;

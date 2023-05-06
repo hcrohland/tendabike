@@ -8,7 +8,7 @@ use rocket::{Config, Request};
 use crate::{AppConn, Summary};
 use crate::domain::error::{TbResult, Error};
 use crate::drivers::strava::{StravaUser, StravaAthlete};
-use crate::presentation::{jwt, Admin, tbapi, ApiResult, AppDbConn};
+use crate::presentation::{jwt, Admin, ApiResult, AppDbConn};
 
 use super::StravaContext;
 
@@ -107,5 +107,5 @@ pub fn sync(tbid: i32, _u: Admin, context: StravaContext, oauth: OAuth2<Strava>)
 
 #[post("/disable/<tbid>")]
 pub fn disable(tbid: i32, _u: Admin, context: StravaContext, oauth: OAuth2<Strava>) -> ApiResult<()> {
-    tbapi(from_tb(tbid, context, oauth)?.admin_disable())
+    from_tb(tbid, context, oauth)?.admin_disable().map(rocket_contrib::json::Json)
 }

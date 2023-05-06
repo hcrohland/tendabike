@@ -12,7 +12,7 @@ pub fn hooks (context: StravaContext) -> ApiResult<Summary> {
     user.lock(conn)?;
     let res = process(&context);
     user.unlock(conn)?;
-    tbapi(res)
+    res.map(Json)
 }
 
 #[post("/callback", format = "json", data="<event>")]
@@ -27,10 +27,10 @@ pub fn create_event(event: Json<InEvent>, conn: AppDbConn) -> Result<(),ApiError
 pub fn validate_subscription (hub: Form<Hub>) -> ApiResult<Hub> {
     let hub = hub.into_inner();
     info!("Received validation callback {:?}", hub);
-    tbapi(validate(hub))
+    validate(hub).map(Json)
 }
 
 #[get("/sync?<time>&<user_id>")]
 pub fn sync_api (time: i64, user_id: Option<i32>, _u: Admin, conn: AppDbConn) -> ApiResult<()> {
-    tbapi(crate::drivers::strava::sync_users(user_id, time, &conn))
+    crate::drivers::strava::sync_users(user_id, time, &conn).map(Json)
 }

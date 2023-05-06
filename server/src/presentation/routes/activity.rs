@@ -1,26 +1,23 @@
 
-use rocket::response::status;
-use rocket_contrib::json::Json;
-
 use super::*;
 use domain::activity::*;
 
 #[post("/defaultgear", data="<gear_id>")]
 fn def_part_api (gear_id: Json<PartId>, user: RUser, conn: AppDbConn) -> ApiResult<Summary> {
-    tbapi(set_default_part(*gear_id, user.0, &conn))
+    set_default_part(*gear_id, user.0, &conn).map(Json)
 }
 
 #[get("/rescan")]
 fn rescan(_u: Admin, conn: AppDbConn) -> ApiResult<()> {
     let conn = &conn.0;
-    tbapi(domain::activity::rescan_all(&conn))
+    domain::activity::rescan_all(&conn).map(Json)
 }
 
 
 /// web interface to read an activity
 #[get("/<id>")]
 fn get(id: i32, user: RUser, conn: AppDbConn) -> ApiResult<Activity> {
-    tbapi(ActivityId::new(id).read(user.0, &conn))
+    ActivityId::new(id).read(user.0, &conn).map(Json)
 }
 
 /// web interface to create an activity
@@ -46,24 +43,24 @@ fn put(
     activity: Json<NewActivity>,
     user: RUser,
     conn: AppDbConn,
-) -> Result<Json<Summary>, ApiError> {
-    tbapi(ActivityId::new(id).update(&activity, user.0, &conn))
+) -> Result<Json<Summary>, anyhow::Error> {
+    ActivityId::new(id).update(&activity, user.0, &conn).map(Json)
 }
 
 /// web interface to delete an activity
 #[delete("/<id>")]
 fn delete(id: i32, user: RUser, conn: AppDbConn) -> ApiResult<Summary> {
-    tbapi(ActivityId::new(id).delete(user.0, &conn))
+    ActivityId::new(id).delete(user.0, &conn).map(Json)
 }
 
 #[post("/descend?<tz>", data = "<data>")]
 fn descend(data: rocket::data::Data, tz: String, user: RUser, conn: AppDbConn) -> ApiResult<(Summary, Vec<String>, Vec<String>)> {
-    tbapi(csv2descend(data.open(), tz, user.0, &conn))
+    csv2descend(data.open(), tz, user.0, &conn).map(Json)
 }
 
 #[get("/categories")]
 fn mycats(user: RUser, conn: AppDbConn) -> ApiResult<Vec<PartTypeId>> {
-    tbapi(categories(user.0, &conn))
+    categories(user.0, &conn).map(Json)
 }
 
 pub fn routes() -> Vec<rocket::Route> {
