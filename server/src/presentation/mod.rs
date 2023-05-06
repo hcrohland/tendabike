@@ -3,12 +3,7 @@ use rocket::fairing::AdHoc;
 use std::env;
 use crate::*;
 
-
-mod user;
-mod types;
-mod part;
-mod attachment;
-mod activity;
+mod routes;
 pub(super) mod strava;
 mod error;
 mod jwt;
@@ -87,11 +82,11 @@ pub fn start () {
                 )
             )
         )
-        .mount("/user", user::routes())
-        .mount("/types", types::routes())
-        .mount("/part", part::routes())
-        .mount("/part", attachment::routes())
-        .mount("/activ", activity::routes())
+        .mount("/user", routes::user())
+        .mount("/types", routes::types())
+        .mount("/part", routes::part())
+        .mount("/part", routes::attachment())
+        .mount("/activ", routes::activity())
         .mount("/strava", strava::ui::routes())
         ;
         

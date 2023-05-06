@@ -14,6 +14,6 @@ fn part(conn: AppDbConn) -> Json<Vec<PartType>> {
     Json(parts(&conn))
 }
 
-pub(super) fn routes() -> Vec<rocket::Route> {
+pub fn routes() -> Vec<rocket::Route> {
     routes![part, activity]
 }

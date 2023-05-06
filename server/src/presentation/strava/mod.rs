@@ -87,6 +87,12 @@ impl StravaContext {
         user.update_db(conn)
     }
 
+    /// disable a user per admin request
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the user does not exist, is already disabled 
+    /// or has open events and if strava or the database is not reachable.
     fn admin_disable(self) -> TbResult<()> {
         let (user, conn) = self.split();
     

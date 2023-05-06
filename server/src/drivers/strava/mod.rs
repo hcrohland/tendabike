@@ -174,6 +174,11 @@ pub fn strava_url(who: i32, context: &StravaContext) -> TbResult<String> {
     Ok(format!("https://strava.com/athletes/{}", &g))
 }
 
+/// return the open events and the disabled status for a user.
+///
+/// # Errors
+///
+/// This function will return an error if the database connection fails.
 pub fn get_stats(tbid: i32, conn: &AppConn) -> TbResult<(i64, bool)> {
     use schema::strava_events::dsl::*;
 
