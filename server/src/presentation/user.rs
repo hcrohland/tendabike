@@ -3,6 +3,8 @@ use domain::user::Stat;
 use rocket_contrib::json::Json;
 use presentation::strava;
 
+use crate::drivers::strava::user_summary;
+
 use super::*;
 
 #[get("/")]
@@ -17,15 +19,11 @@ fn userlist(_u: Admin, conn: AppDbConn) -> ApiResult<Vec<Stat>> {
 
 #[get("/summary")]
 fn summary(context: strava::StravaContext) -> ApiResult<Summary> {
-    strava::ui::update_user(&context)?;
-    let (user, conn) = context.disect();
-    let parts = domain::part::Part::get_all(user, conn)?;
-    let attachments = Attachment::for_parts(&parts,&conn)?;
-    let activities = Activity::get_all(user, conn)?;
-    tbapi(Ok(Summary{parts,attachments,activities}))
+    tbapi(user_summary(&context))
 }
-
 
 pub fn routes() -> Vec<rocket::Route> {
     routes![getuser, userlist, summary]
 }
+
+

@@ -201,3 +201,35 @@ pub fn sync_users (user_id: Option<i32>, time: i64, conn: &AppConn) -> TbResult<
         Ok(())
 }
 
+/// Get list of gear for user from Strava
+fn update_user(context: &StravaContext) -> TbResult<Vec<PartId>> {
+    #[derive(Deserialize, Debug)]
+    struct Gear {
+        id: String,
+    }
+
+    #[derive(Deserialize, Debug)]
+    struct Athlete {
+        // firstname: String,
+        // lastname: String,
+        bikes: Vec<Gear>,
+        shoes: Vec<Gear>,
+    }
+
+    let r = context.request("/athlete")?;
+    let ath: Athlete = serde_json::from_str(&r)?;
+    let parts = ath.bikes.into_iter()
+        .chain(ath.shoes)
+        .map(|gear| gear::strava_to_tb(gear.id, context))
+        .collect::<TbResult<_>>()?;
+    Ok(parts)
+}
+
+pub fn user_summary(context: &StravaContext) -> TbResult<Summary> {
+    update_user(&context)?;
+    let (user, conn) = context.disect();
+    let parts = domain::part::Part::get_all(user, conn)?;
+    let attachments = Attachment::for_parts(&parts,&conn)?;
+    let activities = Activity::get_all(user, conn)?;
+    Ok(Summary{parts,attachments,activities})
+}
