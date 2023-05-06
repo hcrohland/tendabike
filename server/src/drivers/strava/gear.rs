@@ -38,7 +38,7 @@ pub fn strava_url(gear: i32, context: &StravaContext) -> TbResult<String> {
 }
 
 impl StravaGear {
-    pub fn into_tb(self, context: &StravaContext) -> TbResult<NewPart> {
+    fn into_tb(self, context: &StravaContext) -> TbResult<NewPart> {
         let (user,_) = context.split();
         Ok(NewPart {
             owner: user.tb_id(),

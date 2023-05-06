@@ -98,11 +98,7 @@ impl StravaUser {
         self.id
     }
 
-    pub fn last_activity(&self) -> i64 {
-        self.last_activity
-    }
-
-    pub fn update_last(&self, time: i64, conn: &AppConn) -> TbResult<i64> {
+    fn update_last(&self, time: i64, conn: &AppConn) -> TbResult<i64> {
         if self.last_activity >= time {
             return Ok(self.last_activity);
         }
@@ -166,12 +162,12 @@ impl Person for StravaUser {
 pub fn strava_url(who: i32, context: &StravaContext) -> TbResult<String> {
     use schema::strava_users::dsl::*;
 
-    let g: i32 = strava_users
+    let user_id: i32 = strava_users
         .filter(tendabike_id.eq(who))
         .select(id)
         .first(context.conn())?;
 
-    Ok(format!("https://strava.com/athletes/{}", &g))
+    Ok(format!("https://strava.com/athletes/{}", &user_id))
 }
 
 /// return the open events and the disabled status for a user.

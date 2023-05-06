@@ -95,14 +95,14 @@ impl std::fmt::Display for Event {
 }
 
 impl Event {
-    pub fn delete (&self, conn: &AppConn) -> TbResult<()> {
+    fn delete (&self, conn: &AppConn) -> TbResult<()> {
         use schema::strava_events::dsl::*;
         debug!("Deleting {}", self);
         diesel::delete(strava_events).filter(id.eq(self.id)).execute(conn)?;
         Ok(())
     }
 
-    pub fn setdate(&mut self, time: i64, conn: &AppConn) -> TbResult<()> {
+    fn setdate(&mut self, time: i64, conn: &AppConn) -> TbResult<()> {
         use schema::strava_events::dsl::*;
         self.event_time = time;
         diesel::update(strava_events).filter(id.eq(self.id)).set(event_time.eq(self.event_time)).execute(conn)?;
@@ -119,6 +119,66 @@ impl Event {
             diesel::insert_into(schema::strava_events::table).values(&self).get_result::<Event>(conn)?
         );
         Ok(())
+    }
+
+    fn rate_limit(self, context: &StravaContext) -> TbResult<Option<Self>> {
+        // rate limit event
+        if self.event_time > chrono::offset::Utc::now().timestamp() {
+            // still rate limited!
+            return Ok(None);
+        }
+        // remove stop event
+        warn!("Starting hooks again");
+        self.delete(context.conn())?;
+        // get next event
+        return get_event(context)
+    }
+
+    fn process_activity (self, context: &StravaContext) -> TbResult<Summary> {
+        match self.process_hook(context).or_else(|e| check_try_again(e, context.conn()))    {
+            Ok(res) => return Ok(res),
+            Err(err) => {
+                        self.delete(context.conn())?;
+                        Err(err)
+                    }
+        }
+    }
+    
+    fn process_hook(&self, context: &StravaContext) -> TbResult<Summary>{
+        let res = match self.aspect_type.as_str() {
+            "create" | "update" => activity::upsert_activity(self.object_id, context)?,
+            "delete" => activity::delete_activity(self.object_id, context)?,
+            _ => {
+                warn!("Skipping unknown aspect_type {:?}", self);
+                Summary::default()
+            }
+        };
+        self.delete(context.conn())?;
+        Ok(res)
+    }
+    
+    fn sync(mut self, context: &StravaContext) -> TbResult<Summary> {
+        // let mut len = batch;
+        let mut start = self.event_time;
+        let mut hash = SumHash::default();
+    
+        // while len == batch 
+        {
+            let acts = next_activities(&context, 10, Some(start))?;
+            if acts.len() == 0 {
+                self.delete(context.conn())?;
+            } else {
+                for a in acts {
+                    start = std::cmp::max(start, a.start_date.timestamp());
+                    trace!("processing sync event at {}", start);
+                    let ps = a.send_to_tb(&context)?;
+                    self.setdate(start,  context.conn())?;
+                    hash.merge(ps);
+                }
+            }
+        }
+    
+        Ok(hash.collect())
     }
 }
 
@@ -147,19 +207,6 @@ pub fn insert_stop(conn: &AppConn) -> TbResult<()> {
     Ok(())
 }
 
-fn rate_limit(event: Event, context: &StravaContext) -> TbResult<Option<Event>> {
-    // rate limit event
-    if event.event_time > chrono::offset::Utc::now().timestamp() {
-        // still rate limited!
-        return Ok(None);
-    }
-    // remove stop event
-    warn!("Starting hooks again");
-    event.delete(context.conn())?;
-    // get next event
-    return get_event(context)
-}
-
 pub fn get_event(context: &StravaContext) -> TbResult<Option<Event>> {
     use schema::strava_events::dsl::*;
     let (user, conn) = context.split();
@@ -174,7 +221,7 @@ pub fn get_event(context: &StravaContext) -> TbResult<Option<Event>> {
         None => return Ok(None),
     };
     if event.object_type.as_str() == "stop" { 
-        return rate_limit(event, context);
+        return event.rate_limit(context);
     }
 
     // Prevent unneeded calls to Strava
@@ -224,77 +271,30 @@ fn check_try_again(err: anyhow::Error, conn: &AppConn) -> TbResult<Summary> {
     }
 }
 
-fn process_activity (e:Event, context: &StravaContext) -> TbResult<Summary> {
-    match process_hook(&e, context).or_else(|e| check_try_again(e, context.conn()))    {
-        Ok(res) => return Ok(res),
-        Err(err) => {
-                    e.delete(context.conn())?;
-                    Err(err)
-                }
-    }
-}
-
-pub fn process_hook(e: &Event, context: &StravaContext) -> TbResult<Summary>{
-    let res = match e.aspect_type.as_str() {
-        "create" | "update" => activity::upsert_activity(e.object_id, context)?,
-        "delete" => activity::delete_activity(e.object_id, context)?,
-        _ => {
-            warn!("Skipping unknown aspect_type {:?}", e);
-            Summary::default()
-        }
-    };
-    e.delete(context.conn())?;
-    Ok(res)
-}
-
 fn next_activities(context: &StravaContext, per_page: usize, start: Option<i64>) -> TbResult<Vec<StravaActivity>> {
     let r = context.request(&format!(
         "/activities?after={}&per_page={}",
-        start.unwrap_or_else(|| context.user().last_activity()),
+        start.unwrap_or_else(|| context.user().last_activity),
         per_page
     ))?;
     Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)
 }
 
-pub fn sync(mut e: Event, context: &StravaContext) -> TbResult<Summary> {
-    // let mut len = batch;
-    let mut start = e.event_time;
-    let mut hash = SumHash::default();
-
-    // while len == batch 
-    {
-        let acts = next_activities(&context, 10, Some(start))?;
-        if acts.len() == 0 {
-            e.delete(context.conn())?;
-        } else {
-            for a in acts {
-                start = std::cmp::max(start, a.start_date.timestamp());
-                trace!("processing sync event at {}", start);
-                let ps = a.send_to_tb(&context)?;
-                e.setdate(start,  context.conn())?;
-                hash.merge(ps);
-            }
-        }
-    }
-
-    Ok(hash.collect())
-}
-
 pub fn process (context: &StravaContext) -> TbResult<Summary> {
-    let e = get_event(context)?;
-    if e.is_none() {
+    let event = get_event(context)?;
+    if event.is_none() {
         return Ok(Summary::default());
     };
-    let e = e.unwrap();
-    info!("Processing {}", e);
+    let event = event.unwrap();
+    info!("Processing {}", event);
     
-    match e.object_type.as_str() {
-        "activity" => process_activity(e, context),
-        "sync" => sync(e, context).or_else(|err| check_try_again(err, context.conn())),
+    match event.object_type.as_str() {
+        "activity" => event.process_activity(context),
+        "sync" => event.sync(context).or_else(|err| check_try_again(err, context.conn())),
         // "athlete" => process_user(e, user),
         _ => {
-            warn!("skipping {}", e);
-            e.delete(context.conn())?;
+            warn!("skipping {}", event);
+            event.delete(context.conn())?;
             Ok(Summary::default())
         }
     }
