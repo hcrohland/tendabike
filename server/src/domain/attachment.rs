@@ -4,7 +4,6 @@
 //! They are identified by part_id and attached time
 
 use diesel::{self, QueryDsl, RunQueryDsl};
-use rocket_contrib::json::Json;
 
 use crate::*;
 use schema::attachments;
@@ -26,7 +25,7 @@ impl Event {
     ///
     /// Check's authorization and taht the part is attached
     ///
-    fn detach(self, user: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
+    pub fn detach(self, user: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
         info!("detach {:?}", self);
         // check user
         self.part_id.checkuser(user, conn)?;
@@ -66,7 +65,7 @@ impl Event {
     ///
     /// When the detached part has child parts they are attached to that part
     ///
-    fn attach(self, user: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
+    pub fn attach(self, user: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
         info!("attach {:?}", self);
         // check user
         let part = self.part_id.part(user, conn)?;
@@ -538,20 +537,4 @@ impl Attachment {
 
         Ok(atts)
     }
-}
-
-/// route for attach API
-#[post("/attach", data = "<event>")]
-fn attach_rt(event: Json<Event>, user: &User, conn: AppDbConn) -> ApiResult<Summary> {
-    tbapi(event.into_inner().attach(user, &conn))
-}
-
-/// route for detach API
-#[post("/detach", data = "<event>")]
-fn detach_rt(event: Json<Event>, user: &User, conn: AppDbConn) -> ApiResult<Summary> {
-    tbapi(event.into_inner().detach(user, &conn))
-}
-
-pub fn routes() -> Vec<rocket::Route> {
-    routes![attach_rt, detach_rt]
 }

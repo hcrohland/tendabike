@@ -7,9 +7,6 @@
 //! Most operations are done on the ActivityId though
 //!
 
-use rocket::response::status;
-use rocket_contrib::json::Json;
-
 use crate::*;
 use schema::activities;
 
@@ -82,10 +79,14 @@ pub struct NewActivity {
 }
 
 impl ActivityId {
+    pub fn new(id:i32) -> Self {
+        Self(id)
+    }
+
     /// Read the activity with id self
     ///
     /// checks authorization
-    fn read(self, person: &dyn Person, conn: &AppConn) -> TbResult<Activity> {
+    pub fn read(self, person: &dyn Person, conn: &AppConn) -> TbResult<Activity> {
         let act = activities::table
             .find(self)
             .for_update()
@@ -224,7 +225,7 @@ impl Activity {
             .expect("could not read activities")
     }
 
-    fn register(self, factor: Factor, conn: &AppConn) -> TbResult<Summary> {
+    pub fn register(self, factor: Factor, conn: &AppConn) -> TbResult<Summary> {
         trace!("{} {:?}", if factor == Factor::Add {"Registering"} else {"Unregistering"}, self);
 
         let usage = self.usage(factor);
@@ -250,7 +251,7 @@ impl Activity {
     }
 }
 
-fn categories(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartTypeId>> {
+pub fn categories(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartTypeId>> {
     use crate::schema::activities::dsl::*;
     use crate::schema::activity_types;
 
@@ -272,7 +273,7 @@ fn categories(user: &dyn Person, conn: &AppConn) -> TbResult<Vec<PartTypeId>> {
 }
 
 
-fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn) 
+pub fn csv2descend(data: impl std::io::Read, tz: String, user: &User, conn: &AppConn) 
     -> TbResult<(Summary, Vec<String>, Vec<String>)> {
     use schema::activities::dsl::*;
     #[derive(Debug, Deserialize)]
@@ -291,7 +292,7 @@ fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn
     let mut good = Vec::new();
     let mut bad = Vec::new();
     let mut summary = Summary::default();
-    let mut rdr = csv::Reader::from_reader(data.open());
+    let mut rdr = csv::Reader::from_reader(data);
     let tz = tz.parse::<chrono_tz::Tz>()
                 .map_err(|_| Error::BadRequest(format!("Unknown timezone {}",tz)))?;
 
@@ -344,6 +345,12 @@ fn csv2descend(data: rocket::data::Data, tz: String, user: &User, conn: &AppConn
     Ok((summary, good, bad))
 }
 
+pub fn set_default_part (gear_id: PartId, user: &User, conn: &AppConn) -> TbResult<Summary>{
+    conn.transaction(|| {
+        Ok(def_part(&gear_id, user, &conn)?)
+    })
+}
+
 fn def_part(partid: &PartId, user: & User, conn: &AppConn) -> TbResult<Summary> {
     use schema::activities::dsl::*;
     let part = partid.part(user, conn)?;
@@ -365,16 +372,7 @@ fn def_part(partid: &PartId, user: & User, conn: &AppConn) -> TbResult<Summary> 
     Ok(hash.collect())
 }
 
-#[post("/defaultgear", data="<gearid>")]
-fn def_part_api (gearid: Json<PartId>, user: &User, conn: AppDbConn) -> ApiResult<Summary> {
-    tbapi(conn.transaction(|| {
-        Ok(def_part(&gearid, user, &conn)?)
-    }))
-}
-
-#[get("/rescan")]
-fn rescan(_u: Admin, conn: AppDbConn) -> ApiResult<()> {
-    let conn = &conn.0;
+pub fn rescan_all (conn: &AppConn) -> TbResult<()>{
     warn!("rescanning all activities!");
     let res = conn.transaction(|| {
         {
@@ -409,59 +407,5 @@ fn rescan(_u: Admin, conn: AppDbConn) -> ApiResult<()> {
         Ok(())
     });
     warn!("Done rescanning");
-    tbapi(res)
-}
-
-
-/// web interface to read an activity
-#[get("/<id>")]
-fn get(id: i32, user: &User, conn: AppDbConn) -> ApiResult<Activity> {
-    tbapi(ActivityId(id).read(user, &conn))
-}
-
-/// web interface to create an activity
-#[post("/", data = "<activity>")]
-fn post(
-    activity: Json<NewActivity>,
-    user: &User,
-    conn: AppDbConn,
-) -> Result<status::Created<Json<Summary>>, ApiError> {
-    let assembly = Activity::create(&activity, user, &conn)?;
-    let id_raw: i32 = assembly.activities[0].id.into();
-    let url = uri!(get: id_raw);
-    Ok(status::Created(
-        url.to_string(),
-        Some(Json(assembly)),
-    ))
-}
-
-/// web interface to change an activity
-#[put("/<id>", data = "<activity>")]
-fn put(
-    id: i32,
-    activity: Json<NewActivity>,
-    user: &User,
-    conn: AppDbConn,
-) -> Result<Json<Summary>, ApiError> {
-    tbapi(ActivityId(id).update(&activity, user, &conn))
-}
-
-/// web interface to delete an activity
-#[delete("/<id>")]
-fn delete(id: i32, user: &User, conn: AppDbConn) -> ApiResult<Summary> {
-    tbapi(ActivityId(id).delete(user, &conn))
-}
-
-#[post("/descend?<tz>", data = "<data>")]
-fn descend(data: rocket::data::Data, tz: String, user: &User, conn: AppDbConn) -> ApiResult<(Summary, Vec<String>, Vec<String>)> {
-    tbapi(csv2descend(data, tz, user, &conn))
-}
-
-#[get("/categories")]
-fn mycats(user: &User, conn: AppDbConn) -> ApiResult<Vec<PartTypeId>> {
-    tbapi(categories(user, &conn))
-}
-
-pub fn routes() -> Vec<rocket::Route> {
-    routes![get, put, delete, post, descend, mycats, rescan, def_part_api]
+    res
 }

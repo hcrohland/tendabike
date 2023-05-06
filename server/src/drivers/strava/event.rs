@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
-use rocket::request::Form;
-use rocket_contrib::json::Json;
 use anyhow::ensure;
 
 use diesel::{self, RunQueryDsl};
 use diesel::prelude::*;
 
+use crate::drivers::strava::activity::StravaActivity;
+
 use super::*;
-use auth::User;
+use super::StravaContext;
 use schema::strava_events;
 
 // complicated way to have query parameters with dots in the name
@@ -42,7 +42,7 @@ pub struct InEvent {
 }
 
 impl InEvent {
-    fn convert(self) -> TbResult<Event> {
+    pub fn convert(self) -> TbResult<Event> {
         let objects = ["activity", "athlete"];
         let aspects = ["create", "update", "delete"];
 
@@ -95,21 +95,21 @@ impl std::fmt::Display for Event {
 }
 
 impl Event {
-    pub fn delete (&self, conn: &AppConn) -> TbResult<()> {
+    fn delete (&self, conn: &AppConn) -> TbResult<()> {
         use schema::strava_events::dsl::*;
         debug!("Deleting {}", self);
         diesel::delete(strava_events).filter(id.eq(self.id)).execute(conn)?;
         Ok(())
     }
 
-    pub fn setdate(&mut self, time: i64, conn: &AppConn) -> TbResult<()> {
+    fn setdate(&mut self, time: i64, conn: &AppConn) -> TbResult<()> {
         use schema::strava_events::dsl::*;
         self.event_time = time;
         diesel::update(strava_events).filter(id.eq(self.id)).set(event_time.eq(self.event_time)).execute(conn)?;
         Ok(())
     }
 
-    fn store(self, conn: &AppConn) -> TbResult<()>{
+    pub fn store(self, conn: &AppConn) -> TbResult<()>{
         ensure!(
             schema::strava_users::table.find(self.owner_id).execute(conn) == Ok(1),
             Error::BadRequest(format!("Unknown event owner received: {}", self))
@@ -119,6 +119,66 @@ impl Event {
             diesel::insert_into(schema::strava_events::table).values(&self).get_result::<Event>(conn)?
         );
         Ok(())
+    }
+
+    fn rate_limit(self, context: &StravaContext) -> TbResult<Option<Self>> {
+        // rate limit event
+        if self.event_time > chrono::offset::Utc::now().timestamp() {
+            // still rate limited!
+            return Ok(None);
+        }
+        // remove stop event
+        warn!("Starting hooks again");
+        self.delete(context.conn())?;
+        // get next event
+        return get_event(context)
+    }
+
+    fn process_activity (self, context: &StravaContext) -> TbResult<Summary> {
+        match self.process_hook(context).or_else(|e| check_try_again(e, context.conn()))    {
+            Ok(res) => return Ok(res),
+            Err(err) => {
+                        self.delete(context.conn())?;
+                        Err(err)
+                    }
+        }
+    }
+    
+    fn process_hook(&self, context: &StravaContext) -> TbResult<Summary>{
+        let res = match self.aspect_type.as_str() {
+            "create" | "update" => activity::upsert_activity(self.object_id, context)?,
+            "delete" => activity::delete_activity(self.object_id, context)?,
+            _ => {
+                warn!("Skipping unknown aspect_type {:?}", self);
+                Summary::default()
+            }
+        };
+        self.delete(context.conn())?;
+        Ok(res)
+    }
+    
+    fn sync(mut self, context: &StravaContext) -> TbResult<Summary> {
+        // let mut len = batch;
+        let mut start = self.event_time;
+        let mut hash = SumHash::default();
+    
+        // while len == batch 
+        {
+            let acts = next_activities(&context, 10, Some(start))?;
+            if acts.len() == 0 {
+                self.delete(context.conn())?;
+            } else {
+                for a in acts {
+                    start = std::cmp::max(start, a.start_date.timestamp());
+                    trace!("processing sync event at {}", start);
+                    let ps = a.send_to_tb(&context)?;
+                    self.setdate(start,  context.conn())?;
+                    hash.merge(ps);
+                }
+            }
+        }
+    
+        Ok(hash.collect())
     }
 }
 
@@ -147,25 +207,12 @@ pub fn insert_stop(conn: &AppConn) -> TbResult<()> {
     Ok(())
 }
 
-fn rate_limit(event: Event, user: &User) -> TbResult<Option<Event>> {
-    // rate limit event
-    if event.event_time > chrono::offset::Utc::now().timestamp() {
-        // still rate limited!
-        return Ok(None);
-    }
-    // remove stop event
-    warn!("Starting hooks again");
-    event.delete(user.conn())?;
-    // get next event
-    return get_event(user)
-}
-
-pub fn get_event(user: &User) -> TbResult<Option<Event>> {
+pub fn get_event(context: &StravaContext) -> TbResult<Option<Event>> {
     use schema::strava_events::dsl::*;
-    let conn = user.conn();
+    let (user, conn) = context.split();
 
     let event: Option<Event> = strava_events
-        .filter(owner_id.eq_any(vec![0,user.strava_id()]))
+        .filter(owner_id.eq_any(vec![0,user.id]))
         .order(event_time.asc())
         .first(conn)
         .optional()?;
@@ -174,7 +221,7 @@ pub fn get_event(user: &User) -> TbResult<Option<Event>> {
         None => return Ok(None),
     };
     if event.object_type.as_str() == "stop" { 
-        return rate_limit(event, user);
+        return event.rate_limit(context);
     }
 
     // Prevent unneeded calls to Strava
@@ -200,7 +247,7 @@ pub fn get_event(user: &User) -> TbResult<Option<Event>> {
 
 const VERIFY_TOKEN: &str = "tendabike_strava";
 
-fn validate(hub: Hub) -> TbResult<Hub> {
+pub fn validate(hub: Hub) -> TbResult<Hub> {
     ensure!(
         hub.verify_token == VERIFY_TOKEN, 
         Error::BadRequest(format!("Unknown verify token {}", hub.verify_token))
@@ -217,71 +264,38 @@ fn check_try_again(err: anyhow::Error, conn: &AppConn) -> TbResult<Summary> {
     match err.downcast_ref::<Error>() {
         Some(&Error::TryAgain(_)) => {
             warn!("Stopping hooks for 15 minutes {:?}", err);
-            webhook::insert_stop(conn)?;
+            insert_stop(conn)?;
             Ok(Summary::default())
         },
         _ => Err(err)
     }
 }
 
-fn process_activity (e:Event, user: &User) -> TbResult<Summary> {
-    match activity::process_hook(&e, user).or_else(|e| check_try_again(e, user.conn()))    {
-        Ok(res) => return Ok(res),
-        Err(err) => {
-                    e.delete(user.conn())?;
-                    Err(err)
-                }
-    }
+fn next_activities(context: &StravaContext, per_page: usize, start: Option<i64>) -> TbResult<Vec<StravaActivity>> {
+    let r = context.request(&format!(
+        "/activities?after={}&per_page={}",
+        start.unwrap_or_else(|| context.user().last_activity),
+        per_page
+    ))?;
+    Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)
 }
 
-fn process (user: &User) -> TbResult<Summary> {
-    let e = get_event(user)?;
-    if e.is_none() {
+pub fn process (context: &StravaContext) -> TbResult<Summary> {
+    let event = get_event(context)?;
+    if event.is_none() {
         return Ok(Summary::default());
     };
-    let e = e.unwrap();
-    info!("Processing {}", e);
+    let event = event.unwrap();
+    info!("Processing {}", event);
     
-    match e.object_type.as_str() {
-        "activity" => process_activity(e, user),
-        "sync" => activity::sync(e, user).or_else(|err| check_try_again(err, user.conn())),
+    match event.object_type.as_str() {
+        "activity" => event.process_activity(context),
+        "sync" => event.sync(context).or_else(|err| check_try_again(err, context.conn())),
         // "athlete" => process_user(e, user),
         _ => {
-            warn!("skipping {}", e);
-            e.delete(user.conn())?;
+            warn!("skipping {}", event);
+            event.delete(context.conn())?;
             Ok(Summary::default())
         }
     }
-}
-
-#[get("/hooks")]
-pub fn hooks (user: User) -> ApiResult<Summary> {
-    user.lock()?;
-    let res = process(&user);
-    user.unlock()?;
-    tbapi(res)
-}
-
-#[post("/callback", format = "json", data="<event>")]
-pub fn create_event(event: Json<InEvent>, conn: AppDbConn) -> Result<(),ApiError> {
-    let event = event.into_inner();
-    trace!("Received {:#?}", event);
-    event.convert()?.store(&conn)?;
-    Ok(())
-}
-
-#[get("/callback?<hub..>")]
-pub fn validate_subscription (hub: Form<Hub>) -> ApiResult<Hub> {
-    let hub = hub.into_inner();
-    info!("Received validation callback {:?}", hub);
-    tbapi(validate(hub))
-}
-
-#[get("/sync?<time>&<user>")]
-pub fn sync_api (time: i64, user: Option<i32>, _user: Admin, conn: AppDbConn) -> ApiResult<()> {
-    let users = auth::getusers(user, &conn)?;
-    for user in users {
-        insert_sync(user, time, &conn)?;
-    }
-    tbapi(Ok(()))
 }

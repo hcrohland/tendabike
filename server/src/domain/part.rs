@@ -1,8 +1,5 @@
 use std::collections::HashMap;
 
-use rocket::response::status;
-use rocket_contrib::json::Json;
-
 use self::schema::{part_types, parts};
 use crate::*;
 
@@ -88,7 +85,7 @@ pub struct NewPart {
 #[derive(Clone, Debug, PartialEq, Deserialize, AsChangeset)]
 #[table_name = "parts"]
 #[changeset_options(treat_none_as_null = "true")]
-struct ChangePart {
+pub struct ChangePart {
     pub id: PartId,
     /// The owner
     pub owner: i32,
@@ -110,6 +107,10 @@ NewtypeDisplay! { () pub struct PartId(); }
 NewtypeFrom! { () pub struct PartId(i32); }
 
 impl PartId {
+    pub fn new (id:i32) -> PartId {
+        PartId(id)
+    }
+    
     pub fn get(id: i32, user: &dyn Person, conn: &AppConn) -> TbResult<PartId> {
         PartId(id).checkuser(user, conn)
     }
@@ -275,7 +276,7 @@ impl NewPart {
 }
 
 impl ChangePart {
-    fn change(&self, user: &User, conn: &AppConn) -> TbResult<Part> {
+    pub fn change(&self, user: &User, conn: &AppConn) -> TbResult<Part> {
         use schema::parts::dsl::*;
         info!("Change {:?}", self);
 
@@ -287,34 +288,4 @@ impl ChangePart {
         let part: Part = diesel::update(parts.filter(id.eq(self.id))).set(self).get_result(conn)?;
         Ok(part)
     }
-}
-
-#[get("/<part>")]
-fn get(part: i32, user: &User, conn: AppDbConn) -> ApiResult<Part> {
-    Ok(Json(PartId(part).part(user, &conn)?))
-}
-
-#[post("/", data = "<newpart>")]
-fn post(
-    newpart: Json<NewPart>,
-    user: &User,
-    conn: AppDbConn,
-) -> Result<status::Created<Json<Part>>, ApiError> {
-    let part = newpart.clone().create(user, &conn)?;
-    let url = uri!(get: i32::from(part.id));
-    Ok(status::Created(url.to_string(), Some(Json(part))))
-}
-
-#[put("/", data = "<part>")]
-fn put(
-    part: Json<ChangePart>,
-    user: &User,
-    conn: AppDbConn,
-) -> ApiResult<Part> {
-
-    tbapi(part.change(user, &conn))
-}
-
-pub fn routes() -> Vec<rocket::Route> {
-    routes![get, post, put]
 }

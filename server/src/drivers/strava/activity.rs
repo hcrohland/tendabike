@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use super::*;
 use crate::activity::ActivityId;
 use crate::activity::NewActivity;
-use strava::auth::User;
+use presentation::strava::StravaContext;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaActivity {
@@ -30,12 +30,13 @@ pub struct StravaActivity {
 }
 
 impl StravaActivity {
-    fn into_tb(self, user: &User) -> TbResult<NewActivity> {
+    fn into_tb(self, context: &StravaContext) -> TbResult<NewActivity> {
         let what = self.what()?;
         let gear = match self.gear_id {
-            Some(x) => Some(gear::strava_to_tb(x, user)?),
+            Some(x) => Some(gear::strava_to_tb(x, context)?),
             None => None,
         };
+        let (user, _) = context.split();
         Ok(NewActivity {
             what,
             gear,
@@ -100,25 +101,26 @@ impl StravaActivity {
 }
 
 impl StravaActivity {
-    fn send_to_tb(self, user: &User) -> TbResult<Summary> {
-        user.conn().transaction(||{
+    pub fn send_to_tb(self, context: &StravaContext) -> TbResult<Summary> {
+        let (user, conn) = context.split();
+        conn.transaction(||{
             use schema::strava_activities::dsl::*;
 
             let strava_id = self.id;
-            let tb = self.into_tb(user)?;
+            let tb = self.into_tb(context)?;
 
             let tb_id = strava_activities
                 .find(strava_id)
                 .select(tendabike_id)
                 .for_update()
-                .get_result::<ActivityId>(user.conn())
+                .get_result::<ActivityId>(conn)
                 .optional()?;
 
             let res; 
             if let Some(tb_id) = tb_id {
-                res = tb_id.update(&tb, user, user.conn())?
+                res = tb_id.update(&tb, user, conn)?
             } else {
-                res = Activity::create(&tb, user, user.conn())?;
+                res = Activity::create(&tb, user, conn)?;
                 let new_id = &res.activities[0].id;
                 diesel::insert_into(strava_activities)
                     .values((
@@ -126,10 +128,10 @@ impl StravaActivity {
                         tendabike_id.eq(new_id),
                         user_id.eq(tb.user_id),
                     ))
-                    .execute(user.conn())?;
+                    .execute(conn)?;
             }
 
-            user.update_last(tb.start.timestamp())
+            user.update_last(tb.start.timestamp(), conn)
                 .context("unable to update user")?;
 
             Ok(res)
@@ -137,85 +139,41 @@ impl StravaActivity {
     }
 }
 
-pub fn strava_url(act: i32, user: &User) -> TbResult<String> {
+pub fn strava_url(act: i32, context: &StravaContext) -> TbResult<String> {
     use schema::strava_activities::dsl::*;
 
     let g: i64 = strava_activities
         .filter(tendabike_id.eq(act))
         .select(id)
-        .first(user.conn())?;
+        .first(context.conn())?;
 
     Ok(format!("https://strava.com/activities/{}", &g))
 }
 
-fn get_activity(id: i64, user: &User) -> TbResult<StravaActivity> {
-    let r = user.request(&format!("/activities/{}",id ))?;
+fn get_activity(id: i64, context: &StravaContext) -> TbResult<StravaActivity> {
+    let r = context.request(&format!("/activities/{}",id ))?;
     // let r = user.request("/activities?per_page=2")?;
     let act: StravaActivity = serde_json::from_str(&r)?;
     Ok(act)
 }
 
-fn upsert_activity(id: i64, user: &User) -> TbResult<Summary> {
-    let act = get_activity(id, user).context(format!("strava activity id {}", id))?;
-    act.send_to_tb(user)
+pub fn upsert_activity(id: i64, context: &StravaContext) -> TbResult<Summary> {
+    let act = get_activity(id, context).context(format!("strava activity id {}", id))?;
+    act.send_to_tb(context)
 }
 
-fn delete_activity(sid: i64, user: &User) -> TbResult<Summary> {
+pub fn delete_activity(sid: i64, context: &StravaContext) -> TbResult<Summary> {
     use schema::strava_activities::dsl::*;
 
-    user.conn().transaction(||{
-        let tid: Option<ActivityId> = strava_activities.select(tendabike_id).find(sid).for_update().first(user.conn()).optional()?;
+    let (user, conn) = context.split();
+    conn.transaction(||{
+        let tid: Option<ActivityId> = strava_activities.select(tendabike_id).find(sid).for_update().first(conn).optional()?;
         if let Some(tid) = tid {
-            diesel::delete(strava_activities.find(sid)).execute(user.conn())?;
-            tid.delete(user, user.conn())
+            diesel::delete(strava_activities.find(sid)).execute(conn)?;
+            tid.delete(user, conn)
         } else {
             Ok(Summary::default())
         }
     })
 }
 
-pub fn process_hook(e: &webhook::Event, user: &User) -> TbResult<Summary>{
-    let res = match e.aspect_type.as_str() {
-        "create" | "update" => upsert_activity(e.object_id, user)?,
-        "delete" => delete_activity(e.object_id, user)?,
-        _ => {
-            warn!("Skipping unknown aspect_type {:?}", e);
-            Summary::default()
-        }
-    };
-    e.delete(user.conn())?;
-    Ok(res)
-}
-
-fn next_activities(user: &User, per_page: usize, start: Option<i64>) -> TbResult<Vec<StravaActivity>> {
-    let r = user.request(&format!(
-        "/activities?after={}&per_page={}",
-        start.unwrap_or_else(|| user.last_activity()),
-        per_page
-    ))?;
-    Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)
-}
-
-pub fn sync(mut e: webhook::Event, user: &User) -> TbResult<Summary> {
-    // let mut len = batch;
-    let mut start = e.event_time;
-    let mut hash = SumHash::default();
-
-    // while len == batch 
-    {
-        let acts = next_activities(&user, 10, Some(start))?;
-        if acts.len() == 0 {
-            e.delete(user.conn())?;
-        } else {
-            for a in acts {
-                start = std::cmp::max(start, a.start_date.timestamp());
-                trace!("processing sync event at {}", start);
-                let ps = a.send_to_tb(&user)?;
-                e.setdate(start,  user.conn())?;
-                hash.merge(ps);
-            }
-        }
-    }
-
-    Ok(hash.collect())
-}
