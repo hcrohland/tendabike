@@ -7,6 +7,9 @@ use anyhow::ensure;
 use diesel::{self, RunQueryDsl};
 use diesel::prelude::*;
 
+use crate::drivers::strava::activity::StravaActivity;
+use crate::presentation::error::{tbapi,ApiResult, ApiError};
+
 use super::*;
 use super::StravaContext;
 use schema::strava_events;
@@ -225,13 +228,59 @@ fn check_try_again(err: anyhow::Error, conn: &AppConn) -> TbResult<Summary> {
 }
 
 fn process_activity (e:Event, context: &StravaContext) -> TbResult<Summary> {
-    match activity::process_hook(&e, context).or_else(|e| check_try_again(e, context.conn()))    {
+    match process_hook(&e, context).or_else(|e| check_try_again(e, context.conn()))    {
         Ok(res) => return Ok(res),
         Err(err) => {
                     e.delete(context.conn())?;
                     Err(err)
                 }
     }
+}
+
+pub fn process_hook(e: &webhook::Event, context: &StravaContext) -> TbResult<Summary>{
+    let res = match e.aspect_type.as_str() {
+        "create" | "update" => activity::upsert_activity(e.object_id, context)?,
+        "delete" => activity::delete_activity(e.object_id, context)?,
+        _ => {
+            warn!("Skipping unknown aspect_type {:?}", e);
+            Summary::default()
+        }
+    };
+    e.delete(context.conn())?;
+    Ok(res)
+}
+
+fn next_activities(context: &StravaContext, per_page: usize, start: Option<i64>) -> TbResult<Vec<StravaActivity>> {
+    let r = context.request(&format!(
+        "/activities?after={}&per_page={}",
+        start.unwrap_or_else(|| context.last_activity()),
+        per_page
+    ))?;
+    Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)
+}
+
+pub fn sync(mut e: webhook::Event, context: &StravaContext) -> TbResult<Summary> {
+    // let mut len = batch;
+    let mut start = e.event_time;
+    let mut hash = SumHash::default();
+
+    // while len == batch 
+    {
+        let acts = next_activities(&context, 10, Some(start))?;
+        if acts.len() == 0 {
+            e.delete(context.conn())?;
+        } else {
+            for a in acts {
+                start = std::cmp::max(start, a.start_date.timestamp());
+                trace!("processing sync event at {}", start);
+                let ps = a.send_to_tb(&context)?;
+                e.setdate(start,  context.conn())?;
+                hash.merge(ps);
+            }
+        }
+    }
+
+    Ok(hash.collect())
 }
 
 fn process (context: &StravaContext) -> TbResult<Summary> {
@@ -244,7 +293,7 @@ fn process (context: &StravaContext) -> TbResult<Summary> {
     
     match e.object_type.as_str() {
         "activity" => process_activity(e, context),
-        "sync" => activity::sync(e, context).or_else(|err| check_try_again(err, context.conn())),
+        "sync" => sync(e, context).or_else(|err| check_try_again(err, context.conn())),
         // "athlete" => process_user(e, user),
         _ => {
             warn!("skipping {}", e);

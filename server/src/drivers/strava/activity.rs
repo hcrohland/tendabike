@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use super::*;
 use crate::activity::ActivityId;
 use crate::activity::NewActivity;
-use presentation::strava::{StravaContext, webhook};
+use presentation::strava::StravaContext;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaActivity {
@@ -101,7 +101,7 @@ impl StravaActivity {
 }
 
 impl StravaActivity {
-    fn send_to_tb(self, context: &StravaContext) -> TbResult<Summary> {
+    pub fn send_to_tb(self, context: &StravaContext) -> TbResult<Summary> {
         let (user, conn) = context.disect();
         conn.transaction(||{
             use schema::strava_activities::dsl::*;
@@ -157,12 +157,12 @@ fn get_activity(id: i64, context: &StravaContext) -> TbResult<StravaActivity> {
     Ok(act)
 }
 
-fn upsert_activity(id: i64, context: &StravaContext) -> TbResult<Summary> {
+pub fn upsert_activity(id: i64, context: &StravaContext) -> TbResult<Summary> {
     let act = get_activity(id, context).context(format!("strava activity id {}", id))?;
     act.send_to_tb(context)
 }
 
-fn delete_activity(sid: i64, context: &StravaContext) -> TbResult<Summary> {
+pub fn delete_activity(sid: i64, context: &StravaContext) -> TbResult<Summary> {
     use schema::strava_activities::dsl::*;
 
     let (user, conn) = context.disect();
@@ -177,48 +177,3 @@ fn delete_activity(sid: i64, context: &StravaContext) -> TbResult<Summary> {
     })
 }
 
-pub fn process_hook(e: &webhook::Event, context: &StravaContext) -> TbResult<Summary>{
-    let res = match e.aspect_type.as_str() {
-        "create" | "update" => upsert_activity(e.object_id, context)?,
-        "delete" => delete_activity(e.object_id, context)?,
-        _ => {
-            warn!("Skipping unknown aspect_type {:?}", e);
-            Summary::default()
-        }
-    };
-    e.delete(context.conn())?;
-    Ok(res)
-}
-
-fn next_activities(context: &StravaContext, per_page: usize, start: Option<i64>) -> TbResult<Vec<StravaActivity>> {
-    let r = context.request(&format!(
-        "/activities?after={}&per_page={}",
-        start.unwrap_or_else(|| context.last_activity()),
-        per_page
-    ))?;
-    Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)
-}
-
-pub fn sync(mut e: webhook::Event, context: &StravaContext) -> TbResult<Summary> {
-    // let mut len = batch;
-    let mut start = e.event_time;
-    let mut hash = SumHash::default();
-
-    // while len == batch 
-    {
-        let acts = next_activities(&context, 10, Some(start))?;
-        if acts.len() == 0 {
-            e.delete(context.conn())?;
-        } else {
-            for a in acts {
-                start = std::cmp::max(start, a.start_date.timestamp());
-                trace!("processing sync event at {}", start);
-                let ps = a.send_to_tb(&context)?;
-                e.setdate(start,  context.conn())?;
-                hash.merge(ps);
-            }
-        }
-    }
-
-    Ok(hash.collect())
-}

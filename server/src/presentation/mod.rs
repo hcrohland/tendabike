@@ -9,18 +9,16 @@ mod types;
 mod part;
 mod attachment;
 mod activity;
-pub mod strava;
+pub(super) mod strava;
 mod error;
-pub mod jwt;
-pub use error::*;
+mod jwt;
+use error::*;
 
 #[database("app_db")]
 pub struct AppDbConn(crate::AppConn);
 
 use rocket::{Outcome, request::{FromRequest, self}, Request, http::Status};
-
-use crate::domain;
-use crate::{domain::user::{User, Person}, drivers::strava::error::TbResult};
+use crate::domain::{user::{User, Person}, error::TbResult};
 
 struct RUser<'a> ( &'a User );
 
@@ -99,7 +97,7 @@ pub fn start () {
         
         // add oauth2 flow
         let config = ship.config().clone();
-        ship.attach(strava::oauth::fairing(&config))
+        ship.attach(strava::oauth_fairing(&config))
             .attach(rocket::fairing::AdHoc::on_launch("Launch Message", |rocket| {
                 let c = rocket.config();
                 info!("\n\n TendaBike running on {}:{}\n\n", c.address, c.port);
@@ -111,4 +109,9 @@ fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
     let conn = AppDbConn::get_one(&rocket).expect("database connection");
     crate::run_db_migrations(&conn);
     Ok(rocket)
+}
+
+pub fn sync_user(id:i32, conn: &PgConnection) -> Result<(), anyhow::Error> {
+    strava::webhook::insert_sync(id, 0, conn)?;
+    Ok(())
 }

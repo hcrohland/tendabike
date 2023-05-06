@@ -59,7 +59,7 @@ pub fn update(user: StravaUser, tokenset: TokenResponse<Strava>, conn: &AppConn)
 }
 
 
-pub(crate) fn get_user(request: &Request, user: StravaUser, conn: &AppConn) -> Result<StravaUser, anyhow::Error> {
+pub fn get_user(request: &Request, user: StravaUser, conn: &AppConn) -> Result<StravaUser, anyhow::Error> {
     let oauth = request
         .guard::<OAuth>()
         .expect("No oauth struct!!!");

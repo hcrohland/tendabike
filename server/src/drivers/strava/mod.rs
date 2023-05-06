@@ -1,9 +1,15 @@
-pub(crate) use anyhow::Context;
+use anyhow::Context;
+use diesel::{self, QueryDsl, RunQueryDsl};
+use serde_json::Value as jValue;
 
 pub mod activity;
 pub mod gear;
 
-pub use crate::*;
+use crate::*;
+use crate::{AppConn, TbResult};
+use schema::strava_users;
+use user::Person;
+use presentation::strava::StravaContext;
 
 #[derive(Error, Debug)]
 pub enum OAuthError {
@@ -11,22 +17,12 @@ pub enum OAuthError {
     Authorize(&'static str),
 }
 
-use serde_json::Value as jValue;
-
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct JSummary {
     activities: Vec<jValue>,
     parts: Vec<jValue>,
     attachments: Vec<jValue>
 }
-
-
-use diesel::{self, QueryDsl, RunQueryDsl};
-
-use crate::{AppConn, TbResult};
-use schema::strava_users;
-use user::Person;
-use presentation::strava::{StravaContext, webhook};
 
 #[derive(Queryable, Insertable, Identifiable, Debug, Default)]
 #[table_name = "strava_users"]
@@ -65,13 +61,12 @@ impl StravaAthlete {
             ..Default::default()
         };
 
-        let user = diesel::insert_into(strava_users::table)
+        let user: StravaUser = diesel::insert_into(strava_users::table)
             .values(&user)
             .get_result(conn)?;
-        webhook::insert_sync(self.id, 0, conn)?;
+        presentation::sync_user(user.id, conn)?;
         Ok(user)
     }
-
 }
 
 impl StravaUser {
@@ -144,7 +139,6 @@ impl Person for StravaUser {
         false
     }
 }
-
 
 pub fn strava_url(who: i32, context: &StravaContext) -> TbResult<String> {
     use schema::strava_users::dsl::*;

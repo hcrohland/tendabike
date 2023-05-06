@@ -8,9 +8,9 @@ use crate::*;
 use presentation::jwt;
 use drivers::strava::*;
 
-pub(crate) mod ui;
-pub mod webhook;
-pub(crate) mod oauth;
+pub mod ui;
+pub (super) mod webhook;
+mod oauth;
 
 const API: &str = "https://www.strava.com/api/v3";
 
@@ -191,3 +191,6 @@ impl<'a, 'r> FromRequest<'a, 'r> for StravaContext {
     }
 }
 
+pub(super) fn oauth_fairing(config: &Config) -> impl rocket::fairing::Fairing {
+    oauth::fairing(config)
+}
