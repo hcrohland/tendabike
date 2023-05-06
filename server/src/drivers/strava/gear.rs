@@ -1,7 +1,7 @@
 use diesel::{self, QueryDsl, RunQueryDsl};
 
 use super::*;
-use auth::StravaContext;
+use presentation::strava::StravaContext;
 use schema::strava_gears;
 use part::NewPart;
 

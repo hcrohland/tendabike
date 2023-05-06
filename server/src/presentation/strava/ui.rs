@@ -1,5 +1,5 @@
 use super::*;
-use auth::StravaContext;
+use presentation::strava::StravaContext;
 use rocket::response::Redirect;
 
 
@@ -54,10 +54,10 @@ pub fn routes() -> Vec<rocket::Route> {
         redirect_act,
         redirect_user,
         logout,
-        auth::login,
-        auth::callback,
-        auth::sync,
-        auth::disable,
+        oauth::login,
+        oauth::callback,
+        oauth::sync,
+        oauth::disable,
         webhook::validate_subscription,
         webhook::create_event,
         webhook::hooks,

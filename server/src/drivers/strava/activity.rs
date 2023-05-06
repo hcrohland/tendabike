@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use super::*;
 use crate::activity::ActivityId;
 use crate::activity::NewActivity;
-use drivers::strava::auth::StravaContext;
+use presentation::strava::{StravaContext, webhook};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaActivity {

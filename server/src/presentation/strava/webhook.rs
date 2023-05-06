@@ -8,7 +8,7 @@ use diesel::{self, RunQueryDsl};
 use diesel::prelude::*;
 
 use super::*;
-use auth::StravaContext;
+use super::StravaContext;
 use schema::strava_events;
 
 // complicated way to have query parameters with dots in the name

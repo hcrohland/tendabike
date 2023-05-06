@@ -9,6 +9,7 @@ mod types;
 mod part;
 mod attachment;
 mod activity;
+pub mod strava;
 mod error;
 pub mod jwt;
 pub use error::*;
@@ -24,7 +25,7 @@ use crate::{domain::user::{User, Person}, drivers::strava::error::TbResult};
 struct RUser<'a> ( &'a User );
 
 fn readuser (request: &Request) -> TbResult<User> {
-    let id = crate::drivers::strava::auth::get_id(request)?;
+    let id = strava::get_id(request)?;
     let conn = request.guard::<AppDbConn>().expect("No db request guard").0;
     User::read(id, &conn)
 }
@@ -93,12 +94,12 @@ pub fn start () {
         .mount("/part", part::routes())
         .mount("/part", attachment::routes())
         .mount("/activ", activity::routes())
-        .mount("/strava", drivers::strava::ui::routes())
+        .mount("/strava", strava::ui::routes())
         ;
         
         // add oauth2 flow
         let config = ship.config().clone();
-        ship.attach(drivers::strava::auth::fairing(&config))
+        ship.attach(strava::oauth::fairing(&config))
             .attach(rocket::fairing::AdHoc::on_launch("Launch Message", |rocket| {
                 let c = rocket.config();
                 eprintln!("\nInfo: TendaBike running on {}:{}\n", c.address, c.port);
@@ -111,4 +112,3 @@ fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
     crate::run_db_migrations(&conn);
     Ok(rocket)
 }
-
