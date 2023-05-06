@@ -7,7 +7,6 @@ use rocket::*;
 use crate::*;
 use presentation::jwt;
 use drivers::strava::*;
-use drivers::strava::auth::*;
 
 pub(crate) mod ui;
 pub mod webhook;

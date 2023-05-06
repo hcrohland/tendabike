@@ -7,7 +7,7 @@ use rocket::{Config, Request};
 
 use crate::{AppConn, Summary};
 use crate::domain::error::{TbResult, Error};
-use crate::drivers::strava::auth::{StravaUser, StravaAthlete};
+use crate::drivers::strava::{StravaUser, StravaAthlete};
 use crate::presentation::{jwt, Admin, tbapi, ApiResult, AppDbConn};
 
 use super::StravaContext;

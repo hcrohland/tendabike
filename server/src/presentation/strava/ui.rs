@@ -39,7 +39,7 @@ fn redirect_act(id: i32, context: StravaContext) -> Option<Redirect> {
 
 #[get("/users/<id>")]
 fn redirect_user(id: i32, context: StravaContext) -> Option<Redirect> {
-    auth::strava_url(id, &context).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
+    strava_url(id, &context).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
 }
 
 #[get("/logout")]

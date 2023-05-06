@@ -279,7 +279,7 @@ pub fn validate_subscription (hub: Form<Hub>) -> ApiResult<Hub> {
 
 #[get("/sync?<time>&<user_id>")]
 pub fn sync_api (time: i64, user_id: Option<i32>, _u: Admin, conn: AppDbConn) -> ApiResult<()> {
-    let users = auth::getusers(user_id, &conn)?;
+    let users = getusers(user_id, &conn)?;
     for user_id in users {
         insert_sync(user_id, time, &conn)?;
     }
