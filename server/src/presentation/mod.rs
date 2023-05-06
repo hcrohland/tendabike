@@ -102,7 +102,7 @@ pub fn start () {
         ship.attach(strava::oauth::fairing(&config))
             .attach(rocket::fairing::AdHoc::on_launch("Launch Message", |rocket| {
                 let c = rocket.config();
-                eprintln!("\nInfo: TendaBike running on {}:{}\n", c.address, c.port);
+                info!("\n\n TendaBike running on {}:{}\n\n", c.address, c.port);
             }))
             .launch();
 }
