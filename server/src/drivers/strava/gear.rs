@@ -39,7 +39,7 @@ pub fn strava_url(gear: i32, context: &StravaContext) -> TbResult<String> {
 
 impl StravaGear {
     pub fn into_tb(self, context: &StravaContext) -> TbResult<NewPart> {
-        let (user,_) = context.disect();
+        let (user,_) = context.split();
         Ok(NewPart {
             owner: user.tb_id(),
             what: self.what().into(),
@@ -81,21 +81,23 @@ fn get_tbid(strava_id: &str, conn: &AppConn) -> TbResult<Option<PartId>> {
 /// If it does not exist create it at tb
 /// None will return None
 pub fn strava_to_tb(strava_id: String, context: &StravaContext) -> TbResult<PartId> {
-    let conn = context.conn();
+    let (user, conn) = context.split();
     
-    if let Some(g) = get_tbid(&strava_id, conn)? { return Ok(g) }
-
+    if let Some(gear) = get_tbid(&strava_id, conn)? { 
+        return Ok(gear) 
+    }
+    
     debug!("New Gear");
     let part = StravaGear::request(&strava_id, context)
         .context("Couldn't map gear")?
         .into_tb(context)?;
 
-
     conn.transaction(||{
         use schema::strava_gears::dsl::*;
-        let (user, conn) = context.disect();
         // maybe the gear was created by now?
-        if let Some(g) = get_tbid(&strava_id, conn)? { return Ok(g) }
+        if let Some(gear) = get_tbid(&strava_id, conn)? { 
+            return Ok(gear) 
+        }
 
         let tbid = part.create(user, conn)?.id;
     

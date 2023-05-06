@@ -36,6 +36,21 @@ pub struct StravaContext {
 /// It retrieves the storage (cookies and database) from the request.
 /// By that the visible routes only need to use the User request guard to access Strava
 impl StravaContext {
+    /// get the reference to the database connection
+    pub fn conn(&self) -> &AppConn {
+        &self.conn
+    }
+
+    /// get the reference to the StravaUser
+    pub fn user(&self) -> &StravaUser {
+        &self.user
+    }
+
+    /// get references to both the StravaUser and the database connection as a tuple  
+    pub fn split(&self) -> (&StravaUser, &AppConn) {
+        (&self.user, &self.conn)
+    }
+
     /// the get function reads the user from the cookie and other stores,
     /// if needed and possible it refreshes the access token
     fn get(request: &Request) -> TbResult<StravaContext> {
@@ -63,7 +78,7 @@ impl StravaContext {
     
     /// disable a user 
     fn disable(&self) -> TbResult<()> {
-        let (user, conn) = self.disect();
+        let (user, conn) = self.split();
 
         let id = user.id();
         info!("disabling user {}", id);
@@ -72,8 +87,8 @@ impl StravaContext {
         user.update_db(conn)
     }
 
-    fn my_disable(self) -> TbResult<()> {
-        let (user, conn) = self.disect();
+    fn admin_disable(self) -> TbResult<()> {
+        let (user, conn) = self.split();
     
         let (events, disabled) = get_stats(user.tb_id(), conn)?;
 
@@ -129,28 +144,7 @@ impl StravaContext {
             .text().context("Could not get response body")?)
     }
 
-    pub fn strava_id(&self) -> i32 {
-        self.user.id()
-    }
-
-    pub fn last_activity(&self) -> i64 {
-        self.user.last_activity()
-    }
-
-    pub fn update_last(&self, time: i64) -> TbResult<i64> {
-        let (user, conn) = self.disect();
-        user.update_last(time, conn)
-    }
-
-    pub fn conn(&self) -> &AppConn {
-        &self.conn
-    }
-
-    pub fn disect(&self) -> (&StravaUser, &AppConn) {
-        (&self.user, &self.conn)
-    }
-
-    pub fn logout(&self,  cookies: Cookies)  {
+    fn logout(&self,  cookies: Cookies)  {
         jwt::remove(cookies);
     }
 }

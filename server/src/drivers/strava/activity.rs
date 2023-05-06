@@ -36,7 +36,7 @@ impl StravaActivity {
             Some(x) => Some(gear::strava_to_tb(x, context)?),
             None => None,
         };
-        let (user, _) = context.disect();
+        let (user, _) = context.split();
         Ok(NewActivity {
             what,
             gear,
@@ -102,7 +102,7 @@ impl StravaActivity {
 
 impl StravaActivity {
     pub fn send_to_tb(self, context: &StravaContext) -> TbResult<Summary> {
-        let (user, conn) = context.disect();
+        let (user, conn) = context.split();
         conn.transaction(||{
             use schema::strava_activities::dsl::*;
 
@@ -131,7 +131,7 @@ impl StravaActivity {
                     .execute(conn)?;
             }
 
-            context.update_last(tb.start.timestamp())
+            user.update_last(tb.start.timestamp(), conn)
                 .context("unable to update user")?;
 
             Ok(res)
@@ -165,7 +165,7 @@ pub fn upsert_activity(id: i64, context: &StravaContext) -> TbResult<Summary> {
 pub fn delete_activity(sid: i64, context: &StravaContext) -> TbResult<Summary> {
     use schema::strava_activities::dsl::*;
 
-    let (user, conn) = context.disect();
+    let (user, conn) = context.split();
     conn.transaction(||{
         let tid: Option<ActivityId> = strava_activities.select(tendabike_id).find(sid).for_update().first(conn).optional()?;
         if let Some(tid) = tid {

@@ -162,10 +162,10 @@ fn rate_limit(event: Event, context: &StravaContext) -> TbResult<Option<Event>> 
 
 pub fn get_event(context: &StravaContext) -> TbResult<Option<Event>> {
     use schema::strava_events::dsl::*;
-    let conn = context.conn();
+    let (user, conn) = context.split();
 
     let event: Option<Event> = strava_events
-        .filter(owner_id.eq_any(vec![0,context.strava_id()]))
+        .filter(owner_id.eq_any(vec![0,user.id]))
         .order(event_time.asc())
         .first(conn)
         .optional()?;
@@ -250,7 +250,7 @@ pub fn process_hook(e: &Event, context: &StravaContext) -> TbResult<Summary>{
 fn next_activities(context: &StravaContext, per_page: usize, start: Option<i64>) -> TbResult<Vec<StravaActivity>> {
     let r = context.request(&format!(
         "/activities?after={}&per_page={}",
-        start.unwrap_or_else(|| context.last_activity()),
+        start.unwrap_or_else(|| context.user().last_activity()),
         per_page
     ))?;
     Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)

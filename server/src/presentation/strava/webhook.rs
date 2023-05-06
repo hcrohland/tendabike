@@ -8,7 +8,7 @@ use super::StravaContext;
 
 #[get("/hooks")]
 pub fn hooks (context: StravaContext) -> ApiResult<Summary> {
-    let (user, conn) = context.disect();
+    let (user, conn) = context.split();
     user.lock(conn)?;
     let res = process(&context);
     user.unlock(conn)?;

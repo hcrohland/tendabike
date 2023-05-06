@@ -107,5 +107,5 @@ pub fn sync(tbid: i32, _u: Admin, context: StravaContext, oauth: OAuth2<Strava>)
 
 #[post("/disable/<tbid>")]
 pub fn disable(tbid: i32, _u: Admin, context: StravaContext, oauth: OAuth2<Strava>) -> ApiResult<()> {
-    tbapi(from_tb(tbid, context, oauth)?.my_disable())
+    tbapi(from_tb(tbid, context, oauth)?.admin_disable())
 }

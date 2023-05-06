@@ -227,7 +227,7 @@ fn update_user(context: &StravaContext) -> TbResult<Vec<PartId>> {
 
 pub fn user_summary(context: &StravaContext) -> TbResult<Summary> {
     update_user(&context)?;
-    let (user, conn) = context.disect();
+    let (user, conn) = context.split();
     let parts = domain::part::Part::get_all(user, conn)?;
     let attachments = Attachment::for_parts(&parts,&conn)?;
     let activities = Activity::get_all(user, conn)?;
