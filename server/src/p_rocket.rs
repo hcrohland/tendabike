@@ -9,13 +9,15 @@ mod error;
 mod jwt;
 use error::*;
 
+
 // AppDbConn needs to be published to be used in Rocket
-// It should notbe used outside presentation
+// It should not be used outside presentation
 #[database("app_db")]
 pub struct AppDbConn(AppConn);
 
 use rocket::{Outcome, request::{FromRequest, self}, Request, http::Status};
-use crate::domain::{user::{User, Person}, error::TbResult};
+use crate::domain::{user::User, error::TbResult};
+use p_rocket::Person;
 
 struct RUser<'a> ( &'a User );
 
@@ -64,42 +66,48 @@ impl Person for Admin<'_> {
     }
 }
 
-pub fn start () {
-    let cors = rocket_cors::CorsOptions::default()
-        .to_cors()
-        .expect("Could not set CORS options");
+#[derive(Debug)]
+pub struct Server {}
 
-    let ship = rocket::ignite()
-        // add database pool
-        .attach(AppDbConn::fairing())
-        // run database migrations
-        .attach(AdHoc::on_attach("TendaBike Database Migrations", run_db_migrations))
-        .attach(cors)
-        // mount all the endpoints from the module
-        .mount(
-            "/",
-            rocket_contrib::serve::StaticFiles::from(
-                std::env::var("STATIC_WWW").unwrap_or_else(|_|
-                    concat!(env!("CARGO_MANIFEST_DIR"),"/../frontend/public").into()
+impl domain::presentation::Presentation for Server {
+    fn start() -> Self {
+        let cors = rocket_cors::CorsOptions::default()
+            .to_cors()
+            .expect("Could not set CORS options");
+
+        let ship = rocket::ignite()
+            // add database pool
+            .attach(AppDbConn::fairing())
+            // run database migrations
+            .attach(AdHoc::on_attach("TendaBike Database Migrations", run_db_migrations))
+            .attach(cors)
+            // mount all the endpoints from the module
+            .mount(
+                "/",
+                rocket_contrib::serve::StaticFiles::from(
+                    std::env::var("STATIC_WWW").unwrap_or_else(|_|
+                        concat!(env!("CARGO_MANIFEST_DIR"),"/../frontend/public").into()
+                    )
                 )
             )
-        )
-        .mount("/user", routes::user())
-        .mount("/types", routes::types())
-        .mount("/part", routes::part())
-        .mount("/part", routes::attachment())
-        .mount("/activ", routes::activity())
-        .mount("/strava", strava::ui::routes())
-        ;
-        
-        // add oauth2 flow
-        let config = ship.config().clone();
-        ship.attach(strava::fairing(&config))
-            .attach(rocket::fairing::AdHoc::on_launch("Launch Message", |rocket| {
-                let c = rocket.config();
-                info!("\n\n TendaBike running on {}:{}\n\n", c.address, c.port);
-            }))
-            .launch();
+            .mount("/user", routes::user::routes())
+            .mount("/types", routes::types::routes())
+            .mount("/part", routes::part::routes())
+            .mount("/part", routes::attachment::routes())
+            .mount("/activ", routes::activity::routes())
+            .mount("/strava", strava::ui::routes())
+            ;
+            
+            // add oauth2 flow
+            let config = ship.config().clone();
+            ship.attach(strava::fairing(&config))
+                .attach(rocket::fairing::AdHoc::on_launch("Launch Message", |rocket| {
+                    let c = rocket.config();
+                    info!("\n\n TendaBike running on {}:{}\n\n", c.address, c.port);
+                }))
+                .launch();
+            Server {}
+    }
 }
 
 fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {

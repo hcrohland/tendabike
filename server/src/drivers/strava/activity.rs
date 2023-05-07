@@ -4,7 +4,7 @@ use super::*;
 use crate::activity::ActivityId;
 use crate::activity::NewActivity;
 use crate::domain::types::ActTypeId;
-use presentation::strava::StravaContext;
+use p_rocket::strava::StravaContext;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaActivity {
