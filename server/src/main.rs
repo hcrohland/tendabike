@@ -1,42 +1,12 @@
-#![feature(proc_macro_hygiene, decl_macro)]
+#![feature( decl_macro)]
 #![feature(drain_filter)]
 #![warn(clippy::all)]
 
-#[macro_use]
-extern crate serde_derive;
-extern crate serde_json;
-#[macro_use]
-extern crate rocket;
-#[macro_use]
-extern crate rocket_contrib;
-extern crate rocket_cors;
 
 #[macro_use]
 extern crate diesel;
 #[macro_use]
-extern crate diesel_derive_newtype;
-#[macro_use]
 extern crate diesel_migrations;
-
-#[macro_use]
-extern crate newtype_derive;
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate anyhow;
-extern crate chrono;
-extern crate chrono_tz;
-extern crate env_logger;
-
-extern crate dotenv;
-
-#[macro_use]
-extern crate thiserror;
-
-extern crate reqwest;
-extern crate jsonwebtoken;
-
-use self::diesel::prelude::*;
 
 mod p_rocket;
 mod drivers;

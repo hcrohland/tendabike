@@ -1,7 +1,8 @@
 
-pub use anyhow::Context;
+use thiserror::Error;
+pub use anyhow::{Context, ensure, bail};
 
-#[derive(Clone, Debug, Error, Responder)]
+#[derive(Clone, Debug, Error, rocket::Responder)]
 pub enum Error{
     #[error("User not authenticated: {0}")]
     NotAuth(String),

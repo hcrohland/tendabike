@@ -30,7 +30,7 @@ fn post(
     let assembly = Activity::create(&activity, user.0, &conn)?;
     let id_raw: i32 = assembly.first().into();
                     
-    let url = uri!(get: id_raw);
+    let url = rocket::uri!(get: id_raw);
     Ok(status::Created(
         url.to_string(),
         Some(Json(assembly)),
