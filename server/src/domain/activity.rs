@@ -7,10 +7,8 @@
 //! Most operations are done on the ActivityId though
 //!
 
-use crate::*;
+use super::*;
 use schema::activities;
-
-use diesel::{self, QueryDsl, RunQueryDsl};
 
 /// The Id of an Activity
 ///

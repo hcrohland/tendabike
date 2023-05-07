@@ -1,16 +1,14 @@
-use std::collections::HashMap;
+use std::cmp::{min, max};
 
-use self::schema::{part_types, parts};
-use crate::*;
-
-use diesel::{self, QueryDsl, RunQueryDsl};
+use super::*;
+use schema::{part_types, parts};
 
 // make rls happy for now. This is broken anyways...
 
 //#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub type Assembly = HashMap<PartId, Part>;
 
-pub trait ATrait {
+trait ATrait {
     fn part(&self, part: PartId) -> Option<&Part>;
 }
 

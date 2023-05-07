@@ -7,6 +7,7 @@ pub mod gear;
 pub mod event;
 
 use crate::*;
+use crate::domain::user::Stat;
 use crate::{AppConn, TbResult};
 use schema::strava_users;
 use user::Person;
@@ -142,6 +143,18 @@ impl StravaUser {
         Ok(())
     }        
 
+    /// return the open events and the disabled status for a user.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the database connection fails.
+    pub fn get_stats(&self, conn: &AppConn) -> TbResult<(i64, bool)> {
+        use schema::strava_events::dsl::*;
+
+        let events = strava_events.count().filter(owner_id.eq(self.tendabike_id)).first(conn)?;
+        return Ok((events, self.expires_at == 0))
+    }
+
 }
 
 impl Person for StravaUser {
@@ -164,21 +177,25 @@ pub fn strava_url(who: i32, context: &StravaContext) -> TbResult<String> {
     Ok(format!("https://strava.com/athletes/{}", &user_id))
 }
 
-/// return the open events and the disabled status for a user.
-///
-/// # Errors
-///
-/// This function will return an error if the database connection fails.
-pub fn get_stats(tbid: i32, conn: &AppConn) -> TbResult<(i64, bool)> {
-    use schema::strava_events::dsl::*;
+#[derive(Debug, Serialize)]
+pub struct StravaStat {
+    #[serde(flatten)]
+    stat: Stat,
+    events: i64,
+    disabled: bool,
+}
 
-    let user: StravaUser = strava_users::table
-        .filter(strava_users::tendabike_id.eq(tbid))
-        .get_result(conn)
-        .context(format!("get_stats: tb user {} not registered", tbid))?;
+pub fn get_all_stats(conn: &AppConn) -> TbResult<Vec<StravaStat>> {
+    let users = strava_users::table
+        .get_results::<StravaUser>(conn)
+        .context(format!("get_stats: could not read users"))?;
 
-    let events = strava_events.count().filter(owner_id.eq(user.tendabike_id)).first(conn)?;
-    return Ok((events, user.expires_at == 0))
+    users.into_iter().map(|u| {
+        let uid = u.tendabike_id;
+        let stat = User::get_stat(uid, conn)?;
+        let (events, disabled) = u.get_stats(conn)?;
+        Ok(StravaStat {stat, events, disabled})
+    }).collect()
 }
 
 /// Get the strava id for all users
@@ -226,5 +243,5 @@ pub fn user_summary(context: &StravaContext) -> TbResult<Summary> {
     let parts = domain::part::Part::get_all(user, conn)?;
     let attachments = Attachment::for_parts(&parts,&conn)?;
     let activities = Activity::get_all(user, conn)?;
-    Ok(Summary{parts,attachments,activities})
+    Ok(Summary::new(activities, parts,attachments))
 }

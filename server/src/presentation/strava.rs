@@ -96,7 +96,7 @@ impl StravaContext {
     fn admin_disable(self) -> TbResult<()> {
         let (user, conn) = self.split();
     
-        let (events, disabled) = get_stats(user.tb_id(), conn)?;
+        let (events, disabled) = user.get_stats(conn)?;
 
         if disabled { bail!(Error::BadRequest(String::from("user already disabled!"))) }
         if events > 0 { bail!(Error::BadRequest(String::from("user has open events!"))) }

@@ -1,9 +1,5 @@
-use crate::*;
+use super::*;
 use schema::{activity_types, part_types};
-
-// use self::diesel::prelude::*;
-
-use diesel::{self, QueryDsl, RunQueryDsl};
 
 #[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PartTypeId(i32);

@@ -121,7 +121,7 @@ impl StravaActivity {
                 res = tb_id.update(&tb, user, conn)?
             } else {
                 res = Activity::create(&tb, user, conn)?;
-                let new_id = &res.activities[0].id;
+                let new_id = res.first();
                 diesel::insert_into(strava_activities)
                     .values((
                         id.eq(strava_id),
