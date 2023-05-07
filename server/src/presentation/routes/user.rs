@@ -1,11 +1,7 @@
 
-use drivers::strava::StravaStat;
-use rocket_contrib::json::Json;
-use presentation::strava;
-
-use crate::drivers::strava::{user_summary, get_all_stats};
-
 use super::*;
+use drivers::strava::{user_summary, get_all_stats, StravaStat};
+
 
 #[get("/")]
 fn getuser(user: RUser) -> Json<User> {

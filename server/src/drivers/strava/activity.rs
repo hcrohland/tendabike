@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use super::*;
 use crate::activity::ActivityId;
 use crate::activity::NewActivity;
+use crate::domain::types::ActTypeId;
 use presentation::strava::StravaContext;
 
 #[derive(Serialize, Deserialize, Debug)]

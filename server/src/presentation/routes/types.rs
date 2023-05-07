@@ -1,6 +1,5 @@
 use super::*;
-use rocket_contrib::json::Json;
-use crate::{domain::types::*};
+use crate::domain::types::*;
 
 // get all activity types
 #[get("/activity")]

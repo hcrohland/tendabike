@@ -1,17 +1,20 @@
-use anyhow::Context;
-use diesel::{self, QueryDsl, RunQueryDsl, sql_query};
+use diesel::prelude::*;
+use diesel::{QueryDsl, RunQueryDsl, sql_query};
 use serde_json::Value as jValue;
 
 pub mod activity;
 pub mod gear;
 pub mod event;
 
-use crate::*;
-use crate::domain::user::Stat;
-use crate::{AppConn, TbResult};
-use schema::strava_users;
-use user::Person;
+use super::*;
+use crate::domain::*;
+use crate::presentation;
+
+use user::{User, Person, Stat};
+use persistence::AppConn;
 use presentation::strava::StravaContext;
+
+use schema::strava_users;
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 struct JSummary {
@@ -60,7 +63,7 @@ impl StravaAthlete {
         let user: StravaUser = diesel::insert_into(strava_users::table)
             .values(&user)
             .get_result(conn)?;
-        drivers::strava::sync_users(Some(user.id), 0, conn)?;
+        sync_users(Some(user.id), 0, conn)?;
         Ok(user)
     }
 }
@@ -213,34 +216,11 @@ pub fn sync_users (user_id: Option<i32>, time: i64, conn: &AppConn) -> TbResult<
         Ok(())
 }
 
-/// Get list of gear for user from Strava
-fn update_user(context: &StravaContext) -> TbResult<Vec<PartId>> {
-    #[derive(Deserialize, Debug)]
-    struct Gear {
-        id: String,
-    }
-
-    #[derive(Deserialize, Debug)]
-    struct Athlete {
-        // firstname: String,
-        // lastname: String,
-        bikes: Vec<Gear>,
-        shoes: Vec<Gear>,
-    }
-
-    let r = context.request("/athlete")?;
-    let ath: Athlete = serde_json::from_str(&r)?;
-    let parts = ath.bikes.into_iter()
-        .chain(ath.shoes)
-        .map(|gear| gear::strava_to_tb(gear.id, context))
-        .collect::<TbResult<_>>()?;
-    Ok(parts)
-}
-
-pub fn user_summary(context: &StravaContext) -> TbResult<Summary> {
-    update_user(&context)?;
+pub fn user_summary(context: &StravaContext) -> TbResult<crate::domain::Summary> {
+    use crate::*;
+    gear::update_user(&context)?;
     let (user, conn) = context.split();
-    let parts = domain::part::Part::get_all(user, conn)?;
+    let parts = Part::get_all(user, conn)?;
     let attachments = Attachment::for_parts(&parts,&conn)?;
     let activities = Activity::get_all(user, conn)?;
     Ok(Summary::new(activities, parts,attachments))

@@ -1,17 +1,16 @@
-use rocket::http::{Cookies, Status};
-use rocket::request::{self, FromRequest, Request};
+use rocket::http::Cookies;
 use rocket::response::Redirect;
-use rocket::Outcome;
 
-use crate::*;
+use super::*;
 use presentation::jwt;
 use drivers::strava::*;
 
-pub mod ui;
-pub (super) mod webhook;
+pub(super) mod ui;
+pub(super) mod webhook;
 mod oauth;
 
 pub use oauth::fairing;
+
 
 const API: &str = "https://www.strava.com/api/v3";
 

@@ -1,5 +1,4 @@
 use super::*;
-use anyhow::Context;
 use schema::users;
 
 pub trait Person {

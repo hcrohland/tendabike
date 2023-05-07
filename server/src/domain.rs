@@ -18,7 +18,8 @@ use diesel::{self, QueryDsl, RunQueryDsl};
 use diesel::prelude::*;
 
 use crate::drivers::persistence::{schema, AppConn};
-use super::{Error, TbResult, Context, Connection};
+use super::error::{Error, TbResult, Context};
+use super::Connection;
 
 #[derive(Debug)]
 pub struct Usage {

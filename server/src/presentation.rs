@@ -1,7 +1,7 @@
 use rocket::Rocket;
 use rocket::fairing::AdHoc;
-use std::env;
 use crate::*;
+use crate::error::*;
 
 mod routes;
 pub(super) mod strava;
@@ -77,7 +77,7 @@ pub fn start () {
         .mount(
             "/",
             rocket_contrib::serve::StaticFiles::from(
-                env::var("STATIC_WWW").unwrap_or_else(|_|
+                std::env::var("STATIC_WWW").unwrap_or_else(|_|
                     concat!(env!("CARGO_MANIFEST_DIR"),"/../frontend/public").into()
                 )
             )
