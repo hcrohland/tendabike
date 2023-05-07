@@ -12,14 +12,8 @@ use schema::strava_users;
 use user::Person;
 use presentation::strava::StravaContext;
 
-#[derive(Error, Debug)]
-pub enum OAuthError {
-    #[error("authorization needed: {0}")]
-    Authorize(&'static str),
-}
-
 #[derive(Debug, Default, Deserialize, Serialize)]
-pub struct JSummary {
+struct JSummary {
     activities: Vec<jValue>,
     parts: Vec<jValue>,
     attachments: Vec<jValue>

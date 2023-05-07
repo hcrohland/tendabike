@@ -41,11 +41,11 @@ use self::diesel::prelude::*;
 use std::cmp::{max,min};
 use std::collections::HashMap;
 
-pub mod schema;
+mod schema;
 
-pub mod presentation;
-pub mod drivers;
-pub mod domain;
+mod presentation;
+mod drivers;
+mod domain;
 use domain::*;
 use types::*;
 use part::{Part, PartId};
