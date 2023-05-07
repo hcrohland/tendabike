@@ -142,7 +142,7 @@ impl StravaContext {
         }
     }
 
-    /// send an API call with an authenticated User
+    /// request a Strava API call with an authenticated User
     ///
     pub fn request(&self, uri: &str) -> TbResult<String> {
         Ok(self.get_strava(uri)?

@@ -9,8 +9,10 @@ mod error;
 mod jwt;
 use error::*;
 
+// AppDbConn needs to be published to be used in Rocket
+// It should notbe used outside presentation
 #[database("app_db")]
-pub struct AppDbConn(crate::AppConn);
+pub struct AppDbConn(AppConn);
 
 use rocket::{Outcome, request::{FromRequest, self}, Request, http::Status};
 use crate::domain::{user::{User, Person}, error::TbResult};
