@@ -7,6 +7,10 @@ pub mod error;
 pub mod presentation;
 
 use std::collections::HashMap;
+use serde_derive::{Serialize, Deserialize};
+use log::{info,trace,warn,debug};
+use newtype_derive::*;
+use diesel_derive_newtype::*;
 
 pub use part::{Part, PartId};
 pub use activity::{Activity, ActivityId};
@@ -16,12 +20,11 @@ pub use user::User;
 pub use types::*;
 
 use chrono::{DateTime, Utc, TimeZone};
-use diesel::{self, QueryDsl, RunQueryDsl};
+use diesel::{self, Connection, QueryDsl, RunQueryDsl};
 use diesel::prelude::*;
 
 use crate::drivers::persistence::{schema, AppConn};
-use super::error::{Error, TbResult, Context};
-use super::Connection;
+use super::error::*;
 
 #[derive(Debug)]
 pub struct Usage {

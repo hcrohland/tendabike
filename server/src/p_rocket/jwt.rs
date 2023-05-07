@@ -3,6 +3,7 @@ use time::*;
 use rocket::http::{Cookie, Cookies, SameSite};
 use rocket::request::Request;
 use jsonwebtoken::{DecodingKey, decode, Validation, Algorithm, encode, EncodingKey, Header};
+use serde_derive::{Deserialize, Serialize};
 
 pub const LEEWAY: u64 = 60 * 60 * 24 * 21; // 21 days
 

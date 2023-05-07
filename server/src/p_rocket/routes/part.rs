@@ -14,7 +14,7 @@ fn post(
     conn: AppDbConn,
 ) -> Result<status::Created<Json<Part>>, ApiError> {
     let part = newpart.clone().create(user.0, &conn)?;
-    let url = uri!(get: i32::from(part.id));
+    let url = rocket::uri!(get: i32::from(part.id));
     Ok(status::Created(url.to_string(), Some(Json(part))))
 }
 

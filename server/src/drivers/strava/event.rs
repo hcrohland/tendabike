@@ -5,20 +5,6 @@ use schema::strava_events;
 
 use crate::drivers::strava::activity::StravaActivity;
 
-// complicated way to have query parameters with dots in the name
-#[derive(Debug, FromForm, Serialize)]
-pub struct Hub {
-    #[form(field = "hub.mode")]
-    #[serde(skip_serializing)]
-    mode: String,
-    #[form(field = "hub.challenge")]
-    #[serde(rename(serialize = "hub.challenge"))]
-    challenge: String,
-    #[form(field = "hub.verify_token")]
-    #[serde(skip_serializing)]
-    verify_token: String,
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InEvent {
     object_type: String,
@@ -237,20 +223,6 @@ pub fn get_event(context: &StravaContext) -> TbResult<Option<Event>> {
     }
 
     return Ok(res)
-}
-
-const VERIFY_TOKEN: &str = "tendabike_strava";
-
-pub fn validate(hub: Hub) -> TbResult<Hub> {
-    ensure!(
-        hub.verify_token == VERIFY_TOKEN, 
-        Error::BadRequest(format!("Unknown verify token {}", hub.verify_token))
-    );
-    ensure!(
-        hub.mode == "subscribe", 
-        Error::BadRequest(format!("Unknown mode {}", hub.mode))
-    );
-    Ok(hub)
 }
 
 fn check_try_again(err: anyhow::Error, conn: &AppConn) -> TbResult<Summary> {

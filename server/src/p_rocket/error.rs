@@ -4,6 +4,7 @@ use rocket::response::{Response, Responder};
 use rocket::http::Status;
 use rocket::request::Request;
 
+use log::warn;
 use crate::error::{Error, TbResult};
 
 #[derive(Debug)]

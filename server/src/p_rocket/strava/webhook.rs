@@ -1,11 +1,38 @@
 use super::*;
-use rocket::request::Form;
+use rocket::{request::{Form, FromForm}, get, post};
 use rocket_contrib::json::Json;
 
-use crate::drivers::strava::event::{Hub, InEvent, process, validate};
+use crate::drivers::strava::event::{InEvent, process};
 
 use super::StravaContext;
 
+// complicated way to have query parameters with dots in the name
+#[derive(Debug, FromForm, Serialize)]
+pub struct Hub {
+    #[form(field = "hub.mode")]
+    #[serde(skip_serializing)]
+    mode: String,
+    #[form(field = "hub.challenge")]
+    #[serde(rename(serialize = "hub.challenge"))]
+    challenge: String,
+    #[form(field = "hub.verify_token")]
+    #[serde(skip_serializing)]
+    verify_token: String,
+}
+
+fn validate(hub: Hub) -> TbResult<Hub> {
+    ensure!(
+        hub.verify_token == VERIFY_TOKEN, 
+        Error::BadRequest(format!("Unknown verify token {}", hub.verify_token))
+    );
+    ensure!(
+        hub.mode == "subscribe", 
+        Error::BadRequest(format!("Unknown mode {}", hub.mode))
+    );
+    Ok(hub)
+}
+
+const VERIFY_TOKEN: &str = "tendabike_strava";
 
 #[get("/hooks")]
 pub fn hooks (context: StravaContext) -> ApiResult<Summary> {

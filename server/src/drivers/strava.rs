@@ -1,5 +1,6 @@
 use diesel::prelude::*;
 use diesel::{QueryDsl, RunQueryDsl, sql_query};
+use serde_derive::{Deserialize, Serialize};
 use serde_json::Value as jValue;
 
 pub mod activity;
