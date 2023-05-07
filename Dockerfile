@@ -1,4 +1,4 @@
-FROM rust:latest as base
+FROM lukemathwalker/cargo-chef:latest as base
 # We only pay the installation cost once, 
 # it will be cached from the second build onwards
 # To ensure a reproducible build consider pinning 
@@ -9,13 +9,12 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y libpq-dev libssl-dev
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN cargo install cargo-chef 
 # install nighlty toolchain
 RUN rustup set profile minimal && rustup update nightly && rustup default nightly
 
 FROM base as planner
 
-COPY server/. .
+COPY Cargo.toml Cargo.lock server ./
 RUN cargo chef prepare --recipe-path recipe.json
 
 
