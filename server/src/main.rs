@@ -38,19 +38,20 @@ extern crate jsonwebtoken;
 
 use self::diesel::prelude::*;
 
-mod presentation;
+mod p_rocket;
 mod drivers;
 mod domain;
 
 use domain::*;
 
 use drivers::persistence::*;
+use domain::presentation::Presentation;
 
 fn main() {
     // setup environment. Includes Config and logging
     init_environment();
 
-    presentation::start()
+    p_rocket::Server::start();
 }
 
 pub fn init_environment() {

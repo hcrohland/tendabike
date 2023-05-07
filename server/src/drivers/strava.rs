@@ -8,11 +8,12 @@ pub mod event;
 
 use super::*;
 use crate::domain::*;
-use crate::presentation;
+use crate::p_rocket;
 
-use user::{User, Person, Stat};
+use crate::domain::presentation::Person;
+use user::{User, Stat};
 use persistence::AppConn;
-use presentation::strava::StravaContext;
+use p_rocket::strava::StravaContext;
 
 use schema::strava_users;
 

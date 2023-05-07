@@ -4,13 +4,15 @@ pub mod activity;
 pub mod attachment;
 pub mod user;
 pub mod error;
+pub mod presentation;
 
 use std::collections::HashMap;
 
 pub use part::{Part, PartId};
 pub use activity::{Activity, ActivityId};
 pub use attachment::{Attachment, AttachmentDetail};
-pub use user::{Person, User};
+pub use presentation::Person;
+pub use user::User;
 pub use types::*;
 
 use chrono::{DateTime, Utc, TimeZone};

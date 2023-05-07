@@ -2,7 +2,7 @@ use rocket::http::Cookies;
 use rocket::response::Redirect;
 
 use super::*;
-use presentation::jwt;
+use p_rocket::jwt;
 use drivers::strava::*;
 
 pub(super) mod ui;
