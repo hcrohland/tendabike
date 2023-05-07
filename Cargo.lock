@@ -2175,7 +2175,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "thiserror",
- "time 0.1.45",
+ "time 0.3.21",
 ]
 
 [[package]]
