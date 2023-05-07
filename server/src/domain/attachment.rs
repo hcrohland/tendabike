@@ -3,9 +3,7 @@
 //! Attachments can be hierarchical
 //! They are identified by part_id and attached time
 
-use diesel::{self, QueryDsl, RunQueryDsl};
-
-use crate::*;
+use super::*;
 use schema::attachments;
 /// Description of an Attach or Detach request
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]

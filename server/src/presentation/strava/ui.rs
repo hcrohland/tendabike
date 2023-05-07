@@ -1,7 +1,4 @@
 use super::*;
-use presentation::strava::StravaContext;
-use rocket::response::Redirect;
-
 
 #[get("/bikes/<id>")]
 fn redirect_gear(id: i32, context: StravaContext) -> Option<Redirect> {

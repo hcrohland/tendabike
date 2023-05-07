@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use super::*;
 use crate::activity::ActivityId;
 use crate::activity::NewActivity;
+use crate::domain::types::ActTypeId;
 use presentation::strava::StravaContext;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -121,7 +122,7 @@ impl StravaActivity {
                 res = tb_id.update(&tb, user, conn)?
             } else {
                 res = Activity::create(&tb, user, conn)?;
-                let new_id = &res.activities[0].id;
+                let new_id = res.first();
                 diesel::insert_into(strava_activities)
                     .values((
                         id.eq(strava_id),

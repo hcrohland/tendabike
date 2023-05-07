@@ -28,7 +28,8 @@ fn post(
     conn: AppDbConn,
 ) -> Result<status::Created<Json<Summary>>, ApiError> {
     let assembly = Activity::create(&activity, user.0, &conn)?;
-    let id_raw: i32 = assembly.activities[0].id.into();
+    let id_raw: i32 = assembly.first().into();
+                    
     let url = uri!(get: id_raw);
     Ok(status::Created(
         url.to_string(),

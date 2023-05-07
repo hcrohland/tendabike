@@ -1,9 +1,9 @@
 use diesel::{self, QueryDsl, RunQueryDsl};
 
 use super::*;
-use presentation::strava::StravaContext;
-use schema::strava_gears;
 use part::NewPart;
+
+use schema::strava_gears;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaGear {
@@ -106,4 +106,28 @@ pub fn strava_to_tb(strava_id: String, context: &StravaContext) -> TbResult<Part
             .execute(conn).context("couldn't store gear")?;
         Ok(tbid)
     })
+}
+
+/// Get list of gear for user from Strava
+pub fn update_user(context: &StravaContext) -> TbResult<Vec<PartId>> {
+    #[derive(Deserialize, Debug)]
+    struct Gear {
+        id: String,
+    }
+
+    #[derive(Deserialize, Debug)]
+    struct Athlete {
+        // firstname: String,
+        // lastname: String,
+        bikes: Vec<Gear>,
+        shoes: Vec<Gear>,
+    }
+
+    let r = context.request("/athlete")?;
+    let ath: Athlete = serde_json::from_str(&r)?;
+    let parts = ath.bikes.into_iter()
+        .chain(ath.shoes)
+        .map(|gear| gear::strava_to_tb(gear.id, context))
+        .collect::<TbResult<_>>()?;
+    Ok(parts)
 }

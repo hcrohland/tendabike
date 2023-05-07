@@ -1,7 +1,5 @@
-use crate::*;
-use anyhow::Context;
-use schema::*;
-use drivers::strava;
+use super::*;
+use schema::users;
 
 pub trait Person {
     fn get_id(&self) -> i32;
@@ -25,11 +23,9 @@ pub struct User {
 
 #[derive(Debug, Serialize)]
 pub struct Stat {
-    user: User,
+    pub user: User,
     parts: i64,
     activities: i64,
-    events: i64,
-    disabled: bool,
 }
 
 impl User {
@@ -37,23 +33,18 @@ impl User {
         Ok(users::table.find(id).get_result(conn)?)
     }
 
-    pub fn get_stat(self, conn: &AppConn) -> TbResult<Stat> {
+    pub fn get_stat(id: i32, conn: &AppConn) -> TbResult<Stat> {
+        let user = User::read(id, conn)?;
         let parts = {
             use schema::parts::dsl::{parts, owner};
-            parts.count().filter(owner.eq(self.id)).first(conn)?
+            parts.count().filter(owner.eq(id)).first(conn)?
         };
         let activities = {
             use schema::activities::dsl::*;
-            activities.count().filter(user_id.eq(self.id)).first(conn)?
+            activities.count().filter(user_id.eq(id)).first(conn)?
         };
-        let  (events, disabled) = strava::get_stats(self.id, conn)?;
-        Ok(Stat{user: self, parts, activities, events, disabled})
-    }
-
-    pub fn get_all (conn: &AppConn) -> TbResult<Vec<Stat>> {
-        let users = users::table.get_results::<User>(conn)?;
-        users.into_iter().map(|u| u.get_stat(conn)).collect::<TbResult<_>>()
-    }    
+        Ok(Stat{user, parts, activities})
+    }   
 }
 
 impl Person for User {

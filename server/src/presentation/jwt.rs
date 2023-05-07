@@ -1,9 +1,6 @@
-
-use rocket::http::*;
 use time::*;
 
-
-use rocket::http::Cookies;
+use rocket::http::{Cookie, Cookies, SameSite};
 use rocket::request::Request;
 use jsonwebtoken::{DecodingKey, decode, Validation, Algorithm, encode, EncodingKey, Header};
 

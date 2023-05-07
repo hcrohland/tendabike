@@ -1,14 +1,7 @@
-use anyhow::Context;
-use rocket::http::Cookies;
-use rocket::response::Redirect;
+use super::*;
 use rocket_oauth2::HyperSyncRustlsAdapter;
 use rocket_oauth2::{OAuth2, TokenResponse, OAuthConfig};
-use rocket::{Config, Request};
-
-use crate::{AppConn, Summary};
-use crate::domain::error::{TbResult, Error};
-use crate::drivers::strava::{StravaUser, StravaAthlete};
-use crate::presentation::{jwt, Admin, ApiResult, AppDbConn};
+use rocket::Config;
 
 use super::StravaContext;
 

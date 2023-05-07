@@ -1,17 +1,16 @@
-use rocket::http::{Cookies, Status};
-use rocket::request::{self, FromRequest, Request};
+use rocket::http::Cookies;
 use rocket::response::Redirect;
-use rocket::Outcome;
 
-use crate::*;
+use super::*;
 use presentation::jwt;
 use drivers::strava::*;
 
-pub mod ui;
-pub (super) mod webhook;
+pub(super) mod ui;
+pub(super) mod webhook;
 mod oauth;
 
 pub use oauth::fairing;
+
 
 const API: &str = "https://www.strava.com/api/v3";
 
@@ -96,7 +95,7 @@ impl StravaContext {
     fn admin_disable(self) -> TbResult<()> {
         let (user, conn) = self.split();
     
-        let (events, disabled) = get_stats(user.tb_id(), conn)?;
+        let (events, disabled) = user.get_stats(conn)?;
 
         if disabled { bail!(Error::BadRequest(String::from("user already disabled!"))) }
         if events > 0 { bail!(Error::BadRequest(String::from("user has open events!"))) }

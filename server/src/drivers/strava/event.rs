@@ -1,15 +1,9 @@
 use std::collections::HashMap;
 
-use anyhow::ensure;
-
-use diesel::{self, RunQueryDsl};
-use diesel::prelude::*;
+use super::*;
+use schema::strava_events;
 
 use crate::drivers::strava::activity::StravaActivity;
-
-use super::*;
-use super::StravaContext;
-use schema::strava_events;
 
 // complicated way to have query parameters with dots in the name
 #[derive(Debug, FromForm, Serialize)]
