@@ -41,11 +41,9 @@ use self::diesel::prelude::*;
 use std::cmp::{max,min};
 use std::collections::HashMap;
 
-mod schema;
-
-mod presentation;
-mod drivers;
-mod domain;
+pub mod presentation;
+pub mod drivers;
+pub mod domain;
 use domain::*;
 use types::*;
 use part::{Part, PartId};
@@ -54,6 +52,8 @@ use attachment::{Attachment, AttachmentDetail};
 use user::{Person, User};
 use error::*;
 use presentation::*;
+
+use drivers::persistence::schema;
 
 use chrono::{DateTime, TimeZone, Utc};
 
@@ -64,21 +64,6 @@ fn main() {
     init_environment();
 
     presentation::start()
-}
-
-embed_migrations!();
-
-fn run_db_migrations (conn: &AppConn) {
-    use schema::attachments::dsl::*;
-
-    diesel::update(attachments)
-        .filter(detached.is_null())
-        .set(detached.eq(DateTime::<Utc>::MAX_UTC))
-        .execute(conn)
-        .expect("rewrite detached failed");
-
-    embedded_migrations::run(conn)
-        .expect("Failed to run database migrations: {:?}");
 }
 
 pub fn init_environment() {
