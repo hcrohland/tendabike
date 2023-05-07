@@ -4,7 +4,7 @@ use rocket::response::{Response, Responder};
 use rocket::http::Status;
 use rocket::request::Request;
 
-use crate::error::*;
+use crate::error::{Error, TbResult};
 
 #[derive(Debug)]
 pub struct ApiError (anyhow::Error);
@@ -23,21 +23,33 @@ impl<'r> Responder<'r> for ApiError {
 
         let mut build = Response::build();
 
-        match any.root_cause().downcast_ref::<DieselError>() {
-            Some(DieselError::NotFound) => { 
-                    // warn!("{}", any);
-                    any = Error::NotFound("Object not found".into()).into();
-                },
-            Some(DieselError::DatabaseError(diesel::result::DatabaseErrorKind::ForeignKeyViolation,_)) 
-                    => {build.status(Status::BadRequest);},
-            _ => {build.status(Status::InternalServerError);}
-        }
+        if let Some(err) = any.root_cause().downcast_ref::<DieselError>() {
+            match err {
+                    DieselError::NotFound => { 
+                            // warn!("{}", any);
+                            any = Error::NotFound("Object not found".into()).into();
+                        },
+                    DieselError::DatabaseError(diesel::result::DatabaseErrorKind::ForeignKeyViolation,_)
+                        => {build.status(Status::BadRequest);},
+                    _ 
+                        => {build.status(Status::InternalServerError);}
+                };
+        };
+
         if let Some(err) = any.root_cause().downcast_ref::<Error>() {
-            build.merge(err.clone().respond_to(req)?);
+            let status = match err {
+                Error::NotAuth(_)      => Status::Unauthorized,
+                Error::Forbidden(_)    => Status::Forbidden,
+                Error::NotFound(_)     => Status::NotFound,
+                Error::BadRequest(_)   => Status::BadRequest,
+                Error::Conflict(_)     => Status::Conflict,
+                Error::TryAgain(_)     => Status::TooManyRequests,                       
+            };
+            build
+                .status(status)
+                .merge(err.clone().respond_to(req)?);
         }
-        // create a standard Body
-        // build.header(ContentType::JSON).sized_body(Cursor::new(body));
-        
+               
         // Respond. The `Ok` here is a bit of a misnomer. It means we
         // successfully created an error response
         Ok(build.finalize())
