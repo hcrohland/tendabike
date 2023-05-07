@@ -14,12 +14,12 @@ fn getuser(user: RUser) -> Json<User> {
 
 #[get("/all")]
 fn userlist(_u: Admin, conn: AppDbConn) -> ApiResult<Vec<Stat>> {
-    tbapi(User::get_all(&conn))
+    User::get_all(&conn).map(Json)
 }
 
 #[get("/summary")]
 fn summary(context: strava::StravaContext) -> ApiResult<Summary> {
-    tbapi(user_summary(&context))
+    user_summary(&context).map(Json)
 }
 
 pub fn routes() -> Vec<rocket::Route> {

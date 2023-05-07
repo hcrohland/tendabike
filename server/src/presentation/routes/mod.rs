@@ -1,4 +1,7 @@
 use super::*;
+use rocket_contrib::json::Json;
+use rocket::response::status;
+
 mod activity;
 pub(super) use activity::routes as activity;
 mod user;

@@ -1,14 +1,10 @@
 
 use super::*;
-
 use crate::domain::part::*;
-
-use rocket::response::status;
-use rocket_contrib::json::Json;
 
 #[get("/<part>")]
 fn get(part: i32, user: RUser, conn: AppDbConn) -> ApiResult<Part> {
-    Ok(Json(PartId::new(part).part(user.0, &conn)?))
+    PartId::new(part).part(user.0, &conn).map(Json)
 }
 
 #[post("/", data = "<newpart>")]
@@ -28,8 +24,7 @@ fn put(
     user: RUser,
     conn: AppDbConn,
 ) -> ApiResult<Part> {
-
-    tbapi(part.change(user.0, &conn))
+    part.change(user.0, &conn).map(Json)
 }
 
 pub fn routes() -> Vec<rocket::Route> {
