@@ -1,9 +1,12 @@
 use super::*;
+use anyhow::ensure;
+use domain::Summary;
 use rocket_oauth2::HyperSyncRustlsAdapter;
 use rocket_oauth2::{OAuth2, TokenResponse, OAuthConfig};
 use rocket::Config;
+use log::error;
 
-use super::StravaContext;
+use super::MyContext;
 
 pub fn refresh_token(user: &StravaUser, oauth: OAuth2<Strava>) -> TbResult<TokenResponse<Strava>>{
     info!("refreshing access token for strava id {}", user.id());
@@ -61,16 +64,16 @@ pub fn get_user(request: &Request, user: StravaUser, conn: &AppConn) -> Result<S
     Ok(user)
 }
 
-fn from_tb(id: i32, context: StravaContext, oauth: OAuth2<Strava>) -> TbResult<StravaContext> {
+fn from_tb(id: i32, context: MyContext, oauth: OAuth2<Strava>) -> TbResult<MyContext> {
     let conn = context.conn;
     let user = StravaUser::read(id, &conn)?;
 
     if user.is_valid() {
-        return Ok(StravaContext {user,conn});
+        return Ok(MyContext {user,conn});
     }
     let tokenset = refresh_token(&user,oauth)?;
     let user = update(user, tokenset, &conn)?;
-    Ok(StravaContext{user,conn})
+    Ok(MyContext{user,conn})
 }
 
 #[get("/login")]
@@ -92,13 +95,13 @@ pub fn callback(token: TokenResponse<Strava>, conn: AppDbConn, cookies: Cookies<
 
 
 #[get("/sync/<tbid>")]
-pub fn sync(tbid: i32, _u: Admin, context: StravaContext, oauth: OAuth2<Strava>) -> ApiResult<Summary> {
+pub fn sync(tbid: i32, _u: Admin, context: MyContext, oauth: OAuth2<Strava>) -> ApiResult<Summary> {
     let user = from_tb(tbid, context, oauth)?;
     
     super::webhook::hooks(user)
 }
 
 #[post("/disable/<tbid>")]
-pub fn disable(tbid: i32, _u: Admin, context: StravaContext, oauth: OAuth2<Strava>) -> ApiResult<()> {
+pub fn disable(tbid: i32, _u: Admin, context: MyContext, oauth: OAuth2<Strava>) -> ApiResult<()> {
     from_tb(tbid, context, oauth)?.admin_disable().map(rocket_contrib::json::Json)
 }

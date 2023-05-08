@@ -23,7 +23,7 @@ pub struct Gear {
     user_id: i32,
 }
 
-pub fn strava_url(gear: i32, context: &StravaContext) -> TbResult<String> {
+pub fn strava_url(gear: i32, context: &dyn StravaContext) -> TbResult<String> {
     use schema::strava_gears::dsl::*;
 
     let mut g: String = strava_gears
@@ -38,7 +38,7 @@ pub fn strava_url(gear: i32, context: &StravaContext) -> TbResult<String> {
 }
 
 impl StravaGear {
-    fn into_tb(self, context: &StravaContext) -> TbResult<NewPart> {
+    fn into_tb(self, context: &dyn StravaContext) -> TbResult<NewPart> {
         let (user,_) = context.split();
         Ok(NewPart {
             owner: user.tb_id(),
@@ -57,7 +57,7 @@ impl StravaGear {
         }
     }
 
-    fn request(id: &str, context: &StravaContext) -> TbResult<StravaGear> {
+    fn request(id: &str, context: &dyn StravaContext) -> TbResult<StravaGear> {
         let r = context.request(&format!("/gear/{}", id))?;
         let res: StravaGear =
             serde_json::from_str(&r).context(format!("Did not receive StravaGear format: {:?}", r))?;
@@ -80,7 +80,7 @@ fn get_tbid(strava_id: &str, conn: &AppConn) -> TbResult<Option<PartId>> {
 ///
 /// If it does not exist create it at tb
 /// None will return None
-pub fn strava_to_tb(strava_id: String, context: &StravaContext) -> TbResult<PartId> {
+pub fn strava_to_tb(strava_id: String, context: &dyn StravaContext) -> TbResult<PartId> {
     let (user, conn) = context.split();
     
     if let Some(gear) = get_tbid(&strava_id, conn)? { 
@@ -109,7 +109,7 @@ pub fn strava_to_tb(strava_id: String, context: &StravaContext) -> TbResult<Part
 }
 
 /// Get list of gear for user from Strava
-pub fn update_user(context: &StravaContext) -> TbResult<Vec<PartId>> {
+pub fn update_user(context: &dyn StravaContext) -> TbResult<Vec<PartId>> {
     #[derive(Deserialize, Debug)]
     struct Gear {
         id: String,

@@ -101,7 +101,7 @@ impl Event {
         Ok(())
     }
 
-    fn rate_limit(self, context: &StravaContext) -> TbResult<Option<Self>> {
+    fn rate_limit(self, context: &dyn StravaContext) -> TbResult<Option<Self>> {
         // rate limit event
         if self.event_time > chrono::offset::Utc::now().timestamp() {
             // still rate limited!
@@ -114,7 +114,7 @@ impl Event {
         return get_event(context)
     }
 
-    fn process_activity (self, context: &StravaContext) -> TbResult<Summary> {
+    fn process_activity (self, context: &dyn StravaContext) -> TbResult<Summary> {
         match self.process_hook(context).or_else(|e| check_try_again(e, context.conn()))    {
             Ok(res) => return Ok(res),
             Err(err) => {
@@ -124,7 +124,7 @@ impl Event {
         }
     }
     
-    fn process_hook(&self, context: &StravaContext) -> TbResult<Summary>{
+    fn process_hook(&self, context: &dyn StravaContext) -> TbResult<Summary>{
         let res = match self.aspect_type.as_str() {
             "create" | "update" => activity::upsert_activity(self.object_id, context)?,
             "delete" => activity::delete_activity(self.object_id, context)?,
@@ -137,21 +137,21 @@ impl Event {
         Ok(res)
     }
     
-    fn sync(mut self, context: &StravaContext) -> TbResult<Summary> {
+    fn sync(mut self, context: &dyn StravaContext) -> TbResult<Summary> {
         // let mut len = batch;
         let mut start = self.event_time;
         let mut hash = SumHash::default();
     
         // while len == batch 
         {
-            let acts = next_activities(&context, 10, Some(start))?;
+            let acts = next_activities(context, 10, Some(start))?;
             if acts.len() == 0 {
                 self.delete(context.conn())?;
             } else {
                 for a in acts {
                     start = std::cmp::max(start, a.start_date.timestamp());
                     trace!("processing sync event at {}", start);
-                    let ps = a.send_to_tb(&context)?;
+                    let ps = a.send_to_tb(context)?;
                     self.setdate(start,  context.conn())?;
                     hash.merge(ps);
                 }
@@ -187,7 +187,7 @@ pub fn insert_stop(conn: &AppConn) -> TbResult<()> {
     Ok(())
 }
 
-pub fn get_event(context: &StravaContext) -> TbResult<Option<Event>> {
+pub fn get_event(context: &dyn StravaContext) -> TbResult<Option<Event>> {
     use schema::strava_events::dsl::*;
     let (user, conn) = context.split();
 
@@ -237,7 +237,7 @@ fn check_try_again(err: anyhow::Error, conn: &AppConn) -> TbResult<Summary> {
     }
 }
 
-fn next_activities(context: &StravaContext, per_page: usize, start: Option<i64>) -> TbResult<Vec<StravaActivity>> {
+fn next_activities(context: &dyn StravaContext, per_page: usize, start: Option<i64>) -> TbResult<Vec<StravaActivity>> {
     let r = context.request(&format!(
         "/activities?after={}&per_page={}",
         start.unwrap_or_else(|| context.user().last_activity),
@@ -246,7 +246,7 @@ fn next_activities(context: &StravaContext, per_page: usize, start: Option<i64>)
     Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)
 }
 
-pub fn process (context: &StravaContext) -> TbResult<Summary> {
+pub fn process (context: &dyn StravaContext) -> TbResult<Summary> {
     let event = get_event(context)?;
     if event.is_none() {
         return Ok(Summary::default());

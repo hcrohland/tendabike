@@ -1,10 +1,13 @@
+use anyhow::{Context, bail};
+use domain::AppConn;
+use domain::drivers::strava::{StravaUser, StravaContext};
 use rocket::http::Cookies;
 use rocket::response::Redirect;
 use rocket::{routes, get, post};
 
 use super::*;
-use p_rocket::jwt;
-use drivers::strava::*;
+use crate::jwt;
+use domain::drivers::strava::*;
 
 pub(super) mod ui;
 pub(super) mod webhook;
@@ -19,10 +22,10 @@ const API: &str = "https://www.strava.com/api/v3";
 /// 
 /// Will refresh token if possible
 pub fn get_id(request: &Request) -> TbResult<i32> {
-    StravaContext::get(request).map(|u| u.user.tb_id())
+    MyContext::get(request).map(|u| u.user.tb_id())
 }
 
-pub struct StravaContext {
+pub struct MyContext {
     user: StravaUser,
     conn: AppDbConn,
 }
@@ -35,25 +38,34 @@ pub struct StravaContext {
 ///
 /// It retrieves the storage (cookies and database) from the request.
 /// By that the visible routes only need to use the User request guard to access Strava
-impl StravaContext {
+impl StravaContext for MyContext {
     /// get the reference to the database connection
-    pub fn conn(&self) -> &AppConn {
+    fn conn(&self) -> &AppConn {
         &self.conn
     }
 
     /// get the reference to the StravaUser
-    pub fn user(&self) -> &StravaUser {
+    fn user(&self) -> &StravaUser {
         &self.user
     }
 
     /// get references to both the StravaUser and the database connection as a tuple  
-    pub fn split(&self) -> (&StravaUser, &AppConn) {
+    fn split(&self) -> (&StravaUser, &AppConn) {
         (&self.user, &self.conn)
     }
+ 
+    /// request a Strava API call with an authenticated User
+    ///
+    fn request(&self, uri: &str) -> TbResult<String> {
+        Ok(self.get_strava(uri)?
+            .text().context("Could not get response body")?)
+    }
+}
 
+impl MyContext {
     /// the get function reads the user from the cookie and other stores,
     /// if needed and possible it refreshes the access token
-    fn get(request: &Request) -> TbResult<StravaContext> {
+    fn get(request: &Request) -> TbResult<MyContext> {
         // Get user id
         let token = jwt::token(request)?;
         let id = jwt::id(&token)?;
@@ -143,25 +155,18 @@ impl StravaContext {
         }
     }
 
-    /// request a Strava API call with an authenticated User
-    ///
-    pub fn request(&self, uri: &str) -> TbResult<String> {
-        Ok(self.get_strava(uri)?
-            .text().context("Could not get response body")?)
-    }
-
     fn logout(&self,  cookies: Cookies)  {
         jwt::remove(cookies);
     }
 }
 
-impl<'a, 'r> FromRequest<'a, 'r> for StravaContext {
+impl<'a, 'r> FromRequest<'a, 'r> for MyContext {
     type Error = Redirect;
 
     /// Get the current user
     /// Redirect to the login screen on failure
     fn from_request(request: &'a Request<'r>) -> request::Outcome<Self, Self::Error> {
-        match StravaContext::get(request) {
+        match MyContext::get(request) {
             Ok(x) => Outcome::Success(x),
             Err(err) => {
                 warn!("{}", err);

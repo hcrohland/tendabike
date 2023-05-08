@@ -2,10 +2,8 @@
 use thiserror::Error;
 pub use anyhow::{Context, ensure, bail};
 
-#[derive(Clone, Debug, Error, rocket::Responder)]
+#[derive(Clone, Debug, Error)]
 pub enum Error{
-    #[error("User not authenticated: {0}")]
-    NotAuth(String),
     #[error("Forbidden request: {0}")]
     Forbidden(String),
     #[error("Object not found: {0}")]

@@ -1,26 +1,27 @@
+#![feature( decl_macro)]
+#![warn(clippy::all)]
+
 use rocket::Rocket;
 use rocket::fairing::AdHoc;
 use rocket_contrib::database;
-use log::{info,trace,warn,error};
-use serde_derive::*;
-use crate::*;
+use log::{info,warn};
 use crate::error::*;
 
 mod routes;
-pub(super) mod strava;
+mod strava;
 mod error;
 mod jwt;
-use error::*;
 
+use kernel as domain;
 
 // AppDbConn needs to be published to be used in Rocket
 // It should not be used outside presentation
 #[database("app_db")]
-pub struct AppDbConn(AppConn);
+pub struct AppDbConn(kernel::domain::AppConn);
 
 use rocket::{Outcome, request::{FromRequest, self}, Request, http::Status};
-use crate::domain::{user::User, error::TbResult};
-use p_rocket::Person;
+use kernel::{user::User, error::TbResult};
+use kernel::Person;
 
 struct RUser<'a> ( &'a User );
 
@@ -115,6 +116,6 @@ impl domain::presentation::Presentation for Server {
 
 fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
     let conn = AppDbConn::get_one(&rocket).expect("database connection");
-    drivers::persistence::run_db_migrations(&conn);
+    domain::drivers::persistence::run_db_migrations(&conn);
     Ok(rocket)
 }
