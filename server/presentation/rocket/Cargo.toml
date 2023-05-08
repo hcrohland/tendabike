@@ -1,12 +1,12 @@
 [package]
-name = "p_rocket"
+name = "tb_rocket"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-kernel = {path = "../server"}
+kernel = {path = "../../kernel"}
 
 rocket = "0.4"
 rocket_cors = "0.5"

@@ -5,7 +5,7 @@ fn main() {
     // setup environment. Includes Config and logging
     init_environment();
 
-    p_rocket::Server::start();
+    tb_rocket::Server::start();
 }
 
 pub fn init_environment() {

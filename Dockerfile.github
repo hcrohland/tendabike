@@ -16,8 +16,6 @@ FROM base as build-engine
 # do not copy frontend!
 COPY Cargo.toml Cargo.lock ./
 COPY server server/
-COPY p_rocket p_rocket/
-COPY tendabike tendabike/
 
 RUN cargo build --release
 

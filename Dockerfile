@@ -15,8 +15,6 @@ RUN rustup set profile minimal && rustup update nightly && rustup default nightl
 FROM base as planner
 # do not copy frontend!
 COPY Cargo.toml Cargo.lock ./
-COPY tendabike tendabike/
-COPY p_rocket p_rocket/
 COPY server server/
 
 RUN cargo chef prepare --recipe-path recipe.json
@@ -31,8 +29,6 @@ FROM cacher as build-engine
 
 # do not copy frontend!
 COPY Cargo.toml Cargo.lock ./
-COPY tendabike tendabike/
-COPY p_rocket p_rocket/
 COPY server server/
 
 RUN cargo build --release

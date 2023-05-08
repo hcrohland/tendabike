@@ -1,6 +1,6 @@
 [workspace]
     members = [
-        "tendabike",
-        "server",
-        "p_rocket"
+        "server/app",
+        "server/kernel",
+        "server/presentation/rocket"
     ]
