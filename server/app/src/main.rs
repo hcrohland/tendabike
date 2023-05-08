@@ -1,11 +1,10 @@
 #![warn(clippy::all)]
 
-use kernel::domain::presentation::Presentation;
 fn main() {
     // setup environment. Includes Config and logging
     init_environment();
 
-    tb_rocket::Server::start();
+    tb_rocket::start();
 }
 
 pub fn init_environment() {
@@ -13,6 +12,6 @@ pub fn init_environment() {
 
     // Default log level is warn
     env_logger::Builder::from_env(
-    env_logger::Env::default().default_filter_or("warn")
+        env_logger::Env::default().default_filter_or("warn")
     ).init();
 }

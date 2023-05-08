@@ -1,9 +1,4 @@
 use super::*;
-use std::fmt::Debug;
-
-pub trait Presentation: Send + Sync + Debug {
-    fn start() -> Self;
-}
 
 pub trait Person {
     fn get_id(&self) -> i32;

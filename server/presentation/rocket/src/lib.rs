@@ -72,41 +72,34 @@ impl Person for Admin<'_> {
     }
 }
 
-#[derive(Debug)]
-pub struct Server {}
+pub fn start() {
+    let cors = rocket_cors::CorsOptions::default()
+        .to_cors()
+        .expect("Could not set CORS options");
 
-impl domain::presentation::Presentation for Server {
-    fn start() -> Self {
-        let cors = rocket_cors::CorsOptions::default()
-            .to_cors()
-            .expect("Could not set CORS options");
-
-        let ship = rocket::ignite()
-            // add database pool
-            .attach(AppDbConn::fairing())
-            // run database migrations
-            .attach(AdHoc::on_attach("TendaBike Database Migrations", run_db_migrations))
-            .attach(cors)
-            // mount all the endpoints from the module
-            .mount("/",rocket_contrib::serve::StaticFiles::from(get_static_path()))
-            .mount("/user", routes::user::routes())
-            .mount("/types", routes::types::routes())
-            .mount("/part", routes::part::routes())
-            .mount("/part", routes::attachment::routes())
-            .mount("/activ", routes::activity::routes())
-            .mount("/strava", strava::ui::routes())
-            ;
-            
-            // add oauth2 flow
-            let config = ship.config().clone();
-            ship.attach(strava::fairing(&config))
-                .attach(rocket::fairing::AdHoc::on_launch("Launch Message", |rocket| {
-                    let c = rocket.config();
-                    info!("\n\n TendaBike running on {}:{}\n\n", c.address, c.port);
-                }))
-                .launch();
-            Server {}
-    }
+    let ship = rocket::ignite()
+        // add database pool
+        .attach(AppDbConn::fairing())
+        // run database migrations
+        .attach(AdHoc::on_attach("TendaBike Database Migrations", run_db_migrations))
+        .attach(cors)
+        // mount all the endpoints from the module
+        .mount("/",rocket_contrib::serve::StaticFiles::from(get_static_path()))
+        .mount("/user", routes::user::routes())
+        .mount("/types", routes::types::routes())
+        .mount("/part", routes::part::routes())
+        .mount("/part", routes::attachment::routes())
+        .mount("/activ", routes::activity::routes())
+        .mount("/strava", strava::ui::routes());
+        
+    // add oauth2 flow
+    let config = ship.config().clone();
+    ship.attach(strava::fairing(&config))
+        .attach(rocket::fairing::AdHoc::on_launch("Launch Message", |rocket| {
+            let c = rocket.config();
+            info!("\n\n TendaBike running on {}:{}\n\n", c.address, c.port);
+        }))
+        .launch();
 }
 
 fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
@@ -120,5 +113,5 @@ fn get_static_path () -> PathBuf {
         |_| concat!(env!("CARGO_MANIFEST_DIR"),"/../../../frontend/public").to_string()
     );
     
-    Path::new(&path).canonicalize().expect(&format!("Path {} does not exist", path))
+    Path::new(&path).canonicalize().expect(&format!("STATIC_WWW Path {} does not exist", path))
 }
