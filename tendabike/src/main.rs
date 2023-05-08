@@ -1,22 +1,6 @@
-#![feature( decl_macro)]
-#![feature(drain_filter)]
 #![warn(clippy::all)]
 
-
-#[macro_use]
-extern crate diesel;
-#[macro_use]
-extern crate diesel_migrations;
-
-mod p_rocket;
-mod drivers;
-mod domain;
-
-use domain::*;
-
-use drivers::persistence::*;
-use domain::presentation::Presentation;
-
+use kernel::domain::presentation::Presentation;
 fn main() {
     // setup environment. Includes Config and logging
     init_environment();

@@ -1,0 +1,12 @@
+[package]
+name = "tendabike"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dotenv = "0.15.0"
+env_logger = "0.10.0"
+kernel = { path = "../server"}
+p_rocket = { path = "../p_rocket"}

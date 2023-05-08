@@ -13,8 +13,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN rustup set profile minimal && rustup update nightly && rustup default nightly
 
 FROM base as planner
+# do not copy frontend!
+COPY Cargo.toml Cargo.lock ./
+COPY tendabike tendabike/
+COPY p_rocket p_rocket/
+COPY server server/
 
-COPY Cargo.toml Cargo.lock server ./
 RUN cargo chef prepare --recipe-path recipe.json
 
 
@@ -26,7 +30,10 @@ RUN cargo chef cook --release --recipe-path recipe.json
 FROM cacher as build-engine
 
 # do not copy frontend!
-COPY server/ .
+COPY Cargo.toml Cargo.lock ./
+COPY tendabike tendabike/
+COPY p_rocket p_rocket/
+COPY server server/
 
 RUN cargo build --release
 

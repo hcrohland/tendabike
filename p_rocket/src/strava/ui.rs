@@ -1,22 +1,22 @@
 use super::*;
 
 #[get("/bikes/<id>")]
-fn redirect_gear(id: i32, context: StravaContext) -> Option<Redirect> {
+fn redirect_gear(id: i32, context: MyContext) -> Option<Redirect> {
     gear::strava_url(id, &context).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
 }
 
 #[get("/activities/<id>")]
-fn redirect_act(id: i32, context: StravaContext) -> Option<Redirect> {
+fn redirect_act(id: i32, context: MyContext) -> Option<Redirect> {
     activity::strava_url(id, &context).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
 }
 
 #[get("/users/<id>")]
-fn redirect_user(id: i32, context: StravaContext) -> Option<Redirect> {
+fn redirect_user(id: i32, context: MyContext) -> Option<Redirect> {
     strava_url(id, &context).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
 }
 
 #[get("/logout")]
-fn logout(context: StravaContext, cookies: rocket::http::Cookies) -> Redirect {
+fn logout(context: MyContext, cookies: rocket::http::Cookies) -> Redirect {
     context.logout(cookies);
     Redirect::to("/")
 }

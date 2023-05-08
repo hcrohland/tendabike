@@ -4,7 +4,6 @@ use super::*;
 use crate::activity::ActivityId;
 use crate::activity::NewActivity;
 use crate::domain::types::ActTypeId;
-use p_rocket::strava::StravaContext;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaActivity {
@@ -31,7 +30,7 @@ pub struct StravaActivity {
 }
 
 impl StravaActivity {
-    fn into_tb(self, context: &StravaContext) -> TbResult<NewActivity> {
+    fn into_tb(self, context: &dyn StravaContext) -> TbResult<NewActivity> {
         let what = self.what()?;
         let gear = match self.gear_id {
             Some(x) => Some(gear::strava_to_tb(x, context)?),
@@ -102,7 +101,7 @@ impl StravaActivity {
 }
 
 impl StravaActivity {
-    pub fn send_to_tb(self, context: &StravaContext) -> TbResult<Summary> {
+    pub fn send_to_tb(self, context: &dyn StravaContext) -> TbResult<Summary> {
         let (user, conn) = context.split();
         conn.transaction(||{
             use schema::strava_activities::dsl::*;
@@ -140,7 +139,7 @@ impl StravaActivity {
     }
 }
 
-pub fn strava_url(act: i32, context: &StravaContext) -> TbResult<String> {
+pub fn strava_url(act: i32, context: &dyn StravaContext) -> TbResult<String> {
     use schema::strava_activities::dsl::*;
 
     let g: i64 = strava_activities
@@ -151,19 +150,19 @@ pub fn strava_url(act: i32, context: &StravaContext) -> TbResult<String> {
     Ok(format!("https://strava.com/activities/{}", &g))
 }
 
-fn get_activity(id: i64, context: &StravaContext) -> TbResult<StravaActivity> {
+fn get_activity(id: i64, context: &dyn StravaContext) -> TbResult<StravaActivity> {
     let r = context.request(&format!("/activities/{}",id ))?;
     // let r = user.request("/activities?per_page=2")?;
     let act: StravaActivity = serde_json::from_str(&r)?;
     Ok(act)
 }
 
-pub fn upsert_activity(id: i64, context: &StravaContext) -> TbResult<Summary> {
+pub fn upsert_activity(id: i64, context: &dyn StravaContext) -> TbResult<Summary> {
     let act = get_activity(id, context).context(format!("strava activity id {}", id))?;
     act.send_to_tb(context)
 }
 
-pub fn delete_activity(sid: i64, context: &StravaContext) -> TbResult<Summary> {
+pub fn delete_activity(sid: i64, context: &dyn StravaContext) -> TbResult<Summary> {
     use schema::strava_activities::dsl::*;
 
     let (user, conn) = context.split();

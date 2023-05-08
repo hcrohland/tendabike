@@ -1,10 +1,13 @@
 use super::*;
+use anyhow::ensure;
+use log::trace;
 use rocket::{request::{Form, FromForm}, get, post};
 use rocket_contrib::json::Json;
 
-use crate::drivers::strava::event::{InEvent, process};
+use domain::{drivers::strava::event::{InEvent, process}, Summary};
+use serde_derive::Serialize;
 
-use super::StravaContext;
+use super::MyContext;
 
 // complicated way to have query parameters with dots in the name
 #[derive(Debug, FromForm, Serialize)]
@@ -35,7 +38,7 @@ fn validate(hub: Hub) -> TbResult<Hub> {
 const VERIFY_TOKEN: &str = "tendabike_strava";
 
 #[get("/hooks")]
-pub fn hooks (context: StravaContext) -> ApiResult<Summary> {
+pub fn hooks (context: MyContext) -> ApiResult<Summary> {
     let (user, conn) = context.split();
     user.lock(conn)?;
     let res = process(&context);
@@ -60,5 +63,5 @@ pub fn validate_subscription (hub: Form<Hub>) -> ApiResult<Hub> {
 
 #[get("/sync?<time>&<user_id>")]
 pub fn sync_api (time: i64, user_id: Option<i32>, _u: Admin, conn: AppDbConn) -> ApiResult<()> {
-    crate::drivers::strava::sync_users(user_id, time, &conn).map(Json)
+    domain::drivers::strava::sync_users(user_id, time, &conn).map(Json)
 }
