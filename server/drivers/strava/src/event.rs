@@ -1,9 +1,10 @@
+use diesel::{QueryDsl, RunQueryDsl};
 use std::collections::HashMap;
 
 use super::*;
 use schema::strava_events;
 
-use crate::drivers::strava::activity::StravaActivity;
+use crate::activity::StravaActivity;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InEvent {
@@ -22,13 +23,13 @@ pub struct InEvent {
 }
 
 impl InEvent {
-    pub fn convert(self) -> TbResult<Event> {
+    pub fn convert(self) -> anyhow::Result<Event> {
         let objects = ["activity", "athlete"];
         let aspects = ["create", "update", "delete"];
 
         ensure!(
             objects.contains(&self.object_type.as_str()) && aspects.contains(&self.aspect_type.as_str()),
-            Error::BadRequest(format!("unknown event received: {:?}", self))
+            kernel::error::Error::BadRequest(format!("unknown event received: {:?}", self))
         );
 
         Ok(Event {
@@ -75,23 +76,24 @@ impl std::fmt::Display for Event {
 }
 
 impl Event {
-    fn delete (&self, conn: &AppConn) -> TbResult<()> {
+    fn delete (&self, conn: &AppConn) -> anyhow::Result<()> {
         use schema::strava_events::dsl::*;
         debug!("Deleting {}", self);
         diesel::delete(strava_events).filter(id.eq(self.id)).execute(conn)?;
         Ok(())
     }
 
-    fn setdate(&mut self, time: i64, conn: &AppConn) -> TbResult<()> {
+    fn setdate(&mut self, time: i64, conn: &AppConn) -> anyhow::Result<()> {
         use schema::strava_events::dsl::*;
         self.event_time = time;
         diesel::update(strava_events).filter(id.eq(self.id)).set(event_time.eq(self.event_time)).execute(conn)?;
         Ok(())
     }
 
-    pub fn store(self, conn: &AppConn) -> TbResult<()>{
+    pub fn store(self, conn: &AppConn) -> anyhow::Result<()>{
+        
         ensure!(
-            schema::strava_users::table.find(self.owner_id).execute(conn) == Ok(1),
+            strava_users::table.find(self.owner_id).execute(conn) == core::result::Result::Ok(1),
             Error::BadRequest(format!("Unknown event owner received: {}", self))
         );
         
@@ -101,7 +103,7 @@ impl Event {
         Ok(())
     }
 
-    fn rate_limit(self, context: &dyn StravaContext) -> TbResult<Option<Self>> {
+    fn rate_limit(self, context: &dyn StravaContext) -> anyhow::Result<Option<Self>> {
         // rate limit event
         if self.event_time > chrono::offset::Utc::now().timestamp() {
             // still rate limited!
@@ -114,9 +116,9 @@ impl Event {
         return get_event(context)
     }
 
-    fn process_activity (self, context: &dyn StravaContext) -> TbResult<Summary> {
+    fn process_activity (self, context: &dyn StravaContext) -> anyhow::Result<Summary> {
         match self.process_hook(context).or_else(|e| check_try_again(e, context.conn()))    {
-            Ok(res) => return Ok(res),
+            core::result::Result::Ok(res) => return Ok(res),
             Err(err) => {
                         self.delete(context.conn())?;
                         Err(err)
@@ -124,7 +126,7 @@ impl Event {
         }
     }
     
-    fn process_hook(&self, context: &dyn StravaContext) -> TbResult<Summary>{
+    fn process_hook(&self, context: &dyn StravaContext) -> anyhow::Result<Summary>{
         let res = match self.aspect_type.as_str() {
             "create" | "update" => activity::upsert_activity(self.object_id, context)?,
             "delete" => activity::delete_activity(self.object_id, context)?,
@@ -137,7 +139,7 @@ impl Event {
         Ok(res)
     }
     
-    fn sync(mut self, context: &dyn StravaContext) -> TbResult<Summary> {
+    fn sync(mut self, context: &dyn StravaContext) -> anyhow::Result<Summary> {
         // let mut len = batch;
         let mut start = self.event_time;
         let mut hash = SumHash::default();
@@ -162,7 +164,7 @@ impl Event {
     }
 }
 
-pub fn insert_sync(owner_id: i32, event_time: i64, conn: &AppConn) -> TbResult<()> {
+pub fn insert_sync(owner_id: i32, event_time: i64, conn: &AppConn) -> anyhow::Result<()> {
     ensure!(
         event_time <= get_time(), 
         Error::BadRequest(format!("eventtime {} > now!", event_time))
@@ -175,7 +177,7 @@ pub fn insert_sync(owner_id: i32, event_time: i64, conn: &AppConn) -> TbResult<(
     }.store(conn)
 }
 
-pub fn insert_stop(conn: &AppConn) -> TbResult<()> {
+pub fn insert_stop(conn: &AppConn) -> anyhow::Result<()> {
     let e = Event {
         object_type: "stop".to_string(),
         object_id: chrono::offset::Utc::now().timestamp() + 900,
@@ -187,7 +189,7 @@ pub fn insert_stop(conn: &AppConn) -> TbResult<()> {
     Ok(())
 }
 
-pub fn get_event(context: &dyn StravaContext) -> TbResult<Option<Event>> {
+pub fn get_event(context: &dyn StravaContext) -> anyhow::Result<Option<Event>> {
     use schema::strava_events::dsl::*;
     let (user, conn) = context.split();
 
@@ -225,7 +227,7 @@ pub fn get_event(context: &dyn StravaContext) -> TbResult<Option<Event>> {
     return Ok(res)
 }
 
-fn check_try_again(err: anyhow::Error, conn: &AppConn) -> TbResult<Summary> {
+fn check_try_again(err: anyhow::Error, conn: &AppConn) -> anyhow::Result<Summary> {
     // Keep events for temporary failure - delete others
     match err.downcast_ref::<Error>() {
         Some(&Error::TryAgain(_)) => {
@@ -237,7 +239,7 @@ fn check_try_again(err: anyhow::Error, conn: &AppConn) -> TbResult<Summary> {
     }
 }
 
-fn next_activities(context: &dyn StravaContext, per_page: usize, start: Option<i64>) -> TbResult<Vec<StravaActivity>> {
+fn next_activities(context: &dyn StravaContext, per_page: usize, start: Option<i64>) -> anyhow::Result<Vec<StravaActivity>> {
     let r = context.request(&format!(
         "/activities?after={}&per_page={}",
         start.unwrap_or_else(|| context.user().last_activity),
@@ -246,7 +248,7 @@ fn next_activities(context: &dyn StravaContext, per_page: usize, start: Option<i
     Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)
 }
 
-pub fn process (context: &dyn StravaContext) -> TbResult<Summary> {
+pub fn process (context: &dyn StravaContext) -> anyhow::Result<Summary> {
     let event = get_event(context)?;
     if event.is_none() {
         return Ok(Summary::default());

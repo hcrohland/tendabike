@@ -1,7 +1,7 @@
 
 use super::*;
 use domain::Summary;
-use domain::drivers::strava::{user_summary, get_all_stats, StravaStat};
+use ::strava::{user_summary, get_all_stats, StravaStat};
 
 
 #[get("/")]

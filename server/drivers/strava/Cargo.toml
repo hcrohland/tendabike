@@ -1,0 +1,19 @@
+[package]
+name = "strava"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+kernel = {path = "../../kernel"}
+
+diesel = { version = "1", features = ["postgres", "chrono"] }
+diesel-derive-newtype = "1"
+
+log = "0.4.17"
+serde = "1.0.162"
+serde_derive = "1.0.162"
+serde_json = "1.0.96"
+chrono = "0.4.24"
+anyhow = "1.0.71"

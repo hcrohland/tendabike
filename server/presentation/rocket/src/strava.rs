@@ -1,13 +1,13 @@
 use anyhow::{Context, bail};
-use domain::AppConn;
-use domain::drivers::strava::{StravaUser, StravaContext};
 use rocket::http::Cookies;
 use rocket::response::Redirect;
 use rocket::{routes, get, post};
 
+use domain::AppConn;
+use ::strava::*;
+
 use super::*;
 use crate::jwt;
-use domain::drivers::strava::*;
 
 pub(super) mod ui;
 pub(super) mod webhook;

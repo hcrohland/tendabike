@@ -4,7 +4,8 @@ use log::trace;
 use rocket::{request::{Form, FromForm}, get, post};
 use rocket_contrib::json::Json;
 
-use domain::{drivers::strava::event::{InEvent, process}, Summary};
+use domain::Summary;
+use ::strava::event::{InEvent, process};
 use serde_derive::Serialize;
 
 use super::MyContext;
@@ -63,5 +64,5 @@ pub fn validate_subscription (hub: Form<Hub>) -> ApiResult<Hub> {
 
 #[get("/sync?<time>&<user_id>")]
 pub fn sync_api (time: i64, user_id: Option<i32>, _u: Admin, conn: AppDbConn) -> ApiResult<()> {
-    domain::drivers::strava::sync_users(user_id, time, &conn).map(Json)
+    ::strava::sync_users(user_id, time, &conn).map(Json)
 }

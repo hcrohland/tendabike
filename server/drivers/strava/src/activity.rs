@@ -1,9 +1,9 @@
 use chrono::{DateTime, Utc};
 
 use super::*;
-use crate::activity::ActivityId;
-use crate::activity::NewActivity;
-use crate::domain::types::ActTypeId;
+use kernel::activity::ActivityId;
+use kernel::activity::NewActivity;
+use kernel::domain::types::ActTypeId;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaActivity {
@@ -30,7 +30,7 @@ pub struct StravaActivity {
 }
 
 impl StravaActivity {
-    fn into_tb(self, context: &dyn StravaContext) -> TbResult<NewActivity> {
+    fn into_tb(self, context: &dyn StravaContext) -> Result<NewActivity> {
         let what = self.what()?;
         let gear = match self.gear_id {
             Some(x) => Some(gear::strava_to_tb(x, context)?),
@@ -53,7 +53,7 @@ impl StravaActivity {
     }
 
     /// map strava workout type strings to tendabike types
-    fn what(&self) -> TbResult<ActTypeId> {
+    fn what(&self) -> Result<ActTypeId> {
         let t = self.type_.as_str();
 
         Ok(match t {
@@ -101,7 +101,7 @@ impl StravaActivity {
 }
 
 impl StravaActivity {
-    pub fn send_to_tb(self, context: &dyn StravaContext) -> TbResult<Summary> {
+    pub fn send_to_tb(self, context: &dyn StravaContext) -> Result<Summary> {
         let (user, conn) = context.split();
         conn.transaction(||{
             use schema::strava_activities::dsl::*;
@@ -139,7 +139,7 @@ impl StravaActivity {
     }
 }
 
-pub fn strava_url(act: i32, context: &dyn StravaContext) -> TbResult<String> {
+pub fn strava_url(act: i32, context: &dyn StravaContext) -> Result<String> {
     use schema::strava_activities::dsl::*;
 
     let g: i64 = strava_activities
@@ -150,19 +150,19 @@ pub fn strava_url(act: i32, context: &dyn StravaContext) -> TbResult<String> {
     Ok(format!("https://strava.com/activities/{}", &g))
 }
 
-fn get_activity(id: i64, context: &dyn StravaContext) -> TbResult<StravaActivity> {
+fn get_activity(id: i64, context: &dyn StravaContext) -> Result<StravaActivity> {
     let r = context.request(&format!("/activities/{}",id ))?;
     // let r = user.request("/activities?per_page=2")?;
     let act: StravaActivity = serde_json::from_str(&r)?;
     Ok(act)
 }
 
-pub fn upsert_activity(id: i64, context: &dyn StravaContext) -> TbResult<Summary> {
+pub fn upsert_activity(id: i64, context: &dyn StravaContext) -> Result<Summary> {
     let act = get_activity(id, context).context(format!("strava activity id {}", id))?;
     act.send_to_tb(context)
 }
 
-pub fn delete_activity(sid: i64, context: &dyn StravaContext) -> TbResult<Summary> {
+pub fn delete_activity(sid: i64, context: &dyn StravaContext) -> Result<Summary> {
     use schema::strava_activities::dsl::*;
 
     let (user, conn) = context.split();

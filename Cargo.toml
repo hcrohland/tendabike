@@ -2,5 +2,6 @@
     members = [
         "server/app",
         "server/kernel",
-        "server/presentation/rocket"
+        "server/presentation/rocket",
+        "server/drivers/strava"
     ]
