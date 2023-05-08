@@ -1,6 +1,8 @@
 #![feature( decl_macro)]
 #![warn(clippy::all)]
 
+use std::path::{Path, PathBuf};
+
 use rocket::Rocket;
 use rocket::fairing::AdHoc;
 use rocket_contrib::database;
@@ -86,14 +88,7 @@ impl domain::presentation::Presentation for Server {
             .attach(AdHoc::on_attach("TendaBike Database Migrations", run_db_migrations))
             .attach(cors)
             // mount all the endpoints from the module
-            .mount(
-                "/",
-                rocket_contrib::serve::StaticFiles::from(
-                    std::env::var("STATIC_WWW").unwrap_or_else(|_|
-                        concat!(env!("CARGO_MANIFEST_DIR"),"/../frontend/public").into()
-                    )
-                )
-            )
+            .mount("/",rocket_contrib::serve::StaticFiles::from(get_static_path()))
             .mount("/user", routes::user::routes())
             .mount("/types", routes::types::routes())
             .mount("/part", routes::part::routes())
@@ -118,4 +113,12 @@ fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
     let conn = AppDbConn::get_one(&rocket).expect("database connection");
     domain::drivers::persistence::run_db_migrations(&conn);
     Ok(rocket)
+}
+
+fn get_static_path () -> PathBuf {
+    let path = std::env::var("STATIC_WWW").unwrap_or_else(
+        |_| concat!(env!("CARGO_MANIFEST_DIR"),"/../../../frontend/public").to_string()
+    );
+    
+    Path::new(&path).canonicalize().expect(&format!("Path {} does not exist", path))
 }
