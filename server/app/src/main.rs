@@ -12,6 +12,6 @@ pub fn init_environment() {
 
     // Default log level is warn
     env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("warn")
+        env_logger::Env::default().default_filter_or("tendabike,tb_rocket,kernel")
     ).init();
 }
