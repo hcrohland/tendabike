@@ -1,6 +1,6 @@
 
 use super::*;
-use domain::attachment::*;
+use domain::{Summary, attachment::Event};
 
 /// route for attach API
 #[post("/attach", data = "<event>")]

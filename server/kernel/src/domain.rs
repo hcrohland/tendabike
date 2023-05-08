@@ -23,7 +23,8 @@ use chrono::{DateTime, Utc, TimeZone};
 use diesel::{self, Connection, QueryDsl, RunQueryDsl};
 use diesel::prelude::*;
 
-use crate::drivers::persistence::{schema, AppConn};
+use crate::drivers::persistence::schema;
+pub use crate::drivers::persistence::AppConn;
 use super::error::*;
 
 #[derive(Debug)]

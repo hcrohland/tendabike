@@ -1,6 +1,6 @@
 
 use super::*;
-use domain::activity::*;
+use kernel::{activity::*, PartId, Summary, PartTypeId};
 
 #[post("/defaultgear", data="<gear_id>")]
 fn def_part_api (gear_id: Json<PartId>, user: RUser, conn: AppDbConn) -> ApiResult<Summary> {
@@ -10,7 +10,7 @@ fn def_part_api (gear_id: Json<PartId>, user: RUser, conn: AppDbConn) -> ApiResu
 #[get("/rescan")]
 fn rescan(_u: Admin, conn: AppDbConn) -> ApiResult<()> {
     let conn = &conn.0;
-    domain::activity::rescan_all(&conn).map(Json)
+    kernel::activity::rescan_all(&conn).map(Json)
 }
 
 

@@ -1,6 +1,7 @@
 
 use super::*;
-use drivers::strava::{user_summary, get_all_stats, StravaStat};
+use domain::Summary;
+use domain::drivers::strava::{user_summary, get_all_stats, StravaStat};
 
 
 #[get("/")]
@@ -14,7 +15,7 @@ fn userlist(_u: Admin, conn: AppDbConn) -> ApiResult<Vec<StravaStat>> {
 }
 
 #[get("/summary")]
-fn summary(context: strava::StravaContext) -> ApiResult<Summary> {
+fn summary(context: strava::MyContext) -> ApiResult<Summary> {
     user_summary(&context).map(Json)
 }
 

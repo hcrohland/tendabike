@@ -9,14 +9,19 @@ pub mod event;
 
 use super::*;
 use crate::domain::*;
-use crate::p_rocket;
 
 use crate::domain::presentation::Person;
 use user::{User, Stat};
 use persistence::AppConn;
-use p_rocket::strava::StravaContext;
 
 use schema::strava_users;
+
+pub trait StravaContext {
+    fn split(&self) -> (&StravaUser, &AppConn);
+    fn conn(&self) -> &AppConn;
+    fn user(&self) -> &StravaUser;
+    fn request(&self, uri: &str) -> TbResult<String>;
+}
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 struct JSummary {
@@ -72,7 +77,7 @@ impl StravaAthlete {
 
 impl StravaUser {
     pub fn is_valid (&self) -> bool {
-        self.expires_at > time::get_time().sec 
+        self.expires_at > get_time()
     }
     
     pub fn read (id: i32, conn: &AppConn) -> TbResult<Self> {
@@ -112,9 +117,8 @@ impl StravaUser {
 
     pub fn update(self, access: &str, expires: Option<i64>, refresh: Option<&str>, conn: &AppConn) -> TbResult<Self> {
         use schema::strava_users::dsl::*;
-        use time::*;
         
-        let iat = get_time().sec;
+        let iat = get_time();
         let exp = expires.unwrap() as i64 + iat - 300; // 5 Minutes buffer
         let user: StravaUser = diesel::update(strava_users.find(self.id()))
             .set((
@@ -171,7 +175,7 @@ impl Person for StravaUser {
     }
 }
 
-pub fn strava_url(who: i32, context: &StravaContext) -> TbResult<String> {
+pub fn strava_url(who: i32, context: & dyn StravaContext) -> TbResult<String> {
     use schema::strava_users::dsl::*;
 
     let user_id: i32 = strava_users
@@ -218,12 +222,19 @@ pub fn sync_users (user_id: Option<i32>, time: i64, conn: &AppConn) -> TbResult<
         Ok(())
 }
 
-pub fn user_summary(context: &StravaContext) -> TbResult<crate::domain::Summary> {
+pub fn user_summary(context: & dyn StravaContext) -> TbResult<crate::domain::Summary> {
     use crate::*;
-    gear::update_user(&context)?;
+    gear::update_user(context)?;
     let (user, conn) = context.split();
     let parts = Part::get_all(user, conn)?;
     let attachments = Attachment::for_parts(&parts,&conn)?;
     let activities = Activity::get_all(user, conn)?;
     Ok(Summary::new(activities, parts,attachments))
+}
+
+fn get_time() -> i64 {
+    use std::time::SystemTime;
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH).expect("Systemtime before EPOCH!")
+        .as_secs().try_into().expect("Sytemtime too far in the future")
 }
