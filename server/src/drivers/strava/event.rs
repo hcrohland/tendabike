@@ -164,7 +164,7 @@ impl Event {
 
 pub fn insert_sync(owner_id: i32, event_time: i64, conn: &AppConn) -> TbResult<()> {
     ensure!(
-        event_time <= time::get_time().sec, 
+        event_time <= get_time(), 
         Error::BadRequest(format!("eventtime {} > now!", event_time))
     );
     Event {

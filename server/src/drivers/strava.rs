@@ -77,7 +77,7 @@ impl StravaAthlete {
 
 impl StravaUser {
     pub fn is_valid (&self) -> bool {
-        self.expires_at > time::get_time().sec 
+        self.expires_at > get_time()
     }
     
     pub fn read (id: i32, conn: &AppConn) -> TbResult<Self> {
@@ -117,9 +117,8 @@ impl StravaUser {
 
     pub fn update(self, access: &str, expires: Option<i64>, refresh: Option<&str>, conn: &AppConn) -> TbResult<Self> {
         use schema::strava_users::dsl::*;
-        use time::*;
         
-        let iat = get_time().sec;
+        let iat = get_time();
         let exp = expires.unwrap() as i64 + iat - 300; // 5 Minutes buffer
         let user: StravaUser = diesel::update(strava_users.find(self.id()))
             .set((
@@ -231,4 +230,11 @@ pub fn user_summary(context: & dyn StravaContext) -> TbResult<crate::domain::Sum
     let attachments = Attachment::for_parts(&parts,&conn)?;
     let activities = Activity::get_all(user, conn)?;
     Ok(Summary::new(activities, parts,attachments))
+}
+
+fn get_time() -> i64 {
+    use std::time::SystemTime;
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH).expect("Systemtime before EPOCH!")
+        .as_secs().try_into().expect("Sytemtime too far in the future")
 }
