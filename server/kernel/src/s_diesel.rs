@@ -5,7 +5,7 @@ pub mod schema;
 
 pub type AppConn = diesel::PgConnection;
 
-embed_migrations!("src/drivers/persistence/migrations");
+embed_migrations!("src/s_diesel/migrations");
 
 pub fn run_db_migrations (conn: &AppConn) {
     use schema::attachments::dsl::*;

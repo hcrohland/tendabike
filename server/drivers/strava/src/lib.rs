@@ -11,16 +11,16 @@ pub mod gear;
 pub mod event;
 
 use kernel::domain::*;
-use kernel::drivers::persistence;
+use kernel::s_diesel;
 use kernel::error::Error;
 use anyhow::{Result, Context, Ok, ensure, bail};
 
 use kernel::domain::presentation::Person;
 use user::{User, Stat};
-use persistence::AppConn;
+use s_diesel::AppConn;
 
-use persistence::schema;
-use persistence::schema::strava_users;
+use s_diesel::schema;
+use s_diesel::schema::strava_users;
 
 
 

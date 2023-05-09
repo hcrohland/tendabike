@@ -103,7 +103,7 @@ impl ActivityId {
     /// returns all affected parts  
     /// checks authorization  
     pub fn delete(self, person: &dyn Person, conn: &AppConn) -> TbResult<Summary> {
-        use crate::schema::activities::dsl::*;
+        use schema::activities::dsl::*;
         info!("Deleting {:?}", self);
         conn.transaction(|| {
             let mut res = self

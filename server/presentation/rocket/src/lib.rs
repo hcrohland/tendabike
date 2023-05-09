@@ -104,7 +104,7 @@ pub fn start() {
 
 fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
     let conn = AppDbConn::get_one(&rocket).expect("database connection");
-    domain::drivers::persistence::run_db_migrations(&conn);
+    domain::s_diesel::run_db_migrations(&conn);
     Ok(rocket)
 }
 

@@ -1,11 +1,6 @@
 use super::*;
 use schema::{activity_types, part_types};
-
-#[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PartTypeId(i32);
-
-NewtypeDisplay! { () pub struct PartTypeId(); }
-NewtypeFrom! { () pub struct PartTypeId(i32); }
+use kernel::{domain::PartType, PartTypeId, part};
 
 /// List of of all valid part types.
 ///
@@ -13,32 +8,38 @@ NewtypeFrom! { () pub struct PartTypeId(i32); }
 /// - Main parts can be used for an activity - like a bike
 /// - Spares can be attached to other parts and are subparts of main parts
 #[derive(Clone, Debug, Serialize, Deserialize, Queryable, Identifiable, Associations, PartialEq)]
-pub struct PartType {
+#[table_name = "part_types"]
+pub struct DieselPartType {
     /// The primary key
-    pub id: PartTypeId,
+    pub id: i32,
     /// The display name
     pub name: String,
     /// is it a main part? I.e. can it be used for an activity?
-    pub main: PartTypeId,
+    pub main: i32,
     /// Part types that can be attached
-    pub hooks: Vec<PartTypeId>,
+    pub hooks: Vec<i32>,
     /// the order for displaying types
     pub order: i32,
     /// Potential group
     pub group: Option<String>
 }
 
-#[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ActTypeId(i32);
+impl From<DieselPartType> for PartType {
+    fn from(d: DieselPartType) -> Self {
 
-NewtypeDisplay! { () pub struct ActTypeId(); }
-NewtypeFrom! { () pub struct ActTypeId(i32); }
+        let DieselPartType{id, name, main, hooks, order, group} = d;
+        let hooks: Vec<PartTypeId> = hooks.into_iter().map(Into::into).collect();
+        Self {id: id.into(), name, main: main.into(), hooks, order, group}
+    }
+}
 
+/* 
 /// The list of activity types
 /// Includes the kind of gear which can be used for this activity
 /// multiple gears are possible
 #[derive(Debug, Clone, Identifiable, Queryable, PartialEq, Serialize, Deserialize)]
-pub struct ActivityType {
+#[table("activity_types")]
+pub struct D_ActivityType {
     /// The primary key
     pub id: ActTypeId,
     /// The name
@@ -47,11 +48,18 @@ pub struct ActivityType {
     pub gear_type: PartTypeId,
 }
 
+impl ActTypeId {
+    pub fn get(self, conn: &AppConn) -> TbResult<ActivityType> {
+        Ok(activity_types::table
+            .find(self)
+            .first::<ActivityType>(conn)?)
+    }
+}
+
 impl PartTypeId {
 
     /// get the full type for a type_id
     pub fn get (self, conn: &AppConn) -> TbResult<PartType> {
-        // parttype_get
         use schema::part_types::dsl::*;
         Ok(part_types
             .find(self)
@@ -71,7 +79,10 @@ impl PartTypeId {
 
     /// get all the types you can attach - even indirectly - to this type_id
     pub fn subtypes(self, conn: &AppConn) -> Vec<PartType> {
-        let mut types = parts(conn);
+        use schema::part_types::dsl::*;
+        let mut types = part_types
+            .load::<PartType>(conn)
+            .expect("Error loading parttypes");
         self.filter_types(&mut types)
     }
 
@@ -99,3 +110,4 @@ pub fn parts(conn: &AppConn) -> Vec<PartType> {
         .load::<PartType>(conn)
         .expect("error loading PartType")
 }
+ */
