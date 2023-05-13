@@ -1,6 +1,6 @@
 
 use super::*;
-use crate::domain::part::*;
+use crate::domain::{ChangePart, NewPart, Part, PartId};
 
 #[get("/<part>")]
 fn get(part: i32, user: RUser, conn: AppDbConn) -> ApiResult<Part> {

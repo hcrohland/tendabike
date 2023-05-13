@@ -1,7 +1,6 @@
 use diesel::{self, QueryDsl, RunQueryDsl};
 
 use super::*;
-use part::NewPart;
 
 use schema::strava_gears;
 

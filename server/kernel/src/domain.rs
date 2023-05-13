@@ -1,5 +1,5 @@
 pub mod types;
-pub mod part;
+mod part;
 mod activity;
 mod attachment;
 mod user;
@@ -12,7 +12,7 @@ use log::{info,trace,warn,debug};
 use newtype_derive::*;
 use diesel_derive_newtype::*;
 
-pub use part::{Part, PartId};
+pub use part::{Part, PartId, NewPart, ChangePart};
 pub use activity::{Activity, ActivityId, NewActivity};
 pub use attachment::{Attachment, AttachmentDetail, Event};
 pub use presentation::Person;
