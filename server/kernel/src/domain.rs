@@ -1,7 +1,7 @@
 pub mod types;
 pub mod part;
 mod activity;
-pub mod attachment;
+mod attachment;
 mod user;
 pub mod error;
 pub mod presentation;
@@ -14,7 +14,7 @@ use diesel_derive_newtype::*;
 
 pub use part::{Part, PartId};
 pub use activity::{Activity, ActivityId, NewActivity};
-pub use attachment::{Attachment, AttachmentDetail};
+pub use attachment::{Attachment, AttachmentDetail, Event};
 pub use presentation::Person;
 pub use user::*;
 pub use types::*;
