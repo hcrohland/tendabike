@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use super::*;
 use kernel::ActivityId;
 use kernel::NewActivity;
-use kernel::domain::types::ActTypeId;
+use kernel::domain::ActTypeId;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaActivity {

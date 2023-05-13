@@ -28,6 +28,15 @@ pub struct PartType {
     pub group: Option<String>
 }
 
+impl PartType {
+    pub fn all_ordered(conn: &AppConn) -> Vec<Self> {
+        part_types::table
+            .order(part_types::id)
+            .load::<PartType>(conn)
+            .expect("error loading PartType")
+    }   
+}
+
 #[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActTypeId(i32);
 
@@ -71,7 +80,7 @@ impl PartTypeId {
 
     /// get all the types you can attach - even indirectly - to this type_id
     pub fn subtypes(self, conn: &AppConn) -> Vec<PartType> {
-        let mut types = parts(conn);
+        let mut types = PartType::all_ordered(conn);
         self.filter_types(&mut types)
     }
 
@@ -86,16 +95,11 @@ impl PartTypeId {
     }
 }
 
-pub fn activities(conn: &AppConn) -> Vec<ActivityType> {
-    activity_types::table
-        .order(activity_types::id)
-        .load::<ActivityType>(conn)
-        .expect("error loading ActivityTypes")
-}
-
-pub fn parts(conn: &AppConn) -> Vec<PartType> {
-    part_types::table
-        .order(part_types::id)
-        .load::<PartType>(conn)
-        .expect("error loading PartType")
+impl ActivityType {
+    pub fn all_ordered(conn: &AppConn) -> Vec<ActivityType> {
+        activity_types::table
+            .order(activity_types::id)
+            .load::<ActivityType>(conn)
+            .expect("error loading ActivityTypes")
+    }
 }

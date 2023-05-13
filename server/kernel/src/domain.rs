@@ -1,4 +1,4 @@
-pub mod types;
+mod types;
 mod part;
 mod activity;
 mod attachment;
