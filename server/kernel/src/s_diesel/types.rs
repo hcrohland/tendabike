@@ -49,7 +49,7 @@ pub struct D_ActivityType {
 }
 
 impl ActTypeId {
-    pub fn get(self, conn: &AppConn) -> TbResult<ActivityType> {
+    pub fn get(self, conn: &AppConn) -> AnyResult<ActivityType> {
         Ok(activity_types::table
             .find(self)
             .first::<ActivityType>(conn)?)
@@ -59,7 +59,7 @@ impl ActTypeId {
 impl PartTypeId {
 
     /// get the full type for a type_id
-    pub fn get (self, conn: &AppConn) -> TbResult<PartType> {
+    pub fn get (self, conn: &AppConn) -> AnyResult<PartType> {
         use schema::part_types::dsl::*;
         Ok(part_types
             .find(self)
@@ -87,7 +87,7 @@ impl PartTypeId {
     }
 
     /// Get the activity types valid for this part_type
-    pub fn act_types(&self, conn: &AppConn) -> TbResult<Vec<ActTypeId>> {
+    pub fn act_types(&self, conn: &AppConn) -> AnyResult<Vec<ActTypeId>> {
         use schema::activity_types::dsl::*;
 
         Ok(activity_types

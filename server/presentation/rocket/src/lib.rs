@@ -22,12 +22,12 @@ use kernel as domain;
 pub struct AppDbConn(kernel::domain::AppConn);
 
 use rocket::{Outcome, request::{FromRequest, self}, Request, http::Status};
-use kernel::{User, TbResult};
+use kernel::{User, AnyResult};
 use kernel::Person;
 
 struct RUser<'a> ( &'a User );
 
-fn readuser (request: &Request) -> TbResult<User> {
+fn readuser (request: &Request) -> AnyResult<User> {
     let id = strava::get_id(request)?;
     let conn = request.guard::<AppDbConn>().expect("No db request guard").0;
     User::read(id, &conn)

@@ -59,7 +59,7 @@ pub struct ActivityType {
 impl PartTypeId {
 
     /// get the full type for a type_id
-    pub fn get (self, conn: &AppConn) -> TbResult<PartType> {
+    pub fn get (self, conn: &AppConn) -> AnyResult<PartType> {
         // parttype_get
         use schema::part_types::dsl::*;
         Ok(part_types
@@ -85,7 +85,7 @@ impl PartTypeId {
     }
 
     /// Get the activity types valid for this part_type
-    pub fn act_types(&self, conn: &AppConn) -> TbResult<Vec<ActTypeId>> {
+    pub fn act_types(&self, conn: &AppConn) -> AnyResult<Vec<ActTypeId>> {
         use schema::activity_types::dsl::*;
 
         Ok(activity_types

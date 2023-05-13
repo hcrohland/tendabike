@@ -24,7 +24,7 @@ pub struct Hub {
     verify_token: String,
 }
 
-fn validate(hub: Hub) -> TbResult<Hub> {
+fn validate(hub: Hub) -> AnyResult<Hub> {
     ensure!(
         hub.verify_token == VERIFY_TOKEN, 
         Error::BadRequest(format!("Unknown verify token {}", hub.verify_token))

@@ -8,7 +8,7 @@ use log::error;
 
 use super::MyContext;
 
-pub fn refresh_token(user: &StravaUser, oauth: OAuth2<Strava>) -> TbResult<TokenResponse<Strava>>{
+pub fn refresh_token(user: &StravaUser, oauth: OAuth2<Strava>) -> AnyResult<TokenResponse<Strava>>{
     info!("refreshing access token for strava id {}", user.id());
 
     ensure!(user.expires_at != 0, Error::NotAuth("User needs to authenticate".to_string()));
@@ -23,7 +23,7 @@ pub fn refresh_token(user: &StravaUser, oauth: OAuth2<Strava>) -> TbResult<Token
 #[derive(Debug)]
 pub struct Strava;
 
-fn process_callback(tokenset: TokenResponse<Strava>, conn: &AppConn, mut cookies: Cookies<'_>) -> TbResult<()>
+fn process_callback(tokenset: TokenResponse<Strava>, conn: &AppConn, mut cookies: Cookies<'_>) -> AnyResult<()>
 {
     if tokenset.scope().unwrap_or("") != "read,activity:read_all,profile:read_all" {
         bail!(Error::NotAuth(format!("Insufficient authorization {:?}", tokenset.scope())))
@@ -50,7 +50,7 @@ pub fn fairing(config: &Config) -> impl rocket::fairing::Fairing {
                 HyperSyncRustlsAdapter::default().basic_auth(false), config)
 }
 
-pub fn update(user: StravaUser, tokenset: TokenResponse<Strava>, conn: &AppConn) -> TbResult<StravaUser> {
+pub fn update(user: StravaUser, tokenset: TokenResponse<Strava>, conn: &AppConn) -> AnyResult<StravaUser> {
     user.update(tokenset.access_token(), tokenset.expires_in(), tokenset.refresh_token(), conn) 
 }
 
@@ -64,7 +64,7 @@ pub fn get_user(request: &Request, user: StravaUser, conn: &AppConn) -> Result<S
     Ok(user)
 }
 
-fn from_tb(id: i32, context: MyContext, oauth: OAuth2<Strava>) -> TbResult<MyContext> {
+fn from_tb(id: i32, context: MyContext, oauth: OAuth2<Strava>) -> AnyResult<MyContext> {
     let conn = context.conn;
     let user = StravaUser::read(id, &conn)?;
 
@@ -77,7 +77,7 @@ fn from_tb(id: i32, context: MyContext, oauth: OAuth2<Strava>) -> TbResult<MyCon
 }
 
 #[get("/login")]
-pub fn login(oauth2: OAuth2<Strava>, mut cookies: Cookies<'_>) -> TbResult<Redirect> {
+pub fn login(oauth2: OAuth2<Strava>, mut cookies: Cookies<'_>) -> AnyResult<Redirect> {
     // We want the "user:read" scope. For some providers, scopes may be
     // pre-selected or restricted during application registration. We could
     // use `&[]` instead to not request any scopes, but usually scopes
