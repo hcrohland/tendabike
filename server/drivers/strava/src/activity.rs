@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 
 use super::*;
-use kernel::activity::ActivityId;
-use kernel::activity::NewActivity;
+use kernel::ActivityId;
+use kernel::NewActivity;
 use kernel::domain::types::ActTypeId;
 
 #[derive(Serialize, Deserialize, Debug)]
