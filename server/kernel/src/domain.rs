@@ -3,7 +3,7 @@ mod part;
 mod activity;
 mod attachment;
 mod user;
-pub mod error;
+mod error;
 pub mod presentation;
 
 use std::collections::HashMap;
@@ -18,6 +18,7 @@ pub use attachment::{Attachment, AttachmentDetail, Event};
 pub use presentation::Person;
 pub use user::*;
 pub use types::*;
+pub use error::*;
 
 use chrono::{DateTime, Utc, TimeZone};
 use diesel::{self, Connection, QueryDsl, RunQueryDsl};
@@ -25,7 +26,6 @@ use diesel::prelude::*;
 
 use crate::s_diesel::schema;
 pub use crate::s_diesel::AppConn;
-use super::error::*;
 
 #[derive(Debug)]
 pub struct Usage {

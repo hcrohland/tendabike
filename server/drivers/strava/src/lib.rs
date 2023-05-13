@@ -12,7 +12,7 @@ pub mod event;
 
 use kernel::domain::*;
 use kernel::s_diesel;
-use kernel::error::Error;
+use kernel::Error;
 use anyhow::{Result, Context, Ok, ensure, bail};
 
 use kernel::domain::presentation::Person;

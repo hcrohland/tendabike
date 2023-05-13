@@ -34,7 +34,7 @@ impl From<anyhow::Error> for ApiError {
 impl<'r> Responder<'r> for ApiError {
     fn respond_to(self, req: &Request) -> ::std::result::Result<Response<'r>, Status> {
         use diesel::result::Error as DieselError;
-        use domain::error::Error as TbError;
+        use domain::Error as TbError;
 
         let mut any = self.0;
 
