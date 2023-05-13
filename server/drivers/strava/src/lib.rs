@@ -16,7 +16,6 @@ use kernel::error::Error;
 use anyhow::{Result, Context, Ok, ensure, bail};
 
 use kernel::domain::presentation::Person;
-use user::{User, Stat};
 use s_diesel::AppConn;
 
 use s_diesel::schema;
@@ -67,7 +66,7 @@ impl StravaAthlete {
         }
 
         // create user!
-        let tendabike_id = crate::user::create(self.firstname, self.lastname, conn)?;
+        let tendabike_id = crate::User::create(self.firstname, self.lastname, conn)?;
 
         let user = StravaUser {
             id: self.id,

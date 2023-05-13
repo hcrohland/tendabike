@@ -2,7 +2,7 @@ pub mod types;
 pub mod part;
 pub mod activity;
 pub mod attachment;
-pub mod user;
+mod user;
 pub mod error;
 pub mod presentation;
 
@@ -16,7 +16,7 @@ pub use part::{Part, PartId};
 pub use activity::{Activity, ActivityId};
 pub use attachment::{Attachment, AttachmentDetail};
 pub use presentation::Person;
-pub use user::User;
+pub use user::*;
 pub use types::*;
 
 use chrono::{DateTime, Utc, TimeZone};

@@ -22,7 +22,7 @@ use kernel as domain;
 pub struct AppDbConn(kernel::domain::AppConn);
 
 use rocket::{Outcome, request::{FromRequest, self}, Request, http::Status};
-use kernel::{user::User, error::TbResult};
+use kernel::{User, error::TbResult};
 use kernel::Person;
 
 struct RUser<'a> ( &'a User );
