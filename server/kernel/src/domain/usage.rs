@@ -1,3 +1,5 @@
+use super::*;
+
 #[derive(Debug)]
 pub struct Usage {
 // usage time
@@ -36,7 +38,7 @@ pub fn none() -> Usage {
 /// Add an activity to of a usage
 ///
 /// If the descend value is missing, assume descend = climb
-pub fn add_activity(self, act: &crate::Activity, factor: Factor) -> Usage {
+pub fn add_activity(self, act: &Activity, factor: Factor) -> Usage {
     let factor = factor as i32;
     Usage {
         time: self.time + act.time.unwrap_or(0) * factor,

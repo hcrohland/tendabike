@@ -9,21 +9,20 @@ use rocket_contrib::database;
 use log::{info,warn};
 use crate::error::*;
 
+use kernel::{domain, s_diesel};
 mod routes;
 mod strava;
 mod error;
 mod jwt;
 
-use kernel as domain;
 
 // AppDbConn needs to be published to be used in Rocket
 // It should not be used outside presentation
 #[database("app_db")]
-pub struct AppDbConn(kernel::domain::AppConn);
+pub struct AppDbConn(s_diesel::AppConn);
 
 use rocket::{Outcome, request::{FromRequest, self}, Request, http::Status};
-use kernel::{User, AnyResult};
-use kernel::Person;
+use domain::{Person, User, AnyResult};
 
 struct RUser<'a> ( &'a User );
 
@@ -104,7 +103,7 @@ pub fn start() {
 
 fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
     let conn = AppDbConn::get_one(&rocket).expect("database connection");
-    domain::s_diesel::run_db_migrations(&conn);
+    s_diesel::run_db_migrations(&conn);
     Ok(rocket)
 }
 

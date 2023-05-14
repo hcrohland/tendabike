@@ -6,10 +6,7 @@
 extern crate diesel;
 #[macro_use]
 extern crate diesel_migrations;
-pub use domain::*;
 
 pub mod s_diesel;
 use s_diesel::*;
 pub mod domain;
-
-pub use domain::*;

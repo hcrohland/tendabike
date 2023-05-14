@@ -1,16 +1,16 @@
 
 use super::*;
-use kernel::{Activity, ActivityId, NewActivity, PartId, PartTypeId, Summary};
+use domain::{Activity, ActivityId, NewActivity, PartId, PartTypeId, Summary};
 
 #[post("/defaultgear", data="<gear_id>")]
 fn def_part_api (gear_id: Json<PartId>, user: RUser, conn: AppDbConn) -> ApiResult<Summary> {
-    kernel::Activity::set_default_part(*gear_id, user.0, &conn).map(Json)
+    Activity::set_default_part(*gear_id, user.0, &conn).map(Json)
 }
 
 #[get("/rescan")]
 fn rescan(_u: Admin, conn: AppDbConn) -> ApiResult<()> {
     let conn = &conn.0;
-    kernel::Activity::rescan_all(&conn).map(Json)
+    Activity::rescan_all(&conn).map(Json)
 }
 
 
@@ -56,12 +56,12 @@ fn delete(id: i32, user: RUser, conn: AppDbConn) -> ApiResult<Summary> {
 
 #[post("/descend?<tz>", data = "<data>")]
 fn descend(data: rocket::data::Data, tz: String, user: RUser, conn: AppDbConn) -> ApiResult<(Summary, Vec<String>, Vec<String>)> {
-    kernel::Activity::csv2descend(data.open(), tz, user.0, &conn).map(Json)
+    Activity::csv2descend(data.open(), tz, user.0, &conn).map(Json)
 }
 
 #[get("/categories")]
 fn mycats(user: RUser, conn: AppDbConn) -> ApiResult<Vec<PartTypeId>> {
-    kernel::Activity::categories(user.0, &conn).map(Json)
+    Activity::categories(user.0, &conn).map(Json)
 }
 
 pub fn routes() -> Vec<rocket::Route> {

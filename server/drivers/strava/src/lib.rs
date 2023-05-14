@@ -9,12 +9,10 @@ pub mod activity;
 pub mod gear;
 pub mod event;
 
-use kernel::domain::*;
-use kernel::s_diesel;
-use kernel::Error;
+use kernel::{domain, s_diesel};
 use anyhow::{Result, Context, Ok, ensure, bail};
+use domain::*;
 
-use kernel::domain::presentation::Person;
 use s_diesel::AppConn;
 
 use s_diesel::schema;

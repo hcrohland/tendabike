@@ -1,6 +1,6 @@
 use super::*;
 use schema::{activity_types, part_types};
-use kernel::{domain::PartType, PartTypeId, part};
+use domain::{PartType, PartTypeId};
 
 /// List of of all valid part types.
 ///

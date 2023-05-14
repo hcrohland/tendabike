@@ -3,7 +3,7 @@ use rocket::http::Cookies;
 use rocket::response::Redirect;
 use rocket::{routes, get, post};
 
-use domain::AppConn;
+use s_diesel::AppConn;
 use ::strava::*;
 
 use super::*;
