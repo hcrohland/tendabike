@@ -33,7 +33,7 @@ impl From<anyhow::Error> for ApiError {
 
 impl<'r> Responder<'r> for ApiError {
     fn respond_to(self, req: &Request) -> ::std::result::Result<Response<'r>, Status> {
-        use diesel::result::Error as DieselError;
+        // use diesel::result::Error as DieselError;
         use domain::Error as TbError;
 
         let mut any = self.0;
@@ -52,15 +52,15 @@ impl<'r> Responder<'r> for ApiError {
             }.into();
         }
         
-        match any.root_cause().downcast_ref::<DieselError>() {
-            Some(DieselError::NotFound) => { 
-                    // warn!("{}", any);
-                    any = Error::NotFound("Object not found".into()).into();
-                },
-            Some(DieselError::DatabaseError(diesel::result::DatabaseErrorKind::ForeignKeyViolation,_)) 
-                    => {build.status(Status::BadRequest);},
-            _ => {build.status(Status::InternalServerError);}
-        }
+        // match any.root_cause().downcast_ref::<DieselError>() {
+        //     Some(DieselError::NotFound) => { 
+        //             // warn!("{}", any);
+        //             any = Error::NotFound("Object not found".into()).into();
+        //         },
+        //     Some(DieselError::DatabaseError(diesel::result::DatabaseErrorKind::ForeignKeyViolation,_)) 
+        //             => {build.status(Status::BadRequest);},
+        //     _ => {build.status(Status::InternalServerError);}
+        // }
         if let Some(err) = any.root_cause().downcast_ref::<Error>() {
             build.merge(err.clone().respond_to(req)?);
         }

@@ -23,9 +23,9 @@ impl Person for RUser<'_> {
 
 
 fn readuser (request: &Request) -> AnyResult<User> {
-let id = strava::get_id(request)?;
-let conn = request.guard::<AppDbConn>().expect("No db request guard").0;
-User::read(id, &conn)
+    let id = strava::get_id(request)?;
+    let conn = request.guard::<AppDbConn>().expect("No db request guard").0;
+    User::read(id, &conn)
 }
 
 impl<'a, 'r> FromRequest<'a, 'r> for RUser<'a> {
