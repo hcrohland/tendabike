@@ -4,7 +4,7 @@ use domain::{Activity, ActivityId, NewActivity, PartId, PartTypeId, Summary};
 
 #[post("/defaultgear", data="<gear_id>")]
 fn def_part_api (gear_id: Json<PartId>, user: RUser, conn: AppDbConn) -> ApiResult<Summary> {
-    Activity::set_default_part(*gear_id, user.0, &conn).map(Json)
+    Activity::set_default_part(*gear_id, &user, &conn).map(Json)
 }
 
 #[get("/rescan")]
@@ -17,7 +17,7 @@ fn rescan(_u: Admin, conn: AppDbConn) -> ApiResult<()> {
 /// web interface to read an activity
 #[get("/<id>")]
 fn get(id: i32, user: RUser, conn: AppDbConn) -> ApiResult<Activity> {
-    ActivityId::new(id).read(user.0, &conn).map(Json)
+    ActivityId::new(id).read(&user, &conn).map(Json)
 }
 
 /// web interface to create an activity
@@ -27,7 +27,7 @@ fn post(
     user: RUser,
     conn: AppDbConn,
 ) -> Result<status::Created<Json<Summary>>, ApiError> {
-    let assembly = Activity::create(&activity, user.0, &conn)?;
+    let assembly = Activity::create(&activity, &user, &conn)?;
     let id_raw: i32 = assembly.first().into();
                     
     let url = rocket::uri!(get: id_raw);
@@ -45,23 +45,23 @@ fn put(
     user: RUser,
     conn: AppDbConn,
 ) -> Result<Json<Summary>, anyhow::Error> {
-    ActivityId::new(id).update(&activity, user.0, &conn).map(Json)
+    ActivityId::new(id).update(&activity, &user, &conn).map(Json)
 }
 
 /// web interface to delete an activity
 #[delete("/<id>")]
 fn delete(id: i32, user: RUser, conn: AppDbConn) -> ApiResult<Summary> {
-    ActivityId::new(id).delete(user.0, &conn).map(Json)
+    ActivityId::new(id).delete(&user, &conn).map(Json)
 }
 
 #[post("/descend?<tz>", data = "<data>")]
 fn descend(data: rocket::data::Data, tz: String, user: RUser, conn: AppDbConn) -> ApiResult<(Summary, Vec<String>, Vec<String>)> {
-    Activity::csv2descend(data.open(), tz, user.0, &conn).map(Json)
+    Activity::csv2descend(data.open(), tz, &user, &conn).map(Json)
 }
 
 #[get("/categories")]
 fn mycats(user: RUser, conn: AppDbConn) -> ApiResult<Vec<PartTypeId>> {
-    Activity::categories(user.0, &conn).map(Json)
+    Activity::categories(&user, &conn).map(Json)
 }
 
 pub fn routes() -> Vec<rocket::Route> {

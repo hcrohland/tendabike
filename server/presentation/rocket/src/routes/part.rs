@@ -4,7 +4,7 @@ use crate::domain::{ChangePart, NewPart, Part, PartId};
 
 #[get("/<part>")]
 fn get(part: i32, user: RUser, conn: AppDbConn) -> ApiResult<Part> {
-    PartId::new(part).part(user.0, &conn).map(Json)
+    PartId::new(part).part(&user, &conn).map(Json)
 }
 
 #[post("/", data = "<newpart>")]
@@ -13,7 +13,7 @@ fn post(
     user: RUser,
     conn: AppDbConn,
 ) -> Result<status::Created<Json<Part>>, ApiError> {
-    let part = newpart.clone().create(user.0, &conn)?;
+    let part = newpart.clone().create(&user, &conn)?;
     let url = rocket::uri!(get: i32::from(part.id));
     Ok(status::Created(url.to_string(), Some(Json(part))))
 }
@@ -24,7 +24,7 @@ fn put(
     user: RUser,
     conn: AppDbConn,
 ) -> ApiResult<Part> {
-    part.change(user.0, &conn).map(Json)
+    part.change(&user, &conn).map(Json)
 }
 
 pub fn routes() -> Vec<rocket::Route> {
