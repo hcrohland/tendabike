@@ -8,5 +8,6 @@ edition = "2021"
 [dependencies]
 dotenv = "0.15.0"
 env_logger = "0.10.0"
+anyhow = "1"
 kernel = { path = "../kernel"}
 tb_rocket = { path = "../presentation/rocket"}

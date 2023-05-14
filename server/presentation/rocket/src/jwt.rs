@@ -1,4 +1,4 @@
-use anyhow::{ensure, bail};
+use anyhow::{ensure, bail, Result as AnyResult};
 use time::*;
 
 use rocket::http::{Cookie, Cookies, SameSite};
@@ -9,8 +9,6 @@ use serde_derive::{Deserialize, Serialize};
 pub const LEEWAY: u64 = 60 * 60 * 24 * 21; // 21 days
 
 const MY_SECRET: &[u8] = b"9bjh34g2jh5hgjg";
-
-use super::*;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct UserToken {

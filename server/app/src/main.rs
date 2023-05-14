@@ -1,10 +1,13 @@
 #![warn(clippy::all)]
 
-fn main() {
+use kernel::*;
+
+fn main() -> anyhow::Result<()> {
     // setup environment. Includes Config and logging
     init_environment();
 
-    tb_rocket::start();
+    let db = s_diesel::init_connection_pool()?;
+    Ok (tb_rocket::start(db))
 }
 
 pub fn init_environment() {

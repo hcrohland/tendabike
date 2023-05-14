@@ -1,42 +1,54 @@
 #![feature( decl_macro)]
 #![warn(clippy::all)]
 
-use std::path::{Path, PathBuf};
+use std::{path::{Path, PathBuf}, ops::Deref};
 
-use rocket::Rocket;
-use rocket::fairing::AdHoc;
-use rocket_contrib::database;
 use log::{info,warn};
+use rocket::{Outcome, request::{FromRequest, self}, Request, http::Status, State};
+use domain::{Person, User, AnyResult};
+
+
 use crate::error::*;
 
-use kernel::{domain, s_diesel};
+use kernel::{domain, s_diesel::{self, DbPool}};
 mod routes;
 mod strava;
 mod error;
 mod jwt;
 
 
-// AppDbConn needs to be published to be used in Rocket
-// It should not be used outside presentation
-#[database("app_db")]
-pub struct AppDbConn(s_diesel::AppConn);
+pub struct AppDbConn(s_diesel::PooledConn);
 
-use rocket::{Outcome, request::{FromRequest, self}, Request, http::Status};
-use domain::{Person, User, AnyResult};
+impl<'a,'r> FromRequest<'a,'r> for AppDbConn {
+    type Error = ();
+
+    fn from_request(request: &'a Request<'r>) -> request::Outcome<Self, Self::Error> {
+        let pool = request.guard::<State<DbPool>>();
+        let conn = pool.map(|p| AppDbConn(p.get().expect ("failed to get database connection")));
+        conn
+    }
+}
+
+impl Deref for AppDbConn {
+    type Target = s_diesel::AppConn;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 
 mod user;
 use user::*;
 
-pub fn start() {
+pub fn start(db: DbPool) {
     let cors = rocket_cors::CorsOptions::default()
         .to_cors()
         .expect("Could not set CORS options");
 
     let ship = rocket::ignite()
         // add database pool
-        .attach(AppDbConn::fairing())
-        // run database migrations
-        .attach(AdHoc::on_attach("TendaBike Database Migrations", run_db_migrations))
+        .manage(db)
         .attach(cors)
         // mount all the endpoints from the module
         .mount("/",rocket_contrib::serve::StaticFiles::from(get_static_path()))
@@ -57,12 +69,6 @@ pub fn start() {
         .launch();
 }
 
-fn run_db_migrations(rocket: Rocket) -> Result<Rocket, Rocket> {
-    let conn = AppDbConn::get_one(&rocket).expect("database connection");
-    s_diesel::run_db_migrations(&conn);
-    Ok(rocket)
-}
-
 fn get_static_path () -> PathBuf {
     let path = std::env::var("STATIC_WWW").unwrap_or_else(
         |_| concat!(env!("CARGO_MANIFEST_DIR"),"/../../../frontend/public").to_string()
@@ -70,3 +76,4 @@ fn get_static_path () -> PathBuf {
     
     Path::new(&path).canonicalize().expect(&format!("STATIC_WWW Path {} does not exist", path))
 }
+
