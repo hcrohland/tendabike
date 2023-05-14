@@ -23,5 +23,6 @@ pretty_assertions = "1"
 
 thiserror = "1.0"
 anyhow = "1.0"
+r2d2 = "0.8.10"
 
 ## Needed for drivers::strava
