@@ -20,13 +20,10 @@ pub use oauth::fairing;
 /// 
 /// Will refresh token if possible
 pub fn get_id(request: &Request) -> AnyResult<i32> {
-    MyContext::get(request).map(|u| u.user.tb_id())
+    User::get(request).map(|u| u.tb_id())
 }
 
-pub struct MyContext {
-    user: StravaUser,
-    conn: AppDbConn,
-}
+pub struct User(StravaUser);
 
 /// User request guard
 ///
@@ -36,19 +33,10 @@ pub struct MyContext {
 ///
 /// It retrieves the storage (cookies and database) from the request.
 /// By that the visible routes only need to use the User request guard to access Strava
-impl MyContext {
-    /// get the reference to the database connection
-    pub fn conn(&self) -> &AppConn {
-        &self.conn
-    }
-
-    /// get references to both the StravaUser and the database connection as a tuple  
-    pub fn split(&self) -> (&StravaUser, &AppConn) {
-        (&self.user, &self.conn)
-    }
+impl User {
     /// the get function reads the user from the cookie and other stores,
     /// if needed and possible it refreshes the access token
-    fn get(request: &Request) -> AnyResult<MyContext> {
+    fn get(request: &Request) -> AnyResult<User> {
         // Get user id
         let token = jwt::token(request)?;
         let id = jwt::id(&token)?;
@@ -59,7 +47,7 @@ impl MyContext {
         let user = StravaUser::read(id, &conn)?;
 
         if user.is_valid() {
-            return Ok(Self {user, conn});
+            return Ok(Self(user));
         }
         let user = oauth::get_user(request, user, &conn)?;
         let mut cookies = request
@@ -68,22 +56,30 @@ impl MyContext {
 
         jwt::store(&mut cookies, user.tendabike_id, user.expires_at);
 
-        Ok(Self{user,conn})
+        Ok(Self(user))
     }   
 }
 
-impl<'a, 'r> FromRequest<'a, 'r> for MyContext {
+impl<'a, 'r> FromRequest<'a, 'r> for User {
     type Error = Redirect;
 
     /// Get the current user
     /// Redirect to the login screen on failure
     fn from_request(request: &'a Request<'r>) -> request::Outcome<Self, Self::Error> {
-        match MyContext::get(request) {
+        match User::get(request) {
             Ok(x) => Outcome::Success(x),
             Err(err) => {
                 warn!("{}", err);
                 Outcome::Failure((Status::Unauthorized, Redirect::to("/login")))
             }
         }
+    }
+}
+
+impl Deref for User {
+    type Target = StravaUser;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }

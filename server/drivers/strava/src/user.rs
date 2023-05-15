@@ -220,7 +220,7 @@ pub fn sync_users (user_id: Option<i32>, time: i64, conn: &AppConn) -> Result<()
         Ok(())
 }
 
-pub fn user_summary((user, conn): (&StravaUser, &AppConn)) -> Result<Summary> {
+pub fn user_summary(user: &StravaUser, conn: &AppConn) -> Result<Summary> {
     use crate::*;
     gear::update_user(user, conn)?;
     let parts = Part::get_all(user, conn)?;

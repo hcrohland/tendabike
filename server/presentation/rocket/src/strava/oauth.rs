@@ -6,7 +6,7 @@ use rocket_oauth2::{OAuth2, TokenResponse, OAuthConfig};
 use rocket::Config;
 use log::error;
 
-use super::MyContext;
+use super::User;
 
 pub fn refresh_token(user: &StravaUser, oauth: OAuth2<Strava>) -> AnyResult<TokenResponse<Strava>>{
     info!("refreshing access token for strava id {}", user.id());
@@ -94,10 +94,10 @@ pub fn callback(token: TokenResponse<Strava>, conn: AppDbConn, cookies: Cookies<
 
 
 #[get("/sync/<tbid>")]
-pub fn sync(tbid: i32, _u: Admin, context: MyContext, oauth: OAuth2<Strava>) -> ApiResult<Summary> {
-    let user = from_tb(tbid, oauth, context.conn())?;
+pub fn sync(tbid: i32, _u: Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<Summary> {
+    let user = from_tb(tbid, oauth, &conn)?;
     
-    super::webhook::hooks(MyContext { user, conn: context.conn })
+    super::webhook::hooks(User(user), conn)
 }
 
 #[post("/disable/<tbid>")]

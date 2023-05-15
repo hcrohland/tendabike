@@ -8,7 +8,7 @@ use domain::Summary;
 use ::strava::event::{InEvent, process};
 use serde_derive::Serialize;
 
-use super::MyContext;
+use super::User;
 
 // complicated way to have query parameters with dots in the name
 #[derive(Debug, FromForm, Serialize)]
@@ -39,11 +39,10 @@ fn validate(hub: Hub) -> AnyResult<Hub> {
 const VERIFY_TOKEN: &str = "tendabike_strava";
 
 #[get("/hooks")]
-pub fn hooks (context: MyContext) -> ApiResult<Summary> {
-    let (user, conn) = context.split();
-    user.lock(conn)?;
-    let res = process(user, conn);
-    user.unlock(conn)?;
+pub fn hooks (user: User, conn: AppDbConn) -> ApiResult<Summary> {
+    user.lock(&conn)?;
+    let res = process(&user, &conn);
+    user.unlock(&conn)?;
     res.map(Json)
 }
 

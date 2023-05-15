@@ -16,8 +16,8 @@ fn userlist(_u: Admin, conn: AppDbConn) -> ApiResult<Vec<StravaStat>> {
 }
 
 #[get("/summary")]
-fn summary(context: strava::MyContext) -> ApiResult<Summary> {
-    user_summary(context.split()).map(Json)
+fn summary(user: strava::User, conn: AppDbConn) -> ApiResult<Summary> {
+    user_summary(&user, &conn).map(Json)
 }
 
 pub fn routes() -> Vec<rocket::Route> {
