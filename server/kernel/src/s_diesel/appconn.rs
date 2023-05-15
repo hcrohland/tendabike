@@ -8,8 +8,7 @@ use diesel::prelude::*;
 use chrono::{DateTime, Utc};
 
 pub type AppConn = PgConnection;
-pub type PooledConn = PooledConnection<ConnectionManager<AppConn>>;
-pub struct Store (PooledConn);
+pub struct Store (PooledConnection<ConnectionManager<AppConn>>);
 
 impl Deref for Store {
     type Target = AppConn;
@@ -20,10 +19,11 @@ impl Deref for Store {
 }
 
 impl Store {
-    pub fn new(pool: DbPool) -> AnyResult<Self> {
-        let conn = pool.get()?;
+    pub fn new(pool: &DbPool) -> AnyResult<Self> {
+        let conn = pool.0.get()?;
         Ok(Store(conn))
     }
+
 }
 
 embed_migrations!("src/s_diesel/migrations");
@@ -45,7 +45,7 @@ fn run_db_migrations (conn: &AppConn) {
 use r2d2::{Pool, PooledConnection};
 use diesel::r2d2::ConnectionManager;
 
-pub type DbPool = r2d2::Pool<ConnectionManager<AppConn>>;
+pub struct DbPool (pub r2d2::Pool<ConnectionManager<AppConn>>);
 
 pub fn init_connection_pool() -> AnyResult<DbPool> {
     let database_url = std::env::var("DB_URL").unwrap_or(
@@ -60,5 +60,5 @@ pub fn init_connection_pool() -> AnyResult<DbPool> {
 
     let conn = pool.get().context("failed to get connection from pool")?;
     run_db_migrations(&conn);
-    Ok(pool)
+    Ok(DbPool(pool))
 }

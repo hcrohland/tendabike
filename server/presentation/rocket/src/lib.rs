@@ -17,20 +17,22 @@ mod error;
 mod jwt;
 
 
-pub struct AppDbConn(s_diesel::PooledConn);
+pub struct AppDbConn(s_diesel::Store);
 
 impl<'a,'r> FromRequest<'a,'r> for AppDbConn {
     type Error = ();
 
     fn from_request(request: &'a Request<'r>) -> request::Outcome<Self, Self::Error> {
         let pool = request.guard::<State<DbPool>>();
-        let conn = pool.map(|p| AppDbConn(p.get().expect ("failed to get database connection")));
+        let conn = pool.map(|p| {
+            AppDbConn(s_diesel::Store::new(&p).expect ("failed to get database connection"))
+        });
         conn
     }
 }
 
 impl Deref for AppDbConn {
-    type Target = s_diesel::AppConn;
+    type Target = s_diesel::Store;
 
     fn deref(&self) -> &Self::Target {
         &self.0

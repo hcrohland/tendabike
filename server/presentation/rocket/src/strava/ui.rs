@@ -12,7 +12,7 @@ fn redirect_act(id: i32, conn: AppDbConn) -> Option<Redirect> {
 
 #[get("/users/<id>")]
 fn redirect_user(id: i32, conn: AppDbConn) -> Option<Redirect> {
-    strava_url(id, &conn).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
+    strava_url(id, &conn.0).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
 }
 
 #[get("/logout")]
