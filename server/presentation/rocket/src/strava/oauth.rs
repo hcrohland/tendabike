@@ -64,16 +64,15 @@ pub fn get_user(request: &Request, user: StravaUser, conn: &AppConn) -> Result<S
     Ok(user)
 }
 
-fn from_tb(id: i32, context: MyContext, oauth: OAuth2<Strava>) -> AnyResult<MyContext> {
-    let conn = context.conn;
+fn from_tb(id: i32, oauth: OAuth2<Strava>, conn: &AppConn) -> AnyResult<StravaUser> {
     let user = StravaUser::read(id, &conn)?;
 
     if user.is_valid() {
-        return Ok(MyContext {user,conn});
+        return Ok(user);
     }
     let tokenset = refresh_token(&user,oauth)?;
     let user = update(user, tokenset, &conn)?;
-    Ok(MyContext{user,conn})
+    Ok(user)
 }
 
 #[get("/login")]
@@ -96,12 +95,12 @@ pub fn callback(token: TokenResponse<Strava>, conn: AppDbConn, cookies: Cookies<
 
 #[get("/sync/<tbid>")]
 pub fn sync(tbid: i32, _u: Admin, context: MyContext, oauth: OAuth2<Strava>) -> ApiResult<Summary> {
-    let user = from_tb(tbid, context, oauth)?;
+    let user = from_tb(tbid, oauth, context.conn())?;
     
-    super::webhook::hooks(user)
+    super::webhook::hooks(MyContext { user, conn: context.conn })
 }
 
 #[post("/disable/<tbid>")]
-pub fn disable(tbid: i32, _u: Admin, context: MyContext, oauth: OAuth2<Strava>) -> ApiResult<()> {
-    from_tb(tbid, context, oauth)?.admin_disable().map(rocket_contrib::json::Json)
+pub fn disable(tbid: i32, _u: Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<()> {
+    from_tb(tbid, oauth, &conn)?.admin_disable(&conn).map(rocket_contrib::json::Json)
 }

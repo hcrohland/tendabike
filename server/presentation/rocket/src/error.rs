@@ -49,6 +49,7 @@ impl<'r> Responder<'r> for ApiError {
                 TbError::BadRequest(x) => Error::BadRequest(x.into()),
                 TbError::Conflict(x) => Error::Conflict(x.into()),
                 TbError::TryAgain(x) => Error::TryAgain(x),
+                TbError::NotAuth(x) => Error::NotAuth(x.into()),
             }.into();
         }
         

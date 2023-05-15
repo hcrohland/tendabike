@@ -42,7 +42,7 @@ const VERIFY_TOKEN: &str = "tendabike_strava";
 pub fn hooks (context: MyContext) -> ApiResult<Summary> {
     let (user, conn) = context.split();
     user.lock(conn)?;
-    let res = process(&context);
+    let res = process(user, conn);
     user.unlock(conn)?;
     res.map(Json)
 }

@@ -25,20 +25,13 @@ pub use user::*;
 mod athlete;
 pub use athlete::*;
 
-pub trait StravaContext {
-    fn split(&self) -> (&StravaUser, &AppConn);
-    fn conn(&self) -> &AppConn;
-    fn user(&self) -> &StravaUser;
-    fn request(&self, uri: &str) -> Result<String>;
-}
-
-pub fn strava_url(who: i32, context: & dyn StravaContext) -> Result<String> {
+pub fn strava_url(who: i32, conn: & AppConn) -> Result<String> {
     use schema::strava_users::dsl::*;
 
     let user_id: i32 = strava_users
         .filter(tendabike_id.eq(who))
         .select(id)
-        .first(context.conn())?;
+        .first(conn)?;
 
     Ok(format!("https://strava.com/athletes/{}", &user_id))
 }

@@ -2112,9 +2112,11 @@ dependencies = [
  "diesel-derive-newtype",
  "kernel",
  "log 0.4.17",
+ "reqwest",
  "serde",
  "serde_derive",
  "serde_json",
+ "time 0.1.45",
 ]
 
 [[package]]
