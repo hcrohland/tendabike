@@ -1,17 +1,17 @@
 
 use super::*;
-use domain::{Summary, attachment::Event};
+use domain::{Summary, Event};
 
 /// route for attach API
 #[post("/attach", data = "<event>")]
 fn attach_rt(event: Json<Event>, user: RUser, conn: AppDbConn) -> ApiResult<Summary> {
-    event.into_inner().attach(user.0, &conn).map(Json)
+    event.into_inner().attach(&user, &conn).map(Json)
 }
 
 /// route for detach API
 #[post("/detach", data = "<event>")]
 fn detach_rt(event: Json<Event>, user: RUser, conn: AppDbConn) -> ApiResult<Summary> {
-    event.into_inner().detach(user.0, &conn).map(Json)
+    event.into_inner().detach(&user, &conn).map(Json)
 }
 
 pub fn routes() -> Vec<rocket::Route> {

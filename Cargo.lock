@@ -1046,6 +1046,7 @@ dependencies = [
  "log 0.4.17",
  "newtype_derive",
  "pretty_assertions",
+ "r2d2",
  "serde",
  "serde_derive",
  "thiserror",

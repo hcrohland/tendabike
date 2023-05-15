@@ -16,4 +16,4 @@ pub enum Error{
     TryAgain(&'static str),
 }
 
-pub type TbResult<T> = Result<T,anyhow::Error>;
+pub type AnyResult<T> = Result<T,anyhow::Error>;

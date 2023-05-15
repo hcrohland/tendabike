@@ -3,7 +3,7 @@ use rocket::http::Cookies;
 use rocket::response::Redirect;
 use rocket::{routes, get, post};
 
-use domain::AppConn;
+use s_diesel::AppConn;
 use ::strava::*;
 
 use super::*;
@@ -21,7 +21,7 @@ const API: &str = "https://www.strava.com/api/v3";
 /// check user id from the request
 /// 
 /// Will refresh token if possible
-pub fn get_id(request: &Request) -> TbResult<i32> {
+pub fn get_id(request: &Request) -> AnyResult<i32> {
     MyContext::get(request).map(|u| u.user.tb_id())
 }
 
@@ -56,7 +56,7 @@ impl StravaContext for MyContext {
  
     /// request a Strava API call with an authenticated User
     ///
-    fn request(&self, uri: &str) -> TbResult<String> {
+    fn request(&self, uri: &str) -> AnyResult<String> {
         Ok(self.get_strava(uri)?
             .text().context("Could not get response body")?)
     }
@@ -65,7 +65,7 @@ impl StravaContext for MyContext {
 impl MyContext {
     /// the get function reads the user from the cookie and other stores,
     /// if needed and possible it refreshes the access token
-    fn get(request: &Request) -> TbResult<MyContext> {
+    fn get(request: &Request) -> AnyResult<MyContext> {
         // Get user id
         let token = jwt::token(request)?;
         let id = jwt::id(&token)?;
@@ -89,7 +89,7 @@ impl MyContext {
     }
     
     /// disable a user 
-    fn disable(&self) -> TbResult<()> {
+    fn disable(&self) -> AnyResult<()> {
         let (user, conn) = self.split();
 
         let id = user.id();
@@ -105,7 +105,7 @@ impl MyContext {
     ///
     /// This function will return an error if the user does not exist, is already disabled 
     /// or has open events and if strava or the database is not reachable.
-    fn admin_disable(self) -> TbResult<()> {
+    fn admin_disable(self) -> AnyResult<()> {
         let (user, conn) = self.split();
     
         let (events, disabled) = user.get_stats(conn)?;
@@ -128,7 +128,7 @@ impl MyContext {
     ///
     /// will return Error::TryAgain on certain error conditions
     /// will disable the User if Strava responds with NOT_AUTH
-    fn get_strava(&self, uri: &str) -> TbResult<reqwest::blocking::Response> {
+    fn get_strava(&self, uri: &str) -> AnyResult<reqwest::blocking::Response> {
         use reqwest::StatusCode;
         let resp = reqwest::blocking::Client::new()
             .get(&format!("{}{}", API, uri))

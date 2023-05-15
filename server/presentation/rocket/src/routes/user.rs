@@ -6,7 +6,8 @@ use ::strava::{user_summary, get_all_stats, StravaStat};
 
 #[get("/")]
 fn getuser(user: RUser) -> Json<User> {
-    Json(user.0.clone())
+    let user: &User = &user;
+    Json(user.clone())
 }
 
 #[get("/all")]

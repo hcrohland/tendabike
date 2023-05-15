@@ -1,9 +1,9 @@
 use chrono::{DateTime, Utc};
 
 use super::*;
-use kernel::activity::ActivityId;
-use kernel::activity::NewActivity;
-use kernel::domain::types::ActTypeId;
+use ActivityId;
+use NewActivity;
+use ActTypeId;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaActivity {

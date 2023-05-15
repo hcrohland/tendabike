@@ -19,7 +19,7 @@ struct UserToken {
     id: i32
 }
 
-pub fn id(token: &str) -> TbResult<i32> {
+pub fn id(token: &str) -> AnyResult<i32> {
 
     let token_data = decode::<UserToken>(token, &DecodingKey::from_secret(MY_SECRET), &Validation::new(Algorithm::HS256))?;
     Ok(token_data.claims.id)
@@ -30,7 +30,7 @@ const TOKEN: &str = "tendabike_debug";
 #[cfg(not(debug_assertions))]
 const TOKEN: &str = "tendabike_token";
 
-pub fn token(request: &Request) -> TbResult<String> {
+pub fn token(request: &Request) -> AnyResult<String> {
     let mut headers = request.headers().get("Authorization"); 
 
     if let Some(header) = headers.next() {

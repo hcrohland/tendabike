@@ -29,7 +29,7 @@ impl InEvent {
 
         ensure!(
             objects.contains(&self.object_type.as_str()) && aspects.contains(&self.aspect_type.as_str()),
-            kernel::error::Error::BadRequest(format!("unknown event received: {:?}", self))
+            domain::Error::BadRequest(format!("unknown event received: {:?}", self))
         );
 
         Ok(Event {
