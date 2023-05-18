@@ -26,6 +26,7 @@ impl Store {
 
 }
 
+
 embed_migrations!("src/s_diesel/migrations");
 
 fn run_db_migrations (conn: &AppConn) {
@@ -45,20 +46,23 @@ fn run_db_migrations (conn: &AppConn) {
 use r2d2::{Pool, PooledConnection};
 use diesel::r2d2::ConnectionManager;
 
+#[derive(Clone)]
 pub struct DbPool (pub r2d2::Pool<ConnectionManager<AppConn>>);
 
-pub fn init_connection_pool() -> AnyResult<DbPool> {
-    let database_url = std::env::var("DB_URL").unwrap_or(
-        "postgres://localhost/tendabike".to_string());
-        
-    println!("Connecting to database {}...", database_url);
-    let manager = ConnectionManager::<AppConn>::new(database_url);
+impl DbPool {
+    pub fn new() -> AnyResult<Self> {
+        let database_url = std::env::var("DB_URL").unwrap_or(
+            "postgres://localhost/tendabike".to_string());
+            
+        println!("Connecting to database {}...", database_url);
+        let manager = ConnectionManager::<AppConn>::new(database_url);
 
-    let pool = Pool::builder()
-        .build(manager)
-        .context("Failed to create database connection pool.")?;
+        let pool = Pool::builder()
+            .build(manager)
+            .context("Failed to create database connection pool.")?;
 
-    let conn = pool.get().context("failed to get connection from pool")?;
-    run_db_migrations(&conn);
-    Ok(DbPool(pool))
+        let conn = pool.get().context("failed to get connection from pool")?;
+        run_db_migrations(&conn);
+        Ok(Self(pool))
+}
 }
