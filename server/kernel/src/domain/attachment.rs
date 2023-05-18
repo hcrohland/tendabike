@@ -23,11 +23,11 @@ impl Event {
     ///
     /// Check's authorization and taht the part is attached
     ///
-    pub fn detach(self, user: &dyn Person, conn: &AppConn) -> AnyResult<Summary> {
+    pub fn detach(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Summary> {
         info!("detach {:?}", self);
         // check user
         self.part_id.checkuser(user, conn)?;
-        conn.transaction(|| {
+        conn.transaction(|conn| {
             let target = self
                 .at(conn)?
                 .ok_or(Error::NotFound("part not attached".into()))?;
@@ -48,7 +48,7 @@ impl Event {
     /// 
     /// When the 'self.partid' has child parts they are attached to that part
     ///
-    fn detach_assembly(self, target: Attachment, conn: &AppConn) -> AnyResult<Summary> {
+    fn detach_assembly(self, target: Attachment, conn: &mut AppConn) -> AnyResult<Summary> {
         debug!("- detaching {}", target.part_id);
         let subs = self.assembly(target.gear, conn)?;
         let mut hash = SumHash::new(target.detach(self.time, conn)?);
@@ -63,7 +63,7 @@ impl Event {
     ///
     /// When the detached part has child parts they are attached to that part
     ///
-    pub fn attach(self, user: &dyn Person, conn: &AppConn) -> AnyResult<Summary> {
+    pub fn attach(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Summary> {
         info!("attach {:?}", self);
         // check user
         let part = self.part_id.part(user, conn)?;
@@ -84,7 +84,7 @@ impl Event {
                 mytype.name, gear.what
             ))
         );
-        conn.transaction(|| {
+        conn.transaction(|conn| {
             let mut hash = SumHash::default();
 
             // detach self assembly
@@ -130,7 +130,7 @@ impl Event {
     /// * Detach time is adjusted according to later attachments
     ///
     /// If the part is attached already to the same hook, the attachments are merged
-    fn attach_one(self, conn: &AppConn) -> AnyResult<(Summary, DateTime<Utc>)> {
+    fn attach_one(self, conn: &mut AppConn) -> AnyResult<(Summary, DateTime<Utc>)> {
         let mut hash = SumHash::default();
         // when does the current attachment end
         let mut end = DateTime::<Utc>::MAX_UTC; 
@@ -196,7 +196,7 @@ impl Event {
     }
 
     /// Return Attachment if another part is attached to same hook at Event
-    fn occupant(&self, conn: &AppConn) -> AnyResult<Option<Attachment>> {
+    fn occupant(&self, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         use schema::parts;
         let what = self.part_id.what(conn)?;
@@ -217,7 +217,7 @@ impl Event {
     }
 
     /// Return Attachment if some other part is attached to same hook after the Event
-    fn next(&self, what: PartTypeId, conn: &AppConn) -> AnyResult<Option<Attachment>> {
+    fn next(&self, what: PartTypeId, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         use schema::parts;
 
@@ -239,7 +239,7 @@ impl Event {
     }
 
     /// Return Attachment if self.part_id is attached somewhere at the event
-    fn at(&self, conn: &AppConn) -> AnyResult<Option<Attachment>> {
+    fn at(&self, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         Ok(attachments
             .for_update()
@@ -251,7 +251,7 @@ impl Event {
     }
 
     /// Return Attachment if self.part_id is attached somewhere after the event
-    fn after(&self, conn: &AppConn) -> AnyResult<Option<Attachment>> {
+    fn after(&self, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         Ok(attachments
             .for_update()
@@ -263,7 +263,7 @@ impl Event {
     }
 
     /// Iff self.part_id already attached just before self.time return that attachment
-    fn adjacent(&self, conn: &AppConn) -> AnyResult<Option<Attachment>> {
+    fn adjacent(&self, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         Ok(attachments
             .for_update()
@@ -276,7 +276,7 @@ impl Event {
     }
 
     /// find all subparts of self which are attached to target at self.time
-    fn assembly(&self, target: PartId, conn: &AppConn) -> AnyResult<Vec<Attachment>> {
+    fn assembly(&self, target: PartId, conn: &mut AppConn) -> AnyResult<Vec<Attachment>> {
         use schema::attachments::dsl::*;
 
         let types = self.part_id.what(conn)?.subtypes(conn);
@@ -308,10 +308,9 @@ impl Event {
     Insertable,
     AsChangeset,
 )]
-#[primary_key(part_id, attached)]
-#[changeset_options(treat_none_as_null = "true")]
-#[belongs_to(PartType, foreign_key = "hook")]
-// #[belongs_to(Part, foreign_key = "hook_id")]
+#[diesel(primary_key(part_id, attached))]
+#[diesel(treat_none_as_null = true)]
+#[diesel(belongs_to(PartType, foreign_key = hook))]
 pub struct Attachment {
     /// the sub-part, which is attached to the hook
     part_id: PartId,
@@ -357,7 +356,7 @@ impl AttachmentDetail {
 
 impl Attachment {
     /// return the usage for the attachment
-    fn usage(&self, factor: Factor, conn: &AppConn) -> Usage {
+    fn usage(&self, factor: Factor, conn: &mut AppConn) -> Usage {
         Activity::find(self.gear, self.attached, self.detached, conn)
             .into_iter()
             .fold(Usage::none(), |acc, x| {
@@ -365,7 +364,7 @@ impl Attachment {
             })
     }
 
-    fn shift (&self, at_time: DateTime<Utc>, target: PartId, hash: &mut SumHash, conn: &AppConn) -> AnyResult<DateTime<Utc>> {
+    fn shift (&self, at_time: DateTime<Utc>, target: PartId, hash: &mut SumHash, conn: &mut AppConn) -> AnyResult<DateTime<Utc>> {
         debug!("-- moving {} to {}", self.part_id, target);
         let ev = Event {
             time: at_time,
@@ -383,7 +382,7 @@ impl Attachment {
     ///
     /// * deletes the attachment for detached < attached
     /// * Does not check for collisions
-    fn detach(mut self, detached: DateTime<Utc>, conn: &AppConn) -> AnyResult<Summary> {
+    fn detach(mut self, detached: DateTime<Utc>, conn: &mut AppConn) -> AnyResult<Summary> {
         trace!("detaching {} at {}", self.part_id, detached);
 
         let del = self.delete(conn)?;
@@ -400,7 +399,7 @@ impl Attachment {
     //
     /// - recalculates the usage counters in the attached assembly
     /// - returns all affected parts
-    fn create(mut self, conn: &AppConn) -> AnyResult<Summary> {
+    fn create(mut self, conn: &mut AppConn) -> AnyResult<Summary> {
         trace!("create {:?}", self);
         let usage = self.usage(Factor::Add, conn);
         self.count = usage.count;
@@ -427,7 +426,7 @@ impl Attachment {
     ///
     /// - recalculates the usage counters in the attached assembly
     /// - returns all affected parts
-    fn delete(self, conn: &AppConn) -> AnyResult<Summary> {
+    fn delete(self, conn: &mut AppConn) -> AnyResult<Summary> {
         trace!("delete {:?}", self);
         let ctx = format!("Could not delete attachment {:#?}", self);
         let mut att = diesel::delete(attachments::table.find(self.id())) // delete the attachment in the database
@@ -461,7 +460,7 @@ impl Attachment {
     }
 
     /// add redundant details from database for client simplicity
-    fn read_details(self, conn: &AppConn) -> AnyResult<AttachmentDetail> {
+    fn read_details(self, conn: &mut AppConn) -> AnyResult<AttachmentDetail> {
         use schema::parts::dsl::{name, parts, what};
 
         let (n, w) = parts
@@ -472,7 +471,7 @@ impl Attachment {
     }
 
     /// return all parts which are affected byActivity 'act'
-    pub fn parts_per_activity(act: &Activity, conn: &AppConn) -> Vec<PartId> {
+    pub fn parts_per_activity(act: &Activity, conn: &mut AppConn) -> Vec<PartId> {
         use schema::attachments::dsl::*;
 
         let mut res = Vec::new();
@@ -494,7 +493,7 @@ impl Attachment {
     /// apply usage to all attachments affected by activity
     ///
     /// returns the list of Attachments - including the redundant details
-    pub fn register(act: &Activity, usage: &Usage, conn: &AppConn) -> Vec<AttachmentDetail> {
+    pub fn register(act: &Activity, usage: &Usage, conn: &mut AppConn) -> Vec<AttachmentDetail> {
         use schema::attachments::dsl::*;
 
         if let Some(act_gear) = act.gear {
@@ -522,7 +521,7 @@ impl Attachment {
     }
 
     /// return all attachments with details for the parts in 'partlist'
-    pub fn for_parts(partlist: &Vec<Part>, conn: &AppConn) -> AnyResult<Vec<AttachmentDetail>> {
+    pub fn for_parts(partlist: &Vec<Part>, conn: &mut AppConn) -> AnyResult<Vec<AttachmentDetail>> {
         use schema::attachments::dsl::*;
         use schema::parts::dsl::{id, name, parts, what};
         let ids: Vec<_> = partlist.iter().map(|p| p.id).collect();

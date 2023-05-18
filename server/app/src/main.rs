@@ -1,16 +1,16 @@
 #![warn(clippy::all)]
 
-use kernel::*;
+use kernel::s_diesel::DbPool;
 
 fn main() -> anyhow::Result<()> {
     // setup environment. Includes Config and logging
     init_environment();
 
-    let db = s_diesel::init_connection_pool()?;
+    let db = DbPool::new()?;
     Ok (tb_rocket::start(db))
 }
 
-pub fn init_environment() {
+fn init_environment() {
     dotenv::dotenv().ok();
 
     // Default log level is warn

@@ -30,13 +30,12 @@ pub struct StravaActivity {
 }
 
 impl StravaActivity {
-    fn into_tb(self, context: &dyn StravaContext) -> Result<NewActivity> {
+    fn into_tb(self, user: &StravaUser, conn: &mut AppConn) -> AnyResult<NewActivity> {
         let what = self.what()?;
         let gear = match self.gear_id {
-            Some(x) => Some(gear::strava_to_tb(x, context)?),
+            Some(x) => Some(gear::strava_to_tb(x, user, conn)?),
             None => None,
         };
-        let (user, _) = context.split();
         Ok(NewActivity {
             what,
             gear,
@@ -53,7 +52,7 @@ impl StravaActivity {
     }
 
     /// map strava workout type strings to tendabike types
-    fn what(&self) -> Result<ActTypeId> {
+    fn what(&self) -> AnyResult<ActTypeId> {
         let t = self.type_.as_str();
 
         Ok(match t {
@@ -101,13 +100,12 @@ impl StravaActivity {
 }
 
 impl StravaActivity {
-    pub fn send_to_tb(self, context: &dyn StravaContext) -> Result<Summary> {
-        let (user, conn) = context.split();
-        conn.transaction(||{
+    pub fn send_to_tb(self, user: &StravaUser, conn: &mut AppConn) -> AnyResult<Summary> {
+        conn.transaction(|conn|{
             use schema::strava_activities::dsl::*;
 
             let strava_id = self.id;
-            let tb = self.into_tb(context)?;
+            let tb = self.into_tb(user, conn)?;
 
             let tb_id = strava_activities
                 .find(strava_id)
@@ -139,34 +137,33 @@ impl StravaActivity {
     }
 }
 
-pub fn strava_url(act: i32, context: &dyn StravaContext) -> Result<String> {
+pub fn strava_url(act: i32, conn: &mut AppConn) -> AnyResult<String> {
     use schema::strava_activities::dsl::*;
 
     let g: i64 = strava_activities
         .filter(tendabike_id.eq(act))
         .select(id)
-        .first(context.conn())?;
+        .first(conn)?;
 
     Ok(format!("https://strava.com/activities/{}", &g))
 }
 
-fn get_activity(id: i64, context: &dyn StravaContext) -> Result<StravaActivity> {
-    let r = context.request(&format!("/activities/{}",id ))?;
+fn get_activity(id: i64, user: &StravaUser, conn: &mut AppConn) -> AnyResult<StravaActivity> {
+    let r = user.request(&format!("/activities/{}",id ), conn)?;
     // let r = user.request("/activities?per_page=2")?;
     let act: StravaActivity = serde_json::from_str(&r)?;
     Ok(act)
 }
 
-pub fn upsert_activity(id: i64, context: &dyn StravaContext) -> Result<Summary> {
-    let act = get_activity(id, context).context(format!("strava activity id {}", id))?;
-    act.send_to_tb(context)
+pub fn upsert_activity(id: i64, user: &StravaUser, conn: &mut AppConn) -> AnyResult<Summary> {
+    let act = get_activity(id, user, conn).context(format!("strava activity id {}", id))?;
+    act.send_to_tb(user, conn)
 }
 
-pub fn delete_activity(sid: i64, context: &dyn StravaContext) -> Result<Summary> {
+pub fn delete_activity(sid: i64, user: &StravaUser, conn: &mut AppConn) -> AnyResult<Summary> {
     use schema::strava_activities::dsl::*;
 
-    let (user, conn) = context.split();
-    conn.transaction(||{
+    conn.transaction(|conn|{
         let tid: Option<ActivityId> = strava_activities.select(tendabike_id).find(sid).for_update().first(conn).optional()?;
         if let Some(tid) = tid {
             diesel::delete(strava_activities.find(sid)).execute(conn)?;

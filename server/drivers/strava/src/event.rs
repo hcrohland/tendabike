@@ -46,7 +46,7 @@ impl InEvent {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Queryable, Insertable)]
-#[table_name = "strava_events"]
+#[diesel(table_name = strava_events)]
 pub struct Event {
     id: Option<i32>,
     pub object_type: String,
@@ -76,21 +76,21 @@ impl std::fmt::Display for Event {
 }
 
 impl Event {
-    fn delete (&self, conn: &AppConn) -> anyhow::Result<()> {
+    fn delete (&self, conn: &mut AppConn) -> anyhow::Result<()> {
         use schema::strava_events::dsl::*;
         debug!("Deleting {}", self);
         diesel::delete(strava_events).filter(id.eq(self.id)).execute(conn)?;
         Ok(())
     }
 
-    fn setdate(&mut self, time: i64, conn: &AppConn) -> anyhow::Result<()> {
+    fn setdate(&mut self, time: i64, conn: &mut AppConn) -> anyhow::Result<()> {
         use schema::strava_events::dsl::*;
         self.event_time = time;
         diesel::update(strava_events).filter(id.eq(self.id)).set(event_time.eq(self.event_time)).execute(conn)?;
         Ok(())
     }
 
-    pub fn store(self, conn: &AppConn) -> anyhow::Result<()>{
+    pub fn store(self, conn: &mut AppConn) -> anyhow::Result<()>{
         
         ensure!(
             strava_users::table.find(self.owner_id).execute(conn) == core::result::Result::Ok(1),
@@ -103,7 +103,7 @@ impl Event {
         Ok(())
     }
 
-    fn rate_limit(self, context: &dyn StravaContext) -> anyhow::Result<Option<Self>> {
+    fn rate_limit(self, user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Option<Self>> {
         // rate limit event
         if self.event_time > chrono::offset::Utc::now().timestamp() {
             // still rate limited!
@@ -111,50 +111,50 @@ impl Event {
         }
         // remove stop event
         warn!("Starting hooks again");
-        self.delete(context.conn())?;
+        self.delete(conn)?;
         // get next event
-        return get_event(context)
+        return get_event(user, conn)
     }
 
-    fn process_activity (self, context: &dyn StravaContext) -> anyhow::Result<Summary> {
-        match self.process_hook(context).or_else(|e| check_try_again(e, context.conn()))    {
+    fn process_activity (self, user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
+        match self.process_hook(user, conn).or_else(|e| check_try_again(e, conn))    {
             core::result::Result::Ok(res) => return Ok(res),
             Err(err) => {
-                        self.delete(context.conn())?;
+                        self.delete(conn)?;
                         Err(err)
                     }
         }
     }
     
-    fn process_hook(&self, context: &dyn StravaContext) -> anyhow::Result<Summary>{
+    fn process_hook(&self, user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary>{
         let res = match self.aspect_type.as_str() {
-            "create" | "update" => activity::upsert_activity(self.object_id, context)?,
-            "delete" => activity::delete_activity(self.object_id, context)?,
+            "create" | "update" => activity::upsert_activity(self.object_id, user, conn)?,
+            "delete" => activity::delete_activity(self.object_id, user, conn)?,
             _ => {
                 warn!("Skipping unknown aspect_type {:?}", self);
                 Summary::default()
             }
         };
-        self.delete(context.conn())?;
+        self.delete(conn)?;
         Ok(res)
     }
     
-    fn sync(mut self, context: &dyn StravaContext) -> anyhow::Result<Summary> {
+    fn sync(mut self, user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
         // let mut len = batch;
         let mut start = self.event_time;
         let mut hash = SumHash::default();
     
         // while len == batch 
         {
-            let acts = next_activities(context, 10, Some(start))?;
+            let acts = next_activities(user, conn, 10, Some(start))?;
             if acts.len() == 0 {
-                self.delete(context.conn())?;
+                self.delete(conn)?;
             } else {
                 for a in acts {
                     start = std::cmp::max(start, a.start_date.timestamp());
                     trace!("processing sync event at {}", start);
-                    let ps = a.send_to_tb(context)?;
-                    self.setdate(start,  context.conn())?;
+                    let ps = a.send_to_tb(user, conn)?;
+                    self.setdate(start,  conn)?;
                     hash.merge(ps);
                 }
             }
@@ -164,7 +164,7 @@ impl Event {
     }
 }
 
-pub fn insert_sync(owner_id: i32, event_time: i64, conn: &AppConn) -> anyhow::Result<()> {
+pub fn insert_sync(owner_id: i32, event_time: i64, conn: &mut AppConn) -> anyhow::Result<()> {
     ensure!(
         event_time <= get_time(), 
         Error::BadRequest(format!("eventtime {} > now!", event_time))
@@ -177,7 +177,7 @@ pub fn insert_sync(owner_id: i32, event_time: i64, conn: &AppConn) -> anyhow::Re
     }.store(conn)
 }
 
-pub fn insert_stop(conn: &AppConn) -> anyhow::Result<()> {
+pub fn insert_stop(conn: &mut AppConn) -> anyhow::Result<()> {
     let e = Event {
         object_type: "stop".to_string(),
         object_id: chrono::offset::Utc::now().timestamp() + 900,
@@ -189,9 +189,8 @@ pub fn insert_stop(conn: &AppConn) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn get_event(context: &dyn StravaContext) -> anyhow::Result<Option<Event>> {
+pub fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Option<Event>> {
     use schema::strava_events::dsl::*;
-    let (user, conn) = context.split();
 
     let event: Option<Event> = strava_events
         .filter(owner_id.eq_any(vec![0,user.id]))
@@ -203,7 +202,7 @@ pub fn get_event(context: &dyn StravaContext) -> anyhow::Result<Option<Event>> {
         None => return Ok(None),
     };
     if event.object_type.as_str() == "stop" { 
-        return event.rate_limit(context);
+        return event.rate_limit(user, conn);
     }
 
     // Prevent unneeded calls to Strava
@@ -227,7 +226,7 @@ pub fn get_event(context: &dyn StravaContext) -> anyhow::Result<Option<Event>> {
     return Ok(res)
 }
 
-fn check_try_again(err: anyhow::Error, conn: &AppConn) -> anyhow::Result<Summary> {
+fn check_try_again(err: anyhow::Error, conn: &mut AppConn) -> anyhow::Result<Summary> {
     // Keep events for temporary failure - delete others
     match err.downcast_ref::<Error>() {
         Some(&Error::TryAgain(_)) => {
@@ -239,17 +238,17 @@ fn check_try_again(err: anyhow::Error, conn: &AppConn) -> anyhow::Result<Summary
     }
 }
 
-fn next_activities(context: &dyn StravaContext, per_page: usize, start: Option<i64>) -> anyhow::Result<Vec<StravaActivity>> {
-    let r = context.request(&format!(
+fn next_activities(user: &StravaUser, conn: &mut AppConn, per_page: usize, start: Option<i64>) -> anyhow::Result<Vec<StravaActivity>> {
+    let r = user.request(&format!(
         "/activities?after={}&per_page={}",
-        start.unwrap_or_else(|| context.user().last_activity),
+        start.unwrap_or_else(|| user.last_activity),
         per_page
-    ))?;
+    ), conn)?;
     Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)
 }
 
-pub fn process (context: &dyn StravaContext) -> anyhow::Result<Summary> {
-    let event = get_event(context)?;
+pub fn process (user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
+    let event = get_event(user, conn)?;
     if event.is_none() {
         return Ok(Summary::default());
     };
@@ -257,12 +256,12 @@ pub fn process (context: &dyn StravaContext) -> anyhow::Result<Summary> {
     info!("Processing {}", event);
     
     match event.object_type.as_str() {
-        "activity" => event.process_activity(context),
-        "sync" => event.sync(context).or_else(|err| check_try_again(err, context.conn())),
+        "activity" => event.process_activity(user, conn),
+        "sync" => event.sync(user, conn).or_else(|err| check_try_again(err, conn)),
         // "athlete" => process_user(e, user),
         _ => {
             warn!("skipping {}", event);
-            event.delete(context.conn())?;
+            event.delete(conn)?;
             Ok(Summary::default())
         }
     }

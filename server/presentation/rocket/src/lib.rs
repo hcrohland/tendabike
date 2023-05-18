@@ -1,7 +1,7 @@
 #![feature( decl_macro)]
 #![warn(clippy::all)]
 
-use std::{path::{Path, PathBuf}, ops::Deref};
+use std::{path::{Path, PathBuf}, ops::{Deref, DerefMut}};
 
 use log::{info,warn};
 use rocket::{Outcome, request::{FromRequest, self}, Request, http::Status, State};
@@ -16,27 +16,33 @@ mod strava;
 mod error;
 mod jwt;
 
-
-pub struct AppDbConn(s_diesel::PooledConn);
+struct AppDbConn(s_diesel::Store);
 
 impl<'a,'r> FromRequest<'a,'r> for AppDbConn {
     type Error = ();
 
     fn from_request(request: &'a Request<'r>) -> request::Outcome<Self, Self::Error> {
         let pool = request.guard::<State<DbPool>>();
-        let conn = pool.map(|p| AppDbConn(p.get().expect ("failed to get database connection")));
+        let conn = pool.map(|p| {
+            AppDbConn(s_diesel::Store::new(&p).expect ("failed to get database connection"))
+        });
         conn
     }
 }
 
 impl Deref for AppDbConn {
-    type Target = s_diesel::AppConn;
+    type Target = s_diesel::Store;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
+impl DerefMut for AppDbConn {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 mod user;
 use user::*;

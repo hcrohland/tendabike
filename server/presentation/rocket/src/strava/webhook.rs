@@ -8,7 +8,7 @@ use domain::Summary;
 use ::strava::event::{InEvent, process};
 use serde_derive::Serialize;
 
-use super::MyContext;
+use super::User;
 
 // complicated way to have query parameters with dots in the name
 #[derive(Debug, FromForm, Serialize)]
@@ -39,30 +39,29 @@ fn validate(hub: Hub) -> AnyResult<Hub> {
 const VERIFY_TOKEN: &str = "tendabike_strava";
 
 #[get("/hooks")]
-pub fn hooks (context: MyContext) -> ApiResult<Summary> {
-    let (user, conn) = context.split();
-    user.lock(conn)?;
-    let res = process(&context);
-    user.unlock(conn)?;
+pub(crate) fn hooks (user: User, mut conn: AppDbConn) -> ApiResult<Summary> {
+    user.lock(&mut conn)?;
+    let res = process(&user, &mut conn);
+    user.unlock(&mut conn)?;
     res.map(Json)
 }
 
 #[post("/callback", format = "json", data="<event>")]
-pub fn create_event(event: Json<InEvent>, conn: AppDbConn) -> Result<(),ApiError> {
+pub(crate) fn create_event(event: Json<InEvent>, mut conn: AppDbConn) -> Result<(),ApiError> {
     let event = event.into_inner();
     trace!("Received {:#?}", event);
-    event.convert()?.store(&conn)?;
+    event.convert()?.store(&mut conn)?;
     Ok(())
 }
 
 #[get("/callback?<hub..>")]
-pub fn validate_subscription (hub: Form<Hub>) -> ApiResult<Hub> {
+pub(crate) fn validate_subscription (hub: Form<Hub>) -> ApiResult<Hub> {
     let hub = hub.into_inner();
     info!("Received validation callback {:?}", hub);
     validate(hub).map(Json)
 }
 
 #[get("/sync?<time>&<user_id>")]
-pub fn sync_api (time: i64, user_id: Option<i32>, _u: Admin, conn: AppDbConn) -> ApiResult<()> {
-    ::strava::sync_users(user_id, time, &conn).map(Json)
+pub(crate) fn sync_api (time: i64, user_id: Option<i32>, _u: Admin, mut conn: AppDbConn) -> ApiResult<()> {
+    ::strava::sync_users(user_id, time, &mut conn).map(Json)
 }

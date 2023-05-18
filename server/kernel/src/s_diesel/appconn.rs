@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 use crate::domain::AnyResult;
 
@@ -8,8 +8,7 @@ use diesel::prelude::*;
 use chrono::{DateTime, Utc};
 
 pub type AppConn = PgConnection;
-pub type PooledConn = PooledConnection<ConnectionManager<AppConn>>;
-pub struct Store (PooledConn);
+pub struct Store (PooledConnection<ConnectionManager<AppConn>>);
 
 impl Deref for Store {
     type Target = AppConn;
@@ -19,16 +18,24 @@ impl Deref for Store {
     }
 }
 
-impl Store {
-    pub fn new(pool: DbPool) -> AnyResult<Self> {
-        let conn = pool.get()?;
-        Ok(Store(conn))
+impl DerefMut for Store {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
-embed_migrations!("src/s_diesel/migrations");
+impl Store {
+    pub fn new(pool: &DbPool) -> AnyResult<Self> {
+        let conn = pool.0.get()?;
+        Ok(Store(conn))
+    }
 
-fn run_db_migrations (conn: &AppConn) {
+}
+
+use diesel_migrations::MigrationHarness;
+pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations = embed_migrations!("src/s_diesel/migrations");
+
+fn run_db_migrations (conn: &mut AppConn) {
     use schema::attachments::dsl::*;
 
     diesel::update(attachments)
@@ -37,7 +44,7 @@ fn run_db_migrations (conn: &AppConn) {
         .execute(conn)
         .expect("rewrite detached failed");
 
-    embedded_migrations::run(conn)
+    conn.run_pending_migrations(MIGRATIONS)
         .expect("Failed to run database migrations: {:?}");
 }
 
@@ -45,20 +52,23 @@ fn run_db_migrations (conn: &AppConn) {
 use r2d2::{Pool, PooledConnection};
 use diesel::r2d2::ConnectionManager;
 
-pub type DbPool = r2d2::Pool<ConnectionManager<AppConn>>;
+#[derive(Clone)]
+pub struct DbPool (pub r2d2::Pool<ConnectionManager<AppConn>>);
 
-pub fn init_connection_pool() -> AnyResult<DbPool> {
-    let database_url = std::env::var("DB_URL").unwrap_or(
-        "postgres://localhost/tendabike".to_string());
-        
-    println!("Connecting to database {}...", database_url);
-    let manager = ConnectionManager::<AppConn>::new(database_url);
+impl DbPool {
+    pub fn new() -> AnyResult<Self> {
+        let database_url = std::env::var("DB_URL").unwrap_or(
+            "postgres://localhost/tendabike".to_string());
+            
+        println!("Connecting to database {}...", database_url);
+        let manager = ConnectionManager::<AppConn>::new(database_url);
 
-    let pool = Pool::builder()
-        .build(manager)
-        .context("Failed to create database connection pool.")?;
+        let pool = Pool::builder()
+            .build(manager)
+            .context("Failed to create database connection pool.")?;
 
-    let conn = pool.get().context("failed to get connection from pool")?;
-    run_db_migrations(&conn);
-    Ok(pool)
+        let mut conn = pool.get().context("failed to get connection from pool")?;
+        run_db_migrations(&mut conn);
+        Ok(Self(pool))
+}
 }

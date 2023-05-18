@@ -1,7 +1,7 @@
 
 use super::*;
 use domain::Summary;
-use ::strava::{user_summary, get_all_stats, StravaStat};
+use ::strava::{get_all_stats, StravaStat};
 
 
 #[get("/")]
@@ -10,18 +10,18 @@ fn getuser(user: RUser) -> Json<User> {
     Json(user.clone())
 }
 
-#[get("/all")]
-fn userlist(_u: Admin, conn: AppDbConn) -> ApiResult<Vec<StravaStat>> {
-    get_all_stats(&conn).map(Json)
+#[get("/summary")]
+fn summary(user: strava::User, mut conn: AppDbConn) -> ApiResult<Summary> {
+    user.get_summary(&mut conn).map(Json)
 }
 
-#[get("/summary")]
-fn summary(context: strava::MyContext) -> ApiResult<Summary> {
-    user_summary(&context).map(Json)
+#[get("/all")]
+fn userlist(_u: Admin, mut conn: AppDbConn) -> ApiResult<Vec<StravaStat>> {
+    get_all_stats(&mut conn).map(Json)
 }
 
 pub fn routes() -> Vec<rocket::Route> {
-    routes![getuser, userlist, summary]
+    routes![getuser, summary, userlist]
 }
 
 

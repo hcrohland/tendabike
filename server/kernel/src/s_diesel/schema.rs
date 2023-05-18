@@ -77,6 +77,14 @@ table! {
 }
 
 table! {
+    strava_gears (id) {
+        id -> Text,
+        tendabike_id -> Int4,
+        user_id -> Int4,
+    }
+}
+
+table! {
     strava_events (id) {
         id -> Nullable<Int4>,
         object_type -> Text,
@@ -86,14 +94,6 @@ table! {
         owner_id -> Int4,
         subscription_id -> Int4,
         event_time -> Int8,
-    }
-}
-
-table! {
-    strava_gears (id) {
-        id -> Text,
-        tendabike_id -> Int4,
-        user_id -> Int4,
     }
 }
 

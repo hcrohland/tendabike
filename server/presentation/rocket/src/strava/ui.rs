@@ -1,24 +1,18 @@
 use super::*;
 
 #[get("/bikes/<id>")]
-fn redirect_gear(id: i32, context: MyContext) -> Option<Redirect> {
-    gear::strava_url(id, &context).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
+fn redirect_gear(id: i32, mut conn: AppDbConn) -> Option<Redirect> {
+    gear::strava_url(id, &mut conn).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
 }
 
 #[get("/activities/<id>")]
-fn redirect_act(id: i32, context: MyContext) -> Option<Redirect> {
-    activity::strava_url(id, &context).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
+fn redirect_act(id: i32, mut conn: AppDbConn) -> Option<Redirect> {
+    activity::strava_url(id, &mut conn).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
 }
 
 #[get("/users/<id>")]
-fn redirect_user(id: i32, context: MyContext) -> Option<Redirect> {
-    strava_url(id, &context).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
-}
-
-#[get("/logout")]
-fn logout(context: MyContext, cookies: rocket::http::Cookies) -> Redirect {
-    context.logout(cookies);
-    Redirect::to("/")
+fn redirect_user(id: i32, mut conn: AppDbConn) -> Option<Redirect> {
+    strava_url(id, &mut conn).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
 }
 
 pub fn routes() -> Vec<rocket::Route> {
@@ -26,7 +20,7 @@ pub fn routes() -> Vec<rocket::Route> {
         redirect_gear,
         redirect_act,
         redirect_user,
-        logout,
+        oauth::logout,
         oauth::login,
         oauth::callback,
         oauth::sync,

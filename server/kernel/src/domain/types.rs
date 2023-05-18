@@ -12,7 +12,7 @@ NewtypeFrom! { () pub struct PartTypeId(i32); }
 /// We distingish main parts from spares:
 /// - Main parts can be used for an activity - like a bike
 /// - Spares can be attached to other parts and are subparts of main parts
-#[derive(Clone, Debug, Serialize, Deserialize, Queryable, Identifiable, Associations, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, Queryable, Identifiable, PartialEq)]
 pub struct PartType {
     /// The primary key
     pub id: PartTypeId,
@@ -29,7 +29,7 @@ pub struct PartType {
 }
 
 impl PartType {
-    pub fn all_ordered(conn: &AppConn) -> Vec<Self> {
+    pub fn all_ordered(conn: &mut AppConn) -> Vec<Self> {
         part_types::table
             .order(part_types::id)
             .load::<PartType>(conn)
@@ -59,7 +59,7 @@ pub struct ActivityType {
 impl PartTypeId {
 
     /// get the full type for a type_id
-    pub fn get (self, conn: &AppConn) -> AnyResult<PartType> {
+    pub fn get (self, conn: &mut AppConn) -> AnyResult<PartType> {
         // parttype_get
         use schema::part_types::dsl::*;
         Ok(part_types
@@ -79,13 +79,13 @@ impl PartTypeId {
     }
 
     /// get all the types you can attach - even indirectly - to this type_id
-    pub fn subtypes(self, conn: &AppConn) -> Vec<PartType> {
+    pub fn subtypes(self, conn: &mut AppConn) -> Vec<PartType> {
         let mut types = PartType::all_ordered(conn);
         self.filter_types(&mut types)
     }
 
     /// Get the activity types valid for this part_type
-    pub fn act_types(&self, conn: &AppConn) -> AnyResult<Vec<ActTypeId>> {
+    pub fn act_types(&self, conn: &mut AppConn) -> AnyResult<Vec<ActTypeId>> {
         use schema::activity_types::dsl::*;
 
         Ok(activity_types
@@ -96,7 +96,7 @@ impl PartTypeId {
 }
 
 impl ActivityType {
-    pub fn all_ordered(conn: &AppConn) -> Vec<ActivityType> {
+    pub fn all_ordered(conn: &mut AppConn) -> Vec<ActivityType> {
         activity_types::table
             .order(activity_types::id)
             .load::<ActivityType>(conn)

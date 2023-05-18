@@ -30,9 +30,9 @@ impl ATrait for Assembly {
     Associations,
     AsChangeset,
 )]
-#[primary_key(id)]
-#[table_name = "parts"]
-#[belongs_to(PartType, foreign_key = "what")]
+#[diesel(primary_key(id))]
+#[diesel(table_name = parts)]
+#[diesel(belongs_to(PartType, foreign_key = what))]
 pub struct Part {
     /// The primary key
     pub id: PartId,
@@ -65,7 +65,7 @@ pub struct Part {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Insertable)]
-#[table_name = "parts"]
+#[diesel(table_name = parts)]
 pub struct NewPart {
     /// The owner
     pub owner: i32,
@@ -81,8 +81,8 @@ pub struct NewPart {
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize, AsChangeset)]
-#[table_name = "parts"]
-#[changeset_options(treat_none_as_null = "true")]
+#[diesel(table_name = parts)]
+#[diesel(treat_none_as_null = true)]
 pub struct ChangePart {
     pub id: PartId,
     /// The owner
@@ -109,12 +109,12 @@ impl PartId {
         PartId(id)
     }
     
-    pub fn get(id: i32, user: &dyn Person, conn: &AppConn) -> AnyResult<PartId> {
+    pub fn get(id: i32, user: &dyn Person, conn: &mut AppConn) -> AnyResult<PartId> {
         PartId(id).checkuser(user, conn)
     }
 
     /// get the part with id part
-    pub fn part(self, user: &dyn Person, conn: &AppConn) -> AnyResult<Part> {
+    pub fn part(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Part> {
         let part = parts::table
             .find(self)
             .first::<Part>(conn)
@@ -129,7 +129,7 @@ impl PartId {
     /// get the name of the part
     ///
     /// does not check ownership. This is needed for rentals.
-    pub fn name(self, conn: &AppConn) -> AnyResult<String> {
+    pub fn name(self, conn: &mut AppConn) -> AnyResult<String> {
         parts::table
             .find(self)
             .select(parts::name)
@@ -137,7 +137,7 @@ impl PartId {
             .with_context(|| format!("part {} does not exist", self))
     }
 
-    pub fn what(self, conn: &AppConn) -> AnyResult<PartTypeId> {
+    pub fn what(self, conn: &mut AppConn) -> AnyResult<PartTypeId> {
         parts::table
             .find(self)
             .select(parts::what)
@@ -147,7 +147,7 @@ impl PartId {
 
     /// check if the given user is the owner or an admin.
     /// Returns Forbidden if not.
-    pub fn checkuser(self, user: &dyn Person, conn: &AppConn) -> AnyResult<PartId> {
+    pub fn checkuser(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<PartId> {
         use schema::parts::dsl::*;
 
         if user.is_admin() {
@@ -174,12 +174,12 @@ impl PartId {
     ///
     /// If the stored purchase date is later than the usage date, it will adjust the purchase date
     /// returns the changed part
-    pub fn apply_usage(self, usage: &Usage, start: DateTime<Utc>, conn: &AppConn) -> AnyResult<Part> {
+    pub fn apply_usage(self, usage: &Usage, start: DateTime<Utc>, conn: &mut AppConn) -> AnyResult<Part> {
         use schema::parts::dsl::*;
 
         trace!("Applying usage {:?} to part {}", usage, self);
 
-        Ok(conn.transaction(|| {
+        Ok(conn.transaction(|conn| {
             let part: Part = parts.find(self).for_update().get_result(conn)?;
             diesel::update(parts.find(self))
                 .set((
@@ -197,7 +197,7 @@ impl PartId {
 }
 
 impl Part {
-    pub fn get_all(user: &dyn Person, conn: &AppConn) -> AnyResult<Vec<Part>> {
+    pub fn get_all(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<Part>> {
         use schema::parts::dsl::*;
 
         Ok(parts
@@ -209,7 +209,7 @@ impl Part {
     /// reset all usage counters for all parts of a person
     ///
     /// returns the list of main gears affected
-    pub fn reset(user: &dyn Person, conn: &AppConn) -> AnyResult<Vec<PartId>> {
+    pub fn reset(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<PartId>> {
         use schema::parts::dsl::*;
         use std::collections::HashSet;
 
@@ -244,7 +244,7 @@ impl Part {
 }
 
 impl NewPart {
-    pub fn create(self, user: &dyn Person, conn: &AppConn) -> AnyResult<Part> {
+    pub fn create(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Part> {
         use schema::parts::dsl::*;
         info!("Create {:?}", self);
 
@@ -274,7 +274,7 @@ impl NewPart {
 }
 
 impl ChangePart {
-    pub fn change(&self, user: &User, conn: &AppConn) -> AnyResult<Part> {
+    pub fn change(&self, user: &User, conn: &mut AppConn) -> AnyResult<Part> {
         use schema::parts::dsl::*;
         info!("Change {:?}", self);
 
