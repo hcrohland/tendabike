@@ -10,7 +10,7 @@ fn main() -> anyhow::Result<()> {
     Ok (tb_rocket::start(db))
 }
 
-pub fn init_environment() {
+fn init_environment() {
     dotenv::dotenv().ok();
 
     // Default log level is warn

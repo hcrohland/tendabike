@@ -2607,6 +2607,7 @@ dependencies = [
  "jsonwebtoken",
  "kernel",
  "log 0.4.17",
+ "reqwest",
  "rocket",
  "rocket_contrib",
  "rocket_cors",

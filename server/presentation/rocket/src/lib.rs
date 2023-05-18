@@ -16,8 +16,7 @@ mod strava;
 mod error;
 mod jwt;
 
-
-pub struct AppDbConn(s_diesel::Store);
+struct AppDbConn(s_diesel::Store);
 
 impl<'a,'r> FromRequest<'a,'r> for AppDbConn {
     type Error = ();

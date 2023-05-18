@@ -39,7 +39,7 @@ fn validate(hub: Hub) -> AnyResult<Hub> {
 const VERIFY_TOKEN: &str = "tendabike_strava";
 
 #[get("/hooks")]
-pub fn hooks (user: User, conn: AppDbConn) -> ApiResult<Summary> {
+pub(crate) fn hooks (user: User, conn: AppDbConn) -> ApiResult<Summary> {
     user.lock(&conn)?;
     let res = process(&user, &conn);
     user.unlock(&conn)?;
@@ -47,7 +47,7 @@ pub fn hooks (user: User, conn: AppDbConn) -> ApiResult<Summary> {
 }
 
 #[post("/callback", format = "json", data="<event>")]
-pub fn create_event(event: Json<InEvent>, conn: AppDbConn) -> Result<(),ApiError> {
+pub(crate) fn create_event(event: Json<InEvent>, conn: AppDbConn) -> Result<(),ApiError> {
     let event = event.into_inner();
     trace!("Received {:#?}", event);
     event.convert()?.store(&conn)?;
@@ -55,13 +55,13 @@ pub fn create_event(event: Json<InEvent>, conn: AppDbConn) -> Result<(),ApiError
 }
 
 #[get("/callback?<hub..>")]
-pub fn validate_subscription (hub: Form<Hub>) -> ApiResult<Hub> {
+pub(crate) fn validate_subscription (hub: Form<Hub>) -> ApiResult<Hub> {
     let hub = hub.into_inner();
     info!("Received validation callback {:?}", hub);
     validate(hub).map(Json)
 }
 
 #[get("/sync?<time>&<user_id>")]
-pub fn sync_api (time: i64, user_id: Option<i32>, _u: Admin, conn: AppDbConn) -> ApiResult<()> {
+pub(crate) fn sync_api (time: i64, user_id: Option<i32>, _u: Admin, conn: AppDbConn) -> ApiResult<()> {
     ::strava::sync_users(user_id, time, &conn).map(Json)
 }

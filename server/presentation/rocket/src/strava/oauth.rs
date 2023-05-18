@@ -91,7 +91,7 @@ pub fn logout(cookies: rocket::http::Cookies) -> Redirect {
 }
 
 #[get("/token")]
-pub fn callback(token: TokenResponse<Strava>, conn: AppDbConn, cookies: Cookies<'_>) -> Result<Redirect,String> {
+pub(crate) fn callback(token: TokenResponse<Strava>, conn: AppDbConn, cookies: Cookies<'_>) -> Result<Redirect,String> {
     match process_callback(token, &conn, cookies) {
         Err(e) => {error!("{:#?}", e); return Err(format!("{:#?}", e))},
         _ => Ok(Redirect::to("/"))
@@ -100,13 +100,13 @@ pub fn callback(token: TokenResponse<Strava>, conn: AppDbConn, cookies: Cookies<
 
 
 #[get("/sync/<tbid>")]
-pub fn sync(tbid: i32, _u: Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<Summary> {
+pub(crate) fn sync(tbid: i32, _u: Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<Summary> {
     let user = from_tb(tbid, oauth, &conn)?;
     
     super::webhook::hooks(User(user), conn)
 }
 
 #[post("/disable/<tbid>")]
-pub fn disable(tbid: i32, _u: Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<()> {
+pub(crate) fn disable(tbid: i32, _u: Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<()> {
     from_tb(tbid, oauth, &conn)?.admin_disable(&conn).map(rocket_contrib::json::Json)
 }
