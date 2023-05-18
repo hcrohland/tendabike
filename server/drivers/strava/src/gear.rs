@@ -15,14 +15,14 @@ pub struct StravaGear {
     frame_type: Option<i32>,
 }
 #[derive(Serialize, Deserialize, Debug, Queryable, Insertable)]
-#[table_name = "strava_gears"]
+#[diesel(table_name = strava_gears)]
 pub struct Gear {
     id: String,
     tendabike_id: i32,
     user_id: i32,
 }
 
-pub fn strava_url(gear: i32, conn: &AppConn) -> Result<String> {
+pub fn strava_url(gear: i32, conn: &mut AppConn) -> AnyResult<String> {
     use schema::strava_gears::dsl::*;
 
     let mut g: String = strava_gears
@@ -37,7 +37,7 @@ pub fn strava_url(gear: i32, conn: &AppConn) -> Result<String> {
 }
 
 impl StravaGear {
-    fn into_tb(self, user: &StravaUser) -> Result<NewPart> {
+    fn into_tb(self, user: &StravaUser) -> AnyResult<NewPart> {
         Ok(NewPart {
             owner: user.tb_id(),
             what: self.what().into(),
@@ -55,7 +55,7 @@ impl StravaGear {
         }
     }
 
-    fn request(id: &str, user: &StravaUser, conn: &AppConn) -> Result<StravaGear> {
+    fn request(id: &str, user: &StravaUser, conn: &mut AppConn) -> AnyResult<StravaGear> {
         let r = user.request(&format!("/gear/{}", id), conn)?;
         let res: StravaGear =
             serde_json::from_str(&r).context(format!("Did not receive StravaGear format: {:?}", r))?;
@@ -63,7 +63,7 @@ impl StravaGear {
     }
 }
 
-fn get_tbid(strava_id: &str, conn: &AppConn) -> Result<Option<PartId>> {
+fn get_tbid(strava_id: &str, conn: &mut AppConn) -> AnyResult<Option<PartId>> {
     use schema::strava_gears::dsl::*;
     
     Ok(strava_gears
@@ -78,7 +78,7 @@ fn get_tbid(strava_id: &str, conn: &AppConn) -> Result<Option<PartId>> {
 ///
 /// If it does not exist create it at tb
 /// None will return None
-pub fn strava_to_tb(strava_id: String, user: &StravaUser, conn: &AppConn) -> Result<PartId> {
+pub fn strava_to_tb(strava_id: String, user: &StravaUser, conn: &mut AppConn) -> AnyResult<PartId> {
     
     if let Some(gear) = get_tbid(&strava_id, conn)? { 
         return Ok(gear) 
@@ -89,7 +89,7 @@ pub fn strava_to_tb(strava_id: String, user: &StravaUser, conn: &AppConn) -> Res
         .context("Couldn't map gear")?
         .into_tb(user)?;
 
-    conn.transaction(||{
+    conn.transaction(|conn|{
         use schema::strava_gears::dsl::*;
         // maybe the gear was created by now?
         if let Some(gear) = get_tbid(&strava_id, conn)? { 
@@ -106,7 +106,7 @@ pub fn strava_to_tb(strava_id: String, user: &StravaUser, conn: &AppConn) -> Res
 }
 
 /// Get list of gear for user from Strava
-pub fn update_user(user: &StravaUser, conn: &AppConn) -> Result<Vec<PartId>> {
+pub fn update_user(user: &StravaUser, conn: &mut AppConn) -> AnyResult<Vec<PartId>> {
     #[derive(Deserialize, Debug)]
     struct Gear {
         id: String,
@@ -125,6 +125,6 @@ pub fn update_user(user: &StravaUser, conn: &AppConn) -> Result<Vec<PartId>> {
     let parts = ath.bikes.into_iter()
         .chain(ath.shoes)
         .map(|gear| gear::strava_to_tb(gear.id, user, conn))
-        .collect::<Result<_>>()?;
+        .collect::<AnyResult<_>>()?;
     Ok(parts)
 }

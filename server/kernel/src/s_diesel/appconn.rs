@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 use crate::domain::AnyResult;
 
@@ -18,6 +18,12 @@ impl Deref for Store {
     }
 }
 
+impl DerefMut for Store {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 impl Store {
     pub fn new(pool: &DbPool) -> AnyResult<Self> {
         let conn = pool.0.get()?;
@@ -26,10 +32,10 @@ impl Store {
 
 }
 
+use diesel_migrations::MigrationHarness;
+pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations = embed_migrations!("src/s_diesel/migrations");
 
-embed_migrations!("src/s_diesel/migrations");
-
-fn run_db_migrations (conn: &AppConn) {
+fn run_db_migrations (conn: &mut AppConn) {
     use schema::attachments::dsl::*;
 
     diesel::update(attachments)
@@ -38,7 +44,7 @@ fn run_db_migrations (conn: &AppConn) {
         .execute(conn)
         .expect("rewrite detached failed");
 
-    embedded_migrations::run(conn)
+    conn.run_pending_migrations(MIGRATIONS)
         .expect("Failed to run database migrations: {:?}");
 }
 
@@ -61,8 +67,8 @@ impl DbPool {
             .build(manager)
             .context("Failed to create database connection pool.")?;
 
-        let conn = pool.get().context("failed to get connection from pool")?;
-        run_db_migrations(&conn);
+        let mut conn = pool.get().context("failed to get connection from pool")?;
+        run_db_migrations(&mut conn);
         Ok(Self(pool))
 }
 }

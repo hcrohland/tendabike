@@ -10,7 +10,7 @@ pub mod gear;
 pub mod event;
 
 use kernel::{domain, s_diesel};
-use anyhow::{Result, Context, Ok, ensure, bail};
+use anyhow::{Result as AnyResult, Context, ensure, bail};
 use domain::*;
 
 use s_diesel::AppConn;

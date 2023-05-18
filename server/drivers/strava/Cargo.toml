@@ -8,8 +8,8 @@ edition = "2021"
 [dependencies]
 kernel = {path = "../../kernel"}
 
-diesel = { version = "1", features = ["postgres", "chrono"] }
-diesel-derive-newtype = "1"
+diesel = { version = "2", features = ["postgres", "chrono"] }
+diesel-derive-newtype = "2"
 
 log = "0.4"
 serde = "1.0"

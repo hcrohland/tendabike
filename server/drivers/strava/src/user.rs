@@ -5,7 +5,7 @@ const API: &str = "https://www.strava.com/api/v3";
 
 /// Strava User data
 #[derive(Serialize, Deserialize, Queryable, Insertable, Identifiable, Debug, Default)]
-#[table_name = "strava_users"]
+#[diesel(table_name = strava_users)]
 pub struct StravaUser {
     /// the Strava user id
     pub id: i32,
@@ -26,7 +26,7 @@ impl StravaUser {
     /// # Errors
     /// 
     /// returns Error if the user is not registered
-    pub fn read (id: i32, conn: &AppConn) -> Result<Self> {
+    pub fn read (id: i32, conn: &mut AppConn) -> AnyResult<Self> {
         Ok(strava_users::table
             .filter(strava_users::tendabike_id.eq(id))
             .get_result(conn)
@@ -46,7 +46,7 @@ impl StravaUser {
     }
 
     /// store last activity time for the user
-    pub(crate) fn update_last(&self, time: i64, conn: &AppConn) -> Result<i64> {
+    pub(crate) fn update_last(&self, time: i64, conn: &mut AppConn) -> AnyResult<i64> {
         if self.last_activity >= time {
             return Ok(self.last_activity);
         }
@@ -67,7 +67,7 @@ impl StravaUser {
     /// 
     /// sets a five minute buffer for the access token
     /// returns the updated user
-    pub fn update_token(self, access: &str, expires: Option<i64>, refresh: Option<&str>, conn: &AppConn) -> Result<Self> {
+    pub fn update_token(self, access: &str, expires: Option<i64>, refresh: Option<&str>, conn: &mut AppConn) -> AnyResult<Self> {
         use schema::strava_users::dsl::*;
         
         let iat = get_time();
@@ -84,12 +84,12 @@ impl StravaUser {
     }
 
     /// lock the current user
-    pub fn lock (&self, conn: &AppConn) -> Result<()> {
+    pub fn lock (&self, conn: &mut AppConn) -> AnyResult<()> {
         use diesel::sql_types::Bool;
         #[derive(QueryableByName, Debug)]
         struct Lock {
-            #[sql_type = "Bool"]
-            #[column_name = "pg_try_advisory_lock"]
+            #[diesel(sql_type = Bool)]
+            #[diesel(column_name = pg_try_advisory_lock)]
             lock: bool
         }
 
@@ -101,7 +101,7 @@ impl StravaUser {
     }
 
     /// unlock the current user
-    pub fn unlock(&self, conn: &AppConn) -> Result<()> {
+    pub fn unlock(&self, conn: &mut AppConn) -> AnyResult<()> {
         sql_query(format!("SELECT pg_advisory_unlock({});", self.id)).execute(conn)?;
         Ok(())
     }        
@@ -111,14 +111,14 @@ impl StravaUser {
     /// # Errors
     ///
     /// This function will return an error if the database connection fails.
-    pub fn get_stats(&self, conn: &AppConn) -> Result<(i64, bool)> {
+    pub fn get_stats(&self, conn: &mut AppConn) -> AnyResult<(i64, bool)> {
         use schema::strava_events::dsl::*;
 
         let events = strava_events.count().filter(owner_id.eq(self.tendabike_id)).first(conn)?;
         return Ok((events, self.expires_at == 0))
     }
 
-    pub(crate) fn request(&self, uri: &str, conn: &PgConnection) -> AnyResult<String> {
+    pub(crate) fn request(&self, uri: &str, conn: &mut PgConnection) -> AnyResult<String> {
         Ok(self.get_strava(uri, conn)?
             .text().context("Could not get response body")?)
     }
@@ -127,7 +127,7 @@ impl StravaUser {
     ///
     /// will return Error::TryAgain on certain error conditions
     /// will disable the User if Strava responds with NOT_AUTH
-    fn get_strava(&self, uri: &str, conn: &AppConn) -> AnyResult<reqwest::blocking::Response> {
+    fn get_strava(&self, uri: &str, conn: &mut AppConn) -> AnyResult<reqwest::blocking::Response> {
         use reqwest::StatusCode;
         let resp = reqwest::blocking::Client::new()
             .get(&format!("{}{}", API, uri))
@@ -155,7 +155,7 @@ impl StravaUser {
     }
 
     /// Disable the user data in the database by erasing the access token 
-    fn disable_db(&self, conn: &AppConn) -> Result<()> {
+    fn disable_db(&self, conn: &mut AppConn) -> AnyResult<()> {
         use schema::strava_users::dsl::*;
         diesel::update(strava_users.find(self.id))
             .set((expires_at.eq(0), access_token.eq("")))
@@ -164,7 +164,7 @@ impl StravaUser {
     }
 
     /// disable a user 
-    fn disable(&self, conn: &AppConn) -> AnyResult<()> {
+    fn disable(&self, conn: &mut AppConn) -> AnyResult<()> {
 
         let id = self.strava_id();
         info!("disabling user {}", id);
@@ -179,7 +179,7 @@ impl StravaUser {
     ///
     /// This function will return an error if the user does not exist, is already disabled 
     /// or has open events and if strava or the database is not reachable.
-    pub fn admin_disable(self, conn: &AppConn) -> AnyResult<()> {
+    pub fn admin_disable(self, conn: &mut AppConn) -> AnyResult<()> {
     
         let (events, disabled) = self.get_stats(conn)?;
 
@@ -198,16 +198,16 @@ impl StravaUser {
     }
 
     /// get all parts, attachments and activities for the user
-    pub fn get_summary(&self, conn: &AppConn) -> Result<Summary> {
+    pub fn get_summary(&self, conn: &mut AppConn) -> AnyResult<Summary> {
         use crate::*;
         gear::update_user(self, conn)?;
         let parts = Part::get_all(self, conn)?;
-        let attachments = Attachment::for_parts(&parts,&conn)?;
+        let attachments = Attachment::for_parts(&parts, conn)?;
         let activities = Activity::get_all(self, conn)?;
         Ok(Summary::new(activities, parts,attachments))
     }
 
-    pub fn retrieve(id: i32, firstname:String, lastname: String, conn: &AppConn) -> Result<StravaUser> {
+    pub fn retrieve(id: i32, firstname:String, lastname: String, conn: &mut AppConn) -> AnyResult<StravaUser> {
         debug!("got id {}: {} {}", id, &firstname, &lastname);
 
         let user = strava_users::table.find(id).get_result::<StravaUser>(conn).optional()?;
@@ -251,7 +251,7 @@ pub struct StravaStat {
     disabled: bool,
 }
 
-pub fn get_all_stats(conn: &AppConn) -> Result<Vec<StravaStat>> {
+pub fn get_all_stats(conn: &mut AppConn) -> AnyResult<Vec<StravaStat>> {
     let users = strava_users::table
         .get_results::<StravaUser>(conn)
         .context(format!("get_stats: could not read users"))?;
@@ -265,7 +265,7 @@ pub fn get_all_stats(conn: &AppConn) -> Result<Vec<StravaStat>> {
 }
 
 /// Get the strava id for all users
-pub fn sync_users (user_id: Option<i32>, time: i64, conn: &AppConn) -> Result<()> {
+pub fn sync_users (user_id: Option<i32>, time: i64, conn: &mut AppConn) -> AnyResult<()> {
     use schema::strava_users::dsl::*;
 
     let users =
@@ -274,12 +274,12 @@ pub fn sync_users (user_id: Option<i32>, time: i64, conn: &AppConn) -> Result<()
             None => strava_users.select(id).get_results(conn)?
         };
         for user_id in users {
-            event::insert_sync(user_id, time, &conn)?;
+            event::insert_sync(user_id, time, conn)?;
         };
         Ok(())
 }
 
-pub fn strava_url(strava_id: i32, conn: &AppConn) -> Result<String> {
+pub fn strava_url(strava_id: i32, conn: &mut AppConn) -> AnyResult<String> {
     let user_id = s_diesel::get_user_id_from_strava_id(conn, strava_id)?;
     Ok(format!("https://strava.com/athletes/{}", &user_id))
 }

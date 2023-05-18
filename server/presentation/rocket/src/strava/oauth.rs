@@ -30,7 +30,7 @@ id: i32
 #[derive(Debug)]
 pub struct Strava;
 
-fn process_callback(tokenset: TokenResponse<Strava>, conn: &AppConn, mut cookies: Cookies<'_>) -> AnyResult<()>
+fn process_callback(tokenset: TokenResponse<Strava>, conn: &mut AppConn, mut cookies: Cookies<'_>) -> AnyResult<()>
 {
     if tokenset.scope().unwrap_or("") != "read,activity:read_all,profile:read_all" {
         bail!(Error::NotAuth(format!("Insufficient authorization {:?}", tokenset.scope())))
@@ -56,13 +56,13 @@ pub fn fairing(config: &Config) -> impl rocket::fairing::Fairing {
                 HyperSyncRustlsAdapter::default().basic_auth(false), config)
 }
 
-pub fn update(user: StravaUser, tokenset: TokenResponse<Strava>, conn: &AppConn) -> AnyResult<StravaUser> {
+pub fn update(user: StravaUser, tokenset: TokenResponse<Strava>, conn: &mut AppConn) -> AnyResult<StravaUser> {
     
     user.update_token(tokenset.access_token(), tokenset.expires_in(), tokenset.refresh_token(), conn) 
 }
 
 
-pub fn get_user(request: &Request, user: StravaUser, conn: &AppConn) -> Result<StravaUser, anyhow::Error> {
+pub fn get_user(request: &Request, user: StravaUser, conn: &mut AppConn) -> Result<StravaUser, anyhow::Error> {
     let oauth = request
         .guard::<OAuth>()
         .expect("No oauth struct!!!");
@@ -71,14 +71,14 @@ pub fn get_user(request: &Request, user: StravaUser, conn: &AppConn) -> Result<S
     Ok(user)
 }
 
-fn from_tb(id: i32, oauth: OAuth2<Strava>, conn: &AppConn) -> AnyResult<StravaUser> {
-    let user = StravaUser::read(id, &conn)?;
+fn from_tb(id: i32, oauth: OAuth2<Strava>, conn: &mut AppConn) -> AnyResult<StravaUser> {
+    let user = StravaUser::read(id, conn)?;
 
     if user.token_is_valid() {
         return Ok(user);
     }
     let tokenset = refresh_token(&user,oauth)?;
-    let user = update(user, tokenset, &conn)?;
+    let user = update(user, tokenset, conn)?;
     Ok(user)
 }
 
@@ -98,8 +98,8 @@ pub fn logout(cookies: rocket::http::Cookies) -> Redirect {
 }
 
 #[get("/token")]
-pub(crate) fn callback(token: TokenResponse<Strava>, conn: AppDbConn, cookies: Cookies<'_>) -> Result<Redirect,String> {
-    match process_callback(token, &conn, cookies) {
+pub(crate) fn callback(token: TokenResponse<Strava>, mut conn: AppDbConn, cookies: Cookies<'_>) -> Result<Redirect,String> {
+    match process_callback(token, &mut conn, cookies) {
         Err(e) => {error!("{:#?}", e); return Err(format!("{:#?}", e))},
         _ => Ok(Redirect::to("/"))
     }
@@ -107,13 +107,13 @@ pub(crate) fn callback(token: TokenResponse<Strava>, conn: AppDbConn, cookies: C
 
 
 #[get("/sync/<tbid>")]
-pub(crate) fn sync(tbid: i32, _u: Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<Summary> {
-    let user = from_tb(tbid, oauth, &conn)?;
+pub(crate) fn sync(tbid: i32, _u: Admin, mut conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<Summary> {
+    let user = from_tb(tbid, oauth, &mut conn)?;
     
     super::webhook::hooks(User(user), conn)
 }
 
 #[post("/disable/<tbid>")]
-pub(crate) fn disable(tbid: i32, _u: Admin, conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<()> {
-    from_tb(tbid, oauth, &conn)?.admin_disable(&conn).map(rocket_contrib::json::Json)
+pub(crate) fn disable(tbid: i32, _u: Admin, mut conn: AppDbConn, oauth: OAuth2<Strava>) -> ApiResult<()> {
+    from_tb(tbid, oauth, &mut conn)?.admin_disable(&mut conn).map(rocket_contrib::json::Json)
 }

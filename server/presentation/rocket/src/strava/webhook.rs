@@ -39,18 +39,18 @@ fn validate(hub: Hub) -> AnyResult<Hub> {
 const VERIFY_TOKEN: &str = "tendabike_strava";
 
 #[get("/hooks")]
-pub(crate) fn hooks (user: User, conn: AppDbConn) -> ApiResult<Summary> {
-    user.lock(&conn)?;
-    let res = process(&user, &conn);
-    user.unlock(&conn)?;
+pub(crate) fn hooks (user: User, mut conn: AppDbConn) -> ApiResult<Summary> {
+    user.lock(&mut conn)?;
+    let res = process(&user, &mut conn);
+    user.unlock(&mut conn)?;
     res.map(Json)
 }
 
 #[post("/callback", format = "json", data="<event>")]
-pub(crate) fn create_event(event: Json<InEvent>, conn: AppDbConn) -> Result<(),ApiError> {
+pub(crate) fn create_event(event: Json<InEvent>, mut conn: AppDbConn) -> Result<(),ApiError> {
     let event = event.into_inner();
     trace!("Received {:#?}", event);
-    event.convert()?.store(&conn)?;
+    event.convert()?.store(&mut conn)?;
     Ok(())
 }
 
@@ -62,6 +62,6 @@ pub(crate) fn validate_subscription (hub: Form<Hub>) -> ApiResult<Hub> {
 }
 
 #[get("/sync?<time>&<user_id>")]
-pub(crate) fn sync_api (time: i64, user_id: Option<i32>, _u: Admin, conn: AppDbConn) -> ApiResult<()> {
-    ::strava::sync_users(user_id, time, &conn).map(Json)
+pub(crate) fn sync_api (time: i64, user_id: Option<i32>, _u: Admin, mut conn: AppDbConn) -> ApiResult<()> {
+    ::strava::sync_users(user_id, time, &mut conn).map(Json)
 }

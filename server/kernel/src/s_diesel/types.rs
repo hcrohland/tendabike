@@ -8,7 +8,7 @@ use domain::{PartType, PartTypeId};
 /// - Main parts can be used for an activity - like a bike
 /// - Spares can be attached to other parts and are subparts of main parts
 #[derive(Clone, Debug, Serialize, Deserialize, Queryable, Identifiable, Associations, PartialEq)]
-#[table_name = "part_types"]
+#[diesel(table_name = part_types)]
 pub struct DieselPartType {
     /// The primary key
     pub id: i32,
@@ -49,7 +49,7 @@ pub struct D_ActivityType {
 }
 
 impl ActTypeId {
-    pub fn get(self, conn: &AppConn) -> AnyResult<ActivityType> {
+    pub fn get(self, conn: &mut AppConn) -> AnyResult<ActivityType> {
         Ok(activity_types::table
             .find(self)
             .first::<ActivityType>(conn)?)
@@ -59,7 +59,7 @@ impl ActTypeId {
 impl PartTypeId {
 
     /// get the full type for a type_id
-    pub fn get (self, conn: &AppConn) -> AnyResult<PartType> {
+    pub fn get (self, conn: &mut AppConn) -> AnyResult<PartType> {
         use schema::part_types::dsl::*;
         Ok(part_types
             .find(self)
@@ -78,7 +78,7 @@ impl PartTypeId {
     }
 
     /// get all the types you can attach - even indirectly - to this type_id
-    pub fn subtypes(self, conn: &AppConn) -> Vec<PartType> {
+    pub fn subtypes(self, conn: &mut AppConn) -> Vec<PartType> {
         use schema::part_types::dsl::*;
         let mut types = part_types
             .load::<PartType>(conn)
@@ -87,7 +87,7 @@ impl PartTypeId {
     }
 
     /// Get the activity types valid for this part_type
-    pub fn act_types(&self, conn: &AppConn) -> AnyResult<Vec<ActTypeId>> {
+    pub fn act_types(&self, conn: &mut AppConn) -> AnyResult<Vec<ActTypeId>> {
         use schema::activity_types::dsl::*;
 
         Ok(activity_types
@@ -97,14 +97,14 @@ impl PartTypeId {
     }
 }
 
-pub fn activities(conn: &AppConn) -> Vec<ActivityType> {
+pub fn activities(conn: &mut AppConn) -> Vec<ActivityType> {
     activity_types::table
         .order(activity_types::id)
         .load::<ActivityType>(conn)
         .expect("error loading ActivityTypes")
 }
 
-pub fn parts(conn: &AppConn) -> Vec<PartType> {
+pub fn parts(conn: &mut AppConn) -> Vec<PartType> {
     part_types::table
         .order(part_types::id)
         .load::<PartType>(conn)

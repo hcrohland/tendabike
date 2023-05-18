@@ -1,7 +1,7 @@
 #![feature( decl_macro)]
 #![warn(clippy::all)]
 
-use std::{path::{Path, PathBuf}, ops::Deref};
+use std::{path::{Path, PathBuf}, ops::{Deref, DerefMut}};
 
 use log::{info,warn};
 use rocket::{Outcome, request::{FromRequest, self}, Request, http::Status, State};
@@ -38,6 +38,11 @@ impl Deref for AppDbConn {
     }
 }
 
+impl DerefMut for AppDbConn {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 mod user;
 use user::*;

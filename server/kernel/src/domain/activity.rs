@@ -22,7 +22,7 @@ NewtypeFrom! { () pub struct ActivityId(i32); }
 
 /// The database's representation of an activity.
 #[derive(Debug, Clone, Identifiable, Queryable, AsChangeset, PartialEq, Serialize, Deserialize)]
-#[table_name = "activities"]
+#[diesel(table_name = activities)]
 pub struct Activity {
     /// The primary key
     pub id: ActivityId,
@@ -51,7 +51,7 @@ pub struct Activity {
 }
 
 #[derive(Debug, Clone, Insertable, AsChangeset, PartialEq, Serialize, Deserialize)]
-#[table_name = "activities"]
+#[diesel(table_name = activities)]
 pub struct NewActivity {
     pub user_id: i32,
     /// The activity type
@@ -84,7 +84,7 @@ impl ActivityId {
     /// Read the activity with id self
     ///
     /// checks authorization
-    pub fn read(self, person: &dyn Person, conn: &AppConn) -> AnyResult<Activity> {
+    pub fn read(self, person: &dyn Person, conn: &mut AppConn) -> AnyResult<Activity> {
         let act = activities::table
             .find(self)
             .for_update()
@@ -102,10 +102,10 @@ impl ActivityId {
     ///
     /// returns all affected parts  
     /// checks authorization  
-    pub fn delete(self, person: &dyn Person, conn: &AppConn) -> AnyResult<Summary> {
+    pub fn delete(self, person: &dyn Person, conn: &mut AppConn) -> AnyResult<Summary> {
         use schema::activities::dsl::*;
         info!("Deleting {:?}", self);
-        conn.transaction(|| {
+        conn.transaction(|conn| {
             let mut res = self
                 .read(person, conn)
                 .context("Could not read user")?
@@ -134,9 +134,9 @@ impl ActivityId {
         self,
         act: &NewActivity,
         user: &dyn Person,
-        conn: &AppConn,
+        conn: &mut AppConn,
     ) -> AnyResult<Summary> {
-        conn.transaction(|| {
+        conn.transaction(|conn| {
             self
                 .read(user, conn)?
                 .register(Factor::Sub, conn)?;
@@ -164,7 +164,7 @@ impl Activity {
     pub fn create(
         act: &NewActivity,
         user: &dyn Person,
-        conn: &AppConn,
+        conn: &mut AppConn,
     ) -> AnyResult<Summary> {
         user.check_owner(
             act.user_id,
@@ -175,7 +175,7 @@ impl Activity {
             ),
         )?;
         info!("Creating {:?}", act);
-        conn.transaction(|| {
+        conn.transaction(|conn| {
             let new: Activity = diesel::insert_into(activities::table)
                 .values(act)
                 .get_result(conn)
@@ -211,7 +211,7 @@ impl Activity {
         part: PartId,
         begin: DateTime<Utc>,
         end: DateTime<Utc>,
-        conn: &AppConn,
+        conn: &mut AppConn,
     ) -> Vec<Activity> {
         use schema::activities::dsl::{activities, gear, start};
 
@@ -223,7 +223,7 @@ impl Activity {
             .expect("could not read activities")
     }
 
-    pub fn register(self, factor: Factor, conn: &AppConn) -> AnyResult<Summary> {
+    pub fn register(self, factor: Factor, conn: &mut AppConn) -> AnyResult<Summary> {
         trace!("{} {:?}", if factor == Factor::Add {"Registering"} else {"Unregistering"}, self);
 
         let usage = self.usage(factor);
@@ -239,7 +239,7 @@ impl Activity {
         )
     }
 
-    pub fn get_all(user: &dyn Person, conn: &AppConn) -> AnyResult<Vec<Activity>> {
+    pub fn get_all(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<Activity>> {
         use schema::activities::dsl::*;
         let acts = activities
             .filter(user_id.eq(user.get_id()))
@@ -248,7 +248,7 @@ impl Activity {
         Ok(acts)
     }
 
-    pub fn categories(user: &dyn Person, conn: &AppConn) -> AnyResult<Vec<PartTypeId>> {
+    pub fn categories(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<PartTypeId>> {
         use crate::schema::activities::dsl::*;
         use crate::schema::activity_types;
 
@@ -270,7 +270,7 @@ impl Activity {
     }
 
 
-    pub fn csv2descend(data: impl std::io::Read, tz: String, user: &User, conn: &AppConn) 
+    pub fn csv2descend(data: impl std::io::Read, tz: String, user: &User, conn: &mut AppConn) 
         -> AnyResult<(Summary, Vec<String>, Vec<String>)> {
         use schema::activities::dsl::*;
         #[derive(Debug, Deserialize)]
@@ -306,7 +306,7 @@ impl Activity {
                 None => None,
             };
             match 
-                conn.transaction::<_,anyhow::Error,_>(|| {
+                conn.transaction::<_,anyhow::Error,_>(|conn| {
                     let act: Activity = activities
                         .filter(user_id.eq(user.get_id()))
                         .filter(start.eq(rstart))
@@ -342,14 +342,14 @@ impl Activity {
         Ok((summary, good, bad))
     }
 
-    pub fn set_default_part (gear_id: PartId, user: &User, conn: &AppConn) -> AnyResult<Summary>{
-        conn.transaction(|| {
-            Ok(def_part(&gear_id, user, &conn)?)
+    pub fn set_default_part (gear_id: PartId, user: &User, conn: &mut AppConn) -> AnyResult<Summary>{
+        conn.transaction(|conn| {
+            Ok(def_part(&gear_id, user, conn)?)
         })
     }
-    pub fn rescan_all (conn: &AppConn) -> AnyResult<()>{
+    pub fn rescan_all (conn: &mut AppConn) -> AnyResult<()>{
         warn!("rescanning all activities!");
-        let res = conn.transaction(|| {
+        let res = conn.transaction(|conn| {
             {
                 use schema::parts::dsl::*;
                 debug!("resetting all parts");
@@ -386,7 +386,7 @@ impl Activity {
     }
     }
 
-fn def_part(partid: &PartId, user: & User, conn: &AppConn) -> AnyResult<Summary> {
+fn def_part(partid: &PartId, user: & User, conn: &mut AppConn) -> AnyResult<Summary> {
     use schema::activities::dsl::*;
     let part = partid.part(user, conn)?;
     let types = part.what.act_types(conn)?;

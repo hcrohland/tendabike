@@ -41,15 +41,15 @@ impl User {
         let token = jwt::token(request)?;
         let id = jwt::id(&token)?;
         // Get the user
-        let conn = request
+        let mut conn = request
             .guard::<AppDbConn>()
             .expect("internal db missing!!!");
-        let user = StravaUser::read(id, &conn)?;
+        let user = StravaUser::read(id, &mut conn)?;
 
         if user.token_is_valid() {
             return Ok(Self(user));
         }
-        let user = oauth::get_user(request, user, &conn)?;
+        let user = oauth::get_user(request, user, &mut conn)?;
         let mut cookies = request
             .guard::<Cookies>()
             .expect("Could not get Cookie store!!!");

@@ -11,13 +11,13 @@ fn getuser(user: RUser) -> Json<User> {
 }
 
 #[get("/summary")]
-fn summary(user: strava::User, conn: AppDbConn) -> ApiResult<Summary> {
-    user.get_summary(&conn).map(Json)
+fn summary(user: strava::User, mut conn: AppDbConn) -> ApiResult<Summary> {
+    user.get_summary(&mut conn).map(Json)
 }
 
 #[get("/all")]
-fn userlist(_u: Admin, conn: AppDbConn) -> ApiResult<Vec<StravaStat>> {
-    get_all_stats(&conn).map(Json)
+fn userlist(_u: Admin, mut conn: AppDbConn) -> ApiResult<Vec<StravaStat>> {
+    get_all_stats(&mut conn).map(Json)
 }
 
 pub fn routes() -> Vec<rocket::Route> {
