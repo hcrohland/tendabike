@@ -22,8 +22,6 @@ use s_diesel::schema::strava_users;
 mod user;
 pub use user::*;
 
-pub mod athlete;
-pub use athlete::StravaAthlete;
 
 fn get_time() -> i64 {
     use std::time::SystemTime;

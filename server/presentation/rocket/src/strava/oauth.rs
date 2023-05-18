@@ -18,6 +18,13 @@ pub fn refresh_token(user: &StravaUser, oauth: OAuth2<Strava>) -> AnyResult<Toke
 
 }
 
+#[derive(Debug, serde_derive::Deserialize)]
+pub struct StravaAthlete {
+firstname: String,
+lastname: String,
+id: i32
+}
+
 // We need a struct Strava to identify its type
 // which is needed to retrieve the request guard
 #[derive(Debug)]
@@ -35,10 +42,9 @@ fn process_callback(tokenset: TokenResponse<Strava>, conn: &AppConn, mut cookies
 
     let athlete: StravaAthlete = serde_json::from_value(athlete.clone())?;
 
-    // conn.transaction(|| {
-        let user = athlete.retrieve(conn)?;
-        let user = user.update_token(tokenset.access_token(), tokenset.expires_in(), tokenset.refresh_token(), conn)?;
-    // });
+    let user = strava::StravaUser::retrieve(athlete.id, athlete.firstname, athlete.lastname, conn)?;
+    let user = user.update_token(tokenset.access_token(), tokenset.expires_in(), tokenset.refresh_token(), conn)?;
+    
     Ok(jwt::store(&mut cookies, user.tendabike_id, user.expires_at))
 }
 
@@ -51,6 +57,7 @@ pub fn fairing(config: &Config) -> impl rocket::fairing::Fairing {
 }
 
 pub fn update(user: StravaUser, tokenset: TokenResponse<Strava>, conn: &AppConn) -> AnyResult<StravaUser> {
+    
     user.update_token(tokenset.access_token(), tokenset.expires_in(), tokenset.refresh_token(), conn) 
 }
 

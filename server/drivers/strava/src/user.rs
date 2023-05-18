@@ -4,7 +4,7 @@ const API: &str = "https://www.strava.com/api/v3";
 
 
 /// Strava User data
-#[derive(Queryable, Insertable, Identifiable, Debug, Default)]
+#[derive(Serialize, Deserialize, Queryable, Insertable, Identifiable, Debug, Default)]
 #[table_name = "strava_users"]
 pub struct StravaUser {
     /// the Strava user id
@@ -207,6 +207,30 @@ impl StravaUser {
         Ok(Summary::new(activities, parts,attachments))
     }
 
+    pub fn retrieve(id: i32, firstname:String, lastname: String, conn: &AppConn) -> Result<StravaUser> {
+        debug!("got id {}: {} {}", id, &firstname, &lastname);
+
+        let user = strava_users::table.find(id).get_result::<StravaUser>(conn).optional()?;
+        if let Some(user) = user {
+            return Ok(user);
+        }
+
+        // create new user!
+        let tendabike_id = crate::User::create(firstname, lastname, conn)?;
+
+        let user = StravaUser {
+            id: id,
+            tendabike_id,
+            ..Default::default()
+        };
+        info!("creating new user id {:?}", user);
+
+        let user: StravaUser = diesel::insert_into(strava_users::table)
+            .values(&user)
+            .get_result(conn)?;
+        sync_users(Some(user.id), 0, conn)?;
+        Ok(user)
+    }
 }
 
 impl Person for StravaUser {
@@ -253,4 +277,9 @@ pub fn sync_users (user_id: Option<i32>, time: i64, conn: &AppConn) -> Result<()
             event::insert_sync(user_id, time, &conn)?;
         };
         Ok(())
+}
+
+pub fn strava_url(strava_id: i32, conn: &AppConn) -> Result<String> {
+    let user_id = s_diesel::get_user_id_from_strava_id(conn, strava_id)?;
+    Ok(format!("https://strava.com/athletes/{}", &user_id))
 }
