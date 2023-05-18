@@ -33,3 +33,8 @@ impl StravaAthlete {
         Ok(user)
     }
 }
+
+pub fn strava_url(strava_id: i32, conn: &AppConn) -> Result<String> {
+    let user_id = s_diesel::get_user_id_from_strava_id(conn, strava_id)?;
+    Ok(format!("https://strava.com/athletes/{}", &user_id))
+}

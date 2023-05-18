@@ -22,22 +22,19 @@ pub struct StravaUser {
 }
 
 impl StravaUser {
-    /// check if the access token is still valid
-    pub fn token_is_valid (&self) -> bool {
-        self.expires_at > get_time()
-    }
-
-    /// read the current user data for id 
     /// 
-    /// return Error if the user is not registered
+    /// # Errors
+    /// 
+    /// returns Error if the user is not registered
     pub fn read (id: i32, conn: &AppConn) -> Result<Self> {
         Ok(strava_users::table
             .filter(strava_users::tendabike_id.eq(id))
             .get_result(conn)
             .context(format!("User::get: user {} not registered", id))?)
-    }
-
-    
+        }
+        
+        
+    /// read the current user data for id 
     /// get the tendabike id for this user
     pub fn tb_id(&self) -> i32 {
         self.tendabike_id
@@ -61,6 +58,11 @@ impl StravaUser {
         Ok(time)
     }
 
+    /// check if the access token is still valid
+    pub fn token_is_valid (&self) -> bool {
+        self.expires_at > get_time()
+    }
+    
     /// update the access and optionally refresh token for the user
     /// 
     /// sets a five minute buffer for the access token
@@ -252,4 +254,3 @@ pub fn sync_users (user_id: Option<i32>, time: i64, conn: &AppConn) -> Result<()
         };
         Ok(())
 }
-

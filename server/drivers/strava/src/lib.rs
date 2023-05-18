@@ -22,13 +22,8 @@ use s_diesel::schema::strava_users;
 mod user;
 pub use user::*;
 
-mod athlete;
-pub use athlete::*;
-
-pub fn strava_url(strava_id: i32, conn: &AppConn) -> Result<String> {
-    let user_id = s_diesel::get_user_id_from_strava_id(conn, strava_id)?;
-    Ok(format!("https://strava.com/athletes/{}", &user_id))
-}
+pub mod athlete;
+pub use athlete::StravaAthlete;
 
 fn get_time() -> i64 {
     use std::time::SystemTime;
