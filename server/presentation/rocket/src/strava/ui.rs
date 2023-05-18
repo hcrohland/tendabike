@@ -12,13 +12,7 @@ fn redirect_act(id: i32, conn: AppDbConn) -> Option<Redirect> {
 
 #[get("/users/<id>")]
 fn redirect_user(id: i32, conn: AppDbConn) -> Option<Redirect> {
-    strava_url(id, &conn.0).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
-}
-
-#[get("/logout")]
-fn logout(cookies: rocket::http::Cookies) -> Redirect {
-    jwt::remove(cookies);
-    Redirect::to("/")
+    strava_url(id, &conn).map_or_else(|_| None, |x| Some(Redirect::permanent(x)))
 }
 
 pub fn routes() -> Vec<rocket::Route> {
@@ -26,7 +20,7 @@ pub fn routes() -> Vec<rocket::Route> {
         redirect_gear,
         redirect_act,
         redirect_user,
-        logout,
+        oauth::logout,
         oauth::login,
         oauth::callback,
         oauth::sync,

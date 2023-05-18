@@ -5,3 +5,4 @@ mod appconn;
 pub use appconn::*;
 
 mod stravastore;
+pub use stravastore::*;

@@ -2,7 +2,6 @@ use diesel::{prelude::*, Identifiable, QueryableByName};
 use diesel::{QueryDsl, RunQueryDsl, sql_query};
 use diesel::{Queryable, Insertable};
 
-use kernel::stravatrait::StravaStore;
 use serde_derive::{Deserialize, Serialize};
 use log::{info,trace,warn,debug};
 
@@ -26,8 +25,8 @@ pub use user::*;
 mod athlete;
 pub use athlete::*;
 
-pub fn strava_url(strava_id: i32, store: &dyn StravaStore) -> Result<String> {
-    let user_id = store.get_user_id_from_strava_id(strava_id)?;
+pub fn strava_url(strava_id: i32, conn: &AppConn) -> Result<String> {
+    let user_id = s_diesel::get_user_id_from_strava_id(conn, strava_id)?;
     Ok(format!("https://strava.com/athletes/{}", &user_id))
 }
 

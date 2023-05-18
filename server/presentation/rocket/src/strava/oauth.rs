@@ -84,6 +84,12 @@ pub fn login(oauth2: OAuth2<Strava>, mut cookies: Cookies<'_>) -> AnyResult<Redi
     Ok(oauth2.get_redirect(&mut cookies, &["activity:read_all,profile:read_all"])?)
 }
 
+#[get("/logout")]
+pub fn logout(cookies: rocket::http::Cookies) -> Redirect {
+    jwt::remove(cookies);
+    Redirect::to("/")
+}
+
 #[get("/token")]
 pub fn callback(token: TokenResponse<Strava>, conn: AppDbConn, cookies: Cookies<'_>) -> Result<Redirect,String> {
     match process_callback(token, &conn, cookies) {
