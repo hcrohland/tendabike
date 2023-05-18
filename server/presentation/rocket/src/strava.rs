@@ -46,7 +46,7 @@ impl User {
             .expect("internal db missing!!!");
         let user = StravaUser::read(id, &conn)?;
 
-        if user.is_valid() {
+        if user.token_is_valid() {
             return Ok(Self(user));
         }
         let user = oauth::get_user(request, user, &conn)?;

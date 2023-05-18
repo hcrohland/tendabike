@@ -9,7 +9,7 @@ use log::error;
 use super::User;
 
 pub fn refresh_token(user: &StravaUser, oauth: OAuth2<Strava>) -> AnyResult<TokenResponse<Strava>>{
-    info!("refreshing access token for strava id {}", user.id());
+    info!("refreshing access token for strava id {}", user.strava_id());
 
     ensure!(user.expires_at != 0, Error::NotAuth("User needs to authenticate".to_string()));
     
@@ -37,7 +37,7 @@ fn process_callback(tokenset: TokenResponse<Strava>, conn: &AppConn, mut cookies
 
     // conn.transaction(|| {
         let user = athlete.retrieve(conn)?;
-        let user = user.update(tokenset.access_token(), tokenset.expires_in(), tokenset.refresh_token(), conn)?;
+        let user = user.update_token(tokenset.access_token(), tokenset.expires_in(), tokenset.refresh_token(), conn)?;
     // });
     Ok(jwt::store(&mut cookies, user.tendabike_id, user.expires_at))
 }
@@ -51,7 +51,7 @@ pub fn fairing(config: &Config) -> impl rocket::fairing::Fairing {
 }
 
 pub fn update(user: StravaUser, tokenset: TokenResponse<Strava>, conn: &AppConn) -> AnyResult<StravaUser> {
-    user.update(tokenset.access_token(), tokenset.expires_in(), tokenset.refresh_token(), conn) 
+    user.update_token(tokenset.access_token(), tokenset.expires_in(), tokenset.refresh_token(), conn) 
 }
 
 
@@ -67,7 +67,7 @@ pub fn get_user(request: &Request, user: StravaUser, conn: &AppConn) -> Result<S
 fn from_tb(id: i32, oauth: OAuth2<Strava>, conn: &AppConn) -> AnyResult<StravaUser> {
     let user = StravaUser::read(id, &conn)?;
 
-    if user.is_valid() {
+    if user.token_is_valid() {
         return Ok(user);
     }
     let tokenset = refresh_token(&user,oauth)?;

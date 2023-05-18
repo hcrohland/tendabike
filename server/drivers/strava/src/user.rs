@@ -2,22 +2,34 @@ use super::*;
 
 const API: &str = "https://www.strava.com/api/v3";
 
+
+/// Strava User data
 #[derive(Queryable, Insertable, Identifiable, Debug, Default)]
 #[table_name = "strava_users"]
 pub struct StravaUser {
-pub id: i32,
-pub tendabike_id: i32,
-pub last_activity: i64,
-pub access_token: String,
-pub expires_at: i64,
-pub refresh_token: String,
+    /// the Strava user id
+    pub id: i32,
+    /// the corresponding tendabike user id
+    pub tendabike_id: i32,
+    /// the time of the latest activity we have processed
+    pub last_activity: i64,
+    /// the access token to access user data for this user
+    pub access_token: String,
+    /// the expiry time for the access token
+    pub expires_at: i64,
+    /// the refresh token to get a new access token from Strava
+    pub refresh_token: String,
 }
 
 impl StravaUser {
-    pub fn is_valid (&self) -> bool {
+    /// check if the access token is still valid
+    pub fn token_is_valid (&self) -> bool {
         self.expires_at > get_time()
     }
 
+    /// read the current user data for id 
+    /// 
+    /// return Error if the user is not registered
     pub fn read (id: i32, conn: &AppConn) -> Result<Self> {
         Ok(strava_users::table
             .filter(strava_users::tendabike_id.eq(id))
@@ -25,22 +37,18 @@ impl StravaUser {
             .context(format!("User::get: user {} not registered", id))?)
     }
 
-    pub fn update_db(&self, conn: &AppConn) -> Result<()> {
-        use schema::strava_users::dsl::*;
-        diesel::update(strava_users.find(self.id))
-            .set((expires_at.eq(0), access_token.eq("")))
-            .execute(conn).context(format!("Could not disable record for user {}",self.id))?;
-        Ok(())
-    }
-
+    
+    /// get the tendabike id for this user
     pub fn tb_id(&self) -> i32 {
         self.tendabike_id
     }
 
-    pub fn id(&self) -> i32 {
+    /// get the strava id for this user
+    pub fn strava_id(&self) -> i32 {
         self.id
     }
 
+    /// store last activity time for the user
     pub(crate) fn update_last(&self, time: i64, conn: &AppConn) -> Result<i64> {
         if self.last_activity >= time {
             return Ok(self.last_activity);
@@ -53,12 +61,16 @@ impl StravaUser {
         Ok(time)
     }
 
-    pub fn update(self, access: &str, expires: Option<i64>, refresh: Option<&str>, conn: &AppConn) -> Result<Self> {
+    /// update the access and optionally refresh token for the user
+    /// 
+    /// sets a five minute buffer for the access token
+    /// returns the updated user
+    pub fn update_token(self, access: &str, expires: Option<i64>, refresh: Option<&str>, conn: &AppConn) -> Result<Self> {
         use schema::strava_users::dsl::*;
         
         let iat = get_time();
         let exp = expires.unwrap() as i64 + iat - 300; // 5 Minutes buffer
-        let user: StravaUser = diesel::update(strava_users.find(self.id()))
+        let user: StravaUser = diesel::update(strava_users.find(self.strava_id()))
             .set((
                 access_token.eq(access),
                 expires_at.eq(exp),
@@ -69,6 +81,7 @@ impl StravaUser {
         Ok(user)
     }
 
+    /// lock the current user
     pub fn lock (&self, conn: &AppConn) -> Result<()> {
         use diesel::sql_types::Bool;
         #[derive(QueryableByName, Debug)]
@@ -85,6 +98,7 @@ impl StravaUser {
         Ok(())
     }
 
+    /// unlock the current user
     pub fn unlock(&self, conn: &AppConn) -> Result<()> {
         sql_query(format!("SELECT pg_advisory_unlock({});", self.id)).execute(conn)?;
         Ok(())
@@ -138,15 +152,23 @@ impl StravaUser {
         }
     }
 
-     
+    /// Disable the user data in the database by erasing the access token 
+    fn disable_db(&self, conn: &AppConn) -> Result<()> {
+        use schema::strava_users::dsl::*;
+        diesel::update(strava_users.find(self.id))
+            .set((expires_at.eq(0), access_token.eq("")))
+            .execute(conn).context(format!("Could not disable record for user {}",self.id))?;
+        Ok(())
+    }
+
     /// disable a user 
     fn disable(&self, conn: &AppConn) -> AnyResult<()> {
 
-        let id = self.id();
+        let id = self.strava_id();
         info!("disabling user {}", id);
         event::insert_sync(id, time::get_time().sec, conn)
             .context(format!("Could insert sync for user: {:?}", id))?;
-        self.update_db(conn)
+        self.disable_db(conn)
     }
 
     /// disable a user per admin request
@@ -172,6 +194,17 @@ impl StravaUser {
         warn!("User {} disabled by admin", self.tb_id());
         self.disable(conn)
     }
+
+    /// get all parts, attachments and activities for the user
+    pub fn get_summary(&self, conn: &AppConn) -> Result<Summary> {
+        use crate::*;
+        gear::update_user(self, conn)?;
+        let parts = Part::get_all(self, conn)?;
+        let attachments = Attachment::for_parts(&parts,&conn)?;
+        let activities = Activity::get_all(self, conn)?;
+        Ok(Summary::new(activities, parts,attachments))
+    }
+
 }
 
 impl Person for StravaUser {
@@ -220,11 +253,3 @@ pub fn sync_users (user_id: Option<i32>, time: i64, conn: &AppConn) -> Result<()
         Ok(())
 }
 
-pub fn user_summary(user: &StravaUser, conn: &AppConn) -> Result<Summary> {
-    use crate::*;
-    gear::update_user(user, conn)?;
-    let parts = Part::get_all(user, conn)?;
-    let attachments = Attachment::for_parts(&parts,&conn)?;
-    let activities = Activity::get_all(user, conn)?;
-    Ok(Summary::new(activities, parts,attachments))
-}
