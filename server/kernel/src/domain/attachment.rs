@@ -443,11 +443,11 @@ impl Attachment {
 
         // mark as deleted for client!
         att.detached = att.attached;
-        return Ok(Summary {
-            attachments: vec![att.add_details("".into(), 0.into())],
+        Ok(Summary {
+            attachments: vec![att.add_details("", 0.into())],
             parts: vec![part],
             activities: vec![],
-        });
+        })
     }
 
     /// add redundant details for client simplicity
@@ -521,7 +521,7 @@ impl Attachment {
     }
 
     /// return all attachments with details for the parts in 'partlist'
-    pub fn for_parts(partlist: &Vec<Part>, conn: &mut AppConn) -> AnyResult<Vec<AttachmentDetail>> {
+    pub fn for_parts(partlist: &[Part], conn: &mut AppConn) -> AnyResult<Vec<AttachmentDetail>> {
         use schema::attachments::dsl::*;
         use schema::parts::dsl::{id, name, parts, what};
         let ids: Vec<_> = partlist.iter().map(|p| p.id).collect();

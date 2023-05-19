@@ -113,12 +113,12 @@ impl Event {
         warn!("Starting hooks again");
         self.delete(conn)?;
         // get next event
-        return get_event(user, conn)
+        get_event(user, conn)
     }
 
     fn process_activity (self, user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
         match self.process_hook(user, conn).or_else(|e| check_try_again(e, conn))    {
-            core::result::Result::Ok(res) => return Ok(res),
+            core::result::Result::Ok(res) => Ok(res),
             Err(err) => {
                         self.delete(conn)?;
                         Err(err)
@@ -147,7 +147,7 @@ impl Event {
         // while len == batch 
         {
             let acts = next_activities(user, conn, 10, Some(start))?;
-            if acts.len() == 0 {
+            if acts.is_empty() {
                 self.delete(conn)?;
             } else {
                 for a in acts {
@@ -214,7 +214,7 @@ pub fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Option
             .get_results::<Event>(conn)?;
     let res = list.pop();
 
-    if list.len() > 0 {
+    if !list.is_empty() {
         debug!("Dropping {:#?}", list);
         diesel::delete(strava_events)
         .filter(id.eq_any(
@@ -223,7 +223,7 @@ pub fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Option
         .execute(conn)?;
     }
 
-    return Ok(res)
+    Ok(res)
 }
 
 fn check_try_again(err: anyhow::Error, conn: &mut AppConn) -> anyhow::Result<Summary> {
@@ -241,7 +241,7 @@ fn check_try_again(err: anyhow::Error, conn: &mut AppConn) -> anyhow::Result<Sum
 fn next_activities(user: &StravaUser, conn: &mut AppConn, per_page: usize, start: Option<i64>) -> anyhow::Result<Vec<StravaActivity>> {
     let r = user.request(&format!(
         "/activities?after={}&per_page={}",
-        start.unwrap_or_else(|| user.last_activity),
+        start.unwrap_or(user.last_activity),
         per_page
     ), conn)?;
     Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)

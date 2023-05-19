@@ -32,7 +32,7 @@ pub fn token(request: &Request) -> AnyResult<String> {
     let mut headers = request.headers().get("Authorization"); 
 
     if let Some(header) = headers.next() {
-        ensure!(headers.next() == None, "Multiple Authentication header");
+        ensure!(headers.next().is_none(), "Multiple Authentication header");
 
         let authorization_words = header.split_whitespace().collect::<Vec<_>>();
 

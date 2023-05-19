@@ -23,10 +23,9 @@ impl<'a,'r> FromRequest<'a,'r> for AppDbConn {
 
     fn from_request(request: &'a Request<'r>) -> request::Outcome<Self, Self::Error> {
         let pool = request.guard::<State<DbPool>>();
-        let conn = pool.map(|p| {
+        pool.map(|p| {
             AppDbConn(s_diesel::Store::new(&p).expect ("failed to get database connection"))
-        });
-        conn
+        })
     }
 }
 
@@ -80,6 +79,6 @@ fn get_static_path () -> PathBuf {
         |_| concat!(env!("CARGO_MANIFEST_DIR"),"/../../../frontend/public").to_string()
     );
     
-    Path::new(&path).canonicalize().expect(&format!("STATIC_WWW Path {} does not exist", path))
+    Path::new(&path).canonicalize().unwrap_or_else(|_| panic!("STATIC_WWW Path {} does not exist", path))
 }
 
