@@ -34,7 +34,7 @@ impl User {
         Ok(Stat{user, parts, activities})
     }  
 
-    pub fn create(forename: String, lastname: String, conn: &mut AppConn) -> AnyResult<i32> {
+    pub fn create(forename: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<i32> {
         use crate::schema::users::dsl::*;
     
         let user: User = diesel::insert_into(users)
@@ -47,6 +47,10 @@ impl User {
             .context("Could not create user")?;
         Ok(user.id)
     }     
+
+    pub fn names(&self) -> (&str, &str) {
+        (&self.firstname, &self.name)
+    }
 }
 
 impl Person for User {
