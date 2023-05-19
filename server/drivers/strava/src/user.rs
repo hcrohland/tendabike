@@ -4,7 +4,7 @@ const API: &str = "https://www.strava.com/api/v3";
 
 
 /// Strava User data
-#[derive(Serialize, Deserialize, Queryable, Insertable, Identifiable, Debug, Default)]
+#[derive(Clone, Serialize, Deserialize, Queryable, Insertable, Identifiable, Debug, Default)]
 #[diesel(table_name = strava_users)]
 pub struct StravaUser {
     /// the Strava user id
@@ -27,11 +27,11 @@ impl StravaUser {
     /// 
     /// returns Error if the user is not registered
     pub fn read (id: i32, conn: &mut AppConn) -> AnyResult<Self> {
-        Ok(strava_users::table
+        strava_users::table
             .filter(strava_users::tendabike_id.eq(id))
             .get_result(conn)
-            .context(format!("User::get: user {} not registered", id))?)
-        }
+            .context(format!("User::get: user {} not registered", id))
+    }
         
         
     /// read the current user data for id 
@@ -71,7 +71,7 @@ impl StravaUser {
         use schema::strava_users::dsl::*;
         
         let iat = get_time();
-        let exp = expires.unwrap() as i64 + iat - 300; // 5 Minutes buffer
+        let exp = expires.unwrap() + iat - 300; // 5 Minutes buffer
         let user: StravaUser = diesel::update(strava_users.find(self.strava_id()))
             .set((
                 access_token.eq(access),
@@ -115,12 +115,12 @@ impl StravaUser {
         use schema::strava_events::dsl::*;
 
         let events = strava_events.count().filter(owner_id.eq(self.tendabike_id)).first(conn)?;
-        return Ok((events, self.expires_at == 0))
+        Ok((events, self.expires_at == 0))
     }
 
     pub(crate) fn request(&self, uri: &str, conn: &mut PgConnection) -> AnyResult<String> {
-        Ok(self.get_strava(uri, conn)?
-            .text().context("Could not get response body")?)
+        self.get_strava(uri, conn)?
+            .text().context("Could not get response body")
     }
 
     /// request information from the Strava API
@@ -130,7 +130,7 @@ impl StravaUser {
     fn get_strava(&self, uri: &str, conn: &mut AppConn) -> AnyResult<reqwest::blocking::Response> {
         use reqwest::StatusCode;
         let resp = reqwest::blocking::Client::new()
-            .get(&format!("{}{}", API, uri))
+            .get(format!("{}{}", API, uri))
             .bearer_auth(&self.access_token)
             .send().context("Could not reach strava")?;
 
@@ -207,7 +207,7 @@ impl StravaUser {
         Ok(Summary::new(activities, parts,attachments))
     }
 
-    pub fn retrieve(id: i32, firstname:String, lastname: String, conn: &mut AppConn) -> AnyResult<StravaUser> {
+    pub fn retrieve(id: i32, firstname: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<StravaUser> {
         debug!("got id {}: {} {}", id, &firstname, &lastname);
 
         let user = strava_users::table.find(id).get_result::<StravaUser>(conn).optional()?;
@@ -219,7 +219,7 @@ impl StravaUser {
         let tendabike_id = crate::User::create(firstname, lastname, conn)?;
 
         let user = StravaUser {
-            id: id,
+            id,
             tendabike_id,
             ..Default::default()
         };
@@ -254,7 +254,7 @@ pub struct StravaStat {
 pub fn get_all_stats(conn: &mut AppConn) -> AnyResult<Vec<StravaStat>> {
     let users = strava_users::table
         .get_results::<StravaUser>(conn)
-        .context(format!("get_stats: could not read users"))?;
+        .context("get_stats: could not read users".to_string())?;
 
     users.into_iter().map(|u| {
         let uid = u.tendabike_id;

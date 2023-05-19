@@ -66,12 +66,12 @@ impl StravaGear {
 fn get_tbid(strava_id: &str, conn: &mut AppConn) -> AnyResult<Option<PartId>> {
     use schema::strava_gears::dsl::*;
     
-    Ok(strava_gears
+    strava_gears
         .find(strava_id)
         .select(tendabike_id)
         .for_update()
         .first(conn)
-        .optional().context("Error reading database")? )
+        .optional().context("Error reading database")
 }
 
 /// map strava gear_id to tb gear_id

@@ -56,9 +56,9 @@ pub fn merge(&mut self, ps: Summary)  {
 
 pub fn collect(self) -> Summary {
     Summary {
-        activities: self.activities.into_iter().map(|(_,v)| v).collect(),
-        parts: self.parts.into_iter().map(|(_,v)| v).collect(),
-        attachments: self.atts.into_iter().map(|(_,v)| v).collect(),
+        activities: self.activities.into_values().collect(),
+        parts: self.parts.into_values().collect(),
+        attachments: self.atts.into_values().collect(),
     }
 }
 }

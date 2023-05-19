@@ -13,8 +13,8 @@ pub fn refresh_token(user: &StravaUser, oauth: OAuth2<Strava>) -> AnyResult<Toke
 
     ensure!(user.expires_at != 0, Error::NotAuth("User needs to authenticate".to_string()));
     
-    Ok(oauth
-        .refresh(&user.refresh_token).context("could not refresh access token")?)
+    oauth
+        .refresh(&user.refresh_token).context("could not refresh access token")
 
 }
 
@@ -42,10 +42,10 @@ fn process_callback(tokenset: TokenResponse<Strava>, conn: &mut AppConn, mut coo
 
     let athlete: StravaAthlete = serde_json::from_value(athlete.clone())?;
 
-    let user = strava::StravaUser::retrieve(athlete.id, athlete.firstname, athlete.lastname, conn)?;
+    let user = strava::StravaUser::retrieve(athlete.id, &athlete.firstname, &athlete.lastname, conn)?;
     let user = user.update_token(tokenset.access_token(), tokenset.expires_in(), tokenset.refresh_token(), conn)?;
-    
-    Ok(jwt::store(&mut cookies, user.tendabike_id, user.expires_at))
+    jwt::store(&mut cookies, user.tendabike_id, user.expires_at);
+    Ok(())
 }
 
 pub type OAuth = OAuth2<Strava>;
@@ -100,7 +100,10 @@ pub fn logout(cookies: rocket::http::Cookies) -> Redirect {
 #[get("/token")]
 pub(crate) fn callback(token: TokenResponse<Strava>, mut conn: AppDbConn, cookies: Cookies<'_>) -> Result<Redirect,String> {
     match process_callback(token, &mut conn, cookies) {
-        Err(e) => {error!("{:#?}", e); return Err(format!("{:#?}", e))},
+        Err(e) => {
+                error!("{:#?}", e); 
+                Err(format!("{:#?}", e))
+            },
         _ => Ok(Redirect::to("/"))
     }
 }

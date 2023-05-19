@@ -181,10 +181,9 @@ impl Activity {
                 .get_result(conn)
                 .context("Could not insert activity")?;
             // let res = new.check_geartype(res, conn)?;
-            Ok(new
+            new
                 .register(Factor::Add, conn)
-                .context("Could not register activity")?
-            )
+                .context("Could not register activity")
         })
     }
 
@@ -300,9 +299,9 @@ impl Activity {
             info!("{:?}", record);
             let description = format!("{} at {}", &record.title, &record.start);
             let rstart = tz.datetime_from_str(&record.start, "%Y-%m-%d %H:%M:%S")?;
-            let rdescend = record.descend.replace(".", "").parse::<i32>().context("Could not parse descend")?;
+            let rdescend = record.descend.replace('.', "").parse::<i32>().context("Could not parse descend")?;
             let rclimb = match record.climb {
-                Some(rclimb) => Some(rclimb.replace(".", "").parse::<i32>().context("Could not parse climb")?),
+                Some(rclimb) => Some(rclimb.replace('.', "").parse::<i32>().context("Could not parse climb")?),
                 None => None,
             };
             match 
@@ -344,7 +343,7 @@ impl Activity {
 
     pub fn set_default_part (gear_id: PartId, user: &User, conn: &mut AppConn) -> AnyResult<Summary>{
         conn.transaction(|conn| {
-            Ok(def_part(&gear_id, user, conn)?)
+            def_part(&gear_id, user, conn)
         })
     }
     pub fn rescan_all (conn: &mut AppConn) -> AnyResult<()>{
