@@ -2445,13 +2445,17 @@ dependencies = [
  "anyhow",
  "async-session",
  "axum",
+ "diesel",
  "headers",
  "http",
+ "kernel",
  "oauth2",
+ "r2d2",
  "reqwest",
  "serde",
  "serde_derive",
  "serde_json",
+ "strava",
  "thiserror",
  "tokio",
  "tracing",
@@ -2487,7 +2491,7 @@ dependencies = [
  "dotenv",
  "env_logger",
  "kernel",
- "tb_rocket",
+ "tb_axum",
 ]
 
 [[package]]

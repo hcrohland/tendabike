@@ -56,7 +56,7 @@ use diesel::r2d2::ConnectionManager;
 pub struct DbPool (pub r2d2::Pool<ConnectionManager<AppConn>>);
 
 impl DbPool {
-    pub fn new() -> AnyResult<Self> {
+    pub fn init() -> AnyResult<r2d2::Pool<ConnectionManager<AppConn>>> {
         let database_url = std::env::var("DB_URL").unwrap_or(
             "postgres://localhost/tendabike".to_string());
             
@@ -69,6 +69,7 @@ impl DbPool {
 
         let mut conn = pool.get().context("failed to get connection from pool")?;
         run_db_migrations(&mut conn);
-        Ok(Self(pool))
-}
+        Ok(pool)
+    }
+
 }
