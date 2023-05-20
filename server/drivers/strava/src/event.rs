@@ -189,7 +189,7 @@ pub fn insert_stop(conn: &mut AppConn) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Option<Event>> {
+fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Option<Event>> {
     use schema::strava_events::dsl::*;
 
     let event: Option<Event> = strava_events

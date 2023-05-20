@@ -16,7 +16,7 @@ pub struct StravaGear {
 }
 #[derive(Serialize, Deserialize, Debug, Queryable, Insertable)]
 #[diesel(table_name = strava_gears)]
-pub struct Gear {
+struct Gear {
     id: String,
     tendabike_id: i32,
     user_id: i32,
@@ -78,7 +78,7 @@ fn get_tbid(strava_id: &str, conn: &mut AppConn) -> AnyResult<Option<PartId>> {
 ///
 /// If it does not exist create it at tb
 /// None will return None
-pub fn strava_to_tb(strava_id: String, user: &StravaUser, conn: &mut AppConn) -> AnyResult<PartId> {
+pub(crate) fn strava_to_tb(strava_id: String, user: &StravaUser, conn: &mut AppConn) -> AnyResult<PartId> {
     
     if let Some(gear) = get_tbid(&strava_id, conn)? { 
         return Ok(gear) 
@@ -106,7 +106,7 @@ pub fn strava_to_tb(strava_id: String, user: &StravaUser, conn: &mut AppConn) ->
 }
 
 /// Get list of gear for user from Strava
-pub fn update_user(user: &StravaUser, conn: &mut AppConn) -> AnyResult<Vec<PartId>> {
+pub(crate) fn update_user(user: &StravaUser, conn: &mut AppConn) -> AnyResult<Vec<PartId>> {
     #[derive(Deserialize, Debug)]
     struct Gear {
         id: String,

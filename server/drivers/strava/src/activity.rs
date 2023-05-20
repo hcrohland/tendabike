@@ -6,7 +6,7 @@ use NewActivity;
 use ActTypeId;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct StravaActivity {
+pub(crate) struct StravaActivity {
     pub id: i64,
     /// The activity type
     #[serde(rename = "type")]
@@ -100,7 +100,7 @@ impl StravaActivity {
 }
 
 impl StravaActivity {
-    pub fn send_to_tb(self, user: &StravaUser, conn: &mut AppConn) -> AnyResult<Summary> {
+    pub(crate) fn send_to_tb(self, user: &StravaUser, conn: &mut AppConn) -> AnyResult<Summary> {
         conn.transaction(|conn|{
             use schema::strava_activities::dsl::*;
 
@@ -160,7 +160,7 @@ pub fn upsert_activity(id: i64, user: &StravaUser, conn: &mut AppConn) -> AnyRes
     act.send_to_tb(user, conn)
 }
 
-pub fn delete_activity(sid: i64, user: &StravaUser, conn: &mut AppConn) -> AnyResult<Summary> {
+pub(crate) fn delete_activity(sid: i64, user: &StravaUser, conn: &mut AppConn) -> AnyResult<Summary> {
     use schema::strava_activities::dsl::*;
 
     conn.transaction(|conn|{
