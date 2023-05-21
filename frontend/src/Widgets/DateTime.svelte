@@ -40,10 +40,14 @@
 		const [ selectedDates ] = event.detail;
 		date = selectedDates[0] as Date
 	}
+
+	date = roundTime(date)
+	console.log(date);
+	
 </script>
 
 	<Flatpickr options={ flatpickrOptions } 
-		value={roundTime(date)}
+		value={date}
 		on:change={handleChange}
 		{...props}
 	/> 
@@ -55,7 +59,7 @@
 		</button>
 	{/if}
 	{#if (!maxdate || (new Date(maxdate) >= new Date)) && (!mindate || (new Date(mindate) <= new Date)) }
-		 <button on:click|preventDefault={() => date = new Date()}> 
+		 <button on:click|preventDefault={() => date = roundTime(new Date())}> 
 			&#8226;
 		</button>
 	{/if}
