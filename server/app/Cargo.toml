@@ -2,6 +2,7 @@
 name = "tendabike"
 version = "0.3.0"
 edition = "2021"
+default-run = "tendabike"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
