@@ -1,4 +1,5 @@
 use anyhow::{ensure, bail, Result as AnyResult};
+use kernel::domain::UserId;
 use time::*;
 
 use rocket::http::{Cookie, Cookies, SameSite};
@@ -14,10 +15,10 @@ const MY_SECRET: &[u8] = b"9bjh34g2jh5hgjg";
 struct UserToken {
     iat: i64,
     exp: i64,
-    id: i32
+    id: UserId
 }
 
-pub fn id(token: &str) -> AnyResult<i32> {
+pub fn id(token: &str) -> AnyResult<UserId> {
 
     let token_data = decode::<UserToken>(token, &DecodingKey::from_secret(MY_SECRET), &Validation::new(Algorithm::HS256))?;
     Ok(token_data.claims.id)
@@ -63,7 +64,7 @@ fn cookie<T> (value: T) -> Cookie<'static>
                     .finish()
 }
 
-pub fn store (cookie_store: &mut Cookies, id: i32, exp: i64) {
+pub fn store (cookie_store: &mut Cookies, id: UserId, exp: i64) {
 
     let iat = get_time().sec;
     let my_claims = UserToken {iat, exp, id};

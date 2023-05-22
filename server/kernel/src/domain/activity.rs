@@ -27,7 +27,7 @@ pub struct Activity {
     /// The primary key
     pub id: ActivityId,
     /// The athlete
-    pub user_id: i32,
+    pub user_id: UserId,
     /// The activity type
     pub what: ActTypeId,
     /// This name of the activity.
@@ -53,7 +53,7 @@ pub struct Activity {
 #[derive(Debug, Clone, Insertable, AsChangeset, PartialEq, Serialize, Deserialize)]
 #[diesel(table_name = activities)]
 pub struct NewActivity {
-    pub user_id: i32,
+    pub user_id: UserId,
     /// The activity type
     pub what: ActTypeId,
     /// This name of the activity.

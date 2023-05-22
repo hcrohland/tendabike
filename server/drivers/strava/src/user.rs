@@ -10,7 +10,7 @@ pub struct StravaUser {
     /// the Strava user id
     pub id: i32,
     /// the corresponding tendabike user id
-    pub tendabike_id: i32,
+    pub tendabike_id: UserId,
     /// the time of the latest activity we have processed
     pub last_activity: i64,
     /// the access token to access user data for this user
@@ -26,7 +26,7 @@ impl StravaUser {
     /// # Errors
     /// 
     /// returns Error if the user is not registered
-    pub fn read (id: i32, conn: &mut AppConn) -> AnyResult<Self> {
+    pub fn read (id: UserId, conn: &mut AppConn) -> AnyResult<Self> {
         strava_users::table
             .filter(strava_users::tendabike_id.eq(id))
             .get_result(conn)
@@ -36,7 +36,7 @@ impl StravaUser {
         
     /// read the current user data for id 
     /// get the tendabike id for this user
-    pub fn tb_id(&self) -> i32 {
+    pub fn tb_id(&self) -> UserId {
         self.tendabike_id
     }
 
@@ -216,11 +216,11 @@ impl StravaUser {
         }
 
         // create new user!
-        let tendabike_id = crate::User::create(firstname, lastname, conn)?;
+        let tendabike_id = crate::UserId::create(firstname, lastname, conn)?;
 
         let user = StravaUser {
             id,
-            tendabike_id,
+            tendabike_id: tendabike_id.into(),
             ..Default::default()
         };
         info!("creating new user id {:?}", user);
@@ -234,7 +234,7 @@ impl StravaUser {
 }
 
 impl Person for StravaUser {
-    fn get_id(&self) -> i32 {
+    fn get_id(&self) -> UserId {
         self.tendabike_id
     }
     fn is_admin(&self) -> bool {
@@ -257,8 +257,8 @@ pub fn get_all_stats(conn: &mut AppConn) -> AnyResult<Vec<StravaStat>> {
         .context("get_stats: could not read users".to_string())?;
 
     users.into_iter().map(|u| {
-        let uid = u.tendabike_id;
-        let stat = User::get_stat(uid, conn)?;
+        let uid: UserId = u.tendabike_id.into();
+        let stat = uid.get_stat(conn)?;
         let (events, disabled) = u.get_stats(conn)?;
         Ok(StravaStat {stat, events, disabled})
     }).collect()

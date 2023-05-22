@@ -6,7 +6,7 @@ use axum::{
     RequestPartsExt, TypedHeader,
 };
 use http::{header, request::Parts};
-use kernel::domain::{Person, User};
+use kernel::domain::{Person, User, UserId};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::oauth::AuthRedirect;
@@ -22,7 +22,7 @@ impl Deref for RUser {
 }
 
 impl Person for RUser {
-    fn get_id(&self) -> i32 {
+    fn get_id(&self) -> UserId {
         self.0.get_id()
     }
     fn is_admin(&self) -> bool {

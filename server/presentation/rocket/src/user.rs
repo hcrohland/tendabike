@@ -12,7 +12,7 @@ impl Deref for RUser<'_> {
 }
 
 impl Person for RUser<'_> {
-    fn get_id(&self) -> i32 {
+    fn get_id(&self) -> domain::UserId {
         self.0.get_id()
     }
     fn is_admin(&self) -> bool {
@@ -24,7 +24,7 @@ impl Person for RUser<'_> {
 fn readuser(request: &Request) -> AnyResult<User> {
     let id = strava::get_id(request)?;
     let mut conn = request.guard::<AppDbConn>().expect("No db request guard").0;
-    User::read(id, &mut conn)
+    id.read(&mut conn)
 }
 
 impl<'a, 'r> FromRequest<'a, 'r> for RUser<'a> {

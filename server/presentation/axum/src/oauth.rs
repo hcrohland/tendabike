@@ -14,7 +14,6 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 use http::StatusCode;
-use kernel::domain::User;
 use oauth2::{
     basic::{
         BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
@@ -182,7 +181,7 @@ pub(crate) async fn login_authorized(
         .update_token(access, expires, refresh, &mut conn)
         .map_err(internal_any)?;
 
-    let user = User::read(user.tendabike_id, &mut conn).map_err(internal_any)?;
+    let user = user.tendabike_id.read(&mut conn).map_err(internal_any)?;
     let user = RUser(user);
     // Create a new session filled with user data
     let mut session = Session::new();

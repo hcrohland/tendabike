@@ -105,11 +105,10 @@ async fn protected(user: RUser) -> impl IntoResponse {
 // Session is optional
 async fn index(user: Option<RUser>) -> impl IntoResponse {
     match user {
-        Some(u) => {
-            let (first, _) = u.names();
+        Some(_u) => {
             format!(
             "Hey {}! You're logged in!\nYou may now access `/protected`.\nLog out with `/logout`.",
-            first
+            "you"
         )
         }
         None => "You're not logged in.\nVisit `/auth/strava` to do so.".to_string(),

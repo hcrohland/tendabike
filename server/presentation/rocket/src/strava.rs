@@ -1,4 +1,5 @@
 use anyhow::{Context, bail};
+use kernel::domain::UserId;
 use rocket::http::Cookies;
 use rocket::response::Redirect;
 use rocket::{routes, get, post};
@@ -19,7 +20,7 @@ pub use oauth::fairing;
 /// check user id from the request
 /// 
 /// Will refresh token if possible
-pub fn get_id(request: &Request) -> AnyResult<i32> {
+pub fn get_id(request: &Request) -> AnyResult<UserId> {
     User::get(request).map(|u| u.tb_id())
 }
 
