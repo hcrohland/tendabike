@@ -7,7 +7,12 @@ fn main() -> anyhow::Result<()> {
     init_environment();
 
     let db = DbPool::init()?;
-    tb_axum::start(db);
+    if cfg!(rocket) {
+        tb_rocket::start(DbPool(db));
+    } else {
+        tb_axum::start(db);
+    }
+
     Ok (())
 }
 

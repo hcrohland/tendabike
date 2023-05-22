@@ -2492,6 +2492,7 @@ dependencies = [
  "env_logger",
  "kernel",
  "tb_axum",
+ "tb_rocket",
 ]
 
 [[package]]
