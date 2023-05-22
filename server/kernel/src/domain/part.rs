@@ -274,7 +274,7 @@ impl NewPart {
 }
 
 impl ChangePart {
-    pub fn change(&self, user: &User, conn: &mut AppConn) -> AnyResult<Part> {
+    pub fn change(&self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Part> {
         use schema::parts::dsl::*;
         info!("Change {:?}", self);
 

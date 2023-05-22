@@ -269,7 +269,7 @@ impl Activity {
     }
 
 
-    pub fn csv2descend(data: impl std::io::Read, tz: String, user: &User, conn: &mut AppConn) 
+    pub fn csv2descend(data: impl std::io::Read, tz: String, user: &dyn Person, conn: &mut AppConn) 
         -> AnyResult<(Summary, Vec<String>, Vec<String>)> {
         use schema::activities::dsl::*;
         #[derive(Debug, Deserialize)]
@@ -341,7 +341,7 @@ impl Activity {
         Ok((summary, good, bad))
     }
 
-    pub fn set_default_part (gear_id: PartId, user: &User, conn: &mut AppConn) -> AnyResult<Summary>{
+    pub fn set_default_part (gear_id: PartId, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Summary>{
         conn.transaction(|conn| {
             def_part(&gear_id, user, conn)
         })
@@ -385,7 +385,7 @@ impl Activity {
     }
     }
 
-fn def_part(partid: &PartId, user: & User, conn: &mut AppConn) -> AnyResult<Summary> {
+fn def_part(partid: &PartId, user: & dyn Person, conn: &mut AppConn) -> AnyResult<Summary> {
     use schema::activities::dsl::*;
     let part = partid.part(user, conn)?;
     let types = part.what.act_types(conn)?;

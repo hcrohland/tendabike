@@ -66,15 +66,3 @@ where
         Ok(user)
     }
 }
-
-pub struct Admin(User);
-
-impl Person for Admin {
-    fn get_id(&self) -> i32 {
-        self.0.get_id()
-    }
-    fn is_admin(&self) -> bool {
-        assert!(self.0.is_admin());
-        true
-    }
-}
