@@ -51,6 +51,7 @@ pub async fn start(pool: DbPool) {
         .route("/auth/strava", get(oauth::strava_auth))
         .route("/auth/authorized", get(oauth::login_authorized))
         .route("/auth/check", get(protected))
+        .route("/auth/admin", get(admin_check))
         .route("/logout", get(oauth::logout))
         .with_state(app_state);
 
@@ -98,6 +99,13 @@ use user::RUser;
 async fn protected(user: RUser) -> impl IntoResponse {
     format!(
         "Welcome to the protected area :)\nHere's your info:\n{:?}",
+        user
+    )
+}
+
+async fn admin_check(_: user::Admin, user: RUser) -> impl IntoResponse {
+    format!(
+        "Welcome to the admin area :)\nHere's your info:\n{:?}",
         user
     )
 }

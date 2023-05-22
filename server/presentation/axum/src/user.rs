@@ -1,9 +1,9 @@
 use async_session::{async_trait, MemoryStore, SessionStore};
 use axum::{
     extract::{rejection::TypedHeaderRejectionReason, FromRef, FromRequestParts},
-    RequestPartsExt, TypedHeader,
+    RequestPartsExt, TypedHeader, response::{Response, IntoResponse},
 };
-use http::{header, request::Parts};
+use http::{header, request::Parts, StatusCode};
 use kernel::domain::{Person, UserId};
 use serde_derive::{Deserialize, Serialize};
 
@@ -62,5 +62,25 @@ where
         let user = session.get::<RUser>("user").ok_or(AuthRedirect)?;
 
         Ok(user)
+    }
+}
+
+pub struct Admin;
+
+#[async_trait]
+impl<S> FromRequestParts<S> for Admin 
+where
+    MemoryStore: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = Response;
+
+    async fn from_request_parts(parts: &mut Parts, state: & S) ->  Result<Self,Self::Rejection> {
+        let user = RUser::from_request_parts(parts, state).await.map_err(IntoResponse::into_response)?;
+        if !user.is_admin() {
+            Err(StatusCode::NOT_FOUND.into_response())
+        } else {
+            Ok(Admin)
+        }
     }
 }
