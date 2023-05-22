@@ -207,11 +207,12 @@ impl StravaUser {
         Ok(Summary::new(activities, parts,attachments))
     }
 
-    pub fn retrieve(id: i32, firstname: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<StravaUser> {
+    pub fn upsert(id: i32, firstname: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<StravaUser> {
         debug!("got id {}: {} {}", id, &firstname, &lastname);
 
         let user = strava_users::table.find(id).get_result::<StravaUser>(conn).optional()?;
         if let Some(user) = user {
+            user.tendabike_id.update(firstname, lastname, conn)?;
             return Ok(user);
         }
 

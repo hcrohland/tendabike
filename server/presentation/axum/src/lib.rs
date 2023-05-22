@@ -98,17 +98,17 @@ use user::RUser;
 async fn protected(user: RUser) -> impl IntoResponse {
     format!(
         "Welcome to the protected area :)\nHere's your info:\n{:?}",
-        user.0
+        user
     )
 }
 
 // Session is optional
 async fn index(user: Option<RUser>) -> impl IntoResponse {
     match user {
-        Some(_u) => {
+        Some(u) => {
             format!(
             "Hey {}! You're logged in!\nYou may now access `/protected`.\nLog out with `/logout`.",
-            "you"
+            u.firstname
         )
         }
         None => "You're not logged in.\nVisit `/auth/strava` to do so.".to_string(),

@@ -51,6 +51,23 @@ impl UserId {
             .get_result(conn)
             .context("Could not create user")?;
         Ok(user.id)
+    }
+
+    pub fn update(&self, firstname_: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<Self> {
+        use crate::schema::users::dsl::*;
+    
+        let user: User = diesel::update(users.filter(id.eq(self)))
+            .set((
+                firstname.eq(firstname_),
+                name.eq(lastname),
+            ))
+            .get_result(conn)
+            .context("Could not update user")?;
+        Ok(user.id)
+    }
+
+    pub fn is_admin(&self, conn: &mut r2d2::PooledConnection<diesel::r2d2::ConnectionManager<PgConnection>>) -> AnyResult<bool> {
+        self.read(conn).map(|u| u.is_admin)
     }     
 }
 

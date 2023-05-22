@@ -42,7 +42,7 @@ fn process_callback(tokenset: TokenResponse<Strava>, conn: &mut AppConn, mut coo
 
     let athlete: StravaAthlete = serde_json::from_value(athlete.clone())?;
 
-    let user = strava::StravaUser::retrieve(athlete.id, &athlete.firstname, &athlete.lastname, conn)?;
+    let user = strava::StravaUser::upsert(athlete.id, &athlete.firstname, &athlete.lastname, conn)?;
     let user = user.update_token(tokenset.access_token(), tokenset.expires_in(), tokenset.refresh_token(), conn)?;
     jwt::store(&mut cookies, user.tendabike_id, user.expires_at);
     Ok(())

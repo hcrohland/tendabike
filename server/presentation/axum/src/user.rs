@@ -1,33 +1,31 @@
-use std::ops::Deref;
-
 use async_session::{async_trait, MemoryStore, SessionStore};
 use axum::{
     extract::{rejection::TypedHeaderRejectionReason, FromRef, FromRequestParts},
     RequestPartsExt, TypedHeader,
 };
 use http::{header, request::Parts};
-use kernel::domain::{Person, User, UserId};
+use kernel::domain::{Person, UserId};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::oauth::AuthRedirect;
 #[derive(Debug, Serialize, Deserialize)]
-pub(crate) struct RUser(pub User);
+pub(crate) struct RUser { 
+    pub user: UserId,
+    pub firstname: String,
+    pub lastname: String,
+    pub is_admin: bool
+}
 
-impl Deref for RUser {
-    type Target = User;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+impl RUser {
+    pub(crate) fn new(user: UserId, firstname: String, lastname: String, is_admin: bool) -> Self { Self { user, firstname, lastname, is_admin } }
 }
 
 impl Person for RUser {
     fn get_id(&self) -> UserId {
-        self.0.get_id()
+        self.user
     }
     fn is_admin(&self) -> bool {
-        assert!(self.0.is_admin());
-        true
+        self.is_admin
     }
 }
 
