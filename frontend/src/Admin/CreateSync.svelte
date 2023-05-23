@@ -23,7 +23,7 @@
   export const createSync = (id?: User) => {
     user = id
     if (id) {
-      userParam = '&user=' + user.id
+      userParam = '&user_id=' + user.id
     } else {
       userParam = ''
     }

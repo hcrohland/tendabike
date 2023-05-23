@@ -114,7 +114,7 @@ impl StravaUser {
     pub fn get_stats(&self, conn: &mut AppConn) -> AnyResult<(i64, bool)> {
         use schema::strava_events::dsl::*;
 
-        let events = strava_events.count().filter(owner_id.eq(self.tendabike_id)).first(conn)?;
+        let events = strava_events.count().filter(owner_id.eq(self.id)).first(conn)?;
         Ok((events, self.expires_at == 0))
     }
 
