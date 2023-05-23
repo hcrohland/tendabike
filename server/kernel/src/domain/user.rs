@@ -21,15 +21,15 @@ impl User {
         Ok(users::table.find(id).get_result(conn)?)
     }
 
-    pub fn get_stat(id: i32, conn: &mut AppConn) -> AnyResult<Stat> {
-        let user = User::read(id, conn)?;
+    pub fn get_stat(uid: i32, conn: &mut AppConn) -> AnyResult<Stat> {
+        let user = User::read(uid, conn)?;
         let parts = {
             use schema::parts::dsl::{parts, owner};
-            parts.count().filter(owner.eq(id)).first(conn)?
+            parts.count().filter(owner.eq(uid)).first(conn)?
         };
         let activities = {
             use schema::activities::dsl::*;
-            activities.count().filter(user_id.eq(id)).first(conn)?
+            activities.count().filter(user_id.eq(uid)).first(conn)?
         };
         Ok(Stat{user, parts, activities})
     }  
