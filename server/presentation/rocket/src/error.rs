@@ -9,16 +9,22 @@ use log::warn;
 
 #[derive(Clone, Debug, thiserror::Error, Responder)]
 pub(crate) enum Error{
+    #[response(status = 401)]
     #[error("User not authenticated: {0}")]
     NotAuth(String),
+    #[response(status = 403)]
     #[error("Forbidden request: {0}")]
     Forbidden(String),
+    #[response(status = 404)]
     #[error("Object not found: {0}")]
     NotFound(String),
+    #[response(status = 400)]
     #[error("Bad Request: {0}")]
     BadRequest(String),
+    #[response(status = 409)]
     #[error("Conflict: {0}")]
     Conflict(String),
+    #[response(status = 429)]
     #[error("Try again: {0}")]
     TryAgain(&'static str),
 }
@@ -63,6 +69,7 @@ impl<'r> Responder<'r> for ApiError {
         //     _ => {build.status(Status::InternalServerError);}
         // }
         if let Some(err) = any.root_cause().downcast_ref::<Error>() {
+            warn!("Request error: {}", &err);
             build.merge(err.clone().respond_to(req)?);
         }
         // create a standard Body
