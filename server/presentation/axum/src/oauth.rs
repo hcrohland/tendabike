@@ -25,7 +25,7 @@ use oauth2::{
 };
 use serde::{Deserialize, Serialize};
 use std::env;
-use strava::StravaUser;
+use strava::{StravaUser, StravaId};
 
 use super::DbPool;
 
@@ -33,7 +33,7 @@ pub(crate) static COOKIE_NAME: &str = "SESSION";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct StravaAthleteInfo {
-    id: i32,
+    id: StravaId,
     pub firstname: String,
     lastname: String,
     #[serde(flatten)]

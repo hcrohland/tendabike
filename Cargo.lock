@@ -2386,6 +2386,7 @@ dependencies = [
  "diesel-derive-newtype",
  "kernel",
  "log 0.4.17",
+ "newtype_derive",
  "reqwest",
  "serde",
  "serde_derive",

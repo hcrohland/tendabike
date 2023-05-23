@@ -22,7 +22,7 @@ pub fn refresh_token(user: &StravaUser, oauth: OAuth2<Strava>) -> AnyResult<Toke
 pub struct StravaAthlete {
 firstname: String,
 lastname: String,
-id: i32
+id: StravaId
 }
 
 // We need a struct Strava to identify its type

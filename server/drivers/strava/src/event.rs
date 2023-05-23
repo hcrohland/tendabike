@@ -37,7 +37,7 @@ impl InEvent {
             object_type: self.object_type,
             object_id: self.object_id,
             aspect_type: self.aspect_type,
-            owner_id: self.owner_id,
+            owner_id: self.owner_id.into(),
             subscription_id: self.subscription_id,
             event_time: self.event_time,
             updates: serde_json::to_string(&self.updates).unwrap_or_else(|e|{ format!("{:?}", e)}),
@@ -56,7 +56,7 @@ pub struct Event {
     // hash 	For activity update events, keys can contain "title," "type," and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone). For app deauthorization events, there is always an "authorized" : "false" key-value pair.
     updates: String,  
     // The athlete's ID.
-    owner_id: i32,
+    owner_id: StravaId,
     // The push subscription ID that is receiving this event.
     subscription_id: i32, 
     // The time that the event occurred.
@@ -164,7 +164,7 @@ impl Event {
     }
 }
 
-pub fn insert_sync(owner_id: i32, event_time: i64, conn: &mut AppConn) -> anyhow::Result<()> {
+pub fn insert_sync(owner_id: StravaId, event_time: i64, conn: &mut AppConn) -> anyhow::Result<()> {
     ensure!(
         event_time <= get_time(), 
         Error::BadRequest(format!("eventtime {} > now!", event_time))
@@ -193,7 +193,7 @@ fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Option<Eve
     use schema::strava_events::dsl::*;
 
     let event: Option<Event> = strava_events
-        .filter(owner_id.eq_any(vec![0,user.id]))
+        .filter(owner_id.eq_any(vec![0,user.id.into()]))
         .order(event_time.asc())
         .first(conn)
         .optional()?;

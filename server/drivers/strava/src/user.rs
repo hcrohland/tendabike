@@ -1,14 +1,21 @@
+use diesel_derive_newtype::DieselNewType;
+use newtype_derive::{NewtypeDisplay, NewtypeFrom, newtype_fmt};
+
 use super::*;
 
 const API: &str = "https://www.strava.com/api/v3";
 
+#[derive(DieselNewType, Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StravaId(i32);
+NewtypeDisplay! { () pub struct StravaId(); }
+NewtypeFrom! { () pub struct StravaId(i32); }
 
 /// Strava User data
 #[derive(Clone, Serialize, Deserialize, Queryable, Insertable, Identifiable, Debug, Default)]
 #[diesel(table_name = strava_users)]
 pub struct StravaUser {
     /// the Strava user id
-    pub id: i32,
+    pub id: StravaId,
     /// the corresponding tendabike user id
     pub tendabike_id: UserId,
     /// the time of the latest activity we have processed
@@ -41,7 +48,7 @@ impl StravaUser {
     }
 
     /// get the strava id for this user
-    pub fn strava_id(&self) -> i32 {
+    pub fn strava_id(&self) -> StravaId {
         self.id
     }
 
@@ -207,7 +214,7 @@ impl StravaUser {
         Ok(Summary::new(activities, parts,attachments))
     }
 
-    pub fn upsert(id: i32, firstname: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<StravaUser> {
+    pub fn upsert(id: StravaId, firstname: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<StravaUser> {
         debug!("got id {}: {} {}", id, &firstname, &lastname);
 
         let user = strava_users::table.find(id).get_result::<StravaUser>(conn).optional()?;
@@ -221,7 +228,7 @@ impl StravaUser {
 
         let user = StravaUser {
             id,
-            tendabike_id: tendabike_id.into(),
+            tendabike_id,
             ..Default::default()
         };
         info!("creating new user id {:?}", user);
@@ -258,7 +265,7 @@ pub fn get_all_stats(conn: &mut AppConn) -> AnyResult<Vec<StravaStat>> {
         .context("get_stats: could not read users".to_string())?;
 
     users.into_iter().map(|u| {
-        let uid: UserId = u.tendabike_id.into();
+        let uid: UserId = u.tendabike_id;
         let stat = uid.get_stat(conn)?;
         let (events, disabled) = u.get_stats(conn)?;
         Ok(StravaStat {stat, events, disabled})
@@ -266,7 +273,7 @@ pub fn get_all_stats(conn: &mut AppConn) -> AnyResult<Vec<StravaStat>> {
 }
 
 /// Get the strava id for all users
-pub fn sync_users (user_id: Option<i32>, time: i64, conn: &mut AppConn) -> AnyResult<()> {
+pub fn sync_users (user_id: Option<StravaId>, time: i64, conn: &mut AppConn) -> AnyResult<()> {
     use schema::strava_users::dsl::*;
 
     let users =
