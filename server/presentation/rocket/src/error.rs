@@ -1,7 +1,7 @@
 
 use kernel::domain;
 use rocket_contrib::json::Json;
-use rocket::response::{Response, Responder, self};
+use rocket::response::{Response, Responder};
 use rocket::http::Status;
 use rocket::request::Request;
 
