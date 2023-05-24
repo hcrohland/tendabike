@@ -5,7 +5,7 @@ use rocket::response::Redirect;
 use rocket::{routes, get, post};
 
 use s_diesel::AppConn;
-use ::strava::*;
+use tb_strava::*;
 
 use super::*;
 use crate::jwt;

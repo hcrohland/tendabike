@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 kernel = {path = "../../kernel"}
-strava = {path = "../../drivers/strava"}
+tb_strava = {path = "../../drivers/strava"}
 
 rocket = "0.4"
 rocket_cors = "0.5"

@@ -1,7 +1,7 @@
 
 use super::*;
 use domain::Summary;
-use ::strava::{get_all_stats, StravaStat};
+use tb_strava::{get_all_stats, StravaStat};
 
 
 #[get("/")]

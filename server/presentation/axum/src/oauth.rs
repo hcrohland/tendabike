@@ -25,7 +25,7 @@ use oauth2::{
 };
 use serde::{Deserialize, Serialize};
 use std::env;
-use strava::{StravaUser, StravaId};
+use tb_strava::{StravaUser, StravaId};
 
 use super::DbPool;
 

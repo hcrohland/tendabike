@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 kernel = {path = "../../kernel"}
-strava = {path = "../../drivers/strava"}
+tb_strava = {path = "../../drivers/strava"}
 
 anyhow = "1.0"
 thiserror = "1.0"

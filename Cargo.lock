@@ -2377,24 +2377,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3015a7d0a5fd5105c91c3710d42f9ccf0abfb287d62206484dcc67f9569a6483"
 
 [[package]]
-name = "strava"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "diesel",
- "diesel-derive-newtype",
- "kernel",
- "log 0.4.17",
- "newtype_derive",
- "reqwest",
- "serde",
- "serde_derive",
- "serde_json",
- "time 0.1.45",
-]
-
-[[package]]
 name = "subtle"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2456,7 +2438,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "strava",
+ "tb_strava",
  "thiserror",
  "tokio",
  "tracing",
@@ -2479,8 +2461,26 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "strava",
+ "tb_strava",
  "thiserror",
+ "time 0.1.45",
+]
+
+[[package]]
+name = "tb_strava"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "diesel",
+ "diesel-derive-newtype",
+ "kernel",
+ "log 0.4.17",
+ "newtype_derive",
+ "reqwest",
+ "serde",
+ "serde_derive",
+ "serde_json",
  "time 0.1.45",
 ]
 

@@ -5,7 +5,7 @@ use rocket::{request::{Form, FromForm}, get, post};
 use rocket_contrib::json::Json;
 
 use domain::Summary;
-use ::strava::event::{InEvent, process};
+use tb_strava::event::{InEvent, process};
 use serde_derive::Serialize;
 
 use super::User;
@@ -64,5 +64,5 @@ pub(crate) fn validate_subscription (hub: Form<Hub>) -> ApiResult<Hub> {
 #[get("/sync?<time>&<user_id>")]
 pub(crate) fn sync_api (time: i64, user_id: Option<i32>, _u: Admin, mut conn: AppDbConn) -> ApiResult<()> {
     let user_id = user_id.map(|u| u.into());
-    ::strava::sync_users(user_id, time, &mut conn).map(Json)
+    tb_strava::sync_users(user_id, time, &mut conn).map(Json)
 }
