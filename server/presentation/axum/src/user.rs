@@ -1,23 +1,45 @@
 use async_session::{async_trait, MemoryStore, SessionStore};
 use axum::{
     extract::{rejection::TypedHeaderRejectionReason, FromRef, FromRequestParts},
-    RequestPartsExt, TypedHeader, response::{Response, IntoResponse},
+    RequestPartsExt, TypedHeader, response::{Response, IntoResponse}, Router, routing::get, Json,
 };
 use http::{header, request::Parts, StatusCode};
 use kernel::domain::{Person, UserId};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::strava::AuthRedirect;
+
+pub(crate) fn router(state: crate::AppState) -> Router{
+    Router::new()
+        .route("/", get(getuser))
+        // .route("/summary", get(summary))
+        // .route("/all", get(userlist))
+        .with_state(state)
+}
+
+async fn getuser(user: RUser) -> Json<RUser> {
+    Json(user)
+}
+
+// fn summary(user: strava::User, mut conn: AppDbConn) -> ApiResult<Summary> {
+//     user.get_summary(&mut conn).map(Json)
+// }
+
+// fn userlist(_u: Admin, mut conn: AppDbConn) -> ApiResult<Vec<StravaStat>> {
+//     get_all_stats(&mut conn).map(Json)
+// }
+
+
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct RUser { 
     pub user: UserId,
     pub firstname: String,
-    pub lastname: String,
+    pub name: String,
     pub is_admin: bool
 }
 
 impl RUser {
-    pub(crate) fn new(user: UserId, firstname: String, lastname: String, is_admin: bool) -> Self { Self { user, firstname, lastname, is_admin } }
+    pub(crate) fn new(user: UserId, firstname: String, name: String, is_admin: bool) -> Self { Self { user, firstname, name, is_admin } }
 }
 
 impl Person for RUser {

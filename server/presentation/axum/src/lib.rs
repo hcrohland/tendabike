@@ -50,8 +50,7 @@ pub async fn start(pool: DbPool, path: std::path::PathBuf) {
 
     let app = Router::new()
         .nest_service("/", tower_http::services::ServeDir::new(path))
-    // .mount("/",rocket_contrib::serve::StaticFiles::from(get_static_path()))
-    // .nest("/user", user::router())
+        .nest("/user", user::router(app_state.clone()))
     // .nest("/types", types::router())
     // .nest("/part", part::router())
     // .nest("/part", attachment::router())
