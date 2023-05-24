@@ -1,7 +1,7 @@
 #![feature( decl_macro)]
 #![warn(clippy::all)]
 
-use std::{path::{Path, PathBuf}, ops::{Deref, DerefMut}};
+use std::{path::{PathBuf}, ops::{Deref, DerefMut}};
 
 use log::{info,warn};
 use rocket::{Outcome, request::{FromRequest, self}, Request, http::Status, State};
@@ -46,7 +46,7 @@ impl DerefMut for AppDbConn {
 mod user;
 use user::*;
 
-pub fn start(db: DbPool) {
+pub fn start(db: DbPool, path: PathBuf) {
     let cors = rocket_cors::CorsOptions::default()
         .to_cors()
         .expect("Could not set CORS options");
@@ -56,7 +56,7 @@ pub fn start(db: DbPool) {
         .manage(db)
         .attach(cors)
         // mount all the endpoints from the module
-        .mount("/",rocket_contrib::serve::StaticFiles::from(get_static_path()))
+        .mount("/",rocket_contrib::serve::StaticFiles::from(path))
         .mount("/user", routes::user::routes())
         .mount("/types", routes::types::routes())
         .mount("/part", routes::part::routes())
@@ -74,11 +74,4 @@ pub fn start(db: DbPool) {
         .launch();
 }
 
-fn get_static_path () -> PathBuf {
-    let path = std::env::var("STATIC_WWW").unwrap_or_else(
-        |_| concat!(env!("CARGO_MANIFEST_DIR"),"/../../../frontend/public").to_string()
-    );
-    
-    Path::new(&path).canonicalize().unwrap_or_else(|_| panic!("STATIC_WWW Path {} does not exist", path))
-}
 

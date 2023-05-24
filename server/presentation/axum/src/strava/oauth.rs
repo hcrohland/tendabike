@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use tb_strava::{StravaUser, StravaId};
 
-use super::DbPool;
+use crate::DbPool;
 
 pub(crate) static COOKIE_NAME: &str = "SESSION";
 
@@ -82,7 +82,7 @@ pub(crate) fn oauth_client() -> StravaClient {
     let client_id = env::var("CLIENT_ID").expect("Missing CLIENT_ID!");
     let client_secret = env::var("CLIENT_SECRET").expect("Missing CLIENT_SECRET!");
     let redirect_url = env::var("REDIRECT_URL")
-        .unwrap_or_else(|_| "http://localhost:3000/auth/authorized".to_string());
+        .unwrap_or_else(|_| "http://localhost:3000/strava/token".to_string());
 
     let auth_url = env::var("AUTH_URL")
         .unwrap_or_else(|_| "https://www.strava.com/oauth/authorize".to_string());
@@ -109,7 +109,6 @@ pub(crate) async fn strava_auth(State(client): State<StravaClient>) -> impl Into
         ))
         .url();
 
-    dbg!(&auth_url);
     // Redirect to Strava's oauth service
     Redirect::to(auth_url.as_ref())
 }
@@ -146,8 +145,6 @@ pub(crate) async fn login_authorized(
     State(pool): State<DbPool>,
 ) -> Result<(HeaderMap, Redirect), (StatusCode, String)> {
     // Get an auth token
-    dbg!(&query);
-
     let mut conn = pool.get().map_err(internal_error)?;
 
     let token = oauth_client

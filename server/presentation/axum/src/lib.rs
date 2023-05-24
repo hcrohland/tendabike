@@ -6,20 +6,19 @@
 //! CLIENT_ID=REPLACE_ME CLIENT_SECRET=REPLACE_ME cargo run -p example-oauth
 //! ```
 
-pub(crate) mod oauth;
+pub(crate) mod strava;
 pub(crate) mod user;
 
 use std::net::SocketAddr;
 
 use diesel::{r2d2::ConnectionManager, PgConnection};
 use http::StatusCode;
-use oauth::StravaClient;
+use crate::strava::StravaClient;
 
 use async_session::MemoryStore;
 use axum::{
     extract::FromRef,
     response::{IntoResponse, Response},
-    routing::get,
     Router,
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -27,7 +26,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
 
 #[tokio::main]
-pub async fn start(pool: DbPool) {
+pub async fn start(pool: DbPool, path: std::path::PathBuf) {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -38,7 +37,7 @@ pub async fn start(pool: DbPool) {
 
     // `MemoryStore` is just used as an example. Don't use this in production.
     let store = MemoryStore::new();
-    let oauth_client = oauth::oauth_client();
+    let oauth_client = strava::oauth_client();
 
     let app_state = AppState {
         store,
@@ -46,14 +45,20 @@ pub async fn start(pool: DbPool) {
         pool,
     };
 
+
+
+
     let app = Router::new()
-        .route("/", get(index))
-        .route("/auth/strava", get(oauth::strava_auth))
-        .route("/auth/authorized", get(oauth::login_authorized))
-        .route("/auth/check", get(protected))
-        .route("/auth/admin", get(admin_check))
-        .route("/logout", get(oauth::logout))
-        .with_state(app_state);
+        .nest_service("/", tower_http::services::ServeDir::new(path))
+    // .mount("/",rocket_contrib::serve::StaticFiles::from(get_static_path()))
+    // .nest("/user", user::router())
+    // .nest("/types", types::router())
+    // .nest("/part", part::router())
+    // .nest("/part", attachment::router())
+    // .nest("/activ", activity::router())
+        .nest("/strava", strava::router(app_state))
+        // .with_state(app_state)
+        .fallback(fallback);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::debug!("listening on {}", addr);
@@ -110,17 +115,8 @@ async fn admin_check(_: user::Admin, user: RUser) -> impl IntoResponse {
     )
 }
 
-// Session is optional
-async fn index(user: Option<RUser>) -> impl IntoResponse {
-    match user {
-        Some(u) => {
-            format!(
-            "Hey {}! You're logged in!\nYou may now access `/protected`.\nLog out with `/logout`.",
-            u.firstname
-        )
-        }
-        None => "You're not logged in.\nVisit `/auth/strava` to do so.".to_string(),
-    }
+async fn fallback() -> (StatusCode, &'static str) {
+    (StatusCode::NOT_FOUND, "Not Found")
 }
 
 /// Utility function for mapping any error into a `500 Internal Server Error`

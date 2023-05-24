@@ -7,7 +7,7 @@ use http::{header, request::Parts, StatusCode};
 use kernel::domain::{Person, UserId};
 use serde_derive::{Deserialize, Serialize};
 
-use crate::oauth::AuthRedirect;
+use crate::strava::AuthRedirect;
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct RUser { 
     pub user: UserId,
@@ -51,7 +51,7 @@ where
                 },
                 _ => panic!("unexpected error getting cookies: {}", e),
             })?;
-        let session_cookie = cookies.get(crate::oauth::COOKIE_NAME).ok_or(AuthRedirect)?;
+        let session_cookie = cookies.get(crate::strava::COOKIE_NAME).ok_or(AuthRedirect)?;
 
         let session = store
             .load_session(session_cookie.to_string())
