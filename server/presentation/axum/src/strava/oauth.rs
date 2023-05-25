@@ -6,7 +6,7 @@
 //! CLIENT_ID=REPLACE_ME CLIENT_SECRET=REPLACE_ME cargo run -p example-oauth
 //! ```
 
-use crate::{internal_any, internal_error, user::RUser};
+use crate::{internal_any, internal_error, user::RUser, AppDbConn};
 use async_session::{MemoryStore, Session, SessionStore};
 use axum::{
     extract::{Query, State, TypedHeader},
@@ -26,8 +26,6 @@ use oauth2::{
 use serde::{Deserialize, Serialize};
 use std::env;
 use tb_strava::{StravaUser, StravaId};
-
-use crate::DbPool;
 
 pub(crate) static COOKIE_NAME: &str = "SESSION";
 
@@ -142,11 +140,9 @@ pub(crate) async fn login_authorized(
     Query(query): Query<AuthRequest>,
     State(store): State<MemoryStore>,
     State(oauth_client): State<StravaClient>,
-    State(pool): State<DbPool>,
+    mut conn: AppDbConn,
 ) -> Result<(HeaderMap, Redirect), (StatusCode, String)> {
     // Get an auth token
-    let mut conn = pool.get().map_err(internal_error)?;
-
     let token = oauth_client
         .exchange_code(AuthorizationCode::new(query.code.clone()))
         .request_async(async_http_client)

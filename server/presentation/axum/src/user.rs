@@ -1,13 +1,13 @@
 use async_session::{async_trait, MemoryStore, SessionStore};
 use axum::{
-    extract::{rejection::TypedHeaderRejectionReason, FromRef, FromRequestParts, State},
+    extract::{rejection::TypedHeaderRejectionReason, FromRef, FromRequestParts},
     RequestPartsExt, TypedHeader, response::{Response, IntoResponse}, Router, routing::get, Json,
 };
 use http::{header, request::Parts, StatusCode};
 use kernel::domain::{Person, UserId};
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{strava::AuthRedirect, DbPool, AppError};
+use crate::{strava::AuthRedirect, AppError, AppDbConn};
 
 pub(crate) fn router(state: crate::AppState) -> Router{
     Router::new()
@@ -27,9 +27,8 @@ type ApiResult<T> = Result<Json<T>, AppError>;
 //     user.get_summary(&mut conn).map(Json)
 // }
 
-async fn userlist(_u: AxumAdmin, pool: State<DbPool>) -> ApiResult<Vec<tb_strava::StravaStat>> {
-    let mut conn = &mut pool.get()?;
-    Ok(tb_strava::get_all_stats(&mut conn).map(Json)?)
+async fn userlist(_u: AxumAdmin, mut pool: AppDbConn) -> ApiResult<Vec<tb_strava::StravaStat>> {
+    Ok(tb_strava::get_all_stats(&mut pool).map(Json)?)
 }
 
 #[derive(Debug, Serialize, Deserialize)]

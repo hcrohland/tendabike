@@ -15,17 +15,19 @@ use std::net::SocketAddr;
 
 use diesel::{r2d2::ConnectionManager, PgConnection};
 use http::StatusCode;
+use r2d2::PooledConnection;
 use crate::strava::StravaClient;
 
 use async_session::MemoryStore;
 use axum::{
-    extract::FromRef,
+    extract::{FromRef, State},
     response::{IntoResponse, Response},
     Router,
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
+type AppDbConn = State<PooledConnection<ConnectionManager<PgConnection>>>;
 
 #[tokio::main]
 pub async fn start(pool: DbPool, path: std::path::PathBuf) {
@@ -89,11 +91,12 @@ impl FromRef<AppState> for StravaClient {
     }
 }
 
-impl FromRef<AppState> for DbPool {
+impl FromRef<AppState> for PooledConnection<ConnectionManager<PgConnection>> {
     fn from_ref(state: &AppState) -> Self {
-        state.pool.clone()
+        state.pool.clone().get().unwrap()
     }
 }
+
 
 // impl FromRef<AppState> for DbPool {
 //     fn from_ref(state: &AppState) -> Self {
