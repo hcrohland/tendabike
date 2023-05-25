@@ -1,3 +1,5 @@
+#![feature(trivial_bounds)]
+
 //! Example OAuth (Strava) implementation.
 //!
 //! 1) Create client_id and client_secret at <https://www.strava.com/settings/api>
@@ -107,7 +109,7 @@ async fn protected(user: RUser) -> impl IntoResponse {
     )
 }
 
-async fn admin_check(_: user::Admin, user: RUser) -> impl IntoResponse {
+async fn admin_check(_: user::AxumAdmin, user: RUser) -> impl IntoResponse {
     format!(
         "Welcome to the admin area :)\nHere's your info:\n{:?}",
         user

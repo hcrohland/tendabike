@@ -32,5 +32,5 @@ fn get_static_path () -> PathBuf {
         |_| concat!(env!("CARGO_MANIFEST_DIR"),"/../../frontend/public").to_string()
     );
     
-    dbg!(Path::new(&path).canonicalize().unwrap_or_else(|_| panic!("STATIC_WWW Path {} does not exist", path)))
+    Path::new(&path).canonicalize().unwrap_or_else(|_| panic!("STATIC_WWW Path {} does not exist", path))
 }

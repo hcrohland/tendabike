@@ -1,19 +1,19 @@
 use async_session::{async_trait, MemoryStore, SessionStore};
 use axum::{
-    extract::{rejection::TypedHeaderRejectionReason, FromRef, FromRequestParts},
+    extract::{rejection::TypedHeaderRejectionReason, FromRef, FromRequestParts, State},
     RequestPartsExt, TypedHeader, response::{Response, IntoResponse}, Router, routing::get, Json,
 };
 use http::{header, request::Parts, StatusCode};
 use kernel::domain::{Person, UserId};
 use serde_derive::{Deserialize, Serialize};
 
-use crate::strava::AuthRedirect;
+use crate::{strava::AuthRedirect, DbPool, AppError};
 
 pub(crate) fn router(state: crate::AppState) -> Router{
     Router::new()
         .route("/", get(getuser))
         // .route("/summary", get(summary))
-        // .route("/all", get(userlist))
+        .route("/all", get(userlist))
         .with_state(state)
 }
 
@@ -21,14 +21,16 @@ async fn getuser(user: RUser) -> Json<RUser> {
     Json(user)
 }
 
-// fn summary(user: strava::User, mut conn: AppDbConn) -> ApiResult<Summary> {
+type ApiResult<T> = Result<Json<T>, AppError>;
+
+// async fn summary(user: strava::User, mut conn: AppDbConn) -> ApiResult<Summary> {
 //     user.get_summary(&mut conn).map(Json)
 // }
 
-// fn userlist(_u: Admin, mut conn: AppDbConn) -> ApiResult<Vec<StravaStat>> {
-//     get_all_stats(&mut conn).map(Json)
-// }
-
+async fn userlist(_u: AxumAdmin, pool: State<DbPool>) -> ApiResult<Vec<tb_strava::StravaStat>> {
+    let mut conn = &mut pool.get()?;
+    Ok(tb_strava::get_all_stats(&mut conn).map(Json)?)
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct RUser { 
@@ -87,10 +89,10 @@ where
     }
 }
 
-pub struct Admin;
+pub struct AxumAdmin;
 
 #[async_trait]
-impl<S> FromRequestParts<S> for Admin 
+impl<S> FromRequestParts<S> for AxumAdmin 
 where
     MemoryStore: FromRef<S>,
     S: Send + Sync,
@@ -102,7 +104,7 @@ where
         if !user.is_admin() {
             Err(StatusCode::NOT_FOUND.into_response())
         } else {
-            Ok(Admin)
+            Ok(AxumAdmin)
         }
     }
 }
