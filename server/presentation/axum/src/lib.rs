@@ -32,7 +32,7 @@ type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
 type AppDbConn = State<PooledConnection<ConnectionManager<PgConnection>>>;
 
 #[tokio::main]
-pub async fn start(pool: DbPool, path: std::path::PathBuf) {
+pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
@@ -66,7 +66,6 @@ pub async fn start(pool: DbPool, path: std::path::PathBuf) {
         .nest("/strava", strava::router(app_state))
         .fallback(error::fallback);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::debug!("listening on {}", addr);
 
     axum::Server::bind(&addr)

@@ -86,7 +86,7 @@ pub(crate) fn oauth_client() -> StravaClient {
     let client_id = env::var("CLIENT_ID").expect("Missing CLIENT_ID!");
     let client_secret = env::var("CLIENT_SECRET").expect("Missing CLIENT_SECRET!");
     let redirect_url = env::var("REDIRECT_URL")
-        .unwrap_or_else(|_| "http://localhost:3000/strava/token".to_string());
+        .unwrap_or_else(|_| "http://localhost:8000/strava/token".to_string());
 
     let auth_url = env::var("AUTH_URL")
         .unwrap_or_else(|_| "https://www.strava.com/oauth/authorize".to_string());
