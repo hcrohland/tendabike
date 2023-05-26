@@ -30,10 +30,10 @@ pub(crate) struct StravaActivity {
 }
 
 impl StravaActivity {
-    fn into_tb(self, user: &StravaUser, conn: &mut AppConn) -> AnyResult<NewActivity> {
+    async fn into_tb(self, user: &StravaUser, conn: &mut AppConn) -> AnyResult<NewActivity> {
         let what = self.what()?;
         let gear = match self.gear_id {
-            Some(x) => Some(gear::strava_to_tb(x, user, conn)?),
+            Some(x) => Some(gear::strava_to_tb(x, user, conn).await?),
             None => None,
         };
         Ok(NewActivity {
@@ -100,12 +100,12 @@ impl StravaActivity {
 }
 
 impl StravaActivity {
-    pub(crate) fn send_to_tb(self, user: &StravaUser, conn: &mut AppConn) -> AnyResult<Summary> {
-        conn.transaction(|conn|{
+    pub(crate) async fn send_to_tb(self, user: &StravaUser, conn: &mut AppConn) -> AnyResult<Summary> {
+        // conn.transaction(|conn|{
             use schema::strava_activities::dsl::*;
 
             let strava_id = self.id;
-            let tb = self.into_tb(user, conn)?;
+            let tb = self.into_tb(user, conn).await?;
 
             let tb_id = strava_activities
                 .find(strava_id)
@@ -133,7 +133,7 @@ impl StravaActivity {
                 .context("unable to update user")?;
 
             Ok(res)
-        })
+        // })
     }
 }
 
@@ -148,16 +148,16 @@ pub fn strava_url(act: i32, conn: &mut AppConn) -> AnyResult<String> {
     Ok(format!("https://strava.com/activities/{}", &g))
 }
 
-fn get_activity(id: i64, user: &StravaUser, conn: &mut AppConn) -> AnyResult<StravaActivity> {
-    let r = user.request(&format!("/activities/{}",id ), conn)?;
+async fn get_activity(id: i64, user: &StravaUser, conn: &mut AppConn) -> AnyResult<StravaActivity> {
+    let r = user.request(&format!("/activities/{}",id ), conn).await?;
     // let r = user.request("/activities?per_page=2")?;
     let act: StravaActivity = serde_json::from_str(&r)?;
     Ok(act)
 }
 
-pub fn upsert_activity(id: i64, user: &StravaUser, conn: &mut AppConn) -> AnyResult<Summary> {
-    let act = get_activity(id, user, conn).context(format!("strava activity id {}", id))?;
-    act.send_to_tb(user, conn)
+pub async fn upsert_activity(id: i64, user: &StravaUser, conn: &mut AppConn) -> AnyResult<Summary> {
+    let act = get_activity(id, user, conn).await.context(format!("strava activity id {}", id))?;
+    act.send_to_tb(user, conn).await
 }
 
 pub(crate) fn delete_activity(sid: i64, user: &StravaUser, conn: &mut AppConn) -> AnyResult<Summary> {

@@ -6,7 +6,6 @@ use axum::{
 use http::{header, request::Parts, StatusCode};
 use kernel::domain::{Person, UserId, Summary};
 use serde_derive::{Deserialize, Serialize};
-use tokio::task::spawn_blocking;
 
 use crate::{AuthRedirect, AppDbConn, ApiResult};
 
@@ -24,8 +23,7 @@ async fn getuser(user: RUser) -> Json<RUser> {
 
 async fn summary(user: RUser, mut conn: AppDbConn) -> ApiResult<Summary> {
     let user = tb_strava::StravaUser::read(user.user, &mut conn)?;
-    let res = spawn_blocking(move || user.get_summary(&mut conn)).await??;
-    Ok(Json(res))
+    Ok(user.get_summary(&mut conn).await.map(Json)?)
 }
 
 async fn userlist(_u: AxumAdmin, mut pool: AppDbConn) -> ApiResult<Vec<tb_strava::StravaStat>> {

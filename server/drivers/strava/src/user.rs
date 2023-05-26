@@ -125,21 +125,21 @@ impl StravaUser {
         Ok((events, self.expires_at == 0))
     }
 
-    pub(crate) fn request(&self, uri: &str, conn: &mut PgConnection) -> AnyResult<String> {
-        self.get_strava(uri, conn)?
-            .text().context("Could not get response body")
+    pub(crate) async fn request(&self, uri: &str, conn: &mut PgConnection) -> AnyResult<String> {
+        self.get_strava(uri, conn).await?
+            .text().await.context("Could not get response body")
     }
 
     /// request information from the Strava API
     ///
     /// will return Error::TryAgain on certain error conditions
     /// will disable the User if Strava responds with NOT_AUTH
-    fn get_strava(&self, uri: &str, conn: &mut AppConn) -> AnyResult<reqwest::blocking::Response> {
+    async fn get_strava(&self, uri: &str, conn: &mut AppConn) -> AnyResult<reqwest::Response> {
         use reqwest::StatusCode;
-        let resp = reqwest::blocking::Client::new()
+        let resp = reqwest::Client::new()
             .get(format!("{}{}", API, uri))
             .bearer_auth(&self.access_token)
-            .send().context("Could not reach strava")?;
+            .send().await.context("Could not reach strava")?;
 
         let status = resp.status();
         if status.is_success() { return Ok(resp) }
@@ -186,18 +186,18 @@ impl StravaUser {
     ///
     /// This function will return an error if the user does not exist, is already disabled 
     /// or has open events and if strava or the database is not reachable.
-    pub fn admin_disable(self, conn: &mut AppConn) -> AnyResult<()> {
+    pub async fn admin_disable(self, conn: &mut AppConn) -> AnyResult<()> {
     
         let (events, disabled) = self.get_stats(conn)?;
 
         if disabled { bail!(Error::BadRequest(String::from("user already disabled!"))) }
         if events > 0 { bail!(Error::BadRequest(String::from("user has open events!"))) }
 
-        reqwest::blocking::Client::new()
+        reqwest::Client::new()
             .post("https://www.strava.com/oauth/deauthorize")
             .query(&[("access_token" , &self.access_token)])
             .bearer_auth(&self.access_token)
-            .send().context("Could not reach strava")?
+            .send().await.context("Could not reach strava")?
             .error_for_status()?;
 
         warn!("User {} disabled by admin", self.tb_id());
@@ -205,9 +205,9 @@ impl StravaUser {
     }
 
     /// get all parts, attachments and activities for the user
-    pub fn get_summary(&self, conn: &mut AppConn) -> AnyResult<Summary> {
+    pub async fn get_summary(&self, conn: &mut AppConn) -> AnyResult<Summary> {
         use crate::*;
-        gear::update_user(self, conn)?;
+        gear::update_user(self, conn).await?;
         let parts = Part::get_all(self, conn)?;
         let attachments = Attachment::for_parts(&parts, conn)?;
         let activities = Activity::get_all(self, conn)?;
