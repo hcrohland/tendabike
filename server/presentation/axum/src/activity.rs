@@ -58,8 +58,12 @@ async fn act_delete(Path(id): Path<i32>, user: RUser, mut conn: AppDbConn) -> Ap
     Ok(ActivityId::new(id).delete(&user, &mut conn).map(Json)?)
 }
 
-async fn descend(Query(tz): Query<String>, user: RUser, mut conn: AppDbConn, data: String) -> ApiResult<(Summary, Vec<String>, Vec<String>)> {
-    let res = tokio::task::spawn_blocking(move || Activity::csv2descend(data.as_bytes(), tz, &user, &mut conn)).await??;
+#[derive(serde::Deserialize)]
+struct QueryTZ {
+    tz: String,
+}
+async fn descend(Query(q): Query<QueryTZ>, user: RUser, mut conn: AppDbConn, data: String) -> ApiResult<(Summary, Vec<String>, Vec<String>)> {
+    let res = tokio::task::spawn_blocking(move || Activity::csv2descend(data.as_bytes(), q.tz, &user, &mut conn)).await??;
     Ok(Json(res))
 }
 
