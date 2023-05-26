@@ -1825,10 +1825,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tb_rocket"
-version = "0.1.0"
-
-[[package]]
 name = "tb_strava"
 version = "0.1.0"
 dependencies = [
@@ -1855,7 +1851,6 @@ dependencies = [
  "env_logger",
  "kernel",
  "tb_axum",
- "tb_rocket",
 ]
 
 [[package]]

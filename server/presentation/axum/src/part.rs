@@ -19,24 +19,19 @@ pub(crate) fn router(state: crate::AppState) -> Router {
         .with_state(state)
 }
 
-// #[get("/<part>")]
 async fn get_part(Path(part): Path<i32>, user: RUser, mut conn: AppDbConn) -> ApiResult<Part> {
     Ok(PartId::new(part).part(&user, &mut conn).map(Json)?)
 }
 
-// #[post("/", data = "<newpart>")]
 async fn post_part(
     user: RUser,
     mut conn: AppDbConn,
     Json(newpart): Json<NewPart>,
-    // ) -> ApiResult<Part> {
 ) -> Result<(StatusCode, Json<Part>), AppError> {
     let part = newpart.clone().create(&user, &mut conn)?;
-    // let url = rocket::uri!(get: i32::from(part.id));
     Ok((StatusCode::CREATED, Json(part)))
 }
 
-// #[put("/", data = "<part>")]
 async fn put_part(
     user: RUser,
     mut conn: AppDbConn,

@@ -10,7 +10,6 @@ use crate::{AppDbConn, ApiResult, user::{RUser, AxumAdmin}};
 
 use super::refresh_token;
 
-// complicated way to have query parameters with dots in the name
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Hub {
     #[serde(rename = "hub.mode")]
@@ -39,7 +38,6 @@ impl Hub {
 
 const VERIFY_TOKEN: &str = "tendabike_strava";
 
-// #[get("/hooks")]
 pub(crate) async fn hooks (user: RUser, mut conn: AppDbConn) -> ApiResult<Summary> {
     let user = user.get_strava_user(&mut conn)?;
     user.lock(&mut conn)?;
@@ -48,14 +46,12 @@ pub(crate) async fn hooks (user: RUser, mut conn: AppDbConn) -> ApiResult<Summar
     Ok(Json(res))
 }
 
-// #[post("/callback", format = "json", data="<event>")]
 pub(crate) async fn create_event(mut conn: AppDbConn, Json(event): axum::extract::Json<InEvent>) -> ApiResult<()> {
     trace!("Received {:#?}", event);
     event.convert()?.store(&mut conn)?;
     Ok(Json(()))
 }
 
-// #[get("/callback?<hub..>")]
 pub(super) async fn validate_subscription (Query(hub): Query<Hub>) -> ApiResult<Hub> {
     info!("Received validation callback {:?}", hub);
     Ok(hub.validate().map(Json)?)
@@ -67,14 +63,12 @@ pub(super) struct SyncQuery {
     user_id: Option<i32>,
 }
 
-// #[get("/sync?<time>&<user_id>")]
 pub(super) async fn sync_api (_u: AxumAdmin, mut conn: AppDbConn, Query(query): Query<SyncQuery>) -> ApiResult<()> {
     let user_id = query.user_id.map(|u| u.into());
     Ok(tb_strava::sync_users(user_id, query.time, &mut conn).await.map(Json)?)
 }
 
 
-// #[get("/sync/<tbid>")]
 pub(super) async fn sync(Path(tbid): Path<i32>, _u: AxumAdmin, mut conn: AppDbConn, State(oauth): State<super::StravaClient>) -> ApiResult<Summary> {
     let conn = &mut conn;
     let user = StravaUser::read(tbid.into(), conn)?;

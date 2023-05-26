@@ -14,21 +14,13 @@ fn main() -> anyhow::Result<()> {
     let path = get_static_path();
     let socket = get_socket_address();
 
-    // #[cfg(axum)]
     tb_axum::start(db, path, socket);
-    // #[cfg(not(axum))]
-    // tb_rocket::start(DbPool(db), path);
 
     Ok(())
 }
 
 fn init_environment() {
     dotenv::dotenv().ok();
-
-    // Default log level is warn
-    // env_logger::Builder::from_env(
-    //     env_logger::Env::default().default_filter_or("tendabike,tb_rocket,kernel")
-    // ).init();
 }
 
 fn get_static_path() -> PathBuf {

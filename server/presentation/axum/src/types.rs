@@ -4,13 +4,11 @@ use kernel::domain::{ActivityType, PartType};
 use crate::{user::RUser, AppDbConn};
 
 // get all activity types
-// #[get("/activity")]
 async fn activity(_user: RUser, mut conn: AppDbConn) -> Json<Vec<ActivityType>> {
     Json(ActivityType::all_ordered(&mut conn))
 }
 
 /// get all part types
-// #[get("/part")]
 async fn part(mut conn: AppDbConn) -> Json<Vec<PartType>> {
     Json(PartType::all_ordered(&mut conn))
 }
