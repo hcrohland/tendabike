@@ -16,8 +16,6 @@ use appstate::*;
 mod appstate;
 mod error;
 use error::*;
-use http::Method;
-use tower_http::cors::{Any, CorsLayer};
 
 use std::net::SocketAddr;
 
@@ -35,9 +33,8 @@ type AppDbConn = State<PooledConnection<ConnectionManager<PgConnection>>>;
 pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
     tracing_subscriber::registry()
         .with(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                "oauth2,reqwest,axum=trace,tb_axum,tower_http".into()
-            }),
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "debug".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -48,15 +45,7 @@ pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
 
     let app_state = AppState::new(store, oauth_client, pool);
 
-    let cors = CorsLayer::new()
-        // allow `GET` and `POST` when accessing the resource
-        .allow_methods([Method::GET, Method::POST, Method::PUT])
-        // allow requests from any origin
-        .allow_origin(Any);
-
     let app = Router::new()
-        .layer(cors)
-        .layer(tower_http::trace::TraceLayer::new_for_http())
         .nest_service("/", tower_http::services::ServeDir::new(path))
         .nest("/user", user::router(app_state.clone()))
         .nest("/types", types::router(app_state.clone()))
@@ -64,7 +53,8 @@ pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
         .nest("/part", attachment::router(app_state.clone()))
         .nest("/activ", activity::router(app_state.clone()))
         .nest("/strava", strava::router(app_state))
-        .fallback(error::fallback);
+        .fallback(error::fallback)
+        .layer(tower_http::trace::TraceLayer::new_for_http());
 
     tracing::debug!("listening on {}", addr);
 
