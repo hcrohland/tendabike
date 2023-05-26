@@ -175,7 +175,7 @@ impl StravaUser {
 
         let id = self.strava_id();
         info!("disabling user {}", id);
-        event::insert_sync(id, time::get_time().sec, conn)
+        event::insert_sync(id, crate::get_time(), conn)
             .context(format!("Could insert sync for user: {:?}", id))?;
         self.disable_db(conn)
     }
