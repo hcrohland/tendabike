@@ -193,14 +193,6 @@ pub(crate) async fn login_authorized(
     Ok((headers, Redirect::to("/")))
 }
 
-pub(crate) struct AuthRedirect;
-
-impl IntoResponse for AuthRedirect {
-    fn into_response(self) -> Response {
-        Redirect::temporary("/auth/strava").into_response()
-    }
-}
-
 // Make our own error that wraps `anyhow::Error`.
 struct AppError(anyhow::Error);
 

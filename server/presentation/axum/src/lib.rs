@@ -10,6 +10,7 @@
 
 pub(crate) mod strava;
 pub(crate) mod user;
+mod types;
 
 use std::net::SocketAddr;
 
@@ -22,7 +23,7 @@ use async_session::MemoryStore;
 use axum::{
     extract::{FromRef, State},
     response::{IntoResponse, Response},
-    Router,
+    Router, Json,
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -49,16 +50,13 @@ pub async fn start(pool: DbPool, path: std::path::PathBuf) {
         pool,
     };
 
-
-
-
     let app = Router::new()
         .nest_service("/", tower_http::services::ServeDir::new(path))
         .nest("/user", user::router(app_state.clone()))
-    // .nest("/types", types::router())
-    // .nest("/part", part::router())
-    // .nest("/part", attachment::router())
-    // .nest("/activ", activity::router())
+        .nest("/types", types::router(app_state.clone()))
+        // .nest("/part", part::router())
+        // .nest("/part", attachment::router())
+        // .nest("/activ", activity::router())
         .nest("/strava", strava::router(app_state))
         // .with_state(app_state)
         .fallback(fallback);
@@ -97,13 +95,6 @@ impl FromRef<AppState> for PooledConnection<ConnectionManager<PgConnection>> {
     }
 }
 
-
-// impl FromRef<AppState> for DbPool {
-//     fn from_ref(state: &AppState) -> Self {
-//         state.db.clone()
-//     }
-// }
-
 use user::RUser;
 async fn protected(user: RUser) -> impl IntoResponse {
     format!(
@@ -135,6 +126,16 @@ where
 fn internal_any(err: anyhow::Error) -> (StatusCode, String) {
     (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
 }
+
+struct AuthRedirect;
+
+impl IntoResponse for AuthRedirect {
+    fn into_response(self) -> Response {
+        axum::response::Redirect::temporary("/strava/login").into_response()
+    }
+}
+
+type ApiResult<T> = Result<Json<T>, AppError>;
 
 // Make our own error that wraps `anyhow::Error`.
 struct AppError(anyhow::Error);

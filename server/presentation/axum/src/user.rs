@@ -4,15 +4,16 @@ use axum::{
     RequestPartsExt, TypedHeader, response::{Response, IntoResponse}, Router, routing::get, Json,
 };
 use http::{header, request::Parts, StatusCode};
-use kernel::domain::{Person, UserId};
+use kernel::domain::{Person, UserId, Summary};
 use serde_derive::{Deserialize, Serialize};
+use tokio::task::spawn_blocking;
 
-use crate::{strava::AuthRedirect, AppError, AppDbConn};
+use crate::{AuthRedirect, AppDbConn, ApiResult};
 
 pub(crate) fn router(state: crate::AppState) -> Router{
     Router::new()
         .route("/", get(getuser))
-        // .route("/summary", get(summary))
+        .route("/summary", get(summary))
         .route("/all", get(userlist))
         .with_state(state)
 }
@@ -21,11 +22,11 @@ async fn getuser(user: RUser) -> Json<RUser> {
     Json(user)
 }
 
-type ApiResult<T> = Result<Json<T>, AppError>;
-
-// async fn summary(user: strava::User, mut conn: AppDbConn) -> ApiResult<Summary> {
-//     user.get_summary(&mut conn).map(Json)
-// }
+async fn summary(user: RUser, mut conn: AppDbConn) -> ApiResult<Summary> {
+    let user = tb_strava::StravaUser::read(user.user, &mut conn)?;
+    let res = spawn_blocking(move || user.get_summary(&mut conn)).await??;
+    Ok(Json(res))
+}
 
 async fn userlist(_u: AxumAdmin, mut pool: AppDbConn) -> ApiResult<Vec<tb_strava::StravaStat>> {
     Ok(tb_strava::get_all_stats(&mut pool).map(Json)?)
@@ -40,7 +41,9 @@ pub(crate) struct RUser {
 }
 
 impl RUser {
-    pub(crate) fn new(user: UserId, firstname: String, name: String, is_admin: bool) -> Self { Self { user, firstname, name, is_admin } }
+    pub(crate) fn new(user: UserId, firstname: String, name: String, is_admin: bool) -> Self { 
+        Self { user, firstname, name, is_admin } 
+    }
 }
 
 impl Person for RUser {
