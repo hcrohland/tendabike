@@ -164,7 +164,7 @@ pub(crate) async fn login_authorized(
         lastname,
         ..
     } = &token.extra_fields().athlete;
-    let user = StravaUser::upsert(*id, firstname, lastname, &mut conn).map_err(internal_any)?;
+    let user = StravaUser::upsert(*id, firstname, lastname, &mut conn).await.map_err(internal_any)?;
 
     // get (and eventually create) StravaUser
     let access = token.access_token().secret();
@@ -175,7 +175,7 @@ pub(crate) async fn login_authorized(
         .map_err(internal_any)?;
 
     let is_admin = user.tendabike_id.is_admin(&mut conn).map_err(internal_any)?;
-    let user = RUser::new( user.tendabike_id, firstname.clone(), lastname.clone(), is_admin);
+    let user = RUser::new( user.tendabike_id, user.id, firstname.clone(), lastname.clone(), is_admin);
     // Create a new session filled with user data
     let mut session = Session::new();
     session.insert("user", &user).unwrap();

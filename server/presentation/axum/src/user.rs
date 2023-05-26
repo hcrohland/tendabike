@@ -4,8 +4,9 @@ use axum::{
     RequestPartsExt, TypedHeader, response::{Response, IntoResponse}, Router, routing::get, Json,
 };
 use http::{header, request::Parts, StatusCode};
-use kernel::domain::{Person, UserId, Summary};
+use kernel::{domain::{Person, UserId, Summary, AnyResult}, s_diesel::AppConn};
 use serde_derive::{Deserialize, Serialize};
+use tb_strava::{StravaId, StravaUser};
 
 use crate::{AuthRedirect, AppDbConn, ApiResult};
 
@@ -22,8 +23,7 @@ async fn getuser(user: RUser) -> Json<RUser> {
 }
 
 async fn summary(user: RUser, mut conn: AppDbConn) -> ApiResult<Summary> {
-    let user = tb_strava::StravaUser::read(user.user, &mut conn)?;
-    Ok(user.get_summary(&mut conn).await.map(Json)?)
+    Ok(user.get_strava_user(&mut conn)?.get_summary(&mut conn).await.map(Json)?)
 }
 
 async fn userlist(_u: AxumAdmin, mut pool: AppDbConn) -> ApiResult<Vec<tb_strava::StravaStat>> {
@@ -32,21 +32,26 @@ async fn userlist(_u: AxumAdmin, mut pool: AppDbConn) -> ApiResult<Vec<tb_strava
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct RUser { 
-    pub user: UserId,
+    pub id: UserId,
+    pub strava_id: StravaId,
     pub firstname: String,
     pub name: String,
     pub is_admin: bool
 }
 
 impl RUser {
-    pub(crate) fn new(user: UserId, firstname: String, name: String, is_admin: bool) -> Self { 
-        Self { user, firstname, name, is_admin } 
+    pub(crate) fn new(id: UserId, strava_id: StravaId, firstname: String, name: String, is_admin: bool) -> Self { 
+        Self { id, strava_id, firstname, name, is_admin } 
+    }
+
+    pub(crate) fn get_strava_user(&self,  conn: &mut AppConn) -> AnyResult<StravaUser> {
+        StravaUser::read(self.id, conn)
     }
 }
 
 impl Person for RUser {
     fn get_id(&self) -> UserId {
-        self.user
+        self.id
     }
     fn is_admin(&self) -> bool {
         self.is_admin

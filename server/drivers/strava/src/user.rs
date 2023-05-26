@@ -214,7 +214,7 @@ impl StravaUser {
         Ok(Summary::new(activities, parts,attachments))
     }
 
-    pub fn upsert(id: StravaId, firstname: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<StravaUser> {
+    pub async fn upsert(id: StravaId, firstname: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<StravaUser> {
         debug!("got id {}: {} {}", id, &firstname, &lastname);
 
         let user = strava_users::table.find(id).get_result::<StravaUser>(conn).optional()?;
@@ -236,7 +236,7 @@ impl StravaUser {
         let user: StravaUser = diesel::insert_into(strava_users::table)
             .values(&user)
             .get_result(conn)?;
-        sync_users(Some(user.id), 0, conn)?;
+        sync_users(Some(user.id), 0, conn).await?;
         Ok(user)
     }
 }
@@ -273,7 +273,7 @@ pub fn get_all_stats(conn: &mut AppConn) -> AnyResult<Vec<StravaStat>> {
 }
 
 /// Get the strava id for all users
-pub fn sync_users (user_id: Option<StravaId>, time: i64, conn: &mut AppConn) -> AnyResult<()> {
+pub async fn sync_users (user_id: Option<StravaId>, time: i64, conn: &mut AppConn) -> AnyResult<()> {
     use schema::strava_users::dsl::*;
 
     let users =
