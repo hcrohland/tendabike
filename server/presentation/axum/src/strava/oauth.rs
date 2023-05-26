@@ -7,13 +7,18 @@
 //! ```
 
 use crate::{internal_any, internal_error, user::RUser, AppDbConn};
-use async_session::{MemoryStore, Session, SessionStore};
+use anyhow::ensure;
+use async_session::{log::info, MemoryStore, Session, SessionStore};
 use axum::{
     extract::{Query, State, TypedHeader},
     http::{header::SET_COOKIE, HeaderMap},
     response::{IntoResponse, Redirect, Response},
 };
 use http::StatusCode;
+use kernel::{
+    domain::{AnyResult, Error},
+    s_diesel::AppConn,
+};
 use oauth2::{
     basic::{
         BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
@@ -21,11 +26,12 @@ use oauth2::{
     },
     reqwest::async_http_client,
     AuthUrl, AuthorizationCode, Client, ClientId, ClientSecret, CsrfToken, ExtraTokenFields,
-    RedirectUrl, Scope, StandardRevocableToken, StandardTokenResponse, TokenResponse, TokenUrl,
+    RedirectUrl, RefreshToken, Scope, StandardRevocableToken, StandardTokenResponse, TokenResponse,
+    TokenUrl,
 };
 use serde::{Deserialize, Serialize};
 use std::env;
-use tb_strava::{StravaUser, StravaId};
+use tb_strava::{StravaId, StravaUser};
 
 pub(crate) static COOKIE_NAME: &str = "SESSION";
 
@@ -53,7 +59,7 @@ pub(crate) struct StravaAthleteInfo {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct StravaExtraTokenFields {
-    athlete: StravaAthleteInfo,
+    athlete: Option<StravaAthleteInfo>,
 }
 
 impl ExtraTokenFields for StravaExtraTokenFields {}
@@ -142,14 +148,13 @@ pub(crate) async fn login_authorized(
     State(oauth_client): State<StravaClient>,
     mut conn: AppDbConn,
 ) -> Result<(HeaderMap, Redirect), (StatusCode, String)> {
+    let conn = &mut conn;
     // Get an auth token
     let token = oauth_client
         .exchange_code(AuthorizationCode::new(query.code.clone()))
         .request_async(async_http_client)
         .await
         .map_err(internal_error)?;
-
-    dbg!(&token);
 
     if token.scopes().is_some() {
         return Err((
@@ -163,19 +168,26 @@ pub(crate) async fn login_authorized(
         firstname,
         lastname,
         ..
-    } = &token.extra_fields().athlete;
-    let user = StravaUser::upsert(*id, firstname, lastname, &mut conn).await.map_err(internal_any)?;
+    } = token.extra_fields().athlete.as_ref().ok_or((
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "No athlete info".to_string(),
+    ))?;
 
-    // get (and eventually create) StravaUser
-    let access = token.access_token().secret();
-    let expires = token.expires_in().map(|t| t.as_secs() as i64);
-    let refresh = token.refresh_token().map(|r| r.secret().as_str());
-    let user = user
-        .update_token(access, expires, refresh, &mut conn)
+    let user = StravaUser::upsert(*id, firstname, lastname, conn)
+        .await
         .map_err(internal_any)?;
 
-    let is_admin = user.tendabike_id.is_admin(&mut conn).map_err(internal_any)?;
-    let user = RUser::new( user.tendabike_id, user.id, firstname.clone(), lastname.clone(), is_admin);
+    // get (and eventually create) StravaUser
+    let user = update_user(&token, user, conn).map_err(internal_any)?;
+
+    let is_admin = user.tendabike_id.is_admin(conn).map_err(internal_any)?;
+    let user = RUser::new(
+        user.tendabike_id,
+        user.id,
+        firstname.clone(),
+        lastname.clone(),
+        is_admin,
+    );
     // Create a new session filled with user data
     let mut session = Session::new();
     session.insert("user", &user).unwrap();
@@ -191,6 +203,42 @@ pub(crate) async fn login_authorized(
     headers.insert(SET_COOKIE, cookie.parse().unwrap());
 
     Ok((headers, Redirect::to("/")))
+}
+
+fn update_user(
+    token: &StandardTokenResponse<StravaExtraTokenFields, BasicTokenType>,
+    user: StravaUser,
+    conn: &mut AppConn,
+) -> AnyResult<StravaUser> {
+    let access = token.access_token().secret();
+    let expires = token.expires_in().map(|t| t.as_secs() as i64);
+    let refresh = token.refresh_token().map(|r| r.secret().as_str());
+    let user = user.update_token(access, expires, refresh, conn)?;
+    Ok(user)
+}
+
+pub(crate) async fn refresh_token(
+    user: StravaUser,
+    oauth: StravaClient,
+    conn: &mut AppConn,
+) -> AnyResult<StravaUser> {
+    if user.token_is_valid() {
+        return Ok(user);
+    }
+
+    info!("refreshing access token for strava id {}", user.strava_id());
+
+    ensure!(
+        user.expires_at != 0,
+        Error::NotAuth("User needs to authenticate".to_string())
+    );
+    let refresh_token = RefreshToken::new(user.refresh_token.clone());
+
+    let tokenset = oauth
+        .exchange_refresh_token(&refresh_token)
+        .request_async(async_http_client)
+        .await?;
+    update_user(&tokenset, user, conn)
 }
 
 // Make our own error that wraps `anyhow::Error`.

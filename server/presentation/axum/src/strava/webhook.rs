@@ -1,12 +1,14 @@
 use anyhow::ensure;
 use async_session::log::{trace, info};
-use axum::{Json, extract::{Query}};
-use kernel::domain::{AnyResult, Error, Summary};
+use axum::{Json, extract::{Query, Path, State}};
+use kernel::{domain::{AnyResult, Error, Summary}};
 
-use tb_strava::event::{InEvent, process};
+use tb_strava::{event::{InEvent, process}, StravaUser};
 use serde_derive::{ Deserialize, Serialize};
 
 use crate::{AppDbConn, ApiResult, user::{RUser, AxumAdmin}};
+
+use super::refresh_token;
 
 // complicated way to have query parameters with dots in the name
 #[derive(Debug, Deserialize, Serialize)]
@@ -73,8 +75,12 @@ pub(super) async fn sync_api (_u: AxumAdmin, mut conn: AppDbConn, Query(query): 
 
 
 // #[get("/sync/<tbid>")]
-// pub(super) async fn sync(tbid: i32, _u: AxumAdmin, mut conn: AppDbConn, State(oauth): State<StravaClient>) -> ApiResult<Summary> {
-//     let user = get_user_from_tb(tbid, oauth, &mut conn)?;
-    
-//     hooks(User(user), conn)
-// }
+pub(super) async fn sync(Path(tbid): Path<i32>, _u: AxumAdmin, mut conn: AppDbConn, State(oauth): State<super::StravaClient>) -> ApiResult<Summary> {
+    let conn = &mut conn;
+    let user = StravaUser::read(tbid.into(), conn)?;
+    let user = refresh_token(user, oauth, conn).await?;
+    user.lock( conn)?;
+    let res = process(&user, conn).await?;
+    user.unlock(conn)?;
+    Ok(Json(res))
+}
