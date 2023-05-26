@@ -16,11 +16,11 @@ function refresh() {
 refresh()
 
 function rescan() {
-      promise = myfetch('/activ/rescan/').catch(handleError)
+      promise = myfetch('/activ/rescan').catch(handleError)
 }
 
 function disable(user) {
-  myfetch('/strava/disable/' + user.id, 'POST')
+  myfetch('/strava/disable' + user.id, 'POST')
     .catch(handleError)
 }
 </script>

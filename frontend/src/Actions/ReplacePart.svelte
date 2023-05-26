@@ -41,7 +41,7 @@
 
   async function action () {
     disabled = true;
-    await myfetch('/part/', 'POST', newpart)
+    await myfetch('/part', 'POST', newpart)
       .then(attachPart)
       .catch(handleError)
     isOpen = false;
