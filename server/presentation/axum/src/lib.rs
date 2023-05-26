@@ -6,16 +6,18 @@
 //! CLIENT_ID=REPLACE_ME CLIENT_SECRET=REPLACE_ME cargo run -p example-oauth
 //! ```
 
-pub(crate) mod strava;
-pub(crate) mod user;
+mod activity;
+mod attachment;
 mod part;
+pub(crate) mod strava;
 mod types;
+pub(crate) mod user;
 use appstate::*;
 mod appstate;
 mod error;
 use error::*;
 use http::Method;
-use tower_http::cors::{CorsLayer, Any};
+use tower_http::cors::{Any, CorsLayer};
 
 use std::net::SocketAddr;
 
@@ -23,10 +25,7 @@ use diesel::{r2d2::ConnectionManager, PgConnection};
 use r2d2::PooledConnection;
 
 use async_session::MemoryStore;
-use axum::{
-    extract::{State},
-    Router,
-};
+use axum::{extract::State, Router};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
@@ -36,8 +35,9 @@ type AppDbConn = State<PooledConnection<ConnectionManager<PgConnection>>>;
 pub async fn start(pool: DbPool, path: std::path::PathBuf) {
     tracing_subscriber::registry()
         .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "oauth2,reqwest,axum=trace,tb_axum=trace,tower_http=trace".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                "oauth2,reqwest,axum=trace,tb_axum,tower_http".into()
+            }),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -61,12 +61,10 @@ pub async fn start(pool: DbPool, path: std::path::PathBuf) {
         .nest("/user", user::router(app_state.clone()))
         .nest("/types", types::router(app_state.clone()))
         .nest("/part", part::router(app_state.clone()))
-        // .nest("/part", attachment::router(app_state.clone()))
-        // .nest("/activ", activity::router(app_state.clone()))
+        .nest("/part", attachment::router(app_state.clone()))
+        .nest("/activ", activity::router(app_state.clone()))
         .nest("/strava", strava::router(app_state))
-        // .with_state(app_state)
-        .fallback(error::fallback)
-        ;
+        .fallback(error::fallback);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::debug!("listening on {}", addr);
