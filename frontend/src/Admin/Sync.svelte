@@ -12,7 +12,7 @@ async function getdata(id) {
     let data
     count = 0;
     do {
-      data = await myfetch('/strava/sync' + id).catch(handleError)
+      data = await myfetch('/strava/sync/' + id).catch(handleError)
       if (!data) break;
       count += data["activities"].length;
     } while (data["activities"].length > 0)

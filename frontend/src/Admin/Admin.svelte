@@ -20,7 +20,7 @@ function rescan() {
 }
 
 function disable(user) {
-  myfetch('/strava/disable' + user.id, 'POST')
+  myfetch('/strava/disable/' + user.id, 'POST')
     .catch(handleError)
 }
 </script>
