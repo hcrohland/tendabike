@@ -6,20 +6,20 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-kernel = {path = "../../kernel"}
-tb_strava = {path = "../../drivers/strava"}
+# kernel = {path = "../../kernel"}
+# tb_strava = {path = "../../drivers/strava"}
 
-rocket = "0.4"
-rocket_cors = "0.5"
-rocket_contrib = { version = "0.4", default-features = false, features = ["json", "serve"]}
-rocket_oauth2 = "0.4"
+# rocket = "0.4"
+# rocket_cors = "0.5"
+# rocket_contrib = { version = "0.4", default-features = false, features = ["json", "serve"]}
+# rocket_oauth2 = "0.4"
 
-log = "0.4.17"
-anyhow = "1.0"
-thiserror = "1.0"
-time = "0.1"
-jsonwebtoken = "8"
-serde = "1.0" 
-serde_derive = "1.0"
-serde_json = "1.0"
-reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "json", "blocking"] }
+# log = "0.4.17"
+# anyhow = "1.0"
+# thiserror = "1.0"
+# time = "0.1"
+# jsonwebtoken = "8"
+# serde = "1.0" 
+# serde_derive = "1.0"
+# serde_json = "1.0"
+# reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "json", "blocking"] }

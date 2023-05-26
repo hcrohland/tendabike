@@ -10,10 +10,10 @@ fn main() -> anyhow::Result<()> {
     let db = DbPool::init()?;
     let path = get_static_path();
 
-    #[cfg(axum)]
+    // #[cfg(axum)]
     tb_axum::start(db, path);
-    #[cfg(not(axum))]
-    tb_rocket::start(DbPool(db), path);
+    // #[cfg(not(axum))]
+    // tb_rocket::start(DbPool(db), path);
 
     Ok (())
 }
