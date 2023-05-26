@@ -122,16 +122,18 @@ pub(crate) async fn logout(
     State(store): State<MemoryStore>,
     TypedHeader(cookies): TypedHeader<headers::Cookie>,
 ) -> impl IntoResponse {
-    let cookie = cookies.get(COOKIE_NAME).unwrap();
-    let session = match store.load_session(cookie.to_string()).await.unwrap() {
-        Some(s) => s,
-        // No session active, just redirect
-        None => return Redirect::to("/"),
-    };
+    if let Some (cookie) = cookies.get(COOKIE_NAME) {
+        let session = match store.load_session(cookie.to_string()).await {
+            Ok(Some(s)) => s,
+            // No session active, just redirect
+            _ => return Redirect::to("/").into_response(),
+        };
+        if store.destroy_session(session).await.is_err() {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to destroy session").into_response();
+        }
+    }  
 
-    store.destroy_session(session).await.unwrap();
-
-    Redirect::to("/")
+    Redirect::to("/").into_response()
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -190,13 +192,16 @@ pub(crate) async fn login_authorized(
     );
     // Create a new session filled with user data
     let mut session = Session::new();
-    session.insert("user", &user).unwrap();
+    session.insert("user", &user).map_err(internal_error)?;
 
     // Store session and get corresponding cookie
-    let cookie = store.store_session(session).await.map_err(internal_any)?;
-
+    let cookie = match store.store_session(session).await.map_err(internal_any)? {
+        Some(cookie) => cookie,
+        None => return Err((StatusCode::INTERNAL_SERVER_ERROR, "Failed to store session".to_string())),
+    };
+    
     // Build the cookie
-    let cookie = format!("{}={}; SameSite=Lax; Path=/", COOKIE_NAME, cookie.unwrap());
+    let cookie = format!("{}={}; SameSite=Lax; Path=/", COOKIE_NAME, cookie);
 
     // Set cookie
     let mut headers = HeaderMap::new();

@@ -85,7 +85,7 @@ where
         let session = store
             .load_session(session_cookie.to_string())
             .await
-            .unwrap()
+            .expect("could not load session")
             .ok_or(AuthRedirect)?;
 
         let user = session.get::<RUser>("user").ok_or(AuthRedirect)?;
