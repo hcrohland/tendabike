@@ -1,5 +1,3 @@
-#![feature(trivial_bounds)]
-
 //! Example OAuth (Strava) implementation.
 //!
 //! 1) Create client_id and client_secret at <https://www.strava.com/settings/api>
