@@ -69,9 +69,20 @@ impl PartTypeId {
 
     /// recursively look for subtypes to self in the PartType vector
     fn filter_types(self, types: &mut Vec<PartType>) -> Vec<PartType> {
-        let mut res = types
-            .drain_filter(|x| x.hooks.contains(&self) || x.id == self)
-            .collect::<Vec<_>>();
+        // let mut res = types
+        //     .drain_filter(|x| x.hooks.contains(&self) || x.id == self)
+        //     .collect::<Vec<_>>();
+        let mut res = Vec::new();
+        let mut i = 0;
+        while i < types.len() {
+            let x = &types[i];
+            if x.hooks.contains(&self) || x.id == self {
+                res.push(types.remove(i));
+            } else {
+                i += 1;
+            }
+        }
+
         for t in res.clone().iter() {
             res.append(&mut t.id.filter_types(types));
         }

@@ -1,6 +1,6 @@
 [package]
 name = "tendabike"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 default-run = "tendabike"
 
@@ -11,4 +11,4 @@ dotenv = "0.15.0"
 env_logger = "0.10.0"
 anyhow = "1"
 kernel = { path = "../kernel"}
-tb_rocket = { path = "../presentation/rocket"}
+tb_axum = { path = "../presentation/axum"}

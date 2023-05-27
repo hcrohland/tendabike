@@ -16,7 +16,7 @@ pub struct StravaGear {
 }
 #[derive(Serialize, Deserialize, Debug, Queryable, Insertable)]
 #[diesel(table_name = strava_gears)]
-pub struct Gear {
+struct Gear {
     id: String,
     tendabike_id: i32,
     user_id: i32,
@@ -55,8 +55,8 @@ impl StravaGear {
         }
     }
 
-    fn request(id: &str, user: &StravaUser, conn: &mut AppConn) -> AnyResult<StravaGear> {
-        let r = user.request(&format!("/gear/{}", id), conn)?;
+    async fn request(id: &str, user: &StravaUser, conn: &mut AppConn) -> AnyResult<StravaGear> {
+        let r = user.request(&format!("/gear/{}", id), conn).await?;
         let res: StravaGear =
             serde_json::from_str(&r).context(format!("Did not receive StravaGear format: {:?}", r))?;
         Ok(res)
@@ -78,7 +78,7 @@ fn get_tbid(strava_id: &str, conn: &mut AppConn) -> AnyResult<Option<PartId>> {
 ///
 /// If it does not exist create it at tb
 /// None will return None
-pub fn strava_to_tb(strava_id: String, user: &StravaUser, conn: &mut AppConn) -> AnyResult<PartId> {
+pub(crate) async fn strava_to_tb(strava_id: String, user: &StravaUser, conn: &mut AppConn) -> AnyResult<PartId> {
     
     if let Some(gear) = get_tbid(&strava_id, conn)? { 
         return Ok(gear) 
@@ -86,7 +86,7 @@ pub fn strava_to_tb(strava_id: String, user: &StravaUser, conn: &mut AppConn) ->
     
     debug!("New Gear");
     let part = StravaGear::request(&strava_id, user, conn)
-        .context("Couldn't map gear")?
+        .await.context("Couldn't map gear")?
         .into_tb(user)?;
 
     conn.transaction(|conn|{
@@ -106,7 +106,7 @@ pub fn strava_to_tb(strava_id: String, user: &StravaUser, conn: &mut AppConn) ->
 }
 
 /// Get list of gear for user from Strava
-pub fn update_user(user: &StravaUser, conn: &mut AppConn) -> AnyResult<Vec<PartId>> {
+pub(crate) async fn update_user(user: &StravaUser, conn: &mut AppConn) -> AnyResult<Vec<PartId>> {
     #[derive(Deserialize, Debug)]
     struct Gear {
         id: String,
@@ -120,11 +120,13 @@ pub fn update_user(user: &StravaUser, conn: &mut AppConn) -> AnyResult<Vec<PartI
         shoes: Vec<Gear>,
     }
 
-    let r = user.request("/athlete", conn)?;
+    let r = user.request("/athlete", conn).await?;
     let ath: Athlete = serde_json::from_str(&r)?;
-    let parts = ath.bikes.into_iter()
-        .chain(ath.shoes)
-        .map(|gear| gear::strava_to_tb(gear.id, user, conn))
-        .collect::<AnyResult<_>>()?;
+    
+    let mut parts = Vec::new();
+    for gear in ath.bikes.into_iter().chain(ath.shoes){
+        parts.push(gear::strava_to_tb(gear.id, user, conn).await?);
+    }
+
     Ok(parts)
 }

@@ -37,7 +37,7 @@ impl InEvent {
             object_type: self.object_type,
             object_id: self.object_id,
             aspect_type: self.aspect_type,
-            owner_id: self.owner_id,
+            owner_id: self.owner_id.into(),
             subscription_id: self.subscription_id,
             event_time: self.event_time,
             updates: serde_json::to_string(&self.updates).unwrap_or_else(|e|{ format!("{:?}", e)}),
@@ -56,7 +56,7 @@ pub struct Event {
     // hash 	For activity update events, keys can contain "title," "type," and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone). For app deauthorization events, there is always an "authorized" : "false" key-value pair.
     updates: String,  
     // The athlete's ID.
-    owner_id: i32,
+    owner_id: StravaId,
     // The push subscription ID that is receiving this event.
     subscription_id: i32, 
     // The time that the event occurred.
@@ -116,8 +116,9 @@ impl Event {
         get_event(user, conn)
     }
 
-    fn process_activity (self, user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
-        match self.process_hook(user, conn).or_else(|e| check_try_again(e, conn))    {
+    async fn process_activity (self, user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
+        match self.process_hook(user, conn).await
+                    .or_else(|e| check_try_again(e, conn))    {
             core::result::Result::Ok(res) => Ok(res),
             Err(err) => {
                         self.delete(conn)?;
@@ -126,9 +127,9 @@ impl Event {
         }
     }
     
-    fn process_hook(&self, user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary>{
+    async fn process_hook(&self, user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary>{
         let res = match self.aspect_type.as_str() {
-            "create" | "update" => activity::upsert_activity(self.object_id, user, conn)?,
+            "create" | "update" => activity::upsert_activity(self.object_id, user, conn).await?,
             "delete" => activity::delete_activity(self.object_id, user, conn)?,
             _ => {
                 warn!("Skipping unknown aspect_type {:?}", self);
@@ -139,21 +140,21 @@ impl Event {
         Ok(res)
     }
     
-    fn sync(mut self, user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
+    async fn sync(mut self, user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
         // let mut len = batch;
         let mut start = self.event_time;
         let mut hash = SumHash::default();
     
         // while len == batch 
         {
-            let acts = next_activities(user, conn, 10, Some(start))?;
+            let acts = next_activities(user, conn, 10, Some(start)).await?;
             if acts.is_empty() {
                 self.delete(conn)?;
             } else {
                 for a in acts {
                     start = std::cmp::max(start, a.start_date.timestamp());
                     trace!("processing sync event at {}", start);
-                    let ps = a.send_to_tb(user, conn)?;
+                    let ps = a.send_to_tb(user, conn).await?;
                     self.setdate(start,  conn)?;
                     hash.merge(ps);
                 }
@@ -164,7 +165,7 @@ impl Event {
     }
 }
 
-pub fn insert_sync(owner_id: i32, event_time: i64, conn: &mut AppConn) -> anyhow::Result<()> {
+pub fn insert_sync(owner_id: StravaId, event_time: i64, conn: &mut AppConn) -> anyhow::Result<()> {
     ensure!(
         event_time <= get_time(), 
         Error::BadRequest(format!("eventtime {} > now!", event_time))
@@ -189,11 +190,11 @@ pub fn insert_stop(conn: &mut AppConn) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Option<Event>> {
+fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Option<Event>> {
     use schema::strava_events::dsl::*;
 
     let event: Option<Event> = strava_events
-        .filter(owner_id.eq_any(vec![0,user.id]))
+        .filter(owner_id.eq_any(vec![0,user.id.into()]))
         .order(event_time.asc())
         .first(conn)
         .optional()?;
@@ -238,16 +239,16 @@ fn check_try_again(err: anyhow::Error, conn: &mut AppConn) -> anyhow::Result<Sum
     }
 }
 
-fn next_activities(user: &StravaUser, conn: &mut AppConn, per_page: usize, start: Option<i64>) -> anyhow::Result<Vec<StravaActivity>> {
+async fn next_activities(user: &StravaUser, conn: &mut AppConn, per_page: usize, start: Option<i64>) -> anyhow::Result<Vec<StravaActivity>> {
     let r = user.request(&format!(
         "/activities?after={}&per_page={}",
         start.unwrap_or(user.last_activity),
         per_page
-    ), conn)?;
+    ), conn).await?;
     Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)
 }
 
-pub fn process (user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
+pub async fn process (user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
     let event = get_event(user, conn)?;
     if event.is_none() {
         return Ok(Summary::default());
@@ -256,8 +257,8 @@ pub fn process (user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary
     info!("Processing {}", event);
     
     match event.object_type.as_str() {
-        "activity" => event.process_activity(user, conn),
-        "sync" => event.sync(user, conn).or_else(|err| check_try_again(err, conn)),
+        "activity" => event.process_activity(user, conn).await,
+        "sync" => event.sync(user, conn).await.or_else(|err| check_try_again(err, conn)),
         // "athlete" => process_user(e, user),
         _ => {
             warn!("skipping {}", event);

@@ -5,12 +5,12 @@ FROM lukemathwalker/cargo-chef:latest as base
 # the cargo-chef version with `--version X.X.X`
 
 WORKDIR /app
-# install dependencies
-RUN apt-get update && apt-get install -y libpq-dev libssl-dev
 
 ENV DEBIAN_FRONTEND=noninteractive
 # install nighlty toolchain
-RUN rustup set profile minimal && rustup update nightly && rustup default nightly
+RUN rustup set profile minimal
+# install dependencies
+RUN apt-get update && apt-get install -y libpq-dev libssl-dev
 
 FROM base as planner
 # do not copy frontend!

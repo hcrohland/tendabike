@@ -1,4 +1,3 @@
-#![feature(drain_filter)]
 #![warn(clippy::all)]
 
 

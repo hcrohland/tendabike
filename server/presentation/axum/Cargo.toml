@@ -6,6 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+kernel = {path = "../../kernel"}
+tb_strava = {path = "../../drivers/strava"}
+
 anyhow = "1.0"
 thiserror = "1.0"
 
@@ -22,3 +25,7 @@ serde_json = "1.0"
 tokio = { version = "1.0", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+diesel = { version = "2", features = ["postgres", "r2d2"] }
+r2d2 = "0.8.10"
+tower-http = { version = "0.4", features = ["full"] }
+axum-macros = "0.3"

@@ -12,7 +12,7 @@
 
   async function action () {
     part.disposed_at = null;
-    await myfetch('/part/', 'PUT', part)
+    await myfetch('/part', 'PUT', part)
       .then(data => parts.updateMap([data]))
       .catch(handleError)
     isOpen = false;  

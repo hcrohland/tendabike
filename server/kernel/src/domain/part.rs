@@ -37,7 +37,7 @@ pub struct Part {
     /// The primary key
     pub id: PartId,
     /// The owner
-    pub owner: i32,
+    pub owner: UserId,
     /// The type of the part
     pub what: PartTypeId,
     /// This name of the part.
@@ -68,7 +68,7 @@ pub struct Part {
 #[diesel(table_name = parts)]
 pub struct NewPart {
     /// The owner
-    pub owner: i32,
+    pub owner: UserId,
     /// The type of the part
     pub what: PartTypeId,
     /// This name of the part.
@@ -86,7 +86,7 @@ pub struct NewPart {
 pub struct ChangePart {
     pub id: PartId,
     /// The owner
-    pub owner: i32,
+    pub owner: UserId,
     /// This name of the part.
     pub name: String,
     /// The vendor name
@@ -158,7 +158,7 @@ impl PartId {
             .find(self)
             .filter(owner.eq(user.get_id()))
             .select(owner)
-            .first::<i32>(conn)?;
+            .first::<UserId>(conn)?;
         if user.get_id() == own {
             return Ok(self);
         }
@@ -274,7 +274,7 @@ impl NewPart {
 }
 
 impl ChangePart {
-    pub fn change(&self, user: &User, conn: &mut AppConn) -> AnyResult<Part> {
+    pub fn change(&self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Part> {
         use schema::parts::dsl::*;
         info!("Change {:?}", self);
 

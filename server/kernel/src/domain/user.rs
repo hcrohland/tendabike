@@ -1,9 +1,14 @@
 use super::*;
 use schema::users;
 
+#[derive(DieselNewType, Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserId(i32);
+NewtypeDisplay! { () pub struct UserId(); }
+NewtypeFrom! { () pub struct UserId(i32); }
+
 #[derive(Clone, Debug, Queryable, Insertable, Serialize, Deserialize)]
 pub struct User {
-    id: i32,
+    id: UserId,
     name: String,
     firstname: String,
     is_admin: bool,
@@ -16,45 +21,58 @@ pub struct Stat {
     activities: i64,
 }
 
-impl User {
-    pub fn read(id:i32, conn: &mut AppConn) -> AnyResult<Self> {
-        Ok(users::table.find(id).get_result(conn)?)
+impl UserId {
+    pub fn read(self, conn: &mut AppConn) -> AnyResult<User> {
+        Ok(users::table.find(self).get_result(conn)?)
     }
 
-    pub fn get_stat(uid: i32, conn: &mut AppConn) -> AnyResult<Stat> {
-        let user = User::read(uid, conn)?;
+    pub fn get_stat(self, conn: &mut AppConn) -> AnyResult<Stat> {
+        let user = self.read(conn)?;
         let parts = {
             use schema::parts::dsl::{parts, owner};
-            parts.count().filter(owner.eq(uid)).first(conn)?
+            parts.count().filter(owner.eq(self)).first(conn)?
         };
         let activities = {
             use schema::activities::dsl::*;
-            activities.count().filter(user_id.eq(uid)).first(conn)?
+            activities.count().filter(user_id.eq(self)).first(conn)?
         };
         Ok(Stat{user, parts, activities})
     }  
 
-    pub fn create(forename: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<i32> {
+    pub fn create(firstname_: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<Self> {
         use crate::schema::users::dsl::*;
     
         let user: User = diesel::insert_into(users)
             .values((
-                firstname.eq(forename),
+                firstname.eq(firstname_),
                 name.eq(lastname),
                 is_admin.eq(false),
             ))
             .get_result(conn)
             .context("Could not create user")?;
         Ok(user.id)
-    }     
-
-    pub fn names(&self) -> (&str, &str) {
-        (&self.firstname, &self.name)
     }
+
+    pub fn update(&self, firstname_: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<Self> {
+        use crate::schema::users::dsl::*;
+    
+        let user: User = diesel::update(users.filter(id.eq(self)))
+            .set((
+                firstname.eq(firstname_),
+                name.eq(lastname),
+            ))
+            .get_result(conn)
+            .context("Could not update user")?;
+        Ok(user.id)
+    }
+
+    pub fn is_admin(&self, conn: &mut r2d2::PooledConnection<diesel::r2d2::ConnectionManager<PgConnection>>) -> AnyResult<bool> {
+        self.read(conn).map(|u| u.is_admin)
+    }     
 }
 
 impl Person for User {
-    fn get_id(&self) -> i32 {
+    fn get_id(&self) -> UserId {
         self.id
     }
     fn is_admin(&self) -> bool {

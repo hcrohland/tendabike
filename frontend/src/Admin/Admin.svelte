@@ -16,7 +16,7 @@ function refresh() {
 refresh()
 
 function rescan() {
-      promise = myfetch('/activ/rescan/').catch(handleError)
+      promise = myfetch('/activ/rescan').catch(handleError)
 }
 
 function disable(user) {

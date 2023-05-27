@@ -6,11 +6,11 @@ FROM lukemathwalker/cargo-chef:latest as base
 
 WORKDIR /app
 # install dependencies
-RUN apt-get update && apt-get install -y libpq-dev libssl-dev 
-
 ENV DEBIAN_FRONTEND=noninteractive
 # install nighlty toolchain
-RUN rustup update nightly && rustup default nightly
+RUN rustup profile set minimal
+
+RUN apt-get update && apt-get install -y libpq-dev libssl-dev 
 
 FROM base as build-engine
 # do not copy frontend!

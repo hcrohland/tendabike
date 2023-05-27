@@ -35,7 +35,7 @@
           .then(updateSummary)
       }
       if (dispose || part_changed){
-        await myfetch('/part/', 'PUT', newpart)
+        await myfetch('/part', 'PUT', newpart)
           .then(data => parts.updateMap([data]))
       }
     }

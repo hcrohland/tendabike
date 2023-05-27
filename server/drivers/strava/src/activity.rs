@@ -1,12 +1,12 @@
 use chrono::{DateTime, Utc};
 
 use super::*;
+use ActTypeId;
 use ActivityId;
 use NewActivity;
-use ActTypeId;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct StravaActivity {
+pub(crate) struct StravaActivity {
     pub id: i64,
     /// The activity type
     #[serde(rename = "type")]
@@ -30,10 +30,10 @@ pub struct StravaActivity {
 }
 
 impl StravaActivity {
-    fn into_tb(self, user: &StravaUser, conn: &mut AppConn) -> AnyResult<NewActivity> {
+    async fn into_tb(self, user: &StravaUser, conn: &mut AppConn) -> AnyResult<NewActivity> {
         let what = self.what()?;
         let gear = match self.gear_id {
-            Some(x) => Some(gear::strava_to_tb(x, user, conn)?),
+            Some(x) => Some(gear::strava_to_tb(x, user, conn).await?),
             None => None,
         };
         Ok(NewActivity {
@@ -56,23 +56,23 @@ impl StravaActivity {
         let t = self.type_.as_str();
 
         Ok(match t {
-            "Ride"          => 1,
-            "VirtualRide"   => 5,
-            "EBikeRide"     => 9,
-            "Snowboard"     => 2,
-            "Run"           => 3,
-            "VirtualRun"    => 3,
-            "Hike"          => 4,
-            "AlpineSki"     => 6,
-            "Walk"          => 8,
+            "Ride" => 1,
+            "VirtualRide" => 5,
+            "EBikeRide" => 9,
+            "Snowboard" => 2,
+            "Run" => 3,
+            "VirtualRun" => 3,
+            "Hike" => 4,
+            "AlpineSki" => 6,
+            "Walk" => 8,
             "BackcountrySki" => 10,
-            "Workout"       => 0,
+            "Workout" => 0,
             "StandUpPaddling" => 0,
-            "Windsurf"      => 0,
-            "Kitesurf"      => 0,
-            "Rowing"        => 0,
-            "WaterSport"    => 0,
-            "RockClimbing"  => 0,
+            "Windsurf" => 0,
+            "Kitesurf" => 0,
+            "Rowing" => 0,
+            "WaterSport" => 0,
+            "RockClimbing" => 0,
             "Handcycle" => 0,
             "Canoeing" => 0,
             "Crossfit" => 0,
@@ -94,18 +94,22 @@ impl StravaActivity {
             "WeightTraining" => 0,
             "Wheelchair" => 0,
             "Yoga" => 0,
-            _ => bail!("unsupported activity {}", t)
-        }.into())
+            _ => bail!("unsupported activity {}", t),
+        }
+        .into())
     }
 }
 
 impl StravaActivity {
-    pub fn send_to_tb(self, user: &StravaUser, conn: &mut AppConn) -> AnyResult<Summary> {
-        conn.transaction(|conn|{
+    pub(crate) async fn send_to_tb(
+        self,
+        user: &StravaUser,
+        conn: &mut AppConn,
+    ) -> AnyResult<Summary> {
+        let strava_id = self.id;
+        let tb = self.into_tb(user, conn).await?;
+        conn.transaction(|conn| {
             use schema::strava_activities::dsl::*;
-
-            let strava_id = self.id;
-            let tb = self.into_tb(user, conn)?;
 
             let tb_id = strava_activities
                 .find(strava_id)
@@ -114,7 +118,7 @@ impl StravaActivity {
                 .get_result::<ActivityId>(conn)
                 .optional()?;
 
-            let res; 
+            let res;
             if let Some(tb_id) = tb_id {
                 res = tb_id.update(&tb, user, conn)?
             } else {
@@ -148,23 +152,34 @@ pub fn strava_url(act: i32, conn: &mut AppConn) -> AnyResult<String> {
     Ok(format!("https://strava.com/activities/{}", &g))
 }
 
-fn get_activity(id: i64, user: &StravaUser, conn: &mut AppConn) -> AnyResult<StravaActivity> {
-    let r = user.request(&format!("/activities/{}",id ), conn)?;
+async fn get_activity(id: i64, user: &StravaUser, conn: &mut AppConn) -> AnyResult<StravaActivity> {
+    let r = user.request(&format!("/activities/{}", id), conn).await?;
     // let r = user.request("/activities?per_page=2")?;
     let act: StravaActivity = serde_json::from_str(&r)?;
     Ok(act)
 }
 
-pub fn upsert_activity(id: i64, user: &StravaUser, conn: &mut AppConn) -> AnyResult<Summary> {
-    let act = get_activity(id, user, conn).context(format!("strava activity id {}", id))?;
-    act.send_to_tb(user, conn)
+pub async fn upsert_activity(id: i64, user: &StravaUser, conn: &mut AppConn) -> AnyResult<Summary> {
+    let act = get_activity(id, user, conn)
+        .await
+        .context(format!("strava activity id {}", id))?;
+    act.send_to_tb(user, conn).await
 }
 
-pub fn delete_activity(sid: i64, user: &StravaUser, conn: &mut AppConn) -> AnyResult<Summary> {
+pub(crate) fn delete_activity(
+    sid: i64,
+    user: &StravaUser,
+    conn: &mut AppConn,
+) -> AnyResult<Summary> {
     use schema::strava_activities::dsl::*;
 
-    conn.transaction(|conn|{
-        let tid: Option<ActivityId> = strava_activities.select(tendabike_id).find(sid).for_update().first(conn).optional()?;
+    conn.transaction(|conn| {
+        let tid: Option<ActivityId> = strava_activities
+            .select(tendabike_id)
+            .find(sid)
+            .for_update()
+            .first(conn)
+            .optional()?;
         if let Some(tid) = tid {
             diesel::delete(strava_activities.find(sid)).execute(conn)?;
             tid.delete(user, conn)
@@ -173,4 +188,3 @@ pub fn delete_activity(sid: i64, user: &StravaUser, conn: &mut AppConn) -> AnyRe
         }
     })
 }
-
