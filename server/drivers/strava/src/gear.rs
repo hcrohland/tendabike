@@ -1,3 +1,6 @@
+//! This module contains the implementation of StravaGear, a struct that represents a gear object from Strava API.
+//! It also contains functions to convert StravaGear to Tendabike's Part object and to map Strava gear_id to Tendabike gear_id.
+//! 
 use diesel::{self, QueryDsl, RunQueryDsl};
 
 use super::*;

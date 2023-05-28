@@ -1,3 +1,11 @@
+//! This module contains the implementation of the attachment API endpoints.
+//!
+//! The attachment API allows users to attach and detach parts to other parts.
+//! The API endpoints are `/attach` and `/detach`.
+//!
+//! The module defines two async functions `attach_rt` and `detach_rt` that handle the requests to the API endpoints.
+//! The `router` function creates a new router and maps the API endpoints to their respective functions.
+
 use axum::{routing::post, Json, Router};
 use kernel::domain::{Event, Summary};
 

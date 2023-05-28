@@ -1,3 +1,14 @@
+/// This module contains the web interface for managing activities.
+///
+/// Activities are a central concept in the Tendabike application. They represent
+/// a user's cycling activity, and can be created, read, updated, and deleted
+/// through the web interface provided by this module.
+///
+/// The module also provides endpoints for managing activity parts, such as
+/// setting a default part and rescanning all parts.
+///
+/// Finally, the module provides an endpoint for using CSV data to update usage data for activities.
+
 use axum::{
     extract::{Path, Query},
     routing::{delete, get, post},

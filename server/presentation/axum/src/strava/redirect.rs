@@ -1,3 +1,8 @@
+//! This module contains functions for redirecting to Strava URLs.
+//!
+//! The functions in this module are used to redirect users to Strava URLs for activities, gear, and users.
+//!
+
 use axum::{response::Redirect, extract::Path};
 
 use crate::AppDbConn;

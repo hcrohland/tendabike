@@ -76,6 +76,7 @@ pub struct Activity {
 
 #[derive(Debug, Clone, Insertable, AsChangeset, PartialEq, Serialize, Deserialize)]
 #[diesel(table_name = activities)]
+/// A new activity to be inserted into the database.
 pub struct NewActivity {
     pub user_id: UserId,
     /// The activity type
@@ -241,6 +242,12 @@ impl Activity {
             .expect("could not read activities")
     }
 
+    /// Register or unregister an activity with the given factor.
+    ///
+    /// If the factor is `Factor::Add`, the activity is registered and the usage is added to the parts and attachments.
+    /// If the factor is `Factor::Subtract`, the activity is unregistered and the usage is subtracted from the parts and attachments.
+    ///
+    /// Returns a summary of the affected parts, attachments, and activities.
     pub fn register(self, factor: Factor, conn: &mut AppConn) -> AnyResult<Summary> {
         trace!(
             "{} {:?}",
@@ -263,6 +270,13 @@ impl Activity {
         })
     }
 
+    /// Get all activities for a given user.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec` of `Activity` objects representing all activities for the given user.
+    ///
+    
     pub fn get_all(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<Activity>> {
         use schema::activities::dsl::*;
         let acts = activities

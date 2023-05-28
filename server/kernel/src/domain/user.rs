@@ -18,7 +18,22 @@
 
  */
 
- use super::*;
+//! This module contains the domain logic for the `User` entity.
+//!
+//! The `User` entity represents a user of the `tendabike` application.
+//! It contains information such as the user's name, whether they are an admin, and their activity and parts statistics.
+//!
+//! The `UserId` type is a newtype wrapper around an `i32` and is used to represent the unique identifier of a `User`.
+//!
+//! The `Stat` struct is used to represent the statistics of a `User`, including the number of parts and activities associated with the user.
+//!
+//! The `User` struct contains the fields of a user, including their `id`, `name`, `firstname`, and `is_admin` status.
+//!
+//! The `Person` trait is implemented for the `User` struct and provides methods for getting the user's `id` and `is_admin` status.
+//!
+//! The `create`, `update`, `read`, and `get_stat` methods are implemented for the `UserId` type and provide CRUD functionality for `User` entities.
+
+use super::*;
 use schema::users;
 
 #[derive(DieselNewType, Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]

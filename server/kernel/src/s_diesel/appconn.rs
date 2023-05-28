@@ -1,3 +1,10 @@
+//! This module contains the implementation of the database connection pool and the database migration logic.
+//!
+//! The `DbPool` struct is a wrapper around the `r2d2::Pool` type, which is used to manage a pool of database connections.
+//! The `Store` struct is a wrapper around the `diesel::PgConnection` type, which is used to represent a single database connection.
+//! The `run_db_migrations` function is used to run the database migrations using the `diesel_migrations` crate.
+//!
+//! This module is used by other modules in the application to interact with the database.
 use std::ops::{Deref, DerefMut};
 
 use crate::domain::AnyResult;

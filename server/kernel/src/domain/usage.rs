@@ -18,8 +18,11 @@
 
  */
 
+//! This module contains the `Usage` struct and its implementation. 
+//! The `Usage` struct represents the usage of a part, including time, distance, climbing, descending, power, and count. 
+//! It also provides methods to add an activity to the usage.
 
- use super::*;
+use super::*;
 
 #[derive(Debug)]
 pub struct Usage {

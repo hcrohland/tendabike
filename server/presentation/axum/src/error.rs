@@ -1,3 +1,14 @@
+//! This module contains error handling utilities for the axum web framework.
+//!
+//! It provides functions for handling fallback errors, mapping any error into a `500 Internal Server Error`
+//! response, and converting `anyhow::Error` into a custom `AppError` type.
+//!
+//! Additionally, it defines a custom `AppError` type that wraps `anyhow::Error` and implements the `IntoResponse`
+//! trait for converting it into an HTTP response.
+//!
+//! Finally, it defines a type alias `ApiResult<T>` for `Result<Json<T>, AppError>`.
+//! 
+
 use axum::{response::{IntoResponse, Response}, Json};
 use http::StatusCode;
 

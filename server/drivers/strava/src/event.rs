@@ -7,6 +7,7 @@ use schema::strava_events;
 use crate::activity::StravaActivity;
 
 #[derive(Debug, Serialize, Deserialize)]
+/// A struct representing an incoming Strava event.
 pub struct InEvent {
     object_type: String,
     object_id: i64,
@@ -23,6 +24,15 @@ pub struct InEvent {
 }
 
 impl InEvent {
+    /// Converts an incoming Strava event into an `Event` struct.
+    ///
+    /// # Arguments
+    ///
+    /// * `self` - An instance of `InEvent`.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing an `Event` struct if the conversion is successful, or an `anyhow::Error` if it fails.
     pub fn convert(self) -> anyhow::Result<Event> {
         let objects = ["activity", "athlete"];
         let aspects = ["create", "update", "delete"];
@@ -145,6 +155,20 @@ impl Event {
         }
     }
 
+    /// Processes a Strava webhook event and performs the corresponding action.
+    ///
+    /// # Arguments
+    ///
+    /// * `user` - A reference to the Strava user associated with the webhook event.
+    /// * `conn` - A mutable reference to the database connection.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing a `Summary` struct that summarizes the action performed.
+    ///
+    /// # Examples
+    ///
+    ///
     async fn process_hook(&self, user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
         let res = match self.aspect_type.as_str() {
             "create" | "update" => activity::upsert_activity(self.object_id, user, conn).await?,
@@ -183,6 +207,25 @@ impl Event {
     }
 }
 
+/// Inserts a new sync event into the database.
+///
+/// # Arguments
+///
+/// * `owner_id` - The ID of the Strava user associated with the sync event.
+/// * `event_time` - The time of the sync event in Unix timestamp format.
+/// * `conn` - A mutable reference to the database connection.
+///
+/// # Returns
+///
+/// Returns a `Result` containing `()` if the operation was successful, or an `anyhow::Error` if an error occurred.
+///
+/// # Errors
+///
+/// This function may return an error if the `event_time` is greater than the current time.
+///
+/// # Examples
+///
+///
 pub fn insert_sync(owner_id: StravaId, event_time: i64, conn: &mut AppConn) -> anyhow::Result<()> {
     ensure!(
         event_time <= get_time(),
