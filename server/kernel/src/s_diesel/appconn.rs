@@ -2,13 +2,12 @@ use std::ops::{Deref, DerefMut};
 
 use crate::domain::AnyResult;
 
-use super::schema;
 use anyhow::Context;
+use async_session::log::info;
 use diesel::prelude::*;
-use chrono::{DateTime, Utc};
 
 pub type AppConn = PgConnection;
-pub struct Store (PooledConnection<ConnectionManager<AppConn>>);
+pub struct Store(PooledConnection<ConnectionManager<AppConn>>);
 
 impl Deref for Store {
     type Target = AppConn;
@@ -29,37 +28,29 @@ impl Store {
         let conn = pool.0.get()?;
         Ok(Store(conn))
     }
-
 }
 
 use diesel_migrations::MigrationHarness;
-pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations = embed_migrations!("src/s_diesel/migrations");
+pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
+    embed_migrations!("src/s_diesel/migrations");
 
-fn run_db_migrations (conn: &mut AppConn) {
-    use schema::attachments::dsl::*;
-
-    diesel::update(attachments)
-        .filter(detached.is_null())
-        .set(detached.eq(DateTime::<Utc>::MAX_UTC))
-        .execute(conn)
-        .expect("rewrite detached failed");
-
+fn run_db_migrations(conn: &mut AppConn) {
+    info!("Running database migrations...");
     conn.run_pending_migrations(MIGRATIONS)
         .expect("Failed to run database migrations: {:?}");
 }
 
-
-use r2d2::{Pool, PooledConnection};
 use diesel::r2d2::ConnectionManager;
+use r2d2::{Pool, PooledConnection};
 
 #[derive(Clone)]
-pub struct DbPool (pub r2d2::Pool<ConnectionManager<AppConn>>);
+pub struct DbPool(pub r2d2::Pool<ConnectionManager<AppConn>>);
 
 impl DbPool {
     pub fn init() -> AnyResult<r2d2::Pool<ConnectionManager<AppConn>>> {
-        let database_url = std::env::var("DB_URL").unwrap_or(
-            "postgres://localhost/tendabike".to_string());
-            
+        let database_url =
+            std::env::var("DB_URL").unwrap_or("postgres://localhost/tendabike".to_string());
+
         println!("Connecting to database {}...", database_url);
         let manager = ConnectionManager::<AppConn>::new(database_url);
 
@@ -71,5 +62,4 @@ impl DbPool {
         run_db_migrations(&mut conn);
         Ok(pool)
     }
-
 }

@@ -1,6 +1,7 @@
-use std::cmp::{min, max};
+use std::cmp::{max, min};
 
 use super::*;
+use ::time::OffsetDateTime;
 use schema::{part_types, parts};
 
 // make rls happy for now. This is broken anyways...
@@ -19,6 +20,7 @@ impl ATrait for Assembly {
 }
 
 /// The database's representation of a part.
+#[serde_as]
 #[derive(
     Clone,
     Debug,
@@ -47,7 +49,8 @@ pub struct Part {
     /// The model name
     pub model: String,
     /// purchase date
-    pub purchase: DateTime<Utc>,
+    #[serde_as(as = "Rfc3339")]
+    pub purchase: OffsetDateTime,
     /// usage time
     pub time: i32,
     /// Usage distance
@@ -59,11 +62,14 @@ pub struct Part {
     /// usage count
     pub count: i32,
     /// last time it was used
-    pub last_used: DateTime<Utc>,
+    #[serde_as(as = "Rfc3339")]
+    pub last_used: OffsetDateTime,
     /// Was it disposed? If yes, when?
-    pub disposed_at: Option<DateTime<Utc>>,
+    #[serde_as(as = "Option<Rfc3339>")]
+    pub disposed_at: Option<OffsetDateTime>,
 }
 
+#[serde_as]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Insertable)]
 #[diesel(table_name = parts)]
 pub struct NewPart {
@@ -77,9 +83,13 @@ pub struct NewPart {
     pub vendor: String,
     /// The model name
     pub model: String,
-    pub purchase: Option<DateTime<Utc>>,
+    #[serde_as(as = "Option<Rfc3339>")]
+    pub purchase: Option<OffsetDateTime>,
 }
 
+use serde_with::serde_as;
+use time::format_description::well_known::Rfc3339;
+#[serde_as]
 #[derive(Clone, Debug, PartialEq, Deserialize, AsChangeset)]
 #[diesel(table_name = parts)]
 #[diesel(treat_none_as_null = true)]
@@ -93,9 +103,11 @@ pub struct ChangePart {
     pub vendor: String,
     /// The model name
     pub model: String,
-    pub purchase: DateTime<Utc>,
+    #[serde_as(as = "Rfc3339")]
+    pub purchase: OffsetDateTime,
     /// Was it disposed? If yes, when?
-    pub disposed_at: Option<DateTime<Utc>>,
+    #[serde_as(as = "Option<Rfc3339>")]
+    pub disposed_at: Option<OffsetDateTime>,
 }
 
 #[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -105,10 +117,10 @@ NewtypeDisplay! { () pub struct PartId(); }
 NewtypeFrom! { () pub struct PartId(i32); }
 
 impl PartId {
-    pub fn new (id:i32) -> PartId {
+    pub fn new(id: i32) -> PartId {
         PartId(id)
     }
-    
+
     pub fn get(id: i32, user: &dyn Person, conn: &mut AppConn) -> AnyResult<PartId> {
         PartId(id).checkuser(user, conn)
     }
@@ -174,7 +186,12 @@ impl PartId {
     ///
     /// If the stored purchase date is later than the usage date, it will adjust the purchase date
     /// returns the changed part
-    pub fn apply_usage(self, usage: &Usage, start: DateTime<Utc>, conn: &mut AppConn) -> AnyResult<Part> {
+    pub fn apply_usage(
+        self,
+        usage: &Usage,
+        start: OffsetDateTime,
+        conn: &mut AppConn,
+    ) -> AnyResult<Part> {
         use schema::parts::dsl::*;
 
         trace!("Applying usage {:?} to part {}", usage, self);
@@ -189,7 +206,7 @@ impl PartId {
                     distance.eq(distance + usage.distance),
                     count.eq(count + usage.count),
                     purchase.eq(min(part.purchase, start)),
-                    last_used.eq(max(part.last_used, start))
+                    last_used.eq(max(part.last_used, start)),
                 ))
                 .get_result::<Part>(conn)
         })?)
@@ -221,7 +238,7 @@ impl Part {
                 descend.eq(0),
                 distance.eq(0),
                 count.eq(0),
-                last_used.eq(purchase)
+                last_used.eq(purchase),
             ))
             .get_results::<Part>(conn)?;
 
@@ -253,14 +270,15 @@ impl NewPart {
             format!("user {} cannot create this part", user.get_id()),
         )?;
 
+        let now = OffsetDateTime::now_utc();
         let values = (
             owner.eq(self.owner),
             what.eq(self.what),
             name.eq(self.name),
             vendor.eq(self.vendor),
             model.eq(self.model),
-            purchase.eq(self.purchase.unwrap_or_else(Utc::now)),
-            last_used.eq(self.purchase.unwrap_or_else(Utc::now)),
+            purchase.eq(self.purchase.unwrap_or(now)),
+            last_used.eq(self.purchase.unwrap_or(now)),
             time.eq(0),
             distance.eq(0),
             climb.eq(0),
@@ -283,7 +301,9 @@ impl ChangePart {
             format!("user {} cannot create this part", user.get_id()),
         )?;
 
-        let part: Part = diesel::update(parts.filter(id.eq(self.id))).set(self).get_result(conn)?;
+        let part: Part = diesel::update(parts.filter(id.eq(self.id)))
+            .set(self)
+            .get_result(conn)?;
         Ok(part)
     }
 }

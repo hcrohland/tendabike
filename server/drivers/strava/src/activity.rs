@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use time::OffsetDateTime;
 
 use super::*;
 use ActTypeId;
@@ -14,7 +14,8 @@ pub(crate) struct StravaActivity {
     /// This name of the activity.
     pub name: String,
     /// Start time
-    pub start_date: DateTime<Utc>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub start_date: OffsetDateTime,
     /// End time
     pub elapsed_time: i32,
     /// activity time
@@ -133,7 +134,7 @@ impl StravaActivity {
                     .execute(conn)?;
             }
 
-            user.update_last(tb.start.timestamp(), conn)
+            user.update_last(tb.start.unix_timestamp(), conn)
                 .context("unable to update user")?;
 
             Ok(res)

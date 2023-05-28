@@ -1,24 +1,24 @@
 [package]
 name = "kernel"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Christoph Rohland <tendabike@rohland.net>"]
 edition = "2021"
 
 [dependencies]
 
-diesel = { version = "2", features = ["postgres", "chrono", "r2d2"] }
+diesel = { version = "2", features = ["postgres", "time", "r2d2", "postgres_backend"] }
 diesel_migrations = "2"
 diesel-derive-newtype = "2"
 
 newtype_derive = "0.1"
-log = "0.4.3"  
+async-session = "3.0.0"
 serde = "1.0" 
 serde_derive = "1.0"
+serde_with = { version = "3", features = ["time_0_3"] }
 csv = "1.1"
 
-chrono = { version ="0.4", features = ["serde"] }
-chrono-tz = "0.8"
-
+time = { version = "0.3", features = ["serde", "parsing", "serde-human-readable"] }
+time-tz = {version = "1", features = ["db"]}
 pretty_assertions = "1"
 
 thiserror = "1.0"

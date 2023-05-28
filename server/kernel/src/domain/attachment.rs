@@ -5,13 +5,17 @@
 
 use super::*;
 use schema::attachments;
+use time::{macros::datetime, OffsetDateTime};
+
+const MAX_TIME: OffsetDateTime = datetime!(9100-01-01 0:00 UTC);
 /// Description of an Attach or Detach request
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 pub struct Event {
     /// the part which should be change
     part_id: PartId,
     /// when it the change happens
-    time: DateTime<Utc>,
+    #[serde(with = "time::serde::rfc3339")]
+    time: OffsetDateTime,
     /// The gear the part is or will be attached to
     gear: PartId,
     /// the hook on that gear
@@ -45,14 +49,14 @@ impl Event {
     ///
     /// 'target' is the corresponding Attachment. handed in as an optimization
     /// it must be the same as self.at(conn)
-    /// 
+    ///
     /// When the 'self.partid' has child parts they are attached to that part
     ///
     fn detach_assembly(self, target: Attachment, conn: &mut AppConn) -> AnyResult<Summary> {
         debug!("- detaching {}", target.part_id);
         let subs = self.assembly(target.gear, conn)?;
         let mut hash = SumHash::new(target.detach(self.time, conn)?);
-        for sub in subs { 
+        for sub in subs {
             sub.shift(self.time, target.part_id, &mut hash, conn)?;
         }
         Ok(hash.collect())
@@ -117,7 +121,7 @@ impl Event {
                     };
                     let (sum, _) = ev.attach_one(conn)?;
                     hash.merge(sum);
-                } 
+                }
             }
             Ok(hash.collect())
         })
@@ -130,13 +134,13 @@ impl Event {
     /// * Detach time is adjusted according to later attachments
     ///
     /// If the part is attached already to the same hook, the attachments are merged
-    fn attach_one(self, conn: &mut AppConn) -> AnyResult<(Summary, DateTime<Utc>)> {
+    fn attach_one(self, conn: &mut AppConn) -> AnyResult<(Summary, OffsetDateTime)> {
         let mut hash = SumHash::default();
         // when does the current attachment end
-        let mut end = DateTime::<Utc>::MAX_UTC; 
+        let mut end = MAX_TIME;
         // the time the current part will be detached
         // we need this to reattach subparts
-        let mut det = DateTime::<Utc>::MAX_UTC; 
+        let mut det = MAX_TIME;
 
         let what = self.part_id.what(conn)?;
 
@@ -149,7 +153,8 @@ impl Event {
         }
 
         if let Some(next) = self.after(conn)? {
-            if end > next.attached { // is this attachment earlier than the previous one?
+            if end > next.attached {
+                // is this attachment earlier than the previous one?
                 if next.gear == self.gear && next.hook == self.hook {
                     trace!("still attached until {}", next.detached);
                     // the previous one is the real next so we keep 'det'!
@@ -158,7 +163,13 @@ impl Event {
                     let sum = next.delete(conn)?;
                     hash.merge(sum);
                 } else {
-                    trace!("changing gear/hook from {}/{} to {}/{}", self.gear, self.hook, next.gear, next.hook);
+                    trace!(
+                        "changing gear/hook from {}/{} to {}/{}",
+                        self.gear,
+                        self.hook,
+                        next.gear,
+                        next.hook
+                    );
                     // it is attached to a different hook later
                     // the new attachment ends when the next starts
                     end = next.attached;
@@ -180,7 +191,7 @@ impl Event {
     }
 
     /// create an attachment of self with the given detached time
-    fn attachment(self, detached: DateTime<Utc>) -> Attachment {
+    fn attachment(self, detached: OffsetDateTime) -> Attachment {
         Attachment {
             part_id: self.part_id,
             gear: self.gear,
@@ -315,13 +326,15 @@ pub struct Attachment {
     /// the sub-part, which is attached to the hook
     part_id: PartId,
     /// when it was attached
-    attached: DateTime<Utc>,
+    #[serde(with = "time::serde::rfc3339")]
+    attached: OffsetDateTime,
     /// The gear the part is attached to
     gear: PartId,
     /// the hook on that gear
     hook: PartTypeId,
     /// when it was removed again, "none" means "still attached"
-    detached: DateTime<Utc>,
+    #[serde(with = "time::serde::rfc3339")]
+    detached: OffsetDateTime,
     // we do not accept theses values from the client!
     /// usage count
     pub count: i32,
@@ -359,12 +372,16 @@ impl Attachment {
     fn usage(&self, factor: Factor, conn: &mut AppConn) -> Usage {
         Activity::find(self.gear, self.attached, self.detached, conn)
             .into_iter()
-            .fold(Usage::none(), |acc, x| {
-                acc.add_activity(&x, factor)
-            })
+            .fold(Usage::none(), |acc, x| acc.add_activity(&x, factor))
     }
 
-    fn shift (&self, at_time: DateTime<Utc>, target: PartId, hash: &mut SumHash, conn: &mut AppConn) -> AnyResult<DateTime<Utc>> {
+    fn shift(
+        &self,
+        at_time: OffsetDateTime,
+        target: PartId,
+        hash: &mut SumHash,
+        conn: &mut AppConn,
+    ) -> AnyResult<OffsetDateTime> {
         debug!("-- moving {} to {}", self.part_id, target);
         let ev = Event {
             time: at_time,
@@ -377,12 +394,12 @@ impl Attachment {
         hash.merge(sum);
         Ok(det)
     }
-        
+
     /// change detached time for attachment
     ///
     /// * deletes the attachment for detached < attached
     /// * Does not check for collisions
-    fn detach(mut self, detached: DateTime<Utc>, conn: &mut AppConn) -> AnyResult<Summary> {
+    fn detach(mut self, detached: OffsetDateTime, conn: &mut AppConn) -> AnyResult<Summary> {
         trace!("detaching {} at {}", self.part_id, detached);
 
         let del = self.delete(conn)?;
