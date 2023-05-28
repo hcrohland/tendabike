@@ -8,7 +8,10 @@
 //!
 
 use super::*;
+use ::time::PrimitiveDateTime;
 use schema::activities;
+use time::{macros::format_description, OffsetDateTime};
+use time_tz::PrimitiveDateTimeExt;
 
 /// The Id of an Activity
 ///
@@ -33,7 +36,8 @@ pub struct Activity {
     /// This name of the activity.
     pub name: String,
     /// Start time
-    pub start: DateTime<Utc>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub start: OffsetDateTime,
     /// End time
     pub duration: i32,
     /// activity time
@@ -59,7 +63,8 @@ pub struct NewActivity {
     /// This name of the activity.
     pub name: String,
     /// Start time
-    pub start: DateTime<Utc>,
+    #[serde(with = "time::serde::rfc3339")]
+    pub start: OffsetDateTime,
     /// End time
     pub duration: i32,
     /// activity time
@@ -77,7 +82,7 @@ pub struct NewActivity {
 }
 
 impl ActivityId {
-    pub fn new(id:i32) -> Self {
+    pub fn new(id: i32) -> Self {
         Self(id)
     }
 
@@ -114,13 +119,13 @@ impl ActivityId {
             diesel::delete(activities.filter(id.eq(self)))
                 .execute(conn)
                 .context("Error deleting activity")?;
-            res.activities[0].gear=None;
-            res.activities[0].duration=0;
-            res.activities[0].time=None;
-            res.activities[0].distance=None;
-            res.activities[0].climb=None;
-            res.activities[0].descend=None;
-            res.activities[0].power=None;
+            res.activities[0].gear = None;
+            res.activities[0].duration = 0;
+            res.activities[0].time = None;
+            res.activities[0].distance = None;
+            res.activities[0].climb = None;
+            res.activities[0].descend = None;
+            res.activities[0].power = None;
             Ok(res)
         })
     }
@@ -137,10 +142,8 @@ impl ActivityId {
         conn: &mut AppConn,
     ) -> AnyResult<Summary> {
         conn.transaction(|conn| {
-            self
-                .read(user, conn)?
-                .register(Factor::Sub, conn)?;
-                
+            self.read(user, conn)?.register(Factor::Sub, conn)?;
+
             let act = diesel::update(activities::table)
                 .filter(activities::id.eq(self))
                 .set(act)
@@ -149,8 +152,9 @@ impl ActivityId {
 
             info!("Updating {:?}", act);
 
-            let res = act.register(Factor::Add, conn)
-                            .context("Could not register activity")?;
+            let res = act
+                .register(Factor::Add, conn)
+                .context("Could not register activity")?;
             Ok(res)
         })
     }
@@ -161,11 +165,7 @@ impl Activity {
     ///
     /// returns the activity and all affected parts  
     /// checks authorization  
-    pub fn create(
-        act: &NewActivity,
-        user: &dyn Person,
-        conn: &mut AppConn,
-    ) -> AnyResult<Summary> {
+    pub fn create(act: &NewActivity, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Summary> {
         user.check_owner(
             act.user_id,
             format!(
@@ -181,8 +181,7 @@ impl Activity {
                 .get_result(conn)
                 .context("Could not insert activity")?;
             // let res = new.check_geartype(res, conn)?;
-            new
-                .register(Factor::Add, conn)
+            new.register(Factor::Add, conn)
                 .context("Could not register activity")
         })
     }
@@ -208,8 +207,8 @@ impl Activity {
     /// if end is none it means for the whole future
     pub fn find(
         part: PartId,
-        begin: DateTime<Utc>,
-        end: DateTime<Utc>,
+        begin: OffsetDateTime,
+        end: OffsetDateTime,
         conn: &mut AppConn,
     ) -> Vec<Activity> {
         use schema::activities::dsl::{activities, gear, start};
@@ -223,19 +222,25 @@ impl Activity {
     }
 
     pub fn register(self, factor: Factor, conn: &mut AppConn) -> AnyResult<Summary> {
-        trace!("{} {:?}", if factor == Factor::Add {"Registering"} else {"Unregistering"}, self);
+        trace!(
+            "{} {:?}",
+            if factor == Factor::Add {
+                "Registering"
+            } else {
+                "Unregistering"
+            },
+            self
+        );
 
         let usage = self.usage(factor);
-        Ok(
-            Summary {
-                parts: Attachment::parts_per_activity(&self, conn)
-                    .iter()
-                    .map(|part| part.apply_usage(&usage, self.start, conn))
-                    .collect::<AnyResult<_>>()?,
-                attachments: Attachment::register(&self, &usage, conn),
-                activities: vec![self]
-            }
-        )
+        Ok(Summary {
+            parts: Attachment::parts_per_activity(&self, conn)
+                .iter()
+                .map(|part| part.apply_usage(&usage, self.start, conn))
+                .collect::<AnyResult<_>>()?,
+            attachments: Attachment::register(&self, &usage, conn),
+            activities: vec![self],
+        })
     }
 
     pub fn get_all(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<Activity>> {
@@ -243,7 +248,10 @@ impl Activity {
         let acts = activities
             .filter(user_id.eq(user.get_id()))
             .get_results::<Activity>(conn)
-            .context(format!("Error reading activities for user {}", user.get_id()))?; 
+            .context(format!(
+                "Error reading activities for user {}",
+                user.get_id()
+            ))?;
         Ok(acts)
     }
 
@@ -265,12 +273,14 @@ impl Activity {
             .get_results(conn)?;
 
         Ok(p_types)
-
     }
 
-
-    pub fn csv2descend(data: impl std::io::Read, tz: String, user: &dyn Person, conn: &mut AppConn) 
-        -> AnyResult<(Summary, Vec<String>, Vec<String>)> {
+    pub fn csv2descend(
+        data: impl std::io::Read,
+        tz: String,
+        user: &dyn Person,
+        conn: &mut AppConn,
+    ) -> AnyResult<(Summary, Vec<String>, Vec<String>)> {
         use schema::activities::dsl::*;
         #[derive(Debug, Deserialize)]
         struct Result {
@@ -284,13 +294,14 @@ impl Activity {
             descend: String,
             climb: Option<String>,
         }
-
+        const FORMAT: &[::time::format_description::FormatItem] =
+            format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
         let mut good = Vec::new();
         let mut bad = Vec::new();
         let mut summary = Summary::default();
         let mut rdr = csv::Reader::from_reader(data);
-        let tz = tz.parse::<chrono_tz::Tz>()
-                    .map_err(|_| Error::BadRequest(format!("Unknown timezone {}",tz)))?;
+        let tz = time_tz::timezones::get_by_name(&tz)
+            .ok_or_else(|| Error::BadRequest(format!("Unknown timezone {}", tz)))?;
 
         for result in rdr.deserialize() {
             // The iterator yields Result<StringRecord, Error>, so we check the
@@ -298,78 +309,94 @@ impl Activity {
             let record: Result = result.context("record")?;
             info!("{:?}", record);
             let description = format!("{} at {}", &record.title, &record.start);
-            let rstart = tz.datetime_from_str(&record.start, "%Y-%m-%d %H:%M:%S")?;
-            let rdescend = record.descend.replace('.', "").parse::<i32>().context("Could not parse descend")?;
+            let rstart = PrimitiveDateTime::parse(&record.start, FORMAT)
+                .context("Could not parse start")?
+                .assume_timezone(tz)
+                .unwrap();
+            let rdescend = record
+                .descend
+                .replace('.', "")
+                .parse::<i32>()
+                .context("Could not parse descend")?;
             let rclimb = match record.climb {
-                Some(rclimb) => Some(rclimb.replace('.', "").parse::<i32>().context("Could not parse climb")?),
+                Some(rclimb) => Some(
+                    rclimb
+                        .replace('.', "")
+                        .parse::<i32>()
+                        .context("Could not parse climb")?,
+                ),
                 None => None,
             };
-            match 
-                conn.transaction::<_,anyhow::Error,_>(|conn| {
-                    let act: Activity = activities
-                        .filter(user_id.eq(user.get_id()))
-                        .filter(start.eq(rstart))
-                        .for_update()
-                        .get_result(conn).context(format!("Activitiy {}", rstart))?;
-                    let act_id = act.register(Factor::Sub, conn)?
-                        .activities[0].id;
-                    if let Some(rclimb) = rclimb {
-                        diesel::update(activities.find(act_id))
-                            .set(climb.eq(rclimb))
+            match conn.transaction::<_, anyhow::Error, _>(|conn| {
+                let act: Activity = activities
+                    .filter(user_id.eq(user.get_id()))
+                    .filter(start.eq(rstart))
+                    .for_update()
+                    .get_result(conn)
+                    .context(format!("Activitiy {}", rstart))?;
+                let act_id = act.register(Factor::Sub, conn)?.activities[0].id;
+                if let Some(rclimb) = rclimb {
+                    diesel::update(activities.find(act_id))
+                        .set(climb.eq(rclimb))
                         .execute(conn)
-                        .context("Error updating climb")?;    
-                    }
-                    let act = diesel::update(activities.find(act_id))
-                        .set(descend.eq(rdescend))
-                        .get_result::<Activity>(conn)
-                        .context("Error updating descent")?;
-                    act.register(Factor::Add, conn)
-                        .context("Could not register activity")
-                    }) 
-                {
-                    Ok(res) => {
-                        summary = summary.merge(res);
-                        good.push(description);
-                    },
-                    Err(_) => {
-                        warn!("skipped {}", description); 
-                        bad.push(description);
-                    }
+                        .context("Error updating climb")?;
                 }
-        }   
+                let act = diesel::update(activities.find(act_id))
+                    .set(descend.eq(rdescend))
+                    .get_result::<Activity>(conn)
+                    .context("Error updating descent")?;
+                act.register(Factor::Add, conn)
+                    .context("Could not register activity")
+            }) {
+                Ok(res) => {
+                    summary = summary.merge(res);
+                    good.push(description);
+                }
+                Err(_) => {
+                    warn!("skipped {}", description);
+                    bad.push(description);
+                }
+            }
+        }
 
         Ok((summary, good, bad))
     }
 
-    pub fn set_default_part (gear_id: PartId, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Summary>{
-        conn.transaction(|conn| {
-            def_part(&gear_id, user, conn)
-        })
+    pub fn set_default_part(
+        gear_id: PartId,
+        user: &dyn Person,
+        conn: &mut AppConn,
+    ) -> AnyResult<Summary> {
+        conn.transaction(|conn| def_part(&gear_id, user, conn))
     }
-    pub fn rescan_all (conn: &mut AppConn) -> AnyResult<()>{
+    pub fn rescan_all(conn: &mut AppConn) -> AnyResult<()> {
         warn!("rescanning all activities!");
         let res = conn.transaction(|conn| {
             {
                 use schema::parts::dsl::*;
                 debug!("resetting all parts");
-                diesel::update(parts).set((
-                    time.eq(0),
-                    distance.eq(0),
-                    climb.eq(0),
-                    descend.eq(0),
-                    count.eq(0),
-                )).execute(conn)?;
+                diesel::update(parts)
+                    .set((
+                        time.eq(0),
+                        distance.eq(0),
+                        climb.eq(0),
+                        descend.eq(0),
+                        count.eq(0),
+                    ))
+                    .execute(conn)?;
             }
             {
                 use schema::attachments::dsl::*;
                 debug!("resetting all attachments");
-                diesel::update(attachments).set((
-                    time.eq(0),
-                    distance.eq(0),
-                    climb.eq(0),
-                    descend.eq(0),
-                    count.eq(0),
-                )).execute(conn)?;
+                diesel::update(attachments)
+                    .set((
+                        time.eq(0),
+                        distance.eq(0),
+                        climb.eq(0),
+                        descend.eq(0),
+                        count.eq(0),
+                    ))
+                    .execute(conn)?;
             }
             {
                 use schema::activities::dsl::*;
@@ -383,15 +410,14 @@ impl Activity {
         warn!("Done rescanning");
         res
     }
-    }
+}
 
-fn def_part(partid: &PartId, user: & dyn Person, conn: &mut AppConn) -> AnyResult<Summary> {
+fn def_part(partid: &PartId, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Summary> {
     use schema::activities::dsl::*;
     let part = partid.part(user, conn)?;
     let types = part.what.act_types(conn)?;
 
-    let acts =
-    diesel::update(activities)
+    let acts = diesel::update(activities)
         .filter(user_id.eq(user.get_id()))
         .filter(gear.is_null())
         .filter(what.eq_any(types))
@@ -405,4 +431,3 @@ fn def_part(partid: &PartId, user: & dyn Person, conn: &mut AppConn) -> AnyResul
     }
     Ok(hash.collect())
 }
-

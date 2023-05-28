@@ -3,7 +3,7 @@ use diesel::{QueryDsl, RunQueryDsl, sql_query};
 use diesel::{Queryable, Insertable};
 
 use serde_derive::{Deserialize, Serialize};
-use log::{info,trace,warn,debug};
+use async_session::log::{info,trace,warn,debug};
 
 pub mod activity;
 pub mod gear;
@@ -24,8 +24,5 @@ pub use user::*;
 
 
 fn get_time() -> i64 {
-    use std::time::SystemTime;
-    SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH).expect("Systemtime before EPOCH!")
-        .as_secs().try_into().expect("Sytemtime too far in the future")
+    time::OffsetDateTime::now_utc().unix_timestamp()
 }

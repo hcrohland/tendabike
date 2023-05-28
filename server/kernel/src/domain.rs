@@ -1,29 +1,28 @@
-mod types;
-mod part;
 mod activity;
 mod attachment;
-mod user;
 mod error;
+mod part;
 mod presentation;
+mod types;
+mod user;
 
-use std::collections::HashMap;
-use serde_derive::{Serialize, Deserialize};
-use log::{info,trace,warn,debug};
-use newtype_derive::*;
+use async_session::log::{debug, info, trace, warn};
 use diesel_derive_newtype::*;
+use newtype_derive::*;
+use serde_derive::{Deserialize, Serialize};
+use std::collections::HashMap;
 
-pub use part::{Part, PartId, NewPart, ChangePart};
 pub use activity::{Activity, ActivityId, NewActivity};
 pub use attachment::{Attachment, AttachmentDetail, Event};
-pub use presentation::Person;
-pub use user::*;
-pub use types::*;
-pub use error::{Error, AnyResult};
 use error::*;
+pub use error::{AnyResult, Error};
+pub use part::{ChangePart, NewPart, Part, PartId};
+pub use presentation::Person;
+pub use types::*;
+pub use user::*;
 
-use chrono::{DateTime, Utc, TimeZone};
-use diesel::{self, Connection, QueryDsl, RunQueryDsl};
 use diesel::prelude::*;
+use diesel::{self, Connection, QueryDsl, RunQueryDsl};
 
 use crate::s_diesel::schema;
 use crate::s_diesel::AppConn;
