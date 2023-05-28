@@ -16,6 +16,8 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
  */
+
+
 ///! Domain model for tendabike
 mod activity;
 mod attachment;

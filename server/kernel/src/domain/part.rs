@@ -18,26 +18,24 @@
 
  */
 
- use std::cmp::{min, max};
+//! This module contains the domain logic for parts in the Tendabike system.
+//!
+//! A `Part` represents a single part of a bike, such as a wheel or a chain. Each part has a unique
+//! ID, an owner, a type, a name, and various other attributes that describe its usage and history.
+//!
+//! The `Assembly` type is a collection of parts that make up a complete bike. It is represented as
+//! a `HashMap` of `PartId` keys and `Part` values.
+//!
+//! This module also defines the `ATrait` trait, which provides a method for looking up a part by ID
+//! in an `Assembly`.
+//!
+//! Finally, this module defines the `NewPart` type, which is used to create new parts in the database.
+
+use std::cmp::{min, max};
 
 use super::*;
 use ::time::OffsetDateTime;
 use schema::{part_types, parts};
-
-// make rls happy for now. This is broken anyways...
-
-//#[derive(Debug, Serialize, Deserialize, PartialEq)]
-pub type Assembly = HashMap<PartId, Part>;
-
-trait ATrait {
-    fn part(&self, part: PartId) -> Option<&Part>;
-}
-
-impl ATrait for Assembly {
-    fn part(&self, part: PartId) -> Option<&Part> {
-        self.get(&part)
-    }
-}
 
 /// The database's representation of a part.
 #[serde_as]
@@ -234,6 +232,20 @@ impl PartId {
 }
 
 impl Part {
+/// Returns a list of all parts owned by the given user.
+///
+/// # Arguments
+///
+/// * `user` - A reference to a `dyn Person` trait object representing the user.
+/// * `conn` - A mutable reference to an `AppConn` object representing the database connection.
+///
+/// # Returns
+///
+/// A `Vec` of `Part` objects owned by the given user.
+///
+/// # Errors
+///
+/// Returns an `AnyResult` object that may contain a `diesel::result::Error` if the query fails.
     pub fn get_all(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<Part>> {
         use schema::parts::dsl::*;
 

@@ -1,3 +1,8 @@
+//! This module contains types and functions related to handling activity and part types in the server.
+//!
+//! The `activity` and `part` functions are used to retrieve all activity and part types from the database.
+//! The `router` function is used to create a router that handles requests related to activity and part types.
+
 use axum::{Json, Router, routing::get};
 use kernel::domain::{ActivityType, PartType};
 

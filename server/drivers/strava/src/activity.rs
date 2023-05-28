@@ -1,3 +1,11 @@
+// This file contains the implementation of the StravaActivity struct and its methods.
+// StravaActivity is a struct that represents an activity from Strava API.
+// It has fields that represent the activity's properties such as id, type, name, start date, elapsed time, moving time, distance, total elevation gain, average watts, and gear id.
+// The struct also has a method called into_tb that converts the StravaActivity into a NewActivity struct which is used to create a new activity in the Tendabike API.
+// The struct also has a method called what that maps Strava workout type strings to Tendabike types.
+// The file imports the OffsetDateTime struct from the time crate.
+// The file also has two comments that indicate the beginning and end of a code block.
+
 use time::OffsetDateTime;
 
 use super::*;
@@ -6,6 +14,8 @@ use ActivityId;
 use NewActivity;
 
 #[derive(Serialize, Deserialize, Debug)]
+/// A struct that represents an activity from Strava API.
+/// It has fields that represent the activity's properties such as id, type, name, start date, elapsed time, moving time, distance, total elevation gain, average watts, and gear id.
 pub(crate) struct StravaActivity {
     pub id: i64,
     /// The activity type
@@ -31,6 +41,17 @@ pub(crate) struct StravaActivity {
 }
 
 impl StravaActivity {
+    /// Converts a StravaActivity into a NewActivity struct which is used to create a new activity in the Tendabike API.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `self` - A StravaActivity struct that represents an activity from Strava API.
+    /// * `user` - A reference to a StravaUser struct that represents the user who performed the activity.
+    /// * `conn` - A mutable reference to an AppConn struct that represents a connection to the Tendabike API.
+    /// 
+    /// # Returns
+    /// 
+    /// A Result containing a NewActivity struct if the conversion was successful, or an error if it failed.
     async fn into_tb(self, user: &StravaUser, conn: &mut AppConn) -> AnyResult<NewActivity> {
         let what = self.what()?;
         let gear = match self.gear_id {
@@ -52,7 +73,15 @@ impl StravaActivity {
         })
     }
 
-    /// map strava workout type strings to tendabike types
+    /// Maps Strava workout type strings to Tendabike types.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `self` - A reference to a StravaActivity struct that represents an activity from Strava API.
+    /// 
+    /// # Returns
+    /// 
+    /// A Result containing an ActTypeId if the mapping was successful, or an error if it failed.
     fn what(&self) -> AnyResult<ActTypeId> {
         let t = self.type_.as_str();
 
@@ -102,6 +131,17 @@ impl StravaActivity {
 }
 
 impl StravaActivity {
+    /// Sends the activity to Tendabike API.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `self` - A reference to a StravaActivity struct that represents an activity from Strava API.
+    /// * `user` - A reference to a StravaUser struct that represents the user from Strava API.
+    /// * `conn` - A mutable reference to an AppConn struct that represents the connection to the Tendabike API.
+    /// 
+    /// # Returns
+    /// 
+    /// A Result containing a Summary if the sending was successful, or an error if it failed.
     pub(crate) async fn send_to_tb(
         self,
         user: &StravaUser,

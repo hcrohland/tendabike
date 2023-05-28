@@ -17,10 +17,12 @@
 
  */
 
-//! The list of all historical attachments. This is the central piece of TendaBike.
+//! This module contains the implementation of the `Attachment` struct and its related functions.
 //!
-//! Attachments can be hierarchical
-//! They are identified by part_id and attached time
+//! An attachment records that a part is attached to a gear at a certain time. Attachments can be hierarchical and are identified by part_id and attached time.
+//!
+//! This module also contains the implementation of the `Event` struct, which describes an attach or detach request.
+//!
 
 use super::*;
 use schema::attachments;

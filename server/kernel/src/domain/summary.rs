@@ -1,3 +1,14 @@
+//! This module contains the implementation of the `Summary` struct and its associated functions.
+//!
+//! The `Summary` struct is used to represent a summary of activities, parts, and attachments.
+//! It contains three fields: `activities`, `parts`, and `attachments`, which are vectors of `Activity`,
+//! `Part`, and `AttachmentDetail` structs, respectively.
+//!
+//! The `Summary` struct also has several associated functions, including `new`, `append`, `merge`, and `first`.
+//!
+//! Additionally, this module contains the `SumHash` struct and its associated functions, which are used
+//! to efficiently merge multiple `Summary` structs together.
+
 use super::*;
 #[derive(Serialize, Debug, Default)]
 pub struct Summary {

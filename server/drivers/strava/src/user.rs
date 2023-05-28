@@ -1,3 +1,10 @@
+//! This module contains the implementation of the StravaUser struct and its methods.
+//!
+//! The StravaUser struct represents a user of the Strava API and contains information such as the user's
+//! Strava ID, Tendabike ID, access token, and refresh token.
+//!
+//! The methods implemented for the StravaUser struct allow for reading and updating user data, as well as
+//! checking the validity of the user's access token.
 use diesel_derive_newtype::DieselNewType;
 use newtype_derive::{NewtypeDisplay, NewtypeFrom, newtype_fmt};
 
@@ -29,10 +36,16 @@ pub struct StravaUser {
 }
 
 impl StravaUser {
-    /// 
+    /// Reads the StravaUser data for the given `id` from the database.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - A `UserId` representing the Tendabike user ID.
+    /// * `conn` - A mutable reference to the database connection.
+    ///
     /// # Errors
-    /// 
-    /// returns Error if the user is not registered
+    ///
+    /// Returns an `Error` if the user is not registered.
     pub fn read (id: UserId, conn: &mut AppConn) -> AnyResult<Self> {
         strava_users::table
             .filter(strava_users::tendabike_id.eq(id))
@@ -214,6 +227,18 @@ impl StravaUser {
         Ok(Summary::new(activities, parts,attachments))
     }
 
+    /// Upsert a Strava user by ID, updating their Tendabike user ID if they already exist, or creating a new user if they don't.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - A `StravaId` representing the ID of the Strava user to upsert.
+    /// * `firstname` - A `&str` representing the first name of the Strava user.
+    /// * `lastname` - A `&str` representing the last name of the Strava user.
+    /// * `conn` - A mutable reference to a `AppConn` representing the database connection.
+    ///
+    /// # Returns
+    ///
+    /// An `AnyResult` containing a `StravaUser` representing the upserted user.
     pub async fn upsert(id: StravaId, firstname: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<StravaUser> {
         debug!("got id {}: {} {}", id, &firstname, &lastname);
 
@@ -272,7 +297,6 @@ pub fn get_all_stats(conn: &mut AppConn) -> AnyResult<Vec<StravaStat>> {
     }).collect()
 }
 
-/// Get the strava id for all users
 pub async fn sync_users (user_id: Option<StravaId>, time: i64, conn: &mut AppConn) -> AnyResult<()> {
     use schema::strava_users::dsl::*;
 
@@ -287,6 +311,16 @@ pub async fn sync_users (user_id: Option<StravaId>, time: i64, conn: &mut AppCon
         Ok(())
 }
 
+/// Returns the Strava URL for a user with the given Strava ID.
+///
+/// # Arguments
+///
+/// * `strava_id` - An `i32` representing the Strava ID of the user.
+/// * `conn` - A mutable reference to a `AppConn` representing the database connection.
+///
+/// # Returns
+///
+/// An `AnyResult` containing a `String` representing the Strava URL for the user.
 pub fn strava_url(strava_id: i32, conn: &mut AppConn) -> AnyResult<String> {
     let user_id = s_diesel::get_user_id_from_strava_id(conn, strava_id)?;
     Ok(format!("https://strava.com/athletes/{}", &user_id))

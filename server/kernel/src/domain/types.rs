@@ -18,7 +18,13 @@
 
  */
 
- use super::*;
+//! This module defines the types used in the tendabike application.
+//!
+//! It includes the types for parts and activities, as well as their relationships.
+//!
+//! The types defined in this module are used throughout the application to ensure type safety and consistency.
+
+use super::*;
 use schema::{activity_types, part_types};
 
 #[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]

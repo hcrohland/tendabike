@@ -1,10 +1,11 @@
-//! Example OAuth (Strava) implementation.
+//! This module contains the implementation of the OAuth flow for Strava authentication.
+//! It defines the `oauth_client` function which returns a `StravaClient` that can be used to
+//! authenticate users with Strava.
 //!
-//! 1) Create client_id and client_secret at <https://www.strava.com/settings/api>
-//! 2) Run with the following (replacing values appropriately):
-//! ```not_rust
-//! CLIENT_ID=REPLACE_ME CLIENT_SECRET=REPLACE_ME cargo run -p example-oauth
-//! ```
+//! It also defines the `StravaAthleteInfo` and `StravaExtraTokenFields` structs which are used
+//! to store additional information about the authenticated user.
+//!
+//! Finally, it defines the `COOKIE_NAME` constant which is used to store the session cookie.
 
 use crate::{internal_any, internal_error, user::RUser, AppDbConn};
 use anyhow::ensure;

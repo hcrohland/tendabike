@@ -18,7 +18,11 @@
 
  */
 
-
+//! This module contains the error types used throughout the application.
+//!
+//! The `Error` enum defines the different types of errors that can occur, and the `AnyResult` type
+//! is a convenient alias for `Result<T, anyhow::Error>`.
+//!
 use thiserror::Error;
 pub use anyhow::{Context, ensure, bail};
 

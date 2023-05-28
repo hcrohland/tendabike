@@ -18,7 +18,38 @@
 
  */
 
- use anyhow::ensure;
+//! This module contains the implementation of the Strava webhook API endpoints.
+//!
+//! The webhook API is used by Strava to notify Tendabike of new activities and other events.
+//! The endpoints in this module handle the incoming webhook requests, validate them, and
+//! process the events.
+//!
+//! The following endpoints are defined in this module:
+//!
+//! - `hooks`: The main webhook endpoint that is called by the client to process incoming events.
+//! - `create_event`: An endpoint that is called by Strava to inform about a new event.
+//! - `validate_subscription`: An endpoint that is called by Strava to validate the webhook subscription.
+//! - `sync_api`: An endpoint that triggers a manual sync of Strava data for all users.
+//! - `sync`: An endpoint that triggers a manual sync of Strava data for a specific user.
+//!
+//! The `create_event` endpoint is the main entry point for incoming webhook events. It is responsible
+//! for validating the incoming request, extracting the event data, and storing incoming events in the
+//! database. This endpoint is not meant to be called directly.
+//!
+//! The `hooks` endpoint is the main entry point for clients to process incoming events and return the resulting changes.
+//!
+//! The `validate_subscription` endpoint is called by Strava to validate the webhook subscription.
+//! When a new subscription is created, Strava sends a validation request to this endpoint. The
+//! endpoint must respond with the `hub.challenge` value that was sent in the request.
+//!
+//! The `sync_api` endpoint triggers a manual sync of Strava data for all users. This endpoint is
+//! only accessible to users with the `admin` role.
+//!
+//! The `sync` endpoint triggers a manual sync of Strava data for a specific user. This endpoint is
+//! only accessible to users with the `admin` role.
+//!
+
+use anyhow::ensure;
 use async_session::log::{trace, info};
 use axum::{Json, extract::{Query, Path, State}};
 use kernel::{domain::{AnyResult, Error, Summary}};

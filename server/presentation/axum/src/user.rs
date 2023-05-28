@@ -1,3 +1,11 @@
+//! This module contains the implementation of user-related routes and handlers for the Axum web framework.
+//!
+//! The routes in this module are used to retrieve user information, summaries, and lists of users.
+//! The handlers in this module interact with the database and Strava API to retrieve and process user data.
+//!
+//! This module also defines the `RUser` struct, which represents a user in the system and is used throughout the module.
+//! Additionally, it defines the `AxumAdmin` struct, which is used as a marker type for routes that require admin privileges.
+
 use async_session::{async_trait, MemoryStore, SessionStore};
 use axum::{
     extract::{rejection::TypedHeaderRejectionReason, FromRef, FromRequestParts},
