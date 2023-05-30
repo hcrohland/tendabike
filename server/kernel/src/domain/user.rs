@@ -101,7 +101,7 @@ impl UserId {
         Ok(user.id)
     }
 
-    pub fn is_admin(&self, conn: &mut r2d2::PooledConnection<diesel::r2d2::ConnectionManager<PgConnection>>) -> AnyResult<bool> {
+    pub fn is_admin(&self, conn: &mut AppConn) -> AnyResult<bool> {
         self.read(conn).map(|u| u.is_admin)
     }     
 }
