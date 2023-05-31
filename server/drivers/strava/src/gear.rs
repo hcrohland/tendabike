@@ -1,11 +1,9 @@
 //! This module contains the implementation of StravaGear, a struct that represents a gear object from Strava API.
 //! It also contains functions to convert StravaGear to Tendabike's Part object and to map Strava gear_id to Tendabike gear_id.
 //!
-use diesel::{self, QueryDsl};
 
 use super::*;
 
-use schema::strava_gears;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaGear {
@@ -17,28 +15,16 @@ pub struct StravaGear {
     /// Id None it is shoes
     frame_type: Option<i32>,
 }
-#[derive(Serialize, Deserialize, Debug, Queryable, Insertable)]
-#[diesel(table_name = strava_gears)]
-struct Gear {
-    id: String,
-    tendabike_id: i32,
-    user_id: i32,
-}
 
 pub async fn strava_url(gear: i32, conn: &mut AppConn) -> AnyResult<String> {
-    use schema::strava_gears::dsl::*;
-
-    let mut g: String = strava_gears
-        .filter(tendabike_id.eq(gear))
-        .select(id)
-        .first(conn)
-        .await?;
+    let mut g = s_diesel::get_strava_name_for_gear_id(gear, conn).await?;
     if g.remove(0) != 'b' {
         bail!("Not found");
     }
 
     Ok(format!("https://strava.com/bikes/{}", &g))
 }
+
 
 impl StravaGear {
     fn into_tb(self, user: &StravaUser) -> AnyResult<NewPart> {
@@ -67,17 +53,6 @@ impl StravaGear {
     }
 }
 
-async fn get_tbid(strava_id: &str, conn: &mut AppConn) -> AnyResult<Option<PartId>> {
-    use schema::strava_gears::dsl::*;
-    
-    strava_gears
-        .find(strava_id)
-        .select(tendabike_id)
-        .for_update()
-        .first(conn).await
-        .optional().context("Error reading database")
-}
-
 /// map strava gear_id to tb gear_id
 ///
 /// If it does not exist create it at tb
@@ -87,7 +62,7 @@ pub(crate) async fn strava_to_tb(
     user: &StravaUser,
     conn: &mut AppConn,
 ) -> AnyResult<PartId> {
-    if let Some(gear) = get_tbid(&strava_id, conn).await? {
+    if let Some(gear) = s_diesel::get_tbid_for_strava_gear(&strava_id, conn).await? {
         return Ok(gear);
     }
 
@@ -101,7 +76,7 @@ pub(crate) async fn strava_to_tb(
         async {
             use schema::strava_gears::dsl::*;
             // maybe the gear was created by now?
-            if let Some(gear) = get_tbid(&strava_id, conn).await? {
+            if let Some(gear) = s_diesel::get_tbid_for_strava_gear(&strava_id, conn).await? {
                 return Ok(gear);
             }
 

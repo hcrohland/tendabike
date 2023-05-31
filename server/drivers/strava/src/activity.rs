@@ -151,15 +151,7 @@ impl StravaActivity {
         let tb = self.into_tb(user, conn).await?;
         conn.transaction(|conn| {
             async {
-                use schema::strava_activities::dsl::*;
-
-                let tb_id = strava_activities
-                    .find(strava_id)
-                    .select(tendabike_id)
-                    .for_update()
-                    .get_result::<ActivityId>(conn)
-                    .await
-                    .optional()?;
+                let tb_id = s_diesel::get_tbid_for_strava_activity(strava_id, conn).await?;
 
                 let res;
                 if let Some(tb_id) = tb_id {
@@ -167,14 +159,7 @@ impl StravaActivity {
                 } else {
                     res = Activity::create(&tb, user, conn).await?;
                     let new_id = res.first_act();
-                    diesel::insert_into(strava_activities)
-                        .values((
-                            id.eq(strava_id),
-                            tendabike_id.eq(new_id),
-                            user_id.eq(tb.user_id),
-                        ))
-                        .execute(conn)
-                        .await?;
+                    s_diesel::insert_new_activity(strava_id, tb.user_id, new_id, conn).await?;
                 }
 
                 user.update_last(tb.start.unix_timestamp(), conn).await
@@ -189,13 +174,7 @@ impl StravaActivity {
 }
 
 pub async fn strava_url(act: i32, conn: &mut AppConn) -> AnyResult<String> {
-    use schema::strava_activities::dsl::*;
-
-    let g: i64 = strava_activities
-        .filter(tendabike_id.eq(act))
-        .select(id)
-        .first(conn)
-        .await?;
+    let g = s_diesel::get_stravaid_for_tb_activity(act, conn).await?;
 
     Ok(format!("https://strava.com/activities/{}", &g))
 }
