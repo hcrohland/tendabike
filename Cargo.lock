@@ -1905,8 +1905,6 @@ dependencies = [
  "async-session",
  "axum",
  "axum-macros",
- "diesel",
- "diesel-async",
  "headers",
  "http",
  "kernel",

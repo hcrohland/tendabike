@@ -26,11 +26,11 @@ fn run_db_migrations(db: &str) {
     conn.run_pending_migrations(MIGRATIONS)
         .expect("Failed to run database migrations: {:?}");
 }
-
-pub struct DbPool {}
+#[derive(Clone)]
+pub struct DbPool (Pool<AsyncPgConnection>);
 
 impl DbPool {
-    pub async fn init() -> AnyResult<Pool<AsyncPgConnection>> {
+    pub async fn new() -> AnyResult<Self> {
         let database_url =
             std::env::var("DB_URL").unwrap_or("postgres://localhost/tendabike".to_string());
         run_db_migrations(&database_url);
@@ -39,6 +39,11 @@ impl DbPool {
             AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(database_url);
         let pool: Pool<AsyncPgConnection> = Pool::builder(config).build()?;
 
-        Ok(pool)
+        Ok(DbPool(pool))
+    }
+
+    pub async fn get(&self) -> AnyResult<diesel_async::pooled_connection::deadpool::Object<AsyncPgConnection>> {
+        let conn = self.0.get().await?;
+        Ok(conn)
     }
 }
