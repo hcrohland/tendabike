@@ -139,15 +139,15 @@ impl PartId {
         PartId(id)
     }
 
-    pub fn get(id: i32, user: &dyn Person, conn: &mut AppConn) -> AnyResult<PartId> {
-        PartId(id).checkuser(user, conn)
+    pub async fn get(id: i32, user: &dyn Person, conn: &mut AppConn) -> AnyResult<PartId> {
+        PartId(id).checkuser(user, conn).await
     }
 
     /// get the part with id part
-    pub fn part(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Part> {
+    pub async fn part(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Part> {
         let part = parts::table
             .find(self)
-            .first::<Part>(conn)
+            .first::<Part>(conn).await
             .with_context(|| format!("part {} does not exist", self))?;
         user.check_owner(
             part.owner,
@@ -159,25 +159,25 @@ impl PartId {
     /// get the name of the part
     ///
     /// does not check ownership. This is needed for rentals.
-    pub fn name(self, conn: &mut AppConn) -> AnyResult<String> {
+    pub async fn name(self, conn: &mut AppConn) -> AnyResult<String> {
         parts::table
             .find(self)
             .select(parts::name)
-            .first(conn)
+            .first(conn).await
             .with_context(|| format!("part {} does not exist", self))
     }
 
-    pub fn what(self, conn: &mut AppConn) -> AnyResult<PartTypeId> {
+    pub async fn what(self, conn: &mut AppConn) -> AnyResult<PartTypeId> {
         parts::table
             .find(self)
             .select(parts::what)
-            .first(conn)
+            .first(conn).await
             .with_context(|| format!("part {} does not exist", self))
     }
 
     /// check if the given user is the owner or an admin.
     /// Returns Forbidden if not.
-    pub fn checkuser(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<PartId> {
+    pub async fn checkuser(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<PartId> {
         use schema::parts::dsl::*;
 
         if user.is_admin() {
@@ -188,7 +188,7 @@ impl PartId {
             .find(self)
             .filter(owner.eq(user.get_id()))
             .select(owner)
-            .first::<UserId>(conn)?;
+            .first::<UserId>(conn).await?;
         if user.get_id() == own {
             return Ok(self);
         }
@@ -204,7 +204,7 @@ impl PartId {
     ///
     /// If the stored purchase date is later than the usage date, it will adjust the purchase date
     /// returns the changed part
-    pub fn apply_usage(
+    pub async fn apply_usage(
         self,
         usage: &Usage,
         start: OffsetDateTime,
@@ -214,8 +214,8 @@ impl PartId {
 
         trace!("Applying usage {:?} to part {}", usage, self);
 
-        Ok(conn.transaction(|conn| {
-            let part: Part = parts.find(self).for_update().get_result(conn)?;
+        Ok(conn.transaction(|conn| async {
+            let part: Part = parts.find(self).for_update().get_result(conn).await?;
             diesel::update(parts.find(self))
                 .set((
                     time.eq(time + usage.time),
@@ -226,8 +226,8 @@ impl PartId {
                     purchase.eq(min(part.purchase, start)),
                     last_used.eq(max(part.last_used, start)),
                 ))
-                .get_result::<Part>(conn)
-        })?)
+                .get_result::<Part>(conn).await
+        }.scope_boxed()).await?)
     }
 }
 
@@ -246,19 +246,19 @@ impl Part {
 /// # Errors
 ///
 /// Returns an `AnyResult` object that may contain a `diesel::result::Error` if the query fails.
-    pub fn get_all(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<Part>> {
+    pub async fn get_all(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<Part>> {
         use schema::parts::dsl::*;
 
         Ok(parts
             .filter(owner.eq(user.get_id()))
             .order_by(last_used)
-            .load::<Part>(conn)?)
+            .load::<Part>(conn).await?)
     }
 
     /// reset all usage counters for all parts of a person
     ///
     /// returns the list of main gears affected
-    pub fn reset(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<PartId>> {
+    pub async fn reset(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<PartId>> {
         use schema::parts::dsl::*;
         use std::collections::HashSet;
 
@@ -272,13 +272,13 @@ impl Part {
                 count.eq(0),
                 last_used.eq(purchase),
             ))
-            .get_results::<Part>(conn)?;
+            .get_results::<Part>(conn).await?;
 
         // get the main types
         let mains: HashSet<PartTypeId> = part_types::table
             .select(part_types::id)
             .filter(part_types::main.eq(part_types::id))
-            .load::<PartTypeId>(conn)
+            .load::<PartTypeId>(conn).await
             .expect("error loading PartType")
             .into_iter()
             .collect();
@@ -293,7 +293,7 @@ impl Part {
 }
 
 impl NewPart {
-    pub fn create(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Part> {
+    pub async fn create(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Part> {
         use schema::parts::dsl::*;
         info!("Create {:?}", self);
 
@@ -318,13 +318,13 @@ impl NewPart {
             count.eq(0),
         );
 
-        let part: Part = diesel::insert_into(parts).values(values).get_result(conn)?;
+        let part: Part = diesel::insert_into(parts).values(values).get_result(conn).await?;
         Ok(part)
     }
 }
 
 impl ChangePart {
-    pub fn change(&self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Part> {
+    pub async fn change(&self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Part> {
         use schema::parts::dsl::*;
         info!("Change {:?}", self);
 
@@ -335,7 +335,7 @@ impl ChangePart {
 
         let part: Part = diesel::update(parts.filter(id.eq(self.id)))
             .set(self)
-            .get_result(conn)?;
+            .get_result(conn).await?;
         Ok(part)
     }
 }

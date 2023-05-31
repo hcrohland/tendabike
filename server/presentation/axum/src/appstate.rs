@@ -7,10 +7,9 @@
 //! The `FromRef` trait is implemented for `MemoryStore`, `StravaClient`, and `PooledConnection<ConnectionManager<PgConnection>>`
 //! to allow easy extraction of these components from a reference to `AppState`.
 
+
 use async_session::MemoryStore;
 use axum::extract::FromRef;
-use diesel::{r2d2::ConnectionManager, PgConnection};
-use r2d2::PooledConnection;
 
 use crate::{strava::StravaClient, DbPool};
 
@@ -43,8 +42,9 @@ impl FromRef<AppState> for StravaClient {
     }
 }
 
-impl FromRef<AppState> for PooledConnection<ConnectionManager<PgConnection>> {
+impl FromRef<AppState> for DbPool {
     fn from_ref(state: &AppState) -> Self {
-        state.pool.clone().get().unwrap()
+        state.pool.clone()
     }
 }
+

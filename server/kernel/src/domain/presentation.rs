@@ -1,6 +1,6 @@
 use super::*;
 
-pub trait Person {
+pub trait Person: Send + Sync {
     fn get_id(&self) -> UserId;
     fn is_admin(&self) -> bool;
     fn check_owner(&self, owner: UserId, error: String) -> AnyResult<()> {

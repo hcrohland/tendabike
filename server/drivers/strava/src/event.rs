@@ -1,4 +1,6 @@
-use diesel::{QueryDsl, RunQueryDsl};
+use async_recursion::async_recursion;
+use diesel::QueryDsl;
+use diesel_async::*;
 use std::collections::HashMap;
 
 use super::*;
@@ -90,28 +92,31 @@ impl std::fmt::Display for Event {
 }
 
 impl Event {
-    fn delete(&self, conn: &mut AppConn) -> anyhow::Result<()> {
+    async fn delete(&self, conn: &mut AppConn) -> anyhow::Result<()> {
         use schema::strava_events::dsl::*;
         debug!("Deleting {}", self);
         diesel::delete(strava_events)
             .filter(id.eq(self.id))
-            .execute(conn)?;
+            .execute(conn)
+            .await?;
         Ok(())
     }
 
-    fn setdate(&mut self, time: i64, conn: &mut AppConn) -> anyhow::Result<()> {
+    async fn setdate(&mut self, time: i64, conn: &mut AppConn) -> anyhow::Result<()> {
         use schema::strava_events::dsl::*;
         self.event_time = time;
         diesel::update(strava_events)
             .filter(id.eq(self.id))
             .set(event_time.eq(self.event_time))
-            .execute(conn)?;
+            .execute(conn)
+            .await?;
         Ok(())
     }
 
-    pub fn store(self, conn: &mut AppConn) -> anyhow::Result<()> {
+    pub async fn store(self, conn: &mut AppConn) -> anyhow::Result<()> {
         ensure!(
-            strava_users::table.find(self.owner_id).execute(conn) == core::result::Result::Ok(1),
+            strava_users::table.find(self.owner_id).execute(conn).await
+                == core::result::Result::Ok(1),
             Error::BadRequest(format!("Unknown event owner received: {}", self))
         );
 
@@ -119,12 +124,18 @@ impl Event {
             "Received {}",
             diesel::insert_into(schema::strava_events::table)
                 .values(&self)
-                .get_result::<Event>(conn)?
+                .get_result::<Event>(conn)
+                .await?
         );
         Ok(())
     }
 
-    fn rate_limit(self, user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Option<Self>> {
+#[async_recursion]
+    async fn rate_limit(
+        self,
+        user: &StravaUser,
+        conn: &mut AppConn,
+    ) -> anyhow::Result<Option<Self>> {
         // rate limit event
         if self.event_time > get_time() {
             // still rate limited!
@@ -132,9 +143,9 @@ impl Event {
         }
         // remove stop event
         warn!("Starting hooks again");
-        self.delete(conn)?;
+        self.delete(conn).await?;
         // get next event
-        get_event(user, conn)
+        get_event(user, conn).await
     }
 
     async fn process_activity(
@@ -142,14 +153,15 @@ impl Event {
         user: &StravaUser,
         conn: &mut AppConn,
     ) -> anyhow::Result<Summary> {
-        match self
-            .process_hook(user, conn)
-            .await
-            .or_else(|e| check_try_again(e, conn))
-        {
-            core::result::Result::Ok(res) => Ok(res),
+        let summary = self.process_hook(user, conn).await;
+        let summary = match summary {
+            Ok(x) => Ok(x),
+            Err(e) => check_try_again(e, conn).await,
+        };
+        match summary {
+            Ok(res) => Ok(res),
             Err(err) => {
-                self.delete(conn)?;
+                self.delete(conn).await?;
                 Err(err)
             }
         }
@@ -172,13 +184,13 @@ impl Event {
     async fn process_hook(&self, user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
         let res = match self.aspect_type.as_str() {
             "create" | "update" => activity::upsert_activity(self.object_id, user, conn).await?,
-            "delete" => activity::delete_activity(self.object_id, user, conn)?,
+            "delete" => activity::delete_activity(self.object_id, user, conn).await?,
             _ => {
                 warn!("Skipping unknown aspect_type {:?}", self);
                 Summary::default()
             }
         };
-        self.delete(conn)?;
+        self.delete(conn).await?;
         Ok(res)
     }
 
@@ -191,13 +203,13 @@ impl Event {
         {
             let acts = next_activities(user, conn, 10, Some(start)).await?;
             if acts.is_empty() {
-                self.delete(conn)?;
+                self.delete(conn).await?;
             } else {
                 for a in acts {
                     start = std::cmp::max(start, a.start_date.unix_timestamp());
                     trace!("processing sync event at {}", start);
                     let ps = a.send_to_tb(user, conn).await?;
-                    self.setdate(start, conn)?;
+                    self.setdate(start, conn).await?;
                     hash.merge(ps);
                 }
             }
@@ -205,6 +217,16 @@ impl Event {
 
         Ok(hash.collect())
     }
+
+    async fn process_sync(self, user: &StravaUser, conn: &mut AsyncPgConnection) -> Result<Summary, anyhow::Error> {
+        let summary = self
+            .sync(user, conn)
+            .await;
+        if let Err(err) = summary {
+            return check_try_again(err, conn).await
+        }
+        summary
+    }    
 }
 
 /// Inserts a new sync event into the database.
@@ -226,7 +248,11 @@ impl Event {
 /// # Examples
 ///
 ///
-pub fn insert_sync(owner_id: StravaId, event_time: i64, conn: &mut AppConn) -> anyhow::Result<()> {
+pub async fn insert_sync(
+    owner_id: StravaId,
+    event_time: i64,
+    conn: &mut AppConn,
+) -> anyhow::Result<()> {
     ensure!(
         event_time <= get_time(),
         Error::BadRequest(format!("eventtime {} > now!", event_time))
@@ -238,9 +264,10 @@ pub fn insert_sync(owner_id: StravaId, event_time: i64, conn: &mut AppConn) -> a
         ..Default::default()
     }
     .store(conn)
+    .await
 }
 
-pub fn insert_stop(conn: &mut AppConn) -> anyhow::Result<()> {
+pub async fn insert_stop(conn: &mut AppConn) -> anyhow::Result<()> {
     let e = Event {
         object_type: "stop".to_string(),
         object_id: get_time() + 900,
@@ -248,24 +275,25 @@ pub fn insert_stop(conn: &mut AppConn) -> anyhow::Result<()> {
     };
     diesel::insert_into(schema::strava_events::table)
         .values(e)
-        .execute(conn)?;
+        .execute(conn)
+        .await?;
     Ok(())
 }
 
-fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Option<Event>> {
+async fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Option<Event>> {
     use schema::strava_events::dsl::*;
 
-    let event: Option<Event> = strava_events
+    let event = strava_events
         .filter(owner_id.eq_any(vec![0, user.id.into()]))
-        .order(event_time.asc())
-        .first(conn)
+        .first::<Event>(conn)
+        .await
         .optional()?;
     let event = match event {
         Some(event) => event,
         None => return Ok(None),
     };
     if event.object_type.as_str() == "stop" {
-        return event.rate_limit(user, conn);
+        return event.rate_limit(user, conn).await;
     }
 
     // Prevent unneeded calls to Strava
@@ -274,25 +302,27 @@ fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Option<Eve
         .filter(object_id.eq(event.object_id))
         .filter(owner_id.eq(event.owner_id))
         .order(event_time.asc())
-        .get_results::<Event>(conn)?;
+        .get_results::<Event>(conn)
+        .await?;
     let res = list.pop();
 
     if !list.is_empty() {
         debug!("Dropping {:#?}", list);
         diesel::delete(strava_events)
             .filter(id.eq_any(list.into_iter().map(|l| l.id).collect::<Vec<_>>()))
-            .execute(conn)?;
+            .execute(conn)
+            .await?;
     }
 
     Ok(res)
 }
 
-fn check_try_again(err: anyhow::Error, conn: &mut AppConn) -> anyhow::Result<Summary> {
+async fn check_try_again(err: anyhow::Error, conn: &mut AppConn) -> anyhow::Result<Summary> {
     // Keep events for temporary failure - delete others
     match err.downcast_ref::<Error>() {
         Some(&Error::TryAgain(_)) => {
             warn!("Stopping hooks for 15 minutes {:?}", err);
-            insert_stop(conn)?;
+            insert_stop(conn).await?;
             Ok(Summary::default())
         }
         _ => Err(err),
@@ -319,7 +349,7 @@ async fn next_activities(
 }
 
 pub async fn process(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
-    let event = get_event(user, conn)?;
+    let event = get_event(user, conn).await?;
     if event.is_none() {
         return Ok(Summary::default());
     };
@@ -328,14 +358,11 @@ pub async fn process(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Su
 
     match event.object_type.as_str() {
         "activity" => event.process_activity(user, conn).await,
-        "sync" => event
-            .sync(user, conn)
-            .await
-            .or_else(|err| check_try_again(err, conn)),
+        "sync" => event.process_sync(user, conn).await,
         // "athlete" => process_user(e, user),
         _ => {
             warn!("skipping {}", event);
-            event.delete(conn)?;
+            event.delete(conn).await?;
             Ok(Summary::default())
         }
     }

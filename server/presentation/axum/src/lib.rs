@@ -18,21 +18,17 @@ pub(crate) mod user;
 use appstate::*;
 mod appstate;
 mod error;
+use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection};
 use error::*;
 
 use std::net::SocketAddr;
 
-use diesel::{r2d2::ConnectionManager, PgConnection};
-use r2d2::PooledConnection;
-
 use async_session::MemoryStore;
-use axum::{extract::State, Router};
+use axum::Router;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
-type AppDbConn = State<PooledConnection<ConnectionManager<PgConnection>>>;
+type DbPool = Pool<AsyncPgConnection>;
 
-#[tokio::main]
 pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
     tracing_subscriber::registry()
         .with(
@@ -50,12 +46,13 @@ pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
 
     let app = Router::new()
         .nest_service("/", tower_http::services::ServeDir::new(path))
-        .nest("/user", user::router(app_state.clone()))
-        .nest("/types", types::router(app_state.clone()))
-        .nest("/part", part::router(app_state.clone()))
-        .nest("/part", attachment::router(app_state.clone()))
-        .nest("/activ", activity::router(app_state.clone()))
-        .nest("/strava", strava::router(app_state))
+        .nest("/user", user::router())
+        .nest("/types", types::router())
+        .nest("/part", part::router())
+        .nest("/part", attachment::router())
+        .nest("/activ", activity::router())
+        .nest("/strava", strava::router())
+        .with_state(app_state)
         .fallback(error::fallback)
         .layer(tower_http::trace::TraceLayer::new_for_http());
 

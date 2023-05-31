@@ -1,22 +1,22 @@
-/* 
-    tendabike - the bike maintenance tracker
-    
-    Copyright (C) 2023  Christoph Rohland 
+/*
+   tendabike - the bike maintenance tracker
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Affero General Public License as published
-    by the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+   Copyright (C) 2023  Christoph Rohland
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Affero General Public License for more details.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as published
+   by the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
 
-    You should have received a copy of the GNU Affero General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU Affero General Public License for more details.
 
- */
+   You should have received a copy of the GNU Affero General Public License
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+*/
 
 //! This module defines the types used in the tendabike application.
 //!
@@ -51,16 +51,17 @@ pub struct PartType {
     /// the order for displaying types
     pub order: i32,
     /// Potential group
-    pub group: Option<String>
+    pub group: Option<String>,
 }
 
 impl PartType {
-    pub fn all_ordered(conn: &mut AppConn) -> Vec<Self> {
+    pub async fn all_ordered(conn: &mut AppConn) -> Vec<Self> {
         part_types::table
             .order(part_types::id)
             .load::<PartType>(conn)
+            .await
             .expect("error loading PartType")
-    }   
+    }
 }
 
 #[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -83,14 +84,11 @@ pub struct ActivityType {
 }
 
 impl PartTypeId {
-
     /// get the full type for a type_id
-    pub fn get (self, conn: &mut AppConn) -> AnyResult<PartType> {
+    pub async fn get(self, conn: &mut AppConn) -> AnyResult<PartType> {
         // parttype_get
         use schema::part_types::dsl::*;
-        Ok(part_types
-            .find(self)
-            .get_result::<PartType>(conn)?)
+        Ok(part_types.find(self).get_result::<PartType>(conn).await?)
     }
 
     /// recursively look for subtypes to self in the PartType vector
@@ -116,27 +114,29 @@ impl PartTypeId {
     }
 
     /// get all the types you can attach - even indirectly - to this type_id
-    pub fn subtypes(self, conn: &mut AppConn) -> Vec<PartType> {
-        let mut types = PartType::all_ordered(conn);
+    pub async fn subtypes(self, conn: &mut AppConn) -> Vec<PartType> {
+        let mut types = PartType::all_ordered(conn).await;
         self.filter_types(&mut types)
     }
 
     /// Get the activity types valid for this part_type
-    pub fn act_types(&self, conn: &mut AppConn) -> AnyResult<Vec<ActTypeId>> {
+    pub async fn act_types(&self, conn: &mut AppConn) -> AnyResult<Vec<ActTypeId>> {
         use schema::activity_types::dsl::*;
 
         Ok(activity_types
             .filter(gear.eq(self))
             .select(id)
-            .get_results(conn)?)
+            .get_results(conn)
+            .await?)
     }
 }
 
 impl ActivityType {
-    pub fn all_ordered(conn: &mut AppConn) -> Vec<ActivityType> {
+    pub async fn all_ordered(conn: &mut AppConn) -> Vec<ActivityType> {
         activity_types::table
             .order(activity_types::id)
             .load::<ActivityType>(conn)
+            .await
             .expect("error loading ActivityTypes")
     }
 }

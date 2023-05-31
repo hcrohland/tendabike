@@ -57,7 +57,7 @@ use kernel::{domain::{AnyResult, Error, Summary}};
 use tb_strava::{event::{InEvent, process}, StravaUser};
 use serde_derive::{ Deserialize, Serialize};
 
-use crate::{AppDbConn, ApiResult, user::{RUser, AxumAdmin}};
+use crate::{ApiResult, user::{RUser, AxumAdmin}, DbPool};
 
 use super::refresh_token;
 
@@ -89,17 +89,19 @@ impl Hub {
 
 const VERIFY_TOKEN: &str = "tendabike_strava";
 
-pub(crate) async fn hooks (user: RUser, mut conn: AppDbConn) -> ApiResult<Summary> {
-    let user = user.get_strava_user(&mut conn)?;
-    user.lock(&mut conn)?;
+pub(crate) async fn hooks (user: RUser, State(conn): State<DbPool>) -> ApiResult<Summary> {
+    let mut conn = conn.get().await?;
+    let user = user.get_strava_user(&mut conn).await?;
+    user.lock(&mut conn).await?;
     let res = process(&user, &mut conn).await?;
-    user.unlock(&mut conn)?;
+    user.unlock(&mut conn).await?;
     Ok(Json(res))
 }
 
-pub(crate) async fn create_event(mut conn: AppDbConn, Json(event): axum::extract::Json<InEvent>) -> ApiResult<()> {
+pub(crate) async fn create_event(State(conn): State<DbPool>, Json(event): axum::extract::Json<InEvent>) -> ApiResult<()> {
     trace!("Received {:#?}", event);
-    event.convert()?.store(&mut conn)?;
+    let mut conn = conn.get().await?;
+    event.convert()?.store(&mut conn).await?;
     Ok(Json(()))
 }
 
@@ -114,18 +116,20 @@ pub(super) struct SyncQuery {
     user_id: Option<i32>,
 }
 
-pub(super) async fn sync_api (_u: AxumAdmin, mut conn: AppDbConn, Query(query): Query<SyncQuery>) -> ApiResult<()> {
+pub(super) async fn sync_api (_u: AxumAdmin, State(conn): State<DbPool>, Query(query): Query<SyncQuery>) -> ApiResult<()> {
+    let mut conn = conn.get().await?;
     let user_id = query.user_id.map(|u| u.into());
     Ok(tb_strava::sync_users(user_id, query.time, &mut conn).await.map(Json)?)
 }
 
 
-pub(super) async fn sync(Path(tbid): Path<i32>, _u: AxumAdmin, mut conn: AppDbConn, State(oauth): State<super::StravaClient>) -> ApiResult<Summary> {
+pub(super) async fn sync(Path(tbid): Path<i32>, _u: AxumAdmin, State(conn): State<DbPool>, State(oauth): State<super::StravaClient>) -> ApiResult<Summary> {
+    let mut conn = conn.get().await?;
     let conn = &mut conn;
-    let user = StravaUser::read(tbid.into(), conn)?;
+    let user = StravaUser::read(tbid.into(), conn).await?;
     let user = refresh_token(user, oauth, conn).await?;
-    user.lock( conn)?;
+    user.lock( conn).await?;
     let res = process(&user, conn).await?;
-    user.unlock(conn)?;
+    user.unlock(conn).await?;
     Ok(Json(res))
 }

@@ -42,15 +42,15 @@ pub(crate) struct StravaActivity {
 
 impl StravaActivity {
     /// Converts a StravaActivity into a NewActivity struct which is used to create a new activity in the Tendabike API.
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `self` - A StravaActivity struct that represents an activity from Strava API.
     /// * `user` - A reference to a StravaUser struct that represents the user who performed the activity.
     /// * `conn` - A mutable reference to an AppConn struct that represents a connection to the Tendabike API.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// A Result containing a NewActivity struct if the conversion was successful, or an error if it failed.
     async fn into_tb(self, user: &StravaUser, conn: &mut AppConn) -> AnyResult<NewActivity> {
         let what = self.what()?;
@@ -74,13 +74,13 @@ impl StravaActivity {
     }
 
     /// Maps Strava workout type strings to Tendabike types.
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `self` - A reference to a StravaActivity struct that represents an activity from Strava API.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// A Result containing an ActTypeId if the mapping was successful, or an error if it failed.
     fn what(&self) -> AnyResult<ActTypeId> {
         let t = self.type_.as_str();
@@ -132,15 +132,15 @@ impl StravaActivity {
 
 impl StravaActivity {
     /// Sends the activity to Tendabike API.
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `self` - A reference to a StravaActivity struct that represents an activity from Strava API.
     /// * `user` - A reference to a StravaUser struct that represents the user from Strava API.
     /// * `conn` - A mutable reference to an AppConn struct that represents the connection to the Tendabike API.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// A Result containing a Summary if the sending was successful, or an error if it failed.
     pub(crate) async fn send_to_tb(
         self,
@@ -150,45 +150,52 @@ impl StravaActivity {
         let strava_id = self.id;
         let tb = self.into_tb(user, conn).await?;
         conn.transaction(|conn| {
-            use schema::strava_activities::dsl::*;
+            async {
+                use schema::strava_activities::dsl::*;
 
-            let tb_id = strava_activities
-                .find(strava_id)
-                .select(tendabike_id)
-                .for_update()
-                .get_result::<ActivityId>(conn)
-                .optional()?;
+                let tb_id = strava_activities
+                    .find(strava_id)
+                    .select(tendabike_id)
+                    .for_update()
+                    .get_result::<ActivityId>(conn)
+                    .await
+                    .optional()?;
 
-            let res;
-            if let Some(tb_id) = tb_id {
-                res = tb_id.update(&tb, user, conn)?
-            } else {
-                res = Activity::create(&tb, user, conn)?;
-                let new_id = res.first();
-                diesel::insert_into(strava_activities)
-                    .values((
-                        id.eq(strava_id),
-                        tendabike_id.eq(new_id),
-                        user_id.eq(tb.user_id),
-                    ))
-                    .execute(conn)?;
+                let res;
+                if let Some(tb_id) = tb_id {
+                    res = tb_id.update(&tb, user, conn).await?
+                } else {
+                    res = Activity::create(&tb, user, conn).await?;
+                    let new_id = res.first_act();
+                    diesel::insert_into(strava_activities)
+                        .values((
+                            id.eq(strava_id),
+                            tendabike_id.eq(new_id),
+                            user_id.eq(tb.user_id),
+                        ))
+                        .execute(conn)
+                        .await?;
+                }
+
+                user.update_last(tb.start.unix_timestamp(), conn).await
+                    .context("unable to update user")?;
+
+                Ok(res)
             }
-
-            user.update_last(tb.start.unix_timestamp(), conn)
-                .context("unable to update user")?;
-
-            Ok(res)
+            .scope_boxed()
         })
+        .await
     }
 }
 
-pub fn strava_url(act: i32, conn: &mut AppConn) -> AnyResult<String> {
+pub async fn strava_url(act: i32, conn: &mut AppConn) -> AnyResult<String> {
     use schema::strava_activities::dsl::*;
 
     let g: i64 = strava_activities
         .filter(tendabike_id.eq(act))
         .select(id)
-        .first(conn)?;
+        .first(conn)
+        .await?;
 
     Ok(format!("https://strava.com/activities/{}", &g))
 }
@@ -207,7 +214,7 @@ pub async fn upsert_activity(id: i64, user: &StravaUser, conn: &mut AppConn) -> 
     act.send_to_tb(user, conn).await
 }
 
-pub(crate) fn delete_activity(
+pub(crate) async fn delete_activity(
     sid: i64,
     user: &StravaUser,
     conn: &mut AppConn,
@@ -215,17 +222,24 @@ pub(crate) fn delete_activity(
     use schema::strava_activities::dsl::*;
 
     conn.transaction(|conn| {
-        let tid: Option<ActivityId> = strava_activities
-            .select(tendabike_id)
-            .find(sid)
-            .for_update()
-            .first(conn)
-            .optional()?;
-        if let Some(tid) = tid {
-            diesel::delete(strava_activities.find(sid)).execute(conn)?;
-            tid.delete(user, conn)
-        } else {
-            Ok(Summary::default())
+        async {
+            let tid: Option<ActivityId> = strava_activities
+                .select(tendabike_id)
+                .find(sid)
+                .for_update()
+                .first(conn)
+                .await
+                .optional()?;
+            if let Some(tid) = tid {
+                diesel::delete(strava_activities.find(sid))
+                    .execute(conn)
+                    .await?;
+                tid.delete(user, conn).await
+            } else {
+                Ok(Summary::default())
+            }
         }
+        .scope_boxed()
     })
+    .await
 }

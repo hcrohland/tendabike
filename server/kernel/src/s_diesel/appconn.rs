@@ -5,68 +5,40 @@
 //! The `run_db_migrations` function is used to run the database migrations using the `diesel_migrations` crate.
 //!
 //! This module is used by other modules in the application to interact with the database.
-use std::ops::{Deref, DerefMut};
 
 use crate::domain::AnyResult;
 
-use anyhow::Context;
 use async_session::log::info;
 use diesel::prelude::*;
+use diesel_async::pooled_connection::deadpool::Pool;
+use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use diesel_async::AsyncPgConnection;
 
-pub type AppConn = PgConnection;
-pub struct Store(PooledConnection<ConnectionManager<AppConn>>);
-
-impl Deref for Store {
-    type Target = AppConn;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Store {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl Store {
-    pub fn new(pool: &DbPool) -> AnyResult<Self> {
-        let conn = pool.0.get()?;
-        Ok(Store(conn))
-    }
-}
+pub type AppConn = diesel_async::AsyncPgConnection;
 
 use diesel_migrations::MigrationHarness;
 pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
     embed_migrations!("src/s_diesel/migrations");
 
-fn run_db_migrations(conn: &mut AppConn) {
+fn run_db_migrations(db: &str) {
     info!("Running database migrations...");
+    let mut conn = PgConnection::establish(&db).expect("Failed to connect to database: {:?}");
     conn.run_pending_migrations(MIGRATIONS)
         .expect("Failed to run database migrations: {:?}");
 }
 
-use diesel::r2d2::ConnectionManager;
-use r2d2::{Pool, PooledConnection};
-
-#[derive(Clone)]
-pub struct DbPool(pub r2d2::Pool<ConnectionManager<AppConn>>);
+pub struct DbPool {}
 
 impl DbPool {
-    pub fn init() -> AnyResult<r2d2::Pool<ConnectionManager<AppConn>>> {
+    pub async fn init() -> AnyResult<Pool<AsyncPgConnection>> {
         let database_url =
             std::env::var("DB_URL").unwrap_or("postgres://localhost/tendabike".to_string());
+        run_db_migrations(&database_url);
 
-        println!("Connecting to database {}...", database_url);
-        let manager = ConnectionManager::<AppConn>::new(database_url);
+        let config =
+            AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(database_url);
+        let pool: Pool<AsyncPgConnection> = Pool::builder(config).build()?;
 
-        let pool = Pool::builder()
-            .build(manager)
-            .context("Failed to create database connection pool.")?;
-
-        let mut conn = pool.get().context("failed to get connection from pool")?;
-        run_db_migrations(&mut conn);
         Ok(pool)
     }
 }

@@ -34,7 +34,7 @@ pub fn merge(self, new: Summary) -> Summary {
     hash.collect()
 }
 
-pub fn first(&self) -> ActivityId {
+pub fn first_act(&self) -> ActivityId {
     self.activities[0].id
 }
 }

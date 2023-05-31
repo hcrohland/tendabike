@@ -7,7 +7,7 @@
 //!
 //! Finally, it defines the `COOKIE_NAME` constant which is used to store the session cookie.
 
-use crate::{internal_any, internal_error, user::RUser, AppDbConn};
+use crate::{internal_any, internal_error, user::RUser};
 use anyhow::ensure;
 use async_session::{log::info, MemoryStore, Session, SessionStore};
 use axum::{
@@ -149,9 +149,9 @@ pub(crate) async fn login_authorized(
     Query(query): Query<AuthRequest>,
     State(store): State<MemoryStore>,
     State(oauth_client): State<StravaClient>,
-    mut conn: AppDbConn,
+    State(conn): State<crate::DbPool>,
 ) -> Result<(HeaderMap, Redirect), (StatusCode, String)> {
-    let conn = &mut conn;
+    let mut conn = conn.get().await.map_err(internal_error)?;
     // Get an auth token
     let token = oauth_client
         .exchange_code(AuthorizationCode::new(query.code.clone()))
@@ -176,14 +176,14 @@ pub(crate) async fn login_authorized(
         "No athlete info".to_string(),
     ))?;
 
-    let user = StravaUser::upsert(*id, firstname, lastname, conn)
+    let user = StravaUser::upsert(*id, firstname, lastname, &mut conn)
         .await
         .map_err(internal_any)?;
 
     // get (and eventually create) StravaUser
-    let user = update_user(&token, user, conn).map_err(internal_any)?;
+    let user = update_user(&token, user, &mut conn).await.map_err(internal_any)?;
 
-    let is_admin = user.tendabike_id.is_admin(conn).map_err(internal_any)?;
+    let is_admin = user.tendabike_id.is_admin(&mut conn).await.map_err(internal_any)?;
     let user = RUser::new(
         user.tendabike_id,
         user.id,
@@ -211,7 +211,7 @@ pub(crate) async fn login_authorized(
     Ok((headers, Redirect::to("/")))
 }
 
-fn update_user(
+async fn update_user(
     token: &StandardTokenResponse<StravaExtraTokenFields, BasicTokenType>,
     user: StravaUser,
     conn: &mut AppConn,
@@ -219,7 +219,7 @@ fn update_user(
     let access = token.access_token().secret();
     let expires = token.expires_in().map(|t| t.as_secs() as i64);
     let refresh = token.refresh_token().map(|r| r.secret().as_str());
-    let user = user.update_token(access, expires, refresh, conn)?;
+    let user = user.update_token(access, expires, refresh, conn).await?;
     Ok(user)
 }
 
@@ -244,7 +244,7 @@ pub(crate) async fn refresh_token(
         .exchange_refresh_token(&refresh_token)
         .request_async(async_http_client)
         .await?;
-    update_user(&tokenset, user, conn)
+    update_user(&tokenset, user, conn).await
 }
 
 // Make our own error that wraps `anyhow::Error`.
