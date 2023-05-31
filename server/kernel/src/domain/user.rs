@@ -1,22 +1,22 @@
-/* 
-    tendabike - the bike maintenance tracker
-    
-    Copyright (C) 2023  Christoph Rohland 
+/*
+   tendabike - the bike maintenance tracker
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Affero General Public License as published
-    by the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+   Copyright (C) 2023  Christoph Rohland
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Affero General Public License for more details.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as published
+   by the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
 
-    You should have received a copy of the GNU Affero General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU Affero General Public License for more details.
 
- */
+   You should have received a copy of the GNU Affero General Public License
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+*/
 
 //! This module contains the domain logic for the `User` entity.
 //!
@@ -36,7 +36,9 @@
 use super::*;
 use schema::users;
 
-#[derive(DieselNewType, Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    DieselNewType, Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize,
+)]
 pub struct UserId(i32);
 NewtypeDisplay! { () pub struct UserId(); }
 NewtypeFrom! { () pub struct UserId(i32); }
@@ -57,26 +59,30 @@ pub struct Stat {
 }
 
 impl UserId {
-    pub fn read(self, conn: &mut AppConn) -> AnyResult<User> {
-        Ok(users::table.find(self).get_result(conn)?)
+    pub async fn read(self, conn: &mut AppConn) -> AnyResult<User> {
+        Ok(users::table.find(self).get_result(conn).await?)
     }
 
-    pub fn get_stat(self, conn: &mut AppConn) -> AnyResult<Stat> {
-        let user = self.read(conn)?;
+    pub async fn get_stat(self, conn: &mut AppConn) -> AnyResult<Stat> {
+        let user = self.read(conn).await?;
         let parts = {
-            use schema::parts::dsl::{parts, owner};
-            parts.count().filter(owner.eq(self)).first(conn)?
+            use schema::parts::dsl::{owner, parts};
+            parts.count().filter(owner.eq(self)).first(conn).await?
         };
         let activities = {
             use schema::activities::dsl::*;
-            activities.count().filter(user_id.eq(self)).first(conn)?
+            activities.count().filter(user_id.eq(self)).first(conn).await?
         };
-        Ok(Stat{user, parts, activities})
-    }  
+        Ok(Stat {
+            user,
+            parts,
+            activities,
+        })
+    }
 
-    pub fn create(firstname_: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<Self> {
+    pub async fn create(firstname_: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<Self> {
         use crate::schema::users::dsl::*;
-    
+
         let user: User = diesel::insert_into(users)
             .values((
                 firstname.eq(firstname_),
@@ -84,26 +90,30 @@ impl UserId {
                 is_admin.eq(false),
             ))
             .get_result(conn)
+            .await
             .context("Could not create user")?;
         Ok(user.id)
     }
 
-    pub fn update(&self, firstname_: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<Self> {
+    pub async fn update(
+        &self,
+        firstname_: &str,
+        lastname: &str,
+        conn: &mut AppConn,
+    ) -> AnyResult<Self> {
         use crate::schema::users::dsl::*;
-    
+
         let user: User = diesel::update(users.filter(id.eq(self)))
-            .set((
-                firstname.eq(firstname_),
-                name.eq(lastname),
-            ))
+            .set((firstname.eq(firstname_), name.eq(lastname)))
             .get_result(conn)
+            .await
             .context("Could not update user")?;
         Ok(user.id)
     }
 
-    pub fn is_admin(&self, conn: &mut r2d2::PooledConnection<diesel::r2d2::ConnectionManager<PgConnection>>) -> AnyResult<bool> {
-        self.read(conn).map(|u| u.is_admin)
-    }     
+    pub async fn is_admin(&self, conn: &mut AppConn) -> AnyResult<bool> {
+        self.read(conn).await.map(|u| u.is_admin)
+    }
 }
 
 impl Person for User {

@@ -15,8 +15,9 @@
 //!
 
 use diesel::{prelude::*, Identifiable, QueryableByName};
-use diesel::{QueryDsl, RunQueryDsl, sql_query};
+use diesel::{QueryDsl, sql_query};
 use diesel::{Queryable, Insertable};
+use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
 
 use serde_derive::{Deserialize, Serialize};
 use async_session::log::{info,trace,warn,debug};

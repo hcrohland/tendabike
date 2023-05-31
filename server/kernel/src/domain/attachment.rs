@@ -1,21 +1,21 @@
-/* 
-    tendabike - the bike maintenance tracker
-    Copyright (C) 2023  Christoph Rohland 
+/*
+   tendabike - the bike maintenance tracker
+   Copyright (C) 2023  Christoph Rohland
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Affero General Public License as published
-    by the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as published
+   by the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Affero General Public License for more details.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU Affero General Public License for more details.
 
-    You should have received a copy of the GNU Affero General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+   You should have received a copy of the GNU Affero General Public License
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
- */
+*/
 
 //! This module contains the implementation of the `Attachment` struct and its related functions.
 //!
@@ -25,6 +25,7 @@
 //!
 
 use super::*;
+use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
 use schema::attachments;
 use time::{macros::datetime, OffsetDateTime};
 
@@ -48,22 +49,27 @@ impl Event {
     ///
     /// Check's authorization and taht the part is attached
     ///
-    pub fn detach(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Summary> {
+    pub async fn detach(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Summary> {
         info!("detach {:?}", self);
         // check user
-        self.part_id.checkuser(user, conn)?;
+        self.part_id.checkuser(user, conn).await?;
         conn.transaction(|conn| {
-            let target = self
-                .at(conn)?
-                .ok_or(Error::NotFound("part not attached".into()))?;
+            async move {
+                let target = self
+                    .at(conn)
+                    .await?
+                    .ok_or(Error::NotFound("part not attached".into()))?;
 
-            ensure!(
-                self.hook == target.hook && self.gear == target.gear,
-                Error::BadRequest(format!("{:?} does not match attachment", self))
-            );
+                ensure!(
+                    self.hook == target.hook && self.gear == target.gear,
+                    Error::BadRequest(format!("{:?} does not match attachment", self))
+                );
 
-            self.detach_assembly(target, conn)
+                self.detach_assembly(target, conn).await
+            }
+            .scope_boxed()
         })
+        .await
     }
 
     /// detach the whole assembly pointed at by 'self'
@@ -73,12 +79,13 @@ impl Event {
     ///
     /// When the 'self.partid' has child parts they are attached to that part
     ///
-    fn detach_assembly(self, target: Attachment, conn: &mut AppConn) -> AnyResult<Summary> {
+    async fn detach_assembly(self, target: Attachment, conn: &mut AppConn) -> AnyResult<Summary> {
         debug!("- detaching {}", target.part_id);
-        let subs = self.assembly(target.gear, conn)?;
-        let mut hash = SumHash::new(target.detach(self.time, conn)?);
+        let subs = self.assembly(target.gear, conn).await?;
+        let mut hash = SumHash::new(target.detach(self.time, conn).await?);
         for sub in subs {
-            sub.shift(self.time, target.part_id, &mut hash, conn)?;
+            sub.shift(self.time, target.part_id, &mut hash, conn)
+                .await?;
         }
         Ok(hash.collect())
     }
@@ -88,12 +95,12 @@ impl Event {
     ///
     /// When the detached part has child parts they are attached to that part
     ///
-    pub fn attach(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Summary> {
+    pub async fn attach(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Summary> {
         info!("attach {:?}", self);
         // check user
-        let part = self.part_id.part(user, conn)?;
+        let part = self.part_id.part(user, conn).await?;
         // and types
-        let mytype = part.what.get(conn)?;
+        let mytype = part.what.get(conn).await?;
         ensure!(
             mytype.hooks.contains(&self.hook),
             Error::BadRequest(format!(
@@ -101,7 +108,7 @@ impl Event {
                 mytype.name, self.hook
             ))
         );
-        let gear = self.gear.part(user, conn)?;
+        let gear = self.gear.part(user, conn).await?;
         ensure!(
             mytype.main == gear.what || mytype.hooks.contains(&gear.what),
             Error::BadRequest(format!(
@@ -110,42 +117,46 @@ impl Event {
             ))
         );
         conn.transaction(|conn| {
-            let mut hash = SumHash::default();
+            async move {
+                let mut hash = SumHash::default();
 
-            // detach self assembly
-            if let Some(target) = self.at(conn)? {
-                info!("detaching self assembly");
-                hash.merge(self.detach_assembly(target, conn)?);
-            }
-
-            // detach target assembly
-            if let Some(att) = self.occupant(conn)? {
-                info!("detaching target assembly {}", att.part_id);
-                hash.merge(self.detach_assembly(att, conn)?);
-            }
-
-            let subs = self.assembly(self.part_id, conn)?;
-            // reattach the assembly
-            info!("attaching assembly");
-            debug!("- attaching {}", self.part_id);
-            let (sum, det) = self.attach_one(conn)?;
-            hash.merge(sum);
-            for att in subs {
-                let sub_det = att.shift(self.time, self.gear, &mut hash, conn)?;
-                if sub_det == det && det < att.detached {
-                    trace!("reattaching {} to {} at {}", att.part_id, self.part_id, det);
-                    let ev = Event {
-                        part_id: att.part_id,
-                        hook: att.hook,
-                        gear: self.part_id,
-                        time: det,
-                    };
-                    let (sum, _) = ev.attach_one(conn)?;
-                    hash.merge(sum);
+                // detach self assembly
+                if let Some(target) = self.at(conn).await? {
+                    info!("detaching self assembly");
+                    hash.merge(self.detach_assembly(target, conn).await?);
                 }
+
+                // detach target assembly
+                if let Some(att) = self.occupant(conn).await? {
+                    info!("detaching target assembly {}", att.part_id);
+                    hash.merge(self.detach_assembly(att, conn).await?);
+                }
+
+                let subs = self.assembly(self.part_id, conn).await?;
+                // reattach the assembly
+                info!("attaching assembly");
+                debug!("- attaching {}", self.part_id);
+                let (sum, det) = self.attach_one(conn).await?;
+                hash.merge(sum);
+                for att in subs {
+                    let sub_det = att.shift(self.time, self.gear, &mut hash, conn).await?;
+                    if sub_det == det && det < att.detached {
+                        trace!("reattaching {} to {} at {}", att.part_id, self.part_id, det);
+                        let ev = Event {
+                            part_id: att.part_id,
+                            hook: att.hook,
+                            gear: self.part_id,
+                            time: det,
+                        };
+                        let (sum, _) = ev.attach_one(conn).await?;
+                        hash.merge(sum);
+                    }
+                }
+                Ok(hash.collect())
             }
-            Ok(hash.collect())
+            .scope_boxed()
         })
+        .await
     }
 
     /// create Attachment for one part according to self
@@ -155,7 +166,7 @@ impl Event {
     /// * Detach time is adjusted according to later attachments
     ///
     /// If the part is attached already to the same hook, the attachments are merged
-    fn attach_one(self, conn: &mut AppConn) -> AnyResult<(Summary, OffsetDateTime)> {
+    async fn attach_one(self, conn: &mut AppConn) -> AnyResult<(Summary, OffsetDateTime)> {
         let mut hash = SumHash::default();
         // when does the current attachment end
         let mut end = MAX_TIME;
@@ -163,9 +174,9 @@ impl Event {
         // we need this to reattach subparts
         let mut det = MAX_TIME;
 
-        let what = self.part_id.what(conn)?;
+        let what = self.part_id.what(conn).await?;
 
-        if let Some(next) = self.next(what, conn)? {
+        if let Some(next) = self.next(what, conn).await? {
             trace!("successor at {}", next.attached);
             // something else is already attached to the hook
             // the new attachment ends when the next starts
@@ -173,7 +184,7 @@ impl Event {
             det = next.attached;
         }
 
-        if let Some(next) = self.after(conn)? {
+        if let Some(next) = self.after(conn).await? {
             if end > next.attached {
                 // is this attachment earlier than the previous one?
                 if next.gear == self.gear && next.hook == self.hook {
@@ -181,7 +192,7 @@ impl Event {
                     // the previous one is the real next so we keep 'det'!
                     // 'next' will be replaced by 'self' but 'end' is taken from 'next'
                     end = next.detached;
-                    let sum = next.delete(conn)?;
+                    let sum = next.delete(conn).await?;
                     hash.merge(sum);
                 } else {
                     trace!(
@@ -200,12 +211,12 @@ impl Event {
         }
 
         // try to merge previous attachment
-        if let Some(prev) = self.adjacent(conn)? {
+        if let Some(prev) = self.adjacent(conn).await? {
             trace!("adjacent starting {}", prev.attached);
-            hash.merge(prev.detach(end, conn)?)
+            hash.merge(prev.detach(end, conn).await?)
         } else {
             trace!("create {:?}\n", self);
-            hash.merge(self.attachment(end).create(conn)?);
+            hash.merge(self.attachment(end).create(conn).await?);
         }
 
         Ok((hash.collect(), det))
@@ -228,10 +239,10 @@ impl Event {
     }
 
     /// Return Attachment if another part is attached to same hook at Event
-    fn occupant(&self, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
+    async fn occupant(&self, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         use schema::parts;
-        let what = self.part_id.what(conn)?;
+        let what = self.part_id.what(conn).await?;
 
         Ok(attachments
             .inner_join(
@@ -245,11 +256,12 @@ impl Event {
             .filter(attached.le(self.time))
             .filter(detached.gt(self.time))
             .first::<Attachment>(conn)
+            .await
             .optional()?)
     }
 
     /// Return Attachment if some other part is attached to same hook after the Event
-    fn next(&self, what: PartTypeId, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
+    async fn next(&self, what: PartTypeId, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         use schema::parts;
 
@@ -267,11 +279,12 @@ impl Event {
             .filter(attached.gt(self.time))
             .order(attached)
             .first::<Attachment>(conn)
+            .await
             .optional()?)
     }
 
     /// Return Attachment if self.part_id is attached somewhere at the event
-    fn at(&self, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
+    async fn at(&self, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         Ok(attachments
             .for_update()
@@ -279,11 +292,12 @@ impl Event {
             .filter(attached.le(self.time))
             .filter(detached.gt(self.time))
             .first::<Attachment>(conn)
+            .await
             .optional()?)
     }
 
     /// Return Attachment if self.part_id is attached somewhere after the event
-    fn after(&self, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
+    async fn after(&self, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         Ok(attachments
             .for_update()
@@ -291,11 +305,12 @@ impl Event {
             .filter(attached.gt(self.time))
             .order(attached)
             .first::<Attachment>(conn)
+            .await
             .optional()?)
     }
 
     /// Iff self.part_id already attached just before self.time return that attachment
-    fn adjacent(&self, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
+    async fn adjacent(&self, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         Ok(attachments
             .for_update()
@@ -304,14 +319,15 @@ impl Event {
             .filter(hook.eq(self.hook))
             .filter(detached.eq(self.time))
             .first::<Attachment>(conn)
+            .await
             .optional()?)
     }
 
     /// find all subparts of self which are attached to target at self.time
-    fn assembly(&self, target: PartId, conn: &mut AppConn) -> AnyResult<Vec<Attachment>> {
+    async fn assembly(&self, target: PartId, conn: &mut AppConn) -> AnyResult<Vec<Attachment>> {
         use schema::attachments::dsl::*;
 
-        let types = self.part_id.what(conn)?.subtypes(conn);
+        let types = self.part_id.what(conn).await?.subtypes(conn).await;
 
         Ok(Attachment::belonging_to(&types)
             .for_update()
@@ -319,7 +335,8 @@ impl Event {
             .filter(attached.le(self.time))
             .filter(detached.gt(self.time))
             .order(hook)
-            .load(conn)?)
+            .load(conn)
+            .await?)
     }
 }
 /// Timeline of attachments
@@ -390,13 +407,13 @@ impl AttachmentDetail {
 
 impl Attachment {
     /// return the usage for the attachment
-    fn usage(&self, factor: Factor, conn: &mut AppConn) -> Usage {
-        Activity::find(self.gear, self.attached, self.detached, conn)
+    async fn usage(&self, factor: Factor, conn: &mut AppConn) -> Usage {
+        Activity::find(self.gear, self.attached, self.detached, conn).await
             .into_iter()
             .fold(Usage::none(), |acc, x| acc.add_activity(&x, factor))
     }
 
-    fn shift(
+    async fn shift(
         &self,
         at_time: OffsetDateTime,
         target: PartId,
@@ -410,8 +427,8 @@ impl Attachment {
             part_id: self.part_id,
             hook: self.hook,
         };
-        hash.merge(self.detach(at_time, conn)?);
-        let (sum, det) = ev.attach_one(conn)?;
+        hash.merge(self.detach(at_time, conn).await?);
+        let (sum, det) = ev.attach_one(conn).await?;
         hash.merge(sum);
         Ok(det)
     }
@@ -420,16 +437,16 @@ impl Attachment {
     ///
     /// * deletes the attachment for detached < attached
     /// * Does not check for collisions
-    fn detach(mut self, detached: OffsetDateTime, conn: &mut AppConn) -> AnyResult<Summary> {
+    async fn detach(mut self, detached: OffsetDateTime, conn: &mut AppConn) -> AnyResult<Summary> {
         trace!("detaching {} at {}", self.part_id, detached);
 
-        let del = self.delete(conn)?;
+        let del = self.delete(conn).await?;
         if self.attached >= detached {
             return Ok(del);
         }
 
         self.detached = detached;
-        let cre = self.create(conn)?;
+        let cre = self.create(conn).await?;
         Ok(del.merge(cre))
     }
 
@@ -437,19 +454,23 @@ impl Attachment {
     //
     /// - recalculates the usage counters in the attached assembly
     /// - returns all affected parts
-    fn create(mut self, conn: &mut AppConn) -> AnyResult<Summary> {
+    async fn create(mut self, conn: &mut AppConn) -> AnyResult<Summary> {
         trace!("create {:?}", self);
-        let usage = self.usage(Factor::Add, conn);
+        let usage = self.usage(Factor::Add, conn).await;
         self.count = usage.count;
         self.time = usage.time;
         self.distance = usage.distance;
         self.climb = usage.climb;
         self.descend = usage.descend;
-        let part = self.part_id.apply_usage(&usage, self.attached, conn)?;
+        let part = self
+            .part_id
+            .apply_usage(&usage, self.attached, conn)
+            .await?;
 
         let attachment = self
             .insert_into(attachments::table)
             .get_result::<Attachment>(conn)
+            .await
             .context("insert into attachments")?
             .add_details(&part.name, part.what);
 
@@ -464,15 +485,16 @@ impl Attachment {
     ///
     /// - recalculates the usage counters in the attached assembly
     /// - returns all affected parts
-    fn delete(self, conn: &mut AppConn) -> AnyResult<Summary> {
+    async fn delete(self, conn: &mut AppConn) -> AnyResult<Summary> {
         trace!("delete {:?}", self);
         let ctx = format!("Could not delete attachment {:#?}", self);
         let mut att = diesel::delete(attachments::table.find(self.id())) // delete the attachment in the database
             .get_result::<Attachment>(conn)
+            .await
             .context(ctx)?;
 
-        let usage = att.usage(Factor::Sub, conn);
-        let part = att.part_id.apply_usage(&usage, att.attached, conn)?;
+        let usage = att.usage(Factor::Sub, conn).await;
+        let part = att.part_id.apply_usage(&usage, att.attached, conn).await?;
         att.count = 0;
         att.time = 0;
         att.distance = 0;
@@ -498,18 +520,19 @@ impl Attachment {
     }
 
     /// add redundant details from database for client simplicity
-    fn read_details(self, conn: &mut AppConn) -> AnyResult<AttachmentDetail> {
+    async fn read_details(self, conn: &mut AppConn) -> AnyResult<AttachmentDetail> {
         use schema::parts::dsl::{name, parts, what};
 
         let (n, w) = parts
             .find(self.part_id)
             .select((name, what))
-            .get_result::<(String, PartTypeId)>(conn)?;
+            .get_result::<(String, PartTypeId)>(conn)
+            .await?;
         Ok(self.add_details(&n, w))
     }
 
     /// return all parts which are affected byActivity 'act'
-    pub fn parts_per_activity(act: &Activity, conn: &mut AppConn) -> Vec<PartId> {
+    pub async fn parts_per_activity(act: &Activity, conn: &mut AppConn) -> Vec<PartId> {
         use schema::attachments::dsl::*;
 
         let mut res = Vec::new();
@@ -522,6 +545,7 @@ impl Attachment {
                     .filter(detached.is_null().or(detached.ge(act.start)))
                     .select(part_id)
                     .get_results::<PartId>(conn)
+                    .await
                     .expect("Error reading attachments"),
             );
         }
@@ -531,11 +555,16 @@ impl Attachment {
     /// apply usage to all attachments affected by activity
     ///
     /// returns the list of Attachments - including the redundant details
-    pub fn register(act: &Activity, usage: &Usage, conn: &mut AppConn) -> Vec<AttachmentDetail> {
+    pub async fn register(
+        act: &Activity,
+        usage: &Usage,
+        conn: &mut AppConn,
+    ) -> Vec<AttachmentDetail> {
         use schema::attachments::dsl::*;
 
+        let mut res = Vec::new();
         if let Some(act_gear) = act.gear {
-            diesel::update(
+            let atts = diesel::update(
                 attachments
                     .filter(gear.eq(act_gear))
                     .filter(attached.lt(act.start))
@@ -549,17 +578,24 @@ impl Attachment {
                 count.eq(count + usage.count),
             ))
             .get_results::<Attachment>(conn)
-            .expect("Database Error")
-            .into_iter()
-            .map(|a| a.read_details(conn).expect("couldn't enrich attachment"))
-            .collect::<Vec<_>>()
-        } else {
-            Vec::new()
+            .await
+            .expect("Database Error");
+            for att in atts.iter() {
+                res.push(
+                    att.read_details(conn)
+                        .await
+                        .expect("couldn't enrich attachment"),
+                );
+            }
         }
+        res
     }
 
     /// return all attachments with details for the parts in 'partlist'
-    pub fn for_parts(partlist: &[Part], conn: &mut AppConn) -> AnyResult<Vec<AttachmentDetail>> {
+    pub async fn for_parts(
+        partlist: &[Part],
+        conn: &mut AppConn,
+    ) -> AnyResult<Vec<AttachmentDetail>> {
         use schema::attachments::dsl::*;
         use schema::parts::dsl::{id, name, parts, what};
         let ids: Vec<_> = partlist.iter().map(|p| p.id).collect();
@@ -568,7 +604,8 @@ impl Attachment {
             .or_filter(gear.eq_any(ids))
             .inner_join(parts.on(id.eq(part_id)))
             .select((schema::attachments::all_columns, name, what))
-            .get_results::<AttachmentDetail>(conn)?;
+            .get_results::<AttachmentDetail>(conn)
+            .await?;
 
         Ok(atts)
     }

@@ -3,24 +3,25 @@
 //! The `activity` and `part` functions are used to retrieve all activity and part types from the database.
 //! The `router` function is used to create a router that handles requests related to activity and part types.
 
-use axum::{Json, Router, routing::get};
+use axum::{Json, Router, routing::get, extract::State};
 use kernel::domain::{ActivityType, PartType};
 
-use crate::{user::RUser, AppDbConn};
+use crate::{user::RUser, appstate::AppState, DbPool, error::ApiResult};
 
 // get all activity types
-async fn activity(_user: RUser, mut conn: AppDbConn) -> Json<Vec<ActivityType>> {
-    Json(ActivityType::all_ordered(&mut conn))
+async fn activity(_user: RUser, State(conn): State<DbPool>) -> ApiResult<Vec<ActivityType>> {
+    let mut conn = conn.get().await?;
+    Ok(Json(ActivityType::all_ordered(&mut conn).await))
 }
 
 /// get all part types
-async fn part(mut conn: AppDbConn) -> Json<Vec<PartType>> {
-    Json(PartType::all_ordered(&mut conn))
+async fn part(State(conn): State<DbPool>) -> ApiResult<Vec<PartType>> {
+    let mut conn = conn.get().await?;
+    Ok(Json(PartType::all_ordered(&mut conn).await))
 }
 
-pub(crate) fn router(state: crate::AppState) -> Router{
+pub(crate) fn router() -> Router<AppState>{
     Router::new()
         .route("/part", get(part))
         .route("/activity", get(activity))
-        .with_state(state)
 }

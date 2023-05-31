@@ -8,7 +8,7 @@
 
 use async_session::{async_trait, MemoryStore, SessionStore};
 use axum::{
-    extract::{rejection::TypedHeaderRejectionReason, FromRef, FromRequestParts},
+    extract::{rejection::TypedHeaderRejectionReason, FromRef, FromRequestParts, State},
     RequestPartsExt, TypedHeader, response::{Response, IntoResponse}, Router, routing::get, Json,
 };
 use http::{header, request::Parts, StatusCode};
@@ -16,26 +16,27 @@ use kernel::{domain::{Person, UserId, Summary, AnyResult}, s_diesel::AppConn};
 use serde_derive::{Deserialize, Serialize};
 use tb_strava::{StravaId, StravaUser};
 
-use crate::{AuthRedirect, AppDbConn, ApiResult};
+use crate::{AuthRedirect, ApiResult, appstate::AppState, DbPool};
 
-pub(crate) fn router(state: crate::AppState) -> Router{
+pub(crate) fn router() -> Router<AppState>{
     Router::new()
         .route("/", get(getuser))
         .route("/summary", get(summary))
         .route("/all", get(userlist))
-        .with_state(state)
 }
 
 async fn getuser(user: RUser) -> Json<RUser> {
     Json(user)
 }
 
-async fn summary(user: RUser, mut conn: AppDbConn) -> ApiResult<Summary> {
-    Ok(user.get_strava_user(&mut conn)?.get_summary(&mut conn).await.map(Json)?)
+async fn summary(user: RUser, State(conn): State<DbPool>) -> ApiResult<Summary> {
+    let mut conn = conn.get().await?;
+    Ok(user.get_strava_user(&mut conn).await?.get_summary(&mut conn).await.map(Json)?)
 }
 
-async fn userlist(_u: AxumAdmin, mut pool: AppDbConn) -> ApiResult<Vec<tb_strava::StravaStat>> {
-    Ok(tb_strava::get_all_stats(&mut pool).map(Json)?)
+async fn userlist(_u: AxumAdmin, State(conn): State<DbPool>) -> ApiResult<Vec<tb_strava::StravaStat>> {
+    let mut conn = conn.get().await?;
+    Ok(tb_strava::get_all_stats(&mut conn).await.map(Json)?)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -52,8 +53,8 @@ impl RUser {
         Self { id, strava_id, firstname, name, is_admin } 
     }
 
-    pub(crate) fn get_strava_user(&self,  conn: &mut AppConn) -> AnyResult<StravaUser> {
-        StravaUser::read(self.id, conn)
+    pub(crate) async fn get_strava_user(&self,  conn: &mut AppConn) -> AnyResult<StravaUser> {
+        StravaUser::read(self.id, conn).await
     }
 }
 

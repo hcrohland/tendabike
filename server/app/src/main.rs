@@ -1,20 +1,20 @@
 #![warn(clippy::all)]
 
-use kernel::s_diesel::DbPool;
 use std::{
     net::SocketAddr,
     path::{Path, PathBuf},
 };
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     // setup environment. Includes Config and logging
     init_environment();
 
-    let db = DbPool::init()?;
+    let db = kernel::s_diesel::DbPool::init().await?;
     let path = get_static_path();
     let socket = get_socket_address();
 
-    tb_axum::start(db, path, socket);
+    tb_axum::start(db, path, socket).await;
 
     Ok(())
 }

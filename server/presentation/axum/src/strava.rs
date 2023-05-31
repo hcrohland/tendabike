@@ -13,7 +13,9 @@ mod redirect;
 use axum::{Router, routing::{get, post}};
 pub(crate) use oauth::*;
 
-pub(crate) fn router(state: crate::AppState) -> Router{
+use crate::appstate::AppState;
+
+pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .route("/login", get(oauth::strava_auth))
         .route("/token", get(oauth::login_authorized))
@@ -25,5 +27,4 @@ pub(crate) fn router(state: crate::AppState) -> Router{
         .route("/bikes/:id", get(redirect::redirect_gear))
         .route("/activities/:id", get(redirect::redirect_act))
         .route("/users/:id", get(redirect::redirect_user))
-        .with_state(state)
 }
