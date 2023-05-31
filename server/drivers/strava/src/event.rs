@@ -218,7 +218,7 @@ impl Event {
         Ok(hash.collect())
     }
 
-    async fn process_sync(self, user: &StravaUser, conn: &mut AsyncPgConnection) -> Result<Summary, anyhow::Error> {
+    async fn process_sync(self, user: &StravaUser, conn: &mut AppConn) -> Result<Summary, anyhow::Error> {
         let summary = self
             .sync(user, conn)
             .await;

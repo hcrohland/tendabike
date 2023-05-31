@@ -10,11 +10,11 @@ use crate::domain::AnyResult;
 
 use async_session::log::info;
 use diesel::prelude::*;
-use diesel_async::pooled_connection::deadpool::Pool;
+use diesel_async::pooled_connection::deadpool::{Pool, Object};
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::AsyncPgConnection;
 
-pub type AppConn = diesel_async::AsyncPgConnection;
+pub type AppConn = Object<AsyncPgConnection>;
 
 use diesel_migrations::MigrationHarness;
 pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
