@@ -6,7 +6,7 @@
 //! The methods implemented for the StravaUser struct allow for reading and updating user data, as well as
 //! checking the validity of the user's access token.
 use diesel_derive_newtype::DieselNewType;
-use ::s_diesel::schema::strava_users;
+use s_diesel::schema::strava_users;
 use newtype_derive::{NewtypeDisplay, NewtypeFrom, newtype_fmt};
 
 use super::*;
@@ -325,6 +325,6 @@ pub async fn sync_users (user_id: Option<StravaId>, time: i64, conn: &mut AppCon
 ///
 /// An `AnyResult` containing a `String` representing the Strava URL for the user.
 pub async fn strava_url(strava_id: i32, conn: &mut AppConn) -> AnyResult<String> {
-    let user_id = s_diesel::get_user_id_from_strava_id(conn, strava_id).await?;
+    let user_id = strava_store::get_user_id_from_strava_id(conn, strava_id).await?;
     Ok(format!("https://strava.com/athletes/{}", &user_id))
 }

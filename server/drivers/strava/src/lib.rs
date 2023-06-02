@@ -30,11 +30,11 @@ pub mod event;
 use anyhow::{Result as AnyResult, Context, ensure, bail};
 use domain::*;
 
-pub mod s_diesel;
+pub mod strava_store;
 
-use ::s_diesel::AppConn;
+use s_diesel::AppConn;
 
-use ::s_diesel::schema;
+use s_diesel::schema;
 
 
 mod user;

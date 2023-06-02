@@ -26,7 +26,7 @@ use async_session::MemoryStore;
 use axum::Router;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use ::s_diesel::DbPool;
+use s_diesel::DbPool;
 
 pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
     tracing_subscriber::registry()

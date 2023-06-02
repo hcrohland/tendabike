@@ -16,7 +16,7 @@ pub struct StravaGear {
 }
 
 pub async fn strava_url(gear: i32, conn: &mut AppConn) -> AnyResult<String> {
-    let mut g = s_diesel::get_strava_name_for_gear_id(gear, conn).await?;
+    let mut g = strava_store::get_strava_name_for_gear_id(gear, conn).await?;
     if g.remove(0) != 'b' {
         bail!("Not found");
     }
@@ -60,7 +60,7 @@ pub(crate) async fn strava_to_tb(
     user: &StravaUser,
     conn: &mut AppConn,
 ) -> AnyResult<PartId> {
-    if let Some(gear) = s_diesel::get_tbid_for_strava_gear(&strava_id, conn).await? {
+    if let Some(gear) = strava_store::get_tbid_for_strava_gear(&strava_id, conn).await? {
         return Ok(gear);
     }
 
@@ -70,7 +70,7 @@ pub(crate) async fn strava_to_tb(
         .context("Couldn't map gear")?
         .into_tb(user)?;
 
-    s_diesel::create_new_gear(conn, strava_id, part, user).await
+    strava_store::create_new_gear(conn, strava_id, part, user).await
 }
 
 /// Get list of gear for user from Strava
