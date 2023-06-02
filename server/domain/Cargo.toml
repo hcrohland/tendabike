@@ -1,5 +1,5 @@
 [package]
-name = "kernel"
+name = "domain"
 version = "0.2.1"
 authors = ["Christoph Rohland <tendabike@rohland.net>"]
 edition = "2021"

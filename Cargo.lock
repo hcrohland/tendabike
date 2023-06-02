@@ -575,6 +575,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "domain"
+version = "0.2.1"
+dependencies = [
+ "anyhow",
+ "async-session",
+ "csv",
+ "diesel",
+ "diesel-async",
+ "diesel-derive-newtype",
+ "diesel_migrations",
+ "newtype_derive",
+ "pretty_assertions",
+ "s_diesel",
+ "serde",
+ "serde_derive",
+ "serde_with",
+ "thiserror",
+ "time",
+ "time-tz",
+]
+
+[[package]]
 name = "dotenv"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -993,28 +1015,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2f37a4a5928311ac501dee68b3c7613a1037d0edb30c8e5427bd832d55d1b790"
 dependencies = [
  "wasm-bindgen",
-]
-
-[[package]]
-name = "kernel"
-version = "0.2.1"
-dependencies = [
- "anyhow",
- "async-session",
- "csv",
- "diesel",
- "diesel-async",
- "diesel-derive-newtype",
- "diesel_migrations",
- "newtype_derive",
- "pretty_assertions",
- "s_diesel",
- "serde",
- "serde_derive",
- "serde_with",
- "thiserror",
- "time",
- "time-tz",
 ]
 
 [[package]]
@@ -1917,9 +1917,9 @@ dependencies = [
  "async-session",
  "axum",
  "axum-macros",
+ "domain",
  "headers",
  "http",
- "kernel",
  "oauth2",
  "reqwest",
  "s_diesel",
@@ -1943,8 +1943,8 @@ dependencies = [
  "diesel",
  "diesel-async",
  "diesel-derive-newtype",
+ "domain",
  "futures",
- "kernel",
  "newtype_derive",
  "reqwest",
  "s_diesel",
@@ -1959,8 +1959,8 @@ name = "tendabike"
 version = "0.4.1"
 dependencies = [
  "anyhow",
+ "domain",
  "dotenv",
- "kernel",
  "s_diesel",
  "tb_axum",
  "tokio",

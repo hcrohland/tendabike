@@ -32,7 +32,7 @@ use axum::{
     Json, Router,
 };
 use http::StatusCode;
-use kernel::domain::{ChangePart, NewPart, Part, PartId};
+use domain::{ChangePart, NewPart, Part, PartId};
 
 pub(crate) fn router() -> Router<AppState> {
     Router::new()

@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-kernel = {path = "../../kernel"}
+domain = {path = "../../domain"}
 tb_strava = {path = "../../drivers/strava"}
 s_diesel = {path = "../../drivers/s_diesel"}
 

@@ -12,7 +12,7 @@ use axum::{
     RequestPartsExt, TypedHeader, response::{Response, IntoResponse}, Router, routing::get, Json,
 };
 use http::{header, request::Parts, StatusCode};
-use kernel::{domain::{Person, UserId, Summary, AnyResult}};
+use {domain::{Person, UserId, Summary, AnyResult}};
 use serde_derive::{Deserialize, Serialize};
 use tb_strava::{StravaId, StravaUser};
 use s_diesel::AppConn;

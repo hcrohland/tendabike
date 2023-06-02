@@ -1,11 +1,8 @@
-use crate::{
-    domain::{ActivityId, PartId, UserId, NewPart, Person},
-    {schema, AppConn},
-};
+use crate::{schema, ActivityId, AppConn, NewPart, PartId, Person, UserId};
 use anyhow::Context;
 use anyhow::Result as AnyResult;
 use diesel::prelude::*;
-use diesel_async::{RunQueryDsl, scoped_futures::ScopedFutureExt, AsyncConnection};
+use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
 use schema::strava_gears;
 use serde_derive::{Deserialize, Serialize};
 
@@ -87,7 +84,10 @@ pub async fn insert_new_activity(
     Ok(())
 }
 
-pub async fn get_stravaid_for_tb_activity(act: i32, conn: &mut AppConn) -> Result<i64, anyhow::Error> {
+pub async fn get_stravaid_for_tb_activity(
+    act: i32,
+    conn: &mut AppConn,
+) -> Result<i64, anyhow::Error> {
     use schema::strava_activities::dsl::*;
     let g: i64 = strava_activities
         .filter(tendabike_id.eq(act))
@@ -97,14 +97,20 @@ pub async fn get_stravaid_for_tb_activity(act: i32, conn: &mut AppConn) -> Resul
     Ok(g)
 }
 
-pub async fn delete_strava_activity(act_id: i64, conn: &mut AppConn) -> Result<usize, anyhow::Error> {
+pub async fn delete_strava_activity(
+    act_id: i64,
+    conn: &mut AppConn,
+) -> Result<usize, anyhow::Error> {
     use schema::strava_activities::dsl::*;
     Ok(diesel::delete(strava_activities.find(act_id))
         .execute(conn)
         .await?)
 }
 
-pub async fn get_activityid_from_strava_activity(act_id: i64, conn: &mut AppConn) -> Result<Option<ActivityId>, anyhow::Error> {
+pub async fn get_activityid_from_strava_activity(
+    act_id: i64,
+    conn: &mut AppConn,
+) -> Result<Option<ActivityId>, anyhow::Error> {
     use schema::strava_activities::dsl::*;
     let tid: Option<ActivityId> = strava_activities
         .select(tendabike_id)
@@ -115,7 +121,12 @@ pub async fn get_activityid_from_strava_activity(act_id: i64, conn: &mut AppConn
     Ok(tid)
 }
 
-pub async fn create_new_gear(conn: &mut AppConn, strava_id: String, part: NewPart, user: &dyn Person) -> Result<PartId, anyhow::Error> {
+pub async fn create_new_gear(
+    conn: &mut AppConn,
+    strava_id: String,
+    part: NewPart,
+    user: &dyn Person,
+) -> Result<PartId, anyhow::Error> {
     conn.transaction(|conn| {
         async {
             use schema::strava_gears::dsl::*;

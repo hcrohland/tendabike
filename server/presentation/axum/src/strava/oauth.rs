@@ -16,7 +16,7 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 use http::StatusCode;
-use kernel::{
+use {
     domain::{AnyResult, Error},
 };
 use s_diesel::AppConn;

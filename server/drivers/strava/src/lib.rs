@@ -27,7 +27,6 @@ pub mod activity;
 pub mod gear;
 pub mod event;
 
-use kernel::{domain};
 use anyhow::{Result as AnyResult, Context, ensure, bail};
 use domain::*;
 

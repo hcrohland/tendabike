@@ -15,7 +15,7 @@ use axum::{
     Json, Router,
 };
 use http::StatusCode;
-use kernel::domain::{Activity, ActivityId, NewActivity, PartId, PartTypeId, Summary};
+use domain::{Activity, ActivityId, NewActivity, PartId, PartTypeId, Summary};
 
 use crate::{
     error::{ApiResult, AppError},

@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-kernel = {path = "../../kernel"}
+domain = {path = "../../domain"}
 s_diesel = {path = "../s_diesel"}
 
 diesel = { version = "2", features = ["time"] }

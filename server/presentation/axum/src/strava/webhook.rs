@@ -52,7 +52,7 @@
 use anyhow::ensure;
 use async_session::log::{trace, info};
 use axum::{Json, extract::{Query, Path, State}};
-use kernel::{domain::{AnyResult, Error, Summary}};
+use {domain::{AnyResult, Error, Summary}};
 
 use tb_strava::{event::{InEvent, process}, StravaUser};
 use serde_derive::{ Deserialize, Serialize};
