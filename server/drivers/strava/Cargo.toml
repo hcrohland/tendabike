@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 kernel = {path = "../../kernel"}
+s_diesel = {path = "../s_diesel"}
 
 diesel = { version = "2", features = ["time"] }
 diesel-async = { version = "0.3", features = ["postgres", "deadpool" ] }

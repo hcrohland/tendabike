@@ -1,6 +1,6 @@
 use crate::{
     domain::{ActivityId, PartId, UserId, NewPart, Person},
-    s_diesel::{schema, AppConn},
+    {schema, AppConn},
 };
 use anyhow::Context;
 use anyhow::Result as AnyResult;

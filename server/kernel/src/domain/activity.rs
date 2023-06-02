@@ -301,8 +301,8 @@ impl Activity {
     }
 
     pub async fn categories(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<PartTypeId>> {
-        use crate::schema::activities::dsl::*;
-        use crate::schema::activity_types;
+        use s_diesel::schema::activities::dsl::*;
+        use s_diesel::schema::activity_types;
 
         let act_types = activities
             .filter(user_id.eq(user.get_id()))

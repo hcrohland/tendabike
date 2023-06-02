@@ -27,13 +27,15 @@ pub mod activity;
 pub mod gear;
 pub mod event;
 
-use kernel::{domain, s_diesel};
+use kernel::{domain};
 use anyhow::{Result as AnyResult, Context, ensure, bail};
 use domain::*;
 
-use s_diesel::AppConn;
+pub mod s_diesel;
 
-use s_diesel::schema;
+use ::s_diesel::AppConn;
+
+use ::s_diesel::schema;
 
 
 mod user;

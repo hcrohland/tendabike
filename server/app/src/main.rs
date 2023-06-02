@@ -5,8 +5,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use kernel::s_diesel;
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // setup environment. Includes Config and logging

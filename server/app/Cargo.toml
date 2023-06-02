@@ -12,3 +12,4 @@ anyhow = "1"
 tokio = { version = "1", features = ["full"] }
 kernel = { path = "../kernel"}
 tb_axum = { path = "../presentation/axum"}
+s_diesel = { path = "../drivers/s_diesel"}

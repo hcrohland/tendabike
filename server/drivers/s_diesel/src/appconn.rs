@@ -6,19 +6,18 @@
 //!
 //! This module is used by other modules in the application to interact with the database.
 
-use crate::domain::AnyResult;
-
 use async_session::log::info;
 use diesel::prelude::*;
-use diesel_async::pooled_connection::deadpool::{Pool, Object};
+use diesel_async::pooled_connection::deadpool::{Object, Pool};
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::AsyncPgConnection;
 
+type AnyResult<T> = anyhow::Result<T>;
 pub type AppConn = Object<AsyncPgConnection>;
 
-use diesel_migrations::MigrationHarness;
+use diesel_migrations::{embed_migrations, MigrationHarness};
 pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
-    embed_migrations!("src/s_diesel/migrations");
+    embed_migrations!("migrations");
 
 fn run_db_migrations(db: &str) {
     info!("Running database migrations...");
@@ -27,7 +26,7 @@ fn run_db_migrations(db: &str) {
         .expect("Failed to run database migrations: {:?}");
 }
 #[derive(Clone)]
-pub struct DbPool (Pool<AsyncPgConnection>);
+pub struct DbPool(Pool<AsyncPgConnection>);
 
 impl DbPool {
     pub async fn new() -> AnyResult<Self> {
@@ -42,7 +41,9 @@ impl DbPool {
         Ok(DbPool(pool))
     }
 
-    pub async fn get(&self) -> AnyResult<diesel_async::pooled_connection::deadpool::Object<AsyncPgConnection>> {
+    pub async fn get(
+        &self,
+    ) -> AnyResult<diesel_async::pooled_connection::deadpool::Object<AsyncPgConnection>> {
         let conn = self.0.get().await?;
         Ok(conn)
     }

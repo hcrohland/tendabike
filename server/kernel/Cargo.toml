@@ -5,6 +5,7 @@ authors = ["Christoph Rohland <tendabike@rohland.net>"]
 edition = "2021"
 
 [dependencies]
+s_diesel = {path = "../drivers/s_diesel"}
 
 diesel = { version = "2", features = ["postgres", "time" ] }
 diesel-async = { version = "0.3", features = ["postgres", "deadpool" ] }

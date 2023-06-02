@@ -1,11 +1,11 @@
 use async_recursion::async_recursion;
 use diesel::QueryDsl;
 use diesel_async::*;
-use kernel::s_diesel::schema::strava_users;
+use ::s_diesel::schema::strava_users;
 use std::collections::HashMap;
 
 use super::*;
-use schema::strava_events;
+use ::s_diesel::schema::strava_events;
 
 use crate::activity::StravaActivity;
 

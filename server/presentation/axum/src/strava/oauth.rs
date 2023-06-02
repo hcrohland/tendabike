@@ -18,8 +18,8 @@ use axum::{
 use http::StatusCode;
 use kernel::{
     domain::{AnyResult, Error},
-    s_diesel::AppConn,
 };
+use s_diesel::AppConn;
 use oauth2::{
     basic::{
         BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,

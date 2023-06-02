@@ -46,8 +46,8 @@ pub use user::*;
 use diesel::prelude::*;
 use diesel::{self, QueryDsl};
 
-use crate::s_diesel::schema;
-use crate::s_diesel::AppConn;
+use s_diesel::schema;
+use s_diesel::AppConn;
 
 mod usage;
 pub use usage::*;

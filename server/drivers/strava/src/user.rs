@@ -6,7 +6,7 @@
 //! The methods implemented for the StravaUser struct allow for reading and updating user data, as well as
 //! checking the validity of the user's access token.
 use diesel_derive_newtype::DieselNewType;
-use kernel::s_diesel::schema::strava_users;
+use ::s_diesel::schema::strava_users;
 use newtype_derive::{NewtypeDisplay, NewtypeFrom, newtype_fmt};
 
 use super::*;

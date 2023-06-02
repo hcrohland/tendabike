@@ -81,7 +81,7 @@ impl UserId {
     }
 
     pub async fn create(firstname_: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<Self> {
-        use crate::schema::users::dsl::*;
+        use s_diesel::schema::users::dsl::*;
 
         let user: User = diesel::insert_into(users)
             .values((
@@ -101,7 +101,7 @@ impl UserId {
         lastname: &str,
         conn: &mut AppConn,
     ) -> AnyResult<Self> {
-        use crate::schema::users::dsl::*;
+        use s_diesel::schema::users::dsl::*;
 
         let user: User = diesel::update(users.filter(id.eq(self)))
             .set((firstname.eq(firstname_), name.eq(lastname)))
