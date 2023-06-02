@@ -10,7 +10,6 @@ use time::OffsetDateTime;
 
 use super::*;
 use ActTypeId;
-use ActivityId;
 use NewActivity;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -194,31 +193,20 @@ pub async fn upsert_activity(id: i64, user: &StravaUser, conn: &mut AppConn) -> 
 }
 
 pub(crate) async fn delete_activity(
-    sid: i64,
+    act_id: i64,
     user: &StravaUser,
     conn: &mut AppConn,
 ) -> AnyResult<Summary> {
-    use schema::strava_activities::dsl::*;
 
-    conn.transaction(|conn| {
-        async {
-            let tid: Option<ActivityId> = strava_activities
-                .select(tendabike_id)
-                .find(sid)
-                .for_update()
-                .first(conn)
-                .await
-                .optional()?;
-            if let Some(tid) = tid {
-                diesel::delete(strava_activities.find(sid))
-                    .execute(conn)
-                    .await?;
-                tid.delete(user, conn).await
-            } else {
-                Ok(Summary::default())
-            }
-        }
-        .scope_boxed()
-    })
-    .await
+    let tid = s_diesel::get_activityid_from_strava_activity(act_id, conn).await?;
+    let mut res = Summary::default();
+    if let Some(tid) = tid {
+        // first delete the tendabike activity
+        res = tid.delete(user, conn).await?;
+        // now delete the reference to the strava activity 
+        // if this fails we end up with an orphaned entry in the strava_activities table, which should not be a problem in practice
+        s_diesel::delete_strava_activity(act_id, conn).await?;
+    } 
+    Ok(res)
 }
+

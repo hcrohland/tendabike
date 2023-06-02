@@ -96,3 +96,21 @@ pub async fn get_stravaid_for_tb_activity(act: i32, conn: &mut AppConn) -> Resul
         .await?;
     Ok(g)
 }
+
+pub async fn delete_strava_activity(act_id: i64, conn: &mut AppConn) -> Result<usize, anyhow::Error> {
+    use schema::strava_activities::dsl::*;
+    Ok(diesel::delete(strava_activities.find(act_id))
+        .execute(conn)
+        .await?)
+}
+
+pub async fn get_activityid_from_strava_activity(act_id: i64, conn: &mut AppConn) -> Result<Option<ActivityId>, anyhow::Error> {
+    use schema::strava_activities::dsl::*;
+    let tid: Option<ActivityId> = strava_activities
+        .select(tendabike_id)
+        .find(act_id)
+        .first(conn)
+        .await
+        .optional()?;
+    Ok(tid)
+}
