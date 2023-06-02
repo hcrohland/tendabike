@@ -34,7 +34,6 @@ use domain::*;
 use s_diesel::AppConn;
 
 use s_diesel::schema;
-use s_diesel::schema::strava_users;
 
 
 mod user;
