@@ -1,11 +1,11 @@
 use crate::{
-    domain::{ActivityId, PartId, UserId},
+    domain::{ActivityId, PartId, UserId, NewPart, Person},
     s_diesel::{schema, AppConn},
 };
 use anyhow::Context;
 use anyhow::Result as AnyResult;
 use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use diesel_async::{RunQueryDsl, scoped_futures::ScopedFutureExt, AsyncConnection};
 use schema::strava_gears;
 use serde_derive::{Deserialize, Serialize};
 
@@ -113,4 +113,31 @@ pub async fn get_activityid_from_strava_activity(act_id: i64, conn: &mut AppConn
         .await
         .optional()?;
     Ok(tid)
+}
+
+pub async fn create_new_gear(conn: &mut AppConn, strava_id: String, part: NewPart, user: &dyn Person) -> Result<PartId, anyhow::Error> {
+    conn.transaction(|conn| {
+        async {
+            use schema::strava_gears::dsl::*;
+            // maybe the gear was created by now?
+            if let Some(gear) = get_tbid_for_strava_gear(&strava_id, conn).await? {
+                return Ok(gear);
+            }
+
+            let tbid = part.create(user, conn).await?.id;
+
+            diesel::insert_into(strava_gears)
+                .values((
+                    id.eq(strava_id),
+                    tendabike_id.eq(tbid),
+                    user_id.eq(user.get_id()),
+                ))
+                .execute(conn)
+                .await
+                .context("couldn't store gear")?;
+            Ok(tbid)
+        }
+        .scope_boxed()
+    })
+    .await
 }

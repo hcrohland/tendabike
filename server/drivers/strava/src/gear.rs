@@ -4,7 +4,6 @@
 
 use super::*;
 
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaGear {
     id: String,
@@ -24,7 +23,6 @@ pub async fn strava_url(gear: i32, conn: &mut AppConn) -> AnyResult<String> {
 
     Ok(format!("https://strava.com/bikes/{}", &g))
 }
-
 
 impl StravaGear {
     fn into_tb(self, user: &StravaUser) -> AnyResult<NewPart> {
@@ -72,30 +70,7 @@ pub(crate) async fn strava_to_tb(
         .context("Couldn't map gear")?
         .into_tb(user)?;
 
-    conn.transaction(|conn| {
-        async {
-            use schema::strava_gears::dsl::*;
-            // maybe the gear was created by now?
-            if let Some(gear) = s_diesel::get_tbid_for_strava_gear(&strava_id, conn).await? {
-                return Ok(gear);
-            }
-
-            let tbid = part.create(user, conn).await?.id;
-
-            diesel::insert_into(strava_gears)
-                .values((
-                    id.eq(strava_id),
-                    tendabike_id.eq(tbid),
-                    user_id.eq(user.tb_id()),
-                ))
-                .execute(conn)
-                .await
-                .context("couldn't store gear")?;
-            Ok(tbid)
-        }
-        .scope_boxed()
-    })
-    .await
+    s_diesel::create_new_gear(conn, strava_id, part, user).await
 }
 
 /// Get list of gear for user from Strava
