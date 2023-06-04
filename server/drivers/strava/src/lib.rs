@@ -14,8 +14,8 @@
 //! # Examples
 //!
 
-use diesel::{prelude::*, Identifiable, QueryableByName};
-use diesel::{QueryDsl, sql_query};
+use diesel::{Identifiable, QueryableByName};
+use diesel::{sql_query};
 use diesel::{Queryable, Insertable};
 use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
 
@@ -33,9 +33,6 @@ use domain::*;
 pub mod strava_store;
 
 use s_diesel::AppConn;
-
-use s_diesel::schema;
-
 
 mod user;
 pub use user::*;

@@ -1,7 +1,4 @@
 use async_recursion::async_recursion;
-use diesel::QueryDsl;
-use diesel_async::*;
-use s_diesel::schema::strava_users;
 use std::collections::HashMap;
 
 use super::*;
@@ -46,8 +43,9 @@ impl InEvent {
         );
 
         ensure!(
-            strava_users::table.find(self.owner_id).execute(conn).await
-                == core::result::Result::Ok(1),
+            strava_store::read_stravauser_for_stravaid(self.owner_id.into(), conn)
+                .await?
+                .len() == 1,
             Error::BadRequest(format!("Unknown event owner received: {:?}", self))
         );
 
