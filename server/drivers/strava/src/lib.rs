@@ -25,8 +25,6 @@ use async_session::log::{info,trace,warn,debug};
 use anyhow::{Result as AnyResult, Context, ensure, bail};
 use domain::*;
 
-pub mod strava_store;
-
 use s_diesel::AppConn;
 mod storetrait;
 pub use storetrait::Store;

@@ -43,7 +43,7 @@ impl InEvent {
         );
 
         ensure!(
-            strava_store::read_stravauser_for_stravaid(self.owner_id.into(), conn)
+            conn.read_stravauser_for_stravaid(self.owner_id.into())
                 .await?
                 .len() == 1,
             Error::BadRequest(format!("Unknown event owner received: {:?}", self))
@@ -103,12 +103,12 @@ impl std::fmt::Display for Event {
 impl Event {
     async fn delete(&self, conn: &mut AppConn) -> anyhow::Result<()> {
         debug!("Deleting {}", self);
-        strava_store::delete_strava_event(self.id, conn).await
+        conn.delete_strava_event(self.id).await
     }
 
     async fn setdate(&mut self, time: i64, conn: &mut AppConn) -> anyhow::Result<()> {
         self.event_time = time;
-        strava_store::set_event_time(self.id, self.event_time, conn).await
+        conn.set_event_time(self.id, self.event_time).await
     }
 
     #[async_recursion]
@@ -260,7 +260,7 @@ pub async fn insert_stop(conn: &mut AppConn) -> anyhow::Result<()> {
 }
 
 async fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Option<Event>> {
-    let event = strava_store::get_next_event_for_stravauser(user, conn).await?;
+    let event = conn.get_next_event_for_stravauser(user).await?;
     let event = match event {
         Some(event) => event,
         None => return Ok(None),
@@ -271,14 +271,14 @@ async fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Opti
 
     // Prevent unneeded calls to Strava
     // only the latest event for an object is interesting
-    let  mut list = strava_store::get_all_later_events_for_object(event.object_id, event.owner_id, conn).await?;
+    let  mut list = conn.get_all_later_events_for_object(event.object_id, event.owner_id).await?;
     let res = list.pop();
 
 
     if !list.is_empty() {
         debug!("Dropping {:#?}", list);
         let values = list.into_iter().map(|l| l.id).collect::<Vec<_>>();
-        strava_store::delete_events_by_vec_id(values, conn).await?;
+        conn.delete_events_by_vec_id(values).await?;
     }
 
     Ok(res)

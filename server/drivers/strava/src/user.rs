@@ -50,7 +50,7 @@ impl StravaUser {
     ///
     /// Returns an `Error` if the user is not registered.
     pub async fn read(id: UserId, conn: &mut AppConn) -> AnyResult<Self> {
-        strava_store::read_stravauser_for_userid(id, conn).await
+        conn.read_stravauser_for_userid(id).await
     }
 
     /// read the current user data for id
@@ -69,7 +69,7 @@ impl StravaUser {
         if self.last_activity >= time {
             return Ok(self.last_activity);
         }
-        strava_store::stravauser_update_last_activity(self, time, conn).await?;
+        conn.stravauser_update_last_activity(self, time).await?;
         Ok(time)
     }
 
@@ -96,7 +96,7 @@ impl StravaUser {
         let iat = get_time();
         let exp = expires.unwrap() + iat - 300; // 5 Minutes buffer
         let user: StravaUser =
-            strava_store::stravaid_update_token(self.id, access, exp, refresh, conn).await?;
+            conn.stravaid_update_token(self.id, access, exp, refresh).await?;
 
         Ok(user)
     }
@@ -184,7 +184,7 @@ impl StravaUser {
         event::insert_sync(id, crate::get_time(), conn)
             .await
             .context(format!("Could insert sync for user: {:?}", id))?;
-        strava_store::disable_stravauser(&self.id, conn).await
+        conn.disable_stravauser(&self.id).await
     }
 
     /// disable a user per admin request
@@ -194,7 +194,7 @@ impl StravaUser {
     /// This function will return an error if the user does not exist, is already disabled
     /// or has open events and if strava or the database is not reachable.
     pub async fn admin_disable(self, conn: &mut AppConn) -> AnyResult<()> {
-        let events = strava_store::get_count_of_events_for_user(&self, conn).await?;
+        let events = conn.get_count_of_events_for_user(&self).await?;
 
         if self.disabled() {
             bail!(Error::BadRequest(String::from("user already disabled!")))
@@ -246,7 +246,7 @@ impl StravaUser {
     ) -> AnyResult<StravaUser> {
         debug!("got id {}: {} {}", id, &firstname, &lastname);
 
-        let user = strava_store::read_stravauser_for_stravaid(id, conn)
+        let user = conn.read_stravauser_for_stravaid(id)
             .await?
             .pop();
         if let Some(user) = user {
@@ -264,7 +264,7 @@ impl StravaUser {
         };
         info!("creating new user id {:?}", user);
 
-        let user = strava_store::insert_stravauser(user, conn).await?;
+        let user = conn.insert_stravauser(user).await?;
         sync_users(Some(user.id), 0, conn).await?;
         Ok(user)
     }
@@ -288,12 +288,12 @@ pub struct StravaStat {
 }
 
 pub async fn get_all_stats(conn: &mut AppConn) -> AnyResult<Vec<StravaStat>> {
-    let users = strava_store::get_all_stravausers(conn).await?;
+    let users = conn.get_all_stravausers().await?;
 
     let mut res = Vec::new();
     for u in users {
         let stat = u.tendabike_id.get_stat(conn).await?;
-        let events = strava_store::get_count_of_events_for_user(&u, conn).await?;
+        let events = conn.get_count_of_events_for_user(&u).await?;
         res.push(StravaStat {
             stat,
             events,
@@ -305,8 +305,8 @@ pub async fn get_all_stats(conn: &mut AppConn) -> AnyResult<Vec<StravaStat>> {
 
 pub async fn sync_users(user_id: Option<StravaId>, time: i64, conn: &mut AppConn) -> AnyResult<()> {
     let users = match user_id {
-        Some(user) => strava_store::read_stravauser_for_stravaid(user, conn).await?,
-        None => strava_store::get_all_stravausers(conn).await?,
+        Some(user) => conn.read_stravauser_for_stravaid(user).await?,
+        None => conn.get_all_stravausers().await?,
     };
     for user in users {
         event::insert_sync(user.id, time, conn).await?;
@@ -325,6 +325,6 @@ pub async fn sync_users(user_id: Option<StravaId>, time: i64, conn: &mut AppConn
 ///
 /// An `AnyResult` containing a `String` representing the Strava URL for the user.
 pub async fn strava_url(strava_id: i32, conn: &mut AppConn) -> AnyResult<String> {
-    let user_id = strava_store::get_user_id_from_strava_id(conn, strava_id).await?;
+    let user_id = conn.get_user_id_from_strava_id(strava_id).await?;
     Ok(format!("https://strava.com/athletes/{}", &user_id))
 }
