@@ -6,14 +6,30 @@
 //!
 //! This module is used by other modules in the application to interact with the database.
 
+use std::ops::{Deref, DerefMut};
+
 use async_session::log::info;
 use diesel::prelude::*;
 use diesel_async::pooled_connection::deadpool::{Object, Pool};
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::AsyncPgConnection;
+use anyhow::Result as AnyResult;
 
-type AnyResult<T> = anyhow::Result<T>;
-pub type AppConn = Object<AsyncPgConnection>;
+pub struct AppConn(Object<AsyncPgConnection>);
+
+impl Deref for AppConn {
+    type Target = Object<AsyncPgConnection>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for AppConn {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 use diesel_migrations::{embed_migrations, MigrationHarness};
 pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
@@ -35,7 +51,7 @@ impl DbPool {
         run_db_migrations(&database_url);
 
         let config =
-            AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(database_url);
+            AsyncDieselConnectionManager::<AsyncPgConnection>::new(database_url);
         let pool: Pool<AsyncPgConnection> = Pool::builder(config).build()?;
 
         Ok(DbPool(pool))
@@ -43,8 +59,8 @@ impl DbPool {
 
     pub async fn get(
         &self,
-    ) -> AnyResult<diesel_async::pooled_connection::deadpool::Object<AsyncPgConnection>> {
+    ) -> AnyResult<AppConn> {
         let conn = self.0.get().await?;
-        Ok(conn)
+        Ok(AppConn(conn))
     }
 }
