@@ -101,7 +101,7 @@ pub(crate) async fn hooks (user: RUser, State(conn): State<DbPool>) -> ApiResult
 pub(crate) async fn create_event(State(conn): State<DbPool>, Json(event): axum::extract::Json<InEvent>) -> ApiResult<()> {
     trace!("Received {:#?}", event);
     let mut conn = conn.get().await?;
-    event.convert()?.store(&mut conn).await?;
+    event.accept(&mut conn).await?;
     Ok(Json(()))
 }
 

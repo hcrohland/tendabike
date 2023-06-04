@@ -5,7 +5,6 @@ use s_diesel::schema::strava_users;
 use std::collections::HashMap;
 
 use super::*;
-use s_diesel::schema::strava_events;
 
 use crate::activity::StravaActivity;
 
@@ -36,7 +35,7 @@ impl InEvent {
     /// # Returns
     ///
     /// Returns a `Result` containing an `Event` struct if the conversion is successful, or an `anyhow::Error` if it fails.
-    pub fn convert(self) -> anyhow::Result<Event> {
+    pub async fn to_event(self, conn: &mut AppConn) -> anyhow::Result<Event> {
         let objects = ["activity", "athlete"];
         let aspects = ["create", "update", "delete"];
 
@@ -44,6 +43,12 @@ impl InEvent {
             objects.contains(&self.object_type.as_str())
                 && aspects.contains(&self.aspect_type.as_str()),
             domain::Error::BadRequest(format!("unknown event received: {:?}", self))
+        );
+
+        ensure!(
+            strava_users::table.find(self.owner_id).execute(conn).await
+                == core::result::Result::Ok(1),
+            Error::BadRequest(format!("Unknown event owner received: {:?}", self))
         );
 
         Ok(Event {
@@ -57,10 +62,15 @@ impl InEvent {
             updates: serde_json::to_string(&self.updates).unwrap_or_else(|e| format!("{:?}", e)),
         })
     }
+    
+    pub async fn accept(self, conn: &mut AppConn) -> AnyResult<()> {
+        let event = self.to_event(conn).await?;
+        strava_store::store_event(event, conn).await?;
+        Ok(())
+    }
 }
-
 #[derive(Debug, Default, Serialize, Deserialize, Queryable, Insertable)]
-#[diesel(table_name = strava_events)]
+#[diesel(table_name = s_diesel::schema::strava_events)]
 pub struct Event {
     id: Option<i32>,
     pub object_type: String,
@@ -94,44 +104,16 @@ impl std::fmt::Display for Event {
 
 impl Event {
     async fn delete(&self, conn: &mut AppConn) -> anyhow::Result<()> {
-        use schema::strava_events::dsl::*;
         debug!("Deleting {}", self);
-        diesel::delete(strava_events)
-            .filter(id.eq(self.id))
-            .execute(conn)
-            .await?;
-        Ok(())
+        strava_store::delete_strava_event(self.id, conn).await
     }
 
     async fn setdate(&mut self, time: i64, conn: &mut AppConn) -> anyhow::Result<()> {
-        use schema::strava_events::dsl::*;
         self.event_time = time;
-        diesel::update(strava_events)
-            .filter(id.eq(self.id))
-            .set(event_time.eq(self.event_time))
-            .execute(conn)
-            .await?;
-        Ok(())
+        strava_store::set_event_time(self.id, self.event_time, conn).await
     }
 
-    pub async fn store(self, conn: &mut AppConn) -> anyhow::Result<()> {
-        ensure!(
-            strava_users::table.find(self.owner_id).execute(conn).await
-                == core::result::Result::Ok(1),
-            Error::BadRequest(format!("Unknown event owner received: {}", self))
-        );
-
-        info!(
-            "Received {}",
-            diesel::insert_into(schema::strava_events::table)
-                .values(&self)
-                .get_result::<Event>(conn)
-                .await?
-        );
-        Ok(())
-    }
-
-#[async_recursion]
+    #[async_recursion]
     async fn rate_limit(
         self,
         user: &StravaUser,
@@ -219,15 +201,17 @@ impl Event {
         Ok(hash.collect())
     }
 
-    async fn process_sync(self, user: &StravaUser, conn: &mut AppConn) -> Result<Summary, anyhow::Error> {
-        let summary = self
-            .sync(user, conn)
-            .await;
+    async fn process_sync(
+        self,
+        user: &StravaUser,
+        conn: &mut AppConn,
+    ) -> Result<Summary, anyhow::Error> {
+        let summary = self.sync(user, conn).await;
         if let Err(err) = summary {
-            return check_try_again(err, conn).await
+            return check_try_again(err, conn).await;
         }
         summary
-    }    
+    }
 }
 
 /// Inserts a new sync event into the database.
@@ -258,13 +242,13 @@ pub async fn insert_sync(
         event_time <= get_time(),
         Error::BadRequest(format!("eventtime {} > now!", event_time))
     );
-    Event {
+    let event = Event {
         owner_id,
         event_time,
         object_type: "sync".to_string(),
         ..Default::default()
-    }
-    .store(conn)
+    };
+    strava_store::store_event(event, conn)
     .await
 }
 
@@ -274,21 +258,11 @@ pub async fn insert_stop(conn: &mut AppConn) -> anyhow::Result<()> {
         object_id: get_time() + 900,
         ..Default::default()
     };
-    diesel::insert_into(schema::strava_events::table)
-        .values(e)
-        .execute(conn)
-        .await?;
-    Ok(())
+    strava_store::store_event(e, conn).await
 }
 
 async fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Option<Event>> {
-    use schema::strava_events::dsl::*;
-
-    let event = strava_events
-        .filter(owner_id.eq_any(vec![0, user.id.into()]))
-        .first::<Event>(conn)
-        .await
-        .optional()?;
+    let event = strava_store::get_next_event_for_stravauser(user, conn).await?;
     let event = match event {
         Some(event) => event,
         None => return Ok(None),
@@ -299,20 +273,14 @@ async fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Opti
 
     // Prevent unneeded calls to Strava
     // only the latest event for an object is interesting
-    let mut list = strava_events
-        .filter(object_id.eq(event.object_id))
-        .filter(owner_id.eq(event.owner_id))
-        .order(event_time.asc())
-        .get_results::<Event>(conn)
-        .await?;
+    let  mut list = strava_store::get_all_later_events_for_object(event.object_id, event.owner_id, conn).await?;
     let res = list.pop();
+
 
     if !list.is_empty() {
         debug!("Dropping {:#?}", list);
-        diesel::delete(strava_events)
-            .filter(id.eq_any(list.into_iter().map(|l| l.id).collect::<Vec<_>>()))
-            .execute(conn)
-            .await?;
+        let values = list.into_iter().map(|l| l.id).collect::<Vec<_>>();
+        strava_store::delete_events_by_vec_id(values, conn).await?;
     }
 
     Ok(res)

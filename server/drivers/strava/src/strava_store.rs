@@ -1,4 +1,5 @@
-use crate::{schema, ActivityId, AppConn, NewPart, PartId, Person, UserId};
+use crate::event::Event;
+use crate::{schema, ActivityId, AppConn, NewPart, PartId, Person, UserId, StravaId};
 use anyhow::Context;
 use anyhow::Result as AnyResult;
 use diesel::prelude::*;
@@ -152,3 +153,62 @@ pub async fn create_new_gear(
     })
     .await
 }
+
+pub(crate) async fn delete_strava_event(event_id: Option<i32>, conn: &mut AppConn) -> Result<(), anyhow::Error> {
+    use schema::strava_events::dsl::*;
+    diesel::delete(strava_events)
+        .filter(id.eq(event_id))
+        .execute(conn)
+        .await?;
+    Ok(())
+}
+
+pub async fn set_event_time(e_id: Option<i32>, e_time: i64, conn: &mut AppConn) -> Result<(), anyhow::Error> {
+    use schema::strava_events::dsl::*;
+    diesel::update(strava_events)
+        .filter(id.eq(e_id))
+        .set(event_time.eq(e_time))
+        .execute(conn)
+        .await?;
+    Ok(())
+}
+
+pub async fn store_event(e: Event, conn: &mut AppConn) -> anyhow::Result<()> {
+    diesel::insert_into(schema::strava_events::table)
+        .values(&e)
+        .get_result::<Event>(conn)
+        .await?;
+    Ok(())
+}
+
+pub async fn get_next_event_for_stravauser(user: &crate::StravaUser, conn: &mut AppConn) -> AnyResult<Option<Event>> {
+    use schema::strava_events::dsl::*;
+    let event = strava_events
+        .filter(owner_id.eq_any(vec![0, user.id.into()]))
+        .first::<Event>(conn)
+        .await
+        .optional()?;
+    Ok(event)
+}
+
+pub async fn get_all_later_events_for_object(obj_id: i64, oid: StravaId, conn: &mut AppConn) -> AnyResult<Vec<Event>> {
+    use schema::strava_events::dsl::*;
+    let list = strava_events
+        .filter(object_id.eq(obj_id))
+        .filter(owner_id.eq(oid))
+        .order(event_time.asc())
+        .get_results::<Event>(conn)
+        .await?;
+    Ok(list)
+}
+
+pub async fn delete_events_by_vec_id(values: Vec<Option<i32>>, conn: &mut AppConn) -> AnyResult<()> {
+    use schema::strava_events::dsl::*;
+
+    diesel::delete(strava_events)
+        .filter(id.eq_any(values))
+        .execute(conn)
+        .await?;
+    Ok(())
+}
+
