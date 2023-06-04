@@ -22,21 +22,24 @@ use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl
 use serde_derive::{Deserialize, Serialize};
 use async_session::log::{info,trace,warn,debug};
 
-
-pub mod activity;
-pub mod gear;
-pub mod event;
-
 use anyhow::{Result as AnyResult, Context, ensure, bail};
 use domain::*;
 
 pub mod strava_store;
 
 use s_diesel::AppConn;
+mod storetrait;
+pub use storetrait::Store;
+
+pub mod activity;
+pub mod gear;
+pub mod event;
+
+mod store;
+
 
 mod user;
 pub use user::*;
-
 
 fn get_time() -> i64 {
     time::OffsetDateTime::now_utc().unix_timestamp()

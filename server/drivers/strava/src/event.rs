@@ -63,7 +63,7 @@ impl InEvent {
     
     pub async fn accept(self, conn: &mut AppConn) -> AnyResult<()> {
         let event = self.to_event(conn).await?;
-        strava_store::store_event(event, conn).await?;
+        conn.store_stravaevent(event).await?;
         Ok(())
     }
 }
@@ -246,7 +246,7 @@ pub async fn insert_sync(
         object_type: "sync".to_string(),
         ..Default::default()
     };
-    strava_store::store_event(event, conn)
+    conn.store_stravaevent(event)
     .await
 }
 
@@ -256,7 +256,7 @@ pub async fn insert_stop(conn: &mut AppConn) -> anyhow::Result<()> {
         object_id: get_time() + 900,
         ..Default::default()
     };
-    strava_store::store_event(e, conn).await
+    conn.store_stravaevent(e).await
 }
 
 async fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Option<Event>> {

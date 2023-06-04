@@ -182,14 +182,6 @@ pub async fn set_event_time(
     Ok(())
 }
 
-pub async fn store_event(e: Event, conn: &mut AppConn) -> anyhow::Result<()> {
-    diesel::insert_into(schema::strava_events::table)
-        .values(&e)
-        .get_result::<Event>(conn)
-        .await?;
-    Ok(())
-}
-
 pub async fn get_next_event_for_stravauser(
     user: &crate::StravaUser,
     conn: &mut AppConn,

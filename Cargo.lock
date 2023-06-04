@@ -1940,6 +1940,7 @@ dependencies = [
  "anyhow",
  "async-recursion",
  "async-session",
+ "async-trait",
  "diesel",
  "diesel-async",
  "diesel-derive-newtype",
