@@ -118,7 +118,7 @@ pub(super) struct SyncQuery {
 
 pub(super) async fn sync_api (_u: AxumAdmin, State(conn): State<DbPool>, Query(query): Query<SyncQuery>) -> ApiResult<()> {
     let mut conn = conn.get().await?;
-    let user_id = query.user_id.map(|u| u.into());
+    let user_id: Option<domain::UserId> = query.user_id.map(|u| u.into());
     Ok(tb_strava::sync_users(user_id, query.time, &mut conn).await.map(Json)?)
 }
 

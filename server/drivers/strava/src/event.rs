@@ -236,6 +236,7 @@ pub async fn insert_sync(
     event_time: i64,
     conn: &mut AppConn,
 ) -> anyhow::Result<()> {
+    
     ensure!(
         event_time <= get_time(),
         Error::BadRequest(format!("eventtime {} > now!", event_time))

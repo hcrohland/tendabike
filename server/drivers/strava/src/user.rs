@@ -265,7 +265,7 @@ impl StravaUser {
         info!("creating new user id {:?}", user);
 
         let user = conn.insert_stravauser(user).await?;
-        sync_users(Some(user.id), 0, conn).await?;
+        sync_users(Some(user.tendabike_id), 0, conn).await?;
         Ok(user)
     }
 }
@@ -303,12 +303,16 @@ pub async fn get_all_stats(conn: &mut AppConn) -> AnyResult<Vec<StravaStat>> {
     Ok(res)
 }
 
-pub async fn sync_users(user_id: Option<StravaId>, time: i64, conn: &mut AppConn) -> AnyResult<()> {
+pub async fn sync_users(user_id: Option<UserId>, time: i64, conn: &mut AppConn) -> AnyResult<()> {
+    info!("syncing users {:?} at {}", user_id, time);
     let users = match user_id {
-        Some(user) => conn.read_stravauser_for_stravaid(user).await?,
+        Some(id) => vec!(conn.read_stravauser_for_userid(id).await?),
         None => conn.get_all_stravausers().await?,
     };
     for user in users {
+        if user.disabled() {
+            continue;
+        }
         event::insert_sync(user.id, time, conn).await?;
     }
     Ok(())
