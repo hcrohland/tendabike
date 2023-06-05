@@ -1,5 +1,6 @@
-use time::OffsetDateTime;
 use crate::{AnyResult, Part, PartId, PartTypeId, Person, Usage, UserId};
+use time::OffsetDateTime;
+
 #[async_trait::async_trait]
 pub trait PartStore {
     async fn partid_get_part(&mut self, pid: PartId) -> AnyResult<Part>;
@@ -8,8 +9,7 @@ pub trait PartStore {
 
     async fn partid_get_type(&mut self, pid: PartId) -> AnyResult<PartTypeId>;
 
-    async fn partid_get_ownerid(&mut self, pid: PartId, user: &dyn Person)
-        -> AnyResult<UserId>;
+    async fn partid_get_ownerid(&mut self, pid: PartId, user: &dyn Person) -> AnyResult<UserId>;
 
     async fn partid_apply_usage(
         &mut self,

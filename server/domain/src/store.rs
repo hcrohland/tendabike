@@ -1,2 +1,2 @@
 mod types;
-mod parts;
+mod part;
