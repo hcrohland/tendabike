@@ -28,7 +28,7 @@ mod types;
 mod user;
 
 use async_session::log::{debug, info, trace, warn};
-use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
+use diesel_async::{ RunQueryDsl};
 use diesel_derive_newtype::*;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};

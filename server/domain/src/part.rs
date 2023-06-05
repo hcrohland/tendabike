@@ -1,22 +1,22 @@
-/* 
-    tendabike - the bike maintenance tracker
-    
-    Copyright (C) 2023  Christoph Rohland 
+/*
+   tendabike - the bike maintenance tracker
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Affero General Public License as published
-    by the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+   Copyright (C) 2023  Christoph Rohland
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Affero General Public License for more details.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as published
+   by the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
 
-    You should have received a copy of the GNU Affero General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU Affero General Public License for more details.
 
- */
+   You should have received a copy of the GNU Affero General Public License
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+*/
 
 //! This module contains the domain logic for parts in the Tendabike system.
 //!
@@ -31,11 +31,8 @@
 //!
 //! Finally, this module defines the `NewPart` type, which is used to create new parts in the database.
 
-use std::cmp::{min, max};
-
 use super::*;
 use ::time::OffsetDateTime;
-use schema::{part_types, parts};
 
 /// The database's representation of a part.
 #[serde_as]
@@ -51,7 +48,7 @@ use schema::{part_types, parts};
     AsChangeset,
 )]
 #[diesel(primary_key(id))]
-#[diesel(table_name = parts)]
+#[diesel(table_name = schema::parts)]
 #[diesel(belongs_to(PartType, foreign_key = what))]
 pub struct Part {
     /// The primary key
@@ -89,7 +86,7 @@ pub struct Part {
 
 #[serde_as]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Insertable)]
-#[diesel(table_name = parts)]
+#[diesel(table_name = schema::parts)]
 pub struct NewPart {
     /// The owner
     pub owner: UserId,
@@ -109,7 +106,7 @@ use serde_with::serde_as;
 use time::format_description::well_known::Rfc3339;
 #[serde_as]
 #[derive(Clone, Debug, PartialEq, Deserialize, AsChangeset)]
-#[diesel(table_name = parts)]
+#[diesel(table_name = schema::parts)]
 #[diesel(treat_none_as_null = true)]
 pub struct ChangePart {
     pub id: PartId,
@@ -145,10 +142,7 @@ impl PartId {
 
     /// get the part with id part
     pub async fn part(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Part> {
-        let part = parts::table
-            .find(self)
-            .first::<Part>(conn).await
-            .with_context(|| format!("part {} does not exist", self))?;
+        let part = conn.partid_get_part(self).await?;
         user.check_owner(
             part.owner,
             format!("user {} cannot access part {}", user.get_id(), part.id),
@@ -160,35 +154,21 @@ impl PartId {
     ///
     /// does not check ownership. This is needed for rentals.
     pub async fn name(self, conn: &mut AppConn) -> AnyResult<String> {
-        parts::table
-            .find(self)
-            .select(parts::name)
-            .first(conn).await
-            .with_context(|| format!("part {} does not exist", self))
+        conn.partid_get_name(self).await
     }
 
     pub async fn what(self, conn: &mut AppConn) -> AnyResult<PartTypeId> {
-        parts::table
-            .find(self)
-            .select(parts::what)
-            .first(conn).await
-            .with_context(|| format!("part {} does not exist", self))
+        conn.partid_get_type(self).await
     }
 
     /// check if the given user is the owner or an admin.
     /// Returns Forbidden if not.
     pub async fn checkuser(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<PartId> {
-        use schema::parts::dsl::*;
-
         if user.is_admin() {
             return Ok(self);
         }
 
-        let own = parts
-            .find(self)
-            .filter(owner.eq(user.get_id()))
-            .select(owner)
-            .first::<UserId>(conn).await?;
+        let own = conn.partid_get_ownerid(self, user).await?;
         if user.get_id() == own {
             return Ok(self);
         }
@@ -210,78 +190,41 @@ impl PartId {
         start: OffsetDateTime,
         conn: &mut AppConn,
     ) -> AnyResult<Part> {
-        use schema::parts::dsl::*;
-
         trace!("Applying usage {:?} to part {}", usage, self);
-
-        Ok(conn.transaction(|conn| async {
-            let part: Part = parts.find(self).for_update().get_result(conn).await?;
-            diesel::update(parts.find(self))
-                .set((
-                    time.eq(time + usage.time),
-                    climb.eq(climb + usage.climb),
-                    descend.eq(descend + usage.descend),
-                    distance.eq(distance + usage.distance),
-                    count.eq(count + usage.count),
-                    purchase.eq(min(part.purchase, start)),
-                    last_used.eq(max(part.last_used, start)),
-                ))
-                .get_result::<Part>(conn).await
-        }.scope_boxed()).await?)
+        conn.partid_apply_usage(self, usage, start).await
     }
 }
 
 impl Part {
-/// Returns a list of all parts owned by the given user.
-///
-/// # Arguments
-///
-/// * `user` - A reference to a `dyn Person` trait object representing the user.
-/// * `conn` - A mutable reference to an `AppConn` object representing the database connection.
-///
-/// # Returns
-///
-/// A `Vec` of `Part` objects owned by the given user.
-///
-/// # Errors
-///
-/// Returns an `AnyResult` object that may contain a `diesel::result::Error` if the query fails.
+    /// Returns a list of all parts owned by the given user.
+    ///
+    /// # Arguments
+    ///
+    /// * `user` - A reference to a `dyn Person` trait object representing the user.
+    /// * `conn` - A mutable reference to an `AppConn` object representing the database connection.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec` of `Part` objects owned by the given user.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `AnyResult` object that may contain a `diesel::result::Error` if the query fails.
     pub async fn get_all(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<Part>> {
-        use schema::parts::dsl::*;
-
-        Ok(parts
-            .filter(owner.eq(user.get_id()))
-            .order_by(last_used)
-            .load::<Part>(conn).await?)
+        conn.part_get_all_for_userid(user.get_id()).await
     }
 
     /// reset all usage counters for all parts of a person
     ///
     /// returns the list of main gears affected
     pub async fn reset(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<PartId>> {
-        use schema::parts::dsl::*;
         use std::collections::HashSet;
 
         // reset all counters for all parts of this user
-        let part_list = diesel::update(parts.filter(owner.eq(user.get_id())))
-            .set((
-                time.eq(0),
-                climb.eq(0),
-                descend.eq(0),
-                distance.eq(0),
-                count.eq(0),
-                last_used.eq(purchase),
-            ))
-            .get_results::<Part>(conn).await?;
+        let part_list = conn.parts_reset_all_usages(user.get_id()).await?;
 
         // get the main types
-        let mains: HashSet<PartTypeId> = part_types::table
-            .select(part_types::id)
-            .filter(part_types::main.eq(part_types::id))
-            .load::<PartTypeId>(conn).await
-            .expect("error loading PartType")
-            .into_iter()
-            .collect();
+        let mains: HashSet<PartTypeId> = conn.parttypes_all_maingear().await?.into_iter().collect();
 
         // only return the main parts
         Ok(part_list
@@ -294,7 +237,6 @@ impl Part {
 
 impl NewPart {
     pub async fn create(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Part> {
-        use schema::parts::dsl::*;
         info!("Create {:?}", self);
 
         user.check_owner(
@@ -303,29 +245,13 @@ impl NewPart {
         )?;
 
         let now = OffsetDateTime::now_utc();
-        let values = (
-            owner.eq(self.owner),
-            what.eq(self.what),
-            name.eq(self.name),
-            vendor.eq(self.vendor),
-            model.eq(self.model),
-            purchase.eq(self.purchase.unwrap_or(now)),
-            last_used.eq(self.purchase.unwrap_or(now)),
-            time.eq(0),
-            distance.eq(0),
-            climb.eq(0),
-            descend.eq(0),
-            count.eq(0),
-        );
-
-        let part: Part = diesel::insert_into(parts).values(values).get_result(conn).await?;
-        Ok(part)
+        let createtime = self.purchase.unwrap_or(now);
+        conn.create_part(self, createtime).await
     }
 }
 
 impl ChangePart {
-    pub async fn change(&self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Part> {
-        use schema::parts::dsl::*;
+    pub async fn change(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Part> {
         info!("Change {:?}", self);
 
         user.check_owner(
@@ -333,9 +259,6 @@ impl ChangePart {
             format!("user {} cannot create this part", user.get_id()),
         )?;
 
-        let part: Part = diesel::update(parts.filter(id.eq(self.id)))
-            .set(self)
-            .get_result(conn).await?;
-        Ok(part)
+        conn.part_change(self).await
     }
 }
