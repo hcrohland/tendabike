@@ -407,10 +407,10 @@ impl AttachmentDetail {
 
 impl Attachment {
     /// return the usage for the attachment
-    async fn usage(&self, factor: Factor, conn: &mut AppConn) -> Usage {
-        Activity::find(self.gear, self.attached, self.detached, conn).await
+    async fn usage(&self, factor: Factor, conn: &mut AppConn) -> AnyResult<Usage> {
+        Ok(Activity::find(self.gear, self.attached, self.detached, conn).await?
             .into_iter()
-            .fold(Usage::none(), |acc, x| acc.add_activity(&x, factor))
+            .fold(Usage::none(), |acc, x| acc.add_activity(&x, factor)))
     }
 
     async fn shift(
@@ -456,7 +456,7 @@ impl Attachment {
     /// - returns all affected parts
     async fn create(mut self, conn: &mut AppConn) -> AnyResult<Summary> {
         trace!("create {:?}", self);
-        let usage = self.usage(Factor::Add, conn).await;
+        let usage = self.usage(Factor::Add, conn).await?;
         self.count = usage.count;
         self.time = usage.time;
         self.distance = usage.distance;
@@ -493,7 +493,7 @@ impl Attachment {
             .await
             .context(ctx)?;
 
-        let usage = att.usage(Factor::Sub, conn).await;
+        let usage = att.usage(Factor::Sub, conn).await?;
         let part = att.part_id.apply_usage(&usage, att.attached, conn).await?;
         att.count = 0;
         att.time = 0;

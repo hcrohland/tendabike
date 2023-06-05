@@ -123,6 +123,6 @@ impl PartTypeId {
 
 impl ActivityType {
     pub async fn all_ordered(conn: &mut AppConn) -> Vec<ActivityType> {
-        conn.get_all_activitytypes_order().await
+        conn.activitytypes_get_all_ordered().await
     }
 }

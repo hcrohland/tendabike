@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 /// This module contains the web interface for managing activities.
 ///
 /// Activities are a central concept in the Tendabike application. They represent
@@ -85,7 +87,7 @@ async fn descend(Query(q): Query<QueryTZ>, user: RUser, State(conn): State<DbPoo
     Ok(Json(res))
 }
 
-async fn mycats(user: RUser, State(conn): State<DbPool>) -> ApiResult<Vec<PartTypeId>> {
+async fn mycats(user: RUser, State(conn): State<DbPool>) -> ApiResult<HashSet<PartTypeId>> {
     let mut conn = conn.get().await?;
     Ok(Activity::categories(&user, &mut conn).await.map(Json)?)
 }

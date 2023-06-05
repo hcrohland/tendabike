@@ -51,7 +51,7 @@ impl crate::traits::TypesStore for AppConn {
             .await?)
     }
 
-    async fn get_all_activitytypes_order(&mut self) -> Vec<ActivityType> {
+    async fn activitytypes_get_all_ordered(&mut self) -> Vec<ActivityType> {
         use schema::activity_types;
         activity_types::table
             .order(activity_types::id)

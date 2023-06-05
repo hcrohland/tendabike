@@ -10,5 +10,5 @@ pub trait TypesStore {
 
     async fn get_activity_types_by_parttypeid(&mut self, tid: &PartTypeId) -> AnyResult<Vec<ActTypeId>>;
 
-    async fn get_all_activitytypes_order(&mut self) -> Vec<ActivityType>;
+    async fn activitytypes_get_all_ordered(&mut self) -> Vec<ActivityType>;
 }
