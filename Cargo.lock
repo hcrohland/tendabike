@@ -580,6 +580,7 @@ version = "0.2.1"
 dependencies = [
  "anyhow",
  "async-session",
+ "async-trait",
  "csv",
  "diesel",
  "diesel-async",

@@ -56,11 +56,7 @@ pub struct PartType {
 
 impl PartType {
     pub async fn all_ordered(conn: &mut AppConn) -> Vec<Self> {
-        part_types::table
-            .order(part_types::id)
-            .load::<PartType>(conn)
-            .await
-            .expect("error loading PartType")
+        conn.get_all_parttypes_ordered().await
     }
 }
 
@@ -86,9 +82,7 @@ pub struct ActivityType {
 impl PartTypeId {
     /// get the full type for a type_id
     pub async fn get(self, conn: &mut AppConn) -> AnyResult<PartType> {
-        // parttype_get
-        use schema::part_types::dsl::*;
-        Ok(part_types.find(self).get_result::<PartType>(conn).await?)
+        conn.get_parttype_by_id(self).await
     }
 
     /// recursively look for subtypes to self in the PartType vector
@@ -121,22 +115,12 @@ impl PartTypeId {
 
     /// Get the activity types valid for this part_type
     pub async fn act_types(&self, conn: &mut AppConn) -> AnyResult<Vec<ActTypeId>> {
-        use schema::activity_types::dsl::*;
-
-        Ok(activity_types
-            .filter(gear.eq(self))
-            .select(id)
-            .get_results(conn)
-            .await?)
+        conn.get_activity_types_by_parttypeid(self).await
     }
 }
 
 impl ActivityType {
     pub async fn all_ordered(conn: &mut AppConn) -> Vec<ActivityType> {
-        activity_types::table
-            .order(activity_types::id)
-            .load::<ActivityType>(conn)
-            .await
-            .expect("error loading ActivityTypes")
+        conn.get_all_activitytypes_order().await
     }
 }

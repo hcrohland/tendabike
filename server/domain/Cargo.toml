@@ -26,4 +26,6 @@ pretty_assertions = "1"
 thiserror = "1.0"
 anyhow = "1.0"
 
+async-trait = "0.1"
+
 ## Needed for drivers::strava
