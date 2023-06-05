@@ -31,6 +31,8 @@
 //!
 //! Finally, this module defines the `NewPart` type, which is used to create new parts in the database.
 
+use crate::traits::{PartStore, TypesStore};
+
 use super::*;
 use ::time::OffsetDateTime;
 

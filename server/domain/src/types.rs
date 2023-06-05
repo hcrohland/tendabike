@@ -24,6 +24,8 @@
 //!
 //! The types defined in this module are used throughout the application to ensure type safety and consistency.
 
+use crate::traits::TypesStore;
+
 use super::*;
 use schema::{activity_types, part_types};
 

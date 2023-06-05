@@ -55,7 +55,6 @@ pub use usage::*;
 mod summary;
 pub use summary::*;
 
-mod store;
-pub use store::Store;
+mod traits;
 
-mod domainstore;
+mod store;
