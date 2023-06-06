@@ -101,12 +101,12 @@ impl std::fmt::Display for Event {
 }
 
 impl Event {
-    async fn delete(&self, conn: &mut AppConn) -> anyhow::Result<()> {
+    async fn delete(&self, conn: &mut impl StravaStore) -> anyhow::Result<()> {
         debug!("Deleting {}", self);
         conn.delete_strava_event(self.id).await
     }
 
-    async fn setdate(&mut self, time: i64, conn: &mut AppConn) -> anyhow::Result<()> {
+    async fn setdate(&mut self, time: i64, conn: &mut impl StravaStore) -> anyhow::Result<()> {
         self.event_time = time;
         conn.set_event_time(self.id, self.event_time).await
     }
@@ -115,7 +115,7 @@ impl Event {
     async fn rate_limit(
         self,
         user: &StravaUser,
-        conn: &mut AppConn,
+        conn: &mut impl StravaStore,
     ) -> anyhow::Result<Option<Self>> {
         // rate limit event
         if self.event_time > get_time() {
@@ -234,7 +234,7 @@ impl Event {
 pub async fn insert_sync(
     owner_id: StravaId,
     event_time: i64,
-    conn: &mut AppConn,
+    conn: &mut impl StravaStore,
 ) -> anyhow::Result<()> {
     
     ensure!(
@@ -251,7 +251,7 @@ pub async fn insert_sync(
     .await
 }
 
-pub async fn insert_stop(conn: &mut AppConn) -> anyhow::Result<()> {
+pub async fn insert_stop(conn: &mut impl StravaStore) -> anyhow::Result<()> {
     let e = Event {
         object_type: "stop".to_string(),
         object_id: get_time() + 900,
@@ -260,7 +260,7 @@ pub async fn insert_stop(conn: &mut AppConn) -> anyhow::Result<()> {
     conn.store_stravaevent(e).await
 }
 
-async fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Option<Event>> {
+async fn get_event(user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Result<Option<Event>> {
     let event = conn.get_next_event_for_stravauser(user).await?;
     let event = match event {
         Some(event) => event,
@@ -285,7 +285,7 @@ async fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Opti
     Ok(res)
 }
 
-async fn check_try_again(err: anyhow::Error, conn: &mut AppConn) -> anyhow::Result<Summary> {
+async fn check_try_again(err: anyhow::Error, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
     // Keep events for temporary failure - delete others
     match err.downcast_ref::<Error>() {
         Some(&Error::TryAgain(_)) => {
@@ -299,7 +299,7 @@ async fn check_try_again(err: anyhow::Error, conn: &mut AppConn) -> anyhow::Resu
 
 async fn next_activities(
     user: &StravaUser,
-    conn: &mut AppConn,
+    conn: &mut impl StravaStore,
     per_page: usize,
     start: Option<i64>,
 ) -> anyhow::Result<Vec<StravaActivity>> {

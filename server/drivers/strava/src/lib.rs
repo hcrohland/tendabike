@@ -14,10 +14,9 @@
 //! # Examples
 //!
 
-use diesel::sql_query;
-use diesel::{Identifiable, QueryableByName};
+use diesel::Identifiable;
 use diesel::{Insertable, Queryable};
-use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
+use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection};
 
 use async_session::log::{debug, info, trace, warn};
 use serde_derive::{Deserialize, Serialize};
@@ -26,8 +25,8 @@ use anyhow::{bail, ensure, Context, Result as AnyResult};
 use domain::*;
 
 use s_diesel::AppConn;
-mod store;
-pub use store::Store;
+mod traits;
+pub use traits::StravaStore;
 
 pub mod activity;
 pub mod event;

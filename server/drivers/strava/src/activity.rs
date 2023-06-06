@@ -178,7 +178,7 @@ pub async fn strava_url(act: i32, conn: &mut AppConn) -> AnyResult<String> {
     Ok(format!("https://strava.com/activities/{}", &g))
 }
 
-async fn get_activity(id: i64, user: &StravaUser, conn: &mut AppConn) -> AnyResult<StravaActivity> {
+async fn get_activity(id: i64, user: &StravaUser, conn: &mut impl StravaStore) -> AnyResult<StravaActivity> {
     let r = user.request(&format!("/activities/{}", id), conn).await?;
     // let r = user.request("/activities?per_page=2")?;
     let act: StravaActivity = serde_json::from_str(&r)?;

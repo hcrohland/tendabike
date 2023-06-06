@@ -15,8 +15,8 @@ pub struct StravaGear {
     frame_type: Option<i32>,
 }
 
-pub async fn strava_url(gear: i32, conn: &mut AppConn) -> AnyResult<String> {
-    let mut g = conn.get_strava_name_for_gear_id(gear).await?;
+pub async fn strava_url(gear: i32, conn: &mut impl StravaStore) -> AnyResult<String> {
+    let mut g = conn.strava_gearid_get_name(gear).await?;
     if g.remove(0) != 'b' {
         bail!("Not found");
     }
@@ -43,7 +43,7 @@ impl StravaGear {
         }
     }
 
-    async fn request(id: &str, user: &StravaUser, conn: &mut AppConn) -> AnyResult<StravaGear> {
+    async fn request(id: &str, user: &StravaUser, conn: &mut impl StravaStore) -> AnyResult<StravaGear> {
         let r = user.request(&format!("/gear/{}", id), conn).await?;
         let res: StravaGear = serde_json::from_str(&r)
             .context(format!("Did not receive StravaGear format: {:?}", r))?;
@@ -58,9 +58,9 @@ impl StravaGear {
 pub(crate) async fn strava_to_tb(
     strava_id: String,
     user: &StravaUser,
-    conn: &mut AppConn,
+    conn: &mut impl StravaStore,
 ) -> AnyResult<PartId> {
-    if let Some(gear) = conn.get_tbid_for_strava_gear(&strava_id).await? {
+    if let Some(gear) = conn.strava_gear_get_tbid(&strava_id).await? {
         return Ok(gear);
     }
 
@@ -74,7 +74,7 @@ pub(crate) async fn strava_to_tb(
 }
 
 /// Get list of gear for user from Strava
-pub(crate) async fn update_user(user: &StravaUser, conn: &mut AppConn) -> AnyResult<Vec<PartId>> {
+pub(crate) async fn update_user(user: &StravaUser, conn: &mut impl StravaStore) -> AnyResult<Vec<PartId>> {
     #[derive(Deserialize, Debug)]
     struct Gear {
         id: String,

@@ -5,6 +5,7 @@ use crate::StravaUser;
 use anyhow::Context;
 use anyhow::Result as AnyResult;
 use diesel::prelude::*;
+use diesel::sql_query;
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::AsyncConnection;
 use diesel_async::RunQueryDsl;
@@ -16,7 +17,7 @@ use domain::UserId;
 use s_diesel::schema;
 
 #[async_session::async_trait]
-impl crate::Store for AppConn {
+impl crate::StravaStore for AppConn {
     async fn get_user_id_from_strava_id(&mut self, who: i32) -> AnyResult<i32> {
         use schema::strava_users::dsl::*;
         let user_id: i32 = strava_users
@@ -35,7 +36,7 @@ impl crate::Store for AppConn {
         Ok(())
     }
 
-    async fn get_tbid_for_strava_gear(&mut self, strava_id: &str) -> AnyResult<Option<PartId>> {
+    async fn strava_gear_get_tbid(&mut self, strava_id: &str) -> AnyResult<Option<PartId>> {
         use schema::strava_gears::dsl::*;
 
         strava_gears
@@ -48,7 +49,7 @@ impl crate::Store for AppConn {
             .context("Error reading database")
     }
 
-    async fn get_strava_name_for_gear_id(&mut self, gear: i32) -> Result<String, anyhow::Error> {
+    async fn strava_gearid_get_name(&mut self, gear: i32) -> Result<String, anyhow::Error> {
         use schema::strava_gears::dsl::*;
         let g: String = strava_gears
             .filter(tendabike_id.eq(gear))
@@ -131,7 +132,7 @@ impl crate::Store for AppConn {
             async {
                 use schema::strava_gears::dsl::*;
                 // maybe the gear was created by now?
-                if let Some(gear) = conn.get_tbid_for_strava_gear(&strava_id).await? {
+                if let Some(gear) = conn.strava_gear_get_tbid(&strava_id).await? {
                     return Ok(gear);
                 }
 
@@ -310,4 +311,28 @@ impl crate::Store for AppConn {
             .context(format!("Could not disable record for user {}", user))?;
         Ok(())
     }
+
+    async fn stravaid_lock(&mut self, user_id: &StravaId) -> AnyResult<bool> {
+        use diesel::sql_types::Bool;
+        #[derive(QueryableByName, Debug)]
+        struct Lock {
+            #[diesel(sql_type = Bool)]
+            #[diesel(column_name = pg_try_advisory_lock)]
+            lock: bool,
+        }
+        let lock: bool = sql_query(format!("SELECT pg_try_advisory_lock({});", user_id))
+            .get_result::<Lock>(self)
+            .await?
+            .lock;
+        Ok(lock)
+    }
+
+    async fn stravaid_unlock(&mut self, id: StravaId) -> AnyResult<usize> {
+        sql_query(format!("SELECT pg_advisory_unlock({});", id))
+            .execute(self)
+            .await
+            .context("Could not unlock stravaid")
+    }
+    
+
 }

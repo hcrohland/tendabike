@@ -6,12 +6,12 @@ use crate::{event::Event, StravaId, StravaUser};
 // use crate::{event::Event, StravaId, StravaUser};
 
 #[async_trait]
-pub trait Store {
+pub trait StravaStore: domain::traits::Store + Send {
     async fn get_user_id_from_strava_id(&mut self, who: i32) -> AnyResult<i32>;
 
-    async fn get_tbid_for_strava_gear(&mut self, strava_id: &str) -> AnyResult<Option<PartId>>;
+    async fn strava_gear_get_tbid(&mut self, strava_id: &str) -> AnyResult<Option<PartId>>;
 
-    async fn get_strava_name_for_gear_id(&mut self, gear: i32) -> AnyResult<String>;
+    async fn strava_gearid_get_name(&mut self, gear: i32) -> AnyResult<String>;
 
     async fn get_tbid_for_strava_activity(
         &mut self,
@@ -105,5 +105,7 @@ pub trait Store {
 
     async fn disable_stravauser(&mut self, user: &StravaId) -> AnyResult<()>;
 
+    async fn stravaid_lock(&mut self, user_id: &StravaId) -> AnyResult<bool>;
+    async fn stravaid_unlock(&mut self, id: StravaId) -> AnyResult<usize>;
 
 }

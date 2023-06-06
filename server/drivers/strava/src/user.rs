@@ -49,7 +49,7 @@ impl StravaUser {
     /// # Errors
     ///
     /// Returns an `Error` if the user is not registered.
-    pub async fn read(id: UserId, conn: &mut AppConn) -> AnyResult<Self> {
+    pub async fn read(id: UserId, conn: &mut impl StravaStore) -> AnyResult<Self> {
         conn.read_stravauser_for_userid(id).await
     }
 
@@ -65,7 +65,7 @@ impl StravaUser {
     }
 
     /// store last activity time for the user
-    pub(crate) async fn update_last(&self, time: i64, conn: &mut AppConn) -> AnyResult<i64> {
+    pub(crate) async fn update_last(&self, time: i64, conn: &mut impl StravaStore) -> AnyResult<i64> {
         if self.last_activity >= time {
             return Ok(self.last_activity);
         }
@@ -78,7 +78,7 @@ impl StravaUser {
         self.expires_at > get_time()
     }
 
-    fn disabled (&self) -> bool {
+    fn disabled(&self) -> bool {
         self.expires_at == 0
     }
 
@@ -91,45 +91,34 @@ impl StravaUser {
         access: &str,
         expires: Option<i64>,
         refresh: Option<&str>,
-        conn: &mut AppConn,
+        conn: &mut impl StravaStore,
     ) -> AnyResult<Self> {
         let iat = get_time();
         let exp = expires.unwrap() + iat - 300; // 5 Minutes buffer
-        let user: StravaUser =
-            conn.stravaid_update_token(self.id, access, exp, refresh).await?;
+        let user: StravaUser = conn
+            .stravaid_update_token(self.id, access, exp, refresh)
+            .await?;
 
         Ok(user)
     }
 
     /// lock the current user
-    pub async fn lock(&self, conn: &mut AppConn) -> AnyResult<()> {
-        use diesel::sql_types::Bool;
-        #[derive(QueryableByName, Debug)]
-        struct Lock {
-            #[diesel(sql_type = Bool)]
-            #[diesel(column_name = pg_try_advisory_lock)]
-            lock: bool,
-        }
-
+    pub async fn lock(&self, conn: &mut impl StravaStore) -> AnyResult<()> {
+        let lock = conn.stravaid_lock(&self.id).await?;
         ensure!(
-            sql_query(format!("SELECT pg_try_advisory_lock({});", self.id))
-                .get_result::<Lock>(conn)
-                .await?
-                .lock,
+            lock,
             Error::Conflict(format!("Two sessions for user {}", self.id))
         );
         Ok(())
     }
 
+    
     /// unlock the current user
-    pub async fn unlock(&self, conn: &mut AppConn) -> AnyResult<()> {
-        sql_query(format!("SELECT pg_advisory_unlock({});", self.id))
-            .execute(conn)
-            .await?;
-        Ok(())
+    pub async fn unlock(&self, conn: &mut impl StravaStore) -> AnyResult<usize> {
+        conn.stravaid_unlock(self.id).await
     }
 
-    pub(crate) async fn request(&self, uri: &str, conn: &mut AppConn) -> AnyResult<String> {
+    pub(crate) async fn request(&self, uri: &str, conn: &mut impl StravaStore) -> AnyResult<String> {
         self.get_strava(uri, conn)
             .await?
             .text()
@@ -141,7 +130,7 @@ impl StravaUser {
     ///
     /// will return Error::TryAgain on certain error conditions
     /// will disable the User if Strava responds with NOT_AUTH
-    async fn get_strava(&self, uri: &str, conn: &mut AppConn) -> AnyResult<reqwest::Response> {
+    async fn get_strava(&self, uri: &str, conn: &mut impl StravaStore) -> AnyResult<reqwest::Response> {
         use reqwest::StatusCode;
         let resp = reqwest::Client::new()
             .get(format!("{}{}", API, uri))
@@ -178,7 +167,7 @@ impl StravaUser {
     }
 
     /// disable a user
-    async fn disable(&self, conn: &mut AppConn) -> AnyResult<()> {
+    async fn disable(&self, conn: &mut impl StravaStore) -> AnyResult<()> {
         let id = self.strava_id();
         info!("disabling user {}", id);
         event::insert_sync(id, crate::get_time(), conn)
@@ -193,7 +182,7 @@ impl StravaUser {
     ///
     /// This function will return an error if the user does not exist, is already disabled
     /// or has open events and if strava or the database is not reachable.
-    pub async fn admin_disable(self, conn: &mut AppConn) -> AnyResult<()> {
+    pub async fn admin_disable(self, conn: &mut impl StravaStore) -> AnyResult<()> {
         let events = conn.get_count_of_events_for_user(&self).await?;
 
         if self.disabled() {
@@ -246,9 +235,7 @@ impl StravaUser {
     ) -> AnyResult<StravaUser> {
         debug!("got id {}: {} {}", id, &firstname, &lastname);
 
-        let user = conn.read_stravauser_for_stravaid(id)
-            .await?
-            .pop();
+        let user = conn.read_stravauser_for_stravaid(id).await?.pop();
         if let Some(user) = user {
             user.tendabike_id.update(firstname, lastname, conn).await?;
             return Ok(user);
@@ -303,10 +290,10 @@ pub async fn get_all_stats(conn: &mut AppConn) -> AnyResult<Vec<StravaStat>> {
     Ok(res)
 }
 
-pub async fn sync_users(user_id: Option<UserId>, time: i64, conn: &mut AppConn) -> AnyResult<()> {
+pub async fn sync_users(user_id: Option<UserId>, time: i64, conn: &mut impl StravaStore) -> AnyResult<()> {
     info!("syncing users {:?} at {}", user_id, time);
     let users = match user_id {
-        Some(id) => vec!(conn.read_stravauser_for_userid(id).await?),
+        Some(id) => vec![conn.read_stravauser_for_userid(id).await?],
         None => conn.get_all_stravausers().await?,
     };
     for user in users {
@@ -328,7 +315,7 @@ pub async fn sync_users(user_id: Option<UserId>, time: i64, conn: &mut AppConn) 
 /// # Returns
 ///
 /// An `AnyResult` containing a `String` representing the Strava URL for the user.
-pub async fn strava_url(strava_id: i32, conn: &mut AppConn) -> AnyResult<String> {
+pub async fn strava_url(strava_id: i32, conn: &mut impl StravaStore) -> AnyResult<String> {
     let user_id = conn.get_user_id_from_strava_id(strava_id).await?;
     Ok(format!("https://strava.com/athletes/{}", &user_id))
 }
