@@ -6,7 +6,7 @@ use serde_derive::Deserialize;
 use time::OffsetDateTime;
 
 use crate::{
-    traits::AttachmentStore, AnyResult, Attachment, Error, PartId, PartTypeId, Person, SumHash,
+    traits::{AttachmentStore, Store}, AnyResult, Attachment, Error, PartId, PartTypeId, Person, SumHash,
     Summary,
 };
 
@@ -73,7 +73,7 @@ impl Event {
     ///
     /// When the 'self.partid' has child parts they are attached to that part
     ///
-    async fn detach_assembly(self, target: Attachment, conn: &mut AppConn) -> AnyResult<Summary> {
+    async fn detach_assembly(self, target: Attachment, conn: &mut impl Store) -> AnyResult<Summary> {
         debug!("- detaching {}", target.part_id);
         let subs = self.assembly(target.gear, conn).await?;
         let mut hash = SumHash::new(target.detach(self.time, conn).await?);
@@ -171,7 +171,7 @@ impl Event {
     /// If the part is attached already to the same hook, the attachments are merged
     pub(super) async fn attach_one(
         self,
-        conn: &mut AppConn,
+        conn: &mut impl Store,
     ) -> AnyResult<(Summary, OffsetDateTime)> {
         let mut hash = SumHash::default();
         // when does the current attachment end
@@ -254,7 +254,7 @@ impl Event {
     }
 
     /// find all subparts of self which are attached to target at self.time
-    async fn assembly(&self, target: PartId, conn: &mut AppConn) -> AnyResult<Vec<Attachment>> {
+    async fn assembly(&self, target: PartId, conn: &mut impl Store) -> AnyResult<Vec<Attachment>> {
         let types = self.part_id.what(conn).await?.subtypes(conn).await;
         conn.assembly_get_by_types_time_and_gear(types, target, self.time)
             .await

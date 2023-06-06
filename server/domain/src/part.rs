@@ -31,7 +31,7 @@
 //!
 //! Finally, this module defines the `NewPart` type, which is used to create new parts in the database.
 
-use crate::traits::{PartStore, TypesStore};
+use crate::traits::Store;
 
 use super::*;
 use ::time::OffsetDateTime;
@@ -138,12 +138,12 @@ impl PartId {
         PartId(id)
     }
 
-    pub async fn get(id: i32, user: &dyn Person, conn: &mut AppConn) -> AnyResult<PartId> {
+    pub async fn get(id: i32, user: &dyn Person, conn: &mut impl Store) -> AnyResult<PartId> {
         PartId(id).checkuser(user, conn).await
     }
 
     /// get the part with id part
-    pub async fn part(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Part> {
+    pub async fn part(self, user: &dyn Person, conn: &mut impl Store) -> AnyResult<Part> {
         let part = conn.partid_get_part(self).await?;
         user.check_owner(
             part.owner,
@@ -155,17 +155,17 @@ impl PartId {
     /// get the name of the part
     ///
     /// does not check ownership. This is needed for rentals.
-    pub async fn name(self, conn: &mut AppConn) -> AnyResult<String> {
+    pub async fn name(self, conn: &mut impl Store) -> AnyResult<String> {
         conn.partid_get_name(self).await
     }
 
-    pub async fn what(self, conn: &mut AppConn) -> AnyResult<PartTypeId> {
+    pub async fn what(self, conn: &mut impl Store) -> AnyResult<PartTypeId> {
         conn.partid_get_type(self).await
     }
 
     /// check if the given user is the owner or an admin.
     /// Returns Forbidden if not.
-    pub async fn checkuser(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<PartId> {
+    pub async fn checkuser(self, user: &dyn Person, conn: &mut impl Store) -> AnyResult<PartId> {
         if user.is_admin() {
             return Ok(self);
         }
@@ -190,7 +190,7 @@ impl PartId {
         self,
         usage: &Usage,
         start: OffsetDateTime,
-        conn: &mut AppConn,
+        conn: &mut impl Store,
     ) -> AnyResult<Part> {
         trace!("Applying usage {:?} to part {}", usage, self);
         conn.partid_apply_usage(self, usage, start).await
@@ -212,14 +212,14 @@ impl Part {
     /// # Errors
     ///
     /// Returns an `AnyResult` object that may contain a `diesel::result::Error` if the query fails.
-    pub async fn get_all(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<Part>> {
+    pub async fn get_all(user: &dyn Person, conn: &mut impl Store) -> AnyResult<Vec<Part>> {
         conn.part_get_all_for_userid(user.get_id()).await
     }
 
     /// reset all usage counters for all parts of a person
     ///
     /// returns the list of main gears affected
-    pub async fn reset(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<PartId>> {
+    pub async fn reset(user: &dyn Person, conn: &mut impl Store) -> AnyResult<Vec<PartId>> {
         use std::collections::HashSet;
 
         // reset all counters for all parts of this user
@@ -238,7 +238,7 @@ impl Part {
 }
 
 impl NewPart {
-    pub async fn create(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Part> {
+    pub async fn create(self, user: &dyn Person, conn: &mut impl Store) -> AnyResult<Part> {
         info!("Create {:?}", self);
 
         user.check_owner(
@@ -253,7 +253,7 @@ impl NewPart {
 }
 
 impl ChangePart {
-    pub async fn change(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Part> {
+    pub async fn change(self, user: &dyn Person, conn: &mut impl Store) -> AnyResult<Part> {
         info!("Change {:?}", self);
 
         user.check_owner(

@@ -1,5 +1,5 @@
 #[async_trait::async_trait]
-pub trait Store: TypesStore + PartStore + UserStore {}
+pub trait Store: TypesStore + PartStore + UserStore + ActivityStore + AttachmentStore  {}
 
 mod types;
 pub use types::*;

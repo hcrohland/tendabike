@@ -33,7 +33,7 @@
 //!
 //! The `create`, `update`, `read`, and `get_stat` methods are implemented for the `UserId` type and provide CRUD functionality for `User` entities.
 
-use crate::traits::{UserStore, PartStore, ActivityStore};
+use crate::traits::Store;
 
 use super::*;
 
@@ -61,11 +61,11 @@ pub struct Stat {
 }
 
 impl UserId {
-    pub async fn read(self, conn: &mut AppConn) -> AnyResult<User> {
+    pub async fn read(self, conn: &mut impl Store) -> AnyResult<User> {
         conn.user_read_by_id(self).await
     }
 
-    pub async fn get_stat(self, conn: &mut AppConn) -> AnyResult<Stat> {
+    pub async fn get_stat(self, conn: &mut impl Store) -> AnyResult<Stat> {
         let user = self.read(conn).await?;
         let parts = conn.part_get_all_for_userid(user.id).await?.len() as i64;
         let activities = conn.activity_get_all_for_userid(user.id).await?.len() as i64;
@@ -76,7 +76,11 @@ impl UserId {
         })
     }
 
-    pub async fn create(firstname_: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<Self> {
+    pub async fn create(
+        firstname_: &str,
+        lastname: &str,
+        conn: &mut impl Store,
+    ) -> AnyResult<Self> {
         conn.user_create(firstname_, lastname).await.map(|u| u.id)
     }
 
@@ -84,16 +88,17 @@ impl UserId {
         &self,
         firstname_: &str,
         lastname: &str,
-        conn: &mut AppConn,
+        conn: &mut impl Store,
     ) -> AnyResult<Self> {
-        conn.user_update(self, firstname_, lastname).await.map(|u| u.id)
+        conn.user_update(self, firstname_, lastname)
+            .await
+            .map(|u| u.id)
     }
 
-    pub async fn is_admin(&self, conn: &mut AppConn) -> AnyResult<bool> {
+    pub async fn is_admin(&self, conn: &mut impl Store) -> AnyResult<bool> {
         self.read(conn).await.map(|u| u.is_admin)
     }
 }
-
 
 impl Person for User {
     fn get_id(&self) -> UserId {

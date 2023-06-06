@@ -24,7 +24,7 @@
 //!
 //! The types defined in this module are used throughout the application to ensure type safety and consistency.
 
-use crate::traits::TypesStore;
+use crate::traits::Store;
 
 use super::*;
 use schema::{activity_types, part_types};
@@ -57,7 +57,7 @@ pub struct PartType {
 }
 
 impl PartType {
-    pub async fn all_ordered(conn: &mut AppConn) -> Vec<Self> {
+    pub async fn all_ordered(conn: &mut impl Store) -> Vec<Self> {
         conn.get_all_parttypes_ordered().await
     }
 }
@@ -83,7 +83,7 @@ pub struct ActivityType {
 
 impl PartTypeId {
     /// get the full type for a type_id
-    pub async fn get(self, conn: &mut AppConn) -> AnyResult<PartType> {
+    pub async fn get(self, conn: &mut impl Store) -> AnyResult<PartType> {
         conn.get_parttype_by_id(self).await
     }
 
@@ -110,19 +110,19 @@ impl PartTypeId {
     }
 
     /// get all the types you can attach - even indirectly - to this type_id
-    pub async fn subtypes(self, conn: &mut AppConn) -> Vec<PartType> {
+    pub async fn subtypes(self, conn: &mut impl Store) -> Vec<PartType> {
         let mut types = PartType::all_ordered(conn).await;
         self.filter_types(&mut types)
     }
 
     /// Get the activity types valid for this part_type
-    pub async fn act_types(&self, conn: &mut AppConn) -> AnyResult<Vec<ActTypeId>> {
+    pub async fn act_types(&self, conn: &mut impl Store) -> AnyResult<Vec<ActTypeId>> {
         conn.get_activity_types_by_parttypeid(self).await
     }
 }
 
 impl ActivityType {
-    pub async fn all_ordered(conn: &mut AppConn) -> Vec<ActivityType> {
+    pub async fn all_ordered(conn: &mut impl Store) -> Vec<ActivityType> {
         conn.activitytypes_get_all_ordered().await
     }
 }

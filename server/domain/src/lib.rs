@@ -53,6 +53,6 @@ pub use usage::*;
 mod summary;
 pub use summary::*;
 
-mod traits;
+pub mod traits;
 
 mod store;

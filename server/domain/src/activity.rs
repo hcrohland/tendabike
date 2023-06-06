@@ -29,7 +29,7 @@
 
 use std::collections::HashSet;
 
-use crate::traits::{ActivityStore, AttachmentStore, TypesStore};
+use crate::traits::{ActivityStore, Store};
 
 use super::*;
 use ::time::PrimitiveDateTime;
@@ -132,7 +132,7 @@ impl ActivityId {
     /// Read the activity with id self
     ///
     /// checks authorization
-    pub async fn read(self, person: &dyn Person, conn: &mut AppConn) -> AnyResult<Activity> {
+    pub async fn read(self, person: &dyn Person, conn: &mut impl Store) -> AnyResult<Activity> {
         let act = conn.activity_read_by_id(self).await?;
         person.check_owner(
             act.user_id,
@@ -261,7 +261,7 @@ impl Activity {
         part: PartId,
         begin: OffsetDateTime,
         end: OffsetDateTime,
-        conn: &mut AppConn,
+        conn: &mut impl Store,
     ) -> AnyResult<Vec<Activity>> {
         conn.activities_find_by_partid_and_time(part, begin, end)
             .await
@@ -273,7 +273,7 @@ impl Activity {
     /// If the factor is `Factor::Subtract`, the activity is unregistered and the usage is subtracted from the parts and attachments.
     ///
     /// Returns a summary of the affected parts, attachments, and activities.
-    pub async fn register(self, factor: Factor, conn: &mut AppConn) -> AnyResult<Summary> {
+    pub async fn register(self, factor: Factor, conn: &mut impl Store) -> AnyResult<Summary> {
         trace!(
             "{} {:?}",
             if factor == Factor::Add {
@@ -306,13 +306,13 @@ impl Activity {
     /// A `Vec` of `Activity` objects representing all activities for the given user.
     ///
 
-    pub async fn get_all(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<Activity>> {
+    pub async fn get_all(user: &dyn Person, conn: &mut impl Store) -> AnyResult<Vec<Activity>> {
         conn.activity_get_all_for_userid(user.get_id()).await
     }
 
     pub async fn categories(
         user: &dyn Person,
-        conn: &mut AppConn,
+        conn: &mut impl Store,
     ) -> AnyResult<HashSet<PartTypeId>> {
         let act_types = conn
             .activity_get_all_for_userid(user.get_id())
@@ -420,7 +420,7 @@ impl Activity {
     }
 }
 
-async fn rescan(conn: &mut AppConn) -> AnyResult<()> {
+async fn rescan(conn: &mut impl Store) -> AnyResult<()> {
     conn.part_reset_all().await?;
     conn.attachment_reset_all().await?;
     for a in conn.activity_get_really_all().await? {
