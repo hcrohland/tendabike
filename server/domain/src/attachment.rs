@@ -24,9 +24,9 @@
 //! This module also contains the implementation of the `Event` struct, which describes an attach or detach request.
 //!
 
+use crate::traits::{AttachmentStore, PartStore};
+
 use super::*;
-use diesel_async::RunQueryDsl;
-use schema::attachments;
 use time::OffsetDateTime;
 
 pub use event::Event;
@@ -53,6 +53,7 @@ mod event;
 #[diesel(primary_key(part_id, attached))]
 #[diesel(treat_none_as_null = true)]
 #[diesel(belongs_to(PartType, foreign_key = hook))]
+#[diesel(table_name = schema::attachments)]
 pub struct Attachment {
     /// the sub-part, which is attached to the hook
     part_id: PartId,
@@ -158,11 +159,9 @@ impl Attachment {
             .apply_usage(&usage, self.attached, conn)
             .await?;
 
-        let attachment = self
-            .insert_into(attachments::table)
-            .get_result::<Attachment>(conn)
-            .await
-            .context("insert into attachments")?
+        let attachment = conn
+            .attachment_create(self)
+            .await?
             .add_details(&part.name, part.what);
 
         Ok(Summary {
@@ -178,11 +177,7 @@ impl Attachment {
     /// - returns all affected parts
     async fn delete(self, conn: &mut AppConn) -> AnyResult<Summary> {
         trace!("delete {:?}", self);
-        let ctx = format!("Could not delete attachment {:#?}", self);
-        let mut att = diesel::delete(attachments::table.find(self.id())) // delete the attachment in the database
-            .get_result::<Attachment>(conn)
-            .await
-            .context(ctx)?;
+        let mut att = conn.attachment_delete(self).await?;
 
         let usage = att.usage(Factor::Sub, conn).await?;
         let part = att.part_id.apply_usage(&usage, att.attached, conn).await?;
@@ -212,32 +207,23 @@ impl Attachment {
 
     /// add redundant details from database for client simplicity
     async fn read_details(self, conn: &mut AppConn) -> AnyResult<AttachmentDetail> {
-        use schema::parts::dsl::{name, parts, what};
-
-        let (n, w) = parts
-            .find(self.part_id)
-            .select((name, what))
-            .get_result::<(String, PartTypeId)>(conn)
-            .await?;
-        Ok(self.add_details(&n, w))
+        let part = conn.partid_get_part(self.part_id).await?;
+        Ok(self.add_details(&part.name, part.what))
     }
 
     /// return all parts which are affected by Activity 'act'
     pub async fn parts_per_activity(act: &Activity, conn: &mut AppConn) -> AnyResult<Vec<PartId>> {
-        use schema::attachments::dsl::*;
-
         let mut res = Vec::new();
         if let Some(act_gear) = act.gear {
             res.push(act_gear); // We need the gear too!
+            let start = act.start;
             res.append(
-                &mut attachments
-                    .filter(gear.eq(act_gear))
-                    .filter(attached.lt(act.start))
-                    .filter(detached.is_null().or(detached.ge(act.start)))
-                    .select(part_id)
-                    .get_results::<PartId>(conn)
-                    .await
-                    .context("Error reading attachments")?,
+                conn.attachment_get_by_gear_and_time(act_gear, start)
+                    .await?
+                    .into_iter()
+                    .map(|x| x.part_id)
+                    .collect::<Vec<_>>()
+                    .as_mut(),
             );
         }
         Ok(res)
@@ -250,27 +236,13 @@ impl Attachment {
         act: &Activity,
         usage: &Usage,
         conn: &mut AppConn,
-    ) -> Vec<AttachmentDetail> {
-        use schema::attachments::dsl::*;
-
+    ) -> AnyResult<Vec<AttachmentDetail>> {
         let mut res = Vec::new();
         if let Some(act_gear) = act.gear {
-            let atts = diesel::update(
-                attachments
-                    .filter(gear.eq(act_gear))
-                    .filter(attached.lt(act.start))
-                    .filter(detached.ge(act.start)),
-            )
-            .set((
-                time.eq(time + usage.time),
-                climb.eq(climb + usage.climb),
-                descend.eq(descend + usage.descend),
-                distance.eq(distance + usage.distance),
-                count.eq(count + usage.count),
-            ))
-            .get_results::<Attachment>(conn)
-            .await
-            .expect("Database Error");
+            let start = act.start;
+            let atts = conn
+                .attachments_add_usage_by_gear_and_time(act_gear, start, usage)
+                .await?;
             for att in atts.iter() {
                 res.push(
                     att.read_details(conn)
@@ -279,7 +251,7 @@ impl Attachment {
                 );
             }
         }
-        res
+        Ok(res)
     }
 
     /// return all attachments with details for the parts in 'partlist'
@@ -287,17 +259,13 @@ impl Attachment {
         partlist: &[Part],
         conn: &mut AppConn,
     ) -> AnyResult<Vec<AttachmentDetail>> {
-        use schema::attachments::dsl::*;
-        use schema::parts::dsl::{id, name, parts, what};
         let ids: Vec<_> = partlist.iter().map(|p| p.id).collect();
-        let atts = attachments
-            .filter(part_id.eq_any(ids.clone()))
-            .or_filter(gear.eq_any(ids))
-            .inner_join(parts.on(id.eq(part_id)))
-            .select((schema::attachments::all_columns, name, what))
-            .get_results::<AttachmentDetail>(conn)
-            .await?;
+        let atts = conn.attachments_all_by_partlist(ids).await?;
 
-        Ok(atts)
+        let mut res = Vec::new();
+        for att in atts {
+            res.push(att.read_details(conn).await?)
+        }
+        Ok(res)
     }
 }

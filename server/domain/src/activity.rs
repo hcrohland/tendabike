@@ -29,12 +29,11 @@
 
 use std::collections::HashSet;
 
-use crate::traits::{ActivityStore, TypesStore};
+use crate::traits::{ActivityStore, AttachmentStore, TypesStore};
 
 use super::*;
 use ::time::PrimitiveDateTime;
-use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
-use schema::activities;
+use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection};
 use time::{macros::format_description, OffsetDateTime};
 use time_tz::PrimitiveDateTimeExt;
 
@@ -50,7 +49,7 @@ NewtypeFrom! { () pub struct ActivityId(i32); }
 
 /// The database's representation of an activity.
 #[derive(Debug, Clone, Identifiable, Queryable, AsChangeset, PartialEq, Serialize, Deserialize)]
-#[diesel(table_name = activities)]
+#[diesel(table_name = schema::activities)]
 pub struct Activity {
     /// The primary key
     pub id: ActivityId,
@@ -80,7 +79,7 @@ pub struct Activity {
 }
 
 #[derive(Debug, Clone, Insertable, AsChangeset, Queryable, PartialEq, Serialize, Deserialize)]
-#[diesel(table_name = activities)]
+#[diesel(table_name = schema::activities)]
 /// A new activity to be inserted into the database.
 pub struct NewActivity {
     pub user_id: UserId,
@@ -286,8 +285,7 @@ impl Activity {
         );
 
         let usage = self.usage(factor);
-        let partlist = Attachment::parts_per_activity(&self, conn)
-            .await?;
+        let partlist = Attachment::parts_per_activity(&self, conn).await?;
 
         let mut parts = Vec::new();
         for part in partlist {
@@ -296,7 +294,7 @@ impl Activity {
         }
         Ok(Summary {
             parts,
-            attachments: Attachment::register(&self, &usage, conn).await,
+            attachments: Attachment::register(&self, &usage, conn).await?,
             activities: vec![self],
         })
     }
@@ -424,28 +422,12 @@ impl Activity {
 
 async fn rescan(conn: &mut AppConn) -> AnyResult<()> {
     conn.part_reset_all().await?;
-    attachment_reset_all(conn).await?;
-    {
-        for a in conn.activity_get_really_all().await?
-        {
-            debug!("registering activity {}", a.id);
-            a.register(Factor::Add, conn).await?;
-        }
+    conn.attachment_reset_all().await?;
+    for a in conn.activity_get_really_all().await? {
+        debug!("registering activity {}", a.id);
+        a.register(Factor::Add, conn).await?;
     }
     Ok(())
-}
-
-async fn attachment_reset_all(conn: &mut AppConn) -> AnyResult<usize> {
-    use schema::attachments::dsl::*;
-    debug!("resetting all attachments");
-    diesel::update(attachments)
-        .set((
-            descend.eq(0),
-            count.eq(0),
-        ))
-        .execute(conn)
-        .await
-        .context("Could not reset attachments")
 }
 
 async fn match_and_update(

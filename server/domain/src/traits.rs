@@ -12,3 +12,6 @@ pub use user::*;
 
 mod activity;
 pub use activity::*;
+
+mod attachment;
+pub use attachment::*;

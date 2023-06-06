@@ -43,7 +43,6 @@ pub use types::*;
 pub use user::*;
 
 use diesel::prelude::*;
-use diesel::{self, QueryDsl};
 
 use s_diesel::schema;
 use s_diesel::AppConn;
