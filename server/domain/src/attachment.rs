@@ -222,8 +222,8 @@ impl Attachment {
         Ok(self.add_details(&n, w))
     }
 
-    /// return all parts which are affected byActivity 'act'
-    pub async fn parts_per_activity(act: &Activity, conn: &mut AppConn) -> Vec<PartId> {
+    /// return all parts which are affected by Activity 'act'
+    pub async fn parts_per_activity(act: &Activity, conn: &mut AppConn) -> AnyResult<Vec<PartId>> {
         use schema::attachments::dsl::*;
 
         let mut res = Vec::new();
@@ -237,10 +237,10 @@ impl Attachment {
                     .select(part_id)
                     .get_results::<PartId>(conn)
                     .await
-                    .expect("Error reading attachments"),
+                    .context("Error reading attachments")?,
             );
         }
-        res
+        Ok(res)
     }
 
     /// apply usage to all attachments affected by activity

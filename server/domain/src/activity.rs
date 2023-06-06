@@ -286,12 +286,11 @@ impl Activity {
         );
 
         let usage = self.usage(factor);
-        let iter = Attachment::parts_per_activity(&self, conn)
-            .await
-            .into_iter();
+        let partlist = Attachment::parts_per_activity(&self, conn)
+            .await?;
 
         let mut parts = Vec::new();
-        for part in iter {
+        for part in partlist {
             let part = part.apply_usage(&usage, self.start, conn).await?;
             parts.push(part);
         }
