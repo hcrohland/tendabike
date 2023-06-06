@@ -1,17 +1,18 @@
 use anyhow::ensure;
-use async_session::log::{info, debug, trace};
-use diesel::prelude::*; 
-use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
-use s_diesel::{AppConn, schema};
+use async_session::log::{debug, info, trace};
+use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection};
+use s_diesel::AppConn;
 use serde_derive::Deserialize;
 use time::OffsetDateTime;
 
-use crate::{PartId, PartTypeId, Person, AnyResult, Summary, Error, Attachment, SumHash};
+use crate::{
+    traits::AttachmentStore, AnyResult, Attachment, Error, PartId, PartTypeId, Person, SumHash,
+    Summary,
+};
 
 const MAX_TIME: OffsetDateTime = time::macros::datetime!(9100-01-01 0:00 UTC);
 
 /// Description of an Attach or Detach request
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 pub struct Event {
@@ -28,7 +29,7 @@ pub struct Event {
 
 impl Event {
     /// Create a new Event
-    /// 
+    ///
     pub fn new(part_id: PartId, time: OffsetDateTime, gear: PartId, hook: PartTypeId) -> Self {
         Self {
             part_id,
@@ -48,8 +49,8 @@ impl Event {
         self.part_id.checkuser(user, conn).await?;
         conn.transaction(|conn| {
             async move {
-                let target = self
-                    .at(conn)
+                let target = conn
+                    .attachment_get_by_part_and_time(self.part_id, self.time)
                     .await?
                     .ok_or(Error::NotFound("part not attached".into()))?;
 
@@ -72,11 +73,7 @@ impl Event {
     ///
     /// When the 'self.partid' has child parts they are attached to that part
     ///
-    async fn detach_assembly(
-        self,
-        target: Attachment,
-        conn: &mut AppConn,
-    ) -> AnyResult<Summary> {
+    async fn detach_assembly(self, target: Attachment, conn: &mut AppConn) -> AnyResult<Summary> {
         debug!("- detaching {}", target.part_id);
         let subs = self.assembly(target.gear, conn).await?;
         let mut hash = SumHash::new(target.detach(self.time, conn).await?);
@@ -118,13 +115,22 @@ impl Event {
                 let mut hash = SumHash::default();
 
                 // detach self assembly
-                if let Some(target) = self.at(conn).await? {
+                if let Some(target) = conn
+                    .attachment_get_by_part_and_time(self.part_id, self.time)
+                    .await?
+                {
                     info!("detaching self assembly");
                     hash.merge(self.detach_assembly(target, conn).await?);
                 }
 
                 // detach target assembly
-                if let Some(att) = self.occupant(conn).await? {
+                let what = self.part_id.what(conn).await?;
+                let attachment = conn
+                    .attachment_find_part_of_type_at_hook_and_time(
+                        what, self.gear, self.hook, self.time,
+                    )
+                    .await?;
+                if let Some(att) = attachment {
                     info!("detaching target assembly {}", att.part_id);
                     hash.merge(self.detach_assembly(att, conn).await?);
                 }
@@ -163,7 +169,10 @@ impl Event {
     /// * Detach time is adjusted according to later attachments
     ///
     /// If the part is attached already to the same hook, the attachments are merged
-    pub(super) async fn attach_one(self, conn: &mut AppConn) -> AnyResult<(Summary, OffsetDateTime)> {
+    pub(super) async fn attach_one(
+        self,
+        conn: &mut AppConn,
+    ) -> AnyResult<(Summary, OffsetDateTime)> {
         let mut hash = SumHash::default();
         // when does the current attachment end
         let mut end = MAX_TIME;
@@ -173,7 +182,10 @@ impl Event {
 
         let what = self.part_id.what(conn).await?;
 
-        if let Some(next) = self.next(what, conn).await? {
+        if let Some(next) = conn
+            .attachment_find_successor(self.part_id, self.gear, self.hook, self.time, what)
+            .await?
+        {
             trace!("successor at {}", next.attached);
             // something else is already attached to the hook
             // the new attachment ends when the next starts
@@ -181,7 +193,10 @@ impl Event {
             det = next.attached;
         }
 
-        if let Some(next) = self.after(conn).await? {
+        if let Some(next) = conn
+            .attachment_find_later_attachment_for_part(self.part_id, self.time)
+            .await?
+        {
             if end > next.attached {
                 // is this attachment earlier than the previous one?
                 if next.gear == self.gear && next.hook == self.hook {
@@ -208,7 +223,10 @@ impl Event {
         }
 
         // try to merge previous attachment
-        if let Some(prev) = self.adjacent(conn).await? {
+        if let Some(prev) = conn
+            .attachment_find_part_attached_already(self.part_id, self.gear, self.hook, self.time)
+            .await?
+        {
             trace!("adjacent starting {}", prev.attached);
             hash.merge(prev.detach(end, conn).await?)
         } else {
@@ -235,108 +253,10 @@ impl Event {
         }
     }
 
-    /// Return Attachment if another part is attached to same hook at Event
-    async fn occupant(&self, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
-        use schema::attachments::dsl::*;
-        use schema::parts;
-        let what = self.part_id.what(conn).await?;
-
-        Ok(attachments
-            .inner_join(
-                parts::table.on(parts::id
-                    .eq(part_id) // join corresponding part
-                    .and(parts::what.eq(what))),
-            ) // where the part has my type
-            .filter(gear.eq(self.gear))
-            .filter(hook.eq(self.hook))
-            .select(schema::attachments::all_columns) // return only the attachment
-            .filter(attached.le(self.time))
-            .filter(detached.gt(self.time))
-            .first::<Attachment>(conn)
-            .await
-            .optional()?)
-    }
-
-    /// Return Attachment if some other part is attached to same hook after the Event
-    async fn next(
-        &self,
-        what: PartTypeId,
-        conn: &mut AppConn,
-    ) -> AnyResult<Option<Attachment>> {
-        use schema::attachments::dsl::*;
-        use schema::parts;
-
-        Ok(attachments
-            .for_update()
-            .inner_join(
-                parts::table.on(parts::id
-                    .eq(part_id) // join corresponding part
-                    .and(parts::what.eq(what))),
-            ) // where the part has my type
-            .filter(gear.eq(self.gear))
-            .filter(hook.eq(self.hook))
-            .filter(part_id.ne(self.part_id))
-            .select(schema::attachments::all_columns) // return only the attachment
-            .filter(attached.gt(self.time))
-            .order(attached)
-            .first::<Attachment>(conn)
-            .await
-            .optional()?)
-    }
-
-    /// Return Attachment if self.part_id is attached somewhere at the event
-    async fn at(&self, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
-        use schema::attachments::dsl::*;
-        Ok(attachments
-            .for_update()
-            .filter(part_id.eq(self.part_id))
-            .filter(attached.le(self.time))
-            .filter(detached.gt(self.time))
-            .first::<Attachment>(conn)
-            .await
-            .optional()?)
-    }
-
-    /// Return Attachment if self.part_id is attached somewhere after the event
-    async fn after(&self, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
-        use schema::attachments::dsl::*;
-        Ok(attachments
-            .for_update()
-            .filter(part_id.eq(self.part_id))
-            .filter(attached.gt(self.time))
-            .order(attached)
-            .first::<Attachment>(conn)
-            .await
-            .optional()?)
-    }
-
-    /// Iff self.part_id already attached just before self.time return that attachment
-    async fn adjacent(&self, conn: &mut AppConn) -> AnyResult<Option<Attachment>> {
-        use schema::attachments::dsl::*;
-        Ok(attachments
-            .for_update()
-            .filter(part_id.eq(self.part_id))
-            .filter(gear.eq(self.gear))
-            .filter(hook.eq(self.hook))
-            .filter(detached.eq(self.time))
-            .first::<Attachment>(conn)
-            .await
-            .optional()?)
-    }
-
     /// find all subparts of self which are attached to target at self.time
     async fn assembly(&self, target: PartId, conn: &mut AppConn) -> AnyResult<Vec<Attachment>> {
-        use schema::attachments::dsl::*;
-
         let types = self.part_id.what(conn).await?.subtypes(conn).await;
-
-        Ok(Attachment::belonging_to(&types)
-            .for_update()
-            .filter(gear.eq(target))
-            .filter(attached.le(self.time))
-            .filter(detached.gt(self.time))
-            .order(hook)
-            .load(conn)
-            .await?)
+        conn.assembly_get_by_types_time_and_gear(types, target, self.time)
+            .await
     }
 }
