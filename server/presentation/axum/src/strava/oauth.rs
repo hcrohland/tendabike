@@ -16,10 +16,10 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 use http::StatusCode;
-use kernel::{
+use {
     domain::{AnyResult, Error},
-    s_diesel::AppConn,
 };
+use s_diesel::AppConn;
 use oauth2::{
     basic::{
         BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
@@ -151,7 +151,7 @@ pub(crate) async fn login_authorized(
     State(oauth_client): State<StravaClient>,
     State(conn): State<crate::DbPool>,
 ) -> Result<(HeaderMap, Redirect), (StatusCode, String)> {
-    let mut conn = conn.get().await.map_err(internal_error)?;
+    let mut conn = conn.get().await.map_err(internal_any)?;
     // Get an auth token
     let token = oauth_client
         .exchange_code(AuthorizationCode::new(query.code.clone()))

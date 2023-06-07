@@ -9,11 +9,11 @@
 
 
 use async_session::MemoryStore;
-use axum::extract::FromRef;
+use axum_macros::FromRef;
 
 use crate::{strava::StravaClient, DbPool};
 
-#[derive(Clone)]
+#[derive(Clone, FromRef)]
 pub(super) struct AppState {
     store: MemoryStore,
     oauth_client: StravaClient,
@@ -27,24 +27,6 @@ impl AppState {
             oauth_client,
             pool,
         }
-    }
-}
-
-impl FromRef<AppState> for MemoryStore {
-    fn from_ref(state: &AppState) -> Self {
-        state.store.clone()
-    }
-}
-
-impl FromRef<AppState> for StravaClient {
-    fn from_ref(state: &AppState) -> Self {
-        state.oauth_client.clone()
-    }
-}
-
-impl FromRef<AppState> for DbPool {
-    fn from_ref(state: &AppState) -> Self {
-        state.pool.clone()
     }
 }
 

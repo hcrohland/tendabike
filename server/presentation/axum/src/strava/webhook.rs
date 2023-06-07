@@ -52,7 +52,7 @@
 use anyhow::ensure;
 use async_session::log::{trace, info};
 use axum::{Json, extract::{Query, Path, State}};
-use kernel::{domain::{AnyResult, Error, Summary}};
+use {domain::{AnyResult, Error, Summary}};
 
 use tb_strava::{event::{InEvent, process}, StravaUser};
 use serde_derive::{ Deserialize, Serialize};
@@ -101,7 +101,7 @@ pub(crate) async fn hooks (user: RUser, State(conn): State<DbPool>) -> ApiResult
 pub(crate) async fn create_event(State(conn): State<DbPool>, Json(event): axum::extract::Json<InEvent>) -> ApiResult<()> {
     trace!("Received {:#?}", event);
     let mut conn = conn.get().await?;
-    event.convert()?.store(&mut conn).await?;
+    event.accept(&mut conn).await?;
     Ok(Json(()))
 }
 
@@ -118,7 +118,7 @@ pub(super) struct SyncQuery {
 
 pub(super) async fn sync_api (_u: AxumAdmin, State(conn): State<DbPool>, Query(query): Query<SyncQuery>) -> ApiResult<()> {
     let mut conn = conn.get().await?;
-    let user_id = query.user_id.map(|u| u.into());
+    let user_id: Option<domain::UserId> = query.user_id.map(|u| u.into());
     Ok(tb_strava::sync_users(user_id, query.time, &mut conn).await.map(Json)?)
 }
 

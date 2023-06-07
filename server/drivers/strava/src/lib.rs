@@ -14,32 +14,28 @@
 //! # Examples
 //!
 
-use diesel::{prelude::*, Identifiable, QueryableByName};
-use diesel::{QueryDsl, sql_query};
-use diesel::{Queryable, Insertable};
-use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
+use diesel::Identifiable;
+use diesel::{Insertable, Queryable};
+use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection};
 
+use async_session::log::{debug, info, trace, warn};
 use serde_derive::{Deserialize, Serialize};
-use async_session::log::{info,trace,warn,debug};
 
-
-pub mod activity;
-pub mod gear;
-pub mod event;
-
-use kernel::{domain, s_diesel};
-use anyhow::{Result as AnyResult, Context, ensure, bail};
+use anyhow::{bail, ensure, Context, Result as AnyResult};
 use domain::*;
 
 use s_diesel::AppConn;
+mod traits;
+pub use traits::StravaStore;
 
-use s_diesel::schema;
-use s_diesel::schema::strava_users;
+pub mod activity;
+pub mod event;
+pub mod gear;
 
+mod stravastore;
 
 mod user;
 pub use user::*;
-
 
 fn get_time() -> i64 {
     time::OffsetDateTime::now_utc().unix_timestamp()

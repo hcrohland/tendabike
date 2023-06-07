@@ -10,7 +10,7 @@ async fn main() -> anyhow::Result<()> {
     // setup environment. Includes Config and logging
     init_environment();
 
-    let db = kernel::s_diesel::DbPool::init().await?;
+    let db = s_diesel::DbPool::new().await?;
     let path = get_static_path();
     let socket = get_socket_address();
 

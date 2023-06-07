@@ -1,3 +1,4 @@
+
 table! {
     activities (id) {
         id -> Int4,

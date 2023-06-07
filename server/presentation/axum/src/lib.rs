@@ -18,7 +18,6 @@ pub(crate) mod user;
 use appstate::*;
 mod appstate;
 mod error;
-use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection};
 use error::*;
 
 use std::net::SocketAddr;
@@ -27,7 +26,7 @@ use async_session::MemoryStore;
 use axum::Router;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-type DbPool = Pool<AsyncPgConnection>;
+use s_diesel::DbPool;
 
 pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
     tracing_subscriber::registry()

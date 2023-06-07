@@ -24,6 +24,8 @@
 //!
 //! The types defined in this module are used throughout the application to ensure type safety and consistency.
 
+use crate::traits::Store;
+
 use super::*;
 use schema::{activity_types, part_types};
 
@@ -55,12 +57,8 @@ pub struct PartType {
 }
 
 impl PartType {
-    pub async fn all_ordered(conn: &mut AppConn) -> Vec<Self> {
-        part_types::table
-            .order(part_types::id)
-            .load::<PartType>(conn)
-            .await
-            .expect("error loading PartType")
+    pub async fn all_ordered(conn: &mut impl Store) -> Vec<Self> {
+        conn.get_all_parttypes_ordered().await
     }
 }
 
@@ -85,10 +83,8 @@ pub struct ActivityType {
 
 impl PartTypeId {
     /// get the full type for a type_id
-    pub async fn get(self, conn: &mut AppConn) -> AnyResult<PartType> {
-        // parttype_get
-        use schema::part_types::dsl::*;
-        Ok(part_types.find(self).get_result::<PartType>(conn).await?)
+    pub async fn get(self, conn: &mut impl Store) -> AnyResult<PartType> {
+        conn.get_parttype_by_id(self).await
     }
 
     /// recursively look for subtypes to self in the PartType vector
@@ -114,29 +110,19 @@ impl PartTypeId {
     }
 
     /// get all the types you can attach - even indirectly - to this type_id
-    pub async fn subtypes(self, conn: &mut AppConn) -> Vec<PartType> {
+    pub async fn subtypes(self, conn: &mut impl Store) -> Vec<PartType> {
         let mut types = PartType::all_ordered(conn).await;
         self.filter_types(&mut types)
     }
 
     /// Get the activity types valid for this part_type
-    pub async fn act_types(&self, conn: &mut AppConn) -> AnyResult<Vec<ActTypeId>> {
-        use schema::activity_types::dsl::*;
-
-        Ok(activity_types
-            .filter(gear.eq(self))
-            .select(id)
-            .get_results(conn)
-            .await?)
+    pub async fn act_types(&self, conn: &mut impl Store) -> AnyResult<Vec<ActTypeId>> {
+        conn.get_activity_types_by_parttypeid(self).await
     }
 }
 
 impl ActivityType {
-    pub async fn all_ordered(conn: &mut AppConn) -> Vec<ActivityType> {
-        activity_types::table
-            .order(activity_types::id)
-            .load::<ActivityType>(conn)
-            .await
-            .expect("error loading ActivityTypes")
+    pub async fn all_ordered(conn: &mut impl Store) -> Vec<ActivityType> {
+        conn.activitytypes_get_all_ordered().await
     }
 }

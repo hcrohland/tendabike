@@ -58,7 +58,7 @@ function disable(user) {
   {/each}
 </Table>
 <ButtonGroup>
-  <Button on:click={createSync}> Add Sync Event for all</Button>
+  <Button on:click={createSync()}> Add Sync Event for all</Button>
   <Button on:click={rescan}> 
     {#await promise}
     <Spinner />

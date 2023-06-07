@@ -6,19 +6,34 @@
 //!
 //! This module is used by other modules in the application to interact with the database.
 
-use crate::domain::AnyResult;
+use std::ops::{Deref, DerefMut};
 
 use async_session::log::info;
 use diesel::prelude::*;
-use diesel_async::pooled_connection::deadpool::Pool;
+use diesel_async::pooled_connection::deadpool::{Object, Pool};
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::AsyncPgConnection;
+use anyhow::Result as AnyResult;
 
-pub type AppConn = diesel_async::AsyncPgConnection;
+pub struct AppConn(Object<AsyncPgConnection>);
 
-use diesel_migrations::MigrationHarness;
+impl Deref for AppConn {
+    type Target = Object<AsyncPgConnection>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for AppConn {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+use diesel_migrations::{embed_migrations, MigrationHarness};
 pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
-    embed_migrations!("src/s_diesel/migrations");
+    embed_migrations!("migrations");
 
 fn run_db_migrations(db: &str) {
     info!("Running database migrations...");
@@ -26,19 +41,26 @@ fn run_db_migrations(db: &str) {
     conn.run_pending_migrations(MIGRATIONS)
         .expect("Failed to run database migrations: {:?}");
 }
-
-pub struct DbPool {}
+#[derive(Clone)]
+pub struct DbPool(Pool<AsyncPgConnection>);
 
 impl DbPool {
-    pub async fn init() -> AnyResult<Pool<AsyncPgConnection>> {
+    pub async fn new() -> AnyResult<Self> {
         let database_url =
             std::env::var("DB_URL").unwrap_or("postgres://localhost/tendabike".to_string());
         run_db_migrations(&database_url);
 
         let config =
-            AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(database_url);
+            AsyncDieselConnectionManager::<AsyncPgConnection>::new(database_url);
         let pool: Pool<AsyncPgConnection> = Pool::builder(config).build()?;
 
-        Ok(pool)
+        Ok(DbPool(pool))
+    }
+
+    pub async fn get(
+        &self,
+    ) -> AnyResult<AppConn> {
+        let conn = self.0.get().await?;
+        Ok(AppConn(conn))
     }
 }

@@ -1,22 +1,22 @@
-/* 
-    tendabike - the bike maintenance tracker
-    
-    Copyright (C) 2023  Christoph Rohland 
+/*
+   tendabike - the bike maintenance tracker
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Affero General Public License as published
-    by the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+   Copyright (C) 2023  Christoph Rohland
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Affero General Public License for more details.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as published
+   by the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
 
-    You should have received a copy of the GNU Affero General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU Affero General Public License for more details.
 
- */
+   You should have received a copy of the GNU Affero General Public License
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+*/
 
 //! Activity handling for the TendaBike backend
 //!
@@ -27,12 +27,15 @@
 //! Most operations are done on the ActivityId though
 //!
 
+use std::collections::HashSet;
+
+use crate::traits::{ActivityStore, Store};
+
 use super::*;
 use ::time::PrimitiveDateTime;
-use schema::activities;
+use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection};
 use time::{macros::format_description, OffsetDateTime};
 use time_tz::PrimitiveDateTimeExt;
-use diesel_async::{RunQueryDsl, AsyncConnection, scoped_futures::ScopedFutureExt};
 
 /// The Id of an Activity
 ///
@@ -46,7 +49,7 @@ NewtypeFrom! { () pub struct ActivityId(i32); }
 
 /// The database's representation of an activity.
 #[derive(Debug, Clone, Identifiable, Queryable, AsChangeset, PartialEq, Serialize, Deserialize)]
-#[diesel(table_name = activities)]
+#[diesel(table_name = schema::activities)]
 pub struct Activity {
     /// The primary key
     pub id: ActivityId,
@@ -75,8 +78,8 @@ pub struct Activity {
     pub gear: Option<PartId>,
 }
 
-#[derive(Debug, Clone, Insertable, AsChangeset, PartialEq, Serialize, Deserialize)]
-#[diesel(table_name = activities)]
+#[derive(Debug, Clone, Insertable, AsChangeset, Queryable, PartialEq, Serialize, Deserialize)]
+#[diesel(table_name = schema::activities)]
 /// A new activity to be inserted into the database.
 pub struct NewActivity {
     pub user_id: UserId,
@@ -103,6 +106,24 @@ pub struct NewActivity {
     pub gear: Option<PartId>,
 }
 
+impl From<Activity> for NewActivity {
+    fn from(act: Activity) -> Self {
+        Self {
+            user_id: act.user_id,
+            what: act.what,
+            name: act.name,
+            start: act.start,
+            duration: act.duration,
+            time: act.time,
+            distance: act.distance,
+            climb: act.climb,
+            descend: act.descend,
+            power: act.power,
+            gear: act.gear,
+        }
+    }
+}
+
 impl ActivityId {
     pub fn new(id: i32) -> Self {
         Self(id)
@@ -111,12 +132,8 @@ impl ActivityId {
     /// Read the activity with id self
     ///
     /// checks authorization
-    pub async fn read(self, person: &dyn Person, conn: &mut AppConn) -> AnyResult<Activity> {
-        let act = activities::table
-            .find(self)
-            .for_update()
-            .first::<Activity>(conn).await
-            .context(format!("No activity id {}", self))?;
+    pub async fn read(self, person: &dyn Person, conn: &mut impl Store) -> AnyResult<Activity> {
+        let act = conn.activity_read_by_id(self).await?;
         person.check_owner(
             act.user_id,
             format!("User {} cannot access activity {}", person.get_id(), self),
@@ -124,35 +141,35 @@ impl ActivityId {
         Ok(act)
     }
 
-
-
     /// Delete the activity with id self
     /// and update part usage accordingly
     ///
     /// returns all affected parts  
     /// checks authorization  
     pub async fn delete(self, person: &dyn Person, conn: &mut AppConn) -> AnyResult<Summary> {
-        use schema::activities::dsl::*;
         info!("Deleting {:?}", self);
-        conn.transaction(|conn| async   {
-            let mut res = self
-                .read(person, conn).await
-                .context("Could not read user")?
-                .register(Factor::Sub, conn)
-                .await
-                .context("could not unregister activity")?;
-            diesel::delete(activities.filter(id.eq(self)))
-                .execute(conn)
-                .await.context("Error deleting activity")?;
-            res.activities[0].gear = None;
-            res.activities[0].duration = 0;
-            res.activities[0].time = None;
-            res.activities[0].distance = None;
-            res.activities[0].climb = None;
-            res.activities[0].descend = None;
-            res.activities[0].power = None;
-            Ok(res)
-        }.scope_boxed()).await
+        conn.transaction(|conn| {
+            async {
+                let mut res = self
+                    .read(person, conn)
+                    .await
+                    .context("Could not read activity")?
+                    .register(Factor::Sub, conn)
+                    .await
+                    .context("could not unregister activity")?;
+                conn.activity_delete(self).await?;
+                res.activities[0].gear = None;
+                res.activities[0].duration = 0;
+                res.activities[0].time = None;
+                res.activities[0].distance = None;
+                res.activities[0].climb = None;
+                res.activities[0].descend = None;
+                res.activities[0].power = None;
+                Ok(res)
+            }
+            .scope_boxed()
+        })
+        .await
     }
 
     /// Update the activity with id self according to the data in NewActivity
@@ -166,22 +183,26 @@ impl ActivityId {
         user: &dyn Person,
         conn: &mut AppConn,
     ) -> AnyResult<Summary> {
-        conn.transaction(|conn| async {
-            self.read(user, conn).await?.register(Factor::Sub, conn).await?;
+        conn.transaction(|conn| {
+            async {
+                self.read(user, conn)
+                    .await?
+                    .register(Factor::Sub, conn)
+                    .await?;
 
-            let act = diesel::update(activities::table)
-                .filter(activities::id.eq(self))
-                .set(act)
-                .get_result::<Activity>(conn).await
-                .context("Error updating activity")?;
+                let act = conn.activity_update(self, act).await?;
 
-            info!("Updating {:?}", act);
+                info!("Updating {:?}", act);
 
-            let res = act
-                .register(Factor::Add, conn).await
-                .context("Could not register activity")?;
-            Ok(res)
-        }.scope_boxed()).await
+                let res = act
+                    .register(Factor::Add, conn)
+                    .await
+                    .context("Could not register activity")?;
+                Ok(res)
+            }
+            .scope_boxed()
+        })
+        .await
     }
 }
 
@@ -190,7 +211,11 @@ impl Activity {
     ///
     /// returns the activity and all affected parts  
     /// checks authorization  
-    pub async fn create(act: &NewActivity, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Summary> {
+    pub async fn create(
+        act: &NewActivity,
+        user: &dyn Person,
+        conn: &mut AppConn,
+    ) -> AnyResult<Summary> {
         user.check_owner(
             act.user_id,
             format!(
@@ -200,15 +225,17 @@ impl Activity {
             ),
         )?;
         info!("Creating {:?}", act);
-        conn.transaction(|conn| async {
-            let new: Activity = diesel::insert_into(activities::table)
-                .values(act)
-                .get_result(conn)
-                .await.context("Could not insert activity")?;
-            // let res = new.check_geartype(res, conn)?;
-            new.register(Factor::Add, conn).await
-                .context("Could not register activity")
-        }.scope_boxed()).await
+        conn.transaction(|conn| {
+            async {
+                let new = conn.activity_create(act).await?;
+                // let res = new.check_geartype(res, conn)?;
+                new.register(Factor::Add, conn)
+                    .await
+                    .context("Could not register activity")
+            }
+            .scope_boxed()
+        })
+        .await
     }
 
     /// Extract the usage out of an activity
@@ -234,16 +261,10 @@ impl Activity {
         part: PartId,
         begin: OffsetDateTime,
         end: OffsetDateTime,
-        conn: &mut AppConn,
-    ) -> Vec<Activity> {
-        use schema::activities::dsl::{activities, gear, start};
-
-        activities
-            .filter(gear.eq(Some(part)))
-            .filter(start.ge(begin))
-            .filter(start.lt(end))
-            .load::<Activity>(conn).await
-            .expect("could not read activities")
+        conn: &mut impl Store,
+    ) -> AnyResult<Vec<Activity>> {
+        conn.activities_find_by_partid_and_time(part, begin, end)
+            .await
     }
 
     /// Register or unregister an activity with the given factor.
@@ -252,7 +273,7 @@ impl Activity {
     /// If the factor is `Factor::Subtract`, the activity is unregistered and the usage is subtracted from the parts and attachments.
     ///
     /// Returns a summary of the affected parts, attachments, and activities.
-    pub async fn register(self, factor: Factor, conn: &mut AppConn) -> AnyResult<Summary> {
+    pub async fn register(self, factor: Factor, conn: &mut impl Store) -> AnyResult<Summary> {
         trace!(
             "{} {:?}",
             if factor == Factor::Add {
@@ -264,18 +285,16 @@ impl Activity {
         );
 
         let usage = self.usage(factor);
-        let iter = Attachment::parts_per_activity(&self, conn)
-            .await
-            .into_iter();
+        let partlist = Attachment::parts_per_activity(&self, conn).await?;
 
         let mut parts = Vec::new();
-        for part in iter {
+        for part in partlist {
             let part = part.apply_usage(&usage, self.start, conn).await?;
             parts.push(part);
         }
         Ok(Summary {
             parts,
-            attachments: Attachment::register(&self, &usage, conn).await,
+            attachments: Attachment::register(&self, &usage, conn).await?,
             activities: vec![self],
         })
     }
@@ -286,38 +305,29 @@ impl Activity {
     ///
     /// A `Vec` of `Activity` objects representing all activities for the given user.
     ///
-    
-    pub async fn get_all(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<Activity>> {
-        use schema::activities::dsl::*;
-        let acts = activities
-            .filter(user_id.eq(user.get_id()))
-            .get_results::<Activity>(conn)
-            .await
-            .context(format!(
-                "Error reading activities for user {}",
-                user.get_id()
-            ))?;
-        Ok(acts)
+
+    pub async fn get_all(user: &dyn Person, conn: &mut impl Store) -> AnyResult<Vec<Activity>> {
+        conn.activity_get_all_for_userid(user.get_id()).await
     }
 
-    pub async fn categories(user: &dyn Person, conn: &mut AppConn) -> AnyResult<Vec<PartTypeId>> {
-        use crate::schema::activities::dsl::*;
-        use crate::schema::activity_types;
+    pub async fn categories(
+        user: &dyn Person,
+        conn: &mut impl Store,
+    ) -> AnyResult<HashSet<PartTypeId>> {
+        let act_types = conn
+            .activity_get_all_for_userid(user.get_id())
+            .await?
+            .into_iter()
+            .map(|a| a.what)
+            .collect::<HashSet<_>>();
 
-        let act_types = activities
-            .filter(user_id.eq(user.get_id()))
-            .select(what)
-            .distinct()
-            .get_results::<ActTypeId>(conn)
-            .await?;
-
-        let p_types = activity_types::table
-            .filter(activity_types::id.eq_any(act_types))
-            .filter(activity_types::id.ne(0)) // catch-all unsupported
-            .select(activity_types::gear)
-            .distinct()
-            .get_results(conn)
-            .await?;
+        let p_types = conn
+            .activitytypes_get_all_ordered()
+            .await
+            .into_iter()
+            .filter(|t| act_types.contains(&t.id))
+            .map(|t| t.gear_type)
+            .collect::<HashSet<_>>();
 
         Ok(p_types)
     }
@@ -328,7 +338,6 @@ impl Activity {
         user: &dyn Person,
         conn: &mut AppConn,
     ) -> AnyResult<(Summary, Vec<String>, Vec<String>)> {
-        use schema::activities::dsl::*;
         #[derive(Debug, Deserialize)]
         struct Result {
             #[serde(rename = "Datum")]
@@ -374,27 +383,12 @@ impl Activity {
                 ),
                 None => None,
             };
-            match conn.transaction(|conn| async {
-                let act: Activity = activities
-                    .filter(user_id.eq(user.get_id()))
-                    .filter(start.eq(rstart))
-                    .for_update()
-                    .get_result(conn).await
-                    .context(format!("Activitiy {}", rstart))?;
-                let act_id = act.register(Factor::Sub, conn).await?.activities[0].id;
-                if let Some(rclimb) = rclimb {
-                    diesel::update(activities.find(act_id))
-                        .set(climb.eq(rclimb))
-                        .execute(conn).await
-                        .context("Error updating climb")?;
-                }
-                let act = diesel::update(activities.find(act_id))
-                    .set(descend.eq(rdescend))
-                    .get_result::<Activity>(conn).await
-                    .context("Error updating descent")?;
-                act.register(Factor::Add, conn).await
-                    .context("Could not register activity")
-            }.scope_boxed()).await {
+            match conn
+                .transaction(|conn| {
+                    match_and_update(conn, user, rstart, rclimb, rdescend).scope_boxed()
+                })
+                .await
+            {
                 Ok(res) => {
                     summary = summary.merge(res);
                     good.push(description);
@@ -414,67 +408,55 @@ impl Activity {
         user: &dyn Person,
         conn: &mut AppConn,
     ) -> AnyResult<Summary> {
-        conn.transaction(|conn| async {def_part(&gear_id, user, conn).await}.scope_boxed()).await
+        conn.transaction(|conn| def_part(&gear_id, user, conn).scope_boxed())
+            .await
     }
 
     pub async fn rescan_all(conn: &mut AppConn) -> AnyResult<()> {
         warn!("rescanning all activities!");
-        let res = conn.transaction(|conn| async {
-            {
-                use schema::parts::dsl::*;
-                debug!("resetting all parts");
-                diesel::update(parts)
-                    .set((
-                        time.eq(0),
-                        distance.eq(0),
-                        climb.eq(0),
-                        descend.eq(0),
-                        count.eq(0),
-                    ))
-                    .execute(conn).await?;
-            }
-            {
-                use schema::attachments::dsl::*;
-                debug!("resetting all attachments");
-                diesel::update(attachments)
-                    .set((
-                        time.eq(0),
-                        distance.eq(0),
-                        climb.eq(0),
-                        descend.eq(0),
-                        count.eq(0),
-                    ))
-                    .execute(conn).await?;
-            }
-            {
-                use schema::activities::dsl::*;
-                for a in activities.order_by(id).get_results::<Activity>(conn).await? {
-                    debug!("registering activity {}", a.id);
-                    a.register(Factor::Add, conn).await?;
-                }
-            }
-            Ok(())
-        }.scope_boxed()).await;
+        conn.transaction(|conn| rescan(conn).scope_boxed()).await?;
         warn!("Done rescanning");
-        res
+        Ok(())
     }
 }
 
+async fn rescan(conn: &mut impl Store) -> AnyResult<()> {
+    conn.part_reset_all().await?;
+    conn.attachment_reset_all().await?;
+    for a in conn.activity_get_really_all().await? {
+        debug!("registering activity {}", a.id);
+        a.register(Factor::Add, conn).await?;
+    }
+    Ok(())
+}
+
+async fn match_and_update(
+    conn: &mut AppConn,
+    user: &dyn Person,
+    rstart: OffsetDateTime,
+    rclimb: Option<i32>,
+    rdescend: i32,
+) -> AnyResult<Summary> {
+    let mut act = conn
+        .activity_get_by_user_and_time(user.get_id(), rstart)
+        .await?;
+    if let Some(rclimb) = rclimb {
+        act.climb = Some(rclimb);
+    }
+    act.descend = Some(rdescend);
+    let actid = act.id;
+    let act = NewActivity::from(act);
+    actid.update(&act, user, conn).await
+}
+
 async fn def_part(partid: &PartId, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Summary> {
-    use schema::activities::dsl::*;
     let part = partid.part(user, conn).await?;
     let types = part.what.act_types(conn).await?;
 
-    let acts = diesel::update(activities)
-        .filter(user_id.eq(user.get_id()))
-        .filter(gear.is_null())
-        .filter(what.eq_any(types))
-        .set(gear.eq(partid))
-        .get_results::<Activity>(conn).await
-        .context("Error updating activities")?;
+    let acts = conn.activity_set_gear_if_null(user, types, partid).await?;
 
     let mut hash = SumHash::default();
-    for act in acts.into_iter() {
+    for act in acts {
         hash.merge(act.register(Factor::Add, conn).await?)
     }
     Ok(hash.collect())

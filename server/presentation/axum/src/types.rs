@@ -4,7 +4,7 @@
 //! The `router` function is used to create a router that handles requests related to activity and part types.
 
 use axum::{Json, Router, routing::get, extract::State};
-use kernel::domain::{ActivityType, PartType};
+use domain::{ActivityType, PartType};
 
 use crate::{user::RUser, appstate::AppState, DbPool, error::ApiResult};
 

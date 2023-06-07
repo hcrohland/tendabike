@@ -33,8 +33,9 @@
 //!
 //! The `create`, `update`, `read`, and `get_stat` methods are implemented for the `UserId` type and provide CRUD functionality for `User` entities.
 
+use crate::traits::Store;
+
 use super::*;
-use schema::users;
 
 #[derive(
     DieselNewType, Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize,
@@ -44,6 +45,7 @@ NewtypeDisplay! { () pub struct UserId(); }
 NewtypeFrom! { () pub struct UserId(i32); }
 
 #[derive(Clone, Debug, Queryable, Insertable, Serialize, Deserialize)]
+#[diesel(table_name = schema::users)]
 pub struct User {
     id: UserId,
     name: String,
@@ -59,20 +61,14 @@ pub struct Stat {
 }
 
 impl UserId {
-    pub async fn read(self, conn: &mut AppConn) -> AnyResult<User> {
-        Ok(users::table.find(self).get_result(conn).await?)
+    pub async fn read(self, conn: &mut impl Store) -> AnyResult<User> {
+        conn.user_read_by_id(self).await
     }
 
-    pub async fn get_stat(self, conn: &mut AppConn) -> AnyResult<Stat> {
+    pub async fn get_stat(self, conn: &mut impl Store) -> AnyResult<Stat> {
         let user = self.read(conn).await?;
-        let parts = {
-            use schema::parts::dsl::{owner, parts};
-            parts.count().filter(owner.eq(self)).first(conn).await?
-        };
-        let activities = {
-            use schema::activities::dsl::*;
-            activities.count().filter(user_id.eq(self)).first(conn).await?
-        };
+        let parts = conn.part_get_all_for_userid(user.id).await?.len() as i64;
+        let activities = conn.activity_get_all_for_userid(user.id).await?.len() as i64;
         Ok(Stat {
             user,
             parts,
@@ -80,38 +76,26 @@ impl UserId {
         })
     }
 
-    pub async fn create(firstname_: &str, lastname: &str, conn: &mut AppConn) -> AnyResult<Self> {
-        use crate::schema::users::dsl::*;
-
-        let user: User = diesel::insert_into(users)
-            .values((
-                firstname.eq(firstname_),
-                name.eq(lastname),
-                is_admin.eq(false),
-            ))
-            .get_result(conn)
-            .await
-            .context("Could not create user")?;
-        Ok(user.id)
+    pub async fn create(
+        firstname_: &str,
+        lastname: &str,
+        conn: &mut impl Store,
+    ) -> AnyResult<Self> {
+        conn.user_create(firstname_, lastname).await.map(|u| u.id)
     }
 
     pub async fn update(
         &self,
         firstname_: &str,
         lastname: &str,
-        conn: &mut AppConn,
+        conn: &mut impl Store,
     ) -> AnyResult<Self> {
-        use crate::schema::users::dsl::*;
-
-        let user: User = diesel::update(users.filter(id.eq(self)))
-            .set((firstname.eq(firstname_), name.eq(lastname)))
-            .get_result(conn)
+        conn.user_update(self, firstname_, lastname)
             .await
-            .context("Could not update user")?;
-        Ok(user.id)
+            .map(|u| u.id)
     }
 
-    pub async fn is_admin(&self, conn: &mut AppConn) -> AnyResult<bool> {
+    pub async fn is_admin(&self, conn: &mut impl Store) -> AnyResult<bool> {
         self.read(conn).await.map(|u| u.is_admin)
     }
 }

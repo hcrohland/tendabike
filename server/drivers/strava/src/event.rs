@@ -1,10 +1,7 @@
 use async_recursion::async_recursion;
-use diesel::QueryDsl;
-use diesel_async::*;
 use std::collections::HashMap;
 
 use super::*;
-use schema::strava_events;
 
 use crate::activity::StravaActivity;
 
@@ -35,7 +32,7 @@ impl InEvent {
     /// # Returns
     ///
     /// Returns a `Result` containing an `Event` struct if the conversion is successful, or an `anyhow::Error` if it fails.
-    pub fn convert(self) -> anyhow::Result<Event> {
+    pub async fn to_event(self, conn: &mut AppConn) -> anyhow::Result<Event> {
         let objects = ["activity", "athlete"];
         let aspects = ["create", "update", "delete"];
 
@@ -43,6 +40,13 @@ impl InEvent {
             objects.contains(&self.object_type.as_str())
                 && aspects.contains(&self.aspect_type.as_str()),
             domain::Error::BadRequest(format!("unknown event received: {:?}", self))
+        );
+
+        ensure!(
+            conn.read_stravauser_for_stravaid(self.owner_id.into())
+                .await?
+                .len() == 1,
+            Error::BadRequest(format!("Unknown event owner received: {:?}", self))
         );
 
         Ok(Event {
@@ -56,10 +60,15 @@ impl InEvent {
             updates: serde_json::to_string(&self.updates).unwrap_or_else(|e| format!("{:?}", e)),
         })
     }
+    
+    pub async fn accept(self, conn: &mut AppConn) -> AnyResult<()> {
+        let event = self.to_event(conn).await?;
+        conn.store_stravaevent(event).await?;
+        Ok(())
+    }
 }
-
 #[derive(Debug, Default, Serialize, Deserialize, Queryable, Insertable)]
-#[diesel(table_name = strava_events)]
+#[diesel(table_name = s_diesel::schema::strava_events)]
 pub struct Event {
     id: Option<i32>,
     pub object_type: String,
@@ -92,49 +101,21 @@ impl std::fmt::Display for Event {
 }
 
 impl Event {
-    async fn delete(&self, conn: &mut AppConn) -> anyhow::Result<()> {
-        use schema::strava_events::dsl::*;
+    async fn delete(&self, conn: &mut impl StravaStore) -> anyhow::Result<()> {
         debug!("Deleting {}", self);
-        diesel::delete(strava_events)
-            .filter(id.eq(self.id))
-            .execute(conn)
-            .await?;
-        Ok(())
+        conn.delete_strava_event(self.id).await
     }
 
-    async fn setdate(&mut self, time: i64, conn: &mut AppConn) -> anyhow::Result<()> {
-        use schema::strava_events::dsl::*;
+    async fn setdate(&mut self, time: i64, conn: &mut impl StravaStore) -> anyhow::Result<()> {
         self.event_time = time;
-        diesel::update(strava_events)
-            .filter(id.eq(self.id))
-            .set(event_time.eq(self.event_time))
-            .execute(conn)
-            .await?;
-        Ok(())
+        conn.set_event_time(self.id, self.event_time).await
     }
 
-    pub async fn store(self, conn: &mut AppConn) -> anyhow::Result<()> {
-        ensure!(
-            strava_users::table.find(self.owner_id).execute(conn).await
-                == core::result::Result::Ok(1),
-            Error::BadRequest(format!("Unknown event owner received: {}", self))
-        );
-
-        info!(
-            "Received {}",
-            diesel::insert_into(schema::strava_events::table)
-                .values(&self)
-                .get_result::<Event>(conn)
-                .await?
-        );
-        Ok(())
-    }
-
-#[async_recursion]
+    #[async_recursion]
     async fn rate_limit(
         self,
         user: &StravaUser,
-        conn: &mut AppConn,
+        conn: &mut impl StravaStore,
     ) -> anyhow::Result<Option<Self>> {
         // rate limit event
         if self.event_time > get_time() {
@@ -218,15 +199,17 @@ impl Event {
         Ok(hash.collect())
     }
 
-    async fn process_sync(self, user: &StravaUser, conn: &mut AsyncPgConnection) -> Result<Summary, anyhow::Error> {
-        let summary = self
-            .sync(user, conn)
-            .await;
+    async fn process_sync(
+        self,
+        user: &StravaUser,
+        conn: &mut AppConn,
+    ) -> Result<Summary, anyhow::Error> {
+        let summary = self.sync(user, conn).await;
         if let Err(err) = summary {
-            return check_try_again(err, conn).await
+            return check_try_again(err, conn).await;
         }
         summary
-    }    
+    }
 }
 
 /// Inserts a new sync event into the database.
@@ -251,43 +234,34 @@ impl Event {
 pub async fn insert_sync(
     owner_id: StravaId,
     event_time: i64,
-    conn: &mut AppConn,
+    conn: &mut impl StravaStore,
 ) -> anyhow::Result<()> {
+    
     ensure!(
         event_time <= get_time(),
         Error::BadRequest(format!("eventtime {} > now!", event_time))
     );
-    Event {
+    let event = Event {
         owner_id,
         event_time,
         object_type: "sync".to_string(),
         ..Default::default()
-    }
-    .store(conn)
+    };
+    conn.store_stravaevent(event)
     .await
 }
 
-pub async fn insert_stop(conn: &mut AppConn) -> anyhow::Result<()> {
+pub async fn insert_stop(conn: &mut impl StravaStore) -> anyhow::Result<()> {
     let e = Event {
         object_type: "stop".to_string(),
         object_id: get_time() + 900,
         ..Default::default()
     };
-    diesel::insert_into(schema::strava_events::table)
-        .values(e)
-        .execute(conn)
-        .await?;
-    Ok(())
+    conn.store_stravaevent(e).await
 }
 
-async fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Option<Event>> {
-    use schema::strava_events::dsl::*;
-
-    let event = strava_events
-        .filter(owner_id.eq_any(vec![0, user.id.into()]))
-        .first::<Event>(conn)
-        .await
-        .optional()?;
+async fn get_event(user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Result<Option<Event>> {
+    let event = conn.get_next_event_for_stravauser(user).await?;
     let event = match event {
         Some(event) => event,
         None => return Ok(None),
@@ -298,26 +272,20 @@ async fn get_event(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Opti
 
     // Prevent unneeded calls to Strava
     // only the latest event for an object is interesting
-    let mut list = strava_events
-        .filter(object_id.eq(event.object_id))
-        .filter(owner_id.eq(event.owner_id))
-        .order(event_time.asc())
-        .get_results::<Event>(conn)
-        .await?;
+    let  mut list = conn.get_all_later_events_for_object(event.object_id, event.owner_id).await?;
     let res = list.pop();
+
 
     if !list.is_empty() {
         debug!("Dropping {:#?}", list);
-        diesel::delete(strava_events)
-            .filter(id.eq_any(list.into_iter().map(|l| l.id).collect::<Vec<_>>()))
-            .execute(conn)
-            .await?;
+        let values = list.into_iter().map(|l| l.id).collect::<Vec<_>>();
+        conn.delete_events_by_vec_id(values).await?;
     }
 
     Ok(res)
 }
 
-async fn check_try_again(err: anyhow::Error, conn: &mut AppConn) -> anyhow::Result<Summary> {
+async fn check_try_again(err: anyhow::Error, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
     // Keep events for temporary failure - delete others
     match err.downcast_ref::<Error>() {
         Some(&Error::TryAgain(_)) => {
@@ -331,7 +299,7 @@ async fn check_try_again(err: anyhow::Error, conn: &mut AppConn) -> anyhow::Resu
 
 async fn next_activities(
     user: &StravaUser,
-    conn: &mut AppConn,
+    conn: &mut impl StravaStore,
     per_page: usize,
     start: Option<i64>,
 ) -> anyhow::Result<Vec<StravaActivity>> {

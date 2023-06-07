@@ -10,7 +10,6 @@ use time::OffsetDateTime;
 
 use super::*;
 use ActTypeId;
-use ActivityId;
 use NewActivity;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -151,15 +150,7 @@ impl StravaActivity {
         let tb = self.into_tb(user, conn).await?;
         conn.transaction(|conn| {
             async {
-                use schema::strava_activities::dsl::*;
-
-                let tb_id = strava_activities
-                    .find(strava_id)
-                    .select(tendabike_id)
-                    .for_update()
-                    .get_result::<ActivityId>(conn)
-                    .await
-                    .optional()?;
+                let tb_id = conn.get_tbid_for_strava_activity(strava_id).await?;
 
                 let res;
                 if let Some(tb_id) = tb_id {
@@ -167,14 +158,7 @@ impl StravaActivity {
                 } else {
                     res = Activity::create(&tb, user, conn).await?;
                     let new_id = res.first_act();
-                    diesel::insert_into(strava_activities)
-                        .values((
-                            id.eq(strava_id),
-                            tendabike_id.eq(new_id),
-                            user_id.eq(tb.user_id),
-                        ))
-                        .execute(conn)
-                        .await?;
+                    conn.insert_new_activity(strava_id, tb.user_id, new_id).await?;
                 }
 
                 user.update_last(tb.start.unix_timestamp(), conn).await
@@ -189,18 +173,12 @@ impl StravaActivity {
 }
 
 pub async fn strava_url(act: i32, conn: &mut AppConn) -> AnyResult<String> {
-    use schema::strava_activities::dsl::*;
-
-    let g: i64 = strava_activities
-        .filter(tendabike_id.eq(act))
-        .select(id)
-        .first(conn)
-        .await?;
+    let g = conn.get_stravaid_for_tb_activity(act).await?;
 
     Ok(format!("https://strava.com/activities/{}", &g))
 }
 
-async fn get_activity(id: i64, user: &StravaUser, conn: &mut AppConn) -> AnyResult<StravaActivity> {
+async fn get_activity(id: i64, user: &StravaUser, conn: &mut impl StravaStore) -> AnyResult<StravaActivity> {
     let r = user.request(&format!("/activities/{}", id), conn).await?;
     // let r = user.request("/activities?per_page=2")?;
     let act: StravaActivity = serde_json::from_str(&r)?;
@@ -215,31 +193,20 @@ pub async fn upsert_activity(id: i64, user: &StravaUser, conn: &mut AppConn) -> 
 }
 
 pub(crate) async fn delete_activity(
-    sid: i64,
+    act_id: i64,
     user: &StravaUser,
     conn: &mut AppConn,
 ) -> AnyResult<Summary> {
-    use schema::strava_activities::dsl::*;
 
-    conn.transaction(|conn| {
-        async {
-            let tid: Option<ActivityId> = strava_activities
-                .select(tendabike_id)
-                .find(sid)
-                .for_update()
-                .first(conn)
-                .await
-                .optional()?;
-            if let Some(tid) = tid {
-                diesel::delete(strava_activities.find(sid))
-                    .execute(conn)
-                    .await?;
-                tid.delete(user, conn).await
-            } else {
-                Ok(Summary::default())
-            }
-        }
-        .scope_boxed()
-    })
-    .await
+    let tid = conn.get_activityid_from_strava_activity(act_id).await?;
+    let mut res = Summary::default();
+    if let Some(tid) = tid {
+        // first delete the tendabike activity
+        res = tid.delete(user, conn).await?;
+        // now delete the reference to the strava activity 
+        // if this fails we end up with an orphaned entry in the strava_activities table, which should not be a problem in practice
+        conn.delete_strava_activity(act_id).await?;
+    } 
+    Ok(res)
 }
+

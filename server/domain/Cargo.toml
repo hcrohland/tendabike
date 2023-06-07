@@ -1,10 +1,11 @@
 [package]
-name = "kernel"
+name = "domain"
 version = "0.2.1"
 authors = ["Christoph Rohland <tendabike@rohland.net>"]
 edition = "2021"
 
 [dependencies]
+s_diesel = {path = "../drivers/s_diesel"}
 
 diesel = { version = "2", features = ["postgres", "time" ] }
 diesel-async = { version = "0.3", features = ["postgres", "deadpool" ] }
@@ -24,5 +25,7 @@ pretty_assertions = "1"
 
 thiserror = "1.0"
 anyhow = "1.0"
+
+async-trait = "0.1"
 
 ## Needed for drivers::strava

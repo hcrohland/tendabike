@@ -28,7 +28,6 @@ mod types;
 mod user;
 
 use async_session::log::{debug, info, trace, warn};
-use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection, RunQueryDsl};
 use diesel_derive_newtype::*;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
@@ -44,13 +43,16 @@ pub use types::*;
 pub use user::*;
 
 use diesel::prelude::*;
-use diesel::{self, QueryDsl};
 
-use crate::s_diesel::schema;
-use crate::s_diesel::AppConn;
+use s_diesel::schema;
+use s_diesel::AppConn;
 
 mod usage;
 pub use usage::*;
 
 mod summary;
 pub use summary::*;
+
+pub mod traits;
+
+mod store;

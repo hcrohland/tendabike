@@ -7,7 +7,7 @@
 //! The `router` function creates a new router and maps the API endpoints to their respective functions.
 
 use axum::{routing::post, Json, Router, extract::State};
-use kernel::domain::{Event, Summary};
+use domain::{Event, Summary};
 
 use crate::{error::ApiResult, user::RUser, DbPool, appstate::AppState};
 

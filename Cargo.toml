@@ -1,7 +1,8 @@
 [workspace]
     members = [
         "server/app",
-        "server/kernel",
+        "server/domain",
         "server/presentation/axum",
-        "server/drivers/strava"
+        "server/drivers/strava",
+        "server/drivers/s_diesel"
     ]
