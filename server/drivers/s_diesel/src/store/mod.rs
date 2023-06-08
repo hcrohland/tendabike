@@ -1,6 +1,6 @@
-use s_diesel::AppConn;
+use crate::AppConn;
 
-use crate::traits::Store;
+use domain::Store;
 
 mod types;
 mod part;

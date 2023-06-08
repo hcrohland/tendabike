@@ -20,7 +20,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn init_environment() {
-    dotenv::dotenv().ok();
+    dotenvy::dotenv().ok();
 }
 
 fn get_static_path() -> PathBuf {

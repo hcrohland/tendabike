@@ -32,7 +32,7 @@ impl InEvent {
     /// # Returns
     ///
     /// Returns a `Result` containing an `Event` struct if the conversion is successful, or an `anyhow::Error` if it fails.
-    pub async fn to_event(self, conn: &mut AppConn) -> anyhow::Result<Event> {
+    pub async fn to_event(self, conn: &mut impl StravaStore) -> anyhow::Result<Event> {
         let objects = ["activity", "athlete"];
         let aspects = ["create", "update", "delete"];
 
@@ -43,7 +43,7 @@ impl InEvent {
         );
 
         ensure!(
-            conn.read_stravauser_for_stravaid(self.owner_id.into())
+            conn.stravauser_get_by_stravaid(self.owner_id.into())
                 .await?
                 .len() == 1,
             Error::BadRequest(format!("Unknown event owner received: {:?}", self))
@@ -61,14 +61,14 @@ impl InEvent {
         })
     }
     
-    pub async fn accept(self, conn: &mut AppConn) -> AnyResult<()> {
+    pub async fn accept(self, conn: &mut impl StravaStore) -> AnyResult<()> {
         let event = self.to_event(conn).await?;
-        conn.store_stravaevent(event).await?;
+        conn.stravaevent_store(event).await?;
         Ok(())
     }
 }
 #[derive(Debug, Default, Serialize, Deserialize, Queryable, Insertable)]
-#[diesel(table_name = s_diesel::schema::strava_events)]
+#[diesel(table_name = crate::schema::strava_events)]
 pub struct Event {
     id: Option<i32>,
     pub object_type: String,
@@ -103,12 +103,12 @@ impl std::fmt::Display for Event {
 impl Event {
     async fn delete(&self, conn: &mut impl StravaStore) -> anyhow::Result<()> {
         debug!("Deleting {}", self);
-        conn.delete_strava_event(self.id).await
+        conn.strava_event_delete(self.id).await
     }
 
     async fn setdate(&mut self, time: i64, conn: &mut impl StravaStore) -> anyhow::Result<()> {
         self.event_time = time;
-        conn.set_event_time(self.id, self.event_time).await
+        conn.strava_event_set_time(self.id, self.event_time).await
     }
 
     #[async_recursion]
@@ -132,7 +132,7 @@ impl Event {
     async fn process_activity(
         self,
         user: &StravaUser,
-        conn: &mut AppConn,
+        conn: &mut impl StravaStore,
     ) -> anyhow::Result<Summary> {
         let summary = self.process_hook(user, conn).await;
         let summary = match summary {
@@ -162,7 +162,7 @@ impl Event {
     /// # Examples
     ///
     ///
-    async fn process_hook(&self, user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
+    async fn process_hook(&self, user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
         let res = match self.aspect_type.as_str() {
             "create" | "update" => activity::upsert_activity(self.object_id, user, conn).await?,
             "delete" => activity::delete_activity(self.object_id, user, conn).await?,
@@ -175,7 +175,7 @@ impl Event {
         Ok(res)
     }
 
-    async fn sync(mut self, user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
+    async fn sync(mut self, user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
         // let mut len = batch;
         let mut start = self.event_time;
         let mut hash = SumHash::default();
@@ -202,7 +202,7 @@ impl Event {
     async fn process_sync(
         self,
         user: &StravaUser,
-        conn: &mut AppConn,
+        conn: &mut impl StravaStore,
     ) -> Result<Summary, anyhow::Error> {
         let summary = self.sync(user, conn).await;
         if let Err(err) = summary {
@@ -247,7 +247,7 @@ pub async fn insert_sync(
         object_type: "sync".to_string(),
         ..Default::default()
     };
-    conn.store_stravaevent(event)
+    conn.stravaevent_store(event)
     .await
 }
 
@@ -257,11 +257,11 @@ pub async fn insert_stop(conn: &mut impl StravaStore) -> anyhow::Result<()> {
         object_id: get_time() + 900,
         ..Default::default()
     };
-    conn.store_stravaevent(e).await
+    conn.stravaevent_store(e).await
 }
 
 async fn get_event(user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Result<Option<Event>> {
-    let event = conn.get_next_event_for_stravauser(user).await?;
+    let event = conn.strava_event_get_next_for_user(user).await?;
     let event = match event {
         Some(event) => event,
         None => return Ok(None),
@@ -272,14 +272,14 @@ async fn get_event(user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Re
 
     // Prevent unneeded calls to Strava
     // only the latest event for an object is interesting
-    let  mut list = conn.get_all_later_events_for_object(event.object_id, event.owner_id).await?;
+    let  mut list = conn.strava_event_get_later(event.object_id, event.owner_id).await?;
     let res = list.pop();
 
 
     if !list.is_empty() {
         debug!("Dropping {:#?}", list);
         let values = list.into_iter().map(|l| l.id).collect::<Vec<_>>();
-        conn.delete_events_by_vec_id(values).await?;
+        conn.strava_events_delete_batch(values).await?;
     }
 
     Ok(res)
@@ -316,7 +316,7 @@ async fn next_activities(
     Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)
 }
 
-pub async fn process(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
+pub async fn process(user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
     let event = get_event(user, conn).await?;
     if event.is_none() {
         return Ok(Summary::default());

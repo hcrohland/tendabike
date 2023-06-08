@@ -1,7 +1,4 @@
-use crate::event::Event;
 use crate::AppConn;
-use crate::StravaId;
-use crate::StravaUser;
 use anyhow::Context;
 use anyhow::Result as AnyResult;
 use diesel::prelude::*;
@@ -10,11 +7,14 @@ use diesel_async::RunQueryDsl;
 use domain::ActivityId;
 use domain::PartId;
 use domain::UserId;
-use s_diesel::schema;
+use tb_strava::event::Event;
+use tb_strava::schema;
+use tb_strava::StravaId;
+use tb_strava::StravaUser;
 
 #[async_session::async_trait]
-impl crate::StravaStore for AppConn {
-    async fn get_user_id_from_strava_id(&mut self, who: i32) -> AnyResult<i32> {
+impl tb_strava::StravaStore for AppConn {
+    async fn stravaid_get_user_id(&mut self, who: i32) -> AnyResult<i32> {
         use schema::strava_users::dsl::*;
         let user_id: i32 = strava_users
             .filter(tendabike_id.eq(who))
@@ -24,7 +24,7 @@ impl crate::StravaStore for AppConn {
         Ok(user_id)
     }
 
-    async fn store_stravaevent(&mut self, e: Event) -> AnyResult<()> {
+    async fn stravaevent_store(&mut self, e: Event) -> AnyResult<()> {
         diesel::insert_into(schema::strava_events::table)
             .values(&e)
             .get_result::<Event>(&mut self)
@@ -55,10 +55,7 @@ impl crate::StravaStore for AppConn {
         Ok(g)
     }
 
-    async fn get_tbid_for_strava_activity(
-        &mut self,
-        strava_id: i64,
-    ) -> AnyResult<Option<ActivityId>> {
+    async fn strava_activity_get_tbid(&mut self, strava_id: i64) -> AnyResult<Option<ActivityId>> {
         use schema::strava_activities::dsl::*;
 
         strava_activities
@@ -71,7 +68,7 @@ impl crate::StravaStore for AppConn {
             .context("failed to get tbid for stravaid")
     }
 
-    async fn insert_new_activity(
+    async fn strava_activity_new(
         &mut self,
         strava_id: i64,
         uid: UserId,
@@ -86,7 +83,7 @@ impl crate::StravaStore for AppConn {
         Ok(())
     }
 
-    async fn get_stravaid_for_tb_activity(&mut self, act: i32) -> Result<i64, anyhow::Error> {
+    async fn strava_activitid_get_by_tbid(&mut self, act: i32) -> Result<i64, anyhow::Error> {
         use schema::strava_activities::dsl::*;
         strava_activities
             .filter(tendabike_id.eq(act))
@@ -96,7 +93,7 @@ impl crate::StravaStore for AppConn {
             .context("failed to get stravaid for activity")
     }
 
-    async fn delete_strava_activity(&mut self, act_id: i64) -> Result<usize, anyhow::Error> {
+    async fn strava_activity_delete(&mut self, act_id: i64) -> Result<usize, anyhow::Error> {
         use schema::strava_activities::dsl::*;
         diesel::delete(strava_activities.find(act_id))
             .execute(self)
@@ -104,21 +101,21 @@ impl crate::StravaStore for AppConn {
             .context("failed to delete strava activity")
     }
 
-    async fn get_activityid_from_strava_activity(
+    async fn strava_activity_get_activityid(
         &mut self,
         act_id: i64,
     ) -> Result<Option<ActivityId>, anyhow::Error> {
         use schema::strava_activities::dsl::*;
         strava_activities
-            .select(tendabike_id)
             .find(act_id)
+            .select(tendabike_id)
             .first(self)
             .await
             .optional()
             .context("failed to get activity id")
     }
 
-    async fn create_new_gear(
+    async fn strava_gear_new(
         &mut self,
         strava_id: String,
         tbid: PartId,
@@ -127,18 +124,14 @@ impl crate::StravaStore for AppConn {
         use schema::strava_gears::dsl::*;
 
         diesel::insert_into(strava_gears)
-            .values((
-                id.eq(strava_id),
-                tendabike_id.eq(tbid),
-                user_id.eq(user),
-            ))
+            .values((id.eq(strava_id), tendabike_id.eq(tbid), user_id.eq(user)))
             .execute(self)
             .await
             .context("couldn't store gear")?;
         Ok(())
     }
 
-    async fn delete_strava_event(&mut self, event_id: Option<i32>) -> Result<(), anyhow::Error> {
+    async fn strava_event_delete(&mut self, event_id: Option<i32>) -> Result<(), anyhow::Error> {
         use schema::strava_events::dsl::*;
         diesel::delete(strava_events)
             .filter(id.eq(event_id))
@@ -147,7 +140,7 @@ impl crate::StravaStore for AppConn {
         Ok(())
     }
 
-    async fn set_event_time(
+    async fn strava_event_set_time(
         &mut self,
         e_id: Option<i32>,
         e_time: i64,
@@ -161,9 +154,9 @@ impl crate::StravaStore for AppConn {
         Ok(())
     }
 
-    async fn get_next_event_for_stravauser(
+    async fn strava_event_get_next_for_user(
         &mut self,
-        user: &crate::StravaUser,
+        user: &tb_strava::StravaUser,
     ) -> AnyResult<Option<Event>> {
         use schema::strava_events::dsl::*;
         strava_events
@@ -174,7 +167,7 @@ impl crate::StravaStore for AppConn {
             .context("failed to get next event")
     }
 
-    async fn get_all_later_events_for_object(
+    async fn strava_event_get_later(
         &mut self,
         obj_id: i64,
         oid: StravaId,
@@ -189,7 +182,7 @@ impl crate::StravaStore for AppConn {
             .context("failed to read list of events")
     }
 
-    async fn delete_events_by_vec_id(&mut self, values: Vec<Option<i32>>) -> AnyResult<()> {
+    async fn strava_events_delete_batch(&mut self, values: Vec<Option<i32>>) -> AnyResult<()> {
         use schema::strava_events::dsl::*;
 
         diesel::delete(strava_events)
@@ -199,14 +192,14 @@ impl crate::StravaStore for AppConn {
         Ok(())
     }
 
-    async fn get_all_stravausers(&mut self) -> AnyResult<Vec<StravaUser>> {
+    async fn stravausers_get_all(&mut self) -> AnyResult<Vec<StravaUser>> {
         schema::strava_users::table
             .get_results::<StravaUser>(self)
             .await
             .context("get_stats: could not read users".to_string())
     }
 
-    async fn read_stravauser_for_userid(
+    async fn stravauser_get_by_tbid(
         &mut self,
         id: UserId,
     ) -> Result<StravaUser, anyhow::Error> {
@@ -217,7 +210,7 @@ impl crate::StravaStore for AppConn {
             .context(format!("User::get: user {} not registered", id))
     }
 
-    async fn read_stravauser_for_stravaid(
+    async fn stravauser_get_by_stravaid(
         &mut self,
         id: StravaId,
     ) -> Result<Vec<StravaUser>, anyhow::Error> {
@@ -228,7 +221,7 @@ impl crate::StravaStore for AppConn {
             .context("failed to read stravauser")
     }
 
-    async fn insert_stravauser(&mut self, user: StravaUser) -> Result<StravaUser, anyhow::Error> {
+    async fn stravauser_new(&mut self, user: StravaUser) -> Result<StravaUser, anyhow::Error> {
         diesel::insert_into(schema::strava_users::table)
             .values(&user)
             .get_result(self)
@@ -274,7 +267,7 @@ impl crate::StravaStore for AppConn {
     /// # Errors
     ///
     /// This function will return an error if the database connection fails.
-    async fn get_count_of_events_for_user(&mut self, user: &StravaUser) -> AnyResult<i64> {
+    async fn strava_events_get_count_for_user(&mut self, user: &StravaUser) -> AnyResult<i64> {
         use schema::strava_events::dsl::*;
 
         strava_events
@@ -286,7 +279,7 @@ impl crate::StravaStore for AppConn {
     }
 
     /// Disable the user data in the database by erasing the access token
-    async fn disable_stravauser(&mut self, user: &StravaId) -> AnyResult<()> {
+    async fn stravauser_disable(&mut self, user: &StravaId) -> AnyResult<()> {
         use schema::strava_users::dsl::*;
         diesel::update(strava_users.find(user))
             .set((expires_at.eq(0), access_token.eq("")))

@@ -1,8 +1,9 @@
-#[macro_use]
-extern crate diesel;
 
-pub mod schema;
+pub use domain::schema;
 mod appconn;
 
 pub use appconn::*;
+
+mod store;
+mod stravastore;
 

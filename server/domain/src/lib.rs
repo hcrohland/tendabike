@@ -23,7 +23,6 @@ mod activity;
 mod attachment;
 mod error;
 mod part;
-mod presentation;
 mod types;
 mod user;
 
@@ -38,14 +37,12 @@ pub use attachment::{Attachment, AttachmentDetail, Event};
 use error::*;
 pub use error::{AnyResult, Error};
 pub use part::{ChangePart, NewPart, Part, PartId};
-pub use presentation::Person;
 pub use types::*;
 pub use user::*;
 
 use diesel::prelude::*;
 
-use s_diesel::schema;
-use s_diesel::AppConn;
+pub mod schema;
 
 mod usage;
 pub use usage::*;
@@ -53,6 +50,5 @@ pub use usage::*;
 mod summary;
 pub use summary::*;
 
-pub mod traits;
-
-mod store;
+mod traits;
+pub use traits::*;

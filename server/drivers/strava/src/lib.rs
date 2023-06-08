@@ -16,7 +16,7 @@
 
 use diesel::Identifiable;
 use diesel::{Insertable, Queryable};
-use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection};
+use diesel_async::scoped_futures::ScopedFutureExt;
 
 use async_session::log::{debug, info, trace, warn};
 use serde_derive::{Deserialize, Serialize};
@@ -24,7 +24,6 @@ use serde_derive::{Deserialize, Serialize};
 use anyhow::{bail, ensure, Context, Result as AnyResult};
 use domain::*;
 
-use s_diesel::AppConn;
 mod traits;
 pub use traits::StravaStore;
 
@@ -32,10 +31,10 @@ pub mod activity;
 pub mod event;
 pub mod gear;
 
-mod stravastore;
-
 mod user;
 pub use user::*;
+
+pub mod schema;
 
 fn get_time() -> i64 {
     time::OffsetDateTime::now_utc().unix_timestamp()

@@ -2,13 +2,14 @@ use anyhow::Context;
 use async_session::log::debug;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
-use s_diesel::{schema, AppConn};
+use domain::schema;
+use crate::AppConn;
 use time::OffsetDateTime;
 
-use crate::{ActTypeId, Activity, ActivityId, AnyResult, NewActivity, PartId, Person, UserId};
+use domain::{ActTypeId, Activity, ActivityId, AnyResult, NewActivity, PartId, Person, UserId};
 
 #[async_session::async_trait]
-impl crate::traits::ActivityStore for AppConn {
+impl domain::ActivityStore for AppConn {
     async fn activity_create(&mut self, act: &NewActivity) -> AnyResult<Activity> {
         diesel::insert_into(schema::activities::table)
             .values(act)

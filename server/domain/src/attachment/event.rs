@@ -1,13 +1,11 @@
 use anyhow::ensure;
-use async_session::log::{debug, info, trace};
-use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection};
-use s_diesel::AppConn;
+use async_session::log::{debug, trace};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use serde_derive::Deserialize;
 use time::OffsetDateTime;
 
 use crate::{
-    traits::{AttachmentStore, Store}, AnyResult, Attachment, Error, PartId, PartTypeId, Person, SumHash,
-    Summary,
+    traits::Store, AnyResult, Attachment, Error, PartId, PartTypeId, Person, SumHash, Summary,
 };
 
 const MAX_TIME: OffsetDateTime = time::macros::datetime!(9100-01-01 0:00 UTC);
@@ -43,8 +41,8 @@ impl Event {
     ///
     /// Check's authorization and taht the part is attached
     ///
-    pub async fn detach(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Summary> {
-        info!("detach {:?}", self);
+    pub async fn detach(self, user: &dyn Person, conn: &mut impl Store) -> AnyResult<Summary> {
+        debug!("detach {:?}", self);
         // check user
         self.part_id.checkuser(user, conn).await?;
         conn.transaction(|conn| {
@@ -73,7 +71,11 @@ impl Event {
     ///
     /// When the 'self.partid' has child parts they are attached to that part
     ///
-    async fn detach_assembly(self, target: Attachment, conn: &mut impl Store) -> AnyResult<Summary> {
+    async fn detach_assembly(
+        self,
+        target: Attachment,
+        conn: &mut impl Store,
+    ) -> AnyResult<Summary> {
         debug!("- detaching {}", target.part_id);
         let subs = self.assembly(target.gear, conn).await?;
         let mut hash = SumHash::new(target.detach(self.time, conn).await?);
@@ -89,8 +91,8 @@ impl Event {
     ///
     /// When the detached part has child parts they are attached to that part
     ///
-    pub async fn attach(self, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Summary> {
-        info!("attach {:?}", self);
+    pub async fn attach(self, user: &dyn Person, conn: &mut impl Store) -> AnyResult<Summary> {
+        debug!("attach {:?}", self);
         // check user
         let part = self.part_id.part(user, conn).await?;
         // and types
@@ -119,7 +121,7 @@ impl Event {
                     .attachment_get_by_part_and_time(self.part_id, self.time)
                     .await?
                 {
-                    info!("detaching self assembly");
+                    debug!("detaching self assembly");
                     hash.merge(self.detach_assembly(target, conn).await?);
                 }
 
@@ -131,14 +133,13 @@ impl Event {
                     )
                     .await?;
                 if let Some(att) = attachment {
-                    info!("detaching target assembly {}", att.part_id);
+                    debug!("detaching target assembly {}", att.part_id);
                     hash.merge(self.detach_assembly(att, conn).await?);
                 }
 
                 let subs = self.assembly(self.part_id, conn).await?;
                 // reattach the assembly
-                info!("attaching assembly");
-                debug!("- attaching {}", self.part_id);
+                debug!("- attaching assembly {} to {}", self.part_id, self.gear);
                 let (sum, det) = self.attach_one(conn).await?;
                 hash.merge(sum);
                 for att in subs {

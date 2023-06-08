@@ -22,7 +22,7 @@ NewtypeFrom! { () pub struct StravaId(i32); }
 
 /// Strava User data
 #[derive(Clone, Serialize, Deserialize, Queryable, Insertable, Identifiable, Debug, Default)]
-#[diesel(table_name = s_diesel::schema::strava_users)]
+#[diesel(table_name = crate::schema::strava_users)]
 pub struct StravaUser {
     /// the Strava user id
     pub id: StravaId,
@@ -50,7 +50,7 @@ impl StravaUser {
     ///
     /// Returns an `Error` if the user is not registered.
     pub async fn read(id: UserId, conn: &mut impl StravaStore) -> AnyResult<Self> {
-        conn.read_stravauser_for_userid(id).await
+        conn.stravauser_get_by_tbid(id).await
     }
 
     /// read the current user data for id
@@ -173,7 +173,7 @@ impl StravaUser {
         event::insert_sync(id, crate::get_time(), conn)
             .await
             .context(format!("Could insert sync for user: {:?}", id))?;
-        conn.disable_stravauser(&self.id).await
+        conn.stravauser_disable(&self.id).await
     }
 
     /// disable a user per admin request
@@ -183,7 +183,7 @@ impl StravaUser {
     /// This function will return an error if the user does not exist, is already disabled
     /// or has open events and if strava or the database is not reachable.
     pub async fn admin_disable(self, conn: &mut impl StravaStore) -> AnyResult<()> {
-        let events = conn.get_count_of_events_for_user(&self).await?;
+        let events = conn.strava_events_get_count_for_user(&self).await?;
 
         if self.disabled() {
             bail!(Error::BadRequest(String::from("user already disabled!")))
@@ -206,7 +206,7 @@ impl StravaUser {
     }
 
     /// get all parts, attachments and activities for the user
-    pub async fn get_summary(&self, conn: &mut AppConn) -> AnyResult<Summary> {
+    pub async fn get_summary(&self, conn: &mut impl StravaStore) -> AnyResult<Summary> {
         use crate::*;
         gear::update_user(self, conn).await?;
         let parts = Part::get_all(self, conn).await?;
@@ -231,11 +231,11 @@ impl StravaUser {
         id: StravaId,
         firstname: &str,
         lastname: &str,
-        conn: &mut AppConn,
+        conn: &mut impl StravaStore,
     ) -> AnyResult<StravaUser> {
         debug!("got id {}: {} {}", id, &firstname, &lastname);
 
-        let user = conn.read_stravauser_for_stravaid(id).await?.pop();
+        let user = conn.stravauser_get_by_stravaid(id).await?.pop();
         if let Some(user) = user {
             user.tendabike_id.update(firstname, lastname, conn).await?;
             return Ok(user);
@@ -251,7 +251,7 @@ impl StravaUser {
         };
         info!("creating new user id {:?}", user);
 
-        let user = conn.insert_stravauser(user).await?;
+        let user = conn.stravauser_new(user).await?;
         event::insert_sync(user.id, 0, conn).await?;
         Ok(user)
     }
@@ -274,13 +274,13 @@ pub struct StravaStat {
     disabled: bool,
 }
 
-pub async fn get_all_stats(conn: &mut AppConn) -> AnyResult<Vec<StravaStat>> {
-    let users = conn.get_all_stravausers().await?;
+pub async fn get_all_stats(conn: &mut impl StravaStore) -> AnyResult<Vec<StravaStat>> {
+    let users = conn.stravausers_get_all().await?;
 
     let mut res = Vec::new();
     for u in users {
         let stat = u.tendabike_id.get_stat(conn).await?;
-        let events = conn.get_count_of_events_for_user(&u).await?;
+        let events = conn.strava_events_get_count_for_user(&u).await?;
         res.push(StravaStat {
             stat,
             events,
@@ -293,8 +293,8 @@ pub async fn get_all_stats(conn: &mut AppConn) -> AnyResult<Vec<StravaStat>> {
 pub async fn sync_users(user_id: Option<UserId>, time: i64, conn: &mut impl StravaStore) -> AnyResult<()> {
     info!("syncing users {:?} at {}", user_id, time);
     let users = match user_id {
-        Some(id) => vec![conn.read_stravauser_for_userid(id).await?],
-        None => conn.get_all_stravausers().await?,
+        Some(id) => vec![conn.stravauser_get_by_tbid(id).await?],
+        None => conn.stravausers_get_all().await?,
     };
     for user in users {
         if user.disabled() {
@@ -317,6 +317,6 @@ pub async fn sync_users(user_id: Option<UserId>, time: i64, conn: &mut impl Stra
 ///
 /// An `AnyResult` containing a `String` representing the Strava URL for the user.
 pub async fn strava_url(strava_id: i32, conn: &mut impl StravaStore) -> AnyResult<String> {
-    let user_id = conn.get_user_id_from_strava_id(strava_id).await?;
+    let user_id = conn.stravaid_get_user_id(strava_id).await?;
     Ok(format!("https://strava.com/athletes/{}", &user_id))
 }

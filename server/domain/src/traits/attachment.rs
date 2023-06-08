@@ -2,20 +2,26 @@ use time::OffsetDateTime;
 
 use crate::{AnyResult, Attachment, PartId, PartTypeId, Usage};
 
+/// This trait defines methods for storing and retrieving attachments.
 #[async_trait::async_trait]
 pub trait AttachmentStore {
+    /// Create a new attachment.
     async fn attachment_create(&mut self, att: Attachment) -> AnyResult<Attachment>;
 
+    /// Delete an attachment.
     async fn attachment_delete(&mut self, att: Attachment) -> AnyResult<Attachment>;
 
+    /// Reset all attachments.
     async fn attachment_reset_all(&mut self) -> AnyResult<usize>;
 
+    /// Get all attachments for a given gear and time.
     async fn attachment_get_by_gear_and_time(
         &mut self,
         act_gear: PartId,
         start: OffsetDateTime,
     ) -> AnyResult<Vec<Attachment>>;
 
+    /// Add usage to all attachments for a given gear and time.
     async fn attachments_add_usage_by_gear_and_time(
         &mut self,
         act_gear: PartId,
@@ -23,15 +29,18 @@ pub trait AttachmentStore {
         usage: &Usage,
     ) -> AnyResult<Vec<Attachment>>;
 
+    /// Get all attachments for a list of part IDs.
     async fn attachments_all_by_partlist(&mut self, ids: Vec<PartId>)
         -> AnyResult<Vec<Attachment>>;
 
+    /// Get an attachment for a given part and time.
     async fn attachment_get_by_part_and_time(
         &mut self,
         pid: PartId,
         tim: OffsetDateTime,
     ) -> AnyResult<Option<Attachment>>;
 
+    /// Get all attachments for a given set of part types, gear, and time.
     async fn assembly_get_by_types_time_and_gear(
         &mut self,
         types: Vec<crate::PartType>,
@@ -39,6 +48,7 @@ pub trait AttachmentStore {
         tim: OffsetDateTime,
     ) -> AnyResult<Vec<Attachment>>;
 
+    /// Find an attachment for a given part type, gear, hook, and time.
     async fn attachment_find_part_of_type_at_hook_and_time(
         &mut self,
         what: PartTypeId,
@@ -47,7 +57,7 @@ pub trait AttachmentStore {
         t: OffsetDateTime,
     ) -> AnyResult<Option<Attachment>>;
 
-    /// Return Attachment if some other part is attached to same hook after the Event
+    /// Find the attachment that succeeds a given part.
     async fn attachment_find_successor(
         &mut self,
         part_id: PartId,
@@ -57,19 +67,19 @@ pub trait AttachmentStore {
         what: PartTypeId,
     ) -> AnyResult<Option<Attachment>>;
 
-    /// Return Attachment if self.part_id is attached somewhere after the event
+    /// Find the attachment that is attached to a given part after a given time.
     async fn attachment_find_later_attachment_for_part(
         &mut self,
-        part_id_: PartId,
-        time_: OffsetDateTime,
+        part_id: PartId,
+        time: OffsetDateTime,
     ) -> AnyResult<Option<Attachment>>;
 
-    /// Iff self.part_id already attached just before self.time return that attachment
+    /// Find the attachment that is already attached to a given part just before a given time.
     async fn attachment_find_part_attached_already(
         &mut self,
-        part_id_: PartId,
-        gear_: PartId,
-        hook_: PartTypeId,
-        time_: OffsetDateTime,
+        part_id: PartId,
+        gear: PartId,
+        hook: PartTypeId,
+        time: OffsetDateTime,
     ) -> AnyResult<Option<Attachment>>;
 }
