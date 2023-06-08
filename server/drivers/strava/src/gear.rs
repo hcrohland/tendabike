@@ -83,7 +83,7 @@ pub(crate) async fn strava_to_tb(
 
             let tbid = part.create(user, c).await?.id;
 
-            c.create_new_gear(strava_id, tbid, user.get_id()).await?;
+            c.strava_gear_new(strava_id, tbid, user.get_id()).await?;
             Ok(tbid)
         }
         .scope_boxed()

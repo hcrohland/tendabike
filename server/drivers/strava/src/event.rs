@@ -43,7 +43,7 @@ impl InEvent {
         );
 
         ensure!(
-            conn.read_stravauser_for_stravaid(self.owner_id.into())
+            conn.stravauser_get_by_stravaid(self.owner_id.into())
                 .await?
                 .len() == 1,
             Error::BadRequest(format!("Unknown event owner received: {:?}", self))
@@ -63,7 +63,7 @@ impl InEvent {
     
     pub async fn accept(self, conn: &mut impl StravaStore) -> AnyResult<()> {
         let event = self.to_event(conn).await?;
-        conn.store_stravaevent(event).await?;
+        conn.stravaevent_store(event).await?;
         Ok(())
     }
 }
@@ -103,12 +103,12 @@ impl std::fmt::Display for Event {
 impl Event {
     async fn delete(&self, conn: &mut impl StravaStore) -> anyhow::Result<()> {
         debug!("Deleting {}", self);
-        conn.delete_strava_event(self.id).await
+        conn.strava_event_delete(self.id).await
     }
 
     async fn setdate(&mut self, time: i64, conn: &mut impl StravaStore) -> anyhow::Result<()> {
         self.event_time = time;
-        conn.set_event_time(self.id, self.event_time).await
+        conn.strava_event_set_time(self.id, self.event_time).await
     }
 
     #[async_recursion]
@@ -247,7 +247,7 @@ pub async fn insert_sync(
         object_type: "sync".to_string(),
         ..Default::default()
     };
-    conn.store_stravaevent(event)
+    conn.stravaevent_store(event)
     .await
 }
 
@@ -257,11 +257,11 @@ pub async fn insert_stop(conn: &mut impl StravaStore) -> anyhow::Result<()> {
         object_id: get_time() + 900,
         ..Default::default()
     };
-    conn.store_stravaevent(e).await
+    conn.stravaevent_store(e).await
 }
 
 async fn get_event(user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Result<Option<Event>> {
-    let event = conn.get_next_event_for_stravauser(user).await?;
+    let event = conn.strava_event_get_next_for_user(user).await?;
     let event = match event {
         Some(event) => event,
         None => return Ok(None),
@@ -272,14 +272,14 @@ async fn get_event(user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Re
 
     // Prevent unneeded calls to Strava
     // only the latest event for an object is interesting
-    let  mut list = conn.get_all_later_events_for_object(event.object_id, event.owner_id).await?;
+    let  mut list = conn.strava_event_get_later(event.object_id, event.owner_id).await?;
     let res = list.pop();
 
 
     if !list.is_empty() {
         debug!("Dropping {:#?}", list);
         let values = list.into_iter().map(|l| l.id).collect::<Vec<_>>();
-        conn.delete_events_by_vec_id(values).await?;
+        conn.strava_events_delete_batch(values).await?;
     }
 
     Ok(res)

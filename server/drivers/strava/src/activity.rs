@@ -150,7 +150,7 @@ impl StravaActivity {
         let tb = self.into_tb(user, conn).await?;
         conn.transaction(|conn| {
             async {
-                let tb_id = conn.get_tbid_for_strava_activity(strava_id).await?;
+                let tb_id = conn.strava_activity_get_tbid(strava_id).await?;
 
                 let res;
                 if let Some(tb_id) = tb_id {
@@ -158,7 +158,7 @@ impl StravaActivity {
                 } else {
                     res = Activity::create(&tb, user, conn).await?;
                     let new_id = res.first_act();
-                    conn.insert_new_activity(strava_id, tb.user_id, new_id).await?;
+                    conn.strava_activity_new(strava_id, tb.user_id, new_id).await?;
                 }
 
                 user.update_last(tb.start.unix_timestamp(), conn).await
@@ -173,7 +173,7 @@ impl StravaActivity {
 }
 
 pub async fn strava_url(act: i32, conn: &mut impl StravaStore) -> AnyResult<String> {
-    let g = conn.get_stravaid_for_tb_activity(act).await?;
+    let g = conn.strava_activitid_get_by_tbid(act).await?;
 
     Ok(format!("https://strava.com/activities/{}", &g))
 }
@@ -198,14 +198,14 @@ pub(crate) async fn delete_activity(
     conn: &mut impl StravaStore,
 ) -> AnyResult<Summary> {
 
-    let tid = conn.get_activityid_from_strava_activity(act_id).await?;
+    let tid = conn.strava_activity_get_activityid(act_id).await?;
     let mut res = Summary::default();
     if let Some(tid) = tid {
         // first delete the tendabike activity
         res = tid.delete(user, conn).await?;
         // now delete the reference to the strava activity 
         // if this fails we end up with an orphaned entry in the strava_activities table, which should not be a problem in practice
-        conn.delete_strava_activity(act_id).await?;
+        conn.strava_activity_delete(act_id).await?;
     } 
     Ok(res)
 }

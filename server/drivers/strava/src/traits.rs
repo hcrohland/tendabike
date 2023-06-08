@@ -7,82 +7,82 @@ use crate::{event::Event, StravaId, StravaUser};
 
 #[async_trait]
 pub trait StravaStore: domain::traits::Store + Send {
-    async fn get_user_id_from_strava_id(&mut self, who: i32) -> AnyResult<i32>;
+    async fn stravaid_get_user_id(&mut self, who: i32) -> AnyResult<i32>;
 
     async fn strava_gear_get_tbid(&mut self, strava_id: &str) -> AnyResult<Option<PartId>>;
 
     async fn strava_gearid_get_name(&mut self, gear: i32) -> AnyResult<String>;
 
-    async fn get_tbid_for_strava_activity(
+    async fn strava_activity_get_tbid(
         &mut self,
         strava_id: i64,
     ) -> AnyResult<Option<ActivityId>>;
 
-    async fn insert_new_activity(
+    async fn strava_activity_new(
         &mut self,
         strava_id: i64,
         uid: UserId,
         new_id: ActivityId,
     ) -> AnyResult<()>;
 
-    async fn get_stravaid_for_tb_activity(&mut self, act: i32) -> Result<i64, anyhow::Error>;
+    async fn strava_activitid_get_by_tbid(&mut self, act: i32) -> Result<i64, anyhow::Error>;
 
-    async fn delete_strava_activity(&mut self, act_id: i64) -> AnyResult<usize>;
+    async fn strava_activity_delete(&mut self, act_id: i64) -> AnyResult<usize>;
 
-    async fn get_activityid_from_strava_activity(
+    async fn strava_activity_get_activityid(
         &mut self,
         act_id: i64,
     ) -> AnyResult<Option<ActivityId>>;
 
-    async fn create_new_gear(
+    async fn strava_gear_new(
         &mut self,
         strava_id: String,
         tbid: PartId,
         user: UserId,
     )-> AnyResult<()>;
 
-    async fn delete_strava_event(
+    async fn strava_event_delete(
         &mut self,
         event_id: Option<i32>,
     ) -> AnyResult<()>;
 
-    async fn set_event_time(
+    async fn strava_event_set_time(
         &mut self,
         e_id: Option<i32>,
         e_time: i64,
     ) -> AnyResult<()>;
 
-    async fn store_stravaevent(&mut self, e: Event) -> AnyResult<()>;
+    async fn stravaevent_store(&mut self, e: Event) -> AnyResult<()>;
 
-    async fn get_next_event_for_stravauser(
+    async fn strava_event_get_next_for_user(
         &mut self,
         user: &crate::StravaUser,
     ) -> AnyResult<Option<Event>>;
 
-    async fn get_all_later_events_for_object(
+    async fn strava_event_get_later(
         &mut self,
         obj_id: i64,
         oid: StravaId,
     ) -> AnyResult<Vec<Event>>;
 
-    async fn delete_events_by_vec_id(
+    async fn strava_events_delete_batch(
         &mut self,
         values: Vec<Option<i32>>,
     ) -> AnyResult<()>;
 
-    async fn get_all_stravausers(&mut self) -> AnyResult<Vec<StravaUser>>;
+    async fn stravausers_get_all(&mut self) -> AnyResult<Vec<StravaUser>>;
 
-    async fn read_stravauser_for_userid(
+    async fn stravauser_get_by_tbid(
         &mut self,
         id: UserId,
     ) -> AnyResult<StravaUser>;
 
-    async fn read_stravauser_for_stravaid(
+    async fn stravauser_get_by_stravaid(
         &mut self,
         id: StravaId,
     ) -> AnyResult<Vec<StravaUser>>;
 
-    async fn insert_stravauser(
+    async fn stravauser_new(
         &mut self,
         user: StravaUser,
     ) -> AnyResult<StravaUser>;
@@ -101,9 +101,9 @@ pub trait StravaStore: domain::traits::Store + Send {
         refresh: Option<&str>,
     ) -> AnyResult<StravaUser>;
 
-    async fn get_count_of_events_for_user(&mut self, user: &StravaUser) -> AnyResult<i64>;
+    async fn strava_events_get_count_for_user(&mut self, user: &StravaUser) -> AnyResult<i64>;
 
-    async fn disable_stravauser(&mut self, user: &StravaId) -> AnyResult<()>;
+    async fn stravauser_disable(&mut self, user: &StravaId) -> AnyResult<()>;
 
     async fn stravaid_lock(&mut self, user_id: &StravaId) -> AnyResult<bool>;
     async fn stravaid_unlock(&mut self, id: StravaId) -> AnyResult<usize>;
