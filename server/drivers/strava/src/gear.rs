@@ -43,7 +43,11 @@ impl StravaGear {
         }
     }
 
-    async fn request(id: &str, user: &StravaUser, conn: &mut impl StravaStore) -> AnyResult<StravaGear> {
+    async fn request(
+        id: &str,
+        user: &StravaUser,
+        conn: &mut impl StravaStore,
+    ) -> AnyResult<StravaGear> {
         let r = user.request(&format!("/gear/{}", id), conn).await?;
         let res: StravaGear = serde_json::from_str(&r)
             .context(format!("Did not receive StravaGear format: {:?}", r))?;
@@ -58,7 +62,7 @@ impl StravaGear {
 pub(crate) async fn strava_to_tb(
     strava_id: String,
     user: &StravaUser,
-    conn: &mut impl StravaStore,
+    conn: &mut AppConn,
 ) -> AnyResult<PartId> {
     if let Some(gear) = conn.strava_gear_get_tbid(&strava_id).await? {
         return Ok(gear);
@@ -70,11 +74,28 @@ pub(crate) async fn strava_to_tb(
         .context("Couldn't map gear")?
         .into_tb(user)?;
 
-    conn.create_new_gear(strava_id, part, user).await
+    conn.transaction(|c| {
+        async {
+            // maybe the gear was created by now?
+            if let Some(gear) = c.strava_gear_get_tbid(&strava_id).await? {
+                return Ok(gear);
+            }
+
+            let tbid = part.create(user, c).await?.id;
+
+            c.create_new_gear(strava_id, tbid, user.get_id()).await?;
+            Ok(tbid)
+        }
+        .scope_boxed()
+    })
+    .await
 }
 
 /// Get list of gear for user from Strava
-pub(crate) async fn update_user(user: &StravaUser, conn: &mut impl StravaStore) -> AnyResult<Vec<PartId>> {
+pub(crate) async fn update_user(
+    user: &StravaUser,
+    conn: &mut AppConn,
+) -> AnyResult<Vec<PartId>> {
     #[derive(Deserialize, Debug)]
     struct Gear {
         id: String,
