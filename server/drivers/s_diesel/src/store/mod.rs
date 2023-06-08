@@ -1,6 +1,6 @@
 use crate::AppConn;
 
-use domain::traits::Store;
+use domain::Store;
 
 mod types;
 mod part;

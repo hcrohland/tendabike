@@ -10,7 +10,7 @@ use time::OffsetDateTime;
 use domain::{AnyResult, Attachment, PartId, PartTypeId, Usage};
 
 #[async_session::async_trait]
-impl domain::traits::AttachmentStore for AppConn {
+impl domain::AttachmentStore for AppConn {
     async fn attachment_create(&mut self, att: Attachment) -> AnyResult<Attachment> {
         att.insert_into(schema::attachments::table)
             .get_result::<Attachment>(self)

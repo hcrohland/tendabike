@@ -12,7 +12,7 @@ use domain::PartType;
 use domain::PartTypeId;
 
 #[async_session::async_trait]
-impl domain::traits::TypesStore for AppConn {
+impl domain::TypesStore for AppConn {
     async fn get_all_parttypes_ordered(&mut self) -> Vec<PartType> {
         use schema::part_types;
         part_types::table

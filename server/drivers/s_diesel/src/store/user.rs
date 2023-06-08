@@ -1,4 +1,3 @@
-use domain::traits::UserStore;
 use domain::AnyResult;
 use crate::AppConn;
 use domain::User;
@@ -10,7 +9,7 @@ use diesel_async::RunQueryDsl;
 use domain::schema;
 
 #[async_session::async_trait]
-impl UserStore for AppConn {
+impl domain::UserStore for AppConn {
     async fn user_read_by_id(&mut self, uid: UserId) -> AnyResult<User> {
         schema::users::table
             .find(uid)

@@ -17,7 +17,7 @@ use time::OffsetDateTime;
 use domain::PartTypeId;
 
 #[async_session::async_trait]
-impl domain::traits::PartStore for AppConn {
+impl domain::PartStore for AppConn {
     async fn partid_get_part(&mut self, pid: PartId) -> AnyResult<Part> {
         use schema::parts;
         let part = parts::table

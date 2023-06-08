@@ -23,7 +23,6 @@ mod activity;
 mod attachment;
 mod error;
 mod part;
-mod presentation;
 mod types;
 mod user;
 
@@ -38,7 +37,6 @@ pub use attachment::{Attachment, AttachmentDetail, Event};
 use error::*;
 pub use error::{AnyResult, Error};
 pub use part::{ChangePart, NewPart, Part, PartId};
-pub use presentation::Person;
 pub use types::*;
 pub use user::*;
 
@@ -52,4 +50,5 @@ pub use usage::*;
 mod summary;
 pub use summary::*;
 
-pub mod traits;
+mod traits;
+pub use traits::*;

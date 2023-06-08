@@ -9,7 +9,7 @@ use time::OffsetDateTime;
 use domain::{ActTypeId, Activity, ActivityId, AnyResult, NewActivity, PartId, Person, UserId};
 
 #[async_session::async_trait]
-impl domain::traits::ActivityStore for AppConn {
+impl domain::ActivityStore for AppConn {
     async fn activity_create(&mut self, act: &NewActivity) -> AnyResult<Activity> {
         diesel::insert_into(schema::activities::table)
             .values(act)
