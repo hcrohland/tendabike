@@ -1,23 +1,23 @@
-use crate::AnyResult;
 use crate::AppConn;
-use crate::Part;
-use crate::PartId;
-use crate::Person;
-use crate::Usage;
-use crate::UserId;
 use anyhow::Context;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::AsyncConnection;
 use diesel_async::RunQueryDsl;
-use s_diesel::schema;
+use domain::schema;
+use domain::AnyResult;
+use domain::Part;
+use domain::PartId;
+use domain::Person;
+use domain::Usage;
+use domain::UserId;
 use time::OffsetDateTime;
 
-use crate::PartTypeId;
+use domain::PartTypeId;
 
 #[async_session::async_trait]
-impl crate::traits::PartStore for AppConn {
+impl domain::traits::PartStore for AppConn {
     async fn partid_get_part(&mut self, pid: PartId) -> AnyResult<Part> {
         use schema::parts;
         let part = parts::table
@@ -117,7 +117,7 @@ impl crate::traits::PartStore for AppConn {
 
     async fn create_part(
         &mut self,
-        newpart: crate::NewPart,
+        newpart: domain::NewPart,
         createtime: OffsetDateTime,
     ) -> AnyResult<Part> {
         use schema::parts::dsl::*;
@@ -143,7 +143,7 @@ impl crate::traits::PartStore for AppConn {
             .context("error creating part")
     }
 
-    async fn part_change(&mut self, part: crate::ChangePart) -> AnyResult<Part> {
+    async fn part_change(&mut self, part: domain::ChangePart) -> AnyResult<Part> {
         use schema::parts::dsl::*;
         diesel::update(parts.filter(id.eq(part.id)))
             .set(part)

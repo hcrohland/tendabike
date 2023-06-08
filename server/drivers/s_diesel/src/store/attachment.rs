@@ -1,15 +1,16 @@
+use crate::AppConn;
 use anyhow::Context;
 use async_session::log::debug;
 use diesel::prelude::*;
 use diesel::{BoolExpressionMethods, ExpressionMethods, Identifiable, Insertable, QueryDsl};
 use diesel_async::RunQueryDsl;
-use s_diesel::{schema, AppConn};
+use domain::schema;
 use time::OffsetDateTime;
 
-use crate::{AnyResult, Attachment, PartId, PartTypeId, Usage};
+use domain::{AnyResult, Attachment, PartId, PartTypeId, Usage};
 
 #[async_session::async_trait]
-impl crate::traits::AttachmentStore for AppConn {
+impl domain::traits::AttachmentStore for AppConn {
     async fn attachment_create(&mut self, att: Attachment) -> AnyResult<Attachment> {
         att.insert_into(schema::attachments::table)
             .get_result::<Attachment>(self)
@@ -106,7 +107,7 @@ impl crate::traits::AttachmentStore for AppConn {
 
     async fn assembly_get_by_types_time_and_gear(
         &mut self,
-        types: Vec<crate::PartType>,
+        types: Vec<domain::PartType>,
         target: PartId,
         tim: OffsetDateTime,
     ) -> AnyResult<Vec<Attachment>> {

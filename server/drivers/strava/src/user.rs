@@ -22,7 +22,7 @@ NewtypeFrom! { () pub struct StravaId(i32); }
 
 /// Strava User data
 #[derive(Clone, Serialize, Deserialize, Queryable, Insertable, Identifiable, Debug, Default)]
-#[diesel(table_name = s_diesel::schema::strava_users)]
+#[diesel(table_name = crate::schema::strava_users)]
 pub struct StravaUser {
     /// the Strava user id
     pub id: StravaId,

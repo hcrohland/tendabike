@@ -7,7 +7,7 @@ default-run = "tendabike"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dotenv = "0.15.0"
+dotenvy = "0.15"
 anyhow = "1"
 tokio = { version = "1", features = ["full"] }
 domain = { path = "../domain"}

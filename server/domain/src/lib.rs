@@ -44,8 +44,7 @@ pub use user::*;
 
 use diesel::prelude::*;
 
-use s_diesel::schema;
-use s_diesel::AppConn;
+pub mod schema;
 
 mod usage;
 pub use usage::*;
@@ -54,5 +53,3 @@ mod summary;
 pub use summary::*;
 
 pub mod traits;
-
-mod store;

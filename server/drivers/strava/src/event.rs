@@ -68,7 +68,7 @@ impl InEvent {
     }
 }
 #[derive(Debug, Default, Serialize, Deserialize, Queryable, Insertable)]
-#[diesel(table_name = s_diesel::schema::strava_events)]
+#[diesel(table_name = crate::schema::strava_events)]
 pub struct Event {
     id: Option<i32>,
     pub object_type: String,

@@ -1,19 +1,19 @@
-use crate::event::Event;
 use crate::AppConn;
-use crate::StravaId;
-use crate::StravaUser;
 use anyhow::Context;
 use anyhow::Result as AnyResult;
 use diesel::prelude::*;
 use diesel::sql_query;
 use diesel_async::RunQueryDsl;
+use domain::schema;
 use domain::ActivityId;
 use domain::PartId;
 use domain::UserId;
-use s_diesel::schema;
+use tb_strava::event::Event;
+use tb_strava::StravaId;
+use tb_strava::StravaUser;
 
 #[async_session::async_trait]
-impl crate::StravaStore for AppConn {
+impl tb_strava::StravaStore for AppConn {
     async fn get_user_id_from_strava_id(&mut self, who: i32) -> AnyResult<i32> {
         use schema::strava_users::dsl::*;
         let user_id: i32 = strava_users
@@ -127,11 +127,7 @@ impl crate::StravaStore for AppConn {
         use schema::strava_gears::dsl::*;
 
         diesel::insert_into(strava_gears)
-            .values((
-                id.eq(strava_id),
-                tendabike_id.eq(tbid),
-                user_id.eq(user),
-            ))
+            .values((id.eq(strava_id), tendabike_id.eq(tbid), user_id.eq(user)))
             .execute(self)
             .await
             .context("couldn't store gear")?;
@@ -163,7 +159,7 @@ impl crate::StravaStore for AppConn {
 
     async fn get_next_event_for_stravauser(
         &mut self,
-        user: &crate::StravaUser,
+        user: &tb_strava::StravaUser,
     ) -> AnyResult<Option<Event>> {
         use schema::strava_events::dsl::*;
         strava_events

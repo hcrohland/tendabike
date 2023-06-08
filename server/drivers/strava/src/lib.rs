@@ -24,15 +24,12 @@ use serde_derive::{Deserialize, Serialize};
 use anyhow::{bail, ensure, Context, Result as AnyResult};
 use domain::*;
 
-use s_diesel::AppConn;
 mod traits;
 pub use traits::StravaStore;
 
 pub mod activity;
 pub mod event;
 pub mod gear;
-
-mod stravastore;
 
 mod user;
 pub use user::*;

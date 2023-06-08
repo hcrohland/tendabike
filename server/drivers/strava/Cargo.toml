@@ -7,10 +7,9 @@ edition = "2021"
 
 [dependencies]
 domain = {path = "../../domain"}
-s_diesel = {path = "../s_diesel"}
 
 diesel = { version = "2", features = ["time"] }
-diesel-async = { version = "0.3", features = ["postgres", "deadpool" ] }
+diesel-async = { version = "0.3" }
 diesel-derive-newtype = "2"
 
 newtype_derive = "0.1"

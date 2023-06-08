@@ -1,18 +1,18 @@
-use crate::ActTypeId;
-use crate::ActivityType;
-use crate::AnyResult;
+use domain::ActTypeId;
+use domain::ActivityType;
+use domain::AnyResult;
 use crate::AppConn;
 use anyhow::Context;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
-use s_diesel::schema;
+use domain::schema;
 
-use crate::PartType;
-use crate::PartTypeId;
+use domain::PartType;
+use domain::PartTypeId;
 
 #[async_session::async_trait]
-impl crate::traits::TypesStore for AppConn {
+impl domain::traits::TypesStore for AppConn {
     async fn get_all_parttypes_ordered(&mut self) -> Vec<PartType> {
         use schema::part_types;
         part_types::table

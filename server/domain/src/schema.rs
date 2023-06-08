@@ -1,3 +1,4 @@
+use diesel::prelude::*;
 
 table! {
     activities (id) {

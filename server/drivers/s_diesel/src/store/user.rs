@@ -1,19 +1,18 @@
-use crate::traits::UserStore;
-use crate::AnyResult;
+use domain::traits::UserStore;
+use domain::AnyResult;
 use crate::AppConn;
-use crate::User;
-use crate::UserId;
+use domain::User;
+use domain::UserId;
 use anyhow::Context;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
-use s_diesel::schema;
-use schema::users;
+use domain::schema;
 
 #[async_session::async_trait]
 impl UserStore for AppConn {
     async fn user_read_by_id(&mut self, uid: UserId) -> AnyResult<User> {
-        users::table
+        schema::users::table
             .find(uid)
             .get_result(self)
             .await
@@ -21,7 +20,7 @@ impl UserStore for AppConn {
     }
 
     async fn user_create(&mut self, firstname_: &str, lastname: &str) -> AnyResult<User> {
-        use s_diesel::schema::users::dsl::*;
+        use schema::users::dsl::*;
     
         diesel::insert_into(users)
             .values((
@@ -35,7 +34,7 @@ impl UserStore for AppConn {
     }
     
     async fn user_update(&mut self, uid: &UserId, firstname_: &str, lastname: &str) -> Result<User, anyhow::Error> {
-        use s_diesel::schema::users::dsl::*;
+        use schema::users::dsl::*;
         diesel::update(users.filter(id.eq(uid)))
             .set((firstname.eq(firstname_), name.eq(lastname)))
             .get_result(self)
