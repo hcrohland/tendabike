@@ -252,7 +252,7 @@ impl StravaUser {
         info!("creating new user id {:?}", user);
 
         let user = conn.insert_stravauser(user).await?;
-        sync_users(Some(user.tendabike_id), 0, conn).await?;
+        event::insert_sync(user.id, 0, conn).await?;
         Ok(user)
     }
 }
@@ -298,6 +298,7 @@ pub async fn sync_users(user_id: Option<UserId>, time: i64, conn: &mut impl Stra
     };
     for user in users {
         if user.disabled() {
+            warn!("user {} disabled, skipping", user.id);
             continue;
         }
         event::insert_sync(user.id, time, conn).await?;
