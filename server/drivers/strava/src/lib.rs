@@ -34,6 +34,8 @@ pub mod gear;
 mod user;
 pub use user::*;
 
+pub mod schema;
+
 fn get_time() -> i64 {
     time::OffsetDateTime::now_utc().unix_timestamp()
 }

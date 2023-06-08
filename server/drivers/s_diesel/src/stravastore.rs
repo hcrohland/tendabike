@@ -4,7 +4,7 @@ use anyhow::Result as AnyResult;
 use diesel::prelude::*;
 use diesel::sql_query;
 use diesel_async::RunQueryDsl;
-use domain::schema;
+use tb_strava::schema;
 use domain::ActivityId;
 use domain::PartId;
 use domain::UserId;
