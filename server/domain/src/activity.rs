@@ -148,7 +148,7 @@ impl ActivityId {
     /// checks authorization  
     pub async fn delete(self, person: &dyn Person, conn: &mut impl Store) -> AnyResult<Summary> {
         info!("Deleting {:?}", self);
-        conn.storetransaction(|conn| {
+        conn.transaction(|conn| {
             async {
                 let mut res = self
                     .read(person, conn)
@@ -183,7 +183,7 @@ impl ActivityId {
         user: &dyn Person,
         conn: &mut impl Store,
     ) -> AnyResult<Summary> {
-        conn.storetransaction(|conn| {
+        conn.transaction(|conn| {
             async {
                 self.read(user, conn)
                     .await?
@@ -225,7 +225,7 @@ impl Activity {
             ),
         )?;
         info!("Creating {:?}", act);
-        conn.storetransaction(|conn| {
+        conn.transaction(|conn| {
             async {
                 let new = conn.activity_create(act).await?;
                 // let res = new.check_geartype(res, conn)?;
@@ -384,7 +384,7 @@ impl Activity {
                 None => None,
             };
             match conn
-                .storetransaction(|conn| {
+                .transaction(|conn| {
                     match_and_update(conn, user, rstart, rclimb, rdescend).scope_boxed()
                 })
                 .await
@@ -408,13 +408,13 @@ impl Activity {
         user: &dyn Person,
         conn: &mut impl Store,
     ) -> AnyResult<Summary> {
-        conn.storetransaction(|conn| def_part(&gear_id, user, conn).scope_boxed())
+        conn.transaction(|conn| def_part(&gear_id, user, conn).scope_boxed())
             .await
     }
 
     pub async fn rescan_all(conn: &mut impl Store) -> AnyResult<()> {
         warn!("rescanning all activities!");
-        conn.storetransaction(|conn| rescan(conn).scope_boxed()).await?;
+        conn.transaction(|conn| rescan(conn).scope_boxed()).await?;
         warn!("Done rescanning");
         Ok(())
     }

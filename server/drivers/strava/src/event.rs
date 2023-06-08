@@ -303,6 +303,7 @@ async fn next_activities(
     per_page: usize,
     start: Option<i64>,
 ) -> anyhow::Result<Vec<StravaActivity>> {
+    info!("Getting activities for {}", user.id);
     let r = user
         .request(
             &format!(

@@ -26,7 +26,7 @@ pub trait Store:
     + ActivityStore
     + AttachmentStore
 {
-    async fn storetransaction<'a, R, E, F>(&mut self, callback: F) -> Result<R, E>
+    async fn transaction<'a, R, E, F>(&mut self, callback: F) -> Result<R, E>
     where
         F: for<'r> FnOnce(&'r mut Self) -> scoped_futures::ScopedBoxFuture<'a,'r,Result<R,E> >  + Send + 'a,
         E: From<diesel::result::Error> + Send + 'a,

@@ -74,7 +74,7 @@ pub(crate) async fn strava_to_tb(
         .context("Couldn't map gear")?
         .into_tb(user)?;
 
-    conn.storetransaction(|c| {
+    conn.transaction(|c| {
         async {
             // maybe the gear was created by now?
             if let Some(gear) = c.strava_gear_get_tbid(&strava_id).await? {
