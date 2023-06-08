@@ -16,6 +16,6 @@ impl Store for AppConn {
         E: From<diesel::result::Error> + Send + 'a,
         R: Send + 'a,
     {
-        self.transaction(callback).await
+        diesel_async::AsyncConnection::transaction(self, callback).await
     }
 }
