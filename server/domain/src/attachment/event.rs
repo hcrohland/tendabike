@@ -1,6 +1,6 @@
 use anyhow::ensure;
 use async_session::log::{debug, trace};
-use diesel_async::scoped_futures::ScopedFutureExt;
+use scoped_futures::ScopedFutureExt;
 use serde_derive::Deserialize;
 use time::OffsetDateTime;
 

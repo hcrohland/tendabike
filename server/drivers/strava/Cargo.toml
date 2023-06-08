@@ -9,7 +9,7 @@ edition = "2021"
 domain = {path = "../../domain"}
 
 diesel = { version = "2", features = ["time"] }
-diesel-async = { version = "0.3" }
+scoped-futures = "0.1"
 diesel-derive-newtype = "2"
 
 newtype_derive = "0.1"
