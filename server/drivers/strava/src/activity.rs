@@ -148,7 +148,7 @@ impl StravaActivity {
     ) -> AnyResult<Summary> {
         let strava_id = self.id;
         let tb = self.into_tb(user, conn).await?;
-        conn.transaction(|conn| {
+        conn.storetransaction(|conn| {
             async {
                 let tb_id = conn.strava_activity_get_tbid(strava_id).await?;
 

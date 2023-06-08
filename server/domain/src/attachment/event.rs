@@ -45,7 +45,7 @@ impl Event {
         debug!("detach {:?}", self);
         // check user
         self.part_id.checkuser(user, conn).await?;
-        conn.transaction(|conn| {
+        conn.storetransaction(|conn| {
             async move {
                 let target = conn
                     .attachment_get_by_part_and_time(self.part_id, self.time)
@@ -112,7 +112,7 @@ impl Event {
                 mytype.name, gear.what
             ))
         );
-        conn.transaction(|conn| {
+        conn.storetransaction(|conn| {
             async move {
                 let mut hash = SumHash::default();
 
