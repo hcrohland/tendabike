@@ -188,7 +188,6 @@ impl Event {
             } else {
                 for a in acts {
                     start = std::cmp::max(start, a.start_date.unix_timestamp());
-                    trace!("processing sync event at {}", start);
                     let ps = a.send_to_tb(user, conn).await?;
                     self.setdate(start, conn).await?;
                     hash.merge(ps);
