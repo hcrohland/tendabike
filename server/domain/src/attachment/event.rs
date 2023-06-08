@@ -1,5 +1,5 @@
 use anyhow::ensure;
-use async_session::log::{debug, info, trace};
+use async_session::log::{debug, trace};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use serde_derive::Deserialize;
 use time::OffsetDateTime;
@@ -42,7 +42,7 @@ impl Event {
     /// Check's authorization and taht the part is attached
     ///
     pub async fn detach(self, user: &dyn Person, conn: &mut impl Store) -> AnyResult<Summary> {
-        info!("detach {:?}", self);
+        debug!("detach {:?}", self);
         // check user
         self.part_id.checkuser(user, conn).await?;
         conn.transaction(|conn| {
@@ -92,7 +92,7 @@ impl Event {
     /// When the detached part has child parts they are attached to that part
     ///
     pub async fn attach(self, user: &dyn Person, conn: &mut impl Store) -> AnyResult<Summary> {
-        info!("attach {:?}", self);
+        debug!("attach {:?}", self);
         // check user
         let part = self.part_id.part(user, conn).await?;
         // and types
@@ -121,7 +121,7 @@ impl Event {
                     .attachment_get_by_part_and_time(self.part_id, self.time)
                     .await?
                 {
-                    info!("detaching self assembly");
+                    debug!("detaching self assembly");
                     hash.merge(self.detach_assembly(target, conn).await?);
                 }
 
@@ -133,14 +133,13 @@ impl Event {
                     )
                     .await?;
                 if let Some(att) = attachment {
-                    info!("detaching target assembly {}", att.part_id);
+                    debug!("detaching target assembly {}", att.part_id);
                     hash.merge(self.detach_assembly(att, conn).await?);
                 }
 
                 let subs = self.assembly(self.part_id, conn).await?;
                 // reattach the assembly
-                info!("attaching assembly");
-                debug!("- attaching {}", self.part_id);
+                debug!("- attaching assembly {} to {}", self.part_id, self.gear);
                 let (sum, det) = self.attach_one(conn).await?;
                 hash.merge(sum);
                 for att in subs {

@@ -1,6 +1,6 @@
 [package]
 name = "domain"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Christoph Rohland <tendabike@rohland.net>"]
 edition = "2021"
 
@@ -24,5 +24,3 @@ thiserror = "1.0"
 anyhow = "1.0"
 
 async-trait = "0.1"
-
-## Needed for drivers::strava

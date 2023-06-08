@@ -576,7 +576,7 @@ dependencies = [
 
 [[package]]
 name = "domain"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-session",
@@ -1616,7 +1616,7 @@ checksum = "f91339c0467de62360649f8d3e185ca8de4224ff281f66000de5eb2a77a79041"
 
 [[package]]
 name = "s_diesel"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-session",
@@ -1937,7 +1937,7 @@ dependencies = [
 
 [[package]]
 name = "tb_strava"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1958,7 +1958,7 @@ dependencies = [
 
 [[package]]
 name = "tendabike"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "domain",
