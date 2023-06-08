@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 // use domain::{ActivityId, AnyResult, NewPart, PartId, Person, UserId};
-use domain::{AnyResult, PartId, ActivityId, UserId, NewPart, Person};
+use domain::{AnyResult, PartId, ActivityId, UserId};
 
 use crate::{event::Event, StravaId, StravaUser};
 // use crate::{event::Event, StravaId, StravaUser};
@@ -37,9 +37,9 @@ pub trait StravaStore: domain::traits::Store + Send {
     async fn create_new_gear(
         &mut self,
         strava_id: String,
-        part: NewPart,
-        user: &dyn Person,
-    ) -> AnyResult<PartId>;
+        tbid: PartId,
+        user: UserId,
+    )-> AnyResult<()>;
 
     async fn delete_strava_event(
         &mut self,

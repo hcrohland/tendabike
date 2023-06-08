@@ -6,13 +6,9 @@ use anyhow::Context;
 use anyhow::Result as AnyResult;
 use diesel::prelude::*;
 use diesel::sql_query;
-use diesel_async::scoped_futures::ScopedFutureExt;
-use diesel_async::AsyncConnection;
 use diesel_async::RunQueryDsl;
 use domain::ActivityId;
-use domain::NewPart;
 use domain::PartId;
-use domain::Person;
 use domain::UserId;
 use s_diesel::schema;
 
@@ -125,33 +121,21 @@ impl crate::StravaStore for AppConn {
     async fn create_new_gear(
         &mut self,
         strava_id: String,
-        part: NewPart,
-        user: &dyn Person,
-    ) -> Result<PartId, anyhow::Error> {
-        self.transaction(|conn| {
-            async {
-                use schema::strava_gears::dsl::*;
-                // maybe the gear was created by now?
-                if let Some(gear) = conn.strava_gear_get_tbid(&strava_id).await? {
-                    return Ok(gear);
-                }
+        tbid: PartId,
+        user: UserId,
+    ) -> Result<(), anyhow::Error> {
+        use schema::strava_gears::dsl::*;
 
-                let tbid = part.create(user, conn).await?.id;
-
-                diesel::insert_into(strava_gears)
-                    .values((
-                        id.eq(strava_id),
-                        tendabike_id.eq(tbid),
-                        user_id.eq(user.get_id()),
-                    ))
-                    .execute(conn)
-                    .await
-                    .context("couldn't store gear")?;
-                Ok(tbid)
-            }
-            .scope_boxed()
-        })
-        .await
+        diesel::insert_into(strava_gears)
+            .values((
+                id.eq(strava_id),
+                tendabike_id.eq(tbid),
+                user_id.eq(user),
+            ))
+            .execute(self)
+            .await
+            .context("couldn't store gear")?;
+        Ok(())
     }
 
     async fn delete_strava_event(&mut self, event_id: Option<i32>) -> Result<(), anyhow::Error> {
@@ -333,6 +317,4 @@ impl crate::StravaStore for AppConn {
             .await
             .context("Could not unlock stravaid")
     }
-    
-
 }
