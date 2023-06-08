@@ -93,9 +93,9 @@ pub(crate) async fn hooks (user: RUser, State(conn): State<DbPool>) -> ApiResult
     let mut conn = conn.get().await?;
     let user = user.get_strava_user(&mut conn).await?;
     user.lock(&mut conn).await?;
-    let res = process(&user, &mut conn).await?;
+    let res = process(&user, &mut conn).await;
     user.unlock(&mut conn).await?;
-    Ok(Json(res))
+    Ok(Json(res?))
 }
 
 pub(crate) async fn create_event(State(conn): State<DbPool>, Json(event): axum::extract::Json<InEvent>) -> ApiResult<()> {
@@ -129,7 +129,7 @@ pub(super) async fn sync(Path(tbid): Path<i32>, _u: AxumAdmin, State(conn): Stat
     let user = StravaUser::read(tbid.into(), conn).await?;
     let user = refresh_token(user, oauth, conn).await?;
     user.lock( conn).await?;
-    let res = process(&user, conn).await?;
+    let res = process(&user, conn).await;
     user.unlock(conn).await?;
-    Ok(Json(res))
+    Ok(Json(res?))
 }
