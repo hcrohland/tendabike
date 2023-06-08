@@ -16,7 +16,7 @@
 
 use diesel::Identifiable;
 use diesel::{Insertable, Queryable};
-use diesel_async::scoped_futures::ScopedFutureExt;
+use scoped_futures::ScopedFutureExt;
 
 use async_session::log::{debug, info, trace, warn};
 use serde_derive::{Deserialize, Serialize};

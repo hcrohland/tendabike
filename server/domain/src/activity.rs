@@ -33,7 +33,7 @@ use crate::traits::Store;
 
 use super::*;
 use ::time::PrimitiveDateTime;
-use diesel_async::scoped_futures::ScopedFutureExt;
+use scoped_futures::ScopedFutureExt;
 use time::{macros::format_description, OffsetDateTime};
 use time_tz::PrimitiveDateTimeExt;
 

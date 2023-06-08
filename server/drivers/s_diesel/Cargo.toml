@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 diesel = { version = "2", features = ["postgres", "time" ] }
 diesel-async = { version = "0.3", features = ["postgres", "deadpool" ] }
+scoped-futures = "0.1"
 diesel_migrations = "2"
 async-session = "3.0.0"
 anyhow = "1.0"
