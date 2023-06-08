@@ -32,7 +32,7 @@ impl InEvent {
     /// # Returns
     ///
     /// Returns a `Result` containing an `Event` struct if the conversion is successful, or an `anyhow::Error` if it fails.
-    pub async fn to_event(self, conn: &mut AppConn) -> anyhow::Result<Event> {
+    pub async fn to_event(self, conn: &mut impl StravaStore) -> anyhow::Result<Event> {
         let objects = ["activity", "athlete"];
         let aspects = ["create", "update", "delete"];
 
@@ -61,7 +61,7 @@ impl InEvent {
         })
     }
     
-    pub async fn accept(self, conn: &mut AppConn) -> AnyResult<()> {
+    pub async fn accept(self, conn: &mut impl StravaStore) -> AnyResult<()> {
         let event = self.to_event(conn).await?;
         conn.store_stravaevent(event).await?;
         Ok(())
@@ -132,7 +132,7 @@ impl Event {
     async fn process_activity(
         self,
         user: &StravaUser,
-        conn: &mut AppConn,
+        conn: &mut impl StravaStore,
     ) -> anyhow::Result<Summary> {
         let summary = self.process_hook(user, conn).await;
         let summary = match summary {
@@ -162,7 +162,7 @@ impl Event {
     /// # Examples
     ///
     ///
-    async fn process_hook(&self, user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
+    async fn process_hook(&self, user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
         let res = match self.aspect_type.as_str() {
             "create" | "update" => activity::upsert_activity(self.object_id, user, conn).await?,
             "delete" => activity::delete_activity(self.object_id, user, conn).await?,
@@ -175,7 +175,7 @@ impl Event {
         Ok(res)
     }
 
-    async fn sync(mut self, user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
+    async fn sync(mut self, user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
         // let mut len = batch;
         let mut start = self.event_time;
         let mut hash = SumHash::default();
@@ -202,7 +202,7 @@ impl Event {
     async fn process_sync(
         self,
         user: &StravaUser,
-        conn: &mut AppConn,
+        conn: &mut impl StravaStore,
     ) -> Result<Summary, anyhow::Error> {
         let summary = self.sync(user, conn).await;
         if let Err(err) = summary {
@@ -316,7 +316,7 @@ async fn next_activities(
     Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)
 }
 
-pub async fn process(user: &StravaUser, conn: &mut AppConn) -> anyhow::Result<Summary> {
+pub async fn process(user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
     let event = get_event(user, conn).await?;
     if event.is_none() {
         return Ok(Summary::default());

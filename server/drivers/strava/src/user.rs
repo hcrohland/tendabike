@@ -206,7 +206,7 @@ impl StravaUser {
     }
 
     /// get all parts, attachments and activities for the user
-    pub async fn get_summary(&self, conn: &mut AppConn) -> AnyResult<Summary> {
+    pub async fn get_summary(&self, conn: &mut impl StravaStore) -> AnyResult<Summary> {
         use crate::*;
         gear::update_user(self, conn).await?;
         let parts = Part::get_all(self, conn).await?;
@@ -231,7 +231,7 @@ impl StravaUser {
         id: StravaId,
         firstname: &str,
         lastname: &str,
-        conn: &mut AppConn,
+        conn: &mut impl StravaStore,
     ) -> AnyResult<StravaUser> {
         debug!("got id {}: {} {}", id, &firstname, &lastname);
 
@@ -274,7 +274,7 @@ pub struct StravaStat {
     disabled: bool,
 }
 
-pub async fn get_all_stats(conn: &mut AppConn) -> AnyResult<Vec<StravaStat>> {
+pub async fn get_all_stats(conn: &mut impl StravaStore) -> AnyResult<Vec<StravaStat>> {
     let users = conn.get_all_stravausers().await?;
 
     let mut res = Vec::new();

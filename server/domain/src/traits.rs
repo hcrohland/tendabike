@@ -1,5 +1,3 @@
-#[async_trait::async_trait]
-pub trait Store: TypesStore + PartStore + UserStore + ActivityStore + AttachmentStore  {}
 
 mod types;
 pub use types::*;
@@ -15,3 +13,7 @@ pub use activity::*;
 
 mod attachment;
 pub use attachment::*;
+
+#[async_trait::async_trait]
+pub trait Store: diesel_async::AsyncConnection + TypesStore + PartStore + UserStore + ActivityStore + AttachmentStore  {
+}

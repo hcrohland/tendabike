@@ -51,7 +51,7 @@ impl StravaActivity {
     /// # Returns
     ///
     /// A Result containing a NewActivity struct if the conversion was successful, or an error if it failed.
-    async fn into_tb(self, user: &StravaUser, conn: &mut AppConn) -> AnyResult<NewActivity> {
+    async fn into_tb(self, user: &StravaUser, conn: &mut impl StravaStore) -> AnyResult<NewActivity> {
         let what = self.what()?;
         let gear = match self.gear_id {
             Some(x) => Some(gear::strava_to_tb(x, user, conn).await?),
@@ -144,7 +144,7 @@ impl StravaActivity {
     pub(crate) async fn send_to_tb(
         self,
         user: &StravaUser,
-        conn: &mut AppConn,
+        conn: &mut impl StravaStore,
     ) -> AnyResult<Summary> {
         let strava_id = self.id;
         let tb = self.into_tb(user, conn).await?;
@@ -172,7 +172,7 @@ impl StravaActivity {
     }
 }
 
-pub async fn strava_url(act: i32, conn: &mut AppConn) -> AnyResult<String> {
+pub async fn strava_url(act: i32, conn: &mut impl StravaStore) -> AnyResult<String> {
     let g = conn.get_stravaid_for_tb_activity(act).await?;
 
     Ok(format!("https://strava.com/activities/{}", &g))
@@ -185,7 +185,7 @@ async fn get_activity(id: i64, user: &StravaUser, conn: &mut impl StravaStore) -
     Ok(act)
 }
 
-pub async fn upsert_activity(id: i64, user: &StravaUser, conn: &mut AppConn) -> AnyResult<Summary> {
+pub async fn upsert_activity(id: i64, user: &StravaUser, conn: &mut impl StravaStore) -> AnyResult<Summary> {
     let act = get_activity(id, user, conn)
         .await
         .context(format!("strava activity id {}", id))?;
@@ -195,7 +195,7 @@ pub async fn upsert_activity(id: i64, user: &StravaUser, conn: &mut AppConn) -> 
 pub(crate) async fn delete_activity(
     act_id: i64,
     user: &StravaUser,
-    conn: &mut AppConn,
+    conn: &mut impl StravaStore,
 ) -> AnyResult<Summary> {
 
     let tid = conn.get_activityid_from_strava_activity(act_id).await?;

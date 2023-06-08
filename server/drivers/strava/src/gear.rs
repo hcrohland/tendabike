@@ -62,7 +62,7 @@ impl StravaGear {
 pub(crate) async fn strava_to_tb(
     strava_id: String,
     user: &StravaUser,
-    conn: &mut AppConn,
+    conn: &mut impl StravaStore,
 ) -> AnyResult<PartId> {
     if let Some(gear) = conn.strava_gear_get_tbid(&strava_id).await? {
         return Ok(gear);
@@ -94,7 +94,7 @@ pub(crate) async fn strava_to_tb(
 /// Get list of gear for user from Strava
 pub(crate) async fn update_user(
     user: &StravaUser,
-    conn: &mut AppConn,
+    conn: &mut impl StravaStore,
 ) -> AnyResult<Vec<PartId>> {
     #[derive(Deserialize, Debug)]
     struct Gear {

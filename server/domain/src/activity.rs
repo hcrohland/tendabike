@@ -29,11 +29,11 @@
 
 use std::collections::HashSet;
 
-use crate::traits::{ActivityStore, Store};
+use crate::traits::Store;
 
 use super::*;
 use ::time::PrimitiveDateTime;
-use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection};
+use diesel_async::scoped_futures::ScopedFutureExt;
 use time::{macros::format_description, OffsetDateTime};
 use time_tz::PrimitiveDateTimeExt;
 
@@ -146,7 +146,7 @@ impl ActivityId {
     ///
     /// returns all affected parts  
     /// checks authorization  
-    pub async fn delete(self, person: &dyn Person, conn: &mut AppConn) -> AnyResult<Summary> {
+    pub async fn delete(self, person: &dyn Person, conn: &mut impl Store) -> AnyResult<Summary> {
         info!("Deleting {:?}", self);
         conn.transaction(|conn| {
             async {
@@ -181,7 +181,7 @@ impl ActivityId {
         self,
         act: &NewActivity,
         user: &dyn Person,
-        conn: &mut AppConn,
+        conn: &mut impl Store,
     ) -> AnyResult<Summary> {
         conn.transaction(|conn| {
             async {
@@ -214,7 +214,7 @@ impl Activity {
     pub async fn create(
         act: &NewActivity,
         user: &dyn Person,
-        conn: &mut AppConn,
+        conn: &mut impl Store,
     ) -> AnyResult<Summary> {
         user.check_owner(
             act.user_id,
@@ -336,7 +336,7 @@ impl Activity {
         data: impl std::io::Read,
         tz: String,
         user: &dyn Person,
-        conn: &mut AppConn,
+        conn: &mut impl Store,
     ) -> AnyResult<(Summary, Vec<String>, Vec<String>)> {
         #[derive(Debug, Deserialize)]
         struct Result {
@@ -406,13 +406,13 @@ impl Activity {
     pub async fn set_default_part(
         gear_id: PartId,
         user: &dyn Person,
-        conn: &mut AppConn,
+        conn: &mut impl Store,
     ) -> AnyResult<Summary> {
         conn.transaction(|conn| def_part(&gear_id, user, conn).scope_boxed())
             .await
     }
 
-    pub async fn rescan_all(conn: &mut AppConn) -> AnyResult<()> {
+    pub async fn rescan_all(conn: &mut impl Store) -> AnyResult<()> {
         warn!("rescanning all activities!");
         conn.transaction(|conn| rescan(conn).scope_boxed()).await?;
         warn!("Done rescanning");
@@ -431,7 +431,7 @@ async fn rescan(conn: &mut impl Store) -> AnyResult<()> {
 }
 
 async fn match_and_update(
-    conn: &mut AppConn,
+    conn: &mut impl Store,
     user: &dyn Person,
     rstart: OffsetDateTime,
     rclimb: Option<i32>,
@@ -449,7 +449,7 @@ async fn match_and_update(
     actid.update(&act, user, conn).await
 }
 
-async fn def_part(partid: &PartId, user: &dyn Person, conn: &mut AppConn) -> AnyResult<Summary> {
+async fn def_part(partid: &PartId, user: &dyn Person, conn: &mut impl Store) -> AnyResult<Summary> {
     let part = partid.part(user, conn).await?;
     let types = part.what.act_types(conn).await?;
 
