@@ -39,7 +39,7 @@ impl InEvent {
         ensure!(
             objects.contains(&self.object_type.as_str())
                 && aspects.contains(&self.aspect_type.as_str()),
-            tb_domain::Error::BadRequest(format!("unknown event received: {:?}", self))
+            Error::BadRequest(format!("unknown event received: {:?}", self))
         );
 
         ensure!(
