@@ -10,7 +10,7 @@ diesel = { version = "2", features = ["postgres", "time" ] }
 diesel-async = { version = "0.3", features = ["postgres", "deadpool" ] }
 scoped-futures = "0.1"
 diesel_migrations = "2"
-async-session = "3.0.0"
+async-session = "3"
 anyhow = "1.0"
 time = { version = "0.3", features = ["serde", "parsing", "serde-human-readable"] }
 tb_strava = {path = "../strava"}

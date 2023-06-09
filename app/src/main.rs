@@ -7,8 +7,7 @@ use std::{
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // setup environment. Includes Config and logging
-    init_environment();
+    dotenvy::dotenv().ok();
 
     let db = tb_diesel::DbPool::new().await?;
     let path = get_static_path();
@@ -19,13 +18,9 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn init_environment() {
-    dotenvy::dotenv().ok();
-}
-
 fn get_static_path() -> PathBuf {
     let path = std::env::var("STATIC_WWW").unwrap_or_else(|_| {
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../../frontend/public").to_string()
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../frontend/public").to_string()
     });
 
     Path::new(&path)

@@ -5,7 +5,7 @@ authors = ["Christoph Rohland <tendabike@rohland.net>"]
 edition = "2021"
 
 [dependencies]
-diesel = { version = "2", features = ["time" ] }
+diesel = { version = "2", features = ["time", "postgres" ] }
 scoped-futures = "0.1"
 diesel-derive-newtype = "2"
 
