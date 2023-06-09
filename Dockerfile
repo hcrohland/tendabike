@@ -15,7 +15,12 @@ RUN apt-get update && apt-get install -y libpq-dev libssl-dev
 FROM base as planner
 # do not copy frontend!
 COPY Cargo.toml Cargo.lock ./
-COPY server server/
+COPY app app/
+COPY axum axum/
+COPY diesel diesel/
+COPY domain domain/
+COPY strava strava/
+
 
 RUN cargo chef prepare --recipe-path recipe.json
 
@@ -29,7 +34,11 @@ FROM cacher as build-engine
 
 # do not copy frontend!
 COPY Cargo.toml Cargo.lock ./
-COPY server server/
+COPY app app/
+COPY axum axum/
+COPY diesel diesel/
+COPY domain domain/
+COPY strava strava/
 
 RUN cargo build --release
 
