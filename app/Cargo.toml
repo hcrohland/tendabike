@@ -1,0 +1,15 @@
+[package]
+name = "tendabike"
+version = "0.4.2"
+edition = "2021"
+default-run = "tendabike"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dotenvy = "0.15"
+anyhow = "1"
+tokio = { version = "1", features = ["full"] }
+tb_domain = { path = "../domain"}
+tb_axum = { path = "../axum"}
+tb_diesel = { path = "../diesel"}

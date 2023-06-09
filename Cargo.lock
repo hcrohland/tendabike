@@ -575,27 +575,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "domain"
-version = "0.3.0"
-dependencies = [
- "anyhow",
- "async-session",
- "async-trait",
- "csv",
- "diesel",
- "diesel-derive-newtype",
- "newtype_derive",
- "pretty_assertions",
- "scoped-futures",
- "serde",
- "serde_derive",
- "serde_with",
- "thiserror",
- "time",
- "time-tz",
-]
-
-[[package]]
 name = "dotenvy"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1614,21 +1593,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f91339c0467de62360649f8d3e185ca8de4224ff281f66000de5eb2a77a79041"
 
 [[package]]
-name = "s_diesel"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "async-session",
- "diesel",
- "diesel-async",
- "diesel_migrations",
- "domain",
- "scoped-futures",
- "tb_strava",
- "time",
-]
-
-[[package]]
 name = "scoped-futures"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1919,20 +1883,56 @@ dependencies = [
  "async-session",
  "axum",
  "axum-macros",
- "domain",
  "headers",
  "http",
  "oauth2",
  "reqwest",
- "s_diesel",
  "serde",
  "serde_derive",
  "serde_json",
+ "tb_diesel",
+ "tb_domain",
  "tb_strava",
  "thiserror",
  "tower-http",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "tb_diesel"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "async-session",
+ "diesel",
+ "diesel-async",
+ "diesel_migrations",
+ "scoped-futures",
+ "tb_domain",
+ "tb_strava",
+ "time",
+]
+
+[[package]]
+name = "tb_domain"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "async-session",
+ "async-trait",
+ "csv",
+ "diesel",
+ "diesel-derive-newtype",
+ "newtype_derive",
+ "pretty_assertions",
+ "scoped-futures",
+ "serde",
+ "serde_derive",
+ "serde_with",
+ "thiserror",
+ "time",
+ "time-tz",
 ]
 
 [[package]]
@@ -1945,7 +1945,6 @@ dependencies = [
  "async-trait",
  "diesel",
  "diesel-derive-newtype",
- "domain",
  "futures",
  "newtype_derive",
  "reqwest",
@@ -1953,6 +1952,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "tb_domain",
  "time",
 ]
 
@@ -1961,10 +1961,10 @@ name = "tendabike"
 version = "0.4.2"
 dependencies = [
  "anyhow",
- "domain",
  "dotenvy",
- "s_diesel",
  "tb_axum",
+ "tb_diesel",
+ "tb_domain",
  "tokio",
 ]
 
