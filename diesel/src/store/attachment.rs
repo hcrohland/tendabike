@@ -1,4 +1,4 @@
-use crate::AppConn;
+use crate::AsyncDieselConn;
 use anyhow::Context;
 use async_session::log::debug;
 use diesel::prelude::*;
@@ -10,7 +10,7 @@ use time::OffsetDateTime;
 use tb_domain::{AnyResult, Attachment, PartId, PartTypeId, Usage};
 
 #[async_session::async_trait]
-impl tb_domain::AttachmentStore for AppConn {
+impl tb_domain::AttachmentStore for AsyncDieselConn {
     async fn attachment_create(&mut self, att: Attachment) -> AnyResult<Attachment> {
         att.insert_into(schema::attachments::table)
             .get_result::<Attachment>(self)

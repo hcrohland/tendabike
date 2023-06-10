@@ -1,5 +1,5 @@
 use tb_domain::AnyResult;
-use crate::AppConn;
+use crate::AsyncDieselConn;
 use tb_domain::User;
 use tb_domain::UserId;
 use anyhow::Context;
@@ -9,7 +9,7 @@ use diesel_async::RunQueryDsl;
 use tb_domain::schema;
 
 #[async_session::async_trait]
-impl tb_domain::UserStore for AppConn {
+impl tb_domain::UserStore for AsyncDieselConn {
     async fn user_read_by_id(&mut self, uid: UserId) -> AnyResult<User> {
         schema::users::table
             .find(uid)

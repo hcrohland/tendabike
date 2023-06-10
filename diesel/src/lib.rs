@@ -1,8 +1,8 @@
 
 pub use tb_domain::schema;
-mod appconn;
+mod async_diesel;
 
-pub use appconn::*;
+pub use async_diesel::*;
 
 mod store;
 mod stravastore;
