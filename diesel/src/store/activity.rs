@@ -3,13 +3,13 @@ use async_session::log::debug;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use tb_domain::schema;
-use crate::AppConn;
+use crate::AsyncDieselConn;
 use time::OffsetDateTime;
 
 use tb_domain::{ActTypeId, Activity, ActivityId, AnyResult, NewActivity, PartId, Person, UserId};
 
 #[async_session::async_trait]
-impl tb_domain::ActivityStore for AppConn {
+impl tb_domain::ActivityStore for AsyncDieselConn {
     async fn activity_create(&mut self, act: &NewActivity) -> AnyResult<Activity> {
         diesel::insert_into(schema::activities::table)
             .values(act)

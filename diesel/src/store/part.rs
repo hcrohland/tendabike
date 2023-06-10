@@ -1,4 +1,4 @@
-use crate::AppConn;
+use crate::AsyncDieselConn;
 use anyhow::Context;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
@@ -17,7 +17,7 @@ use time::OffsetDateTime;
 use tb_domain::PartTypeId;
 
 #[async_session::async_trait]
-impl tb_domain::PartStore for AppConn {
+impl tb_domain::PartStore for AsyncDieselConn {
     async fn partid_get_part(&mut self, pid: PartId) -> AnyResult<Part> {
         use schema::parts;
         let part = parts::table

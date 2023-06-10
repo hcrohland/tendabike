@@ -1,7 +1,7 @@
 use tb_domain::ActTypeId;
 use tb_domain::ActivityType;
 use tb_domain::AnyResult;
-use crate::AppConn;
+use crate::AsyncDieselConn;
 use anyhow::Context;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
@@ -12,7 +12,7 @@ use tb_domain::PartType;
 use tb_domain::PartTypeId;
 
 #[async_session::async_trait]
-impl tb_domain::TypesStore for AppConn {
+impl tb_domain::TypesStore for AsyncDieselConn {
     async fn get_all_parttypes_ordered(&mut self) -> Vec<PartType> {
         use schema::part_types;
         part_types::table

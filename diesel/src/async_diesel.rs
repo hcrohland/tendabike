@@ -15,17 +15,18 @@ use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::AsyncPgConnection;
 use anyhow::Result as AnyResult;
 
-pub struct AppConn(Object<AsyncPgConnection>);
+type MyConnection = AsyncPgConnection;
+pub struct AsyncDieselConn(Object<MyConnection>);
 
-impl Deref for AppConn {
-    type Target = Object<AsyncPgConnection>;
+impl Deref for AsyncDieselConn {
+    type Target = Object<MyConnection>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl DerefMut for AppConn {
+impl DerefMut for AsyncDieselConn {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -42,7 +43,7 @@ fn run_db_migrations(db: &str) {
         .expect("Failed to run database migrations: {:?}");
 }
 #[derive(Clone)]
-pub struct DbPool(Pool<AsyncPgConnection>);
+pub struct DbPool(Pool<MyConnection>);
 
 impl DbPool {
     pub async fn new() -> AnyResult<Self> {
@@ -51,16 +52,16 @@ impl DbPool {
         run_db_migrations(&database_url);
 
         let config =
-            AsyncDieselConnectionManager::<AsyncPgConnection>::new(database_url);
-        let pool: Pool<AsyncPgConnection> = Pool::builder(config).build()?;
+            AsyncDieselConnectionManager::<MyConnection>::new(database_url);
+        let pool: Pool<MyConnection> = Pool::builder(config).build()?;
 
         Ok(DbPool(pool))
     }
 
     pub async fn get(
         &self,
-    ) -> AnyResult<AppConn> {
+    ) -> AnyResult<AsyncDieselConn> {
         let conn = self.0.get().await?;
-        Ok(AppConn(conn))
+        Ok(AsyncDieselConn(conn))
     }
 }

@@ -1,4 +1,4 @@
-use crate::AppConn;
+use crate::AsyncDieselConn;
 use anyhow::Context;
 use anyhow::Result as AnyResult;
 use diesel::prelude::*;
@@ -13,7 +13,7 @@ use tb_strava::StravaId;
 use tb_strava::StravaUser;
 
 #[async_session::async_trait]
-impl tb_strava::StravaStore for AppConn {
+impl tb_strava::StravaStore for AsyncDieselConn {
     async fn stravaid_get_user_id(&mut self, who: i32) -> AnyResult<i32> {
         use schema::strava_users::dsl::*;
         let user_id: i32 = strava_users
