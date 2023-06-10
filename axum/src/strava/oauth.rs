@@ -19,7 +19,6 @@ use http::StatusCode;
 use {
     tb_domain::{AnyResult, Error},
 };
-use tb_diesel::AppConn;
 use oauth2::{
     basic::{
         BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
@@ -32,7 +31,7 @@ use oauth2::{
 };
 use serde::{Deserialize, Serialize};
 use std::env;
-use tb_strava::{StravaId, StravaUser};
+use tb_strava::{StravaId, StravaUser, StravaStore};
 
 pub(crate) static COOKIE_NAME: &str = "SESSION";
 
@@ -214,19 +213,18 @@ pub(crate) async fn login_authorized(
 async fn update_user(
     token: &StandardTokenResponse<StravaExtraTokenFields, BasicTokenType>,
     user: StravaUser,
-    conn: &mut AppConn,
+    conn: &mut impl StravaStore,
 ) -> AnyResult<StravaUser> {
     let access = token.access_token().secret();
     let expires = token.expires_in().map(|t| t.as_secs() as i64);
     let refresh = token.refresh_token().map(|r| r.secret().as_str());
-    let user = user.update_token(access, expires, refresh, conn).await?;
-    Ok(user)
+    user.update_token(access, expires, refresh, conn).await
 }
 
 pub(crate) async fn refresh_token(
     user: StravaUser,
     oauth: StravaClient,
-    conn: &mut AppConn,
+    conn: &mut impl StravaStore,
 ) -> AnyResult<StravaUser> {
     if user.token_is_valid() {
         return Ok(user);

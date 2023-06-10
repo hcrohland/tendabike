@@ -14,8 +14,7 @@ use axum::{
 use http::{header, request::Parts, StatusCode};
 use {tb_domain::{Person, UserId, Summary, AnyResult}};
 use serde_derive::{Deserialize, Serialize};
-use tb_strava::{StravaId, StravaUser};
-use tb_diesel::AppConn;
+use tb_strava::{StravaId, StravaUser, StravaStore};
 
 use crate::{AuthRedirect, ApiResult, appstate::AppState, DbPool};
 
@@ -54,7 +53,7 @@ impl RUser {
         Self { id, strava_id, firstname, name, is_admin } 
     }
 
-    pub(crate) async fn get_strava_user(&self,  conn: &mut AppConn) -> AnyResult<StravaUser> {
+    pub(crate) async fn get_strava_user(&self,  conn: &mut impl StravaStore) -> AnyResult<StravaUser> {
         StravaUser::read(self.id, conn).await
     }
 }
