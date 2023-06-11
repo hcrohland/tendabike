@@ -231,11 +231,11 @@ impl tb_strava::StravaStore for AsyncDieselConn {
 
     async fn stravauser_update_last_activity(
         &mut self,
-        user: &StravaUser,
+        user: &StravaId,
         time: i64,
     ) -> AnyResult<()> {
         use schema::strava_users::dsl::*;
-        diesel::update(strava_users.find(user.id))
+        diesel::update(strava_users.find(user))
             .set(last_activity.eq(time))
             .execute(self)
             .await

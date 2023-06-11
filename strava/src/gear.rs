@@ -25,7 +25,7 @@ pub async fn strava_url(gear: i32, conn: &mut impl StravaStore) -> AnyResult<Str
 }
 
 impl StravaGear {
-    fn into_tb(self, user: &StravaUser) -> AnyResult<NewPart> {
+    fn into_tb(self, user: &impl StravaPerson) -> AnyResult<NewPart> {
         Ok(NewPart {
             owner: user.tb_id(),
             what: self.what().into(),
@@ -50,7 +50,7 @@ impl StravaGear {
 /// None will return None
 pub(crate) async fn strava_to_tb(
     strava_id: String,
-    user: &StravaUser,
+    user: &impl StravaPerson,
     conn: &mut impl StravaStore,
 ) -> AnyResult<PartId> {
     if let Some(gear) = conn.strava_gear_get_tbid(&strava_id).await? {
@@ -79,32 +79,4 @@ pub(crate) async fn strava_to_tb(
         .scope_boxed()
     })
     .await
-}
-
-/// Get list of gear for user from Strava
-pub(crate) async fn update_user(
-    user: &StravaUser,
-    conn: &mut impl StravaStore,
-) -> AnyResult<Vec<PartId>> {
-    #[derive(Deserialize, Debug)]
-    struct Gear {
-        id: String,
-    }
-
-    #[derive(Deserialize, Debug)]
-    struct Athlete {
-        // firstname: String,
-        // lastname: String,
-        bikes: Vec<Gear>,
-        shoes: Vec<Gear>,
-    }
-
-    let ath: Athlete = user.request_json("/athlete", conn).await?;
-
-    let mut parts = Vec::new();
-    for gear in ath.bikes.into_iter().chain(ath.shoes) {
-        parts.push(gear::strava_to_tb(gear.id, user, conn).await?);
-    }
-
-    Ok(parts)
 }

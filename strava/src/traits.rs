@@ -4,7 +4,8 @@ and provides additional methods for interacting with Strava data.
 */
 
 use async_trait::async_trait;
-use tb_domain::{AnyResult, PartId, ActivityId, UserId};
+use serde::de::DeserializeOwned;
+use tb_domain::{AnyResult, PartId, ActivityId, UserId, Person};
 use crate::{event::Event, StravaId, StravaUser};
 
 #[async_trait]
@@ -327,7 +328,7 @@ pub trait StravaStore: tb_domain::Store + Send {
     /// Returns an error if the user cannot be updated.
     async fn stravauser_update_last_activity(
         &mut self,
-        user: &StravaUser,
+        user: &StravaId,
         time: i64,
     ) -> AnyResult<()>;
 
@@ -411,4 +412,18 @@ pub trait StravaStore: tb_domain::Store + Send {
     /// Returns an error if the unlock operation fails.
     async fn stravaid_unlock(&mut self, id: StravaId) -> AnyResult<usize>;
 
+}
+
+#[async_trait]
+pub trait StravaPerson: Person {
+    /// Returns the Strava ID of the user.
+    ///
+    /// # Returns
+    ///
+    /// The Strava ID of the user.
+    fn strava_id(&self) -> StravaId;
+
+    fn tb_id(&self) -> UserId;
+
+    async fn request_json<T: DeserializeOwned>(&self, uri: &str, conn: &mut impl StravaStore) -> AnyResult<T>;
 }

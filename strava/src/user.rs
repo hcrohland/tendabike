@@ -8,7 +8,7 @@
 
 use diesel_derive_newtype::DieselNewType;
 use newtype_derive::{newtype_fmt, NewtypeDisplay, NewtypeFrom};
-use serde::{Deserialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize};
 
 use super::*;
 
@@ -20,6 +20,21 @@ const API: &str = "https://www.strava.com/api/v3";
 pub struct StravaId(i32);
 NewtypeDisplay! { () pub struct StravaId(); }
 NewtypeFrom! { () pub struct StravaId(i32); }
+
+impl StravaId {
+    /// store last activity time for the user
+    pub(crate) async fn update_last(
+        &self,
+        time: i64,
+        conn: &mut impl StravaStore,
+    ) -> AnyResult<i64> {
+        // if self.last_activity >= time {
+        //     return Ok(self.last_activity);
+        // }
+        conn.stravauser_update_last_activity(self, time).await?;
+        Ok(time)
+    }
+}
 
 /// Strava User data
 #[derive(Clone, Serialize, Deserialize, Queryable, Insertable, Identifiable, Debug, Default)]
@@ -65,15 +80,6 @@ impl StravaUser {
         self.id
     }
 
-    /// store last activity time for the user
-    pub(crate) async fn update_last(&self, time: i64, conn: &mut impl StravaStore) -> AnyResult<i64> {
-        if self.last_activity >= time {
-            return Ok(self.last_activity);
-        }
-        conn.stravauser_update_last_activity(self, time).await?;
-        Ok(time)
-    }
-
     /// check if the access token is still valid
     pub fn token_is_valid(&self) -> bool {
         self.expires_at > get_time()
@@ -113,26 +119,20 @@ impl StravaUser {
         Ok(())
     }
 
-    
     /// unlock the current user
     pub async fn unlock(&self, conn: &mut impl StravaStore) -> AnyResult<usize> {
         conn.stravaid_unlock(self.id).await
-    }
-
-    pub(crate) async fn request_json<T: DeserializeOwned>(&self, uri: &str, conn: &mut impl StravaStore) -> AnyResult<T> {
-        let r = self.get_strava(uri, conn)
-            .await?
-            .text()
-            .await?;
-        serde_json::from_str::<T>(& r)
-            .context("Could not parse response body")
     }
 
     /// request information from the Strava API
     ///
     /// will return Error::TryAgain on certain error conditions
     /// will disable the User if Strava responds with NOT_AUTH
-    async fn get_strava(&self, uri: &str, conn: &mut impl StravaStore) -> AnyResult<reqwest::Response> {
+    async fn get_strava(
+        &self,
+        uri: &str,
+        conn: &mut impl StravaStore,
+    ) -> AnyResult<reqwest::Response> {
         use reqwest::StatusCode;
         let resp = reqwest::Client::new()
             .get(format!("{}{}", API, uri))
@@ -210,7 +210,7 @@ impl StravaUser {
     /// get all parts, attachments and activities for the user
     pub async fn get_summary(&self, conn: &mut impl StravaStore) -> AnyResult<Summary> {
         use crate::*;
-        gear::update_user(self, conn).await?;
+        Self::update_user(self, conn).await?;
         let parts = Part::get_all(self, conn).await?;
         let attachments = Attachment::for_parts(&parts, conn).await?;
         let activities = Activity::get_all(self, conn).await?;
@@ -257,6 +257,53 @@ impl StravaUser {
         event::insert_sync(user.id, 0, conn).await?;
         Ok(user)
     }
+
+    /// Get list of gear for user from Strava
+    pub async fn update_user(
+        user: &impl StravaPerson,
+        conn: &mut impl StravaStore,
+    ) -> AnyResult<Vec<PartId>> {
+        #[derive(Deserialize, Debug)]
+        struct Gear {
+            id: String,
+        }
+
+        #[derive(Deserialize, Debug)]
+        struct Athlete {
+            // firstname: String,
+            // lastname: String,
+            bikes: Vec<Gear>,
+            shoes: Vec<Gear>,
+        }
+
+        let ath: Athlete = user.request_json("/athlete", conn).await?;
+
+        let mut parts = Vec::new();
+        for gear in ath.bikes.into_iter().chain(ath.shoes) {
+            parts.push(gear::strava_to_tb(gear.id, user, conn).await?);
+        }
+
+        Ok(parts)
+    }
+}
+
+#[async_session::async_trait]
+impl StravaPerson for StravaUser {
+    fn strava_id(&self) -> StravaId {
+        self.id
+    }
+    fn tb_id(&self) -> UserId {
+        self.tendabike_id
+    }
+
+    async fn request_json<T: DeserializeOwned>(
+        &self,
+        uri: &str,
+        conn: &mut impl StravaStore,
+    ) -> AnyResult<T> {
+        let r = self.get_strava(uri, conn).await?.text().await?;
+        serde_json::from_str::<T>(&r).context("Could not parse response body")
+    }
 }
 
 impl Person for StravaUser {
@@ -292,7 +339,11 @@ pub async fn get_all_stats(conn: &mut impl StravaStore) -> AnyResult<Vec<StravaS
     Ok(res)
 }
 
-pub async fn sync_users(user_id: Option<UserId>, time: i64, conn: &mut impl StravaStore) -> AnyResult<()> {
+pub async fn sync_users(
+    user_id: Option<UserId>,
+    time: i64,
+    conn: &mut impl StravaStore,
+) -> AnyResult<()> {
     info!("syncing users {:?} at {}", user_id, time);
     let users = match user_id {
         Some(id) => vec![conn.stravauser_get_by_tbid(id).await?],
