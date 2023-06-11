@@ -29,7 +29,7 @@
       if (!data) break;
       updateSummary(data);
       number += data["activities"].length;
-    } while (running && data["activities"].length > 0)
+    } while ($user && running && data["activities"].length > 0)
     running = false;
     number = 0;
   }

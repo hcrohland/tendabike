@@ -7,6 +7,11 @@ export function checkStatus<T>(response) {
         return response.json()
     }
 
+    if (response.status === 401) {
+        user.set(undefined);
+        window.location.href = '/#/about';
+    }
+
     return response.text()
         .then((text) => {
             message.set({ active: true, status: response.statusText, message: text })
