@@ -178,17 +178,8 @@ pub async fn strava_url(act: i32, conn: &mut impl StravaStore) -> AnyResult<Stri
     Ok(format!("https://strava.com/activities/{}", &g))
 }
 
-async fn get_activity(id: i64, user: &StravaUser, conn: &mut impl StravaStore) -> AnyResult<StravaActivity> {
-    let r = user.request(&format!("/activities/{}", id), conn).await?;
-    // let r = user.request("/activities?per_page=2")?;
-    let act: StravaActivity = serde_json::from_str(&r)?;
-    Ok(act)
-}
-
 pub async fn upsert_activity(id: i64, user: &StravaUser, conn: &mut impl StravaStore) -> AnyResult<Summary> {
-    let act = get_activity(id, user, conn)
-        .await
-        .context(format!("strava activity id {}", id))?;
+    let act: StravaActivity = user.request_json(&format!("/activities/{}", id), conn).await?;
     act.send_to_tb(user, conn).await
 }
 

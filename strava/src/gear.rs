@@ -42,17 +42,6 @@ impl StravaGear {
             Some(_) => 1, // bikes
         }
     }
-
-    async fn request(
-        id: &str,
-        user: &StravaUser,
-        conn: &mut impl StravaStore,
-    ) -> AnyResult<StravaGear> {
-        let r = user.request(&format!("/gear/{}", id), conn).await?;
-        let res: StravaGear = serde_json::from_str(&r)
-            .context(format!("Did not receive StravaGear format: {:?}", r))?;
-        Ok(res)
-    }
 }
 
 /// map strava gear_id to tb gear_id
@@ -69,7 +58,8 @@ pub(crate) async fn strava_to_tb(
     }
 
     debug!("New Gear");
-    let part = StravaGear::request(&strava_id, user, conn)
+    let part = user
+        .request_json::<StravaGear>(&format!("/gear/{}", &strava_id), conn)
         .await
         .context("Couldn't map gear")?
         .into_tb(user)?;
@@ -109,8 +99,7 @@ pub(crate) async fn update_user(
         shoes: Vec<Gear>,
     }
 
-    let r = user.request("/athlete", conn).await?;
-    let ath: Athlete = serde_json::from_str(&r)?;
+    let ath: Athlete = user.request_json("/athlete", conn).await?;
 
     let mut parts = Vec::new();
     for gear in ath.bikes.into_iter().chain(ath.shoes) {

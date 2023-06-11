@@ -303,8 +303,8 @@ async fn next_activities(
     per_page: usize,
     start: Option<i64>,
 ) -> anyhow::Result<Vec<StravaActivity>> {
-    let r = user
-        .request(
+    user
+        .request_json(
             &format!(
                 "/activities?after={}&per_page={}",
                 start.unwrap_or(user.last_activity),
@@ -312,8 +312,7 @@ async fn next_activities(
             ),
             conn,
         )
-        .await?;
-    Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)
+        .await
 }
 
 pub async fn process(user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {

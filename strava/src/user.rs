@@ -8,6 +8,7 @@
 
 use diesel_derive_newtype::DieselNewType;
 use newtype_derive::{newtype_fmt, NewtypeDisplay, NewtypeFrom};
+use serde::{Deserialize, de::DeserializeOwned};
 
 use super::*;
 
@@ -118,12 +119,13 @@ impl StravaUser {
         conn.stravaid_unlock(self.id).await
     }
 
-    pub(crate) async fn request(&self, uri: &str, conn: &mut impl StravaStore) -> AnyResult<String> {
-        self.get_strava(uri, conn)
+    pub(crate) async fn request_json<T: DeserializeOwned>(&self, uri: &str, conn: &mut impl StravaStore) -> AnyResult<T> {
+        let r = self.get_strava(uri, conn)
             .await?
             .text()
-            .await
-            .context("Could not get response body")
+            .await?;
+        serde_json::from_str::<T>(& r)
+            .context("Could not parse response body")
     }
 
     /// request information from the Strava API
