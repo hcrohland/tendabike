@@ -65,10 +65,10 @@ impl UserId {
         conn.user_read_by_id(self).await
     }
 
-    pub async fn get_stat(self, conn: &mut impl Store) -> AnyResult<Stat> {
+    pub async fn get_stat(&self, conn: &mut impl Store) -> AnyResult<Stat> {
         let user = self.read(conn).await?;
-        let parts = conn.part_get_all_for_userid(user.id).await?.len() as i64;
-        let activities = conn.activity_get_all_for_userid(user.id).await?.len() as i64;
+        let parts = conn.part_get_all_for_userid(self).await?.len() as i64;
+        let activities = conn.activity_get_all_for_userid(self).await?.len() as i64;
         Ok(Stat {
             user,
             parts,
@@ -98,6 +98,16 @@ impl UserId {
     pub async fn is_admin(&self, conn: &mut impl Store) -> AnyResult<bool> {
         self.read(conn).await.map(|u| u.is_admin)
     }
+
+    /// get all parts, attachments and activities for the user
+    pub async fn get_summary(&self, conn: &mut impl Store) -> AnyResult<Summary> {
+        use crate::*;
+        let parts = Part::get_all(self, conn).await?;
+        let attachments = Attachment::for_parts(&parts, conn).await?;
+        let activities = Activity::get_all(self, conn).await?;
+        Ok(Summary::new(activities, parts, attachments))
+    }
+
 }
 
 impl Person for User {

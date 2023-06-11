@@ -207,16 +207,6 @@ impl StravaUser {
         self.disable(conn).await
     }
 
-    /// get all parts, attachments and activities for the user
-    pub async fn get_summary(&self, conn: &mut impl StravaStore) -> AnyResult<Summary> {
-        use crate::*;
-        Self::update_user(self, conn).await?;
-        let parts = Part::get_all(self, conn).await?;
-        let attachments = Attachment::for_parts(&parts, conn).await?;
-        let activities = Activity::get_all(self, conn).await?;
-        Ok(Summary::new(activities, parts, attachments))
-    }
-
     /// Upsert a Strava user by ID, updating their Tendabike user ID if they already exist, or creating a new user if they don't.
     ///
     /// # Arguments

@@ -45,7 +45,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .context("Error deleting activity")
     }
 
-    async fn activity_get_all_for_userid(&mut self, uid: UserId) -> AnyResult<Vec<Activity>> {
+    async fn activity_get_all_for_userid(&mut self, uid: &UserId) -> AnyResult<Vec<Activity>> {
         use schema::activities::dsl::*;
 
         activities

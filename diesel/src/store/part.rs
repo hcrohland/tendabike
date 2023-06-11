@@ -88,7 +88,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .await?)
     }
 
-    async fn part_get_all_for_userid(&mut self, uid: UserId) -> AnyResult<Vec<Part>> {
+    async fn part_get_all_for_userid(&mut self, uid: &UserId) -> AnyResult<Vec<Part>> {
         use schema::parts::dsl::*;
 
         parts

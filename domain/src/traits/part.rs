@@ -76,7 +76,7 @@ pub trait PartStore {
     /// # Returns
     ///
     /// Returns a vector of `Part` objects if the user has parts, otherwise returns an error.
-    async fn part_get_all_for_userid(&mut self, uid: UserId) -> AnyResult<Vec<Part>>;
+    async fn part_get_all_for_userid(&mut self, uid: &UserId) -> AnyResult<Vec<Part>>;
 
     /// Resets all usages for a given user's `Part` objects.
     ///

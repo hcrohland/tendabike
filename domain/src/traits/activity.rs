@@ -59,7 +59,7 @@ pub trait ActivityStore {
     /// # Returns
     ///
     /// Returns a `Result` containing a vector of `Activity` structs or an error if the operation fails.
-    async fn activity_get_all_for_userid(&mut self, uid: UserId) -> AnyResult<Vec<Activity>>;
+    async fn activity_get_all_for_userid(&mut self, uid: &UserId) -> AnyResult<Vec<Activity>>;
 
     /// Retrieves all activities for a given part ID and time range.
     ///

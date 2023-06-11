@@ -175,6 +175,9 @@ pub(crate) async fn login_authorized(
         "No athlete info".to_string(),
     ))?;
 
+    let access_token = token.access_token().secret().clone();
+    let expires = token.expires_in().map(|t| t.as_secs() as i64);
+    let refresh = token.refresh_token().map(|r| r.secret().clone());
     let user = StravaUser::upsert(*id, firstname, lastname, &mut conn)
         .await
         .map_err(internal_any)?;
@@ -189,6 +192,9 @@ pub(crate) async fn login_authorized(
         firstname.clone(),
         lastname.clone(),
         is_admin,
+        access_token,
+        expires,
+        refresh,
     );
     // Create a new session filled with user data
     let mut session = Session::new();
