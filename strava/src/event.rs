@@ -115,7 +115,7 @@ impl Event {
     #[async_recursion]
     async fn rate_limit(
         self,
-        user: &StravaUser,
+        user: &impl StravaPerson,
         conn: &mut impl StravaStore,
     ) -> anyhow::Result<Option<Self>> {
         // rate limit event
@@ -132,7 +132,7 @@ impl Event {
 
     async fn process_activity(
         self,
-        user: &StravaUser,
+        user: &impl StravaPerson,
         conn: &mut impl StravaStore,
     ) -> anyhow::Result<Summary> {
         let summary = self.process_hook(user, conn).await;
@@ -165,7 +165,7 @@ impl Event {
     ///
     async fn process_hook(
         &self,
-        user: &StravaUser,
+        user: &impl StravaPerson,
         conn: &mut impl StravaStore,
     ) -> anyhow::Result<Summary> {
         let res = match self.aspect_type.as_str() {
@@ -182,7 +182,7 @@ impl Event {
 
     async fn sync(
         mut self,
-        user: &StravaUser,
+        user: &impl StravaPerson,
         conn: &mut impl StravaStore,
     ) -> anyhow::Result<Summary> {
         // let mut len = batch;
@@ -210,7 +210,7 @@ impl Event {
 
     async fn process_sync(
         self,
-        user: &StravaUser,
+        user: &impl StravaPerson,
         conn: &mut impl StravaStore,
     ) -> Result<Summary, anyhow::Error> {
         let summary = self.sync(user, conn).await;
@@ -268,7 +268,7 @@ pub async fn insert_stop(conn: &mut impl StravaStore) -> anyhow::Result<()> {
 }
 
 async fn get_event(
-    user: &StravaUser,
+    user: &impl StravaPerson,
     conn: &mut impl StravaStore,
 ) -> anyhow::Result<Option<Event>> {
     let event = conn.strava_event_get_next_for_user(user).await?;
@@ -324,7 +324,7 @@ async fn next_activities(
     .await
 }
 
-pub async fn process(user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
+pub async fn process(user: &impl StravaPerson, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
     let event = get_event(user, conn).await?;
     if event.is_none() {
         return Ok(Summary::default());

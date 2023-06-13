@@ -282,10 +282,7 @@ impl StravaPerson for StravaUser {
     fn strava_id(&self) -> StravaId {
         self.id
     }
-    fn tb_id(&self) -> UserId {
-        self.tendabike_id
-    }
-
+    
     async fn request_json<T: DeserializeOwned>(
         &self,
         uri: &str,

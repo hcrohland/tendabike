@@ -185,7 +185,7 @@ pub async fn upsert_activity(id: i64, user: &impl StravaPerson, conn: &mut impl 
 
 pub(crate) async fn delete_activity(
     act_id: i64,
-    user: &StravaUser,
+    user: &impl StravaPerson,
     conn: &mut impl StravaStore,
 ) -> AnyResult<Summary> {
 

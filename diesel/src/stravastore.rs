@@ -7,6 +7,7 @@ use diesel_async::RunQueryDsl;
 use tb_domain::ActivityId;
 use tb_domain::PartId;
 use tb_domain::UserId;
+use tb_strava::StravaPerson;
 use tb_strava::event::Event;
 use tb_strava::schema;
 use tb_strava::StravaId;
@@ -156,11 +157,11 @@ impl tb_strava::StravaStore for AsyncDieselConn {
 
     async fn strava_event_get_next_for_user(
         &mut self,
-        user: &tb_strava::StravaUser,
+        user: &impl StravaPerson,
     ) -> AnyResult<Option<Event>> {
         use schema::strava_events::dsl::*;
         strava_events
-            .filter(owner_id.eq_any(vec![0, user.id.into()]))
+            .filter(owner_id.eq_any(vec![0, user.get_id().into()]))
             .first::<Event>(self)
             .await
             .optional()
@@ -267,12 +268,12 @@ impl tb_strava::StravaStore for AsyncDieselConn {
     /// # Errors
     ///
     /// This function will return an error if the database connection fails.
-    async fn strava_events_get_count_for_user(&mut self, user: &StravaUser) -> AnyResult<i64> {
+    async fn strava_events_get_count_for_user(&mut self, user: &impl StravaPerson) -> AnyResult<i64> {
         use schema::strava_events::dsl::*;
 
         strava_events
             .count()
-            .filter(owner_id.eq(user.id))
+            .filter(owner_id.eq(user.get_id()))
             .first(self)
             .await
             .context("could not read strava events")
