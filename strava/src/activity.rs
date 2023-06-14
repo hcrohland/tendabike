@@ -51,7 +51,7 @@ impl StravaActivity {
     /// # Returns
     ///
     /// A Result containing a NewActivity struct if the conversion was successful, or an error if it failed.
-    async fn into_tb(self, user: &mut impl StravaPerson, conn: &mut impl StravaStore) -> AnyResult<NewActivity> {
+    async fn into_tb(self, user: &mut impl StravaPerson, conn: &mut impl StravaStore) -> TbResult<NewActivity> {
         let what = self.what()?;
         let gear = match self.gear_id {
             Some(x) => Some(gear::strava_to_tb(x, user, conn).await?),
@@ -81,7 +81,7 @@ impl StravaActivity {
     /// # Returns
     ///
     /// A Result containing an ActTypeId if the mapping was successful, or an error if it failed.
-    fn what(&self) -> AnyResult<ActTypeId> {
+    fn what(&self) -> TbResult<ActTypeId> {
         let t = self.type_.as_str();
 
         Ok(match t {
@@ -123,7 +123,7 @@ impl StravaActivity {
             "WeightTraining" => 0,
             "Wheelchair" => 0,
             "Yoga" => 0,
-            _ => bail!("unsupported activity {}", t),
+            _ => return Err(Error::BadRequest(format!("unsupported activity {}", t))),
         }
         .into())
     }
@@ -145,7 +145,7 @@ impl StravaActivity {
         self,
         user: &mut impl StravaPerson,
         conn: &mut impl StravaStore,
-    ) -> AnyResult<Summary> {
+    ) -> TbResult<Summary> {
         let strava_id = self.id;
         let tb = self.into_tb(user, conn).await?;
         conn.transaction(|conn| {
@@ -172,13 +172,13 @@ impl StravaActivity {
     }
 }
 
-pub async fn strava_url(act: i32, conn: &mut impl StravaStore) -> AnyResult<String> {
+pub async fn strava_url(act: i32, conn: &mut impl StravaStore) -> TbResult<String> {
     let g = conn.strava_activitid_get_by_tbid(act).await?;
 
     Ok(format!("https://strava.com/activities/{}", &g))
 }
 
-pub async fn upsert_activity(id: i64, user: &mut impl StravaPerson, conn: &mut impl StravaStore) -> AnyResult<Summary> {
+pub async fn upsert_activity(id: i64, user: &mut impl StravaPerson, conn: &mut impl StravaStore) -> TbResult<Summary> {
     let act: StravaActivity = user.request_json(&format!("/activities/{}", id), conn).await?;
     act.send_to_tb(user, conn).await
 }
@@ -187,7 +187,7 @@ pub(crate) async fn delete_activity(
     act_id: i64,
     user: &impl StravaPerson,
     conn: &mut impl StravaStore,
-) -> AnyResult<Summary> {
+) -> TbResult<Summary> {
 
     let tid = conn.strava_activity_get_activityid(act_id).await?;
     let mut res = Summary::default();

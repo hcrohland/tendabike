@@ -1,6 +1,6 @@
 use std::time::SystemTime;
 
-use anyhow::{bail, Context};
+use anyhow::{Context};
 use async_session::{
     async_trait,
     log::{debug, trace},
@@ -18,7 +18,7 @@ use oauth2::{
 };
 use serde::de::DeserializeOwned;
 use serde_derive::{Deserialize, Serialize};
-use tb_domain::{AnyResult, Error, Person, UserId};
+use tb_domain::{TbResult, Error, Person, UserId};
 use tb_strava::{StravaId, StravaPerson, StravaStore, StravaUser};
 
 use crate::{
@@ -44,7 +44,7 @@ impl RequestUser {
     pub(crate) async fn create_from_token(
         token: StandardTokenResponse<StravaExtraTokenFields, BasicTokenType>,
         conn: &mut impl StravaStore,
-    ) -> AnyResult<Self> {
+    ) -> TbResult<Self> {
         trace!("got token {:?})", &token);
 
         let StravaAthleteInfo {
@@ -74,7 +74,7 @@ impl RequestUser {
         })
     }
 
-    pub(crate) async fn create_from_id(user: UserId, conn: &mut impl StravaStore) -> AnyResult<RequestUser> {
+    pub(crate) async fn create_from_id(user: UserId, conn: &mut impl StravaStore) -> TbResult<RequestUser> {
         let user = StravaUser::read(user, conn).await?;
 
         let strava_id = user.strava_id();
@@ -103,12 +103,12 @@ impl RequestUser {
         &mut self,
         token: RefreshToken,
         conn: &mut impl StravaStore,
-    ) -> AnyResult<()> {
+    ) -> TbResult<()> {
         debug!("refreshing token for user {}", self.id);
         let token = STRAVACLIENT
             .exchange_refresh_token(&token)
             .request_async(async_http_client)
-            .await?;
+            .await.context("token exchange failed")?;
         self.access_token = token.access_token().clone();
         self.expires_at = token.expires_in().map(|d| SystemTime::now() + d);
         self.refresh_token = token.refresh_token().cloned();
@@ -121,12 +121,12 @@ impl RequestUser {
         &mut self,
         uri: &str,
         conn: &mut impl StravaStore,
-    ) -> AnyResult<reqwest::Response> {
+    ) -> TbResult<reqwest::Response> {
         if self.is_expired() {
             debug!("access token for user {} is expired", self.id);
             match self.refresh_token.clone() {
                 Some(token) => self.refresh_the_token(token, conn).await?,
-                None => bail!(Error::NotAuth(
+                None => return Err(Error::NotAuth(
                     "No Refresh Token provided and Access Token expired".to_string()
                 )),
             }
@@ -149,15 +149,15 @@ impl RequestUser {
             | StatusCode::BAD_GATEWAY
             | StatusCode::SERVICE_UNAVAILABLE
             | StatusCode::GATEWAY_TIMEOUT => {
-                bail!(Error::TryAgain(status.canonical_reason().unwrap()))
+                return Err(Error::TryAgain(status.canonical_reason().unwrap()))
             }
             StatusCode::UNAUTHORIZED => {
                 // self.disable(conn).await?;
-                bail!(Error::NotAuth(
+                return Err(Error::NotAuth(
                     "Strava request authorization withdrawn".to_string()
                 ))
             }
-            _ => bail!(Error::BadRequest(format!(
+            _ => return Err(Error::BadRequest(format!(
                 "Strava request error: {}",
                 status
                     .canonical_reason()
@@ -186,9 +186,9 @@ impl StravaPerson for RequestUser {
         &mut self,
         uri: &str,
         conn: &mut impl StravaStore,
-    ) -> AnyResult<T> {
-        let r = self.get_strava(uri, conn).await?.text().await?;
-        serde_json::from_str::<T>(&r).context("Could not parse response body")
+    ) -> TbResult<T> {
+        let r = self.get_strava(uri, conn).await?.text().await.context("could not reach strava")?;
+        Ok(serde_json::from_str::<T>(&r).context("Could not parse response body")?)
     }
 }
 
@@ -229,6 +229,7 @@ where
         Ok(user)
     }
 }
+
 
 pub struct AxumAdmin;
 

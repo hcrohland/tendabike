@@ -1,5 +1,4 @@
 use crate::AsyncDieselConn;
-use anyhow::Context;
 use async_session::log::debug;
 use diesel::prelude::*;
 use diesel::{BoolExpressionMethods, ExpressionMethods, Identifiable, Insertable, QueryDsl};
@@ -7,39 +6,39 @@ use diesel_async::RunQueryDsl;
 use tb_domain::schema;
 use time::OffsetDateTime;
 
-use tb_domain::{AnyResult, Attachment, PartId, PartTypeId, Usage};
+use tb_domain::{TbResult, Attachment, PartId, PartTypeId, Usage};
 
 #[async_session::async_trait]
 impl tb_domain::AttachmentStore for AsyncDieselConn {
-    async fn attachment_create(&mut self, att: Attachment) -> AnyResult<Attachment> {
+    async fn attachment_create(&mut self, att: Attachment) -> TbResult<Attachment> {
         att.insert_into(schema::attachments::table)
             .get_result::<Attachment>(self)
             .await
-            .context("insert into attachments")
+            .map_err(|e| e.into())
     }
 
-    async fn attachment_delete(&mut self, att: Attachment) -> AnyResult<Attachment> {
+    async fn attachment_delete(&mut self, att: Attachment) -> TbResult<Attachment> {
         diesel::delete(schema::attachments::table.find(att.id())) // delete the attachment in the database
             .get_result::<Attachment>(self)
             .await
-            .context(format!("Could not delete attachment {:#?}", att))
+            .map_err(|e| e.into())
     }
 
-    async fn attachment_reset_all(&mut self) -> AnyResult<usize> {
+    async fn attachment_reset_all(&mut self) -> TbResult<usize> {
         use schema::attachments::dsl::*;
         debug!("resetting all attachments");
         diesel::update(attachments)
             .set((descend.eq(0), count.eq(0)))
             .execute(self)
             .await
-            .context("Could not reset attachments")
+            .map_err(|e| e.into())
     }
 
     async fn attachment_get_by_gear_and_time(
         &mut self,
         act_gear: PartId,
         start: OffsetDateTime,
-    ) -> AnyResult<Vec<Attachment>> {
+    ) -> TbResult<Vec<Attachment>> {
         use schema::attachments::dsl::*;
         attachments
             .filter(gear.eq(act_gear))
@@ -47,7 +46,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .filter(detached.is_null().or(detached.ge(start)))
             .get_results::<Attachment>(self)
             .await
-            .context("Error reading attachments")
+            .map_err(|e| e.into())
     }
 
     async fn attachments_add_usage_by_gear_and_time(
@@ -55,7 +54,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
         act_gear: PartId,
         start: OffsetDateTime,
         usage: &Usage,
-    ) -> AnyResult<Vec<Attachment>> {
+    ) -> TbResult<Vec<Attachment>> {
         use schema::attachments::dsl::*;
         diesel::update(
             attachments
@@ -72,27 +71,27 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
         ))
         .get_results::<Attachment>(self)
         .await
-        .context("update attachments failed")
+        .map_err(|e| e.into())
     }
 
     async fn attachments_all_by_partlist(
         &mut self,
         ids: Vec<PartId>,
-    ) -> AnyResult<Vec<Attachment>> {
+    ) -> TbResult<Vec<Attachment>> {
         use schema::attachments::dsl::*;
         attachments
             .filter(part_id.eq_any(ids.clone()))
             .or_filter(gear.eq_any(ids))
             .get_results(self)
             .await
-            .context("get attachments")
+            .map_err(|e| e.into())
     }
 
     async fn attachment_get_by_part_and_time(
         &mut self,
         pid: PartId,
         tim: OffsetDateTime,
-    ) -> AnyResult<Option<Attachment>> {
+    ) -> TbResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         attachments
             .for_update()
@@ -102,7 +101,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .first::<Attachment>(self)
             .await
             .optional()
-            .context("attachment_get_by_part_and_time")
+            .map_err(|e| e.into())
     }
 
     async fn assembly_get_by_types_time_and_gear(
@@ -110,7 +109,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
         types: Vec<tb_domain::PartType>,
         target: PartId,
         tim: OffsetDateTime,
-    ) -> AnyResult<Vec<Attachment>> {
+    ) -> TbResult<Vec<Attachment>> {
         use schema::attachments::dsl::*;
         Attachment::belonging_to(&types)
             .for_update()
@@ -120,7 +119,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .order(hook)
             .load(self)
             .await
-            .context("assembly_get_by_types_time_and_gear")
+            .map_err(|e| e.into())
     }
 
     async fn attachment_find_part_of_type_at_hook_and_time(
@@ -129,7 +128,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
         gear_: PartId,
         hook_: PartTypeId,
         time_: OffsetDateTime,
-    ) -> AnyResult<Option<Attachment>> {
+    ) -> TbResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         use schema::parts;
         attachments
@@ -146,7 +145,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .first::<Attachment>(self)
             .await
             .optional()
-            .context("attachment_find_part_of_type_at_hook_and_time")
+            .map_err(|e| e.into())
     }
 
     /// Return Attachment if some other part is attached to same hook after the Event
@@ -157,7 +156,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
         hook_: PartTypeId,
         time_: OffsetDateTime,
         what: PartTypeId,
-    ) -> AnyResult<Option<Attachment>> {
+    ) -> TbResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         use schema::parts;
 
@@ -177,7 +176,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .first::<Attachment>(self)
             .await
             .optional()
-            .context("attachment_find_successor")
+            .map_err(|e| e.into())
     }
 
     /// Return Attachment if self.part_id is attached somewhere after the event
@@ -185,7 +184,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
         &mut self,
         part_id_: PartId,
         time_: OffsetDateTime,
-    ) -> AnyResult<Option<Attachment>> {
+    ) -> TbResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         attachments
             .for_update()
@@ -195,7 +194,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .first::<Attachment>(self)
             .await
             .optional()
-            .context("attachment_find_later_attachment_for_part")
+            .map_err(|e| e.into())
     }
 
     /// Iff self.part_id already attached just before self.time return that attachment
@@ -205,7 +204,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
         gear_: PartId,
         hook_: PartTypeId,
         time_: OffsetDateTime,
-    ) -> AnyResult<Option<Attachment>> {
+    ) -> TbResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         attachments
             .for_update()
@@ -216,6 +215,6 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .first::<Attachment>(self)
             .await
             .optional()
-            .context("attachment_find_part_attached_already")
+            .map_err(|e| e.into())
     }
 }

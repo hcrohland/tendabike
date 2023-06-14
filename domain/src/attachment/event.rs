@@ -1,11 +1,10 @@
-use anyhow::ensure;
 use async_session::log::{debug, trace};
 use scoped_futures::ScopedFutureExt;
 use serde_derive::Deserialize;
 use time::OffsetDateTime;
 
 use crate::{
-    traits::Store, AnyResult, Attachment, Error, PartId, PartTypeId, Person, SumHash, Summary,
+    traits::Store, Attachment, Error, PartId, PartTypeId, Person, SumHash, Summary, TbResult,
 };
 
 const MAX_TIME: OffsetDateTime = time::macros::datetime!(9100-01-01 0:00 UTC);
@@ -41,7 +40,7 @@ impl Event {
     ///
     /// Check's authorization and taht the part is attached
     ///
-    pub async fn detach(self, user: &dyn Person, conn: &mut impl Store) -> AnyResult<Summary> {
+    pub async fn detach(self, user: &dyn Person, conn: &mut impl Store) -> TbResult<Summary> {
         debug!("detach {:?}", self);
         // check user
         self.part_id.checkuser(user, conn).await?;
@@ -52,10 +51,12 @@ impl Event {
                     .await?
                     .ok_or(Error::NotFound("part not attached".into()))?;
 
-                ensure!(
-                    self.hook == target.hook && self.gear == target.gear,
-                    Error::BadRequest(format!("{:?} does not match attachment", self))
-                );
+                if !(self.hook == target.hook && self.gear == target.gear) {
+                    return Err(Error::BadRequest(format!(
+                        "{:?} does not match attachment",
+                        self
+                    )));
+                }
 
                 self.detach_assembly(target, conn).await
             }
@@ -71,11 +72,7 @@ impl Event {
     ///
     /// When the 'self.partid' has child parts they are attached to that part
     ///
-    async fn detach_assembly(
-        self,
-        target: Attachment,
-        conn: &mut impl Store,
-    ) -> AnyResult<Summary> {
+    async fn detach_assembly(self, target: Attachment, conn: &mut impl Store) -> TbResult<Summary> {
         debug!("- detaching {}", target.part_id);
         let subs = self.assembly(target.gear, conn).await?;
         let mut hash = SumHash::new(target.detach(self.time, conn).await?);
@@ -91,27 +88,25 @@ impl Event {
     ///
     /// When the detached part has child parts they are attached to that part
     ///
-    pub async fn attach(self, user: &dyn Person, conn: &mut impl Store) -> AnyResult<Summary> {
+    pub async fn attach(self, user: &dyn Person, conn: &mut impl Store) -> TbResult<Summary> {
         debug!("attach {:?}", self);
         // check user
         let part = self.part_id.part(user, conn).await?;
         // and types
         let mytype = part.what.get(conn).await?;
-        ensure!(
-            mytype.hooks.contains(&self.hook),
-            Error::BadRequest(format!(
+        if !mytype.hooks.contains(&self.hook) {
+            return Err(Error::BadRequest(format!(
                 "Type {} cannot be attached to hook {}",
                 mytype.name, self.hook
-            ))
-        );
+            )));
+        };
         let gear = self.gear.part(user, conn).await?;
-        ensure!(
-            mytype.main == gear.what || mytype.hooks.contains(&gear.what),
-            Error::BadRequest(format!(
+        if !(mytype.main == gear.what || mytype.hooks.contains(&gear.what)) {
+            return Err(Error::BadRequest(format!(
                 "Type {} cannot be attached to gear {}",
                 mytype.name, gear.what
-            ))
-        );
+            )));
+        };
         conn.transaction(|conn| {
             async move {
                 let mut hash = SumHash::default();
@@ -173,7 +168,7 @@ impl Event {
     pub(super) async fn attach_one(
         self,
         conn: &mut impl Store,
-    ) -> AnyResult<(Summary, OffsetDateTime)> {
+    ) -> TbResult<(Summary, OffsetDateTime)> {
         let mut hash = SumHash::default();
         // when does the current attachment end
         let mut end = MAX_TIME;
@@ -255,7 +250,7 @@ impl Event {
     }
 
     /// find all subparts of self which are attached to target at self.time
-    async fn assembly(&self, target: PartId, conn: &mut impl Store) -> AnyResult<Vec<Attachment>> {
+    async fn assembly(&self, target: PartId, conn: &mut impl Store) -> TbResult<Vec<Attachment>> {
         let types = self.part_id.what(conn).await?.subtypes(conn).await;
         conn.assembly_get_by_types_time_and_gear(types, target, self.time)
             .await

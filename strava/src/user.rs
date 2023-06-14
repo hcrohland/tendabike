@@ -26,7 +26,7 @@ impl StravaId {
         &self,
         time: i64,
         conn: &mut impl StravaStore,
-    ) -> AnyResult<i64> {
+    ) -> TbResult<i64> {
         // if self.last_activity >= time {
         //     return Ok(self.last_activity);
         // }
@@ -35,17 +35,18 @@ impl StravaId {
     }
 
     /// lock the current user
-    pub async fn lock(&self, conn: &mut impl StravaStore) -> AnyResult<()> {
-        let lock = conn.stravaid_lock(&self).await?;
-        ensure!(
-            lock,
-            Error::Conflict(format!("Two sessions for user {}", self))
-        );
-        Ok(())
+    pub async fn lock(&self, conn: &mut impl StravaStore) -> TbResult<()> {
+        if conn.stravaid_lock(&self).await? {
+            Ok(())
+        }
+        else
+        {
+            Err(Error::Conflict(format!("Two sessions for user {}", self)))
+        }
     }
 
     /// unlock the current user
-    pub async fn unlock(&self, conn: &mut impl StravaStore) -> AnyResult<usize> {
+    pub async fn unlock(&self, conn: &mut impl StravaStore) -> TbResult<usize> {
         conn.stravaid_unlock(self).await
     }
 
@@ -57,7 +58,7 @@ impl StravaId {
         self,
         refresh: Option<&String>,
         conn: &mut impl StravaStore,
-    ) -> AnyResult<StravaUser> {
+    ) -> TbResult<StravaUser> {
         conn.stravaid_update_token(self, refresh).await
     }
 }
@@ -91,7 +92,7 @@ impl StravaUser {
     /// # Errors
     ///
     /// Returns an `Error` if the user is not registered.
-    pub async fn read(id: UserId, conn: &mut impl StravaStore) -> AnyResult<Self> {
+    pub async fn read(id: UserId, conn: &mut impl StravaStore) -> TbResult<Self> {
         conn.stravauser_get_by_tbid(id).await
     }
 
@@ -110,12 +111,13 @@ impl StravaUser {
         self.refresh_token.clone()
     }
 
-    pub(crate) fn disabled(&self) -> bool {
+    pub(crate) 
+    fn disabled(&self) -> bool {
         self.refresh_token.is_none()
     }
 
     /// disable a user
-    async fn disable(&self, conn: &mut impl StravaStore) -> AnyResult<()> {
+    async fn disable(&self, conn: &mut impl StravaStore) -> TbResult<()> {
         let id = self.strava_id();
         info!("disabling user {}", id);
         event::insert_sync(id, self.last_activity, conn)
@@ -131,7 +133,8 @@ impl StravaUser {
     ///
     /// This function will return an error if the user does not exist, is already disabled
     /// or has open events and if strava or the database is not reachable.
-    pub async fn admin_disable(self, conn: &mut impl StravaStore) -> AnyResult<()> {
+    pub async fn admin_disable(self, conn: &mut impl StravaStore) -> anyhow::Result<()> {
+        use anyhow::bail;
         let events = conn.strava_events_get_count_for_user(&self.id).await?;
 
         if self.disabled() {
@@ -151,7 +154,7 @@ impl StravaUser {
             .error_for_status()?;
 
         warn!("User {} disabled by admin", self.tendabike_id);
-        self.disable(conn).await
+        Ok(self.disable(conn).await?)
     }
 
     /// Upsert a Strava user by ID, updating their Tendabike user ID if they already exist, or creating a new user if they don't.
@@ -165,14 +168,14 @@ impl StravaUser {
     ///
     /// # Returns
     ///
-    /// An `AnyResult` containing a `StravaUser` representing the upserted user.
+    /// An `TbResult` containing a `StravaUser` representing the upserted user.
     pub async fn upsert(
         id: StravaId,
         firstname: &str,
         lastname: &str,
         refresh: Option<&String>,
         conn: &mut impl StravaStore,
-    ) -> AnyResult<StravaUser> {
+    ) -> TbResult<StravaUser> {
         debug!("got id {}: {} {}", id, &firstname, &lastname);
 
         let user = conn.stravauser_get_by_stravaid(id).await?.pop();
@@ -201,7 +204,7 @@ impl StravaUser {
     pub async fn update_user(
         user: &mut impl StravaPerson,
         conn: &mut impl StravaStore,
-    ) -> AnyResult<Vec<PartId>> {
+    ) -> TbResult<Vec<PartId>> {
         #[derive(Deserialize, Debug)]
         struct Gear {
             id: String,
@@ -235,7 +238,7 @@ pub struct StravaStat {
     disabled: bool,
 }
 
-pub async fn get_all_stats(conn: &mut impl StravaStore) -> AnyResult<Vec<StravaStat>> {
+pub async fn get_all_stats(conn: &mut impl StravaStore) -> TbResult<Vec<StravaStat>> {
     let users = conn.stravausers_get_all().await?;
 
     let mut res = Vec::new();
@@ -260,8 +263,8 @@ pub async fn get_all_stats(conn: &mut impl StravaStore) -> AnyResult<Vec<StravaS
 ///
 /// # Returns
 ///
-/// An `AnyResult` containing a `String` representing the Strava URL for the user.
-pub async fn strava_url(strava_id: i32, conn: &mut impl StravaStore) -> AnyResult<String> {
+/// An `TbResult` containing a `String` representing the Strava URL for the user.
+pub async fn strava_url(strava_id: i32, conn: &mut impl StravaStore) -> TbResult<String> {
     let user_id = conn.stravaid_get_user_id(strava_id).await?;
     Ok(format!("https://strava.com/athletes/{}", &user_id))
 }

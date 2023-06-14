@@ -61,11 +61,11 @@ pub struct Stat {
 }
 
 impl UserId {
-    pub async fn read(self, conn: &mut impl Store) -> AnyResult<User> {
+    pub async fn read(self, conn: &mut impl Store) -> TbResult<User> {
         conn.user_read_by_id(self).await
     }
 
-    pub async fn get_stat(&self, conn: &mut impl Store) -> AnyResult<Stat> {
+    pub async fn get_stat(&self, conn: &mut impl Store) -> TbResult<Stat> {
         let user = self.read(conn).await?;
         let parts = conn.part_get_all_for_userid(self).await?.len() as i64;
         let activities = conn.activity_get_all_for_userid(self).await?.len() as i64;
@@ -80,7 +80,7 @@ impl UserId {
         firstname_: &str,
         lastname: &str,
         conn: &mut impl Store,
-    ) -> AnyResult<Self> {
+    ) -> TbResult<Self> {
         conn.user_create(firstname_, lastname).await.map(|u| u.id)
     }
 
@@ -89,18 +89,18 @@ impl UserId {
         firstname_: &str,
         lastname: &str,
         conn: &mut impl Store,
-    ) -> AnyResult<Self> {
+    ) -> TbResult<Self> {
         conn.user_update(self, firstname_, lastname)
             .await
             .map(|u| u.id)
     }
 
-    pub async fn is_admin(&self, conn: &mut impl Store) -> AnyResult<bool> {
+    pub async fn is_admin(&self, conn: &mut impl Store) -> TbResult<bool> {
         self.read(conn).await.map(|u| u.is_admin)
     }
 
     /// get all parts, attachments and activities for the user
-    pub async fn get_summary(&self, conn: &mut impl Store) -> AnyResult<Summary> {
+    pub async fn get_summary(&self, conn: &mut impl Store) -> TbResult<Summary> {
         use crate::*;
         let parts = Part::get_all(self, conn).await?;
         let attachments = Attachment::for_parts(&parts, conn).await?;

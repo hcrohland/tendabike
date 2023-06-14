@@ -1,8 +1,7 @@
 use tb_domain::ActTypeId;
 use tb_domain::ActivityType;
-use tb_domain::AnyResult;
+use tb_domain::TbResult;
 use crate::AsyncDieselConn;
-use anyhow::Context;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
@@ -22,33 +21,34 @@ impl tb_domain::TypesStore for AsyncDieselConn {
             .expect("error loading PartType")
     }
 
-    async fn get_parttype_by_id(&mut self, pid: PartTypeId) -> AnyResult<PartType> {
+    async fn get_parttype_by_id(&mut self, pid: PartTypeId) -> TbResult<PartType> {
         // parttype_get
         use schema::part_types::dsl::*;
         Ok(part_types.find(pid).get_result::<PartType>(self).await?)
     }
 
-    async fn parttypes_all_maingear(&mut self) -> AnyResult<Vec<PartTypeId>> {
+    async fn parttypes_all_maingear(&mut self) -> TbResult<Vec<PartTypeId>> {
         use schema::part_types::dsl::*;
         part_types
             .select(id)
             .filter(main.eq(id))
             .load::<PartTypeId>(self)
             .await
-            .context("error loading maingear")
+            .map_err(|e| e.into())
     }
 
     async fn get_activity_types_by_parttypeid(
         &mut self,
         tid: &PartTypeId,
-    ) -> AnyResult<Vec<ActTypeId>> {
+    ) -> TbResult<Vec<ActTypeId>> {
         use schema::activity_types::dsl::*;
 
-        Ok(activity_types
+        activity_types
             .filter(gear.eq(tid))
             .select(id)
             .get_results(self)
-            .await?)
+            .await
+            .map_err(|e| e.into())
     }
 
     async fn activitytypes_get_all_ordered(&mut self) -> Vec<ActivityType> {

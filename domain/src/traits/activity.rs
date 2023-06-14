@@ -1,6 +1,6 @@
 use time::OffsetDateTime;
 
-use crate::{ActTypeId, Activity, ActivityId, AnyResult, NewActivity, PartId, Person, UserId};
+use crate::{ActTypeId, Activity, ActivityId, TbResult, NewActivity, PartId, Person, UserId};
 // A trait for storing and retrieving activities.
 /// A trait defining the methods for storing and retrieving activities.
 #[async_trait::async_trait]
@@ -14,7 +14,7 @@ pub trait ActivityStore {
     /// # Returns
     ///
     /// Returns a `Result` containing the newly created `Activity` or an error if the operation fails.
-    async fn activity_create(&mut self, act: &NewActivity) -> AnyResult<Activity>;
+    async fn activity_create(&mut self, act: &NewActivity) -> TbResult<Activity>;
 
     /// Retrieves an activity by its ID.
     ///
@@ -25,7 +25,7 @@ pub trait ActivityStore {
     /// # Returns
     ///
     /// Returns a `Result` containing the retrieved `Activity` or an error if the operation fails.
-    async fn activity_read_by_id(&mut self, aid: ActivityId) -> AnyResult<Activity>;
+    async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Activity>;
 
     /// Updates an existing activity.
     ///
@@ -37,7 +37,7 @@ pub trait ActivityStore {
     /// # Returns
     ///
     /// Returns a `Result` containing the updated `Activity` or an error if the operation fails.
-    async fn activity_update(&mut self, aid: ActivityId, act: &NewActivity) -> AnyResult<Activity>;
+    async fn activity_update(&mut self, aid: ActivityId, act: &NewActivity) -> TbResult<Activity>;
 
     /// Deletes an activity by its ID.
     ///
@@ -48,7 +48,7 @@ pub trait ActivityStore {
     /// # Returns
     ///
     /// Returns a `Result` containing the number of deleted activities or an error if the operation fails.
-    async fn activity_delete(&mut self, aid: ActivityId) -> AnyResult<usize>;
+    async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize>;
 
     /// Retrieves all activities for a given user ID.
     ///
@@ -59,7 +59,7 @@ pub trait ActivityStore {
     /// # Returns
     ///
     /// Returns a `Result` containing a vector of `Activity` structs or an error if the operation fails.
-    async fn activity_get_all_for_userid(&mut self, uid: &UserId) -> AnyResult<Vec<Activity>>;
+    async fn activity_get_all_for_userid(&mut self, uid: &UserId) -> TbResult<Vec<Activity>>;
 
     /// Retrieves all activities for a given part ID and time range.
     ///
@@ -77,7 +77,7 @@ pub trait ActivityStore {
         part: PartId,
         begin: OffsetDateTime,
         end: OffsetDateTime,
-    ) -> AnyResult<Vec<Activity>>;
+    ) -> TbResult<Vec<Activity>>;
 
     /// Retrieves an activity for a given user ID and start time.
     ///
@@ -93,7 +93,7 @@ pub trait ActivityStore {
         &mut self,
         uid: UserId,
         rstart: OffsetDateTime,
-    ) -> AnyResult<Activity>;
+    ) -> TbResult<Activity>;
 
     /// Sets the gear for an activity if it is null.
     ///
@@ -111,19 +111,19 @@ pub trait ActivityStore {
         user: &dyn Person,
         types: Vec<ActTypeId>,
         partid: &PartId,
-    ) -> AnyResult<Vec<Activity>>;
+    ) -> TbResult<Vec<Activity>>;
 
     /// Resets all parts.
     ///
     /// # Returns
     ///
     /// Returns a `Result` containing the number of reset parts or an error if the operation fails.
-    async fn part_reset_all(&mut self) -> AnyResult<usize>;
+    async fn part_reset_all(&mut self) -> TbResult<usize>;
 
     /// Retrieves all activities.
     ///
     /// # Returns
     ///
     /// Returns a `Result` containing a vector of `Activity` structs or an error if the operation fails.
-    async fn activity_get_really_all(&mut self) -> AnyResult<Vec<Activity>>;
+    async fn activity_get_really_all(&mut self) -> TbResult<Vec<Activity>>;
 }
