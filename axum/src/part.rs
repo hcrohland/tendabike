@@ -22,8 +22,8 @@
 
 use crate::{
     error::{ApiResult, AppError},
-    user::RequestUser,
     appstate::AppState, DbPool,
+    RequestUser,
 };
 
 use axum::{

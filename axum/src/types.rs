@@ -6,7 +6,7 @@
 use axum::{Json, Router, routing::get, extract::State};
 use tb_domain::{ActivityType, PartType};
 
-use crate::{user::RequestUser, appstate::AppState, DbPool, error::ApiResult};
+use crate::{RequestUser, appstate::AppState, DbPool, error::ApiResult};
 
 // get all activity types
 async fn activity(_user: RequestUser, State(conn): State<DbPool>) -> ApiResult<Vec<ActivityType>> {

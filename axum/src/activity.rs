@@ -21,7 +21,7 @@ use tb_domain::{Activity, ActivityId, NewActivity, PartId, PartTypeId, Summary};
 
 use crate::{
     error::{ApiResult, AppError},
-    user::{AxumAdmin, RequestUser},
+    AxumAdmin, RequestUser,
     DbPool, appstate::AppState,
 };
 

@@ -28,6 +28,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use tb_diesel::DbPool;
 
+use user::{RequestUser, AxumAdmin};
+
 pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
     tracing_subscriber::registry()
         .with(

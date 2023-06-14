@@ -57,7 +57,7 @@ use {tb_domain::{AnyResult, Error, Summary}};
 use tb_strava::{event::{InEvent, process}, StravaUser};
 use serde_derive::{ Deserialize, Serialize};
 
-use crate::{ApiResult, user::{RequestUser, AxumAdmin}, DbPool};
+use crate::{ApiResult, RequestUser, AxumAdmin, DbPool};
 
 use super::refresh_token;
 
