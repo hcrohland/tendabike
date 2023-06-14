@@ -31,8 +31,9 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/all", get(userlist))
 }
 
-async fn getuser(user: RequestUser) -> Json<RequestUser> {
-    Json(user)
+async fn getuser(user: RequestUser, State(pool): State<DbPool>) -> ApiResult<tb_domain::User> {
+    let mut conn = pool.get().await?;
+    Ok(user.get_id().read(&mut conn).await.map(Json)?)
 }
 
 async fn summary(user: RequestUser, State(pool): State<DbPool>) -> ApiResult<Summary> {
