@@ -240,10 +240,8 @@ async fn update_user(
     user: StravaUser,
     conn: &mut impl StravaStore,
 ) -> AnyResult<StravaUser> {
-    let access = token.access_token().secret();
-    let expires = token.expires_in().map(|t| t.as_secs() as i64);
-    let refresh = token.refresh_token().map(|r| r.secret().as_str());
-    user.update_token(access, expires, refresh, conn).await
+    let refresh = token.refresh_token().map(|r| r.secret());
+    conn.stravaid_update_token(user.id, refresh).await
 }
 
 /* pub(crate) async fn refresh_token(

@@ -51,7 +51,7 @@ pub struct StravaUser {
     /// the expiry time for the access token
     pub expires_at: i64,
     /// the refresh token to get a new access token from Strava
-    pub refresh_token: String,
+    pub refresh_token: Option<String>,
 }
 
 impl StravaUser {
@@ -88,27 +88,7 @@ impl StravaUser {
     fn disabled(&self) -> bool {
         self.expires_at == 0
     }
-
-    /// update the access and optionally refresh token for the user
-    ///
-    /// sets a five minute buffer for the access token
-    /// returns the updated user
-    pub async fn update_token(
-        self,
-        access: &str,
-        expires: Option<i64>,
-        refresh: Option<&str>,
-        conn: &mut impl StravaStore,
-    ) -> AnyResult<Self> {
-        let iat = get_time();
-        let exp = expires.unwrap() + iat - 300; // 5 Minutes buffer
-        let user: StravaUser = conn
-            .stravaid_update_token(self.id, access, exp, refresh)
-            .await?;
-
-        Ok(user)
-    }
-
+    
     /// lock the current user
     pub async fn lock(&self, conn: &mut impl StravaStore) -> AnyResult<()> {
         let lock = conn.stravaid_lock(&self.id).await?;

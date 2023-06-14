@@ -325,9 +325,7 @@ pub trait StravaStore: tb_domain::Store + Send {
     async fn stravaid_update_token(
         &mut self,
         stravaid: StravaId,
-        access: &str,
-        exp: i64,
-        refresh: Option<&str>,
+        refresh: Option<&String>,
     ) -> AnyResult<StravaUser>;
 
     /// Returns the number of Strava events for a given user.

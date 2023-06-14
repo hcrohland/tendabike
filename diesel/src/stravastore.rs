@@ -247,16 +247,12 @@ impl tb_strava::StravaStore for AsyncDieselConn {
     async fn stravaid_update_token(
         &mut self,
         stravaid: StravaId,
-        access: &str,
-        exp: i64,
-        refresh: Option<&str>,
+        refresh: Option<&String>,
     ) -> AnyResult<StravaUser> {
         use schema::strava_users::dsl::*;
         diesel::update(strava_users.find(stravaid))
             .set((
-                access_token.eq(access),
-                expires_at.eq(exp),
-                refresh_token.eq(refresh.unwrap()),
+                refresh_token.eq(refresh),
             ))
             .get_result(self)
             .await
