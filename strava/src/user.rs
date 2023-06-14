@@ -8,11 +8,10 @@
 
 use diesel_derive_newtype::DieselNewType;
 use newtype_derive::{newtype_fmt, NewtypeDisplay, NewtypeFrom};
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::Deserialize;
 
 use super::*;
 
-const API: &str = "https://www.strava.com/api/v3";
 
 #[derive(
     DieselNewType, Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize,
@@ -33,6 +32,21 @@ impl StravaId {
         // }
         conn.stravauser_update_last_activity(self, time).await?;
         Ok(time)
+    }
+
+    /// lock the current user
+    pub async fn lock(&self, conn: &mut impl StravaStore) -> AnyResult<()> {
+        let lock = conn.stravaid_lock(&self).await?;
+        ensure!(
+            lock,
+            Error::Conflict(format!("Two sessions for user {}", self))
+        );
+        Ok(())
+    }
+
+    /// unlock the current user
+    pub async fn unlock(&self, conn: &mut impl StravaStore) -> AnyResult<usize> {
+        conn.stravaid_unlock(self).await
     }
 }
 
@@ -86,76 +100,30 @@ impl StravaUser {
     }
 
     fn disabled(&self) -> bool {
-        self.expires_at == 0
-    }
-    
-    /// lock the current user
-    pub async fn lock(&self, conn: &mut impl StravaStore) -> AnyResult<()> {
-        let lock = conn.stravaid_lock(&self.id).await?;
-        ensure!(
-            lock,
-            Error::Conflict(format!("Two sessions for user {}", self.id))
-        );
-        Ok(())
+        self.refresh_token.is_none()
     }
 
-    /// unlock the current user
-    pub async fn unlock(&self, conn: &mut impl StravaStore) -> AnyResult<usize> {
-        conn.stravaid_unlock(self.id).await
-    }
-
-    /// request information from the Strava API
+    /// update the refresh token for the user
     ///
-    /// will return Error::TryAgain on certain error conditions
-    /// will disable the User if Strava responds with NOT_AUTH
-    async fn get_strava(
+    /// sets a five minute buffer for the access token
+    /// returns the updated user
+    pub async fn update_token(
         &self,
-        uri: &str,
+        refresh: Option<&String>,
         conn: &mut impl StravaStore,
-    ) -> AnyResult<reqwest::Response> {
-        use reqwest::StatusCode;
-        let resp = reqwest::Client::new()
-            .get(format!("{}{}", API, uri))
-            .bearer_auth(&self.access_token)
-            .send()
-            .await
-            .context("Could not reach strava")?;
-
-        let status = resp.status();
-        if status.is_success() {
-            return Ok(resp);
-        }
-
-        match status {
-            StatusCode::TOO_MANY_REQUESTS
-            | StatusCode::BAD_GATEWAY
-            | StatusCode::SERVICE_UNAVAILABLE
-            | StatusCode::GATEWAY_TIMEOUT => {
-                bail!(Error::TryAgain(status.canonical_reason().unwrap()))
-            }
-            StatusCode::UNAUTHORIZED => {
-                self.disable(conn).await?;
-                bail!(Error::NotAuth(
-                    "Strava request authorization withdrawn".to_string()
-                ))
-            }
-            _ => bail!(Error::BadRequest(format!(
-                "Strava request error: {}",
-                status
-                    .canonical_reason()
-                    .unwrap_or("Unknown status received")
-            ))),
-        }
+    ) -> AnyResult<StravaUser> {
+        conn.stravaid_update_token(self.id, refresh).await
     }
 
     /// disable a user
     async fn disable(&self, conn: &mut impl StravaStore) -> AnyResult<()> {
         let id = self.strava_id();
         info!("disabling user {}", id);
-        event::insert_sync(id, crate::get_time(), conn)
+        event::insert_sync(id, self.last_activity, conn)
             .await
             .context(format!("Could insert sync for user: {:?}", id))?;
-        conn.stravauser_disable(&self.id).await
+        conn.stravaid_update_token(self.id, None).await?;
+        Ok(())
     }
 
     /// disable a user per admin request
@@ -165,7 +133,7 @@ impl StravaUser {
     /// This function will return an error if the user does not exist, is already disabled
     /// or has open events and if strava or the database is not reachable.
     pub async fn admin_disable(self, conn: &mut impl StravaStore) -> AnyResult<()> {
-        let events = conn.strava_events_get_count_for_user(&self).await?;
+        let events = conn.strava_events_get_count_for_user(&self.id).await?;
 
         if self.disabled() {
             bail!(Error::BadRequest(String::from("user already disabled!")))
@@ -203,6 +171,7 @@ impl StravaUser {
         id: StravaId,
         firstname: &str,
         lastname: &str,
+        refresh: Option<&String>,
         conn: &mut impl StravaStore,
     ) -> AnyResult<StravaUser> {
         debug!("got id {}: {} {}", id, &firstname, &lastname);
@@ -210,6 +179,7 @@ impl StravaUser {
         let user = conn.stravauser_get_by_stravaid(id).await?.pop();
         if let Some(user) = user {
             user.tendabike_id.update(firstname, lastname, conn).await?;
+            conn.stravaid_update_token(user.id, refresh).await?;
             return Ok(user);
         }
 
@@ -257,22 +227,6 @@ impl StravaUser {
     }
 }
 
-#[async_session::async_trait]
-impl StravaPerson for StravaUser {
-    fn strava_id(&self) -> StravaId {
-        self.id
-    }
-    
-    async fn request_json<T: DeserializeOwned>(
-        &mut self,
-        uri: &str,
-        conn: &mut impl StravaStore,
-    ) -> AnyResult<T> {
-        let r = self.get_strava(uri, conn).await?.text().await?;
-        serde_json::from_str::<T>(&r).context("Could not parse response body")
-    }
-}
-
 impl Person for StravaUser {
     fn get_id(&self) -> UserId {
         self.tendabike_id
@@ -296,7 +250,7 @@ pub async fn get_all_stats(conn: &mut impl StravaStore) -> AnyResult<Vec<StravaS
     let mut res = Vec::new();
     for u in users {
         let stat = u.tendabike_id.get_stat(conn).await?;
-        let events = conn.strava_events_get_count_for_user(&u).await?;
+        let events = conn.strava_events_get_count_for_user(&u.id).await?;
         res.push(StravaStat {
             stat,
             events,

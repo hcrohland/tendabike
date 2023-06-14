@@ -341,7 +341,7 @@ pub trait StravaStore: tb_domain::Store + Send {
     /// # Errors
     ///
     /// Returns an error if the event count cannot be retrieved.
-    async fn strava_events_get_count_for_user(&mut self, user: &impl StravaPerson) -> AnyResult<i64>;
+    async fn strava_events_get_count_for_user(&mut self, user: &StravaId) -> AnyResult<i64>;
 
     /// Disables a Strava user.
     ///
@@ -382,7 +382,7 @@ pub trait StravaStore: tb_domain::Store + Send {
     /// # Errors
     ///
     /// Returns an error if the unlock operation fails.
-    async fn stravaid_unlock(&mut self, id: StravaId) -> AnyResult<usize>;
+    async fn stravaid_unlock(&mut self, id: &StravaId) -> AnyResult<usize>;
 }
 
 #[async_trait]

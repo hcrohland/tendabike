@@ -64,7 +64,7 @@ impl RequestUser {
 
         Ok(Self {
             id: user.get_id(),
-            strava_id: user.strava_id(),
+            strava_id: user.id,
             is_admin: user.is_admin(),
             access_token: token.access_token().clone(),
             expires_at: token.expires_in().map(|d| SystemTime::now() + d),

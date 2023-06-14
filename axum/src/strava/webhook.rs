@@ -54,8 +54,7 @@ use async_session::log::{trace, info};
 use axum::{Json, extract::{Query, Path, State}};
 use {tb_domain::{AnyResult, Error, Summary}};
 
-use tb_domain::Person;
-use tb_strava::{event::{InEvent, process}, StravaUser};
+use tb_strava::{event::{InEvent, process}, StravaPerson};
 use serde_derive::{ Deserialize, Serialize};
 
 use crate::{ApiResult, RequestUser, AxumAdmin, DbPool};
@@ -88,12 +87,11 @@ impl Hub {
 
 const VERIFY_TOKEN: &str = "tendabike_strava";
 
-pub(crate) async fn hooks (user: RequestUser, State(conn): State<DbPool>) -> ApiResult<Summary> {
+pub(crate) async fn hooks (mut user: RequestUser, State(conn): State<DbPool>) -> ApiResult<Summary> {
     let mut conn = conn.get().await?;
-    let mut user = StravaUser::read(user.get_id(), &mut conn).await?;
-    user.lock(&mut conn).await?;
+    user.strava_id().lock(&mut conn).await?;
     let res = process(&mut user, &mut conn).await;
-    user.unlock(&mut conn).await?;
+    user.strava_id().unlock(&mut conn).await?;
     Ok(Json(res?))
 }
 

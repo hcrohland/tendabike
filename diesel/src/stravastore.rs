@@ -264,12 +264,12 @@ impl tb_strava::StravaStore for AsyncDieselConn {
     /// # Errors
     ///
     /// This function will return an error if the database connection fails.
-    async fn strava_events_get_count_for_user(&mut self, user: &impl StravaPerson) -> AnyResult<i64> {
+    async fn strava_events_get_count_for_user(&mut self, user: &StravaId) -> AnyResult<i64> {
         use schema::strava_events::dsl::*;
 
         strava_events
             .count()
-            .filter(owner_id.eq(user.get_id()))
+            .filter(owner_id.eq(user))
             .first(self)
             .await
             .context("could not read strava events")
@@ -301,7 +301,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
         Ok(lock)
     }
 
-    async fn stravaid_unlock(&mut self, id: StravaId) -> AnyResult<usize> {
+    async fn stravaid_unlock(&mut self, id: &StravaId) -> AnyResult<usize> {
         sql_query(format!("SELECT pg_advisory_unlock({});", id))
             .execute(self)
             .await
