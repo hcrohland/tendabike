@@ -35,6 +35,10 @@ use tb_strava::{StravaId, StravaUser, StravaStore};
 
 pub(crate) static COOKIE_NAME: &str = "SESSION";
 
+lazy_static::lazy_static! {
+    static ref STRAVACLIENT: StravaClient = oauth_client();
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct StravaAthleteInfo {
     id: StravaId,
@@ -104,8 +108,8 @@ pub(crate) fn oauth_client() -> StravaClient {
     .set_redirect_uri(RedirectUrl::new(redirect_url).unwrap())
 }
 
-pub(crate) async fn strava_auth(State(client): State<StravaClient>) -> impl IntoResponse {
-    let (auth_url, _csrf_token) = client
+pub(crate) async fn strava_auth() -> impl IntoResponse {
+    let (auth_url, _csrf_token) = STRAVACLIENT
         .authorize_url(CsrfToken::new_random)
         // .add_scope(Scope::new("activity:read_all,profile:read_all".to_string()))
         .add_scope(Scope::new(
@@ -147,12 +151,11 @@ pub(crate) struct AuthRequest {
 pub(crate) async fn login_authorized(
     Query(query): Query<AuthRequest>,
     State(store): State<MemoryStore>,
-    State(oauth_client): State<StravaClient>,
     State(conn): State<crate::DbPool>,
 ) -> Result<(HeaderMap, Redirect), (StatusCode, String)> {
     let mut conn = conn.get().await.map_err(internal_any)?;
     // Get an auth token
-    let token = oauth_client
+    let token = STRAVACLIENT
         .exchange_code(AuthorizationCode::new(query.code.clone()))
         .request_async(async_http_client)
         .await
@@ -229,7 +232,6 @@ async fn update_user(
 
 pub(crate) async fn refresh_token(
     user: StravaUser,
-    oauth: StravaClient,
     conn: &mut impl StravaStore,
 ) -> AnyResult<StravaUser> {
     if user.token_is_valid() {
@@ -244,7 +246,7 @@ pub(crate) async fn refresh_token(
     );
     let refresh_token = RefreshToken::new(user.refresh_token.clone());
 
-    let tokenset = oauth
+    let tokenset = STRAVACLIENT
         .exchange_refresh_token(&refresh_token)
         .request_async(async_http_client)
         .await?;

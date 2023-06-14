@@ -123,11 +123,11 @@ pub(super) async fn sync_api (_u: AxumAdmin, State(conn): State<DbPool>, Query(q
 }
 
 
-pub(super) async fn sync(Path(tbid): Path<i32>, _u: AxumAdmin, State(conn): State<DbPool>, State(oauth): State<super::StravaClient>) -> ApiResult<Summary> {
+pub(super) async fn sync(Path(tbid): Path<i32>, _u: AxumAdmin, State(conn): State<DbPool>) -> ApiResult<Summary> {
     let mut conn = conn.get().await?;
     let conn = &mut conn;
     let user = StravaUser::read(tbid.into(), conn).await?;
-    let user = refresh_token(user, oauth, conn).await?;
+    let user = refresh_token(user, conn).await?;
     user.lock( conn).await?;
     let res = process(&user, conn).await;
     user.unlock(conn).await?;

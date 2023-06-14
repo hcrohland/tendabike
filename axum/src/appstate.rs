@@ -11,20 +11,18 @@
 use async_session::MemoryStore;
 use axum_macros::FromRef;
 
-use crate::{strava::StravaClient, DbPool};
+use crate::{DbPool};
 
 #[derive(Clone, FromRef)]
 pub(super) struct AppState {
     store: MemoryStore,
-    oauth_client: StravaClient,
     pool: DbPool,
 }
 
 impl AppState {
-    pub(super) fn new(store: MemoryStore, oauth_client: StravaClient, pool: DbPool) -> Self {
+    pub(super) fn new(store: MemoryStore, pool: DbPool) -> Self {
         Self {
             store,
-            oauth_client,
             pool,
         }
     }
