@@ -1885,6 +1885,7 @@ dependencies = [
  "axum-macros",
  "headers",
  "http",
+ "lazy_static",
  "oauth2",
  "reqwest",
  "serde",

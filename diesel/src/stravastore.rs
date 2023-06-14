@@ -7,6 +7,7 @@ use diesel_async::RunQueryDsl;
 use tb_domain::ActivityId;
 use tb_domain::PartId;
 use tb_domain::UserId;
+use tb_strava::StravaPerson;
 use tb_strava::event::Event;
 use tb_strava::schema;
 use tb_strava::StravaId;
@@ -156,11 +157,11 @@ impl tb_strava::StravaStore for AsyncDieselConn {
 
     async fn strava_event_get_next_for_user(
         &mut self,
-        user: &tb_strava::StravaUser,
+        user: &impl StravaPerson,
     ) -> AnyResult<Option<Event>> {
         use schema::strava_events::dsl::*;
         strava_events
-            .filter(owner_id.eq_any(vec![0, user.id.into()]))
+            .filter(owner_id.eq_any(vec![0, user.strava_id().into()]))
             .first::<Event>(self)
             .await
             .optional()
@@ -231,11 +232,11 @@ impl tb_strava::StravaStore for AsyncDieselConn {
 
     async fn stravauser_update_last_activity(
         &mut self,
-        user: &StravaUser,
+        user: &StravaId,
         time: i64,
     ) -> AnyResult<()> {
         use schema::strava_users::dsl::*;
-        diesel::update(strava_users.find(user.id))
+        diesel::update(strava_users.find(user))
             .set(last_activity.eq(time))
             .execute(self)
             .await
@@ -246,16 +247,12 @@ impl tb_strava::StravaStore for AsyncDieselConn {
     async fn stravaid_update_token(
         &mut self,
         stravaid: StravaId,
-        access: &str,
-        exp: i64,
-        refresh: Option<&str>,
+        refresh: Option<&String>,
     ) -> AnyResult<StravaUser> {
         use schema::strava_users::dsl::*;
         diesel::update(strava_users.find(stravaid))
             .set((
-                access_token.eq(access),
-                expires_at.eq(exp),
-                refresh_token.eq(refresh.unwrap()),
+                refresh_token.eq(refresh),
             ))
             .get_result(self)
             .await
@@ -267,12 +264,12 @@ impl tb_strava::StravaStore for AsyncDieselConn {
     /// # Errors
     ///
     /// This function will return an error if the database connection fails.
-    async fn strava_events_get_count_for_user(&mut self, user: &StravaUser) -> AnyResult<i64> {
+    async fn strava_events_get_count_for_user(&mut self, user: &StravaId) -> AnyResult<i64> {
         use schema::strava_events::dsl::*;
 
         strava_events
             .count()
-            .filter(owner_id.eq(user.id))
+            .filter(owner_id.eq(user))
             .first(self)
             .await
             .context("could not read strava events")
@@ -304,7 +301,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
         Ok(lock)
     }
 
-    async fn stravaid_unlock(&mut self, id: StravaId) -> AnyResult<usize> {
+    async fn stravaid_unlock(&mut self, id: &StravaId) -> AnyResult<usize> {
         sql_query(format!("SELECT pg_advisory_unlock({});", id))
             .execute(self)
             .await

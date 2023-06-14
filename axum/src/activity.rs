@@ -21,12 +21,12 @@ use tb_domain::{Activity, ActivityId, NewActivity, PartId, PartTypeId, Summary};
 
 use crate::{
     error::{ApiResult, AppError},
-    user::{AxumAdmin, RUser},
+    AxumAdmin, RequestUser,
     DbPool, appstate::AppState,
 };
 
 async fn def_part_api(
-    user: RUser,
+    user: RequestUser,
     State(conn): State<DbPool>,
     Json(gear_id): Json<PartId>,
 ) -> ApiResult<Summary> {
@@ -41,14 +41,14 @@ async fn rescan(_u: AxumAdmin, State(conn): State<DbPool>) -> Result<(), AppErro
 }
 
 /// web interface to read an activity
-async fn act_get(user: RUser, State(conn): State<DbPool>, Path(id): Path<i32>) -> ApiResult<Activity> {
+async fn act_get(user: RequestUser, State(conn): State<DbPool>, Path(id): Path<i32>) -> ApiResult<Activity> {
     let mut conn = conn.get().await?;
     Ok(ActivityId::new(id).read(&user, &mut conn).await.map(Json)?)
 }
 
 /// web interface to create an activity
 async fn act_post(
-    user: RUser,
+    user: RequestUser,
     State(conn): State<DbPool>,
     Json(activity): Json<NewActivity>,
 ) -> Result<(StatusCode, Json<Summary>), AppError> {
@@ -61,7 +61,7 @@ async fn act_post(
 /// web interface to change an activity
 async fn act_put(
     Path(id): Path<i32>,
-    user: RUser,
+    user: RequestUser,
     State(conn): State<DbPool>,
     activity: Json<NewActivity>,
 ) -> ApiResult<Summary> {
@@ -72,7 +72,7 @@ async fn act_put(
 }
 
 /// web interface to delete an activity
-async fn act_delete(Path(id): Path<i32>, user: RUser, State(conn): State<DbPool>) -> ApiResult<Summary> {
+async fn act_delete(Path(id): Path<i32>, user: RequestUser, State(conn): State<DbPool>) -> ApiResult<Summary> {
     let mut conn = conn.get().await?;
     Ok(ActivityId::new(id).delete(&user, &mut conn).await.map(Json)?)
 }
@@ -81,13 +81,13 @@ async fn act_delete(Path(id): Path<i32>, user: RUser, State(conn): State<DbPool>
 struct QueryTZ {
     tz: String,
 }
-async fn descend(Query(q): Query<QueryTZ>, user: RUser, State(conn): State<DbPool>, data: String) -> ApiResult<(Summary, Vec<String>, Vec<String>)> {
+async fn descend(Query(q): Query<QueryTZ>, user: RequestUser, State(conn): State<DbPool>, data: String) -> ApiResult<(Summary, Vec<String>, Vec<String>)> {
     let mut conn = conn.get().await?;
     let res = Activity::csv2descend(data.as_bytes(), q.tz, &user, &mut conn).await?;
     Ok(Json(res))
 }
 
-async fn mycats(user: RUser, State(conn): State<DbPool>) -> ApiResult<HashSet<PartTypeId>> {
+async fn mycats(user: RequestUser, State(conn): State<DbPool>) -> ApiResult<HashSet<PartTypeId>> {
     let mut conn = conn.get().await?;
     Ok(Activity::categories(&user, &mut conn).await.map(Json)?)
 }

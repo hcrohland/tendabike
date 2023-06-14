@@ -306,8 +306,8 @@ impl Activity {
     /// A `Vec` of `Activity` objects representing all activities for the given user.
     ///
 
-    pub async fn get_all(user: &dyn Person, conn: &mut impl Store) -> AnyResult<Vec<Activity>> {
-        conn.activity_get_all_for_userid(user.get_id()).await
+    pub async fn get_all(user: &UserId, conn: &mut impl Store) -> AnyResult<Vec<Activity>> {
+        conn.activity_get_all_for_userid(user).await
     }
 
     pub async fn categories(
@@ -315,7 +315,7 @@ impl Activity {
         conn: &mut impl Store,
     ) -> AnyResult<HashSet<PartTypeId>> {
         let act_types = conn
-            .activity_get_all_for_userid(user.get_id())
+            .activity_get_all_for_userid(&user.get_id())
             .await?
             .into_iter()
             .map(|a| a.what)

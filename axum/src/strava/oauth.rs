@@ -7,18 +7,14 @@
 //!
 //! Finally, it defines the `COOKIE_NAME` constant which is used to store the session cookie.
 
-use crate::{internal_any, internal_error, user::RUser};
-use anyhow::ensure;
-use async_session::{log::info, MemoryStore, Session, SessionStore};
+use crate::{internal_any, internal_error};
+use async_session::{MemoryStore, Session, SessionStore};
 use axum::{
     extract::{Query, State, TypedHeader},
     http::{header::SET_COOKIE, HeaderMap},
-    response::{IntoResponse, Redirect, Response},
+    response::{IntoResponse, Redirect},
 };
 use http::StatusCode;
-use {
-    tb_domain::{AnyResult, Error},
-};
 use oauth2::{
     basic::{
         BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
@@ -26,20 +22,23 @@ use oauth2::{
     },
     reqwest::async_http_client,
     AuthUrl, AuthorizationCode, Client, ClientId, ClientSecret, CsrfToken, ExtraTokenFields,
-    RedirectUrl, RefreshToken, Scope, StandardRevocableToken, StandardTokenResponse, TokenResponse,
-    TokenUrl,
+    RedirectUrl, Scope, StandardRevocableToken, StandardTokenResponse, TokenResponse, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
 use std::env;
-use tb_strava::{StravaId, StravaUser, StravaStore};
+use tb_strava::StravaId;
 
 pub(crate) static COOKIE_NAME: &str = "SESSION";
 
+lazy_static::lazy_static! {
+    pub(super) static ref STRAVACLIENT: StravaClient = strava_oauth_client();
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct StravaAthleteInfo {
-    id: StravaId,
+    pub id: StravaId,
     pub firstname: String,
-    lastname: String,
+    pub lastname: String,
     #[serde(flatten)]
     other: serde_json::Value,
     // bio: String,
@@ -59,7 +58,7 @@ pub(crate) struct StravaAthleteInfo {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct StravaExtraTokenFields {
-    athlete: Option<StravaAthleteInfo>,
+    pub athlete: Option<StravaAthleteInfo>,
 }
 
 impl ExtraTokenFields for StravaExtraTokenFields {}
@@ -75,7 +74,7 @@ pub(crate) type StravaClient = Client<
     BasicRevocationErrorResponse,
 >;
 
-pub(crate) fn oauth_client() -> StravaClient {
+pub(crate) fn strava_oauth_client() -> StravaClient {
     // Environment variables (* = required):
     // *"CLIENT_ID"     "REPLACE_ME";
     // *"CLIENT_SECRET" "REPLACE_ME";
@@ -104,8 +103,8 @@ pub(crate) fn oauth_client() -> StravaClient {
     .set_redirect_uri(RedirectUrl::new(redirect_url).unwrap())
 }
 
-pub(crate) async fn strava_auth(State(client): State<StravaClient>) -> impl IntoResponse {
-    let (auth_url, _csrf_token) = client
+pub(crate) async fn strava_auth() -> impl IntoResponse {
+    let (auth_url, _csrf_token) = STRAVACLIENT
         .authorize_url(CsrfToken::new_random)
         // .add_scope(Scope::new("activity:read_all,profile:read_all".to_string()))
         .add_scope(Scope::new(
@@ -122,16 +121,20 @@ pub(crate) async fn logout(
     State(store): State<MemoryStore>,
     TypedHeader(cookies): TypedHeader<headers::Cookie>,
 ) -> impl IntoResponse {
-    if let Some (cookie) = cookies.get(COOKIE_NAME) {
+    if let Some(cookie) = cookies.get(COOKIE_NAME) {
         let session = match store.load_session(cookie.to_string()).await {
             Ok(Some(s)) => s,
             // No session active, just redirect
             _ => return Redirect::to("/").into_response(),
         };
         if store.destroy_session(session).await.is_err() {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to destroy session").into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to destroy session",
+            )
+                .into_response();
         }
-    }  
+    }
 
     Redirect::to("/").into_response()
 }
@@ -147,12 +150,12 @@ pub(crate) struct AuthRequest {
 pub(crate) async fn login_authorized(
     Query(query): Query<AuthRequest>,
     State(store): State<MemoryStore>,
-    State(oauth_client): State<StravaClient>,
     State(conn): State<crate::DbPool>,
 ) -> Result<(HeaderMap, Redirect), (StatusCode, String)> {
     let mut conn = conn.get().await.map_err(internal_any)?;
+
     // Get an auth token
-    let token = oauth_client
+    let token = STRAVACLIENT
         .exchange_code(AuthorizationCode::new(query.code.clone()))
         .request_async(async_http_client)
         .await
@@ -165,31 +168,10 @@ pub(crate) async fn login_authorized(
         ));
     }
 
-    let StravaAthleteInfo {
-        id,
-        firstname,
-        lastname,
-        ..
-    } = token.extra_fields().athlete.as_ref().ok_or((
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "No athlete info".to_string(),
-    ))?;
-
-    let user = StravaUser::upsert(*id, firstname, lastname, &mut conn)
+    let user = super::RequestUser::create_from_token(token, &mut conn)
         .await
         .map_err(internal_any)?;
 
-    // get (and eventually create) StravaUser
-    let user = update_user(&token, user, &mut conn).await.map_err(internal_any)?;
-
-    let is_admin = user.tendabike_id.is_admin(&mut conn).await.map_err(internal_any)?;
-    let user = RUser::new(
-        user.tendabike_id,
-        user.id,
-        firstname.clone(),
-        lastname.clone(),
-        is_admin,
-    );
     // Create a new session filled with user data
     let mut session = Session::new();
     session.insert("user", &user).map_err(internal_error)?;
@@ -197,9 +179,14 @@ pub(crate) async fn login_authorized(
     // Store session and get corresponding cookie
     let cookie = match store.store_session(session).await.map_err(internal_any)? {
         Some(cookie) => cookie,
-        None => return Err((StatusCode::INTERNAL_SERVER_ERROR, "Failed to store session".to_string())),
+        None => {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to store session".to_string(),
+            ))
+        }
     };
-    
+
     // Build the cookie
     let cookie = format!("{}={}; SameSite=Lax; Path=/", COOKIE_NAME, cookie);
 
@@ -208,64 +195,4 @@ pub(crate) async fn login_authorized(
     headers.insert(SET_COOKIE, cookie.parse().unwrap());
 
     Ok((headers, Redirect::to("/")))
-}
-
-async fn update_user(
-    token: &StandardTokenResponse<StravaExtraTokenFields, BasicTokenType>,
-    user: StravaUser,
-    conn: &mut impl StravaStore,
-) -> AnyResult<StravaUser> {
-    let access = token.access_token().secret();
-    let expires = token.expires_in().map(|t| t.as_secs() as i64);
-    let refresh = token.refresh_token().map(|r| r.secret().as_str());
-    user.update_token(access, expires, refresh, conn).await
-}
-
-pub(crate) async fn refresh_token(
-    user: StravaUser,
-    oauth: StravaClient,
-    conn: &mut impl StravaStore,
-) -> AnyResult<StravaUser> {
-    if user.token_is_valid() {
-        return Ok(user);
-    }
-
-    info!("refreshing access token for strava id {}", user.strava_id());
-
-    ensure!(
-        user.expires_at != 0,
-        Error::NotAuth("User needs to authenticate".to_string())
-    );
-    let refresh_token = RefreshToken::new(user.refresh_token.clone());
-
-    let tokenset = oauth
-        .exchange_refresh_token(&refresh_token)
-        .request_async(async_http_client)
-        .await?;
-    update_user(&tokenset, user, conn).await
-}
-
-// Make our own error that wraps `anyhow::Error`.
-struct AppError(anyhow::Error);
-
-// Tell axum how to convert `AppError` into a response.
-impl IntoResponse for AppError {
-    fn into_response(self) -> Response {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Something went wrong: {}", self.0),
-        )
-            .into_response()
-    }
-}
-
-// This enables using `?` on functions that return `Result<_, anyhow::Error>` to turn them into
-// `Result<_, AppError>`. That way you don't need to do that manually.
-impl<E> From<E> for AppError
-where
-    E: Into<anyhow::Error>,
-{
-    fn from(err: E) -> Self {
-        Self(err.into())
-    }
 }

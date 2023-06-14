@@ -25,7 +25,7 @@ use anyhow::{bail, ensure, Context, Result as AnyResult};
 use tb_domain::*;
 
 mod traits;
-pub use traits::StravaStore;
+pub use traits::*;
 
 pub mod activity;
 pub mod event;

@@ -36,7 +36,7 @@ table! {
         last_activity -> Int8,
         access_token -> Text,
         expires_at -> Int8,
-        refresh_token -> Text,
+        refresh_token -> Nullable<Text>,
     }
 }
 

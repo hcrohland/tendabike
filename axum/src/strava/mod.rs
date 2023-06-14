@@ -10,8 +10,10 @@
 mod oauth;
 mod webhook;
 mod redirect;
+mod requestuser;
 use axum::{Router, routing::{get, post}};
 pub(crate) use oauth::*;
+pub(crate) use requestuser::*;
 
 use crate::appstate::AppState;
 

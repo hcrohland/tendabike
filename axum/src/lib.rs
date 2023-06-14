@@ -28,6 +28,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use tb_diesel::DbPool;
 
+use strava::{RequestUser, AxumAdmin};
+
 pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
     tracing_subscriber::registry()
         .with(
@@ -39,9 +41,8 @@ pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
 
     // `MemoryStore` is just used as an example. Don't use this in production.
     let store = MemoryStore::new();
-    let oauth_client = strava::oauth_client();
 
-    let app_state = AppState::new(store, oauth_client, pool);
+    let app_state = AppState::new(store, pool);
 
     let app = Router::new()
         .nest_service("/", tower_http::services::ServeDir::new(path))

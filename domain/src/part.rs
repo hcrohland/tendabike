@@ -212,8 +212,8 @@ impl Part {
     /// # Errors
     ///
     /// Returns an `AnyResult` object that may contain a `diesel::result::Error` if the query fails.
-    pub async fn get_all(user: &dyn Person, conn: &mut impl Store) -> AnyResult<Vec<Part>> {
-        conn.part_get_all_for_userid(user.get_id()).await
+    pub async fn get_all(user: &UserId, conn: &mut impl Store) -> AnyResult<Vec<Part>> {
+        conn.part_get_all_for_userid(user).await
     }
 
     /// reset all usage counters for all parts of a person

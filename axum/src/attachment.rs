@@ -9,11 +9,11 @@
 use axum::{routing::post, Json, Router, extract::State};
 use tb_domain::{Event, Summary};
 
-use crate::{error::ApiResult, user::RUser, DbPool, appstate::AppState};
+use crate::{error::ApiResult, RequestUser, DbPool, appstate::AppState};
 
 /// route for attach API
 async fn attach_rt(
-    user: RUser,
+    user: RequestUser,
     State(conn): State<DbPool>,
     Json(event): Json<Event>,
 ) -> ApiResult<Summary> {
@@ -23,7 +23,7 @@ async fn attach_rt(
 
 /// route for detach API
 async fn detach_rt(
-    user: RUser,
+    user: RequestUser,
     State(conn): State<DbPool>,
     Json(event): Json<Event>,
 ) -> ApiResult<Summary> {

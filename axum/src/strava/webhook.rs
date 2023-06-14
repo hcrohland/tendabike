@@ -54,12 +54,10 @@ use async_session::log::{trace, info};
 use axum::{Json, extract::{Query, Path, State}};
 use {tb_domain::{AnyResult, Error, Summary}};
 
-use tb_strava::{event::{InEvent, process}, StravaUser};
+use tb_strava::{event::{InEvent, process}, StravaPerson};
 use serde_derive::{ Deserialize, Serialize};
 
-use crate::{ApiResult, user::{RUser, AxumAdmin}, DbPool};
-
-use super::refresh_token;
+use crate::{ApiResult, RequestUser, AxumAdmin, DbPool};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Hub {
@@ -89,12 +87,11 @@ impl Hub {
 
 const VERIFY_TOKEN: &str = "tendabike_strava";
 
-pub(crate) async fn hooks (user: RUser, State(conn): State<DbPool>) -> ApiResult<Summary> {
+pub(crate) async fn hooks (mut user: RequestUser, State(conn): State<DbPool>) -> ApiResult<Summary> {
     let mut conn = conn.get().await?;
-    let user = user.get_strava_user(&mut conn).await?;
-    user.lock(&mut conn).await?;
-    let res = process(&user, &mut conn).await;
-    user.unlock(&mut conn).await?;
+    user.strava_id().lock(&mut conn).await?;
+    let res = process(&mut user, &mut conn).await;
+    user.strava_id().unlock(&mut conn).await?;
     Ok(Json(res?))
 }
 
@@ -119,17 +116,16 @@ pub(super) struct SyncQuery {
 pub(super) async fn sync_api (_u: AxumAdmin, State(conn): State<DbPool>, Query(query): Query<SyncQuery>) -> ApiResult<()> {
     let mut conn = conn.get().await?;
     let user_id: Option<tb_domain::UserId> = query.user_id.map(|u| u.into());
-    Ok(tb_strava::sync_users(user_id, query.time, &mut conn).await.map(Json)?)
+    Ok(tb_strava::event::sync_users(user_id, query.time, &mut conn).await.map(Json)?)
 }
 
 
-pub(super) async fn sync(Path(tbid): Path<i32>, _u: AxumAdmin, State(conn): State<DbPool>, State(oauth): State<super::StravaClient>) -> ApiResult<Summary> {
+pub(super) async fn sync(Path(tbid): Path<i32>, _u: AxumAdmin, State(conn): State<DbPool>) -> ApiResult<Summary> {
     let mut conn = conn.get().await?;
     let conn = &mut conn;
-    let user = StravaUser::read(tbid.into(), conn).await?;
-    let user = refresh_token(user, oauth, conn).await?;
-    user.lock( conn).await?;
-    let res = process(&user, conn).await;
-    user.unlock(conn).await?;
+    let mut user = RequestUser::create_from_id(tbid.into(), conn).await?;
+    user.strava_id().lock(conn).await?;
+    let res = process(&mut user, conn).await;
+    user.strava_id().unlock(conn).await?;
     Ok(Json(res?))
 }

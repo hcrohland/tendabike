@@ -45,7 +45,8 @@ impl InEvent {
         ensure!(
             conn.stravauser_get_by_stravaid(self.owner_id.into())
                 .await?
-                .len() == 1,
+                .len()
+                == 1,
             Error::BadRequest(format!("Unknown event owner received: {:?}", self))
         );
 
@@ -60,7 +61,7 @@ impl InEvent {
             updates: serde_json::to_string(&self.updates).unwrap_or_else(|e| format!("{:?}", e)),
         })
     }
-    
+
     pub async fn accept(self, conn: &mut impl StravaStore) -> AnyResult<()> {
         let event = self.to_event(conn).await?;
         conn.stravaevent_store(event).await?;
@@ -114,7 +115,7 @@ impl Event {
     #[async_recursion]
     async fn rate_limit(
         self,
-        user: &StravaUser,
+        user: &impl StravaPerson,
         conn: &mut impl StravaStore,
     ) -> anyhow::Result<Option<Self>> {
         // rate limit event
@@ -131,7 +132,7 @@ impl Event {
 
     async fn process_activity(
         self,
-        user: &StravaUser,
+        user: &mut impl StravaPerson,
         conn: &mut impl StravaStore,
     ) -> anyhow::Result<Summary> {
         let summary = self.process_hook(user, conn).await;
@@ -162,7 +163,11 @@ impl Event {
     /// # Examples
     ///
     ///
-    async fn process_hook(&self, user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
+    async fn process_hook(
+        &self,
+        user: &mut impl StravaPerson,
+        conn: &mut impl StravaStore,
+    ) -> anyhow::Result<Summary> {
         let res = match self.aspect_type.as_str() {
             "create" | "update" => activity::upsert_activity(self.object_id, user, conn).await?,
             "delete" => activity::delete_activity(self.object_id, user, conn).await?,
@@ -175,14 +180,18 @@ impl Event {
         Ok(res)
     }
 
-    async fn sync(mut self, user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
+    async fn sync(
+        mut self,
+        user: &mut impl StravaPerson,
+        conn: &mut impl StravaStore,
+    ) -> anyhow::Result<Summary> {
         // let mut len = batch;
         let mut start = self.event_time;
         let mut hash = SumHash::default();
 
         // while len == batch
         {
-            let acts = next_activities(user, conn, 10, Some(start)).await?;
+            let acts = next_activities(user, conn, 10, start).await?;
             if acts.is_empty() {
                 self.delete(conn).await?;
             } else {
@@ -201,7 +210,7 @@ impl Event {
 
     async fn process_sync(
         self,
-        user: &StravaUser,
+        user: &mut impl StravaPerson,
         conn: &mut impl StravaStore,
     ) -> Result<Summary, anyhow::Error> {
         let summary = self.sync(user, conn).await;
@@ -236,7 +245,6 @@ pub async fn insert_sync(
     event_time: i64,
     conn: &mut impl StravaStore,
 ) -> anyhow::Result<()> {
-    
     ensure!(
         event_time <= get_time(),
         Error::BadRequest(format!("eventtime {} > now!", event_time))
@@ -247,8 +255,7 @@ pub async fn insert_sync(
         object_type: "sync".to_string(),
         ..Default::default()
     };
-    conn.stravaevent_store(event)
-    .await
+    conn.stravaevent_store(event).await
 }
 
 pub async fn insert_stop(conn: &mut impl StravaStore) -> anyhow::Result<()> {
@@ -260,7 +267,10 @@ pub async fn insert_stop(conn: &mut impl StravaStore) -> anyhow::Result<()> {
     conn.stravaevent_store(e).await
 }
 
-async fn get_event(user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Result<Option<Event>> {
+async fn get_event(
+    user: &impl StravaPerson,
+    conn: &mut impl StravaStore,
+) -> anyhow::Result<Option<Event>> {
     let event = conn.strava_event_get_next_for_user(user).await?;
     let event = match event {
         Some(event) => event,
@@ -272,9 +282,10 @@ async fn get_event(user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Re
 
     // Prevent unneeded calls to Strava
     // only the latest event for an object is interesting
-    let  mut list = conn.strava_event_get_later(event.object_id, event.owner_id).await?;
+    let mut list = conn
+        .strava_event_get_later(event.object_id, event.owner_id)
+        .await?;
     let res = list.pop();
-
 
     if !list.is_empty() {
         debug!("Dropping {:#?}", list);
@@ -285,7 +296,10 @@ async fn get_event(user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Re
     Ok(res)
 }
 
-async fn check_try_again(err: anyhow::Error, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
+async fn check_try_again(
+    err: anyhow::Error,
+    conn: &mut impl StravaStore,
+) -> anyhow::Result<Summary> {
     // Keep events for temporary failure - delete others
     match err.downcast_ref::<Error>() {
         Some(&Error::TryAgain(_)) => {
@@ -298,25 +312,19 @@ async fn check_try_again(err: anyhow::Error, conn: &mut impl StravaStore) -> any
 }
 
 async fn next_activities(
-    user: &StravaUser,
+    user: &mut impl StravaPerson,
     conn: &mut impl StravaStore,
     per_page: usize,
-    start: Option<i64>,
+    start: i64,
 ) -> anyhow::Result<Vec<StravaActivity>> {
-    let r = user
-        .request(
-            &format!(
-                "/activities?after={}&per_page={}",
-                start.unwrap_or(user.last_activity),
-                per_page
-            ),
-            conn,
-        )
-        .await?;
-    Ok(serde_json::from_str::<Vec<StravaActivity>>(&r)?)
+    user.request_json(
+        &format!("/activities?after={}&per_page={}", start, per_page),
+        conn,
+    )
+    .await
 }
 
-pub async fn process(user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
+pub async fn process(user: &mut impl StravaPerson, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
     let event = get_event(user, conn).await?;
     if event.is_none() {
         return Ok(Summary::default());
@@ -334,4 +342,24 @@ pub async fn process(user: &StravaUser, conn: &mut impl StravaStore) -> anyhow::
             Ok(Summary::default())
         }
     }
+}
+
+pub async fn sync_users(
+    user_id: Option<UserId>,
+    time: i64,
+    conn: &mut impl StravaStore,
+) -> AnyResult<()> {
+    info!("syncing users {:?} at {}", user_id, time);
+    let users = match user_id {
+        Some(id) => vec![conn.stravauser_get_by_tbid(id).await?],
+        None => conn.stravausers_get_all().await?,
+    };
+    for user in users {
+        if user.disabled() {
+            warn!("user {} disabled, skipping", user.strava_id());
+            continue;
+        }
+        event::insert_sync(user.strava_id(), time, conn).await?;
+    }
+    Ok(())
 }
