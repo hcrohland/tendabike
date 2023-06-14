@@ -116,22 +116,16 @@ pub(super) struct SyncQuery {
 pub(super) async fn sync_api (_u: AxumAdmin, State(conn): State<DbPool>, Query(query): Query<SyncQuery>) -> ApiResult<()> {
     let mut conn = conn.get().await?;
     let user_id: Option<tb_domain::UserId> = query.user_id.map(|u| u.into());
-    Ok(tb_strava::sync_users(user_id, query.time, &mut conn).await.map(Json)?)
+    Ok(tb_strava::event::sync_users(user_id, query.time, &mut conn).await.map(Json)?)
 }
 
 
-pub(super) async fn sync(Path(_tbid ): Path<i32>, _u: AxumAdmin) -> ApiResult<Summary> {
-    todo!()
-}
-/* 
 pub(super) async fn sync(Path(tbid): Path<i32>, _u: AxumAdmin, State(conn): State<DbPool>) -> ApiResult<Summary> {
     let mut conn = conn.get().await?;
     let conn = &mut conn;
-    let user = StravaUser::read(tbid.into(), conn).await?;
-    let user = refresh_token(user, conn).await?;
-    user.lock( conn).await?;
-    let res = process(&user, conn).await;
-    user.unlock(conn).await?;
+    let mut user = RequestUser::create_from_id(tbid.into(), conn).await?;
+    user.strava_id().lock(conn).await?;
+    let res = process(&mut user, conn).await;
+    user.strava_id().unlock(conn).await?;
     Ok(Json(res?))
 }
- */

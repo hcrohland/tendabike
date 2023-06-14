@@ -48,6 +48,18 @@ impl StravaId {
     pub async fn unlock(&self, conn: &mut impl StravaStore) -> AnyResult<usize> {
         conn.stravaid_unlock(self).await
     }
+
+    /// update the refresh token for the user
+    ///
+    /// sets a five minute buffer for the access token
+    /// returns the updated user
+    pub async fn update_token(
+        self,
+        refresh: Option<&String>,
+        conn: &mut impl StravaStore,
+    ) -> AnyResult<StravaUser> {
+        conn.stravaid_update_token(self, refresh).await
+    }
 }
 
 /// Strava User data
@@ -55,17 +67,17 @@ impl StravaId {
 #[diesel(table_name = crate::schema::strava_users)]
 pub struct StravaUser {
     /// the Strava user id
-    pub id: StravaId,
+    id: StravaId,
     /// the corresponding tendabike user id
-    pub tendabike_id: UserId,
+    tendabike_id: UserId,
     /// the time of the latest activity we have processed
-    pub last_activity: i64,
+    last_activity: i64,
     /// the access token to access user data for this user
-    pub access_token: String,
+    access_token: String,
     /// the expiry time for the access token
-    pub expires_at: i64,
+    expires_at: i64,
     /// the refresh token to get a new access token from Strava
-    pub refresh_token: Option<String>,
+    refresh_token: Option<String>,
 }
 
 impl StravaUser {
@@ -94,25 +106,12 @@ impl StravaUser {
         self.id
     }
 
-    /// check if the access token is still valid
-    pub fn token_is_valid(&self) -> bool {
-        self.expires_at > get_time()
+    pub fn refresh_token(&self) -> Option<String> {
+        self.refresh_token.clone()
     }
 
-    fn disabled(&self) -> bool {
+    pub(crate) fn disabled(&self) -> bool {
         self.refresh_token.is_none()
-    }
-
-    /// update the refresh token for the user
-    ///
-    /// sets a five minute buffer for the access token
-    /// returns the updated user
-    pub async fn update_token(
-        &self,
-        refresh: Option<&String>,
-        conn: &mut impl StravaStore,
-    ) -> AnyResult<StravaUser> {
-        conn.stravaid_update_token(self.id, refresh).await
     }
 
     /// disable a user
@@ -151,7 +150,7 @@ impl StravaUser {
             .context("Could not reach strava")?
             .error_for_status()?;
 
-        warn!("User {} disabled by admin", self.tb_id());
+        warn!("User {} disabled by admin", self.tendabike_id);
         self.disable(conn).await
     }
 
@@ -227,14 +226,6 @@ impl StravaUser {
     }
 }
 
-impl Person for StravaUser {
-    fn get_id(&self) -> UserId {
-        self.tendabike_id
-    }
-    fn is_admin(&self) -> bool {
-        false
-    }
-}
 
 #[derive(Debug, Serialize)]
 pub struct StravaStat {
@@ -258,26 +249,6 @@ pub async fn get_all_stats(conn: &mut impl StravaStore) -> AnyResult<Vec<StravaS
         });
     }
     Ok(res)
-}
-
-pub async fn sync_users(
-    user_id: Option<UserId>,
-    time: i64,
-    conn: &mut impl StravaStore,
-) -> AnyResult<()> {
-    info!("syncing users {:?} at {}", user_id, time);
-    let users = match user_id {
-        Some(id) => vec![conn.stravauser_get_by_tbid(id).await?],
-        None => conn.stravausers_get_all().await?,
-    };
-    for user in users {
-        if user.disabled() {
-            warn!("user {} disabled, skipping", user.id);
-            continue;
-        }
-        event::insert_sync(user.id, time, conn).await?;
-    }
-    Ok(())
 }
 
 /// Returns the Strava URL for a user with the given Strava ID.

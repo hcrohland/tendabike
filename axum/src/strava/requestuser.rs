@@ -41,7 +41,7 @@ pub(crate) struct RequestUser {
 const API: &str = "https://www.strava.com/api/v3";
 
 impl RequestUser {
-    pub(crate) async fn create(
+    pub(crate) async fn create_from_token(
         token: StandardTokenResponse<StravaExtraTokenFields, BasicTokenType>,
         conn: &mut impl StravaStore,
     ) -> AnyResult<Self> {
@@ -61,14 +61,34 @@ impl RequestUser {
         let refresh_token = token.refresh_token();
         let refresh = refresh_token.map(|t| t.secret());
         let user = StravaUser::upsert(*id, &firstname, &lastname, refresh, conn).await?;
+        let id = user.tb_id();
+        let is_admin = id.is_admin(conn).await?;
 
         Ok(Self {
-            id: user.get_id(),
-            strava_id: user.id,
-            is_admin: user.is_admin(),
+            id,
+            strava_id: user.strava_id(),
+            is_admin,
             access_token: token.access_token().clone(),
             expires_at: token.expires_in().map(|d| SystemTime::now() + d),
             refresh_token: refresh_token.cloned(),
+        })
+    }
+
+    pub(crate) async fn create_from_id(user: UserId, conn: &mut impl StravaStore) -> AnyResult<RequestUser> {
+        let user = StravaUser::read(user, conn).await?;
+
+        let strava_id = user.strava_id();
+        let id = user.tb_id();
+        let is_admin = id.is_admin(conn).await?;
+        let refresh_token = user.refresh_token().ok_or(Error::BadRequest(format!("User {} does not have a refresh token (disabled?)", id)))?;
+
+        Ok(Self{
+            id,
+            strava_id,
+            is_admin,
+            access_token: AccessToken::new("".to_string()),
+            expires_at: Some(SystemTime::UNIX_EPOCH),
+            refresh_token: Some(RefreshToken::new(refresh_token)),
         })
     }
 
@@ -93,7 +113,7 @@ impl RequestUser {
         self.expires_at = token.expires_in().map(|d| SystemTime::now() + d);
         self.refresh_token = token.refresh_token().cloned();
         let refresh = token.refresh_token().map(|t| t.secret());
-        conn.stravaid_update_token(self.strava_id, refresh).await?;
+        self.strava_id.update_token(refresh, conn).await?;
         Ok(())
     }
 

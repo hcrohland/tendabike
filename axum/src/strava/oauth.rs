@@ -168,7 +168,7 @@ pub(crate) async fn login_authorized(
         ));
     }
 
-    let user = super::RequestUser::create(token, &mut conn)
+    let user = super::RequestUser::create_from_token(token, &mut conn)
         .await
         .map_err(internal_any)?;
 

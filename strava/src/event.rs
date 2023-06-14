@@ -272,6 +272,7 @@ async fn get_event(
     conn: &mut impl StravaStore,
 ) -> anyhow::Result<Option<Event>> {
     let event = conn.strava_event_get_next_for_user(user).await?;
+    debug!("got {:?} from DB", event);
     let event = match event {
         Some(event) => event,
         None => return Ok(None),
@@ -326,6 +327,7 @@ async fn next_activities(
 
 pub async fn process(user: &mut impl StravaPerson, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
     let event = get_event(user, conn).await?;
+    debug!("Processing {:?}", event);
     if event.is_none() {
         return Ok(Summary::default());
     };
@@ -342,4 +344,24 @@ pub async fn process(user: &mut impl StravaPerson, conn: &mut impl StravaStore) 
             Ok(Summary::default())
         }
     }
+}
+
+pub async fn sync_users(
+    user_id: Option<UserId>,
+    time: i64,
+    conn: &mut impl StravaStore,
+) -> AnyResult<()> {
+    info!("syncing users {:?} at {}", user_id, time);
+    let users = match user_id {
+        Some(id) => vec![conn.stravauser_get_by_tbid(id).await?],
+        None => conn.stravausers_get_all().await?,
+    };
+    for user in users {
+        if user.disabled() {
+            warn!("user {} disabled, skipping", user.strava_id());
+            continue;
+        }
+        event::insert_sync(user.strava_id(), time, conn).await?;
+    }
+    Ok(())
 }
