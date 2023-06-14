@@ -161,7 +161,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
     ) -> AnyResult<Option<Event>> {
         use schema::strava_events::dsl::*;
         strava_events
-            .filter(owner_id.eq_any(vec![0, user.get_id().into()]))
+            .filter(owner_id.eq_any(vec![0, user.strava_id().into()]))
             .first::<Event>(self)
             .await
             .optional()
