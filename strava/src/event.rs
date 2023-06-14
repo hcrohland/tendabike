@@ -272,7 +272,6 @@ async fn get_event(
     conn: &mut impl StravaStore,
 ) -> anyhow::Result<Option<Event>> {
     let event = conn.strava_event_get_next_for_user(user).await?;
-    debug!("got {:?} from DB", event);
     let event = match event {
         Some(event) => event,
         None => return Ok(None),
@@ -327,7 +326,6 @@ async fn next_activities(
 
 pub async fn process(user: &mut impl StravaPerson, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
     let event = get_event(user, conn).await?;
-    debug!("Processing {:?}", event);
     if event.is_none() {
         return Ok(Summary::default());
     };
