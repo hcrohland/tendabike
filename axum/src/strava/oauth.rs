@@ -7,37 +7,44 @@
 //!
 //! Finally, it defines the `COOKIE_NAME` constant which is used to store the session cookie.
 
-use crate::{internal_any, internal_error, user::RequestUser};
-use anyhow::ensure;
-use async_session::{log::info, MemoryStore, Session, SessionStore};
+use crate::{error::AuthRedirect, internal_any, internal_error};
+use anyhow::{bail, Context, ensure};
+use async_session::{
+    async_trait,
+    log::info,
+    MemoryStore, Session, SessionStore,
+};
 use axum::{
-    extract::{Query, State, TypedHeader},
+    extract::{
+        rejection::TypedHeaderRejectionReason, FromRef, FromRequestParts, Query, State, TypedHeader,
+    },
     http::{header::SET_COOKIE, HeaderMap},
     response::{IntoResponse, Redirect, Response},
+    RequestPartsExt,
 };
-use http::StatusCode;
-use {
-    tb_domain::{AnyResult, Error},
-};
+use http::{header, request::Parts, StatusCode};
 use oauth2::{
     basic::{
         BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
         BasicTokenType,
     },
     reqwest::async_http_client,
-    AuthUrl, AuthorizationCode, Client, ClientId, ClientSecret, CsrfToken, ExtraTokenFields,
-    RedirectUrl, RefreshToken, Scope, StandardRevocableToken, StandardTokenResponse, TokenResponse,
-    TokenUrl,
+    AuthUrl, AuthorizationCode, Client, ClientId, ClientSecret, CsrfToken,
+    ExtraTokenFields, RedirectUrl, RefreshToken, Scope, StandardRevocableToken,
+    StandardTokenResponse, TokenResponse, TokenUrl,
 };
-use serde::{Deserialize, Serialize};
-use std::env;
-use tb_strava::{StravaId, StravaUser, StravaStore};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::{env};
+use tb_domain::{AnyResult, Error, Person, UserId};
+use tb_strava::{StravaId, StravaPerson, StravaStore, StravaUser};
 
 pub(crate) static COOKIE_NAME: &str = "SESSION";
 
 lazy_static::lazy_static! {
     static ref STRAVACLIENT: StravaClient = oauth_client();
 }
+
+const API: &str = "https://www.strava.com/api/v3";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct StravaAthleteInfo {
@@ -126,16 +133,20 @@ pub(crate) async fn logout(
     State(store): State<MemoryStore>,
     TypedHeader(cookies): TypedHeader<headers::Cookie>,
 ) -> impl IntoResponse {
-    if let Some (cookie) = cookies.get(COOKIE_NAME) {
+    if let Some(cookie) = cookies.get(COOKIE_NAME) {
         let session = match store.load_session(cookie.to_string()).await {
             Ok(Some(s)) => s,
             // No session active, just redirect
             _ => return Redirect::to("/").into_response(),
         };
         if store.destroy_session(session).await.is_err() {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to destroy session").into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to destroy session",
+            )
+                .into_response();
         }
-    }  
+    }
 
     Redirect::to("/").into_response()
 }
@@ -154,6 +165,7 @@ pub(crate) async fn login_authorized(
     State(conn): State<crate::DbPool>,
 ) -> Result<(HeaderMap, Redirect), (StatusCode, String)> {
     let mut conn = conn.get().await.map_err(internal_any)?;
+
     // Get an auth token
     let token = STRAVACLIENT
         .exchange_code(AuthorizationCode::new(query.code.clone()))
@@ -206,9 +218,14 @@ pub(crate) async fn login_authorized(
     // Store session and get corresponding cookie
     let cookie = match store.store_session(session).await.map_err(internal_any)? {
         Some(cookie) => cookie,
-        None => return Err((StatusCode::INTERNAL_SERVER_ERROR, "Failed to store session".to_string())),
+        None => {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to store session".to_string(),
+            ))
+        }
     };
-    
+
     // Build the cookie
     let cookie = format!("{}={}; SameSite=Lax; Path=/", COOKIE_NAME, cookie);
 
@@ -275,5 +292,176 @@ where
 {
     fn from(err: E) -> Self {
         Self(err.into())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct RequestUser {
+    id: UserId,
+    strava_id: StravaId,
+    firstname: String,
+    name: String,
+    is_admin: bool,
+    access_token: String,
+    expires_at: Option<i64>,
+    refresh_token: Option<String>,
+}
+
+impl RequestUser {
+    pub(crate) fn new(
+        id: UserId,
+        strava_id: StravaId,
+        firstname: String,
+        name: String,
+        is_admin: bool,
+        access_token: String,
+        expires_at: Option<i64>,
+        refresh_token: Option<String>,
+    ) -> Self {
+        Self {
+            id,
+            strava_id,
+            firstname,
+            name,
+            is_admin,
+            access_token,
+            expires_at,
+            refresh_token,
+        }
+    }
+
+    pub(crate) async fn get_strava_user(
+        &self,
+        conn: &mut impl StravaStore,
+    ) -> AnyResult<StravaUser> {
+        StravaUser::read(self.id, conn).await
+    }
+
+    async fn get_strava(
+        &self,
+        uri: &str,
+        conn: &mut impl StravaStore,
+    ) -> AnyResult<reqwest::Response> {
+        let resp = reqwest::Client::new()
+            .get(format!("{}{}", API, uri))
+            .bearer_auth(&self.access_token)
+            .send()
+            .await
+            .context("Could not reach strava")?;
+
+        let status = resp.status();
+        if status.is_success() {
+            return Ok(resp);
+        }
+
+        match status {
+            StatusCode::TOO_MANY_REQUESTS
+            | StatusCode::BAD_GATEWAY
+            | StatusCode::SERVICE_UNAVAILABLE
+            | StatusCode::GATEWAY_TIMEOUT => {
+                bail!(Error::TryAgain(status.canonical_reason().unwrap()))
+            }
+            StatusCode::UNAUTHORIZED => {
+                // self.disable(conn).await?;
+                bail!(Error::NotAuth(
+                    "Strava request authorization withdrawn".to_string()
+                ))
+            }
+            _ => bail!(Error::BadRequest(format!(
+                "Strava request error: {}",
+                status
+                    .canonical_reason()
+                    .unwrap_or("Unknown status received")
+            ))),
+        }
+    }
+}
+
+impl Person for RequestUser {
+    fn get_id(&self) -> UserId {
+        self.id
+    }
+    fn is_admin(&self) -> bool {
+        self.is_admin
+    }
+}
+
+#[async_trait]
+impl StravaPerson for RequestUser {
+    fn strava_id(&self) -> StravaId {
+        self.strava_id
+    }
+
+    fn tb_id(&self) -> UserId {
+        self.id
+    }
+
+    async fn request_json<T: DeserializeOwned>(
+        &self,
+        uri: &str,
+        conn: &mut impl StravaStore,
+    ) -> AnyResult<T> {
+        let r = self.get_strava(uri, conn).await?.text().await?;
+        serde_json::from_str::<T>(&r).context("Could not parse response body")
+    }
+}
+
+#[async_trait]
+impl<S> FromRequestParts<S> for RequestUser
+where
+    MemoryStore: FromRef<S>,
+    S: Send + Sync,
+{
+    // If anything goes wrong or no session is found, redirect to the auth page
+    type Rejection = AuthRedirect;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let store = MemoryStore::from_ref(state);
+
+        let cookies = parts
+            .extract::<TypedHeader<headers::Cookie>>()
+            .await
+            .map_err(|e| match *e.name() {
+                header::COOKIE => match e.reason() {
+                    TypedHeaderRejectionReason::Missing => AuthRedirect,
+                    _ => panic!("unexpected error getting Cookie header(s): {}", e),
+                },
+                _ => panic!("unexpected error getting cookies: {}", e),
+            })?;
+        let session_cookie = cookies
+            .get(crate::strava::COOKIE_NAME)
+            .ok_or(AuthRedirect)?;
+
+        let session = store
+            .load_session(session_cookie.to_string())
+            .await
+            .expect("could not load session")
+            .ok_or(AuthRedirect)?;
+
+        let user = session.get::<RequestUser>("user").ok_or(AuthRedirect)?;
+
+        Ok(user)
+    }
+}
+
+pub struct AxumAdmin;
+
+#[async_trait]
+impl<S> FromRequestParts<S> for AxumAdmin
+where
+    MemoryStore: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = Response;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let user = RequestUser::from_request_parts(parts, state)
+            .await
+            .map_err(IntoResponse::into_response)?;
+        if !user.is_admin() {
+            Err(StatusCode::NOT_FOUND.into_response())
+        } else {
+            Ok(AxumAdmin)
+        }
     }
 }

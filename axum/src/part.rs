@@ -23,7 +23,7 @@
 use crate::{
     error::{ApiResult, AppError},
     appstate::AppState, DbPool,
-    RequestUser,
+    RequestUser
 };
 
 use axum::{
