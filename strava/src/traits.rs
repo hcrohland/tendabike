@@ -401,7 +401,7 @@ pub trait StravaPerson: Person {
     }
 
     async fn request_json<T: DeserializeOwned>(
-        &self,
+        &mut self,
         uri: &str,
         conn: &mut impl StravaStore,
     ) -> AnyResult<T>;

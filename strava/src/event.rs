@@ -132,7 +132,7 @@ impl Event {
 
     async fn process_activity(
         self,
-        user: &impl StravaPerson,
+        user: &mut impl StravaPerson,
         conn: &mut impl StravaStore,
     ) -> anyhow::Result<Summary> {
         let summary = self.process_hook(user, conn).await;
@@ -165,7 +165,7 @@ impl Event {
     ///
     async fn process_hook(
         &self,
-        user: &impl StravaPerson,
+        user: &mut impl StravaPerson,
         conn: &mut impl StravaStore,
     ) -> anyhow::Result<Summary> {
         let res = match self.aspect_type.as_str() {
@@ -182,7 +182,7 @@ impl Event {
 
     async fn sync(
         mut self,
-        user: &impl StravaPerson,
+        user: &mut impl StravaPerson,
         conn: &mut impl StravaStore,
     ) -> anyhow::Result<Summary> {
         // let mut len = batch;
@@ -210,7 +210,7 @@ impl Event {
 
     async fn process_sync(
         self,
-        user: &impl StravaPerson,
+        user: &mut impl StravaPerson,
         conn: &mut impl StravaStore,
     ) -> Result<Summary, anyhow::Error> {
         let summary = self.sync(user, conn).await;
@@ -312,7 +312,7 @@ async fn check_try_again(
 }
 
 async fn next_activities(
-    user: &impl StravaPerson,
+    user: &mut impl StravaPerson,
     conn: &mut impl StravaStore,
     per_page: usize,
     start: i64,
@@ -324,7 +324,7 @@ async fn next_activities(
     .await
 }
 
-pub async fn process(user: &impl StravaPerson, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
+pub async fn process(user: &mut impl StravaPerson, conn: &mut impl StravaStore) -> anyhow::Result<Summary> {
     let event = get_event(user, conn).await?;
     if event.is_none() {
         return Ok(Summary::default());

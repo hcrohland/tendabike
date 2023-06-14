@@ -54,12 +54,11 @@ use async_session::log::{trace, info};
 use axum::{Json, extract::{Query, Path, State}};
 use {tb_domain::{AnyResult, Error, Summary}};
 
+use tb_domain::Person;
 use tb_strava::{event::{InEvent, process}, StravaUser};
 use serde_derive::{ Deserialize, Serialize};
 
 use crate::{ApiResult, RequestUser, AxumAdmin, DbPool};
-
-use super::refresh_token;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Hub {
@@ -91,9 +90,9 @@ const VERIFY_TOKEN: &str = "tendabike_strava";
 
 pub(crate) async fn hooks (user: RequestUser, State(conn): State<DbPool>) -> ApiResult<Summary> {
     let mut conn = conn.get().await?;
-    let user = user.get_strava_user(&mut conn).await?;
+    let mut user = StravaUser::read(user.get_id(), &mut conn).await?;
     user.lock(&mut conn).await?;
-    let res = process(&user, &mut conn).await;
+    let res = process(&mut user, &mut conn).await;
     user.unlock(&mut conn).await?;
     Ok(Json(res?))
 }
@@ -123,6 +122,10 @@ pub(super) async fn sync_api (_u: AxumAdmin, State(conn): State<DbPool>, Query(q
 }
 
 
+pub(super) async fn sync(Path(_tbid ): Path<i32>, _u: AxumAdmin) -> ApiResult<Summary> {
+    todo!()
+}
+/* 
 pub(super) async fn sync(Path(tbid): Path<i32>, _u: AxumAdmin, State(conn): State<DbPool>) -> ApiResult<Summary> {
     let mut conn = conn.get().await?;
     let conn = &mut conn;
@@ -133,3 +136,4 @@ pub(super) async fn sync(Path(tbid): Path<i32>, _u: AxumAdmin, State(conn): Stat
     user.unlock(conn).await?;
     Ok(Json(res?))
 }
+ */

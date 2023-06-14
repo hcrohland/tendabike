@@ -8,10 +8,9 @@
 //! Finally, it defines the `COOKIE_NAME` constant which is used to store the session cookie.
 
 use crate::{error::AuthRedirect, internal_any, internal_error};
-use anyhow::{bail, Context, ensure};
+use anyhow::{bail, Context};
 use async_session::{
     async_trait,
-    log::info,
     MemoryStore, Session, SessionStore,
 };
 use axum::{
@@ -30,7 +29,7 @@ use oauth2::{
     },
     reqwest::async_http_client,
     AuthUrl, AuthorizationCode, Client, ClientId, ClientSecret, CsrfToken,
-    ExtraTokenFields, RedirectUrl, RefreshToken, Scope, StandardRevocableToken,
+    ExtraTokenFields, RedirectUrl, Scope, StandardRevocableToken,
     StandardTokenResponse, TokenResponse, TokenUrl,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -247,7 +246,7 @@ async fn update_user(
     user.update_token(access, expires, refresh, conn).await
 }
 
-pub(crate) async fn refresh_token(
+/* pub(crate) async fn refresh_token(
     user: StravaUser,
     conn: &mut impl StravaStore,
 ) -> AnyResult<StravaUser> {
@@ -269,7 +268,7 @@ pub(crate) async fn refresh_token(
         .await?;
     update_user(&tokenset, user, conn).await
 }
-
+ */
 // Make our own error that wraps `anyhow::Error`.
 struct AppError(anyhow::Error);
 
@@ -328,13 +327,6 @@ impl RequestUser {
             expires_at,
             refresh_token,
         }
-    }
-
-    pub(crate) async fn get_strava_user(
-        &self,
-        conn: &mut impl StravaStore,
-    ) -> AnyResult<StravaUser> {
-        StravaUser::read(self.id, conn).await
     }
 
     async fn get_strava(
@@ -397,7 +389,7 @@ impl StravaPerson for RequestUser {
     }
 
     async fn request_json<T: DeserializeOwned>(
-        &self,
+        &mut self,
         uri: &str,
         conn: &mut impl StravaStore,
     ) -> AnyResult<T> {

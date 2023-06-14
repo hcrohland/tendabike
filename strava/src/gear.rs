@@ -50,7 +50,7 @@ impl StravaGear {
 /// None will return None
 pub(crate) async fn strava_to_tb(
     strava_id: String,
-    user: &impl StravaPerson,
+    user: &mut impl StravaPerson,
     conn: &mut impl StravaStore,
 ) -> AnyResult<PartId> {
     if let Some(gear) = conn.strava_gear_get_tbid(&strava_id).await? {

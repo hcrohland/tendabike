@@ -250,7 +250,7 @@ impl StravaUser {
 
     /// Get list of gear for user from Strava
     pub async fn update_user(
-        user: &impl StravaPerson,
+        user: &mut impl StravaPerson,
         conn: &mut impl StravaStore,
     ) -> AnyResult<Vec<PartId>> {
         #[derive(Deserialize, Debug)]
@@ -284,7 +284,7 @@ impl StravaPerson for StravaUser {
     }
     
     async fn request_json<T: DeserializeOwned>(
-        &self,
+        &mut self,
         uri: &str,
         conn: &mut impl StravaStore,
     ) -> AnyResult<T> {
