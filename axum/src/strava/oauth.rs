@@ -7,7 +7,7 @@
 //!
 //! Finally, it defines the `COOKIE_NAME` constant which is used to store the session cookie.
 
-use crate::{internal_any, internal_error, user::RUser};
+use crate::{internal_any, internal_error, user::RequestUser};
 use anyhow::ensure;
 use async_session::{log::info, MemoryStore, Session, SessionStore};
 use axum::{
@@ -186,7 +186,7 @@ pub(crate) async fn login_authorized(
     let user = update_user(&token, user, &mut conn).await.map_err(internal_any)?;
 
     let is_admin = user.tendabike_id.is_admin(&mut conn).await.map_err(internal_any)?;
-    let user = RUser::new(
+    let user = RequestUser::new(
         user.tendabike_id,
         user.id,
         firstname.clone(),

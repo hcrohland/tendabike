@@ -31,11 +31,11 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/all", get(userlist))
 }
 
-async fn getuser(user: RUser) -> Json<RUser> {
+async fn getuser(user: RequestUser) -> Json<RequestUser> {
     Json(user)
 }
 
-async fn summary(user: RUser, State(pool): State<DbPool>) -> ApiResult<Summary> {
+async fn summary(user: RequestUser, State(pool): State<DbPool>) -> ApiResult<Summary> {
     let mut conn = pool.get().await?;
     StravaUser::update_user(&user, &mut conn).await?;
     Ok(user.id.get_summary(&mut conn).await.map(Json)?)
@@ -50,7 +50,7 @@ async fn userlist(
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub(crate) struct RUser {
+pub(crate) struct RequestUser {
     id: UserId,
     strava_id: StravaId,
     firstname: String,
@@ -61,7 +61,7 @@ pub(crate) struct RUser {
     refresh_token: Option<String>,
 }
 
-impl RUser {
+impl RequestUser {
     pub(crate) fn new(
         id: UserId,
         strava_id: StravaId,
@@ -131,7 +131,7 @@ impl RUser {
     }
 }
 
-impl Person for RUser {
+impl Person for RequestUser {
     fn get_id(&self) -> UserId {
         self.id
     }
@@ -141,7 +141,7 @@ impl Person for RUser {
 }
 
 #[async_trait]
-impl StravaPerson for RUser {
+impl StravaPerson for RequestUser {
     fn strava_id(&self) -> StravaId {
         self.strava_id
     }
@@ -161,7 +161,7 @@ impl StravaPerson for RUser {
 }
 
 #[async_trait]
-impl<S> FromRequestParts<S> for RUser
+impl<S> FromRequestParts<S> for RequestUser
 where
     MemoryStore: FromRef<S>,
     S: Send + Sync,
@@ -192,7 +192,7 @@ where
             .expect("could not load session")
             .ok_or(AuthRedirect)?;
 
-        let user = session.get::<RUser>("user").ok_or(AuthRedirect)?;
+        let user = session.get::<RequestUser>("user").ok_or(AuthRedirect)?;
 
         Ok(user)
     }
@@ -209,7 +209,7 @@ where
     type Rejection = Response;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let user = RUser::from_request_parts(parts, state)
+        let user = RequestUser::from_request_parts(parts, state)
             .await
             .map_err(IntoResponse::into_response)?;
         if !user.is_admin() {

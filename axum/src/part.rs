@@ -22,7 +22,7 @@
 
 use crate::{
     error::{ApiResult, AppError},
-    user::RUser,
+    user::RequestUser,
     appstate::AppState, DbPool,
 };
 
@@ -40,13 +40,13 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/:part", get(get_part))
 }
 
-async fn get_part(Path(part): Path<i32>, user: RUser, State(conn): State<DbPool>) -> ApiResult<Part> {
+async fn get_part(Path(part): Path<i32>, user: RequestUser, State(conn): State<DbPool>) -> ApiResult<Part> {
     let mut conn = conn.get().await?;
     Ok(PartId::new(part).part(&user, &mut conn).await.map(Json)?)
 }
 
 async fn post_part(
-    user: RUser,
+    user: RequestUser,
     State(conn): State<DbPool>,
     Json(newpart): Json<NewPart>,
 ) -> Result<(StatusCode, Json<Part>), AppError> {
@@ -56,7 +56,7 @@ async fn post_part(
 }
 
 async fn put_part(
-    user: RUser,
+    user: RequestUser,
     State(conn): State<DbPool>,
     part: String,
 ) -> ApiResult<Part> {

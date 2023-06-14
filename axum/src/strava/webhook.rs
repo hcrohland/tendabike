@@ -57,7 +57,7 @@ use {tb_domain::{AnyResult, Error, Summary}};
 use tb_strava::{event::{InEvent, process}, StravaUser};
 use serde_derive::{ Deserialize, Serialize};
 
-use crate::{ApiResult, user::{RUser, AxumAdmin}, DbPool};
+use crate::{ApiResult, user::{RequestUser, AxumAdmin}, DbPool};
 
 use super::refresh_token;
 
@@ -89,7 +89,7 @@ impl Hub {
 
 const VERIFY_TOKEN: &str = "tendabike_strava";
 
-pub(crate) async fn hooks (user: RUser, State(conn): State<DbPool>) -> ApiResult<Summary> {
+pub(crate) async fn hooks (user: RequestUser, State(conn): State<DbPool>) -> ApiResult<Summary> {
     let mut conn = conn.get().await?;
     let user = user.get_strava_user(&mut conn).await?;
     user.lock(&mut conn).await?;
