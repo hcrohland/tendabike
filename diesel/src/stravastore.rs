@@ -211,12 +211,13 @@ impl tb_strava::StravaStore for AsyncDieselConn {
 
     async fn stravauser_get_by_stravaid(
         &mut self,
-        id: StravaId,
-    ) -> TbResult<Vec<StravaUser>> {
+        id: &StravaId,
+    ) -> TbResult<Option<StravaUser>> {
         schema::strava_users::table
             .find(id)
-            .get_results::<StravaUser>(self)
+            .first::<StravaUser>(self)
             .await
+            .optional()
             .map_err(map_to_tb)
     }
 

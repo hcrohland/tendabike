@@ -271,7 +271,7 @@ pub trait StravaStore: tb_domain::Store + Send {
     /// # Errors
     ///
     /// Returns an error if the users cannot be retrieved.
-    async fn stravauser_get_by_stravaid(&mut self, id: StravaId) -> TbResult<Vec<StravaUser>>;
+    async fn stravauser_get_by_stravaid(&mut self, id: &StravaId) -> TbResult<Option<StravaUser>>;
 
     /// Creates a new Strava user.
     ///
@@ -387,4 +387,6 @@ pub trait StravaPerson: Person {
         uri: &str,
         conn: &mut impl StravaStore,
     ) -> TbResult<T>;
+
+    async fn deauthorize(&mut self, conn: &mut impl StravaStore) -> TbResult<()>;
 }

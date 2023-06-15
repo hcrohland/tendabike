@@ -11,7 +11,7 @@
 
 use async_session::log::{error, info, debug};
 use axum::{
-    response::{IntoResponse, Response},
+    response::{IntoResponse, Response, Redirect},
     Json,
 };
 use http::StatusCode;
@@ -45,7 +45,7 @@ impl IntoResponse for AppError {
         let code = match &self {
             Self::TbError(err) => match err {
                 Error::Forbidden(_) |
-                Error::NotAuth(_) => StatusCode::FORBIDDEN,
+                Error::NotAuth(_) => return (StatusCode::UNAUTHORIZED, Redirect::temporary("/strava/logout")).into_response(),
                 Error::NotFound(_) => StatusCode::NOT_FOUND,
                 Error::BadRequest(_) => StatusCode::BAD_REQUEST,
                 Error::Conflict(_) => StatusCode::CONFLICT,

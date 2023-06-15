@@ -9,7 +9,7 @@
 
 use crate::error::AppError;
 use anyhow::Context;
-use async_session::{MemoryStore, Session, SessionStore};
+use async_session::{MemoryStore, Session, SessionStore, log::warn};
 use axum::{
     extract::{Query, State, TypedHeader},
     http::{header::SET_COOKIE, HeaderMap},
@@ -23,7 +23,8 @@ use oauth2::{
     },
     reqwest::async_http_client,
     AuthUrl, AuthorizationCode, Client, ClientId, ClientSecret, CsrfToken, ExtraTokenFields,
-    RedirectUrl, Scope, StandardRevocableToken, StandardTokenResponse, TokenResponse, TokenUrl,
+    RedirectUrl, RevocationUrl, Scope, StandardRevocableToken, StandardTokenResponse,
+    TokenResponse, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -84,25 +85,23 @@ pub(crate) fn strava_oauth_client() -> StravaClient {
     //  "AUTH_URL"      "https://www.strava.com/oauth/authorize";
     //  "TOKEN_URL"     "https://www.strava.com/oauth/token";
 
-    let client_id = env::var("CLIENT_ID").expect("Missing CLIENT_ID!");
-    let client_secret = env::var("CLIENT_SECRET").expect("Missing CLIENT_SECRET!");
+    let client_id = ClientId::new(env::var("CLIENT_ID").expect("Missing CLIENT_ID!"));
+    let client_secret =
+        ClientSecret::new(env::var("CLIENT_SECRET").expect("Missing CLIENT_SECRET!"));
+
     let redirect_url = env::var("REDIRECT_URL")
         .unwrap_or_else(|_| "http://localhost:8000/strava/token".to_string());
+    let redirect_url = RedirectUrl::new(redirect_url).unwrap();
 
-    let auth_url = env::var("AUTH_URL")
-        .unwrap_or_else(|_| "https://www.strava.com/oauth/authorize".to_string());
+    let auth_url = AuthUrl::new("https://www.strava.com/oauth/authorize".to_string()).unwrap();
+    let token_url = TokenUrl::new("https://www.strava.com/oauth/token".to_string()).unwrap();
+    let revocation_url =
+        RevocationUrl::new("https://www.strava.com/oauth/deauthorize".to_string()).unwrap();
 
-    let token_url =
-        env::var("TOKEN_URL").unwrap_or_else(|_| "https://www.strava.com/oauth/token".to_string());
-
-    StravaClient::new(
-        ClientId::new(client_id),
-        Some(ClientSecret::new(client_secret)),
-        AuthUrl::new(auth_url).unwrap(),
-        Some(TokenUrl::new(token_url).unwrap()),
-    )
-    .set_auth_type(oauth2::AuthType::RequestBody)
-    .set_redirect_uri(RedirectUrl::new(redirect_url).unwrap())
+    StravaClient::new(client_id, Some(client_secret), auth_url, Some(token_url))
+        .set_auth_type(oauth2::AuthType::RequestBody)
+        .set_redirect_uri(redirect_url)
+        .set_revocation_uri(revocation_url)
 }
 
 pub(crate) async fn strava_auth() -> impl IntoResponse {
@@ -160,9 +159,11 @@ pub(crate) async fn login_authorized(
     let token = STRAVACLIENT
         .exchange_code(AuthorizationCode::new(query.code.clone()))
         .request_async(async_http_client)
-        .await.context("token exchange failed")?;
+        .await
+        .context("token exchange failed")?;
 
     if token.scopes().is_some() {
+        warn!("Insufficient authorization {:?}", token.scopes());
         Err(Error::NotAuth(format!(
             "Insufficient authorization {:?}",
             token.scopes()
@@ -173,7 +174,9 @@ pub(crate) async fn login_authorized(
 
     // Create a new session filled with user data
     let mut session = Session::new();
-    session.insert("user", &user).context("session insert failed")?;
+    session
+        .insert("user", &user)
+        .context("session insert failed")?;
 
     // Store session and get corresponding cookie
     let cookie = match store.store_session(session).await? {

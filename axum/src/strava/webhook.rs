@@ -136,12 +136,12 @@ pub(super) async fn sync_api(
 
 pub(super) async fn sync(
     Path(tbid): Path<i32>,
-    _u: AxumAdmin,
+    admin: AxumAdmin,
     State(conn): State<DbPool>,
 ) -> ApiResult<Summary> {
     let mut conn = conn.get().await?;
     let conn = &mut conn;
-    let mut user = RequestUser::create_from_id(tbid.into(), conn).await?;
+    let mut user = RequestUser::create_from_id(admin,tbid.into(), conn).await?;
     user.strava_id().lock(conn).await?;
     let res = process(&mut user, conn).await;
     user.strava_id().unlock(conn).await?;
