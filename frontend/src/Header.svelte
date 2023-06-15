@@ -43,7 +43,7 @@
   async function poll (promiseFn, time) {
     if (polling) return
     polling = true;
-    while (true){
+    while ($user){
       promise = promiseFn()
       await promise.catch(handleError)
       await new Promise(resolve => setTimeout(resolve, time))

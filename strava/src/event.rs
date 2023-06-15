@@ -45,11 +45,9 @@ impl InEvent {
             )));
         };
 
-        if !(conn
-            .stravauser_get_by_stravaid(self.owner_id.into())
+        if StravaId::read(&self.owner_id.into(), conn)
             .await?
-            .len()
-            == 1)
+            .is_none()
         {
             return Err(Error::BadRequest(format!(
                 "Unknown event owner received: {:?}",
@@ -98,7 +96,7 @@ impl std::fmt::Display for Event {
         write!(
             f,
             "Event {}: {} {} {} at {}, owner:{}",
-            self.id.unwrap_or(0),
+            self.id.unwrap_or(0.into()),
             self.aspect_type,
             self.object_type,
             self.object_id,
@@ -355,7 +353,6 @@ pub async fn sync_users(
     time: i64,
     conn: &mut impl StravaStore,
 ) -> TbResult<()> {
-    info!("syncing users {:?} at {}", user_id, time);
     let users = match user_id {
         Some(id) => vec![conn.stravauser_get_by_tbid(id).await?],
         None => conn.stravausers_get_all().await?,
@@ -365,6 +362,7 @@ pub async fn sync_users(
             warn!("user {} disabled, skipping", user.strava_id());
             continue;
         }
+        info!("Adding sync for {:?} at {}", user.strava_id(), time);
         event::insert_sync(user.strava_id(), time, conn).await?;
     }
     Ok(())
