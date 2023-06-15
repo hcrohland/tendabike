@@ -246,7 +246,7 @@ where
             .await
             .map_err(IntoResponse::into_response)?;
         if !user.is_admin() {
-            Err(StatusCode::NOT_FOUND.into_response())
+            Err((StatusCode::NOT_FOUND, "Page not found").into_response())
         } else {
             Ok(AxumAdmin)
         }

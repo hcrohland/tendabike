@@ -1,4 +1,4 @@
-use crate::AsyncDieselConn;
+use crate::*;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
@@ -14,7 +14,7 @@ impl tb_domain::UserStore for AsyncDieselConn {
             .find(uid)
             .get_result(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 
     async fn user_create(&mut self, firstname_: &str, lastname: &str) -> TbResult<User> {
@@ -28,7 +28,7 @@ impl tb_domain::UserStore for AsyncDieselConn {
             ))
             .get_result(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 
     async fn user_update(
@@ -42,6 +42,6 @@ impl tb_domain::UserStore for AsyncDieselConn {
             .set((firstname.eq(firstname_), name.eq(lastname)))
             .get_result(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 }

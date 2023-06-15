@@ -15,6 +15,7 @@ use axum::{
     Json,
 };
 use http::StatusCode;
+use tb_domain::Error;
 
 pub async fn fallback() -> (StatusCode, &'static str) {
     (StatusCode::NOT_FOUND, "Not Found")
@@ -30,12 +31,10 @@ impl IntoResponse for AuthRedirect {
 
 pub type ApiResult<T> = Result<Json<T>, AppError>;
 
-use thiserror::Error;
-
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum AppError {
     #[error(transparent)]
-    TbError(#[from] tb_domain::Error),
+    TbError(#[from] Error),
     #[error(transparent)]
     AnyError(#[from] anyhow::Error),
 }
@@ -45,24 +44,26 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let code = match &self {
             Self::TbError(err) => match err {
-                tb_domain::Error::Forbidden(_) |
-                tb_domain::Error::NotAuth(_) => StatusCode::FORBIDDEN,
-                tb_domain::Error::NotFound(_) => StatusCode::NOT_FOUND,
-                tb_domain::Error::BadRequest(_) => StatusCode::BAD_REQUEST,
-                tb_domain::Error::Conflict(_) => StatusCode::CONFLICT,
-                tb_domain::Error::TryAgain(_) => StatusCode::TOO_MANY_REQUESTS,
-                tb_domain::Error::DatabaseFailure(_) |
-                tb_domain::Error::AnyFailure(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                Error::Forbidden(_) |
+                Error::NotAuth(_) => StatusCode::FORBIDDEN,
+                Error::NotFound(_) => StatusCode::NOT_FOUND,
+                Error::BadRequest(_) => StatusCode::BAD_REQUEST,
+                Error::Conflict(_) => StatusCode::CONFLICT,
+                Error::TryAgain(_) => StatusCode::TOO_MANY_REQUESTS,
+                Error::DatabaseFailure(_) |
+                Error::AnyFailure(_) => StatusCode::INTERNAL_SERVER_ERROR,
             }
             Self::AnyError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         
+        let any: anyhow::Error = self.into();
+        let msg = format!("{:#}", any);
         match code {
-            StatusCode::INTERNAL_SERVER_ERROR =>  error!("Internal server error : {}", self),
-            StatusCode::BAD_REQUEST => info!("bad request: {}", self),
-            StatusCode::NOT_FOUND => info!("not found: {}", self),
-            _ => debug!("returning with error: {}", self)
+            StatusCode::INTERNAL_SERVER_ERROR =>  error!("{}", msg),
+            StatusCode::BAD_REQUEST |
+            StatusCode::NOT_FOUND => info!("{}", msg),
+            _ => debug!("returning with error {}: {}", code.canonical_reason().unwrap_or(""), msg)
         };
-        (code, self.to_string()).into_response()
+        (code, msg).into_response()
     }
 }

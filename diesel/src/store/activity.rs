@@ -1,11 +1,11 @@
+use crate::*;
 use async_session::log::debug;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use tb_domain::schema;
-use crate::AsyncDieselConn;
 use time::OffsetDateTime;
 
-use tb_domain::{ActTypeId, Activity, ActivityId, TbResult, NewActivity, PartId, Person, UserId};
+use tb_domain::{ActTypeId, Activity, ActivityId, NewActivity, PartId, Person, TbResult, UserId};
 
 #[async_session::async_trait]
 impl tb_domain::ActivityStore for AsyncDieselConn {
@@ -14,7 +14,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .values(act)
             .get_result(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 
     async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Activity> {
@@ -23,7 +23,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .for_update()
             .first::<Activity>(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 
     async fn activity_update(&mut self, aid: ActivityId, act: &NewActivity) -> TbResult<Activity> {
@@ -33,7 +33,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .set(act)
             .get_result::<Activity>(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 
     async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize> {
@@ -41,7 +41,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
         diesel::delete(activities.filter(id.eq(aid)))
             .execute(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 
     async fn activity_get_all_for_userid(&mut self, uid: &UserId) -> TbResult<Vec<Activity>> {
@@ -52,7 +52,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .order_by(start)
             .load::<Activity>(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 
     async fn activities_find_by_partid_and_time(
@@ -69,7 +69,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .filter(start.lt(end))
             .load::<Activity>(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 
     async fn activity_get_by_user_and_time(
@@ -84,7 +84,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .for_update()
             .get_result(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 
     async fn activity_set_gear_if_null(
@@ -101,7 +101,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .set(gear.eq(partid))
             .get_results::<Activity>(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 
     async fn part_reset_all(&mut self) -> TbResult<usize> {
@@ -117,7 +117,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             ))
             .execute(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 
     async fn activity_get_really_all(&mut self) -> TbResult<Vec<Activity>> {
@@ -126,6 +126,6 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .order_by(id)
             .get_results::<Activity>(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 }

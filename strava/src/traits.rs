@@ -6,8 +6,8 @@ and provides additional methods for interacting with Strava data.
 use crate::{event::Event, StravaId, StravaUser};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
+use tb_domain::TbResult;
 use tb_domain::{ActivityId, PartId, Person, UserId};
-use tb_domain::TbResult as TbResult;
 
 #[async_trait]
 pub trait StravaStore: tb_domain::Store + Send {
@@ -132,10 +132,8 @@ pub trait StravaStore: tb_domain::Store + Send {
     /// # Errors
     ///
     /// Returns an error if the ActivityId cannot be retrieved from the database.
-    async fn strava_activity_get_activityid(
-        &mut self,
-        act_id: i64,
-    ) -> TbResult<Option<ActivityId>>;
+    async fn strava_activity_get_activityid(&mut self, act_id: i64)
+        -> TbResult<Option<ActivityId>>;
 
     /// Creates a new Strava gear with the given Strava ID, PartId, and user ID.
     ///
@@ -221,8 +219,7 @@ pub trait StravaStore: tb_domain::Store + Send {
     /// # Errors
     ///
     /// Returns an error if the events cannot be retrieved.
-    async fn strava_event_get_later(&mut self, obj_id: i64, oid: StravaId)
-        -> TbResult<Vec<Event>>;
+    async fn strava_event_get_later(&mut self, obj_id: i64, oid: StravaId) -> TbResult<Vec<Event>>;
 
     /// Deletes the Strava events with the given event IDs.
     ///
@@ -301,11 +298,8 @@ pub trait StravaStore: tb_domain::Store + Send {
     /// # Errors
     ///
     /// Returns an error if the user cannot be updated.
-    async fn stravauser_update_last_activity(
-        &mut self,
-        user: &StravaId,
-        time: i64,
-    ) -> TbResult<()>;
+    async fn stravauser_update_last_activity(&mut self, user: &StravaId, time: i64)
+        -> TbResult<()>;
 
     /// Updates the access token for a Strava user.
     ///
@@ -343,17 +337,6 @@ pub trait StravaStore: tb_domain::Store + Send {
     ///
     /// Returns an error if the event count cannot be retrieved.
     async fn strava_events_get_count_for_user(&mut self, user: &StravaId) -> TbResult<i64>;
-
-    /// Disables a Strava user.
-    ///
-    /// # Arguments
-    ///
-    /// * `user` - The Strava ID of the user to disable.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the user cannot be disabled.
-    async fn stravauser_disable(&mut self, user: &StravaId) -> TbResult<()>;
 
     /// Locks a Strava ID.
     ///

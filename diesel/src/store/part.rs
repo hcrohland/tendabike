@@ -1,4 +1,4 @@
-use crate::AsyncDieselConn;
+use crate::*;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel_async::scoped_futures::ScopedFutureExt;
@@ -23,7 +23,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .find(pid)
             .first::<Part>(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 
     async fn partid_get_name(&mut self, pid: PartId) -> TbResult<String> {
@@ -33,7 +33,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .select(parts::name)
             .first(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 
     async fn partid_get_type(&mut self, pid: PartId) -> TbResult<PartTypeId> {
@@ -43,7 +43,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .select(parts::what)
             .first(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 
     async fn partid_get_ownerid(&mut self, pid: PartId, user: &dyn Person) -> TbResult<UserId> {
@@ -54,7 +54,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .select(owner)
             .first::<UserId>(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(Into::into)
     }
 
     async fn partid_apply_usage(
@@ -94,7 +94,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .order_by(last_used)
             .load::<Part>(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 
     async fn parts_reset_all_usages(&mut self, uid: UserId) -> TbResult<Vec<Part>> {
@@ -110,7 +110,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
             ))
             .get_results::<Part>(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 
     async fn create_part(
@@ -138,7 +138,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .values(values)
             .get_result(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 
     async fn part_change(&mut self, part: tb_domain::ChangePart) -> TbResult<Part> {
@@ -147,6 +147,6 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .set(part)
             .get_result(self)
             .await
-            .map_err(|e| e.into())
+            .map_err(map_to_tb)
     }
 }
