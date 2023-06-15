@@ -20,13 +20,12 @@
 
 //! This module contains the error types used throughout the application.
 //!
-//! The `Error` enum defines the different types of errors that can occur, and the `AnyResult` type
+//! The `Error` enum defines the different types of errors that can occur, and the `TbResult` type
 //! is a convenient alias for `Result<T, anyhow::Error>`.
 //!
 use thiserror::Error;
-pub use anyhow::{Context, ensure, bail};
 
-#[derive(Clone, Debug, Error)]
+#[derive(Debug, Error)]
 pub enum Error{
     #[error("User not authenticated: {0}")]
     NotAuth(String),
@@ -40,6 +39,10 @@ pub enum Error{
     Conflict(String),
     #[error("Try again: {0}")]
     TryAgain(&'static str),
+    #[error(transparent)]
+    DatabaseFailure(#[from] diesel::result::Error),
+    #[error(transparent)]
+    AnyFailure(#[from] anyhow::Error),
 }
 
-pub type AnyResult<T> = Result<T,anyhow::Error>;
+pub type TbResult<T> = Result<T,Error>;

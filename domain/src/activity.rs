@@ -32,6 +32,7 @@ use std::collections::HashSet;
 use crate::traits::Store;
 
 use super::*;
+use anyhow::Context;
 use ::time::PrimitiveDateTime;
 use scoped_futures::ScopedFutureExt;
 use time::{macros::format_description, OffsetDateTime};
@@ -132,7 +133,7 @@ impl ActivityId {
     /// Read the activity with id self
     ///
     /// checks authorization
-    pub async fn read(self, person: &dyn Person, conn: &mut impl Store) -> AnyResult<Activity> {
+    pub async fn read(self, person: &dyn Person, conn: &mut impl Store) -> TbResult<Activity> {
         let act = conn.activity_read_by_id(self).await?;
         person.check_owner(
             act.user_id,
@@ -146,17 +147,15 @@ impl ActivityId {
     ///
     /// returns all affected parts  
     /// checks authorization  
-    pub async fn delete(self, person: &dyn Person, conn: &mut impl Store) -> AnyResult<Summary> {
+    pub async fn delete(self, person: &dyn Person, conn: &mut impl Store) -> TbResult<Summary> {
         info!("Deleting {:?}", self);
         conn.transaction(|conn| {
             async {
                 let mut res = self
                     .read(person, conn)
-                    .await
-                    .context("Could not read activity")?
+                    .await?
                     .register(Factor::Sub, conn)
-                    .await
-                    .context("could not unregister activity")?;
+                    .await?;
                 conn.activity_delete(self).await?;
                 res.activities[0].gear = None;
                 res.activities[0].duration = 0;
@@ -182,7 +181,7 @@ impl ActivityId {
         act: &NewActivity,
         user: &dyn Person,
         conn: &mut impl Store,
-    ) -> AnyResult<Summary> {
+    ) -> TbResult<Summary> {
         conn.transaction(|conn| {
             async {
                 self.read(user, conn)
@@ -196,8 +195,7 @@ impl ActivityId {
 
                 let res = act
                     .register(Factor::Add, conn)
-                    .await
-                    .context("Could not register activity")?;
+                    .await?;
                 Ok(res)
             }
             .scope_boxed()
@@ -215,7 +213,7 @@ impl Activity {
         act: &NewActivity,
         user: &dyn Person,
         conn: &mut impl Store,
-    ) -> AnyResult<Summary> {
+    ) -> TbResult<Summary> {
         user.check_owner(
             act.user_id,
             format!(
@@ -231,7 +229,6 @@ impl Activity {
                 // let res = new.check_geartype(res, conn)?;
                 new.register(Factor::Add, conn)
                     .await
-                    .context("Could not register activity")
             }
             .scope_boxed()
         })
@@ -262,7 +259,7 @@ impl Activity {
         begin: OffsetDateTime,
         end: OffsetDateTime,
         conn: &mut impl Store,
-    ) -> AnyResult<Vec<Activity>> {
+    ) -> TbResult<Vec<Activity>> {
         conn.activities_find_by_partid_and_time(part, begin, end)
             .await
     }
@@ -273,7 +270,7 @@ impl Activity {
     /// If the factor is `Factor::Subtract`, the activity is unregistered and the usage is subtracted from the parts and attachments.
     ///
     /// Returns a summary of the affected parts, attachments, and activities.
-    pub async fn register(self, factor: Factor, conn: &mut impl Store) -> AnyResult<Summary> {
+    pub async fn register(self, factor: Factor, conn: &mut impl Store) -> TbResult<Summary> {
         trace!(
             "{} {:?}",
             if factor == Factor::Add {
@@ -306,14 +303,14 @@ impl Activity {
     /// A `Vec` of `Activity` objects representing all activities for the given user.
     ///
 
-    pub async fn get_all(user: &UserId, conn: &mut impl Store) -> AnyResult<Vec<Activity>> {
+    pub async fn get_all(user: &UserId, conn: &mut impl Store) -> TbResult<Vec<Activity>> {
         conn.activity_get_all_for_userid(user).await
     }
 
     pub async fn categories(
         user: &dyn Person,
         conn: &mut impl Store,
-    ) -> AnyResult<HashSet<PartTypeId>> {
+    ) -> TbResult<HashSet<PartTypeId>> {
         let act_types = conn
             .activity_get_all_for_userid(&user.get_id())
             .await?
@@ -337,7 +334,7 @@ impl Activity {
         tz: String,
         user: &dyn Person,
         conn: &mut impl Store,
-    ) -> AnyResult<(Summary, Vec<String>, Vec<String>)> {
+    ) -> TbResult<(Summary, Vec<String>, Vec<String>)> {
         #[derive(Debug, Deserialize)]
         struct Result {
             #[serde(rename = "Datum")]
@@ -407,12 +404,12 @@ impl Activity {
         gear_id: PartId,
         user: &dyn Person,
         conn: &mut impl Store,
-    ) -> AnyResult<Summary> {
+    ) -> TbResult<Summary> {
         conn.transaction(|conn| def_part(&gear_id, user, conn).scope_boxed())
             .await
     }
 
-    pub async fn rescan_all(conn: &mut impl Store) -> AnyResult<()> {
+    pub async fn rescan_all(conn: &mut impl Store) -> TbResult<()> {
         warn!("rescanning all activities!");
         conn.transaction(|conn| rescan(conn).scope_boxed()).await?;
         warn!("Done rescanning");
@@ -420,7 +417,7 @@ impl Activity {
     }
 }
 
-async fn rescan(conn: &mut impl Store) -> AnyResult<()> {
+async fn rescan(conn: &mut impl Store) -> TbResult<()> {
     conn.part_reset_all().await?;
     conn.attachment_reset_all().await?;
     for a in conn.activity_get_really_all().await? {
@@ -436,7 +433,7 @@ async fn match_and_update(
     rstart: OffsetDateTime,
     rclimb: Option<i32>,
     rdescend: i32,
-) -> AnyResult<Summary> {
+) -> TbResult<Summary> {
     let mut act = conn
         .activity_get_by_user_and_time(user.get_id(), rstart)
         .await?;
@@ -449,7 +446,7 @@ async fn match_and_update(
     actid.update(&act, user, conn).await
 }
 
-async fn def_part(partid: &PartId, user: &dyn Person, conn: &mut impl Store) -> AnyResult<Summary> {
+async fn def_part(partid: &PartId, user: &dyn Person, conn: &mut impl Store) -> TbResult<Summary> {
     let part = partid.part(user, conn).await?;
     let types = part.what.act_types(conn).await?;
 

@@ -8,12 +8,12 @@
 
 use std::ops::{Deref, DerefMut};
 
+use anyhow::Context;
 use async_session::log::info;
 use diesel::prelude::*;
 use diesel_async::pooled_connection::deadpool::{Object, Pool};
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::AsyncPgConnection;
-use anyhow::Result as AnyResult;
 
 type MyConnection = AsyncPgConnection;
 pub struct AsyncDieselConn(Object<MyConnection>);
@@ -33,6 +33,7 @@ impl DerefMut for AsyncDieselConn {
 }
 
 use diesel_migrations::{embed_migrations, MigrationHarness};
+use tb_domain::TbResult;
 pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
     embed_migrations!("migrations");
 
@@ -46,22 +47,22 @@ fn run_db_migrations(db: &str) {
 pub struct DbPool(Pool<MyConnection>);
 
 impl DbPool {
-    pub async fn new() -> AnyResult<Self> {
+    pub async fn new() -> anyhow::Result<Self> {
         let database_url =
             std::env::var("DB_URL").unwrap_or("postgres://localhost/tendabike".to_string());
         run_db_migrations(&database_url);
 
         let config =
             AsyncDieselConnectionManager::<MyConnection>::new(database_url);
-        let pool: Pool<MyConnection> = Pool::builder(config).build()?;
+        let pool = Pool::builder(config).build()?;
 
         Ok(DbPool(pool))
     }
 
     pub async fn get(
         &self,
-    ) -> AnyResult<AsyncDieselConn> {
-        let conn = self.0.get().await?;
+    ) -> TbResult<AsyncDieselConn> {
+        let conn = self.0.get().await.context("Could not get pool")?;
         Ok(AsyncDieselConn(conn))
     }
 }

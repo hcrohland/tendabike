@@ -1,4 +1,4 @@
-use crate::{AnyResult, User, UserId};
+use crate::{TbResult, User, UserId};
 
 #[async_trait::async_trait]
 /// A trait representing a user store.
@@ -12,7 +12,7 @@ pub trait UserStore {
     /// # Returns
     ///
     /// The user with the given ID, if it exists.
-    async fn user_read_by_id(&mut self, uid: UserId) -> AnyResult<User>;
+    async fn user_read_by_id(&mut self, uid: UserId) -> TbResult<User>;
 
     /// Creates a new user.
     ///
@@ -24,7 +24,7 @@ pub trait UserStore {
     /// # Returns
     ///
     /// The newly created user.
-    async fn user_create(&mut self, firstname: &str, lastname: &str) -> AnyResult<User>;
+    async fn user_create(&mut self, firstname: &str, lastname: &str) -> TbResult<User>;
 
     /// Updates an existing user.
     ///
@@ -42,5 +42,5 @@ pub trait UserStore {
         uid: &UserId,
         firstname: &str,
         lastname: &str,
-    ) -> AnyResult<User>;
+    ) -> TbResult<User>;
 }

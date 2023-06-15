@@ -1,12 +1,11 @@
-use crate::AsyncDieselConn;
-use anyhow::Context;
+use crate::*;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::AsyncConnection;
 use diesel_async::RunQueryDsl;
 use tb_domain::schema;
-use tb_domain::AnyResult;
+use tb_domain::TbResult;
 use tb_domain::Part;
 use tb_domain::PartId;
 use tb_domain::Person;
@@ -18,37 +17,36 @@ use tb_domain::PartTypeId;
 
 #[async_session::async_trait]
 impl tb_domain::PartStore for AsyncDieselConn {
-    async fn partid_get_part(&mut self, pid: PartId) -> AnyResult<Part> {
+    async fn partid_get_part(&mut self, pid: PartId) -> TbResult<Part> {
         use schema::parts;
-        let part = parts::table
+        parts::table
             .find(pid)
             .first::<Part>(self)
             .await
-            .with_context(|| format!("part {} does not exist", pid))?;
-        Ok(part)
+            .map_err(map_to_tb)
     }
 
-    async fn partid_get_name(&mut self, pid: PartId) -> AnyResult<String> {
+    async fn partid_get_name(&mut self, pid: PartId) -> TbResult<String> {
         use schema::parts;
         parts::table
             .find(pid)
             .select(parts::name)
             .first(self)
             .await
-            .with_context(|| format!("part {} does not exist", pid))
+            .map_err(map_to_tb)
     }
 
-    async fn partid_get_type(&mut self, pid: PartId) -> AnyResult<PartTypeId> {
+    async fn partid_get_type(&mut self, pid: PartId) -> TbResult<PartTypeId> {
         use schema::parts;
         parts::table
             .find(pid)
             .select(parts::what)
             .first(self)
             .await
-            .with_context(|| format!("part {} does not exist", pid))
+            .map_err(map_to_tb)
     }
 
-    async fn partid_get_ownerid(&mut self, pid: PartId, user: &dyn Person) -> AnyResult<UserId> {
+    async fn partid_get_ownerid(&mut self, pid: PartId, user: &dyn Person) -> TbResult<UserId> {
         use schema::parts::dsl::*;
         parts
             .find(pid)
@@ -56,7 +54,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .select(owner)
             .first::<UserId>(self)
             .await
-            .context("part does not exist or you are not the owner")
+            .map_err(Into::into)
     }
 
     async fn partid_apply_usage(
@@ -64,7 +62,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
         pid: PartId,
         usage: &Usage,
         start: OffsetDateTime,
-    ) -> AnyResult<Part> {
+    ) -> TbResult<Part> {
         use schema::parts::dsl::*;
         Ok(self
             .transaction(|conn| {
@@ -88,7 +86,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .await?)
     }
 
-    async fn part_get_all_for_userid(&mut self, uid: &UserId) -> AnyResult<Vec<Part>> {
+    async fn part_get_all_for_userid(&mut self, uid: &UserId) -> TbResult<Vec<Part>> {
         use schema::parts::dsl::*;
 
         parts
@@ -96,10 +94,10 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .order_by(last_used)
             .load::<Part>(self)
             .await
-            .context("error loading parts")
+            .map_err(map_to_tb)
     }
 
-    async fn parts_reset_all_usages(&mut self, uid: UserId) -> AnyResult<Vec<Part>> {
+    async fn parts_reset_all_usages(&mut self, uid: UserId) -> TbResult<Vec<Part>> {
         use schema::parts::dsl::*;
         diesel::update(parts.filter(owner.eq(uid)))
             .set((
@@ -112,14 +110,14 @@ impl tb_domain::PartStore for AsyncDieselConn {
             ))
             .get_results::<Part>(self)
             .await
-            .context("error resetting usages")
+            .map_err(map_to_tb)
     }
 
     async fn create_part(
         &mut self,
         newpart: tb_domain::NewPart,
         createtime: OffsetDateTime,
-    ) -> AnyResult<Part> {
+    ) -> TbResult<Part> {
         use schema::parts::dsl::*;
         let values = (
             owner.eq(newpart.owner),
@@ -140,15 +138,15 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .values(values)
             .get_result(self)
             .await
-            .context("error creating part")
+            .map_err(map_to_tb)
     }
 
-    async fn part_change(&mut self, part: tb_domain::ChangePart) -> AnyResult<Part> {
+    async fn part_change(&mut self, part: tb_domain::ChangePart) -> TbResult<Part> {
         use schema::parts::dsl::*;
         diesel::update(parts.filter(id.eq(part.id)))
             .set(part)
             .get_result(self)
             .await
-            .context("error updating part")
+            .map_err(map_to_tb)
     }
 }

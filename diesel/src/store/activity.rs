@@ -1,51 +1,50 @@
-use anyhow::Context;
+use crate::*;
 use async_session::log::debug;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use tb_domain::schema;
-use crate::AsyncDieselConn;
 use time::OffsetDateTime;
 
-use tb_domain::{ActTypeId, Activity, ActivityId, AnyResult, NewActivity, PartId, Person, UserId};
+use tb_domain::{ActTypeId, Activity, ActivityId, NewActivity, PartId, Person, TbResult, UserId};
 
 #[async_session::async_trait]
 impl tb_domain::ActivityStore for AsyncDieselConn {
-    async fn activity_create(&mut self, act: &NewActivity) -> AnyResult<Activity> {
+    async fn activity_create(&mut self, act: &NewActivity) -> TbResult<Activity> {
         diesel::insert_into(schema::activities::table)
             .values(act)
             .get_result(self)
             .await
-            .context("Could not insert activity")
+            .map_err(map_to_tb)
     }
 
-    async fn activity_read_by_id(&mut self, aid: ActivityId) -> AnyResult<Activity> {
+    async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Activity> {
         schema::activities::table
             .find(aid)
             .for_update()
             .first::<Activity>(self)
             .await
-            .context(format!("No activity id {}", aid))
+            .map_err(map_to_tb)
     }
 
-    async fn activity_update(&mut self, aid: ActivityId, act: &NewActivity) -> AnyResult<Activity> {
+    async fn activity_update(&mut self, aid: ActivityId, act: &NewActivity) -> TbResult<Activity> {
         use schema::activities;
         diesel::update(activities::table)
             .filter(activities::id.eq(aid))
             .set(act)
             .get_result::<Activity>(self)
             .await
-            .context("Error updating activity")
+            .map_err(map_to_tb)
     }
 
-    async fn activity_delete(&mut self, aid: ActivityId) -> AnyResult<usize> {
+    async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize> {
         use schema::activities::dsl::*;
         diesel::delete(activities.filter(id.eq(aid)))
             .execute(self)
             .await
-            .context("Error deleting activity")
+            .map_err(map_to_tb)
     }
 
-    async fn activity_get_all_for_userid(&mut self, uid: &UserId) -> AnyResult<Vec<Activity>> {
+    async fn activity_get_all_for_userid(&mut self, uid: &UserId) -> TbResult<Vec<Activity>> {
         use schema::activities::dsl::*;
 
         activities
@@ -53,7 +52,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .order_by(start)
             .load::<Activity>(self)
             .await
-            .context("error loading activities")
+            .map_err(map_to_tb)
     }
 
     async fn activities_find_by_partid_and_time(
@@ -61,7 +60,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
         part: PartId,
         begin: OffsetDateTime,
         end: OffsetDateTime,
-    ) -> AnyResult<Vec<Activity>> {
+    ) -> TbResult<Vec<Activity>> {
         use schema::activities::dsl::{activities, gear, start};
 
         activities
@@ -70,14 +69,14 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .filter(start.lt(end))
             .load::<Activity>(self)
             .await
-            .context("could not read activities")
+            .map_err(map_to_tb)
     }
 
     async fn activity_get_by_user_and_time(
         &mut self,
         uid: UserId,
         rstart: OffsetDateTime,
-    ) -> AnyResult<Activity> {
+    ) -> TbResult<Activity> {
         use schema::activities::dsl::*;
         activities
             .filter(user_id.eq(uid))
@@ -85,7 +84,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .for_update()
             .get_result(self)
             .await
-            .context(format!("could not read Activitiy at {}", rstart))
+            .map_err(map_to_tb)
     }
 
     async fn activity_set_gear_if_null(
@@ -93,7 +92,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
         user: &dyn Person,
         types: Vec<ActTypeId>,
         partid: &PartId,
-    ) -> AnyResult<Vec<Activity>> {
+    ) -> TbResult<Vec<Activity>> {
         use schema::activities::dsl::*;
         diesel::update(activities)
             .filter(user_id.eq(user.get_id()))
@@ -102,10 +101,10 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .set(gear.eq(partid))
             .get_results::<Activity>(self)
             .await
-            .context("Error updating activities")
+            .map_err(map_to_tb)
     }
 
-    async fn part_reset_all(&mut self) -> AnyResult<usize> {
+    async fn part_reset_all(&mut self) -> TbResult<usize> {
         use schema::parts::dsl::*;
         debug!("resetting all parts");
         diesel::update(parts)
@@ -118,15 +117,15 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             ))
             .execute(self)
             .await
-            .context("Could not reset parts")
+            .map_err(map_to_tb)
     }
 
-    async fn activity_get_really_all(&mut self) -> AnyResult<Vec<Activity>> {
+    async fn activity_get_really_all(&mut self) -> TbResult<Vec<Activity>> {
         use schema::activities::dsl::*;
         activities
             .order_by(id)
             .get_results::<Activity>(self)
             .await
-            .context("Could not get activities")
+            .map_err(map_to_tb)
     }
 }

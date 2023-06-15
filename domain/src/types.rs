@@ -83,7 +83,7 @@ pub struct ActivityType {
 
 impl PartTypeId {
     /// get the full type for a type_id
-    pub async fn get(self, conn: &mut impl Store) -> AnyResult<PartType> {
+    pub async fn get(self, conn: &mut impl Store) -> TbResult<PartType> {
         conn.get_parttype_by_id(self).await
     }
 
@@ -116,7 +116,7 @@ impl PartTypeId {
     }
 
     /// Get the activity types valid for this part_type
-    pub async fn act_types(&self, conn: &mut impl Store) -> AnyResult<Vec<ActTypeId>> {
+    pub async fn act_types(&self, conn: &mut impl Store) -> TbResult<Vec<ActTypeId>> {
         conn.get_activity_types_by_parttypeid(self).await
     }
 }

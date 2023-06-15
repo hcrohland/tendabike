@@ -58,9 +58,8 @@ async fn post_part(
 async fn put_part(
     user: RequestUser,
     State(conn): State<DbPool>,
-    part: String,
+    Json(part): Json<ChangePart>,
 ) -> ApiResult<Part> {
     let mut conn = conn.get().await?;
-    let part = serde_json::from_str::<ChangePart>(&part)?;
     Ok(part.change(&user, &mut conn).await.map(Json)?)
 }

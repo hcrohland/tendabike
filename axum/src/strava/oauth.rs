@@ -7,7 +7,8 @@
 //!
 //! Finally, it defines the `COOKIE_NAME` constant which is used to store the session cookie.
 
-use crate::{internal_any, internal_error};
+use crate::error::AppError;
+use anyhow::Context;
 use async_session::{MemoryStore, Session, SessionStore};
 use axum::{
     extract::{Query, State, TypedHeader},
@@ -26,6 +27,7 @@ use oauth2::{
 };
 use serde::{Deserialize, Serialize};
 use std::env;
+use tb_domain::Error;
 use tb_strava::StravaId;
 
 pub(crate) static COOKIE_NAME: &str = "SESSION";
@@ -151,40 +153,34 @@ pub(crate) async fn login_authorized(
     Query(query): Query<AuthRequest>,
     State(store): State<MemoryStore>,
     State(conn): State<crate::DbPool>,
-) -> Result<(HeaderMap, Redirect), (StatusCode, String)> {
-    let mut conn = conn.get().await.map_err(internal_any)?;
+) -> Result<(HeaderMap, Redirect), AppError> {
+    let mut conn = conn.get().await?;
 
     // Get an auth token
     let token = STRAVACLIENT
         .exchange_code(AuthorizationCode::new(query.code.clone()))
         .request_async(async_http_client)
-        .await
-        .map_err(internal_error)?;
+        .await.context("token exchange failed")?;
 
     if token.scopes().is_some() {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            format!("Insufficient authorization {:?}", token.scopes()),
-        ));
+        Err(Error::NotAuth(format!(
+            "Insufficient authorization {:?}",
+            token.scopes()
+        )))?
     }
 
-    let user = super::RequestUser::create_from_token(token, &mut conn)
-        .await
-        .map_err(internal_any)?;
+    let user = super::RequestUser::create_from_token(token, &mut conn).await?;
 
     // Create a new session filled with user data
     let mut session = Session::new();
-    session.insert("user", &user).map_err(internal_error)?;
+    session.insert("user", &user).context("session insert failed")?;
 
     // Store session and get corresponding cookie
-    let cookie = match store.store_session(session).await.map_err(internal_any)? {
+    let cookie = match store.store_session(session).await? {
         Some(cookie) => cookie,
-        None => {
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to store session".to_string(),
-            ))
-        }
+        None => Err(Error::AnyFailure(anyhow::anyhow!(
+            "Failed to store session".to_string(),
+        )))?,
     };
 
     // Build the cookie

@@ -101,7 +101,7 @@ impl AttachmentDetail {
 
 impl Attachment {
     /// return the usage for the attachment
-    async fn usage(&self, factor: Factor, conn: &mut impl Store) -> AnyResult<Usage> {
+    async fn usage(&self, factor: Factor, conn: &mut impl Store) -> TbResult<Usage> {
         Ok(
             Activity::find(self.gear, self.attached, self.detached, conn)
                 .await?
@@ -116,7 +116,7 @@ impl Attachment {
         target: PartId,
         hash: &mut SumHash,
         conn: &mut impl Store,
-    ) -> AnyResult<OffsetDateTime> {
+    ) -> TbResult<OffsetDateTime> {
         debug!("-- moving {} to {}", self.part_id, target);
         let ev = Event::new(self.part_id, at_time, target, self.hook);
         hash.merge(self.detach(at_time, conn).await?);
@@ -133,7 +133,7 @@ impl Attachment {
         mut self,
         detached: OffsetDateTime,
         conn: &mut impl Store,
-    ) -> AnyResult<Summary> {
+    ) -> TbResult<Summary> {
         trace!("detaching {} at {}", self.part_id, detached);
 
         let del = self.delete(conn).await?;
@@ -150,7 +150,7 @@ impl Attachment {
     //
     /// - recalculates the usage counters in the attached assembly
     /// - returns all affected parts
-    async fn create(mut self, conn: &mut impl Store) -> AnyResult<Summary> {
+    async fn create(mut self, conn: &mut impl Store) -> TbResult<Summary> {
         trace!("create {:?}", self);
         let usage = self.usage(Factor::Add, conn).await?;
         self.count = usage.count;
@@ -179,7 +179,7 @@ impl Attachment {
     ///
     /// - recalculates the usage counters in the attached assembly
     /// - returns all affected parts
-    async fn delete(self, conn: &mut impl Store) -> AnyResult<Summary> {
+    async fn delete(self, conn: &mut impl Store) -> TbResult<Summary> {
         trace!("delete {:?}", self);
         let mut att = conn.attachment_delete(self).await?;
 
@@ -210,7 +210,7 @@ impl Attachment {
     }
 
     /// add redundant details from database for client simplicity
-    async fn read_details(self, conn: &mut impl Store) -> AnyResult<AttachmentDetail> {
+    async fn read_details(self, conn: &mut impl Store) -> TbResult<AttachmentDetail> {
         let part = conn.partid_get_part(self.part_id).await?;
         Ok(self.add_details(&part.name, part.what))
     }
@@ -219,7 +219,7 @@ impl Attachment {
     pub async fn parts_per_activity(
         act: &Activity,
         conn: &mut impl Store,
-    ) -> AnyResult<Vec<PartId>> {
+    ) -> TbResult<Vec<PartId>> {
         let mut res = Vec::new();
         if let Some(act_gear) = act.gear {
             res.push(act_gear); // We need the gear too!
@@ -243,7 +243,7 @@ impl Attachment {
         act: &Activity,
         usage: &Usage,
         conn: &mut impl Store,
-    ) -> AnyResult<Vec<AttachmentDetail>> {
+    ) -> TbResult<Vec<AttachmentDetail>> {
         let mut res = Vec::new();
         if let Some(act_gear) = act.gear {
             let start = act.start;
@@ -265,7 +265,7 @@ impl Attachment {
     pub async fn for_parts(
         partlist: &[Part],
         conn: &mut impl Store,
-    ) -> AnyResult<Vec<AttachmentDetail>> {
+    ) -> TbResult<Vec<AttachmentDetail>> {
         let ids: Vec<_> = partlist.iter().map(|p| p.id).collect();
         let atts = conn.attachments_all_by_partlist(ids).await?;
 

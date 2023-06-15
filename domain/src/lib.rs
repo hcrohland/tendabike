@@ -34,8 +34,7 @@ use std::collections::HashMap;
 
 pub use activity::{Activity, ActivityId, NewActivity};
 pub use attachment::{Attachment, AttachmentDetail, Event};
-use error::*;
-pub use error::{AnyResult, Error};
+pub use error::{TbResult, Error};
 pub use part::{ChangePart, NewPart, Part, PartId};
 pub use types::*;
 pub use user::*;

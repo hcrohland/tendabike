@@ -1,4 +1,4 @@
-use crate::{AnyResult, Part, PartId, PartTypeId, Person, Usage, UserId};
+use crate::{TbResult, Part, PartId, PartTypeId, Person, Usage, UserId};
 use time::OffsetDateTime;
 
 #[async_trait::async_trait]
@@ -13,7 +13,7 @@ pub trait PartStore {
     /// # Returns
     ///
     /// Returns a `Part` object if the part exists, otherwise returns an error.
-    async fn partid_get_part(&mut self, pid: PartId) -> AnyResult<Part>;
+    async fn partid_get_part(&mut self, pid: PartId) -> TbResult<Part>;
 
     /// Retrieves the name of a `Part` by its ID.
     ///
@@ -24,7 +24,7 @@ pub trait PartStore {
     /// # Returns
     ///
     /// Returns the name of the `Part` if it exists, otherwise returns an error.
-    async fn partid_get_name(&mut self, pid: PartId) -> AnyResult<String>;
+    async fn partid_get_name(&mut self, pid: PartId) -> TbResult<String>;
 
     /// Retrieves the type of a `Part` by its ID.
     ///
@@ -35,7 +35,7 @@ pub trait PartStore {
     /// # Returns
     ///
     /// Returns the type of the `Part` if it exists, otherwise returns an error.
-    async fn partid_get_type(&mut self, pid: PartId) -> AnyResult<PartTypeId>;
+    async fn partid_get_type(&mut self, pid: PartId) -> TbResult<PartTypeId>;
 
     /// Retrieves the owner ID of a `Part` by its ID and the user requesting the information.
     ///
@@ -47,7 +47,7 @@ pub trait PartStore {
     /// # Returns
     ///
     /// Returns the owner ID of the `Part` if it exists and the user has permission to access it, otherwise returns an error.
-    async fn partid_get_ownerid(&mut self, pid: PartId, user: &dyn Person) -> AnyResult<UserId>;
+    async fn partid_get_ownerid(&mut self, pid: PartId, user: &dyn Person) -> TbResult<UserId>;
 
     /// Applies usage to a `Part` by its ID.
     ///
@@ -65,7 +65,7 @@ pub trait PartStore {
         pid: PartId,
         usage: &Usage,
         start: OffsetDateTime,
-    ) -> AnyResult<Part>;
+    ) -> TbResult<Part>;
 
     /// Retrieves all `Part` objects for a given user ID.
     ///
@@ -76,7 +76,7 @@ pub trait PartStore {
     /// # Returns
     ///
     /// Returns a vector of `Part` objects if the user has parts, otherwise returns an error.
-    async fn part_get_all_for_userid(&mut self, uid: &UserId) -> AnyResult<Vec<Part>>;
+    async fn part_get_all_for_userid(&mut self, uid: &UserId) -> TbResult<Vec<Part>>;
 
     /// Resets all usages for a given user's `Part` objects.
     ///
@@ -87,7 +87,7 @@ pub trait PartStore {
     /// # Returns
     ///
     /// Returns a vector of updated `Part` objects if the user has parts and the usages were successfully reset, otherwise returns an error.
-    async fn parts_reset_all_usages(&mut self, uid: UserId) -> AnyResult<Vec<Part>>;
+    async fn parts_reset_all_usages(&mut self, uid: UserId) -> TbResult<Vec<Part>>;
 
     /// Creates a new `Part` object.
     ///
@@ -103,7 +103,7 @@ pub trait PartStore {
         &mut self,
         newpart: crate::NewPart,
         createtime: OffsetDateTime,
-    ) -> AnyResult<Part>;
+    ) -> TbResult<Part>;
 
     /// Changes an existing `Part` object.
     ///
@@ -114,5 +114,5 @@ pub trait PartStore {
     /// # Returns
     ///
     /// Returns the updated `Part` object if it was successfully updated, otherwise returns an error.
-    async fn part_change(&mut self, part: crate::ChangePart) -> AnyResult<Part>;
+    async fn part_change(&mut self, part: crate::ChangePart) -> TbResult<Part>;
 }

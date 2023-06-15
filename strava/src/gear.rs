@@ -15,17 +15,17 @@ pub struct StravaGear {
     frame_type: Option<i32>,
 }
 
-pub async fn strava_url(gear: i32, conn: &mut impl StravaStore) -> AnyResult<String> {
+pub async fn strava_url(gear: i32, conn: &mut impl StravaStore) -> TbResult<String> {
     let mut g = conn.strava_gearid_get_name(gear).await?;
     if g.remove(0) != 'b' {
-        bail!("Not found");
+        return Err(Error::BadRequest(format!("'{g}' is not a bike id")));
     }
 
     Ok(format!("https://strava.com/bikes/{}", &g))
 }
 
 impl StravaGear {
-    fn into_tb(self, user: &impl StravaPerson) -> AnyResult<NewPart> {
+    fn into_tb(self, user: &impl StravaPerson) -> TbResult<NewPart> {
         Ok(NewPart {
             owner: user.tb_id(),
             what: self.what().into(),
@@ -52,7 +52,7 @@ pub(crate) async fn strava_to_tb(
     strava_id: String,
     user: &mut impl StravaPerson,
     conn: &mut impl StravaStore,
-) -> AnyResult<PartId> {
+) -> TbResult<PartId> {
     if let Some(gear) = conn.strava_gear_get_tbid(&strava_id).await? {
         return Ok(gear);
     }

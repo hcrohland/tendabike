@@ -1,22 +1,22 @@
-/* 
-    tendabike - the bike maintenance tracker
-    
-    Copyright (C) 2023  Christoph Rohland 
+/*
+   tendabike - the bike maintenance tracker
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU Affero General Public License as published
-    by the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+   Copyright (C) 2023  Christoph Rohland
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU Affero General Public License for more details.
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as published
+   by the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
 
-    You should have received a copy of the GNU Affero General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU Affero General Public License for more details.
 
- */
+   You should have received a copy of the GNU Affero General Public License
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+*/
 
 //! This module contains the implementation of the Strava webhook API endpoints.
 //!
@@ -49,15 +49,20 @@
 //! only accessible to users with the `admin` role.
 //!
 
-use anyhow::ensure;
-use async_session::log::{trace, info};
-use axum::{Json, extract::{Query, Path, State}};
-use {tb_domain::{AnyResult, Error, Summary}};
+use async_session::log::{info, trace};
+use axum::{
+    extract::{Path, Query, State},
+    Json,
+};
+use tb_domain::{Error, Summary, TbResult};
 
-use tb_strava::{event::{InEvent, process}, StravaPerson};
-use serde_derive::{ Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
+use tb_strava::{
+    event::{process, InEvent},
+    StravaPerson,
+};
 
-use crate::{ApiResult, RequestUser, AxumAdmin, DbPool};
+use crate::{ApiResult, AxumAdmin, DbPool, RequestUser};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Hub {
@@ -72,22 +77,23 @@ pub struct Hub {
 }
 
 impl Hub {
-    fn validate(self) -> AnyResult<Hub> {
-        ensure!(
-            self.verify_token == VERIFY_TOKEN, 
-            Error::BadRequest(format!("Unknown verify token {}", self.verify_token))
-        );
-        ensure!(
-            self.mode == "subscribe", 
-            Error::BadRequest(format!("Unknown mode {}", self.mode))
-        );
+    fn validate(self) -> TbResult<Hub> {
+        if self.verify_token != VERIFY_TOKEN {
+            return Err(Error::BadRequest(format!(
+                "Unknown verify token {}",
+                self.verify_token
+            )));
+        };
+        if self.mode != "subscribe" {
+            return Err(Error::BadRequest(format!("Unknown mode {}", self.mode)));
+        };
         Ok(self)
     }
 }
 
 const VERIFY_TOKEN: &str = "tendabike_strava";
 
-pub(crate) async fn hooks (mut user: RequestUser, State(conn): State<DbPool>) -> ApiResult<Summary> {
+pub(crate) async fn hooks(mut user: RequestUser, State(conn): State<DbPool>) -> ApiResult<Summary> {
     let mut conn = conn.get().await?;
     user.strava_id().lock(&mut conn).await?;
     let res = process(&mut user, &mut conn).await;
@@ -95,14 +101,17 @@ pub(crate) async fn hooks (mut user: RequestUser, State(conn): State<DbPool>) ->
     Ok(Json(res?))
 }
 
-pub(crate) async fn create_event(State(conn): State<DbPool>, Json(event): axum::extract::Json<InEvent>) -> ApiResult<()> {
+pub(crate) async fn create_event(
+    State(conn): State<DbPool>,
+    Json(event): axum::extract::Json<InEvent>,
+) -> ApiResult<()> {
     trace!("Received {:#?}", event);
     let mut conn = conn.get().await?;
     event.accept(&mut conn).await?;
     Ok(Json(()))
 }
 
-pub(super) async fn validate_subscription (Query(hub): Query<Hub>) -> ApiResult<Hub> {
+pub(super) async fn validate_subscription(Query(hub): Query<Hub>) -> ApiResult<Hub> {
     info!("Received validation callback {:?}", hub);
     Ok(hub.validate().map(Json)?)
 }
@@ -113,14 +122,23 @@ pub(super) struct SyncQuery {
     user_id: Option<i32>,
 }
 
-pub(super) async fn sync_api (_u: AxumAdmin, State(conn): State<DbPool>, Query(query): Query<SyncQuery>) -> ApiResult<()> {
+pub(super) async fn sync_api(
+    _u: AxumAdmin,
+    State(conn): State<DbPool>,
+    Query(query): Query<SyncQuery>,
+) -> ApiResult<()> {
     let mut conn = conn.get().await?;
     let user_id: Option<tb_domain::UserId> = query.user_id.map(|u| u.into());
-    Ok(tb_strava::event::sync_users(user_id, query.time, &mut conn).await.map(Json)?)
+    Ok(tb_strava::event::sync_users(user_id, query.time, &mut conn)
+        .await
+        .map(Json)?)
 }
 
-
-pub(super) async fn sync(Path(tbid): Path<i32>, _u: AxumAdmin, State(conn): State<DbPool>) -> ApiResult<Summary> {
+pub(super) async fn sync(
+    Path(tbid): Path<i32>,
+    _u: AxumAdmin,
+    State(conn): State<DbPool>,
+) -> ApiResult<Summary> {
     let mut conn = conn.get().await?;
     let conn = &mut conn;
     let mut user = RequestUser::create_from_id(tbid.into(), conn).await?;
