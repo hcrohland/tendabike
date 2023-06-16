@@ -62,6 +62,21 @@ impl StravaId {
     ) -> TbResult<StravaUser> {
         conn.stravaid_update_token(self, refresh).await
     }
+
+    /// disable a user
+    async fn disable(self, conn: &mut impl StravaStore) -> TbResult<()> {
+        let id = self;
+        info!("disabling user {}", id);
+        let user = self
+            .read(conn)
+            .await?
+            .ok_or(Error::NotFound("StravaUser not found".to_string()))?;
+        event::insert_sync(id, user.last_activity, conn)
+            .await
+            .context(format!("Could insert sync for user: {:?}", id))?;
+        conn.stravaid_update_token(id, None).await?;
+        Ok(())
+    }
 }
 
 /// Strava User data
@@ -114,17 +129,6 @@ impl StravaUser {
 
     pub(crate) fn disabled(&self) -> bool {
         self.refresh_token.is_none()
-    }
-
-    /// disable a user
-    async fn disable(&self, conn: &mut impl StravaStore) -> TbResult<()> {
-        let id = self.strava_id();
-        info!("disabling user {}", id);
-        event::insert_sync(id, self.last_activity, conn)
-            .await
-            .context(format!("Could insert sync for user: {:?}", id))?;
-        conn.stravaid_update_token(id, None).await?;
-        Ok(())
     }
 
     /// Upsert a Strava user by ID, updating their Tendabike user ID if they already exist, or creating a new user if they don't.
@@ -223,30 +227,35 @@ pub async fn get_all_stats(conn: &mut impl StravaStore) -> TbResult<Vec<StravaSt
     Ok(res)
 }
 
-/// disable a user 
+/// disable a user
 ///
 /// # Errors
 ///
 /// This function will return an error if the user does not exist, is already disabled
 /// or has open events and if strava or the database is not reachable.
-pub async fn user_disable(user: &mut impl StravaPerson, conn: &mut impl StravaStore) -> TbResult<()> {
+pub async fn user_disable(
+    user: &mut impl StravaPerson,
+    conn: &mut impl StravaStore,
+) -> TbResult<()> {
     let events = conn
-        .strava_events_get_count_for_user(&user.strava_id())
+        .strava_events_delete_for_user(&user.strava_id())
         .await?;
 
     if events > 0 {
-        return Err(Error::BadRequest(String::from("user has open events!")));
+        warn!("deleted {} open events for user {}", events, user.tb_id());
     }
 
-    user.deauthorize(conn).await?;
+    if let Err(err) = user.deauthorize(conn).await {
+        warn!(
+            "could not deauthorize user {}: {:#}",
+            user.tb_id(),
+            anyhow::anyhow!(err)
+        )
+    }
 
     warn!("User {} disabled", user.tb_id());
-    let user = user
-        .strava_id()
-        .read(conn)
-        .await?
-        .ok_or(Error::NotFound("StravaUser not found".to_string()))?;
-    Ok(user.disable(conn).await?)
+
+    Ok(user.strava_id().disable(conn).await?)
 }
 
 /// Returns the Strava URL for a user with the given Strava ID.

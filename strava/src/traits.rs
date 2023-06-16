@@ -338,6 +338,21 @@ pub trait StravaStore: tb_domain::Store + Send {
     /// Returns an error if the event count cannot be retrieved.
     async fn strava_events_get_count_for_user(&mut self, user: &StravaId) -> TbResult<i64>;
 
+    /// Deletes a[[ Strava events for a given user.
+    ///
+    /// # Arguments
+    ///
+    /// * `user` - The Strava user to get the event count for.
+    ///
+    /// # Returns
+    ///
+    /// The number of Strava events deleted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the event count cannot be retrieved.
+    async fn strava_events_delete_for_user(&mut self, user: &StravaId) -> TbResult<usize>;
+
     /// Locks a Strava ID.
     ///
     /// # Arguments

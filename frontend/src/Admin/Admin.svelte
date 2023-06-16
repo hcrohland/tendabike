@@ -55,7 +55,7 @@
             <ButtonGroup>
               <Button on:click={() => createSync(user)}>Add Sync Event</Button>
               <Sync {user} {refresh} />
-              <Button disabled={events > 0} on:click={() => disable(user)}>
+              <Button on:click={() => disable(user)}>
                 Disable user</Button
               >
             </ButtonGroup>
