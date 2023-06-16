@@ -89,10 +89,6 @@ pub struct StravaUser {
     tendabike_id: UserId,
     /// the time of the latest activity we have processed
     last_activity: i64,
-    /// the access token to access user data for this user
-    access_token: String,
-    /// the expiry time for the access token
-    expires_at: i64,
     /// the refresh token to get a new access token from Strava
     refresh_token: Option<String>,
 }

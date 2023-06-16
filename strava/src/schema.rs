@@ -34,8 +34,6 @@ table! {
         id -> Int4,
         tendabike_id -> Int4,
         last_activity -> Int8,
-        access_token -> Text,
-        expires_at -> Int8,
         refresh_token -> Nullable<Text>,
     }
 }
