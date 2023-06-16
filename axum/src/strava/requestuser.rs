@@ -93,7 +93,7 @@ impl RequestUser {
             id,
             strava_id,
             is_admin,
-            access_token: AccessToken::new("".to_string()),
+            access_token: AccessToken::new(String::default()),
             expires_at: Some(SystemTime::UNIX_EPOCH),
             refresh_token: Some(RefreshToken::new(refresh_token)),
         })
@@ -108,15 +108,24 @@ impl RequestUser {
 
     async fn refresh_the_token(
         &mut self,
-        token: RefreshToken,
         conn: &mut impl StravaStore,
     ) -> TbResult<()> {
+        let token = match self.refresh_token.clone() {
+            Some(token) => token,
+            None => {
+                return Err(Error::NotAuth(
+                    "No Refresh Token provided and Access Token expired".to_string(),
+                ))
+            }
+        };
         debug!("refreshing token for user {}", self.id);
-        let token = STRAVACLIENT
+        let token = match STRAVACLIENT
             .exchange_refresh_token(&token)
             .request_async(async_http_client)
-            .await
-            .context("token exchange failed")?;
+            .await {
+                Ok(token) => token,
+                Err(err) => return Err(Error::NotAuth(err.to_string()))
+        };
         self.access_token = token.access_token().clone();
         self.expires_at = token.expires_in().map(|d| SystemTime::now() + d);
         self.refresh_token = token.refresh_token().cloned();
@@ -171,14 +180,7 @@ impl RequestUser {
     async fn check_token(&mut self, conn: &mut impl StravaStore) -> TbResult<()> {
         Ok(if self.is_expired() {
             debug!("access token for user {} is expired", self.id);
-            match self.refresh_token.clone() {
-                Some(token) => self.refresh_the_token(token, conn).await?,
-                None => {
-                    return Err(Error::NotAuth(
-                        "No Refresh Token provided and Access Token expired".to_string(),
-                    ))
-                }
-            }
+            self.refresh_the_token(conn).await?
         })
     }
 }

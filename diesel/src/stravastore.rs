@@ -273,6 +273,15 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .map_err(map_to_tb)
     }
 
+    async fn strava_events_delete_for_user(&mut self, user: &StravaId) -> TbResult<usize> {
+        use schema::strava_events::dsl::*;
+
+        diesel::delete(strava_events.filter(owner_id.eq(user)))
+            .execute(self)
+            .await
+            .map_err(map_to_tb)
+    }
+
     async fn stravaid_lock(&mut self, user_id: &StravaId) -> TbResult<bool> {
         use diesel::sql_types::Bool;
         #[derive(QueryableByName, Debug)]

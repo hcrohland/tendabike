@@ -141,9 +141,10 @@ pub(super) async fn sync(
 ) -> ApiResult<Summary> {
     let mut conn = conn.get().await?;
     let conn = &mut conn;
-    let mut user = RequestUser::create_from_id(admin,tbid.into(), conn).await?;
-    user.strava_id().lock(conn).await?;
-    let res = process(&mut user, conn).await;
-    user.strava_id().unlock(conn).await?;
-    Ok(Json(res?))
+    let mut user = RequestUser::create_from_id(admin, tbid.into(), conn).await?;
+    let res = process(&mut user, conn).await.map_err(|e| match e {
+        Error::NotAuth(_) => Error::AnyFailure(anyhow::anyhow!("User not authenticated at Strava")),
+        err => err,
+    })?;
+    Ok(Json(res))
 }
