@@ -338,6 +338,7 @@ impl Activity {
         #[derive(Debug, Deserialize)]
         struct Result {
             #[serde(rename = "Datum")]
+            #[serde(alias = "Date")]
             start: String,
             #[serde(rename = "Titel")]
             title: String,
