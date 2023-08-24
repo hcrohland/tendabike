@@ -52,11 +52,11 @@ RUN npm update rollup
 COPY frontend/ /frontend
 RUN npm run build
 
-FROM debian:buster-slim
+FROM debian:12-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y libpq5 libssl1.1 ca-certificates curl
+RUN apt-get update && apt-get install -y libpq5 libssl3 ca-certificates curl
 
 RUN useradd --system tendabike
 USER tendabike
