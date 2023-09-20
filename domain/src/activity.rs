@@ -341,6 +341,7 @@ impl Activity {
             #[serde(alias = "Date")]
             start: String,
             #[serde(rename = "Titel")]
+            #[serde(alias = "Title")]
             title: String,
             #[serde(alias = "Negativer Höhenunterschied")]
             #[serde(alias = "Abstieg gesamt")]
