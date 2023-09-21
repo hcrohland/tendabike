@@ -22,7 +22,7 @@
   "dependencies": {
     "lodash": "^4",
     "sirv-cli": "^2",
-    "svelte-flatpickr": "^3",
+    "svelte-flatpickr": "^3.3.3",
     "svelte-spa-router": "^3",
     "svelte-timezone-picker": "^2"
   },
