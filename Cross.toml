@@ -1,5 +1,5 @@
 [build]
 pre-build = [
-  "dpkg --add-architecture $CROSS_DEB_ARCH && apt-get update && apt-get --assume-yes install libpq5:$CROSS_DEB_ARCH libssl3:$CROSS_DEB_ARCH"
+  "dpkg --add-architecture $CROSS_DEB_ARCH && apt-get update && apt-get --assume-yes install libpq:$CROSS_DEB_ARCH"
 ]
 
