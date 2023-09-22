@@ -1,5 +1,5 @@
 [build]
 pre-build = [
-  "dpkg --add-architecture $CROSS_DEB_ARCH && apt-get update && apt-get --assume-yes install libpq5:$CROSS_DEB_ARCH && ls /lib/aarch64-linux-gnu/libpq.so.5"
+  "dpkg --add-architecture arm64 && apt-get update && apt-get --assume-yes install libpq5:arm64 && ls /lib/aarch64-linux-gnu/libpq.so.5"
 ]
 
