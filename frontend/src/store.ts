@@ -1,10 +1,15 @@
 import { writable, get } from "svelte/store";
 import type { Part, Attachment, Type, Activity, ActType } from './types';
 
-export const maxDate = new Date("9999-12-31");
+export const maxDate = new Date("2999-12-31");
 export function checkStatus<T>(response) {
     if (response.ok) {
         return response.json()
+    }
+
+    if (response.status === 401) {
+        user.set(undefined);
+        window.location.href = '/#/about';
     }
 
     return response.text()

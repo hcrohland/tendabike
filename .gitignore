@@ -28,3 +28,4 @@
 Rocket.toml
 **/.env
 **/launch.json
+.cargo/*

@@ -15,7 +15,7 @@
 
   async function savePart () {
     disabled = true;
-    await myfetch('/part/', 'POST', newpart)
+    await myfetch('/part', 'POST', newpart)
       .then(data => parts.updateMap([data]))
       .catch(handleError)
     isOpen = false;

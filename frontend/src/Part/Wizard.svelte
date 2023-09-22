@@ -55,7 +55,7 @@ async function attachPart (part, hook) {
 
   async function installPart (newpart:Part, hook: number) {
     disabled = true;
-    await myfetch('/part/', 'POST', newpart)
+    await myfetch('/part', 'POST', newpart)
       .then((p) => attachPart(p, hook))
       .catch(handleError)
   }

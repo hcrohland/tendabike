@@ -60,9 +60,10 @@
       <p></p>  
     </CardBody>
     <CardFooter>
-      © Christoph Rohland 2019-2020
+      © Christoph Rohland 2019-2023
       - Icons made by <a href="https://www.flaticon.com/authors/freepik" title="Freepik">Freepik</a> 
       from <a href="https://www.flaticon.com/" title="Flaticon">www.flaticon.com</a>
+      - Source Code at <a href="https://github.com/hcrohland/tendabike" title="Repository">GitHub</a>
     </CardFooter>
   </Card>
 </div>

@@ -1,21 +1,27 @@
-FROM rust:latest as base
+FROM lukemathwalker/cargo-chef:latest as base
 # We only pay the installation cost once, 
 # it will be cached from the second build onwards
 # To ensure a reproducible build consider pinning 
 # the cargo-chef version with `--version X.X.X`
 
 WORKDIR /app
+
+ENV DEBIAN_FRONTEND=noninteractive
+# install nighlty toolchain
+RUN rustup set profile minimal
 # install dependencies
 RUN apt-get update && apt-get install -y libpq-dev libssl-dev
 
-ENV DEBIAN_FRONTEND=noninteractive
-RUN cargo install cargo-chef 
-# install nighlty toolchain
-RUN rustup set profile minimal && rustup update nightly && rustup default nightly
-
 FROM base as planner
+# do not copy frontend!
+COPY Cargo.toml Cargo.lock ./
+COPY app app/
+COPY axum axum/
+COPY diesel diesel/
+COPY domain domain/
+COPY strava strava/
 
-COPY server/. .
+
 RUN cargo chef prepare --recipe-path recipe.json
 
 
@@ -27,7 +33,12 @@ RUN cargo chef cook --release --recipe-path recipe.json
 FROM cacher as build-engine
 
 # do not copy frontend!
-COPY server/ .
+COPY Cargo.toml Cargo.lock ./
+COPY app app/
+COPY axum axum/
+COPY diesel diesel/
+COPY domain domain/
+COPY strava strava/
 
 RUN cargo build --release
 
@@ -41,11 +52,11 @@ RUN npm update rollup
 COPY frontend/ /frontend
 RUN npm run build
 
-FROM debian:buster-slim
+FROM debian:12-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y libpq5 libssl1.1 ca-certificates curl
+RUN apt-get update && apt-get install -y libpq5 libssl3 ca-certificates curl
 
 RUN useradd --system tendabike
 USER tendabike

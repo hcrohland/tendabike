@@ -1,42 +1,50 @@
 <script lang="ts">
-  import { Modal, ModalHeader, ModalBody, 
-          Form, FormGroup, 
-          InputGroup, InputGroupAddon, InputGroupText
-        } from 'sveltestrap';
-  import ModalFooter from '../Actions/ModalFooter.svelte'
-  import {handleError, myfetch} from '../store';
-  import type { User } from '../types';
-  import DateTime from '../Widgets/DateTime.svelte'
+  import {
+    Modal,
+    ModalHeader,
+    ModalBody,
+    Form,
+    FormGroup,
+    InputGroup,
+    InputGroupAddon,
+    InputGroupText,
+  } from "sveltestrap";
+  import ModalFooter from "../Actions/ModalFooter.svelte";
+  import { handleError, myfetch } from "../store";
+  import type { User } from "../types";
+  import DateTime from "../Widgets/DateTime.svelte";
 
+  export let refresh: () => void;
   let user: User;
-  let date = new Date;
+  let date = new Date();
   let isOpen = false;
   let userParam: string;
-  const toggle = () => isOpen = false
+  const toggle = () => (isOpen = false);
 
-  async function action () {
-    await myfetch('/strava/sync?time=' + (date.getTime()/1000).toFixed(0) + userParam)
-      .catch(handleError)
-    isOpen = false;  
-  }  
-  
+  async function action() {
+    await myfetch(
+      "/strava/sync?time=" + (date.getTime() / 1000).toFixed(0) + userParam
+    ).catch(handleError);
+    isOpen = false;
+    refresh();
+  }
+
   export const createSync = (id?: User) => {
-    user = id
+    user = id;
     if (id) {
-      userParam = '&user=' + user.id
+      userParam = "&user_id=" + user.id;
     } else {
-      userParam = ''
+      userParam = "";
     }
-    isOpen = true
-  };  
-
+    isOpen = true;
+  };
 </script>
 
 <Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
-  <ModalHeader {toggle}> 
+  <ModalHeader {toggle}>
     Create sync Event
     {#if user}
-       for {user.firstname} {user.name} ({user.id})
+      for {user.firstname} {user.name} ({user.id})
     {/if}
   </ModalHeader>
   <ModalBody>
@@ -46,10 +54,10 @@
           <InputGroupAddon addonType="prepend">
             <InputGroupText>Start</InputGroupText>
           </InputGroupAddon>
-          <DateTime maxdate={new Date} bind:date/> 
+          <DateTime maxdate={new Date()} bind:date />
         </InputGroup>
       </FormGroup>
     </Form>
   </ModalBody>
-  <ModalFooter {toggle} {action} button={'Sync'} />
+  <ModalFooter {toggle} {action} button={"Sync"} />
 </Modal>
