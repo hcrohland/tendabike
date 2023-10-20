@@ -23,8 +23,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Run sccache
+      uses: mozilla-actions/sccache-action@v0.0.3
     - uses: actions/checkout@v3
-    - uses: Swatinem/rust-cache@v2
+    #- uses: Swatinem/rust-cache@v2
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
@@ -34,4 +36,4 @@ jobs:
       with:
         use-cross: true
         command: build
-        args: --target ${{matrix.target}}
+        args: --release --target ${{matrix.target}}
