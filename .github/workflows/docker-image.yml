@@ -14,9 +14,13 @@ jobs:
 
   build:
 
-    runs-on: buildjet-2vcpu-ubuntu-2204-arm
+    runs-on: ubuntu-latest
+    #runs-on: buildjet-2vcpu-ubuntu-2204-arm
 
+    env: 
+      TAG: ${{ github.event_name == 'pull_request' && format('PR_{0}', github.event.pull_request.number) || 'latest'}}
     steps:
+    - run: echo ${{ env.TAG }}
     - uses: actions/checkout@v3
     -
         name: Login to GitHub Container Registry
@@ -25,14 +29,10 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
-    - run: echo ${{ github.event_name }}
     - name: Build the Docker image
       run: docker build . --file Dockerfile --tag tendabike
-    - name: Tag with PR_# if pull request
-      if: github.event_name == 'pull_request'
-      run: docker tag tendabike ghcr.io/hcrohland/tendabike:PR_${{ github.event.pull_request.number }}
     - name: Tag as latest if pushed
       if: github.event_name == 'push'
-      run: docker tag tendabike ghcr.io/hcrohland/tendabike:latest
+      run: docker tag tendabike ghcr.io/hcrohland/tendabike:${{ env.TAG }}
     - name: Publish image
       run: docker push -a ghcr.io/hcrohland/tendabike
