@@ -20,8 +20,6 @@ jobs:
     env: 
       TAG: ${{ github.event_name == 'pull_request' && format('PR_{0}', github.event.pull_request.number) || 'latest'}}
     steps:
-    - run: echo ${{ env.TAG }}
-    - uses: actions/checkout@v3
     -
       name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
