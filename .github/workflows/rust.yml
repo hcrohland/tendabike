@@ -30,6 +30,7 @@ jobs:
           - name: linux-aarch64
             runner: ubuntu-latest
             target: aarch64-unknown-linux-gnu
+            platform: linux/arm64/v8
             command: cross
 
     runs-on: ubuntu-latest
@@ -58,7 +59,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ github.token }}
     - name: Build the Docker image
-      run: docker build . --file cross.Dockerfile --tag tendabike
+      run: docker buildx build . --platform ${{ matrix.platform }} --file cross.Dockerfile --tag tendabike
     - name: Tag with PR_# if pull request
       if: github.event_name == 'pull_request'
       run: docker tag tendabike ghcr.io/hcrohland/tendabike:PR_${{ github.event.pull_request.number }}
