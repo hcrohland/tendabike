@@ -14,7 +14,7 @@ jobs:
 
   build:
 
-    runs-on: ARM64
+    runs-on: buildjet-2vcpu-ubuntu-2204-arm
 
     steps:
     - uses: actions/checkout@v3
