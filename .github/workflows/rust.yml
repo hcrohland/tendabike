@@ -44,3 +44,16 @@ jobs:
 
     - name: Build Binary
       run: ${{ matrix.command }} build --locked --release --target ${{ matrix.target }}
+    
+    - run: cp target/${{ matrix.target }}/release/tendabike .
+    - name: Build the Docker image
+      run: docker build . --file cross.Dockerfile --tag tendabike
+    - name: Tag with PR_# if pull request
+      if: github.event_name == 'pull_request'
+      run: docker tag tendabike ghcr.io/hcrohland/tendabike:PR_${{ github.event.pull_request.number }}
+    - name: Tag as latest if pushed
+      if: github.event_name == 'push'
+      run: docker tag tendabike ghcr.io/hcrohland/tendabike:latest
+    - name: Publish image
+      run: docker push -a ghcr.io/hcrohland/tendabike
+
