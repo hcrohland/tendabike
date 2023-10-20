@@ -46,6 +46,12 @@ jobs:
       run: ${{ matrix.command }} build --locked --release --target ${{ matrix.target }}
     
     - run: cp target/${{ matrix.target }}/release/tendabike .
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
     - name: Build the Docker image
       run: docker build . --file cross.Dockerfile --tag tendabike
     - name: Tag with PR_# if pull request
