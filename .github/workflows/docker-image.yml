@@ -23,16 +23,18 @@ jobs:
     - run: echo ${{ env.TAG }}
     - uses: actions/checkout@v3
     -
-        name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag tendabike
-    - name: Tag as latest if pushed
-      if: github.event_name == 'push'
-      run: docker tag tendabike ghcr.io/hcrohland/tendabike:${{ env.TAG }}
-    - name: Publish image
-      run: docker push -a ghcr.io/hcrohland/tendabike
+      name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    -
+      name: Login to GitHub Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    -
+      name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        push: true
+        tags: ghcr.io/hcrohland/tendabike:${{ env.TAG }}
