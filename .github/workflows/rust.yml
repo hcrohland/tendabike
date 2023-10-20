@@ -17,8 +17,8 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          #- aarch64-unknown-linux-gnu
-          - arm-unknown-linux-gnueabi
+          - aarch64-unknown-linux-gnu
+          #- arm-unknown-linux-gnueabi
 
     runs-on: ubuntu-latest
 
