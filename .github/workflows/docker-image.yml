@@ -14,8 +14,8 @@ jobs:
 
   build:
 
-    runs-on: ubuntu-latest
-    #runs-on: buildjet-2vcpu-ubuntu-2204-arm
+    #runs-on: ubuntu-latest
+    runs-on: buildjet-2vcpu-ubuntu-2204-arm
 
     env: 
       TAG: ${{ github.event_name == 'pull_request' && format('PR_{0}', github.event.pull_request.number) || 'latest'}}
@@ -36,5 +36,5 @@ jobs:
       with:
         push: true
         tags: ghcr.io/hcrohland/tendabike:${{ env.TAG }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        cache-from: type=registry,ref=ghcr.io/hcrohland/tendabike:latest
+        cache-to: type=inline
