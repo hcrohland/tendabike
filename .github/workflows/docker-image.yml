@@ -38,3 +38,5 @@ jobs:
       with:
         push: true
         tags: ghcr.io/hcrohland/tendabike:${{ env.TAG }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
