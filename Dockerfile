@@ -10,7 +10,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # install nighlty toolchain
 RUN rustup set profile minimal
 # install dependencies
-RUN apt-get update && apt-get install -y libpq-dev libssl-dev
+RUN apt-get update && apt-get install -y libpq-dev
 
 FROM base as planner
 # do not copy frontend!
@@ -56,7 +56,7 @@ FROM debian:12-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y libpq5 libssl3 ca-certificates curl
+RUN apt-get update && apt-get install -y libpq5 ca-certificates curl
 
 RUN useradd --system tendabike
 USER tendabike
