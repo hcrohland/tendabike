@@ -31,7 +31,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - uses: Swatinem/rust-cache@v2
+    #- uses: Swatinem/rust-cache@v2
     - uses: dtolnay/rust-toolchain@stable
     # Only install cross if we need it
     # Install via cargo-binstall which I found faster
