@@ -58,6 +58,10 @@ jobs:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ github.token }}
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v2
+      with:
+        platforms: 'arm64'
     - name: Build the Docker image
       run: docker buildx build . --platform ${{ matrix.platform }} --file cross.Dockerfile --tag tendabike
     - name: Tag with PR_# if pull request
