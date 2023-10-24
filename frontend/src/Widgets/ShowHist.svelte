@@ -1,4 +1,4 @@
-<button class="btn badge" on:click={click}>
+<button class="btn" on:click={click}>
   {#if show_hist}
     &#9650;
   {:else}

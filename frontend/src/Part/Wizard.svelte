@@ -1,6 +1,6 @@
 <script lang="ts">
 import {
-    Input, InputGroup, CustomInput, Table, Container, Button
+    Input, InputGroup, Table, Container, Button
   } from 'sveltestrap';
 import type {AttEvent, Attachment, Part, Type} from '../types'
 import {category, filterValues, types, handleError, updateSummary, myfetch} from '../store'
@@ -92,7 +92,7 @@ let show_button = (groups.length != allgroups.length)
 {#if gear.disposed_at == null && groups.length > 0}
 <Container>
   {#if show_button}
-    <Button on:click={() => show_button = false}>
+    <Button color=success on:click={() => show_button = false}>
       Add more component groups
     </Button>
   {:else}
@@ -105,9 +105,9 @@ let show_button = (groups.length != allgroups.length)
       {#each groups as g, i}
       <tr>
         <th style="vertical-align: middle">
-          <CustomInput type="switch" id={g.group} name="customSwitch" bind:checked={g.enabled}> 
+          <Input type="switch" id={g.group} name="customSwitch" bind:checked={g.enabled}> 
             {g.group}:
-          </CustomInput>
+          </Input>
         </th>
         <td>
           <InputGroup>

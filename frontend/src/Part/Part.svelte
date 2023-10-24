@@ -19,16 +19,16 @@
 </script>
 
 <GearCard {part} display>
-  <ButtonGroup class="float-right">
+  <ButtonGroup class="float-end">
       {#if part.disposed_at}
       <Button on:click={() => recoverPart(part)}> Recover gear </Button>
       {:else}
       {#if part.what == hook.main}
-         <Button on:click={() => installPart(part)}>  Install new part </Button>
+         <Button color=light on:click={() => installPart(part)}>  Install new part </Button>
       {:else}
-         <Button on:click={() => attachPart(part)}>  Attach part </Button>
+         <Button color=light on:click={() => attachPart(part)}>  Attach part </Button>
       {/if}
-      <Button on:click={() => changePart(part)}>  Change details </Button>
+      <Button color=light on:click={() => changePart(part)}>  Change details </Button>
       {/if}
   </ButtonGroup>
 </GearCard>

@@ -1,5 +1,5 @@
-<Dropdown {isOpen} toggle={() => (isOpen = !isOpen)} size="sm" class="float-right">
-  <DropdownToggle caret/>
+<Dropdown {isOpen} toggle={() => (isOpen = !isOpen)} size="sm" class="float-end">
+  <DropdownToggle color=light caret/>
   <DropdownMenu right>
     <slot />
   </DropdownMenu>

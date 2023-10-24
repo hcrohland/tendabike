@@ -6,7 +6,6 @@
     Form,
     FormGroup,
     InputGroup,
-    InputGroupAddon,
     InputGroupText,
   } from "sveltestrap";
   import ModalFooter from "../Actions/ModalFooter.svelte";
@@ -51,9 +50,7 @@
     <Form>
       <FormGroup check>
         <InputGroup>
-          <InputGroupAddon addonType="prepend">
-            <InputGroupText>Start</InputGroupText>
-          </InputGroupAddon>
+          <InputGroupText>Start</InputGroupText>
           <DateTime maxdate={new Date()} bind:date />
         </InputGroup>
       </FormGroup>

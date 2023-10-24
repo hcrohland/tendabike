@@ -42,7 +42,7 @@ $: subparts = filterValues($parts, (p) => p.what == type.id).sort(by("last_used"
     {/if}
   </th>
   <th class="border-2 text-nowrap" colspan=80>
-    <Button class="badge badge-secondary float-right" on:click={() => newPart(type)}> New {type.name}</Button>
+    <Button class="badge badge-secondary float-end" on:click={() => newPart(type)}> New {type.name}</Button>
   </th>
 </tr>
   {#each subparts.filter((p) => show_all || !(attachedTo($attachments, p.id, date) || p.disposed_at))

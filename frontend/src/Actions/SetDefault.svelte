@@ -1,5 +1,5 @@
 <script lang="ts">
-import { Button, Col, InputGroup, InputGroupAddon, Row } from "sveltestrap";
+import { Button, Col, InputGroup, Row } from "sveltestrap";
 
 import { activities, filterValues, handleError, myfetch, parts, updateSummary } from "../store";
 import type { Type } from "../types";
@@ -22,11 +22,9 @@ $: unassigned = filterValues($activities, (a) => !a.gear && type.acts.some((t) =
 <Col md=8 lg=6>
   <Row>
     <InputGroup>
-      <InputGroupAddon addonType="prepend">
-        <button on:click={() => isOpen = true}>
-          Assign {unassigned.length} unassigned activities to
-        </button>
-      </InputGroupAddon>
+      <button on:click={() => isOpen = true}>
+        Assign {unassigned.length} unassigned activities to
+      </button>
       <select name="gear" class="form-control" required bind:value>
         <option hidden value> -- select one -- </option>
         {#each filterValues($parts, (p) => p.what == type.id) as gear}

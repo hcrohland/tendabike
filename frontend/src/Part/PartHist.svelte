@@ -8,14 +8,9 @@
   
 </script>
 
-<style>
-.scroll-x {
-  width: 100%;
-  overflow-x: scroll;
-}
-</style>
+
 {#if atts.length > 0}
-<div class="scroll-x">
+<div class="table-responsive">
   <table class="table">
     <thead>
       <tr>

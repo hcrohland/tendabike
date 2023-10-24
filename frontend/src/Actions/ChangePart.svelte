@@ -87,13 +87,13 @@
           <InputGroup>
             <Dispose bind:dispose/>
             {#if dispose}
-            <DateTime bind:date mindate={last.detached}/>
+              <DateTime bind:date mindate={last.detached}/>
             {/if}
           </InputGroup>
           {:else}
           <InputGroup>
-            <Switch bind:checked={detach}>
-              {#if detach} detached at {:else} detach? {/if}
+            <Switch bind:checked={detach} >
+              {#if detach} detached {:else} detach? {/if}
             </Switch>
             {#if detach}
               <DateTime bind:date mindate={last.attached}/>

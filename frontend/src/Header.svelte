@@ -56,9 +56,9 @@
 
 <Garmin bind:garmin />
 
-<Navbar expand="md" color="light" light mb-2>
+<Navbar expand="md" color='secondary-subtle' light mb-2>
   <img src="favicon.png" alt="TendaBike" title="TendaBike" width=60 class="rounded-circle">
-  <NavbarBrand href="#/cat/1">
+  <NavbarBrand class="text-decoration-none" href="#/cat/1">
     <div class="d-none d-md-block">
       &nbsp; Tend a Bike
     </div>
@@ -71,15 +71,15 @@
   {#if $user}
     <NavbarToggler on:click={() => (isOpen = !isOpen)} />
     <Collapse {isOpen} navbar expand="md" on:update={navbarUpdate}>
-      <Nav class="ml-auto float-left" navbar>
+      <Nav class="ms-auto float-start" navbar>
         {#if $category}
           <a href="/cat/{$category.id}" use:link class="dropdown-item text-reset">{$category.name}s</a>
           <a href="/spares/{$category.id}" use:link class="dropdown-item text-reset">Spare parts</a>
         {/if}
       </Nav>
-      <Nav class="ml-auto float-right" navbar>
+      <Nav class="ms-auto float-end" navbar>
         <Dropdown nav isOpen={syncOpen} toggle={() => (syncOpen = !syncOpen)}>
-          <DropdownToggle nav caret>
+          <DropdownToggle color=light caret>
             {#await promise}
               Syncing
               {#if number != 0}
@@ -99,7 +99,7 @@
           </DropdownMenu>
         </Dropdown>
         <Dropdown nav isOpen={userOpen} toggle={() => (userOpen = !userOpen)}>
-          <DropdownToggle nav caret>{$user.firstname}</DropdownToggle>
+          <DropdownToggle color=light caret>{$user.firstname}</DropdownToggle>
           <DropdownMenu right>
             <DropdownItem href="/#/stats">Statistics</DropdownItem>
             <DropdownItem href="/strava/logout">Logout</DropdownItem>
@@ -114,7 +114,7 @@
       </Nav>
     </Collapse>
   {:else}
-    <Nav class="ml-auto float-right" navbar>
+    <Nav class="ml-auto float-end" navbar>
       <a href="/strava/login"><img src="connect_with_strava.png" alt="Login with Strava"></a>
     </Nav>
   {/if}

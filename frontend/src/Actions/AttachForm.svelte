@@ -1,6 +1,6 @@
 <script lang="ts">
   import {
-    Form, InputGroup, InputGroupAddon, InputGroupText
+    Form, InputGroup, InputGroupText
   } from 'sveltestrap'
   import DateTime from '../Widgets/DateTime.svelte';
   import {attachments, filterValues, types, parts, by, maxDate} from '../store';
@@ -37,9 +37,7 @@
 <Form>
   <div class="form-inline">
     <InputGroup class="mb-0 mr-sm-2 mb-sm-2">
-      <InputGroupAddon addonType="prepend">
-        <InputGroupText>to</InputGroupText>
-      </InputGroupAddon>
+      <InputGroupText>to</InputGroupText>
       {#if type.hooks.length > 1}
         <!-- svelte-ignore a11y-autofocus -->
         <select name="hook" class="form-control" required bind:value={attach.hook}>
@@ -48,9 +46,7 @@
             <option value={h}>{types[h].name}</option>
           {/each}
         </select>
-        <InputGroupAddon addonType="prepend">
-          <InputGroupText>of</InputGroupText>
-        </InputGroupAddon>
+        <InputGroupText>of</InputGroupText>
       {/if}
       <select name="gear" class="form-control" required bind:value={attach.gear}>
         <option hidden value> -- select one -- </option>
@@ -60,9 +56,7 @@
       </select> 
     </InputGroup>  
     <InputGroup class="mb-0 mr-sm-2 mb-sm-2">
-      <InputGroupAddon addonType="prepend">
-        <InputGroupText>at</InputGroupText>
-      </InputGroupAddon>
+      <InputGroupText>at</InputGroupText>
       <DateTime bind:date={attach.time}/> 
     </InputGroup>
   </div>
