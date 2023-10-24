@@ -42,7 +42,7 @@ COPY strava strava/
 
 RUN cargo build --release
 
-FROM node:20 AS build-frontend
+FROM node:21 AS build-frontend
 
 WORKDIR /frontend
 
