@@ -14,7 +14,7 @@
     <CardHeader>
       <h2>
         Tend your bike for a happy ride
-        <div class="float-right">
+        <div class="float-end">
           <a href="http://www.strava.com" target="_blank">
             <img src="api_logo_pwrdBy_strava.png" alt="powered by Strava" height="50"> 
           </a>

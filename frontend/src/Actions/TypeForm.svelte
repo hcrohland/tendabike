@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import {
-    Form, InputGroup, InputGroupAddon, InputGroupText, Input, FormGroup, Label,
+    Form, InputGroup, InputGroupText, Input, FormGroup, Label,
   } from 'sveltestrap'
   import type {Type, Part, Attachment} from '../types'
   import {types, category, filterValues} from '../store'
@@ -25,9 +25,7 @@
 
 <Form>
   <InputGroup class="col-md-12">
-    <InputGroupAddon addonType="prepend">
-      <InputGroupText>New</InputGroupText>
-    </InputGroupAddon>
+    <InputGroupText>New</InputGroupText>
     <!-- svelte-ignore a11y-no-onchange -->
     <select  class="custom-select" required bind:value={type} on:change={updatehook}>
       <option hidden value> -- select one -- </option>
@@ -36,9 +34,7 @@
       {/each}
     </select> 
     {#if type && type.hooks.length > 1}
-      <InputGroupAddon addonType="append">
-        <InputGroupText>for </InputGroupText>
-      </InputGroupAddon>
+      <InputGroupText>for </InputGroupText>
       <!-- svelte-ignore a11y-autofocus -->
       <select name="hook" class="form-control" required bind:value={hook}>
         <option hidden value={undefined}> -- select one -- </option>

@@ -1,6 +1,6 @@
 <script lang="ts">
 import {activities, parts, by, filterValues} from './store'
-import {Row, Col, FormGroup, InputGroup, InputGroupAddon, InputGroupText, NavItem} from 'sveltestrap'
+import {Row, Col, FormGroup, InputGroup, InputGroupText, NavItem} from 'sveltestrap'
 import type { Part, Usage, Activity } from './types';
 import { addToUsage, newUsage } from './types';
 import Plotly from './Widgets/Plotly.svelte';
@@ -171,21 +171,17 @@ $: years = buildYears(selectBikes, gear);
   <Col xs="auto" class="p-0 p-sm-2">
   <FormGroup inline>
     <InputGroup>
-      <InputGroupAddon addonType="prepend">
-        <InputGroupText>
-          Your statistics for
-        </InputGroupText>
-      </InputGroupAddon>
+      <InputGroupText>
+        Your statistics for
+      </InputGroupText>
       <select class="custom-select" bind:value={cumm} on:change={() => {if (cumm == comp) comp = null}}>
         {#each years as item, i}
           <option value={i}>{item.year}</option>
         {/each}
       </select>
-      <InputGroupAddon addonType="prepend">
-        <InputGroupText>
-          vs
-        </InputGroupText>
-      </InputGroupAddon>
+      <InputGroupText>
+        vs
+      </InputGroupText>
       <select class="custom-select" bind:value={comp}>
         {#each years as item, i}
           {#if i != cumm}

@@ -39,7 +39,7 @@ function buildList (list: MyList[], hook: Type, attachees: Attachment[], level: 
 
 </script>
 {#if attachees.length > 0}
-    <Table hover>
+    <Table responsive hover>
     <thead>
       <SubType header/>
     </thead>

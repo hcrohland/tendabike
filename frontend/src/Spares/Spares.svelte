@@ -20,6 +20,7 @@ function update(show: boolean) {
 }
 </script>
 
+<div class="table-responsive">
 <table class="table table-hover">
   <thead>
     <tr>
@@ -39,3 +40,4 @@ function update(show: boolean) {
     {/each}
   </tbody>
 </table>
+</div>
