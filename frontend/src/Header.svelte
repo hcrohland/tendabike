@@ -56,10 +56,10 @@
 
 <Garmin bind:garmin />
 
-<Navbar expand="md" color='secondary-subtle' light mb-2>
+<Navbar expand="md" >
   <img src="favicon.png" alt="TendaBike" title="TendaBike" width=60 class="rounded-circle">
   <NavbarBrand class="text-decoration-none" href="#/cat/1">
-    <div class="d-none d-md-block">
+    <div class="d-md-block">
       &nbsp; Tend a Bike
     </div>
     <!-- {#if $category}
@@ -68,8 +68,16 @@
       Gear
     {/if} -->
   </NavbarBrand>
+  <NavbarToggler on:click={() => (isOpen = !isOpen)}>
+    <div class="row">
+      <div class="hamburg">
+          <span class="line"></span>
+          <span class="line"></span>
+          <span class="line"></span>
+      </div>
+    </div>
+  </NavbarToggler>
   {#if $user}
-    <NavbarToggler on:click={() => (isOpen = !isOpen)} />
     <Collapse {isOpen} navbar expand="md" on:update={navbarUpdate}>
       <Nav class="ms-auto float-start" navbar>
         {#if $category}
@@ -119,3 +127,28 @@
     </Nav>
   {/if}
 </Navbar>
+
+<style>
+.hamburg { 
+   display: block;
+   background: #fff; width: 50px; height: 40px; 
+   position: relative; 
+   margin-left: auto; margin-right: auto;
+   border-radius: 4px; 
+   transition: border-radius .5s;
+}
+
+.line { 
+   position: absolute; 
+   left:10px;
+   height: 4px; width: 30px; 
+   background: #555; border-radius: 2px;
+   display: block; 
+   transition: 0.5s; 
+   transform-origin: center; 
+}
+
+.line:nth-child(1) { top: 10px; }
+.line:nth-child(2) { top: 20px; }
+.line:nth-child(3) { top: 30px; }
+</style>
