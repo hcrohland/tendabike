@@ -56,7 +56,7 @@
 
 <Garmin bind:garmin />
 
-<Navbar expand="md" >
+<Navbar color="light" expand="md" >
   <img src="favicon.png" alt="TendaBike" title="TendaBike" width=60 class="rounded-circle">
   <NavbarBrand class="text-decoration-none" href="#/cat/1">
     <div class="d-md-block">
