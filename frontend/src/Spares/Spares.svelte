@@ -1,8 +1,8 @@
 <script lang="ts">
 import {filterValues, types, state, category} from '../store'
 import Usage from '../Usage.svelte'
-import type {Type} from '../types'
 import SpareType from './SpareType.svelte';
+import { Table } from 'sveltestrap';
 
 export let params;
 
@@ -21,7 +21,7 @@ function update(show: boolean) {
 </script>
 
 <div class="table-responsive">
-<table class="table table-hover">
+  <Table responsive hover>
   <thead>
     <tr>
       <th scope="col">Part</th>
@@ -39,5 +39,5 @@ function update(show: boolean) {
       <SpareType {type} {attachee} {update}/>
     {/each}
   </tbody>
-</table>
+</Table>
 </div>

@@ -25,24 +25,18 @@ function attachedTo(atts: {[key: string]: Attachment}, partId: number, time: Dat
 $: subparts = filterValues($parts, (p) => p.what == type.id).sort(by("last_used"))
 </script>
 
-<style>
- .border-2 {
-   border-width: 4px;
- }
-</style>
-
 <AttachPart bind:attachPart />
 <NewPart bind:newPart/>
 
 <tr>
-  <th colspan=6 scope="col" class="border-2 text-nowrap"> 
+  <th colspan=6 scope="col" class="text-nowrap"> 
     {type.name}s 
     {#if subparts.length > 0}
        <ShowAll on:toggle={(e) => {{show_all = e.detail; update(show_all)}}}/>
     {/if}
   </th>
-  <th class="border-2 text-nowrap" colspan=80>
-    <Button class="badge badge-secondary float-end" on:click={() => newPart(type)}> New {type.name}</Button>
+  <th class="text-nowrap" colspan=80>
+    <Button class="badge float-end" on:click={() => newPart(type)}> New {type.name}</Button>
   </th>
 </tr>
   {#each subparts.filter((p) => show_all || !(attachedTo($attachments, p.id, date) || p.disposed_at))
