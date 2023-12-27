@@ -52,32 +52,14 @@ RUN npm update rollup
 COPY frontend/ /frontend
 RUN npm run build
 
-FROM gcr.io/distroless/base-debian12
-COPY --from=build-engine /lib/aarch64-linux-gnu/libcrypto.so.3 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libgssapi_krb5.so.2 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libldap-2.5.so.0 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libkrb5.so.3 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libk5crypto.so.3 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libcom_err.so.2 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libkrb5support.so.0 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/liblber-2.5.so.0 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libsasl2.so.2 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libgnutls.so.30 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libkeyutils.so.1 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libresolv.so.2 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libp11-kit.so.0 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libidn2.so.0 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libunistring.so.2 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libtasn1.so.6 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libnettle.so.8 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libhogweed.so.6 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libgmp.so.10 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libffi.so.8 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libgcc_s.so.1 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libssl.so.3 /lib/aarch64-linux-gnu/
-COPY --from=build-engine /lib/aarch64-linux-gnu/libpq.so.5 /lib/aarch64-linux-gnu/
+FROM debian:12-slim
 
-USER 999:999
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y libpq5 ca-certificates curl
+
+RUN useradd --system tendabike
+USER tendabike
 WORKDIR /tendabike
 ENV STATIC_WWW="/tendabike/public"
 
