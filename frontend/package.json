@@ -2,11 +2,11 @@
   "name": "tendabike-app",
   "version": "0.3.0",
   "devDependencies": {
+    "@rollup/plugin-commonjs": "^25",
+    "@rollup/plugin-node-resolve": "^15",
     "@rollup/plugin-typescript": "^11",
     "@tsconfig/svelte": "^4",
     "@types/lodash": "^4",
-    "@rollup/plugin-commonjs": "^25",
-    "@rollup/plugin-node-resolve": "^15",
     "rollup": "^2",
     "rollup-plugin-css-only": "^4",
     "rollup-plugin-livereload": "^2",
@@ -14,16 +14,17 @@
     "rollup-plugin-terser": "^7",
     "svelte": "^3",
     "svelte-check": "^3",
+    "svelte-preprocess": "^5",
     "sveltestrap": "^5",
     "tslib": "^2",
-    "typescript": "^5",
-    "svelte-preprocess": "^5"
+    "typescript": "^5"
   },
   "dependencies": {
     "lodash": "^4",
     "sirv-cli": "^2",
     "svelte-flatpickr": "^3.3.3",
     "svelte-spa-router": "^3",
+    "svelte-table": "^0.6.1",
     "svelte-timezone-picker": "^2"
   },
   "scripts": {
