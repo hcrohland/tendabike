@@ -83,6 +83,7 @@
         {#if $category}
           <a href="/cat/{$category.id}" use:link class="dropdown-item text-reset">{$category.name}s</a>
           <a href="/spares/{$category.id}" use:link class="dropdown-item text-reset">Spare parts</a>
+          <a href="/activities" use:link class="dropdown-item text-reset">Activities</a>
         {/if}
       </Nav>
       <Nav class="ms-auto float-end" navbar>

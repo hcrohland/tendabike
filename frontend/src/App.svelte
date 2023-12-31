@@ -32,6 +32,7 @@
   import Admin from './Admin/Admin.svelte'
 	import {initData} from './store'
   import Statistics from "./Statistics.svelte";
+	import ActTable from './Activities/ActTable.svelte';
 
 	const routes = {
 		'/about': About,
@@ -41,7 +42,8 @@
 		'/spares/:category': Spares,
 		'/switch': Home,
 		'/admin': Admin,
-		'/stats': Statistics
+		'/stats': Statistics,
+		'/activities': ActTable
 	}
 
 </script>
