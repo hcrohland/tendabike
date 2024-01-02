@@ -28,12 +28,13 @@
 			title: "Gear",
 			value: gearname,
 			sortable: true,
+			filterValue: v => v.gear,
       filterOptions: rows => {
 				let types = {};
 				rows.forEach(row => {
 					let name = gearname(row);
-					if (types[name] === undefined)
-						types[name] = {name: name, value: name};
+					if (types[row.gear] === undefined)
+						types[row.gear] = {name: name, value: row.gear};
 				});
 				// fix order
 				types = Object.entries(types)
