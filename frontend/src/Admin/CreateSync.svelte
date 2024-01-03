@@ -7,7 +7,7 @@
     FormGroup,
     InputGroup,
     InputGroupText,
-  } from "sveltestrap";
+  } from "@sveltestrap/sveltestrap";
   import ModalFooter from "../Actions/ModalFooter.svelte";
   import { handleError, myfetch } from "../store";
   import type { User } from "../types";

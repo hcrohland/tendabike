@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button } from "sveltestrap";
+  import { Button } from "@sveltestrap/sveltestrap";
   import { handleError, myfetch } from "../store";
   import type { User } from "../types";
 

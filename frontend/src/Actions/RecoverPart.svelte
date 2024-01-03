@@ -1,7 +1,7 @@
 <script lang="ts">
   import { 
     Modal, ModalHeader, ModalBody,
-  } from 'sveltestrap';
+  } from '@sveltestrap/sveltestrap';
   import ModalFooter from './ModalFooter.svelte'
   import {myfetch, handleError, types, fmtDate, parts} from '../store';
   import type {Part} from '../types';  

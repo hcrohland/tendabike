@@ -2,7 +2,7 @@
 import {filterValues, types, state, category} from '../store'
 import Usage from '../Usage.svelte'
 import SpareType from './SpareType.svelte';
-import { Table } from 'sveltestrap';
+import { Table } from '@sveltestrap/sveltestrap';
 
 export let params;
 

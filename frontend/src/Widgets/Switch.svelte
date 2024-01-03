@@ -9,7 +9,7 @@
 </InputGroupText>
 
 <script lang="ts">
-import {InputGroupText, Input} from 'sveltestrap'
+import {InputGroupText, Input} from '@sveltestrap/sveltestrap'
  export let checked
  export let id = "custominputneedsone"
 </script>

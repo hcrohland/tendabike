@@ -2,7 +2,7 @@
   import {
     Modal, ModalBody, ModalHeader,
     Form
-  } from 'sveltestrap';
+  } from '@sveltestrap/sveltestrap';
   import NewForm from './NewForm.svelte';
   import ModalFooter from './ModalFooter.svelte'
   import {myfetch, handleError, initData, parts, user} from '../store';

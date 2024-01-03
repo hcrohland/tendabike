@@ -2,7 +2,7 @@
   import {
     Modal, ModalBody, ModalHeader,
     FormGroup, InputGroup, Form
-  } from 'sveltestrap';
+  } from '@sveltestrap/sveltestrap';
   import {myfetch, handleError, parts, types, updateSummary, attachments, filterValues, by, maxDate} from '../store';
   import ModalFooter from './ModalFooter.svelte'
   import type {AttEvent, Part, Attachment} from '../types'

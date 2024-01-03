@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Col, Row } from 'sveltestrap';
+  import { Col, Row } from '@sveltestrap/sveltestrap';
   import MainCard from './Part/MainCard.svelte';
   import {filterValues, by, types, parts, category, activities} from './store';
   import ShowAll from './Widgets/ShowHist.svelte';

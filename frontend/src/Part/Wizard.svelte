@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Input, InputGroup, Table, Container, Button } from "sveltestrap";
+  import { Input, InputGroup, Table, Container, Button } from "@sveltestrap/sveltestrap";
   import type { AttEvent, Attachment, Part, Type } from "../types";
   import {
     category,

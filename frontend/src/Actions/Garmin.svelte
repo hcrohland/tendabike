@@ -2,18 +2,18 @@
   import {
     Modal, ModalBody, ModalHeader,
     ListGroup, ListGroupItem, Input,
-    Row, Col, Container
-  } from 'sveltestrap';
+    InputGroup, InputGroupText, Label
+  } from '@sveltestrap/sveltestrap';
   import {attachments, checkStatus, handleError, parts} from "../store";
-  import TimezonePicker from 'svelte-timezone-picker';
+  import TZPicker from '../Widgets/TZPicker.svelte';
   import ModalFooter from './ModalFooter.svelte'
 
-  let timezone  ;
+  let timezone: string| undefined;
 
   let isOpen = false;
-  let files;
-  let result;
-  let button;
+  let files: FileList | undefined;
+  let result: {good:string[], bad:string[]} | undefined;
+  let button: string | undefined;
   const toggle = () => isOpen = false
 
   export const garmin = () => {
@@ -27,7 +27,7 @@
   $: disabled = !(files && files[0])
 
   async function sendFile () {
-    var body = await files[0].text();
+    var body = files && await files[0].text();
     return fetch('/activ/descend?tz=' + timezone, {
             method: 'POST',
             credentials: 'include',
@@ -41,14 +41,14 @@
             good: a[1],
             bad: a[2]
           }
-          button = null
+          button = undefined
         }
         )
         .catch(handleError)
   };
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
+<Modal {isOpen} {toggle} backdrop={false}>
   <ModalHeader {toggle}>Upload Garmin activities file</ModalHeader>
   {#if result}
     <ModalBody>
@@ -76,17 +76,11 @@ If there is no match it will skip the activity - maybe it was in another timezon
 You can upload multiple times" 
       />
       <br>
-      <Container border>
-        <Row class='border m-10 '> 
-          <Col xs='auto'>
-            Timezone of activities: 
-          </Col>
-          <Col>
-            <TimezonePicker bind:timezone />
-          </Col>
-        </Row>
-      </Container>
-    </ModalBody>
+      <InputGroup class="mb-0 mr-sm-2 mb-sm-2">
+        <InputGroupText>Timezone of activities: </InputGroupText>
+        <TZPicker bind:timezone />
+      </InputGroup>
+      </ModalBody>
   {/if}
   <ModalFooter {toggle} {disabled} action={sendFile} {button}/>
 </Modal>

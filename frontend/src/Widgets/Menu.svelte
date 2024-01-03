@@ -6,7 +6,7 @@
 </Dropdown>
 
 <script>
-import {Dropdown, DropdownToggle, DropdownMenu} from 'sveltestrap'
+import {Dropdown, DropdownToggle, DropdownMenu} from '@sveltestrap/sveltestrap'
 
 let isOpen
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button, ButtonGroup, Spinner, Table } from "sveltestrap";
+  import { Button, ButtonGroup, Spinner, Table } from "@sveltestrap/sveltestrap";
   import { handleError, myfetch } from "../store";
   import type { User } from "../types";
   import Sync from "./Sync.svelte";
