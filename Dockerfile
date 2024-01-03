@@ -61,9 +61,10 @@ RUN apt-get update && apt-get install -y libpq5 ca-certificates curl
 RUN useradd --system tendabike
 USER tendabike
 WORKDIR /tendabike
-ENV STATIC_WWW="/tendabike/public"
+ENV STATIC_WWW="/tendabike/dist"
 
 COPY --from=build-engine /app/target/release/tendabike ./
-COPY --from=build-frontend /frontend/public/* ./public/
+COPY --from=build-frontend /frontend/dist dist
+RUN /bin/ls dist/assets
 
 ENTRYPOINT [ "./tendabike" ]
