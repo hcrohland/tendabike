@@ -1,6 +1,6 @@
 <script lang="ts">
   import {message} from './store'
-  import {Container, Row, Col, Toast, ToastBody, ToastHeader} from 'sveltestrap'
+  import {Container, Row, Col, Toast, ToastBody, ToastHeader} from '@sveltestrap/sveltestrap'
 
   function toggle() {
     let m = $message

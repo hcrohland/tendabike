@@ -1,7 +1,7 @@
 <script lang="ts">
   import {
     Input, InputGroup, FormGroup, Label, Col
-  } from 'sveltestrap'
+  } from '@sveltestrap/sveltestrap'
   import DateTime from '../Widgets/DateTime.svelte';
   import type {Type, Part} from '../types'
   import { createEventDispatcher } from 'svelte';

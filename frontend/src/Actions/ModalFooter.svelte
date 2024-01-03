@@ -3,7 +3,7 @@
     Button,
     ModalFooter,
     Spinner,
-  } from 'sveltestrap';
+  } from '@sveltestrap/sveltestrap';
   
   export let toggle;
   export let action;

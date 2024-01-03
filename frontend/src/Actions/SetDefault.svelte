@@ -1,5 +1,5 @@
 <script lang="ts">
-import { Button, Col, InputGroup, Row } from "sveltestrap";
+import { Button, Col, InputGroup, Row } from "@sveltestrap/sveltestrap";
 
 import { activities, filterValues, handleError, myfetch, parts, updateSummary } from "../store";
 import type { Type } from "../types";

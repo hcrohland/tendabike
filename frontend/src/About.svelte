@@ -4,7 +4,7 @@
     CardBody,
     CardFooter,
     CardHeader,
-  } from 'sveltestrap';
+  } from '@sveltestrap/sveltestrap';
 
 </script>
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Modal, ModalHeader, ModalBody, Table } from 'sveltestrap';
+  import { Modal, ModalHeader, ModalBody, Table } from '@sveltestrap/sveltestrap';
   import { fmtDate } from '../store';
   import type { Activity } from '../types';
 

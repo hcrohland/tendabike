@@ -4,7 +4,7 @@
     ModalHeader,
     ModalBody,
     Form
-  } from 'sveltestrap';
+  } from '@sveltestrap/sveltestrap';
   import type {AttEvent, Part, Type} from '../types';
   import {myfetch, handleError, user, updateSummary, attachments, filterValues} from '../store';
   import ModalFooter from './ModalFooter.svelte'

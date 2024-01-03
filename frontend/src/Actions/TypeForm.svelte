@@ -2,7 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import {
     Form, InputGroup, InputGroupText, Input, FormGroup, Label,
-  } from 'sveltestrap'
+  } from '@sveltestrap/sveltestrap'
   import type {Type, Part, Attachment} from '../types'
   import {types, category, filterValues} from '../store'
 

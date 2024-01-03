@@ -1,14 +1,15 @@
 <script lang="ts">
   import {
+    Row,
     Card,
     CardBody,
     CardFooter,
     CardHeader,
-  } from 'sveltestrap';
+  } from '@sveltestrap/sveltestrap';
 
 </script>
 
-<div class="row p-sm-2">
+<Row hidden >
 
   <Card>
     <CardHeader>
@@ -17,7 +18,7 @@
       </h2>
       Know how long your parts last and when to maintain them
     </CardHeader>
-    <CardBody>
+    <CardBody >
       
       <h4>
         General use
@@ -60,4 +61,4 @@
       from <a href="https://www.flaticon.com/" title="Flaticon">www.flaticon.com</a>
     </CardFooter>
   </Card>
-</div>
+</Row>

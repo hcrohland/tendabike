@@ -1,7 +1,7 @@
 <script lang="ts">
 import type {Attachment, Type, Part} from '../types';
 
-import {Table} from 'sveltestrap'
+import {Table} from '@sveltestrap/sveltestrap'
 import {attachments, types, filterValues, by} from '../store'
 import SubType from './SubType.svelte'
 import Wizard from './Wizard.svelte';

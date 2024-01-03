@@ -1,6 +1,6 @@
 <script lang="ts">
   // import { slide } from 'svelte/transition';
-  import {Card, CardBody, CardHeader, Row, Col} from 'sveltestrap';
+  import {Card, CardBody, CardHeader, Row, Col} from '@sveltestrap/sveltestrap';
   import {types, fmtSeconds, fmtDate, fmtNumber} from '../store';
   import type {Part} from '../types'
 

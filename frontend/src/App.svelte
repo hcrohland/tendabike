@@ -19,7 +19,7 @@
  -->
 
 <script lang="ts" context="module">
-	import {Spinner, Container} from "sveltestrap"
+	import {Spinner, Container} from "@sveltestrap/sveltestrap"
 	import Router from 'svelte-spa-router';
 
 	import ToyGroup from "./ToyGroup.svelte"

@@ -1,5 +1,5 @@
 <script lang="ts">
-import {DropdownItem} from 'sveltestrap';
+import {DropdownItem} from '@sveltestrap/sveltestrap';
 import {isAttached, attTime, parts} from '../store'
 import Usage from '../Usage.svelte'
 import ReplacePart from '../Actions/ReplacePart.svelte'

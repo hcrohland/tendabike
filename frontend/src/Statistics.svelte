@@ -1,6 +1,6 @@
 <script lang="ts">
 import {activities, parts, by, filterValues} from './store'
-import {Row, Col, FormGroup, InputGroup, InputGroupText, NavItem} from 'sveltestrap'
+import {Row, Col, FormGroup, InputGroup, InputGroupText, NavItem} from '@sveltestrap/sveltestrap'
 import type { Part, Usage, Activity } from './types';
 import { addToUsage, newUsage } from './types';
 import Plotly from './Widgets/Plotly.svelte';

@@ -1,11 +1,12 @@
 <script lang="ts">
-  import {Collapse, Navbar, Nav, NavbarToggler, NavbarBrand} from 'sveltestrap';
+  import {Collapse, Navbar, Nav, NavbarToggler, NavbarBrand, NavLink} from '@sveltestrap/sveltestrap';
   import {
     Dropdown,
     DropdownItem,
     DropdownMenu,
-    DropdownToggle
-  } from 'sveltestrap';
+    DropdownToggle,
+    NavItem,
+  } from '@sveltestrap/sveltestrap';
   import {link} from 'svelte-spa-router';
   import {myfetch, handleError, setSummary, updateSummary, category, user} from "./store";
   import Garmin from "./Actions/Garmin.svelte"
@@ -81,9 +82,15 @@
     <Collapse {isOpen} navbar expand="md" on:update={navbarUpdate}>
       <Nav class="ms-auto float-start" navbar>
         {#if $category}
-          <a href="/cat/{$category.id}" use:link class="dropdown-item text-reset">{$category.name}s</a>
-          <a href="/spares/{$category.id}" use:link class="dropdown-item text-reset">Spare parts</a>
-          <a href="/activities" use:link class="dropdown-item text-reset">Activities</a>
+        <NavItem>
+          <NavLink href="/#/cat/{$category.id}"  class="dropdown-item text-reset">{$category.name}s</NavLink>
+        </NavItem>
+        <NavItem>
+          <NavLink href="/#/spares/{$category.id}" class="dropdown-item text-reset">Spare parts</NavLink>
+        </NavItem>
+        <NavItem>
+          <NavLink href="/#/activities" class="dropdown-item text-reset">Activities</NavLink>
+        </NavItem>
         {/if}
       </Nav>
       <Nav class="ms-auto float-end" navbar>

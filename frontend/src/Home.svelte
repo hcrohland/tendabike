@@ -1,6 +1,6 @@
 <script lang="ts">
 import {myfetch, handleError, types, icons, parts, category} from './store';
-import {Spinner} from 'sveltestrap'
+import {Spinner} from '@sveltestrap/sveltestrap'
 
 category.set(undefined);
 

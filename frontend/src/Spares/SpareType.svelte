@@ -1,7 +1,7 @@
 
 <script lang="ts">
 import {filterValues, by, types, parts, fmtDate, attachments, isAttached} from '../store'
-import {Button, DropdownItem} from 'sveltestrap'
+import {Button, DropdownItem} from '@sveltestrap/sveltestrap'
 import Usage from '../Usage.svelte'
 import AttachPart from '../Actions/AttachPart.svelte'
 import NewPart from '../Actions/NewPart.svelte'
