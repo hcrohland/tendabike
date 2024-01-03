@@ -64,6 +64,7 @@ WORKDIR /tendabike
 ENV STATIC_WWW="/tendabike/dist"
 
 COPY --from=build-engine /app/target/release/tendabike ./
-COPY --from=build-frontend /frontend/dist/* ./dist/
+COPY --from=build-frontend /frontend/dist dist
+RUN /bin/ls dist/assets
 
 ENTRYPOINT [ "./tendabike" ]
