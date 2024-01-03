@@ -8,12 +8,12 @@
   import TZPicker from '../Widgets/TZPicker.svelte';
   import ModalFooter from './ModalFooter.svelte'
 
-  let timezone: string;
+  let timezone: string| undefined;
 
   let isOpen = false;
-  let files;
-  let result;
-  let button;
+  let files: FileList | undefined;
+  let result: {good:string[], bad:string[]} | undefined;
+  let button: string | undefined;
   const toggle = () => isOpen = false
 
   export const garmin = () => {
@@ -27,7 +27,7 @@
   $: disabled = !(files && files[0])
 
   async function sendFile () {
-    var body = await files[0].text();
+    var body = files && await files[0].text();
     return fetch('/activ/descend?tz=' + timezone, {
             method: 'POST',
             credentials: 'include',
@@ -41,14 +41,14 @@
             good: a[1],
             bad: a[2]
           }
-          button = null
+          button = undefined
         }
         )
         .catch(handleError)
   };
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
+<Modal {isOpen} {toggle} backdrop={false}>
   <ModalHeader {toggle}>Upload Garmin activities file</ModalHeader>
   {#if result}
     <ModalBody>

@@ -8,7 +8,7 @@
   export let toggle;
   export let action;
   export let disabled = false;
-  export let button = undefined
+  export let button
   let promise;
 
 </script>
