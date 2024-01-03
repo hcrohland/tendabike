@@ -65,6 +65,12 @@
 			title: "Time",
 			value: v => v.time,
 			sortable: true,
+		},
+    {
+			key: "duration",
+			title: "Duration",
+			value: v => v.duration,
+			sortable: true,
 		}
   ];
 </script>
