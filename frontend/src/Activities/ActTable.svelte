@@ -78,7 +78,7 @@
 <SvelteTable 
   {columns} 
   {rows} 
-  sortOrder={-1} 
+  sortOrders={[-1,1]} 
   sortBy=start 
   classNameTable={['table']}
   classNameThead={['table-secondary']}
