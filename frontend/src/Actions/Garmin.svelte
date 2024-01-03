@@ -2,13 +2,13 @@
   import {
     Modal, ModalBody, ModalHeader,
     ListGroup, ListGroupItem, Input,
-    Row, Col, Container
+    InputGroup, InputGroupText, Label
   } from '@sveltestrap/sveltestrap';
   import {attachments, checkStatus, handleError, parts} from "../store";
-  // import TimezonePicker from 'svelte-timezone-picker';
+  import TZPicker from '../Widgets/TZPicker.svelte';
   import ModalFooter from './ModalFooter.svelte'
 
-  let timezone  ;
+  let timezone: string;
 
   let isOpen = false;
   let files;
@@ -76,17 +76,11 @@ If there is no match it will skip the activity - maybe it was in another timezon
 You can upload multiple times" 
       />
       <br>
-      <!-- <Container border>
-        <Row class='border m-10 '> 
-          <Col xs='auto'>
-            Timezone of activities: 
-          </Col>
-          <Col>
-            <TimezonePicker bind:timezone />
-          </Col>
-        </Row>
-      </Container> -->
-    </ModalBody>
+      <InputGroup class="mb-0 mr-sm-2 mb-sm-2">
+        <InputGroupText>Timezone of activities: </InputGroupText>
+        <TZPicker bind:timezone />
+      </InputGroup>
+      </ModalBody>
   {/if}
   <ModalFooter {toggle} {disabled} action={sendFile} {button}/>
 </Modal>
