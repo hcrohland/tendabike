@@ -117,7 +117,7 @@
     console.error("'rowKey' is needed to use 'classNameRowSelected'");
   }
 
-  let showFilterHeader = columns.some(c => {
+  let showFilterHeader = columns.some((c) => {
     // check if there are any filter or search headers
     return (
       !c.hideFilterHeader &&
@@ -130,7 +130,7 @@
   let columnByKey;
   $: {
     columnByKey = {};
-    columns.forEach(col => {
+    columns.forEach((col) => {
       columnByKey[col.key] = col;
     });
   }
@@ -138,9 +138,9 @@
   $: colspan = (showExpandIcon ? 1 : 0) + columns.length;
 
   $: c_rows = rows
-    .filter(r => {
+    .filter((r) => {
       // get search and filter results/matches
-      return Object.keys(filterSelections).every(f => {
+      return Object.keys(filterSelections).every((f) => {
         /**
          * @type {boolean}
          * Determine whether search term matches a row.
@@ -190,14 +190,14 @@
         return resFilter;
       });
     })
-    .map(r =>
+    .map((r) =>
       Object.assign({}, r, {
         // internal row property for sort order
         $sortOn: sortFunction(r),
         // internal row property for expanded rows
         $expanded: rowKey !== null && expanded.indexOf(r[rowKey]) >= 0,
         $selected: rowKey !== null && selected.indexOf(r[rowKey]) >= 0,
-      })
+      }),
     )
     .sort((a, b) => {
       if (!sortBy) return 0;
@@ -206,22 +206,22 @@
       return 0;
     });
 
-  $: t_row = totalsFunc (c_rows)
+  $: t_row = totalsFunc(c_rows);
 
-  const asStringArray = v =>
+  const asStringArray = (v) =>
     []
       .concat(v)
-      .filter(v => v !== null && typeof v === "string" && v !== "")
+      .filter((v) => v !== null && typeof v === "string" && v !== "")
       .join(" ");
 
   const calculateFilterValues = () => {
     filterValues = {};
-    columns.forEach(c => {
+    columns.forEach((c) => {
       if (typeof c.filterOptions === "function") {
         filterValues[c.key] = c.filterOptions(rows);
       } else if (Array.isArray(c.filterOptions)) {
         // if array of strings is provided, use it for name and value
-        filterValues[c.key] = c.filterOptions.map(val => ({
+        filterValues[c.key] = c.filterOptions.map((val) => ({
           name: val,
           value: val,
         }));
@@ -236,7 +236,7 @@
       col.sortable === true &&
       typeof col.value === "function"
     ) {
-      sortFunction = r => col.value(r);
+      sortFunction = (r) => col.value(r);
     }
   }
 
@@ -247,10 +247,10 @@
     }
   }
 
-  const updateSortOrder = colKey => {
+  const updateSortOrder = (colKey) => {
     return colKey === sortBy
       ? sortOrders[
-          (sortOrders.findIndex(o => o === sortOrder) + 1) % sortOrders.length
+          (sortOrders.findIndex((o) => o === sortOrder) + 1) % sortOrders.length
         ]
       : sortOrders[0];
   };
@@ -274,7 +274,7 @@
         }
       } else {
         if (selected.includes(row[rowKey])) {
-          selected = selected.filter(r => r != row[rowKey]);
+          selected = selected.filter((r) => r != row[rowKey]);
         } else {
           selected = [...selected, row[rowKey]].sort();
         }
@@ -291,7 +291,7 @@
     } else if (expandSingle) {
       expanded = [];
     } else if (!row.$expanded) {
-      expanded = expanded.filter(r => r != keyVal);
+      expanded = expanded.filter((r) => r != keyVal);
     } else {
       expanded = [...expanded, keyVal];
     }
@@ -303,159 +303,161 @@
   };
 </script>
 
-<table class={asStringArray(classNameTable)}>
-  <thead class={asStringArray(classNameThead)}>
-    {#if showFilterHeader}
-      <tr>
-        {#each columns as col}
-          <th class={asStringArray([col.headerFilterClass])}>
-            {#if !col.hideFilterHeader && col.searchValue !== undefined}
-              <input
-                bind:value={filterSelections[col.key]}
-                class={asStringArray(classNameInput)}
-                placeholder={col.filterPlaceholder}
-              />
-            {:else if !col.hideFilterHeader && filterValues[col.key] !== undefined}
-              <select
-                bind:value={filterSelections[col.key]}
-                class={asStringArray(classNameSelect)}
-              >
-                <option value={undefined}>{col.filterPlaceholder || ""}</option>
-                {#each filterValues[col.key] as option}
-                  <option value={option.value}>{option.name}</option>
-                {/each}
-              </select>
-            {/if}
-          </th>
-        {/each}
-        {#if showExpandIcon}
-          <th />
-        {/if}
-      </tr>
-    {/if}
-    <slot name="header" {sortOrder} {sortBy}>
-      <tr>
-        {#each columns as col}
-          <th
-            on:click={e => handleClickCol(e, col)}
-            on:keypress={e => e.key === "Enter" && handleClickCol(e, col)}
-            class={asStringArray([
-              col.sortable ? "isSortable" : "",
-              col.headerClass,
-            ])}
-            tabindex="0"
-          >
-            {col.title}
-            {#if sortBy === col.key}
-              {@html sortOrder === 1 ? iconAsc : iconDesc}
-            {:else if col.sortable}
-              {@html iconSortable}
-            {/if}
-          </th>
-        {/each}
-        {#if showExpandIcon}
-          <th />
-        {/if}
-      </tr>
-      {#if t_row}
-      <tr>
-        {#each columns as col}
-          <th
-            class={asStringArray([
-            typeof col.class === "string" ? col.class : null,
-            typeof col.class === "function"
-              ? col.class(row, n, colIndex)
-              : null,
-            classNameCell,
-            ])}
-          >
-            {#if col.parseHTML}
-              {@html col.renderValue
-                ? col.renderValue(t_row)
-                : col.value(t_row)}
-            {:else}
-              {col.renderValue
-                ? col.renderValue(t_row)
-                : col.value(t_row)}
-            {/if}
-          </th>
-        {/each}
-      </tr>
-      {/if}
-    </slot>
-  </thead>
-
-  <tbody class={asStringArray(classNameTbody)}>
-    {#each c_rows as row, n}
-      <slot name="row" {row} {n}>
-        <tr
-          on:click={e => handleClickRow(e, row)}
-          on:keypress={e => e.key === "Enter" && handleClickRow(e, row)}
-          class={asStringArray([
-            typeof classNameRow === "string" ? classNameRow : null,
-            typeof classNameRow === "function" ? classNameRow(row, n) : null,
-            row.$expanded && classNameRowExpanded,
-            row.$selected && classNameRowSelected,
-          ])}
-          tabIndex={selectOnClick ? "0" : null}
-        >
-          {#each columns as col, colIndex}
-            <td
-              on:click={e => handleClickCell(e, row, col.key)}
-              on:keypress={e =>
-                e.key === "Enter" && handleClickCell(e, row, col.key)}
-              class={asStringArray([
-                typeof col.class === "string" ? col.class : null,
-                typeof col.class === "function"
-                  ? col.class(row, n, colIndex)
-                  : null,
-                classNameCell,
-              ])}
-            >
-              {#if col.renderComponent}
-                <svelte:component
-                  this={col.renderComponent.component || col.renderComponent}
-                  {...col.renderComponent.props || {}}
-                  {row}
-                  {col}
+<div class="table-responsive">
+  <table class={asStringArray(classNameTable)}>
+    <thead class={asStringArray(classNameThead)}>
+      {#if showFilterHeader}
+        <tr>
+          {#each columns as col}
+            <th class={asStringArray([col.headerFilterClass])}>
+              {#if !col.hideFilterHeader && col.searchValue !== undefined}
+                <input
+                  bind:value={filterSelections[col.key]}
+                  class={asStringArray(classNameInput)}
+                  placeholder={col.filterPlaceholder}
                 />
-              {:else if col.parseHTML}
-                {@html col.renderValue
-                  ? col.renderValue(row, n, colIndex)
-                  : col.value(row, n, colIndex)}
-              {:else}
-                {col.renderValue
-                  ? col.renderValue(row, n, colIndex)
-                  : col.value(row, n, colIndex)}
+              {:else if !col.hideFilterHeader && filterValues[col.key] !== undefined}
+                <select
+                  bind:value={filterSelections[col.key]}
+                  class={asStringArray(classNameSelect)}
+                >
+                  <option value={undefined}
+                    >{col.filterPlaceholder || ""}</option
+                  >
+                  {#each filterValues[col.key] as option}
+                    <option value={option.value}>{option.name}</option>
+                  {/each}
+                </select>
               {/if}
-            </td>
+            </th>
           {/each}
           {#if showExpandIcon}
-            <td class={asStringArray(classNameCellExpand)}>
-              <span
-                class="isClickable"
-                on:click={e => handleClickExpand(e, row)}
-                on:keypress={e =>
-                  e.key === "Enter" && handleClickExpand(e, row)}
-                tabindex="0"
-                role="button"
-              >
-                {@html row.$expanded ? iconExpand : iconExpanded}
-              </span>
-            </td>
+            <th />
           {/if}
         </tr>
-        {#if row.$expanded}
-          <tr class={asStringArray(classNameExpandedContent)}
-            ><td {colspan}>
-              <slot name="expanded" {row} {n} />
-            </td></tr
-          >
+      {/if}
+      <slot name="header" {sortOrder} {sortBy}>
+        <tr>
+          {#each columns as col}
+            <th
+              on:click={(e) => handleClickCol(e, col)}
+              on:keypress={(e) => e.key === "Enter" && handleClickCol(e, col)}
+              class={asStringArray([
+                col.sortable ? "isSortable" : "",
+                col.headerClass,
+              ])}
+              tabindex="0"
+            >
+              {col.title}
+              {#if sortBy === col.key}
+                {@html sortOrder === 1 ? iconAsc : iconDesc}
+              {:else if col.sortable}
+                {@html iconSortable}
+              {/if}
+            </th>
+          {/each}
+          {#if showExpandIcon}
+            <th />
+          {/if}
+        </tr>
+        {#if t_row}
+          <tr>
+            {#each columns as col}
+              <th
+                class={asStringArray([
+                  typeof col.class === "string" ? col.class : null,
+                  typeof col.class === "function"
+                    ? col.class(row, n, colIndex)
+                    : null,
+                  classNameCell,
+                ])}
+              >
+                {#if col.parseHTML}
+                  {@html col.renderValue
+                    ? col.renderValue(t_row)
+                    : col.value(t_row)}
+                {:else}
+                  {col.renderValue ? col.renderValue(t_row) : col.value(t_row)}
+                {/if}
+              </th>
+            {/each}
+          </tr>
         {/if}
       </slot>
-    {/each}
-  </tbody>
-</table>
+    </thead>
+
+    <tbody class={asStringArray(classNameTbody)}>
+      {#each c_rows as row, n}
+        <slot name="row" {row} {n}>
+          <tr
+            on:click={(e) => handleClickRow(e, row)}
+            on:keypress={(e) => e.key === "Enter" && handleClickRow(e, row)}
+            class={asStringArray([
+              typeof classNameRow === "string" ? classNameRow : null,
+              typeof classNameRow === "function" ? classNameRow(row, n) : null,
+              row.$expanded && classNameRowExpanded,
+              row.$selected && classNameRowSelected,
+            ])}
+            tabIndex={selectOnClick ? "0" : null}
+          >
+            {#each columns as col, colIndex}
+              <td
+                on:click={(e) => handleClickCell(e, row, col.key)}
+                on:keypress={(e) =>
+                  e.key === "Enter" && handleClickCell(e, row, col.key)}
+                class={asStringArray([
+                  typeof col.class === "string" ? col.class : null,
+                  typeof col.class === "function"
+                    ? col.class(row, n, colIndex)
+                    : null,
+                  classNameCell,
+                ])}
+              >
+                {#if col.renderComponent}
+                  <svelte:component
+                    this={col.renderComponent.component || col.renderComponent}
+                    {...col.renderComponent.props || {}}
+                    {row}
+                    {col}
+                  />
+                {:else if col.parseHTML}
+                  {@html col.renderValue
+                    ? col.renderValue(row, n, colIndex)
+                    : col.value(row, n, colIndex)}
+                {:else}
+                  {col.renderValue
+                    ? col.renderValue(row, n, colIndex)
+                    : col.value(row, n, colIndex)}
+                {/if}
+              </td>
+            {/each}
+            {#if showExpandIcon}
+              <td class={asStringArray(classNameCellExpand)}>
+                <span
+                  class="isClickable"
+                  on:click={(e) => handleClickExpand(e, row)}
+                  on:keypress={(e) =>
+                    e.key === "Enter" && handleClickExpand(e, row)}
+                  tabindex="0"
+                  role="button"
+                >
+                  {@html row.$expanded ? iconExpand : iconExpanded}
+                </span>
+              </td>
+            {/if}
+          </tr>
+          {#if row.$expanded}
+            <tr class={asStringArray(classNameExpandedContent)}
+              ><td {colspan}>
+                <slot name="expanded" {row} {n} />
+              </td></tr
+            >
+          {/if}
+        </slot>
+      {/each}
+    </tbody>
+  </table>
+</div>
 
 <style>
   table {
