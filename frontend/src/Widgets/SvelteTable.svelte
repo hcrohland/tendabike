@@ -207,7 +207,6 @@
     });
 
   $: t_row = totalsFunc (c_rows)
-  $: console.log(t_row)
 
   const asStringArray = v =>
     []
