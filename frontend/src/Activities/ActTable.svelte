@@ -1,5 +1,5 @@
 <script lang="ts">
-  import {category, activities, parts, filterValues, fmtNumber} from '../store'
+  import {category, activities, parts, filterValues, fmtNumber, fmtSeconds} from '../store'
   import SvelteTable from "../Widgets/SvelteTable.svelte";
   import {addToUsage, newUsage, type Activity, type Part} from "../types"
 
@@ -66,14 +66,14 @@
     {
 			key: "time",
 			title: "Time",
-			value: v => fmtNumber(v.time),
+			value: v => fmtSeconds(v.time),
 			sortable: true,
 			class: "text-end",
 		},
     {
 			key: "duration",
 			title: "Duration",
-			value: v => fmtNumber(v.duration),
+			value: v => fmtSeconds(v.duration),
 			sortable: true,
 			class: "text-end",
 		}
