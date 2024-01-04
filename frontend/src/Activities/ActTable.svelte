@@ -1,7 +1,7 @@
 <script lang="ts">
-  import {category, activities, parts, filterValues, by} from '../store'
-  import SvelteTable from "svelte-table";
-  import type {Activity, Part} from "../types"
+  import {category, activities, parts, filterValues, fmtNumber} from '../store'
+  import SvelteTable from "../Widgets/SvelteTable.svelte";
+  import {addToUsage, newUsage, type Activity, type Part} from "../types"
 
   export let rows: Activity[] = filterValues($activities, (a) =>  $category.acts.some((t) => t.id == a.what))
 
@@ -14,12 +14,12 @@
 			value: v => v.start,
 			sortable: true,
       searchValue: v => v.start.toLocaleDateString() + ' ' + v.start.toLocaleTimeString(),
-      renderValue: v => v.start.toLocaleDateString() + ' ' + v.start.toLocaleTimeString(),
+      renderValue: v => v.start ? v.start.toLocaleDateString() + ' ' + v.start.toLocaleTimeString() : '',
 		},
 		{
 			key: "name",
 			title: "Name",
-			value: v => v.name,
+			value: v => v.name || '',
 			searchValue: v => v.name,
 			sortable: true,
 		},
@@ -45,35 +45,59 @@
     {
 			key: "climb",
 			title: "Climb",
-			value: v => v.climb,
+			value: v => fmtNumber(v.climb),
 			sortable: true,
+			class: "text-end",
 		},
     {
 			key: "descend",
 			title: "Descend",
-			value: v => v.descend | v.climb,
+			value: v => fmtNumber(v.descend || v.climb),
 			sortable: true,
+			class: "text-end",
 		},
     {
 			key: "distance",
 			title: "Distance",
-			value: v => v.distance,
+			value: v => fmtNumber(v.distance),
 			sortable: true,
+			class: "text-end",
 		},
     {
 			key: "time",
 			title: "Time",
-			value: v => v.time,
+			value: v => fmtNumber(v.time),
 			sortable: true,
+			class: "text-end",
+		},
+    {
+			key: "duration",
+			title: "Duration",
+			value: v => fmtNumber(v.duration),
+			sortable: true,
+			class: "text-end",
 		}
   ];
+
+	const totalsFunc = (r: Activity[]) => {
+			return r.reduce((total, row) => {
+				addToUsage(total, row);
+				return total;
+			}, 
+			{
+				name: "Totals:",
+				... newUsage()
+			}
+		)
+	}
 </script>
 
 <SvelteTable 
   {columns} 
   {rows} 
-  sortOrder={-1} 
+  sortOrders={[-1,1]} 
   sortBy=start 
+	{totalsFunc}
   classNameTable={['table']}
   classNameThead={['table-secondary']}
   classNameSelect={['custom-select']} 
