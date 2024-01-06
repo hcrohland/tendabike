@@ -77,8 +77,9 @@
 				v.start.toLocaleDateString() + " " + v.start.toLocaleTimeString(),
 			renderValue: (v) =>
 				v.start
-					? v.start.toLocaleDateString() + " " + v.start.toLocaleTimeString()
+					? v.start.toLocaleDateString() + "&nbsp;" + v.start.toLocaleTimeString()
 					: "",
+			parseHTML: true,
 		},
 		{
 			key: "name",
@@ -174,4 +175,5 @@
 	classNameTable={["table"]}
 	classNameThead={["table-secondary"]}
 	classNameSelect={["custom-select"]}
+	classNameInput={["form-control form-control-sm"]}
 />
