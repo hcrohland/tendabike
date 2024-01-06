@@ -17,10 +17,20 @@
 	).sort(by("start"));
 
 	const DAY = 24 * 3600000;
+	let selection={};
 
-	let max = Math.floor(acts[0].start.getTime() / DAY);
-	let min = Math.floor(acts[acts.length - 1].start.getTime() / DAY);
-	let values = [min, max];
+	let min, max, values = [];
+
+	MiniMax(undefined)
+
+	function MiniMax(gear) {
+		let set = acts.filter((a) => !gear || a.gear == gear).map((a) => a.start.getTime()/DAY)
+		min = Math.floor(set.reduce((res, start) => start < res ? start : res));
+		max = Math.floor(set.reduce((res, start) => start > res ? start : res));
+		values = [min, max]
+	}
+
+	$: MiniMax(selection.gear)
 
 	$: rows = filterRows(acts, values);
 
@@ -44,6 +54,18 @@
 			return "-";
 		}
 	};
+
+	const createFilterOptions = (acts) => {
+				let types = {};
+				acts.forEach((act) => {
+					let name = gearname(act);
+					if (types[act.gear] === undefined)
+						types[act.gear] = { name: name, value: act.gear };
+				});
+				return Object.values(types).sort(by("value"));
+	}
+
+	let filterOptions = createFilterOptions(acts);
 
 	let columns = [
 		{
@@ -71,19 +93,7 @@
 			value: gearname,
 			sortable: true,
 			filterValue: (v) => v.gear,
-			filterOptions: (rows) => {
-				let types = {};
-				rows.forEach((row) => {
-					let name = gearname(row);
-					if (types[row.gear] === undefined)
-						types[row.gear] = { name: name, value: row.gear };
-				});
-				// fix order
-				types = Object.entries(types)
-					.sort()
-					.reduce((o, [k, v]) => ((o[k] = v), o), {});
-				return Object.values(types);
-			},
+			filterOptions,
 		},
 		{
 			key: "climb",
@@ -160,6 +170,7 @@
 	sortOrders={[-1, 1]}
 	sortBy="start"
 	{totalsFunc}
+	bind:filterSelections="{selection}"
 	classNameTable={["table"]}
 	classNameThead={["table-secondary"]}
 	classNameSelect={["custom-select"]}

@@ -221,10 +221,7 @@
         filterValues[c.key] = c.filterOptions(rows);
       } else if (Array.isArray(c.filterOptions)) {
         // if array of strings is provided, use it for name and value
-        filterValues[c.key] = c.filterOptions.map((val) => ({
-          name: val,
-          value: val,
-        }));
+        filterValues[c.key] = c.filterOptions;
       }
     });
   };
@@ -321,9 +318,7 @@
                   bind:value={filterSelections[col.key]}
                   class={asStringArray(classNameSelect)}
                 >
-                  <option value={undefined}
-                    >{col.filterPlaceholder || ""}</option
-                  >
+                  <option value={undefined}>{col.filterPlaceholder || ""}</option>
                   {#each filterValues[col.key] as option}
                     <option value={option.value}>{option.name}</option>
                   {/each}
