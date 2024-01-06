@@ -89,7 +89,7 @@
 			sortable: true,
 			renderValue: (v) =>
 				v.id 
-					? v.name + '&nbsp;&nbsp;<a href="/strava/activities/' + v.id + '"  target="_blank"> <img src="strava_grey.png" alt="View on Strava" title="View on Strava" />'
+					? v.name + '&nbsp;&nbsp;<a href="/strava/activities/' + v.id + '" style="text-decoration:none"  target="_blank"><img src="strava_grey.png" alt="View on Strava" title="View on Strava" />'
 					: v.name,
 			parseHTML: true,
 		},
