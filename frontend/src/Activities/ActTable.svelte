@@ -142,10 +142,13 @@
 		return r.reduce(
 			(total, row) => {
 				addToUsage(total, row);
+				total.cnt += 1;
+				total.name = "Totals: "+ total.cnt + " activities";
 				return total;
 			},
 			{
 				name: "Totals:",
+				cnt: 0,
 				...newUsage(),
 			},
 		);
