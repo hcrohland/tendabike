@@ -55,6 +55,18 @@
 		}
 	};
 
+	const createFilterOptions = (acts) => {
+				let types = {};
+				acts.forEach((act) => {
+					let name = gearname(act);
+					if (types[act.gear] === undefined)
+						types[act.gear] = { name: name, value: act.gear };
+				});
+				return Object.values(types).sort(by("value"));
+	}
+
+	let filterOptions = createFilterOptions(acts);
+
 	let columns = [
 		{
 			key: "start",
@@ -81,19 +93,7 @@
 			value: gearname,
 			sortable: true,
 			filterValue: (v) => v.gear,
-			filterOptions: (rows) => {
-				let types = {};
-				rows.forEach((row) => {
-					let name = gearname(row);
-					if (types[row.gear] === undefined)
-						types[row.gear] = { name: name, value: row.gear };
-				});
-				// fix order
-				types = Object.entries(types)
-					.sort()
-					.reduce((o, [k, v]) => ((o[k] = v), o), {});
-				return Object.values(types);
-			},
+			filterOptions,
 		},
 		{
 			key: "climb",
