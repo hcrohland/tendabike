@@ -17,13 +17,13 @@
 	).sort(by("start"));
 
 	const DAY = 24 * 3600000;
-	let selection={};
+	let selection: Record<string | number, any> ={};
 
-	let min, max, values = [];
+	let min: number, max: number, values: number[] = [];
 
-	MiniMax(undefined)
+	MiniMax(0)
 
-	function MiniMax(gear) {
+	function MiniMax(gear: Number) {
 		let set = acts.filter((a) => !gear || a.gear == gear).map((a) => a.start.getTime()/DAY)
 		min = Math.floor(set.reduce((res, start) => start < res ? start : res));
 		max = Math.floor(set.reduce((res, start) => start > res ? start : res));
@@ -34,7 +34,7 @@
 
 	$: rows = filterRows(acts, values);
 
-	function filterRows(acts: Activity[], values: Number[]) {
+	function filterRows(acts: Activity[], values: number[]) {
 		let start = new Date(values[0] * DAY);
 		let end = new Date(values[1] * DAY);
 
@@ -44,25 +44,25 @@
 		});
 	}
 
-	const formatter = (v) => new Date(v * DAY).toLocaleDateString();
+	const formatter = (v: number) => new Date(v * DAY).toLocaleDateString();
 
-	const gearname = (v) => {
-		let x = $parts[v.gear];
-		if (x) {
-			return x.name;
+	const gearname = (v: Activity) => {
+		if (v.gear && $parts[v.gear]) {
+			return $parts[v.gear].name;
 		} else {
 			return "-";
 		}
 	};
 
-	const createFilterOptions = (acts) => {
-				let types = {};
+	const createFilterOptions = (acts: Activity[]) => {
+				let types: any = {};
 				acts.forEach((act) => {
-					let name = gearname(act);
-					if (types[act.gear] === undefined)
+					if (act.gear && types[act.gear] === undefined){
+						let name = gearname(act);
 						types[act.gear] = { name: name, value: act.gear };
+					}
 				});
-				return Object.values(types).sort(by("value"));
+				return Object.values(types).sort(by<any>("value"));
 	}
 
 	let filterOptions = createFilterOptions(acts);
@@ -71,11 +71,11 @@
 		{
 			key: "start",
 			title: "Start",
-			value: (v) => v.start,
+			value: (v: Activity) => v.start,
 			sortable: true,
-			searchValue: (v) =>
+			searchValue: (v: Activity) =>
 				v.start.toLocaleDateString() + " " + v.start.toLocaleTimeString(),
-			renderValue: (v) =>
+			renderValue: (v: Activity) =>
 				v.start
 					? v.start.toLocaleDateString() + " " + v.start.toLocaleTimeString()
 					: "",
@@ -83,8 +83,8 @@
 		{
 			key: "name",
 			title: "Name",
-			value: (v) => v.name || "",
-			searchValue: (v) => v.name,
+			value: (v: Activity) => v.name || "",
+			searchValue: (v: Activity) => v.name,
 			sortable: true,
 		},
 		{
@@ -92,46 +92,46 @@
 			title: "Gear",
 			value: gearname,
 			sortable: true,
-			filterValue: (v) => v.gear,
+			filterValue: (v: Activity) => v.gear,
 			filterOptions,
 		},
 		{
 			key: "climb",
 			title: "Climb",
-			value: (v) => v.climb,
-			renderValue: (v) => fmtNumber(v.climb),
+			value: (v: Activity) => v.climb,
+			renderValue: (v: Activity) => fmtNumber(v.climb),
 			sortable: true,
 			class: "text-end",
 		},
 		{
 			key: "descend",
 			title: "Descend",
-			value: (v) => v.descend || v.climb,
-			renderValue: (v) => fmtNumber(v.descend || v.climb),
+			value: (v: Activity) => v.descend || v.climb,
+			renderValue: (v: Activity) => fmtNumber(v.descend || v.climb),
 			sortable: true,
 			class: "text-end",
 		},
 		{
 			key: "distance",
 			title: "Distance",
-			value: (v) => v.distance,
-			renderValue: (v) => fmtNumber(v.distance),
+			value: (v: Activity) => v.distance,
+			renderValue: (v: Activity) => fmtNumber(v.distance),
 			sortable: true,
 			class: "text-end",
 		},
 		{
 			key: "time",
 			title: "Time",
-			value: (v) => v.time,
-			renderValue: (v) => fmtSeconds(v.time),
+			value: (v: Activity) => v.time,
+			renderValue: (v: Activity) => fmtSeconds(v.time),
 			sortable: true,
 			class: "text-end",
 		},
 		{
 			key: "duration",
 			title: "Duration",
-			value: (v) => v.duration,
-			renderValue: (v) => fmtSeconds(v.duration),
+			value: (v: Activity) => v.duration,
+			renderValue: (v: Activity) => fmtSeconds(v.duration),
 			sortable: true,
 			class: "text-end",
 		},
@@ -147,7 +147,7 @@
 				name: "Totals:",
 				...newUsage(),
 			},
-		);
+		) as Activity;
 	};
 </script>
 
@@ -171,7 +171,7 @@
 	sortBy="start"
 	{totalsFunc}
 	bind:filterSelections="{selection}"
-	classNameTable={["table"]}
-	classNameThead={["table-secondary"]}
-	classNameSelect={["custom-select"]}
+	classNameTable="table"
+	classNameThead="table-secondary"
+	classNameSelect="custom-select"
 />

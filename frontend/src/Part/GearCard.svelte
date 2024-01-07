@@ -10,7 +10,7 @@
   let isOpen = false;
   let showLink = false;
 
-  function model(part) {
+  function model(part: Part) {
     if (part.model =='' && part.vendor == '') {
       return 'unknown model'
     } else {
@@ -30,8 +30,8 @@
 </style>
 
 <Card>
-  <div class="header" on:mouseenter={()=> showLink = true} on:mouseleave={()=> showLink = false}>
-    <CardHeader class="h5 mb-0" on:click={() => (isOpen = !isOpen)} >
+  <div class="header" on:click={() => (isOpen = !isOpen)} on:mouseenter={()=> showLink = true} on:mouseleave={()=> showLink = false}>
+    <CardHeader class="h5 mb-0">
       <Row>
         <Col>
           {part.name}
@@ -50,7 +50,7 @@
       <CardBody>
         is a <span class="param">{model(part)}</span>
         {#if part.what == 1}
-           <a href={"/strava/bikes/" + part.id} alt="View on Strava" target="_blank"><img src="strava_grey.png" alt="View on Strava" title="View on Strava" > </a> 
+           <a href={"/strava/bikes/" + part.id} target="_blank"><img src="strava_grey.png" alt="View on Strava" title="View on Strava" > </a> 
         {/if}
         {#if part.what != types[part.what].main}
             {types[part.what].name.toLowerCase()} 
@@ -65,7 +65,7 @@
         {/if}
         you used <span class=param>{fmtNumber(part.count)}</span> times 
         for <span class="param">{fmtSeconds(part.time)}</span> hours.
-        <p> You covered <span class="param">{fmtNumber(parseFloat((part.distance / 1000).toFixed(1)))}</span> km 
+        <p> You covered <span class="param">{fmtNumber(parseFloat(((part.distance || 0) / 1000).toFixed(1)))}</span> km 
         climbing <span class="param">{fmtNumber(part.climb)}</span> and descending <span class="param">{fmtNumber(part.descend)}</span> meters 
       </CardBody>
     <!-- </div> -->

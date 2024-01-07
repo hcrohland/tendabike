@@ -99,7 +99,15 @@
 
   /** @type {string} class added to the cell that allows expanding/closing */
   export let classNameCellExpand = "";
+  
+  /** 
+   * @template Row
+   * @callback totalsFuncDecl
+   * @param {Row[]} v
+   * @returns {Row?}
+  */
 
+  /** @type {totalsFuncDecl<any>}*/
   export let totalsFunc = (v) => undefined;
 
   const dispatch = createEventDispatcher();
@@ -359,13 +367,7 @@
           <tr>
             {#each columns as col}
               <th
-                class={asStringArray([
-                  typeof col.class === "string" ? col.class : null,
-                  typeof col.class === "function"
-                    ? col.class(row, n, colIndex)
-                    : null,
-                  classNameCell,
-                ])}
+                class={col.headerClass}
               >
                 {#if col.parseHTML}
                   {@html col.renderValue
