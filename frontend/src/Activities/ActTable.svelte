@@ -77,8 +77,9 @@
 				v.start.toLocaleDateString() + " " + v.start.toLocaleTimeString(),
 			renderValue: (v: Activity) =>
 				v.start
-					? v.start.toLocaleDateString() + " " + v.start.toLocaleTimeString()
+					? v.start.toLocaleDateString() + "&nbsp;" + v.start.toLocaleTimeString()
 					: "",
+			parseHTML: true,
 		},
 		{
 			key: "name",
@@ -86,6 +87,11 @@
 			value: (v: Activity) => v.name || "",
 			searchValue: (v: Activity) => v.name,
 			sortable: true,
+			renderValue: (v) =>
+				v.id 
+					? '<a href="/strava/activities/' + v.id + '" style="text-decoration:none" class="text-reset" target="_blank">' + v.name + '&nbsp;&nbsp;<img src="strava_grey.png" alt="View on Strava" title="View on Strava" />'
+					: v.name,
+			parseHTML: true,
 		},
 		{
 			key: "gear",
@@ -141,10 +147,13 @@
 		return r.reduce(
 			(total, row) => {
 				addToUsage(total, row);
+				total.cnt += 1;
+				total.name = "Totals: "+ total.cnt + " activities";
 				return total;
 			},
 			{
 				name: "Totals:",
+				cnt: 0,
 				...newUsage(),
 			},
 		) as Activity;
@@ -174,4 +183,5 @@
 	classNameTable="table"
 	classNameThead="table-secondary"
 	classNameSelect="custom-select"
+	classNameInput="form-control form-control-sm"
 />
