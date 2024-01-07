@@ -36,6 +36,5 @@ jobs:
       with:
         push: true
         tags: ghcr.io/hcrohland/tendabike:${{ env.TAG }}
-        cache-from: type=registry,ref=ghcr.io/hcrohland/tendabike:buildcache
-        cache-to: type=registry,ref=ghcr.io/hcrohland/tendabike:buildcache,mode=max
-        
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
