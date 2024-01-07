@@ -82,7 +82,7 @@
       <Nav class="ms-auto float-start" navbar>
         {#if $category}
         <NavItem>
-          <NavLink href="/cat/{$category.id}" class="dropdown-item text-reset">{$category.name}s</NavLink>
+          <NavLink href="/#/cat/{$category.id}" class="dropdown-item text-reset">{$category.name}s</NavLink>
         </NavItem>
         <NavItem>
           <NavLink href="/#/spares/{$category.id}" class="dropdown-item text-reset">Spare parts</NavLink>
