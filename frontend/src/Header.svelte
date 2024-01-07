@@ -68,15 +68,7 @@
       Gear
     {/if} -->
   </NavbarBrand>
-  <NavbarToggler on:click={() => (isOpen = !isOpen)}>
-    <div class="row">
-      <div class="hamburg">
-          <span class="line"></span>
-          <span class="line"></span>
-          <span class="line"></span>
-      </div>
-    </div>
-  </NavbarToggler>
+  <NavbarToggler on:click={() => (isOpen = !isOpen)}/>
   {#if $user}
     <Collapse {isOpen} navbar expand="md" on:update={navbarUpdate}>
       <Nav class="ms-auto float-start" navbar>
