@@ -1,6 +1,7 @@
 <script lang="ts">
   import {filterValues, parts, attachments, types, by, attTime} from '../store'
   import Usage from '../Usage.svelte'
+  import {link} from 'svelte-spa-router'
  
   export let id;
   
@@ -24,7 +25,8 @@
         <tr>
           <td>
           {#if $parts[att.gear]}
-            <a href="#/part/{att.gear}" 
+            <a href="/part/{att.gear}" 
+                use:link
                 style={$parts[att.gear].disposed_at ? "text-decoration: line-through;" : ""} 
                 class="text-reset">
               {$parts[att.gear].name} 

@@ -8,6 +8,7 @@ import NewPart from '../Actions/NewPart.svelte'
 import type {Attachment, Type} from '../types'
 import Menu from '../Widgets/Menu.svelte'
 import ShowAll from '../Widgets/ShowHist.svelte'
+import {link} from 'svelte-spa-router'
 
 export let type: Type;
 export let date = new Date;
@@ -44,7 +45,8 @@ $: subparts = filterValues($parts, (p) => p.what == type.id).sort(by("last_used"
   <tr>
     <td class="border-0"></td>
     <td title={part.vendor + ' ' + part.model + ' ' + fmtDate(part.purchase)}>
-      <a href="#/part/{part.id}" 
+      <a href="/part/{part.id}" 
+          use:link
           style={part.disposed_at ? "text-decoration: line-through;" : ""} 
           class="text-reset">
         {part.name}
