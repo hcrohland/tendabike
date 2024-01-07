@@ -10,16 +10,17 @@ export function fmtDate(date: Date | string | number) {
     return new Date(date).toLocaleDateString(navigator.language)
 }
 
-export function fmtSeconds(sec_num: number) {
-    var hours = Math.floor(sec_num / 3600);
+export function fmtSeconds(sec_num: number | undefined) {
+    sec_num = sec_num || 0;
+    var hours = Math.floor((sec_num) / 3600);
     var minutes: number | string = Math.floor((sec_num - (hours * 3600)) / 60);
 
     if (minutes < 10) { minutes = "0" + minutes; }
     return hours + ':' + minutes;
 }
 
-export function fmtNumber(number: number) {
-    return number.toLocaleString(navigator.language)
+export function fmtNumber(number: number | undefined) {
+    return (number || 0).toLocaleString(navigator.language)
 }
 
 export function myfetch(url: string, method?: any, data?: any) {

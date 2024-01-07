@@ -3,7 +3,7 @@ import {fmtSeconds, fmtNumber} from './store'
 import type {Usage} from './types'
  
 export let header = false
-export let usage: Usage = undefined;
+export let usage: Usage;
 
 </script>
 
@@ -16,7 +16,7 @@ export let usage: Usage = undefined;
       {fmtSeconds(usage.time)}
     </td>
     <td class="text-end"> 
-      {fmtNumber(Math.round(usage.distance / 1000))}
+      {fmtNumber(Math.round(( usage.distance || 0) / 1000))}
     </td>
     <td class="text-end"> 
       {fmtNumber(usage.climb)}

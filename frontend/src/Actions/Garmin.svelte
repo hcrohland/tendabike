@@ -48,7 +48,7 @@
   };
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false}>
+<Modal {isOpen} {toggle} backdrop={false} scrollable>
   <ModalHeader {toggle}>Upload Garmin activities file</ModalHeader>
   {#if result}
     <ModalBody>

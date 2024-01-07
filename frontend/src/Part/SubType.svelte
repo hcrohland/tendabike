@@ -7,6 +7,7 @@ import AttachPart from '../Actions/AttachPart.svelte'
 import type {Attachment, Type} from '../types';
 import Menu from '../Widgets/Menu.svelte';
 import ShowAll from '../Widgets/ShowHist.svelte';
+import {link} from 'svelte-spa-router'
 
 export let header = false;
 export let attachments: Attachment[] = [];
@@ -43,7 +44,8 @@ let attachPart, replacePart;
         {#if isAttached(att)}
           <td>
             {#if part}
-              <a href="#/part/{part.id}" 
+              <a href="/part/{part.id}" 
+                use:link
                 style={part.disposed_at ? "text-decoration: line-through;" : ""} 
                 class="text-reset">
                 {part.name}
@@ -73,7 +75,8 @@ let attachPart, replacePart;
           </th>
           <td>
             {#if part}
-              <a href="#/part/{part.id}" 
+              <a href="/part/{part.id}" 
+                use:link
                 style={part.disposed_at ? "text-decoration: line-through;" : ""} 
                 class="text-reset">
                 {part.name}

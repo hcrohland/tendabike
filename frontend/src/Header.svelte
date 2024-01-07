@@ -7,7 +7,6 @@
     DropdownToggle,
     NavItem,
   } from '@sveltestrap/sveltestrap';
-  import {link} from 'svelte-spa-router';
   import {myfetch, handleError, setSummary, updateSummary, category, user} from "./store";
   import Garmin from "./Actions/Garmin.svelte"
 
@@ -69,21 +68,13 @@
       Gear
     {/if} -->
   </NavbarBrand>
-  <NavbarToggler on:click={() => (isOpen = !isOpen)}>
-    <div class="row">
-      <div class="hamburg">
-          <span class="line"></span>
-          <span class="line"></span>
-          <span class="line"></span>
-      </div>
-    </div>
-  </NavbarToggler>
+  <NavbarToggler on:click={() => (isOpen = !isOpen)}/>
   {#if $user}
     <Collapse {isOpen} navbar expand="md" on:update={navbarUpdate}>
       <Nav class="ms-auto float-start" navbar>
         {#if $category}
         <NavItem>
-          <NavLink href="/#/cat/{$category.id}"  class="dropdown-item text-reset">{$category.name}s</NavLink>
+          <NavLink href="/#/cat/{$category.id}" class="dropdown-item text-reset">{$category.name}s</NavLink>
         </NavItem>
         <NavItem>
           <NavLink href="/#/spares/{$category.id}" class="dropdown-item text-reset">Spare parts</NavLink>
