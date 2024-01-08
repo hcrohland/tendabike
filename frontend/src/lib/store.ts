@@ -1,10 +1,8 @@
 import { writable } from "svelte/store";
 import { mapable, mapObject} from "./mapable";
-import type { Part, Attachment, Type, Activity, ActType, User } from './types';
+import { Activity, Part, Attachment, type Type, type ActType, type User } from './types';
 
 export { filterValues, by } from './mapable';
-
-export const maxDate = new Date("2999-12-31");
 
 export function fmtDate(date: Date | string | number) {
     return new Date(date).toLocaleDateString(navigator.language)
@@ -123,29 +121,14 @@ export const category = writable<Type | undefined>(undefined);
 export const user = writable<User | undefined>(undefined);
 
 export const parts = mapable("id", prepParts);
-function prepParts(a: Part) { a.purchase = new Date(a.purchase); return a }
+function prepParts(a: Part) { return new Part(a) }
 
 export const activities = mapable("id", prepActs)
-function prepActs(a: Activity) { a.start = new Date(a.start); return a }
+function prepActs(a: Activity) { return new Activity(a) }
 
 export const attachments = mapable("idx", prepAtts, delAtt)
-function prepAtts(a: Attachment) {
-    a.attached = new Date(a.attached);
-    a.detached = new Date(a.detached);
-    a.idx = a.part_id + "/" + a.attached.getTime()
-    return a
-}
+function prepAtts(a: Attachment) { return new Attachment(a) }
 function delAtt(a: Attachment) { return a.attached.getTime() == a.detached.getTime() }
-export function attTime(att: Attachment) {
-    let res = fmtDate(att.attached);
-    if (att.detached < maxDate)
-        res = res + " - " + fmtDate(att.detached)
-    return res
-}
-export function isAttached(att: Attachment, time?: Date | string | number) {
-    if (!time) time = new Date()
-    return att.attached <= time && time < att.detached
-}
 
 export const state = writable({ show_all_spares: false });
 export const message = writable({ active: false, message: "No message", status: "" })

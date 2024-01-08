@@ -1,11 +1,11 @@
 
 <script lang="ts">
-import {filterValues, by, types, parts, fmtDate, attachments, isAttached} from '../lib/store'
+import {filterValues, by, types, parts, fmtDate, attachments} from '../lib/store'
 import {Button, DropdownItem} from '@sveltestrap/sveltestrap'
 import Usage from '../Usage.svelte'
 import AttachPart from '../Actions/AttachPart.svelte'
 import NewPart from '../Actions/NewPart.svelte'
-import type {Attachment, Type} from '../lib/types'
+import {Attachment, type Type} from '../lib/types'
 import Menu from '../Widgets/Menu.svelte'
 import ShowAll from '../Widgets/ShowHist.svelte'
 import {link} from 'svelte-spa-router'
@@ -18,7 +18,7 @@ export let attachee: number
 let attachPart, newPart, show_all;
 
 function attachedTo(atts: {[key: string]: Attachment}, partId: number, time: Date) {
-    let att = filterValues(atts, (x) => x.part_id === partId && isAttached(x, time)).pop()
+    let att = filterValues(atts, (x) => x.part_id === partId && x.isAttached(time)).pop()
     if (att == undefined) return
       return $parts[att.gear].name + ' ' + types[att.hook].prefix
 }

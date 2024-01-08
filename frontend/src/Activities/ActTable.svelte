@@ -9,7 +9,7 @@
 		fmtSeconds,
 	} from "../lib/store";
 	import SvelteTable from "../Widgets/SvelteTable.svelte";
-	import { addToUsage, newUsage, type Activity, type Part } from "../lib/types";
+	import { Activity } from "../lib/types";
 	import RangeSlider from "svelte-range-slider-pips";
 
 	export let acts: Activity[] = filterValues($activities, (a) =>
@@ -146,16 +146,11 @@
 	const totalsFunc = (r: Activity[]) => {
 		return r.reduce(
 			(total, row) => {
-				addToUsage(total, row);
-				total.cnt += 1;
-				total.name = "Totals: "+ total.cnt + " activities";
+				total.add(row);
+				total.name = "Totals: "+ total.count + " activities";
 				return total;
 			},
-			{
-				name: "Totals:",
-				cnt: 0,
-				...newUsage(),
-			},
+			new Activity({}),
 		) as Activity;
 	};
 </script>

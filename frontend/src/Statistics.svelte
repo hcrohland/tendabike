@@ -7,13 +7,33 @@
     InputGroup,
     InputGroupText,
   } from "@sveltestrap/sveltestrap";
-  import type { Part, Usage, Activity } from "./lib/types";
-  import { addToUsage, newUsage } from "./lib/types";
+  import { type Part, Activity } from "./lib/types";
+  import { Usage } from "./lib/types";
   import Plotly from "./Widgets/Plotly.svelte";
   import Switch from "./Widgets/Switch.svelte";
 
-  type Day = Usage & {
+  class Day extends Usage  {
     start: Date;
+    constructor(a: Activity | Date | Day) {
+      if (a instanceof Date) {
+        super();
+        this.start = a
+      } else if (a instanceof Activity ) {
+        let b = {
+          count: a.count || 0,
+          distance: (a.distance || 0) / 1000,
+          time: (a.time || a.duration || 0) / 3600,
+          duration: (a.duration || 0)/ 3600,
+          descend: a.descend || a.climb|| 0,
+          climb: a.climb || 0,
+        }
+        super(b);
+        this.start = a.start;
+      } else {
+        super (a)
+        this.start = a.start
+      }
+    } 
   };
 
   type Year = {
@@ -24,15 +44,16 @@
 
   function sumByMonths(arr: Day[]) {
     return Object.values(
-      arr.reduce<{ [s: string]: Day }>((acc, a: Activity) => {
-        let start = new Date(a.start);
-        start.setHours(0, 0, 0, 0);
-        start.setDate(13);
-        let diy = start.toString();
-        if (!acc[diy]) acc[diy] = { start, ...newUsage() };
-        addToUsage(acc[diy], a);
-        return acc;
-      }, {}),
+      arr.reduce<{ [s: string]: Day }> 
+      ((acc, a: Day) => {
+          let start = new Date(a.start);
+          start.setHours(0, 0, 0, 0);
+          start.setDate(13);
+          let diy = start.toString();
+          if (!acc[diy]) acc[diy] = new Day(start);
+          acc[diy].add(a);
+          return acc;
+        }, {}),
     );
   }
 
@@ -43,26 +64,13 @@
     let start = arr.sort(by("start", true)).shift() as Day;
     return arr.reduce(
        (r, a) => {
-        let b = { ...a }; // do not modify arr
-        addToUsage(b, r[r.length - 1]);
+        let b = new Day(a); // do not modify arr
+        b.add(r[r.length - 1]);
         r.push(b);
         return r;
       },
       [start]
     )
-  }
-
-  // create a new - human readable - day out of an activity
-  function activity2Day(a: Activity): Day {
-    return {
-      start: new Date(a.start),
-      count: a.count || 0,
-      distance: (a.distance || 0) / 1000,
-      time: (a.time || a.duration || 0) / 3600,
-      duration: (a.duration || 0)/ 3600,
-      descend: a.descend || a.climb|| 0,
-      climb: a.climb || 0,
-    };
   }
 
   function buildYears(gear: Part[]): Year[] {
@@ -83,7 +91,7 @@
           (g.length == 0 || g.includes(a.gear)),
       )
         // and translate usage data to human readable form
-        .map(activity2Day);
+        .map(a => new Day(a));
       ret.push({
         year,
         days: aggregateDays(acts),

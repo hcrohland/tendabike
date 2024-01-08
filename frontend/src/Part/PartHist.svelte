@@ -1,5 +1,5 @@
 <script lang="ts">
-  import {filterValues, parts, attachments, types, by, attTime} from '../lib/store'
+  import {filterValues, parts, attachments, types, by} from '../lib/store'
   import Usage from '../Usage.svelte'
   import {link} from 'svelte-spa-router'
  
@@ -35,7 +35,7 @@
           {:else}
             N/A
           {/if}
-          <td>{attTime(att)}</td>
+          <td>{att.fmtTime()}</td>
           <Usage usage={att} />
         </tr>
       {/each}

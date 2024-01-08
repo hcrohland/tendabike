@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Modal, ModalHeader, ModalBody, Table } from '@sveltestrap/sveltestrap';
   import { fmtDate } from '../lib/store';
-  import type { Activity } from '../lib/types';
+  import { Activity } from '../lib/types';
 
   export let activities: Activity[];
   export let isOpen = true;

@@ -3,8 +3,8 @@
     Form, InputGroup, InputGroupText
   } from '@sveltestrap/sveltestrap'
   import DateTime from '../Widgets/DateTime.svelte';
-  import {attachments, filterValues, types, parts, by, maxDate} from '../lib/store';
-  import type {AttEvent, Type, Part} from '../lib/types';  
+  import {attachments, filterValues, types, parts, by} from '../lib/store';
+  import {type AttEvent, maxDate, Part} from '../lib/types';  
 
   
   function lastDetach(part) {

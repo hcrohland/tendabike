@@ -1,6 +1,6 @@
 <script lang="ts">
 import {fmtSeconds, fmtNumber} from './lib/store'
-import type {Usage} from './lib/types'
+import {Usage} from './lib/types'
  
 export let header = false
 export let usage: Usage;

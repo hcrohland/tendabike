@@ -2,7 +2,7 @@
   import { Modal, ModalHeader, ModalBody } from '@sveltestrap/sveltestrap';
   import ModalFooter from './ModalFooter.svelte'
   import {myfetch, handleError, updateSummary, types} from '../lib/store';
-  import type {AttEvent, Part} from '../lib/types';  
+  import {type AttEvent, Part} from '../lib/types';  
   import AttachForm from './AttachForm.svelte';
 
   let attach: AttEvent;

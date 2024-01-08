@@ -1,5 +1,5 @@
 <script lang="ts">
-import type {Attachment, Type, Part} from '../lib/types';
+import {Attachment, type Type, Part} from '../lib/types';
 
 import {Table} from '@sveltestrap/sveltestrap'
 import {attachments, types, filterValues, by} from '../lib/store'

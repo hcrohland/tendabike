@@ -3,7 +3,7 @@
   import {
     Form, InputGroup, InputGroupText, Input, FormGroup, Label,
   } from '@sveltestrap/sveltestrap'
-  import type {Type, Part, Attachment} from '../lib/types'
+  import {type Type, Part} from '../lib/types'
   import {types, category, filterValues} from '../lib/store'
 
   export let gear: Part;

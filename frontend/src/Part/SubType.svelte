@@ -1,10 +1,10 @@
 <script lang="ts">
 import {DropdownItem} from '@sveltestrap/sveltestrap';
-import {isAttached, attTime, parts} from '../lib/store'
+import {parts} from '../lib/store'
 import Usage from '../Usage.svelte'
 import ReplacePart from '../Actions/ReplacePart.svelte'
 import AttachPart from '../Actions/AttachPart.svelte'
-import type {Attachment, Type} from '../lib/types';
+import {Attachment, type Type} from '../lib/types';
 import Menu from '../Widgets/Menu.svelte';
 import ShowAll from '../Widgets/ShowHist.svelte';
 import {link} from 'svelte-spa-router'
@@ -41,7 +41,7 @@ let attachPart, replacePart;
             <ShowAll bind:show_hist/>
           {/if}
         </th>  
-        {#if isAttached(att)}
+        {#if att.isAttached()}
           <td>
             {#if part}
               <a href="/part/{part.id}" 
@@ -54,7 +54,7 @@ let attachPart, replacePart;
               {att.name}
             {/if}
           </td>
-          <td> {attTime(att)} </td>  
+          <td> {att.fmtTime()} </td>  
           <Usage usage={part} />
           <td>
             <Menu>
@@ -85,7 +85,7 @@ let attachPart, replacePart;
               {att.name}
             {/if}
           </td>
-          <td> {attTime(att)} </td>  
+          <td> {att.fmtTime()} </td>  
           <Usage usage={att} />
           <td>
               <Menu>
