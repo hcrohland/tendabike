@@ -9,7 +9,7 @@
 
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
+<Modal {isOpen} {toggle} backdrop={false}>
   <ModalHeader {toggle}> 
     <slot>Activities</slot>
   </ModalHeader>

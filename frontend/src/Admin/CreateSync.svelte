@@ -14,7 +14,7 @@
   import DateTime from "../Widgets/DateTime.svelte";
 
   export let refresh: () => void;
-  let user: User;
+  let user: User | undefined;
   let date = new Date();
   let isOpen = false;
   let userParam: string;
@@ -28,9 +28,8 @@
     refresh();
   }
 
-  export const createSync = (id?: User) => {
-    user = id;
-    if (id) {
+  export const createSync = (user?: User) => {
+    if (user) {
       userParam = "&user_id=" + user.id;
     } else {
       userParam = "";
@@ -39,7 +38,7 @@
   };
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
+<Modal {isOpen} {toggle} backdrop={false}>
   <ModalHeader {toggle}>
     Create sync Event
     {#if user}

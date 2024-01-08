@@ -2,7 +2,6 @@
   import { Input, InputGroup, Table, Container, Button } from "@sveltestrap/sveltestrap";
   import { type AttEvent, Attachment, Part, type Type } from "../lib/types";
   import {
-    category,
     filterValues,
     types,
     handleError,

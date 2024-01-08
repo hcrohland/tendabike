@@ -11,7 +11,7 @@
   import NewForm from './NewForm.svelte';
   import TypeForm from './TypeForm.svelte';
 
-  let part, newpart: Part;
+  let part: Part, newpart: Part;
   let gear: Part;
   let type: Type;
   let hook: number;

@@ -10,6 +10,6 @@
 
 <script lang="ts">
 import {InputGroupText, Input} from '@sveltestrap/sveltestrap'
- export let checked
+ export let checked: boolean;
  export let id = "custominputneedsone"
 </script>

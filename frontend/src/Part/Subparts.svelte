@@ -41,7 +41,7 @@ function buildList (list: MyList[], hook: Type, attachees: Attachment[], level: 
 {#if attachees.length > 0}
     <Table responsive hover>
     <thead>
-      <SubType header/>
+      <SubType/>
     </thead>
     <tbody>
       {#each buildList([], hook, attachees, 0, "") as item (item.hook.id + "." + item.type.id )}

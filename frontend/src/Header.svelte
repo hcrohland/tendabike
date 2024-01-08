@@ -16,7 +16,7 @@
   let number = 0;
   let promise;
   let data = undefined;
-  let garmin
+  let garmin: () => void;
 
   function refresh () {promise = myfetch('/user/summary').then(setSummary)}
 

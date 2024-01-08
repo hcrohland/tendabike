@@ -5,7 +5,7 @@
   import Sync from "./Sync.svelte";
   import CreateSync from "./CreateSync.svelte";
 
-  let promise, createSync;
+  let promise: Promise<void>, createSync: any;
   let request:
     | Promise<
         { user: User; parts: number; activities: number; events: number }[]
@@ -21,7 +21,7 @@
     refresh();
   }
 
-  async function disable(user) {
+  async function disable(user: User) {
     await myfetch("/strava/disable/" + user.id, "POST").catch(handleError);
     refresh();
   }

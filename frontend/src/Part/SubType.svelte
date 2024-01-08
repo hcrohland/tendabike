@@ -4,25 +4,23 @@ import {parts} from '../lib/store'
 import Usage from '../Usage.svelte'
 import ReplacePart from '../Actions/ReplacePart.svelte'
 import AttachPart from '../Actions/AttachPart.svelte'
-import {Attachment, type Type} from '../lib/types';
+import {Part, Attachment, type Type} from '../lib/types';
 import Menu from '../Widgets/Menu.svelte';
 import ShowAll from '../Widgets/ShowHist.svelte';
 import {link} from 'svelte-spa-router'
 
-export let header = false;
 export let attachments: Attachment[] = [];
 export let level: number = 0;
 export let prefix = "";
 export let type: Type | undefined = undefined;
-export let hook: Type | undefined = undefined;
-void(hook) // get rid of warning...
+export const hook: Type | undefined = undefined;
 
 let show_hist = false; 
-let attachPart, replacePart;
+let attachPart: (p: Part) => void, replacePart: (p: Attachment) => void;
 
 </script>
 
-{#if header}
+{#if type == undefined}
   <tr>
     <th scope="col">Attached parts</th>
     <th scope="col">Name</th>

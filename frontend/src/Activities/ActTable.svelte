@@ -87,7 +87,7 @@
 			value: (v: Activity) => v.name || "",
 			searchValue: (v: Activity) => v.name,
 			sortable: true,
-			renderValue: (v) =>
+			renderValue: (v: Activity) =>
 				v.id 
 					? '<a href="/strava/activities/' + v.id + '" style="text-decoration:none" class="text-reset" target="_blank">' + v.name + '&nbsp;&nbsp;<img src="strava_grey.png" alt="View on Strava" title="View on Strava" />'
 					: v.name,

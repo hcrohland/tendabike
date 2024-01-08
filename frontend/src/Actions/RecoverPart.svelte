@@ -11,7 +11,7 @@
   const toggle = () => isOpen = false
 
   async function action () {
-    part.disposed_at = null;
+    part.disposed_at = undefined;
     await myfetch('/part', 'PUT', part)
       .then(data => parts.updateMap([data]))
       .catch(handleError)
@@ -24,7 +24,7 @@
   };  
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
+<Modal {isOpen} {toggle} backdrop={false}>
   <ModalHeader {toggle}> 
     Do you really have {types[part.what].name} {part.name} {part.vendor} {part.model} back?
   </ModalHeader>

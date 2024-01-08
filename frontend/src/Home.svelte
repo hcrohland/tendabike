@@ -1,11 +1,10 @@
 <script lang="ts">
 import {myfetch, handleError, types, icons, parts, category} from './lib/store';
 import {Spinner} from '@sveltestrap/sveltestrap'
-import {link} from 'svelte-spa-router'
 
 category.set(undefined);
 
-let promise, categories: number[]; 
+let promise: Promise<void>, categories: number[]; 
 $: { $parts; promise = myfetch('/activ/categories').then(data => categories = data) }
 </script>
 

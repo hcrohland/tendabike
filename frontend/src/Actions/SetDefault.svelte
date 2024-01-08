@@ -8,7 +8,7 @@ import ActivityList from "../Widgets/ActivityList.svelte";
 export let type: Type
 
 let isOpen = false
-let value;
+let value: number;
 
 function defaultGear(id: number) {
     myfetch('/activ/defaultgear', 'POST', id)

@@ -1,13 +1,18 @@
-<Dropdown {isOpen} toggle={() => (isOpen = !isOpen)} size="sm" class="float-end">
-  <DropdownToggle color=light caret/>
-  <DropdownMenu right>
-    <slot />
-  </DropdownMenu>
-</Dropdown>
+<div class="float-end">
+  <Dropdown {isOpen} toggle={() => (isOpen = !isOpen)} size="sm">
+    <DropdownToggle color=light caret/>
+    <DropdownMenu end>
+      <slot />
+    </DropdownMenu>
+  </Dropdown>
+</div>
 
 <script>
 import {Dropdown, DropdownToggle, DropdownMenu} from '@sveltestrap/sveltestrap'
 
-let isOpen
+/**
+ * @type boolean
+ */
+let isOpen;
 
 </script>

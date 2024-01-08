@@ -19,10 +19,10 @@
   let disabled = true;
   let dispose = false;
   let isOpen = false;
-  let mindate;
+  let mindate: Date;
   const toggle = () => isOpen = false
 
-  async function attachPart (part) {
+  async function attachPart (part: Part) {
     let evt: AttEvent = {
       gear,
       hook,
@@ -55,28 +55,26 @@ export const replacePart = (attl: Attachment) => {
     mindate = attl.attached;
     type = types[oldpart.what];
     prefix = types[attl.hook].prefix;
-    part = {
-      owner: $user.id, 
-      what: oldpart.what, 
-      count:0, climb:0, descend:0, distance:0, time: 0,
-      name: oldpart.name, 
-      vendor: oldpart.vendor, 
-      model: oldpart.model, 
-      purchase: attl.detached < maxDate ? attl.detached : new Date(),
-      last_used: undefined
-    };
+    part = new Part({
+        owner: $user.id, 
+        what: oldpart.what, 
+        name: oldpart.name, 
+        vendor: oldpart.vendor, 
+        model: oldpart.model, 
+        purchase: attl.detached < maxDate ? attl.detached : new Date(),
+      });
     dispose = false;
     isOpen = true;
   }
 
-  const setPart = (e) => {
+  const setPart = (e: any) => {
     newpart = e.detail
     disabled = false
   }
   
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
+<Modal {isOpen} {toggle} backdrop={false}>
   <ModalHeader {toggle}>  New {prefix} {type.name} for {$parts[gear].name} </ModalHeader>
   <ModalBody>
     <Form>

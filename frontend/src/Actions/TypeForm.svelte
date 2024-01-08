@@ -9,11 +9,11 @@
   export let gear: Part;
 
   let type: Type;
-  let hook: number;
+  let hook: number| undefined;
   const dispatch = createEventDispatcher();
 
 
-  let typeList = filterValues(types, (t) => t.main == $category.id && t.id != t.main)
+  let typeList = filterValues(types, (t) => $category != undefined && t.main == $category.id && t.id != t.main)
           .sort((a,b) => a.order - b.order);
 
   function updatehook() {

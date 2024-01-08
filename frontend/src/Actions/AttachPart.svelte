@@ -6,10 +6,10 @@
   import AttachForm from './AttachForm.svelte';
 
   let attach: AttEvent;
-  let part: Part;
+  let part: Part | undefined;
   let isOpen = false;
   let disabled = true;
-  const toggle = () => {part= undefined; isOpen = false}
+  const toggle = () => {part = undefined; isOpen = false}
 
   async function action () {
     disabled = true;
@@ -24,13 +24,16 @@
     isOpen = true
   };  
 </script>
-
-<Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
-  <ModalHeader {toggle}> 
-    Attach {types[part.what].name} {part.name} {part.vendor} {part.model}
-  </ModalHeader>
-  <ModalBody>
-    <AttachForm bind:attach bind:disabled {part} />
-  </ModalBody>
+<Modal {isOpen} {toggle} backdrop={false}>
+  {#if part }
+    <ModalHeader {toggle}> 
+      Attach {types[part.what].name} {part.name} {part.vendor} {part.model}
+    </ModalHeader>
+    <ModalBody>
+      <AttachForm bind:attach bind:disabled {part} />
+    </ModalBody>
+  {:else}
+    Error: part is not defined
+  {/if}
   <ModalFooter {toggle} {action} {disabled} button={'Attach'} />
 </Modal>

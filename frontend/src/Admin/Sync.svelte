@@ -6,12 +6,12 @@
   export let user: User;
   export let refresh: () => void;
 
-  let promise, count;
+  let promise: Promise<void>, count: number;
 
-  const sync = (id) => {
+  const sync = (id: number) => {
     promise = getdata(id);
   };
-  async function getdata(id) {
+  async function getdata(id: number) {
     let data;
     count = 0;
     do {

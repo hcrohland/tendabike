@@ -3,7 +3,7 @@
   import Usage from '../Usage.svelte'
   import {link} from 'svelte-spa-router'
  
-  export let id;
+  export let id: number;
   
   $: atts = filterValues($attachments, (a) => a.part_id == id).sort(by("attached"))
   

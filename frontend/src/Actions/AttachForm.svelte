@@ -7,7 +7,7 @@
   import {type AttEvent, maxDate, Part} from '../lib/types';  
 
   
-  function lastDetach(part) {
+  function lastDetach(part: Part) {
     let last = filterValues($attachments, (a) => a.part_id == part.id).sort(by("attached"))[0]
       
     if (last) {

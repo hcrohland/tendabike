@@ -7,5 +7,5 @@
 </Switch>
 <script lang="ts">
   import Switch from '../Widgets/Switch.svelte'
-  export let dispose
+  export let dispose: boolean
 </script>

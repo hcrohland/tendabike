@@ -9,12 +9,12 @@
 
   export let type: Type;
   export let part: Part;
-  export let maxdate = undefined;
-  export let mindate = undefined;
+  export let maxdate: Date|undefined = undefined;
+  export let mindate: Date|undefined  = undefined;
   let {name, vendor, model} = part
 
   $: if (type && name.length > 0 && vendor.length > 0 && model.length > 0) {
-      part = {...part, name, vendor, model}
+      part = new Part({...part, name, vendor, model})
       part.last_used = part.purchase
       dispatch ("change", part)  
     }
@@ -39,7 +39,7 @@
 </FormGroup>
 <FormGroup row>
   <Col>
-    <Label for="inputDate" right> New {type && type.name || ''} day was </Label>
+    <Label for="inputDate" class="text-end"> New {type && type.name || ''} day was </Label>
   </Col>
   <Col xs=auto>
     <InputGroup>
