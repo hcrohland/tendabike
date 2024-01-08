@@ -4,7 +4,7 @@
     ListGroup, ListGroupItem, Input,
     InputGroup, InputGroupText, Label
   } from '@sveltestrap/sveltestrap';
-  import {attachments, checkStatus, handleError, parts} from "../store";
+  import {attachments, checkStatus, handleError, parts} from "../lib/store";
   import TZPicker from '../Widgets/TZPicker.svelte';
   import ModalFooter from './ModalFooter.svelte'
 

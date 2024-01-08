@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button } from "@sveltestrap/sveltestrap";
-  import { handleError, myfetch } from "../store";
-  import type { User } from "../types";
+  import { handleError, myfetch } from "../lib/store";
+  import type { User } from "../lib/types";
 
   export let user: User;
   export let refresh: () => void;

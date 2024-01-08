@@ -9,8 +9,8 @@
     InputGroupText,
   } from "@sveltestrap/sveltestrap";
   import ModalFooter from "../Actions/ModalFooter.svelte";
-  import { handleError, myfetch } from "../store";
-  import type { User } from "../types";
+  import { handleError, myfetch } from "../lib/store";
+  import type { User } from "../lib/types";
   import DateTime from "../Widgets/DateTime.svelte";
 
   export let refresh: () => void;

@@ -3,9 +3,9 @@
     Modal, ModalBody, ModalHeader,
     FormGroup, InputGroup, Form
   } from '@sveltestrap/sveltestrap';
-  import {myfetch, handleError, parts, types, updateSummary, attachments, filterValues, by, maxDate} from '../store';
+  import {myfetch, handleError, parts, types, updateSummary, attachments, filterValues, by, maxDate} from '../lib/store';
   import ModalFooter from './ModalFooter.svelte'
-  import type {AttEvent, Part, Attachment} from '../types'
+  import type {AttEvent, Part, Attachment} from '../lib/types'
   import NewForm from './NewForm.svelte';
   import Dispose from '../Widgets/Dispose.svelte';
   import DateTime from '../Widgets/DateTime.svelte';

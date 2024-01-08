@@ -1,5 +1,5 @@
 <script lang="ts">
-  import {message} from './store'
+  import {message} from './lib/store'
   import {Container, Row, Col, Toast, ToastBody, ToastHeader} from '@sveltestrap/sveltestrap'
 
   function toggle() {

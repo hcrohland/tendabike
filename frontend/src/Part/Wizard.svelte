@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Input, InputGroup, Table, Container, Button } from "@sveltestrap/sveltestrap";
-  import type { AttEvent, Attachment, Part, Type } from "../types";
+  import type { AttEvent, Attachment, Part, Type } from "../lib/types";
   import {
     category,
     filterValues,
@@ -8,7 +8,7 @@
     handleError,
     updateSummary,
     myfetch,
-  } from "../store";
+  } from "../lib/store";
   import Switch from "../Widgets/Switch.svelte";
 
   export let gear: Part;

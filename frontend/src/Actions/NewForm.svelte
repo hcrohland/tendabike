@@ -3,7 +3,7 @@
     Input, InputGroup, FormGroup, Label, Col
   } from '@sveltestrap/sveltestrap'
   import DateTime from '../Widgets/DateTime.svelte';
-  import type {Type, Part} from '../types'
+  import type {Type, Part} from '../lib/types'
   import { createEventDispatcher } from 'svelte';
   const dispatch = createEventDispatcher()
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import {filterValues, parts, attachments, types, by, attTime} from '../store'
+  import {filterValues, parts, attachments, types, by, attTime} from '../lib/store'
   import Usage from '../Usage.svelte'
   import {link} from 'svelte-spa-router'
  

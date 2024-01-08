@@ -1,6 +1,6 @@
 <script lang="ts">
   import {ButtonGroup, Button} from '@sveltestrap/sveltestrap'
-  import {types, parts} from '../store'
+  import {types, parts} from '../lib/store'
   import InstallPart  from '../Actions/InstallPart.svelte'
   import ChangePart   from '../Actions/ChangePart.svelte'
   import RecoverPart  from '../Actions/RecoverPart.svelte';

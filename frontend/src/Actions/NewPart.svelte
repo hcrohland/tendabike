@@ -5,8 +5,8 @@
   } from '@sveltestrap/sveltestrap';
   import NewForm from './NewForm.svelte';
   import ModalFooter from './ModalFooter.svelte'
-  import {myfetch, handleError, initData, parts, user} from '../store';
-  import type {Type, Part} from '../types'
+  import {myfetch, handleError, initData, parts, user} from '../lib/store';
+  import type {Type, Part} from '../lib/types'
 
   let part, newpart: Part;
   let type: Type;

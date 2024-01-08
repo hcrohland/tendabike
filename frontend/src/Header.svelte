@@ -7,7 +7,7 @@
     DropdownToggle,
     NavItem,
   } from '@sveltestrap/sveltestrap';
-  import {myfetch, handleError, setSummary, updateSummary, category, user} from "./store";
+  import {myfetch, handleError, setSummary, updateSummary, category, user} from "./lib/store";
   import Garmin from "./Actions/Garmin.svelte"
 
   let userOpen = false;

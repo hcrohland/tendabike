@@ -1,10 +1,10 @@
 <script lang="ts">
 import {DropdownItem} from '@sveltestrap/sveltestrap';
-import {isAttached, attTime, parts} from '../store'
+import {isAttached, attTime, parts} from '../lib/store'
 import Usage from '../Usage.svelte'
 import ReplacePart from '../Actions/ReplacePart.svelte'
 import AttachPart from '../Actions/AttachPart.svelte'
-import type {Attachment, Type} from '../types';
+import type {Attachment, Type} from '../lib/types';
 import Menu from '../Widgets/Menu.svelte';
 import ShowAll from '../Widgets/ShowHist.svelte';
 import {link} from 'svelte-spa-router'

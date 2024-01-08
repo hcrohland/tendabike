@@ -7,9 +7,9 @@
 		filterValues,
 		fmtNumber,
 		fmtSeconds,
-	} from "../store";
+	} from "../lib/store";
 	import SvelteTable from "../Widgets/SvelteTable.svelte";
-	import { addToUsage, newUsage, type Activity, type Part } from "../types";
+	import { addToUsage, newUsage, type Activity, type Part } from "../lib/types";
 	import RangeSlider from "svelte-range-slider-pips";
 
 	export let acts: Activity[] = filterValues($activities, (a) =>

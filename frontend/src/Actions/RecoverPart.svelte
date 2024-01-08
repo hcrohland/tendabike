@@ -3,8 +3,8 @@
     Modal, ModalHeader, ModalBody,
   } from '@sveltestrap/sveltestrap';
   import ModalFooter from './ModalFooter.svelte'
-  import {myfetch, handleError, types, fmtDate, parts} from '../store';
-  import type {Part} from '../types';  
+  import {myfetch, handleError, types, fmtDate, parts} from '../lib/store';
+  import type {Part} from '../lib/types';  
 
   let part: Part;
   let isOpen = false;

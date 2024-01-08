@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { activities, parts, by, filterValues } from "./store";
+  import { activities, parts, by, filterValues } from "./lib/store";
   import {
     Row,
     Col,
@@ -7,8 +7,8 @@
     InputGroup,
     InputGroupText,
   } from "@sveltestrap/sveltestrap";
-  import type { Part, Usage, Activity } from "./types";
-  import { addToUsage, newUsage } from "./types";
+  import type { Part, Usage, Activity } from "./lib/types";
+  import { addToUsage, newUsage } from "./lib/types";
   import Plotly from "./Widgets/Plotly.svelte";
   import Switch from "./Widgets/Switch.svelte";
 

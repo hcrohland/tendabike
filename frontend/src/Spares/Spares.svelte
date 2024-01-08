@@ -1,5 +1,5 @@
 <script lang="ts">
-import {filterValues, types, state, category} from '../store'
+import {filterValues, types, state, category} from '../lib/store'
 import Usage from '../Usage.svelte'
 import SpareType from './SpareType.svelte';
 import { Table } from '@sveltestrap/sveltestrap';

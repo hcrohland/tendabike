@@ -1,5 +1,5 @@
 <script lang="ts">
-import {myfetch, handleError, types, icons, parts, category} from './store';
+import {myfetch, handleError, types, icons, parts, category} from './lib/store';
 import {Spinner} from '@sveltestrap/sveltestrap'
 import {link} from 'svelte-spa-router'
 

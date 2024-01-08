@@ -1,8 +1,8 @@
 <script lang="ts">
 import { Button, Col, InputGroup, Row } from "@sveltestrap/sveltestrap";
 
-import { activities, filterValues, handleError, myfetch, parts, updateSummary } from "../store";
-import type { Type } from "../types";
+import { activities, filterValues, handleError, myfetch, parts, updateSummary } from "../lib/store";
+import type { Type } from "../lib/types";
 import ActivityList from "../Widgets/ActivityList.svelte";
 
 export let type: Type

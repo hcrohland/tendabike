@@ -1,9 +1,9 @@
 <script lang="ts">
   import { Col, Row } from '@sveltestrap/sveltestrap';
   import MainCard from './Part/MainCard.svelte';
-  import {filterValues, by, types, parts, category, activities} from './store';
+  import {filterValues, by, types, parts, category, activities} from './lib/store';
   import ShowAll from './Widgets/ShowHist.svelte';
-  import type {Type} from './types';
+  import type {Type} from './lib/types';
 import SetDefault from './Actions/SetDefault.svelte';
 
   export let params;
