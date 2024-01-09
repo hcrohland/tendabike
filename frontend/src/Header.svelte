@@ -14,7 +14,7 @@
   let syncOpen = false;
   let running = false;
   let number = 0;
-  let promise;
+  let promise: Promise<void>;
   let data = undefined;
   let garmin: () => void;
 
@@ -35,12 +35,12 @@
   }
 
   let isOpen = false;
-  function navbarUpdate(event) {
+  function navbarUpdate(event: CustomEvent<any>) {
     isOpen = event.detail.isOpen;
   }
 
   let polling = false;
-  async function poll (promiseFn, time) {
+  async function poll (promiseFn: () => Promise<void>, time: number) {
     if (polling) return
     polling = true;
     while ($user){
@@ -126,28 +126,3 @@
     </Nav>
   {/if}
 </Navbar>
-
-<style>
-.hamburg { 
-   display: block;
-   background: #fff; width: 50px; height: 40px; 
-   position: relative; 
-   margin-left: auto; margin-right: auto;
-   border-radius: 4px; 
-   transition: border-radius .5s;
-}
-
-.line { 
-   position: absolute; 
-   left:10px;
-   height: 4px; width: 30px; 
-   background: #555; border-radius: 2px;
-   display: block; 
-   transition: 0.5s; 
-   transform-origin: center; 
-}
-
-.line:nth-child(1) { top: 10px; }
-.line:nth-child(2) { top: 20px; }
-.line:nth-child(3) { top: 30px; }
-</style>
