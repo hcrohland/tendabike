@@ -62,12 +62,12 @@ export function handleError(e: Error) {
     })
 }
 
-export const icons = {
-    "1": "flaticon-mountain-bike",
-    "301": "flaticon-run",
-    "302": "flaticon-snow",
-    "303": "flaticon-ski",
-}
+export const icons = new Map([
+    [1, "flaticon-mountain-bike"],
+    [301, "flaticon-run"],
+    [302, "flaticon-snow"],
+    [303, "flaticon-ski"],
+])
 
 export async function initData() {
     let u = await myfetch('/user')
