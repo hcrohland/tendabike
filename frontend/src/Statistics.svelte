@@ -17,7 +17,7 @@
     constructor(a: Activity | Date | Day) {
       if (a instanceof Date) {
         super();
-        this.start = a
+        this.start = new Date(a)
       } else if (a instanceof Activity ) {
         let b = {
           count: a.count || 0,
@@ -31,7 +31,7 @@
         this.start = a.start;
       } else {
         super (a)
-        this.start = a.start
+        this.start = new Date(a.start)
       }
     } 
   };
@@ -75,6 +75,8 @@
 
   function buildYears(gear: Part[]): Year[] {
     const g = gear.map((g) => g.id);
+    console.log(g);
+    
     const minyear = Object.values($activities)
       .reduce((min, a) => (min <= a.start ? min : a.start), new Date())
       .getFullYear();
@@ -110,7 +112,7 @@
   ) {
     return {
       x: cum.map((a) => a.start),
-      y: cum.map((a) => (field2 ? a[field] - a[field2] : a[field])),
+      y: cum.map((a) => (field2 ? (a[field] as number) - (a[field2] as number) : (a[field] as number ))),
       type: months ? "bar" : "scatter",
       name: title ? title : field2 ? field + "-" + field2 : field,
       line: { dash: "solid", shape: "hv" },
@@ -119,13 +121,13 @@
   }
 
   function getPlot(
-    _trigger,
+    _trigger: any,
     ncumm: number,
-    ncomp: number,
-    months,
-    title,
-    fields,
-    addlayout?,
+    ncomp: number | null,
+    months: boolean,
+    title: string,
+    fields: string[][],
+    addlayout?: any,
   ) {
     const colorway2 = ["steelblue", "lightblue", "limegreen", "lightgreen"];
     const colorway = [colorway2[0], colorway2[2]];
@@ -164,7 +166,7 @@
         let trace = get_trace(
           months ? year.months : year.days,
           months,
-          field[0],
+          field[0] as keyof Usage,
           field[1],
         );
         trace.x.map((a) => a.setFullYear(years[0].year));
@@ -202,12 +204,12 @@
 
   let gear = [...gears];
   let cumm = 0;
-  let comp = null;
+  let comp: number | null = null;
   let perMonths = false;
   $: years = buildYears(gear);
 </script>
 
-<Row border class="p-sm-2">
+<Row class="p-sm-2">
   <Col xs="auto" class="p-0 p-sm-2">
     <InputGroup>
       <InputGroupText>Your statistics for</InputGroupText>
@@ -237,7 +239,7 @@
     </InputGroup>
   </Col>
   <Col class="p-0 p-sm-2" />
-  <Col xs="auto" class="p-0 p-sm-2" float="right">
+  <Col xs="auto" class="p-0 p-sm-2">
     <InputGroup>
       <select
         class="form-select"
@@ -252,7 +254,7 @@
     </InputGroup>
   </Col>
 </Row>
-<Row border class="p-sm-2">
+<Row class="p-sm-2">
   <Col class="p-0 p-sm-2">
     <Plotly
       {...getPlot(years, cumm, comp, perMonths, "Elevation (m)", [
