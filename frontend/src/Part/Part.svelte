@@ -12,10 +12,13 @@
  
   export let params: {id: number, what:number};
   
-  let installPart: (p: Part) => void, changePart: (p: Part) => void, recoverPart: (p: Part) => void, attachPart: (p: Part) => void;
+  let installPart: (p: Part) => void;
+  let changePart: (p: Part) => void;
+  let recoverPart: (p: Part) => void; 
+  let attachPart: (p: Part) => void;
 
   $: part = $parts[params.id]; 
-  $: hook = types[part.what];
+  $: hook = part.type();
   
 </script>
 
