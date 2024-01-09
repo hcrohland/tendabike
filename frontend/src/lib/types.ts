@@ -113,6 +113,9 @@ export class Attachment extends Usage  {
         if (!time) time = new Date()
         return this.attached <= time && time < this.detached
     }
+    isEmpty() {
+      return this.attached.getTime() >= this.detached.getTime()
+    }
   }
 
 export class Type {

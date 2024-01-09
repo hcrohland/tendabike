@@ -116,11 +116,8 @@ export const category = writable<Type | undefined>(undefined);
 export const user = writable<User | undefined>(undefined);
 
 export const parts = mapable("id", (p) => new Part(p));
-
 export const activities = mapable("id", (a) => new Activity(a));
-
-export const attachments = mapable("idx", (a) => new Attachment(a), delAtt)
-function delAtt(a: Attachment) { return a.attached.getTime() == a.detached.getTime() }
+export const attachments = mapable("idx", (a) => new Attachment(a), (a) => a.isEmpty())
 
 export const state = writable({ show_all_spares: false });
 export const message = writable({ active: false, message: "No message", status: "" })
