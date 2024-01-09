@@ -1,4 +1,4 @@
-import { fmtDate, handleError, myfetch, updateSummary } from "./store";
+import { fmtDate, handleError, myfetch, parts, updateSummary } from "./store";
 export const maxDate = new Date("2999-12-31");
 
 export class Usage {
@@ -68,6 +68,18 @@ export class Part extends Usage  {
       this.purchase = new Date(data.purchase);
       this.last_used = new Date(data.last_used);
       this.disposed_at = data.disposed_at ? new Date(data.disposed_at) : undefined;
+    }
+
+    async create() {
+      return await myfetch('/part', 'POST', this)
+        .then(data => {parts.updateMap([data]); return new Part(data)})
+        .catch(handleError)
+    }
+
+    async update() {
+      return await myfetch('/part', 'PUT', this)
+        .then(data => parts.updateMap([data]))
+        .catch(handleError)
     }
 }
 
@@ -167,8 +179,7 @@ export class AttEvent {
     this.hook = hook;
   }
   async post() {
-    console.log(this)
-    await myfetch('/part/attach', 'POST', this)
+    return await myfetch('/part/attach', 'POST', this)
       .then(updateSummary)
       .catch(handleError)
   }

@@ -7,7 +7,7 @@
   import { createEventDispatcher } from 'svelte';
   const dispatch = createEventDispatcher()
 
-  export let type: Type;
+  export let type: Type|undefined;
   export let part: Part;
   export let maxdate: Date|undefined = undefined;
   export let mindate: Date|undefined  = undefined;

@@ -3,7 +3,7 @@
     Modal, ModalBody, ModalHeader,
     FormGroup, InputGroup, Form
   } from '@sveltestrap/sveltestrap';
-  import {myfetch, handleError, parts, types, updateSummary, attachments, filterValues, by} from '../lib/store';
+  import {handleError, types, attachments, filterValues, by} from '../lib/store';
   import ModalFooter from './ModalFooter.svelte'
   import {AttEvent, Part, Attachment, maxDate} from '../lib/types'
   import NewForm from './NewForm.svelte';
@@ -30,8 +30,7 @@
         await new AttEvent(last.part_id, date, last.gear, last.hook).post();
       }
       if (dispose || part_changed){
-        await myfetch('/part', 'PUT', newpart)
-          .then(data => parts.updateMap([data]))
+        await newpart.update();
       }
     }
     catch(e: any) {handleError(e) }

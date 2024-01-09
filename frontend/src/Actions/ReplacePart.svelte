@@ -6,7 +6,7 @@
     ModalBody
   } from '@sveltestrap/sveltestrap';
   import {AttEvent, Attachment, Part, type Type, maxDate} from '../lib/types';
-  import {myfetch, handleError, types, parts, user} from '../lib/store';
+  import {types, parts, user} from '../lib/store';
   import ModalFooter from './ModalFooter.svelte'
   import NewForm from './NewForm.svelte';
   import Dispose from '../Widgets/Dispose.svelte';
@@ -22,21 +22,20 @@
   let mindate: Date;
   const toggle = () => isOpen = false
 
-  async function attachPart (part: Part) {
+  async function attachPart (part: Part | void) {
+    if (!part) throw ("Replace: update part did fail")
     await new AttEvent(part.id, part.purchase, gear, hook).post();
     
     if (dispose) {
       oldpart.disposed_at = part.purchase;
-      await myfetch('/part', 'PUT', oldpart)
-        .then((data) => parts.updateMap([data]))
+      await oldpart.update()
     }
   }
 
   async function action () {
     disabled = true;
-    await myfetch('/part', 'POST', newpart)
+    await newpart.create()
       .then(attachPart)
-      .catch(handleError)
     isOpen = false;
     isOpen = false;
 }

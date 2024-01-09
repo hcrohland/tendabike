@@ -3,7 +3,7 @@
     Modal, ModalHeader, ModalBody,
   } from '@sveltestrap/sveltestrap';
   import ModalFooter from './ModalFooter.svelte'
-  import {myfetch, handleError, types, fmtDate, parts} from '../lib/store';
+  import {types, fmtDate} from '../lib/store';
   import {Part} from '../lib/types';  
 
   let part: Part;
@@ -12,9 +12,7 @@
 
   async function action () {
     part.disposed_at = undefined;
-    await myfetch('/part', 'PUT', part)
-      .then(data => parts.updateMap([data]))
-      .catch(handleError)
+    await part.update()
     isOpen = false;  
   }  
   

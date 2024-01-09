@@ -4,8 +4,8 @@ import { Activity, Part, Attachment, type Type, type ActType, type User } from '
 
 export { filterValues, by } from './mapable';
 
-export function fmtDate(date: Date | string | number) {
-    return new Date(date).toLocaleDateString(navigator.language)
+export function fmtDate(date: Date | undefined) {
+    return date ? date.toLocaleDateString(navigator.language) : 'never'
 }
 
 export function fmtSeconds(sec_num: number | undefined) {

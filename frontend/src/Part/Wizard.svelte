@@ -1,12 +1,13 @@
 <script lang="ts">
-  import { Input, InputGroup, Table, Container, Button } from "@sveltestrap/sveltestrap";
-  import { AttEvent, Attachment, Part, type Type } from "../lib/types";
   import {
-    filterValues,
-    types,
-    handleError,
-    myfetch,
-  } from "../lib/store";
+    Input,
+    InputGroup,
+    Table,
+    Container,
+    Button,
+  } from "@sveltestrap/sveltestrap";
+  import { AttEvent, Attachment, Part, type Type } from "../lib/types";
+  import { filterValues, types } from "../lib/store";
   import Switch from "../Widgets/Switch.svelte";
 
   export let gear: Part;
@@ -21,16 +22,15 @@
   };
 
   const groupBy = function (xs: Type[]) {
-    return xs.reduce(function (rv: Group[], x) {
-      (rv[x.group] = rv[x.group] || {
-        types: [],
-        group: x.group,
-        vendor: undefined,
-        model: undefined,
-        enabled: false,
-      }).types.push(x);
+    return xs.reduce(function (rv: { [key: string]: Group }, x) {
+      if (x.group) {
+        (rv[x.group] = rv[x.group] || {
+          types: [],
+          group: x.group,
+        }).types.push(x);
+      }
       return rv;
-    }, []);
+    }, {});
   };
 
   function groupAvailable(group: Group) {
@@ -48,7 +48,9 @@
   }
 
   let allgroups = Object.values(
-    groupBy(filterValues(types, (t) => t.group && t.main == gear.what))
+    groupBy(
+      filterValues(types, (t) => t.group != undefined && t.main == gear.what),
+    ),
   );
   let groups = allgroups.filter(groupAvailable);
 
@@ -57,15 +59,16 @@
     return r && (!v.enabled || (v.enabled && v.vendor != ""));
   }, true);
 
-  async function attachPart(part: Part, hook: number) {
+  async function attachPart(part: Part | void, hook: number) {
+    if (!part) throw "Wizard: part create failed";
     await new AttEvent(part.id, part.purchase, gear.id, hook).post();
   }
 
   async function installPart(newpart: Part, hook: number) {
     disabled = true;
-    await myfetch("/part", "POST", newpart)
-      .then((p) => attachPart(p, hook))
-      .catch(handleError);
+    await newpart
+      .create()
+      .then((p) => attachPart(p, hook));
   }
 
   function setGroup(g: Group) {

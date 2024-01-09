@@ -6,14 +6,14 @@
     Form
   } from '@sveltestrap/sveltestrap';
   import {AttEvent, Part, type Type} from '../lib/types';
-  import {myfetch, handleError, user, attachments, filterValues} from '../lib/store';
+  import {user, attachments, filterValues} from '../lib/store';
   import ModalFooter from './ModalFooter.svelte'
   import NewForm from './NewForm.svelte';
   import TypeForm from './TypeForm.svelte';
 
   let part: Part, newpart: Part;
   let gear: Part;
-  let type: Type;
+  let type: Type | undefined;
   let hook: number;
   let disabled = true;
   let isOpen = false;
@@ -30,15 +30,14 @@
     isOpen = true
   }
 
-  async function attachPart (part: Part) {
+  async function attachPart (part: Part | void) {
+    if (!part) return;
     await new AttEvent(part.id, part.purchase, gear.id, hook).post()
   }
 
   async function action () {
     disabled = true;
-    await myfetch('/part', 'POST', newpart)
-      .then(attachPart)
-      .catch(handleError)
+    await newpart.create().then(attachPart);
     isOpen = false;
   }
 
@@ -55,12 +54,12 @@
   }
 
   part = new Part({
-      owner: $user.id, 
+      owner: $user && $user.id, 
       purchase: new Date(),
       last_used: new Date()
     });
 
-  const setType = (e: CustomEvent<any>) => {
+  const setType = (e: CustomEvent<{type: Type, hook: number}>) => {
     type = e.detail.type;
     hook = e.detail.hook;
     part.what = type.id;
