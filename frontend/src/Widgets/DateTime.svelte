@@ -25,7 +25,7 @@
 		minDate: mindate,
 		maxDate: maxdate
 	}
-	export function roundTime(date: Date, minutes?: number) {
+	function roundTime(date: Date, minutes?: number) {
 		if (!minutes) minutes = 15
 		date = date ? new Date(date) : new Date()
     date.setMinutes(Math.floor(date.getMinutes()/15)*15)
