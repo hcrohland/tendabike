@@ -197,6 +197,13 @@ impl StravaUser {
 
         Ok(parts)
     }
+
+    pub async fn process(
+        user: &mut impl StravaPerson,
+        conn: &mut impl StravaStore,
+    ) -> TbResult<Summary> {
+        return event::process(user, conn).await
+    }
 }
 
 #[derive(Debug, Serialize)]
