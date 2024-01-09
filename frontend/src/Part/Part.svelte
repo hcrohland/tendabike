@@ -8,10 +8,11 @@
   import Subparts from './Subparts.svelte'
   import GearCard from './GearCard.svelte'
   import PartHist from './PartHist.svelte'
+  import { Part } from '../lib/types';
  
-  export let params;
+  export let params: {id: number, what:number};
   
-  let installPart, changePart, recoverPart, attachPart;
+  let installPart: (p: Part) => void, changePart: (p: Part) => void, recoverPart: (p: Part) => void, attachPart: (p: Part) => void;
 
   $: part = $parts[params.id]; 
   $: hook = types[part.what];
@@ -33,7 +34,7 @@
   </ButtonGroup>
 </GearCard>
 
-<PartHist id={part.id} />
+<PartHist id={params.id} />
 <Subparts gear={part} {hook} />
 
 <AttachPart bind:attachPart />
