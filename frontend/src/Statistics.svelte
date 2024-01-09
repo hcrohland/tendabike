@@ -75,8 +75,6 @@
 
   function buildYears(gear: Part[]): Year[] {
     const g = gear.map((g) => g.id);
-    console.log(g);
-    
     const minyear = Object.values($activities)
       .reduce((min, a) => (min <= a.start ? min : a.start), new Date())
       .getFullYear();
