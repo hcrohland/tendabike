@@ -1,6 +1,6 @@
 <script lang="ts">
   import {message} from './lib/store'
-  import {Container, Row, Col, Toast, ToastBody, ToastHeader} from '@sveltestrap/sveltestrap'
+  import {Modal, ModalBody, ModalHeader} from '@sveltestrap/sveltestrap'
 
   function toggle() {
     let m = $message
@@ -8,21 +8,11 @@
     message.set(m)
   }
 </script>
-{#if $message.active}
-<Container>
-  <Row class="justify-content-center">
-    <Col xs="auto">
-      <div class="p-2 bg-danger mb-2">
-        <Toast  class="mr-1">
-          <ToastHeader {toggle}>
-            {$message.status}
-          </ToastHeader>
-          <ToastBody>
-            {@html $message.message}
-          </ToastBody>
-        </Toast> 
-      </div>
-    </Col>
-  </Row>
-</Container>
-{/if}
+<Modal isOpen={$message.active}>
+  <ModalHeader {toggle}>
+      {$message.status}
+  </ModalHeader>
+  <ModalBody>
+    {@html $message.message}
+  </ModalBody>
+</Modal> 
