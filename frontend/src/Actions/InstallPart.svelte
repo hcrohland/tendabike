@@ -5,8 +5,8 @@
     ModalBody,
     Form
   } from '@sveltestrap/sveltestrap';
-  import {type AttEvent, Part, type Type} from '../lib/types';
-  import {myfetch, handleError, user, updateSummary, attachments, filterValues} from '../lib/store';
+  import {AttEvent, Part, type Type} from '../lib/types';
+  import {myfetch, handleError, user, attachments, filterValues} from '../lib/store';
   import ModalFooter from './ModalFooter.svelte'
   import NewForm from './NewForm.svelte';
   import TypeForm from './TypeForm.svelte';
@@ -20,31 +20,18 @@
   const toggle = () => isOpen = false
   export const installPart = (g: Part) => {
     gear = g;
-    part = {
-      owner: $user.id, 
-      what: undefined, 
-      count:0, climb:0, descend:0, distance:0, time: 0,
-      name: '', 
-      vendor: '', 
-      model: '', 
+    part = new Part ({
+      owner: $user && $user.id, 
       purchase: new Date(),
       last_used: new Date()
-    };
+    });
     disabled = true;
     type = undefined;
     isOpen = true
   }
 
-  async function attachPart (part) {
-    let attach: AttEvent = {
-      part_id: part.id,
-      time: part.purchase,
-      gear: gear.id,
-      hook
-    }
-    await myfetch('/part/attach', 'POST', attach)
-        .then(updateSummary)
-        .catch(handleError)
+  async function attachPart (part: Part) {
+    await new AttEvent(part.id, part.purchase, gear.id, hook).post()
   }
 
   async function action () {
@@ -67,30 +54,25 @@
     }
   }
 
-  part = {
+  part = new Part({
       owner: $user.id, 
-      what: undefined, 
-      count:0, climb:0, descend:0, distance:0, time: 0,
-      name: '', 
-      vendor: '', 
-      model: '', 
       purchase: new Date(),
       last_used: new Date()
-    };
+    });
 
-  const setType = (e) => {
+  const setType = (e: CustomEvent<any>) => {
     type = e.detail.type;
     hook = e.detail.hook;
     part.what = type.id;
     part.purchase = guessDate(gear, type, hook)
   }
-  const setPart = (e) => {
-    newpart = e.detail
+  const setPart = (e: CustomEvent<Part>) => {
+    newpart = new Part(e.detail);
     disabled = false
   }
 
 </script>
-<Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
+<Modal {isOpen} {toggle} backdrop={false}>
   <ModalHeader {toggle}>  
     <TypeForm {gear} on:change={setType}/>
   </ModalHeader>

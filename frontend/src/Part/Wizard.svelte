@@ -1,11 +1,10 @@
 <script lang="ts">
   import { Input, InputGroup, Table, Container, Button } from "@sveltestrap/sveltestrap";
-  import { type AttEvent, Attachment, Part, type Type } from "../lib/types";
+  import { AttEvent, Attachment, Part, type Type } from "../lib/types";
   import {
     filterValues,
     types,
     handleError,
-    updateSummary,
     myfetch,
   } from "../lib/store";
   import Switch from "../Widgets/Switch.svelte";
@@ -58,15 +57,8 @@
     return r && (!v.enabled || (v.enabled && v.vendor != ""));
   }, true);
 
-  async function attachPart(part, hook) {
-    let attach: AttEvent = {
-      part_id: part.id,
-      time: part.purchase,
-      gear: gear.id,
-      hook: hook,
-    };
-
-    await myfetch("/part/attach", "POST", attach).then(updateSummary);
+  async function attachPart(part: Part, hook: number) {
+    await new AttEvent(part.id, part.purchase, gear.id, hook).post();
   }
 
   async function installPart(newpart: Part, hook: number) {
@@ -79,7 +71,7 @@
   function setGroup(g: Group) {
     if (!g.enabled) return;
 
-    let p: Part = Object.assign({}, gear);
+    let p: Part = new Part(gear);
 
     p.id = undefined;
     p.name = g.vendor + " " + g.model;

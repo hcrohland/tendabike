@@ -5,8 +5,8 @@
     ModalHeader,
     ModalBody
   } from '@sveltestrap/sveltestrap';
-  import {type AttEvent, Attachment, Part, type Type, maxDate} from '../lib/types';
-  import {myfetch, handleError, types, parts, user, updateSummary} from '../lib/store';
+  import {AttEvent, Attachment, Part, type Type, maxDate} from '../lib/types';
+  import {myfetch, handleError, types, parts, user} from '../lib/store';
   import ModalFooter from './ModalFooter.svelte'
   import NewForm from './NewForm.svelte';
   import Dispose from '../Widgets/Dispose.svelte';
@@ -23,14 +23,7 @@
   const toggle = () => isOpen = false
 
   async function attachPart (part: Part) {
-    let evt: AttEvent = {
-      gear,
-      hook,
-      part_id: part.id,
-      time: part.purchase,
-    }
-    await myfetch('/part/attach', 'POST', evt)
-      .then(updateSummary)
+    await new AttEvent(part.id, part.purchase, gear, hook).post();
     
     if (dispose) {
       oldpart.disposed_at = part.purchase;
@@ -56,7 +49,7 @@ export const replacePart = (attl: Attachment) => {
     type = types[oldpart.what];
     prefix = types[attl.hook].prefix;
     part = new Part({
-        owner: $user.id, 
+        owner: $user && $user.id, 
         what: oldpart.what, 
         name: oldpart.name, 
         vendor: oldpart.vendor, 
@@ -67,8 +60,8 @@ export const replacePart = (attl: Attachment) => {
     isOpen = true;
   }
 
-  const setPart = (e: any) => {
-    newpart = e.detail
+  const setPart = (e: CustomEvent<Part>) => {
+    newpart = new Part(e.detail);
     disabled = false
   }
   

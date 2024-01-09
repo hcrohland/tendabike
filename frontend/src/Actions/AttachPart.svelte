@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Modal, ModalHeader, ModalBody } from '@sveltestrap/sveltestrap';
   import ModalFooter from './ModalFooter.svelte'
-  import {myfetch, handleError, updateSummary, types} from '../lib/store';
-  import {type AttEvent, Part} from '../lib/types';  
+  import {types} from '../lib/store';
+  import {AttEvent, Part} from '../lib/types';  
   import AttachForm from './AttachForm.svelte';
 
   let attach: AttEvent;
@@ -13,9 +13,8 @@
 
   async function action () {
     disabled = true;
-    await myfetch('/part/attach', 'POST', attach)
-      .then(updateSummary)
-      .catch(handleError)
+    
+    await attach.post();
     isOpen = false;  
   }  
   

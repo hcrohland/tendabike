@@ -1,4 +1,4 @@
-import { fmtDate } from "./store";
+import { fmtDate, handleError, myfetch, updateSummary } from "./store";
 export const maxDate = new Date("2999-12-31");
 
 export class Usage {
@@ -151,10 +151,26 @@ export type ActType = {
   gear_type: number
 }
 
-export type AttEvent = {
+export class AttEvent {
   part_id: number;
   time: Date;
   gear: number;
   hook: number;
+  constructor (part: number | undefined, time: Date, gear: number | undefined, hook: number) {
+    if (gear == undefined || part == undefined) {
+      console.error("part or gear not defined: ", part, gear);
+      throw ("part or gear not defined")
+    }
+    this.part_id = part;
+    this.time = time;
+    this.gear = gear;
+    this.hook = hook;
+  }
+  async post() {
+    console.log(this)
+    await myfetch('/part/attach', 'POST', this)
+      .then(updateSummary)
+      .catch(handleError)
+  }
 }
   
