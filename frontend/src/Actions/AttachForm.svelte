@@ -21,7 +21,7 @@
   export let part: Part;
   export let disabled = true;
 
-  let type = types[part.what]; 
+  let type = part.type(); 
   let options = filterValues($parts, (p) => (type.main == p.what && ! p.disposed_at));
   
   let  time: Date = lastDetach(part);

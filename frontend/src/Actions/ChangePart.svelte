@@ -41,8 +41,8 @@
   export const changePart = (p: Part) => {
     part = p;
     newpart = p;
-    type = types[part.what];
-    atts = filterValues($attachments, (a) => a.part_id == part.id).sort(by("attached"))
+    type = part.type();
+    atts = part.attachments($attachments);
     last = atts[0];
     start = atts.length > 0 ? atts[atts.length-1].attached : undefined
     date = last && last.detached < maxDate ? last.detached : new Date()

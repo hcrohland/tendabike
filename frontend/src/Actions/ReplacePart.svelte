@@ -45,7 +45,7 @@ export const replacePart = (attl: Attachment) => {
     hook = attl.hook;
     gear= attl.gear;
     mindate = attl.attached;
-    type = types[oldpart.what];
+    type = oldpart.type();
     prefix = types[attl.hook].prefix;
     part = new Part({
         owner: $user && $user.id, 

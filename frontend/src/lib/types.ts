@@ -1,4 +1,4 @@
-import { fmtDate, handleError, myfetch, parts, updateSummary } from "./store";
+import { by, filterValues, fmtDate, handleError, myfetch, parts, types, updateSummary } from "./store";
 export const maxDate = new Date("2999-12-31");
 
 export class Usage {
@@ -80,6 +80,14 @@ export class Part extends Usage  {
       return await myfetch('/part', 'PUT', this)
         .then(data => parts.updateMap([data]))
         .catch(handleError)
+    }
+
+    type() {
+      return types[this.what]
+    }
+
+    attachments(atts: {[key:string]: Attachment}) {
+      return filterValues(atts, (a) => a.part_id == this.id).sort(by("attached"))
     }
 }
 
