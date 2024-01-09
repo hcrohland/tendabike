@@ -1,4 +1,5 @@
 <script>
+  // @ts-nocheck
   import { createEventDispatcher } from "svelte";
 
   /** @type {TableColumns<any>} */
