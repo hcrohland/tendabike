@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Modal, ModalHeader, ModalBody, Table } from '@sveltestrap/sveltestrap';
-  import { fmtDate } from '../store';
-  import type { Activity } from '../types';
+  import { fmtDate } from '../lib/store';
+  import { Activity } from '../lib/types';
 
   export let activities: Activity[];
   export let isOpen = true;
@@ -9,7 +9,7 @@
 
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
+<Modal {isOpen} {toggle} backdrop={false}>
   <ModalHeader {toggle}> 
     <slot>Activities</slot>
   </ModalHeader>

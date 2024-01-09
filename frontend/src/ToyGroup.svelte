@@ -1,16 +1,16 @@
 <script lang="ts">
   import { Col, Row } from '@sveltestrap/sveltestrap';
   import MainCard from './Part/MainCard.svelte';
-  import {filterValues, by, types, parts, category, activities} from './store';
+  import {filterValues, by, types, parts, category, activities} from './lib/store';
   import ShowAll from './Widgets/ShowHist.svelte';
-  import type {Type} from './types';
+  import type {Type} from './lib/types';
 import SetDefault from './Actions/SetDefault.svelte';
 
   export let params;
   
   // Cannot use category directly since it 
   // is unset during destroy and the router gets confused
-  let type: Type, show_hist;
+  let type: Type, show_hist: boolean;
   if (params) {
     type = types[params.category];
   } else {
@@ -24,7 +24,7 @@ import SetDefault from './Actions/SetDefault.svelte';
 
 {#if type }
   <SetDefault {type}></SetDefault>
-  <Row border class="p-sm-2">
+  <Row class="p-sm-2">
     {#each gears as part, i  (part.id)}
       <Col md=6 class="p-0 p-sm-2">
         <MainCard {part} display={i<4 || show_hist} />

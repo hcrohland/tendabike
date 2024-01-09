@@ -1,9 +1,9 @@
 <script lang="ts">
-import {fmtSeconds, fmtNumber} from './store'
-import type {Usage} from './types'
+import {fmtSeconds, fmtNumber} from './lib/store'
+import {Usage} from './lib/types'
  
 export let header = false
-export let usage: Usage;
+export let usage: Usage | undefined = undefined;
 
 </script>
 

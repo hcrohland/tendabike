@@ -18,7 +18,7 @@ export function mapObject<V>(field: keyof V, del?: (v: V) => boolean): (a: map<V
     }
 }
 
-export function mapable<V>(field: keyof V, prepfn?: (v: V) => V, delfn?: (v: V) => boolean) {
+export function mapable<V>(field: keyof V, prepfn?: (v: any) => V, delfn?: (v: V) => boolean) {
     let prepfn1 = prepfn || ((v) => v);
     const { subscribe, set, update } = writable<{ [key: string]: V }>({});
     

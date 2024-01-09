@@ -3,43 +3,37 @@
     Modal, ModalBody, ModalHeader,
     FormGroup, InputGroup, Form
   } from '@sveltestrap/sveltestrap';
-  import {myfetch, handleError, parts, types, updateSummary, attachments, filterValues, by, maxDate} from '../store';
+  import {handleError, types, attachments, filterValues, by} from '../lib/store';
   import ModalFooter from './ModalFooter.svelte'
-  import type {AttEvent, Part, Attachment} from '../types'
+  import {AttEvent, Part, Attachment, maxDate} from '../lib/types'
   import NewForm from './NewForm.svelte';
   import Dispose from '../Widgets/Dispose.svelte';
   import DateTime from '../Widgets/DateTime.svelte';
   import Switch from '../Widgets/Switch.svelte';
   
   let atts: Attachment[]
-  let last: Attachment, start;
-  let part: Part, newpart: Part;
+  let last: Attachment;
+  let start: Date | undefined;
+  let part: Part;
+  let newpart: Part;
   let type = types[1]; // will be set later
   let isGear = false
   let isOpen = false;
-  let disabled = true, detach, part_changed;
-  let dispose = false, date;
+  let disabled = true, detach: boolean, part_changed: boolean, dispose = false;
+  let date: Date;
 
   async function savePart () {
     try {
       disabled = true;
       if (dispose) newpart.disposed_at = date
       if (detach) {
-        let evt: AttEvent = {
-          part_id: last.part_id,
-          gear: last.gear,
-          hook: last.hook,
-          time: date  
-        }
-        await myfetch('/part/detach', 'POST', evt)
-          .then(updateSummary)
+        await new AttEvent(last.part_id, date, last.gear, last.hook).post();
       }
       if (dispose || part_changed){
-        await myfetch('/part', 'PUT', newpart)
-          .then(data => parts.updateMap([data]))
+        await newpart.update();
       }
     }
-    catch(e) {handleError(e) }
+    catch(e: any) {handleError(e) }
 
     isOpen = false;
   }
@@ -60,8 +54,8 @@
   }
 
   const toggle = () => isOpen = false
-  const setPart = (e) => {
-    newpart = e.detail
+  const setPart = (e: CustomEvent<Part>) => {
+    newpart = new Part(e.detail)
     part_changed = true;
   }
 
@@ -69,7 +63,7 @@
 
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
+<Modal {isOpen} {toggle} backdrop={false}>
   <ModalHeader {toggle}> Change {type.name} details </ModalHeader>
   <ModalBody>
     <Form>

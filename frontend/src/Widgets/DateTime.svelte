@@ -1,8 +1,8 @@
 <script lang="ts">
   
   export let date = new Date;
-	export let mindate = undefined;
-	export let maxdate = undefined;
+	export let mindate:any = undefined;
+	export let maxdate:any = undefined;
 
 	const props = Object.assign({}, $$props);
 	delete props.date;
@@ -36,13 +36,12 @@
     return date
 	}	
 
-	function handleChange(event) {
+	function handleChange(event:any) {
 		const [ selectedDates ] = event.detail;
 		date = selectedDates[0] as Date
 	}
 
 	date = roundTime(date)
-	console.log(date);
 	
 </script>
 

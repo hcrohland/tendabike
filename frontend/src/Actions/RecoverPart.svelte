@@ -3,18 +3,16 @@
     Modal, ModalHeader, ModalBody,
   } from '@sveltestrap/sveltestrap';
   import ModalFooter from './ModalFooter.svelte'
-  import {myfetch, handleError, types, fmtDate, parts} from '../store';
-  import type {Part} from '../types';  
+  import {types, fmtDate} from '../lib/store';
+  import {Part} from '../lib/types';  
 
   let part: Part;
   let isOpen = false;
   const toggle = () => isOpen = false
 
   async function action () {
-    part.disposed_at = null;
-    await myfetch('/part', 'PUT', part)
-      .then(data => parts.updateMap([data]))
-      .catch(handleError)
+    part.disposed_at = undefined;
+    await part.update()
     isOpen = false;  
   }  
   
@@ -24,7 +22,7 @@
   };  
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
+<Modal {isOpen} {toggle} backdrop={false}>
   <ModalHeader {toggle}> 
     Do you really have {types[part.what].name} {part.name} {part.vendor} {part.model} back?
   </ModalHeader>

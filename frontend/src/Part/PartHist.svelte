@@ -1,9 +1,9 @@
 <script lang="ts">
-  import {filterValues, parts, attachments, types, by, attTime} from '../store'
+  import {filterValues, parts, attachments, types, by} from '../lib/store'
   import Usage from '../Usage.svelte'
   import {link} from 'svelte-spa-router'
  
-  export let id;
+  export let id: number;
   
   $: atts = filterValues($attachments, (a) => a.part_id == id).sort(by("attached"))
   
@@ -35,7 +35,7 @@
           {:else}
             N/A
           {/if}
-          <td>{attTime(att)}</td>
+          <td>{att.fmtTime()}</td>
           <Usage usage={att} />
         </tr>
       {/each}

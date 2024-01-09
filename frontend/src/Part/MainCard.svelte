@@ -3,7 +3,7 @@
     <a href="/part/{part.id}" 
       use:link
       class="badge badge-secondary text-decoration-none" 
-      title={"View "+ $category.name.toLowerCase() + " details"}>
+      title={"View "+ ($category ? $category.name.toLowerCase() : "") + " details"}>
       &Longrightarrow;
     </a>
   </div>
@@ -11,8 +11,8 @@
 
 <script lang="ts">
   import GearCard from './GearCard.svelte';
-  import type { Part } from '../types';
-  import {category} from '../store'
+  import { Part } from '../lib/types';
+  import {category} from '../lib/store'
   import {link} from 'svelte-spa-router'
 
   export let part: Part

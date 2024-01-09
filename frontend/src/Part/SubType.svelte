@@ -1,28 +1,26 @@
 <script lang="ts">
 import {DropdownItem} from '@sveltestrap/sveltestrap';
-import {isAttached, attTime, parts} from '../store'
+import {parts} from '../lib/store'
 import Usage from '../Usage.svelte'
 import ReplacePart from '../Actions/ReplacePart.svelte'
 import AttachPart from '../Actions/AttachPart.svelte'
-import type {Attachment, Type} from '../types';
+import {Part, Attachment, Type} from '../lib/types';
 import Menu from '../Widgets/Menu.svelte';
 import ShowAll from '../Widgets/ShowHist.svelte';
 import {link} from 'svelte-spa-router'
 
-export let header = false;
 export let attachments: Attachment[] = [];
 export let level: number = 0;
 export let prefix = "";
 export let type: Type | undefined = undefined;
-export let hook: Type | undefined = undefined;
-void(hook) // get rid of warning...
+export const hook: Type | undefined = undefined;
 
 let show_hist = false; 
-let attachPart, replacePart;
+let attachPart: (p: Part) => void, replacePart: (p: Attachment) => void;
 
 </script>
 
-{#if header}
+{#if type == undefined}
   <tr>
     <th scope="col">Attached parts</th>
     <th scope="col">Name</th>
@@ -41,7 +39,7 @@ let attachPart, replacePart;
             <ShowAll bind:show_hist/>
           {/if}
         </th>  
-        {#if isAttached(att)}
+        {#if att.isAttached()}
           <td>
             {#if part}
               <a href="/part/{part.id}" 
@@ -54,7 +52,7 @@ let attachPart, replacePart;
               {att.name}
             {/if}
           </td>
-          <td> {attTime(att)} </td>  
+          <td> {att.fmtTime()} </td>  
           <Usage usage={part} />
           <td>
             <Menu>
@@ -85,7 +83,7 @@ let attachPart, replacePart;
               {att.name}
             {/if}
           </td>
-          <td> {attTime(att)} </td>  
+          <td> {att.fmtTime()} </td>  
           <Usage usage={att} />
           <td>
               <Menu>

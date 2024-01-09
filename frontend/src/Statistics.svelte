@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { activities, parts, by, filterValues } from "./store";
+  import { activities, parts, by, filterValues } from "./lib/store";
   import {
     Row,
     Col,
@@ -7,13 +7,33 @@
     InputGroup,
     InputGroupText,
   } from "@sveltestrap/sveltestrap";
-  import type { Part, Usage, Activity } from "./types";
-  import { addToUsage, newUsage } from "./types";
+  import { type Part, Activity } from "./lib/types";
+  import { Usage } from "./lib/types";
   import Plotly from "./Widgets/Plotly.svelte";
   import Switch from "./Widgets/Switch.svelte";
 
-  type Day = Usage & {
+  class Day extends Usage  {
     start: Date;
+    constructor(a: Activity | Date | Day) {
+      if (a instanceof Date) {
+        super();
+        this.start = new Date(a)
+      } else if (a instanceof Activity ) {
+        let b = {
+          count: a.count || 0,
+          distance: (a.distance || 0) / 1000,
+          time: (a.time || a.duration || 0) / 3600,
+          duration: (a.duration || 0)/ 3600,
+          descend: a.descend || a.climb|| 0,
+          climb: a.climb || 0,
+        }
+        super(b);
+        this.start = a.start;
+      } else {
+        super (a)
+        this.start = new Date(a.start)
+      }
+    } 
   };
 
   type Year = {
@@ -24,15 +44,16 @@
 
   function sumByMonths(arr: Day[]) {
     return Object.values(
-      arr.reduce<{ [s: string]: Day }>((acc, a: Activity) => {
-        let start = new Date(a.start);
-        start.setHours(0, 0, 0, 0);
-        start.setDate(13);
-        let diy = start.toString();
-        if (!acc[diy]) acc[diy] = { start, ...newUsage() };
-        addToUsage(acc[diy], a);
-        return acc;
-      }, {}),
+      arr.reduce<{ [s: string]: Day }> 
+      ((acc, a: Day) => {
+          let start = new Date(a.start);
+          start.setHours(0, 0, 0, 0);
+          start.setDate(13);
+          let diy = start.toString();
+          if (!acc[diy]) acc[diy] = new Day(start);
+          acc[diy].add(a);
+          return acc;
+        }, {}),
     );
   }
 
@@ -43,26 +64,13 @@
     let start = arr.sort(by("start", true)).shift() as Day;
     return arr.reduce(
        (r, a) => {
-        let b = { ...a }; // do not modify arr
-        addToUsage(b, r[r.length - 1]);
+        let b = new Day(a); // do not modify arr
+        b.add(r[r.length - 1]);
         r.push(b);
         return r;
       },
       [start]
     )
-  }
-
-  // create a new - human readable - day out of an activity
-  function activity2Day(a: Activity): Day {
-    return {
-      start: new Date(a.start),
-      count: a.count || 0,
-      distance: (a.distance || 0) / 1000,
-      time: (a.time || a.duration || 0) / 3600,
-      duration: (a.duration || 0)/ 3600,
-      descend: a.descend || a.climb|| 0,
-      climb: a.climb || 0,
-    };
   }
 
   function buildYears(gear: Part[]): Year[] {
@@ -83,7 +91,7 @@
           (g.length == 0 || g.includes(a.gear)),
       )
         // and translate usage data to human readable form
-        .map(activity2Day);
+        .map(a => new Day(a));
       ret.push({
         year,
         days: aggregateDays(acts),
@@ -102,7 +110,7 @@
   ) {
     return {
       x: cum.map((a) => a.start),
-      y: cum.map((a) => (field2 ? a[field] - a[field2] : a[field])),
+      y: cum.map((a) => (field2 ? (a[field] as number) - (a[field2] as number) : (a[field] as number ))),
       type: months ? "bar" : "scatter",
       name: title ? title : field2 ? field + "-" + field2 : field,
       line: { dash: "solid", shape: "hv" },
@@ -111,13 +119,13 @@
   }
 
   function getPlot(
-    _trigger,
+    _trigger: any,
     ncumm: number,
-    ncomp: number,
-    months,
-    title,
-    fields,
-    addlayout?,
+    ncomp: number | null,
+    months: boolean,
+    title: string,
+    fields: string[][],
+    addlayout?: any,
   ) {
     const colorway2 = ["steelblue", "lightblue", "limegreen", "lightgreen"];
     const colorway = [colorway2[0], colorway2[2]];
@@ -156,7 +164,7 @@
         let trace = get_trace(
           months ? year.months : year.days,
           months,
-          field[0],
+          field[0] as keyof Usage,
           field[1],
         );
         trace.x.map((a) => a.setFullYear(years[0].year));
@@ -194,12 +202,12 @@
 
   let gear = [...gears];
   let cumm = 0;
-  let comp = null;
+  let comp: number | null = null;
   let perMonths = false;
   $: years = buildYears(gear);
 </script>
 
-<Row border class="p-sm-2">
+<Row class="p-sm-2">
   <Col xs="auto" class="p-0 p-sm-2">
     <InputGroup>
       <InputGroupText>Your statistics for</InputGroupText>
@@ -229,7 +237,7 @@
     </InputGroup>
   </Col>
   <Col class="p-0 p-sm-2" />
-  <Col xs="auto" class="p-0 p-sm-2" float="right">
+  <Col xs="auto" class="p-0 p-sm-2">
     <InputGroup>
       <select
         class="form-select"
@@ -244,7 +252,7 @@
     </InputGroup>
   </Col>
 </Row>
-<Row border class="p-sm-2">
+<Row class="p-sm-2">
   <Col class="p-0 p-sm-2">
     <Plotly
       {...getPlot(years, cumm, comp, perMonths, "Elevation (m)", [

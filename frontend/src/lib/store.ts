@@ -1,13 +1,11 @@
 import { writable } from "svelte/store";
 import { mapable, mapObject} from "./mapable";
-import type { Part, Attachment, Type, Activity, ActType, User } from './types';
+import { Activity, Part, Attachment, Type, type ActType, type User } from './types';
 
 export { filterValues, by } from './mapable';
 
-export const maxDate = new Date("2999-12-31");
-
-export function fmtDate(date: Date | string | number) {
-    return new Date(date).toLocaleDateString(navigator.language)
+export function fmtDate(date: Date | undefined) {
+    return date ? date.toLocaleDateString(navigator.language) : 'never'
 }
 
 export function fmtSeconds(sec_num: number | undefined) {
@@ -64,12 +62,12 @@ export function handleError(e: Error) {
     })
 }
 
-export const icons = {
-    "1": "flaticon-mountain-bike",
-    "301": "flaticon-run",
-    "302": "flaticon-snow",
-    "303": "flaticon-ski",
-}
+export const icons = new Map([
+    [1, "flaticon-mountain-bike"],
+    [301, "flaticon-run"],
+    [302, "flaticon-snow"],
+    [303, "flaticon-ski"],
+])
 
 export async function initData() {
     let u = await myfetch('/user')
@@ -80,7 +78,7 @@ export async function initData() {
     }
     return Promise.all([
         myfetch('/types/part')
-            .then((types) => types.map(prepTypes).reduce(mapObject('id'), {})), // data[0]
+            .then((types) => types.map((t:any) => new Type(t)).reduce(mapObject('id'), {})), // data[0]
         myfetch('/types/activity'), // data[1]
         myfetch('/user/summary')
             .then(setSummary),
@@ -113,39 +111,13 @@ export function updateSummary(data: Summary) {
 }
 
 export let types: { [key: number]: Type };
-function prepTypes(t: Type) {
-    t.prefix = t.name.split(' ').reverse()[1] || '';  // The first word iff there were two (hack!)
-    t.acts = [];
-    return t
-}
 
 export const category = writable<Type | undefined>(undefined);
 export const user = writable<User | undefined>(undefined);
 
-export const parts = mapable("id", prepParts);
-function prepParts(a: Part) { a.purchase = new Date(a.purchase); return a }
-
-export const activities = mapable("id", prepActs)
-function prepActs(a: Activity) { a.start = new Date(a.start); return a }
-
-export const attachments = mapable("idx", prepAtts, delAtt)
-function prepAtts(a: Attachment) {
-    a.attached = new Date(a.attached);
-    a.detached = new Date(a.detached);
-    a.idx = a.part_id + "/" + a.attached.getTime()
-    return a
-}
-function delAtt(a: Attachment) { return a.attached.getTime() == a.detached.getTime() }
-export function attTime(att: Attachment) {
-    let res = fmtDate(att.attached);
-    if (att.detached < maxDate)
-        res = res + " - " + fmtDate(att.detached)
-    return res
-}
-export function isAttached(att: Attachment, time?: Date | string | number) {
-    if (!time) time = new Date()
-    return att.attached <= time && time < att.detached
-}
+export const parts = mapable("id", (p) => new Part(p));
+export const activities = mapable("id", (a) => new Activity(a));
+export const attachments = mapable("idx", (a) => new Attachment(a), (a) => a.isEmpty())
 
 export const state = writable({ show_all_spares: false });
 export const message = writable({ active: false, message: "No message", status: "" })

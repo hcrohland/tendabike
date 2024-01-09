@@ -5,8 +5,8 @@
     ModalHeader,
     ModalBody
   } from '@sveltestrap/sveltestrap';
-  import type {AttEvent, Attachment, Part, Type} from '../types';
-  import {myfetch, handleError, types, parts, user, updateSummary, maxDate} from '../store';
+  import {AttEvent, Attachment, Part, Type, maxDate} from '../lib/types';
+  import {types, parts, user} from '../lib/store';
   import ModalFooter from './ModalFooter.svelte'
   import NewForm from './NewForm.svelte';
   import Dispose from '../Widgets/Dispose.svelte';
@@ -19,31 +19,23 @@
   let disabled = true;
   let dispose = false;
   let isOpen = false;
-  let mindate;
+  let mindate: Date;
   const toggle = () => isOpen = false
 
-  async function attachPart (part) {
-    let evt: AttEvent = {
-      gear,
-      hook,
-      part_id: part.id,
-      time: part.purchase,
-    }
-    await myfetch('/part/attach', 'POST', evt)
-      .then(updateSummary)
+  async function attachPart (part: Part | void) {
+    if (!part) throw ("Replace: update part did fail")
+    await new AttEvent(part.id, part.purchase, gear, hook).post();
     
     if (dispose) {
       oldpart.disposed_at = part.purchase;
-      await myfetch('/part', 'PUT', oldpart)
-        .then((data) => parts.updateMap([data]))
+      await oldpart.update()
     }
   }
 
   async function action () {
     disabled = true;
-    await myfetch('/part', 'POST', newpart)
+    await newpart.create()
       .then(attachPart)
-      .catch(handleError)
     isOpen = false;
     isOpen = false;
 }
@@ -55,28 +47,26 @@ export const replacePart = (attl: Attachment) => {
     mindate = attl.attached;
     type = types[oldpart.what];
     prefix = types[attl.hook].prefix;
-    part = {
-      owner: $user.id, 
-      what: oldpart.what, 
-      count:0, climb:0, descend:0, distance:0, time: 0,
-      name: oldpart.name, 
-      vendor: oldpart.vendor, 
-      model: oldpart.model, 
-      purchase: attl.detached < maxDate ? attl.detached : new Date(),
-      last_used: undefined
-    };
+    part = new Part({
+        owner: $user && $user.id, 
+        what: oldpart.what, 
+        name: oldpart.name, 
+        vendor: oldpart.vendor, 
+        model: oldpart.model, 
+        purchase: attl.detached < maxDate ? attl.detached : new Date(),
+      });
     dispose = false;
     isOpen = true;
   }
 
-  const setPart = (e) => {
-    newpart = e.detail
+  const setPart = (e: CustomEvent<Part>) => {
+    newpart = new Part(e.detail);
     disabled = false
   }
   
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
+<Modal {isOpen} {toggle} backdrop={false}>
   <ModalHeader {toggle}>  New {prefix} {type.name} for {$parts[gear].name} </ModalHeader>
   <ModalBody>
     <Form>

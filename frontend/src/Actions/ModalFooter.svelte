@@ -5,11 +5,11 @@
     Spinner,
   } from '@sveltestrap/sveltestrap';
   
-  export let toggle;
-  export let action;
+  export let toggle: () => void;
+  export let action: () => Promise<void>;
   export let disabled = false;
-  export let button
-  let promise;
+  export let button: any
+  let promise: Promise<void>;
 
 </script>
 

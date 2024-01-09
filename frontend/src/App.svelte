@@ -30,7 +30,7 @@
 	import About from "./About.svelte"
   import Message from './Message.svelte'
   import Admin from './Admin/Admin.svelte'
-	import {initData} from './store'
+	import {initData} from './lib/store'
   import Statistics from "./Statistics.svelte";
 	import ActTable from './Activities/ActTable.svelte';
 

@@ -9,12 +9,12 @@
     InputGroupText,
   } from "@sveltestrap/sveltestrap";
   import ModalFooter from "../Actions/ModalFooter.svelte";
-  import { handleError, myfetch } from "../store";
-  import type { User } from "../types";
+  import { handleError, myfetch } from "../lib/store";
+  import type { User } from "../lib/types";
   import DateTime from "../Widgets/DateTime.svelte";
 
   export let refresh: () => void;
-  let user: User;
+  let user: User | undefined;
   let date = new Date();
   let isOpen = false;
   let userParam: string;
@@ -28,9 +28,8 @@
     refresh();
   }
 
-  export const createSync = (id?: User) => {
-    user = id;
-    if (id) {
+  export const createSync = (user?: User) => {
+    if (user) {
       userParam = "&user_id=" + user.id;
     } else {
       userParam = "";
@@ -39,7 +38,7 @@
   };
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false} transitionOptions={{}}>
+<Modal {isOpen} {toggle} backdrop={false}>
   <ModalHeader {toggle}>
     Create sync Event
     {#if user}

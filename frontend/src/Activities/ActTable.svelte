@@ -7,9 +7,9 @@
 		filterValues,
 		fmtNumber,
 		fmtSeconds,
-	} from "../store";
+	} from "../lib/store";
 	import SvelteTable from "../Widgets/SvelteTable.svelte";
-	import { addToUsage, newUsage, type Activity, type Part } from "../types";
+	import { Activity } from "../lib/types";
 	import RangeSlider from "svelte-range-slider-pips";
 
 	export let acts: Activity[] = filterValues($activities, (a) =>
@@ -87,7 +87,7 @@
 			value: (v: Activity) => v.name || "",
 			searchValue: (v: Activity) => v.name,
 			sortable: true,
-			renderValue: (v) =>
+			renderValue: (v: Activity) =>
 				v.id 
 					? '<a href="/strava/activities/' + v.id + '" style="text-decoration:none" class="text-reset" target="_blank">' + v.name + '&nbsp;&nbsp;<img src="strava_grey.png" alt="View on Strava" title="View on Strava" />'
 					: v.name,
@@ -144,19 +144,17 @@
 	];
 
 	const totalsFunc = (r: Activity[]) => {
-		return r.reduce(
+		let res= r.reduce(
 			(total, row) => {
-				addToUsage(total, row);
-				total.cnt += 1;
-				total.name = "Totals: "+ total.cnt + " activities";
+				total.add(row);
+				total.name = "Totals: "+ total.count + " activities";
 				return total;
 			},
-			{
-				name: "Totals:",
-				cnt: 0,
-				...newUsage(),
-			},
-		) as Activity;
+			new Activity({}),
+		);
+		// @ts-ignore
+		res.start = undefined;
+		return res;
 	};
 </script>
 
