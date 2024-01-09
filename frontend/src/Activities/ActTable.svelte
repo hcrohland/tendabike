@@ -144,14 +144,17 @@
 	];
 
 	const totalsFunc = (r: Activity[]) => {
-		return r.reduce(
+		let res= r.reduce(
 			(total, row) => {
 				total.add(row);
 				total.name = "Totals: "+ total.count + " activities";
 				return total;
 			},
 			new Activity({}),
-		) as Activity;
+		);
+		// @ts-ignore
+		res.start = undefined;
+		return res;
 	};
 </script>
 
