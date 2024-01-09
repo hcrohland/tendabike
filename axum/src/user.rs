@@ -27,6 +27,7 @@ async fn getuser(user: RequestUser, State(pool): State<DbPool>) -> ApiResult<tb_
 async fn summary(mut user: RequestUser, State(pool): State<DbPool>) -> ApiResult<Summary> {
     let mut conn = pool.get().await?;
     StravaUser::update_user(&mut user, &mut conn).await?;
+    StravaUser::process(&mut user, &mut conn).await?;
     Ok(user.get_id().get_summary(&mut conn).await.map(Json)?)
 }
 
