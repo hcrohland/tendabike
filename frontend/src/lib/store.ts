@@ -1,6 +1,6 @@
 import { writable } from "svelte/store";
 import { mapable, mapObject} from "./mapable";
-import { Activity, Part, Attachment, type Type, type ActType, type User } from './types';
+import { Activity, Part, Attachment, Type, type ActType, type User } from './types';
 
 export { filterValues, by } from './mapable';
 
@@ -78,7 +78,7 @@ export async function initData() {
     }
     return Promise.all([
         myfetch('/types/part')
-            .then((types) => types.map(prepTypes).reduce(mapObject('id'), {})), // data[0]
+            .then((types) => types.map((t:any) => new Type(t)).reduce(mapObject('id'), {})), // data[0]
         myfetch('/types/activity'), // data[1]
         myfetch('/user/summary')
             .then(setSummary),
@@ -111,23 +111,15 @@ export function updateSummary(data: Summary) {
 }
 
 export let types: { [key: number]: Type };
-function prepTypes(t: Type) {
-    t.prefix = t.name.split(' ').reverse()[1] || '';  // The first word iff there were two (hack!)
-    t.acts = [];
-    return t
-}
 
 export const category = writable<Type | undefined>(undefined);
 export const user = writable<User | undefined>(undefined);
 
-export const parts = mapable("id", prepParts);
-function prepParts(a: Part) { return new Part(a) }
+export const parts = mapable("id", (p) => new Part(p));
 
-export const activities = mapable("id", prepActs)
-function prepActs(a: Activity) { return new Activity(a) }
+export const activities = mapable("id", (a) => new Activity(a));
 
-export const attachments = mapable("idx", prepAtts, delAtt)
-function prepAtts(a: Attachment) { return new Attachment(a) }
+export const attachments = mapable("idx", (a) => new Attachment(a), delAtt)
 function delAtt(a: Attachment) { return a.attached.getTime() == a.detached.getTime() }
 
 export const state = writable({ show_all_spares: false });

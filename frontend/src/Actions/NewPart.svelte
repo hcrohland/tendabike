@@ -6,7 +6,7 @@
   import NewForm from './NewForm.svelte';
   import ModalFooter from './ModalFooter.svelte'
   import {user} from '../lib/store';
-  import {type Type, Part} from '../lib/types'
+  import {Type, Part} from '../lib/types'
 
   let part: Part, newpart: Part;
   let type: Type;

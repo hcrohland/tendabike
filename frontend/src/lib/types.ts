@@ -115,7 +115,7 @@ export class Attachment extends Usage  {
     }
   }
 
-export type Type = {
+export class Type {
     id: number;
     name: string;
     main: number;
@@ -124,6 +124,18 @@ export type Type = {
     group?: string;
     prefix: string;
     acts: ActType[];
+
+    // export let types: { [key: number]: Type };
+    constructor(t: any) {
+      this.id = t.id;
+      this.name = t.name;
+      this.main = t.main;
+      this.hooks = t.hooks;
+      this.order = t.order;
+
+      this.prefix = this.name.split(' ').reverse()[1] || '';  // The first word iff there were two (hack!)
+      this.acts = [];
+    }
 }
 
 export type User = {

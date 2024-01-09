@@ -5,7 +5,7 @@ import {Button, DropdownItem} from '@sveltestrap/sveltestrap'
 import Usage from '../Usage.svelte'
 import AttachPart from '../Actions/AttachPart.svelte'
 import NewPart from '../Actions/NewPart.svelte'
-import {Attachment, Part, type Type} from '../lib/types'
+import {Attachment, Part, Type} from '../lib/types'
 import Menu from '../Widgets/Menu.svelte'
 import ShowAll from '../Widgets/ShowHist.svelte'
 import {link} from 'svelte-spa-router'
@@ -19,7 +19,7 @@ let attachPart: (part: Part) => void;
 let newPart: (t: Type) => void;
 let show_all: boolean;
 
-function attachedTo(atts: {[key: string]: Attachment}, partId: number, time: Date) {
+function attachedTo(atts: {[key: string]: Attachment}, partId: number | undefined, time: Date) {
     let att = filterValues(atts, (x) => x.part_id === partId && x.isAttached(time)).pop()
     if (att == undefined) return
       return $parts[att.gear].name + ' ' + types[att.hook].prefix

@@ -4,7 +4,7 @@ import {parts} from '../lib/store'
 import Usage from '../Usage.svelte'
 import ReplacePart from '../Actions/ReplacePart.svelte'
 import AttachPart from '../Actions/AttachPart.svelte'
-import {Part, Attachment, type Type} from '../lib/types';
+import {Part, Attachment, Type} from '../lib/types';
 import Menu from '../Widgets/Menu.svelte';
 import ShowAll from '../Widgets/ShowHist.svelte';
 import {link} from 'svelte-spa-router'

@@ -5,7 +5,7 @@
     ModalHeader,
     ModalBody
   } from '@sveltestrap/sveltestrap';
-  import {AttEvent, Attachment, Part, type Type, maxDate} from '../lib/types';
+  import {AttEvent, Attachment, Part, Type, maxDate} from '../lib/types';
   import {types, parts, user} from '../lib/store';
   import ModalFooter from './ModalFooter.svelte'
   import NewForm from './NewForm.svelte';

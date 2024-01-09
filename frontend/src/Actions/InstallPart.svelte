@@ -5,7 +5,7 @@
     ModalBody,
     Form
   } from '@sveltestrap/sveltestrap';
-  import {AttEvent, Part, type Type} from '../lib/types';
+  import {AttEvent, Part, Type} from '../lib/types';
   import {user, attachments, filterValues} from '../lib/store';
   import ModalFooter from './ModalFooter.svelte'
   import NewForm from './NewForm.svelte';
