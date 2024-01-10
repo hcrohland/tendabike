@@ -4,17 +4,14 @@
 		category,
 		activities,
 		parts,
-		filterValues,
 		fmtNumber,
 		fmtSeconds,
 	} from "../lib/store";
 	import SvelteTable from "../Widgets/SvelteTable.svelte";
-	import { Activity } from "../lib/types";
+	import { Activity, ActivitiesByType } from "../lib/types";
 	import RangeSlider from "svelte-range-slider-pips";
 
-	export let acts: Activity[] = filterValues($activities, (a) =>
-		$category ? $category.acts.some((t) => t.id == a.what) : false,
-	).sort(by("start"));
+	export let acts: Activity[] = ActivitiesByType($activities, $category);
 
 	const DAY = 24 * 3600000;
 	let selection: Record<string | number, any> ={};

@@ -2,7 +2,7 @@
 import { Button, Col, InputGroup, Row } from "@sveltestrap/sveltestrap";
 
 import { activities, filterValues, handleError, myfetch, parts, updateSummary } from "../lib/store";
-import type { Type } from "../lib/types";
+import { PartsByType, Type } from "../lib/types";
 import ActivityList from "../Widgets/ActivityList.svelte";
 
 export let type: Type
@@ -27,7 +27,7 @@ $: unassigned = filterValues($activities, (a) => !a.gear && type.acts.some((t) =
       </button>
       <select name="gear" class="form-control" required bind:value>
         <option hidden value> -- select one -- </option>
-        {#each filterValues($parts, (p) => p.what == type.id) as gear}
+        {#each PartsByType($parts, type) as gear}
         <option value={gear.id}>{gear.name}</option>
         {/each}
       </select> 
