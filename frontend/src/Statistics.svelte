@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { activities, parts, by, filterValues } from "./lib/store";
+  import { activities, parts, by, filterValues, category } from "./lib/store";
   import {
     Row,
     Col,
@@ -7,34 +7,34 @@
     InputGroup,
     InputGroupText,
   } from "@sveltestrap/sveltestrap";
-  import { type Part, Activity } from "./lib/types";
+  import { type Part, Activity, ActivitiesByType, PartsByType } from "./lib/types";
   import { Usage } from "./lib/types";
   import Plotly from "./Widgets/Plotly.svelte";
   import Switch from "./Widgets/Switch.svelte";
 
-  class Day extends Usage  {
+  class Day extends Usage {
     start: Date;
     constructor(a: Activity | Date | Day) {
       if (a instanceof Date) {
         super();
-        this.start = new Date(a)
-      } else if (a instanceof Activity ) {
+        this.start = new Date(a);
+      } else if (a instanceof Activity) {
         let b = {
           count: a.count || 0,
           distance: (a.distance || 0) / 1000,
           time: (a.time || a.duration || 0) / 3600,
-          duration: (a.duration || 0)/ 3600,
-          descend: a.descend || a.climb|| 0,
+          duration: (a.duration || 0) / 3600,
+          descend: a.descend || a.climb || 0,
           climb: a.climb || 0,
-        }
+        };
         super(b);
-        this.start = a.start;
+        this.start = new Date(a.start);
       } else {
-        super (a)
-        this.start = new Date(a.start)
+        super(a);
+        this.start = new Date(a.start);
       }
-    } 
-  };
+    }
+  }
 
   type Year = {
     year: number;
@@ -44,16 +44,15 @@
 
   function sumByMonths(arr: Day[]) {
     return Object.values(
-      arr.reduce<{ [s: string]: Day }> 
-      ((acc, a: Day) => {
-          let start = new Date(a.start);
-          start.setHours(0, 0, 0, 0);
-          start.setDate(13);
-          let diy = start.toString();
-          if (!acc[diy]) acc[diy] = new Day(start);
-          acc[diy].add(a);
-          return acc;
-        }, {}),
+      arr.reduce<{ [s: string]: Day }>((acc, a: Day) => {
+        let start = new Date(a.start);
+        start.setHours(0, 0, 0, 0);
+        start.setDate(13);
+        let diy = start.toString();
+        if (!acc[diy]) acc[diy] = new Day(start);
+        acc[diy].add(a);
+        return acc;
+      }, {}),
     );
   }
 
@@ -63,19 +62,20 @@
 
     let start = arr.sort(by("start", true)).shift() as Day;
     return arr.reduce(
-       (r, a) => {
+      (r, a) => {
         let b = new Day(a); // do not modify arr
         b.add(r[r.length - 1]);
         r.push(b);
         return r;
       },
-      [start]
-    )
+      [start],
+    );
   }
 
-  function buildYears(gear: Part[]): Year[] {
+  function buildYears(acts1: Activity[], gear: Part[]): Year[] {
     const g = gear.map((g) => g.id);
-    const minyear = Object.values($activities)
+
+    const minyear = acts1
       .reduce((min, a) => (min <= a.start ? min : a.start), new Date())
       .getFullYear();
     const thisyear = new Date().getFullYear();
@@ -83,15 +83,11 @@
     let year: number;
     for (year = thisyear; year >= minyear; year--) {
       // get a copy of all bike activities for year year
-      let acts = filterValues(
-        $activities,
-        (a) =>
+      let acts = acts1.filter((a) => (
           a.start.getFullYear() == year &&
-          a.what == 1 &&
-          (g.length == 0 || g.includes(a.gear)),
-      )
-        // and translate usage data to human readable form
-        .map(a => new Day(a));
+          (g.length == 0 || g.includes(a.gear))
+      ))
+        .map((a) => new Day(a));;
       ret.push({
         year,
         days: aggregateDays(acts),
@@ -110,7 +106,11 @@
   ) {
     return {
       x: cum.map((a) => a.start),
-      y: cum.map((a) => (field2 ? (a[field] as number) - (a[field2] as number) : (a[field] as number ))),
+      y: cum.map((a) =>
+        field2
+          ? (a[field] as number) - (a[field2] as number)
+          : (a[field] as number),
+      ),
       type: months ? "bar" : "scatter",
       name: title ? title : field2 ? field + "-" + field2 : field,
       line: { dash: "solid", shape: "hv" },
@@ -137,7 +137,7 @@
       yaxis: {
         hoverformat: ".3r",
         fixedrange: true,
-        rangemode: "tozero"
+        rangemode: "tozero",
       },
       xaxis: {
         tickformat: "%b",
@@ -154,6 +154,7 @@
       colorway,
       ...addlayout,
     };
+
     let config = { responsive: true };
 
     let yanchor = "middle";
@@ -198,13 +199,13 @@
     };
   }
 
-  const gears = filterValues($parts, (p) => p.what == 1).sort(by("last_used"));
-
+  let gears = PartsByType($parts, $category);
   let gear = [...gears];
   let cumm = 0;
   let comp: number | null = null;
   let perMonths = false;
-  $: years = buildYears(gear);
+  $: acts = ActivitiesByType($activities, $category)
+  $: years = buildYears(acts, gear);
 </script>
 
 <Row class="p-sm-2">
