@@ -132,9 +132,9 @@ export function ActivitiesByType(acts: { [key: string]: Activity }, type: Type |
   ).sort(by("start")) : [];
 }
 
-export function PartsByType(parts: {[key: string]: Part}, type: Type | undefined) {
+export function PartsByType(parts: { [key: string]: Part }, type: Type | undefined) {
   return type ? filterValues(parts, (p) => p.what == type.id).sort(
-      by("last_used")) : [];
+    by("last_used")) : [];
 }
 
 export class Type {
@@ -212,8 +212,15 @@ export class AttEvent {
     this.gear = gear;
     this.hook = hook;
   }
-  async post() {
+
+  async attach() {
     return await myfetch('/part/attach', 'POST', this)
+      .then(updateSummary)
+      .catch(handleError)
+  }
+
+  async detach() {
+    return await myfetch('/part/detach', 'POST', this)
       .then(updateSummary)
       .catch(handleError)
   }

@@ -27,7 +27,7 @@
       disabled = true;
       if (dispose) newpart.disposed_at = date
       if (detach) {
-        await new AttEvent(last.part_id, date, last.gear, last.hook).post();
+        await new AttEvent(last.part_id, date, last.gear, last.hook).detach();
       }
       if (dispose || part_changed){
         await newpart.update();

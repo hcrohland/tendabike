@@ -61,7 +61,7 @@
 
   async function attachPart(part: Part | void, hook: number) {
     if (!part) throw "Wizard: part create failed";
-    await new AttEvent(part.id, part.purchase, gear.id, hook).post();
+    await new AttEvent(part.id, part.purchase, gear.id, hook).attach();
   }
 
   async function installPart(newpart: Part, hook: number) {

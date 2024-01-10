@@ -14,7 +14,7 @@
   async function action () {
     disabled = true;
     
-    await attach.post();
+    await attach.attach();
     isOpen = false;  
   }  
   
