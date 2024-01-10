@@ -39,7 +39,7 @@
 		'/': ToyGroup,
     '/cat/:category': ToyGroup,
 		'/part/:id': Gear,
-		'/spares/:category': Spares,
+		'/spares/': Spares,
 		'/switch': Home,
 		'/admin': Admin,
 		'/stats': Statistics,
@@ -55,7 +55,7 @@
 		<Spinner />
 	{:then}
 	  <Message />
-		<Router {routes} restoreScrollState={true}/>
+		<Router {routes}/>
 	{:catch error}
 		<About />
 	{/await}
