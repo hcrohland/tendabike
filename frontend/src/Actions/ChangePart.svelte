@@ -3,7 +3,7 @@
     Modal, ModalBody, ModalHeader,
     FormGroup, InputGroup, Form
   } from '@sveltestrap/sveltestrap';
-  import {handleError, types, attachments, filterValues, by} from '../lib/store';
+  import {handleError, types, attachments} from '../lib/store';
   import ModalFooter from './ModalFooter.svelte'
   import {AttEvent, Part, Attachment, maxDate} from '../lib/types'
   import NewForm from './NewForm.svelte';
