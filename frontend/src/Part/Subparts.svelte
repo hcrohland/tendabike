@@ -12,7 +12,7 @@ export let hook: Type;
 $: attachees = filterValues(
     $attachments, 
     (a) => a.gear == gear.id
-  ) as Attachment[]
+  )
 
 type MyList = {
   attachments: Attachment[];

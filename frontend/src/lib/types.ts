@@ -1,13 +1,13 @@
-import { fmtDate, handleError, myfetch, parts, updateSummary } from "./store";
+import { by, filterValues, fmtDate, handleError, myfetch, parts, types, updateSummary } from "./store";
 export const maxDate = new Date("2999-12-31");
 
 export class Usage {
   count?: number;
-  climb?: number; 
-  descend?: number; 
-  distance?: number; 
-  time?:  number;  
-  duration?: number; 
+  climb?: number;
+  descend?: number;
+  distance?: number;
+  time?: number;
+  duration?: number;
 
   constructor(data?: any) {
     if (data) {
@@ -24,7 +24,7 @@ export class Usage {
       this.distance = 0;
       this.time = 0;
       this.duration = 0;
-    } 
+    }
   }
 
   // fill () {
@@ -36,109 +36,128 @@ export class Usage {
   //   if (! this.duration) this.duration = this.time;
   // }
 
-  add (a: Usage) {
+  add(a: Usage) {
     this.count = (this.count || 0) + (a.count || 1);
-    this.climb = (this.climb || 0) + (a.climb || 0) ;
-    this.descend = (this.descend || 0) + (a.descend || a.climb || 0) ;
+    this.climb = (this.climb || 0) + (a.climb || 0);
+    this.descend = (this.descend || 0) + (a.descend || a.climb || 0);
     this.distance = (this.distance || 0) + (a.distance || 0);
     this.time = (this.time || 0) + (a.time || a.duration || 0);
     this.duration = (this.duration || 0) + (a.duration || a.time || 0);
   }
 }
 
-export class Part extends Usage  {
-    id?: number;
-    owner: number;
-    what: number; 
-    name: string; 
-    vendor: string; 
-    model: string; 
-    purchase: Date;
-    last_used: Date;
-    disposed_at?: Date;
+export class Part extends Usage {
+  id?: number;
+  owner: number;
+  what: number;
+  name: string;
+  vendor: string;
+  model: string;
+  purchase: Date;
+  last_used: Date;
+  disposed_at?: Date;
 
-    constructor(data: any) {
-      super(data);
-      this.id = data.id;
-      this.owner = data.owner;
-      this.what = data.what;
-      this.name = data.name;
-      this.vendor = data.vendor;
-      this.model = data.model;
-      this.purchase = new Date(data.purchase);
-      this.last_used = new Date(data.last_used);
-      this.disposed_at = data.disposed_at ? new Date(data.disposed_at) : undefined;
-    }
-
-    async create() {
-      return await myfetch('/part', 'POST', this)
-        .then(data => {parts.updateMap([data]); return new Part(data)})
-        .catch(handleError)
-    }
-
-    async update() {
-      return await myfetch('/part', 'PUT', this)
-        .then(data => parts.updateMap([data]))
-        .catch(handleError)
-    }
-}
-
-export class Attachment extends Usage  {
-    part_id: number;
-    attached: Date;
-    gear: number;
-    hook: number;
-    detached: Date;
-    what: number;
-    name: string;
-    idx: string;
-    constructor (data: any) {
-      super (data);
-      this.part_id = data.part_id;
-      this.attached = new Date(data.attached);
-      this.gear = data.gear;
-      this.hook = data.hook;
-      this.detached = new Date(data.detached);
-      this.what = data.what;
-      this.name = data.name;
-      this.idx = this.part_id + "/" + this.attached.getTime()
-    }
-    fmtTime() {
-      let res = fmtDate(this.attached);
-      if (this.detached < maxDate)
-          res = res + " - " + fmtDate(this.detached)
-      return res
-    }
-    isAttached(time?: Date | string | number) {
-        if (!time) time = new Date()
-        return this.attached <= time && time < this.detached
-    }
-    isEmpty() {
-      return this.attached.getTime() >= this.detached.getTime()
-    }
+  constructor(data: any) {
+    super(data);
+    this.id = data.id;
+    this.owner = data.owner;
+    this.what = data.what;
+    this.name = data.name;
+    this.vendor = data.vendor;
+    this.model = data.model;
+    this.purchase = new Date(data.purchase);
+    this.last_used = new Date(data.last_used);
+    this.disposed_at = data.disposed_at ? new Date(data.disposed_at) : undefined;
   }
 
+  async create() {
+    return await myfetch('/part', 'POST', this)
+      .then(data => { parts.updateMap([data]); return new Part(data) })
+      .catch(handleError)
+  }
+
+  async update() {
+    return await myfetch('/part', 'PUT', this)
+      .then(data => parts.updateMap([data]))
+      .catch(handleError)
+  }
+
+  type() {
+    return types[this.what]
+  }
+
+  attachments(atts: { [key: string]: Attachment }) {
+    return filterValues(atts, (a) => a.part_id == this.id).sort(by("attached"))
+  }
+}
+
+export class Attachment extends Usage {
+  part_id: number;
+  attached: Date;
+  gear: number;
+  hook: number;
+  detached: Date;
+  what: number;
+  name: string;
+  idx: string;
+  constructor(data: any) {
+    super(data);
+    this.part_id = data.part_id;
+    this.attached = new Date(data.attached);
+    this.gear = data.gear;
+    this.hook = data.hook;
+    this.detached = new Date(data.detached);
+    this.what = data.what;
+    this.name = data.name;
+    this.idx = this.part_id + "/" + this.attached.getTime()
+  }
+  fmtTime() {
+    let res = fmtDate(this.attached);
+    if (this.detached < maxDate)
+      res = res + " - " + fmtDate(this.detached)
+    return res
+  }
+  isAttached(time?: Date | string | number) {
+    if (!time) time = new Date()
+    return this.attached <= time && time < this.detached
+  }
+  isEmpty() {
+    return this.attached.getTime() >= this.detached.getTime()
+  }
+}
+
+export function ActivitiesByType(acts: { [key: string]: Activity }, type: Type | undefined) {
+  return type ? filterValues(acts, (a) =>
+    type.acts.some((t) => t.id == a.what),
+  ).sort(by("start")) : [];
+}
+
+export function PartsByType(parts: {[key: string]: Part}, type: Type | undefined) {
+  return type ? filterValues(parts, (p) => p.what == type.id).sort(
+      by("last_used")) : [];
+}
+
 export class Type {
-    id: number;
-    name: string;
-    main: number;
-    hooks: Array<number>;
-    order: number;
-    group?: string;
-    prefix: string;
-    acts: ActType[];
+  id: number;
+  name: string;
+  main: number;
+  hooks: Array<number>;
+  order: number;
+  group?: string;
+  prefix: string;
+  acts: ActType[];
 
-    // export let types: { [key: number]: Type };
-    constructor(t: any) {
-      this.id = t.id;
-      this.name = t.name;
-      this.main = t.main;
-      this.hooks = t.hooks;
-      this.order = t.order;
+  // export let types: { [key: number]: Type };
+  constructor(t: any) {
+    this.id = t.id;
+    this.name = t.name;
+    this.main = t.main;
+    this.hooks = t.hooks;
+    this.order = t.order;
 
-      this.prefix = this.name.split(' ').reverse()[1] || '';  // The first word iff there were two (hack!)
-      this.acts = [];
-    }
+    this.prefix = this.name.split(' ').reverse()[1] || '';  // The first word iff there were two (hack!)
+    this.acts = [];
+  }
 }
 
 export type User = {
@@ -183,7 +202,7 @@ export class AttEvent {
   time: Date;
   gear: number;
   hook: number;
-  constructor (part: number | undefined, time: Date, gear: number | undefined, hook: number) {
+  constructor(part: number | undefined, time: Date, gear: number | undefined, hook: number) {
     if (gear == undefined || part == undefined) {
       console.error("part or gear not defined: ", part, gear);
       throw ("part or gear not defined")
@@ -199,4 +218,3 @@ export class AttEvent {
       .catch(handleError)
   }
 }
-  

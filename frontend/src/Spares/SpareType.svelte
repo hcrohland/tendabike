@@ -5,7 +5,7 @@ import {Button, DropdownItem} from '@sveltestrap/sveltestrap'
 import Usage from '../Usage.svelte'
 import AttachPart from '../Actions/AttachPart.svelte'
 import NewPart from '../Actions/NewPart.svelte'
-import {Attachment, Part, Type} from '../lib/types'
+import {Attachment, Part, PartsByType, Type} from '../lib/types'
 import Menu from '../Widgets/Menu.svelte'
 import ShowAll from '../Widgets/ShowHist.svelte'
 import {link} from 'svelte-spa-router'
@@ -25,7 +25,7 @@ function attachedTo(atts: {[key: string]: Attachment}, partId: number | undefine
       return $parts[att.gear].name + ' ' + types[att.hook].prefix
 }
 
-$: subparts = filterValues($parts, (p) => p.what == type.id).sort(by("last_used"))
+$: subparts = PartsByType($parts, type)
 </script>
 
 <AttachPart bind:attachPart />

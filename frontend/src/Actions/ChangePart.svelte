@@ -3,7 +3,7 @@
     Modal, ModalBody, ModalHeader,
     FormGroup, InputGroup, Form
   } from '@sveltestrap/sveltestrap';
-  import {handleError, types, attachments, filterValues, by} from '../lib/store';
+  import {handleError, types, attachments} from '../lib/store';
   import ModalFooter from './ModalFooter.svelte'
   import {AttEvent, Part, Attachment, maxDate} from '../lib/types'
   import NewForm from './NewForm.svelte';
@@ -41,8 +41,8 @@
   export const changePart = (p: Part) => {
     part = p;
     newpart = p;
-    type = types[part.what];
-    atts = filterValues($attachments, (a) => a.part_id == part.id).sort(by("attached"))
+    type = part.type();
+    atts = part.attachments($attachments);
     last = atts[0];
     start = atts.length > 0 ? atts[atts.length-1].attached : undefined
     date = last && last.detached < maxDate ? last.detached : new Date()
