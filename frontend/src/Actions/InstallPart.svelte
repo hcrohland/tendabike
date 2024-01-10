@@ -32,7 +32,7 @@
 
   async function attachPart (part: Part | void) {
     if (!part) return;
-    await new AttEvent(part.id, part.purchase, gear.id, hook).post()
+    await new AttEvent(part.id, part.purchase, gear.id, hook).attach()
   }
 
   async function action () {

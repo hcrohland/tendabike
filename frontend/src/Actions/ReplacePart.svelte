@@ -24,7 +24,7 @@
 
   async function attachPart (part: Part | void) {
     if (!part) throw ("Replace: update part did fail")
-    await new AttEvent(part.id, part.purchase, gear, hook).post();
+    await new AttEvent(part.id, part.purchase, gear, hook).attach();
     
     if (dispose) {
       oldpart.disposed_at = part.purchase;
