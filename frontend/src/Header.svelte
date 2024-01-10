@@ -58,15 +58,8 @@
 
 <Navbar color="light" expand="md" >
   <img src="favicon.png" alt="TendaBike" title="TendaBike" width=60 class="rounded-circle">
-  <NavbarBrand class="text-decoration-none" href="#/cat/1">
-    <div class="d-md-block">
-      &nbsp; Tend a Bike
-    </div>
-    <!-- {#if $category}
-      <strong> {$category.name} </strong>
-    {:else}
-      Gear
-    {/if} -->
+  <NavbarBrand class="text-decoration-none" href="/#/cat/1">
+    &nbsp; Tend a {$category ? $category.name : 'Bike'}
   </NavbarBrand>
   <NavbarToggler on:click={() => (isOpen = !isOpen)}/>
   {#if $user}
@@ -77,7 +70,7 @@
           <NavLink href="/#/cat/{$category.id}" class="dropdown-item text-reset">{$category.name}s</NavLink>
         </NavItem>
         <NavItem>
-          <NavLink href="/#/spares/{$category.id}" class="dropdown-item text-reset">Spare parts</NavLink>
+          <NavLink href="/#/spares" class="dropdown-item text-reset">Spare parts</NavLink>
         </NavItem>
         <NavItem>
           <NavLink href="/#/activities" class="dropdown-item text-reset">Activities</NavLink>
@@ -109,6 +102,7 @@
           <DropdownToggle color=light caret>{$user.firstname}</DropdownToggle>
           <DropdownMenu right>
             <DropdownItem href="/#/stats">Statistics</DropdownItem>
+            <DropdownItem href="/#/switch">Switch Sport</DropdownItem>
             <DropdownItem href="/strava/logout">Logout</DropdownItem>
             <DropdownItem divider />
             <DropdownItem href="/#/about">About</DropdownItem>

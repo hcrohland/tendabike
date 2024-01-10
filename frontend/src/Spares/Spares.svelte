@@ -4,15 +4,9 @@ import Usage from '../Usage.svelte'
 import SpareType from './SpareType.svelte';
 import { Table } from '@sveltestrap/sveltestrap';
 
-export let params;
-
-// Cannot use category directly since it 
-// is unset during destroy and the router gets confused
-let cat = types[params.category]
 let attachee = 0;
 
-category.set(cat);
-
+let cat = $category ? $category : types[1]
 let spareTypes = filterValues(types, (t) => t.main == cat.id && t.id != cat.id)
 
 function update(show: boolean) {
