@@ -1,4 +1,4 @@
-import { by, filterValues, fmtDate, handleError, myfetch, parts, types, updateSummary } from "./store";
+import { type Map, by, filterValues, fmtDate, handleError, myfetch, parts, types, updateSummary } from "./store";
 export const maxDate = new Date("2999-12-31");
 
 export class Usage {
@@ -86,7 +86,7 @@ export class Part extends Usage {
     return types[this.what]
   }
 
-  attachments(atts: { [key: string]: Attachment }) {
+  attachments(atts: Map<Attachment>) {
     return filterValues(atts, (a) => a.part_id == this.id).sort(by("attached"))
   }
 }
@@ -148,13 +148,13 @@ export class Type {
     this.acts = [];
   }
 
-  activities(acts: { [key: string]: Activity }) {
+  activities(acts: Map<Activity>) {
     return filterValues(acts, (a) =>
       this.acts.some((t) => t.id == a.what),
     ).sort(by("start"));
   }
   
-  parts(parts: {[key: string]: Part}) {
+  parts(parts: Map<Part>) {
     return filterValues(parts, (p) => p.what == this.id).sort(
         by("last_used"));
   } 

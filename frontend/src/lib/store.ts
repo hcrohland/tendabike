@@ -2,7 +2,7 @@ import { writable, type Writable } from "svelte/store";
 import { mapable, mapObject} from "./mapable";
 import { Activity, Part, Attachment, Type, type ActType, type User } from './types';
 
-export { filterValues, by } from './mapable';
+export { type Map, filterValues, by } from './mapable';
 
 export function fmtDate(date: Date | undefined) {
     return date ? date.toLocaleDateString(navigator.language) : 'never'
