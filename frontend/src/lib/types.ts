@@ -126,17 +126,6 @@ export class Attachment extends Usage {
   }
 }
 
-export function ActivitiesByType(acts: { [key: string]: Activity }, type: Type | undefined) {
-  return type ? filterValues(acts, (a) =>
-    type.acts.some((t) => t.id == a.what),
-  ).sort(by("start")) : [];
-}
-
-export function PartsByType(parts: {[key: string]: Part}, type: Type | undefined) {
-  return type ? filterValues(parts, (p) => p.what == type.id).sort(
-      by("last_used")) : [];
-}
-
 export class Type {
   id: number;
   name: string;
@@ -158,6 +147,17 @@ export class Type {
     this.prefix = this.name.split(' ').reverse()[1] || '';  // The first word iff there were two (hack!)
     this.acts = [];
   }
+
+  activities(acts: { [key: string]: Activity }) {
+    return filterValues(acts, (a) =>
+      this.acts.some((t) => t.id == a.what),
+    ).sort(by("start"));
+  }
+  
+  parts(parts: {[key: string]: Part}) {
+    return filterValues(parts, (p) => p.what == this.id).sort(
+        by("last_used"));
+  } 
 }
 
 export type User = {

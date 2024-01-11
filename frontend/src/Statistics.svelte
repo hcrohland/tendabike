@@ -7,7 +7,7 @@
     InputGroup,
     InputGroupText,
   } from "@sveltestrap/sveltestrap";
-  import { type Part, Activity, ActivitiesByType, PartsByType } from "./lib/types";
+  import { Part, Activity } from "./lib/types";
   import { Usage } from "./lib/types";
   import Plotly from "./Widgets/Plotly.svelte";
   import Switch from "./Widgets/Switch.svelte";
@@ -199,12 +199,12 @@
     };
   }
 
-  let gears = PartsByType($parts, $category);
+  $: acts = $category ? $category.activities($activities) : []
+  $: gears = $category ? $category.parts($parts) : [];
   let gear = [...gears];
   let cumm = 0;
   let comp: number | null = null;
   let perMonths = false;
-  $: acts = ActivitiesByType($activities, $category)
   $: years = buildYears(acts, gear);
 </script>
 
