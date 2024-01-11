@@ -6,7 +6,7 @@ import { Table } from '@sveltestrap/sveltestrap';
 
 let attachee = 0;
 
-let spareTypes = filterValues(types, (t) => t.main == $category.id && t.id != $category.id)
+$: spareTypes = filterValues(types, (t) => t.main == $category.id && t.id != $category.id)
 
 function update(show: boolean) {
   show ? attachee++ : attachee--
