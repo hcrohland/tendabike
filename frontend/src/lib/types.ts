@@ -212,8 +212,15 @@ export class AttEvent {
     this.gear = gear;
     this.hook = hook;
   }
-  async post() {
+
+  async attach() {
     return await myfetch('/part/attach', 'POST', this)
+      .then(updateSummary)
+      .catch(handleError)
+  }
+
+  async detach() {
+    return await myfetch('/part/detach', 'POST', this)
       .then(updateSummary)
       .catch(handleError)
   }
