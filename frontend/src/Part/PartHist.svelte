@@ -17,7 +17,7 @@
       <tr>
         <th scope="col">Attached to</th>
         <th scope="col"> </th>
-        <Usage header/>
+        <Usage/>
       </tr>
     </thead>
     <tbody>

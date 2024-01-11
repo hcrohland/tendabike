@@ -1,14 +1,29 @@
 <script lang="ts">
-  import {Collapse, Navbar, Nav, NavbarToggler, NavbarBrand, NavLink} from '@sveltestrap/sveltestrap';
+  import {
+    Collapse,
+    Navbar,
+    Nav,
+    NavbarToggler,
+    NavbarBrand,
+    NavLink,
+  } from "@sveltestrap/sveltestrap";
   import {
     Dropdown,
     DropdownItem,
     DropdownMenu,
     DropdownToggle,
     NavItem,
-  } from '@sveltestrap/sveltestrap';
-  import {myfetch, handleError, setSummary, updateSummary, category, user} from "./lib/store";
-  import Garmin from "./Actions/Garmin.svelte"
+  } from "@sveltestrap/sveltestrap";
+  import {
+    myfetch,
+    handleError,
+    setSummary,
+    updateSummary,
+    category,
+    user,
+  } from "./lib/store";
+  import Garmin from "./Actions/Garmin.svelte";
+    import Sport from "./Widgets/Sport.svelte";
 
   let userOpen = false;
   let syncOpen = false;
@@ -18,18 +33,20 @@
   let data = undefined;
   let garmin: () => void;
 
-  function refresh () {promise = myfetch('/user/summary').then(setSummary)}
+  function refresh() {
+    promise = myfetch("/user/summary").then(setSummary);
+  }
 
   async function getdata() {
     running = true;
     const batch = 10;
     number = 0;
     do {
-      data = await myfetch('/strava/hooks').catch(handleError)
+      data = await myfetch("/strava/hooks").catch(handleError);
       if (!data) break;
       updateSummary(data);
       number += data["activities"].length;
-    } while ($user && running && data["activities"].length > 0)
+    } while ($user && running && data["activities"].length > 0);
     running = false;
     number = 0;
   }
@@ -40,44 +57,55 @@
   }
 
   let polling = false;
-  async function poll (promiseFn: () => Promise<void>, time: number) {
-    if (polling) return
+  async function poll(promiseFn: () => Promise<void>, time: number) {
+    if (polling) return;
     polling = true;
-    while ($user){
-      promise = promiseFn()
-      await promise.catch(handleError)
-      await new Promise(resolve => setTimeout(resolve, time))
+    while ($user) {
+      promise = promiseFn();
+      await promise.catch(handleError);
+      await new Promise((resolve) => setTimeout(resolve, time));
     }
   }
 
-  $: if ($user) poll(getdata, 60000)
-
+  $: if ($user) poll(getdata, 60000);
 </script>
 
 <Garmin bind:garmin />
 
-<Navbar color="light" expand="md" >
-  <img src="favicon.png" alt="TendaBike" title="TendaBike" width=60 class="rounded-circle">
-  <NavbarBrand class="text-decoration-none" href="/#/cat/1">
+<Navbar color="light" expand="md">
+  <img
+    src="favicon.png"
+    alt="TendaBike"
+    title="TendaBike"
+    width="60"
+    class="rounded-circle"
+  />
+  <NavbarBrand class="text-decoration-none" href="/#/cat">
     &nbsp; Tend a {$category.name}
   </NavbarBrand>
-  <NavbarToggler on:click={() => (isOpen = !isOpen)}/>
+  <NavbarToggler on:click={() => (isOpen = !isOpen)} />
   {#if $user}
     <Collapse {isOpen} navbar expand="md" on:update={navbarUpdate}>
       <Nav class="ms-auto float-start" navbar>
         <NavItem>
-          <NavLink href="/#/cat/{$category.id}" class="dropdown-item text-reset">{$category.name}s</NavLink>
+          <NavLink href="/#/cat" class="dropdown-item text-reset"
+            >{$category.name}s</NavLink
+          >
         </NavItem>
         <NavItem>
-          <NavLink href="/#/spares" class="dropdown-item text-reset">Spare parts</NavLink>
+          <NavLink href="/#/spares" class="dropdown-item text-reset"
+            >Spare parts</NavLink
+          >
         </NavItem>
         <NavItem>
-          <NavLink href="/#/activities" class="dropdown-item text-reset">Activities</NavLink>
+          <NavLink href="/#/activities" class="dropdown-item text-reset"
+            >Activities</NavLink
+          >
         </NavItem>
       </Nav>
       <Nav class="ms-auto float-end" navbar>
         <Dropdown nav isOpen={syncOpen} toggle={() => (syncOpen = !syncOpen)}>
-          <DropdownToggle color=light caret>
+          <DropdownToggle color="light" caret>
             {#await promise}
               Syncing
               {#if number != 0}
@@ -86,7 +114,7 @@
                 ...
               {/if}
             {:then}
-              Sync 
+              Sync
             {:catch error}
               {handleError(error)}
             {/await}
@@ -97,16 +125,16 @@
           </DropdownMenu>
         </Dropdown>
         <Dropdown nav isOpen={userOpen} toggle={() => (userOpen = !userOpen)}>
-          <DropdownToggle color=light caret>{$user.firstname}</DropdownToggle>
+          <DropdownToggle color="light" caret>{$user.firstname}</DropdownToggle>
           <DropdownMenu right>
             <DropdownItem href="/#/stats">Statistics</DropdownItem>
-            <DropdownItem href="/#/switch">Switch Sport</DropdownItem>
+            <Sport></Sport>
             <DropdownItem href="/strava/logout">Logout</DropdownItem>
             <DropdownItem divider />
             <DropdownItem href="/#/about">About</DropdownItem>
             {#if $user.is_admin}
               <DropdownItem divider />
-              <DropdownItem href="/#/admin" > Admin </DropdownItem>
+              <DropdownItem href="/#/admin">Admin</DropdownItem>
             {/if}
           </DropdownMenu>
         </Dropdown>
@@ -114,7 +142,9 @@
     </Collapse>
   {:else}
     <Nav class="ml-auto float-end" navbar>
-      <a href="/strava/login"><img src="connect_with_strava.png" alt="Login with Strava"></a>
+      <a href="/strava/login"
+        ><img src="connect_with_strava.png" alt="Login with Strava" /></a
+      >
     </Nav>
   {/if}
 </Navbar>

@@ -7,7 +7,7 @@
     Button,
   } from "@sveltestrap/sveltestrap";
   import { AttEvent, Attachment, Part, Type } from "../lib/types";
-  import { filterValues, types } from "../lib/store";
+  import { type Map, filterValues, types } from "../lib/store";
   import Switch from "../Widgets/Switch.svelte";
 
   export let gear: Part;
@@ -22,7 +22,7 @@
   };
 
   const groupBy = function (xs: Type[]) {
-    return xs.reduce(function (rv: { [key: string]: Group }, x) {
+    return xs.reduce(function (rv: Map<Group>, x) {
       if (x.group) {
         (rv[x.group] = rv[x.group] || {
           types: [],

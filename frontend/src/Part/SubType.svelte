@@ -25,7 +25,7 @@ let attachPart: (p: Part) => void, replacePart: (p: Attachment) => void;
     <th scope="col">Attached parts</th>
     <th scope="col">Name</th>
     <th scope="col">Attached</th>
-    <Usage header/>
+    <Usage/>
     <th></th>
   </tr>    
 {:else}

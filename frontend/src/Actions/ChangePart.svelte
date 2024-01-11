@@ -59,7 +59,7 @@
     part_changed = true;
   }
 
-  $: disabled = (detach || dispose || part_changed) ? false : true 
+  $: disabled = !(detach || dispose || part_changed) 
 
 </script>
 
