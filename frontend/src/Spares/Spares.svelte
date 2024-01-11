@@ -19,7 +19,7 @@ function update(show: boolean) {
     <tr>
       <th scope="col">Part</th>
       <th scope="col">Name</th>
-      <Usage header/>
+      <Usage/>
       {#if attachee > 0}
       <th colspan=2>
         Attached to
