@@ -8,10 +8,10 @@
 		fmtSeconds,
 	} from "../lib/store";
 	import SvelteTable from "../Widgets/SvelteTable.svelte";
-	import { Activity, ActivitiesByType } from "../lib/types";
+	import { Activity } from "../lib/types";
 	import RangeSlider from "svelte-range-slider-pips";
 
-	export let acts: Activity[] = ActivitiesByType($activities, $category);
+	export let acts: Activity[] = $category ? $category.activities($activities) : [];
 
 	const DAY = 24 * 3600000;
 	let selection: Record<string | number, any> ={};

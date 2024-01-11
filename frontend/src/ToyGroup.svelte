@@ -3,7 +3,6 @@
   import MainCard from './Part/MainCard.svelte';
   import {filterValues, by, types, parts, category, activities} from './lib/store';
   import ShowAll from './Widgets/ShowHist.svelte';
-  import {ActivitiesByType} from './lib/types';
   import SetDefault from './Actions/SetDefault.svelte';
 
   export let params: {category: number};
@@ -27,7 +26,7 @@
         <MainCard {part} display={i<4 || show_hist} />
       </Col>
     {:else}
-      {#if ActivitiesByType($activities, type).length == 0}
+      {#if type.activities($activities).length == 0}
          We did not find any {type.name} activities on Strava (yet). 
       {:else}
          You have no {type.name} assigned to any activity on Strava. Please do so to get started.
