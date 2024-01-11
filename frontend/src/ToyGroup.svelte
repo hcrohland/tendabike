@@ -5,13 +5,13 @@
   import ShowAll from './Widgets/ShowHist.svelte';
   import SetDefault from './Actions/SetDefault.svelte';
 
-  export let params: {category: number};
+  export let params = {category: 1} ;
   
   // Cannot use category directly since it 
   // is unset during destroy and the router gets confused
   let show_hist: boolean;
 
-  $: type = params ? types[params.category] : types[1]; 
+  $: type = types[params.category]; 
   $: category.set(type); 
   $: gears = filterValues($parts, (p) => p.what == type.id && ! p.disposed_at).sort(by("last_used"))
   $: bin = filterValues($parts, (p) => p.what == type.id && p.disposed_at != undefined).sort(by("last_used"))
