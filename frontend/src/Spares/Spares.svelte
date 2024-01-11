@@ -1,13 +1,12 @@
 <script lang="ts">
-import {filterValues, types, state, category} from '../lib/store'
+import {filterValues, types, category} from '../lib/store'
 import Usage from '../Usage.svelte'
 import SpareType from './SpareType.svelte';
 import { Table } from '@sveltestrap/sveltestrap';
 
 let attachee = 0;
 
-let cat = $category ? $category : types[1]
-let spareTypes = filterValues(types, (t) => t.main == cat.id && t.id != cat.id)
+let spareTypes = filterValues(types, (t) => t.main == $category.id && t.id != $category.id)
 
 function update(show: boolean) {
   show ? attachee++ : attachee--

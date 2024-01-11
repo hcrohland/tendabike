@@ -1,4 +1,4 @@
-import { writable } from "svelte/store";
+import { writable, type Writable } from "svelte/store";
 import { mapable, mapObject} from "./mapable";
 import { Activity, Part, Attachment, Type, type ActType, type User } from './types';
 
@@ -69,19 +69,11 @@ export const icons = new Map([
     [303, "flaticon-ski"],
 ])
 
-export async function initData() {
-    let u = await myfetch('/user')
-    if (u) {
-        user.set(u)
-    } else {
-        return
-    }
+export async function getTypes() {
     return Promise.all([
         myfetch('/types/part')
             .then((types) => types.map((t:any) => new Type(t)).reduce(mapObject('id'), {})), // data[0]
         myfetch('/types/activity'), // data[1]
-        myfetch('/user/summary')
-            .then(setSummary),
     ])
         .then((data: { 0: Type[], 1: ActType[] }) => {
             types = data[1].reduce(
@@ -92,8 +84,20 @@ export async function initData() {
                 data[0]
             );
         })
-        .then(() => category.set(types[1]))
+        .then(() => category = writable(types[1]))
+}
 
+export async function initData() {
+    let u = await myfetch('/user')
+    if (u) {
+        user.set(u)
+    } else {
+        return
+    }
+    return Promise.all([
+        myfetch('/user/summary')
+            .then(setSummary),
+    ])
 }
 
 type Summary = { parts: Part[], attachments: Attachment[], activities: Activity[] }
@@ -112,7 +116,7 @@ export function updateSummary(data: Summary) {
 
 export let types: { [key: number]: Type };
 
-export const category = writable<Type | undefined>(undefined);
+export let category: Writable<Type>;
 export const user = writable<User | undefined>(undefined);
 
 export const parts = mapable("id", (p) => new Part(p));

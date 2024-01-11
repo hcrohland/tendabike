@@ -59,13 +59,12 @@
 <Navbar color="light" expand="md" >
   <img src="favicon.png" alt="TendaBike" title="TendaBike" width=60 class="rounded-circle">
   <NavbarBrand class="text-decoration-none" href="/#/cat/1">
-    &nbsp; Tend a {$category ? $category.name : 'Bike'}
+    &nbsp; Tend a {$category.name}
   </NavbarBrand>
   <NavbarToggler on:click={() => (isOpen = !isOpen)}/>
   {#if $user}
     <Collapse {isOpen} navbar expand="md" on:update={navbarUpdate}>
       <Nav class="ms-auto float-start" navbar>
-        {#if $category}
         <NavItem>
           <NavLink href="/#/cat/{$category.id}" class="dropdown-item text-reset">{$category.name}s</NavLink>
         </NavItem>
@@ -75,7 +74,6 @@
         <NavItem>
           <NavLink href="/#/activities" class="dropdown-item text-reset">Activities</NavLink>
         </NavItem>
-        {/if}
       </Nav>
       <Nav class="ms-auto float-end" navbar>
         <Dropdown nav isOpen={syncOpen} toggle={() => (syncOpen = !syncOpen)}>

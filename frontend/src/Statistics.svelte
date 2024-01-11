@@ -199,8 +199,8 @@
     };
   }
 
-  $: acts = $category ? $category.activities($activities) : []
-  $: gears = $category ? $category.parts($parts) : [];
+  $: acts = $category.activities($activities)
+  $: gears = $category.parts($parts);
   let gear = gears ? [...gears] : [];
   let cumm = 0;
   let comp: number | null = null;

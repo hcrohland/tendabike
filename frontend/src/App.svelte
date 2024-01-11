@@ -30,7 +30,7 @@
 	import About from "./About.svelte"
   import Message from './Message.svelte'
   import Admin from './Admin/Admin.svelte'
-	import {initData} from './lib/store'
+	import {getTypes, initData} from './lib/store'
   import Statistics from "./Statistics.svelte";
 	import ActTable from './Activities/ActTable.svelte';
 
@@ -46,15 +46,16 @@
 		'/activities': ActTable
 	}
 
+	await getTypes()
 </script>
 
 
 <Header/>
+<Message />
 <Container class="mt-2">
 	{#await initData()}
 		<Spinner />
 	{:then}
-	  <Message />
 		<Router {routes}/>
 	{:catch error}
 		<About />

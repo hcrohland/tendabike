@@ -1,11 +1,8 @@
-<script context="module" lang="ts">
+<script lang="ts">
 	let categories: number[];
 	let promise = myfetch("/activ/categories").then(
 		(data) => (categories = data),
 	);
-</script>
-
-<script lang="ts">
 	import { link } from "svelte-spa-router";
 	import { myfetch, handleError, types, icons } from "./lib/store";
 	import { Spinner } from "@sveltestrap/sveltestrap";

@@ -25,7 +25,7 @@ pub struct AuthRedirect;
 
 impl IntoResponse for AuthRedirect {
     fn into_response(self) -> Response {
-        axum::response::Redirect::temporary("/strava/login").into_response()
+        axum::response::Redirect::temporary("/").into_response()
     }
 }
 
