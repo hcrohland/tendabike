@@ -201,7 +201,7 @@
 
   $: acts = $category ? $category.activities($activities) : []
   $: gears = $category ? $category.parts($parts) : [];
-  let gear = [...gears];
+  let gear = gears ? [...gears] : [];
   let cumm = 0;
   let comp: number | null = null;
   let perMonths = false;
