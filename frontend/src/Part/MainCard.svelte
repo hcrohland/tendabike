@@ -3,7 +3,7 @@
     <a href="/part/{part.id}" 
       use:link
       class="badge badge-secondary text-decoration-none" 
-      title={"View "+ ($category ? $category.name.toLowerCase() : "") + " details"}>
+      title={"View "+ $category.name.toLowerCase() + " details"}>
       &Longrightarrow;
     </a>
   </div>

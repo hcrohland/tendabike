@@ -11,7 +11,7 @@
 	import { Activity } from "../lib/types";
 	import RangeSlider from "svelte-range-slider-pips";
 
-	export let acts: Activity[] = $category ? $category.activities($activities) : [];
+	export let acts: Activity[] = $category.activities($activities);
 
 	const DAY = 24 * 3600000;
 	let selection: Record<string | number, any> ={};
