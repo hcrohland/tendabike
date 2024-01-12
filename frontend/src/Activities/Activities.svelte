@@ -3,17 +3,15 @@
     activities,
     attachments,
     category,
-    filterValues,
     parts,
   } from "../lib/store";
   import { Activity } from "../lib/types";
   import ActTable from "./ActTable.svelte";
 
-  export let params: { part: number; start?: number } | undefined =
-    undefined;
+  export let params: { part: number; start?: number }
 
   let acts: Activity[];
-  $: if (params) {
+  $: if (params.part) {
     let start = params.start;
     let atts = $parts[params.part]
       .attachments($attachments)
