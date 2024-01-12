@@ -124,6 +124,9 @@ export class Attachment extends Usage {
   isEmpty() {
     return this.attached.getTime() >= this.detached.getTime()
   }
+  activities(acts: Map<Activity>) {
+    return filterValues(acts, (a) => a.gear == this.gear && this.isAttached(a.start))
+  }
 }
 
 export class Type {

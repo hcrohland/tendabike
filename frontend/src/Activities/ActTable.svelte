@@ -1,8 +1,6 @@
 <script lang="ts">
 	import {
 		by,
-		category,
-		activities,
 		parts,
 		fmtNumber,
 		fmtSeconds,
@@ -59,10 +57,9 @@
 						types[act.gear] = { name: name, value: act.gear };
 					}
 				});
-				return Object.values(types).sort(by<any>("value"));
+				let res = Object.values(types).sort(by<any>("value"));
+				return res.length > 1 ? res : undefined;
 	}
-
-	let filterOptions = createFilterOptions(acts);
 
 	let columns = [
 		{
@@ -96,7 +93,7 @@
 			value: gearname,
 			sortable: true,
 			filterValue: (v: Activity) => v.gear,
-			filterOptions,
+			filterOptions: createFilterOptions(acts)
 		},
 		{
 			key: "climb",

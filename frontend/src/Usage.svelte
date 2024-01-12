@@ -1,13 +1,21 @@
 <script lang="ts">
+  import { link } from "svelte-spa-router";
   import { fmtSeconds, fmtNumber } from "./lib/store";
   import { Usage } from "./lib/types";
 
   export let usage: Usage | undefined = undefined;
+  export let ref: string | number | undefined = undefined;
 </script>
 
 {#if usage}
   <td class="text-end">
-    {fmtNumber(usage.count)}
+    {#if ref}
+      <a class="text-reset" use:link href={"/activities/" + ref}>
+        {fmtNumber(usage.count)}
+      </a>
+    {:else}
+      {fmtNumber(usage.count)}
+    {/if}
   </td>
   <td class="text-end">
     {fmtSeconds(usage.time)}

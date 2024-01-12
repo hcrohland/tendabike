@@ -53,7 +53,7 @@ let attachPart: (p: Part) => void, replacePart: (p: Attachment) => void;
             {/if}
           </td>
           <td> {att.fmtTime()} </td>  
-          <Usage usage={part} />
+          <Usage usage={part} ref={part.id}/>
           <td>
             <Menu>
               <DropdownItem on:click={() => attachPart(part)}> Move part</DropdownItem>
@@ -84,7 +84,7 @@ let attachPart: (p: Part) => void, replacePart: (p: Attachment) => void;
             {/if}
           </td>
           <td> {att.fmtTime()} </td>  
-          <Usage usage={att} />
+          <Usage usage={att} ref={att.idx}/>
           <td>
               <Menu>
                 <DropdownItem on:click={() => attachPart(part)}>Attach part</DropdownItem>

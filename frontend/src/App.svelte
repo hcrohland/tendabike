@@ -31,7 +31,7 @@
   import Admin from './Admin/Admin.svelte'
 	import {getTypes, initData} from './lib/store'
   import Statistics from "./Statistics.svelte";
-	import AllActivities from "./Activities/AllActivities.svelte";
+	import Activities from "./Activities/Activities.svelte";
 
 	const routes = {
 		'/about': About,
@@ -41,7 +41,7 @@
 		'/spares/': Spares,
 		'/admin': Admin,
 		'/stats': Statistics,
-		'/activities': AllActivities,
+		'/activities/:part?/:start?': Activities,
 	}
 
 	await getTypes()
