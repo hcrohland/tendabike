@@ -123,7 +123,11 @@ export class Attachment extends Usage {
     return res
   }
   isAttached(time?: Date | string | number) {
-    if (!time) time = new Date()
+    if (!time) 
+      time = new Date(); 
+    else 
+      time = new Date(time);
+
     return this.attached <= time && time < this.detached
   }
   isEmpty() {
