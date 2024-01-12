@@ -54,7 +54,7 @@ $: subparts = type.parts($parts)
         {part.name}
       </a>
     </td>
-    <Usage usage={part} />
+    <Usage usage={part} ref={part.id}/>
     {#if attachee > 0 }
       <td>
         {#if part.disposed_at}

@@ -89,6 +89,18 @@ export class Part extends Usage {
   attachments(atts: Map<Attachment>) {
     return filterValues(atts, (a) => a.part_id == this.id).sort(by("attached"))
   }
+
+  isGear() {
+    return this.type().main == this.what
+  }
+
+  partLink() {
+    return '<a href="/#/part/' +
+      this.id +
+      '" style="text-decoration1:none" class="text-reset">' +
+      this.name
+      + '</a>'
+  }
 }
 
 export class Attachment extends Usage {
@@ -118,11 +130,18 @@ export class Attachment extends Usage {
     return res
   }
   isAttached(time?: Date | string | number) {
-    if (!time) time = new Date()
+    if (!time)
+      time = new Date();
+    else
+      time = new Date(time);
+
     return this.attached <= time && time < this.detached
   }
   isEmpty() {
     return this.attached.getTime() >= this.detached.getTime()
+  }
+  activities(acts: Map<Activity>) {
+    return filterValues(acts, (a) => a.gear == this.gear && this.isAttached(a.start))
   }
 }
 
@@ -153,11 +172,11 @@ export class Type {
       this.acts.some((t) => t.id == a.what),
     ).sort(by("start"));
   }
-  
+
   parts(parts: Map<Part>) {
     return filterValues(parts, (p) => p.what == this.id).sort(
-        by("last_used"));
-  } 
+      by("last_used"));
+  }
 }
 
 export type User = {
@@ -188,6 +207,18 @@ export class Activity extends Usage {
     this.name = data.name;
     this.start = new Date(data.start);
     this.gear = data.gear;
+  }
+
+  gearLink(parts: Map<Part>) {
+    if (this.gear && parts[this.gear]) {
+      return parts[this.gear].partLink()
+    } else {
+      return '-'
+    }
+  }
+
+  gearName(parts: Map<Part>) {
+    return this.gear && parts[this.gear] ? parts[this.gear].name : '-';
   }
 }
 

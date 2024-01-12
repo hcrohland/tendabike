@@ -3,6 +3,7 @@
   import {Card, CardBody, CardHeader, Row, Col} from '@sveltestrap/sveltestrap';
   import {types, fmtSeconds, fmtDate, fmtNumber} from '../lib/store';
   import {Part} from '../lib/types'
+    import { link } from 'svelte-spa-router';
 
   export let part: Part;
   export let display = false;
@@ -65,7 +66,7 @@
           until <span class="param">{fmtDate(part.disposed_at)}</span>
           and 
         {/if}
-        you used <span class=param>{fmtNumber(part.count)}</span> times 
+        you used <a href={"/activities/"+part.id} use:link class="param text-reset">{fmtNumber(part.count)}</a> times 
         for <span class="param">{fmtSeconds(part.time)}</span> hours.
         <p> You covered <span class="param">{fmtNumber(parseFloat(((part.distance || 0) / 1000).toFixed(1)))}</span> km 
         climbing <span class="param">{fmtNumber(part.climb)}</span> and descending <span class="param">{fmtNumber(part.descend)}</span> meters 

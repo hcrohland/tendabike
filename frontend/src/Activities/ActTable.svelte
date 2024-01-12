@@ -1,33 +1,35 @@
 <script lang="ts">
-	import {
-		by,
-		category,
-		activities,
-		parts,
-		fmtNumber,
-		fmtSeconds,
-	} from "../lib/store";
+	import { by, parts, fmtNumber, fmtSeconds } from "../lib/store";
 	import SvelteTable from "../Widgets/SvelteTable.svelte";
-	import { Activity } from "../lib/types";
+	import { Activity, Usage } from "../lib/types";
 	import RangeSlider from "svelte-range-slider-pips";
+	import { Alert } from "@sveltestrap/sveltestrap";
 
 	export let acts: Activity[];
 
 	const DAY = 24 * 3600000;
-	let selection: Record<string | number, any> ={};
+	let selection: Record<string | number, any> = {};
 
-	let min: number, max: number, values: number[] = [];
+	let min: number,
+		max: number,
+		values: number[] = [];
 
-	MiniMax(0)
+	MiniMax(0);
 
 	function MiniMax(gear: Number) {
-		let set = acts.filter((a) => !gear || a.gear == gear).map((a) => a.start.getTime()/DAY)
-		min = Math.floor(set.reduce((res, start) => start < res ? start : res));
-		max = Math.floor(set.reduce((res, start) => start > res ? start : res));
-		values = [min, max]
+		let set = acts
+			.filter((a) => !gear || a.gear == gear)
+			.map((a) => a.start.getTime() / DAY);
+		max = Math.floor(
+			set.reduce((res, start) => (start > res ? start : res), 0),
+		);
+		min = Math.floor(
+			set.reduce((res, start) => (start < res ? start : res), max),
+		);
+		values = [min, max];
 	}
 
-	$: MiniMax(selection.gear)
+	$: MiniMax(selection.gear);
 
 	$: rows = filterRows(acts, values);
 
@@ -43,28 +45,19 @@
 
 	const formatter = (v: number) => new Date(v * DAY).toLocaleDateString();
 
-	const gearname = (v: Activity) => {
-		if (v.gear && $parts[v.gear]) {
-			return $parts[v.gear].name;
-		} else {
-			return "-";
-		}
+	const createFilterOptions = (acts: Activity[]) => {
+		let types: any = {};
+		acts.forEach((act) => {
+			if (act.gear && types[act.gear] === undefined) {
+				let name = act.gearName($parts);
+				types[act.gear] = { name: name, value: act.gear };
+			}
+		});
+		let res = Object.values(types).sort(by<any>("value"));
+		return res.length > 1 ? res : undefined;
 	};
 
-	const createFilterOptions = (acts: Activity[]) => {
-				let types: any = {};
-				acts.forEach((act) => {
-					if (act.gear && types[act.gear] === undefined){
-						let name = gearname(act);
-						types[act.gear] = { name: name, value: act.gear };
-					}
-				});
-				return Object.values(types).sort(by<any>("value"));
-	}
-
-	let filterOptions = createFilterOptions(acts);
-
-	let columns = [
+	$: columns = [
 		{
 			key: "start",
 			title: "Start",
@@ -74,8 +67,11 @@
 				v.start.toLocaleDateString() + " " + v.start.toLocaleTimeString(),
 			renderValue: (v: Activity) =>
 				v.start
-					? v.start.toLocaleDateString() + "&nbsp;" + v.start.toLocaleTimeString()
+					? v.start.toLocaleDateString() +
+					  "&nbsp;" +
+					  v.start.toLocaleTimeString()
 					: "",
+			totalsValue: () => "Total:",
 			parseHTML: true,
 		},
 		{
@@ -85,18 +81,25 @@
 			searchValue: (v: Activity) => v.name,
 			sortable: true,
 			renderValue: (v: Activity) =>
-				v.id 
-					? '<a href="/strava/activities/' + v.id + '" style="text-decoration:none" class="text-reset" target="_blank">' + v.name + '&nbsp;&nbsp;<img src="strava_grey.png" alt="View on Strava" title="View on Strava" />'
+				v.id
+					? '<a href="/strava/activities/' +
+					  v.id +
+					  '" style="text-decoration:none" class="text-reset" target="_blank">' +
+					  v.name +
+					  '&nbsp;&nbsp;<img src="strava_grey.png" alt="View on Strava" title="View on Strava" />'
 					: v.name,
+			totalsValue: (a: Activity) => a.count+" activities",
 			parseHTML: true,
 		},
 		{
 			key: "gear",
 			title: "Gear",
-			value: gearname,
+			renderValue: (a: any) => new Activity(a).gearLink($parts),
+			totalsValue: () => "",
+			parseHTML: true,
 			sortable: true,
 			filterValue: (v: Activity) => v.gear,
-			filterOptions,
+			filterOptions: createFilterOptions(acts),
 		},
 		{
 			key: "climb",
@@ -140,43 +143,40 @@
 		},
 	];
 
-	const totalsFunc = (r: Activity[]) => {
-		let res= r.reduce(
-			(total, row) => {
-				total.add(row);
-				total.name = "Totals: "+ total.count + " activities";
-				return total;
-			},
-			new Activity({}),
-		);
-		// @ts-ignore
-		res.start = undefined;
-		return res;
+	const totalsFunc = (r: Usage[]) => {
+		return r.reduce((total, row) => {
+			total.add(row);
+			return total;
+		}, new Usage({}));
 	};
 </script>
 
-<RangeSlider
-	{min}
-	{max}
-	range
-	pushy
-	pips
-	first="label"
-	last="label"
-	float
-	{formatter}
-	bind:values
-></RangeSlider>
+{#if rows.length == 0}
+	<Alert color="secondary" heading="No activities" />
+{:else}
+	<RangeSlider
+		{min}
+		{max}
+		range
+		pushy
+		pips
+		first="label"
+		last="label"
+		float
+		{formatter}
+		bind:values
+	></RangeSlider>
 
-<SvelteTable
-	{columns}
-	{rows}
-	sortOrders={[-1, 1]}
-	sortBy="start"
-	{totalsFunc}
-	bind:filterSelections="{selection}"
-	classNameTable="table"
-	classNameThead="table-secondary"
-	classNameSelect="custom-select"
-	classNameInput="form-control form-control-sm"
-/>
+	<SvelteTable
+		{columns}
+		{rows}
+		sortOrders={[-1, 1]}
+		sortBy="start"
+		{totalsFunc}
+		bind:filterSelections={selection}
+		classNameTable="table"
+		classNameThead="table-secondary"
+		classNameSelect="custom-select"
+		classNameInput="form-control form-control-sm"
+	/>
+{/if}
