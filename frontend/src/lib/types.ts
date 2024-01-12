@@ -94,6 +94,13 @@ export class Part extends Usage {
     return this.type().main == this.what
   }
 
+  partLink() {
+    return '<a href="/#/part/' +
+      this.id +
+      '" style="text-decoration1:none" class="text-reset">' +
+      this.name
+      + '</a>'
+  }
 }
 
 export class Attachment extends Usage {
@@ -123,9 +130,9 @@ export class Attachment extends Usage {
     return res
   }
   isAttached(time?: Date | string | number) {
-    if (!time) 
-      time = new Date(); 
-    else 
+    if (!time)
+      time = new Date();
+    else
       time = new Date(time);
 
     return this.attached <= time && time < this.detached
@@ -200,6 +207,18 @@ export class Activity extends Usage {
     this.name = data.name;
     this.start = new Date(data.start);
     this.gear = data.gear;
+  }
+
+  gearLink(parts: Map<Part>) {
+    if (this.gear && parts[this.gear]) {
+      return parts[this.gear].partLink()
+    } else {
+      return '-'
+    }
+  }
+
+  gearName(parts: Map<Part>) {
+    return this.gear && parts[this.gear] ? parts[this.gear].name : '-';
   }
 }
 

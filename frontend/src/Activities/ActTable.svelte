@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { by, parts, fmtNumber, fmtSeconds } from "../lib/store";
 	import SvelteTable from "../Widgets/SvelteTable.svelte";
-	import { Activity } from "../lib/types";
+	import { Activity, Usage } from "../lib/types";
 	import RangeSlider from "svelte-range-slider-pips";
 	import { Alert } from "@sveltestrap/sveltestrap";
 
@@ -45,19 +45,11 @@
 
 	const formatter = (v: number) => new Date(v * DAY).toLocaleDateString();
 
-	const gearname = (v: Activity) => {
-		if (v.gear && $parts[v.gear]) {
-			return $parts[v.gear].name;
-		} else {
-			return "-";
-		}
-	};
-
 	const createFilterOptions = (acts: Activity[]) => {
 		let types: any = {};
 		acts.forEach((act) => {
 			if (act.gear && types[act.gear] === undefined) {
-				let name = gearname(act);
+				let name = act.gearName($parts);
 				types[act.gear] = { name: name, value: act.gear };
 			}
 		});
@@ -79,6 +71,7 @@
 					  "&nbsp;" +
 					  v.start.toLocaleTimeString()
 					: "",
+			totalsValue: () => "Total:",
 			parseHTML: true,
 		},
 		{
@@ -95,12 +88,15 @@
 					  v.name +
 					  '&nbsp;&nbsp;<img src="strava_grey.png" alt="View on Strava" title="View on Strava" />'
 					: v.name,
+			totalsValue: (a: Activity) => a.count+" activities",
 			parseHTML: true,
 		},
 		{
 			key: "gear",
 			title: "Gear",
-			value: gearname,
+			renderValue: (a: any) => new Activity(a).gearLink($parts),
+			totalsValue: () => "",
+			parseHTML: true,
 			sortable: true,
 			filterValue: (v: Activity) => v.gear,
 			filterOptions: createFilterOptions(acts),
@@ -147,15 +143,11 @@
 		},
 	];
 
-	const totalsFunc = (r: Activity[]) => {
-		let res = r.reduce((total, row) => {
+	const totalsFunc = (r: Usage[]) => {
+		return r.reduce((total, row) => {
 			total.add(row);
-			total.name = "Totals: " + total.count + " activities";
 			return total;
-		}, new Activity({}));
-		// @ts-ignore
-		res.start = undefined;
-		return res;
+		}, new Usage({}));
 	};
 </script>
 

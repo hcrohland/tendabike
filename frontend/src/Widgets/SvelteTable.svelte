@@ -100,13 +100,13 @@
 
   /** @type {string} class added to the cell that allows expanding/closing */
   export let classNameCellExpand = "";
-  
-  /** 
+
+  /**
    * @template Row
    * @callback totalsFuncDecl
    * @param {Row[]} v
    * @returns {Row?}
-  */
+   */
 
   /** @type {totalsFuncDecl<any>}*/
   export let totalsFunc = (v) => undefined;
@@ -367,19 +367,18 @@
         {#if t_row}
           <tr>
             {#each columns as col}
-              <th
-                class={col.headerClass}
-              >
-                {#if col.parseHTML}
-                  {@html col.renderValue
-                    ? col.renderValue(t_row)
-                    : col.value(t_row)}
+              <th class={col.headerClass}>
+                {#if col.totalsValue}
+                  {col.totalsValue(t_row)}
                 {:else}
                   {col.renderValue ? col.renderValue(t_row) : col.value(t_row)}
                 {/if}
               </th>
             {/each}
           </tr>
+          {#if showExpandIcon}
+            <th />
+          {/if}
         {/if}
       </slot>
     </thead>
