@@ -89,6 +89,11 @@ export class Part extends Usage {
   attachments(atts: Map<Attachment>) {
     return filterValues(atts, (a) => a.part_id == this.id).sort(by("attached"))
   }
+
+  isGear() {
+    return this.type().main == this.what
+  }
+
 }
 
 export class Attachment extends Usage {
@@ -156,11 +161,11 @@ export class Type {
       this.acts.some((t) => t.id == a.what),
     ).sort(by("start"));
   }
-  
+
   parts(parts: Map<Part>) {
     return filterValues(parts, (p) => p.what == this.id).sort(
-        by("last_used"));
-  } 
+      by("last_used"));
+  }
 }
 
 export type User = {
