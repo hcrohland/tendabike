@@ -42,8 +42,8 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
         use schema::attachments::dsl::*;
         attachments
             .filter(gear.eq(act_gear))
-            .filter(attached.lt(start))
-            .filter(detached.is_null().or(detached.ge(start)))
+            .filter(attached.le(start))
+            .filter(detached.is_null().or(detached.gt(start)))
             .get_results::<Attachment>(self)
             .await
             .map_err(map_to_tb)
