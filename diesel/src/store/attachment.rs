@@ -6,7 +6,7 @@ use diesel_async::RunQueryDsl;
 use tb_domain::schema;
 use time::OffsetDateTime;
 
-use tb_domain::{TbResult, Attachment, PartId, PartTypeId, Usage};
+use tb_domain::{Attachment, PartId, PartTypeId, TbResult, Usage};
 
 #[async_session::async_trait]
 impl tb_domain::AttachmentStore for AsyncDieselConn {
@@ -28,7 +28,13 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
         use schema::attachments::dsl::*;
         debug!("resetting all attachments");
         diesel::update(attachments)
-            .set((descend.eq(0), count.eq(0)))
+            .set((
+                time.eq(0),
+                distance.eq(0),
+                climb.eq(0),
+                descend.eq(0),
+                count.eq(0),
+            ))
             .execute(self)
             .await
             .map_err(map_to_tb)
@@ -59,8 +65,8 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
         diesel::update(
             attachments
                 .filter(gear.eq(act_gear))
-                .filter(attached.lt(start))
-                .filter(detached.ge(start)),
+                .filter(attached.le(start))
+                .filter(detached.gt(start)),
         )
         .set((
             time.eq(time + usage.time),
@@ -74,10 +80,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
         .map_err(map_to_tb)
     }
 
-    async fn attachments_all_by_partlist(
-        &mut self,
-        ids: Vec<PartId>,
-    ) -> TbResult<Vec<Attachment>> {
+    async fn attachments_all_by_partlist(&mut self, ids: Vec<PartId>) -> TbResult<Vec<Attachment>> {
         use schema::attachments::dsl::*;
         attachments
             .filter(part_id.eq_any(ids.clone()))
