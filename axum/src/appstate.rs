@@ -11,7 +11,7 @@
 use async_session::MemoryStore;
 use axum_macros::FromRef;
 
-use crate::{DbPool};
+use crate::DbPool;
 
 #[derive(Clone, FromRef)]
 pub(super) struct AppState {
