@@ -9,7 +9,11 @@
 //! Additionally, this module contains the `SumHash` struct and its associated functions, which are used
 //! to efficiently merge multiple `Summary` structs together.
 
+use serde_derive::Serialize;
+use std::collections::HashMap;
+
 use super::*;
+
 #[derive(Serialize, Debug, Default)]
 pub struct Summary {
     pub activities: Vec<Activity>,

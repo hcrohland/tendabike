@@ -24,6 +24,8 @@
 //! This module also contains the implementation of the `Event` struct, which describes an attach or detach request.
 //!
 
+use serde_derive::{Deserialize, Serialize};
+
 use crate::traits::Store;
 
 use super::*;

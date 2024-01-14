@@ -37,6 +37,9 @@ use ::time::PrimitiveDateTime;
 use scoped_futures::ScopedFutureExt;
 use time::{macros::format_description, OffsetDateTime};
 use time_tz::PrimitiveDateTimeExt;
+use diesel_derive_newtype::*;
+use newtype_derive::*;
+use serde_derive::{Deserialize, Serialize};
 
 /// The Id of an Activity
 ///

@@ -22,9 +22,11 @@
 //! The `Usage` struct represents the usage of a part, including time, distance, climbing, descending, power, and count. 
 //! It also provides methods to add an activity to the usage.
 
+use serde_derive::{Deserialize, Serialize};
+
 use super::*;
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Usage {
 // usage time
 pub time: i32,

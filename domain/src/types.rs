@@ -24,6 +24,10 @@
 //!
 //! The types defined in this module are used throughout the application to ensure type safety and consistency.
 
+use diesel_derive_newtype::*;
+use newtype_derive::*;
+use serde_derive::{Deserialize, Serialize};
+
 use crate::traits::Store;
 
 use super::*;

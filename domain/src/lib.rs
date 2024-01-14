@@ -27,10 +27,6 @@ mod types;
 mod user;
 
 use async_session::log::{debug, info, trace, warn};
-use diesel_derive_newtype::*;
-use newtype_derive::*;
-use serde_derive::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 pub use activity::{Activity, ActivityId, NewActivity};
 pub use attachment::{Attachment, AttachmentDetail, Event};
