@@ -32,14 +32,14 @@ use std::collections::HashSet;
 use crate::traits::Store;
 
 use super::*;
-use anyhow::Context;
 use ::time::PrimitiveDateTime;
-use scoped_futures::ScopedFutureExt;
-use time::{macros::format_description, OffsetDateTime};
-use time_tz::PrimitiveDateTimeExt;
+use anyhow::Context;
 use diesel_derive_newtype::*;
 use newtype_derive::*;
+use scoped_futures::ScopedFutureExt;
 use serde_derive::{Deserialize, Serialize};
+use time::{macros::format_description, OffsetDateTime};
+use time_tz::PrimitiveDateTimeExt;
 
 /// The Id of an Activity
 ///
@@ -128,6 +128,12 @@ impl From<Activity> for NewActivity {
     }
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum Factor {
+    Add = 1,
+    Sub = -1,
+}
+
 impl ActivityId {
     pub fn new(id: i32) -> Self {
         Self(id)
@@ -196,9 +202,7 @@ impl ActivityId {
 
                 info!("Updating {:?}", act);
 
-                let res = act
-                    .register(Factor::Add, conn)
-                    .await?;
+                let res = act.register(Factor::Add, conn).await?;
                 Ok(res)
             }
             .scope_boxed()
@@ -230,8 +234,7 @@ impl Activity {
             async {
                 let new = conn.activity_create(act).await?;
                 // let res = new.check_geartype(res, conn)?;
-                new.register(Factor::Add, conn)
-                    .await
+                new.register(Factor::Add, conn).await
             }
             .scope_boxed()
         })
@@ -242,15 +245,14 @@ impl Activity {
     ///
     /// If the descend value is missing, assume descend = climb
     /// Account for Factor
-    pub fn usage(&self, factor: Factor) -> Usage {
-        let factor = factor as i32;
+    pub fn usage(&self) -> Usage {
         Usage {
-            time: self.time.unwrap_or(0) * factor,
-            distance: self.distance.unwrap_or(0) * factor,
-            climb: self.climb.unwrap_or(0) * factor,
-            descend: self.descend.unwrap_or_else(|| self.climb.unwrap_or(0)) * factor,
-            power: self.power.unwrap_or(0) * factor,
-            count: factor,
+            time: self.time.unwrap_or(0),
+            distance: self.distance.unwrap_or(0),
+            climb: self.climb.unwrap_or(0),
+            descend: self.descend.unwrap_or_else(|| self.climb.unwrap_or(0)),
+            power: self.power.unwrap_or(0),
+            count: 1,
         }
     }
 
@@ -273,7 +275,7 @@ impl Activity {
     /// If the factor is `Factor::Subtract`, the activity is unregistered and the usage is subtracted from the parts and attachments.
     ///
     /// Returns a summary of the affected parts, attachments, and activities.
-    pub async fn register(self, factor: Factor, conn: &mut impl Store) -> TbResult<Summary> {
+    async fn register(self, factor: Factor, conn: &mut impl Store) -> TbResult<Summary> {
         trace!(
             "{} {:?}",
             if factor == Factor::Add {
@@ -284,7 +286,10 @@ impl Activity {
             self
         );
 
-        let usage = self.usage(factor);
+        let usage = match factor {
+            Factor::Add => self.usage(),
+            Factor::Sub => -self.usage(),
+        };
         let partlist = Attachment::parts_per_activity(&self, conn).await?;
 
         let mut parts = Vec::new();
