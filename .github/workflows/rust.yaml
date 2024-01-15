@@ -1,5 +1,9 @@
-name: Rust
-
+name: MultiPass
+permissions: 
+  contents: read
+  actions: read
+  packages: write
+  
 on:
   push:
     branches: [ "main" ]
