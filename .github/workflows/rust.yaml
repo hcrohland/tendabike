@@ -13,7 +13,7 @@ env:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: debian-latest
 
     steps:
     - uses: actions/checkout@v3
@@ -26,4 +26,8 @@ jobs:
       run: cargo build --release
     - name: Run tests
       run: cargo test --release --verbose
-    - run: ldd target/release/tendabike
+    - name: Upload tendabike executable
+      uses: actions/upload-artifact@v3
+      with:
+        name: tendabike
+        path: target/release/tendabike
