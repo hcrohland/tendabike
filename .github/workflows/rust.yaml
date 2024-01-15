@@ -11,7 +11,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  rust:
 
     runs-on: ubuntu-latest
 
@@ -31,3 +31,37 @@ jobs:
       with:
         name: tendabike
         path: target/release/tendabike
+
+  docker:
+    needs: rust
+    runs-on: ubuntu-latest
+    #runs-on: buildjet-2vcpu-ubuntu-2204-arm
+
+    env: 
+      TAG: ${{ github.event_name == 'pull_request' && format('DLPR_{0}, ghcr.io/hcrohland/tendabike:dlstaging', github.event.pull_request.number) || 'distroless'}}
+    steps:
+    - name: Download tendabike executable
+      uses: actions/download-artifact@v3
+      with:
+        name: tendabike
+        path: tendabike
+    -
+      name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    -
+      name: Login to GitHub Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+    -
+      name: Build and push
+      uses: docker/build-push-action@v5
+      with:
+        push: true
+        file: Dockerfile.distroless
+        tags: ghcr.io/hcrohland/tendabike:${{ env.TAG }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+      
