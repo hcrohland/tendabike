@@ -80,11 +80,7 @@ impl UserId {
         })
     }
 
-    pub async fn create(
-        firstname_: &str,
-        lastname: &str,
-        conn: &mut impl Store,
-    ) -> TbResult<Self> {
+    pub async fn create(firstname_: &str, lastname: &str, conn: &mut impl Store) -> TbResult<Self> {
         conn.user_create(firstname_, lastname).await.map(|u| u.id)
     }
 
@@ -111,7 +107,6 @@ impl UserId {
         let activities = Activity::get_all(self, conn).await?;
         Ok(Summary::new(activities, parts, attachments))
     }
-
 }
 
 impl Person for User {

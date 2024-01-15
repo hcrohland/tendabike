@@ -9,7 +9,7 @@
 
 use crate::error::AppError;
 use anyhow::Context;
-use async_session::{MemoryStore, Session, SessionStore, log::warn};
+use async_session::{log::warn, MemoryStore, Session, SessionStore};
 use axum::{
     extract::{Query, State, TypedHeader},
     http::{header::SET_COOKIE, HeaderMap},

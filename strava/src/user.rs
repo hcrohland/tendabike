@@ -202,7 +202,7 @@ impl StravaUser {
         user: &mut impl StravaPerson,
         conn: &mut impl StravaStore,
     ) -> TbResult<Summary> {
-        return event::process(user, conn).await
+        return event::process(user, conn).await;
     }
 }
 

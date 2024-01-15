@@ -1,4 +1,4 @@
-use crate::{PartType, PartTypeId, TbResult, ActivityType, ActTypeId};
+use crate::{ActTypeId, ActivityType, PartType, PartTypeId, TbResult};
 
 /// A trait defining methods for accessing and manipulating types in the system.
 #[async_trait::async_trait]
@@ -29,7 +29,10 @@ pub trait TypesStore {
     /// # Returns
     ///
     /// A vector of `ActTypeId`s for all `ActivityType`s associated with the given `PartTypeId`, or an `TbResult::Err` if the `PartTypeId` does not exist.
-    async fn get_activity_types_by_parttypeid(&mut self, tid: &PartTypeId) -> TbResult<Vec<ActTypeId>>;
+    async fn get_activity_types_by_parttypeid(
+        &mut self,
+        tid: &PartTypeId,
+    ) -> TbResult<Vec<ActTypeId>>;
 
     /// Returns a vector of all `ActivityType`s in the system, ordered by id.
     async fn activitytypes_get_all_ordered(&mut self) -> Vec<ActivityType>;

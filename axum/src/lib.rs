@@ -28,7 +28,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use tb_diesel::DbPool;
 
-use strava::{RequestUser, AxumAdmin};
+use strava::{AxumAdmin, RequestUser};
 
 pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
     tracing_subscriber::registry()

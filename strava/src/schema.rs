@@ -47,10 +47,4 @@ table! {
     }
 }
 
-
-allow_tables_to_appear_in_same_query!(
-    strava_activities,
-    strava_events,
-    strava_gears,
-    strava_users,
-);
+allow_tables_to_appear_in_same_query!(strava_activities, strava_events, strava_gears, strava_users,);

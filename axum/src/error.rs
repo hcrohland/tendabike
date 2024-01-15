@@ -9,9 +9,9 @@
 //! Finally, it defines a type alias `ApiResult<T>` for `Result<Json<T>, AppError>`.
 //!
 
-use async_session::log::{error, info, debug};
+use async_session::log::{debug, error, info};
 use axum::{
-    response::{IntoResponse, Response, Redirect},
+    response::{IntoResponse, Redirect, Response},
     Json,
 };
 use http::StatusCode;
@@ -44,25 +44,34 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let code = match &self {
             Self::TbError(err) => match err {
-                Error::Forbidden(_) |
-                Error::NotAuth(_) => return (StatusCode::UNAUTHORIZED, Redirect::temporary("/strava/logout")).into_response(),
+                Error::Forbidden(_) | Error::NotAuth(_) => {
+                    return (
+                        StatusCode::UNAUTHORIZED,
+                        Redirect::temporary("/strava/logout"),
+                    )
+                        .into_response()
+                }
                 Error::NotFound(_) => StatusCode::NOT_FOUND,
                 Error::BadRequest(_) => StatusCode::BAD_REQUEST,
                 Error::Conflict(_) => StatusCode::CONFLICT,
                 Error::TryAgain(_) => StatusCode::TOO_MANY_REQUESTS,
-                Error::DatabaseFailure(_) |
-                Error::AnyFailure(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            }
+                Error::DatabaseFailure(_) | Error::AnyFailure(_) => {
+                    StatusCode::INTERNAL_SERVER_ERROR
+                }
+            },
             Self::AnyError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
-        
+
         let any: anyhow::Error = self.into();
         let msg = format!("{:#}", any);
         match code {
-            StatusCode::INTERNAL_SERVER_ERROR =>  error!("{}", msg),
-            StatusCode::BAD_REQUEST |
-            StatusCode::NOT_FOUND => info!("{}", msg),
-            _ => debug!("returning with error {}: {}", code.canonical_reason().unwrap_or(""), msg)
+            StatusCode::INTERNAL_SERVER_ERROR => error!("{}", msg),
+            StatusCode::BAD_REQUEST | StatusCode::NOT_FOUND => info!("{}", msg),
+            _ => debug!(
+                "returning with error {}: {}",
+                code.canonical_reason().unwrap_or(""),
+                msg
+            ),
         };
         (code, msg).into_response()
     }

@@ -1,4 +1,4 @@
-use crate::{TbResult, Part, PartId, PartTypeId, Person, Usage, UserId};
+use crate::{Part, PartId, PartTypeId, Person, TbResult, Usage, UserId};
 use time::OffsetDateTime;
 
 #[async_trait::async_trait]

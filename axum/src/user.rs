@@ -6,7 +6,11 @@
 //! This module also defines the `RUser` struct, which represents a user in the system and is used throughout the module.
 //! Additionally, it defines the `AxumAdmin` struct, which is used as a marker type for routes that require admin privileges.
 
-use axum::{extract::{State, Path}, routing::get, Json, Router};
+use axum::{
+    extract::{Path, State},
+    routing::get,
+    Json, Router,
+};
 use tb_domain::{Person, Summary};
 use tb_strava::StravaUser;
 
@@ -39,7 +43,7 @@ async fn userlist(
     Ok(tb_strava::get_all_stats(&mut conn).await.map(Json)?)
 }
 
-pub(crate) async fn revoke_user (
+pub(crate) async fn revoke_user(
     admin: AxumAdmin,
     Path(tbid): Path<i32>,
     State(pool): State<DbPool>,
