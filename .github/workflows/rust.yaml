@@ -34,9 +34,12 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: tendabike
-        path: |
-          target/release/tendabike
-          /lib/x86_64-linux-gnu/libpq.so.5
+        path: target/release/tendabike
+    - name: Upload libpq
+      uses: actions/upload-artifact@v3
+      with:
+        name: libpq
+        path: /lib/x86_64-linux-gnu/libpq.so.5
 
   docker:
     needs: rust
