@@ -64,6 +64,10 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: tendabike
+    - name: Download tendabike executable
+      uses: actions/download-artifact@v3
+      with:
+        name: libpq
     - run: ls
     -
       name: Build and push
