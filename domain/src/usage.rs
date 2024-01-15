@@ -23,7 +23,6 @@
 //! It also provides methods to add an activity to the usage.
 
 use serde_derive::{Deserialize, Serialize};
-
 use std::ops::{Add, Neg};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
