@@ -45,6 +45,7 @@ jobs:
       with:
         name: tendabike
         path: tendabike
+    - run: ls
     -
       name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
