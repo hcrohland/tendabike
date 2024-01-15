@@ -35,11 +35,13 @@ jobs:
       with:
         name: tendabike
         path: target/release/tendabike
-    - name: Upload libpq
+    - name: Upload libs
       uses: actions/upload-artifact@v3
       with:
-        name: libpq
-        path: /lib/x86_64-linux-gnu/libpq.so.5
+        name: libs
+        path: |
+          /lib/x86_64-linux-gnu/libpq.so.5
+          /lib/x86_64-linux-gnu/libssl.so.3
 
   docker:
     needs: rust
@@ -64,10 +66,10 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: tendabike
-    - name: Download tendabike executable
+    - name: Download libs
       uses: actions/download-artifact@v3
       with:
-        name: libpq
+        name: libs
     - run: ls
     -
       name: Build and push
