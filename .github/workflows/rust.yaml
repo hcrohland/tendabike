@@ -5,7 +5,8 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-
+  workflow_dispatch:
+  
 env:
   CARGO_TERM_COLOR: always
 
@@ -16,6 +17,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - uses: Swatinem/rust-cache@v2
+    - uses: dtolnay/rust-toolchain@stable
+      
     - name: Format check
       run: cargo fmt --check
     - name: Build
