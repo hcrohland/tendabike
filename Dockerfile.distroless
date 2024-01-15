@@ -14,6 +14,7 @@ USER 999:999
 WORKDIR /tendabike
 
 COPY --chmod=755 tendabike .
+COPY /lib/x86_64-linux-gnu/libpq.so.5 /lib/x86_64-linux-gnu/libpq.so.5
 COPY --from=build-frontend /frontend/dist dist
 
 ENV STATIC_WWW="/tendabike/dist"
