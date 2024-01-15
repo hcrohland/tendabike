@@ -26,3 +26,4 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+    - run: ldd target/release/tendabike
