@@ -35,6 +35,9 @@ use crate::traits::Store;
 
 use super::*;
 use ::time::OffsetDateTime;
+use diesel_derive_newtype::*;
+use newtype_derive::*;
+use serde_derive::{Deserialize, Serialize};
 
 /// The database's representation of a part.
 #[serde_as]
@@ -166,7 +169,6 @@ impl PartId {
     /// check if the given user is the owner or an admin.
     /// Returns Forbidden if not.
     pub async fn checkuser(self, user: &dyn Person, conn: &mut impl Store) -> TbResult<PartId> {
-
         let own = conn.partid_get_ownerid(self, user).await?;
         if user.get_id() == own {
             return Ok(self);

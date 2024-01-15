@@ -33,6 +33,10 @@
 //!
 //! The `create`, `update`, `read`, and `get_stat` methods are implemented for the `UserId` type and provide CRUD functionality for `User` entities.
 
+use diesel_derive_newtype::*;
+use newtype_derive::*;
+use serde_derive::{Deserialize, Serialize};
+
 use crate::traits::Store;
 
 use super::*;
@@ -76,11 +80,7 @@ impl UserId {
         })
     }
 
-    pub async fn create(
-        firstname_: &str,
-        lastname: &str,
-        conn: &mut impl Store,
-    ) -> TbResult<Self> {
+    pub async fn create(firstname_: &str, lastname: &str, conn: &mut impl Store) -> TbResult<Self> {
         conn.user_create(firstname_, lastname).await.map(|u| u.id)
     }
 
@@ -107,7 +107,6 @@ impl UserId {
         let activities = Activity::get_all(self, conn).await?;
         Ok(Summary::new(activities, parts, attachments))
     }
-
 }
 
 impl Person for User {

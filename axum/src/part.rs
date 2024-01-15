@@ -21,9 +21,9 @@
 //! The `router` function returns an Axum `Router` that can be mounted in a larger application.
 
 use crate::{
+    appstate::AppState,
     error::{ApiResult, AppError},
-    appstate::AppState, DbPool,
-    RequestUser
+    DbPool, RequestUser,
 };
 
 use axum::{
@@ -40,7 +40,11 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/:part", get(get_part))
 }
 
-async fn get_part(Path(part): Path<i32>, user: RequestUser, State(conn): State<DbPool>) -> ApiResult<Part> {
+async fn get_part(
+    Path(part): Path<i32>,
+    user: RequestUser,
+    State(conn): State<DbPool>,
+) -> ApiResult<Part> {
     let mut conn = conn.get().await?;
     Ok(PartId::new(part).part(&user, &mut conn).await.map(Json)?)
 }

@@ -51,7 +51,11 @@ impl StravaActivity {
     /// # Returns
     ///
     /// A Result containing a NewActivity struct if the conversion was successful, or an error if it failed.
-    async fn into_tb(self, user: &mut impl StravaPerson, conn: &mut impl StravaStore) -> TbResult<NewActivity> {
+    async fn into_tb(
+        self,
+        user: &mut impl StravaPerson,
+        conn: &mut impl StravaStore,
+    ) -> TbResult<NewActivity> {
         let what = self.what()?;
         let gear = match self.gear_id {
             Some(x) => Some(gear::strava_to_tb(x, user, conn).await?),
@@ -158,10 +162,13 @@ impl StravaActivity {
                 } else {
                     res = Activity::create(&tb, user, conn).await?;
                     let new_id = res.first_act();
-                    conn.strava_activity_new(strava_id, tb.user_id, new_id).await?;
+                    conn.strava_activity_new(strava_id, tb.user_id, new_id)
+                        .await?;
                 }
 
-                user.strava_id().update_last(tb.start.unix_timestamp(), conn).await
+                user.strava_id()
+                    .update_last(tb.start.unix_timestamp(), conn)
+                    .await
                     .context("unable to update user")?;
 
                 Ok(res)
@@ -178,8 +185,14 @@ pub async fn strava_url(act: i32, conn: &mut impl StravaStore) -> TbResult<Strin
     Ok(format!("https://strava.com/activities/{}", &g))
 }
 
-pub async fn upsert_activity(id: i64, user: &mut impl StravaPerson, conn: &mut impl StravaStore) -> TbResult<Summary> {
-    let act: StravaActivity = user.request_json(&format!("/activities/{}", id), conn).await?;
+pub async fn upsert_activity(
+    id: i64,
+    user: &mut impl StravaPerson,
+    conn: &mut impl StravaStore,
+) -> TbResult<Summary> {
+    let act: StravaActivity = user
+        .request_json(&format!("/activities/{}", id), conn)
+        .await?;
     act.send_to_tb(user, conn).await
 }
 
@@ -188,16 +201,14 @@ pub(crate) async fn delete_activity(
     user: &impl StravaPerson,
     conn: &mut impl StravaStore,
 ) -> TbResult<Summary> {
-
     let tid = conn.strava_activity_get_activityid(act_id).await?;
     let mut res = Summary::default();
     if let Some(tid) = tid {
         // first delete the tendabike activity
         res = tid.delete(user, conn).await?;
-        // now delete the reference to the strava activity 
+        // now delete the reference to the strava activity
         // if this fails we end up with an orphaned entry in the strava_activities table, which should not be a problem in practice
         conn.strava_activity_delete(act_id).await?;
-    } 
+    }
     Ok(res)
 }
-

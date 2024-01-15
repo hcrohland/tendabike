@@ -45,10 +45,7 @@ impl InEvent {
             )));
         };
 
-        if StravaId::read(&self.owner_id.into(), conn)
-            .await?
-            .is_none()
-        {
+        if StravaId::read(&self.owner_id.into(), conn).await?.is_none() {
             return Err(Error::BadRequest(format!(
                 "Unknown event owner received: {:?}",
                 self
@@ -251,7 +248,10 @@ pub async fn insert_sync(
     conn: &mut impl StravaStore,
 ) -> TbResult<()> {
     if event_time > get_time() {
-        return Err(Error::BadRequest(format!("eventtime {} > now!", event_time)))
+        return Err(Error::BadRequest(format!(
+            "eventtime {} > now!",
+            event_time
+        )));
     }
     let event = Event {
         owner_id,

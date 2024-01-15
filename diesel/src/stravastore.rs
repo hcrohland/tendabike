@@ -6,10 +6,10 @@ use tb_domain::ActivityId;
 use tb_domain::PartId;
 use tb_domain::TbResult;
 use tb_domain::UserId;
-use tb_strava::StravaPerson;
 use tb_strava::event::Event;
 use tb_strava::schema;
 use tb_strava::StravaId;
+use tb_strava::StravaPerson;
 use tb_strava::StravaUser;
 
 #[async_session::async_trait]
@@ -139,11 +139,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
         Ok(())
     }
 
-    async fn strava_event_set_time(
-        &mut self,
-        e_id: Option<i32>,
-        e_time: i64,
-    ) -> TbResult<()> {
+    async fn strava_event_set_time(&mut self, e_id: Option<i32>, e_time: i64) -> TbResult<()> {
         use schema::strava_events::dsl::*;
         diesel::update(strava_events)
             .filter(id.eq(e_id))
@@ -166,11 +162,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .map_err(map_to_tb)
     }
 
-    async fn strava_event_get_later(
-        &mut self,
-        obj_id: i64,
-        oid: StravaId,
-    ) -> TbResult<Vec<Event>> {
+    async fn strava_event_get_later(&mut self, obj_id: i64, oid: StravaId) -> TbResult<Vec<Event>> {
         use schema::strava_events::dsl::*;
         strava_events
             .filter(object_id.eq(obj_id))
@@ -198,10 +190,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .map_err(map_to_tb)
     }
 
-    async fn stravauser_get_by_tbid(
-        &mut self,
-        id: UserId,
-    ) -> TbResult<StravaUser> {
+    async fn stravauser_get_by_tbid(&mut self, id: UserId) -> TbResult<StravaUser> {
         schema::strava_users::table
             .filter(schema::strava_users::tendabike_id.eq(id))
             .get_result(self)
@@ -209,10 +198,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .map_err(map_to_tb)
     }
 
-    async fn stravauser_get_by_stravaid(
-        &mut self,
-        id: &StravaId,
-    ) -> TbResult<Option<StravaUser>> {
+    async fn stravauser_get_by_stravaid(&mut self, id: &StravaId) -> TbResult<Option<StravaUser>> {
         schema::strava_users::table
             .find(id)
             .first::<StravaUser>(self)
@@ -249,9 +235,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
     ) -> TbResult<StravaUser> {
         use schema::strava_users::dsl::*;
         diesel::update(strava_users.find(stravaid))
-            .set((
-                refresh_token.eq(refresh),
-            ))
+            .set((refresh_token.eq(refresh),))
             .get_result(self)
             .await
             .map_err(map_to_tb)

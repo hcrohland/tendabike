@@ -106,10 +106,7 @@ impl RequestUser {
         }
     }
 
-    async fn refresh_the_token(
-        &mut self,
-        conn: &mut impl StravaStore,
-    ) -> TbResult<()> {
+    async fn refresh_the_token(&mut self, conn: &mut impl StravaStore) -> TbResult<()> {
         let token = match self.refresh_token.clone() {
             Some(token) => token,
             None => {
@@ -122,9 +119,10 @@ impl RequestUser {
         let token = match STRAVACLIENT
             .exchange_refresh_token(&token)
             .request_async(async_http_client)
-            .await {
-                Ok(token) => token,
-                Err(err) => return Err(Error::NotAuth(err.to_string()))
+            .await
+        {
+            Ok(token) => token,
+            Err(err) => return Err(Error::NotAuth(err.to_string())),
         };
         self.access_token = token.access_token().clone();
         self.expires_at = token.expires_in().map(|d| SystemTime::now() + d);
@@ -265,7 +263,6 @@ where
         Ok(user)
     }
 }
-
 
 pub struct AxumAdmin;
 

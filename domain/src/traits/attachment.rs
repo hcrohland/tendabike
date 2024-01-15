@@ -1,6 +1,6 @@
 use time::OffsetDateTime;
 
-use crate::{TbResult, Attachment, PartId, PartTypeId, Usage};
+use crate::{Attachment, PartId, PartTypeId, TbResult, Usage};
 
 /// This trait defines methods for storing and retrieving attachments.
 #[async_trait::async_trait]
@@ -30,8 +30,7 @@ pub trait AttachmentStore {
     ) -> TbResult<Vec<Attachment>>;
 
     /// Get all attachments for a list of part IDs.
-    async fn attachments_all_by_partlist(&mut self, ids: Vec<PartId>)
-        -> TbResult<Vec<Attachment>>;
+    async fn attachments_all_by_partlist(&mut self, ids: Vec<PartId>) -> TbResult<Vec<Attachment>>;
 
     /// Get an attachment for a given part and time.
     async fn attachment_get_by_part_and_time(

@@ -1,4 +1,3 @@
-
 mod types;
 pub use types::*;
 
@@ -19,19 +18,15 @@ use crate::UserId;
 #[async_trait::async_trait]
 /// A trait that represents a store for various tb_domain models.
 pub trait Store:
-    Send
-    + TypesStore
-    + PartStore
-    + UserStore
-    + ActivityStore
-    + AttachmentStore
+    Send + TypesStore + PartStore + UserStore + ActivityStore + AttachmentStore
 {
     async fn transaction<'a, R, E, F>(&mut self, callback: F) -> Result<R, E>
     where
-        F: for<'r> FnOnce(&'r mut Self) -> scoped_futures::ScopedBoxFuture<'a,'r,Result<R,E> >  + Send + 'a,
+        F: for<'r> FnOnce(&'r mut Self) -> scoped_futures::ScopedBoxFuture<'a, 'r, Result<R, E>>
+            + Send
+            + 'a,
         E: From<diesel::result::Error> + Send + 'a,
-        R: Send + 'a,
-    ;
+        R: Send + 'a;
 }
 
 /// A trait that represents a person.

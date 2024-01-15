@@ -7,11 +7,10 @@
 //! The `FromRef` trait is implemented for `MemoryStore`, `StravaClient`, and `PooledConnection<ConnectionManager<PgConnection>>`
 //! to allow easy extraction of these components from a reference to `AppState`.
 
-
 use async_session::MemoryStore;
 use axum_macros::FromRef;
 
-use crate::{DbPool};
+use crate::DbPool;
 
 #[derive(Clone, FromRef)]
 pub(super) struct AppState {
@@ -21,10 +20,6 @@ pub(super) struct AppState {
 
 impl AppState {
     pub(super) fn new(store: MemoryStore, pool: DbPool) -> Self {
-        Self {
-            store,
-            pool,
-        }
+        Self { store, pool }
     }
 }
-

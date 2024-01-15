@@ -1,6 +1,6 @@
 use time::OffsetDateTime;
 
-use crate::{ActTypeId, Activity, ActivityId, TbResult, NewActivity, PartId, Person, UserId};
+use crate::{ActTypeId, Activity, ActivityId, NewActivity, PartId, Person, TbResult, UserId};
 // A trait for storing and retrieving activities.
 /// A trait defining the methods for storing and retrieving activities.
 #[async_trait::async_trait]

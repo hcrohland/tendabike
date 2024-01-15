@@ -19,9 +19,8 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn get_static_path() -> PathBuf {
-    let path = std::env::var("STATIC_WWW").unwrap_or_else(|_| {
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../frontend/dist").to_string()
-    });
+    let path = std::env::var("STATIC_WWW")
+        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/../frontend/dist").to_string());
 
     Path::new(&path)
         .canonicalize()
