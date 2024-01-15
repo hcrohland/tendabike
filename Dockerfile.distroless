@@ -13,7 +13,7 @@ FROM gcr.io/distroless/cc
 USER 999:999
 WORKDIR /tendabike
 
-COPY tendabike .
+COPY --chmod=+x tendabike .
 COPY --from=build-frontend /frontend/dist dist
 
 ENV STATIC_WWW="/tendabike/dist"
