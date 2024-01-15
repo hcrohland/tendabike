@@ -40,6 +40,7 @@ jobs:
     env: 
       TAG: ${{ github.event_name == 'pull_request' && format('DLPR_{0}, ghcr.io/hcrohland/tendabike:dlstaging', github.event.pull_request.number) || 'distroless'}}
     steps:
+    - uses: actions/checkout@v3
     -
       name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
