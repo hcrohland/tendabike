@@ -8,7 +8,7 @@ RUN npm update rollup
 COPY frontend/ /frontend
 RUN npm run build
 
-FROM gcr.io/distroless/cc
+FROM gcr.io/distroless/cc-debian12:latest
 
 USER 999:999
 WORKDIR /tendabike
