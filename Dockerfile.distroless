@@ -19,4 +19,4 @@ COPY --from=build-frontend /frontend/dist dist
 
 ENV STATIC_WWW="/tendabike/dist"
 
-ENTRYPOINT [ "./tendabike" ]
+ENTRYPOINT [ "ldd", "./tendabike" ]
