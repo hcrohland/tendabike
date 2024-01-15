@@ -63,6 +63,7 @@ jobs:
         push: true
         file: Dockerfile.distroless
         tags: ghcr.io/hcrohland/tendabike:${{ env.TAG }}
+        context: .
         cache-from: type=gha
         cache-to: type=gha,mode=max
       
