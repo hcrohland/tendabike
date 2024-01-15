@@ -35,8 +35,8 @@ jobs:
       with:
         name: tendabike
         path: |
-          - target/release/tendabike
-          - /lib/x86_64-linux-gnu/libpq.so.5
+          target/release/tendabike
+          /lib/x86_64-linux-gnu/libpq.so.5
 
   docker:
     needs: rust
