@@ -53,7 +53,7 @@ export default class SvelteTable<Row> extends SvelteComponentTyped<
     iconSortable?: string;
     expandRowKey?: string;
     rowKey?: string;
-    totalsFunc?: ((row: Row[]) => Row?);
+    totalsFunc?: (row: Row[]) => Row?;
     classNameTable?: string | string[];
     classNameThead?: string | string[];
     classNameTbody?: string | string[];

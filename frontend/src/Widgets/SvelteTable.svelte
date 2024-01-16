@@ -327,7 +327,9 @@
                   bind:value={filterSelections[col.key]}
                   class={asStringArray(classNameSelect)}
                 >
-                  <option value={undefined}>{col.filterPlaceholder || ""}</option>
+                  <option value={undefined}
+                    >{col.filterPlaceholder || ""}</option
+                  >
                   {#each filterValues[col.key] as option}
                     <option value={option.value}>{option.name}</option>
                   {/each}

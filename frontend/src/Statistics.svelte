@@ -83,11 +83,13 @@
     let year: number;
     for (year = thisyear; year >= minyear; year--) {
       // get a copy of all bike activities for year year
-      let acts = acts1.filter((a) => (
-          a.start.getFullYear() == year &&
-          (g.length == 0 || g.includes(a.gear))
-      ))
-        .map((a) => new Day(a));;
+      let acts = acts1
+        .filter(
+          (a) =>
+            a.start.getFullYear() == year &&
+            (g.length == 0 || g.includes(a.gear)),
+        )
+        .map((a) => new Day(a));
       ret.push({
         year,
         days: aggregateDays(acts),
@@ -199,7 +201,7 @@
     };
   }
 
-  $: acts = $category.activities($activities)
+  $: acts = $category.activities($activities);
   $: gears = $category.parts($parts);
   let gear = gears ? [...gears] : [];
   let cumm = 0;

@@ -66,9 +66,7 @@
 
   async function installPart(newpart: Part, hook: number) {
     disabled = true;
-    await newpart
-      .create()
-      .then((p) => attachPart(p, hook));
+    await newpart.create().then((p) => attachPart(p, hook));
   }
 
   function setGroup(g: Group) {

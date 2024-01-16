@@ -1,16 +1,11 @@
 <script lang="ts">
-  import {
-    Button,
-    ModalFooter,
-    Spinner,
-  } from '@sveltestrap/sveltestrap';
-  
+  import { Button, ModalFooter, Spinner } from "@sveltestrap/sveltestrap";
+
   export let toggle: () => void;
   export let action: () => Promise<void>;
   export let disabled = false;
-  export let button: any
+  export let button: any;
   let promise: Promise<void>;
-
 </script>
 
 <ModalFooter>
@@ -19,7 +14,7 @@
     <Button color="primary" {disabled} on:click={() => (promise = action())}>
       {#await promise}
         <Spinner />
-      {:then} 
+      {:then}
         {button}
       {/await}
     </Button>

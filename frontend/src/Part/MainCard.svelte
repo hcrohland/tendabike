@@ -1,21 +1,22 @@
+<script lang="ts">
+  import GearCard from "./GearCard.svelte";
+  import { Part } from "../lib/types";
+  import { category } from "../lib/store";
+  import { link } from "svelte-spa-router";
+
+  export let part: Part;
+  export let display: boolean;
+</script>
+
 <GearCard {part} {display}>
   <div class="float-end">
-    <a href="/part/{part.id}" 
+    <a
+      href="/part/{part.id}"
       use:link
-      class="badge badge-secondary text-decoration-none" 
-      title={"View "+ $category.name.toLowerCase() + " details"}>
+      class="badge badge-secondary text-decoration-none"
+      title={"View " + $category.name.toLowerCase() + " details"}
+    >
       &Longrightarrow;
     </a>
   </div>
 </GearCard>
-
-<script lang="ts">
-  import GearCard from './GearCard.svelte';
-  import { Part } from '../lib/types';
-  import {category} from '../lib/store'
-  import {link} from 'svelte-spa-router'
-
-  export let part: Part
-  export let display: boolean
-
-</script>
