@@ -7,12 +7,15 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-check --tsconfig ./tsconfig.json"
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "format": "prettier --write .",
+    "fmtcheck": "prettier --check ."
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^3.0.1",
     "@tsconfig/svelte": "^5.0.2",
     "@types/svelte-range-slider-pips": "^2.0.4",
+    "prettier-plugin-svelte": "^3.1.2",
     "svelte": "^4.2.8",
     "svelte-check": "^3.6.2",
     "svelte-range-slider-pips": "^2.2.3",

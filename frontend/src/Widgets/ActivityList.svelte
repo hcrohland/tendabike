@@ -1,16 +1,22 @@
 <script lang="ts">
-  import { Modal, ModalHeader, ModalBody, Table } from '@sveltestrap/sveltestrap';
-  import { fmtDate } from '../lib/store';
-  import { Activity } from '../lib/types';
+  import {
+    Modal,
+    ModalHeader,
+    ModalBody,
+    Table,
+  } from "@sveltestrap/sveltestrap";
+  import { fmtDate } from "../lib/store";
+  import { Activity } from "../lib/types";
 
   export let activities: Activity[];
   export let isOpen = true;
-  const toggle = () => {isOpen = false}
-
+  const toggle = () => {
+    isOpen = false;
+  };
 </script>
 
 <Modal {isOpen} {toggle} backdrop={false}>
-  <ModalHeader {toggle}> 
+  <ModalHeader {toggle}>
     <slot>Activities</slot>
   </ModalHeader>
   <ModalBody>

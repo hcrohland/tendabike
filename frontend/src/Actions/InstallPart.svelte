@@ -3,13 +3,13 @@
     Modal,
     ModalHeader,
     ModalBody,
-    Form
-  } from '@sveltestrap/sveltestrap';
-  import {AttEvent, Part, Type} from '../lib/types';
-  import {user, attachments, filterValues} from '../lib/store';
-  import ModalFooter from './ModalFooter.svelte'
-  import NewForm from './NewForm.svelte';
-  import TypeForm from './TypeForm.svelte';
+    Form,
+  } from "@sveltestrap/sveltestrap";
+  import { AttEvent, Part, Type } from "../lib/types";
+  import { user, attachments, filterValues } from "../lib/store";
+  import ModalFooter from "./ModalFooter.svelte";
+  import NewForm from "./NewForm.svelte";
+  import TypeForm from "./TypeForm.svelte";
 
   let part: Part, newpart: Part;
   let gear: Part;
@@ -17,25 +17,25 @@
   let hook: number;
   let disabled = true;
   let isOpen = false;
-  const toggle = () => isOpen = false
+  const toggle = () => (isOpen = false);
   export const installPart = (g: Part) => {
     gear = g;
-    part = new Part ({
-      owner: $user && $user.id, 
+    part = new Part({
+      owner: $user && $user.id,
       purchase: new Date(),
-      last_used: new Date()
+      last_used: new Date(),
     });
     disabled = true;
     type = undefined;
-    isOpen = true
-  }
+    isOpen = true;
+  };
 
-  async function attachPart (part: Part | void) {
+  async function attachPart(part: Part | void) {
     if (!part) return;
-    await new AttEvent(part.id, part.purchase, gear.id, hook).attach()
+    await new AttEvent(part.id, part.purchase, gear.id, hook).attach();
   }
 
-  async function action () {
+  async function action() {
     disabled = true;
     await newpart.create().then(attachPart);
     isOpen = false;
@@ -43,42 +43,45 @@
 
   function guessDate(g: Part, t: Type, hook: number) {
     if (!t) return new Date();
-    let last = filterValues($attachments, (a) => a.gear == g.id && a.what == t.id && a.hook == hook)
+    let last = filterValues(
+      $attachments,
+      (a) => a.gear == g.id && a.what == t.id && a.hook == hook,
+    );
     if (last.length) {
       //I t is a replacement
-      return new Date()
+      return new Date();
     } else {
       // It is the first part of that type
-      return g.purchase
+      return g.purchase;
     }
   }
 
   part = new Part({
-      owner: $user && $user.id, 
-      purchase: new Date(),
-      last_used: new Date()
-    });
+    owner: $user && $user.id,
+    purchase: new Date(),
+    last_used: new Date(),
+  });
 
-  const setType = (e: CustomEvent<{type: Type, hook: number}>) => {
+  const setType = (e: CustomEvent<{ type: Type; hook: number }>) => {
     type = e.detail.type;
     hook = e.detail.hook;
     part.what = type.id;
-    part.purchase = guessDate(gear, type, hook)
-  }
+    part.purchase = guessDate(gear, type, hook);
+  };
   const setPart = (e: CustomEvent<Part>) => {
     newpart = new Part(e.detail);
-    disabled = false
-  }
-
+    disabled = false;
+  };
 </script>
+
 <Modal {isOpen} {toggle} backdrop={false}>
-  <ModalHeader {toggle}>  
-    <TypeForm {gear} on:change={setType}/>
+  <ModalHeader {toggle}>
+    <TypeForm {gear} on:change={setType} />
   </ModalHeader>
   <ModalBody>
     <Form>
-      <NewForm {type} {part} mindate={gear.purchase} on:change={setPart}/>
+      <NewForm {type} {part} mindate={gear.purchase} on:change={setPart} />
     </Form>
   </ModalBody>
-  <ModalFooter {action} {toggle} {disabled} button={'Install'} />
+  <ModalFooter {action} {toggle} {disabled} button={"Install"} />
 </Modal>

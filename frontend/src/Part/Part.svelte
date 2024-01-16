@@ -1,39 +1,44 @@
 <script lang="ts">
-  import {ButtonGroup, Button} from '@sveltestrap/sveltestrap'
-  import {types, parts} from '../lib/store'
-  import InstallPart  from '../Actions/InstallPart.svelte'
-  import ChangePart   from '../Actions/ChangePart.svelte'
-  import RecoverPart  from '../Actions/RecoverPart.svelte';
-  import AttachPart   from '../Actions/AttachPart.svelte';
-  import Subparts from './Subparts.svelte'
-  import GearCard from './GearCard.svelte'
-  import PartHist from './PartHist.svelte'
-  import { Part } from '../lib/types';
- 
-  export let params: {id: number, what:number};
-  
+  import { ButtonGroup, Button } from "@sveltestrap/sveltestrap";
+  import { types, parts } from "../lib/store";
+  import InstallPart from "../Actions/InstallPart.svelte";
+  import ChangePart from "../Actions/ChangePart.svelte";
+  import RecoverPart from "../Actions/RecoverPart.svelte";
+  import AttachPart from "../Actions/AttachPart.svelte";
+  import Subparts from "./Subparts.svelte";
+  import GearCard from "./GearCard.svelte";
+  import PartHist from "./PartHist.svelte";
+  import { Part } from "../lib/types";
+
+  export let params: { id: number; what: number };
+
   let installPart: (p: Part) => void;
   let changePart: (p: Part) => void;
-  let recoverPart: (p: Part) => void; 
+  let recoverPart: (p: Part) => void;
   let attachPart: (p: Part) => void;
 
-  $: part = $parts[params.id]; 
+  $: part = $parts[params.id];
   $: hook = part.type();
-  
 </script>
 
 <GearCard {part} display>
   <ButtonGroup class="float-end">
-      {#if part.disposed_at}
-      <Button on:click={() => recoverPart(part)}> Recover gear </Button>
-      {:else}
+    {#if part.disposed_at}
+      <Button on:click={() => recoverPart(part)}>Recover gear</Button>
+    {:else}
       {#if part.what == hook.main}
-         <Button color=light on:click={() => installPart(part)}>  Install new part </Button>
+        <Button color="light" on:click={() => installPart(part)}>
+          Install new part
+        </Button>
       {:else}
-         <Button color=light on:click={() => attachPart(part)}>  Attach part </Button>
+        <Button color="light" on:click={() => attachPart(part)}>
+          Attach part
+        </Button>
       {/if}
-      <Button color=light on:click={() => changePart(part)}>  Change details </Button>
-      {/if}
+      <Button color="light" on:click={() => changePart(part)}>
+        Change details
+      </Button>
+    {/if}
   </ButtonGroup>
 </GearCard>
 

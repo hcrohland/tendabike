@@ -1,32 +1,39 @@
 <script lang="ts">
-  import { Modal, ModalHeader, ModalBody } from '@sveltestrap/sveltestrap';
-  import ModalFooter from './ModalFooter.svelte'
-  import {types} from '../lib/store';
-  import {AttEvent, Part} from '../lib/types';  
-  import AttachForm from './AttachForm.svelte';
+  import { Modal, ModalHeader, ModalBody } from "@sveltestrap/sveltestrap";
+  import ModalFooter from "./ModalFooter.svelte";
+  import { types } from "../lib/store";
+  import { AttEvent, Part } from "../lib/types";
+  import AttachForm from "./AttachForm.svelte";
 
   let attach: AttEvent;
   let part: Part | undefined;
   let isOpen = false;
   let disabled = true;
-  const toggle = () => {part = undefined; isOpen = false}
+  const toggle = () => {
+    part = undefined;
+    isOpen = false;
+  };
 
-  async function action () {
+  async function action() {
     disabled = true;
-    
+
     await attach.attach();
-    isOpen = false;  
-  }  
-  
+    isOpen = false;
+  }
+
   export const attachPart = (p: Part) => {
     part = p;
-    isOpen = true
-  };  
+    isOpen = true;
+  };
 </script>
+
 <Modal {isOpen} {toggle} backdrop={false}>
-  {#if part }
-    <ModalHeader {toggle}> 
-      Attach {types[part.what].name} {part.name} {part.vendor} {part.model}
+  {#if part}
+    <ModalHeader {toggle}>
+      Attach {types[part.what].name}
+      {part.name}
+      {part.vendor}
+      {part.model}
     </ModalHeader>
     <ModalBody>
       <AttachForm bind:attach bind:disabled {part} />
@@ -34,5 +41,5 @@
   {:else}
     Error: part is not defined
   {/if}
-  <ModalFooter {toggle} {action} {disabled} button={'Attach'} />
+  <ModalFooter {toggle} {action} {disabled} button={"Attach"} />
 </Modal>

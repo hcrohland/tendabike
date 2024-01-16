@@ -1,4 +1,14 @@
-import { type Map, by, filterValues, fmtDate, handleError, myfetch, parts, types, updateSummary } from "./store";
+import {
+  type Map,
+  by,
+  filterValues,
+  fmtDate,
+  handleError,
+  myfetch,
+  parts,
+  types,
+  updateSummary,
+} from "./store";
 export const maxDate = new Date("2999-12-31");
 
 export class Usage {
@@ -67,39 +77,46 @@ export class Part extends Usage {
     this.model = data.model;
     this.purchase = new Date(data.purchase);
     this.last_used = new Date(data.last_used);
-    this.disposed_at = data.disposed_at ? new Date(data.disposed_at) : undefined;
+    this.disposed_at = data.disposed_at
+      ? new Date(data.disposed_at)
+      : undefined;
   }
 
   async create() {
-    return await myfetch('/part', 'POST', this)
-      .then(data => { parts.updateMap([data]); return new Part(data) })
-      .catch(handleError)
+    return await myfetch("/part", "POST", this)
+      .then((data) => {
+        parts.updateMap([data]);
+        return new Part(data);
+      })
+      .catch(handleError);
   }
 
   async update() {
-    return await myfetch('/part', 'PUT', this)
-      .then(data => parts.updateMap([data]))
-      .catch(handleError)
+    return await myfetch("/part", "PUT", this)
+      .then((data) => parts.updateMap([data]))
+      .catch(handleError);
   }
 
   type() {
-    return types[this.what]
+    return types[this.what];
   }
 
   attachments(atts: Map<Attachment>) {
-    return filterValues(atts, (a) => a.part_id == this.id).sort(by("attached"))
+    return filterValues(atts, (a) => a.part_id == this.id).sort(by("attached"));
   }
 
   isGear() {
-    return this.type().main == this.what
+    return this.type().main == this.what;
   }
 
   partLink() {
-    return '<a href="/#/part/' +
+    return (
+      '<a href="/#/part/' +
       this.id +
       '" style="text-decoration1:none" class="text-reset">' +
-      this.name
-      + '</a>'
+      this.name +
+      "</a>"
+    );
   }
 }
 
@@ -121,27 +138,27 @@ export class Attachment extends Usage {
     this.detached = new Date(data.detached);
     this.what = data.what;
     this.name = data.name;
-    this.idx = this.part_id + "/" + this.attached.getTime()
+    this.idx = this.part_id + "/" + this.attached.getTime();
   }
   fmtTime() {
     let res = fmtDate(this.attached);
-    if (this.detached < maxDate)
-      res = res + " - " + fmtDate(this.detached)
-    return res
+    if (this.detached < maxDate) res = res + " - " + fmtDate(this.detached);
+    return res;
   }
   isAttached(time?: Date | string | number) {
-    if (!time)
-      time = new Date();
-    else
-      time = new Date(time);
+    if (!time) time = new Date();
+    else time = new Date(time);
 
-    return this.attached <= time && time < this.detached
+    return this.attached <= time && time < this.detached;
   }
   isEmpty() {
-    return this.attached.getTime() >= this.detached.getTime()
+    return this.attached.getTime() >= this.detached.getTime();
   }
   activities(acts: Map<Activity>) {
-    return filterValues(acts, (a) => a.gear == this.gear && this.isAttached(a.start))
+    return filterValues(
+      acts,
+      (a) => a.gear == this.gear && this.isAttached(a.start),
+    );
   }
 }
 
@@ -163,7 +180,7 @@ export class Type {
     this.hooks = t.hooks;
     this.order = t.order;
 
-    this.prefix = this.name.split(' ').reverse()[1] || '';  // The first word iff there were two (hack!)
+    this.prefix = this.name.split(" ").reverse()[1] || ""; // The first word iff there were two (hack!)
     this.acts = [];
   }
 
@@ -174,17 +191,16 @@ export class Type {
   }
 
   parts(parts: Map<Part>) {
-    return filterValues(parts, (p) => p.what == this.id).sort(
-      by("last_used"));
+    return filterValues(parts, (p) => p.what == this.id).sort(by("last_used"));
   }
 }
 
 export type User = {
-  id: number,
-  firstname: string,
-  name: string,
-  is_admin: boolean
-}
+  id: number;
+  firstname: string;
+  name: string;
+  is_admin: boolean;
+};
 
 export class Activity extends Usage {
   id: number;
@@ -211,32 +227,37 @@ export class Activity extends Usage {
 
   gearLink(parts: Map<Part>) {
     if (this.gear && parts[this.gear]) {
-      return parts[this.gear].partLink()
+      return parts[this.gear].partLink();
     } else {
-      return '-'
+      return "-";
     }
   }
 
   gearName(parts: Map<Part>) {
-    return this.gear && parts[this.gear] ? parts[this.gear].name : '-';
+    return this.gear && parts[this.gear] ? parts[this.gear].name : "-";
   }
 }
 
 export type ActType = {
-  id: number,
-  name: string,
-  gear_type: number
-}
+  id: number;
+  name: string;
+  gear_type: number;
+};
 
 export class AttEvent {
   part_id: number;
   time: Date;
   gear: number;
   hook: number;
-  constructor(part: number | undefined, time: Date, gear: number | undefined, hook: number) {
+  constructor(
+    part: number | undefined,
+    time: Date,
+    gear: number | undefined,
+    hook: number,
+  ) {
     if (gear == undefined || part == undefined) {
       console.error("part or gear not defined: ", part, gear);
-      throw ("part or gear not defined")
+      throw "part or gear not defined";
     }
     this.part_id = part;
     this.time = time;
@@ -245,14 +266,14 @@ export class AttEvent {
   }
 
   async attach() {
-    return await myfetch('/part/attach', 'POST', this)
+    return await myfetch("/part/attach", "POST", this)
       .then(updateSummary)
-      .catch(handleError)
+      .catch(handleError);
   }
 
   async detach() {
-    return await myfetch('/part/detach', 'POST', this)
+    return await myfetch("/part/detach", "POST", this)
       .then(updateSummary)
-      .catch(handleError)
+      .catch(handleError);
   }
 }

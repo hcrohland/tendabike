@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { Button, ButtonGroup, Spinner, Table } from "@sveltestrap/sveltestrap";
+  import {
+    Button,
+    ButtonGroup,
+    Spinner,
+    Table,
+  } from "@sveltestrap/sveltestrap";
   import { handleError, myfetch } from "../lib/store";
   import type { User } from "../lib/types";
   import Sync from "./Sync.svelte";
@@ -55,9 +60,7 @@
             <ButtonGroup>
               <Button on:click={() => createSync(user)}>Add Sync Event</Button>
               <Sync {user} {refresh} />
-              <Button on:click={() => disable(user)}>
-                Disable user</Button
-              >
+              <Button on:click={() => disable(user)}>Disable user</Button>
             </ButtonGroup>
           {/if}
         </td>

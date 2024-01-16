@@ -22,7 +22,7 @@
 
   async function action() {
     await myfetch(
-      "/strava/sync?time=" + (date.getTime() / 1000).toFixed(0) + userParam
+      "/strava/sync?time=" + (date.getTime() / 1000).toFixed(0) + userParam,
     ).catch(handleError);
     isOpen = false;
     refresh();
