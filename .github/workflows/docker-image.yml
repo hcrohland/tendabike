@@ -63,11 +63,31 @@ jobs:
           /lib/x86_64-linux-gnu/libgcc_s.so.1
           /lib/x86_64-linux-gnu/libssl.so.3
           /lib/x86_64-linux-gnu/libpq.so.5
-
-  docker:
-    needs: rust
+  
+  svelte:
     runs-on: ubuntu-latest
-    #runs-on: buildjet-2vcpu-ubuntu-2204-arm
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          cache: npm
+      - name: npm check
+        run: npm run build
+      - name: Upload frontend components
+        uses: actions/upload-artifact@v3
+        with:
+          name: tendabike_frontend
+          path: frontend/dist
+  
+  docker:
+    needs: 
+    - rust
+    - svelte
+    runs-on: ubuntu-latest
 
     env: 
       TAG: ${{ github.event_name == 'pull_request' && format('PR_{0}, ghcr.io/hcrohland/tendabike:staging', github.event.pull_request.number) || 'latest'}}
@@ -87,6 +107,11 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: tendabike
+    - name: Download tendabike frontend
+      uses: actions/download-artifact@v3
+      with:
+        name: tendabike_frontend
+ 
     - name: Download libs
       uses: actions/download-artifact@v3
       with:

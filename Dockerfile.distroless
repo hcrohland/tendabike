@@ -1,13 +1,3 @@
-FROM node:21 AS build-frontend
-
-WORKDIR /frontend
-
-COPY frontend/package.json frontend/package-lock.json /frontend/
-RUN npm update rollup
-
-COPY frontend/ /frontend
-RUN npm run build
-
 FROM gcr.io/distroless/cc-debian12:latest
 
 USER 999:999
@@ -15,7 +5,7 @@ WORKDIR /tendabike
 
 COPY --chmod=755 tendabike .
 COPY lib*.so* /lib/x86_64-linux-gnu/
-COPY --from=build-frontend /frontend/dist dist
+COPY dist dist
 
 ENV STATIC_WWW="/tendabike/dist"
 
