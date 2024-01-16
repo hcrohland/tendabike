@@ -120,6 +120,7 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: libs
+        path: libs
     - name: Build and push
       uses: docker/build-push-action@v5
       with:

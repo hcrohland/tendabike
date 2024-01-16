@@ -4,8 +4,8 @@ USER 999:999
 WORKDIR /tendabike
 
 COPY --chmod=755 tendabike .
-COPY lib*.so* /lib/x86_64-linux-gnu/
 COPY dist dist
+COPY libs/* /lib/x86_64-linux-gnu/
 
 ENV STATIC_WWW="/tendabike/dist"
 
