@@ -14,10 +14,10 @@ anyhow = "1.0"
 thiserror = "1.0"
 
 async-session = "3.0.0"
-axum = { version = "0.6", features = ["headers"] }
-headers = "0.3"
-http = "0.2"
-oauth2 = "4.1"
+axum = { version = "0.7"}
+headers = "0.4"
+http = "1"
+oauth2 = "4.4"
 # Use Rustls because it makes it easier to cross-compile on CI
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "json"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -25,6 +25,8 @@ serde_derive = "1.0"
 serde_json = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tower-http = { version = "0.4", features = ["full"] }
-axum-macros = "0.3"
+tower-http = { version = "0.5", features = ["full"] }
+axum-macros = "0.4"
 lazy_static = "1.4"
+tokio = "1.35.1"
+axum-extra ={ version = "0.9.2", features = ["typed-header"]}

@@ -11,10 +11,12 @@ use crate::error::AppError;
 use anyhow::Context;
 use async_session::{log::warn, MemoryStore, Session, SessionStore};
 use axum::{
-    extract::{Query, State, TypedHeader},
+    extract::{Query, State},
     http::{header::SET_COOKIE, HeaderMap},
     response::{IntoResponse, Redirect},
 };
+use axum_extra::TypedHeader;
+
 use http::StatusCode;
 use oauth2::{
     basic::{

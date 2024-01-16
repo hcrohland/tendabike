@@ -7,11 +7,12 @@ use async_session::{
     MemoryStore, SessionStore,
 };
 use axum::{
-    extract::{rejection::TypedHeaderRejectionReason, FromRef, FromRequestParts},
+    extract::{FromRef, FromRequestParts},
     response::{IntoResponse, Response},
-    RequestPartsExt, TypedHeader,
+    RequestPartsExt,
 };
-use http::{header, request::Parts, StatusCode};
+use axum_extra::{typed_header::TypedHeaderRejectionReason, TypedHeader};
+use http::{header, request::Parts};
 use oauth2::{
     basic::BasicTokenType, reqwest::async_http_client, AccessToken, RefreshToken,
     StandardTokenResponse, TokenResponse,
@@ -137,6 +138,7 @@ impl RequestUser {
         uri: &str,
         conn: &mut impl StravaStore,
     ) -> TbResult<reqwest::Response> {
+        use reqwest::StatusCode;
         self.check_token(conn).await?;
 
         let resp = reqwest::Client::new()
@@ -279,7 +281,7 @@ where
             .await
             .map_err(IntoResponse::into_response)?;
         if !user.is_admin() {
-            Err((StatusCode::NOT_FOUND, "Page not found").into_response())
+            Err((http::StatusCode::NOT_FOUND, "Page not found").into_response())
         } else {
             Ok(AxumAdmin)
         }
