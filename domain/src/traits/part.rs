@@ -1,6 +1,7 @@
 use crate::{Part, PartId, PartTypeId, Person, TbResult, Usage, UserId};
 use time::OffsetDateTime;
 
+pub trait PartDomain {}
 #[async_trait::async_trait]
 /// A trait representing a store for `Part` objects.
 pub trait PartStore {

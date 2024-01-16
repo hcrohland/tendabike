@@ -468,3 +468,5 @@ async fn def_part(partid: &PartId, user: &dyn Person, conn: &mut impl Store) -> 
     }
     Ok(hash.collect())
 }
+
+impl ActivityDomain for Domain {}

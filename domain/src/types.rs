@@ -130,3 +130,5 @@ impl ActivityType {
         conn.activitytypes_get_all_ordered().await
     }
 }
+
+impl TypesDomain for Domain {}

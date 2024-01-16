@@ -2,6 +2,7 @@ use time::OffsetDateTime;
 
 use crate::{Attachment, PartId, PartTypeId, TbResult, Usage};
 
+pub trait AttachmentDomain {}
 /// This trait defines methods for storing and retrieving attachments.
 #[async_trait::async_trait]
 pub trait AttachmentStore {
