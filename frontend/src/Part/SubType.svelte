@@ -1,23 +1,22 @@
 <script lang="ts">
-import {DropdownItem} from '@sveltestrap/sveltestrap';
-import {parts} from '../lib/store'
-import Usage from '../Usage.svelte'
-import ReplacePart from '../Actions/ReplacePart.svelte'
-import AttachPart from '../Actions/AttachPart.svelte'
-import {Part, Attachment, Type} from '../lib/types';
-import Menu from '../Widgets/Menu.svelte';
-import ShowAll from '../Widgets/ShowHist.svelte';
-import {link} from 'svelte-spa-router'
+  import { DropdownItem } from "@sveltestrap/sveltestrap";
+  import { parts } from "../lib/store";
+  import Usage from "../Usage.svelte";
+  import ReplacePart from "../Actions/ReplacePart.svelte";
+  import AttachPart from "../Actions/AttachPart.svelte";
+  import { Part, Attachment, Type } from "../lib/types";
+  import Menu from "../Widgets/Menu.svelte";
+  import ShowAll from "../Widgets/ShowHist.svelte";
+  import { link } from "svelte-spa-router";
 
-export let attachments: Attachment[] = [];
-export let level: number = 0;
-export let prefix = "";
-export let type: Type | undefined = undefined;
-export const hook: Type | undefined = undefined;
+  export let attachments: Attachment[] = [];
+  export let level: number = 0;
+  export let prefix = "";
+  export let type: Type | undefined = undefined;
+  export const hook: Type | undefined = undefined;
 
-let show_hist = false; 
-let attachPart: (p: Part) => void, replacePart: (p: Attachment) => void;
-
+  let show_hist = false;
+  let attachPart: (p: Part) => void, replacePart: (p: Attachment) => void;
 </script>
 
 {#if type == undefined}
@@ -25,76 +24,86 @@ let attachPart: (p: Part) => void, replacePart: (p: Attachment) => void;
     <th scope="col">Attached parts</th>
     <th scope="col">Name</th>
     <th scope="col">Attached</th>
-    <Usage/>
+    <Usage />
     <th></th>
-  </tr>    
+  </tr>
 {:else}
-  {#each attachments.map(att => ({att, part: $parts[att.part_id]})) as {att, part},i (att.idx)}
+  {#each attachments.map( (att) => ({ att, part: $parts[att.part_id] }), ) as { att, part }, i (att.idx)}
     {#if i == 0}
       <tr>
-        <th scope="row" class="text-nowrap"> 
-          {'| '.repeat(level)}
-          {prefix +  " " + type.name}
-          {#if attachments.length > 1 || (part && part.count != att.count) }
-            <ShowAll bind:show_hist/>
+        <th scope="row" class="text-nowrap">
+          {"| ".repeat(level)}
+          {prefix + " " + type.name}
+          {#if attachments.length > 0 || (part && part.count != att.count)}
+            <ShowAll bind:show_hist />
           {/if}
-        </th>  
+        </th>
         {#if att.isAttached()}
           <td>
             {#if part}
-              <a href="/part/{part.id}" 
+              <a
+                href="/part/{part.id}"
                 use:link
-                style={part.disposed_at ? "text-decoration: line-through;" : ""} 
-                class="text-reset">
+                style={part.disposed_at ? "text-decoration: line-through;" : ""}
+                class="text-reset"
+              >
                 {part.name}
               </a>
             {:else}
               {att.name}
             {/if}
           </td>
-          <td> {att.fmtTime()} </td>  
-          <Usage usage={part} ref={part.id}/>
+          <td> {att.fmtTime()} </td>
+          <Usage usage={part} ref={part.id} />
           <td>
             <Menu>
-              <DropdownItem on:click={() => attachPart(part)}> Move part</DropdownItem>
-              <DropdownItem on:click={() => replacePart(att)}> Replace part</DropdownItem>
+              <DropdownItem on:click={() => attachPart(part)}>
+                Move part</DropdownItem
+              >
+              <DropdownItem on:click={() => replacePart(att)}>
+                Replace part</DropdownItem
+              >
             </Menu>
           </td>
         {:else}
-          <th colspan=80 />
+          <th colspan="80" />
         {/if}
-      </tr>   
+      </tr>
     {/if}
-    {#if show_hist }
-      {#if !(i == 0 && part && part.count == att.count)}
-        <tr>
-          <th scope="row" class="text-nowrap">
-            {'| '.repeat(level+1)}&#9656;
-          </th>
-          <td>
-            {#if part}
-              <a href="/part/{part.id}" 
-                use:link
-                style={part.disposed_at ? "text-decoration: line-through;" : ""} 
-                class="text-reset">
-                {part.name}
-              </a>
-            {:else}
-              {att.name}
-            {/if}
-          </td>
-          <td> {att.fmtTime()} </td>  
-          <Usage usage={att} ref={att.idx}/>
-          <td>
-              <Menu>
-                <DropdownItem on:click={() => attachPart(part)}>Attach part</DropdownItem>
-                <DropdownItem on:click={() => replacePart(att)}> Duplicate part</DropdownItem>
-              </Menu>
-            </td>
-          </tr>
-        {/if}
+    {#if show_hist}
+      <tr>
+        <th scope="row" class="text-nowrap">
+          {"| ".repeat(level + 1)}&#9656;
+        </th>
+        <td>
+          {#if part}
+            <a
+              href="/part/{part.id}"
+              use:link
+              style={part.disposed_at ? "text-decoration: line-through;" : ""}
+              class="text-reset"
+            >
+              {part.name}
+            </a>
+          {:else}
+            {att.name}
+          {/if}
+        </td>
+        <td> {att.fmtTime()} </td>
+        <Usage usage={att} ref={att.idx} />
+        <td>
+          <Menu>
+            <DropdownItem on:click={() => attachPart(part)}
+              >Attach part</DropdownItem
+            >
+            <DropdownItem on:click={() => replacePart(att)}>
+              Duplicate part</DropdownItem
+            >
+          </Menu>
+        </td>
+      </tr>
     {/if}
   {/each}
 {/if}
-<AttachPart bind:attachPart/> 
-<ReplacePart bind:replacePart/>
+<AttachPart bind:attachPart />
+<ReplacePart bind:replacePart />
