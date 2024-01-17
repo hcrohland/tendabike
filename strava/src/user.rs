@@ -39,7 +39,7 @@ impl StravaId {
 
     /// lock the current user
     pub async fn lock(&self, conn: &mut impl StravaStore) -> TbResult<()> {
-        if conn.stravaid_lock(&self).await? {
+        if conn.stravaid_lock(self).await? {
             Ok(())
         } else {
             Err(Error::Conflict(format!("Two sessions for user {}", self)))
@@ -202,7 +202,7 @@ impl StravaUser {
         user: &mut impl StravaPerson,
         conn: &mut impl StravaStore,
     ) -> TbResult<Summary> {
-        return event::process(user, conn).await;
+        event::process(user, conn).await
     }
 }
 
@@ -258,7 +258,7 @@ pub async fn user_disable(
 
     warn!("User {} disabled", user.tb_id());
 
-    Ok(user.strava_id().disable(conn).await?)
+    user.strava_id().disable(conn).await
 }
 
 /// Returns the Strava URL for a user with the given Strava ID.

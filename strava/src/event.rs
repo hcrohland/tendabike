@@ -93,7 +93,7 @@ impl std::fmt::Display for Event {
         write!(
             f,
             "Event {}: {} {} {} at {}, owner:{}",
-            self.id.unwrap_or(0.into()),
+            self.id.unwrap_or(0),
             self.aspect_type,
             self.object_type,
             self.object_id,
