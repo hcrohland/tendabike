@@ -17,7 +17,6 @@
 
 */
 
-///! tb_domain model for tendabike
 mod activity;
 mod attachment;
 mod error;

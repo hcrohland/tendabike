@@ -37,7 +37,7 @@ pub trait Person: Send + Sync {
         if self.get_id() == owner {
             Ok(())
         } else {
-            Err(crate::Error::Forbidden(error).into())
+            Err(crate::Error::Forbidden(error))
         }
     }
 }

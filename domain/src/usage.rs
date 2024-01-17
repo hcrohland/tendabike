@@ -25,7 +25,7 @@
 use serde_derive::{Deserialize, Serialize};
 use std::ops::{Add, Neg};
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct Usage {
     // usage time
     pub time: i32,
@@ -39,19 +39,6 @@ pub struct Usage {
     pub power: i32,
     /// number of activities
     pub count: i32,
-}
-
-impl Default for Usage {
-    fn default() -> Usage {
-        Usage {
-            time: 0,
-            climb: 0,
-            descend: 0,
-            power: 0,
-            distance: 0,
-            count: 0,
-        }
-    }
 }
 
 impl Add for Usage {

@@ -61,7 +61,7 @@ impl RequestUser {
 
         let refresh_token = token.refresh_token();
         let refresh = refresh_token.map(|t| t.secret());
-        let user = StravaUser::upsert(*id, &firstname, &lastname, refresh, conn).await?;
+        let user = StravaUser::upsert(*id, firstname, lastname, refresh, conn).await?;
         let id = user.tb_id();
         let is_admin = id.is_admin(conn).await?;
 
@@ -143,7 +143,7 @@ impl RequestUser {
 
         let resp = reqwest::Client::new()
             .get(format!("{}{}", API, uri))
-            .bearer_auth(&self.access_token.secret())
+            .bearer_auth(self.access_token.secret())
             .send()
             .await
             .context("Could not reach strava")?;
@@ -158,30 +158,27 @@ impl RequestUser {
             | StatusCode::BAD_GATEWAY
             | StatusCode::SERVICE_UNAVAILABLE
             | StatusCode::GATEWAY_TIMEOUT => {
-                return Err(Error::TryAgain(status.canonical_reason().unwrap()))
+                Err(Error::TryAgain(status.canonical_reason().unwrap()))
             }
-            StatusCode::UNAUTHORIZED => {
-                return Err(Error::NotAuth(format!(
-                    "Strava request authorization withdrawn for {}",
-                    uri
-                )));
-            }
-            _ => {
-                return Err(Error::BadRequest(format!(
-                    "Strava request error: {}",
-                    status
-                        .canonical_reason()
-                        .unwrap_or("Unknown status received")
-                )))
-            }
+            StatusCode::UNAUTHORIZED => Err(Error::NotAuth(format!(
+                "Strava request authorization withdrawn for {}",
+                uri
+            ))),
+            _ => Err(Error::BadRequest(format!(
+                "Strava request error: {}",
+                status
+                    .canonical_reason()
+                    .unwrap_or("Unknown status received")
+            ))),
         }
     }
 
     async fn check_token(&mut self, conn: &mut impl StravaStore) -> TbResult<()> {
-        Ok(if self.is_expired() {
+        if self.is_expired() {
             debug!("access token for user {} is expired", self.id);
-            self.refresh_the_token(conn).await?
-        })
+            return self.refresh_the_token(conn).await;
+        }
+        Ok(())
     }
 }
 
