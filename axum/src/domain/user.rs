@@ -6,17 +6,13 @@
 //! This module also defines the `RUser` struct, which represents a user in the system and is used throughout the module.
 //! Additionally, it defines the `AxumAdmin` struct, which is used as a marker type for routes that require admin privileges.
 
-use axum::{
-    extract::{Path, State},
-    routing::get,
-    Json, Router,
-};
+use axum::{extract::State, routing::get, Json, Router};
 use tb_domain::{Person, Summary};
 use tb_strava::StravaUser;
 
 use crate::{appstate::AppState, ApiResult, AxumAdmin, DbPool, RequestUser};
 
-pub(crate) fn router() -> Router<AppState> {
+pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(getuser))
         .route("/summary", get(summary))
@@ -41,15 +37,4 @@ async fn userlist(
 ) -> ApiResult<Vec<tb_strava::StravaStat>> {
     let mut conn = pool.get().await?;
     Ok(tb_strava::get_all_stats(&mut conn).await.map(Json)?)
-}
-
-pub(crate) async fn revoke_user(
-    admin: AxumAdmin,
-    Path(tbid): Path<i32>,
-    State(pool): State<DbPool>,
-) -> ApiResult<()> {
-    let mut conn = pool.get().await?;
-    let conn = &mut conn;
-    let mut user = RequestUser::create_from_id(admin, tbid.into(), conn).await?;
-    Ok(tb_strava::user_disable(&mut user, conn).await.map(Json)?)
 }

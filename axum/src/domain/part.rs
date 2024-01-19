@@ -34,7 +34,7 @@ use axum::{
 use http::StatusCode;
 use tb_domain::{ChangePart, NewPart, Part, PartId};
 
-pub(crate) fn router() -> Router<AppState> {
+pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route("/", put(put_part).post(post_part))
         .route("/:part", get(get_part))
@@ -55,7 +55,7 @@ async fn post_part(
     Json(newpart): Json<NewPart>,
 ) -> Result<(StatusCode, Json<Part>), AppError> {
     let mut conn = conn.get().await?;
-    let part = newpart.clone().create(&user, &mut conn).await?;
+    let part = newpart.create(&user, &mut conn).await?;
     Ok((StatusCode::CREATED, Json(part)))
 }
 

@@ -6,9 +6,12 @@
 use axum::{
     extract::{Path, State},
     response::Redirect,
+    Json,
 };
 
-use crate::{error::AppError, DbPool};
+use crate::{error::AppError, ApiResult, DbPool};
+
+use super::{AxumAdmin, RequestUser};
 
 pub(super) async fn redirect_gear(
     Path(id): Path<i32>,
@@ -41,4 +44,15 @@ pub(super) async fn redirect_user(
         .await
         .unwrap_or_else(|_| "/".to_string());
     Ok(Redirect::permanent(&uri))
+}
+
+pub(super) async fn revoke_user(
+    admin: AxumAdmin,
+    Path(tbid): Path<i32>,
+    State(pool): State<DbPool>,
+) -> ApiResult<()> {
+    let mut conn = pool.get().await?;
+    let conn = &mut conn;
+    let mut user = RequestUser::create_from_id(admin, tbid.into(), conn).await?;
+    Ok(tb_strava::user_disable(&mut user, conn).await.map(Json)?)
 }
