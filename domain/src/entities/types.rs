@@ -87,7 +87,7 @@ pub struct ActivityType {
 
 impl PartTypeId {
     /// get the full type for a type_id
-    pub async fn get(self, conn: &mut impl Store) -> TbResult<PartType> {
+    pub(crate) async fn get(self, conn: &mut impl Store) -> TbResult<PartType> {
         conn.get_parttype_by_id(self).await
     }
 
@@ -114,13 +114,13 @@ impl PartTypeId {
     }
 
     /// get all the types you can attach - even indirectly - to this type_id
-    pub async fn subtypes(self, conn: &mut impl Store) -> Vec<PartType> {
+    pub(crate) async fn subtypes(self, conn: &mut impl Store) -> Vec<PartType> {
         let mut types = PartType::all_ordered(conn).await;
         self.filter_types(&mut types)
     }
 
     /// Get the activity types valid for this part_type
-    pub async fn act_types(&self, conn: &mut impl Store) -> TbResult<Vec<ActTypeId>> {
+    pub(crate) async fn act_types(&self, conn: &mut impl Store) -> TbResult<Vec<ActTypeId>> {
         conn.get_activity_types_by_parttypeid(self).await
     }
 }

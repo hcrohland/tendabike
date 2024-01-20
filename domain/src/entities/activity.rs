@@ -245,7 +245,7 @@ impl Activity {
     ///
     /// If the descend value is missing, assume descend = climb
     /// Account for Factor
-    pub fn usage(&self) -> Usage {
+    pub(crate) fn usage(&self) -> Usage {
         Usage {
             time: self.time.unwrap_or(0),
             distance: self.distance.unwrap_or(0),
@@ -259,7 +259,7 @@ impl Activity {
     /// find all activities for gear part in the given time frame
     ///
     /// if end is none it means for the whole future
-    pub async fn find(
+    pub(crate) async fn find(
         part: PartId,
         begin: OffsetDateTime,
         end: OffsetDateTime,
