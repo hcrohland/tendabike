@@ -41,8 +41,3 @@ pub trait Person: Send + Sync {
         }
     }
 }
-
-pub trait AppDomain:
-    Send + TypesDomain + PartDomain + UserDomain + ActivityDomain + AttachmentDomain
-{
-}

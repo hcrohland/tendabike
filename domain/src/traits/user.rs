@@ -1,6 +1,5 @@
 use crate::{TbResult, User, UserId};
 
-pub trait UserDomain {}
 #[async_trait::async_trait]
 /// A trait representing a user store.
 pub trait UserStore {

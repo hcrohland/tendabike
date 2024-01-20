@@ -36,13 +36,3 @@ pub mod schema;
 
 mod traits;
 pub use traits::*;
-
-pub struct Domain {}
-
-impl Domain {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
-impl AppDomain for Domain {}

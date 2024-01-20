@@ -1,6 +1,5 @@
 use crate::{ActTypeId, ActivityType, PartType, PartTypeId, TbResult};
 
-pub trait TypesDomain {}
 /// A trait defining methods for accessing and manipulating types in the system.
 #[async_trait::async_trait]
 pub trait TypesStore {

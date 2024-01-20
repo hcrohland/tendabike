@@ -117,5 +117,3 @@ impl Person for User {
         self.is_admin
     }
 }
-
-impl UserDomain for Domain {}

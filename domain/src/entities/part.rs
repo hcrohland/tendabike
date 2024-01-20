@@ -263,5 +263,3 @@ impl ChangePart {
         conn.part_change(self).await
     }
 }
-
-impl PartDomain for Domain {}

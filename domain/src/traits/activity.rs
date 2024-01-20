@@ -127,5 +127,3 @@ pub trait ActivityStore {
     /// Returns a `Result` containing a vector of `Activity` structs or an error if the operation fails.
     async fn activity_get_really_all(&mut self) -> TbResult<Vec<Activity>>;
 }
-
-pub trait ActivityDomain {}

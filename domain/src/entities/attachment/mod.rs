@@ -278,5 +278,3 @@ impl Attachment {
         Ok(res)
     }
 }
-
-impl AttachmentDomain for Domain {}
