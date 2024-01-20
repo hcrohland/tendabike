@@ -17,31 +17,22 @@
 
 */
 
-mod activity;
-mod attachment;
 mod error;
-mod part;
-mod types;
-mod user;
-
 use async_session::log::{debug, info, trace, warn};
 
-pub use activity::{Activity, ActivityId, NewActivity};
-pub use attachment::{Attachment, AttachmentDetail, Event};
+mod entities;
+pub use entities::activity::{Activity, ActivityId, NewActivity};
+pub use entities::attachment::{Attachment, AttachmentDetail, Event};
+pub use entities::part::{ChangePart, NewPart, Part, PartId};
+pub use entities::summary::*;
+pub use entities::types::*;
+pub use entities::usage::*;
+pub use entities::user::*;
 pub use error::{Error, TbResult};
-pub use part::{ChangePart, NewPart, Part, PartId};
-pub use types::*;
-pub use user::*;
 
 use diesel::prelude::*;
 
 pub mod schema;
-
-mod usage;
-pub use usage::*;
-
-mod summary;
-pub use summary::*;
 
 mod traits;
 pub use traits::*;

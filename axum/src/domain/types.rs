@@ -20,7 +20,7 @@ async fn part(State(conn): State<DbPool>) -> ApiResult<Vec<PartType>> {
     Ok(Json(PartType::all_ordered(&mut conn).await))
 }
 
-pub(crate) fn router() -> Router<AppState> {
+pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route("/part", get(part))
         .route("/activity", get(activity))

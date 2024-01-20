@@ -241,7 +241,7 @@ impl Attachment {
     /// apply usage to all attachments affected by activity
     ///
     /// returns the list of Attachments - including the redundant details
-    pub async fn register(
+    pub(crate) async fn register(
         act: &Activity,
         usage: &Usage,
         conn: &mut impl Store,
@@ -264,7 +264,7 @@ impl Attachment {
     }
 
     /// return all attachments with details for the parts in 'partlist'
-    pub async fn for_parts(
+    pub(crate) async fn for_parts(
         partlist: &[Part],
         conn: &mut impl Store,
     ) -> TbResult<Vec<AttachmentDetail>> {

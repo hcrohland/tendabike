@@ -23,7 +23,7 @@ pub struct Summary {
 
 impl Summary {
     pub fn new(
-        activities: Vec<activity::Activity>,
+        activities: Vec<entities::activity::Activity>,
         parts: Vec<Part>,
         attachments: Vec<AttachmentDetail>,
     ) -> Self {

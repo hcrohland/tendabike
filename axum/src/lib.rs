@@ -9,14 +9,13 @@
 //!
 //! This file also contains the definitions of various modules that implement the endpoints for the different resources
 //! of the Tendabike server, such as users, parts, attachments, activities, and Strava integration.
-mod activity;
-mod attachment;
-mod part;
-pub(crate) mod strava;
-mod types;
-pub(crate) mod user;
-use appstate::*;
+//!
+
+mod domain;
+mod strava;
+
 mod appstate;
+use appstate::*;
 mod error;
 use error::*;
 
@@ -46,11 +45,7 @@ pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
 
     let app = Router::new()
         .nest_service("/", tower_http::services::ServeDir::new(path))
-        .nest("/user", user::router())
-        .nest("/types", types::router())
-        .nest("/part", part::router())
-        .nest("/part", attachment::router())
-        .nest("/activ", activity::router())
+        .nest("/", domain::router())
         .nest("/strava", strava::router())
         .with_state(app_state)
         .fallback(error::fallback)

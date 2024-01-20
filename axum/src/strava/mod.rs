@@ -35,5 +35,5 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/bikes/:id", get(redirect::redirect_gear))
         .route("/activities/:id", get(redirect::redirect_act))
         .route("/users/:id", get(redirect::redirect_user))
-        .route("/disable/:id", post(crate::user::revoke_user))
+        .route("/disable/:id", post(redirect::revoke_user))
 }

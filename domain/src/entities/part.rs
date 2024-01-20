@@ -185,7 +185,7 @@ impl PartId {
     ///
     /// If the stored purchase date is later than the usage date, it will adjust the purchase date
     /// returns the changed part
-    pub async fn apply_usage(
+    pub(crate) async fn apply_usage(
         self,
         usage: &Usage,
         start: OffsetDateTime,
