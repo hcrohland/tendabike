@@ -109,7 +109,7 @@
    */
 
   /** @type {totalsFuncDecl<any>}*/
-  export let totalsFunc = (v) => undefined;
+  export let totalsFunc = (v) => null;
 
   const dispatch = createEventDispatcher();
 
