@@ -29,6 +29,7 @@ use diesel_derive_newtype::*;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
 use std::ops::{Add, Neg, Sub};
+use std::vec;
 use uuid::Uuid;
 
 #[derive(
@@ -40,7 +41,16 @@ NewtypeDisplay! { () pub struct UsageId(); }
 NewtypeFrom! { () pub struct UsageId(Uuid); }
 
 #[derive(
-    Clone, Debug, PartialEq, Default, Serialize, Deserialize, Queryable, Identifiable, AsChangeset,
+    Clone,
+    Debug,
+    PartialEq,
+    Default,
+    Serialize,
+    Deserialize,
+    Queryable,
+    Identifiable,
+    AsChangeset,
+    Insertable,
 )]
 pub struct Usage {
     // id for referencing
@@ -60,34 +70,52 @@ pub struct Usage {
 }
 
 impl Usage {
-    pub(crate) async fn create(store: &mut impl UsageStore) -> TbResult<Usage> {
-        let res = Usage {
-            id: Uuid::now_v7().into(),
-            ..Default::default()
-        };
-        return store.create(&res).await.map(|_| res);
-    }
+    // pub(crate) async fn update_vec(
+    //     vec: Vec<&Self>,
+    //     store: &mut impl UsageStore,
+    // ) -> TbResult<usize> {
+    //     store.update(vec).await
+    // }
 
-    pub(crate) async fn update_vec(
-        vec: Vec<&Self>,
-        store: &mut impl UsageStore,
-    ) -> TbResult<usize> {
-        return store.update(vec).await;
+    pub(crate) async fn update(&self, store: &mut impl UsageStore) -> TbResult<usize> {
+        store.usage_update(vec![&self]).await
     }
 }
 
 impl UsageId {
+    pub(crate) fn new() -> Self {
+        Uuid::now_v7().into()
+    }
+
     pub(crate) async fn read(self, store: &mut impl UsageStore) -> TbResult<Usage> {
-        return store.read(self).await;
+        store.usage_get(self).await
     }
 }
 
-impl Add for Usage {
-    type Output = Self;
+impl Add for &Usage {
+    type Output = Usage;
     /// Add an activity to of a usage
     ///
     /// If the descend value is missing, assume descend = climb
-    fn add(self, rhs: Self) -> Self {
+    fn add(self, rhs: Self) -> Usage {
+        Usage {
+            id: self.id,
+            time: self.time + rhs.time,
+            climb: self.climb + rhs.climb,
+            descend: self.descend + rhs.descend,
+            power: self.power + rhs.power,
+            distance: self.distance + rhs.distance,
+            count: self.count + rhs.count,
+        }
+    }
+}
+
+impl Add<&Self> for Usage {
+    type Output = Usage;
+    /// Add an activity to of a usage
+    ///
+    /// If the descend value is missing, assume descend = climb
+    fn add(self, rhs: &Self) -> Usage {
         Usage {
             id: self.id,
             time: self.time + rhs.time,
@@ -139,64 +167,66 @@ mod tests {
 
     use std::collections::HashMap;
 
-    use crate::{Error, TbResult, Usage, UsageId, UsageStore};
+    use crate::{TbResult, Usage, UsageId, UsageStore};
 
     struct MemStore(std::collections::HashMap<UsageId, Usage>);
 
     #[async_session::async_trait]
     impl UsageStore for MemStore {
-        async fn read(&mut self, uid: UsageId) -> TbResult<Usage> {
-            self.0
-                .get(&uid)
-                .ok_or(Error::NotFound(format!("UsageId {uid} not found")))
-                .map(|u| u.clone())
+        async fn usage_get(&mut self, id: UsageId) -> TbResult<Usage> {
+            Ok(self.0.get(&id).map_or_else(
+                || Usage {
+                    id,
+                    ..Default::default()
+                },
+                |u| u.clone(),
+            ))
         }
 
-        async fn create(&mut self, usage: &Usage) -> TbResult<usize> {
-            if self.0.contains_key(&usage.id) {
-                return Err(Error::Conflict(format!(
-                    "UsageId {} does already exist",
-                    usage.id
-                )));
+        async fn usage_update(&mut self, vec: Vec<&Usage>) -> TbResult<usize> {
+            let res = vec.len();
+            for usage in vec {
+                self.0.insert(usage.id, usage.clone());
             }
-
-            self.0.insert(usage.id, usage.clone());
-            return Ok(1);
+            Ok(res)
         }
 
-        async fn update(&mut self, vec: Vec<&Usage>) -> TbResult<usize> {
-            for usage in &vec {
-                if self.0.insert(usage.id, (*usage).clone()) == None {
-                    return Err(Error::Conflict(format!(
-                        "UsageId {} does not exist",
-                        usage.id
-                    )));
-                }
-            }
-            return Ok(vec.len());
+        async fn usage_reset_all(&mut self) -> TbResult<usize> {
+            let res = self.0.len();
+            self.0.clear();
+            Ok(res)
         }
     }
 
     #[tokio::test]
     async fn create_usage_returns() -> TbResult<()> {
         let mut store = MemStore(HashMap::new());
-        let usage = Usage::create(&mut store).await?;
+        let usage = UsageId::new().read(&mut store).await?;
         assert_eq!(usage.climb, 0);
         let usage2 = Usage {
+            id: UsageId::new(),
             count: 1,
             climb: 2,
             descend: 3,
             ..Default::default()
         };
-        let usage3 = usage.clone() + usage2.clone() + usage2;
+        let usage3 = &usage + &usage2 + &usage2;
         assert_eq!((&usage3).climb, 4);
         assert_eq!((&usage3).count, 2);
         assert_eq!((&usage3).descend, 6);
         assert_eq!((&usage3).time, 0);
-        Usage::update_vec(vec![&usage3], &mut store).await?;
+        usage3.update(&mut store).await?;
         let usage4 = usage3.id.read(&mut store).await?;
         assert_eq!(usage3, usage4);
         assert_eq!(usage4 - usage3, usage);
+        store.usage_reset_all().await?;
+        assert_eq!(
+            Usage {
+                id: usage2.id,
+                ..Default::default()
+            },
+            usage2.id.read(&mut store).await?
+        );
         Ok(())
     }
 }

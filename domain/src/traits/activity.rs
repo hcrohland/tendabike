@@ -113,13 +113,6 @@ pub trait ActivityStore {
         partid: &PartId,
     ) -> TbResult<Vec<Activity>>;
 
-    /// Resets all parts.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Result` containing the number of reset parts or an error if the operation fails.
-    async fn part_reset_all(&mut self) -> TbResult<usize>;
-
     /// Retrieves all activities.
     ///
     /// # Returns

@@ -31,6 +31,8 @@
 //!
 //! Finally, this module defines the `NewPart` type, which is used to create new parts in the database.
 
+use std::ops::Add;
+
 use crate::traits::Store;
 
 use super::*;
@@ -101,7 +103,7 @@ pub struct NewPart {
 
 use serde_with::serde_as;
 use time::format_description::well_known::Rfc3339;
-use uuid::Uuid;
+
 #[serde_as]
 #[derive(Clone, Debug, PartialEq, Deserialize, AsChangeset)]
 #[diesel(table_name = schema::parts)]
@@ -152,17 +154,17 @@ impl PartId {
     ///
     /// does not check ownership. This is needed for rentals.
     pub async fn name(self, conn: &mut impl Store) -> TbResult<String> {
-        conn.partid_get_name(self).await
+        Ok(conn.partid_get_part(self).await?.name)
     }
 
     pub async fn what(self, conn: &mut impl Store) -> TbResult<PartTypeId> {
-        conn.partid_get_type(self).await
+        Ok(conn.partid_get_part(self).await?.what)
     }
 
     /// check if the given user is the owner or an admin.
     /// Returns Forbidden if not.
     pub async fn checkuser(self, user: &dyn Person, conn: &mut impl Store) -> TbResult<PartId> {
-        let own = conn.partid_get_ownerid(self, user).await?;
+        let own = conn.partid_get_part(self).await?.owner;
         if user.get_id() == own {
             return Ok(self);
         }
@@ -182,10 +184,21 @@ impl PartId {
         self,
         usage: &Usage,
         start: OffsetDateTime,
-        conn: &mut impl Store,
+        store: &mut impl Store,
     ) -> TbResult<Part> {
         trace!("Applying usage {:?} to part {}", usage, self);
-        conn.partid_apply_usage(self, usage, start).await
+        let mut part = store.partid_get_part(self).await?;
+        part.usage
+            .read(store)
+            .await?
+            .add(usage)
+            .update(store)
+            .await?;
+        if start > part.last_used {
+            part.last_used = start;
+            store.part_update(&part).await?;
+        }
+        Ok(part)
     }
 }
 
@@ -220,8 +233,7 @@ impl NewPart {
 
         let now = OffsetDateTime::now_utc();
         let createtime = self.purchase.unwrap_or(now);
-        let usage = Uuid::now_v7().into();
-        conn.create_part(self, createtime, usage).await
+        conn.part_create(self, createtime, UsageId::new()).await
     }
 }
 

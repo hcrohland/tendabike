@@ -429,7 +429,7 @@ impl Activity {
 }
 
 async fn rescan(conn: &mut impl Store) -> TbResult<()> {
-    conn.part_reset_all().await?;
+    conn.usage_reset_all().await?;
     conn.attachment_reset_all().await?;
     for a in conn.activity_get_really_all().await? {
         debug!("registering activity {}", a.id);

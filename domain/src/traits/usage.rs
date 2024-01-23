@@ -3,7 +3,7 @@ use crate::{TbResult, Usage, UsageId};
 #[async_trait::async_trait]
 /// A trait representing a store for `Usage` objects.
 pub trait UsageStore {
-    /// Retrieves a `Usage` by its ID.
+    /// Retrieves or creates a `Usage` by its ID.
     ///
     /// # Arguments
     ///
@@ -11,21 +11,13 @@ pub trait UsageStore {
     ///
     /// # Returns
     ///
-    /// Returns a `Usage` object if the Usage exists, otherwise returns an error.
-    async fn read(&mut self, uid: UsageId) -> TbResult<Usage>;
+    /// Returns the `Usage` object if the Usage exists, an empty new one if not
+    /// Might returns an error from underlying storage system.
+    async fn usage_get(&mut self, uid: UsageId) -> TbResult<Usage>;
 
-    /// Creates a new `Usage` object.
-    ///
-    /// # Arguments
-    ///
-    /// * `usage` - The new `Usage` object to create.
-    ///
-    /// # Returns
-    ///
-    /// Returns the newly created `Usage` object if it was successfully created, otherwise returns an error.
-    async fn create(&mut self, usage: &Usage) -> TbResult<usize>;
-
-    /// Changes an existing `Usage` object.
+    /// Changes an array of `Usage` objects.
+    /// Might delete the Usages on the store if it is all zero
+    /// If a Usage does not exist, it will create it on the store
     ///
     /// # Arguments
     ///
@@ -34,5 +26,12 @@ pub trait UsageStore {
     /// # Returns
     ///
     /// Returns the updated `Usage` object if it was successfully updated, otherwise returns an error.
-    async fn update(&mut self, usage: Vec<&Usage>) -> TbResult<usize>;
+    async fn usage_update(&mut self, usage: Vec<&Usage>) -> TbResult<usize>;
+
+    /// Resets all Usages.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing the number of reset parts or an error if the operation fails.
+    async fn usage_reset_all(&mut self) -> TbResult<usize>;
 }

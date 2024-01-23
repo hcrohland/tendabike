@@ -108,7 +108,7 @@ impl Attachment {
             Activity::find(self.gear, self.attached, self.detached, conn)
                 .await?
                 .into_iter()
-                .fold(Usage::default(), |usage, act| usage + act.usage()),
+                .fold(Usage::default(), |usage, act| &usage + &act.usage()),
         )
     }
 
