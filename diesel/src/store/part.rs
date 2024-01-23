@@ -1,8 +1,8 @@
 use crate::*;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
-use diesel_async::scoped_futures::ScopedFutureExt;
-use diesel_async::AsyncConnection;
+// use diesel_async::scoped_futures::ScopedFutureExt;
+// use diesel_async::AsyncConnection;
 use diesel_async::RunQueryDsl;
 use tb_domain::schema;
 use tb_domain::Part;
@@ -10,6 +10,7 @@ use tb_domain::PartId;
 use tb_domain::Person;
 use tb_domain::TbResult;
 use tb_domain::Usage;
+use tb_domain::UsageId;
 use tb_domain::UserId;
 use time::OffsetDateTime;
 
@@ -63,27 +64,28 @@ impl tb_domain::PartStore for AsyncDieselConn {
         usage: &Usage,
         start: OffsetDateTime,
     ) -> TbResult<Part> {
-        use schema::parts::dsl::*;
-        Ok(self
-            .transaction(|conn| {
-                async {
-                    let part: Part = parts.find(pid).for_update().get_result(conn).await?;
-                    diesel::update(parts.find(pid))
-                        .set((
-                            time.eq(time + usage.time),
-                            climb.eq(climb + usage.climb),
-                            descend.eq(descend + usage.descend),
-                            distance.eq(distance + usage.distance),
-                            count.eq(count + usage.count),
-                            purchase.eq(std::cmp::min(part.purchase, start)),
-                            last_used.eq(std::cmp::max(part.last_used, start)),
-                        ))
-                        .get_result::<Part>(conn)
-                        .await
-                }
-                .scope_boxed()
-            })
-            .await?)
+        todo!();
+        // use schema::parts::dsl::*;
+        // Ok(self
+        //     .transaction(|conn| {
+        //         async {
+        //             let part: Part = parts.find(pid).for_update().get_result(conn).await?;
+        //             diesel::update(parts.find(pid))
+        //                 .set((
+        //                     time.eq(time + usage.time),
+        //                     climb.eq(climb + usage.climb),
+        //                     descend.eq(descend + usage.descend),
+        //                     distance.eq(distance + usage.distance),
+        //                     count.eq(count + usage.count),
+        //                     purchase.eq(std::cmp::min(part.purchase, start)),
+        //                     last_used.eq(std::cmp::max(part.last_used, start)),
+        //                 ))
+        //                 .get_result::<Part>(conn)
+        //                 .await
+        //         }
+        //         .scope_boxed()
+        //     })
+        //     .await?)
     }
 
     async fn part_get_all_for_userid(&mut self, uid: &UserId) -> TbResult<Vec<Part>> {
@@ -97,26 +99,11 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .map_err(map_to_tb)
     }
 
-    async fn parts_reset_all_usages(&mut self, uid: UserId) -> TbResult<Vec<Part>> {
-        use schema::parts::dsl::*;
-        diesel::update(parts.filter(owner.eq(uid)))
-            .set((
-                time.eq(0),
-                climb.eq(0),
-                descend.eq(0),
-                distance.eq(0),
-                count.eq(0),
-                last_used.eq(purchase),
-            ))
-            .get_results::<Part>(self)
-            .await
-            .map_err(map_to_tb)
-    }
-
     async fn create_part(
         &mut self,
         newpart: tb_domain::NewPart,
         createtime: OffsetDateTime,
+        usage_: UsageId,
     ) -> TbResult<Part> {
         use schema::parts::dsl::*;
         let values = (
@@ -127,11 +114,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
             model.eq(newpart.model),
             purchase.eq(createtime),
             last_used.eq(createtime),
-            time.eq(0),
-            distance.eq(0),
-            climb.eq(0),
-            descend.eq(0),
-            count.eq(0),
+            usage.eq(usage_),
         );
 
         diesel::insert_into(parts)

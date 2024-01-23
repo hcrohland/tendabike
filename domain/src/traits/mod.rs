@@ -13,6 +13,9 @@ pub use activity::*;
 mod attachment;
 pub use attachment::*;
 
+mod usage;
+pub use usage::*;
+
 use crate::UserId;
 
 #[async_trait::async_trait]

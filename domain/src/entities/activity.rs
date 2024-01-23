@@ -247,6 +247,7 @@ impl Activity {
     /// Account for Factor
     pub(crate) fn usage(&self) -> Usage {
         Usage {
+            id: UsageId::default(),
             time: self.time.unwrap_or(0),
             distance: self.distance.unwrap_or(0),
             climb: self.climb.unwrap_or(0),

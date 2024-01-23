@@ -1,4 +1,4 @@
-use crate::{Part, PartId, PartTypeId, Person, TbResult, Usage, UserId};
+use crate::{Part, PartId, PartTypeId, Person, TbResult, Usage, UsageId, UserId};
 use time::OffsetDateTime;
 
 #[async_trait::async_trait]
@@ -78,17 +78,6 @@ pub trait PartStore {
     /// Returns a vector of `Part` objects if the user has parts, otherwise returns an error.
     async fn part_get_all_for_userid(&mut self, uid: &UserId) -> TbResult<Vec<Part>>;
 
-    /// Resets all usages for a given user's `Part` objects.
-    ///
-    /// # Arguments
-    ///
-    /// * `uid` - The ID of the user to reset usages for.
-    ///
-    /// # Returns
-    ///
-    /// Returns a vector of updated `Part` objects if the user has parts and the usages were successfully reset, otherwise returns an error.
-    async fn parts_reset_all_usages(&mut self, uid: UserId) -> TbResult<Vec<Part>>;
-
     /// Creates a new `Part` object.
     ///
     /// # Arguments
@@ -103,6 +92,7 @@ pub trait PartStore {
         &mut self,
         newpart: crate::NewPart,
         createtime: OffsetDateTime,
+        usage: UsageId,
     ) -> TbResult<Part>;
 
     /// Changes an existing `Part` object.

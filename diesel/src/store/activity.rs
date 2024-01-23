@@ -105,19 +105,20 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
     }
 
     async fn part_reset_all(&mut self) -> TbResult<usize> {
-        use schema::parts::dsl::*;
-        debug!("resetting all parts");
-        diesel::update(parts)
-            .set((
-                time.eq(0),
-                distance.eq(0),
-                climb.eq(0),
-                descend.eq(0),
-                count.eq(0),
-            ))
-            .execute(self)
-            .await
-            .map_err(map_to_tb)
+        todo!();
+        // use schema::parts::dsl::*;
+        // debug!("resetting all parts");
+        // diesel::update(parts)
+        //     .set((
+        //         time.eq(0),
+        //         distance.eq(0),
+        //         climb.eq(0),
+        //         descend.eq(0),
+        //         count.eq(0),
+        //     ))
+        //     .execute(self)
+        //     .await
+        //     .map_err(map_to_tb)
     }
 
     async fn activity_get_really_all(&mut self) -> TbResult<Vec<Activity>> {

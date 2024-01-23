@@ -71,22 +71,14 @@ pub struct Part {
     /// purchase date
     #[serde_as(as = "Rfc3339")]
     pub purchase: OffsetDateTime,
-    /// usage time
-    pub time: i32,
-    /// Usage distance
-    pub distance: i32,
-    /// Overall climbing
-    pub climb: i32,
-    /// Overall descending
-    pub descend: i32,
-    /// usage count
-    pub count: i32,
     /// last time it was used
     #[serde_as(as = "Rfc3339")]
     pub last_used: OffsetDateTime,
     /// Was it disposed? If yes, when?
     #[serde_as(as = "Option<Rfc3339>")]
     pub disposed_at: Option<OffsetDateTime>,
+    /// the usage tracker
+    pub usage: UsageId,
 }
 
 #[serde_as]
@@ -109,6 +101,7 @@ pub struct NewPart {
 
 use serde_with::serde_as;
 use time::format_description::well_known::Rfc3339;
+use uuid::Uuid;
 #[serde_as]
 #[derive(Clone, Debug, PartialEq, Deserialize, AsChangeset)]
 #[diesel(table_name = schema::parts)]
@@ -214,26 +207,6 @@ impl Part {
     pub async fn get_all(user: &UserId, conn: &mut impl Store) -> TbResult<Vec<Part>> {
         conn.part_get_all_for_userid(user).await
     }
-
-    /// reset all usage counters for all parts of a person
-    ///
-    /// returns the list of main gears affected
-    pub async fn reset(user: &dyn Person, conn: &mut impl Store) -> TbResult<Vec<PartId>> {
-        use std::collections::HashSet;
-
-        // reset all counters for all parts of this user
-        let part_list = conn.parts_reset_all_usages(user.get_id()).await?;
-
-        // get the main types
-        let mains: HashSet<PartTypeId> = conn.parttypes_all_maingear().await?.into_iter().collect();
-
-        // only return the main parts
-        Ok(part_list
-            .into_iter()
-            .filter(|x| mains.contains(&x.what))
-            .map(|x| x.id)
-            .collect())
-    }
 }
 
 impl NewPart {
@@ -247,7 +220,8 @@ impl NewPart {
 
         let now = OffsetDateTime::now_utc();
         let createtime = self.purchase.unwrap_or(now);
-        conn.create_part(self, createtime).await
+        let usage = Uuid::now_v7().into();
+        conn.create_part(self, createtime, usage).await
     }
 }
 
