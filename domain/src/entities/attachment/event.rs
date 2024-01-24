@@ -5,6 +5,7 @@ use time::OffsetDateTime;
 
 use crate::{
     traits::Store, Attachment, Error, PartId, PartTypeId, Person, SumHash, Summary, TbResult,
+    UsageId,
 };
 
 const MAX_TIME: OffsetDateTime = time::macros::datetime!(9100-01-01 0:00 UTC);
@@ -241,11 +242,7 @@ impl Event {
             hook: self.hook,
             attached: self.time,
             detached,
-            count: 0,
-            time: 0,
-            climb: 0,
-            descend: 0,
-            distance: 0,
+            usage: UsageId::new(),
         }
     }
 

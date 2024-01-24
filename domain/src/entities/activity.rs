@@ -276,7 +276,7 @@ impl Activity {
     /// If the factor is `Factor::Subtract`, the activity is unregistered and the usage is subtracted from the parts and attachments.
     ///
     /// Returns a summary of the affected parts, attachments, and activities.
-    async fn register(self, factor: Factor, conn: &mut impl Store) -> TbResult<Summary> {
+    async fn register(self, factor: Factor, store: &mut impl Store) -> TbResult<Summary> {
         trace!(
             "{} {:?}",
             if factor == Factor::Add {
@@ -291,17 +291,21 @@ impl Activity {
             Factor::Add => self.usage(),
             Factor::Sub => -self.usage(),
         };
-        let partlist = Attachment::parts_per_activity(&self, conn).await?;
+        let partlist = Attachment::parts_per_activity(&self, store).await?;
 
         let mut parts = Vec::new();
+        let mut usages = Vec::new();
         for part in partlist {
-            let part = part.apply_usage(&usage, self.start, conn).await?;
-            parts.push(part);
+            parts.push(part.update_last_use(self.start, store).await?);
+            usages.push(part.apply_usage(&usage, store).await?);
         }
+        usages.append(&mut Attachment::register(&self, &usage, store).await?);
+        Usage::update_vec(&usages, store).await?;
         Ok(Summary {
+            usages,
             parts,
-            attachments: Attachment::register(&self, &usage, conn).await?,
             activities: vec![self],
+            ..Default::default()
         })
     }
 
@@ -430,7 +434,6 @@ impl Activity {
 
 async fn rescan(conn: &mut impl Store) -> TbResult<()> {
     conn.usage_reset_all().await?;
-    conn.attachment_reset_all().await?;
     for a in conn.activity_get_really_all().await? {
         debug!("registering activity {}", a.id);
         a.register(Factor::Add, conn).await?;

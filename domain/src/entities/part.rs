@@ -31,8 +31,6 @@
 //!
 //! Finally, this module defines the `NewPart` type, which is used to create new parts in the database.
 
-use std::ops::Add;
-
 use crate::traits::Store;
 
 use super::*;
@@ -178,22 +176,23 @@ impl PartId {
 
     /// apply a usage to the part with given id
     ///
-    /// If the stored purchase date is later than the usage date, it will adjust the purchase date
-    /// returns the changed part
     pub(crate) async fn apply_usage(
         self,
         usage: &Usage,
+        store: &mut impl Store,
+    ) -> TbResult<Usage> {
+        trace!("Applying usage {:?} to part {}", usage, self);
+        let res = store.partid_get_part(self).await?.usage(store).await? + usage;
+        Ok(res)
+    }
+
+    /// if start is later than last_used update last_used
+    pub(crate) async fn update_last_use(
+        self,
         start: OffsetDateTime,
         store: &mut impl Store,
     ) -> TbResult<Part> {
-        trace!("Applying usage {:?} to part {}", usage, self);
         let mut part = store.partid_get_part(self).await?;
-        part.usage
-            .read(store)
-            .await?
-            .add(usage)
-            .update(store)
-            .await?;
         if start > part.last_used {
             part.last_used = start;
             store.part_update(&part).await?;
@@ -217,13 +216,17 @@ impl Part {
     /// # Errors
     ///
     /// Returns an `TbResult` object that may contain a `diesel::result::Error` if the query fails.
-    pub async fn get_all(user: &UserId, conn: &mut impl Store) -> TbResult<Vec<Part>> {
+    pub async fn get_all(user: &UserId, conn: &mut impl PartStore) -> TbResult<Vec<Part>> {
         conn.part_get_all_for_userid(user).await
+    }
+
+    pub async fn usage(&self, store: &mut impl UsageStore) -> TbResult<Usage> {
+        self.usage.read(store).await
     }
 }
 
 impl NewPart {
-    pub async fn create(self, user: &dyn Person, conn: &mut impl Store) -> TbResult<Part> {
+    pub async fn create(self, user: &dyn Person, conn: &mut impl PartStore) -> TbResult<Part> {
         info!("Create {:?}", self);
 
         user.check_owner(
@@ -238,7 +241,7 @@ impl NewPart {
 }
 
 impl ChangePart {
-    pub async fn change(self, user: &dyn Person, conn: &mut impl Store) -> TbResult<Part> {
+    pub async fn change(self, user: &dyn Person, conn: &mut impl PartStore) -> TbResult<Part> {
         info!("Change {:?}", self);
 
         user.check_owner(

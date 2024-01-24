@@ -28,8 +28,8 @@ use crate::UsageStore;
 use diesel_derive_newtype::*;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
+use std::borrow::Borrow;
 use std::ops::{Add, Neg, Sub};
-use std::vec;
 use uuid::Uuid;
 
 #[derive(
@@ -70,21 +70,28 @@ pub struct Usage {
 }
 
 impl Usage {
-    // pub(crate) async fn update_vec(
-    //     vec: Vec<&Self>,
-    //     store: &mut impl UsageStore,
-    // ) -> TbResult<usize> {
-    //     store.update(vec).await
-    // }
+    pub(crate) async fn update_vec<U>(vec: &Vec<U>, store: &mut impl UsageStore) -> TbResult<usize>
+    where
+        U: Borrow<Usage> + Sync,
+    {
+        store.usage_update(vec).await
+    }
 
-    pub(crate) async fn update(&self, store: &mut impl UsageStore) -> TbResult<usize> {
-        store.usage_update(vec![&self]).await
+    pub(crate) fn new(id: UsageId) -> Usage {
+        Usage {
+            id,
+            ..Default::default()
+        }
     }
 }
 
 impl UsageId {
     pub(crate) fn new() -> Self {
         Uuid::now_v7().into()
+    }
+
+    pub(crate) async fn delete(self, store: &mut impl UsageStore) -> TbResult<usize> {
+        store.usage_delete(&self).await
     }
 
     pub(crate) async fn read(self, store: &mut impl UsageStore) -> TbResult<Usage> {
@@ -165,7 +172,7 @@ impl Neg for Usage {
 #[cfg(test)]
 mod tests {
 
-    use std::collections::HashMap;
+    use std::{borrow::Borrow, collections::HashMap};
 
     use crate::{TbResult, Usage, UsageId, UsageStore};
 
@@ -174,21 +181,25 @@ mod tests {
     #[async_session::async_trait]
     impl UsageStore for MemStore {
         async fn usage_get(&mut self, id: UsageId) -> TbResult<Usage> {
-            Ok(self.0.get(&id).map_or_else(
-                || Usage {
-                    id,
-                    ..Default::default()
-                },
-                |u| u.clone(),
-            ))
+            Ok(self.0.get(&id).map_or_else(|| Usage::new(id), Clone::clone))
         }
 
-        async fn usage_update(&mut self, vec: Vec<&Usage>) -> TbResult<usize> {
-            let res = vec.len();
+        async fn usage_update<U>(&mut self, vec: &Vec<U>) -> TbResult<usize>
+        where
+            U: Borrow<Usage> + Sync,
+        {
             for usage in vec {
+                let usage = usage.borrow();
                 self.0.insert(usage.id, usage.clone());
             }
-            Ok(res)
+            Ok(vec.len())
+        }
+
+        async fn usage_delete(&mut self, usage: &UsageId) -> TbResult<usize> {
+            match self.0.remove(&usage) {
+                Some(_) => Ok(1),
+                None => Err(crate::Error::NotFound(format!("Usage {} not found", usage))),
+            }
         }
 
         async fn usage_reset_all(&mut self) -> TbResult<usize> {
@@ -215,18 +226,12 @@ mod tests {
         assert_eq!((&usage3).count, 2);
         assert_eq!((&usage3).descend, 6);
         assert_eq!((&usage3).time, 0);
-        usage3.update(&mut store).await?;
+        Usage::update_vec(&vec![&usage3], &mut store).await?;
         let usage4 = usage3.id.read(&mut store).await?;
         assert_eq!(usage3, usage4);
         assert_eq!(usage4 - usage3, usage);
         store.usage_reset_all().await?;
-        assert_eq!(
-            Usage {
-                id: usage2.id,
-                ..Default::default()
-            },
-            usage2.id.read(&mut store).await?
-        );
+        assert_eq!(Usage::new(usage2.id), usage2.id.read(&mut store).await?);
         Ok(())
     }
 }

@@ -26,7 +26,20 @@ pub trait UsageStore {
     /// # Returns
     ///
     /// Returns the updated `Usage` object if it was successfully updated, otherwise returns an error.
-    async fn usage_update(&mut self, usage: Vec<&Usage>) -> TbResult<usize>;
+    async fn usage_update<U>(&mut self, usage: &Vec<U>) -> TbResult<usize>
+    where
+        U: std::borrow::Borrow<Usage> + Sync;
+
+    /// Delete the Usage
+    ///
+    /// # Arguments
+    ///
+    /// * `Usage` - The `Usage` object to delete.
+    ///
+    /// # Returns
+    ///
+    /// Returns the number of deleted objects or returns an error.
+    async fn usage_delete(&mut self, usage: &UsageId) -> TbResult<usize>;
 
     /// Resets all Usages.
     ///

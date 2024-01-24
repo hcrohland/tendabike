@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+
 use crate::*;
 use async_session::log::debug;
 use diesel::QueryDsl;
@@ -10,11 +12,7 @@ use tb_domain::{TbResult, Usage, UsageId, UsageStore};
 impl UsageStore for AsyncDieselConn {
     async fn usage_get(&mut self, id: UsageId) -> TbResult<Usage> {
         use schema::usages;
-        match usages::table
-            .find(usages::id)
-            .get_result::<Usage>(self)
-            .await
-        {
+        match usages::table.find(id).get_result::<Usage>(self).await {
             Ok(x) => Ok(x),
             Err(diesel::NotFound) => Ok(Usage {
                 id,
@@ -24,13 +22,17 @@ impl UsageStore for AsyncDieselConn {
         }
     }
 
-    async fn usage_update(&mut self, vec: Vec<&Usage>) -> TbResult<usize> {
+    async fn usage_update<U>(&mut self, vec: &Vec<U>) -> TbResult<usize>
+    where
+        U: Borrow<Usage> + Sync,
+    {
         use schema::usages;
 
         let len = vec.len();
         self.transaction(|conn| {
             async move {
                 for usage in vec {
+                    let usage = usage.borrow();
                     diesel::insert_into(usages::table)
                         .values(usage)
                         .on_conflict(usages::id)
@@ -44,6 +46,11 @@ impl UsageStore for AsyncDieselConn {
             .scope_boxed()
         })
         .await
+    }
+
+    async fn usage_delete(&mut self, usage: &UsageId) -> TbResult<usize> {
+        use schema::usages::dsl::*;
+        Ok(diesel::delete(usages.find(usage)).execute(self).await?)
     }
 
     async fn usage_reset_all(&mut self) -> TbResult<usize> {
