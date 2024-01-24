@@ -40,7 +40,7 @@ jobs:
       - 
         name: Build
         run: npm run build
-      - run: touch frontend/dist/itsme
+      - run: touch dist/itsme
       - 
         name: Upload frontend components
         uses: actions/upload-artifact@v3
