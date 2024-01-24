@@ -138,9 +138,13 @@ impl PartId {
         PartId(id).checkuser(user, conn).await
     }
 
+    pub(crate) async fn read(self, store: &mut impl PartStore) -> TbResult<Part> {
+        store.partid_get_part(self).await
+    }
+
     /// get the part with id part
-    pub async fn part(self, user: &dyn Person, conn: &mut impl Store) -> TbResult<Part> {
-        let part = conn.partid_get_part(self).await?;
+    pub async fn part(self, user: &dyn Person, store: &mut impl PartStore) -> TbResult<Part> {
+        let part = self.read(store).await?;
         user.check_owner(
             part.owner,
             format!("user {} cannot access part {}", user.get_id(), part.id),
@@ -151,18 +155,22 @@ impl PartId {
     /// get the name of the part
     ///
     /// does not check ownership. This is needed for rentals.
-    pub async fn name(self, conn: &mut impl Store) -> TbResult<String> {
-        Ok(conn.partid_get_part(self).await?.name)
+    pub async fn name(self, store: &mut impl PartStore) -> TbResult<String> {
+        Ok(self.read(store).await?.name)
     }
 
-    pub async fn what(self, conn: &mut impl Store) -> TbResult<PartTypeId> {
-        Ok(conn.partid_get_part(self).await?.what)
+    pub async fn what(self, store: &mut impl PartStore) -> TbResult<PartTypeId> {
+        Ok(self.read(store).await?.what)
     }
 
     /// check if the given user is the owner or an admin.
     /// Returns Forbidden if not.
-    pub async fn checkuser(self, user: &dyn Person, conn: &mut impl Store) -> TbResult<PartId> {
-        let own = conn.partid_get_part(self).await?.owner;
+    pub async fn checkuser(
+        self,
+        user: &dyn Person,
+        store: &mut impl PartStore,
+    ) -> TbResult<PartId> {
+        let own = self.read(store).await?.owner;
         if user.get_id() == own {
             return Ok(self);
         }
@@ -174,25 +182,13 @@ impl PartId {
         )))
     }
 
-    /// apply a usage to the part with given id
-    ///
-    pub(crate) async fn apply_usage(
-        self,
-        usage: &Usage,
-        store: &mut impl Store,
-    ) -> TbResult<Usage> {
-        trace!("Applying usage {:?} to part {}", usage, self);
-        let res = store.partid_get_part(self).await?.usage(store).await? + usage;
-        Ok(res)
-    }
-
     /// if start is later than last_used update last_used
     pub(crate) async fn update_last_use(
         self,
         start: OffsetDateTime,
-        store: &mut impl Store,
+        store: &mut impl PartStore,
     ) -> TbResult<Part> {
-        let mut part = store.partid_get_part(self).await?;
+        let mut part = self.read(store).await?;
         if start > part.last_used {
             part.last_used = start;
             store.part_update(&part).await?;

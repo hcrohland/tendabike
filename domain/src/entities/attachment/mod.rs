@@ -149,16 +149,25 @@ impl Attachment {
     /// - returns all affected parts
     async fn create(mut self, store: &mut impl Store) -> TbResult<Summary> {
         trace!("create {:?}", self);
-        let part = self.part_id.update_last_use(self.attached, store).await?;
+
+        // create the Usage for the attachement
         self.usage = UsageId::new();
         let usage = self.calculate_usage(store).await?;
-        let part_usage = self.part_id.apply_usage(&usage, store).await?;
+
+        // add that usage to the part
+        let part = self.part_id.update_last_use(self.attached, store).await?;
+        let part_usage = part.usage(store).await? + &usage;
+
+        // Store both usages.
         Usage::update_vec(&vec![&usage, &part_usage], store).await?;
+
+        // store the attachment in the database
         let attachment = store
             .attachment_create(self)
             .await?
             .add_details(&part.name, part.what);
 
+        // return all affected objects
         Ok(Summary {
             parts: vec![part],
             attachments: vec![attachment],
@@ -173,15 +182,18 @@ impl Attachment {
     /// - returns all affected parts
     async fn delete(self, store: &mut impl Store) -> TbResult<Summary> {
         trace!("delete {:?}", self);
-        let att = store.attachment_delete(self).await?;
 
-        let usage = -att.calculate_usage(store).await?;
-        let usages = vec![att.part_id.apply_usage(&usage, store).await?];
+        // delete the attachment on the db
+        let att = store.attachment_delete(self).await?;
+        let usage = -att.usage.delete(store).await?;
+
+        // adjust part usage and store it
+        let part_usage = att.part_id.read(store).await?.usage(store).await?;
+        let usages = vec![part_usage + &usage];
         Usage::update_vec(&usages, store).await?;
 
-        att.usage.delete(store).await?;
+        // mark attachment as deleted for client!
         let mut att = att;
-        // mark as deleted for client!
         att.detached = att.attached;
         att.usage = UsageId::new();
         Ok(Summary {
@@ -227,10 +239,10 @@ impl Attachment {
         Ok(res)
     }
 
-    /// apply usage to all attachments affected by activity
+    /// find all Usages affected by activity and add usage to it
     ///
-    /// returns the list of Attachments - including the redundant details
-    pub(crate) async fn register(
+    /// returns the array of modified Usages
+    pub(crate) async fn apply_usage(
         act: &Activity,
         usage: &Usage,
         store: &mut impl Store,

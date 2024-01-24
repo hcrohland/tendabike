@@ -296,10 +296,11 @@ impl Activity {
         let mut parts = Vec::new();
         let mut usages = Vec::new();
         for part in partlist {
-            parts.push(part.update_last_use(self.start, store).await?);
-            usages.push(part.apply_usage(&usage, store).await?);
+            let part = part.update_last_use(self.start, store).await?;
+            usages.push(part.usage(store).await? + &usage);
+            parts.push(part);
         }
-        usages.append(&mut Attachment::register(&self, &usage, store).await?);
+        usages.append(&mut Attachment::apply_usage(&self, &usage, store).await?);
         Usage::update_vec(&usages, store).await?;
         Ok(Summary {
             usages,
