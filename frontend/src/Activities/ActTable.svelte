@@ -147,7 +147,7 @@
     return r.reduce((total, row) => {
       total.add(row);
       return total;
-    }, new Usage({}));
+    }, new Usage());
   };
 </script>
 

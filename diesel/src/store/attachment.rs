@@ -1,12 +1,11 @@
 use crate::*;
-use async_session::log::debug;
 use diesel::prelude::*;
 use diesel::{BoolExpressionMethods, ExpressionMethods, Identifiable, Insertable, QueryDsl};
 use diesel_async::RunQueryDsl;
 use tb_domain::schema;
 use time::OffsetDateTime;
 
-use tb_domain::{Attachment, PartId, PartTypeId, TbResult, Usage};
+use tb_domain::{Attachment, PartId, PartTypeId, TbResult};
 
 #[async_session::async_trait]
 impl tb_domain::AttachmentStore for AsyncDieselConn {
@@ -24,22 +23,6 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .map_err(map_to_tb)
     }
 
-    async fn attachment_reset_all(&mut self) -> TbResult<usize> {
-        use schema::attachments::dsl::*;
-        debug!("resetting all attachments");
-        diesel::update(attachments)
-            .set((
-                time.eq(0),
-                distance.eq(0),
-                climb.eq(0),
-                descend.eq(0),
-                count.eq(0),
-            ))
-            .execute(self)
-            .await
-            .map_err(map_to_tb)
-    }
-
     async fn attachment_get_by_gear_and_time(
         &mut self,
         act_gear: PartId,
@@ -53,31 +36,6 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .get_results::<Attachment>(self)
             .await
             .map_err(map_to_tb)
-    }
-
-    async fn attachments_add_usage_by_gear_and_time(
-        &mut self,
-        act_gear: PartId,
-        start: OffsetDateTime,
-        usage: &Usage,
-    ) -> TbResult<Vec<Attachment>> {
-        use schema::attachments::dsl::*;
-        diesel::update(
-            attachments
-                .filter(gear.eq(act_gear))
-                .filter(attached.le(start))
-                .filter(detached.gt(start)),
-        )
-        .set((
-            time.eq(time + usage.time),
-            climb.eq(climb + usage.climb),
-            descend.eq(descend + usage.descend),
-            distance.eq(distance + usage.distance),
-            count.eq(count + usage.count),
-        ))
-        .get_results::<Attachment>(self)
-        .await
-        .map_err(map_to_tb)
     }
 
     async fn attachments_all_by_partlist(&mut self, ids: Vec<PartId>) -> TbResult<Vec<Attachment>> {

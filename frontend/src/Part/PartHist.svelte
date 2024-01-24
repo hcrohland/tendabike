@@ -40,7 +40,7 @@
                 N/A
               {/if}
             </td><td>{att.fmtTime()}</td>
-            <Usage usage={att} ref={att.idx} />
+            <Usage id={att.usage} ref={att.idx} />
           </tr>
         {/each}
       </tbody>

@@ -1,6 +1,6 @@
 use time::OffsetDateTime;
 
-use crate::{Attachment, PartId, PartTypeId, TbResult, Usage};
+use crate::{Attachment, PartId, PartTypeId, TbResult};
 
 /// This trait defines methods for storing and retrieving attachments.
 #[async_trait::async_trait]
@@ -11,22 +11,11 @@ pub trait AttachmentStore {
     /// Delete an attachment.
     async fn attachment_delete(&mut self, att: Attachment) -> TbResult<Attachment>;
 
-    /// Reset all attachments.
-    async fn attachment_reset_all(&mut self) -> TbResult<usize>;
-
     /// Get all attachments for a given gear and time.
     async fn attachment_get_by_gear_and_time(
         &mut self,
         act_gear: PartId,
         start: OffsetDateTime,
-    ) -> TbResult<Vec<Attachment>>;
-
-    /// Add usage to all attachments for a given gear and time.
-    async fn attachments_add_usage_by_gear_and_time(
-        &mut self,
-        act_gear: PartId,
-        start: OffsetDateTime,
-        usage: &Usage,
     ) -> TbResult<Vec<Attachment>>;
 
     /// Get all attachments for a list of part IDs.

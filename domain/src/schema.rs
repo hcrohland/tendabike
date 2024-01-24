@@ -32,11 +32,7 @@ table! {
         gear -> Int4,
         hook -> Int4,
         detached -> Timestamptz,
-        count -> Int4,
-        time -> Int4,
-        distance -> Int4,
-        climb -> Int4,
-        descend -> Int4,
+        usage -> Uuid,
     }
 }
 
@@ -60,13 +56,26 @@ table! {
         vendor -> Text,
         model -> Text,
         purchase -> Timestamptz,
-        time -> Int4,
-        distance -> Int4,
-        climb -> Int4,
-        descend -> Int4,
-        count -> Int4,
         last_used -> Timestamptz,
         disposed_at -> Nullable<Timestamptz>,
+        usage -> Uuid,
+    }
+}
+
+table! {
+    usages(id) {
+        id -> Uuid,
+        time -> Int4,
+        /// Usage distance
+        distance -> Int4,
+        /// Overall climbing
+        climb -> Int4,
+        /// Overall descending
+        descend -> Int4,
+        /// Overall descending
+        power -> Int4,
+        /// number of activities
+        count -> Int4,
     }
 }
 

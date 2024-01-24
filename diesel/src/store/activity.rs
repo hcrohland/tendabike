@@ -1,5 +1,5 @@
 use crate::*;
-use async_session::log::debug;
+// use async_session::log::debug;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use tb_domain::schema;
@@ -100,22 +100,6 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .filter(what.eq_any(types))
             .set(gear.eq(partid))
             .get_results::<Activity>(self)
-            .await
-            .map_err(map_to_tb)
-    }
-
-    async fn part_reset_all(&mut self) -> TbResult<usize> {
-        use schema::parts::dsl::*;
-        debug!("resetting all parts");
-        diesel::update(parts)
-            .set((
-                time.eq(0),
-                distance.eq(0),
-                climb.eq(0),
-                descend.eq(0),
-                count.eq(0),
-            ))
-            .execute(self)
             .await
             .map_err(map_to_tb)
     }

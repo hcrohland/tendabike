@@ -19,6 +19,7 @@ pub struct Summary {
     pub activities: Vec<Activity>,
     pub parts: Vec<Part>,
     pub attachments: Vec<AttachmentDetail>,
+    pub usages: Vec<Usage>,
 }
 
 impl Summary {
@@ -26,11 +27,13 @@ impl Summary {
         activities: Vec<entities::activity::Activity>,
         parts: Vec<Part>,
         attachments: Vec<AttachmentDetail>,
+        usages: Vec<Usage>,
     ) -> Self {
         Summary {
             activities,
             parts,
             attachments,
+            usages,
         }
     }
 
@@ -38,6 +41,7 @@ impl Summary {
         self.activities.append(&mut new.activities);
         self.parts.append(&mut new.parts);
         self.attachments.append(&mut new.attachments);
+        self.usages.append(&mut new.usages);
     }
 
     pub fn merge(self, new: Summary) -> Summary {
@@ -56,6 +60,7 @@ pub struct SumHash {
     activities: HashMap<ActivityId, Activity>,
     parts: HashMap<PartId, Part>,
     atts: HashMap<String, AttachmentDetail>,
+    uses: HashMap<UsageId, Usage>,
 }
 
 impl SumHash {
@@ -75,6 +80,9 @@ impl SumHash {
         for att in ps.attachments {
             self.atts.insert(att.idx(), att);
         }
+        for usage in ps.usages {
+            self.uses.insert(usage.id, usage);
+        }
     }
 
     pub fn collect(self) -> Summary {
@@ -82,6 +90,7 @@ impl SumHash {
             activities: self.activities.into_values().collect(),
             parts: self.parts.into_values().collect(),
             attachments: self.atts.into_values().collect(),
+            usages: self.uses.into_values().collect(),
         }
     }
 }

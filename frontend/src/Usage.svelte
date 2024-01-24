@@ -1,13 +1,16 @@
 <script lang="ts">
   import { link } from "svelte-spa-router";
-  import { fmtSeconds, fmtNumber } from "./lib/store";
+  import { usages, fmtSeconds, fmtNumber } from "./lib/store";
   import { Usage } from "./lib/types";
 
-  export let usage: Usage | undefined = undefined;
+  export let id: string | undefined = undefined;
   export let ref: string | number | undefined = undefined;
+
+  let usage = new Usage();
+  $: if (id) usage = $usages[id];
 </script>
 
-{#if usage}
+{#if id}
   <td class="text-end">
     {#if ref}
       <a class="text-reset" use:link href={"/activities/" + ref}>

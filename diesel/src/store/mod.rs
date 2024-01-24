@@ -6,6 +6,7 @@ mod activity;
 mod attachment;
 mod part;
 mod types;
+mod usage;
 mod user;
 
 #[async_session::async_trait]

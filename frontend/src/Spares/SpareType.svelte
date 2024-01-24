@@ -77,7 +77,7 @@
         {part.name}
       </a>
     </td>
-    <Usage usage={part} ref={part.id} />
+    <Usage id={part.usage} ref={part.id} />
     {#if attachee > 0}
       <td>
         {#if part.disposed_at}

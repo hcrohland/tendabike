@@ -70,16 +70,7 @@ pub struct Attachment {
     #[serde(with = "time::serde::rfc3339")]
     detached: OffsetDateTime,
     // we do not accept theses values from the client!
-    /// usage count
-    pub count: i32,
-    /// usage time
-    pub time: i32,
-    /// Usage distance
-    pub distance: i32,
-    /// Overall climbing
-    pub climb: i32,
-    /// Overall descending
-    pub descend: i32,
+    usage: UsageId,
 }
 /// Attachment with additional details
 ///
@@ -89,7 +80,7 @@ pub struct Attachment {
 #[derive(Queryable, Serialize, Deserialize, Debug)]
 pub struct AttachmentDetail {
     #[serde(flatten)]
-    a: Attachment,
+    pub a: Attachment,
     name: String,
     what: PartTypeId,
 }
@@ -102,14 +93,18 @@ impl AttachmentDetail {
 }
 
 impl Attachment {
-    /// return the usage for the attachment
-    async fn usage(&self, conn: &mut impl Store) -> TbResult<Usage> {
+    /// return the calculated usage for the attachment
+    async fn calculate_usage(&self, conn: &mut impl Store) -> TbResult<Usage> {
         Ok(
             Activity::find(self.gear, self.attached, self.detached, conn)
                 .await?
                 .into_iter()
-                .fold(Usage::default(), |usage, act| usage + act.usage()),
+                .fold(Usage::new(self.usage), |usage, act| usage + &act.usage()),
         )
+    }
+
+    pub(crate) async fn usage(&self, store: &mut impl Store) -> TbResult<Usage> {
+        self.usage.read(store).await
     }
 
     async fn shift(
@@ -152,27 +147,31 @@ impl Attachment {
     //
     /// - recalculates the usage counters in the attached assembly
     /// - returns all affected parts
-    async fn create(mut self, conn: &mut impl Store) -> TbResult<Summary> {
+    async fn create(mut self, store: &mut impl Store) -> TbResult<Summary> {
         trace!("create {:?}", self);
-        let usage = self.usage(conn).await?;
-        self.count = usage.count;
-        self.time = usage.time;
-        self.distance = usage.distance;
-        self.climb = usage.climb;
-        self.descend = usage.descend;
-        let part = self
-            .part_id
-            .apply_usage(&usage, self.attached, conn)
-            .await?;
 
-        let attachment = conn
+        // create the Usage for the attachement
+        self.usage = UsageId::new();
+        let usage = self.calculate_usage(store).await?;
+
+        // add that usage to the part
+        let part = self.part_id.update_last_use(self.attached, store).await?;
+        let part_usage = part.usage(store).await? + &usage;
+
+        // Store both usages.
+        Usage::update_vec(&vec![&usage, &part_usage], store).await?;
+
+        // store the attachment in the database
+        let attachment = store
             .attachment_create(self)
             .await?
             .add_details(&part.name, part.what);
 
+        // return all affected objects
         Ok(Summary {
             parts: vec![part],
             attachments: vec![attachment],
+            usages: vec![usage, part_usage],
             ..Default::default()
         })
     }
@@ -181,24 +180,26 @@ impl Attachment {
     ///
     /// - recalculates the usage counters in the attached assembly
     /// - returns all affected parts
-    async fn delete(self, conn: &mut impl Store) -> TbResult<Summary> {
+    async fn delete(self, store: &mut impl Store) -> TbResult<Summary> {
         trace!("delete {:?}", self);
-        let mut att = conn.attachment_delete(self).await?;
 
-        let usage = -att.usage(conn).await?;
-        let part = att.part_id.apply_usage(&usage, att.attached, conn).await?;
-        att.count = 0;
-        att.time = 0;
-        att.distance = 0;
-        att.climb = 0;
-        att.descend = 0;
+        // delete the attachment on the db
+        let att = store.attachment_delete(self).await?;
+        let usage = -att.usage.delete(store).await?;
 
-        // mark as deleted for client!
+        // adjust part usage and store it
+        let part_usage = att.part_id.read(store).await?.usage(store).await?;
+        let usages = vec![part_usage + &usage];
+        Usage::update_vec(&usages, store).await?;
+
+        // mark attachment as deleted for client!
+        let mut att = att;
         att.detached = att.attached;
+        att.usage = UsageId::new();
         Ok(Summary {
             attachments: vec![att.add_details("", 0.into())],
-            parts: vec![part],
-            activities: vec![],
+            usages,
+            ..Default::default()
         })
     }
 
@@ -238,26 +239,22 @@ impl Attachment {
         Ok(res)
     }
 
-    /// apply usage to all attachments affected by activity
+    /// find all Usages affected by activity and add usage to it
     ///
-    /// returns the list of Attachments - including the redundant details
-    pub(crate) async fn register(
+    /// returns the array of modified Usages
+    pub(crate) async fn apply_usage(
         act: &Activity,
         usage: &Usage,
-        conn: &mut impl Store,
-    ) -> TbResult<Vec<AttachmentDetail>> {
+        store: &mut impl Store,
+    ) -> TbResult<Vec<Usage>> {
         let mut res = Vec::new();
         if let Some(act_gear) = act.gear {
             let start = act.start;
-            let atts = conn
-                .attachments_add_usage_by_gear_and_time(act_gear, start, usage)
+            let atts = store
+                .attachment_get_by_gear_and_time(act_gear, start)
                 .await?;
             for att in atts.iter() {
-                res.push(
-                    att.read_details(conn)
-                        .await
-                        .expect("couldn't enrich attachment"),
-                );
+                res.push(att.usage(store).await? + usage);
             }
         }
         Ok(res)

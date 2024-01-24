@@ -7,8 +7,8 @@
     Row,
     Col,
   } from "@sveltestrap/sveltestrap";
-  import { types, fmtSeconds, fmtDate, fmtNumber } from "../lib/store";
-  import { Part } from "../lib/types";
+  import { types, usages, fmtSeconds, fmtDate, fmtNumber } from "../lib/store";
+  import { Part, Usage } from "../lib/types";
   import { link } from "svelte-spa-router";
 
   export let part: Part;
@@ -16,6 +16,9 @@
 
   let isOpen = false;
   let showLink = false;
+
+  let usage = new Usage();
+  $: if ($usages[part.usage]) usage = $usages[part.usage];
 
   function model(part: Part) {
     if (part.model == "" && part.vendor == "") {
@@ -75,17 +78,15 @@
       {/if}
       you used
       <a href={"/activities/" + part.id} use:link class="param text-reset"
-        >{fmtNumber(part.count)}</a
+        >{fmtNumber(usage.count)}</a
       >
-      times for <span class="param">{fmtSeconds(part.time)}</span> hours.
+      times for <span class="param">{fmtSeconds(usage.time)}</span> hours.
       <p>
         You covered <span class="param"
-          >{fmtNumber(
-            parseFloat(((part.distance || 0) / 1000).toFixed(1)),
-          )}</span
+          >{fmtNumber(parseFloat((usage.distance / 1000).toFixed(1)))}</span
         >
-        km climbing <span class="param">{fmtNumber(part.climb)}</span> and
-        descending <span class="param">{fmtNumber(part.descend)}</span> meters
+        km climbing <span class="param">{fmtNumber(usage.climb)}</span> and
+        descending <span class="param">{fmtNumber(usage.descend)}</span> meters
       </p></CardBody
     >
     <!-- </div> -->

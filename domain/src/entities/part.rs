@@ -71,22 +71,14 @@ pub struct Part {
     /// purchase date
     #[serde_as(as = "Rfc3339")]
     pub purchase: OffsetDateTime,
-    /// usage time
-    pub time: i32,
-    /// Usage distance
-    pub distance: i32,
-    /// Overall climbing
-    pub climb: i32,
-    /// Overall descending
-    pub descend: i32,
-    /// usage count
-    pub count: i32,
     /// last time it was used
     #[serde_as(as = "Rfc3339")]
     pub last_used: OffsetDateTime,
     /// Was it disposed? If yes, when?
     #[serde_as(as = "Option<Rfc3339>")]
     pub disposed_at: Option<OffsetDateTime>,
+    /// the usage tracker
+    pub usage: UsageId,
 }
 
 #[serde_as]
@@ -109,6 +101,7 @@ pub struct NewPart {
 
 use serde_with::serde_as;
 use time::format_description::well_known::Rfc3339;
+
 #[serde_as]
 #[derive(Clone, Debug, PartialEq, Deserialize, AsChangeset)]
 #[diesel(table_name = schema::parts)]
@@ -145,9 +138,13 @@ impl PartId {
         PartId(id).checkuser(user, conn).await
     }
 
+    pub(crate) async fn read(self, store: &mut impl PartStore) -> TbResult<Part> {
+        store.partid_get_part(self).await
+    }
+
     /// get the part with id part
-    pub async fn part(self, user: &dyn Person, conn: &mut impl Store) -> TbResult<Part> {
-        let part = conn.partid_get_part(self).await?;
+    pub async fn part(self, user: &dyn Person, store: &mut impl PartStore) -> TbResult<Part> {
+        let part = self.read(store).await?;
         user.check_owner(
             part.owner,
             format!("user {} cannot access part {}", user.get_id(), part.id),
@@ -158,18 +155,22 @@ impl PartId {
     /// get the name of the part
     ///
     /// does not check ownership. This is needed for rentals.
-    pub async fn name(self, conn: &mut impl Store) -> TbResult<String> {
-        conn.partid_get_name(self).await
+    pub async fn name(self, store: &mut impl PartStore) -> TbResult<String> {
+        Ok(self.read(store).await?.name)
     }
 
-    pub async fn what(self, conn: &mut impl Store) -> TbResult<PartTypeId> {
-        conn.partid_get_type(self).await
+    pub async fn what(self, store: &mut impl PartStore) -> TbResult<PartTypeId> {
+        Ok(self.read(store).await?.what)
     }
 
     /// check if the given user is the owner or an admin.
     /// Returns Forbidden if not.
-    pub async fn checkuser(self, user: &dyn Person, conn: &mut impl Store) -> TbResult<PartId> {
-        let own = conn.partid_get_ownerid(self, user).await?;
+    pub async fn checkuser(
+        self,
+        user: &dyn Person,
+        store: &mut impl PartStore,
+    ) -> TbResult<PartId> {
+        let own = self.read(store).await?.owner;
         if user.get_id() == own {
             return Ok(self);
         }
@@ -181,18 +182,18 @@ impl PartId {
         )))
     }
 
-    /// apply a usage to the part with given id
-    ///
-    /// If the stored purchase date is later than the usage date, it will adjust the purchase date
-    /// returns the changed part
-    pub(crate) async fn apply_usage(
+    /// if start is later than last_used update last_used
+    pub(crate) async fn update_last_use(
         self,
-        usage: &Usage,
         start: OffsetDateTime,
-        conn: &mut impl Store,
+        store: &mut impl PartStore,
     ) -> TbResult<Part> {
-        trace!("Applying usage {:?} to part {}", usage, self);
-        conn.partid_apply_usage(self, usage, start).await
+        let mut part = self.read(store).await?;
+        if start > part.last_used {
+            part.last_used = start;
+            store.part_update(&part).await?;
+        }
+        Ok(part)
     }
 }
 
@@ -211,33 +212,17 @@ impl Part {
     /// # Errors
     ///
     /// Returns an `TbResult` object that may contain a `diesel::result::Error` if the query fails.
-    pub async fn get_all(user: &UserId, conn: &mut impl Store) -> TbResult<Vec<Part>> {
+    pub async fn get_all(user: &UserId, conn: &mut impl PartStore) -> TbResult<Vec<Part>> {
         conn.part_get_all_for_userid(user).await
     }
 
-    /// reset all usage counters for all parts of a person
-    ///
-    /// returns the list of main gears affected
-    pub async fn reset(user: &dyn Person, conn: &mut impl Store) -> TbResult<Vec<PartId>> {
-        use std::collections::HashSet;
-
-        // reset all counters for all parts of this user
-        let part_list = conn.parts_reset_all_usages(user.get_id()).await?;
-
-        // get the main types
-        let mains: HashSet<PartTypeId> = conn.parttypes_all_maingear().await?.into_iter().collect();
-
-        // only return the main parts
-        Ok(part_list
-            .into_iter()
-            .filter(|x| mains.contains(&x.what))
-            .map(|x| x.id)
-            .collect())
+    pub async fn usage(&self, store: &mut impl UsageStore) -> TbResult<Usage> {
+        self.usage.read(store).await
     }
 }
 
 impl NewPart {
-    pub async fn create(self, user: &dyn Person, conn: &mut impl Store) -> TbResult<Part> {
+    pub async fn create(self, user: &dyn Person, conn: &mut impl PartStore) -> TbResult<Part> {
         info!("Create {:?}", self);
 
         user.check_owner(
@@ -247,12 +232,12 @@ impl NewPart {
 
         let now = OffsetDateTime::now_utc();
         let createtime = self.purchase.unwrap_or(now);
-        conn.create_part(self, createtime).await
+        conn.part_create(self, createtime, UsageId::new()).await
     }
 }
 
 impl ChangePart {
-    pub async fn change(self, user: &dyn Person, conn: &mut impl Store) -> TbResult<Part> {
+    pub async fn change(self, user: &dyn Person, conn: &mut impl PartStore) -> TbResult<Part> {
         info!("Change {:?}", self);
 
         user.check_owner(
