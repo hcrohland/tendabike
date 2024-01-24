@@ -12,15 +12,17 @@ import {
 export const maxDate = new Date("2999-12-31");
 
 export class Usage {
-  count?: number;
-  climb?: number;
-  descend?: number;
-  distance?: number;
-  time?: number;
-  duration?: number;
+  id: string;
+  count: number;
+  climb: number;
+  descend: number;
+  distance: number;
+  time: number;
+  duration: number;
 
   constructor(data?: any) {
     if (data) {
+      this.id = data.id;
       this.count = data.count;
       this.climb = data.climb;
       this.descend = data.descend;
@@ -28,6 +30,7 @@ export class Usage {
       this.time = data.time;
       this.duration = data.duration;
     } else {
+      this.id = "";
       this.count = 0;
       this.climb = 0;
       this.descend = 0;
@@ -37,26 +40,17 @@ export class Usage {
     }
   }
 
-  // fill () {
-  //   if (! this.count) this.count = 0;
-  //   if (! this.climb) this.climb = 0;
-  //   if (! this.descend) this.descend = this.climb;
-  //   if (! this.distance) this.distance = 0;
-  //   if (! this.time) this.time = 0;
-  //   if (! this.duration) this.duration = this.time;
-  // }
-
-  add(a: Usage) {
-    this.count = (this.count || 0) + (a.count || 1);
-    this.climb = (this.climb || 0) + (a.climb || 0);
-    this.descend = (this.descend || 0) + (a.descend || a.climb || 0);
-    this.distance = (this.distance || 0) + (a.distance || 0);
-    this.time = (this.time || 0) + (a.time || a.duration || 0);
-    this.duration = (this.duration || 0) + (a.duration || a.time || 0);
+  add(a: Usage | Activity) {
+    this.count += a.count || 1;
+    this.climb += a.climb || 0;
+    this.descend += a.descend || a.climb || 0;
+    this.distance += a.distance || 0;
+    this.time += a.time || a.duration || 0;
+    this.duration += a.duration || a.time || 0;
   }
 }
 
-export class Part extends Usage {
+export class Part {
   id?: number;
   owner: number;
   what: number;
@@ -66,9 +60,9 @@ export class Part extends Usage {
   purchase: Date;
   last_used: Date;
   disposed_at?: Date;
+  usage: string;
 
   constructor(data: any) {
-    super(data);
     this.id = data.id;
     this.owner = data.owner;
     this.what = data.what;
@@ -80,6 +74,7 @@ export class Part extends Usage {
     this.disposed_at = data.disposed_at
       ? new Date(data.disposed_at)
       : undefined;
+    this.usage = data.usage;
   }
 
   async create() {
@@ -120,7 +115,7 @@ export class Part extends Usage {
   }
 }
 
-export class Attachment extends Usage {
+export class Attachment {
   part_id: number;
   attached: Date;
   gear: number;
@@ -129,8 +124,8 @@ export class Attachment extends Usage {
   what: number;
   name: string;
   idx: string;
+  usage: string;
   constructor(data: any) {
-    super(data);
     this.part_id = data.part_id;
     this.attached = new Date(data.attached);
     this.gear = data.gear;
@@ -139,6 +134,7 @@ export class Attachment extends Usage {
     this.what = data.what;
     this.name = data.name;
     this.idx = this.part_id + "/" + this.attached.getTime();
+    this.usage = data.usage;
   }
   fmtTime() {
     let res = fmtDate(this.attached);
@@ -202,7 +198,7 @@ export type User = {
   is_admin: boolean;
 };
 
-export class Activity extends Usage {
+export class Activity {
   id: number;
   /// The athlete
   user_id: number;
@@ -214,15 +210,26 @@ export class Activity extends Usage {
   start: Date;
   /// Which gear did she use?
   gear?: number;
+  count: number;
+  climb?: number;
+  descend?: number;
+  distance?: number;
+  time?: number;
+  duration?: number;
 
   constructor(data: any) {
-    super(data);
     this.id = data.id;
     this.user_id = data.user_id;
     this.what = data.what;
     this.name = data.name;
     this.start = new Date(data.start);
     this.gear = data.gear;
+    this.climb = data.climb;
+    this.descend = data.descend;
+    this.distance = data.distance;
+    this.time = data.time;
+    this.duration = data.duration;
+    this.count = 1;
   }
 
   gearLink(parts: Map<Part>) {

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { DropdownItem } from "@sveltestrap/sveltestrap";
-  import { parts } from "../lib/store";
+  import { parts, usages } from "../lib/store";
   import Usage from "../Usage.svelte";
   import ReplacePart from "../Actions/ReplacePart.svelte";
   import AttachPart from "../Actions/AttachPart.svelte";
@@ -34,7 +34,7 @@
         <th scope="row" class="text-nowrap">
           {"| ".repeat(level)}
           {prefix + " " + type.name}
-          {#if attachments.length > 0 || (part && part.count != att.count)}
+          {#if attachments.length > 0 || (part && $usages[part.usage].count != $usages[att.usage].count)}
             <ShowAll bind:show_hist />
           {/if}
         </th>
@@ -54,7 +54,7 @@
             {/if}
           </td>
           <td> {att.fmtTime()} </td>
-          <Usage usage={part} ref={part.id} />
+          <Usage id={part.usage} ref={part.id} />
           <td>
             <Menu>
               <DropdownItem on:click={() => attachPart(part)}>
@@ -90,7 +90,7 @@
           {/if}
         </td>
         <td> {att.fmtTime()} </td>
-        <Usage usage={att} ref={att.idx} />
+        <Usage id={att.usage} ref={att.idx} />
         <td>
           <Menu>
             <DropdownItem on:click={() => attachPart(part)}
