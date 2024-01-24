@@ -48,9 +48,12 @@ impl UsageStore for AsyncDieselConn {
         .await
     }
 
-    async fn usage_delete(&mut self, usage: &UsageId) -> TbResult<usize> {
+    async fn usage_delete(&mut self, usage: &UsageId) -> TbResult<Usage> {
         use schema::usages::dsl::*;
-        Ok(diesel::delete(usages.find(usage)).execute(self).await?)
+        diesel::delete(usages.find(usage))
+            .get_result(self)
+            .await
+            .map_err(map_to_tb)
     }
 
     async fn usage_reset_all(&mut self) -> TbResult<usize> {

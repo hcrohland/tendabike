@@ -90,7 +90,7 @@ impl UsageId {
         Uuid::now_v7().into()
     }
 
-    pub(crate) async fn delete(self, store: &mut impl UsageStore) -> TbResult<usize> {
+    pub(crate) async fn delete(self, store: &mut impl UsageStore) -> TbResult<Usage> {
         store.usage_delete(&self).await
     }
 
@@ -195,9 +195,9 @@ mod tests {
             Ok(vec.len())
         }
 
-        async fn usage_delete(&mut self, usage: &UsageId) -> TbResult<usize> {
+        async fn usage_delete(&mut self, usage: &UsageId) -> TbResult<Usage> {
             match self.0.remove(&usage) {
-                Some(_) => Ok(1),
+                Some(x) => Ok(x),
                 None => Err(crate::Error::NotFound(format!("Usage {} not found", usage))),
             }
         }
