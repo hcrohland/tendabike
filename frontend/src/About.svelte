@@ -68,7 +68,7 @@
       <p></p>
     </CardBody>
     <CardFooter>
-      © Christoph Rohland 2019-2023 - Icons made by <a
+      © Christoph Rohland 2019-2024 - Icons made by <a
         href="https://www.flaticon.com/authors/freepik"
         title="Freepik">Freepik</a
       >
