@@ -22,8 +22,6 @@
     gear = g;
     part = new Part({
       owner: $user && $user.id,
-      purchase: new Date(),
-      last_used: new Date(),
     });
     disabled = true;
     type = undefined;

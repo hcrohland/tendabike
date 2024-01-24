@@ -66,9 +66,9 @@ export class Part {
     this.id = data.id;
     this.owner = data.owner;
     this.what = data.what;
-    this.name = data.name;
-    this.vendor = data.vendor;
-    this.model = data.model;
+    this.name = data.name || "";
+    this.vendor = data.vendor || "";
+    this.model = data.model || "";
     this.purchase = new Date(data.purchase);
     this.last_used = new Date(data.last_used);
     this.disposed_at = data.disposed_at
