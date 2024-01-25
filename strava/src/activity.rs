@@ -8,9 +8,7 @@
 
 use time::OffsetDateTime;
 
-use super::*;
-use ActTypeId;
-use NewActivity;
+use crate::*;
 
 #[derive(Serialize, Deserialize, Debug)]
 /// A struct that represents an activity from Strava API.

@@ -7,10 +7,10 @@
 //! checking the validity of the user's access token.
 
 use diesel_derive_newtype::DieselNewType;
-use newtype_derive::{newtype_fmt, NewtypeDisplay, NewtypeFrom};
+use newtype_derive::*;
 use serde::Deserialize;
 
-use super::*;
+use crate::*;
 
 #[derive(
     DieselNewType, Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize,

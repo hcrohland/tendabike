@@ -29,17 +29,15 @@
 
 use std::collections::HashSet;
 
-use crate::traits::Store;
-
-use super::*;
-use ::time::PrimitiveDateTime;
 use anyhow::Context;
 use diesel_derive_newtype::*;
 use newtype_derive::*;
 use scoped_futures::ScopedFutureExt;
 use serde_derive::{Deserialize, Serialize};
-use time::{macros::format_description, OffsetDateTime};
+use time::{macros::format_description, OffsetDateTime, PrimitiveDateTime};
 use time_tz::PrimitiveDateTimeExt;
+
+use crate::*;
 
 /// The Id of an Activity
 ///

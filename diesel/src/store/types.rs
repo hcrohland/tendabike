@@ -1,14 +1,8 @@
-use crate::*;
-use diesel::ExpressionMethods;
-use diesel::QueryDsl;
+use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
-use tb_domain::schema;
-use tb_domain::ActTypeId;
-use tb_domain::ActivityType;
-use tb_domain::TbResult;
 
-use tb_domain::PartType;
-use tb_domain::PartTypeId;
+use crate::{map_to_tb, AsyncDieselConn};
+use tb_domain::{schema, ActTypeId, ActivityType, PartType, PartTypeId, TbResult};
 
 #[async_session::async_trait]
 impl tb_domain::TypesStore for AsyncDieselConn {

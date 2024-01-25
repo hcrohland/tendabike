@@ -1,16 +1,10 @@
-use crate::*;
 use diesel::prelude::*;
 use diesel::sql_query;
 use diesel_async::RunQueryDsl;
-use tb_domain::ActivityId;
-use tb_domain::PartId;
-use tb_domain::TbResult;
-use tb_domain::UserId;
-use tb_strava::event::Event;
-use tb_strava::schema;
-use tb_strava::StravaId;
-use tb_strava::StravaPerson;
-use tb_strava::StravaUser;
+
+use crate::{map_to_tb, AsyncDieselConn};
+use tb_domain::{ActivityId, PartId, TbResult, UserId};
+use tb_strava::{event::Event, schema, StravaId, StravaPerson, StravaUser};
 
 #[async_session::async_trait]
 impl tb_strava::StravaStore for AsyncDieselConn {

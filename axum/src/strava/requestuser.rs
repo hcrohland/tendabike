@@ -1,5 +1,3 @@
-use std::time::SystemTime;
-
 use anyhow::Context;
 use async_session::{
     async_trait,
@@ -19,15 +17,15 @@ use oauth2::{
 };
 use serde::de::DeserializeOwned;
 use serde_derive::{Deserialize, Serialize};
-use tb_domain::{Error, Person, TbResult, UserId};
-use tb_strava::{StravaId, StravaPerson, StravaStore, StravaUser};
+use std::time::SystemTime;
 
+use super::StravaExtraTokenFields;
 use crate::{
     error::AuthRedirect,
     strava::{oauth::STRAVACLIENT, StravaAthleteInfo},
 };
-
-use super::StravaExtraTokenFields;
+use tb_domain::{Error, Person, TbResult, UserId};
+use tb_strava::{StravaId, StravaPerson, StravaStore, StravaUser};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct RequestUser {

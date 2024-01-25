@@ -1,12 +1,11 @@
-use std::borrow::Borrow;
-
-use crate::*;
 use async_session::log::debug;
 use diesel::QueryDsl;
-use diesel_async::AsyncConnection;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncConnection, RunQueryDsl};
 use scoped_futures::ScopedFutureExt;
-use tb_domain::{TbResult, Usage, UsageId, UsageStore};
+use std::borrow::Borrow;
+
+use crate::{map_to_tb, AsyncDieselConn};
+use tb_domain::{schema, TbResult, Usage, UsageId, UsageStore};
 
 #[async_session::async_trait]
 impl UsageStore for AsyncDieselConn {

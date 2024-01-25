@@ -54,15 +54,14 @@ use axum::{
     extract::{Path, Query, State},
     Json,
 };
-use tb_domain::{Error, Summary, TbResult};
-
 use serde_derive::{Deserialize, Serialize};
+
+use crate::{ApiResult, AxumAdmin, DbPool, RequestUser};
+use tb_domain::{Error, Summary, TbResult};
 use tb_strava::{
     event::{process, InEvent},
     StravaPerson,
 };
-
-use crate::{ApiResult, AxumAdmin, DbPool, RequestUser};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Hub {

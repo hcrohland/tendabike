@@ -1,5 +1,6 @@
-use crate::appstate::AppState;
 use axum::Router;
+
+use crate::appstate::AppState;
 
 mod activity;
 mod attachment;

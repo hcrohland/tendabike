@@ -1,9 +1,8 @@
 use async_recursion::async_recursion;
 use std::collections::HashMap;
 
-use super::*;
-
 use crate::activity::StravaActivity;
+use crate::*;
 
 #[derive(Debug, Serialize, Deserialize)]
 /// A struct representing an incoming Strava event.

@@ -31,13 +31,12 @@
 //!
 //! Finally, this module defines the `NewPart` type, which is used to create new parts in the database.
 
-use crate::traits::Store;
-
-use super::*;
-use ::time::OffsetDateTime;
 use diesel_derive_newtype::*;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
+use time::OffsetDateTime;
+
+use crate::*;
 
 /// The database's representation of a part.
 #[serde_as]

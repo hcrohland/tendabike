@@ -6,14 +6,17 @@
 //!
 //! This module is used by other modules in the application to interact with the database.
 
-use std::ops::{Deref, DerefMut};
-
 use anyhow::Context;
 use async_session::log::info;
 use diesel::prelude::*;
-use diesel_async::pooled_connection::deadpool::{Object, Pool};
-use diesel_async::pooled_connection::AsyncDieselConnectionManager;
-use diesel_async::AsyncPgConnection;
+use diesel_async::{
+    pooled_connection::{
+        deadpool::{Object, Pool},
+        AsyncDieselConnectionManager,
+    },
+    AsyncPgConnection,
+};
+use std::ops::{Deref, DerefMut};
 
 type MyConnection = AsyncPgConnection;
 pub struct AsyncDieselConn(Object<MyConnection>);

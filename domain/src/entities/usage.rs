@@ -22,15 +22,15 @@
 //! The `Usage` struct represents the usage of a part, including time, distance, climbing, descending, power, and count.
 //! It also provides methods to add an activity to the usage.
 
-use super::*;
-use crate::schema::*;
-use crate::UsageStore;
 use diesel_derive_newtype::*;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::ops::{Add, Neg, Sub};
 use uuid::Uuid;
+
+use crate::*;
+use schema::usages;
 
 #[derive(
     DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Default,

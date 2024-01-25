@@ -2,7 +2,7 @@
 //! It also contains functions to convert StravaGear to Tendabike's Part object and to map Strava gear_id to Tendabike gear_id.
 //!
 
-use super::*;
+use crate::*;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaGear {

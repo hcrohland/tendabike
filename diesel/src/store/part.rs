@@ -1,16 +1,9 @@
-use crate::*;
-use diesel::ExpressionMethods;
-use diesel::QueryDsl;
-// use diesel_async::scoped_futures::ScopedFutureExt;
-// use diesel_async::AsyncConnection;
+use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
-use tb_domain::schema;
-use tb_domain::Part;
-use tb_domain::PartId;
-use tb_domain::TbResult;
-use tb_domain::UsageId;
-use tb_domain::UserId;
 use time::OffsetDateTime;
+
+use crate::{map_to_tb, AsyncDieselConn};
+use tb_domain::{schema, Part, PartId, TbResult, UsageId, UserId};
 
 #[async_session::async_trait]
 impl tb_domain::PartStore for AsyncDieselConn {

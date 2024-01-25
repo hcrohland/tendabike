@@ -4,9 +4,9 @@
 //! The `router` function is used to create a router that handles requests related to activity and part types.
 
 use axum::{extract::State, routing::get, Json, Router};
-use tb_domain::{ActivityType, PartType};
 
 use crate::{appstate::AppState, error::ApiResult, DbPool};
+use tb_domain::{ActivityType, PartType};
 
 // get all activity types
 async fn activity(State(conn): State<DbPool>) -> ApiResult<Vec<ActivityType>> {

@@ -9,9 +9,7 @@ use axum::{
     Json,
 };
 
-use crate::{error::AppError, ApiResult, DbPool};
-
-use super::{AxumAdmin, RequestUser};
+use crate::{error::AppError, ApiResult, AxumAdmin, DbPool, RequestUser};
 
 pub(super) async fn redirect_gear(
     Path(id): Path<i32>,

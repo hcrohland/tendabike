@@ -12,7 +12,7 @@
 use serde_derive::Serialize;
 use std::collections::HashMap;
 
-use super::*;
+use crate::*;
 
 #[derive(Serialize, Debug, Default)]
 pub struct Summary {

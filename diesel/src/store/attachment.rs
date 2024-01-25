@@ -1,11 +1,10 @@
-use crate::*;
 use diesel::prelude::*;
 use diesel::{BoolExpressionMethods, ExpressionMethods, Identifiable, Insertable, QueryDsl};
 use diesel_async::RunQueryDsl;
-use tb_domain::schema;
 use time::OffsetDateTime;
 
-use tb_domain::{Attachment, PartId, PartTypeId, TbResult};
+use crate::{map_to_tb, AsyncDieselConn};
+use tb_domain::{schema, Attachment, PartId, PartTypeId, TbResult};
 
 #[async_session::async_trait]
 impl tb_domain::AttachmentStore for AsyncDieselConn {

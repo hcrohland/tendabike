@@ -7,7 +7,6 @@
 //!
 //! Finally, it defines the `COOKIE_NAME` constant which is used to store the session cookie.
 
-use crate::error::AppError;
 use anyhow::Context;
 use async_session::{log::warn, MemoryStore, Session, SessionStore};
 use axum::{
@@ -16,7 +15,6 @@ use axum::{
     response::{IntoResponse, Redirect},
 };
 use axum_extra::TypedHeader;
-
 use http::StatusCode;
 use oauth2::{
     basic::{
@@ -30,6 +28,8 @@ use oauth2::{
 };
 use serde::{Deserialize, Serialize};
 use std::env;
+
+use crate::error::AppError;
 use tb_domain::Error;
 use tb_strava::StravaId;
 

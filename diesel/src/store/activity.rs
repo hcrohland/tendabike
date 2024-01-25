@@ -1,11 +1,11 @@
-use crate::*;
-// use async_session::log::debug;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
-use tb_domain::schema;
 use time::OffsetDateTime;
 
-use tb_domain::{ActTypeId, Activity, ActivityId, NewActivity, PartId, Person, TbResult, UserId};
+use crate::{map_to_tb, AsyncDieselConn};
+use tb_domain::{
+    schema, ActTypeId, Activity, ActivityId, NewActivity, PartId, Person, TbResult, UserId,
+};
 
 #[async_session::async_trait]
 impl tb_domain::ActivityStore for AsyncDieselConn {

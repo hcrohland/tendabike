@@ -1,5 +1,4 @@
 use crate::AsyncDieselConn;
-
 use tb_domain::Store;
 
 mod activity;

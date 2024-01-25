@@ -7,9 +7,9 @@
 //! The `router` function creates a new router and maps the API endpoints to their respective functions.
 
 use axum::{extract::State, routing::post, Json, Router};
-use tb_domain::{Event, Summary};
 
 use crate::{appstate::AppState, error::ApiResult, DbPool, RequestUser};
+use tb_domain::{Event, Summary};
 
 /// route for attach API
 async fn attach_rt(

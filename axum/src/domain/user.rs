@@ -7,10 +7,10 @@
 //! Additionally, it defines the `AxumAdmin` struct, which is used as a marker type for routes that require admin privileges.
 
 use axum::{extract::State, routing::get, Json, Router};
-use tb_domain::{Person, Summary};
-use tb_strava::StravaUser;
 
 use crate::{appstate::AppState, ApiResult, AxumAdmin, DbPool, RequestUser};
+use tb_domain::{Person, Summary};
+use tb_strava::StravaUser;
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()

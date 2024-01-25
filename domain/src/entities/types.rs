@@ -28,9 +28,7 @@ use diesel_derive_newtype::*;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::traits::Store;
-
-use super::*;
+use crate::*;
 use schema::{activity_types, part_types};
 
 #[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]

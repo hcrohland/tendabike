@@ -33,13 +33,11 @@
 //!
 //! The `create`, `update`, `read`, and `get_stat` methods are implemented for the `UserId` type and provide CRUD functionality for `User` entities.
 
-use diesel_derive_newtype::*;
+use diesel_derive_newtype::DieselNewType;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::traits::Store;
-
-use super::*;
+use crate::*;
 
 #[derive(
     DieselNewType, Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize,

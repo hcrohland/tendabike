@@ -28,7 +28,7 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::traits::Store;
 
-use super::*;
+use crate::*;
 use time::OffsetDateTime;
 
 pub use event::Event;

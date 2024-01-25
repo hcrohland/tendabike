@@ -3,11 +3,11 @@ This file defines the StravaStore trait, which extends the tb_domain::traits::St
 and provides additional methods for interacting with Strava data.
 */
 
-use crate::{event::Event, StravaId, StravaUser};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
-use tb_domain::TbResult;
-use tb_domain::{ActivityId, PartId, Person, UserId};
+
+use crate::{event::Event, StravaId, StravaUser};
+use tb_domain::{ActivityId, PartId, Person, TbResult, UserId};
 
 #[async_trait]
 pub trait StravaStore: tb_domain::Store + Send {
