@@ -1,11 +1,10 @@
-use crate::*;
 use diesel::prelude::*;
 use diesel::{BoolExpressionMethods, ExpressionMethods, Identifiable, Insertable, QueryDsl};
 use diesel_async::RunQueryDsl;
-use tb_domain::schema;
 use time::OffsetDateTime;
 
-use tb_domain::{Attachment, PartId, PartTypeId, TbResult};
+use crate::{map_to_tb, AsyncDieselConn};
+use tb_domain::{schema, Attachment, PartId, PartTypeId, TbResult};
 
 #[async_session::async_trait]
 impl tb_domain::AttachmentStore for AsyncDieselConn {
@@ -38,11 +37,10 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .map_err(map_to_tb)
     }
 
-    async fn attachments_all_by_partlist(&mut self, ids: Vec<PartId>) -> TbResult<Vec<Attachment>> {
+    async fn attachments_all_by_part(&mut self, id: PartId) -> TbResult<Vec<Attachment>> {
         use schema::attachments::dsl::*;
         attachments
-            .filter(part_id.eq_any(ids.clone()))
-            .or_filter(gear.eq_any(ids))
+            .filter(part_id.eq(id))
             .get_results(self)
             .await
             .map_err(map_to_tb)

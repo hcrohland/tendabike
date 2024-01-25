@@ -11,23 +11,23 @@
 //! of the Tendabike server, such as users, parts, attachments, activities, and Strava integration.
 //!
 
-mod domain;
-mod strava;
-
-mod appstate;
-use appstate::*;
-mod error;
-use error::*;
-
-use std::net::SocketAddr;
-
 use async_session::MemoryStore;
 use axum::Router;
+use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use tb_diesel::DbPool;
 
+mod domain;
+
+mod strava;
 use strava::{AxumAdmin, RequestUser};
+
+mod appstate;
+use appstate::*;
+
+mod error;
+use error::*;
 
 pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
     tracing_subscriber::registry()

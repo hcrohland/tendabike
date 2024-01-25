@@ -15,6 +15,7 @@ use axum::{
     Json,
 };
 use http::StatusCode;
+
 use tb_domain::Error;
 
 pub async fn fallback() -> (StatusCode, &'static str) {

@@ -2,7 +2,7 @@
 //! It also contains functions to convert StravaGear to Tendabike's Part object and to map Strava gear_id to Tendabike gear_id.
 //!
 
-use super::*;
+use crate::*;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct StravaGear {
@@ -15,8 +15,8 @@ pub struct StravaGear {
     frame_type: Option<i32>,
 }
 
-pub async fn strava_url(gear: i32, conn: &mut impl StravaStore) -> TbResult<String> {
-    let mut g = conn.strava_gearid_get_name(gear).await?;
+pub async fn strava_url(gear: i32, store: &mut impl StravaStore) -> TbResult<String> {
+    let mut g = store.strava_gearid_get_name(gear).await?;
     if g.remove(0) != 'b' {
         return Err(Error::BadRequest(format!("'{g}' is not a bike id")));
     }
@@ -51,32 +51,33 @@ impl StravaGear {
 pub(crate) async fn strava_to_tb(
     strava_id: String,
     user: &mut impl StravaPerson,
-    conn: &mut impl StravaStore,
+    store: &mut impl StravaStore,
 ) -> TbResult<PartId> {
-    if let Some(gear) = conn.strava_gear_get_tbid(&strava_id).await? {
+    if let Some(gear) = store.strava_gear_get_tbid(&strava_id).await? {
         return Ok(gear);
     }
 
     debug!("New Gear");
     let part = user
-        .request_json::<StravaGear>(&format!("/gear/{}", &strava_id), conn)
+        .request_json::<StravaGear>(&format!("/gear/{}", &strava_id), store)
         .await
         .context("Couldn't map gear")?
         .into_tb(user)?;
 
-    conn.transaction(|c| {
-        async {
-            // maybe the gear was created by now?
-            if let Some(gear) = c.strava_gear_get_tbid(&strava_id).await? {
-                return Ok(gear);
+    store
+        .transaction(|c| {
+            async {
+                // maybe the gear was created by now?
+                if let Some(gear) = c.strava_gear_get_tbid(&strava_id).await? {
+                    return Ok(gear);
+                }
+
+                let tbid = part.create(user, c).await?.id;
+
+                c.strava_gear_new(strava_id, tbid, user.get_id()).await?;
+                Ok(tbid)
             }
-
-            let tbid = part.create(user, c).await?.id;
-
-            c.strava_gear_new(strava_id, tbid, user.get_id()).await?;
-            Ok(tbid)
-        }
-        .scope_boxed()
-    })
-    .await
+            .scope_boxed()
+        })
+        .await
 }

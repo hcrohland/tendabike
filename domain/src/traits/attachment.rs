@@ -19,7 +19,7 @@ pub trait AttachmentStore {
     ) -> TbResult<Vec<Attachment>>;
 
     /// Get all attachments for a list of part IDs.
-    async fn attachments_all_by_partlist(&mut self, ids: Vec<PartId>) -> TbResult<Vec<Attachment>>;
+    async fn attachments_all_by_part(&mut self, id: PartId) -> TbResult<Vec<Attachment>>;
 
     /// Get an attachment for a given part and time.
     async fn attachment_get_by_part_and_time(

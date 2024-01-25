@@ -1,12 +1,11 @@
-use std::borrow::Borrow;
-
-use crate::*;
 use async_session::log::debug;
 use diesel::QueryDsl;
-use diesel_async::AsyncConnection;
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncConnection, RunQueryDsl};
 use scoped_futures::ScopedFutureExt;
-use tb_domain::{TbResult, Usage, UsageId, UsageStore};
+use std::borrow::Borrow;
+
+use crate::{map_to_tb, AsyncDieselConn};
+use tb_domain::{schema, TbResult, Usage, UsageId, UsageStore};
 
 #[async_session::async_trait]
 impl UsageStore for AsyncDieselConn {
@@ -29,7 +28,7 @@ impl UsageStore for AsyncDieselConn {
         use schema::usages;
 
         let len = vec.len();
-        self.transaction(|conn| {
+        self.transaction(|store| {
             async move {
                 for usage in vec {
                     let usage = usage.borrow();
@@ -38,7 +37,7 @@ impl UsageStore for AsyncDieselConn {
                         .on_conflict(usages::id)
                         .do_update()
                         .set(usage)
-                        .execute(conn)
+                        .execute(store)
                         .await?;
                 }
                 Ok(len)
@@ -56,7 +55,7 @@ impl UsageStore for AsyncDieselConn {
             .map_err(map_to_tb)
     }
 
-    async fn usage_reset_all(&mut self) -> TbResult<usize> {
+    async fn usage_delete_all(&mut self) -> TbResult<usize> {
         use schema::usages::dsl::*;
         debug!("resetting all usages");
         diesel::delete(usages)

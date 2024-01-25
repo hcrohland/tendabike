@@ -7,7 +7,6 @@
 //!
 //! Finally, it defines the `COOKIE_NAME` constant which is used to store the session cookie.
 
-use crate::error::AppError;
 use anyhow::Context;
 use async_session::{log::warn, MemoryStore, Session, SessionStore};
 use axum::{
@@ -16,7 +15,6 @@ use axum::{
     response::{IntoResponse, Redirect},
 };
 use axum_extra::TypedHeader;
-
 use http::StatusCode;
 use oauth2::{
     basic::{
@@ -30,6 +28,8 @@ use oauth2::{
 };
 use serde::{Deserialize, Serialize};
 use std::env;
+
+use crate::error::AppError;
 use tb_domain::Error;
 use tb_strava::StravaId;
 
@@ -121,16 +121,16 @@ pub(crate) async fn strava_auth() -> impl IntoResponse {
 
 // Valid user session required. If there is none, redirect to the auth page
 pub(crate) async fn logout(
-    State(store): State<MemoryStore>,
+    State(memstore): State<MemoryStore>,
     TypedHeader(cookies): TypedHeader<headers::Cookie>,
 ) -> impl IntoResponse {
     if let Some(cookie) = cookies.get(COOKIE_NAME) {
-        let session = match store.load_session(cookie.to_string()).await {
+        let session = match memstore.load_session(cookie.to_string()).await {
             Ok(Some(s)) => s,
             // No session active, just redirect
             _ => return Redirect::to("/").into_response(),
         };
-        if store.destroy_session(session).await.is_err() {
+        if memstore.destroy_session(session).await.is_err() {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Failed to destroy session",
@@ -152,10 +152,10 @@ pub(crate) struct AuthRequest {
 
 pub(crate) async fn login_authorized(
     Query(query): Query<AuthRequest>,
-    State(store): State<MemoryStore>,
-    State(conn): State<crate::DbPool>,
+    State(memstore): State<MemoryStore>,
+    State(store): State<crate::DbPool>,
 ) -> Result<(HeaderMap, Redirect), AppError> {
-    let mut conn = conn.get().await?;
+    let mut store = store.get().await?;
 
     // Get an auth token
     let token = STRAVACLIENT
@@ -172,7 +172,7 @@ pub(crate) async fn login_authorized(
         )))?
     }
 
-    let user = super::RequestUser::create_from_token(token, &mut conn).await?;
+    let user = super::RequestUser::create_from_token(token, &mut store).await?;
 
     // Create a new session filled with user data
     let mut session = Session::new();
@@ -181,7 +181,7 @@ pub(crate) async fn login_authorized(
         .context("session insert failed")?;
 
     // Store session and get corresponding cookie
-    let cookie = match store.store_session(session).await? {
+    let cookie = match memstore.store_session(session).await? {
         Some(cookie) => cookie,
         None => Err(Error::AnyFailure(anyhow::anyhow!(
             "Failed to store session".to_string(),

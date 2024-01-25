@@ -8,9 +8,7 @@
 
 use time::OffsetDateTime;
 
-use super::*;
-use ActTypeId;
-use NewActivity;
+use crate::*;
 
 #[derive(Serialize, Deserialize, Debug)]
 /// A struct that represents an activity from Strava API.
@@ -46,7 +44,7 @@ impl StravaActivity {
     ///
     /// * `self` - A StravaActivity struct that represents an activity from Strava API.
     /// * `user` - A reference to a StravaUser struct that represents the user who performed the activity.
-    /// * `conn` - A mutable reference to an AppConn struct that represents a connection to the Tendabike API.
+    /// * `store` - A mutable reference to an AppConn struct that represents a connection to the Tendabike API.
     ///
     /// # Returns
     ///
@@ -54,11 +52,11 @@ impl StravaActivity {
     async fn into_tb(
         self,
         user: &mut impl StravaPerson,
-        conn: &mut impl StravaStore,
+        store: &mut impl StravaStore,
     ) -> TbResult<NewActivity> {
         let what = self.what()?;
         let gear = match self.gear_id {
-            Some(x) => Some(gear::strava_to_tb(x, user, conn).await?),
+            Some(x) => Some(gear::strava_to_tb(x, user, store).await?),
             None => None,
         };
         Ok(NewActivity {
@@ -140,7 +138,7 @@ impl StravaActivity {
     ///
     /// * `self` - A reference to a StravaActivity struct that represents an activity from Strava API.
     /// * `user` - A reference to a StravaUser struct that represents the user from Strava API.
-    /// * `conn` - A mutable reference to an AppConn struct that represents the connection to the Tendabike API.
+    /// * `store` - A mutable reference to an AppConn struct that represents the connection to the Tendabike API.
     ///
     /// # Returns
     ///
@@ -148,39 +146,41 @@ impl StravaActivity {
     pub(crate) async fn send_to_tb(
         self,
         user: &mut impl StravaPerson,
-        conn: &mut impl StravaStore,
+        store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
         let strava_id = self.id;
-        let tb = self.into_tb(user, conn).await?;
-        conn.transaction(|conn| {
-            async {
-                let tb_id = conn.strava_activity_get_tbid(strava_id).await?;
+        let tb = self.into_tb(user, store).await?;
+        store
+            .transaction(|store| {
+                async {
+                    let tb_id = store.strava_activity_get_tbid(strava_id).await?;
 
-                let res;
-                if let Some(tb_id) = tb_id {
-                    res = tb_id.update(&tb, user, conn).await?
-                } else {
-                    res = Activity::create(&tb, user, conn).await?;
-                    let new_id = res.first_act();
-                    conn.strava_activity_new(strava_id, tb.user_id, new_id)
-                        .await?;
+                    let res;
+                    if let Some(tb_id) = tb_id {
+                        res = tb_id.update(&tb, user, store).await?
+                    } else {
+                        res = Activity::create(&tb, user, store).await?;
+                        let new_id = res.first_act();
+                        store
+                            .strava_activity_new(strava_id, tb.user_id, new_id)
+                            .await?;
+                    }
+
+                    user.strava_id()
+                        .update_last(tb.start.unix_timestamp(), store)
+                        .await
+                        .context("unable to update user")?;
+
+                    Ok(res)
                 }
-
-                user.strava_id()
-                    .update_last(tb.start.unix_timestamp(), conn)
-                    .await
-                    .context("unable to update user")?;
-
-                Ok(res)
-            }
-            .scope_boxed()
-        })
-        .await
+                .scope_boxed()
+            })
+            .await
     }
 }
 
-pub async fn strava_url(act: i32, conn: &mut impl StravaStore) -> TbResult<String> {
-    let g = conn.strava_activitid_get_by_tbid(act).await?;
+pub async fn strava_url(act: i32, store: &mut impl StravaStore) -> TbResult<String> {
+    let g = store.strava_activitid_get_by_tbid(act).await?;
 
     Ok(format!("https://strava.com/activities/{}", &g))
 }
@@ -188,27 +188,27 @@ pub async fn strava_url(act: i32, conn: &mut impl StravaStore) -> TbResult<Strin
 pub async fn upsert_activity(
     id: i64,
     user: &mut impl StravaPerson,
-    conn: &mut impl StravaStore,
+    store: &mut impl StravaStore,
 ) -> TbResult<Summary> {
     let act: StravaActivity = user
-        .request_json(&format!("/activities/{}", id), conn)
+        .request_json(&format!("/activities/{}", id), store)
         .await?;
-    act.send_to_tb(user, conn).await
+    act.send_to_tb(user, store).await
 }
 
 pub(crate) async fn delete_activity(
     act_id: i64,
     user: &impl StravaPerson,
-    conn: &mut impl StravaStore,
+    store: &mut impl StravaStore,
 ) -> TbResult<Summary> {
-    let tid = conn.strava_activity_get_activityid(act_id).await?;
+    let tid = store.strava_activity_get_activityid(act_id).await?;
     let mut res = Summary::default();
     if let Some(tid) = tid {
         // first delete the tendabike activity
-        res = tid.delete(user, conn).await?;
+        res = tid.delete(user, store).await?;
         // now delete the reference to the strava activity
         // if this fails we end up with an orphaned entry in the strava_activities table, which should not be a problem in practice
-        conn.strava_activity_delete(act_id).await?;
+        store.strava_activity_delete(act_id).await?;
     }
     Ok(res)
 }

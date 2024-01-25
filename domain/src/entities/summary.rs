@@ -12,7 +12,7 @@
 use serde_derive::Serialize;
 use std::collections::HashMap;
 
-use super::*;
+use crate::*;
 
 #[derive(Serialize, Debug, Default)]
 pub struct Summary {
@@ -23,27 +23,6 @@ pub struct Summary {
 }
 
 impl Summary {
-    pub fn new(
-        activities: Vec<entities::activity::Activity>,
-        parts: Vec<Part>,
-        attachments: Vec<AttachmentDetail>,
-        usages: Vec<Usage>,
-    ) -> Self {
-        Summary {
-            activities,
-            parts,
-            attachments,
-            usages,
-        }
-    }
-
-    pub fn append(&mut self, new: &mut Self) {
-        self.activities.append(&mut new.activities);
-        self.parts.append(&mut new.parts);
-        self.attachments.append(&mut new.attachments);
-        self.usages.append(&mut new.usages);
-    }
-
     pub fn merge(self, new: Summary) -> Summary {
         let mut hash = SumHash::new(self);
         hash.merge(new);
@@ -56,7 +35,7 @@ impl Summary {
 }
 
 #[derive(Debug, Default)]
-pub struct SumHash {
+pub(crate) struct SumHash {
     activities: HashMap<ActivityId, Activity>,
     parts: HashMap<PartId, Part>,
     atts: HashMap<String, AttachmentDetail>,

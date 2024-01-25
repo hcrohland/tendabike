@@ -14,14 +14,12 @@
 //! # Examples
 //!
 
-use diesel::Identifiable;
-use diesel::{Insertable, Queryable};
-use scoped_futures::ScopedFutureExt;
-
+use anyhow::Context;
 use async_session::log::{debug, info, trace, warn};
+use diesel::{Identifiable, Insertable, Queryable};
+use scoped_futures::ScopedFutureExt;
 use serde_derive::{Deserialize, Serialize};
 
-use anyhow::Context;
 use tb_domain::*;
 
 mod traits;

@@ -1,11 +1,8 @@
-use crate::*;
-use diesel::ExpressionMethods;
-use diesel::QueryDsl;
+use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
-use tb_domain::schema;
-use tb_domain::TbResult;
-use tb_domain::User;
-use tb_domain::UserId;
+
+use crate::{map_to_tb, AsyncDieselConn};
+use tb_domain::{schema, TbResult, User, UserId};
 
 #[async_session::async_trait]
 impl tb_domain::UserStore for AsyncDieselConn {

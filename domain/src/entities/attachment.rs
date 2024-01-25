@@ -28,7 +28,7 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::traits::Store;
 
-use super::*;
+use crate::*;
 use time::OffsetDateTime;
 
 pub use event::Event;
@@ -94,16 +94,16 @@ impl AttachmentDetail {
 
 impl Attachment {
     /// return the calculated usage for the attachment
-    async fn calculate_usage(&self, conn: &mut impl Store) -> TbResult<Usage> {
+    async fn calculate_usage(&self, store: &mut impl ActivityStore) -> TbResult<Usage> {
         Ok(
-            Activity::find(self.gear, self.attached, self.detached, conn)
+            Activity::find(self.gear, self.attached, self.detached, store)
                 .await?
                 .into_iter()
                 .fold(Usage::new(self.usage), |usage, act| usage + &act.usage()),
         )
     }
 
-    pub(crate) async fn usage(&self, store: &mut impl Store) -> TbResult<Usage> {
+    pub(crate) async fn usage(&self, store: &mut impl UsageStore) -> TbResult<Usage> {
         self.usage.read(store).await
     }
 
@@ -112,12 +112,12 @@ impl Attachment {
         at_time: OffsetDateTime,
         target: PartId,
         hash: &mut SumHash,
-        conn: &mut impl Store,
+        store: &mut impl Store,
     ) -> TbResult<OffsetDateTime> {
         debug!("-- moving {} to {}", self.part_id, target);
         let ev = Event::new(self.part_id, at_time, target, self.hook);
-        hash.merge(self.detach(at_time, conn).await?);
-        let (sum, det) = ev.attach_one(conn).await?;
+        hash.merge(self.detach(at_time, store).await?);
+        let (sum, det) = ev.attach_one(store).await?;
         hash.merge(sum);
         Ok(det)
     }
@@ -129,17 +129,17 @@ impl Attachment {
     async fn detach(
         mut self,
         detached: OffsetDateTime,
-        conn: &mut impl Store,
+        store: &mut impl Store,
     ) -> TbResult<Summary> {
         trace!("detaching {} at {}", self.part_id, detached);
 
-        let del = self.delete(conn).await?;
+        let del = self.delete(store).await?;
         if self.attached >= detached {
             return Ok(del);
         }
 
         self.detached = detached;
-        let cre = self.create(conn).await?;
+        let cre = self.create(store).await?;
         Ok(del.merge(cre))
     }
 
@@ -213,65 +213,60 @@ impl Attachment {
     }
 
     /// add redundant details from database for client simplicity
-    async fn read_details(self, conn: &mut impl Store) -> TbResult<AttachmentDetail> {
-        let part = conn.partid_get_part(self.part_id).await?;
+    async fn read_details(self, store: &mut impl PartStore) -> TbResult<AttachmentDetail> {
+        let part = self.part_id.read(store).await?;
         Ok(self.add_details(&part.name, part.what))
     }
 
-    /// return all parts which are affected by Activity 'act'
-    pub async fn parts_per_activity(
-        act: &Activity,
-        conn: &mut impl Store,
-    ) -> TbResult<Vec<PartId>> {
-        let mut res = Vec::new();
-        if let Some(act_gear) = act.gear {
-            res.push(act_gear); // We need the gear too!
-            let start = act.start;
-            res.append(
-                conn.attachment_get_by_gear_and_time(act_gear, start)
-                    .await?
-                    .into_iter()
-                    .map(|x| x.part_id)
-                    .collect::<Vec<_>>()
-                    .as_mut(),
-            );
-        }
-        Ok(res)
-    }
-
-    /// find all Usages affected by activity and add usage to it
-    ///
-    /// returns the array of modified Usages
-    pub(crate) async fn apply_usage(
-        act: &Activity,
-        usage: &Usage,
-        store: &mut impl Store,
-    ) -> TbResult<Vec<Usage>> {
-        let mut res = Vec::new();
-        if let Some(act_gear) = act.gear {
-            let start = act.start;
-            let atts = store
-                .attachment_get_by_gear_and_time(act_gear, start)
-                .await?;
-            for att in atts.iter() {
-                res.push(att.usage(store).await? + usage);
-            }
-        }
-        Ok(res)
-    }
-
     /// return all attachments with details for the parts in 'partlist'
-    pub(crate) async fn for_parts(
-        partlist: &[Part],
-        conn: &mut impl Store,
-    ) -> TbResult<Vec<AttachmentDetail>> {
-        let ids: Vec<_> = partlist.iter().map(|p| p.id).collect();
-        let atts = conn.attachments_all_by_partlist(ids).await?;
+    pub(crate) async fn for_part_with_usage(
+        part: PartId,
+        store: &mut impl Store,
+    ) -> TbResult<(Vec<AttachmentDetail>, Vec<Usage>)> {
+        let atts = store.attachments_all_by_part(part).await?;
 
-        let mut res = Vec::new();
+        let mut attachments = Vec::new();
+        let mut usages = Vec::new();
         for att in atts {
-            res.push(att.read_details(conn).await?)
+            attachments.push(att.read_details(store).await?);
+            usages.push(att.usage(store).await?);
         }
-        Ok(res)
+        Ok((attachments, usages))
+    }
+
+    pub(crate) async fn register_activity(
+        gear: Option<PartId>,
+        start: OffsetDateTime,
+        usage: Usage,
+        store: &mut impl Store,
+    ) -> TbResult<Summary> {
+        let gear = match gear {
+            None => return Ok(Summary::default()),
+            Some(x) => x,
+        };
+
+        // get all attachment usages and add usage to it
+        let attachments = store.attachment_get_by_gear_and_time(gear, start).await?;
+        let mut usages = Vec::new();
+        for att in attachments.iter() {
+            usages.push(att.usage(store).await? + &usage);
+        }
+
+        // get all parts from attachments, add usage and modify last_used
+        let partlist = attachments.iter().map(|a| a.part_id);
+        let mut parts = Vec::new();
+        for part in partlist {
+            let part = part.update_last_use(start, store).await?;
+            usages.push(part.usage(store).await? + &usage);
+            parts.push(part);
+        }
+
+        // store all updated usages
+        Usage::update_vec(&usages, store).await?;
+        Ok(Summary {
+            usages,
+            parts,
+            ..Default::default()
+        })
     }
 }

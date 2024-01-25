@@ -17,8 +17,11 @@
 
 */
 
-mod error;
 use async_session::log::{debug, info, trace, warn};
+use diesel::prelude::*;
+
+mod error;
+pub use error::{Error, TbResult};
 
 mod entities;
 pub use entities::activity::{Activity, ActivityId, NewActivity};
@@ -28,9 +31,6 @@ pub use entities::summary::*;
 pub use entities::types::*;
 pub use entities::usage::*;
 pub use entities::user::*;
-pub use error::{Error, TbResult};
-
-use diesel::prelude::*;
 
 pub mod schema;
 

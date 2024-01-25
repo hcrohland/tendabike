@@ -7,18 +7,21 @@
 //! The `router` function takes an `AppState` as an argument and returns a `Router` with the mounted endpoints and the provided state.
 //!
 
-mod oauth;
-mod redirect;
-mod requestuser;
-mod webhook;
 use axum::{
     routing::{get, post},
     Router,
 };
-pub(crate) use oauth::*;
-pub(crate) use requestuser::*;
 
 use crate::appstate::AppState;
+
+mod oauth;
+pub(crate) use oauth::*;
+
+mod requestuser;
+pub(crate) use requestuser::*;
+
+mod redirect;
+mod webhook;
 
 pub(crate) fn router() -> Router<AppState> {
     Router::new()

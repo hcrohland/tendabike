@@ -22,15 +22,15 @@
 //! The `Usage` struct represents the usage of a part, including time, distance, climbing, descending, power, and count.
 //! It also provides methods to add an activity to the usage.
 
-use super::*;
-use crate::schema::*;
-use crate::UsageStore;
 use diesel_derive_newtype::*;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::ops::{Add, Neg, Sub};
 use uuid::Uuid;
+
+use crate::*;
+use schema::usages;
 
 #[derive(
     DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Default,
@@ -82,6 +82,10 @@ impl Usage {
             id,
             ..Default::default()
         }
+    }
+
+    pub(crate) async fn delete_all(store: &mut impl UsageStore) -> TbResult<usize> {
+        store.usage_delete_all().await
     }
 }
 
@@ -202,7 +206,7 @@ mod tests {
             }
         }
 
-        async fn usage_reset_all(&mut self) -> TbResult<usize> {
+        async fn usage_delete_all(&mut self) -> TbResult<usize> {
             let res = self.0.len();
             self.0.clear();
             Ok(res)
@@ -212,7 +216,8 @@ mod tests {
     #[tokio::test]
     async fn create_usage_returns() -> TbResult<()> {
         let mut store = MemStore(HashMap::new());
-        let usage = UsageId::new().read(&mut store).await?;
+        let store = &mut store;
+        let usage = UsageId::new().read(store).await?;
         assert_eq!(usage.climb, 0);
         let usage2 = Usage {
             id: UsageId::new(),
@@ -226,12 +231,12 @@ mod tests {
         assert_eq!((&usage3).count, 2);
         assert_eq!((&usage3).descend, 6);
         assert_eq!((&usage3).time, 0);
-        Usage::update_vec(&vec![&usage3], &mut store).await?;
-        let usage4 = usage3.id.read(&mut store).await?;
+        Usage::update_vec(&vec![&usage3], store).await?;
+        let usage4 = usage3.id.read(store).await?;
         assert_eq!(usage3, usage4);
         assert_eq!(usage4 - usage3, usage);
-        store.usage_reset_all().await?;
-        assert_eq!(Usage::new(usage2.id), usage2.id.read(&mut store).await?);
+        Usage::delete_all(store).await?;
+        assert_eq!(Usage::new(usage2.id), usage2.id.read(store).await?);
         Ok(())
     }
 }

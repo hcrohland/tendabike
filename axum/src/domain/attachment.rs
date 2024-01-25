@@ -7,28 +7,28 @@
 //! The `router` function creates a new router and maps the API endpoints to their respective functions.
 
 use axum::{extract::State, routing::post, Json, Router};
-use tb_domain::{Event, Summary};
 
 use crate::{appstate::AppState, error::ApiResult, DbPool, RequestUser};
+use tb_domain::{Event, Summary};
 
 /// route for attach API
 async fn attach_rt(
     user: RequestUser,
-    State(conn): State<DbPool>,
+    State(store): State<DbPool>,
     Json(event): Json<Event>,
 ) -> ApiResult<Summary> {
-    let mut conn = conn.get().await?;
-    Ok(event.attach(&user, &mut conn).await.map(Json)?)
+    let mut store = store.get().await?;
+    Ok(event.attach(&user, &mut store).await.map(Json)?)
 }
 
 /// route for detach API
 async fn detach_rt(
     user: RequestUser,
-    State(conn): State<DbPool>,
+    State(store): State<DbPool>,
     Json(event): Json<Event>,
 ) -> ApiResult<Summary> {
-    let mut conn = conn.get().await?;
-    Ok(event.detach(&user, &mut conn).await.map(Json)?)
+    let mut store = store.get().await?;
+    Ok(event.detach(&user, &mut store).await.map(Json)?)
 }
 
 pub(crate) fn router() -> Router<AppState> {

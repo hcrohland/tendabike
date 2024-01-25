@@ -1,5 +1,6 @@
-use crate::{Part, PartId, TbResult, UsageId, UserId};
 use time::OffsetDateTime;
+
+use crate::{Part, PartId, TbResult, UsageId, UserId};
 
 #[async_trait::async_trait]
 /// A trait representing a store for `Part` objects.

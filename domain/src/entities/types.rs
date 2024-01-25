@@ -28,9 +28,7 @@ use diesel_derive_newtype::*;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::traits::Store;
-
-use super::*;
+use crate::*;
 use schema::{activity_types, part_types};
 
 #[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,8 +59,8 @@ pub struct PartType {
 }
 
 impl PartType {
-    pub async fn all_ordered(conn: &mut impl Store) -> Vec<Self> {
-        conn.get_all_parttypes_ordered().await
+    pub async fn all_ordered(store: &mut impl TypesStore) -> Vec<Self> {
+        store.get_all_parttypes_ordered().await
     }
 }
 
@@ -87,8 +85,8 @@ pub struct ActivityType {
 
 impl PartTypeId {
     /// get the full type for a type_id
-    pub(crate) async fn get(self, conn: &mut impl Store) -> TbResult<PartType> {
-        conn.get_parttype_by_id(self).await
+    pub(crate) async fn get(self, store: &mut impl TypesStore) -> TbResult<PartType> {
+        store.get_parttype_by_id(self).await
     }
 
     /// recursively look for subtypes to self in the PartType vector
@@ -114,19 +112,19 @@ impl PartTypeId {
     }
 
     /// get all the types you can attach - even indirectly - to this type_id
-    pub(crate) async fn subtypes(self, conn: &mut impl Store) -> Vec<PartType> {
-        let mut types = PartType::all_ordered(conn).await;
+    pub(crate) async fn subtypes(self, store: &mut impl TypesStore) -> Vec<PartType> {
+        let mut types = PartType::all_ordered(store).await;
         self.filter_types(&mut types)
     }
 
     /// Get the activity types valid for this part_type
-    pub(crate) async fn act_types(&self, conn: &mut impl Store) -> TbResult<Vec<ActTypeId>> {
-        conn.get_activity_types_by_parttypeid(self).await
+    pub(crate) async fn act_types(&self, store: &mut impl TypesStore) -> TbResult<Vec<ActTypeId>> {
+        store.get_activity_types_by_parttypeid(self).await
     }
 }
 
 impl ActivityType {
-    pub async fn all_ordered(conn: &mut impl Store) -> Vec<ActivityType> {
-        conn.activitytypes_get_all_ordered().await
+    pub async fn all_ordered(store: &mut impl TypesStore) -> Vec<ActivityType> {
+        store.activitytypes_get_all_ordered().await
     }
 }

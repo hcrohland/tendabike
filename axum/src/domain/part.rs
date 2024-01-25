@@ -20,18 +20,18 @@
 //!
 //! The `router` function returns an Axum `Router` that can be mounted in a larger application.
 
-use crate::{
-    appstate::AppState,
-    error::{ApiResult, AppError},
-    DbPool, RequestUser,
-};
-
 use axum::{
     extract::{Path, State},
     routing::{get, put},
     Json, Router,
 };
 use http::StatusCode;
+
+use crate::{
+    appstate::AppState,
+    error::{ApiResult, AppError},
+    DbPool, RequestUser,
+};
 use tb_domain::{ChangePart, NewPart, Part, PartId};
 
 pub(super) fn router() -> Router<AppState> {
@@ -43,27 +43,27 @@ pub(super) fn router() -> Router<AppState> {
 async fn get_part(
     Path(part): Path<i32>,
     user: RequestUser,
-    State(conn): State<DbPool>,
+    State(store): State<DbPool>,
 ) -> ApiResult<Part> {
-    let mut conn = conn.get().await?;
-    Ok(PartId::new(part).part(&user, &mut conn).await.map(Json)?)
+    let mut store = store.get().await?;
+    Ok(PartId::new(part).part(&user, &mut store).await.map(Json)?)
 }
 
 async fn post_part(
     user: RequestUser,
-    State(conn): State<DbPool>,
+    State(store): State<DbPool>,
     Json(newpart): Json<NewPart>,
 ) -> Result<(StatusCode, Json<Part>), AppError> {
-    let mut conn = conn.get().await?;
-    let part = newpart.create(&user, &mut conn).await?;
+    let mut store = store.get().await?;
+    let part = newpart.create(&user, &mut store).await?;
     Ok((StatusCode::CREATED, Json(part)))
 }
 
 async fn put_part(
     user: RequestUser,
-    State(conn): State<DbPool>,
+    State(store): State<DbPool>,
     Json(part): Json<ChangePart>,
 ) -> ApiResult<Part> {
-    let mut conn = conn.get().await?;
-    Ok(part.change(&user, &mut conn).await.map(Json)?)
+    let mut store = store.get().await?;
+    Ok(part.change(&user, &mut store).await.map(Json)?)
 }
