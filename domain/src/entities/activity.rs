@@ -354,7 +354,7 @@ impl Activity {
             format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
         let mut good = Vec::new();
         let mut bad = Vec::new();
-        let mut summary = Summary::default();
+        let mut summary = SumHash::default();
         let mut rdr = csv::Reader::from_reader(data);
         let tz = time_tz::timezones::get_by_name(&tz)
             .ok_or_else(|| Error::BadRequest(format!("Unknown timezone {}", tz)))?;
@@ -390,7 +390,7 @@ impl Activity {
                 .await
             {
                 Ok(res) => {
-                    summary = summary.merge(res);
+                    summary.merge(res);
                     good.push(description);
                 }
                 Err(_) => {
@@ -399,7 +399,7 @@ impl Activity {
                 }
             }
         }
-
+        let summary = summary.collect();
         Ok((summary, good, bad))
     }
 

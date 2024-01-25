@@ -103,16 +103,11 @@ impl UserId {
     pub async fn get_summary(&self, store: &mut impl Store) -> TbResult<Summary> {
         use crate::*;
         let activities = Activity::get_all(self, store).await?;
-        let parts = Part::get_all(self, store).await?;
-        let attachments = Attachment::for_parts(&parts, store).await?;
-        let mut usages = Vec::new();
-        for att in &attachments {
-            usages.push(att.a.usage(store).await?);
-        }
-        for part in &parts {
-            usages.push(part.usage(store).await?);
-        }
-        Ok(Summary::new(activities, parts, attachments, usages))
+        let summary = Part::get_part_summary(self, store).await?;
+        Ok(Summary {
+            activities,
+            ..summary
+        })
     }
 }
 

@@ -213,24 +213,25 @@ impl Attachment {
     }
 
     /// add redundant details from database for client simplicity
-    async fn read_details(self, conn: &mut impl Store) -> TbResult<AttachmentDetail> {
-        let part = conn.partid_get_part(self.part_id).await?;
+    async fn read_details(self, store: &mut impl Store) -> TbResult<AttachmentDetail> {
+        let part = self.part_id.read(store).await?;
         Ok(self.add_details(&part.name, part.what))
     }
 
     /// return all attachments with details for the parts in 'partlist'
-    pub(crate) async fn for_parts(
-        partlist: &[Part],
-        conn: &mut impl Store,
-    ) -> TbResult<Vec<AttachmentDetail>> {
-        let ids: Vec<_> = partlist.iter().map(|p| p.id).collect();
-        let atts = conn.attachments_all_by_partlist(&ids).await?;
+    pub(crate) async fn for_part_with_usage(
+        part: PartId,
+        store: &mut impl Store,
+    ) -> TbResult<(Vec<AttachmentDetail>, Vec<Usage>)> {
+        let atts = store.attachments_all_by_part(part).await?;
 
-        let mut res = Vec::new();
+        let mut attachments = Vec::new();
+        let mut usages = Vec::new();
         for att in atts {
-            res.push(att.read_details(conn).await?)
+            attachments.push(att.read_details(store).await?);
+            usages.push(att.usage(store).await?);
         }
-        Ok(res)
+        Ok((attachments, usages))
     }
 
     pub(crate) async fn register_activity(

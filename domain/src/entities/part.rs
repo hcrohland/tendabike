@@ -212,11 +212,28 @@ impl Part {
     /// # Errors
     ///
     /// Returns an `TbResult` object that may contain a `diesel::result::Error` if the query fails.
-    pub async fn get_all(user: &UserId, conn: &mut impl PartStore) -> TbResult<Vec<Part>> {
-        conn.part_get_all_for_userid(user).await
+    pub(crate) async fn get_part_summary(
+        user: &UserId,
+        store: &mut impl Store,
+    ) -> TbResult<Summary> {
+        let parts = store.part_get_all_for_userid(user).await?;
+        let mut usages = Vec::new();
+        let mut attachments = Vec::new();
+        for part in &parts {
+            usages.push(part.usage(store).await?);
+            let (mut atts, mut uses) = Attachment::for_part_with_usage(part.id, store).await?;
+            usages.append(&mut uses);
+            attachments.append(&mut atts);
+        }
+        Ok(Summary {
+            parts,
+            usages,
+            attachments,
+            ..Default::default()
+        })
     }
 
-    pub async fn usage(&self, store: &mut impl UsageStore) -> TbResult<Usage> {
+    pub(crate) async fn usage(&self, store: &mut impl UsageStore) -> TbResult<Usage> {
         self.usage.read(store).await
     }
 }

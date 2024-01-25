@@ -189,7 +189,7 @@ impl Event {
     ) -> TbResult<Summary> {
         // let mut len = batch;
         let mut start = self.event_time;
-        let mut hash = SumHash::default();
+        let mut summary = Summary::default();
 
         // while len == batch
         {
@@ -202,12 +202,12 @@ impl Event {
                     trace!("processing sync event at {}", start);
                     let ps = a.send_to_tb(user, conn).await?;
                     self.setdate(start, conn).await?;
-                    hash.merge(ps);
+                    summary = summary.merge(ps);
                 }
             }
         }
 
-        Ok(hash.collect())
+        Ok(summary)
     }
 
     async fn process_sync(
