@@ -291,23 +291,10 @@ impl Activity {
             Factor::Add => self.usage(),
             Factor::Sub => -self.usage(),
         };
-        let partlist = Attachment::parts_per_activity(&self, store).await?;
 
-        let mut parts = Vec::new();
-        let mut usages = Vec::new();
-        for part in partlist {
-            let part = part.update_last_use(self.start, store).await?;
-            usages.push(part.usage(store).await? + &usage);
-            parts.push(part);
-        }
-        usages.append(&mut Attachment::apply_usage(&self, &usage, store).await?);
-        Usage::update_vec(&usages, store).await?;
-        Ok(Summary {
-            usages,
-            parts,
-            activities: vec![self],
-            ..Default::default()
-        })
+        let mut res = Attachment::register_activity(self.gear, self.start, usage, store).await?;
+        res.activities = vec![self];
+        Ok(res)
     }
 
     /// Get all activities for a given user.
@@ -433,11 +420,11 @@ impl Activity {
     }
 }
 
-async fn rescan(conn: &mut impl Store) -> TbResult<()> {
-    conn.usage_reset_all().await?;
-    for a in conn.activity_get_really_all().await? {
+async fn rescan(store: &mut impl Store) -> TbResult<()> {
+    Usage::delete_all(store).await?;
+    for a in store.activity_get_really_all().await? {
         debug!("registering activity {}", a.id);
-        a.register(Factor::Add, conn).await?;
+        a.register(Factor::Add, store).await?;
     }
     Ok(())
 }

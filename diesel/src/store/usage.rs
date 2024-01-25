@@ -56,7 +56,7 @@ impl UsageStore for AsyncDieselConn {
             .map_err(map_to_tb)
     }
 
-    async fn usage_reset_all(&mut self) -> TbResult<usize> {
+    async fn usage_delete_all(&mut self) -> TbResult<usize> {
         use schema::usages::dsl::*;
         debug!("resetting all usages");
         diesel::delete(usages)

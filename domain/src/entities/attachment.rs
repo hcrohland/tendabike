@@ -218,60 +218,54 @@ impl Attachment {
         Ok(self.add_details(&part.name, part.what))
     }
 
-    /// return all parts which are affected by Activity 'act'
-    pub async fn parts_per_activity(
-        act: &Activity,
-        conn: &mut impl Store,
-    ) -> TbResult<Vec<PartId>> {
-        let mut res = Vec::new();
-        if let Some(act_gear) = act.gear {
-            res.push(act_gear); // We need the gear too!
-            let start = act.start;
-            res.append(
-                conn.attachment_get_by_gear_and_time(act_gear, start)
-                    .await?
-                    .into_iter()
-                    .map(|x| x.part_id)
-                    .collect::<Vec<_>>()
-                    .as_mut(),
-            );
-        }
-        Ok(res)
-    }
-
-    /// find all Usages affected by activity and add usage to it
-    ///
-    /// returns the array of modified Usages
-    pub(crate) async fn apply_usage(
-        act: &Activity,
-        usage: &Usage,
-        store: &mut impl Store,
-    ) -> TbResult<Vec<Usage>> {
-        let mut res = Vec::new();
-        if let Some(act_gear) = act.gear {
-            let start = act.start;
-            let atts = store
-                .attachment_get_by_gear_and_time(act_gear, start)
-                .await?;
-            for att in atts.iter() {
-                res.push(att.usage(store).await? + usage);
-            }
-        }
-        Ok(res)
-    }
-
     /// return all attachments with details for the parts in 'partlist'
     pub(crate) async fn for_parts(
         partlist: &[Part],
         conn: &mut impl Store,
     ) -> TbResult<Vec<AttachmentDetail>> {
         let ids: Vec<_> = partlist.iter().map(|p| p.id).collect();
-        let atts = conn.attachments_all_by_partlist(ids).await?;
+        let atts = conn.attachments_all_by_partlist(&ids).await?;
 
         let mut res = Vec::new();
         for att in atts {
             res.push(att.read_details(conn).await?)
         }
         Ok(res)
+    }
+
+    pub(crate) async fn register_activity(
+        gear: Option<PartId>,
+        start: OffsetDateTime,
+        usage: Usage,
+        store: &mut impl Store,
+    ) -> TbResult<Summary> {
+        let gear = match gear {
+            None => return Ok(Summary::default()),
+            Some(x) => x,
+        };
+
+        // get all attachment usages and add usage to it
+        let attachments = store.attachment_get_by_gear_and_time(gear, start).await?;
+        let mut usages = Vec::new();
+        for att in attachments.iter() {
+            usages.push(att.usage(store).await? + &usage);
+        }
+
+        // get all parts from attachments, add usage and modify last_used
+        let partlist = attachments.iter().map(|a| a.part_id);
+        let mut parts = Vec::new();
+        for part in partlist {
+            let part = part.update_last_use(start, store).await?;
+            usages.push(part.usage(store).await? + &usage);
+            parts.push(part);
+        }
+
+        // store all updated usages
+        Usage::update_vec(&usages, store).await?;
+        Ok(Summary {
+            usages,
+            parts,
+            ..Default::default()
+        })
     }
 }

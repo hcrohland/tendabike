@@ -38,10 +38,13 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .map_err(map_to_tb)
     }
 
-    async fn attachments_all_by_partlist(&mut self, ids: Vec<PartId>) -> TbResult<Vec<Attachment>> {
+    async fn attachments_all_by_partlist(
+        &mut self,
+        ids: &Vec<PartId>,
+    ) -> TbResult<Vec<Attachment>> {
         use schema::attachments::dsl::*;
         attachments
-            .filter(part_id.eq_any(ids.clone()))
+            .filter(part_id.eq_any(ids))
             .or_filter(gear.eq_any(ids))
             .get_results(self)
             .await
