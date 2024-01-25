@@ -94,16 +94,16 @@ impl AttachmentDetail {
 
 impl Attachment {
     /// return the calculated usage for the attachment
-    async fn calculate_usage(&self, conn: &mut impl Store) -> TbResult<Usage> {
+    async fn calculate_usage(&self, store: &mut impl ActivityStore) -> TbResult<Usage> {
         Ok(
-            Activity::find(self.gear, self.attached, self.detached, conn)
+            Activity::find(self.gear, self.attached, self.detached, store)
                 .await?
                 .into_iter()
                 .fold(Usage::new(self.usage), |usage, act| usage + &act.usage()),
         )
     }
 
-    pub(crate) async fn usage(&self, store: &mut impl Store) -> TbResult<Usage> {
+    pub(crate) async fn usage(&self, store: &mut impl UsageStore) -> TbResult<Usage> {
         self.usage.read(store).await
     }
 
@@ -112,12 +112,12 @@ impl Attachment {
         at_time: OffsetDateTime,
         target: PartId,
         hash: &mut SumHash,
-        conn: &mut impl Store,
+        store: &mut impl Store,
     ) -> TbResult<OffsetDateTime> {
         debug!("-- moving {} to {}", self.part_id, target);
         let ev = Event::new(self.part_id, at_time, target, self.hook);
-        hash.merge(self.detach(at_time, conn).await?);
-        let (sum, det) = ev.attach_one(conn).await?;
+        hash.merge(self.detach(at_time, store).await?);
+        let (sum, det) = ev.attach_one(store).await?;
         hash.merge(sum);
         Ok(det)
     }
@@ -129,17 +129,17 @@ impl Attachment {
     async fn detach(
         mut self,
         detached: OffsetDateTime,
-        conn: &mut impl Store,
+        store: &mut impl Store,
     ) -> TbResult<Summary> {
         trace!("detaching {} at {}", self.part_id, detached);
 
-        let del = self.delete(conn).await?;
+        let del = self.delete(store).await?;
         if self.attached >= detached {
             return Ok(del);
         }
 
         self.detached = detached;
-        let cre = self.create(conn).await?;
+        let cre = self.create(store).await?;
         Ok(del.merge(cre))
     }
 
@@ -213,7 +213,7 @@ impl Attachment {
     }
 
     /// add redundant details from database for client simplicity
-    async fn read_details(self, store: &mut impl Store) -> TbResult<AttachmentDetail> {
+    async fn read_details(self, store: &mut impl PartStore) -> TbResult<AttachmentDetail> {
         let part = self.part_id.read(store).await?;
         Ok(self.add_details(&part.name, part.what))
     }

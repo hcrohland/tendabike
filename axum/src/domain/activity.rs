@@ -26,39 +26,42 @@ use tb_domain::{Activity, ActivityId, NewActivity, PartId, PartTypeId, Summary};
 
 async fn def_part_api(
     user: RequestUser,
-    State(conn): State<DbPool>,
+    State(store): State<DbPool>,
     Json(gear_id): Json<PartId>,
 ) -> ApiResult<Summary> {
-    let mut conn = conn.get().await?;
-    Ok(Activity::set_default_part(gear_id, &user, &mut conn)
+    let mut store = store.get().await?;
+    Ok(Activity::set_default_part(gear_id, &user, &mut store)
         .await
         .map(Json)?)
 }
 
-async fn rescan(_u: AxumAdmin, State(conn): State<DbPool>) -> Result<(), AppError> {
-    let mut conn = conn.get().await?;
-    Activity::rescan_all(&mut conn).await?;
+async fn rescan(_u: AxumAdmin, State(store): State<DbPool>) -> Result<(), AppError> {
+    let mut store = store.get().await?;
+    Activity::rescan_all(&mut store).await?;
     Ok(())
 }
 
 /// web interface to read an activity
 async fn act_get(
     user: RequestUser,
-    State(conn): State<DbPool>,
+    State(store): State<DbPool>,
     Path(id): Path<i32>,
 ) -> ApiResult<Activity> {
-    let mut conn = conn.get().await?;
-    Ok(ActivityId::new(id).read(&user, &mut conn).await.map(Json)?)
+    let mut store = store.get().await?;
+    Ok(ActivityId::new(id)
+        .read(&user, &mut store)
+        .await
+        .map(Json)?)
 }
 
 /// web interface to create an activity
 async fn act_post(
     user: RequestUser,
-    State(conn): State<DbPool>,
+    State(store): State<DbPool>,
     Json(activity): Json<NewActivity>,
 ) -> Result<(StatusCode, Json<Summary>), AppError> {
-    let mut conn = conn.get().await?;
-    let assembly = Activity::create(&activity, &user, &mut conn).await?;
+    let mut store = store.get().await?;
+    let assembly = Activity::create(&activity, &user, &mut store).await?;
 
     Ok((StatusCode::CREATED, Json(assembly)))
 }
@@ -67,12 +70,12 @@ async fn act_post(
 async fn act_put(
     Path(id): Path<i32>,
     user: RequestUser,
-    State(conn): State<DbPool>,
+    State(store): State<DbPool>,
     activity: Json<NewActivity>,
 ) -> ApiResult<Summary> {
-    let mut conn = conn.get().await?;
+    let mut store = store.get().await?;
     Ok(ActivityId::new(id)
-        .update(&activity, &user, &mut conn)
+        .update(&activity, &user, &mut store)
         .await
         .map(Json)?)
 }
@@ -81,11 +84,11 @@ async fn act_put(
 async fn act_delete(
     Path(id): Path<i32>,
     user: RequestUser,
-    State(conn): State<DbPool>,
+    State(store): State<DbPool>,
 ) -> ApiResult<Summary> {
-    let mut conn = conn.get().await?;
+    let mut store = store.get().await?;
     Ok(ActivityId::new(id)
-        .delete(&user, &mut conn)
+        .delete(&user, &mut store)
         .await
         .map(Json)?)
 }
@@ -97,17 +100,17 @@ struct QueryTZ {
 async fn descend(
     Query(q): Query<QueryTZ>,
     user: RequestUser,
-    State(conn): State<DbPool>,
+    State(store): State<DbPool>,
     data: String,
 ) -> ApiResult<(Summary, Vec<String>, Vec<String>)> {
-    let mut conn = conn.get().await?;
-    let res = Activity::csv2descend(data.as_bytes(), q.tz, &user, &mut conn).await?;
+    let mut store = store.get().await?;
+    let res = Activity::csv2descend(data.as_bytes(), q.tz, &user, &mut store).await?;
     Ok(Json(res))
 }
 
-async fn mycats(user: RequestUser, State(conn): State<DbPool>) -> ApiResult<HashSet<PartTypeId>> {
-    let mut conn = conn.get().await?;
-    Ok(Activity::categories(&user, &mut conn).await.map(Json)?)
+async fn mycats(user: RequestUser, State(store): State<DbPool>) -> ApiResult<HashSet<PartTypeId>> {
+    let mut store = store.get().await?;
+    Ok(Activity::categories(&user, &mut store).await.map(Json)?)
 }
 
 pub(crate) fn router() -> Router<AppState> {

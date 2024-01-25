@@ -28,7 +28,7 @@ impl UsageStore for AsyncDieselConn {
         use schema::usages;
 
         let len = vec.len();
-        self.transaction(|conn| {
+        self.transaction(|store| {
             async move {
                 for usage in vec {
                     let usage = usage.borrow();
@@ -37,7 +37,7 @@ impl UsageStore for AsyncDieselConn {
                         .on_conflict(usages::id)
                         .do_update()
                         .set(usage)
-                        .execute(conn)
+                        .execute(store)
                         .await?;
                 }
                 Ok(len)

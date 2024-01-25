@@ -20,21 +20,21 @@ pub(super) fn router() -> Router<AppState> {
 }
 
 async fn getuser(user: RequestUser, State(pool): State<DbPool>) -> ApiResult<tb_domain::User> {
-    let mut conn = pool.get().await?;
-    Ok(user.get_id().read(&mut conn).await.map(Json)?)
+    let mut store = pool.get().await?;
+    Ok(user.get_id().read(&mut store).await.map(Json)?)
 }
 
 async fn summary(mut user: RequestUser, State(pool): State<DbPool>) -> ApiResult<Summary> {
-    let mut conn = pool.get().await?;
-    StravaUser::update_user(&mut user, &mut conn).await?;
-    StravaUser::process(&mut user, &mut conn).await?;
-    Ok(user.get_id().get_summary(&mut conn).await.map(Json)?)
+    let mut store = pool.get().await?;
+    StravaUser::update_user(&mut user, &mut store).await?;
+    StravaUser::process(&mut user, &mut store).await?;
+    Ok(user.get_id().get_summary(&mut store).await.map(Json)?)
 }
 
 async fn userlist(
     _u: AxumAdmin,
     State(pool): State<DbPool>,
 ) -> ApiResult<Vec<tb_strava::StravaStat>> {
-    let mut conn = pool.get().await?;
-    Ok(tb_strava::get_all_stats(&mut conn).await.map(Json)?)
+    let mut store = pool.get().await?;
+    Ok(tb_strava::get_all_stats(&mut store).await.map(Json)?)
 }

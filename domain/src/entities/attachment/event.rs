@@ -38,44 +38,49 @@ impl Event {
     ///
     /// Check's authorization and taht the part is attached
     ///
-    pub async fn detach(self, user: &dyn Person, conn: &mut impl Store) -> TbResult<Summary> {
+    pub async fn detach(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
         debug!("detach {:?}", self);
         // check user
-        self.part_id.checkuser(user, conn).await?;
-        conn.transaction(|conn| {
-            async move {
-                let target = conn
-                    .attachment_get_by_part_and_time(self.part_id, self.time)
-                    .await?
-                    .ok_or(Error::NotFound("part not attached".into()))?;
+        self.part_id.checkuser(user, store).await?;
+        store
+            .transaction(|store| {
+                async move {
+                    let target = store
+                        .attachment_get_by_part_and_time(self.part_id, self.time)
+                        .await?
+                        .ok_or(Error::NotFound("part not attached".into()))?;
 
-                if !(self.hook == target.hook && self.gear == target.gear) {
-                    return Err(Error::BadRequest(format!(
-                        "{:?} does not match attachment",
-                        self
-                    )));
+                    if !(self.hook == target.hook && self.gear == target.gear) {
+                        return Err(Error::BadRequest(format!(
+                            "{:?} does not match attachment",
+                            self
+                        )));
+                    }
+
+                    self.detach_assembly(target, store).await
                 }
-
-                self.detach_assembly(target, conn).await
-            }
-            .scope_boxed()
-        })
-        .await
+                .scope_boxed()
+            })
+            .await
     }
 
     /// detach the whole assembly pointed at by 'self'
     ///
     /// 'target' is the corresponding Attachment. handed in as an optimization
-    /// it must be the same as self.at(conn)
+    /// it must be the same as self.at(store)
     ///
     /// When the 'self.partid' has child parts they are attached to that part
     ///
-    async fn detach_assembly(self, target: Attachment, conn: &mut impl Store) -> TbResult<Summary> {
+    async fn detach_assembly(
+        self,
+        target: Attachment,
+        store: &mut impl Store,
+    ) -> TbResult<Summary> {
         debug!("- detaching {}", target.part_id);
-        let subs = self.assembly(target.gear, conn).await?;
-        let mut hash = SumHash::new(target.detach(self.time, conn).await?);
+        let subs = self.assembly(target.gear, store).await?;
+        let mut hash = SumHash::new(target.detach(self.time, store).await?);
         for sub in subs {
-            sub.shift(self.time, target.part_id, &mut hash, conn)
+            sub.shift(self.time, target.part_id, &mut hash, store)
                 .await?;
         }
         Ok(hash.collect())
@@ -86,74 +91,75 @@ impl Event {
     ///
     /// When the detached part has child parts they are attached to that part
     ///
-    pub async fn attach(self, user: &dyn Person, conn: &mut impl Store) -> TbResult<Summary> {
+    pub async fn attach(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
         debug!("attach {:?}", self);
         // check user
-        let part = self.part_id.part(user, conn).await?;
+        let part = self.part_id.part(user, store).await?;
         // and types
-        let mytype = part.what.get(conn).await?;
+        let mytype = part.what.get(store).await?;
         if !mytype.hooks.contains(&self.hook) {
             return Err(Error::BadRequest(format!(
                 "Type {} cannot be attached to hook {}",
                 mytype.name, self.hook
             )));
         };
-        let gear = self.gear.part(user, conn).await?;
+        let gear = self.gear.part(user, store).await?;
         if !(mytype.main == gear.what || mytype.hooks.contains(&gear.what)) {
             return Err(Error::BadRequest(format!(
                 "Type {} cannot be attached to gear {}",
                 mytype.name, gear.what
             )));
         };
-        conn.transaction(|conn| {
-            async move {
-                let mut hash = SumHash::default();
+        store
+            .transaction(|store| {
+                async move {
+                    let mut hash = SumHash::default();
 
-                // detach self assembly
-                if let Some(target) = conn
-                    .attachment_get_by_part_and_time(self.part_id, self.time)
-                    .await?
-                {
-                    debug!("detaching self assembly");
-                    hash.merge(self.detach_assembly(target, conn).await?);
-                }
-
-                // detach target assembly
-                let what = self.part_id.what(conn).await?;
-                let attachment = conn
-                    .attachment_find_part_of_type_at_hook_and_time(
-                        what, self.gear, self.hook, self.time,
-                    )
-                    .await?;
-                if let Some(att) = attachment {
-                    debug!("detaching target assembly {}", att.part_id);
-                    hash.merge(self.detach_assembly(att, conn).await?);
-                }
-
-                let subs = self.assembly(self.part_id, conn).await?;
-                // reattach the assembly
-                debug!("- attaching assembly {} to {}", self.part_id, self.gear);
-                let (sum, det) = self.attach_one(conn).await?;
-                hash.merge(sum);
-                for att in subs {
-                    let sub_det = att.shift(self.time, self.gear, &mut hash, conn).await?;
-                    if sub_det == det && det < att.detached {
-                        trace!("reattaching {} to {} at {}", att.part_id, self.part_id, det);
-                        let ev = Event {
-                            part_id: att.part_id,
-                            hook: att.hook,
-                            gear: self.part_id,
-                            time: det,
-                        };
-                        let (sum, _) = ev.attach_one(conn).await?;
-                        hash.merge(sum);
+                    // detach self assembly
+                    if let Some(target) = store
+                        .attachment_get_by_part_and_time(self.part_id, self.time)
+                        .await?
+                    {
+                        debug!("detaching self assembly");
+                        hash.merge(self.detach_assembly(target, store).await?);
                     }
+
+                    // detach target assembly
+                    let what = self.part_id.what(store).await?;
+                    let attachment = store
+                        .attachment_find_part_of_type_at_hook_and_time(
+                            what, self.gear, self.hook, self.time,
+                        )
+                        .await?;
+                    if let Some(att) = attachment {
+                        debug!("detaching target assembly {}", att.part_id);
+                        hash.merge(self.detach_assembly(att, store).await?);
+                    }
+
+                    let subs = self.assembly(self.part_id, store).await?;
+                    // reattach the assembly
+                    debug!("- attaching assembly {} to {}", self.part_id, self.gear);
+                    let (sum, det) = self.attach_one(store).await?;
+                    hash.merge(sum);
+                    for att in subs {
+                        let sub_det = att.shift(self.time, self.gear, &mut hash, store).await?;
+                        if sub_det == det && det < att.detached {
+                            trace!("reattaching {} to {} at {}", att.part_id, self.part_id, det);
+                            let ev = Event {
+                                part_id: att.part_id,
+                                hook: att.hook,
+                                gear: self.part_id,
+                                time: det,
+                            };
+                            let (sum, _) = ev.attach_one(store).await?;
+                            hash.merge(sum);
+                        }
+                    }
+                    Ok(hash.collect())
                 }
-                Ok(hash.collect())
-            }
-            .scope_boxed()
-        })
-        .await
+                .scope_boxed()
+            })
+            .await
     }
 
     /// create Attachment for one part according to self
@@ -165,7 +171,7 @@ impl Event {
     /// If the part is attached already to the same hook, the attachments are merged
     pub(super) async fn attach_one(
         self,
-        conn: &mut impl Store,
+        store: &mut impl Store,
     ) -> TbResult<(Summary, OffsetDateTime)> {
         let mut hash = SumHash::default();
         // when does the current attachment end
@@ -174,9 +180,9 @@ impl Event {
         // we need this to reattach subparts
         let mut det = MAX_TIME;
 
-        let what = self.part_id.what(conn).await?;
+        let what = self.part_id.what(store).await?;
 
-        if let Some(next) = conn
+        if let Some(next) = store
             .attachment_find_successor(self.part_id, self.gear, self.hook, self.time, what)
             .await?
         {
@@ -187,7 +193,7 @@ impl Event {
             det = next.attached;
         }
 
-        if let Some(next) = conn
+        if let Some(next) = store
             .attachment_find_later_attachment_for_part(self.part_id, self.time)
             .await?
         {
@@ -198,7 +204,7 @@ impl Event {
                     // the previous one is the real next so we keep 'det'!
                     // 'next' will be replaced by 'self' but 'end' is taken from 'next'
                     end = next.detached;
-                    let sum = next.delete(conn).await?;
+                    let sum = next.delete(store).await?;
                     hash.merge(sum);
                 } else {
                     trace!(
@@ -217,15 +223,15 @@ impl Event {
         }
 
         // try to merge previous attachment
-        if let Some(prev) = conn
+        if let Some(prev) = store
             .attachment_find_part_attached_already(self.part_id, self.gear, self.hook, self.time)
             .await?
         {
             trace!("adjacent starting {}", prev.attached);
-            hash.merge(prev.detach(end, conn).await?)
+            hash.merge(prev.detach(end, store).await?)
         } else {
             trace!("create {:?}\n", self);
-            hash.merge(self.attachment(end).create(conn).await?);
+            hash.merge(self.attachment(end).create(store).await?);
         }
 
         Ok((hash.collect(), det))
@@ -244,9 +250,10 @@ impl Event {
     }
 
     /// find all subparts of self which are attached to target at self.time
-    async fn assembly(&self, target: PartId, conn: &mut impl Store) -> TbResult<Vec<Attachment>> {
-        let types = self.part_id.what(conn).await?.subtypes(conn).await;
-        conn.assembly_get_by_types_time_and_gear(types, target, self.time)
+    async fn assembly(&self, target: PartId, store: &mut impl Store) -> TbResult<Vec<Attachment>> {
+        let types = self.part_id.what(store).await?.subtypes(store).await;
+        store
+            .assembly_get_by_types_time_and_gear(types, target, self.time)
             .await
     }
 }

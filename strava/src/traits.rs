@@ -400,8 +400,8 @@ pub trait StravaPerson: Person {
     async fn request_json<T: DeserializeOwned>(
         &mut self,
         uri: &str,
-        conn: &mut impl StravaStore,
+        store: &mut impl StravaStore,
     ) -> TbResult<T>;
 
-    async fn deauthorize(&mut self, conn: &mut impl StravaStore) -> TbResult<()>;
+    async fn deauthorize(&mut self, store: &mut impl StravaStore) -> TbResult<()>;
 }

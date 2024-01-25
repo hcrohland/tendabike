@@ -133,8 +133,8 @@ impl PartId {
         PartId(id)
     }
 
-    pub async fn get(id: i32, user: &dyn Person, conn: &mut impl Store) -> TbResult<PartId> {
-        PartId(id).checkuser(user, conn).await
+    pub async fn get(id: i32, user: &dyn Person, store: &mut impl PartStore) -> TbResult<PartId> {
+        PartId(id).checkuser(user, store).await
     }
 
     pub(crate) async fn read(self, store: &mut impl PartStore) -> TbResult<Part> {
@@ -202,7 +202,7 @@ impl Part {
     /// # Arguments
     ///
     /// * `user` - A reference to a `dyn Person` trait object representing the user.
-    /// * `conn` - A mutable reference to an `AppConn` object representing the database connection.
+    /// * `store` - A mutable reference to an `AppConn` object representing the database connection.
     ///
     /// # Returns
     ///
@@ -238,7 +238,7 @@ impl Part {
 }
 
 impl NewPart {
-    pub async fn create(self, user: &dyn Person, conn: &mut impl PartStore) -> TbResult<Part> {
+    pub async fn create(self, user: &dyn Person, store: &mut impl PartStore) -> TbResult<Part> {
         info!("Create {:?}", self);
 
         user.check_owner(
@@ -248,12 +248,12 @@ impl NewPart {
 
         let now = OffsetDateTime::now_utc();
         let createtime = self.purchase.unwrap_or(now);
-        conn.part_create(self, createtime, UsageId::new()).await
+        store.part_create(self, createtime, UsageId::new()).await
     }
 }
 
 impl ChangePart {
-    pub async fn change(self, user: &dyn Person, conn: &mut impl PartStore) -> TbResult<Part> {
+    pub async fn change(self, user: &dyn Person, store: &mut impl PartStore) -> TbResult<Part> {
         info!("Change {:?}", self);
 
         user.check_owner(
@@ -261,6 +261,6 @@ impl ChangePart {
             format!("user {} cannot create this part", user.get_id()),
         )?;
 
-        conn.part_change(self).await
+        store.part_change(self).await
     }
 }

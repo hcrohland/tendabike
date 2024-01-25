@@ -41,8 +41,9 @@ pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations = embed_migrations!(
 
 fn run_db_migrations(db: &str) {
     info!("Running database migrations...");
-    let mut conn = PgConnection::establish(db).expect("Failed to connect to database: {:?}");
-    conn.run_pending_migrations(MIGRATIONS)
+    let mut store = PgConnection::establish(db).expect("Failed to connect to database: {:?}");
+    store
+        .run_pending_migrations(MIGRATIONS)
         .expect("Failed to run database migrations: {:?}");
 }
 #[derive(Clone)]
@@ -61,7 +62,7 @@ impl DbPool {
     }
 
     pub async fn get(&self) -> TbResult<AsyncDieselConn> {
-        let conn = self.0.get().await.context("Could not get pool")?;
-        Ok(AsyncDieselConn(conn))
+        let store = self.0.get().await.context("Could not get pool")?;
+        Ok(AsyncDieselConn(store))
     }
 }

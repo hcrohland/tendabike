@@ -63,14 +63,14 @@ pub struct Stat {
 }
 
 impl UserId {
-    pub async fn read(self, conn: &mut impl Store) -> TbResult<User> {
-        conn.user_read_by_id(self).await
+    pub async fn read(self, store: &mut impl UserStore) -> TbResult<User> {
+        store.user_read_by_id(self).await
     }
 
-    pub async fn get_stat(&self, conn: &mut impl Store) -> TbResult<Stat> {
-        let user = self.read(conn).await?;
-        let parts = conn.part_get_all_for_userid(self).await?.len() as i64;
-        let activities = conn.activity_get_all_for_userid(self).await?.len() as i64;
+    pub async fn get_stat(&self, store: &mut impl Store) -> TbResult<Stat> {
+        let user = self.read(store).await?;
+        let parts = store.part_get_all_for_userid(self).await?.len() as i64;
+        let activities = store.activity_get_all_for_userid(self).await?.len() as i64;
         Ok(Stat {
             user,
             parts,
@@ -78,23 +78,28 @@ impl UserId {
         })
     }
 
-    pub async fn create(firstname_: &str, lastname: &str, conn: &mut impl Store) -> TbResult<Self> {
-        conn.user_create(firstname_, lastname).await.map(|u| u.id)
+    pub async fn create(
+        firstname_: &str,
+        lastname: &str,
+        store: &mut impl UserStore,
+    ) -> TbResult<Self> {
+        store.user_create(firstname_, lastname).await.map(|u| u.id)
     }
 
     pub async fn update(
         &self,
         firstname_: &str,
         lastname: &str,
-        conn: &mut impl Store,
+        store: &mut impl UserStore,
     ) -> TbResult<Self> {
-        conn.user_update(self, firstname_, lastname)
+        store
+            .user_update(self, firstname_, lastname)
             .await
             .map(|u| u.id)
     }
 
-    pub async fn is_admin(&self, conn: &mut impl Store) -> TbResult<bool> {
-        self.read(conn).await.map(|u| u.is_admin)
+    pub async fn is_admin(&self, store: &mut impl UserStore) -> TbResult<bool> {
+        self.read(store).await.map(|u| u.is_admin)
     }
 
     /// get all parts, attachments and activities for the user

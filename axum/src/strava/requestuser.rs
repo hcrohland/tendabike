@@ -42,7 +42,7 @@ const API: &str = "https://www.strava.com/api/v3";
 impl RequestUser {
     pub(crate) async fn create_from_token(
         token: StandardTokenResponse<StravaExtraTokenFields, BasicTokenType>,
-        conn: &mut impl StravaStore,
+        store: &mut impl StravaStore,
     ) -> TbResult<Self> {
         trace!("got token {:?})", &token);
 
@@ -59,9 +59,9 @@ impl RequestUser {
 
         let refresh_token = token.refresh_token();
         let refresh = refresh_token.map(|t| t.secret());
-        let user = StravaUser::upsert(*id, firstname, lastname, refresh, conn).await?;
+        let user = StravaUser::upsert(*id, firstname, lastname, refresh, store).await?;
         let id = user.tb_id();
-        let is_admin = id.is_admin(conn).await?;
+        let is_admin = id.is_admin(store).await?;
 
         Ok(Self {
             id,
@@ -76,13 +76,13 @@ impl RequestUser {
     pub(crate) async fn create_from_id(
         _admin: AxumAdmin,
         user: UserId,
-        conn: &mut impl StravaStore,
+        store: &mut impl StravaStore,
     ) -> TbResult<RequestUser> {
-        let user = StravaUser::read(user, conn).await?;
+        let user = StravaUser::read(user, store).await?;
 
         let strava_id = user.strava_id();
         let id = user.tb_id();
-        let is_admin = id.is_admin(conn).await?;
+        let is_admin = id.is_admin(store).await?;
         let refresh_token = user.refresh_token().ok_or(Error::BadRequest(format!(
             "User {} does not have a refresh token (disabled?)",
             id
@@ -105,7 +105,7 @@ impl RequestUser {
         }
     }
 
-    async fn refresh_the_token(&mut self, conn: &mut impl StravaStore) -> TbResult<()> {
+    async fn refresh_the_token(&mut self, store: &mut impl StravaStore) -> TbResult<()> {
         let token = match self.refresh_token.clone() {
             Some(token) => token,
             None => {
@@ -127,17 +127,17 @@ impl RequestUser {
         self.expires_at = token.expires_in().map(|d| SystemTime::now() + d);
         self.refresh_token = token.refresh_token().cloned();
         let refresh = token.refresh_token().map(|t| t.secret());
-        self.strava_id.update_token(refresh, conn).await?;
+        self.strava_id.update_token(refresh, store).await?;
         Ok(())
     }
 
     async fn get_strava(
         &mut self,
         uri: &str,
-        conn: &mut impl StravaStore,
+        store: &mut impl StravaStore,
     ) -> TbResult<reqwest::Response> {
         use reqwest::StatusCode;
-        self.check_token(conn).await?;
+        self.check_token(store).await?;
 
         let resp = reqwest::Client::new()
             .get(format!("{}{}", API, uri))
@@ -171,10 +171,10 @@ impl RequestUser {
         }
     }
 
-    async fn check_token(&mut self, conn: &mut impl StravaStore) -> TbResult<()> {
+    async fn check_token(&mut self, store: &mut impl StravaStore) -> TbResult<()> {
         if self.is_expired() {
             debug!("access token for user {} is expired", self.id);
-            return self.refresh_the_token(conn).await;
+            return self.refresh_the_token(store).await;
         }
         Ok(())
     }
@@ -198,10 +198,10 @@ impl StravaPerson for RequestUser {
     async fn request_json<T: DeserializeOwned>(
         &mut self,
         uri: &str,
-        conn: &mut impl StravaStore,
+        store: &mut impl StravaStore,
     ) -> TbResult<T> {
         let r = self
-            .get_strava(uri, conn)
+            .get_strava(uri, store)
             .await?
             .text()
             .await
@@ -209,8 +209,8 @@ impl StravaPerson for RequestUser {
         Ok(serde_json::from_str::<T>(&r).context("Could not parse response body")?)
     }
 
-    async fn deauthorize(&mut self, conn: &mut impl StravaStore) -> TbResult<()> {
-        self.check_token(conn).await?;
+    async fn deauthorize(&mut self, store: &mut impl StravaStore) -> TbResult<()> {
+        self.check_token(store).await?;
         STRAVACLIENT
             .revoke_token(self.access_token.clone().into())
             .context("revoke token config error")?
