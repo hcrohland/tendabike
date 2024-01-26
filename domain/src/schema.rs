@@ -44,6 +44,18 @@ table! {
 }
 
 table! {
+    services(id) {
+        id -> Uuid,
+        part_id -> Int4,
+        time -> Timestamptz,
+        redone -> Timestamptz,
+        name -> Text,
+        notes -> Text,
+        usage -> Uuid,
+    }
+}
+
+table! {
     usages(id) {
         id -> Uuid,
         time -> Int4,

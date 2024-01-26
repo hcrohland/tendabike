@@ -4,6 +4,7 @@ use tb_domain::Store;
 mod activity;
 mod attachment;
 mod part;
+mod service;
 mod usage;
 mod user;
 

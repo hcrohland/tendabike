@@ -13,12 +13,15 @@ pub use attachment::*;
 mod usage;
 pub use usage::*;
 
+mod service;
+pub use service::*;
+
 use crate::UserId;
 
 #[async_trait::async_trait]
 /// A trait that represents a store for various tb_domain models.
 pub trait Store:
-    Send + PartStore + UserStore + ActivityStore + AttachmentStore + UsageStore
+    Send + PartStore + UserStore + ActivityStore + AttachmentStore + UsageStore + ServiceStore
 {
     async fn transaction<'a, R, E, F>(&mut self, callback: F) -> Result<R, E>
     where
