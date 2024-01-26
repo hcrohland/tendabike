@@ -325,9 +325,7 @@ impl Activity {
             .map(|a| a.what)
             .collect::<HashSet<_>>();
 
-        let p_types = store
-            .activitytypes_get_all_ordered()
-            .await
+        let p_types = ActivityType::all_ordered()
             .into_iter()
             .filter(|t| act_types.contains(&t.id))
             .map(|t| t.gear_type)
@@ -459,7 +457,7 @@ async fn match_and_update(
 
 async fn def_part(partid: &PartId, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
     let part = partid.part(user, store).await?;
-    let types = part.what.act_types(store).await?;
+    let types = part.what.act_types();
 
     let acts = store.activity_set_gear_if_null(user, types, partid).await?;
 

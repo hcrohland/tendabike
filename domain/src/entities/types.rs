@@ -31,7 +31,12 @@ use serde_derive::{Deserialize, Serialize};
 use crate::*;
 use schema::{activity_types, part_types};
 
-#[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+mod objects;
+use objects::{ACTTYPES, PARTTYPES};
+
+#[derive(
+    DieselNewType, Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize,
+)]
 pub struct PartTypeId(i32);
 
 NewtypeDisplay! { () pub struct PartTypeId(); }
@@ -59,12 +64,14 @@ pub struct PartType {
 }
 
 impl PartType {
-    pub async fn all_ordered(store: &mut impl TypesStore) -> Vec<Self> {
-        store.get_all_parttypes_ordered().await
+    pub fn all_ordered() -> Vec<Self> {
+        PARTTYPES.values().map(Clone::clone).collect()
     }
 }
 
-#[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    DieselNewType, Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize,
+)]
 pub struct ActTypeId(i32);
 
 NewtypeDisplay! { () pub struct ActTypeId(); }
@@ -85,8 +92,13 @@ pub struct ActivityType {
 
 impl PartTypeId {
     /// get the full type for a type_id
-    pub(crate) async fn get(self, store: &mut impl TypesStore) -> TbResult<PartType> {
-        store.get_parttype_by_id(self).await
+    pub(crate) fn get(self) -> TbResult<PartType> {
+        PARTTYPES
+            .get(&self)
+            .cloned()
+            .ok_or(crate::Error::NotFound(format!(
+                "parttype {self} does not exist"
+            )))
     }
 
     /// recursively look for subtypes to self in the PartType vector
@@ -112,19 +124,23 @@ impl PartTypeId {
     }
 
     /// get all the types you can attach - even indirectly - to this type_id
-    pub(crate) async fn subtypes(self, store: &mut impl TypesStore) -> Vec<PartType> {
-        let mut types = PartType::all_ordered(store).await;
+    pub(crate) fn subtypes(self) -> Vec<PartType> {
+        let mut types = PartType::all_ordered();
         self.filter_types(&mut types)
     }
 
     /// Get the activity types valid for this part_type
-    pub(crate) async fn act_types(&self, store: &mut impl TypesStore) -> TbResult<Vec<ActTypeId>> {
-        store.get_activity_types_by_parttypeid(self).await
+    pub(crate) fn act_types(&self) -> Vec<ActTypeId> {
+        ACTTYPES
+            .values()
+            .filter(|a| a.gear_type == *self)
+            .map(|a| a.id)
+            .collect()
     }
 }
 
 impl ActivityType {
-    pub async fn all_ordered(store: &mut impl TypesStore) -> Vec<ActivityType> {
-        store.activitytypes_get_all_ordered().await
+    pub fn all_ordered() -> Vec<ActivityType> {
+        ACTTYPES.values().map(Clone::clone).collect()
     }
 }

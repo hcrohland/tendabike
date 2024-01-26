@@ -96,7 +96,7 @@ impl Event {
         // check user
         let part = self.part_id.part(user, store).await?;
         // and types
-        let mytype = part.what.get(store).await?;
+        let mytype = part.what.get()?;
         if !mytype.hooks.contains(&self.hook) {
             return Err(Error::BadRequest(format!(
                 "Type {} cannot be attached to hook {}",
@@ -251,7 +251,7 @@ impl Event {
 
     /// find all subparts of self which are attached to target at self.time
     async fn assembly(&self, target: PartId, store: &mut impl Store) -> TbResult<Vec<Attachment>> {
-        let types = self.part_id.what(store).await?.subtypes(store).await;
+        let types = self.part_id.what(store).await?.subtypes();
         store
             .assembly_get_by_types_time_and_gear(types, target, self.time)
             .await
