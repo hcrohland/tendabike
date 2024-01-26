@@ -12,7 +12,7 @@ pub trait UserStore {
     /// # Returns
     ///
     /// The user with the given ID, if it exists.
-    async fn user_read_by_id(&mut self, uid: UserId) -> TbResult<User>;
+    async fn get(&mut self, uid: UserId) -> TbResult<User>;
 
     /// Creates a new user.
     ///
@@ -24,7 +24,7 @@ pub trait UserStore {
     /// # Returns
     ///
     /// The newly created user.
-    async fn user_create(&mut self, firstname: &str, lastname: &str) -> TbResult<User>;
+    async fn create(&mut self, firstname: &str, lastname: &str) -> TbResult<User>;
 
     /// Updates an existing user.
     ///
@@ -37,10 +37,5 @@ pub trait UserStore {
     /// # Returns
     ///
     /// The updated user.
-    async fn user_update(
-        &mut self,
-        uid: &UserId,
-        firstname: &str,
-        lastname: &str,
-    ) -> TbResult<User>;
+    async fn update(&mut self, uid: &UserId, firstname: &str, lastname: &str) -> TbResult<User>;
 }

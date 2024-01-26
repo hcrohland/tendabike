@@ -197,6 +197,10 @@ impl PartId {
 }
 
 impl Part {
+    pub(crate) async fn get_all(pid: &UserId, store: &mut impl Store) -> TbResult<Vec<Part>> {
+        store.part_get_all_for_userid(pid).await
+    }
+
     /// Returns a list of all parts owned by the given user.
     ///
     /// # Arguments

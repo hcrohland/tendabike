@@ -9,7 +9,7 @@ pub trait AttachmentStore {
     async fn attachment_create(&mut self, att: Attachment) -> TbResult<Attachment>;
 
     /// Delete an attachment.
-    async fn attachment_delete(&mut self, att: Attachment) -> TbResult<Attachment>;
+    async fn delete(&mut self, att: Attachment) -> TbResult<Attachment>;
 
     /// Get all attachments for a given gear and time.
     async fn attachment_get_by_gear_and_time(

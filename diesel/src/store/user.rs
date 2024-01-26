@@ -6,7 +6,7 @@ use tb_domain::{schema, TbResult, User, UserId};
 
 #[async_session::async_trait]
 impl tb_domain::UserStore for AsyncDieselConn {
-    async fn user_read_by_id(&mut self, uid: UserId) -> TbResult<User> {
+    async fn get(&mut self, uid: UserId) -> TbResult<User> {
         schema::users::table
             .find(uid)
             .get_result(self)
@@ -14,7 +14,7 @@ impl tb_domain::UserStore for AsyncDieselConn {
             .map_err(map_to_tb)
     }
 
-    async fn user_create(&mut self, firstname_: &str, lastname: &str) -> TbResult<User> {
+    async fn create(&mut self, firstname_: &str, lastname: &str) -> TbResult<User> {
         use schema::users::dsl::*;
 
         diesel::insert_into(users)
@@ -28,12 +28,7 @@ impl tb_domain::UserStore for AsyncDieselConn {
             .map_err(map_to_tb)
     }
 
-    async fn user_update(
-        &mut self,
-        uid: &UserId,
-        firstname_: &str,
-        lastname: &str,
-    ) -> TbResult<User> {
+    async fn update(&mut self, uid: &UserId, firstname_: &str, lastname: &str) -> TbResult<User> {
         use schema::users::dsl::*;
         diesel::update(users.filter(id.eq(uid)))
             .set((firstname.eq(firstname_), name.eq(lastname)))

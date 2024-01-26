@@ -64,13 +64,13 @@ pub struct Stat {
 
 impl UserId {
     pub async fn read(self, store: &mut impl UserStore) -> TbResult<User> {
-        store.user_read_by_id(self).await
+        store.get(self).await
     }
 
     pub async fn get_stat(&self, store: &mut impl Store) -> TbResult<Stat> {
         let user = self.read(store).await?;
-        let parts = store.part_get_all_for_userid(self).await?.len() as i64;
-        let activities = store.activity_get_all_for_userid(self).await?.len() as i64;
+        let parts = Part::get_all(self, store).await?.len() as i64;
+        let activities = Activity::get_all(self, store).await?.len() as i64;
         Ok(Stat {
             user,
             parts,
@@ -79,11 +79,11 @@ impl UserId {
     }
 
     pub async fn create(
-        firstname_: &str,
+        firstname: &str,
         lastname: &str,
         store: &mut impl UserStore,
     ) -> TbResult<Self> {
-        store.user_create(firstname_, lastname).await.map(|u| u.id)
+        store.create(firstname, lastname).await.map(|u| u.id)
     }
 
     pub async fn update(
@@ -92,10 +92,7 @@ impl UserId {
         lastname: &str,
         store: &mut impl UserStore,
     ) -> TbResult<Self> {
-        store
-            .user_update(self, firstname_, lastname)
-            .await
-            .map(|u| u.id)
+        store.update(self, firstname_, lastname).await.map(|u| u.id)
     }
 
     pub async fn is_admin(&self, store: &mut impl UserStore) -> TbResult<bool> {

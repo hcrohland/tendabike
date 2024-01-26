@@ -44,7 +44,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .map_err(map_to_tb)
     }
 
-    async fn activity_get_all_for_userid(&mut self, uid: &UserId) -> TbResult<Vec<Activity>> {
+    async fn get_all(&mut self, uid: &UserId) -> TbResult<Vec<Activity>> {
         use schema::activities::dsl::*;
 
         activities
@@ -72,7 +72,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .map_err(map_to_tb)
     }
 
-    async fn activity_get_by_user_and_time(
+    async fn get_by_user_and_time(
         &mut self,
         uid: UserId,
         rstart: OffsetDateTime,

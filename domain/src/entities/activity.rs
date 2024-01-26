@@ -311,7 +311,7 @@ impl Activity {
     ///
 
     pub async fn get_all(user: &UserId, store: &mut impl ActivityStore) -> TbResult<Vec<Activity>> {
-        store.activity_get_all_for_userid(user).await
+        store.get_all(user).await
     }
 
     pub async fn categories(
@@ -319,15 +319,13 @@ impl Activity {
         store: &mut impl Store,
     ) -> TbResult<HashSet<PartTypeId>> {
         let act_types = store
-            .activity_get_all_for_userid(&user.get_id())
+            .get_all(&user.get_id())
             .await?
             .into_iter()
             .map(|a| a.what)
             .collect::<HashSet<_>>();
 
-        let p_types = store
-            .activitytypes_get_all_ordered()
-            .await
+        let p_types = ActivityType::all_ordered()
             .into_iter()
             .filter(|t| act_types.contains(&t.id))
             .map(|t| t.gear_type)
@@ -445,9 +443,7 @@ async fn match_and_update(
     rclimb: Option<i32>,
     rdescend: i32,
 ) -> TbResult<Summary> {
-    let mut act = store
-        .activity_get_by_user_and_time(user.get_id(), rstart)
-        .await?;
+    let mut act = store.get_by_user_and_time(user.get_id(), rstart).await?;
     if let Some(rclimb) = rclimb {
         act.climb = Some(rclimb);
     }
@@ -459,7 +455,7 @@ async fn match_and_update(
 
 async fn def_part(partid: &PartId, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
     let part = partid.part(user, store).await?;
-    let types = part.what.act_types(store).await?;
+    let types = part.what.act_types();
 
     let acts = store.activity_set_gear_if_null(user, types, partid).await?;
 
