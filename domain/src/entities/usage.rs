@@ -74,7 +74,7 @@ impl Usage {
     where
         U: Borrow<Usage> + Sync,
     {
-        store.usage_update(vec).await
+        store.update(vec).await
     }
 
     pub(crate) fn new(id: UsageId) -> Usage {
@@ -85,7 +85,7 @@ impl Usage {
     }
 
     pub(crate) async fn delete_all(store: &mut impl UsageStore) -> TbResult<usize> {
-        store.usage_delete_all().await
+        store.delete_all().await
     }
 }
 
@@ -95,11 +95,11 @@ impl UsageId {
     }
 
     pub(crate) async fn delete(self, store: &mut impl UsageStore) -> TbResult<Usage> {
-        store.usage_delete(&self).await
+        store.delete(&self).await
     }
 
     pub(crate) async fn read(self, store: &mut impl UsageStore) -> TbResult<Usage> {
-        store.usage_get(self).await
+        store.get(self).await
     }
 }
 
@@ -184,11 +184,11 @@ mod tests {
 
     #[async_session::async_trait]
     impl UsageStore for MemStore {
-        async fn usage_get(&mut self, id: UsageId) -> TbResult<Usage> {
+        async fn get(&mut self, id: UsageId) -> TbResult<Usage> {
             Ok(self.0.get(&id).map_or_else(|| Usage::new(id), Clone::clone))
         }
 
-        async fn usage_update<U>(&mut self, vec: &Vec<U>) -> TbResult<usize>
+        async fn update<U>(&mut self, vec: &Vec<U>) -> TbResult<usize>
         where
             U: Borrow<Usage> + Sync,
         {
@@ -199,14 +199,14 @@ mod tests {
             Ok(vec.len())
         }
 
-        async fn usage_delete(&mut self, usage: &UsageId) -> TbResult<Usage> {
+        async fn delete(&mut self, usage: &UsageId) -> TbResult<Usage> {
             match self.0.remove(&usage) {
                 Some(x) => Ok(x),
                 None => Err(crate::Error::NotFound(format!("Usage {} not found", usage))),
             }
         }
 
-        async fn usage_delete_all(&mut self) -> TbResult<usize> {
+        async fn delete_all(&mut self) -> TbResult<usize> {
             let res = self.0.len();
             self.0.clear();
             Ok(res)

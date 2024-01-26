@@ -9,7 +9,7 @@ use tb_domain::{schema, TbResult, Usage, UsageId, UsageStore};
 
 #[async_session::async_trait]
 impl UsageStore for AsyncDieselConn {
-    async fn usage_get(&mut self, id: UsageId) -> TbResult<Usage> {
+    async fn get(&mut self, id: UsageId) -> TbResult<Usage> {
         use schema::usages;
         match usages::table.find(id).get_result::<Usage>(self).await {
             Ok(x) => Ok(x),
@@ -21,7 +21,7 @@ impl UsageStore for AsyncDieselConn {
         }
     }
 
-    async fn usage_update<U>(&mut self, vec: &Vec<U>) -> TbResult<usize>
+    async fn update<U>(&mut self, vec: &Vec<U>) -> TbResult<usize>
     where
         U: Borrow<Usage> + Sync,
     {
@@ -47,7 +47,7 @@ impl UsageStore for AsyncDieselConn {
         .await
     }
 
-    async fn usage_delete(&mut self, usage: &UsageId) -> TbResult<Usage> {
+    async fn delete(&mut self, usage: &UsageId) -> TbResult<Usage> {
         use schema::usages::dsl::*;
         diesel::delete(usages.find(usage))
             .get_result(self)
@@ -55,7 +55,7 @@ impl UsageStore for AsyncDieselConn {
             .map_err(map_to_tb)
     }
 
-    async fn usage_delete_all(&mut self) -> TbResult<usize> {
+    async fn delete_all(&mut self) -> TbResult<usize> {
         use schema::usages::dsl::*;
         debug!("resetting all usages");
         diesel::delete(usages)

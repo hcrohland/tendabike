@@ -311,7 +311,7 @@ impl Activity {
     ///
 
     pub async fn get_all(user: &UserId, store: &mut impl ActivityStore) -> TbResult<Vec<Activity>> {
-        store.activity_get_all_for_userid(user).await
+        store.get_all(user).await
     }
 
     pub async fn categories(
@@ -319,7 +319,7 @@ impl Activity {
         store: &mut impl Store,
     ) -> TbResult<HashSet<PartTypeId>> {
         let act_types = store
-            .activity_get_all_for_userid(&user.get_id())
+            .get_all(&user.get_id())
             .await?
             .into_iter()
             .map(|a| a.what)
@@ -443,9 +443,7 @@ async fn match_and_update(
     rclimb: Option<i32>,
     rdescend: i32,
 ) -> TbResult<Summary> {
-    let mut act = store
-        .activity_get_by_user_and_time(user.get_id(), rstart)
-        .await?;
+    let mut act = store.get_by_user_and_time(user.get_id(), rstart).await?;
     if let Some(rclimb) = rclimb {
         act.climb = Some(rclimb);
     }

@@ -26,7 +26,7 @@
 
 use serde_derive::{Deserialize, Serialize};
 
-use crate::traits::Store;
+use crate::traits::{AttachmentStore, Store};
 
 use crate::*;
 use time::OffsetDateTime;
@@ -184,7 +184,7 @@ impl Attachment {
         trace!("delete {:?}", self);
 
         // delete the attachment on the db
-        let att = store.attachment_delete(self).await?;
+        let att = AttachmentStore::delete(store, self).await?;
         let usage = -att.usage.delete(store).await?;
 
         // adjust part usage and store it
