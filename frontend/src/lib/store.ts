@@ -64,8 +64,10 @@ export function checkStatus<T>(response: Response) {
 
 export function handleError(e: Error) {
   message.update((m) => {
-    m.message = e.message;
-    m.active = true;
+    if (m.active == false) {
+      m.message = e.message;
+      m.active = true;
+    }
     return m;
   });
 }
