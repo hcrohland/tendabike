@@ -153,10 +153,10 @@ impl Attachment {
 
         // add that usage to the part
         let part = self.part_id.update_last_use(self.attached, store).await?;
-        let part_usage = part.usage(store).await? + &usage;
-
+        let mut usages = part.usages(store).await? + &usage;
+        usages.push(usage);
         // Store both usages.
-        Usage::update_vec(&vec![&usage, &part_usage], store).await?;
+        Usage::update_vec(&usages, store).await?;
 
         // store the attachment in the database
         let attachment = store
@@ -168,7 +168,7 @@ impl Attachment {
         Ok(Summary {
             parts: vec![part],
             attachments: vec![attachment],
-            usages: vec![usage, part_usage],
+            usages,
             ..Default::default()
         })
     }
@@ -185,8 +185,7 @@ impl Attachment {
         let usage = -att.usage.delete(store).await?;
 
         // adjust part usage and store it
-        let part_usage = att.part_id.read(store).await?.usage(store).await?;
-        let usages = vec![part_usage + &usage];
+        let usages = att.part_id.read(store).await?.usages(store).await? + &usage;
         Usage::update_vec(&usages, store).await?;
 
         // mark attachment as deleted for client!
@@ -213,6 +212,23 @@ impl Attachment {
     async fn read_details(self, store: &mut impl PartStore) -> TbResult<AttachmentDetail> {
         let part = self.part_id.read(store).await?;
         Ok(self.add_details(&part.name, part.what))
+    }
+
+    pub(crate) async fn activities_by_part(
+        part: PartId,
+        begin: OffsetDateTime,
+        end: OffsetDateTime,
+        store: &mut (impl AttachmentStore + ActivityStore),
+    ) -> TbResult<Vec<Activity>> {
+        use std::cmp::{max, min};
+        let attachments = store.attachments_all_by_part(part).await?;
+        let mut activities = Vec::new();
+        for att in attachments {
+            let begin = max(att.attached, begin);
+            let end = min(att.detached, end);
+            activities.append(&mut Activity::find(att.gear, begin, end, store).await?);
+        }
+        Ok(activities)
     }
 
     /// return all attachments with details for the parts in 'partlist'
@@ -255,7 +271,7 @@ impl Attachment {
         let mut parts = Vec::new();
         for part in partlist {
             let part = part.update_last_use(start, store).await?;
-            usages.push(part.usage(store).await? + &usage);
+            usages.append(&mut (part.usages(store).await? + &usage));
             parts.push(part);
         }
 

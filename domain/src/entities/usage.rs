@@ -70,6 +70,10 @@ pub struct Usage {
 }
 
 impl Usage {
+    pub(crate) async fn update(&self, store: &mut impl UsageStore) -> TbResult<usize> {
+        Usage::update_vec(&vec![self], store).await
+    }
+
     pub(crate) async fn update_vec<U>(vec: &Vec<U>, store: &mut impl UsageStore) -> TbResult<usize>
     where
         U: Borrow<Usage> + Sync,
@@ -106,12 +110,16 @@ impl UsageId {
     }
 }
 
-impl Add for &Usage {
+impl<U> Add<U> for &Usage
+where
+    U: Borrow<Usage>,
+{
     type Output = Usage;
     /// Add an activity to of a usage
     ///
     /// If the descend value is missing, assume descend = climb
-    fn add(self, rhs: Self) -> Usage {
+    fn add(self, rhs: U) -> Usage {
+        let rhs = rhs.borrow();
         Usage {
             id: self.id,
             time: self.time + rhs.time,
@@ -124,12 +132,16 @@ impl Add for &Usage {
     }
 }
 
-impl Add<&Self> for Usage {
-    type Output = Usage;
+impl<U> Add<U> for Usage
+where
+    U: Borrow<Usage>,
+{
+    type Output = Self;
     /// Add an activity to of a usage
     ///
     /// If the descend value is missing, assume descend = climb
-    fn add(self, rhs: &Self) -> Usage {
+    fn add(self, rhs: U) -> Usage {
+        let rhs = rhs.borrow();
         Usage {
             id: self.id,
             time: self.time + rhs.time,
@@ -139,6 +151,14 @@ impl Add<&Self> for Usage {
             distance: self.distance + rhs.distance,
             count: self.count + rhs.count,
         }
+    }
+}
+
+impl Add<&Usage> for Vec<Usage> {
+    type Output = Self;
+
+    fn add(self, rhs: &Usage) -> Self {
+        self.into_iter().map(|u| u + rhs).collect()
     }
 }
 
@@ -234,7 +254,7 @@ mod tests {
         assert_eq!((&usage3).count, 2);
         assert_eq!((&usage3).descend, 6);
         assert_eq!((&usage3).time, 0);
-        Usage::update_vec(&vec![&usage3], store).await?;
+        usage3.update(store).await?;
         let usage4 = usage3.id.read(store).await?;
         assert_eq!(usage3, usage4);
         assert_eq!(usage4 - usage3, usage);

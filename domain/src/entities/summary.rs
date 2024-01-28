@@ -23,6 +23,7 @@ pub struct Summary {
     pub parts: Vec<Part>,
     pub attachments: Vec<AttachmentDetail>,
     pub usages: Vec<Usage>,
+    pub services: Vec<Service>,
 }
 
 impl From<SumHash> for Summary {
@@ -32,6 +33,7 @@ impl From<SumHash> for Summary {
             parts: value.parts.into_values().collect(),
             attachments: value.atts.into_values().collect(),
             usages: value.uses.into_values().collect(),
+            services: value.servs.into_values().collect(),
         }
     }
 }
@@ -51,6 +53,7 @@ pub(crate) struct SumHash {
     parts: HashMap<PartId, Part>,
     atts: HashMap<String, AttachmentDetail>,
     uses: HashMap<UsageId, Usage>,
+    servs: HashMap<ServiceId, Service>,
 }
 
 impl From<Summary> for SumHash {
@@ -74,6 +77,9 @@ impl AddAssign<Summary> for SumHash {
         }
         for x in rhs.usages {
             self.uses.insert(x.id, x);
+        }
+        for x in rhs.services {
+            self.servs.insert(x.id, x);
         }
     }
 }

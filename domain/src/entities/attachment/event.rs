@@ -5,8 +5,6 @@ use time::OffsetDateTime;
 
 use crate::*;
 
-const MAX_TIME: OffsetDateTime = time::macros::datetime!(9100-01-01 0:00 UTC);
-
 /// Description of an Attach or Detach request
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]

@@ -66,7 +66,7 @@ pub struct Part {
     #[serde_as(as = "Option<Rfc3339>")]
     pub disposed_at: Option<OffsetDateTime>,
     /// the usage tracker
-    pub usage: UsageId,
+    usage: UsageId,
 }
 
 #[serde_as]
@@ -212,7 +212,7 @@ impl Part {
         let mut usages = Vec::new();
         let mut attachments = Vec::new();
         for part in &parts {
-            usages.push(part.usage(store).await?);
+            usages.append(&mut part.usages(store).await?);
             let (mut atts, mut uses) = Attachment::for_part_with_usage(part.id, store).await?;
             usages.append(&mut uses);
             attachments.append(&mut atts);
@@ -225,8 +225,13 @@ impl Part {
         })
     }
 
-    pub(crate) async fn usage(&self, store: &mut impl UsageStore) -> TbResult<Usage> {
-        self.usage.read(store).await
+    pub(crate) async fn usages(
+        &self,
+        store: &mut (impl ServiceStore + UsageStore),
+    ) -> TbResult<Vec<Usage>> {
+        let mut usages = Service::usages_by_part(self.id, store).await?;
+        usages.push(self.usage.read(store).await?);
+        Ok(usages)
     }
 }
 

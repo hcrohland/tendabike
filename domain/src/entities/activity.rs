@@ -298,9 +298,9 @@ impl Activity {
             Factor::Sub => -self.usage(),
         };
 
-        let mut res = Attachment::register_activity(self.gear, self.start, usage, store).await?;
-        res.activities = vec![self];
-        Ok(res)
+        let res = Attachment::register_activity(self.gear, self.start, usage, store).await?;
+        let activities = vec![self];
+        Ok(Summary { activities, ..res })
     }
 
     /// Get all activities for a given user.

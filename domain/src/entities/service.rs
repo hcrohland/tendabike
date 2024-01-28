@@ -15,7 +15,23 @@ pub struct ServiceId(Uuid);
 NewtypeDisplay! { () pub struct ServiceId(); }
 NewtypeFrom! { () pub struct ServiceId(Uuid); }
 
-/// Timeline of service
+impl ServiceId {
+    pub(crate) fn new() -> Self {
+        Uuid::now_v7().into()
+    }
+
+    async fn finish(self, time: OffsetDateTime, store: &mut impl Store) -> TbResult<Service> {
+        let mut service = ServiceStore::get(store, self).await?;
+        service.redone = time;
+        service.calculate_usage(store).await?.update(store).await?;
+        ServiceStore::update(store, service).await
+    }
+}
+
+/// Timeline of attachments
+///
+/// * Every attachment of a part to a specified hook on a gear is an entry
+/// * Start and end time are noted
 ///
 #[derive(
     Clone,
@@ -29,7 +45,7 @@ NewtypeFrom! { () pub struct ServiceId(Uuid); }
     AsChangeset,
 )]
 pub struct Service {
-    id: ServiceId,
+    pub id: ServiceId,
     /// the part serviced
     part_id: PartId,
     /// when it was serviced
@@ -42,4 +58,58 @@ pub struct Service {
     name: String,
     notes: String,
     usage: UsageId,
+}
+
+impl Service {
+    pub async fn create(
+        part_id: PartId,
+        time: OffsetDateTime,
+        name: String,
+        notes: String,
+        store: &mut impl Store,
+    ) -> TbResult<Self> {
+        let service = Service {
+            id: ServiceId::new(),
+            part_id,
+            time,
+            redone: MAX_TIME,
+            name,
+            notes,
+            usage: UsageId::new(),
+        };
+        let usage = service.calculate_usage(store).await?;
+        usage.update(store).await?;
+        ServiceStore::create(store, &service).await
+    }
+
+    async fn calculate_usage(&self, store: &mut impl Store) -> TbResult<Usage> {
+        Ok(
+            Attachment::activities_by_part(self.part_id, self.time, self.redone, store)
+                .await?
+                .into_iter()
+                .fold(Usage::new(self.usage), |usage, act| usage + &act.usage()),
+        )
+    }
+
+    pub async fn redo(
+        id: ServiceId,
+        time: OffsetDateTime,
+        notes: String,
+        store: &mut impl Store,
+    ) -> TbResult<Self> {
+        let old = id.finish(time, store).await?;
+        Service::create(old.part_id, time, old.name, notes, store).await
+    }
+
+    pub async fn usages_by_part(
+        part: PartId,
+        store: &mut (impl ServiceStore + UsageStore),
+    ) -> TbResult<Vec<Usage>> {
+        let services = store.services_by_part(part).await?;
+        let mut usages = Vec::new();
+        for service in services {
+            usages.push(service.usage.read(store).await?);
+        }
+        Ok(usages)
+    }
 }
