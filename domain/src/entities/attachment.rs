@@ -253,7 +253,8 @@ impl Attachment {
         }
 
         // get all parts from attachments, add usage and modify last_used
-        let partlist = attachments.iter().map(|a| a.part_id);
+        // we need to add gear since it is not attached
+        let partlist = attachments.iter().map(|a| a.part_id).chain([gear]);
         let mut parts = Vec::new();
         for part in partlist {
             let part = part.update_last_use(start, store).await?;
