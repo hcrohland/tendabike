@@ -26,7 +26,7 @@ pub trait UsageStore {
     /// # Returns
     ///
     /// Returns the updated `Usage` object if it was successfully updated, otherwise returns an error.
-    async fn update<U>(&mut self, usage: &Vec<U>) -> TbResult<usize>
+    async fn update<U>(&mut self, usage: &[U]) -> TbResult<usize>
     where
         U: std::borrow::Borrow<Usage> + Sync;
 
