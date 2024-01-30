@@ -188,7 +188,7 @@ mod tests {
             Ok(self.0.get(&id).map_or_else(|| Usage::new(id), Clone::clone))
         }
 
-        async fn update<U>(&mut self, vec: &Vec<U>) -> TbResult<usize>
+        async fn update<U>(&mut self, vec: &[U]) -> TbResult<usize>
         where
             U: Borrow<Usage> + Sync,
         {

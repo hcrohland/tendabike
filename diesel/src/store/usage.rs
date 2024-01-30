@@ -21,7 +21,7 @@ impl UsageStore for AsyncDieselConn {
         }
     }
 
-    async fn update<U>(&mut self, vec: &Vec<U>) -> TbResult<usize>
+    async fn update<U>(&mut self, vec: &[U]) -> TbResult<usize>
     where
         U: Borrow<Usage> + Sync,
     {
