@@ -13,7 +13,7 @@ pub trait UsageStore {
     ///
     /// Returns the `Usage` object if the Usage exists, an empty new one if not
     /// Might returns an error from underlying storage system.
-    async fn get(&mut self, uid: UsageId) -> TbResult<Usage>;
+    async fn get(&mut self, uid: UsageId) -> TbResult<Option<Usage>>;
 
     /// Changes an array of `Usage` objects.
     /// Might delete the Usages on the store if it is all zero
