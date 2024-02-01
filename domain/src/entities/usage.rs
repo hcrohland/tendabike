@@ -99,7 +99,10 @@ impl UsageId {
     }
 
     pub(crate) async fn read(self, store: &mut impl UsageStore) -> TbResult<Usage> {
-        store.get(self).await
+        store
+            .get(self)
+            .await
+            .map(|u| u.unwrap_or_else(|| Usage::new(self)))
     }
 }
 
@@ -184,8 +187,8 @@ mod tests {
 
     #[async_session::async_trait]
     impl UsageStore for MemStore {
-        async fn get(&mut self, id: UsageId) -> TbResult<Usage> {
-            Ok(self.0.get(&id).map_or_else(|| Usage::new(id), Clone::clone))
+        async fn get(&mut self, id: UsageId) -> TbResult<Option<Usage>> {
+            Ok(self.0.get(&id).cloned())
         }
 
         async fn update<U>(&mut self, vec: &[U]) -> TbResult<usize>

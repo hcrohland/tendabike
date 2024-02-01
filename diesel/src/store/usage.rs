@@ -9,16 +9,15 @@ use tb_domain::{schema, TbResult, Usage, UsageId, UsageStore};
 
 #[async_session::async_trait]
 impl UsageStore for AsyncDieselConn {
-    async fn get(&mut self, id: UsageId) -> TbResult<Usage> {
+    async fn get(&mut self, id: UsageId) -> TbResult<Option<Usage>> {
+        use diesel::result::OptionalExtension;
         use schema::usages;
-        match usages::table.find(id).get_result::<Usage>(self).await {
-            Ok(x) => Ok(x),
-            Err(diesel::NotFound) => Ok(Usage {
-                id,
-                ..Default::default()
-            }),
-            Err(x) => Err(map_to_tb(x)),
-        }
+        usages::table
+            .find(id)
+            .get_result::<Usage>(self)
+            .await
+            .optional()
+            .map_err(map_to_tb)
     }
 
     async fn update<U>(&mut self, vec: &[U]) -> TbResult<usize>
