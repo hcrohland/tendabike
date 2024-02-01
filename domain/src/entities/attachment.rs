@@ -153,16 +153,19 @@ impl Attachment {
 
         // add that usage to the part
         let part = self.part_id.update_last_use(self.attached, store).await?;
-        let mut usages = part.usages(store).await? + &usage;
-        usages.push(usage);
-        // Store both usages.
-        Usage::update_vec(&usages, store).await?;
-
+        let mut usages = vec![part.usage().read(store).await? + &usage, usage];
         // store the attachment in the database
         let attachment = store
             .attachment_create(self)
             .await?
             .add_details(&part.name, part.what);
+
+        // recalculate the service usages and append to usages
+        usages
+            .append(&mut Service::recalculate(part.id, self.attached, self.detached, store).await?);
+
+        // Store all usages.
+        Usage::update_vec(&usages, store).await?;
 
         // return all affected objects
         Ok(Summary {
@@ -184,8 +187,14 @@ impl Attachment {
         let att = AttachmentStore::delete(store, self).await?;
         let usage = -att.usage.delete(store).await?;
 
-        // adjust part usage and store it
-        let usages = att.part_id.read(store).await?.usages(store).await? + &usage;
+        // recalc service usages
+        let mut usages =
+            Service::recalculate(att.part_id, att.attached, att.detached, store).await?;
+
+        // adjust part usage
+        usages.push(att.part_id.read(store).await?.usage().read(store).await? + &usage);
+
+        // store all usages
         Usage::update_vec(&usages, store).await?;
 
         // mark attachment as deleted for client!
@@ -259,22 +268,25 @@ impl Attachment {
         };
 
         // get all attachment usages and add usage to it
-        let attachments = store.attachment_get_by_gear_and_time(gear, start).await?;
         let mut usages = Vec::new();
+        let mut parts = Vec::new();
+
+        let attachments = store.attachment_get_by_gear_and_time(gear, start).await?;
         for att in attachments.iter() {
-            usages.push(att.usage(store).await? + &usage);
+            usages.push(att.usage);
         }
 
         // get all parts from attachments, add usage and modify last_used
+        let partlist = attachments.iter().map(|a| a.part_id);
         // we need to add gear since it is not attached
-        let partlist = attachments.iter().map(|a| a.part_id).chain([gear]);
-        let mut parts = Vec::new();
-        for part in partlist {
+        for part in partlist.chain([gear]) {
             let part = part.update_last_use(start, store).await?;
-            usages.append(&mut (part.usages(store).await? + &usage));
+            usages.push(part.usage());
+            usages.append(&mut Service::get_usages(part.id, start, store).await?);
             parts.push(part);
         }
 
+        let usages = Usage::get_vec(&usages, store).await? + &usage;
         // store all updated usages
         Usage::update_vec(&usages, store).await?;
         Ok(Summary {

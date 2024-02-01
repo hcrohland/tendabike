@@ -212,7 +212,7 @@ impl Part {
         let mut usages = Vec::new();
         let mut attachments = Vec::new();
         for part in &parts {
-            usages.append(&mut part.usages(store).await?);
+            usages.push(part.usage().read(store).await?);
             let (mut atts, mut uses) = Attachment::for_part_with_usage(part.id, store).await?;
             usages.append(&mut uses);
             attachments.append(&mut atts);
@@ -225,13 +225,8 @@ impl Part {
         })
     }
 
-    pub(crate) async fn usages(
-        &self,
-        store: &mut (impl ServiceStore + UsageStore),
-    ) -> TbResult<Vec<Usage>> {
-        let mut usages = Service::usages_by_part(self.id, store).await?;
-        usages.push(self.usage.read(store).await?);
-        Ok(usages)
+    pub(crate) fn usage(&self) -> UsageId {
+        self.usage
     }
 }
 

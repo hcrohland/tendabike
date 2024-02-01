@@ -91,6 +91,17 @@ impl Usage {
     pub(crate) async fn delete_all(store: &mut impl UsageStore) -> TbResult<usize> {
         store.delete_all().await
     }
+
+    pub(crate) async fn get_vec(
+        vec: &[UsageId],
+        store: &mut impl UsageStore,
+    ) -> TbResult<Vec<Usage>> {
+        let mut res = Vec::new();
+        for id in vec {
+            res.push(id.read(store).await?);
+        }
+        Ok(res)
+    }
 }
 
 impl UsageId {

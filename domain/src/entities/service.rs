@@ -101,15 +101,35 @@ impl Service {
         Service::create(old.part_id, time, old.name, notes, store).await
     }
 
-    pub async fn usages_by_part(
+    pub(crate) async fn get_usages(
         part: PartId,
+        time: OffsetDateTime,
         store: &mut (impl ServiceStore + UsageStore),
+    ) -> TbResult<Vec<UsageId>> {
+        Ok(store
+            .services_by_part(part)
+            .await?
+            .into_iter()
+            .filter(|s: &Service| s.time <= time && s.redone > time)
+            .map(|s| s.usage)
+            .collect())
+    }
+
+    pub(crate) async fn recalculate(
+        part: PartId,
+        start: OffsetDateTime,
+        end: OffsetDateTime,
+        store: &mut impl Store,
     ) -> TbResult<Vec<Usage>> {
-        let services = store.services_by_part(part).await?;
-        let mut usages = Vec::new();
+        let mut res = Vec::new();
+        let services = store
+            .services_by_part(part)
+            .await?
+            .into_iter()
+            .filter(|s: &Service| s.time <= end && s.redone > start);
         for service in services {
-            usages.push(service.usage.read(store).await?);
+            res.push(service.calculate_usage(store).await?);
         }
-        Ok(usages)
+        Ok(res)
     }
 }
