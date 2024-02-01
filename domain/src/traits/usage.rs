@@ -11,7 +11,7 @@ pub trait UsageStore {
     ///
     /// # Returns
     ///
-    /// Returns the `Usage` object if the Usage exists, an empty new one if not
+    /// Returns the Usage object if the Usage exists, None if not
     /// Might returns an error from underlying storage system.
     async fn get(&mut self, uid: UsageId) -> TbResult<Option<Usage>>;
 
