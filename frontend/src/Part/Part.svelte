@@ -9,11 +9,14 @@
   import GearCard from "./GearCard.svelte";
   import PartHist from "./PartHist.svelte";
   import { Part } from "../lib/types";
+  import NewService from "../Service/NewService.svelte";
+  import ServiceList from "../Service/ServiceList.svelte";
 
   export let params: { id: number; what: number };
 
   let installPart: (p: Part) => void;
   let changePart: (p: Part) => void;
+  let newService: (p: Part) => void;
   let recoverPart: (p: Part) => void;
   let attachPart: (p: Part) => void;
 
@@ -35,6 +38,9 @@
           Attach part
         </Button>
       {/if}
+      <Button color="light" on:click={() => newService(part)}>
+        Log Service
+      </Button>
       <Button color="light" on:click={() => changePart(part)}>
         Change details
       </Button>
@@ -42,6 +48,7 @@
   </ButtonGroup>
 </GearCard>
 
+<ServiceList id={params.id} />
 <PartHist id={params.id} />
 <Subparts gear={part} {hook} />
 
@@ -49,3 +56,4 @@
 <InstallPart bind:installPart />
 <ChangePart bind:changePart />
 <RecoverPart bind:recoverPart />
+<NewService bind:newService />
