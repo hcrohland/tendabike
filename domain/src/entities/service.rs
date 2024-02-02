@@ -67,7 +67,7 @@ impl Service {
         name: String,
         notes: String,
         store: &mut impl Store,
-    ) -> TbResult<Self> {
+    ) -> TbResult<Summary> {
         let service = Service {
             id: ServiceId::new(),
             part_id,
@@ -79,7 +79,13 @@ impl Service {
         };
         let usage = service.calculate_usage(store).await?;
         usage.update(store).await?;
-        ServiceStore::create(store, &service).await
+        let service = ServiceStore::create(store, &service).await?;
+        let usage = service.usage.read(store).await?;
+        Ok(Summary {
+            services: vec![service],
+            usages: vec![usage],
+            ..Default::default()
+        })
     }
 
     async fn calculate_usage(&self, store: &mut impl Store) -> TbResult<Usage> {
@@ -96,12 +102,13 @@ impl Service {
         time: OffsetDateTime,
         notes: String,
         store: &mut impl Store,
-    ) -> TbResult<Self> {
+    ) -> TbResult<Summary> {
         let old = id.finish(time, store).await?;
-        Service::create(old.part_id, time, old.name, notes, store).await
+        Service::create(old.part_id, time, old.name, notes, store).await?;
+        todo!("collect old results")
     }
 
-    pub(crate) async fn get_usages(
+    pub(crate) async fn get_usageids(
         part: PartId,
         time: OffsetDateTime,
         store: &mut (impl ServiceStore + UsageStore),
@@ -131,5 +138,19 @@ impl Service {
             res.push(service.calculate_usage(store).await?);
         }
         Ok(res)
+    }
+
+    /// return all attachments with details for the parts in 'partlist'
+    pub(crate) async fn for_part_with_usage(
+        part: PartId,
+        store: &mut impl Store,
+    ) -> TbResult<(Vec<Service>, Vec<Usage>)> {
+        let services = store.services_by_part(part).await?;
+
+        let mut usages = Vec::new();
+        for serv in &services {
+            usages.push(serv.usage.read(store).await?);
+        }
+        Ok((services, usages))
     }
 }

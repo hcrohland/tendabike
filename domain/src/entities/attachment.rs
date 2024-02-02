@@ -282,7 +282,7 @@ impl Attachment {
         for part in partlist.chain([gear]) {
             let part = part.update_last_use(start, store).await?;
             usages.push(part.usage());
-            usages.append(&mut Service::get_usages(part.id, start, store).await?);
+            usages.append(&mut Service::get_usageids(part.id, start, store).await?);
             parts.push(part);
         }
 

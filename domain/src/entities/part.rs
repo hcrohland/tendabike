@@ -211,16 +211,21 @@ impl Part {
         let parts = store.part_get_all_for_userid(user).await?;
         let mut usages = Vec::new();
         let mut attachments = Vec::new();
+        let mut services = Vec::new();
         for part in &parts {
             usages.push(part.usage().read(store).await?);
             let (mut atts, mut uses) = Attachment::for_part_with_usage(part.id, store).await?;
             usages.append(&mut uses);
             attachments.append(&mut atts);
+            let (mut servs, mut uses) = Service::for_part_with_usage(part.id, store).await?;
+            usages.append(&mut uses);
+            services.append(&mut servs);
         }
         Ok(Summary {
             parts,
             usages,
             attachments,
+            services,
             ..Default::default()
         })
     }
