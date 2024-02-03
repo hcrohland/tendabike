@@ -17,7 +17,7 @@ use std::{
 
 use crate::*;
 
-#[derive(Serialize, Debug, Default)]
+#[derive(Clone, Serialize, Debug, Default, PartialEq)]
 pub struct Summary {
     pub activities: Vec<Activity>,
     pub parts: Vec<Part>,
@@ -75,5 +75,55 @@ impl AddAssign<Summary> for SumHash {
         for x in rhs.usages {
             self.uses.insert(x.id, x);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{SumHash, Summary, Usage, UsageId};
+
+    #[test]
+    fn add_summaries() {
+        let id1 = UsageId::new();
+        let id2 = UsageId::new();
+        let usage1 = Usage {
+            id: id1,
+            count: 1,
+            time: 1,
+            ..Default::default()
+        };
+        let usage2 = Usage {
+            id: id2,
+            count: 2,
+            time: 2,
+            ..Default::default()
+        };
+        let usage3 = Usage {
+            id: id1,
+            count: 3,
+            time: 3,
+            ..Default::default()
+        };
+        let sum1 = Summary {
+            usages: vec![usage1],
+            ..Default::default()
+        };
+        let sum2 = Summary {
+            usages: vec![usage2],
+            ..Default::default()
+        };
+        let sum3 = Summary {
+            usages: vec![usage3],
+            ..Default::default()
+        };
+        let mut hash1 = SumHash::from(sum1.clone());
+        hash1 += sum1.clone();
+        assert_eq!(&sum1, &hash1.into());
+        let sum4 = sum1 + sum2.clone();
+        assert!(sum4.usages.len() == 2);
+        let sum4 = sum4 + sum3.clone();
+        let hash = SumHash::from(sum4);
+        assert_eq!(hash.uses[&id1], sum3.usages[0]);
+        assert_eq!(hash.uses[&id2], sum2.usages[0]);
     }
 }

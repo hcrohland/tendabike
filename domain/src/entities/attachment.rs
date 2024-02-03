@@ -77,7 +77,7 @@ pub struct Attachment {
 /// * the name is needed for attachments to parts which were sold
 /// since the part will not be send to the client
 /// * 'what' is an optimization
-#[derive(Queryable, Serialize, Deserialize, Debug)]
+#[derive(Queryable, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct AttachmentDetail {
     #[serde(flatten)]
     pub a: Attachment,
