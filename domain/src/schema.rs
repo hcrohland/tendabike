@@ -18,14 +18,6 @@ table! {
 }
 
 table! {
-    activity_types (id) {
-        id -> Int4,
-        name -> Text,
-        gear -> Int4,
-    }
-}
-
-table! {
     attachments (part_id, attached) {
         part_id -> Int4,
         attached -> Timestamptz,
@@ -33,17 +25,6 @@ table! {
         hook -> Int4,
         detached -> Timestamptz,
         usage -> Uuid,
-    }
-}
-
-table! {
-    part_types (id) {
-        id -> Int4,
-        name -> Text,
-        main -> Int4,
-        hooks -> Array<Int4>,
-        order -> Int4,
-        group -> Nullable<Text>,
     }
 }
 
@@ -88,16 +69,4 @@ table! {
     }
 }
 
-joinable!(activities -> activity_types (what));
-joinable!(activity_types -> part_types (gear));
-joinable!(attachments -> part_types (hook));
-joinable!(parts -> part_types (what));
-
-allow_tables_to_appear_in_same_query!(
-    activities,
-    activity_types,
-    attachments,
-    part_types,
-    parts,
-    users,
-);
+allow_tables_to_appear_in_same_query!(activities, attachments, parts, users,);

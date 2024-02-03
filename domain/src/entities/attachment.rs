@@ -48,13 +48,11 @@ mod event;
     Deserialize,
     Queryable,
     Identifiable,
-    Associations,
     Insertable,
     AsChangeset,
 )]
 #[diesel(primary_key(part_id, attached))]
 #[diesel(treat_none_as_null = true)]
-#[diesel(belongs_to(PartType, foreign_key = hook))]
 #[diesel(table_name = schema::attachments)]
 pub struct Attachment {
     /// the sub-part, which is attached to the hook
