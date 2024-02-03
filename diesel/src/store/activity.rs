@@ -55,7 +55,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .map_err(map_to_tb)
     }
 
-    async fn activities_find_by_partid_and_time(
+    async fn activities_find_by_gear_and_time(
         &mut self,
         part: PartId,
         begin: OffsetDateTime,

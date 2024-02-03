@@ -89,12 +89,13 @@ impl Service {
     }
 
     async fn calculate_usage(&self, store: &mut impl Store) -> TbResult<Usage> {
-        Ok(
-            Attachment::activities_by_part(self.part_id, self.time, self.redone, store)
-                .await?
-                .into_iter()
-                .fold(Usage::new(self.usage), |usage, act| usage + &act.usage()),
-        )
+        Ok(if self.part_id.is_main(store).await? {
+            Activity::find(self.part_id, self.time, self.redone, store).await?
+        } else {
+            Attachment::activities_by_part(self.part_id, self.time, self.redone, store).await?
+        }
+        .into_iter()
+        .fold(Usage::new(self.usage), |usage, act| usage + &act.usage()))
     }
 
     pub async fn redo(

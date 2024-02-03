@@ -266,13 +266,13 @@ impl Activity {
     ///
     /// if end is none it means for the whole future
     pub(crate) async fn find(
-        part: PartId,
+        gear: PartId,
         begin: OffsetDateTime,
         end: OffsetDateTime,
         store: &mut impl ActivityStore,
     ) -> TbResult<Vec<Activity>> {
         store
-            .activities_find_by_partid_and_time(part, begin, end)
+            .activities_find_by_gear_and_time(gear, begin, end)
             .await
     }
 

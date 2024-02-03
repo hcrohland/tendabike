@@ -151,6 +151,11 @@ impl PartId {
         Ok(self.read(store).await?.what)
     }
 
+    pub async fn is_main(self, store: &mut impl PartStore) -> TbResult<bool> {
+        let part = self.read(store).await?;
+        part.what.is_main()
+    }
+
     /// check if the given user is the owner or an admin.
     /// Returns Forbidden if not.
     pub async fn checkuser(
