@@ -20,20 +20,12 @@
 //!
 //! The `router` function returns an Axum `Router` that can be mounted in a larger application.
 
-use axum::{
-    extract::{Path, State},
-    routing::{get, post, put},
-    Json, Router,
-};
+use axum::{extract::State, routing::post, Json, Router};
 use http::StatusCode;
 use serde_derive::Deserialize;
 use time::OffsetDateTime;
 
-use crate::{
-    appstate::AppState,
-    error::{ApiResult, AppError},
-    DbPool, RequestUser,
-};
+use crate::{appstate::AppState, error::AppError, DbPool, RequestUser};
 use tb_domain::{PartId, Service, Summary};
 
 pub(super) fn router() -> Router<AppState> {
