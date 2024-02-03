@@ -358,7 +358,7 @@ impl Activity {
             format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
         let mut good = Vec::new();
         let mut bad = Vec::new();
-        let mut summary = SumHash::default();
+        let mut summary = Summary::default();
         let mut rdr = csv::Reader::from_reader(data);
         let tz = time_tz::timezones::get_by_name(&tz)
             .ok_or_else(|| Error::BadRequest(format!("Unknown timezone {}", tz)))?;
@@ -394,7 +394,7 @@ impl Activity {
                 .await
             {
                 Ok(res) => {
-                    summary.merge(res);
+                    summary = summary + res;
                     good.push(description);
                 }
                 Err(_) => {
@@ -403,7 +403,6 @@ impl Activity {
                 }
             }
         }
-        let summary = summary.collect();
         Ok((summary, good, bad))
     }
 
@@ -461,7 +460,7 @@ async fn def_part(partid: &PartId, user: &dyn Person, store: &mut impl Store) ->
 
     let mut hash = SumHash::default();
     for act in acts {
-        hash.merge(act.register(Factor::Add, store).await?)
+        hash += act.register(Factor::Add, store).await?;
     }
-    Ok(hash.collect())
+    Ok(hash.into())
 }

@@ -204,7 +204,7 @@ impl Event {
                     trace!("processing sync event at {}", start);
                     let ps = a.send_to_tb(user, store).await?;
                     self.setdate(start, store).await?;
-                    summary = summary.merge(ps);
+                    summary = summary + ps;
                 }
             }
         }

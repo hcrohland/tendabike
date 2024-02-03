@@ -78,12 +78,12 @@ impl Event {
     ) -> TbResult<Summary> {
         debug!("- detaching {}", target.part_id);
         let subs = self.assembly(target.gear, store).await?;
-        let mut hash = SumHash::new(target.detach(self.time, store).await?);
+        let mut hash = SumHash::from(target.detach(self.time, store).await?);
         for sub in subs {
             sub.shift(self.time, target.part_id, &mut hash, store)
                 .await?;
         }
-        Ok(hash.collect())
+        Ok(hash.into())
     }
 
     /// Create an attachment for 'self.part' and all it's childs
@@ -121,7 +121,7 @@ impl Event {
                         .await?
                     {
                         debug!("detaching self assembly");
-                        hash.merge(self.detach_assembly(target, store).await?);
+                        hash += self.detach_assembly(target, store).await?;
                     }
 
                     // detach target assembly
@@ -133,14 +133,14 @@ impl Event {
                         .await?;
                     if let Some(att) = attachment {
                         debug!("detaching target assembly {}", att.part_id);
-                        hash.merge(self.detach_assembly(att, store).await?);
+                        hash += self.detach_assembly(att, store).await?;
                     }
 
                     let subs = self.assembly(self.part_id, store).await?;
                     // reattach the assembly
                     debug!("- attaching assembly {} to {}", self.part_id, self.gear);
                     let (sum, det) = self.attach_one(store).await?;
-                    hash.merge(sum);
+                    hash += sum;
                     for att in subs {
                         let sub_det = att.shift(self.time, self.gear, &mut hash, store).await?;
                         if sub_det == det && det < att.detached {
@@ -152,10 +152,10 @@ impl Event {
                                 time: det,
                             };
                             let (sum, _) = ev.attach_one(store).await?;
-                            hash.merge(sum);
+                            hash += sum;
                         }
                     }
-                    Ok(hash.collect())
+                    Ok(hash.into())
                 }
                 .scope_boxed()
             })
@@ -204,8 +204,7 @@ impl Event {
                     // the previous one is the real next so we keep 'det'!
                     // 'next' will be replaced by 'self' but 'end' is taken from 'next'
                     end = next.detached;
-                    let sum = next.delete(store).await?;
-                    hash.merge(sum);
+                    hash += next.delete(store).await?;
                 } else {
                     trace!(
                         "changing gear/hook from {}/{} to {}/{}",
@@ -228,13 +227,13 @@ impl Event {
             .await?
         {
             trace!("adjacent starting {}", prev.attached);
-            hash.merge(prev.detach(end, store).await?)
+            hash += prev.detach(end, store).await?
         } else {
             trace!("create {:?}\n", self);
-            hash.merge(self.attachment(end).create(store).await?);
+            hash += self.attachment(end).create(store).await?;
         }
 
-        Ok((hash.collect(), det))
+        Ok((hash.into(), det))
     }
 
     /// create an attachment of self with the given detached time

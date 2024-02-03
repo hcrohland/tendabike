@@ -160,7 +160,7 @@ impl StravaActivity {
                         res = tb_id.update(&tb, user, store).await?
                     } else {
                         res = Activity::create(&tb, user, store).await?;
-                        let new_id = res.first_act();
+                        let new_id = res.activities[0].id;
                         store
                             .strava_activity_new(strava_id, tb.user_id, new_id)
                             .await?;

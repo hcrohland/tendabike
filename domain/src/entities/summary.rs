@@ -10,11 +10,14 @@
 //! to efficiently merge multiple `Summary` structs together.
 
 use serde_derive::Serialize;
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    ops::{Add, AddAssign},
+};
 
 use crate::*;
 
-#[derive(Serialize, Debug, Default)]
+#[derive(Clone, Serialize, Debug, Default, PartialEq)]
 pub struct Summary {
     pub activities: Vec<Activity>,
     pub parts: Vec<Part>,
@@ -22,15 +25,23 @@ pub struct Summary {
     pub usages: Vec<Usage>,
 }
 
-impl Summary {
-    pub fn merge(self, new: Summary) -> Summary {
-        let mut hash = SumHash::new(self);
-        hash.merge(new);
-        hash.collect()
+impl From<SumHash> for Summary {
+    fn from(value: SumHash) -> Self {
+        Summary {
+            activities: value.activities.into_values().collect(),
+            parts: value.parts.into_values().collect(),
+            attachments: value.atts.into_values().collect(),
+            usages: value.uses.into_values().collect(),
+        }
     }
+}
+impl Add for Summary {
+    type Output = Self;
 
-    pub fn first_act(&self) -> ActivityId {
-        self.activities[0].id
+    fn add(self, rhs: Summary) -> Self::Output {
+        let mut hash = SumHash::from(self);
+        hash += rhs;
+        hash.into()
     }
 }
 
@@ -42,34 +53,77 @@ pub(crate) struct SumHash {
     uses: HashMap<UsageId, Usage>,
 }
 
-impl SumHash {
-    pub fn new(sum: Summary) -> Self {
+impl From<Summary> for SumHash {
+    fn from(value: Summary) -> Self {
         let mut hash = SumHash::default();
-        hash.merge(sum);
+        hash += value;
         hash
     }
+}
 
-    pub fn merge(&mut self, ps: Summary) {
-        for act in ps.activities {
-            self.activities.insert(act.id, act);
+impl AddAssign<Summary> for SumHash {
+    fn add_assign(&mut self, rhs: Summary) {
+        for x in rhs.activities {
+            self.activities.insert(x.id, x);
         }
-        for part in ps.parts {
-            self.parts.insert(part.id, part);
+        for x in rhs.parts {
+            self.parts.insert(x.id, x);
         }
-        for att in ps.attachments {
-            self.atts.insert(att.idx(), att);
+        for x in rhs.attachments {
+            self.atts.insert(x.idx(), x);
         }
-        for usage in ps.usages {
-            self.uses.insert(usage.id, usage);
+        for x in rhs.usages {
+            self.uses.insert(x.id, x);
         }
     }
+}
 
-    pub fn collect(self) -> Summary {
-        Summary {
-            activities: self.activities.into_values().collect(),
-            parts: self.parts.into_values().collect(),
-            attachments: self.atts.into_values().collect(),
-            usages: self.uses.into_values().collect(),
-        }
+#[cfg(test)]
+mod tests {
+    use crate::{SumHash, Summary, Usage, UsageId};
+
+    #[test]
+    fn add_summaries() {
+        let id1 = UsageId::new();
+        let id2 = UsageId::new();
+        let usage1 = Usage {
+            id: id1,
+            count: 1,
+            time: 1,
+            ..Default::default()
+        };
+        let usage2 = Usage {
+            id: id2,
+            count: 2,
+            time: 2,
+            ..Default::default()
+        };
+        let usage3 = Usage {
+            id: id1,
+            count: 3,
+            time: 3,
+            ..Default::default()
+        };
+        let sum1 = Summary {
+            usages: vec![usage1],
+            ..Default::default()
+        };
+        let sum2 = Summary {
+            usages: vec![usage2],
+            ..Default::default()
+        };
+        let sum3 = Summary {
+            usages: vec![usage3],
+            ..Default::default()
+        };
+        let mut hash1 = SumHash::from(sum1.clone());
+        hash1 += sum1.clone();
+        assert_eq!(&sum1, &hash1.into());
+        let sum4 = sum1 + sum2.clone();
+        assert!(sum4.usages.len() == 2);
+        let sum4 = sum4 + sum3.clone();
+        let hash = SumHash::from(sum4);
+        assert_eq!(hash.uses[&id1], sum3.usages[0]);
+        assert_eq!(hash.uses[&id2], sum2.usages[0]);
     }
 }
