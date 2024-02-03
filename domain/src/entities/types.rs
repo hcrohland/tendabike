@@ -29,7 +29,6 @@ use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::*;
-use schema::{activity_types, part_types};
 
 mod objects;
 use objects::{ACTTYPES, PARTTYPES};
@@ -47,7 +46,7 @@ NewtypeFrom! { () pub struct PartTypeId(i32); }
 /// We distingish main parts from spares:
 /// - Main parts can be used for an activity - like a bike
 /// - Spares can be attached to other parts and are subparts of main parts
-#[derive(Clone, Debug, Serialize, Deserialize, Queryable, Identifiable, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct PartType {
     /// The primary key
     pub id: PartTypeId,
@@ -65,7 +64,7 @@ pub struct PartType {
 
 impl PartType {
     pub fn all_ordered() -> Vec<Self> {
-        PARTTYPES.values().map(Clone::clone).collect()
+        PARTTYPES.values().cloned().collect()
     }
 }
 
@@ -80,7 +79,7 @@ NewtypeFrom! { () pub struct ActTypeId(i32); }
 /// The list of activity types
 /// Includes the kind of gear which can be used for this activity
 /// multiple gears are possible
-#[derive(Debug, Clone, Identifiable, Queryable, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ActivityType {
     /// The primary key
     pub id: ActTypeId,
@@ -124,9 +123,12 @@ impl PartTypeId {
     }
 
     /// get all the types you can attach - even indirectly - to this type_id
-    pub(crate) fn subtypes(self) -> Vec<PartType> {
+    pub(crate) fn subtypes(self) -> Vec<PartTypeId> {
         let mut types = PartType::all_ordered();
         self.filter_types(&mut types)
+            .into_iter()
+            .map(|t| t.id)
+            .collect()
     }
 
     /// Get the activity types valid for this part_type
@@ -141,6 +143,6 @@ impl PartTypeId {
 
 impl ActivityType {
     pub fn all_ordered() -> Vec<ActivityType> {
-        ACTTYPES.values().map(Clone::clone).collect()
+        ACTTYPES.values().cloned().collect()
     }
 }

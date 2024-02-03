@@ -65,13 +65,14 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
 
     async fn assembly_get_by_types_time_and_gear(
         &mut self,
-        types: Vec<tb_domain::PartType>,
+        types: Vec<tb_domain::PartTypeId>,
         target: PartId,
         tim: OffsetDateTime,
     ) -> TbResult<Vec<Attachment>> {
         use schema::attachments::dsl::*;
-        Attachment::belonging_to(&types)
+        attachments
             .for_update()
+            .filter(hook.eq_any(types))
             .filter(gear.eq(target))
             .filter(attached.le(tim))
             .filter(detached.gt(tim))

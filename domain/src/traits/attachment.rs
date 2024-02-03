@@ -31,7 +31,7 @@ pub trait AttachmentStore {
     /// Get all attachments for a given set of part types, gear, and time.
     async fn assembly_get_by_types_time_and_gear(
         &mut self,
-        types: Vec<crate::PartType>,
+        types: Vec<crate::PartTypeId>,
         target: PartId,
         tim: OffsetDateTime,
     ) -> TbResult<Vec<Attachment>>;

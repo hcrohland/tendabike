@@ -40,20 +40,9 @@ use crate::*;
 
 /// The database's representation of a part.
 #[serde_as]
-#[derive(
-    Clone,
-    Debug,
-    PartialEq,
-    Serialize,
-    Deserialize,
-    Queryable,
-    Identifiable,
-    Associations,
-    AsChangeset,
-)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Queryable, Identifiable, AsChangeset)]
 #[diesel(primary_key(id))]
 #[diesel(table_name = schema::parts)]
-#[diesel(belongs_to(PartType, foreign_key = what))]
 pub struct Part {
     /// The primary key
     pub id: PartId,
