@@ -10,7 +10,10 @@
 //! to efficiently merge multiple `Summary` structs together.
 
 use serde_derive::Serialize;
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    ops::{Add, AddAssign},
+};
 
 use crate::*;
 
@@ -22,15 +25,23 @@ pub struct Summary {
     pub usages: Vec<Usage>,
 }
 
-impl Summary {
-    pub fn merge(self, new: Summary) -> Summary {
-        let mut hash = SumHash::new(self);
-        hash.merge(new);
-        hash.collect()
+impl From<SumHash> for Summary {
+    fn from(value: SumHash) -> Self {
+        Summary {
+            activities: value.activities.into_values().collect(),
+            parts: value.parts.into_values().collect(),
+            attachments: value.atts.into_values().collect(),
+            usages: value.uses.into_values().collect(),
+        }
     }
+}
+impl Add for Summary {
+    type Output = Self;
 
-    pub fn first_act(&self) -> ActivityId {
-        self.activities[0].id
+    fn add(self, rhs: Summary) -> Self::Output {
+        let mut hash = SumHash::from(self);
+        hash += rhs;
+        hash.into()
     }
 }
 
@@ -42,34 +53,27 @@ pub(crate) struct SumHash {
     uses: HashMap<UsageId, Usage>,
 }
 
-impl SumHash {
-    pub fn new(sum: Summary) -> Self {
+impl From<Summary> for SumHash {
+    fn from(value: Summary) -> Self {
         let mut hash = SumHash::default();
-        hash.merge(sum);
+        hash += value;
         hash
     }
+}
 
-    pub fn merge(&mut self, ps: Summary) {
-        for act in ps.activities {
-            self.activities.insert(act.id, act);
+impl AddAssign<Summary> for SumHash {
+    fn add_assign(&mut self, rhs: Summary) {
+        for x in rhs.activities {
+            self.activities.insert(x.id, x);
         }
-        for part in ps.parts {
-            self.parts.insert(part.id, part);
+        for x in rhs.parts {
+            self.parts.insert(x.id, x);
         }
-        for att in ps.attachments {
-            self.atts.insert(att.idx(), att);
+        for x in rhs.attachments {
+            self.atts.insert(x.idx(), x);
         }
-        for usage in ps.usages {
-            self.uses.insert(usage.id, usage);
-        }
-    }
-
-    pub fn collect(self) -> Summary {
-        Summary {
-            activities: self.activities.into_values().collect(),
-            parts: self.parts.into_values().collect(),
-            attachments: self.atts.into_values().collect(),
-            usages: self.uses.into_values().collect(),
+        for x in rhs.usages {
+            self.uses.insert(x.id, x);
         }
     }
 }

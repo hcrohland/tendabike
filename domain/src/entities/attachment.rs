@@ -116,9 +116,9 @@ impl Attachment {
     ) -> TbResult<OffsetDateTime> {
         debug!("-- moving {} to {}", self.part_id, target);
         let ev = Event::new(self.part_id, at_time, target, self.hook);
-        hash.merge(self.detach(at_time, store).await?);
+        *hash += self.detach(at_time, store).await?;
         let (sum, det) = ev.attach_one(store).await?;
-        hash.merge(sum);
+        *hash += sum;
         Ok(det)
     }
 
@@ -139,8 +139,7 @@ impl Attachment {
         }
 
         self.detached = detached;
-        let cre = self.create(store).await?;
-        Ok(del.merge(cre))
+        Ok(del + self.create(store).await?)
     }
 
     /// register and store a new attachment
