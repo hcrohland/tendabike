@@ -1,8 +1,14 @@
 <script lang="ts">
+  import { DropdownItem } from "@sveltestrap/sveltestrap";
   import { filterValues, services, by } from "../lib/store";
+  import DeleteService from "./DeleteService.svelte";
   import Usage from "../Usage.svelte";
+  import Menu from "../Widgets/Menu.svelte";
+  import { Service } from "./service";
 
   export let id: number;
+
+  let deleteService: (p: Service) => void;
 
   $: servs = filterValues($services, (s) => s.part_id == id).sort(by("time"));
 </script>
@@ -15,6 +21,7 @@
           <th scope="col">Service</th>
           <th scope="col">Date</th>
           <Usage />
+          <th />
         </tr>
       </thead>
       <tbody>
@@ -25,9 +32,17 @@
             </td>
             <td>{service.fmtTime()}</td>
             <Usage id={service.usage} ref={undefined} />
+            <td>
+              <Menu>
+                <DropdownItem on:click={() => deleteService(service)}>
+                  Delete Service
+                </DropdownItem>
+              </Menu>
+            </td>
           </tr>
         {/each}
       </tbody>
     </table>
   </div>
 {/if}
+<DeleteService bind:deleteService />

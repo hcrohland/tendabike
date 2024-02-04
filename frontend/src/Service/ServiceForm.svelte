@@ -24,7 +24,6 @@
 
 <FormGroup row>
   <FormGroup class="col-md-12">
-    <Label for="inputName">You call it</Label>
     <!-- svelte-ignore a11y-autofocus -->
     <Input
       type="text"
@@ -38,8 +37,8 @@
   </FormGroup>
 </FormGroup>
 <FormGroup row>
-  <FormGroup class="col-md-6">
-    <Label for="inputNotes">and it is a</Label>
+  <FormGroup>
+    <Label for="inputNotes">Notes</Label>
     <Input
       type="textarea"
       class="form-control"

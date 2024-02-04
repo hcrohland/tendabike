@@ -70,11 +70,12 @@ pub struct Usage {
 }
 
 impl Usage {
-    pub(crate) async fn update(&self, store: &mut impl UsageStore) -> TbResult<usize> {
-        Usage::update_vec(&vec![self], store).await
+    pub(crate) async fn update(self, store: &mut impl UsageStore) -> TbResult<Usage> {
+        Usage::update_vec(&[&self], store).await?;
+        Ok(self)
     }
 
-    pub(crate) async fn update_vec<U>(vec: &Vec<U>, store: &mut impl UsageStore) -> TbResult<usize>
+    pub(crate) async fn update_vec<U>(vec: &[U], store: &mut impl UsageStore) -> TbResult<usize>
     where
         U: Borrow<Usage> + Sync,
     {
@@ -110,7 +111,10 @@ impl UsageId {
     }
 
     pub(crate) async fn delete(self, store: &mut impl UsageStore) -> TbResult<Usage> {
-        store.delete(&self).await
+        match store.delete(&self).await {
+            Err(Error::NotFound(_)) => Ok(Usage::new(self)),
+            x => x,
+        }
     }
 
     pub(crate) async fn read(self, store: &mut impl UsageStore) -> TbResult<Usage> {
@@ -265,7 +269,7 @@ mod tests {
         assert_eq!((&usage3).count, 2);
         assert_eq!((&usage3).descend, 6);
         assert_eq!((&usage3).time, 0);
-        usage3.update(store).await?;
+        let usage3 = usage3.update(store).await?;
         let usage4 = usage3.id.read(store).await?;
         assert_eq!(usage3, usage4);
         assert_eq!(usage4 - usage3, usage);

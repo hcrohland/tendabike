@@ -20,11 +20,15 @@ impl ServiceId {
         Uuid::now_v7().into()
     }
 
-    async fn finish(self, time: OffsetDateTime, store: &mut impl Store) -> TbResult<Service> {
-        let mut service = ServiceStore::get(store, self).await?;
-        service.redone = time;
-        service.calculate_usage(store).await?.update(store).await?;
-        ServiceStore::update(store, service).await
+    async fn get(self, store: &mut impl ServiceStore) -> TbResult<Service> {
+        ServiceStore::get(store, self).await
+    }
+
+    pub async fn delete(self, user: &dyn Person, store: &mut impl Store) -> TbResult<usize> {
+        let service = self.get(store).await?;
+        service.part_id.checkuser(user, store).await?;
+        service.usage.delete(store).await?;
+        ServiceStore::delete(store, self).await
     }
 }
 
@@ -64,6 +68,7 @@ impl Service {
     pub async fn create(
         part_id: PartId,
         time: OffsetDateTime,
+        redone: Option<OffsetDateTime>,
         name: String,
         notes: String,
         store: &mut impl Store,
@@ -72,15 +77,13 @@ impl Service {
             id: ServiceId::new(),
             part_id,
             time,
-            redone: MAX_TIME,
+            redone: redone.unwrap_or(MAX_TIME),
             name,
             notes,
             usage: UsageId::new(),
         };
-        let usage = service.calculate_usage(store).await?;
-        usage.update(store).await?;
+        let usage = service.calculate_usage(store).await?.update(store).await?;
         let service = ServiceStore::create(store, &service).await?;
-        let usage = service.usage.read(store).await?;
         Ok(Summary {
             services: vec![service],
             usages: vec![usage],
@@ -102,11 +105,35 @@ impl Service {
         id: ServiceId,
         time: OffsetDateTime,
         notes: String,
+        user: &dyn Person,
         store: &mut impl Store,
     ) -> TbResult<Summary> {
-        let old = id.finish(time, store).await?;
-        Service::create(old.part_id, time, old.name, notes, store).await?;
-        todo!("collect old results")
+        let mut old = id.get(store).await?;
+        old.part_id.checkuser(user, store).await?;
+        Ok(if time < old.time {
+            Service::create(old.part_id, time, Some(old.time), old.name, notes, store).await?
+        } else {
+            old.redone = time;
+            Service::create(old.part_id, time, None, old.name.clone(), notes, store).await?
+                + old.update_unchecked(store).await?
+        })
+    }
+
+    async fn update_unchecked(self, store: &mut impl Store) -> TbResult<Summary> {
+        let usages = vec![self.calculate_usage(store).await?.update(store).await?];
+        let services = vec![ServiceStore::update(store, self).await?];
+        Ok(Summary {
+            usages,
+            services,
+            ..Default::default()
+        })
+    }
+
+    pub async fn update(mut self, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
+        self.part_id.checkuser(user, store).await?;
+        let service = self.id.get(store).await?;
+        self.usage = service.usage;
+        self.update_unchecked(store).await
     }
 
     pub(crate) async fn get_usageids(

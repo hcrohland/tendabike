@@ -20,17 +20,22 @@
 //!
 //! The `router` function returns an Axum `Router` that can be mounted in a larger application.
 
-use axum::{extract::State, routing::post, Json, Router};
+use axum::{
+    extract::{Path, State},
+    routing::{delete, post},
+    Json, Router,
+};
 use http::StatusCode;
 use serde_derive::Deserialize;
 use time::OffsetDateTime;
 
-use crate::{appstate::AppState, error::AppError, DbPool, RequestUser};
-use tb_domain::{PartId, Service, Summary};
+use crate::{appstate::AppState, error::AppError, ApiResult, DbPool, RequestUser};
+use tb_domain::{PartId, Service, ServiceId, Summary};
 
 pub(super) fn router() -> Router<AppState> {
-    Router::new().route("/", post(create))
-    // .route("/:part", get(get_part))
+    Router::new()
+        .route("/", post(create).put(update))
+        .route("/:id", delete(delete_service))
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -53,6 +58,24 @@ async fn create(
 ) -> Result<(StatusCode, Json<Summary>), AppError> {
     let mut store = store.get().await?;
     part_id.checkuser(&user, &mut store).await?;
-    let summary = Service::create(part_id, time, name, notes, &mut store).await?;
+    let summary = Service::create(part_id, time, None, name, notes, &mut store).await?;
     Ok((StatusCode::CREATED, Json(summary)))
+}
+
+async fn update(
+    user: RequestUser,
+    State(store): State<DbPool>,
+    Json(service): Json<Service>,
+) -> ApiResult<Summary> {
+    let mut store = store.get().await?;
+    Ok(service.update(&user, &mut store).await.map(Json)?)
+}
+
+async fn delete_service(
+    user: RequestUser,
+    State(pool): State<DbPool>,
+    Path(id): Path<ServiceId>,
+) -> ApiResult<usize> {
+    let mut store = pool.get().await?;
+    Ok(id.delete(&user, &mut store).await.map(Json)?)
 }

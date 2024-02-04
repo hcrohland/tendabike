@@ -32,6 +32,13 @@ impl tb_domain::ServiceStore for AsyncDieselConn {
             .map_err(map_to_tb)
     }
 
+    async fn delete(&mut self, service: ServiceId) -> TbResult<usize> {
+        diesel::delete(services.find(service))
+            .execute(self)
+            .await
+            .map_err(map_to_tb)
+    }
+
     async fn services_by_part(&mut self, part: PartId) -> TbResult<Vec<Service>> {
         services
             .filter(part_id.eq(part))

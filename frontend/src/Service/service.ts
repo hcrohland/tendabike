@@ -4,6 +4,7 @@ import {
   myfetch,
   services,
   updateSummary,
+  usages,
 } from "../lib/store";
 import { maxDate } from "../lib/types";
 
@@ -45,8 +46,14 @@ export class Service {
 
   async update() {
     return await myfetch("/service", "PUT", this)
-      .then((data) => services.updateMap([data]))
+      .then(updateSummary)
       .catch(handleError);
+  }
+
+  async delete() {
+    await myfetch("/service/" + this.id, "DELETE").catch(handleError);
+    services.deleteItem(this.id);
+    usages.deleteItem(this.usage);
   }
 
   fmtTime() {

@@ -21,7 +21,7 @@ export default defineConfig({
         target: "http://localhost:8000",
         changeOrigin: true,
       },
-      "/service": {
+      "^/service.*": {
         target: "http://localhost:8000",
         changeOrigin: true,
       },
