@@ -36,6 +36,7 @@ pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route("/", post(create).put(update))
         .route("/:id", delete(delete_service))
+        .route("/redo", post(redo))
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -78,4 +79,13 @@ async fn delete_service(
 ) -> ApiResult<usize> {
     let mut store = pool.get().await?;
     Ok(id.delete(&user, &mut store).await.map(Json)?)
+}
+
+async fn redo(
+    user: RequestUser,
+    State(store): State<DbPool>,
+    Json(service): Json<Service>,
+) -> ApiResult<Summary> {
+    let mut store = store.get().await?;
+    Ok(service.redo(&user, &mut store).await.map(Json)?)
 }

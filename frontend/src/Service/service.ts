@@ -41,7 +41,9 @@ export class Service {
       time,
       name,
       notes,
-    }).then(updateSummary).catch;
+    })
+      .then(updateSummary)
+      .catch(handleError);
   }
 
   async update() {
@@ -54,6 +56,12 @@ export class Service {
     await myfetch("/service/" + this.id, "DELETE").catch(handleError);
     services.deleteItem(this.id);
     usages.deleteItem(this.usage);
+  }
+
+  async redo() {
+    return await myfetch("/service/redo", "POST", this)
+      .then(updateSummary)
+      .catch(handleError);
   }
 
   fmtTime() {

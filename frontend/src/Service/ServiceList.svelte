@@ -3,6 +3,7 @@
   import { filterValues, services, by } from "../lib/store";
   import DeleteService from "./DeleteService.svelte";
   import UpdateService from "./UpdateService.svelte";
+  import RedoService from "./RedoService.svelte";
   import Usage from "../Usage.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { Service } from "./service";
@@ -10,6 +11,7 @@
   export let id: number;
 
   let updateService: (p: Service) => void;
+  let redoService: (p: Service) => void;
   let deleteService: (p: Service) => void;
 
   $: servs = filterValues($services, (s) => s.part_id == id).sort(by("time"));
@@ -20,7 +22,7 @@
     <table class="table">
       <thead>
         <tr>
-          <th scope="col">Service</th>
+          <th scope="col">Service Log</th>
           <th scope="col">Date</th>
           <Usage />
           <th />
@@ -39,6 +41,9 @@
                 <DropdownItem on:click={() => updateService(service)}>
                   Change Service
                 </DropdownItem>
+                <DropdownItem on:click={() => redoService(service)}>
+                  Repeat Service
+                </DropdownItem>
                 <DropdownItem on:click={() => deleteService(service)}>
                   Delete Service
                 </DropdownItem>
@@ -52,3 +57,4 @@
 {/if}
 <UpdateService bind:updateService />
 <DeleteService bind:deleteService />
+<RedoService bind:redoService />

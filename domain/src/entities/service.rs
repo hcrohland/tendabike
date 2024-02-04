@@ -101,16 +101,13 @@ impl Service {
         .fold(Usage::new(self.usage), |usage, act| usage + &act.usage()))
     }
 
-    pub async fn redo(
-        id: ServiceId,
-        time: OffsetDateTime,
-        notes: String,
-        user: &dyn Person,
-        store: &mut impl Store,
-    ) -> TbResult<Summary> {
+    pub async fn redo(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
+        let Service {
+            id, notes, time, ..
+        } = self;
         let mut old = id.get(store).await?;
         old.part_id.checkuser(user, store).await?;
-        Ok(if time < old.time {
+        Ok(if self.time < old.time {
             Service::create(old.part_id, time, Some(old.time), old.name, notes, store).await?
         } else {
             old.redone = time;

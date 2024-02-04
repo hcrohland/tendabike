@@ -12,6 +12,7 @@
   const dispatch = createEventDispatcher();
 
   export let service: Service;
+  export let noname = false;
   export let maxdate: Date | undefined = undefined;
   export let mindate: Date | undefined = undefined;
   let { name, notes, time } = service;
@@ -30,6 +31,7 @@
       class="form-control"
       id="inputName"
       bind:value={name}
+      disabled={noname}
       autofocus
       required
       placeholder="Name"
