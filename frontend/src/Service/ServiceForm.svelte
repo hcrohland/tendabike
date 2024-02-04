@@ -18,11 +18,11 @@
   export let maxdate: Date | undefined = undefined;
   export let mindate: Date | undefined = undefined;
   let { name, notes, time } = service;
-  let done = false,
-    findate: Date;
+  let done = false;
+  let redone: Date;
 
   $: if (name.length > 0 && name.length > 0) {
-    service = new Service({ ...service, name, notes, time });
+    service = new Service({ ...service, name, notes, time, redone });
     dispatch("change", service);
   }
 </script>
@@ -80,7 +80,7 @@
     <Col xs="auto">
       {#if done}
         <InputGroup>
-          <DateTime bind:date={findate} mindate={time} />
+          <DateTime bind:date={redone} mindate={time} />
         </InputGroup>
       {/if}
     </Col>
