@@ -27,7 +27,6 @@
 
   let userOpen = false;
   let syncOpen = false;
-  let running = false;
   let number = 0;
   let promise: Promise<void>;
   let data = undefined;
@@ -37,37 +36,25 @@
     promise = myfetch("/user/summary").then(setSummary);
   }
 
-  async function getdata() {
-    running = true;
-    const batch = 10;
-    number = 0;
-    do {
-      data = await myfetch("/strava/hooks").catch(handleError);
-      if (!data) break;
-      updateSummary(data);
-      number += data["activities"].length;
-    } while ($user && running && data["activities"].length > 0);
-    running = false;
-    number = 0;
-  }
-
   let isOpen = false;
   function navbarUpdate(event: CustomEvent<any>) {
     isOpen = event.detail.isOpen;
   }
 
-  let polling = false;
-  async function poll(promiseFn: () => Promise<void>, time: number) {
-    if (polling) return;
-    polling = true;
-    while ($user) {
-      promise = promiseFn();
-      await promise.catch(handleError);
-      await new Promise((resolve) => setTimeout(resolve, time));
+  async function poll() {
+    if ($user) {
+      do {
+        data = await myfetch("/strava/hooks").catch(handleError);
+        if (!data) break;
+        updateSummary(data);
+        number += data["activities"].length;
+      } while (data["activities"].length > 0);
+      number = 0;
     }
+    setTimeout(poll, 60000);
   }
 
-  $: if ($user) poll(getdata, 60000);
+  poll();
 </script>
 
 <Garmin bind:garmin />
