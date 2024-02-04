@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { DropdownItem } from "@sveltestrap/sveltestrap";
+  import { DropdownItem, Tooltip } from "@sveltestrap/sveltestrap";
   import { filterValues, services, by } from "../lib/store";
   import DeleteService from "./DeleteService.svelte";
   import UpdateService from "./UpdateService.svelte";
@@ -32,7 +32,16 @@
         {#each servs as service (service.id)}
           <tr>
             <td>
-              {service.name}
+              <div>
+                <span id={"name" + service.id}>
+                  {service.name}
+                </span>
+                {#if service.notes.length > 0}
+                  <Tooltip target={"name" + service.id}>
+                    {service.notes}
+                  </Tooltip>
+                {/if}
+              </div>
             </td>
             <td>{service.fmtTime()}</td>
             <Usage id={service.usage} ref={undefined} />
