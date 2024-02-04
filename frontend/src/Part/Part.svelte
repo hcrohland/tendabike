@@ -29,6 +29,9 @@
     {#if part.disposed_at}
       <Button on:click={() => recoverPart(part)}>Recover gear</Button>
     {:else}
+      <Button color="light" on:click={() => newService(part)}>
+        Log Service
+      </Button>
       {#if part.what == hook.main}
         <Button color="light" on:click={() => installPart(part)}>
           Install new part
@@ -38,9 +41,6 @@
           Attach part
         </Button>
       {/if}
-      <Button color="light" on:click={() => newService(part)}>
-        Log Service
-      </Button>
       <Button color="light" on:click={() => changePart(part)}>
         Change details
       </Button>
