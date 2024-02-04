@@ -44,7 +44,12 @@
   </ModalHeader>
   <ModalBody>
     <Form>
-      <ServiceForm {service} noname on:change={setService} />
+      <ServiceForm
+        {service}
+        mindate={part.purchase}
+        noname
+        on:change={setService}
+      />
     </Form>
   </ModalBody>
   <ModalFooter {toggle} {disabled} action={saveService} button={"Update"} />

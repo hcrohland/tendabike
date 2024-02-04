@@ -9,13 +9,17 @@
   import DateTime from "../Widgets/DateTime.svelte";
   import { Service } from "./service";
   import { createEventDispatcher } from "svelte";
+  import Switch from "../Widgets/Switch.svelte";
   const dispatch = createEventDispatcher();
 
   export let service: Service;
   export let noname = false;
+  export let finish = false;
   export let maxdate: Date | undefined = undefined;
   export let mindate: Date | undefined = undefined;
   let { name, notes, time } = service;
+  let done = false,
+    findate: Date;
 
   $: if (name.length > 0 && name.length > 0) {
     service = new Service({ ...service, name, notes, time });
@@ -60,3 +64,25 @@
     </InputGroup>
   </Col>
 </FormGroup>
+{#if finish}
+  <FormGroup row>
+    <Col>
+      <InputGroup>
+        <Switch bind:checked={done}>
+          {#if done}
+            until
+          {:else}
+            finish?
+          {/if}
+        </Switch>
+      </InputGroup>
+    </Col>
+    <Col xs="auto">
+      {#if done}
+        <InputGroup>
+          <DateTime bind:date={findate} mindate={time} />
+        </InputGroup>
+      {/if}
+    </Col>
+  </FormGroup>
+{/if}
