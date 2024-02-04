@@ -73,7 +73,7 @@ pub trait ActivityStore {
     /// # Returns
     ///
     /// Returns a `Result` containing a vector of `Activity` structs or an error if the operation fails.
-    async fn activities_find_by_partid_and_time(
+    async fn activities_find_by_gear_and_time(
         &mut self,
         part: PartId,
         begin: OffsetDateTime,

@@ -266,13 +266,13 @@ impl Activity {
     ///
     /// if end is none it means for the whole future
     pub(crate) async fn find(
-        part: PartId,
+        gear: PartId,
         begin: OffsetDateTime,
         end: OffsetDateTime,
         store: &mut impl ActivityStore,
     ) -> TbResult<Vec<Activity>> {
         store
-            .activities_find_by_partid_and_time(part, begin, end)
+            .activities_find_by_gear_and_time(gear, begin, end)
             .await
     }
 
@@ -298,9 +298,9 @@ impl Activity {
             Factor::Sub => -self.usage(),
         };
 
-        let mut res = Attachment::register_activity(self.gear, self.start, usage, store).await?;
-        res.activities = vec![self];
-        Ok(res)
+        let res = Attachment::register_activity(self.gear, self.start, usage, store).await?;
+        let activities = vec![self];
+        Ok(Summary { activities, ..res })
     }
 
     /// Get all activities for a given user.
@@ -358,7 +358,7 @@ impl Activity {
             format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
         let mut good = Vec::new();
         let mut bad = Vec::new();
-        let mut summary = Summary::default();
+        let mut summary = SumHash::default();
         let mut rdr = csv::Reader::from_reader(data);
         let tz = time_tz::timezones::get_by_name(&tz)
             .ok_or_else(|| Error::BadRequest(format!("Unknown timezone {}", tz)))?;
@@ -394,7 +394,7 @@ impl Activity {
                 .await
             {
                 Ok(res) => {
-                    summary = summary + res;
+                    summary += res;
                     good.push(description);
                 }
                 Err(_) => {
@@ -403,7 +403,7 @@ impl Activity {
                 }
             }
         }
-        Ok((summary, good, bad))
+        Ok((summary.into(), good, bad))
     }
 
     pub async fn set_default_part(

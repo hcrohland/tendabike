@@ -27,6 +27,8 @@ mod entities;
 pub use entities::activity::{Activity, ActivityId, NewActivity};
 pub use entities::attachment::{Attachment, AttachmentDetail, Event};
 pub use entities::part::{ChangePart, NewPart, Part, PartId};
+pub use entities::service::*;
+// pub use entities::serviceplan::*;
 pub use entities::summary::*;
 pub use entities::types::*;
 pub use entities::usage::*;
@@ -36,3 +38,5 @@ pub mod schema;
 
 mod traits;
 pub use traits::*;
+
+const MAX_TIME: time::OffsetDateTime = time::macros::datetime!(9100-01-01 0:00 UTC);

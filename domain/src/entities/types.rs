@@ -100,6 +100,11 @@ impl PartTypeId {
             )))
     }
 
+    pub(crate) fn is_main(self) -> TbResult<bool> {
+        let t = self.get()?;
+        Ok(t.hooks.is_empty())
+    }
+
     /// recursively look for subtypes to self in the PartType vector
     fn filter_types(self, types: &mut Vec<PartType>) -> Vec<PartType> {
         // let mut res = types

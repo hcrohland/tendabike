@@ -153,22 +153,25 @@ impl Attachment {
 
         // add that usage to the part
         let part = self.part_id.update_last_use(self.attached, store).await?;
-        let part_usage = part.usage(store).await? + &usage;
-
-        // Store both usages.
-        Usage::update_vec(&vec![&usage, &part_usage], store).await?;
-
+        let mut usages = vec![part.usage().read(store).await? + &usage, usage];
         // store the attachment in the database
         let attachment = store
             .attachment_create(self)
             .await?
             .add_details(&part.name, part.what);
 
+        // recalculate the service usages and append to usages
+        usages
+            .append(&mut Service::recalculate(part.id, self.attached, self.detached, store).await?);
+
+        // Store all usages.
+        Usage::update_vec(&usages, store).await?;
+
         // return all affected objects
         Ok(Summary {
             parts: vec![part],
             attachments: vec![attachment],
-            usages: vec![usage, part_usage],
+            usages,
             ..Default::default()
         })
     }
@@ -184,9 +187,14 @@ impl Attachment {
         let att = AttachmentStore::delete(store, self).await?;
         let usage = -att.usage.delete(store).await?;
 
-        // adjust part usage and store it
-        let part_usage = att.part_id.read(store).await?.usage(store).await?;
-        let usages = vec![part_usage + &usage];
+        // recalc service usages
+        let mut usages =
+            Service::recalculate(att.part_id, att.attached, att.detached, store).await?;
+
+        // adjust part usage
+        usages.push(att.part_id.read(store).await?.usage().read(store).await? + &usage);
+
+        // store all usages
         Usage::update_vec(&usages, store).await?;
 
         // mark attachment as deleted for client!
@@ -213,6 +221,23 @@ impl Attachment {
     async fn read_details(self, store: &mut impl PartStore) -> TbResult<AttachmentDetail> {
         let part = self.part_id.read(store).await?;
         Ok(self.add_details(&part.name, part.what))
+    }
+
+    pub(crate) async fn activities_by_part(
+        part: PartId,
+        begin: OffsetDateTime,
+        end: OffsetDateTime,
+        store: &mut (impl AttachmentStore + ActivityStore),
+    ) -> TbResult<Vec<Activity>> {
+        use std::cmp::{max, min};
+        let attachments = store.attachments_all_by_part(part).await?;
+        let mut activities = Vec::new();
+        for att in attachments {
+            let begin = max(att.attached, begin);
+            let end = min(att.detached, end);
+            activities.append(&mut Activity::find(att.gear, begin, end, store).await?);
+        }
+        Ok(activities)
     }
 
     /// return all attachments with details for the parts in 'partlist'
@@ -243,22 +268,25 @@ impl Attachment {
         };
 
         // get all attachment usages and add usage to it
-        let attachments = store.attachment_get_by_gear_and_time(gear, start).await?;
         let mut usages = Vec::new();
+        let mut parts = Vec::new();
+
+        let attachments = store.attachment_get_by_gear_and_time(gear, start).await?;
         for att in attachments.iter() {
-            usages.push(att.usage(store).await? + &usage);
+            usages.push(att.usage);
         }
 
         // get all parts from attachments, add usage and modify last_used
+        let partlist = attachments.iter().map(|a| a.part_id);
         // we need to add gear since it is not attached
-        let partlist = attachments.iter().map(|a| a.part_id).chain([gear]);
-        let mut parts = Vec::new();
-        for part in partlist {
+        for part in partlist.chain([gear]) {
             let part = part.update_last_use(start, store).await?;
-            usages.push(part.usage(store).await? + &usage);
+            usages.push(part.usage());
+            usages.append(&mut Service::get_usageids(part.id, start, store).await?);
             parts.push(part);
         }
 
+        let usages = Usage::get_vec(&usages, store).await? + &usage;
         // store all updated usages
         Usage::update_vec(&usages, store).await?;
         Ok(Summary {

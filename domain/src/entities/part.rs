@@ -66,7 +66,7 @@ pub struct Part {
     #[serde_as(as = "Option<Rfc3339>")]
     pub disposed_at: Option<OffsetDateTime>,
     /// the usage tracker
-    pub usage: UsageId,
+    usage: UsageId,
 }
 
 #[serde_as]
@@ -151,6 +151,11 @@ impl PartId {
         Ok(self.read(store).await?.what)
     }
 
+    pub async fn is_main(self, store: &mut impl PartStore) -> TbResult<bool> {
+        let part = self.read(store).await?;
+        part.what.is_main()
+    }
+
     /// check if the given user is the owner or an admin.
     /// Returns Forbidden if not.
     pub async fn checkuser(
@@ -211,22 +216,27 @@ impl Part {
         let parts = store.part_get_all_for_userid(user).await?;
         let mut usages = Vec::new();
         let mut attachments = Vec::new();
+        let mut services = Vec::new();
         for part in &parts {
-            usages.push(part.usage(store).await?);
+            usages.push(part.usage().read(store).await?);
             let (mut atts, mut uses) = Attachment::for_part_with_usage(part.id, store).await?;
             usages.append(&mut uses);
             attachments.append(&mut atts);
+            let (mut servs, mut uses) = Service::for_part_with_usage(part.id, store).await?;
+            usages.append(&mut uses);
+            services.append(&mut servs);
         }
         Ok(Summary {
             parts,
             usages,
             attachments,
+            services,
             ..Default::default()
         })
     }
 
-    pub(crate) async fn usage(&self, store: &mut impl UsageStore) -> TbResult<Usage> {
-        self.usage.read(store).await
+    pub(crate) fn usage(&self) -> UsageId {
+        self.usage
     }
 }
 

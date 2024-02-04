@@ -9,6 +9,7 @@ import {
   type User,
   Usage,
 } from "./types";
+import { Service } from "../Service/service";
 
 export { type Map, filterValues, by } from "./mapable";
 
@@ -110,6 +111,7 @@ type Summary = {
   attachments: Attachment[];
   activities: Activity[];
   usages: Usage[];
+  services: Service[];
 };
 
 export function setSummary(data: Summary) {
@@ -117,6 +119,7 @@ export function setSummary(data: Summary) {
   attachments.setMap(data.attachments);
   activities.setMap(data.activities);
   usages.setMap(data.usages);
+  services.setMap(data.services);
 }
 
 export function updateSummary(data: Summary) {
@@ -124,6 +127,7 @@ export function updateSummary(data: Summary) {
   attachments.updateMap(data.attachments);
   activities.updateMap(data.activities);
   usages.updateMap(data.usages);
+  services.updateMap(data.services);
 }
 
 export let types: { [key: number]: Type };
@@ -139,6 +143,7 @@ export const attachments = mapable(
   (a) => a.isEmpty(),
 );
 export const usages = mapable("id", (u) => new Usage(u));
+export const services = mapable("id", (s) => new Service(s));
 
 export const state = writable({ show_all_spares: false });
 export const message = writable({
