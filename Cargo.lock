@@ -2079,7 +2079,7 @@ dependencies = [
 
 [[package]]
 name = "tb_axum"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-session",
@@ -2108,7 +2108,7 @@ dependencies = [
 
 [[package]]
 name = "tb_diesel"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-session",
@@ -2123,7 +2123,7 @@ dependencies = [
 
 [[package]]
 name = "tb_domain"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-session",
@@ -2169,7 +2169,7 @@ dependencies = [
 
 [[package]]
 name = "tendabike"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "dotenvy",
