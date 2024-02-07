@@ -59,7 +59,7 @@ async fn create(
 ) -> Result<(StatusCode, Json<Summary>), AppError> {
     let mut store = store.get().await?;
     part_id.checkuser(&user, &mut store).await?;
-    let summary = Service::create(part_id, time, None, name, notes, &mut store).await?;
+    let summary = Service::create(part_id, time, name, notes, None, &mut store).await?;
     Ok((StatusCode::CREATED, Json(summary)))
 }
 
@@ -76,7 +76,7 @@ async fn delete_service(
     user: RequestUser,
     State(pool): State<DbPool>,
     Path(id): Path<ServiceId>,
-) -> ApiResult<usize> {
+) -> ApiResult<Summary> {
     let mut store = pool.get().await?;
     Ok(id.delete(&user, &mut store).await.map(Json)?)
 }

@@ -6,7 +6,8 @@ import {
   updateSummary,
   usages,
 } from "../lib/store";
-import { maxDate } from "../lib/types";
+import { type Map } from "../lib/mapable";
+import type { Part, Usage } from "../lib/types";
 
 export class Service {
   id?: string;
@@ -19,6 +20,7 @@ export class Service {
   name: string;
   notes: string;
   usage: string;
+  successor?: string;
 
   constructor(data: any) {
     this.id = data.id;
@@ -28,6 +30,7 @@ export class Service {
     this.name = data.name || "";
     this.notes = data.notes || "";
     this.usage = data.usage;
+    this.successor = data.successor;
   }
 
   static async create(
@@ -53,7 +56,9 @@ export class Service {
   }
 
   async delete() {
-    await myfetch("/service/" + this.id, "DELETE").catch(handleError);
+    await myfetch("/service/" + this.id, "DELETE")
+      .then(updateSummary)
+      .catch(handleError);
     services.deleteItem(this.id);
     usages.deleteItem(this.usage);
   }
@@ -64,9 +69,31 @@ export class Service {
       .catch(handleError);
   }
 
-  fmtTime() {
+  get_successor(s: Map<Service>) {
+    if (!this.successor) return null;
+
+    if (!s[this.successor]) {
+      console.error("Successor of ", this, "does not exist");
+      return null;
+    }
+
+    return s[this.successor];
+  }
+
+  get_use(part: Part, usages: Map<Usage>, services: Map<Service>) {
+    let successor = this.get_successor(services);
+    let next;
+    if (!successor) next = part.usage;
+    else {
+      next = successor.usage;
+    }
+    return usages[next].sub(usages[this.usage]);
+  }
+
+  fmtTime(s: Map<Service>) {
     let res = fmtDate(this.time);
-    if (this.redone < maxDate) res = res + " - " + fmtDate(this.redone);
+    let successor = this.get_successor(s);
+    if (successor) res = res + " - " + fmtDate(successor.time);
     return res;
   }
 }

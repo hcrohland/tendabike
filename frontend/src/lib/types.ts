@@ -48,6 +48,18 @@ export class Usage {
     this.time += a.time || a.duration || 0;
     this.duration += a.duration || a.time || 0;
   }
+
+  sub(rhs: Usage) {
+    return new Usage({
+      id: this.id,
+      count: this.count - rhs.count,
+      climb: this.climb - rhs.climb,
+      descend: this.descend - rhs.descend,
+      distance: this.distance - rhs.distance,
+      time: this.time - rhs.time,
+      duration: this.duration - rhs.duration,
+    });
+  }
 }
 
 export class Part {

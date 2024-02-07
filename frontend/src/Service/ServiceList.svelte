@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button, DropdownItem, Tooltip } from "@sveltestrap/sveltestrap";
-  import { services, filterValues, by } from "../lib/store";
+  import { services, usages, filterValues, by } from "../lib/store";
   import DeleteService from "./DeleteService.svelte";
   import UpdateService from "./UpdateService.svelte";
   import RedoService from "./RedoService.svelte";
@@ -53,8 +53,8 @@
                 {/if}
               </div>
             </td>
-            <td>{service.fmtTime()}</td>
-            <Usage id={service.usage} ref={undefined} />
+            <td>{service.fmtTime($services)}</td>
+            <Usage usage={service.get_use(part, $usages, $services)} />
             <td>
               <Menu>
                 <DropdownItem on:click={() => updateService(service)}>

@@ -4,33 +4,35 @@
   import { Usage } from "./lib/types";
 
   export let id: string | undefined = undefined;
+  export let usage: Usage | undefined = undefined;
   export let ref: string | number | undefined = undefined;
 
-  let usage = new Usage();
-  $: if (id) usage = $usages[id];
+  let myusage = new Usage();
+  $: if (id) myusage = $usages[id];
+  else if (usage) myusage = usage;
 </script>
 
-{#if id}
+{#if !(usage == undefined && id == undefined)}
   <td class="text-end">
     {#if ref}
       <a class="text-reset" use:link href={"/activities/" + ref}>
-        {fmtNumber(usage.count)}
+        {fmtNumber(myusage.count)}
       </a>
     {:else}
-      {fmtNumber(usage.count)}
+      {fmtNumber(myusage.count)}
     {/if}
   </td>
   <td class="text-end">
-    {fmtSeconds(usage.time)}
+    {fmtSeconds(myusage.time)}
   </td>
   <td class="text-end">
-    {fmtNumber(Math.round((usage.distance || 0) / 1000))}
+    {fmtNumber(Math.round((myusage.distance || 0) / 1000))}
   </td>
   <td class="text-end">
-    {fmtNumber(usage.climb)}
+    {fmtNumber(myusage.climb)}
   </td>
   <td class="text-end">
-    {fmtNumber(usage.descend)}
+    {fmtNumber(myusage.descend)}
   </td>
 {:else}
   <th class="text-end" scope="col" title="Number of activities">Count</th>
