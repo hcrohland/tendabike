@@ -6,15 +6,13 @@ import {
   usages,
 } from "../lib/store";
 import { filterValues, mapable, type Map } from "../lib/mapable";
-import type { Part, Usage } from "../lib/types";
+import { Usage, type Part } from "../lib/types";
 
 export class Service {
   id?: string;
   part_id: number;
   /// when it was serviced
   time: Date;
-  /// when there was a new service
-  redone: Date;
   // we do not accept theses values from the client!
   name: string;
   notes: string;
@@ -25,7 +23,6 @@ export class Service {
     this.id = data.id;
     this.part_id = data.part_id;
     this.time = data.time ? new Date(data.time) : new Date();
-    this.redone = data.redone ? new Date(data.redone) : new Date();
     this.name = data.name || "";
     this.notes = data.notes || "";
     this.usage = data.usage;
@@ -71,8 +68,9 @@ export class Service {
   get_successor(s: Map<Service>) {
     if (!this.successor) return null;
 
+    // this might happen when the lists get updated
     if (!s[this.successor]) {
-      console.error("Successor of ", this, "does not exist");
+      // console.error("Successor of ", this, "does not exist");
       return null;
     }
 
@@ -81,11 +79,24 @@ export class Service {
 
   predecessors(services: Map<Service>) {
     let pred = filterValues(services, (s) => s.successor == this.id);
-    let res = new Array();
-    pred.forEach((s) => {
-      res = res.concat(s.predecessors(services));
-    });
-    return pred.concat(res);
+    if (pred.length > 0) {
+      let res = new Array();
+      pred.forEach((s) => {
+        res = res.concat(s.predecessors(services));
+      });
+      return pred.concat(res);
+    } else {
+      // build a service entry for the part when it was new
+      let first = new Service({
+        id: "pred" + this.id,
+        name: "New",
+        notes: "",
+        part_id: this.part_id,
+        successor: this.id,
+      });
+      pred.push(first);
+      return pred;
+    }
   }
 
   get_row(parts: Map<Part>, usages: Map<Usage>, services: Map<Service>) {
@@ -100,10 +111,17 @@ export class Service {
       next = successor.usage;
       time = successor.time;
     }
+    // this.usage is undefined for the period without a service
+    // this period starts at time part.purchase and has an empty usage
+    if (!this.usage) this.time = part.purchase;
+    let usage = this.usage
+      ? usages[next].sub(usages[this.usage])
+      : usages[next];
+
+    // How many days passed
     let days = Math.floor(
       (time.getTime() - this.time.getTime()) / (24 * 60 * 60 * 1000),
     );
-    let usage = usages[next].sub(usages[this.usage]);
     return { service: this, days, usage };
   }
 

@@ -35,17 +35,19 @@
   <td class="text-end">{days}</td>
   <UsageCells {usage} />
   <td>
-    <Menu>
-      <DropdownItem on:click={() => updateService(service)}>
-        Change Service
-      </DropdownItem>
-      <DropdownItem on:click={() => redoService(service)}>
-        Repeat Service
-      </DropdownItem>
-      <DropdownItem on:click={() => deleteService(service)}>
-        Delete Service
-      </DropdownItem>
-    </Menu>
+    {#if !service.id?.includes("pred")}
+      <Menu>
+        <DropdownItem on:click={() => updateService(service)}>
+          Change Service
+        </DropdownItem>
+        <DropdownItem on:click={() => redoService(service)}>
+          Repeat Service
+        </DropdownItem>
+        <DropdownItem on:click={() => deleteService(service)}>
+          Delete Service
+        </DropdownItem>
+      </Menu>
+    {/if}
   </td>
 </tr>
 <UpdateService bind:updateService />
