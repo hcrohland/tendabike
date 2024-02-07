@@ -52,6 +52,7 @@ table! {
         name -> Text,
         notes -> Text,
         usage -> Uuid,
+        successor -> Nullable<Uuid>,
     }
 }
 

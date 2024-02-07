@@ -3,7 +3,6 @@
 
   import {
     activities,
-    filterValues,
     handleError,
     myfetch,
     parts,
@@ -11,6 +10,7 @@
   } from "../lib/store";
   import { Type } from "../lib/types";
   import ActivityList from "../Widgets/ActivityList.svelte";
+  import { filterValues } from "../lib/mapable";
 
   export let type: Type;
 

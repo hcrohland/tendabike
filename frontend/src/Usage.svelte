@@ -3,14 +3,15 @@
   import { usages, fmtSeconds, fmtNumber } from "./lib/store";
   import { Usage } from "./lib/types";
 
+  export let header = false;
   export let id: string | undefined = undefined;
+  export let usage: Usage = new Usage();
   export let ref: string | number | undefined = undefined;
 
-  let usage = new Usage();
-  $: if (id) usage = $usages[id];
+  $: if (id && $usages[id]) usage = $usages[id];
 </script>
 
-{#if id}
+{#if !header}
   <td class="text-end">
     {#if ref}
       <a class="text-reset" use:link href={"/activities/" + ref}>

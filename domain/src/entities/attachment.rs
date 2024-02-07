@@ -161,8 +161,7 @@ impl Attachment {
             .add_details(&part.name, part.what);
 
         // recalculate the service usages and append to usages
-        usages
-            .append(&mut Service::recalculate(part.id, self.attached, self.detached, store).await?);
+        usages.append(&mut Service::recalculate(part.id, self.attached, store).await?);
 
         // Store all usages.
         Usage::update_vec(&usages, store).await?;
@@ -188,8 +187,7 @@ impl Attachment {
         let usage = -att.usage.delete(store).await?;
 
         // recalc service usages
-        let mut usages =
-            Service::recalculate(att.part_id, att.attached, att.detached, store).await?;
+        let mut usages = Service::recalculate(att.part_id, att.attached, store).await?;
 
         // adjust part usage
         usages.push(att.part_id.read(store).await?.usage().read(store).await? + &usage);

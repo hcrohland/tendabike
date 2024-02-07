@@ -2,23 +2,24 @@ import {
   fmtDate,
   handleError,
   myfetch,
-  services,
   updateSummary,
   usages,
 } from "../lib/store";
-import { maxDate } from "../lib/types";
+import { filterValues, mapable, type Map } from "../lib/mapable";
+import { Usage, type Part } from "../lib/types";
 
 export class Service {
   id?: string;
   part_id: number;
   /// when it was serviced
   time: Date;
-  /// when there was a new service
+  // this is not used any more
   redone: Date;
-  // we do not accept theses values from the client!
   name: string;
   notes: string;
+  // we do not accept thos values from the client!
   usage: string;
+  successor?: string;
 
   constructor(data: any) {
     this.id = data.id;
@@ -28,6 +29,7 @@ export class Service {
     this.name = data.name || "";
     this.notes = data.notes || "";
     this.usage = data.usage;
+    this.successor = data.successor;
   }
 
   static async create(
@@ -53,7 +55,9 @@ export class Service {
   }
 
   async delete() {
-    await myfetch("/service/" + this.id, "DELETE").catch(handleError);
+    await myfetch("/service/" + this.id, "DELETE")
+      .then(updateSummary)
+      .catch(handleError);
     services.deleteItem(this.id);
     usages.deleteItem(this.usage);
   }
@@ -64,9 +68,72 @@ export class Service {
       .catch(handleError);
   }
 
-  fmtTime() {
+  get_successor(s: Map<Service>) {
+    if (!this.successor) return null;
+
+    // this might happen when the lists get updated
+    if (!s[this.successor]) {
+      // console.error("Successor of ", this, "does not exist");
+      return null;
+    }
+
+    return s[this.successor];
+  }
+
+  predecessors(services: Map<Service>) {
+    let pred = filterValues(services, (s) => s.successor == this.id);
+    if (pred.length > 0) {
+      let res = new Array();
+      pred.forEach((s) => {
+        res = res.concat(s.predecessors(services));
+      });
+      return pred.concat(res);
+    } else {
+      // build a service entry for the part when it was new
+      let first = new Service({
+        id: "pred" + this.id,
+        name: "New",
+        notes: "",
+        part_id: this.part_id,
+        successor: this.id,
+      });
+      pred.push(first);
+      return pred;
+    }
+  }
+
+  get_row(parts: Map<Part>, usages: Map<Usage>, services: Map<Service>) {
+    let part = parts[this.part_id];
+    let successor = this.get_successor(services);
+    let next;
+    let time: Date;
+    if (!successor) {
+      next = part.usage;
+      time = new Date();
+    } else {
+      next = successor.usage;
+      time = successor.time;
+    }
+    // this.usage is undefined for the period without a service
+    // this period starts at time part.purchase and has an empty usage
+    if (!this.usage) this.time = part.purchase;
+    let usage = this.usage
+      ? usages[next].sub(usages[this.usage])
+      : usages[next];
+
+    // How many days passed
+    let days = Math.floor(
+      (time.getTime() - this.time.getTime()) / (24 * 60 * 60 * 1000),
+    );
+    return { service: this, days, usage };
+  }
+
+  fmtTime(s: Map<Service>) {
     let res = fmtDate(this.time);
-    if (this.redone < maxDate) res = res + " - " + fmtDate(this.redone);
+    let successor = this.get_successor(s);
+    if (successor) res = res + " - " + fmtDate(successor.time);
     return res;
   }
 }
+
+export const services = mapable("id", (s) => new Service(s));

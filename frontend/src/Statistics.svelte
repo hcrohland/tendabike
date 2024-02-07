@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { activities, parts, by, filterValues, category } from "./lib/store";
+  import { activities, parts, category } from "./lib/store";
   import {
     Row,
     Col,
@@ -11,6 +11,7 @@
   import { Usage } from "./lib/types";
   import Plotly from "./Widgets/Plotly.svelte";
   import Switch from "./Widgets/Switch.svelte";
+  import { by } from "./lib/mapable";
 
   class Day extends Usage {
     start: Date;

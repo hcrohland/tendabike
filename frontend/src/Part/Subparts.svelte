@@ -2,7 +2,8 @@
   import { Attachment, Type, Part } from "../lib/types";
 
   import { Table } from "@sveltestrap/sveltestrap";
-  import { attachments, types, filterValues, by } from "../lib/store";
+  import { filterValues, by } from "../lib/mapable";
+  import { attachments, types } from "../lib/store";
   import SubType from "./SubType.svelte";
   import Wizard from "./Wizard.svelte";
 

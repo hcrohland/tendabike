@@ -24,11 +24,31 @@ impl ServiceId {
         ServiceStore::get(store, self).await
     }
 
-    pub async fn delete(self, user: &dyn Person, store: &mut impl Store) -> TbResult<usize> {
+    pub async fn delete(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
         let service = self.get(store).await?;
         service.part_id.checkuser(user, store).await?;
+
+        // find predecessors
+        let services = store
+            .services_by_part(service.part_id)
+            .await?
+            .into_iter()
+            .filter(|s| s.successor == Some(service.id));
+
+        // set successors to none
+        let mut res = Vec::new();
+        for mut s in services {
+            s.successor = None;
+            res.push(ServiceStore::update(store, s).await?);
+        }
+
+        // delete service
         service.usage.delete(store).await?;
-        ServiceStore::delete(store, self).await
+        ServiceStore::delete(store, self).await?;
+        Ok(Summary {
+            services: res,
+            ..Default::default()
+        })
     }
 }
 
@@ -48,6 +68,7 @@ impl ServiceId {
     Insertable,
     AsChangeset,
 )]
+#[diesel(treat_none_as_null = true)]
 pub struct Service {
     pub id: ServiceId,
     /// the part serviced
@@ -61,26 +82,30 @@ pub struct Service {
     // we do not accept theses values from the client!
     name: String,
     notes: String,
+    // we do not accept theses values from the client!
     usage: UsageId,
+    // the predecessor Service
+    successor: Option<ServiceId>,
 }
 
 impl Service {
     pub async fn create(
         part_id: PartId,
         time: OffsetDateTime,
-        redone: Option<OffsetDateTime>,
         name: String,
         notes: String,
+        successor: Option<ServiceId>,
         store: &mut impl Store,
     ) -> TbResult<Summary> {
         let service = Service {
             id: ServiceId::new(),
             part_id,
             time,
-            redone: redone.unwrap_or(MAX_TIME),
+            redone: MAX_TIME,
             name,
             notes,
             usage: UsageId::new(),
+            successor,
         };
         let usage = service.calculate_usage(store).await?.update(store).await?;
         let service = ServiceStore::create(store, &service).await?;
@@ -93,9 +118,9 @@ impl Service {
 
     async fn calculate_usage(&self, store: &mut impl Store) -> TbResult<Usage> {
         Ok(if self.part_id.is_main(store).await? {
-            Activity::find(self.part_id, self.time, self.redone, store).await?
+            Activity::find(self.part_id, MIN_TIME, self.time, store).await?
         } else {
-            Attachment::activities_by_part(self.part_id, self.time, self.redone, store).await?
+            Attachment::activities_by_part(self.part_id, MIN_TIME, self.time, store).await?
         }
         .into_iter()
         .fold(Usage::new(self.usage), |usage, act| usage + &act.usage()))
@@ -107,13 +132,22 @@ impl Service {
         } = self;
         let mut old = id.get(store).await?;
         old.part_id.checkuser(user, store).await?;
-        Ok(if self.time < old.time {
-            Service::create(old.part_id, time, Some(old.time), old.name, notes, store).await?
+        if self.time < old.time {
+            Service::create(
+                old.part_id,
+                time,
+                old.name.clone(),
+                notes,
+                Some(old.id),
+                store,
+            )
+            .await
         } else {
-            old.redone = time;
-            Service::create(old.part_id, time, None, old.name.clone(), notes, store).await?
-                + old.update_unchecked(store).await?
-        })
+            let res =
+                Service::create(old.part_id, time, old.name.clone(), notes, None, store).await?;
+            old.successor = Some(res.services[0].id);
+            Ok(res + old.update_unchecked(store).await?)
+        }
     }
 
     async fn update_unchecked(self, store: &mut impl Store) -> TbResult<Summary> {
@@ -142,15 +176,14 @@ impl Service {
             .services_by_part(part)
             .await?
             .into_iter()
-            .filter(|s: &Service| s.time <= time && s.redone > time)
+            .filter(|s: &Service| s.time > time)
             .map(|s| s.usage)
             .collect())
     }
 
     pub(crate) async fn recalculate(
         part: PartId,
-        start: OffsetDateTime,
-        end: OffsetDateTime,
+        attach: OffsetDateTime,
         store: &mut impl Store,
     ) -> TbResult<Vec<Usage>> {
         let mut res = Vec::new();
@@ -158,7 +191,7 @@ impl Service {
             .services_by_part(part)
             .await?
             .into_iter()
-            .filter(|s: &Service| s.time <= end && s.redone > start);
+            .filter(|s: &Service| attach <= s.time);
         for service in services {
             res.push(service.calculate_usage(store).await?);
         }

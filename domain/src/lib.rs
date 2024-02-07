@@ -40,3 +40,4 @@ mod traits;
 pub use traits::*;
 
 const MAX_TIME: time::OffsetDateTime = time::macros::datetime!(9100-01-01 0:00 UTC);
+const MIN_TIME: time::OffsetDateTime = time::macros::datetime!(0000-01-01 0:00 UTC);

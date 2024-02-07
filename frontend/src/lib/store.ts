@@ -9,9 +9,7 @@ import {
   type User,
   Usage,
 } from "./types";
-import { Service } from "../Service/service";
-
-export { type Map, filterValues, by } from "./mapable";
+import { Service, services } from "../Service/service";
 
 export function fmtDate(date: Date | undefined) {
   return date ? date.toLocaleDateString(navigator.language) : "never";
@@ -143,7 +141,6 @@ export const attachments = mapable(
   (a) => a.isEmpty(),
 );
 export const usages = mapable("id", (u) => new Usage(u));
-export const services = mapable("id", (s) => new Service(s));
 
 export const state = writable({ show_all_spares: false });
 export const message = writable({
