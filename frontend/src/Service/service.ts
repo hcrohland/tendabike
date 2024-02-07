@@ -6,7 +6,7 @@ import {
   updateSummary,
   usages,
 } from "../lib/store";
-import { type Map } from "../lib/mapable";
+import { filterValues, type Map } from "../lib/mapable";
 import type { Part, Usage } from "../lib/types";
 
 export class Service {
@@ -80,14 +80,32 @@ export class Service {
     return s[this.successor];
   }
 
-  get_use(part: Part, usages: Map<Usage>, services: Map<Service>) {
+  predecessors(services: Map<Service>) {
+    let pred = filterValues(services, (s) => s.successor == this.id);
+    let res = new Array();
+    pred.forEach((s) => {
+      res = res.concat(s.predecessors(services));
+    });
+    return pred.concat(res);
+  }
+
+  get_row(parts: Map<Part>, usages: Map<Usage>, services: Map<Service>) {
+    let part = parts[this.part_id];
     let successor = this.get_successor(services);
     let next;
-    if (!successor) next = part.usage;
-    else {
+    let time: Date;
+    if (!successor) {
+      next = part.usage;
+      time = new Date();
+    } else {
       next = successor.usage;
+      time = successor.time;
     }
-    return usages[next].sub(usages[this.usage]);
+    let days = Math.floor(
+      (time.getTime() - this.time.getTime()) / (24 * 60 * 60 * 1000),
+    );
+    let usage = usages[next].sub(usages[this.usage]);
+    return { service: this, days, usage };
   }
 
   fmtTime(s: Map<Service>) {
