@@ -13,9 +13,11 @@ export class Service {
   part_id: number;
   /// when it was serviced
   time: Date;
-  // we do not accept theses values from the client!
+  // this is not used any more
+  redone: Date;
   name: string;
   notes: string;
+  // we do not accept thos values from the client!
   usage: string;
   successor?: string;
 
@@ -23,6 +25,7 @@ export class Service {
     this.id = data.id;
     this.part_id = data.part_id;
     this.time = data.time ? new Date(data.time) : new Date();
+    this.redone = data.redone ? new Date(data.redone) : new Date();
     this.name = data.name || "";
     this.notes = data.notes || "";
     this.usage = data.usage;
