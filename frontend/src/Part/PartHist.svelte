@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { filterValues, parts, attachments, types, by } from "../lib/store";
+  import { filterValues, by } from "../lib/mapable";
+  import { parts, attachments, types } from "../lib/store";
   import Usage from "../Usage.svelte";
   import { link } from "svelte-spa-router";
 

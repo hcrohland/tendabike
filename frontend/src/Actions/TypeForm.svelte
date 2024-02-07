@@ -9,7 +9,8 @@
     Label,
   } from "@sveltestrap/sveltestrap";
   import { Type, Part } from "../lib/types";
-  import { types, category, filterValues } from "../lib/store";
+  import { types, category } from "../lib/store";
+  import { filterValues } from "../lib/mapable";
 
   export let gear: Part;
 

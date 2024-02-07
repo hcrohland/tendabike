@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { by, parts, fmtNumber, fmtSeconds } from "../lib/store";
+  import { parts, fmtNumber, fmtSeconds } from "../lib/store";
   import SvelteTable from "../Widgets/SvelteTable.svelte";
   import { Activity, Usage } from "../lib/types";
   import RangeSlider from "svelte-range-slider-pips";
   import { Alert } from "@sveltestrap/sveltestrap";
+  import { by } from "../lib/mapable";
 
   export let acts: Activity[];
 

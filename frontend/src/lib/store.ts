@@ -11,8 +11,6 @@ import {
 } from "./types";
 import { Service, services } from "../Service/service";
 
-export { type Map, filterValues, by } from "./mapable";
-
 export function fmtDate(date: Date | undefined) {
   return date ? date.toLocaleDateString(navigator.language) : "never";
 }

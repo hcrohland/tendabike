@@ -1,7 +1,5 @@
+import { type Map, by, filterValues } from "./mapable";
 import {
-  type Map,
-  by,
-  filterValues,
   fmtDate,
   handleError,
   myfetch,

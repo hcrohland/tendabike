@@ -1,7 +1,8 @@
 <script lang="ts">
   import { Col, Row } from "@sveltestrap/sveltestrap";
   import MainCard from "./Part/MainCard.svelte";
-  import { filterValues, by, parts, category, activities } from "./lib/store";
+  import { filterValues, by } from "./lib/mapable";
+  import { parts, category, activities } from "./lib/store";
   import ShowAll from "./Widgets/ShowHist.svelte";
   import SetDefault from "./Actions/SetDefault.svelte";
 

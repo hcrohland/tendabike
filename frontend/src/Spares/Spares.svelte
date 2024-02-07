@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { filterValues, types, category } from "../lib/store";
+  import { filterValues } from "../lib/mapable";
+  import { types, category } from "../lib/store";
   import Usage from "../Usage.svelte";
   import SpareType from "./SpareType.svelte";
   import { Table } from "@sveltestrap/sveltestrap";

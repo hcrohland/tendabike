@@ -7,8 +7,9 @@
     Button,
   } from "@sveltestrap/sveltestrap";
   import { AttEvent, Attachment, Part, Type } from "../lib/types";
-  import { type Map, filterValues, types } from "../lib/store";
+  import { type Map, filterValues } from "../lib/mapable";
   import Switch from "../Widgets/Switch.svelte";
+  import { types } from "../lib/store";
 
   export let gear: Part;
   export let attachees: Attachment[];
