@@ -1,7 +1,7 @@
 <script lang="ts">
   import { filterValues, by } from "../lib/mapable";
   import { parts, attachments, types } from "../lib/store";
-  import Usage from "../Usage.svelte";
+  import Usage from "../Usage/Usage.svelte";
   import { link } from "svelte-spa-router";
 
   export let id: number;

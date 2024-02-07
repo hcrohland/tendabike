@@ -6,7 +6,7 @@
     Table,
   } from "@sveltestrap/sveltestrap";
   import { fmtDate } from "../lib/store";
-  import { Activity } from "../lib/types";
+  import type { Activity } from "../Activity/activity";
 
   export let activities: Activity[];
   export let isOpen = true;

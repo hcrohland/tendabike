@@ -1,7 +1,7 @@
 <script lang="ts">
   import { DropdownItem } from "@sveltestrap/sveltestrap";
   import { parts, usages } from "../lib/store";
-  import Usage from "../Usage.svelte";
+  import Usage from "../Usage/Usage.svelte";
   import ReplacePart from "../Actions/ReplacePart.svelte";
   import AttachPart from "../Actions/AttachPart.svelte";
   import { Part, Attachment, Type } from "../lib/types";

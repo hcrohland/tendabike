@@ -31,7 +31,7 @@
   import Admin from "./Admin/Admin.svelte";
   import { getTypes, initData } from "./lib/store";
   import Statistics from "./Statistics.svelte";
-  import Activities from "./Activities/Activities.svelte";
+  import Activities from "./Activity/Activities.svelte";
 
   const routes = {
     "/about": About,

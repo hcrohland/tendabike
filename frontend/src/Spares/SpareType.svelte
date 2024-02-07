@@ -1,7 +1,7 @@
 <script lang="ts">
   import { types, parts, fmtDate, attachments } from "../lib/store";
   import { Button, DropdownItem } from "@sveltestrap/sveltestrap";
-  import Usage from "../Usage.svelte";
+  import Usage from "../Usage/Usage.svelte";
   import AttachPart from "../Actions/AttachPart.svelte";
   import NewPart from "../Actions/NewPart.svelte";
   import { Attachment, Part, Type } from "../lib/types";

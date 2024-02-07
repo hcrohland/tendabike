@@ -6,7 +6,8 @@ import {
   usages,
 } from "../lib/store";
 import { filterValues, mapable, type Map } from "../lib/mapable";
-import { Usage, type Part } from "../lib/types";
+import { type Part } from "../lib/types";
+import type { Usage } from "../Usage/usage";
 
 export class Service {
   id?: string;

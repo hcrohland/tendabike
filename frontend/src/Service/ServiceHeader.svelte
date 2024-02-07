@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Usage from "../Usage.svelte";
+  import Usage from "../Usage/Usage.svelte";
 </script>
 
 <tr>

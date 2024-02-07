@@ -3,10 +3,10 @@
   import DeleteService from "./DeleteService.svelte";
   import UpdateService from "./UpdateService.svelte";
   import RedoService from "./RedoService.svelte";
-  import UsageCells from "../Usage.svelte";
+  import UsageCells from "../Usage/Usage.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { Service, services } from "./service";
-  import { Usage } from "../lib/types";
+  import type { Usage } from "../Usage/usage";
 
   export let service: Service;
   export let days: number;

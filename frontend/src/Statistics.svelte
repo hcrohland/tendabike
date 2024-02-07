@@ -7,11 +7,12 @@
     InputGroup,
     InputGroupText,
   } from "@sveltestrap/sveltestrap";
-  import { Part, Activity } from "./lib/types";
-  import { Usage } from "./lib/types";
+  import { Part } from "./lib/types";
   import Plotly from "./Widgets/Plotly.svelte";
   import Switch from "./Widgets/Switch.svelte";
   import { by } from "./lib/mapable";
+  import { Activity } from "./Activity/activity";
+  import { Usage } from "./Usage/usage";
 
   class Day extends Usage {
     start: Date;

@@ -1,3 +1,4 @@
+import type { Activity } from "../Activity/activity";
 import { type Map, by, filterValues } from "./mapable";
 import {
   fmtDate,
@@ -8,57 +9,6 @@ import {
   updateSummary,
 } from "./store";
 export const maxDate = new Date("2999-12-31");
-
-export class Usage {
-  id: string;
-  count: number;
-  climb: number;
-  descend: number;
-  distance: number;
-  time: number;
-  duration: number;
-
-  constructor(data?: any) {
-    if (data) {
-      this.id = data.id;
-      this.count = data.count;
-      this.climb = data.climb;
-      this.descend = data.descend;
-      this.distance = data.distance;
-      this.time = data.time;
-      this.duration = data.duration;
-    } else {
-      this.id = "";
-      this.count = 0;
-      this.climb = 0;
-      this.descend = 0;
-      this.distance = 0;
-      this.time = 0;
-      this.duration = 0;
-    }
-  }
-
-  add(a: Usage | Activity) {
-    this.count += a.count || 1;
-    this.climb += a.climb || 0;
-    this.descend += a.descend || a.climb || 0;
-    this.distance += a.distance || 0;
-    this.time += a.time || a.duration || 0;
-    this.duration += a.duration || a.time || 0;
-  }
-
-  sub(rhs: Usage) {
-    return new Usage({
-      id: this.id,
-      count: this.count - rhs.count,
-      climb: this.climb - rhs.climb,
-      descend: this.descend - rhs.descend,
-      distance: this.distance - rhs.distance,
-      time: this.time - rhs.time,
-      duration: this.duration - rhs.duration,
-    });
-  }
-}
 
 export class Part {
   id?: number;
@@ -207,53 +157,6 @@ export type User = {
   name: string;
   is_admin: boolean;
 };
-
-export class Activity {
-  id: number;
-  /// The athlete
-  user_id: number;
-  /// The activity type
-  what: number;
-  /// This name of the activity.
-  name: string;
-  /// Start time
-  start: Date;
-  /// Which gear did she use?
-  gear?: number;
-  count: number;
-  climb?: number;
-  descend?: number;
-  distance?: number;
-  time?: number;
-  duration?: number;
-
-  constructor(data: any) {
-    this.id = data.id;
-    this.user_id = data.user_id;
-    this.what = data.what;
-    this.name = data.name;
-    this.start = new Date(data.start);
-    this.gear = data.gear;
-    this.climb = data.climb;
-    this.descend = data.descend;
-    this.distance = data.distance;
-    this.time = data.time;
-    this.duration = data.duration;
-    this.count = 1;
-  }
-
-  gearLink(parts: Map<Part>) {
-    if (this.gear && parts[this.gear]) {
-      return parts[this.gear].partLink();
-    } else {
-      return "-";
-    }
-  }
-
-  gearName(parts: Map<Part>) {
-    return this.gear && parts[this.gear] ? parts[this.gear].name : "-";
-  }
-}
 
 export type ActType = {
   id: number;

@@ -21,7 +21,7 @@ use crate::*;
 #[repr(i64)]
 pub enum ServiceAlert {
     NoService,
-    Months(i32),
+    Days(i32),
     Time(i32),
     Distance(i32),
     Climb(i32),
@@ -114,10 +114,10 @@ pub struct ServicePlan {
     /// where it is attached
     hook: Option<PartTypeId>,
     name: String,
-    /// the Usage to track
+    /// the Usage of the last service
     usage: Option<UsageId>,
     /// Time until service
-    pub months: Option<i32>,
+    pub days: Option<i32>,
     /// Usage time
     pub time: Option<i32>,
     /// Usage distance
