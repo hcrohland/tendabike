@@ -2,11 +2,10 @@ import {
   fmtDate,
   handleError,
   myfetch,
-  services,
   updateSummary,
   usages,
 } from "../lib/store";
-import { filterValues, type Map } from "../lib/mapable";
+import { filterValues, mapable, type Map } from "../lib/mapable";
 import type { Part, Usage } from "../lib/types";
 
 export class Service {
@@ -115,3 +114,5 @@ export class Service {
     return res;
   }
 }
+
+export const services = mapable("id", (s) => new Service(s));

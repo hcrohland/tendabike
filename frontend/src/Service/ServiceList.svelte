@@ -1,10 +1,11 @@
 <script lang="ts">
   import { Button } from "@sveltestrap/sveltestrap";
-  import { services, filterValues, by } from "../lib/store";
+  import { filterValues, by } from "../lib/mapable";
   import NewService from "./NewService.svelte";
   import { Part } from "../lib/types";
   import ServiceHist from "./ServiceHist.svelte";
   import ServiceHeader from "./ServiceHeader.svelte";
+  import { services } from "./service";
 
   export let part: Part;
 

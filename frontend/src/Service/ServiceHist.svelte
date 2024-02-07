@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { services, usages, parts } from "../lib/store";
-  import { Service } from "./service";
+  import { usages, parts } from "../lib/store";
+  import { services, Service } from "./service";
   import ShowHist from "../Widgets/ShowHist.svelte";
   import ServiceRow from "./ServiceRow.svelte";
 

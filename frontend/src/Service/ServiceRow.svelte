@@ -1,12 +1,11 @@
 <script lang="ts">
   import { DropdownItem, Tooltip } from "@sveltestrap/sveltestrap";
-  import { services } from "../lib/store";
   import DeleteService from "./DeleteService.svelte";
   import UpdateService from "./UpdateService.svelte";
   import RedoService from "./RedoService.svelte";
   import UsageCells from "../Usage.svelte";
   import Menu from "../Widgets/Menu.svelte";
-  import { Service } from "./service";
+  import { Service, services } from "./service";
   import { Usage } from "../lib/types";
 
   export let service: Service;
