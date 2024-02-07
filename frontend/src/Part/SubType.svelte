@@ -24,7 +24,7 @@
     <th scope="col">Attached parts</th>
     <th scope="col">Name</th>
     <th scope="col">Attached</th>
-    <Usage />
+    <Usage header />
     <th></th>
   </tr>
 {:else}

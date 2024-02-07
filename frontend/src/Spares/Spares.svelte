@@ -22,7 +22,7 @@
       <tr>
         <th scope="col">Part</th>
         <th scope="col">Name</th>
-        <Usage />
+        <Usage header />
         {#if attachee > 0}
           <th colspan="2"> Attached to </th>
         {/if}

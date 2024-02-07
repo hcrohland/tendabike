@@ -3,36 +3,35 @@
   import { usages, fmtSeconds, fmtNumber } from "./lib/store";
   import { Usage } from "./lib/types";
 
+  export let header = false;
   export let id: string | undefined = undefined;
-  export let usage: Usage | undefined = undefined;
+  export let usage: Usage = new Usage();
   export let ref: string | number | undefined = undefined;
 
-  let myusage = new Usage();
-  $: if (id) myusage = $usages[id];
-  else if (usage) myusage = usage;
+  $: if (id && $usages[id]) usage = $usages[id];
 </script>
 
-{#if !(usage == undefined && id == undefined)}
+{#if !header}
   <td class="text-end">
     {#if ref}
       <a class="text-reset" use:link href={"/activities/" + ref}>
-        {fmtNumber(myusage.count)}
+        {fmtNumber(usage.count)}
       </a>
     {:else}
-      {fmtNumber(myusage.count)}
+      {fmtNumber(usage.count)}
     {/if}
   </td>
   <td class="text-end">
-    {fmtSeconds(myusage.time)}
+    {fmtSeconds(usage.time)}
   </td>
   <td class="text-end">
-    {fmtNumber(Math.round((myusage.distance || 0) / 1000))}
+    {fmtNumber(Math.round((usage.distance || 0) / 1000))}
   </td>
   <td class="text-end">
-    {fmtNumber(myusage.climb)}
+    {fmtNumber(usage.climb)}
   </td>
   <td class="text-end">
-    {fmtNumber(myusage.descend)}
+    {fmtNumber(usage.descend)}
   </td>
 {:else}
   <th class="text-end" scope="col" title="Number of activities">Count</th>

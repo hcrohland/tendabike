@@ -47,8 +47,8 @@
     {/if}
   </ButtonGroup>
 </GearCard>
-
-<ServiceList {part} />
+<br />
+<ServiceList {part} /><br />
 <PartHist id={params.id} />
 <Subparts gear={part} {hook} />
 
