@@ -6,7 +6,8 @@
     Container,
     Button,
   } from "@sveltestrap/sveltestrap";
-  import { AttEvent, Attachment, Type } from "../lib/types";
+  import { Type } from "../lib/types";
+  import { AttEvent, Attachment } from "../Attachment/attachment";
   import { type Map, filterValues } from "../lib/mapable";
   import Switch from "../Widgets/Switch.svelte";
   import { types } from "../lib/store";

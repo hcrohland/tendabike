@@ -4,11 +4,12 @@
   import Usage from "../Usage/Usage.svelte";
   import ReplacePart from "../Attachment/ReplacePart.svelte";
   import AttachPart from "../Attachment/AttachPart.svelte";
-  import { Attachment, Type } from "../lib/types";
+  import { Type } from "../lib/types";
   import Menu from "../Widgets/Menu.svelte";
   import ShowAll from "../Widgets/ShowHist.svelte";
   import { link } from "svelte-spa-router";
   import { parts, Part } from "../Part/part";
+  import type { Attachment } from "../Attachment/attachment";
 
   export let attachments: Attachment[] = [];
   export let level: number = 0;

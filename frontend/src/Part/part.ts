@@ -1,6 +1,6 @@
 import { type Map, by, filterValues, mapable } from "../lib/mapable";
 import { handleError, myfetch, types } from "../lib/store";
-import { Attachment } from "../lib/types";
+import { Attachment } from "../Attachment/attachment";
 
 export class Part {
   id?: number;

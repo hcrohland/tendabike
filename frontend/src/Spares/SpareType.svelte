@@ -1,15 +1,16 @@
 <script lang="ts">
-  import { types, fmtDate, attachments } from "../lib/store";
+  import { types, fmtDate } from "../lib/store";
   import { Button, DropdownItem } from "@sveltestrap/sveltestrap";
   import Usage from "../Usage/Usage.svelte";
   import AttachPart from "../Attachment/AttachPart.svelte";
   import NewPart from "../Part/NewPart.svelte";
-  import { Attachment, Type } from "../lib/types";
+  import { Type } from "../lib/types";
   import Menu from "../Widgets/Menu.svelte";
   import ShowAll from "../Widgets/ShowHist.svelte";
   import { link } from "svelte-spa-router";
   import { type Map, filterValues } from "../lib/mapable";
   import { Part, parts } from "../Part/part";
+  import { attachments, Attachment } from "../Attachment/attachment";
 
   export let type: Type;
   export let date = new Date();
