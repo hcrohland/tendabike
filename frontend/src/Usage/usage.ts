@@ -1,4 +1,5 @@
 import { Activity } from "../Activity/activity";
+import { mapable } from "../lib/mapable";
 
 export class Usage {
   id: string;
@@ -50,3 +51,5 @@ export class Usage {
     });
   }
 }
+
+export const usages = mapable("id", (u) => new Usage(u));

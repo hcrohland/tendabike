@@ -1,13 +1,7 @@
-import {
-  fmtDate,
-  handleError,
-  myfetch,
-  updateSummary,
-  usages,
-} from "../lib/store";
+import { fmtDate, handleError, myfetch, updateSummary } from "../lib/store";
 import { filterValues, mapable, type Map } from "../lib/mapable";
 import { Part } from "../Part/part";
-import { Usage } from "../Usage/usage";
+import { usages, Usage } from "../Usage/usage";
 
 export class Service {
   id?: string;

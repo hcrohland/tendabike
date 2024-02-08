@@ -1,6 +1,6 @@
 <script lang="ts">
   import { DropdownItem } from "@sveltestrap/sveltestrap";
-  import { usages } from "../lib/store";
+  import { usages } from "../Usage/usage";
   import Usage from "../Usage/Usage.svelte";
   import ReplacePart from "../Attachment/ReplacePart.svelte";
   import AttachPart from "../Attachment/AttachPart.svelte";

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { link } from "svelte-spa-router";
-  import { usages, fmtSeconds, fmtNumber } from "../lib/store";
-  import { Usage } from "./usage";
+  import { fmtSeconds, fmtNumber } from "../lib/store";
+  import { usages, Usage } from "./usage";
 
   export let header = false;
   export let id: string | undefined = undefined;

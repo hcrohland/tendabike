@@ -1,7 +1,6 @@
 import { Activity } from "../Activity/activity";
 import { Part } from "../Part/part";
 import { type Map, by, filterValues } from "./mapable";
-import { fmtDate, handleError, myfetch, updateSummary } from "./store";
 export const maxDate = new Date("2999-12-31");
 
 export class Type {

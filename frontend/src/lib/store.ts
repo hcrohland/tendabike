@@ -3,7 +3,7 @@ import { mapable, mapObject } from "./mapable";
 import { Type, type ActType, type User } from "./types";
 import { Service, services } from "../Service/service";
 import { activities, Activity } from "../Activity/activity";
-import { Usage } from "../Usage/usage";
+import { Usage, usages } from "../Usage/usage";
 import { parts, type Part } from "../Part/part";
 import { Attachment, attachments } from "../Attachment/attachment";
 
@@ -128,8 +128,6 @@ export let types: { [key: number]: Type };
 
 export let category: Writable<Type>;
 export const user = writable<User | undefined>(undefined);
-
-export const usages = mapable("id", (u) => new Usage(u));
 
 export const state = writable({ show_all_spares: false });
 export const message = writable({
