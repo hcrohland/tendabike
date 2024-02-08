@@ -1,13 +1,14 @@
 <script lang="ts">
   import { DropdownItem } from "@sveltestrap/sveltestrap";
-  import { parts, usages } from "../lib/store";
+  import { usages } from "../lib/store";
   import Usage from "../Usage/Usage.svelte";
   import ReplacePart from "../Actions/ReplacePart.svelte";
   import AttachPart from "../Actions/AttachPart.svelte";
-  import { Part, Attachment, Type } from "../lib/types";
+  import { Attachment, Type } from "../lib/types";
   import Menu from "../Widgets/Menu.svelte";
   import ShowAll from "../Widgets/ShowHist.svelte";
   import { link } from "svelte-spa-router";
+  import { parts, Part } from "../Part/part";
 
   export let attachments: Attachment[] = [];
   export let level: number = 0;

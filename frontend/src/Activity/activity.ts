@@ -1,5 +1,5 @@
-import { Part } from "../lib/types";
-import { type Map } from "../lib/mapable";
+import { Part } from "../Part/part";
+import { mapable, type Map } from "../lib/mapable";
 
 export class Activity {
   id: number;
@@ -47,3 +47,5 @@ export class Activity {
     return this.gear && parts[this.gear] ? parts[this.gear].name : "-";
   }
 }
+
+export const activities = mapable("id", (a) => new Activity(a));

@@ -10,9 +10,10 @@
     InputGroupText,
     Label,
   } from "@sveltestrap/sveltestrap";
-  import { attachments, checkStatus, handleError, parts } from "../lib/store";
+  import { attachments, checkStatus, handleError } from "../lib/store";
   import TZPicker from "../Widgets/TZPicker.svelte";
   import ModalFooter from "./ModalFooter.svelte";
+  import { parts } from "../Part/part";
 
   let timezone: string | undefined;
 

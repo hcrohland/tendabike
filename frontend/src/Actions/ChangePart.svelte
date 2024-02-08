@@ -9,11 +9,12 @@
   } from "@sveltestrap/sveltestrap";
   import { handleError, types, attachments } from "../lib/store";
   import ModalFooter from "./ModalFooter.svelte";
-  import { AttEvent, Part, Attachment, maxDate } from "../lib/types";
+  import { AttEvent, Attachment, maxDate } from "../lib/types";
   import NewForm from "./NewForm.svelte";
   import Dispose from "../Widgets/Dispose.svelte";
   import DateTime from "../Widgets/DateTime.svelte";
   import Switch from "../Widgets/Switch.svelte";
+  import { Part } from "../Part/part";
 
   let atts: Attachment[];
   let last: Attachment;

@@ -1,16 +1,12 @@
 <script lang="ts">
   import { Button, Col, InputGroup, Row } from "@sveltestrap/sveltestrap";
 
-  import {
-    activities,
-    handleError,
-    myfetch,
-    parts,
-    updateSummary,
-  } from "../lib/store";
+  import { handleError, myfetch, updateSummary } from "../lib/store";
   import { Type } from "../lib/types";
-  import ActivityList from "../Widgets/ActivityList.svelte";
+  import ActivityList from "../Activity/ActivityList.svelte";
   import { filterValues } from "../lib/mapable";
+  import { activities } from "../Activity/activity";
+  import { parts } from "../Part/part";
 
   export let type: Type;
 
@@ -48,7 +44,7 @@
       </InputGroup>
     </Row>
   </Col>
-  <ActivityList activities={unassigned} bind:isOpen
-    >Unassigned Activities</ActivityList
-  >
+  <ActivityList activities={unassigned} bind:isOpen>
+    Unassigned Activities
+  </ActivityList>
 {/if}

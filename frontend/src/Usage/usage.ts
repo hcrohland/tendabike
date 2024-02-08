@@ -1,4 +1,4 @@
-import type { Activity } from "../Activity/activity";
+import { Activity } from "../Activity/activity";
 
 export class Usage {
   id: string;

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { ButtonGroup, Button } from "@sveltestrap/sveltestrap";
-  import { parts } from "../lib/store";
   import InstallPart from "../Actions/InstallPart.svelte";
   import ChangePart from "../Actions/ChangePart.svelte";
   import RecoverPart from "../Actions/RecoverPart.svelte";
@@ -8,9 +7,9 @@
   import Subparts from "./Subparts.svelte";
   import GearCard from "./GearCard.svelte";
   import PartHist from "./PartHist.svelte";
-  import { Part } from "../lib/types";
   import NewService from "../Service/NewService.svelte";
   import ServiceList from "../Service/ServiceList.svelte";
+  import { parts, Part } from "./part";
 
   export let params: { id: number; what: number };
 

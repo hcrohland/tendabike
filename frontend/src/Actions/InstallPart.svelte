@@ -5,12 +5,13 @@
     ModalBody,
     Form,
   } from "@sveltestrap/sveltestrap";
-  import { AttEvent, Part, Type } from "../lib/types";
+  import { AttEvent, Type } from "../lib/types";
   import { user, attachments } from "../lib/store";
   import ModalFooter from "./ModalFooter.svelte";
   import NewForm from "./NewForm.svelte";
   import TypeForm from "./TypeForm.svelte";
   import { filterValues } from "../lib/mapable";
+  import { Part } from "../Part/part";
 
   let part: Part, newpart: Part;
   let gear: Part;

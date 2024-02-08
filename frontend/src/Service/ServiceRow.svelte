@@ -6,7 +6,7 @@
   import UsageCells from "../Usage/Usage.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { Service, services } from "./service";
-  import type { Usage } from "../Usage/usage";
+  import { Usage } from "../Usage/usage";
 
   export let service: Service;
   export let days: number;

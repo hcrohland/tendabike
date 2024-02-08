@@ -8,9 +8,10 @@
     FormGroup,
     Label,
   } from "@sveltestrap/sveltestrap";
-  import { Type, Part } from "../lib/types";
+  import { Type } from "../lib/types";
   import { types, category } from "../lib/store";
   import { filterValues } from "../lib/mapable";
+  import { Part } from "../Part/part";
 
   export let gear: Part;
 

@@ -8,7 +8,8 @@
   import NewForm from "./NewForm.svelte";
   import ModalFooter from "./ModalFooter.svelte";
   import { user } from "../lib/store";
-  import { Type, Part } from "../lib/types";
+  import { Type } from "../lib/types";
+  import { Part } from "../Part/part";
 
   let part: Part, newpart: Part;
   let type: Type;

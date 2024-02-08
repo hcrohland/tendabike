@@ -1,79 +1,8 @@
-import type { Activity } from "../Activity/activity";
+import { Activity } from "../Activity/activity";
+import { Part } from "../Part/part";
 import { type Map, by, filterValues } from "./mapable";
-import {
-  fmtDate,
-  handleError,
-  myfetch,
-  parts,
-  types,
-  updateSummary,
-} from "./store";
+import { fmtDate, handleError, myfetch, updateSummary } from "./store";
 export const maxDate = new Date("2999-12-31");
-
-export class Part {
-  id?: number;
-  owner: number;
-  what: number;
-  name: string;
-  vendor: string;
-  model: string;
-  purchase: Date;
-  last_used: Date;
-  disposed_at?: Date;
-  usage: string;
-
-  constructor(data: any) {
-    this.id = data.id;
-    this.owner = data.owner;
-    this.what = data.what;
-    this.name = data.name || "";
-    this.vendor = data.vendor || "";
-    this.model = data.model || "";
-    this.purchase = new Date(data.purchase);
-    this.last_used = new Date(data.last_used);
-    this.disposed_at = data.disposed_at
-      ? new Date(data.disposed_at)
-      : undefined;
-    this.usage = data.usage;
-  }
-
-  async create() {
-    return await myfetch("/part", "POST", this)
-      .then((data) => {
-        parts.updateMap([data]);
-        return new Part(data);
-      })
-      .catch(handleError);
-  }
-
-  async update() {
-    return await myfetch("/part", "PUT", this)
-      .then((data) => parts.updateMap([data]))
-      .catch(handleError);
-  }
-
-  type() {
-    return types[this.what];
-  }
-
-  attachments(atts: Map<Attachment>) {
-    return filterValues(atts, (a) => a.part_id == this.id).sort(by("attached"));
-  }
-
-  isGear() {
-    return this.type().main == this.what;
-  }
-
-  partLink() {
-    return (
-      '<a href="/#/part/' +
-      this.id +
-      '" style="text-decoration1:none" class="text-reset">' +
-      this.name +
-      "</a>"
-    );
-  }
-}
 
 export class Attachment {
   part_id: number;

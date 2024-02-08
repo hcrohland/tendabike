@@ -1,9 +1,10 @@
 import { writable, type Writable } from "svelte/store";
 import { mapable, mapObject } from "./mapable";
-import { Part, Attachment, Type, type ActType, type User } from "./types";
+import { Attachment, Type, type ActType, type User } from "./types";
 import { Service, services } from "../Service/service";
-import { Activity } from "../Activity/activity";
+import { activities, Activity } from "../Activity/activity";
 import { Usage } from "../Usage/usage";
+import { parts, type Part } from "../Part/part";
 
 export function fmtDate(date: Date | undefined) {
   return date ? date.toLocaleDateString(navigator.language) : "never";
@@ -127,8 +128,6 @@ export let types: { [key: number]: Type };
 export let category: Writable<Type>;
 export const user = writable<User | undefined>(undefined);
 
-export const parts = mapable("id", (p) => new Part(p));
-export const activities = mapable("id", (a) => new Activity(a));
 export const attachments = mapable(
   "idx",
   (a) => new Attachment(a),

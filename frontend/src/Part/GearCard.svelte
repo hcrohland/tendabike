@@ -8,7 +8,7 @@
     Col,
   } from "@sveltestrap/sveltestrap";
   import { types, usages, fmtSeconds, fmtDate, fmtNumber } from "../lib/store";
-  import { Part } from "../lib/types";
+  import { Part } from "../Part/part";
   import { link } from "svelte-spa-router";
   import { Usage } from "../Usage/usage";
 

@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { parts, fmtNumber, fmtSeconds } from "../lib/store";
+  import { fmtNumber, fmtSeconds } from "../lib/store";
   import SvelteTable from "../Widgets/SvelteTable.svelte";
   import RangeSlider from "svelte-range-slider-pips";
   import { Alert } from "@sveltestrap/sveltestrap";
   import { by } from "../lib/mapable";
   import { Activity } from "./activity";
   import { Usage } from "../Usage/usage";
+  import { parts } from "../Part/part";
 
   export let acts: Activity[];
 

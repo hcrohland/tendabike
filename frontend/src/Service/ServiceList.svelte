@@ -2,7 +2,7 @@
   import { Button } from "@sveltestrap/sveltestrap";
   import { filterValues, by } from "../lib/mapable";
   import NewService from "./NewService.svelte";
-  import { Part } from "../lib/types";
+  import { Part } from "../Part/part";
   import ServiceHist from "./ServiceHist.svelte";
   import ServiceHeader from "./ServiceHeader.svelte";
   import { services } from "./service";
