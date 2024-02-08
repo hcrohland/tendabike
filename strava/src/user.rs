@@ -37,20 +37,6 @@ impl StravaId {
         Ok(time)
     }
 
-    /// lock the current user
-    pub async fn lock(&self, store: &mut impl StravaStore) -> TbResult<()> {
-        if store.stravaid_lock(self).await? {
-            Ok(())
-        } else {
-            Err(Error::Conflict(format!("Two sessions for user {}", self)))
-        }
-    }
-
-    /// unlock the current user
-    pub async fn unlock(&self, store: &mut impl StravaStore) -> TbResult<usize> {
-        store.stravaid_unlock(self).await
-    }
-
     /// update the refresh token for the user
     ///
     /// sets a five minute buffer for the access token

@@ -58,10 +58,7 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::{ApiResult, AxumAdmin, DbPool, RequestUser};
 use tb_domain::{Error, Summary, TbResult};
-use tb_strava::{
-    event::{process, InEvent},
-    StravaPerson,
-};
+use tb_strava::event::{process, InEvent};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Hub {
@@ -97,9 +94,7 @@ pub(crate) async fn hooks(
     State(store): State<DbPool>,
 ) -> ApiResult<Summary> {
     let mut store = store.get().await?;
-    user.strava_id().lock(&mut store).await?;
     let res = process(&mut user, &mut store).await;
-    user.strava_id().unlock(&mut store).await?;
     Ok(Json(res?))
 }
 
