@@ -26,7 +26,7 @@
         title =
           title +
           " attached to " +
-          $parts[atts[0].gear].name +
+          ($parts[atts[0].gear] ? $parts[atts[0].gear].name : "unknown part") +
           " since " +
           atts[0].fmtTime();
     }
