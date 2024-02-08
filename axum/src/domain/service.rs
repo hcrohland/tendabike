@@ -30,7 +30,7 @@ use serde_derive::Deserialize;
 use time::OffsetDateTime;
 
 use crate::{appstate::AppState, error::AppError, ApiResult, DbPool, RequestUser};
-use tb_domain::{PartId, Service, ServiceId, Summary};
+use tb_domain::{PartId, Service, ServiceId, ServicePlanId, Summary};
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
@@ -46,6 +46,7 @@ struct NewService {
     time: OffsetDateTime,
     name: String,
     notes: String,
+    plan: Option<ServicePlanId>,
 }
 async fn create(
     user: RequestUser,
@@ -55,11 +56,12 @@ async fn create(
         time,
         name,
         notes,
+        plan,
     }): Json<NewService>,
 ) -> Result<(StatusCode, Json<Summary>), AppError> {
     let mut store = store.get().await?;
     part_id.checkuser(&user, &mut store).await?;
-    let summary = Service::create(part_id, time, name, notes, None, &mut store).await?;
+    let summary = Service::create(part_id, time, name, notes, None, plan, &mut store).await?;
     Ok((StatusCode::CREATED, Json(summary)))
 }
 

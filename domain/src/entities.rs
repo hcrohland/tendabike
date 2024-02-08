@@ -1,9 +1,26 @@
-pub(crate) mod activity;
-pub(crate) mod attachment;
-pub(crate) mod part;
-pub(crate) mod service;
-// pub(crate) mod serviceplan;
-pub(crate) mod summary;
-pub(crate) mod types;
-pub(crate) mod usage;
-pub(crate) mod user;
+mod part;
+pub use part::*;
+
+mod user;
+pub use user::*;
+
+mod activity;
+pub use activity::*;
+
+mod attachment;
+pub use attachment::*;
+
+mod usage;
+pub use usage::*;
+
+mod service;
+pub use service::*;
+
+mod serviceplan;
+pub use serviceplan::*;
+
+mod summary;
+pub use summary::*;
+
+mod types;
+pub use types::*;

@@ -86,6 +86,8 @@ pub struct Service {
     usage: UsageId,
     // the predecessor Service
     successor: Option<ServiceId>,
+    // an optional ServicePlan it is fullfilling
+    plan: Option<ServicePlanId>,
 }
 
 impl Service {
@@ -95,6 +97,7 @@ impl Service {
         name: String,
         notes: String,
         successor: Option<ServiceId>,
+        plan: Option<ServicePlanId>,
         store: &mut impl Store,
     ) -> TbResult<Summary> {
         let service = Service {
@@ -106,6 +109,7 @@ impl Service {
             notes,
             usage: UsageId::new(),
             successor,
+            plan,
         };
         let usage = service.calculate_usage(store).await?.update(store).await?;
         let service = ServiceStore::create(store, &service).await?;
@@ -139,13 +143,23 @@ impl Service {
                 old.name.clone(),
                 notes,
                 Some(old.id),
+                None,
                 store,
             )
             .await
         } else {
-            let res =
-                Service::create(old.part_id, time, old.name.clone(), notes, None, store).await?;
+            let res = Service::create(
+                old.part_id,
+                time,
+                old.name.clone(),
+                notes,
+                None,
+                old.plan,
+                store,
+            )
+            .await?;
             old.successor = Some(res.services[0].id);
+            old.plan = None;
             Ok(res + old.update_unchecked(store).await?)
         }
     }
@@ -210,5 +224,12 @@ impl Service {
             usages.push(serv.usage.read(store).await?);
         }
         Ok((services, usages))
+    }
+
+    pub(crate) async fn reset_plan(
+        _plan: ServicePlanId,
+        _store: &mut impl ServiceStore,
+    ) -> TbResult<Vec<Service>> {
+        Ok(Vec::new())
     }
 }

@@ -24,15 +24,7 @@ mod error;
 pub use error::{Error, TbResult};
 
 mod entities;
-pub use entities::activity::{Activity, ActivityId, NewActivity};
-pub use entities::attachment::{Attachment, AttachmentDetail, Event};
-pub use entities::part::{ChangePart, NewPart, Part, PartId};
-pub use entities::service::*;
-// pub use entities::serviceplan::*;
-pub use entities::summary::*;
-pub use entities::types::*;
-pub use entities::usage::*;
-pub use entities::user::*;
+pub use entities::*;
 
 pub mod schema;
 

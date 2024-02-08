@@ -1,11 +1,10 @@
 use diesel_derive_newtype::*;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
-use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::*;
-// use schema::service_plans;
+use schema::service_plans;
 
 #[derive(
     Clone,
@@ -46,16 +45,27 @@ impl ServicePlanId {
         store.get(self).await
     }
 
-    async fn check(
+    pub async fn delete(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Vec<Service>> {
+        let plan = self.get(store).await?;
+        plan.part.checkuser(user, store).await?;
+
+        let res = Service::reset_plan(self, store).await?;
+
+        // delete service
+        ServicePlanStore::delete(store, self).await?;
+        Ok(res)
+    }
+    /* async fn check(
         self,
         last_service: OffsetDateTime,
         usage: &Usage,
         store: &mut impl ServicePlanStore,
     ) -> TbResult<ServiceAlert> {
+        use time::{Duration, OffsetDateTime};
         use ServiceAlert::*;
         let plan = self.get(store).await?;
-        if let Some(plan) = plan.months {
-            if Duration::days((plan*30).into()) <= OffsetDateTime::now_utc() - last_service {
+        if let Some(plan) = plan.days {
+            if Duration::days((plan).into()) <= OffsetDateTime::now_utc() - last_service {
                 return Ok(Time(plan));
             };
         }
@@ -85,7 +95,7 @@ impl ServicePlanId {
             };
         }
         Ok(NoService)
-    }
+    } */
 }
 
 ///
@@ -96,17 +106,17 @@ impl ServicePlanId {
     PartialEq,
     Serialize,
     Deserialize,
-    // Queryable,
-    // Identifiable,
-    // Insertable,
-    // AsChangeset,
+    Queryable,
+    Identifiable,
+    Insertable,
+    AsChangeset,
 )]
 pub struct ServicePlan {
     #[serde(default = "ServicePlanId::new")]
     pub id: ServicePlanId,
     /// the gear or part involved
     /// if hook is None the plan is for a specific part
-    /// if it's Some(hook) it is a generic plan for that hook 
+    /// if it's Some(hook) it is a generic plan for that hook
     part: PartId,
     /// This is only really used for generic plans
     /// for a specific part it is set to the PartType of the part
@@ -114,8 +124,6 @@ pub struct ServicePlan {
     /// where it is attached
     hook: Option<PartTypeId>,
     name: String,
-    /// the Usage of the last service
-    usage: Option<UsageId>,
     /// Time until service
     pub days: Option<i32>,
     /// Usage time
@@ -133,11 +141,26 @@ pub struct ServicePlan {
 }
 
 impl ServicePlan {
-    async fn upsert(plan: ServicePlan) -> TbResult<usize> {
-        todo!()
-        // store the Serviceplan
-
-        // check attached part
+    pub async fn create(
+        &mut self,
+        user: &dyn Person,
+        store: &mut (impl ServicePlanStore + PartStore),
+    ) -> TbResult<Self> {
+        self.part.checkuser(user, store).await?;
+        store.create(self).await
     }
 
+    pub async fn update(
+        mut self,
+        user: &dyn Person,
+        store: &mut (impl ServicePlanStore + PartStore),
+    ) -> TbResult<ServicePlan> {
+        let plan = self.id.get(store).await?;
+        plan.part.checkuser(user, store).await?;
+        // You cannot change these
+        self.part = plan.part;
+        self.what = plan.what;
+        self.hook = plan.hook;
+        store.update(self).await
+    }
 }
