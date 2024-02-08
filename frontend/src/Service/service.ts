@@ -86,9 +86,10 @@ export class Service {
     if (pred.length > 0) {
       let res = new Array();
       pred.forEach((s) => {
+        res.push(s);
         res = res.concat(s.predecessors(services));
       });
-      return pred.concat(res);
+      return res;
     } else {
       // build a service entry for the part when it was new
       let first = new Service({
@@ -98,8 +99,7 @@ export class Service {
         part_id: this.part_id,
         successor: this.id,
       });
-      pred.push(first);
-      return pred;
+      return new Array(first);
     }
   }
 
