@@ -2,7 +2,7 @@
   import { types, fmtDate, attachments } from "../lib/store";
   import { Button, DropdownItem } from "@sveltestrap/sveltestrap";
   import Usage from "../Usage/Usage.svelte";
-  import AttachPart from "../Actions/AttachPart.svelte";
+  import AttachPart from "../Attachment/AttachPart.svelte";
   import NewPart from "../Part/NewPart.svelte";
   import { Attachment, Type } from "../lib/types";
   import Menu from "../Widgets/Menu.svelte";

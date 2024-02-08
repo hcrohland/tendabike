@@ -2,8 +2,8 @@
   import { DropdownItem } from "@sveltestrap/sveltestrap";
   import { usages } from "../lib/store";
   import Usage from "../Usage/Usage.svelte";
-  import ReplacePart from "../Actions/ReplacePart.svelte";
-  import AttachPart from "../Actions/AttachPart.svelte";
+  import ReplacePart from "../Attachment/ReplacePart.svelte";
+  import AttachPart from "../Attachment/AttachPart.svelte";
   import { Attachment, Type } from "../lib/types";
   import Menu from "../Widgets/Menu.svelte";
   import ShowAll from "../Widgets/ShowHist.svelte";
