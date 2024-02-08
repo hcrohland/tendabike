@@ -10,11 +10,11 @@
   let show_hist = false;
 </script>
 
-<ServiceRow {...service.get_row($parts, $usages, $services)}>
+<ServiceRow {...service.get_row(0, $parts, $usages, $services)}>
   <ShowHist bind:show_hist />
 </ServiceRow>
 {#if show_hist}
-  {#each service.predecessors($services) as s (s.id)}
-    <ServiceRow {...s.get_row($parts, $usages, $services)} />
+  {#each service.history(0, $parts, $usages, $services) as s (s.service.id)}
+    <ServiceRow {...s} />
   {/each}
 {/if}

@@ -8,6 +8,7 @@
   import { Service, services } from "./service";
   import { Usage } from "../Usage/usage";
 
+  export let depth: number;
   export let service: Service;
   export let days: number;
   export let usage: Usage;
@@ -21,7 +22,7 @@
   <td>
     <div>
       <span id={"name" + service.id}>
-        {service.name}
+        {"┃ ".repeat(depth) + service.name}
         <slot />
       </span>
       {#if service.notes.length > 0}
