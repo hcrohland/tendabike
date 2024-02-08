@@ -5,11 +5,11 @@
     ModalHeader,
     Form,
   } from "@sveltestrap/sveltestrap";
-  import NewForm from "./NewForm.svelte";
-  import ModalFooter from "./ModalFooter.svelte";
+  import NewForm from "./PartForm.svelte";
+  import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { user } from "../lib/store";
   import { Type } from "../lib/types";
-  import { Part } from "../Part/part";
+  import { Part } from "./part";
 
   let part: Part, newpart: Part;
   let type: Type;

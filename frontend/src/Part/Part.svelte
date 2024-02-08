@@ -1,8 +1,8 @@
 <script lang="ts">
   import { ButtonGroup, Button } from "@sveltestrap/sveltestrap";
   import InstallPart from "../Actions/InstallPart.svelte";
-  import ChangePart from "../Actions/ChangePart.svelte";
-  import RecoverPart from "../Actions/RecoverPart.svelte";
+  import ChangePart from "./ChangePart.svelte";
+  import RecoverPart from "./RecoverPart.svelte";
   import AttachPart from "../Actions/AttachPart.svelte";
   import Subparts from "./Subparts.svelte";
   import GearCard from "./GearCard.svelte";

@@ -7,9 +7,9 @@
   } from "@sveltestrap/sveltestrap";
   import { AttEvent, Type } from "../lib/types";
   import { user, attachments } from "../lib/store";
-  import ModalFooter from "./ModalFooter.svelte";
-  import NewForm from "./NewForm.svelte";
-  import TypeForm from "./TypeForm.svelte";
+  import ModalFooter from "../Widgets/ModalFooter.svelte";
+  import NewForm from "../Part/PartForm.svelte";
+  import TypeForm from "../Part/TypeForm.svelte";
   import { filterValues } from "../lib/mapable";
   import { Part } from "../Part/part";
 

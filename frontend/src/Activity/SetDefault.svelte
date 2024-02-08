@@ -3,9 +3,9 @@
 
   import { handleError, myfetch, updateSummary } from "../lib/store";
   import { Type } from "../lib/types";
-  import ActivityList from "../Activity/ActivityList.svelte";
+  import ActivityList from "./ActivityList.svelte";
   import { filterValues } from "../lib/mapable";
-  import { activities } from "../Activity/activity";
+  import { activities } from "./activity";
   import { parts } from "../Part/part";
 
   export let type: Type;

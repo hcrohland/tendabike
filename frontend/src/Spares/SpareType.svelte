@@ -3,7 +3,7 @@
   import { Button, DropdownItem } from "@sveltestrap/sveltestrap";
   import Usage from "../Usage/Usage.svelte";
   import AttachPart from "../Actions/AttachPart.svelte";
-  import NewPart from "../Actions/NewPart.svelte";
+  import NewPart from "../Part/NewPart.svelte";
   import { Attachment, Type } from "../lib/types";
   import Menu from "../Widgets/Menu.svelte";
   import ShowAll from "../Widgets/ShowHist.svelte";

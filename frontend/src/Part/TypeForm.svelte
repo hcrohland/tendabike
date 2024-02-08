@@ -11,7 +11,7 @@
   import { Type } from "../lib/types";
   import { types, category } from "../lib/store";
   import { filterValues } from "../lib/mapable";
-  import { Part } from "../Part/part";
+  import { Part } from "./part";
 
   export let gear: Part;
 

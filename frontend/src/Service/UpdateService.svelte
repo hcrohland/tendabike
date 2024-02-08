@@ -5,7 +5,7 @@
     ModalHeader,
     Form,
   } from "@sveltestrap/sveltestrap";
-  import ModalFooter from "../Actions/ModalFooter.svelte";
+  import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { Service } from "./service";
   import ServiceForm from "./ServiceForm.svelte";
   import { parts, Part } from "../Part/part";

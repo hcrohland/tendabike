@@ -4,7 +4,7 @@
   import { filterValues, by } from "./lib/mapable";
   import { category } from "./lib/store";
   import ShowAll from "./Widgets/ShowHist.svelte";
-  import SetDefault from "./Actions/SetDefault.svelte";
+  import SetDefault from "./Activity/SetDefault.svelte";
   import { parts } from "./Part/part";
   import { activities } from "./Activity/activity";
 

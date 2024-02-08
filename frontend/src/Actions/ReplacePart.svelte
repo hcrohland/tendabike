@@ -7,8 +7,8 @@
   } from "@sveltestrap/sveltestrap";
   import { AttEvent, Attachment, Type, maxDate } from "../lib/types";
   import { types, user } from "../lib/store";
-  import ModalFooter from "./ModalFooter.svelte";
-  import NewForm from "./NewForm.svelte";
+  import ModalFooter from "../Widgets/ModalFooter.svelte";
+  import NewForm from "../Part/PartForm.svelte";
   import Dispose from "../Widgets/Dispose.svelte";
   import { parts, Part } from "../Part/part";
 
