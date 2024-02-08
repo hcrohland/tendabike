@@ -2,9 +2,11 @@
   import { Col, Row } from "@sveltestrap/sveltestrap";
   import MainCard from "./Part/MainCard.svelte";
   import { filterValues, by } from "./lib/mapable";
-  import { parts, category, activities } from "./lib/store";
+  import { category } from "./lib/store";
   import ShowAll from "./Widgets/ShowHist.svelte";
-  import SetDefault from "./Actions/SetDefault.svelte";
+  import SetDefault from "./Activity/SetDefault.svelte";
+  import { parts } from "./Part/part";
+  import { activities } from "./Activity/activity";
 
   let show_hist: boolean;
 

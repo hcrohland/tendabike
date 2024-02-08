@@ -8,7 +8,7 @@
     InputGroup,
     InputGroupText,
   } from "@sveltestrap/sveltestrap";
-  import ModalFooter from "../Actions/ModalFooter.svelte";
+  import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { handleError, myfetch } from "../lib/store";
   import type { User } from "../lib/types";
   import DateTime from "../Widgets/DateTime.svelte";

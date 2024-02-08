@@ -5,9 +5,9 @@
     ModalHeader,
     Form,
   } from "@sveltestrap/sveltestrap";
-  import ModalFooter from "../Actions/ModalFooter.svelte";
+  import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { Service } from "./service";
-  import type { Part } from "../lib/types";
+  import { Part } from "../Part/part";
   import ServiceForm from "./ServiceForm.svelte";
 
   let part: Part;

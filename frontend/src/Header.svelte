@@ -22,7 +22,7 @@
     category,
     user,
   } from "./lib/store";
-  import Garmin from "./Actions/Garmin.svelte";
+  import Garmin from "./Activity/Garmin.svelte";
   import Sport from "./Widgets/Sport.svelte";
 
   let userOpen = false;

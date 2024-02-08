@@ -7,8 +7,9 @@
     Col,
   } from "@sveltestrap/sveltestrap";
   import DateTime from "../Widgets/DateTime.svelte";
-  import { Type, Part } from "../lib/types";
+  import { Type } from "../lib/types";
   import { createEventDispatcher } from "svelte";
+  import { Part } from "./part";
   const dispatch = createEventDispatcher();
 
   export let type: Type | undefined;

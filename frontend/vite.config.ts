@@ -9,7 +9,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "^/(user)|(strava)|(activ)": {
+      "^/(user)|(strava)|(activ/)": {
         target: "http://localhost:8000",
         changeOrigin: true,
       },

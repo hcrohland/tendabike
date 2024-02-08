@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Modal, ModalHeader, ModalBody } from "@sveltestrap/sveltestrap";
-  import ModalFooter from "./ModalFooter.svelte";
+  import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { types, fmtDate } from "../lib/store";
-  import { Part } from "../lib/types";
+  import { Part } from "./part";
 
   let part: Part;
   let isOpen = false;

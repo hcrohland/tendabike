@@ -1,12 +1,7 @@
-import {
-  fmtDate,
-  handleError,
-  myfetch,
-  updateSummary,
-  usages,
-} from "../lib/store";
+import { fmtDate, handleError, myfetch, updateSummary } from "../lib/store";
 import { filterValues, mapable, type Map } from "../lib/mapable";
-import { Usage, type Part } from "../lib/types";
+import { Part } from "../Part/part";
+import { usages, Usage } from "../Usage/usage";
 
 export class Service {
   id?: string;
@@ -80,29 +75,41 @@ export class Service {
     return s[this.successor];
   }
 
-  predecessors(services: Map<Service>) {
+  history(
+    depth: number,
+    parts: Map<Part>,
+    usages: Map<Usage>,
+    services: Map<Service>,
+  ) {
     let pred = filterValues(services, (s) => s.successor == this.id);
     if (pred.length > 0) {
       let res = new Array();
-      pred.forEach((s) => {
-        res = res.concat(s.predecessors(services));
+      pred.forEach((s, i) => {
+        // the early ones have the higher depth!
+        let d = depth + pred.length - (i + 1);
+        res.push(s.get_row(d, parts, usages, services));
+        res = res.concat(s.history(d, parts, usages, services));
       });
-      return pred.concat(res);
+      return res;
     } else {
       // build a service entry for the part when it was new
       let first = new Service({
         id: "pred" + this.id,
-        name: "New",
+        name: "┗━",
         notes: "",
         part_id: this.part_id,
         successor: this.id,
       });
-      pred.push(first);
-      return pred;
+      return new Array(first.get_row(depth, parts, usages, services));
     }
   }
 
-  get_row(parts: Map<Part>, usages: Map<Usage>, services: Map<Service>) {
+  get_row(
+    depth: number,
+    parts: Map<Part>,
+    usages: Map<Usage>,
+    services: Map<Service>,
+  ) {
     let part = parts[this.part_id];
     let successor = this.get_successor(services);
     let next;
@@ -125,7 +132,7 @@ export class Service {
     let days = Math.floor(
       (time.getTime() - this.time.getTime()) / (24 * 60 * 60 * 1000),
     );
-    return { service: this, days, usage };
+    return { depth, service: this, days, usage };
   }
 
   fmtTime(s: Map<Service>) {

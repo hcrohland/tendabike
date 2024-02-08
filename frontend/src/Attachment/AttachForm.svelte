@@ -1,9 +1,11 @@
 <script lang="ts">
   import { Form, InputGroup, InputGroupText } from "@sveltestrap/sveltestrap";
   import DateTime from "../Widgets/DateTime.svelte";
-  import { attachments, types, parts } from "../lib/store";
-  import { AttEvent, maxDate, Part } from "../lib/types";
+  import { types } from "../lib/store";
+  import { maxDate } from "../lib/types";
   import { by, filterValues } from "../lib/mapable";
+  import { parts, Part } from "../Part/part";
+  import { AttEvent, attachments } from "./attachment";
 
   function lastDetach(part: Part) {
     let last = filterValues($attachments, (a) => a.part_id == part.id).sort(

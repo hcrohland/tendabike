@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { Attachment, Type, Part } from "../lib/types";
+  import { Type } from "../lib/types";
 
   import { Table } from "@sveltestrap/sveltestrap";
   import { filterValues, by } from "../lib/mapable";
-  import { attachments, types } from "../lib/store";
+  import { types } from "../lib/store";
   import SubType from "./SubType.svelte";
   import Wizard from "./Wizard.svelte";
+  import { Part } from "./part";
+  import { attachments, Attachment } from "../Attachment/attachment";
 
   export let gear: Part;
   export let hook: Type;

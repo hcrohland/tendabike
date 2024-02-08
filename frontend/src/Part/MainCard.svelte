@@ -1,6 +1,6 @@
 <script lang="ts">
   import GearCard from "./GearCard.svelte";
-  import { Part } from "../lib/types";
+  import { Part } from "../Part/part";
   import { category } from "../lib/store";
   import { link } from "svelte-spa-router";
 
