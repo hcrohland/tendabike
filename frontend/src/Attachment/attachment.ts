@@ -68,13 +68,13 @@ export class AttEvent {
   }
 
   async attach() {
-    return await myfetch("/part/attach", "POST", this)
+    return await myfetch("/api/part/attach", "POST", this)
       .then(updateSummary)
       .catch(handleError);
   }
 
   async detach() {
-    return await myfetch("/part/detach", "POST", this)
+    return await myfetch("/api/part/detach", "POST", this)
       .then(updateSummary)
       .catch(handleError);
   }

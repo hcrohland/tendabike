@@ -76,10 +76,10 @@ export const icons = new Map([
 
 export async function getTypes() {
   return Promise.all([
-    myfetch("/types/part").then((types) =>
+    myfetch("/api/types/part").then((types) =>
       types.map((t: any) => new Type(t)).reduce(mapObject("id"), {}),
     ), // data[0]
-    myfetch("/types/activity"), // data[1]
+    myfetch("/api/types/activity"), // data[1]
   ])
     .then((data: { 0: Type[]; 1: ActType[] }) => {
       types = data[1].reduce((acc, a) => {
@@ -91,13 +91,13 @@ export async function getTypes() {
 }
 
 export async function initData() {
-  let u = await myfetch("/user");
+  let u = await myfetch("/api/user");
   if (u) {
     user.set(u);
   } else {
     return;
   }
-  return Promise.all([myfetch("/user/summary").then(setSummary)]);
+  return Promise.all([myfetch("/api/user/summary").then(setSummary)]);
 }
 
 type Summary = {

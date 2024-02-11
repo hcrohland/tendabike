@@ -33,7 +33,7 @@ export class Service {
     name: string,
     notes: string,
   ) {
-    return await myfetch("/service", "POST", {
+    return await myfetch("/api/service", "POST", {
       part_id,
       time,
       name,
@@ -44,13 +44,13 @@ export class Service {
   }
 
   async update() {
-    return await myfetch("/service", "PUT", this)
+    return await myfetch("/api/service", "PUT", this)
       .then(updateSummary)
       .catch(handleError);
   }
 
   async delete() {
-    await myfetch("/service/" + this.id, "DELETE")
+    await myfetch("/api/service/" + this.id, "DELETE")
       .then(updateSummary)
       .catch(handleError);
     services.deleteItem(this.id);
@@ -58,7 +58,7 @@ export class Service {
   }
 
   async redo() {
-    return await myfetch("/service/redo", "POST", this)
+    return await myfetch("/api/service/redo", "POST", this)
       .then(updateSummary)
       .catch(handleError);
   }

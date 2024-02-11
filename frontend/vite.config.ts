@@ -9,19 +9,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "^/(user)|(strava)|(activ/)": {
-        target: "http://localhost:8000",
-        changeOrigin: true,
-      },
-      "/types": {
-        target: "http://localhost:8000",
-        changeOrigin: true,
-      },
-      "/part": {
-        target: "http://localhost:8000",
-        changeOrigin: true,
-      },
-      "^/service.*": {
+      "^/(api)|(strava)": {
         target: "http://localhost:8000",
         changeOrigin: true,
       },

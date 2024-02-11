@@ -14,7 +14,7 @@
   let value: number;
 
   function defaultGear(id: number) {
-    myfetch("/activ/defaultgear", "POST", id)
+    myfetch("/api/activ/defaultgear", "POST", id)
       .then(updateSummary)
       .catch(handleError);
   }

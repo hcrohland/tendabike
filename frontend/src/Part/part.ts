@@ -30,7 +30,7 @@ export class Part {
   }
 
   async create() {
-    return await myfetch("/part", "POST", this)
+    return await myfetch("/api/part", "POST", this)
       .then((data) => {
         parts.updateMap([data]);
         return new Part(data);
@@ -39,7 +39,7 @@ export class Part {
   }
 
   async update() {
-    return await myfetch("/part", "PUT", this)
+    return await myfetch("/api/part", "PUT", this)
       .then((data) => parts.updateMap([data]))
       .catch(handleError);
   }
