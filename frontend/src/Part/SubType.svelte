@@ -34,7 +34,7 @@
     {#if i == 0}
       <tr>
         <th scope="row" class="text-nowrap">
-          {"| ".repeat(level)}
+          {"┃ ".repeat(level)}
           {prefix + " " + type.name}
           {#if attachments.length > 0 || (part && $usages[part.usage].count != $usages[att.usage].count)}
             <ShowAll bind:show_hist />
@@ -75,7 +75,7 @@
     {#if show_hist}
       <tr>
         <th scope="row" class="text-nowrap">
-          {"| ".repeat(level + 1)}&#9656;
+          {"┃ ".repeat(level + 1) + "▶"}
         </th>
         <td>
           {#if part}
