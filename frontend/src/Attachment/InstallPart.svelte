@@ -9,7 +9,7 @@
   import { user } from "../lib/store";
   import ModalFooter from "../Widgets/ModalFooter.svelte";
   import NewForm from "../Part/PartForm.svelte";
-  import TypeForm from "../Part/TypeForm.svelte";
+  import TypeForm from "../Widgets/TypeForm.svelte";
   import { filterValues } from "../lib/mapable";
   import { Part } from "../Part/part";
   import { AttEvent, attachments } from "./attachment";
@@ -49,7 +49,7 @@
       (a) => a.gear == g.id && a.what == t.id && a.hook == hook,
     );
     if (last.length) {
-      //I t is a replacement
+      // It is a replacement
       return new Date();
     } else {
       // It is the first part of that type
