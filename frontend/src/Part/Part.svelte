@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { ButtonGroup, Button } from "@sveltestrap/sveltestrap";
+  import {
+    ButtonGroup,
+    Button,
+    Dropdown,
+    DropdownToggle,
+    DropdownMenu,
+    DropdownItem,
+  } from "@sveltestrap/sveltestrap";
   import InstallPart from "../Attachment/InstallPart.svelte";
   import ChangePart from "./ChangePart.svelte";
   import RecoverPart from "./RecoverPart.svelte";
@@ -26,23 +33,31 @@
 <GearCard {part} display>
   <ButtonGroup class="float-end">
     {#if part.disposed_at}
-      <Button on:click={() => recoverPart(part)}>Recover gear</Button>
+      <Button color="light" on:click={() => recoverPart(part)}
+        >Recover gear</Button
+      >
     {:else}
-      <Button color="light" on:click={() => newService(part)}>
-        Log Service
-      </Button>
-      {#if part.what == hook.main}
-        <Button color="light" on:click={() => installPart(part)}>
-          Install new part
-        </Button>
-      {:else}
-        <Button color="light" on:click={() => attachPart(part)}>
-          Attach part
-        </Button>
-      {/if}
-      <Button color="light" on:click={() => changePart(part)}>
-        Change details
-      </Button>
+      <Button color="light" on:click={() => newService(part)}
+        >Log Service</Button
+      >
+      <Dropdown direction="down">
+        <DropdownToggle color="light" caret split />
+        <DropdownMenu>
+          {#if part.isGear()}
+            <DropdownItem on:click={() => installPart(part)}>
+              New part
+            </DropdownItem>
+            <DropdownItem divider />
+          {:else}
+            <DropdownItem on:click={() => attachPart(part)}>
+              Attach part
+            </DropdownItem>
+          {/if}
+          <DropdownItem on:click={() => changePart(part)}>
+            Change details
+          </DropdownItem>
+        </DropdownMenu>
+      </Dropdown>
     {/if}
   </ButtonGroup>
 </GearCard>
