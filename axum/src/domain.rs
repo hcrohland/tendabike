@@ -6,6 +6,7 @@ mod activity;
 mod attachment;
 mod part;
 mod service;
+mod serviceplan;
 mod types;
 mod user;
 
@@ -16,5 +17,6 @@ pub(super) fn router() -> Router<AppState> {
         .nest("/part", part::router())
         .nest("/part", attachment::router())
         .nest("/service", service::router())
+        .nest("/plan", serviceplan::router())
         .nest("/activ", activity::router())
 }
