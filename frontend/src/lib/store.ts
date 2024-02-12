@@ -6,6 +6,7 @@ import { activities, Activity } from "../Activity/activity";
 import { Usage, usages } from "../Usage/usage";
 import { parts, type Part } from "../Part/part";
 import { Attachment, attachments } from "../Attachment/attachment";
+import { plans, type ServicePlan } from "../ServicePlan/serviceplan";
 
 export function fmtDate(date: Date | undefined) {
   return date ? date.toLocaleDateString(navigator.language) : "never";
@@ -106,6 +107,7 @@ type Summary = {
   activities: Activity[];
   usages: Usage[];
   services: Service[];
+  plans: ServicePlan[];
 };
 
 export function setSummary(data: Summary) {
@@ -114,6 +116,7 @@ export function setSummary(data: Summary) {
   activities.setMap(data.activities);
   usages.setMap(data.usages);
   services.setMap(data.services);
+  plans.setMap(data.plans);
 }
 
 export function updateSummary(data: Summary) {
@@ -122,6 +125,7 @@ export function updateSummary(data: Summary) {
   activities.updateMap(data.activities);
   usages.updateMap(data.usages);
   services.updateMap(data.services);
+  plans.updateMap(data.plans);
 }
 
 export let types: { [key: number]: Type };

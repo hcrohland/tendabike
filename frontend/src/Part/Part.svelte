@@ -17,6 +17,7 @@
   import NewService from "../Service/NewService.svelte";
   import ServiceList from "../Service/ServiceList.svelte";
   import { parts, Part } from "./part";
+  import GearPlan from "../ServicePlan/GearPlan.svelte";
 
   export let params: { id: number; what: number };
 
@@ -25,6 +26,7 @@
   let newService: (p: Part) => void;
   let recoverPart: (p: Part) => void;
   let attachPart: (p: Part) => void;
+  let newServicePlan: (p: Part) => void;
 
   $: part = $parts[params.id];
   $: hook = part.type();
@@ -44,8 +46,11 @@
         <DropdownToggle color="light" caret split />
         <DropdownMenu>
           {#if part.isGear()}
+            <DropdownItem on:click={() => newServicePlan(part)}>
+              New Service Plan
+            </DropdownItem>
             <DropdownItem on:click={() => installPart(part)}>
-              New part
+              New Part
             </DropdownItem>
             <DropdownItem divider />
           {:else}
@@ -71,3 +76,4 @@
 <ChangePart bind:changePart />
 <RecoverPart bind:recoverPart />
 <NewService bind:newService />
+<GearPlan bind:newServicePlan />
