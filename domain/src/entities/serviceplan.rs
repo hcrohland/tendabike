@@ -134,19 +134,18 @@ pub struct ServicePlan {
     pub climb: Option<i32>,
     /// Overall descending
     pub descend: Option<i32>,
-    /// Overall descending
-    pub power: Option<i32>,
     /// number of activities
     pub count: Option<i32>,
 }
 
 impl ServicePlan {
     pub async fn create(
-        &mut self,
+        mut self,
         user: &dyn Person,
         store: &mut (impl ServicePlanStore + PartStore),
     ) -> TbResult<Self> {
         self.part.checkuser(user, store).await?;
+        self.id = ServicePlanId::new();
         store.create(self).await
     }
 
@@ -162,5 +161,12 @@ impl ServicePlan {
         self.what = plan.what;
         self.hook = plan.hook;
         store.update(self).await
+    }
+
+    pub(crate) async fn for_part(
+        part: PartId,
+        store: &mut impl ServicePlanStore,
+    ) -> TbResult<Vec<Self>> {
+        store.by_part(part).await
     }
 }
