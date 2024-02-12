@@ -21,8 +21,6 @@
     | "descend"
     | "count"
   )[] = [];
-
-  $: console.log(select, selected);
 </script>
 
 {#each selected as key}
