@@ -12,24 +12,32 @@
   import { Part } from "../Part/part";
 
   export let gear: Part;
+  export let with_body = false;
 
-  let hook: { type: Type; hook: number };
+  let hook: { type: Type; hook: number | null };
   const dispatch = createEventDispatcher();
 
   let typeList = filterValues(
     types,
     (t) => t.main == $category.id && t.id != t.main,
   ).sort((a, b) => a.order - b.order);
-
-  $: if (hook) dispatch("change", { ...hook });
 </script>
 
 <Form>
   <InputGroup class="col-md-12">
     <InputGroupText><slot>New</slot></InputGroupText>
     <!-- svelte-ignore a11y-no-onchange -->
-    <Input type="select" class="custom-select" required bind:value={hook}>
+    <Input
+      type="select"
+      class="custom-select"
+      required
+      bind:value={hook}
+      on:change={() => dispatch("change", hook)}
+    >
       <option hidden value> -- select one -- </option>
+      {#if with_body}
+        <option value={{ type: gear.what, hook: null }}> body </option>
+      {/if}
       {#each typeList as type}
         {#each type.hooks as hook}
           <option value={{ type, hook }}>

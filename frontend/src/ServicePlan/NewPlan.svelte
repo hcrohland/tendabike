@@ -7,16 +7,18 @@
   } from "@sveltestrap/sveltestrap";
   import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { Limits, ServicePlan } from "./serviceplan";
-  import { Part, parts } from "../Part/part";
+  import { Part } from "../Part/part";
   import PlanForm from "./PlanForm.svelte";
   import TypeForm from "../Widgets/TypeForm.svelte";
   import type { Type } from "../lib/types";
 
-  let gear: Part;
+  let part: Part;
   let plan: ServicePlan | undefined;
   let isOpen = false;
-  let newplan: { name?: string | undefined; limits?: Limits } = {};
-  let newhook: { part: number | undefined; what: number; hook: number };
+  let newplan: { name?: string | undefined; limits?: Limits };
+  let newhook:
+    | { part: number | undefined; what: number; hook: number | null }
+    | undefined;
 
   async function createPlan() {
     let plan = new ServicePlan(
@@ -26,8 +28,12 @@
     isOpen = false;
   }
 
-  export const newServicePlan = (part: Part) => {
-    gear = part;
+  export const newPlan = (p: Part) => {
+    part = p;
+    newhook = part.isGear()
+      ? undefined
+      : { part: part.id, what: part.what, hook: null };
+    newplan = {};
     isOpen = true;
   };
 
@@ -35,8 +41,9 @@
     isOpen = false;
     plan = undefined;
   };
+
   const sethook = (e: CustomEvent<{ type: Type; hook: number }>) => {
-    newhook = { part: gear.id, what: e.detail.type.id, hook: e.detail.hook };
+    newhook = { part: part.id, what: e.detail.type.id, hook: e.detail.hook };
   };
 
   const setPlan = (e: CustomEvent<{ name: string; limits: Limits }>) => {
@@ -55,7 +62,13 @@
 
 <Modal {isOpen} {toggle} backdrop={false}>
   <ModalHeader {toggle}>
-    <TypeForm {gear} on:change={sethook}>New service plan for</TypeForm>
+    {#if part.isGear()}
+      <TypeForm gear={part} with_body on:change={sethook}>
+        New service plan for
+      </TypeForm>
+    {:else}
+      New service plan for {part.name}
+    {/if}
   </ModalHeader>
   <ModalBody>
     <Form>
