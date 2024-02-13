@@ -21,9 +21,9 @@
 <tr>
   <td>
     <div>
+      <slot />
       <span id={"name" + service.id}>
         {"┃ ".repeat(depth) + service.name}
-        <slot />
       </span>
       {#if service.notes.length > 0}
         <Tooltip target={"name" + service.id}>

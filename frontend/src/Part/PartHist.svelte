@@ -2,7 +2,7 @@
   import { filterValues, by } from "../lib/mapable";
   import { types } from "../lib/store";
   import Usage from "../Usage/Usage.svelte";
-  import { link } from "svelte-spa-router";
+  import PartLink from "./PartLink.svelte";
   import { parts } from "./part";
   import { attachments } from "../Attachment/attachment";
 
@@ -28,17 +28,8 @@
           <tr>
             <td>
               {#if $parts[att.gear]}
-                <a
-                  href="/part/{att.gear}"
-                  use:link
-                  style={$parts[att.gear].disposed_at
-                    ? "text-decoration: line-through;"
-                    : ""}
-                  class="text-reset"
-                >
-                  {$parts[att.gear].name}
-                  {types[att.hook].prefix}
-                </a>
+                <PartLink part={$parts[att.gear]} />
+                {types[att.hook].prefix}
               {:else}
                 N/A
               {/if}

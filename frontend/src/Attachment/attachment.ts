@@ -80,6 +80,36 @@ export class AttEvent {
   }
 }
 
+/// find part id for part at a specific hook right now
+/// if there is no part at that hook, return parameter part
+export function part_at_hook(
+  gear: number,
+  what: number,
+  hook: number | null,
+  atts: Map<Attachment>,
+) {
+  let att = filterValues(
+    atts,
+    (att) =>
+      att.gear == gear &&
+      att.what == what &&
+      att.hook == hook &&
+      att.isAttached(),
+  ).pop();
+  return att ? att.part_id : gear;
+}
+
+export function attachment_for_part(
+  part: number | undefined,
+  atts: Map<Attachment>,
+) {
+  let now = new Date();
+  return filterValues(
+    atts,
+    (att) => att.part_id == part && att.attached <= now && att.detached > now,
+  ).pop();
+}
+
 export const attachments = mapable(
   "idx",
   (a) => new Attachment(a),

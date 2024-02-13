@@ -15,7 +15,7 @@
   import GearCard from "./GearCard.svelte";
   import PartHist from "./PartHist.svelte";
   import NewService from "../Service/NewService.svelte";
-  import ServiceList from "../Service/ServiceList.svelte";
+  import PlanList from "../ServicePlan/PlanList.svelte";
   import { parts, Part } from "./part";
   import NewPlan from "../ServicePlan/NewPlan.svelte";
 
@@ -67,7 +67,7 @@
   </ButtonGroup>
 </GearCard>
 <br />
-<ServiceList {part} /><br />
+<PlanList {part} /><br />
 <PartHist id={params.id} />
 <Subparts gear={part} {hook} />
 

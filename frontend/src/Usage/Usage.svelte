@@ -34,7 +34,7 @@
     {fmtNumber(usage.descend)}
   </td>
 {:else}
-  <th class="text-end" scope="col" title="Number of activities">Count</th>
+  <th class="text-end" scope="col" title="Number of activities">Rides</th>
   <th class="text-end" scope="col" title="Time (h)">Time</th>
   <th class="text-end" scope="col" title="Distance (km)">Distance</th>
   <th class="text-end" scope="col" title="Climb (m)">Climb</th>

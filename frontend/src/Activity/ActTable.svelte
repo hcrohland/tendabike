@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { fmtNumber, fmtSeconds } from "../lib/store";
+  import { DAY, fmtNumber, fmtSeconds } from "../lib/store";
   import SvelteTable from "../Widgets/SvelteTable.svelte";
   import RangeSlider from "svelte-range-slider-pips";
   import { Alert } from "@sveltestrap/sveltestrap";
@@ -10,7 +10,6 @@
 
   export let acts: Activity[];
 
-  const DAY = 24 * 3600000;
   let selection: Record<string | number, any> = {};
 
   let min: number,

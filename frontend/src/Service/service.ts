@@ -1,4 +1,10 @@
-import { fmtDate, handleError, myfetch, updateSummary } from "../lib/store";
+import {
+  fmtDate,
+  get_days,
+  handleError,
+  myfetch,
+  updateSummary,
+} from "../lib/store";
 import { filterValues, mapable, type Map } from "../lib/mapable";
 import { Part } from "../Part/part";
 import { usages, Usage } from "../Usage/usage";
@@ -14,7 +20,8 @@ export class Service {
   notes: string;
   // we do not accept thos values from the client!
   usage: string;
-  successor?: string;
+  successor: string | null;
+  plan: string | null;
 
   constructor(data: any) {
     this.id = data.id;
@@ -24,7 +31,8 @@ export class Service {
     this.name = data.name || "";
     this.notes = data.notes || "";
     this.usage = data.usage;
-    this.successor = data.successor;
+    this.successor = data.successor || null;
+    this.plan = data.plan || null;
   }
 
   static async create(
@@ -100,7 +108,7 @@ export class Service {
         part_id: this.part_id,
         successor: this.id,
       });
-      return new Array(first.get_row(depth, parts, usages, services));
+      return new Array(first.get_row(depth - 1, parts, usages, services));
     }
   }
 
@@ -129,9 +137,7 @@ export class Service {
       : usages[next];
 
     // How many days passed
-    let days = Math.floor(
-      (time.getTime() - this.time.getTime()) / (24 * 60 * 60 * 1000),
-    );
+    let days = get_days(this.time, time);
     return { depth, service: this, days, usage };
   }
 

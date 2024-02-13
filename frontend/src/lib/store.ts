@@ -1,5 +1,5 @@
 import { writable, type Writable } from "svelte/store";
-import { mapable, mapObject } from "./mapable";
+import { mapObject } from "./mapable";
 import { Type, type ActType, type User } from "./types";
 import { Service, services } from "../Service/service";
 import { activities, Activity } from "../Activity/activity";
@@ -7,6 +7,13 @@ import { Usage, usages } from "../Usage/usage";
 import { parts, type Part } from "../Part/part";
 import { Attachment, attachments } from "../Attachment/attachment";
 import { plans, type ServicePlan } from "../ServicePlan/serviceplan";
+
+export const DAY = 24 * 60 * 60 * 1000;
+
+export function get_days(start: Date, end?: Date) {
+  let e = end ? end : new Date();
+  return Math.floor((e.getTime() - start.getTime()) / DAY);
+}
 
 export function fmtDate(date: Date | undefined) {
   return date ? date.toLocaleDateString(navigator.language) : "never";

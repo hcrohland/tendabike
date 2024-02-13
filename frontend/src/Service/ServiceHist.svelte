@@ -6,15 +6,20 @@
   import { parts } from "../Part/part";
 
   export let service: Service;
+  export let depth = 0;
+
+  export let show_all = false;
 
   let show_hist = false;
 </script>
 
-<ServiceRow {...service.get_row(0, $parts, $usages, $services)}>
-  <ShowHist bind:show_hist />
+<ServiceRow {...service.get_row(depth, $parts, $usages, $services)}>
+  {#if !show_all}
+    <ShowHist bind:show_hist />
+  {/if}
 </ServiceRow>
-{#if show_hist}
-  {#each service.history(0, $parts, $usages, $services) as s (s.service.id)}
+{#if show_hist || show_all}
+  {#each service.history(1, $parts, $usages, $services) as s (s.service.id)}
     <ServiceRow {...s} />
   {/each}
 {/if}

@@ -7,7 +7,7 @@
   import { Type } from "../lib/types";
   import Menu from "../Widgets/Menu.svelte";
   import ShowAll from "../Widgets/ShowHist.svelte";
-  import { link } from "svelte-spa-router";
+  import PartLink from "./PartLink.svelte";
   import { parts, Part } from "../Part/part";
   import type { Attachment } from "../Attachment/attachment";
 
@@ -43,14 +43,7 @@
         {#if att.isAttached()}
           <td>
             {#if part}
-              <a
-                href="/part/{part.id}"
-                use:link
-                style={part.disposed_at ? "text-decoration: line-through;" : ""}
-                class="text-reset"
-              >
-                {part.name}
-              </a>
+              <PartLink {part} />
             {:else}
               {att.name}
             {/if}
@@ -79,14 +72,7 @@
         </th>
         <td>
           {#if part}
-            <a
-              href="/part/{part.id}"
-              use:link
-              style={part.disposed_at ? "text-decoration: line-through;" : ""}
-              class="text-reset"
-            >
-              {part.name}
-            </a>
+            <PartLink {part} />
           {:else}
             {att.name}
           {/if}

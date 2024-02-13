@@ -2,7 +2,6 @@
   import { Modal, ModalHeader, ModalBody } from "@sveltestrap/sveltestrap";
   import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { ServicePlan } from "./serviceplan";
-  import { fmtDate } from "../lib/store";
 
   let plan: ServicePlan;
   let isOpen = false;
@@ -13,7 +12,7 @@
     isOpen = false;
   }
 
-  export const deleteServicePlan = (p: ServicePlan) => {
+  export const deletePlan = (p: ServicePlan) => {
     plan = p;
     isOpen = true;
   };

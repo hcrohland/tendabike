@@ -36,15 +36,12 @@
     >
       <option hidden value> -- select one -- </option>
       {#if with_body}
-        <option value={{ type: gear.what, hook: null }}> body </option>
+        <option value={{ type: types[gear.what], hook: null }}> body </option>
       {/if}
       {#each typeList as type}
         {#each type.hooks as hook}
           <option value={{ type, hook }}>
-            {#if type.hooks.length > 1}
-              {types[hook].prefix}
-            {/if}
-            {type.name}
+            {type.human_name(hook)}
           </option>
         {/each}
       {/each}
