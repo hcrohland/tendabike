@@ -43,7 +43,7 @@ export class Limits {
     | "rides"
   )[] = ["days", "time", "distance", "climb", "descend", "rides"];
 
-  check() {
+  valid() {
     return (
       is_set(this.days) ||
       is_set(this.time) ||
@@ -71,7 +71,7 @@ export class ServicePlan extends Limits {
     super(data);
     this.id = data.id || "00000000-0000-0000-0000-000000000000";
     this.part = data.part;
-    this.what = data.what || data.part.what;
+    this.what = data.what;
     this.hook = data.hook || null;
 
     this.name = data.name || "";
@@ -94,6 +94,10 @@ export class ServicePlan extends Limits {
       .then((data) => services.updateMap(data))
       .catch(handleError);
     plans.deleteItem(this.id);
+  }
+
+  valid() {
+    return super.valid() && this.name.length > 0 && this.what != undefined;
   }
 
   status(

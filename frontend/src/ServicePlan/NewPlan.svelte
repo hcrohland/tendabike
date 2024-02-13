@@ -4,60 +4,45 @@
     ModalBody,
     ModalHeader,
     Form,
+    FormGroup,
+    Input,
   } from "@sveltestrap/sveltestrap";
   import ModalFooter from "../Widgets/ModalFooter.svelte";
-  import { Limits, ServicePlan } from "./serviceplan";
+  import { ServicePlan } from "./serviceplan";
   import { Part } from "../Part/part";
-  import PlanForm from "./PlanForm.svelte";
+  import PlanSelect from "./PlanSelect.svelte";
   import TypeForm from "../Widgets/TypeForm.svelte";
   import type { Type } from "../lib/types";
 
   let part: Part;
-  let plan: ServicePlan | undefined;
+  let plan: ServicePlan;
   let isOpen = false;
-  let newplan: { name?: string | undefined; limits?: Limits };
-  let newhook:
-    | { part: number | undefined; what: number; hook: number | null }
-    | undefined;
 
   async function createPlan() {
-    let plan = new ServicePlan(
-      Object.assign({ name: newplan.name }, newplan.limits, newhook),
-    );
     await plan.create();
     isOpen = false;
   }
 
   export const newPlan = (p: Part) => {
     part = p;
-    newhook = part.isGear()
-      ? undefined
-      : { part: part.id, what: part.what, hook: null };
-    newplan = {};
+    plan = new ServicePlan(
+      part.isGear()
+        ? { part: part.id }
+        : { part: part.id, what: part.what, hook: null },
+    );
     isOpen = true;
   };
 
   const toggle = () => {
     isOpen = false;
-    plan = undefined;
   };
 
   const sethook = (e: CustomEvent<{ type: Type; hook: number }>) => {
-    newhook = { part: part.id, what: e.detail.type.id, hook: e.detail.hook };
+    plan.what = e.detail.type.id;
+    plan.hook = e.detail.hook;
   };
 
-  const setPlan = (e: CustomEvent<{ name: string; limits: Limits }>) => {
-    newplan = e.detail;
-  };
-
-  $: disabled = !(
-    newhook &&
-    newplan &&
-    newplan.name &&
-    newplan.limits &&
-    newplan.name.length > 0 &&
-    newplan.limits.check()
-  );
+  $: disabled = !(plan && plan.valid());
 </script>
 
 <Modal {isOpen} {toggle} backdrop={false}>
@@ -72,7 +57,19 @@
   </ModalHeader>
   <ModalBody>
     <Form>
-      <PlanForm on:change={setPlan} />
+      <FormGroup class="col-md-12">
+        <!-- svelte-ignore a11y-autofocus -->
+        <Input
+          type="text"
+          class="form-control"
+          id="inputName"
+          bind:value={plan.name}
+          autofocus
+          required
+          placeholder="Name"
+        />
+      </FormGroup>
+      <PlanSelect bind:select={plan} />
     </Form>
   </ModalBody>
   <ModalFooter {toggle} {disabled} action={createPlan} button={"Create"} />
