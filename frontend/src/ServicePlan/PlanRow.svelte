@@ -29,17 +29,16 @@
 </script>
 
 <tr>
-  <td colspan="2">
+  <td>
     <div>
       <span id={"name" + plan.id}>
+        {plan.name}
+        <PlanHook {plan} />
         <ShowHist bind:show_hist />
-        "{plan.name}" service
-        <PlanHook {plan}>for</PlanHook>
-        <!-- <PartLink part={$parts[plan.part]} /> -->
-        in
       </span>
     </div>
   </td>
+  <td class="text-end"> in </td>
   <PlanCell plan={plan.days} due={due.days} />
   <PlanCell plan={plan.rides} due={due.rides} />
   <PlanCell plan={plan.time} due={due.time} fmt={fmtSeconds} />

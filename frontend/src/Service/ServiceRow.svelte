@@ -21,7 +21,6 @@
 <tr>
   <td>
     <div>
-      <slot />
       <span id={"name" + service.id}>
         {"┃ ".repeat(depth) + service.name}
       </span>
@@ -30,6 +29,7 @@
           {service.notes}
         </Tooltip>
       {/if}
+      <slot />
     </div>
   </td>
   <td>{service.fmtTime($services)}</td>
