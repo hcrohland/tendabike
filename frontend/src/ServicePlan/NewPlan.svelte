@@ -10,7 +10,7 @@
   import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { ServicePlan } from "./serviceplan";
   import { Part } from "../Part/part";
-  import PlanSelect from "./PlanSelect.svelte";
+  import PlanLimits from "./PlanLimits.svelte";
   import TypeForm from "../Widgets/TypeForm.svelte";
   import type { Type } from "../lib/types";
 
@@ -69,7 +69,7 @@
           placeholder="Name"
         />
       </FormGroup>
-      <PlanSelect bind:select={plan} />
+      <PlanLimits bind:select={plan} />
     </Form>
   </ModalBody>
   <ModalFooter {toggle} {disabled} action={createPlan} button={"Create"} />
