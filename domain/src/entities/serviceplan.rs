@@ -89,8 +89,8 @@ impl ServicePlanId {
                 return Ok(Distance(plan));
             };
         }
-        if let Some(plan) = plan.count {
-            if plan <= usage.count {
+        if let Some(plan) = plan.rides {
+            if plan <= usage.rides {
                 return Ok(Count(plan));
             };
         }
@@ -135,7 +135,7 @@ pub struct ServicePlan {
     /// Overall descending
     pub descend: Option<i32>,
     /// number of activities
-    pub count: Option<i32>,
+    pub rides: Option<i32>,
 }
 
 impl ServicePlan {

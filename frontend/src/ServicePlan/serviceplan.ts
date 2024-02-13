@@ -23,7 +23,7 @@ export class Limits {
   /// Overall descending
   descend: number | null;
   /// number of activities
-  count: number | null;
+  rides: number | null;
 
   constructor(data: any) {
     this.days = Number(data.days) || null;
@@ -31,7 +31,7 @@ export class Limits {
     this.distance = Number(data.distance) || null;
     this.climb = Number(data.climb) || null;
     this.descend = Number(data.descend) || null;
-    this.count = Number(data.count) || null;
+    this.rides = Number(data.rides) || null;
   }
 
   static keys: (
@@ -40,8 +40,8 @@ export class Limits {
     | "distance"
     | "climb"
     | "descend"
-    | "count"
-  )[] = ["days", "time", "distance", "climb", "descend", "count"];
+    | "rides"
+  )[] = ["days", "time", "distance", "climb", "descend", "rides"];
 
   check() {
     return (
@@ -50,7 +50,7 @@ export class Limits {
       is_set(this.distance) ||
       is_set(this.climb) ||
       is_set(this.descend) ||
-      is_set(this.count)
+      is_set(this.rides)
     );
   }
 }
@@ -121,7 +121,7 @@ export class ServicePlan extends Limits {
         res.distance = this.distance - Math.floor(usage.distance / 1000);
       if (this.climb) res.climb = this.climb - usage.climb;
       if (this.descend) res.descend = this.descend - usage.descend;
-      if (this.count) res.count = this.count - usage.count;
+      if (this.rides) res.rides = this.rides - usage.count;
     }
     return res;
   }

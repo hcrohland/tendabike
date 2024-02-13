@@ -19,7 +19,7 @@
     | "distance"
     | "climb"
     | "descend"
-    | "count"
+    | "rides"
   )[] = [];
 </script>
 

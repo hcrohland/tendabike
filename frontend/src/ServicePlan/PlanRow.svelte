@@ -12,7 +12,7 @@
   import { parts } from "../Part/part";
   import { services } from "../Service/service";
   import { usages } from "../Usage/usage";
-  import { DAY, fmtDate, fmtSeconds, get_days } from "../lib/store";
+  import { fmtDate, fmtSeconds, get_days } from "../lib/store";
   import Usage from "../Usage/Usage.svelte";
   import ShowHist from "../Widgets/ShowHist.svelte";
 
@@ -41,7 +41,7 @@
     </div>
   </td>
   <PlanCell plan={plan.days} due={due.days} />
-  <PlanCell plan={plan.count} due={due.count} />
+  <PlanCell plan={plan.rides} due={due.rides} />
   <PlanCell plan={plan.time} due={due.time} fmt={fmtSeconds} />
   <PlanCell plan={plan.distance} due={due.distance} />
   <PlanCell plan={plan.climb} due={due.climb} />

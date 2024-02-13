@@ -9,5 +9,5 @@ CREATE TABLE service_plans (
     "distance" integer,
     "climb" integer,
     "descend" integer,
-    "count" integer
+    "rides" integer
 );

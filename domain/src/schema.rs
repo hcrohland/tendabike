@@ -69,7 +69,7 @@ table! {
         distance -> Nullable<Int4>,
         climb -> Nullable<Int4>,
         descend -> Nullable<Int4>,
-        count -> Nullable<Int4>,
+        rides -> Nullable<Int4>,
     }
 }
 
