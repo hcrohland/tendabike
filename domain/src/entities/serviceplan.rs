@@ -111,6 +111,7 @@ impl ServicePlanId {
     Insertable,
     AsChangeset,
 )]
+#[diesel(treat_none_as_null = true)]
 pub struct ServicePlan {
     #[serde(default = "ServicePlanId::new")]
     pub id: ServicePlanId,
