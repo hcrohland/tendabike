@@ -21,7 +21,7 @@ export class Service {
   // we do not accept thos values from the client!
   usage: string;
   successor: string | null;
-  plan: string | null;
+  plans: string[];
 
   constructor(data: any) {
     this.id = data.id;
@@ -32,7 +32,7 @@ export class Service {
     this.notes = data.notes || "";
     this.usage = data.usage;
     this.successor = data.successor || null;
-    this.plan = data.plan || null;
+    this.plans = data.plans || [];
   }
 
   static async create(

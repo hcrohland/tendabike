@@ -53,7 +53,7 @@ table! {
         notes -> Text,
         usage -> Uuid,
         successor -> Nullable<Uuid>,
-        plan -> Nullable<Uuid>,
+        plans -> Array<Uuid>,
     }
 }
 

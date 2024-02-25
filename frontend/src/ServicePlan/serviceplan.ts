@@ -1,5 +1,5 @@
 import { get_days, handleError, myfetch } from "../lib/store";
-import { mapable, type Map, filterValues } from "../lib/mapable";
+import { mapable, type Map, filterValues, by } from "../lib/mapable";
 import { Service, services } from "../Service/service";
 import { Part } from "../Part/part";
 import {
@@ -109,8 +109,10 @@ export class ServicePlan extends Limits {
     let part = parts[part_at_hook(this.part, this.what, this.hook, attaches)];
     let service = filterValues(
       services,
-      (s) => s.part_id == part.id && s.plan == this.id && s.successor == null,
-    ).pop();
+      (s) => s.part_id == part.id && s.plans.includes(this.id || "xxx"),
+    )
+      .sort(by("time", true))
+      .pop();
     return service
       ? { service, part, time: service.time, usage: usages[service.usage] }
       : { service: null, part, time: part.purchase, usage: usages[part.usage] };

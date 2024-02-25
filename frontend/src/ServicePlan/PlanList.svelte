@@ -18,7 +18,8 @@
 
   $: servs = filterValues(
     $services,
-    (s) => s.part_id == part.id && s.successor == undefined && s.plan == null,
+    (s) =>
+      s.part_id == part.id && s.successor == undefined && s.plans.length == 0,
   ).sort(by("time"));
 </script>
 

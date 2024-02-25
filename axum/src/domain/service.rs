@@ -46,7 +46,7 @@ struct NewService {
     time: OffsetDateTime,
     name: String,
     notes: String,
-    plan: Option<ServicePlanId>,
+    plans: Vec<ServicePlanId>,
 }
 async fn create(
     user: RequestUser,
@@ -56,12 +56,12 @@ async fn create(
         time,
         name,
         notes,
-        plan,
+        plans,
     }): Json<NewService>,
 ) -> Result<(StatusCode, Json<Summary>), AppError> {
     let mut store = store.get().await?;
     part_id.checkuser(&user, &mut store).await?;
-    let summary = Service::create(part_id, time, name, notes, None, plan, &mut store).await?;
+    let summary = Service::create(part_id, time, name, notes, None, plans, &mut store).await?;
     Ok((StatusCode::CREATED, Json(summary)))
 }
 
