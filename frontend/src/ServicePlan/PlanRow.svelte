@@ -15,10 +15,11 @@
   import { fmtDate, fmtSeconds, get_days } from "../lib/store";
   import Usage from "../Usage/Usage.svelte";
   import ShowHist from "../Widgets/ShowHist.svelte";
+  import UpdatePlan from "./UpdatePlan.svelte";
 
   export let plan: ServicePlan;
 
-  // let updatePlan: (p: ServicePlan) => void;
+  let updatePlan: (p: ServicePlan) => void;
   // let fullfillPlan: (p: ServicePlan) => void;
   let deletePlan: (p: ServicePlan) => void;
 
@@ -48,10 +49,10 @@
 
   <td>
     <Menu>
-      <!-- <DropdownItem on:click={() => updatePlan(plan)}>
-          Change ServicePlan
-        </DropdownItem>
-        <DropdownItem on:click={() => fullfillPlan(plan)}>
+      <DropdownItem on:click={() => updatePlan(plan)}>
+        Change ServicePlan
+      </DropdownItem>
+      <!-- <DropdownItem on:click={() => fullfillPlan(plan)}>
           Repeat ServicePlan
         </DropdownItem> -->
       <DropdownItem on:click={() => deletePlan(plan)}>
@@ -74,6 +75,6 @@
     </tr>
   {/if}
 {/if}
-<!-- <UpdatePlan bind:updatePlan /> -->
+<UpdatePlan bind:updatePlan />
 <DeletePlan bind:deletePlan />
 <!-- <RedoPlan bind:fullfillPlan /> -->

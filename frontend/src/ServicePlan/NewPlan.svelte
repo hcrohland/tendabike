@@ -1,18 +1,11 @@
 <script lang="ts">
-  import {
-    Modal,
-    ModalBody,
-    ModalHeader,
-    Form,
-    FormGroup,
-    Input,
-  } from "@sveltestrap/sveltestrap";
+  import { Modal, ModalBody, ModalHeader } from "@sveltestrap/sveltestrap";
   import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { ServicePlan } from "./serviceplan";
   import { Part } from "../Part/part";
-  import PlanLimits from "./PlanLimits.svelte";
   import TypeForm from "../Widgets/TypeForm.svelte";
   import type { Type } from "../lib/types";
+  import PlanForm from "./PlanForm.svelte";
 
   let part: Part;
   let plan: ServicePlan;
@@ -56,21 +49,7 @@
     {/if}
   </ModalHeader>
   <ModalBody>
-    <Form>
-      <FormGroup class="col-md-12">
-        <!-- svelte-ignore a11y-autofocus -->
-        <Input
-          type="text"
-          class="form-control"
-          id="inputName"
-          bind:value={plan.name}
-          autofocus
-          required
-          placeholder="Name"
-        />
-      </FormGroup>
-      <PlanLimits bind:select={plan} />
-    </Form>
+    <PlanForm bind:plan />
   </ModalBody>
   <ModalFooter {toggle} {disabled} action={createPlan} button={"Create"} />
 </Modal>
