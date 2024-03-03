@@ -11,15 +11,18 @@
   export let show_all = false;
 
   let show_hist = false;
+
+  $: part = $parts[service.part_id];
+  $: successor = service.get_successor($services);
 </script>
 
-<ServiceRow {...service.get_row(depth, $parts, $usages, $services)}>
+<ServiceRow {part} {service} {successor} {depth}>
   {#if !show_all}
     <ShowHist bind:show_hist />
   {/if}
 </ServiceRow>
 {#if show_hist || show_all}
-  {#each service.history(1, $parts, $usages, $services) as s (s.service.id)}
-    <ServiceRow {...s} />
+  {#each service.history(1, $services) as s (s.service?.id + "-" + s.successor?.id)}
+    <ServiceRow {part} {...s} />
   {/each}
 {/if}

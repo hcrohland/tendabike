@@ -18,8 +18,7 @@
 
   $: servs = filterValues(
     $services,
-    (s) =>
-      s.part_id == part.id && s.successor == undefined && s.plans.length == 0,
+    (s) => s.part_id == part.id && s.successor == undefined,
   ).sort(by("time"));
 </script>
 
@@ -36,17 +35,6 @@
     <tbody>
       {#each plans_for_part(part.id, $plans, $attachments) as plan (plan.id)}
         <PlanRow {plan} />
-      {/each}
-      <thead>
-        <th colspan="20">
-          More Service Logs &nbsp;&nbsp;
-          <Button size="sm" color="light" on:click={() => newService(part)}>
-            add
-          </Button>
-        </th>
-      </thead>
-      {#each servs as service (service.id)}
-        <ServiceHist {service} />
       {/each}
     </tbody>
   </table>

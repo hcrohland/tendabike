@@ -1,10 +1,7 @@
 <script lang="ts">
   import { DropdownItem } from "@sveltestrap/sveltestrap";
   import DeletePlan from "./DeletePlan.svelte";
-  // import UpdatePlan from "./UpdatePlan.svelte";
-  // import RedoPlan from "./RedoPlan.svelte";
   import Menu from "../Widgets/Menu.svelte";
-  import ServiceHist from "../Service/ServiceHist.svelte";
   import PlanHook from "./PlanHook.svelte";
   import PlanCell from "./PlanCell.svelte";
   import { ServicePlan } from "./serviceplan";
@@ -12,21 +9,22 @@
   import { parts } from "../Part/part";
   import { services } from "../Service/service";
   import { usages } from "../Usage/usage";
-  import { fmtDate, fmtSeconds, get_days } from "../lib/store";
-  import Usage from "../Usage/Usage.svelte";
+  import { fmtSeconds } from "../lib/store";
   import ShowHist from "../Widgets/ShowHist.svelte";
   import UpdatePlan from "./UpdatePlan.svelte";
+  import ServiceRow from "../Service/ServiceRow.svelte";
 
   export let plan: ServicePlan;
 
   let updatePlan: (p: ServicePlan) => void;
-  // let fullfillPlan: (p: ServicePlan) => void;
   let deletePlan: (p: ServicePlan) => void;
 
   let show_hist = false;
 
-  $: status = plan.status($services, $parts, $attachments, $usages);
-  $: due = plan.due(status.time, status.usage);
+  $: part = plan.getpart($parts, $attachments);
+  $: serviceList = plan.services(part, $services);
+
+  $: due = plan.due(part, serviceList.at(0), $usages);
 </script>
 
 <tr>
@@ -52,9 +50,6 @@
       <DropdownItem on:click={() => updatePlan(plan)}>
         Change ServicePlan
       </DropdownItem>
-      <!-- <DropdownItem on:click={() => fullfillPlan(plan)}>
-          Repeat ServicePlan
-        </DropdownItem> -->
       <DropdownItem on:click={() => deletePlan(plan)}>
         Delete ServicePlan
       </DropdownItem>
@@ -62,19 +57,11 @@
   </td>
 </tr>
 {#if show_hist}
-  {#if status.service}
-    <ServiceHist service={status.service} show_all depth={1} />
-  {:else}
-    {@const p = status.part}
-    {@const now = new Date()}
-    <tr>
-      <td> ┗━</td>
-      <td>{fmtDate(p.purchase)}</td>
-      <td class="text-end">{get_days(p.purchase)}</td>
-      <Usage usage={$usages[p.usage]} />
-    </tr>
-  {/if}
+  {#each serviceList as service, i (service.id)}
+    {@const successor = i > 0 ? serviceList[i - 1] : null}
+    <ServiceRow depth={1} {part} {service} {successor} />
+  {/each}
+  <ServiceRow {part} successor={serviceList.at(-1)} />
 {/if}
 <UpdatePlan bind:updatePlan />
 <DeletePlan bind:deletePlan />
-<!-- <RedoPlan bind:fullfillPlan /> -->

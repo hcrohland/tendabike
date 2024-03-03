@@ -85,41 +85,33 @@ export class Service {
 
   history(
     depth: number,
-    parts: Map<Part>,
-    usages: Map<Usage>,
     services: Map<Service>,
-  ) {
-    let pred = filterValues(services, (s) => s.successor == this.id);
-    if (pred.length > 0) {
+  ): { depth: number; service: Service | undefined; successor: Service }[] {
+    let preds = filterValues(services, (s) => s.successor == this.id);
+    if (preds.length > 0) {
       let res = new Array();
-      pred.forEach((s, i) => {
+      preds.forEach((service, i) => {
         // the early ones have the higher depth!
-        let d = depth + pred.length - (i + 1);
-        res.push(s.get_row(d, parts, usages, services));
-        res = res.concat(s.history(d, parts, usages, services));
+        let d = depth + preds.length - (i + 1);
+        res.push({ depth: d, service, successor: this });
+        res = res.concat(service.history(d, services));
       });
       return res;
     } else {
-      // build a service entry for the part when it was new
-      let first = new Service({
-        id: "pred" + this.id,
-        name: "┗━",
-        notes: "",
-        part_id: this.part_id,
-        successor: this.id,
+      return new Array({
+        depth: depth - 1,
+        service: undefined,
+        successor: this,
       });
-      return new Array(first.get_row(depth - 1, parts, usages, services));
     }
   }
 
   get_row(
     depth: number,
-    parts: Map<Part>,
+    part: Part,
     usages: Map<Usage>,
-    services: Map<Service>,
+    successor: Service | null,
   ) {
-    let part = parts[this.part_id];
-    let successor = this.get_successor(services);
     let next;
     let time: Date;
     if (!successor) {

@@ -1,7 +1,6 @@
 import type { Activity } from "../Activity/activity";
 import { type Map, filterValues, mapable } from "../lib/mapable";
-import { fmtDate, handleError, myfetch, updateSummary } from "../lib/store";
-import { maxDate } from "../lib/types";
+import { fmtRange, handleError, myfetch, updateSummary } from "../lib/store";
 
 export class Attachment {
   part_id: number;
@@ -25,9 +24,7 @@ export class Attachment {
     this.usage = data.usage;
   }
   fmtTime() {
-    let res = fmtDate(this.attached);
-    if (this.detached < maxDate) res = res + " - " + fmtDate(this.detached);
-    return res;
+    return fmtRange(this.attached, this.detached);
   }
   isAttached(time?: Date | string | number) {
     if (!time) time = new Date();

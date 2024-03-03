@@ -1,6 +1,6 @@
 import { writable, type Writable } from "svelte/store";
 import { mapObject } from "./mapable";
-import { Type, type ActType, type User } from "./types";
+import { Type, type ActType, type User, maxDate } from "./types";
 import { Service, services } from "../Service/service";
 import { activities, Activity } from "../Activity/activity";
 import { Usage, usages } from "../Usage/usage";
@@ -17,6 +17,12 @@ export function get_days(start: Date, end?: Date) {
 
 export function fmtDate(date: Date | undefined) {
   return date ? date.toLocaleDateString(navigator.language) : "never";
+}
+
+export function fmtRange(start: Date, end: Date | undefined) {
+  let res = fmtDate(start);
+  if (end && end < maxDate) res += " - " + fmtDate(end);
+  return res;
 }
 
 export function fmtSeconds(sec_num: number | undefined) {

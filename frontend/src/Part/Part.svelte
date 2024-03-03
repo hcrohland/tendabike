@@ -18,6 +18,7 @@
   import PlanList from "../ServicePlan/PlanList.svelte";
   import { parts, Part } from "./part";
   import NewPlan from "../ServicePlan/NewPlan.svelte";
+  import ServiceList from "../Service/ServiceList.svelte";
 
   export let params: { id: number; what: number };
 
@@ -68,6 +69,7 @@
 </GearCard>
 <br />
 <PlanList {part} /><br />
+<ServiceList {part} /><br />
 <PartHist id={params.id} />
 <Subparts gear={part} {hook} />
 

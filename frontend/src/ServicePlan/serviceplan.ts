@@ -100,35 +100,29 @@ export class ServicePlan extends Limits {
     return super.valid() && this.name.length > 0 && this.what != undefined;
   }
 
-  status(
-    services: Map<Service>,
-    parts: Map<Part>,
-    attaches: Map<Attachment>,
-    usages: Map<Usage>,
-  ) {
-    let part = parts[part_at_hook(this.part, this.what, this.hook, attaches)];
-    let service = filterValues(
+  services(part: Part, services: Map<Service>) {
+    return filterValues(
       services,
-      (s) => s.part_id == part.id && s.plans.includes(this.id || "xxx"),
-    )
-      .sort(by("time", true))
-      .pop();
-    return service
-      ? { service, part, time: service.time, usage: usages[service.usage] }
-      : { service: null, part, time: part.purchase, usage: usages[part.usage] };
+      // @ts-ignore
+      (s) => s.part_id == part.id && s.plans.includes(this.id),
+    ).sort(by("time"));
   }
 
-  due(time: Date, usage: Usage | undefined) {
+  getpart(parts: Map<Part>, attaches: Map<Attachment>) {
+    return parts[part_at_hook(this.part, this.what, this.hook, attaches)];
+  }
+
+  due(part: Part, service: Service | undefined, usages: Map<Usage>) {
     let res = new Limits({});
-    if (usage) {
-      if (this.days) res.days = this.days - get_days(time);
-      if (this.time) res.time = this.time - usage.time;
-      if (this.distance)
-        res.distance = this.distance - Math.floor(usage.distance / 1000);
-      if (this.climb) res.climb = this.climb - usage.climb;
-      if (this.descend) res.descend = this.descend - usage.descend;
-      if (this.rides) res.rides = this.rides - usage.count;
-    }
+    let time = service ? service.time : part.purchase;
+    let usage = usages[service ? service.usage : part.usage];
+    if (this.days) res.days = this.days - get_days(time);
+    if (this.time) res.time = this.time - usage.time;
+    if (this.distance)
+      res.distance = this.distance - Math.floor(usage.distance / 1000);
+    if (this.climb) res.climb = this.climb - usage.climb;
+    if (this.descend) res.descend = this.descend - usage.descend;
+    if (this.rides) res.rides = this.rides - usage.count;
     return res;
   }
 }
