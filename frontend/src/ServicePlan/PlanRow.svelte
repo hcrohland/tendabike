@@ -50,16 +50,18 @@
 
   <td>
     <Menu>
-      {#if serviceList.at(0) != undefined}
-        <DropdownItem on:click={() => redoService(serviceList.at(0))}>
-          Repeat last service
+      {#if !(part.isGear() && plan.hook)}
+        {#if serviceList.at(0) != undefined}
+          <DropdownItem on:click={() => redoService(serviceList.at(0))}>
+            Repeat last service
+          </DropdownItem>
+        {/if}
+        {@const plans = plan.id ? [plan.id] : []}
+        <DropdownItem on:click={() => newService(part, plans)}>
+          New Service for plan
         </DropdownItem>
+        <DropdownItem divider />
       {/if}
-      {@const plans = plan.id ? [plan.id] : []}
-      <DropdownItem on:click={() => newService(part, plans)}>
-        New Service for plan
-      </DropdownItem>
-      <DropdownItem divider />
       <DropdownItem on:click={() => updatePlan(plan)}>
         Change ServicePlan
       </DropdownItem>
