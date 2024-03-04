@@ -13,6 +13,12 @@
 
   export let select: Limits;
 
+  function handleChange(event: Event, key: keyof Limits) {
+    const target = event.target as HTMLSelectElement;
+    // @ts-ignore
+    select[key] = Number(target.value);
+  }
+
   // @ts-ignore
   let selected: (
     | "days"
@@ -31,11 +37,8 @@
     <Input
       type="number"
       placeholder={key}
-      bind:value={select[key]}
-      on:change={() => {
-        let s = select[key];
-        select[key] = Number(s);
-      }}
+      value={select[key]}
+      on:change={(e) => handleChange(e, key)}
     />
     <InputGroupText>{key}</InputGroupText>
     <Button
