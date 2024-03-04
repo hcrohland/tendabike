@@ -22,14 +22,16 @@
       newservice.time,
       newservice.name,
       newservice.notes,
+      newservice.plans,
     );
     isOpen = false;
   }
 
-  export const newService = (p: Part) => {
+  export const newService = (p: Part, plans: string[] = []) => {
     part = p;
     service = new Service({
       part_id: p.id,
+      plans,
     });
     isOpen = true;
   };

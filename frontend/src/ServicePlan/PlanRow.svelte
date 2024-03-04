@@ -6,17 +6,19 @@
   import PlanCell from "./PlanCell.svelte";
   import { ServicePlan } from "./serviceplan";
   import { attachments } from "../Attachment/attachment";
-  import { parts } from "../Part/part";
+  import { Part, parts } from "../Part/part";
   import { services } from "../Service/service";
   import { usages } from "../Usage/usage";
   import ShowHist from "../Widgets/ShowHist.svelte";
   import UpdatePlan from "./UpdatePlan.svelte";
   import ServiceRow from "../Service/ServiceRow.svelte";
+  import NewService from "../Service/NewService.svelte";
 
   export let plan: ServicePlan;
 
   let updatePlan: (p: ServicePlan) => void;
   let deletePlan: (p: ServicePlan) => void;
+  let newService: (part: Part, plans?: string[]) => void;
 
   let show_hist = false;
 
@@ -46,6 +48,9 @@
 
   <td>
     <Menu>
+      <DropdownItem on:click={() => newService(part, plan.id ? [plan.id] : [])}>
+        Log Service for plan
+      </DropdownItem>
       <DropdownItem on:click={() => updatePlan(plan)}>
         Change ServicePlan
       </DropdownItem>
@@ -64,3 +69,4 @@
 {/if}
 <UpdatePlan bind:updatePlan />
 <DeletePlan bind:deletePlan />
+<NewService bind:newService />

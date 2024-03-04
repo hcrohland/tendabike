@@ -40,12 +40,14 @@ export class Service {
     time: Date,
     name: string,
     notes: string,
+    plans: string[],
   ) {
     return await myfetch("/api/service", "POST", {
       part_id,
       time,
       name,
       notes,
+      plans,
     })
       .then(updateSummary)
       .catch(handleError);
