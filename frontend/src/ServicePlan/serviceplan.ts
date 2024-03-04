@@ -115,7 +115,8 @@ export class ServicePlan extends Limits {
   due(part: Part, service: Service | undefined, usages: Map<Usage>) {
     let res = new Limits({});
     let time = service ? service.time : part.purchase;
-    let usage = usages[service ? service.usage : part.usage];
+    let usage = usages[part.usage];
+    if (service) usage = usage.sub(usages[service.usage]);
     if (this.days) res.days = this.days - get_days(time);
     if (this.time) res.time = this.time - Math.floor(usage.time / 3600);
     if (this.distance)
