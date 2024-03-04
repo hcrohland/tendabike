@@ -2,12 +2,11 @@
   import { Button } from "@sveltestrap/sveltestrap";
   import { filterValues, by } from "../lib/mapable";
   import { Part } from "../Part/part";
-  import { plans, plans_for_part } from "./serviceplan";
+  import { plans, plans_for_gear } from "./serviceplan";
   import { services } from "../Service/service";
   import PlanHeader from "./PlanHeader.svelte";
   import PlanRow from "./PlanRow.svelte";
   import NewPlan from "./NewPlan.svelte";
-  import ServiceHist from "../Service/ServiceHist.svelte";
   import NewService from "../Service/NewService.svelte";
   import { attachments } from "../Attachment/attachment";
 
@@ -33,7 +32,7 @@
       </PlanHeader>
     </thead>
     <tbody>
-      {#each plans_for_part(part.id, $plans, $attachments) as plan (plan.id)}
+      {#each plans_for_gear(part.id, $plans, $attachments) as plan (plan.id)}
         <PlanRow {plan} />
       {/each}
     </tbody>

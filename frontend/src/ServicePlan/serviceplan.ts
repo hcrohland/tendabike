@@ -127,12 +127,13 @@ export class ServicePlan extends Limits {
   }
 }
 
-export function plans_for_part(
+export function plans_for_gear(
   part: number | undefined,
   plans: Map<ServicePlan>,
   atts: Map<Attachment>,
+  time = new Date(),
 ) {
-  let att = attachment_for_part(part, atts);
+  let att = attachment_for_part(part, atts, time);
   return filterValues(
     plans,
     (s) =>
@@ -141,4 +142,14 @@ export function plans_for_part(
   );
 }
 
+export function plans_for_part(
+  part: Part,
+  time: Date,
+  plans: Map<ServicePlan>,
+  atts: Map<Attachment>,
+) {
+  if (part.isGear())
+    return filterValues(plans, (p) => p.part == part.id && p.hook == null);
+  else return plans_for_gear(part.id, plans, atts, time);
+}
 export const plans = mapable("id", (s) => new ServicePlan(s));

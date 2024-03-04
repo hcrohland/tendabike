@@ -99,11 +99,11 @@ export function part_at_hook(
 export function attachment_for_part(
   part: number | undefined,
   atts: Map<Attachment>,
+  time: Date,
 ) {
-  let now = new Date();
   return filterValues(
     atts,
-    (att) => att.part_id == part && att.attached <= now && att.detached > now,
+    (att) => att.part_id == part && att.attached <= time && att.detached > time,
   ).pop();
 }
 
