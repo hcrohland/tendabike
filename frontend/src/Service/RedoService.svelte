@@ -51,5 +51,5 @@
       />
     </Form>
   </ModalBody>
-  <ModalFooter {toggle} {disabled} action={saveService} button={"Update"} />
+  <ModalFooter {toggle} {disabled} action={saveService} button={"Save"} />
 </Modal>

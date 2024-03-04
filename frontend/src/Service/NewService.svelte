@@ -52,5 +52,5 @@
       <ServiceForm {service} mindate={part.purchase} on:change={setService} />
     </Form>
   </ModalBody>
-  <ModalFooter {toggle} {disabled} action={saveService} button={"Create"} />
+  <ModalFooter {toggle} {disabled} action={saveService} button={"Save"} />
 </Modal>
