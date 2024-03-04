@@ -20,16 +20,10 @@
   }
 
   // @ts-ignore
-  let selected: (
-    | "days"
-    | "time"
-    | "distance"
-    | "climb"
-    | "descend"
-    | "rides"
-  )[] = Object.entries(select)
-    .filter(([k, v]) => Limits.keys.includes(k as any) && v != null)
-    .map(([k, v]) => k);
+  let selected: ("days" | "hours" | "km" | "climb" | "descend" | "rides")[] =
+    Object.entries(select)
+      .filter(([k, v]) => Limits.keys.includes(k as any) && v != null)
+      .map(([k, v]) => k);
 </script>
 
 {#each selected as key}

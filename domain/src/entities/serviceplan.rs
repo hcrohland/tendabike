@@ -128,9 +128,9 @@ pub struct ServicePlan {
     /// Time until service
     pub days: Option<i32>,
     /// Usage time
-    pub time: Option<i32>,
+    pub hours: Option<i32>,
     /// Usage distance
-    pub distance: Option<i32>,
+    pub km: Option<i32>,
     /// Overall climbing
     pub climb: Option<i32>,
     /// Overall descending

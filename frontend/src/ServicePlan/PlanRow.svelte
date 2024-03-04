@@ -43,8 +43,8 @@
   <td class="text-end"> in </td>
   <PlanCell plan={plan.days} due={due.days} />
   <PlanCell plan={plan.rides} due={due.rides} />
-  <PlanCell plan={plan.time} due={due.time} />
-  <PlanCell plan={plan.distance} due={due.distance} />
+  <PlanCell plan={plan.hours} due={due.hours} />
+  <PlanCell plan={plan.km} due={due.km} />
   <PlanCell plan={plan.climb} due={due.climb} />
   <PlanCell plan={plan.descend} due={due.descend} />
 

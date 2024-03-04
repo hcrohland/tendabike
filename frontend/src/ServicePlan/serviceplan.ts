@@ -15,9 +15,9 @@ export class Limits {
   /// Time until service
   days: number | null;
   /// Usage time
-  time: number | null;
+  hours: number | null;
   /// Usage distance
-  distance: number | null;
+  km: number | null;
   /// Overall climbing
   climb: number | null;
   /// Overall descending
@@ -27,27 +27,27 @@ export class Limits {
 
   constructor(data: any) {
     this.days = Number(data.days) || null;
-    this.time = Number(data.time) || null;
-    this.distance = Number(data.distance) || null;
+    this.hours = Number(data.hours) || null;
+    this.km = Number(data.km) || null;
     this.climb = Number(data.climb) || null;
     this.descend = Number(data.descend) || null;
     this.rides = Number(data.rides) || null;
   }
 
-  static keys: (
-    | "days"
-    | "time"
-    | "distance"
-    | "climb"
-    | "descend"
-    | "rides"
-  )[] = ["days", "time", "distance", "climb", "descend", "rides"];
+  static keys: ("days" | "hours" | "km" | "climb" | "descend" | "rides")[] = [
+    "days",
+    "hours",
+    "km",
+    "climb",
+    "descend",
+    "rides",
+  ];
 
   valid() {
     return (
       is_set(this.days) ||
-      is_set(this.time) ||
-      is_set(this.distance) ||
+      is_set(this.hours) ||
+      is_set(this.km) ||
       is_set(this.climb) ||
       is_set(this.descend) ||
       is_set(this.rides)
@@ -118,9 +118,8 @@ export class ServicePlan extends Limits {
     let usage = usages[part.usage];
     if (service) usage = usage.sub(usages[service.usage]);
     if (this.days) res.days = this.days - get_days(time);
-    if (this.time) res.time = this.time - Math.floor(usage.time / 3600);
-    if (this.distance)
-      res.distance = this.distance - Math.floor(usage.distance / 1000);
+    if (this.hours) res.hours = this.hours - Math.floor(usage.time / 3600);
+    if (this.km) res.km = this.km - Math.floor(usage.distance / 1000);
     if (this.climb) res.climb = this.climb - usage.climb;
     if (this.descend) res.descend = this.descend - usage.descend;
     if (this.rides) res.rides = this.rides - usage.count;
