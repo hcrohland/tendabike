@@ -132,7 +132,11 @@ impl Service {
 
     pub async fn redo(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
         let Service {
-            id, notes, time, ..
+            id,
+            notes,
+            time,
+            plans,
+            ..
         } = self;
         let mut old = id.get(store).await?;
         old.part_id.checkuser(user, store).await?;
@@ -143,7 +147,7 @@ impl Service {
                 old.name.clone(),
                 notes,
                 Some(old.id),
-                Vec::new(),
+                plans,
                 store,
             )
             .await
@@ -154,7 +158,7 @@ impl Service {
                 old.name.clone(),
                 notes,
                 None,
-                old.plans.clone(),
+                plans,
                 store,
             )
             .await?;
