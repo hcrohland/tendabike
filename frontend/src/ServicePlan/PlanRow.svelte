@@ -7,18 +7,20 @@
   import { ServicePlan } from "./serviceplan";
   import { attachments } from "../Attachment/attachment";
   import { Part, parts } from "../Part/part";
-  import { services } from "../Service/service";
+  import { Service, services } from "../Service/service";
   import { usages } from "../Usage/usage";
   import ShowHist from "../Widgets/ShowHist.svelte";
   import UpdatePlan from "./UpdatePlan.svelte";
   import ServiceRow from "../Service/ServiceRow.svelte";
   import NewService from "../Service/NewService.svelte";
+  import RedoService from "../Service/RedoService.svelte";
 
   export let plan: ServicePlan;
 
   let updatePlan: (p: ServicePlan) => void;
   let deletePlan: (p: ServicePlan) => void;
   let newService: (part: Part, plans?: string[]) => void;
+  let redoService: (s: Service | undefined) => void;
 
   let show_hist = false;
 
@@ -48,9 +50,16 @@
 
   <td>
     <Menu>
-      <DropdownItem on:click={() => newService(part, plan.id ? [plan.id] : [])}>
-        Log Service for plan
+      {#if serviceList.at(0) != undefined}
+        <DropdownItem on:click={() => redoService(serviceList.at(0))}>
+          Repeat last service
+        </DropdownItem>
+      {/if}
+      {@const plans = plan.id ? [plan.id] : []}
+      <DropdownItem on:click={() => newService(part, plans)}>
+        New Service for plan
       </DropdownItem>
+      <DropdownItem divider />
       <DropdownItem on:click={() => updatePlan(plan)}>
         Change ServicePlan
       </DropdownItem>
@@ -70,3 +79,4 @@
 <UpdatePlan bind:updatePlan />
 <DeletePlan bind:deletePlan />
 <NewService bind:newService />
+<RedoService bind:redoService />

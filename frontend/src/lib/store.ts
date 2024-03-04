@@ -122,10 +122,10 @@ type Summary = {
 };
 
 export function setSummary(data: Summary) {
+  usages.setMap(data.usages);
   parts.setMap(data.parts);
   attachments.setMap(data.attachments);
   activities.setMap(data.activities);
-  usages.setMap(data.usages);
   services.setMap(data.services);
   plans.setMap(data.plans);
 }
@@ -134,9 +134,9 @@ export function updateSummary(data: Summary) {
   parts.updateMap(data.parts);
   attachments.updateMap(data.attachments);
   activities.updateMap(data.activities);
-  usages.updateMap(data.usages);
   services.updateMap(data.services);
   plans.updateMap(data.plans);
+  usages.updateMap(data.usages);
 }
 
 export let types: { [key: number]: Type };

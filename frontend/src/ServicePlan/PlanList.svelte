@@ -14,11 +14,6 @@
 
   let newPlan: (p: Part) => void;
   let newService: (p: Part) => void;
-
-  $: servs = filterValues(
-    $services,
-    (s) => s.part_id == part.id && s.successor == undefined,
-  ).sort(by("time"));
 </script>
 
 <Table responsive hover>

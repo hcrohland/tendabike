@@ -140,7 +140,7 @@ export function plans_for_gear(
     (s) =>
       s.part == part ||
       (s.hook == att?.hook && s.part == att?.gear && s.what == att?.what),
-  );
+  ).sort(by("name", true));
 }
 
 export function plans_for_part(

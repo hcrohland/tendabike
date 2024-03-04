@@ -39,7 +39,7 @@ export class Usage {
     this.duration += a.duration || a.time || 0;
   }
 
-  sub(rhs: Usage) {
+  sub(rhs = new Usage()) {
     return new Usage({
       id: this.id,
       count: this.count - rhs.count,
