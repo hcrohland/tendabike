@@ -10,9 +10,8 @@ import { plans, type ServicePlan } from "../ServicePlan/serviceplan";
 
 export const DAY = 24 * 60 * 60 * 1000;
 
-export function get_days(start: Date, end?: Date) {
-  let e = end ? end : new Date();
-  return Math.floor((e.getTime() - start.getTime()) / DAY);
+export function get_days(start: Date, end = new Date()) {
+  return Math.floor((end.getTime() - start.getTime()) / DAY);
 }
 
 export function fmtDate(date: Date | undefined) {

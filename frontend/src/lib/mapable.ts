@@ -46,6 +46,6 @@ export function filterValues<T>(map: Map<T>, fn: (t: T) => boolean) {
   return Object.values(map).filter(fn);
 }
 
-export function by<T>(field: keyof T, asc?: boolean) {
+export function by<T>(field: keyof T, asc = false) {
   return (a: T, b: T) => (a[field] < b[field] ? 1 : -1) * (asc ? -1 : 1);
 }
