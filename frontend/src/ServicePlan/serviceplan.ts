@@ -117,7 +117,7 @@ export class ServicePlan extends Limits {
     let time = service ? service.time : part.purchase;
     let usage = usages[service ? service.usage : part.usage];
     if (this.days) res.days = this.days - get_days(time);
-    if (this.time) res.time = this.time - usage.time;
+    if (this.time) res.time = this.time - Math.floor(usage.time / 3600);
     if (this.distance)
       res.distance = this.distance - Math.floor(usage.distance / 1000);
     if (this.climb) res.climb = this.climb - usage.climb;

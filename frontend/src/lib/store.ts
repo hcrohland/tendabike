@@ -24,15 +24,14 @@ export function fmtRange(start: Date, end: Date | undefined) {
   return res;
 }
 
-export function fmtSeconds(sec_num: number | undefined) {
-  sec_num = sec_num || 0;
-  var hours = Math.floor(sec_num / 3600);
-  var minutes: number | string = Math.floor((sec_num - hours * 3600) / 60);
-
+export function fmtSeconds(sec_num = 0) {
+  let secs = Math.abs(sec_num);
+  let hours = Math.floor(Math.abs(sec_num) / 3600);
+  let minutes: number | string = Math.floor((secs % 3600) / 60);
   if (minutes < 10) {
     minutes = "0" + minutes;
   }
-  return hours + ":" + minutes;
+  return (sec_num < 0 ? "-" : "") + hours + ":" + minutes;
 }
 
 export function fmtNumber(number: number | undefined) {

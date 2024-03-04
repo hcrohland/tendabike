@@ -19,7 +19,7 @@
       <slot>{fmt(due)}</slot>
     </span>
     <Tooltip target={id}>
-      {plan - due} / {plan}
+      {fmt(plan - due)} / {fmt(plan)}
     </Tooltip>
   {:else}
     -
