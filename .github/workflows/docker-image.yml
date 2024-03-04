@@ -43,7 +43,7 @@ jobs:
         run: npm run build
       - 
         name: Upload frontend components
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: tendabike_frontend
           path: frontend/dist
@@ -69,7 +69,7 @@ jobs:
       run: cargo test --release
     - 
       name: Upload tendabike executable
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: tendabike
         path: target/release/tendabike
@@ -79,7 +79,7 @@ jobs:
 
     steps:
       - name: Upload libs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: libs
           path: |
@@ -131,19 +131,19 @@ jobs:
         password: ${{ github.token }}
     - 
       name: Download tendabike executable
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: tendabike
     - 
       name: Download tendabike frontend
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: tendabike_frontend
         path: dist
  
     - 
       name: Download libs
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: libs
         path: libs
