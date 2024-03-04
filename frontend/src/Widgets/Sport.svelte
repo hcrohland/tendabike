@@ -1,6 +1,6 @@
 <script lang="ts">
   let categories: number[];
-  let promise = myfetch("/activ/categories").then(
+  let promise = myfetch("/api/activ/categories").then(
     (data) => (categories = data),
   );
   import { myfetch, handleError, types } from "../lib/store";

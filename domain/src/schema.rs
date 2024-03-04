@@ -53,6 +53,23 @@ table! {
         notes -> Text,
         usage -> Uuid,
         successor -> Nullable<Uuid>,
+        plans -> Array<Uuid>,
+    }
+}
+
+table! {
+    service_plans(id) {
+        id -> Uuid,
+        part -> Int4,
+        what -> Int4,
+        hook -> Nullable<Int4>,
+        name -> Text,
+        days -> Nullable<Int4>,
+        hours -> Nullable<Int4>,
+        km -> Nullable<Int4>,
+        climb -> Nullable<Int4>,
+        descend -> Nullable<Int4>,
+        rides -> Nullable<Int4>,
     }
 }
 

@@ -7,7 +7,7 @@
   import { Type } from "../lib/types";
   import Menu from "../Widgets/Menu.svelte";
   import ShowAll from "../Widgets/ShowHist.svelte";
-  import { link } from "svelte-spa-router";
+  import PartLink from "./PartLink.svelte";
   import { parts, Part } from "../Part/part";
   import type { Attachment } from "../Attachment/attachment";
 
@@ -23,7 +23,7 @@
 
 {#if type == undefined}
   <tr>
-    <th scope="col">Attached parts</th>
+    <th scope="col">Attached parts <slot /> </th>
     <th scope="col">Name</th>
     <th scope="col">Attached</th>
     <Usage header />
@@ -34,7 +34,7 @@
     {#if i == 0}
       <tr>
         <th scope="row" class="text-nowrap">
-          {"| ".repeat(level)}
+          {"┃ ".repeat(level)}
           {prefix + " " + type.name}
           {#if attachments.length > 0 || (part && $usages[part.usage].count != $usages[att.usage].count)}
             <ShowAll bind:show_hist />
@@ -43,14 +43,7 @@
         {#if att.isAttached()}
           <td>
             {#if part}
-              <a
-                href="/part/{part.id}"
-                use:link
-                style={part.disposed_at ? "text-decoration: line-through;" : ""}
-                class="text-reset"
-              >
-                {part.name}
-              </a>
+              <PartLink {part} />
             {:else}
               {att.name}
             {/if}
@@ -75,18 +68,11 @@
     {#if show_hist}
       <tr>
         <th scope="row" class="text-nowrap">
-          {"| ".repeat(level + 1)}&#9656;
+          {"┃ ".repeat(level + 1) + "▶"}
         </th>
         <td>
           {#if part}
-            <a
-              href="/part/{part.id}"
-              use:link
-              style={part.disposed_at ? "text-decoration: line-through;" : ""}
-              class="text-reset"
-            >
-              {part.name}
-            </a>
+            <PartLink {part} />
           {:else}
             {att.name}
           {/if}

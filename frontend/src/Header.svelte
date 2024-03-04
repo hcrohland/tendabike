@@ -33,7 +33,7 @@
   let garmin: () => void;
 
   function refresh() {
-    promise = myfetch("/user/summary").then(setSummary);
+    promise = myfetch("/api/user/summary").then(setSummary);
   }
 
   let isOpen = false;

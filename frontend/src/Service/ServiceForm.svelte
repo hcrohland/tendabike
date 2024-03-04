@@ -10,6 +10,9 @@
   import { Service } from "./service";
   import { createEventDispatcher } from "svelte";
   import Switch from "../Widgets/Switch.svelte";
+  import { plans, plans_for_part } from "../ServicePlan/serviceplan";
+  import { attachments } from "../Attachment/attachment";
+  import { parts } from "../Part/part";
   const dispatch = createEventDispatcher();
 
   export let service: Service;
@@ -21,10 +24,17 @@
   let done = false;
   let redone: Date;
 
-  $: if (name.length > 0 && name.length > 0) {
-    service = new Service({ ...service, name, notes, time, redone });
-    dispatch("change", service);
+  $: if (name.length > 0) {
+    let s = new Service({ ...service, name, notes, time, redone });
+    dispatch("change", s);
   }
+
+  $: planlist = plans_for_part(
+    $parts[service.part_id],
+    time,
+    $plans,
+    $attachments,
+  );
 </script>
 
 <FormGroup row>
@@ -54,6 +64,28 @@
     />
   </FormGroup>
 </FormGroup>
+{#if planlist.length > 0}
+  <FormGroup row>
+    <Col xs="auto">Resolves:</Col>
+    <Col xs="auto">
+      {#each planlist as plan (plan.id)}
+        <div class="form-check">
+          <label class="form-check-label">
+            <input
+              class="form-check-input"
+              name="plans"
+              type="checkbox"
+              value={plan.id}
+              bind:group={service.plans}
+            />
+            {plan.name}
+          </label>
+        </div>
+      {/each}
+    </Col>
+    <br />
+  </FormGroup>
+{/if}
 <FormGroup row>
   <Col>
     <Label for="inputDate" class="text-end">at</Label>

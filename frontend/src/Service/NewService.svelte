@@ -22,14 +22,16 @@
       newservice.time,
       newservice.name,
       newservice.notes,
+      newservice.plans,
     );
     isOpen = false;
   }
 
-  export const newService = (p: Part) => {
+  export const newService = (p: Part, plans: string[] = []) => {
     part = p;
     service = new Service({
       part_id: p.id,
+      plans,
     });
     isOpen = true;
   };
@@ -52,5 +54,5 @@
       <ServiceForm {service} mindate={part.purchase} on:change={setService} />
     </Form>
   </ModalBody>
-  <ModalFooter {toggle} {disabled} action={saveService} button={"Create"} />
+  <ModalFooter {toggle} {disabled} action={saveService} button={"Save"} />
 </Modal>

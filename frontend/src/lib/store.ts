@@ -1,25 +1,37 @@
 import { writable, type Writable } from "svelte/store";
-import { mapable, mapObject } from "./mapable";
-import { Type, type ActType, type User } from "./types";
+import { mapObject } from "./mapable";
+import { Type, type ActType, type User, maxDate } from "./types";
 import { Service, services } from "../Service/service";
 import { activities, Activity } from "../Activity/activity";
 import { Usage, usages } from "../Usage/usage";
 import { parts, type Part } from "../Part/part";
 import { Attachment, attachments } from "../Attachment/attachment";
+import { plans, type ServicePlan } from "../ServicePlan/serviceplan";
+
+export const DAY = 24 * 60 * 60 * 1000;
+
+export function get_days(start: Date, end = new Date()) {
+  return Math.floor((end.getTime() - start.getTime()) / DAY);
+}
 
 export function fmtDate(date: Date | undefined) {
   return date ? date.toLocaleDateString(navigator.language) : "never";
 }
 
-export function fmtSeconds(sec_num: number | undefined) {
-  sec_num = sec_num || 0;
-  var hours = Math.floor(sec_num / 3600);
-  var minutes: number | string = Math.floor((sec_num - hours * 3600) / 60);
+export function fmtRange(start: Date, end: Date | undefined) {
+  let res = fmtDate(start);
+  if (end && end < maxDate) res += " - " + fmtDate(end);
+  return res;
+}
 
+export function fmtSeconds(sec_num = 0) {
+  let secs = Math.abs(sec_num);
+  let hours = Math.floor(Math.abs(sec_num) / 3600);
+  let minutes: number | string = Math.floor((secs % 3600) / 60);
   if (minutes < 10) {
     minutes = "0" + minutes;
   }
-  return hours + ":" + minutes;
+  return (sec_num < 0 ? "-" : "") + hours + ":" + minutes;
 }
 
 export function fmtNumber(number: number | undefined) {
@@ -76,10 +88,10 @@ export const icons = new Map([
 
 export async function getTypes() {
   return Promise.all([
-    myfetch("/types/part").then((types) =>
+    myfetch("/api/types/part").then((types) =>
       types.map((t: any) => new Type(t)).reduce(mapObject("id"), {}),
     ), // data[0]
-    myfetch("/types/activity"), // data[1]
+    myfetch("/api/types/activity"), // data[1]
   ])
     .then((data: { 0: Type[]; 1: ActType[] }) => {
       types = data[1].reduce((acc, a) => {
@@ -91,13 +103,13 @@ export async function getTypes() {
 }
 
 export async function initData() {
-  let u = await myfetch("/user");
+  let u = await myfetch("/api/user");
   if (u) {
     user.set(u);
   } else {
     return;
   }
-  return Promise.all([myfetch("/user/summary").then(setSummary)]);
+  return Promise.all([myfetch("/api/user/summary").then(setSummary)]);
 }
 
 type Summary = {
@@ -106,22 +118,25 @@ type Summary = {
   activities: Activity[];
   usages: Usage[];
   services: Service[];
+  plans: ServicePlan[];
 };
 
 export function setSummary(data: Summary) {
+  usages.setMap(data.usages);
   parts.setMap(data.parts);
   attachments.setMap(data.attachments);
   activities.setMap(data.activities);
-  usages.setMap(data.usages);
   services.setMap(data.services);
+  plans.setMap(data.plans);
 }
 
 export function updateSummary(data: Summary) {
   parts.updateMap(data.parts);
   attachments.updateMap(data.attachments);
   activities.updateMap(data.activities);
-  usages.updateMap(data.usages);
   services.updateMap(data.services);
+  plans.updateMap(data.plans);
+  usages.updateMap(data.usages);
 }
 
 export let types: { [key: number]: Type };

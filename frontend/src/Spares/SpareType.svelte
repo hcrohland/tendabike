@@ -7,7 +7,7 @@
   import { Type } from "../lib/types";
   import Menu from "../Widgets/Menu.svelte";
   import ShowAll from "../Widgets/ShowHist.svelte";
-  import { link } from "svelte-spa-router";
+  import PartLink from "../Part/PartLink.svelte";
   import { type Map, filterValues } from "../lib/mapable";
   import { Part, parts } from "../Part/part";
   import { attachments, Attachment } from "../Attachment/attachment";
@@ -64,14 +64,7 @@
   <tr>
     <td class="border-0"></td>
     <td title={part.vendor + " " + part.model + " " + fmtDate(part.purchase)}>
-      <a
-        href="/part/{part.id}"
-        use:link
-        style={part.disposed_at ? "text-decoration: line-through;" : ""}
-        class="text-reset"
-      >
-        {part.name}
-      </a>
+      <PartLink {part} />
     </td>
     <Usage id={part.usage} ref={part.id} />
     {#if attachee > 0}

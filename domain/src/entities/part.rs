@@ -217,20 +217,24 @@ impl Part {
         let mut usages = Vec::new();
         let mut attachments = Vec::new();
         let mut services = Vec::new();
+        let mut plans = Vec::new();
         for part in &parts {
             usages.push(part.usage().read(store).await?);
             let (mut atts, mut uses) = Attachment::for_part_with_usage(part.id, store).await?;
             usages.append(&mut uses);
             attachments.append(&mut atts);
             let (mut servs, mut uses) = Service::for_part_with_usage(part.id, store).await?;
+            let mut splans = ServicePlan::for_part(part.id, store).await?;
             usages.append(&mut uses);
             services.append(&mut servs);
+            plans.append(&mut splans)
         }
         Ok(Summary {
             parts,
             usages,
             attachments,
             services,
+            plans,
             ..Default::default()
         })
     }

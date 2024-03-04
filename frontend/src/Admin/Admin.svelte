@@ -18,11 +18,11 @@
     | any[] = [];
 
   function refresh() {
-    request = myfetch("/user/all").catch(handleError);
+    request = myfetch("/api/user/all").catch(handleError);
   }
 
   function rescan() {
-    promise = myfetch("/activ/rescan").catch(handleError);
+    promise = myfetch("/api/activ/rescan").catch(handleError);
     refresh();
   }
 

@@ -1,4 +1,10 @@
-import { fmtDate, handleError, myfetch, updateSummary } from "../lib/store";
+import {
+  fmtDate,
+  get_days,
+  handleError,
+  myfetch,
+  updateSummary,
+} from "../lib/store";
 import { filterValues, mapable, type Map } from "../lib/mapable";
 import { Part } from "../Part/part";
 import { usages, Usage } from "../Usage/usage";
@@ -14,7 +20,8 @@ export class Service {
   notes: string;
   // we do not accept thos values from the client!
   usage: string;
-  successor?: string;
+  successor: string | null;
+  plans: string[];
 
   constructor(data: any) {
     this.id = data.id;
@@ -24,7 +31,8 @@ export class Service {
     this.name = data.name || "";
     this.notes = data.notes || "";
     this.usage = data.usage;
-    this.successor = data.successor;
+    this.successor = data.successor || null;
+    this.plans = data.plans || [];
   }
 
   static async create(
@@ -32,25 +40,27 @@ export class Service {
     time: Date,
     name: string,
     notes: string,
+    plans: string[],
   ) {
-    return await myfetch("/service", "POST", {
+    return await myfetch("/api/service", "POST", {
       part_id,
       time,
       name,
       notes,
+      plans,
     })
       .then(updateSummary)
       .catch(handleError);
   }
 
   async update() {
-    return await myfetch("/service", "PUT", this)
+    return await myfetch("/api/service", "PUT", this)
       .then(updateSummary)
       .catch(handleError);
   }
 
   async delete() {
-    await myfetch("/service/" + this.id, "DELETE")
+    await myfetch("/api/service/" + this.id, "DELETE")
       .then(updateSummary)
       .catch(handleError);
     services.deleteItem(this.id);
@@ -58,7 +68,7 @@ export class Service {
   }
 
   async redo() {
-    return await myfetch("/service/redo", "POST", this)
+    return await myfetch("/api/service/redo", "POST", this)
       .then(updateSummary)
       .catch(handleError);
   }
@@ -77,41 +87,33 @@ export class Service {
 
   history(
     depth: number,
-    parts: Map<Part>,
-    usages: Map<Usage>,
     services: Map<Service>,
-  ) {
-    let pred = filterValues(services, (s) => s.successor == this.id);
-    if (pred.length > 0) {
+  ): { depth: number; service: Service | undefined; successor: Service }[] {
+    let preds = filterValues(services, (s) => s.successor == this.id);
+    if (preds.length > 0) {
       let res = new Array();
-      pred.forEach((s, i) => {
+      preds.forEach((service, i) => {
         // the early ones have the higher depth!
-        let d = depth + pred.length - (i + 1);
-        res.push(s.get_row(d, parts, usages, services));
-        res = res.concat(s.history(d, parts, usages, services));
+        let d = depth + preds.length - (i + 1);
+        res.push({ depth: d, service, successor: this });
+        res = res.concat(service.history(d, services));
       });
       return res;
     } else {
-      // build a service entry for the part when it was new
-      let first = new Service({
-        id: "pred" + this.id,
-        name: "┗━",
-        notes: "",
-        part_id: this.part_id,
-        successor: this.id,
+      return new Array({
+        depth: depth - 1,
+        service: undefined,
+        successor: this,
       });
-      return new Array(first.get_row(depth, parts, usages, services));
     }
   }
 
   get_row(
     depth: number,
-    parts: Map<Part>,
+    part: Part,
     usages: Map<Usage>,
-    services: Map<Service>,
+    successor: Service | null,
   ) {
-    let part = parts[this.part_id];
-    let successor = this.get_successor(services);
     let next;
     let time: Date;
     if (!successor) {
@@ -129,9 +131,7 @@ export class Service {
       : usages[next];
 
     // How many days passed
-    let days = Math.floor(
-      (time.getTime() - this.time.getTime()) / (24 * 60 * 60 * 1000),
-    );
+    let days = get_days(this.time, time);
     return { depth, service: this, days, usage };
   }
 

@@ -2,9 +2,10 @@
   import { filterValues, by } from "../lib/mapable";
   import { types } from "../lib/store";
   import Usage from "../Usage/Usage.svelte";
-  import { link } from "svelte-spa-router";
+  import PartLink from "./PartLink.svelte";
   import { parts } from "./part";
   import { attachments } from "../Attachment/attachment";
+  import { Table } from "@sveltestrap/sveltestrap";
 
   export let id: number;
 
@@ -14,39 +15,28 @@
 </script>
 
 {#if atts.length > 0}
-  <div class="table-responsive">
-    <table class="table">
-      <thead>
+  <Table responsive hover>
+    <thead>
+      <tr>
+        <th scope="col">Attached to</th>
+        <th scope="col"> </th>
+        <Usage header />
+      </tr>
+    </thead>
+    <tbody>
+      {#each atts as att (att.attached)}
         <tr>
-          <th scope="col">Attached to</th>
-          <th scope="col"> </th>
-          <Usage header />
+          <td>
+            {#if $parts[att.gear]}
+              <PartLink part={$parts[att.gear]} />
+              {types[att.hook].prefix}
+            {:else}
+              N/A
+            {/if}
+          </td><td>{att.fmtTime()}</td>
+          <Usage id={att.usage} ref={att.idx} />
         </tr>
-      </thead>
-      <tbody>
-        {#each atts as att (att.attached)}
-          <tr>
-            <td>
-              {#if $parts[att.gear]}
-                <a
-                  href="/part/{att.gear}"
-                  use:link
-                  style={$parts[att.gear].disposed_at
-                    ? "text-decoration: line-through;"
-                    : ""}
-                  class="text-reset"
-                >
-                  {$parts[att.gear].name}
-                  {types[att.hook].prefix}
-                </a>
-              {:else}
-                N/A
-              {/if}
-            </td><td>{att.fmtTime()}</td>
-            <Usage id={att.usage} ref={att.idx} />
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-  </div>
+      {/each}
+    </tbody>
+  </Table>
 {/if}

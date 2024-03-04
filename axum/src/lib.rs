@@ -45,7 +45,7 @@ pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
 
     let app = Router::new()
         .nest_service("/", tower_http::services::ServeDir::new(path))
-        .nest("/", domain::router())
+        .nest("/api", domain::router())
         .nest("/strava", strava::router())
         .with_state(app_state)
         .fallback(error::fallback)

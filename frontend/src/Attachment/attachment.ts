@@ -1,7 +1,6 @@
 import type { Activity } from "../Activity/activity";
 import { type Map, filterValues, mapable } from "../lib/mapable";
-import { fmtDate, handleError, myfetch, updateSummary } from "../lib/store";
-import { maxDate } from "../lib/types";
+import { fmtRange, handleError, myfetch, updateSummary } from "../lib/store";
 
 export class Attachment {
   part_id: number;
@@ -25,9 +24,7 @@ export class Attachment {
     this.usage = data.usage;
   }
   fmtTime() {
-    let res = fmtDate(this.attached);
-    if (this.detached < maxDate) res = res + " - " + fmtDate(this.detached);
-    return res;
+    return fmtRange(this.attached, this.detached);
   }
   isAttached(time?: Date | string | number) {
     if (!time) time = new Date();
@@ -68,16 +65,46 @@ export class AttEvent {
   }
 
   async attach() {
-    return await myfetch("/part/attach", "POST", this)
+    return await myfetch("/api/part/attach", "POST", this)
       .then(updateSummary)
       .catch(handleError);
   }
 
   async detach() {
-    return await myfetch("/part/detach", "POST", this)
+    return await myfetch("/api/part/detach", "POST", this)
       .then(updateSummary)
       .catch(handleError);
   }
+}
+
+/// find part id for part at a specific hook right now
+/// if there is no part at that hook, return parameter part
+export function part_at_hook(
+  gear: number,
+  what: number,
+  hook: number | null,
+  atts: Map<Attachment>,
+) {
+  let att = filterValues(
+    atts,
+    (att) =>
+      att.gear == gear &&
+      att.what == what &&
+      att.hook == hook &&
+      att.isAttached(),
+  ).pop();
+  return att ? att.part_id : gear;
+}
+
+export function attachment_for_part(
+  part: number | undefined,
+  atts: Map<Attachment>,
+  time: Date,
+) {
+  return filterValues(
+    atts,
+    (att) => att.part_id == part && att.attached <= time && att.detached > time,
+  ).pop();
 }
 
 export const attachments = mapable(

@@ -5,6 +5,7 @@ mod activity;
 mod attachment;
 mod part;
 mod service;
+mod serviceplan;
 mod usage;
 mod user;
 

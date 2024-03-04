@@ -1,6 +1,7 @@
 import { Activity } from "../Activity/activity";
 import { Part } from "../Part/part";
 import { type Map, by, filterValues } from "./mapable";
+import { types } from "./store";
 export const maxDate = new Date("2999-12-31");
 
 export class Type {
@@ -33,6 +34,10 @@ export class Type {
 
   parts(parts: Map<Part>) {
     return filterValues(parts, (p) => p.what == this.id).sort(by("last_used"));
+  }
+
+  human_name(hook: number) {
+    return (this.hooks.length > 1 ? types[hook].prefix + " " : "") + this.name;
   }
 }
 
