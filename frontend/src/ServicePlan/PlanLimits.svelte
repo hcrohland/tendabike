@@ -32,7 +32,7 @@
       type="number"
       placeholder={key}
       value={select[key]}
-      on:change={(e) => handleChange(e, key)}
+      on:input={(e) => handleChange(e, key)}
     />
     <InputGroupText>{key}</InputGroupText>
     <Button
