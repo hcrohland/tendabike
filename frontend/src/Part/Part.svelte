@@ -40,15 +40,12 @@
         >Recover gear</Button
       >
     {:else}
-      <Button color="light" on:click={() => newService(part)}>
-        Log Service
+      <Button color="light" on:click={() => changePart(part)}>
+        Change details
       </Button>
       <Dropdown direction="down">
         <DropdownToggle color="light" caret split />
         <DropdownMenu>
-          <DropdownItem on:click={() => newPlan(part)}>
-            New Service Plan
-          </DropdownItem>
           {#if part.isGear()}
             <DropdownItem on:click={() => installPart(part)}>
               New Part
@@ -59,8 +56,11 @@
               Attach part
             </DropdownItem>
           {/if}
-          <DropdownItem on:click={() => changePart(part)}>
-            Change details
+          <DropdownItem on:click={() => newService(part)}>
+            Log Service
+          </DropdownItem>
+          <DropdownItem on:click={() => newPlan(part)}>
+            New Service Plan
           </DropdownItem>
         </DropdownMenu>
       </Dropdown>
