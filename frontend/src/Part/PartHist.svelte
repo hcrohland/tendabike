@@ -5,6 +5,7 @@
   import PartLink from "./PartLink.svelte";
   import { parts } from "./part";
   import { attachments } from "../Attachment/attachment";
+  import { Table } from "@sveltestrap/sveltestrap";
 
   export let id: number;
 
@@ -14,30 +15,28 @@
 </script>
 
 {#if atts.length > 0}
-  <div class="table-responsive">
-    <table class="table">
-      <thead>
+  <Table responsive hover>
+    <thead>
+      <tr>
+        <th scope="col">Attached to</th>
+        <th scope="col"> </th>
+        <Usage header />
+      </tr>
+    </thead>
+    <tbody>
+      {#each atts as att (att.attached)}
         <tr>
-          <th scope="col">Attached to</th>
-          <th scope="col"> </th>
-          <Usage header />
+          <td>
+            {#if $parts[att.gear]}
+              <PartLink part={$parts[att.gear]} />
+              {types[att.hook].prefix}
+            {:else}
+              N/A
+            {/if}
+          </td><td>{att.fmtTime()}</td>
+          <Usage id={att.usage} ref={att.idx} />
         </tr>
-      </thead>
-      <tbody>
-        {#each atts as att (att.attached)}
-          <tr>
-            <td>
-              {#if $parts[att.gear]}
-                <PartLink part={$parts[att.gear]} />
-                {types[att.hook].prefix}
-              {:else}
-                N/A
-              {/if}
-            </td><td>{att.fmtTime()}</td>
-            <Usage id={att.usage} ref={att.idx} />
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-  </div>
+      {/each}
+    </tbody>
+  </Table>
 {/if}

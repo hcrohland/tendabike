@@ -20,7 +20,7 @@
     <slot>Activities</slot>
   </ModalHeader>
   <ModalBody>
-    <Table>
+    <Table responsive hover>
       <tr>
         <th>Start</th>
         <th>Name</th>

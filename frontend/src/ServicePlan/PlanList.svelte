@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button } from "@sveltestrap/sveltestrap";
+  import { Button, Table } from "@sveltestrap/sveltestrap";
   import { filterValues, by } from "../lib/mapable";
   import { Part } from "../Part/part";
   import { plans, plans_for_gear } from "./serviceplan";
@@ -21,23 +21,21 @@
   ).sort(by("time"));
 </script>
 
-<div class="table-responsive">
-  <table class="table">
-    <thead>
-      <PlanHeader>
-        Service Plans &nbsp;&nbsp;
-        <Button size="sm" color="light" on:click={() => newPlan(part)}>
-          add
-        </Button>
-      </PlanHeader>
-    </thead>
-    <tbody>
-      {#each plans_for_gear(part.id, $plans, $attachments) as plan (plan.id)}
-        <PlanRow {plan} />
-      {/each}
-    </tbody>
-  </table>
-</div>
+<Table responsive hover>
+  <thead>
+    <PlanHeader>
+      Service Plans &nbsp;&nbsp;
+      <Button size="sm" color="light" on:click={() => newPlan(part)}>
+        add
+      </Button>
+    </PlanHeader>
+  </thead>
+  <tbody>
+    {#each plans_for_gear(part.id, $plans, $attachments) as plan (plan.id)}
+      <PlanRow {plan} />
+    {/each}
+  </tbody>
+</Table>
 
 <NewPlan bind:newPlan />
 <NewService bind:newService />

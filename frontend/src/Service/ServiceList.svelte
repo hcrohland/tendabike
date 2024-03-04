@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button } from "@sveltestrap/sveltestrap";
+  import { Button, Table } from "@sveltestrap/sveltestrap";
   import { filterValues, by } from "../lib/mapable";
   import NewService from "./NewService.svelte";
   import { Part } from "../Part/part";
@@ -18,7 +18,7 @@
 </script>
 
 <div class="table-responsive">
-  <table class="table">
+  <Table responsive hover>
     <thead>
       <ServiceHeader>
         Service Log &nbsp;&nbsp;
@@ -32,7 +32,7 @@
         <ServiceHist {service} />
       {/each}
     </tbody>
-  </table>
+  </Table>
 </div>
 
 <NewService bind:newService />
