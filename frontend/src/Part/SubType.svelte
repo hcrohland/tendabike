@@ -23,7 +23,7 @@
 
 {#if type == undefined}
   <tr>
-    <th scope="col">Attached parts <slot /> </th>
+    <th scope="col"> <slot /> </th>
     <th scope="col">Name</th>
     <th scope="col">Attached</th>
     <Usage header />

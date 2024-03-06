@@ -125,6 +125,20 @@ export class ServicePlan extends Limits {
     if (this.rides) res.rides = this.rides - usage.count;
     return res;
   }
+
+  alert(part: Part, service: Service | undefined, usages: Map<Usage>) {
+    let res = "";
+    let due = this.due(part, service, usages);
+    for (const key of ServicePlan.keys) {
+      if (due[key]) {
+        //@ts-ignore
+        if (due[key] < 0) res = "alert";
+        //@ts-ignore
+        if (res == "" && due[key] < this[key] * 0.05) res = "warn";
+      }
+    }
+    return res;
+  }
 }
 
 export function plans_for_gear(
@@ -152,4 +166,24 @@ export function plans_for_part(
     return filterValues(plans, (p) => p.part == part.id && p.hook == null);
   else return plans_for_gear(part.id, plans, atts, time);
 }
+
+export function alerts_for_plans(
+  plans: ServicePlan[],
+  parts: Map<Part>,
+  services: Map<Service>,
+  usages: Map<Usage>,
+  attachments: Map<Attachment>,
+) {
+  let res = { warn: 0, alert: 0 };
+  plans.forEach((plan) => {
+    let part = plan.getpart(parts, attachments);
+    let serviceList = plan.services(part, services);
+    let alert = plan.alert(part, serviceList.at(0), usages);
+
+    if (alert == "warn") res.warn++;
+    else if (alert == "alert") res.alert++;
+  });
+  return res;
+}
+
 export const plans = mapable("id", (s) => new ServicePlan(s));

@@ -1,19 +1,15 @@
 <script lang="ts">
   import { Type } from "../lib/types";
-
-  import { Button, Table } from "@sveltestrap/sveltestrap";
+  import { Table } from "@sveltestrap/sveltestrap";
   import { filterValues, by } from "../lib/mapable";
   import { types } from "../lib/store";
   import SubType from "./SubType.svelte";
   import Wizard from "./Wizard.svelte";
   import { Part } from "./part";
   import { attachments, Attachment } from "../Attachment/attachment";
-  import InstallPart from "../Attachment/InstallPart.svelte";
 
   export let gear: Part;
   export let hook: Type;
-
-  let installPart: (p: Part) => void;
 
   $: attachees = filterValues($attachments, (a) => a.gear == gear.id);
 
@@ -54,13 +50,7 @@
 {#if attachees.length > 0}
   <Table responsive hover>
     <thead>
-      <SubType>
-        {#if gear.isGear()}
-          <Button size="sm" color="light" on:click={() => installPart(gear)}>
-            add
-          </Button>
-        {/if}
-      </SubType>
+      <SubType />
     </thead>
     <tbody>
       {#each buildList([], hook, attachees, 0, "") as item (item.hook.id + "." + item.type.id)}
@@ -72,4 +62,3 @@
 {#if gear.what == types[gear.what].main}
   <Wizard {gear} {attachees} />
 {/if}
-<InstallPart bind:installPart />
