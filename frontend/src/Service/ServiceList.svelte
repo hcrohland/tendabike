@@ -1,15 +1,12 @@
 <script lang="ts">
-  import { Button, Table } from "@sveltestrap/sveltestrap";
+  import { Table } from "@sveltestrap/sveltestrap";
   import { filterValues, by } from "../lib/mapable";
-  import NewService from "./NewService.svelte";
   import { Part } from "../Part/part";
   import ServiceHist from "./ServiceHist.svelte";
   import ServiceHeader from "./ServiceHeader.svelte";
   import { services } from "./service";
 
   export let part: Part;
-
-  let newService: (p: Part) => void;
 
   $: servs = filterValues(
     $services,
@@ -20,12 +17,7 @@
 <div class="table-responsive">
   <Table responsive hover>
     <thead>
-      <ServiceHeader>
-        Service Log &nbsp;&nbsp;
-        <Button size="sm" color="light" on:click={() => newService(part)}>
-          add
-        </Button>
-      </ServiceHeader>
+      <ServiceHeader />
     </thead>
     <tbody>
       {#each servs as service (service.id)}
@@ -34,5 +26,3 @@
     </tbody>
   </Table>
 </div>
-
-<NewService bind:newService />

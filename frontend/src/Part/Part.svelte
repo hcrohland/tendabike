@@ -6,6 +6,9 @@
     DropdownToggle,
     DropdownMenu,
     DropdownItem,
+    Badge,
+    TabPane,
+    TabContent,
   } from "@sveltestrap/sveltestrap";
   import InstallPart from "../Attachment/InstallPart.svelte";
   import ChangePart from "./ChangePart.svelte";
@@ -19,6 +22,14 @@
   import { parts, Part } from "./part";
   import NewPlan from "../ServicePlan/NewPlan.svelte";
   import ServiceList from "../Service/ServiceList.svelte";
+  import {
+    alerts_for_plans,
+    plans,
+    plans_for_gear,
+  } from "../ServicePlan/serviceplan";
+  import { attachments } from "../Attachment/attachment";
+  import { services } from "../Service/service";
+  import { usages } from "../Usage/usage";
 
   export let params: { id: number; what: number };
 
@@ -31,6 +42,14 @@
 
   $: part = $parts[params.id];
   $: hook = part.type();
+  $: planlist = plans_for_gear(part.id, $plans, $attachments);
+  $: alerts = alerts_for_plans(
+    planlist,
+    $parts,
+    $services,
+    $usages,
+    $attachments,
+  );
 </script>
 
 <GearCard {part} display>
@@ -68,11 +87,45 @@
   </ButtonGroup>
 </GearCard>
 <br />
-<PlanList {part} /><br />
-<ServiceList {part} /><br />
 <PartHist id={params.id} />
-<Subparts gear={part} {hook} />
-
+<div class="text-decoration-none">
+  <TabContent>
+    <TabPane tabId="parts" active>
+      <strong slot="tab">
+        Attached Parts
+        {#if part.isGear()}
+          <Button size="sm" color="light" on:click={() => installPart(part)}>
+            add
+          </Button>
+        {/if}
+      </strong>
+      <Subparts gear={part} {hook} />
+    </TabPane>
+    <TabPane tabId="plans">
+      <strong slot="tab">
+        Service Plans
+        {#if alerts.alert > 0}
+          <Badge color="danger">{alerts.alert}</Badge>
+        {:else if alerts.warn > 0}
+          <Badge color="warning">{alerts.warn}</Badge>
+        {/if}
+        <Button size="sm" color="light" on:click={() => newPlan(part)}>
+          add
+        </Button> &NonBreakingSpace;
+      </strong>
+      <PlanList {planlist} /><br />
+    </TabPane>
+    <TabPane tabId="service">
+      <strong slot="tab">
+        Service Logs
+        <Button size="sm" color="light" on:click={() => newService(part)}>
+          add
+        </Button>
+      </strong>
+      <ServiceList {part} /><br />
+    </TabPane>
+  </TabContent>
+</div>
 <AttachPart bind:attachPart />
 <InstallPart bind:installPart />
 <ChangePart bind:changePart />
