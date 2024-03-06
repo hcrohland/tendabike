@@ -176,7 +176,7 @@
     sortBy="start"
     {totalsFunc}
     bind:filterSelections={selection}
-    classNameTable="table"
+    classNameTable="table table-hover"
     classNameThead="table-secondary"
     classNameSelect="custom-select"
     classNameInput="form-control form-control-sm"
