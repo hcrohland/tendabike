@@ -3,8 +3,8 @@
   import { onMount } from "svelte";
   export let data;
   export let layout = undefined;
-  export let config = undefined;
 
+  let config = { responsive: true };
   let redraw = (a, b, c) => {};
 
   let plotDiv;

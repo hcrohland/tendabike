@@ -6,6 +6,8 @@
     Input,
     InputGroup,
     InputGroupText,
+    TabPane,
+    TabContent,
   } from "@sveltestrap/sveltestrap";
   import Plotly from "./Widgets/Plotly.svelte";
   import Switch from "./Widgets/Switch.svelte";
@@ -124,8 +126,8 @@
 
   function getPlot(
     _trigger: any,
-    ncumm: number,
-    ncomp: number | null,
+    ncumm: Year,
+    ncomp: Year | null,
     months: boolean,
     title: string,
     fields: string[][],
@@ -159,13 +161,10 @@
       ...addlayout,
     };
 
-    let config = { responsive: true };
-
     let yanchor = "middle";
     for (const field of fields.values()) {
-      for (const [indx, y] of [ncumm, ncomp].entries()) {
-        if (y == undefined) break;
-        let year = years[y];
+      for (const [indx, year] of [ncumm, ncomp].entries()) {
+        if (year == null) break;
         let trace = get_trace(
           months ? year.months : year.days,
           months,
@@ -198,16 +197,53 @@
     }
     return {
       data,
-      config,
       layout,
     };
+  }
+
+  let tab = "elevation";
+
+  function plot(
+    tab: string,
+    perMonths: boolean,
+    cumm: Year,
+    comp: Year | null,
+  ) {
+    if (tab == "time") {
+      if (perMonths)
+        return getPlot(
+          years,
+          cumm,
+          null,
+          perMonths,
+          "Time (h)",
+          [
+            ["time", "moving time"],
+            ["duration", "pause", "time"],
+          ],
+          { barmode: "stack" },
+        );
+      else
+        return getPlot(years, cumm, comp, perMonths, "Time (h)", [
+          ["time", "moving time"],
+          ["duration", "outdoor time"],
+        ]);
+    } else if (tab == "distance")
+      return getPlot(years, cumm, comp, perMonths, "Distance (km)", [
+        ["distance"],
+      ]);
+    else
+      return getPlot(years, cumm, comp, perMonths, "Elevation (m)", [
+        ["climb"],
+        ["descend"],
+      ]);
   }
 
   $: acts = $category.activities($activities);
   $: gears = $category.parts($parts);
   let gear = gears ? [...gears] : [];
-  let cumm = 0;
-  let comp: number | null = null;
+  let cumm: Year;
+  let comp: Year | null = null;
   let perMonths = false;
   $: years = buildYears(acts, gear);
 </script>
@@ -221,20 +257,21 @@
         class="custom-select"
         bind:value={cumm}
         on:change={() => {
-          if (cumm == comp) comp = null;
+          if (cumm.year == comp?.year) comp = null;
         }}
       >
-        {#each years as item, i}
-          <option value={i}>{item.year}</option>
+        {#each years as item}
+          <option value={item}>{item.year}</option>
         {/each}
       </Input>
       <InputGroupText>vs</InputGroupText>
       <Input type="select" class="custom-select" bind:value={comp}>
-        {#each years as item, i}
-          {#if i != cumm}
-            <option value={i}>{item.year}</option>
+        {#each years as item (item.year)}
+          {@const selected = (comp ? comp.year : cumm?.year) == item.year}
+          {#if item.year != cumm?.year}
+            <option value={item} {selected}>{item.year}</option>
           {:else}
-            <option value={null} selected>-- None --</option>
+            <option value={null} {selected}>-- None --</option>
           {/if}
         {/each}
       </Input>
@@ -257,47 +294,9 @@
     </InputGroup>
   </Col>
 </Row>
-<Row class="p-sm-2">
-  <Col class="p-0 p-sm-2">
-    <Plotly
-      {...getPlot(years, cumm, comp, perMonths, "Elevation (m)", [
-        ["climb"],
-        ["descend"],
-      ])}
-    />
-  </Col>
-</Row>
-<Row>
-  <Col md="6" xs="12" class="p-0 p-sm-2">
-    <Plotly
-      {...getPlot(years, cumm, comp, perMonths, "Distance (km)", [
-        ["distance"],
-      ])}
-    />
-  </Col>
-  <Col md="6" xs="12" class="p-0 p-sm-2">
-    {#if perMonths}
-      <Plotly
-        {...getPlot(
-          years,
-          cumm,
-          null,
-          perMonths,
-          "Time (h)",
-          [
-            ["time", "moving time"],
-            ["duration", "pause", "time"],
-          ],
-          { barmode: "stack" },
-        )}
-      />
-    {:else}
-      <Plotly
-        {...getPlot(years, cumm, comp, perMonths, "Time (h)", [
-          ["time", "moving time"],
-          ["duration", "outdoor time"],
-        ])}
-      />
-    {/if}
-  </Col>
-</Row>
+<TabContent on:tab={(e) => (tab = e.detail.toString())}>
+  <TabPane tab="Elevation" tabId="elevation" active />
+  <TabPane tab="Distance" tabId="distance" />
+  <TabPane tab="Time" tabId="time" />
+</TabContent>
+<Plotly {...plot(tab, perMonths, cumm, comp)} />
