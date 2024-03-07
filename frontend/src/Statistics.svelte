@@ -126,8 +126,8 @@
 
   function getPlot(
     _trigger: any,
-    ncumm: Year,
-    ncomp: Year | null,
+    ncumm: number,
+    ncomp: number | null,
     months: boolean,
     title: string,
     fields: string[][],
@@ -163,8 +163,9 @@
 
     let yanchor = "middle";
     for (const field of fields.values()) {
-      for (const [indx, year] of [ncumm, ncomp].entries()) {
-        if (year == null) break;
+      for (const [indx, y] of [ncumm, ncomp].entries()) {
+        if (y == undefined) break;
+        let year = years[y];
         let trace = get_trace(
           months ? year.months : year.days,
           months,
@@ -206,8 +207,9 @@
   function plot(
     tab: string,
     perMonths: boolean,
-    cumm: Year,
-    comp: Year | null,
+    cumm: number,
+    comp: number | null,
+    years: Year[],
   ) {
     if (tab == "time") {
       if (perMonths)
@@ -242,8 +244,8 @@
   $: acts = $category.activities($activities);
   $: gears = $category.parts($parts);
   let gear = gears ? [...gears] : [];
-  let cumm: Year;
-  let comp: Year | null = null;
+  let cumm: number;
+  let comp: number | null = null;
   let perMonths = false;
   $: years = buildYears(acts, gear);
 </script>
@@ -257,19 +259,19 @@
         class="custom-select"
         bind:value={cumm}
         on:change={() => {
-          if (cumm.year == comp?.year) comp = null;
+          if (cumm == comp) comp = null;
         }}
       >
-        {#each years as item}
-          <option value={item}>{item.year}</option>
+        {#each years as item, i}
+          <option value={i}>{item.year}</option>
         {/each}
       </Input>
       <InputGroupText>vs</InputGroupText>
       <Input type="select" class="custom-select" bind:value={comp}>
-        {#each years as item (item.year)}
-          {@const selected = (comp ? comp.year : cumm?.year) == item.year}
-          {#if item.year != cumm?.year}
-            <option value={item} {selected}>{item.year}</option>
+        {#each years as item, i (item.year)}
+          {@const selected = (comp ? comp : cumm) == i}
+          {#if i != cumm}
+            <option value={i} {selected}>{item.year}</option>
           {:else}
             <option value={null} {selected}>-- None --</option>
           {/if}
@@ -299,4 +301,4 @@
   <TabPane tab="Distance" tabId="distance" />
   <TabPane tab="Time" tabId="time" />
 </TabContent>
-<Plotly {...plot(tab, perMonths, cumm, comp)} />
+<Plotly {...plot(tab, perMonths, cumm, comp, years)} />
