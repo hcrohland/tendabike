@@ -88,44 +88,42 @@
 </GearCard>
 <br />
 <PartHist id={params.id} />
-<div class="text-decoration-none">
-  <TabContent>
-    <TabPane tabId="parts" active>
-      <strong slot="tab">
-        Attached Parts
-        {#if part.isGear()}
-          <Button size="sm" color="light" on:click={() => installPart(part)}>
-            add
-          </Button>
-        {/if}
-      </strong>
-      <Subparts gear={part} {hook} />
-    </TabPane>
-    <TabPane tabId="plans">
-      <strong slot="tab">
-        Service Plans
-        {#if alerts.alert > 0}
-          <Badge color="danger">{alerts.alert}</Badge>
-        {:else if alerts.warn > 0}
-          <Badge color="warning">{alerts.warn}</Badge>
-        {/if}
-        <Button size="sm" color="light" on:click={() => newPlan(part)}>
-          add
-        </Button> &NonBreakingSpace;
-      </strong>
-      <PlanList {planlist} /><br />
-    </TabPane>
-    <TabPane tabId="service">
-      <strong slot="tab">
-        Service Logs
-        <Button size="sm" color="light" on:click={() => newService(part)}>
+<TabContent>
+  <TabPane tabId="parts" active>
+    <strong slot="tab">
+      Attached Parts
+      {#if part.isGear()}
+        <Button size="sm" color="light" on:click={() => installPart(part)}>
           add
         </Button>
-      </strong>
-      <ServiceList {part} /><br />
-    </TabPane>
-  </TabContent>
-</div>
+      {/if}
+    </strong>
+    <Subparts gear={part} {hook} />
+  </TabPane>
+  <TabPane tabId="plans">
+    <strong slot="tab">
+      Service Plans
+      {#if alerts.alert > 0}
+        <Badge color="danger">{alerts.alert}</Badge>
+      {:else if alerts.warn > 0}
+        <Badge color="warning">{alerts.warn}</Badge>
+      {/if}
+      <Button size="sm" color="light" on:click={() => newPlan(part)}>
+        add
+      </Button> &NonBreakingSpace;
+    </strong>
+    <PlanList {planlist} /><br />
+  </TabPane>
+  <TabPane tabId="service">
+    <strong slot="tab">
+      Service Logs
+      <Button size="sm" color="light" on:click={() => newService(part)}>
+        add
+      </Button>
+    </strong>
+    <ServiceList {part} /><br />
+  </TabPane>
+</TabContent>
 <AttachPart bind:attachPart />
 <InstallPart bind:installPart />
 <ChangePart bind:changePart />
