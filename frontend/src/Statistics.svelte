@@ -14,7 +14,7 @@
   import { by } from "./lib/mapable";
   import { Activity, activities } from "./Activity/activity";
   import { Usage } from "./Usage/usage";
-  import { parts, Part } from "./Part/part";
+  import { parts, Part } from "./lib/part";
 
   class Day extends Usage {
     start: Date;

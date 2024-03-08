@@ -5,7 +5,7 @@
   import { types } from "../lib/store";
   import SubType from "./SubType.svelte";
   import Wizard from "./Wizard.svelte";
-  import { Part } from "./part";
+  import { Part } from "../lib/part";
   import { attachments, Attachment } from "../Attachment/attachment";
 
   export let gear: Part;

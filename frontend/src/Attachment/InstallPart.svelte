@@ -11,7 +11,7 @@
   import NewForm from "../Part/PartForm.svelte";
   import TypeForm from "../Widgets/TypeForm.svelte";
   import { filterValues } from "../lib/mapable";
-  import { Part } from "../Part/part";
+  import { Part } from "../lib/part";
   import { AttEvent, attachments } from "./attachment";
 
   let part: Part, newpart: Part;

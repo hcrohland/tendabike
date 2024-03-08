@@ -3,7 +3,7 @@
   import { services, Service } from "./service";
   import ShowHist from "../Widgets/ShowHist.svelte";
   import ServiceRow from "./ServiceRow.svelte";
-  import { parts } from "../Part/part";
+  import { parts } from "../lib/part";
 
   export let service: Service;
   export let depth = 0;

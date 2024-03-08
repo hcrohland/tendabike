@@ -8,7 +8,7 @@
   import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { Service } from "./service";
   import ServiceForm from "./ServiceForm.svelte";
-  import { parts, Part } from "../Part/part";
+  import { parts, Part } from "../lib/part";
 
   let part: Part;
   let service: Service, newservice: Service;

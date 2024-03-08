@@ -4,7 +4,7 @@
   import { Activity, activities } from "./activity";
   import ActTable from "./ActTable.svelte";
   import { filterValues } from "../lib/mapable";
-  import { parts } from "../Part/part";
+  import { parts } from "../lib/part";
   import { attachments } from "../Attachment/attachment";
 
   export let params: { part: number; start?: number };

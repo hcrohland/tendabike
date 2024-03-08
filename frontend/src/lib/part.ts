@@ -1,5 +1,5 @@
-import { type Map, by, filterValues, mapable } from "../lib/mapable";
-import { handleError, myfetch, types } from "../lib/store";
+import { type Map, by, filterValues, mapable } from "./mapable";
+import { handleError, myfetch, types } from "./store";
 import { Attachment } from "../Attachment/attachment";
 
 export class Part {

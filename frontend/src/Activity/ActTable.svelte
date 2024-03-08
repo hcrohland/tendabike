@@ -6,7 +6,7 @@
   import { by } from "../lib/mapable";
   import { Activity } from "./activity";
   import { Usage } from "../Usage/usage";
-  import { parts } from "../Part/part";
+  import { parts } from "../lib/part";
 
   export let acts: Activity[];
 

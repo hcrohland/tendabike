@@ -19,7 +19,7 @@
   import PartHist from "./PartHist.svelte";
   import NewService from "../Service/NewService.svelte";
   import PlanList from "../ServicePlan/PlanList.svelte";
-  import { parts, Part } from "./part";
+  import { parts, Part } from "../lib/part";
   import NewPlan from "../ServicePlan/NewPlan.svelte";
   import ServiceList from "../Service/ServiceList.svelte";
   import {

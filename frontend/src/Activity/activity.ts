@@ -1,4 +1,4 @@
-import { Part } from "../Part/part";
+import { Part } from "../lib/part";
 import { mapable, type Map } from "../lib/mapable";
 
 export class Activity {

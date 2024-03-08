@@ -4,7 +4,7 @@ import { Type, type ActType, type User, maxDate } from "./types";
 import { Service, services } from "../Service/service";
 import { activities, Activity } from "../Activity/activity";
 import { Usage, usages } from "../Usage/usage";
-import { parts, type Part } from "../Part/part";
+import { parts, type Part } from "../lib/part";
 import { Attachment, attachments } from "../Attachment/attachment";
 import { plans, type ServicePlan } from "../ServicePlan/serviceplan";
 

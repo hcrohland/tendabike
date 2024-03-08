@@ -2,7 +2,7 @@
   import { Modal, ModalBody, ModalHeader } from "@sveltestrap/sveltestrap";
   import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { ServicePlan } from "./serviceplan";
-  import { Part } from "../Part/part";
+  import { Part } from "../lib/part";
   import TypeForm from "../Widgets/TypeForm.svelte";
   import type { Type } from "../lib/types";
   import PlanForm from "./PlanForm.svelte";

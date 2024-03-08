@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Table } from "@sveltestrap/sveltestrap";
   import { filterValues, by } from "../lib/mapable";
-  import { Part } from "../Part/part";
+  import { Part } from "../lib/part";
   import ServiceHist from "./ServiceHist.svelte";
   import ServiceHeader from "./ServiceHeader.svelte";
   import { services } from "./service";

@@ -15,7 +15,7 @@
   import Dispose from "../Widgets/Dispose.svelte";
   import DateTime from "../Widgets/DateTime.svelte";
   import Switch from "../Widgets/Switch.svelte";
-  import { Part } from "./part";
+  import { Part } from "../lib/part";
 
   let atts: Attachment[];
   let last: Attachment;

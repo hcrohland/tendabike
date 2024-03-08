@@ -6,7 +6,7 @@ import {
   updateSummary,
 } from "../lib/store";
 import { filterValues, mapable, type Map } from "../lib/mapable";
-import { Part } from "../Part/part";
+import { Part } from "../lib/part";
 import { usages, Usage } from "../Usage/usage";
 
 export class Service {

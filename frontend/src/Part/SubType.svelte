@@ -8,7 +8,7 @@
   import Menu from "../Widgets/Menu.svelte";
   import ShowAll from "../Widgets/ShowHist.svelte";
   import PartLink from "./PartLink.svelte";
-  import { parts, Part } from "../Part/part";
+  import { parts, Part } from "../lib/part";
   import type { Attachment } from "../Attachment/attachment";
 
   export let attachments: Attachment[] = [];

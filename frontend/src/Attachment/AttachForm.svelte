@@ -4,7 +4,7 @@
   import { types } from "../lib/store";
   import { maxDate } from "../lib/types";
   import { by, filterValues } from "../lib/mapable";
-  import { parts, Part } from "../Part/part";
+  import { parts, Part } from "../lib/part";
   import { AttEvent, attachments } from "./attachment";
 
   function lastDetach(part: Part) {

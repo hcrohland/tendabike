@@ -9,7 +9,7 @@
   import DateTime from "../Widgets/DateTime.svelte";
   import { Type } from "../lib/types";
   import { createEventDispatcher } from "svelte";
-  import { Part } from "./part";
+  import { Part } from "../lib/part";
   const dispatch = createEventDispatcher();
 
   export let type: Type | undefined;

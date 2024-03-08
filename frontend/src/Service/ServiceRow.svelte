@@ -7,7 +7,7 @@
   import Menu from "../Widgets/Menu.svelte";
   import { Service } from "./service";
   import { usages } from "../Usage/usage";
-  import { Part } from "../Part/part";
+  import { Part } from "../lib/part";
   import { Usage } from "../Usage/usage";
   import { fmtRange, get_days } from "../lib/store";
 

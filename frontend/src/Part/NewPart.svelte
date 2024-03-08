@@ -9,7 +9,7 @@
   import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { user } from "../lib/store";
   import { Type } from "../lib/types";
-  import { Part } from "./part";
+  import { Part } from "../lib/part";
 
   let part: Part, newpart: Part;
   let type: Type;

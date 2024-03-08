@@ -5,7 +5,7 @@
   import { category } from "./lib/store";
   import ShowAll from "./Widgets/ShowHist.svelte";
   import SetDefault from "./Activity/SetDefault.svelte";
-  import { parts } from "./Part/part";
+  import { parts } from "./lib/part";
   import { activities } from "./Activity/activity";
 
   let show_hist: boolean;

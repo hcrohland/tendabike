@@ -13,7 +13,7 @@
   import { checkStatus, handleError } from "../lib/store";
   import TZPicker from "../Widgets/TZPicker.svelte";
   import ModalFooter from "../Widgets/ModalFooter.svelte";
-  import { parts } from "../Part/part";
+  import { parts } from "../lib/part";
   import { attachments } from "../Attachment/attachment";
 
   let timezone: string | undefined;

@@ -3,7 +3,7 @@
   import { types } from "../lib/store";
   import Usage from "../Usage/Usage.svelte";
   import PartLink from "./PartLink.svelte";
-  import { parts } from "./part";
+  import { parts } from "../lib/part";
   import { attachments } from "../Attachment/attachment";
   import { Table } from "@sveltestrap/sveltestrap";
 

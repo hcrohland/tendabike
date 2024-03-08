@@ -4,7 +4,7 @@
   import { types } from "../lib/store";
   import { AttEvent } from "./attachment";
   import AttachForm from "./AttachForm.svelte";
-  import { Part } from "../Part/part";
+  import { Part } from "../lib/part";
 
   let attach: AttEvent;
   let part: Part | undefined;
