@@ -3,7 +3,7 @@
   let promise = myfetch("/api/activ/categories").then(
     (data) => (categories = data),
   );
-  import { myfetch, handleError, types } from "../lib/store";
+  import { myfetch, handleError } from "../lib/store";
   import {
     Dropdown,
     DropdownItem,
@@ -11,7 +11,7 @@
     DropdownToggle,
     Spinner,
   } from "@sveltestrap/sveltestrap";
-  import { category } from "../lib/store";
+  import { category, types } from "../lib/types";
 </script>
 
 <Dropdown direction="left">

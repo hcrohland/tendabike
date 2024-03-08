@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Form, InputGroup, InputGroupText } from "@sveltestrap/sveltestrap";
   import DateTime from "../Widgets/DateTime.svelte";
-  import { types } from "../lib/store";
-  import { maxDate } from "../lib/types";
+  import { types } from "../lib/types";
+  import { maxDate } from "../lib/store";
   import { by, filterValues } from "../lib/mapable";
   import { parts, Part } from "../lib/part";
   import { AttEvent, attachments } from "../lib/attachment";

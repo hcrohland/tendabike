@@ -3,7 +3,7 @@
   import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { ServicePlan } from "../lib/serviceplan";
   import { parts, Part } from "../lib/part";
-  import { types } from "../lib/store";
+  import { types } from "../lib/types";
   import PlanForm from "./PlanForm.svelte";
 
   let part: Part;

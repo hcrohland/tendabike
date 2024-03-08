@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { category } from "./lib/store";
+  import { category } from "./lib/types";
   import {
     Row,
     Col,

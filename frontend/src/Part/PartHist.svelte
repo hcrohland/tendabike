@@ -1,6 +1,6 @@
 <script lang="ts">
   import { filterValues, by } from "../lib/mapable";
-  import { types } from "../lib/store";
+  import { types } from "../lib/types";
   import Usage from "../Usage/Usage.svelte";
   import PartLink from "./PartLink.svelte";
   import { parts } from "../lib/part";

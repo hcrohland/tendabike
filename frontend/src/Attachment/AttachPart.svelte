@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Modal, ModalHeader, ModalBody } from "@sveltestrap/sveltestrap";
   import ModalFooter from "../Widgets/ModalFooter.svelte";
-  import { types } from "../lib/store";
+  import { types } from "../lib/types";
   import { AttEvent } from "../lib/attachment";
   import AttachForm from "./AttachForm.svelte";
   import { Part } from "../lib/part";

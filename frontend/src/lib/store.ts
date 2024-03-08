@@ -1,6 +1,5 @@
-import { writable, type Writable } from "svelte/store";
-import { mapObject } from "./mapable";
-import { Type, type ActType, type User, maxDate } from "./types";
+import { writable } from "svelte/store";
+import { type User } from "./types";
 import { Service, services } from "./service";
 import { activities, Activity } from "./activity";
 import { Usage, usages } from "./usage";
@@ -9,6 +8,7 @@ import { Attachment, attachments } from "./attachment";
 import { plans, type ServicePlan } from "./serviceplan";
 
 export const DAY = 24 * 60 * 60 * 1000;
+export const maxDate = new Date("2999-12-31");
 
 export function get_days(start: Date, end = new Date()) {
   return Math.floor((end.getTime() - start.getTime()) / DAY);
@@ -86,22 +86,6 @@ export const icons = new Map([
   [303, "flaticon-ski"],
 ]);
 
-export async function getTypes() {
-  return Promise.all([
-    myfetch("/api/types/part").then((types) =>
-      types.map((t: any) => new Type(t)).reduce(mapObject("id"), {}),
-    ), // data[0]
-    myfetch("/api/types/activity"), // data[1]
-  ])
-    .then((data: { 0: Type[]; 1: ActType[] }) => {
-      types = data[1].reduce((acc, a) => {
-        acc[a.gear_type].acts.push(a);
-        return acc;
-      }, data[0]);
-    })
-    .then(() => (category = writable(types[1])));
-}
-
 export async function initData() {
   let u = await myfetch("/api/user");
   if (u) {
@@ -139,9 +123,6 @@ export function updateSummary(data: Summary) {
   usages.updateMap(data.usages);
 }
 
-export let types: { [key: number]: Type };
-
-export let category: Writable<Type>;
 export const user = writable<User | undefined>(undefined);
 
 export const state = writable({ show_all_spares: false });

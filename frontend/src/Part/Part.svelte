@@ -22,8 +22,13 @@
   import { parts, Part } from "../lib/part";
   import NewPlan from "../ServicePlan/NewPlan.svelte";
   import ServiceList from "../Service/ServiceList.svelte";
-  import { alerts_for_plans, plans, plans_for_gear } from "../lib/serviceplan";
-  import { attachments } from "../lib/attachment";
+  import {
+    plans,
+    alerts_for_plans,
+    plans_by_partid,
+    plans_for_gear,
+  } from "../lib/serviceplan";
+  import { attachees_for_gear, attachments } from "../lib/attachment";
   import { services } from "../lib/service";
   import { usages } from "../lib/usage";
 
@@ -38,7 +43,11 @@
 
   $: part = $parts[params.id];
   $: hook = part.type();
-  $: planlist = plans_for_gear(part.id, $plans, $attachments);
+  $: attachees = attachees_for_gear(part.id, $attachments);
+  $: planlist = attachees.reduce(
+    (list, att) => list.concat(plans_by_partid(att.part_id, $plans)),
+    plans_for_gear(part.id, $plans, $attachments),
+  );
   $: alerts = alerts_for_plans(
     planlist,
     $parts,
@@ -94,7 +103,7 @@
         </Button>
       {/if}
     </strong>
-    <Subparts gear={part} {hook} />
+    <Subparts {part} {hook} />
   </TabPane>
   <TabPane tabId="plans">
     <strong slot="tab">
@@ -108,7 +117,7 @@
         add
       </Button> &NonBreakingSpace;
     </strong>
-    <PlanList {planlist} /><br />
+    <PlanList {planlist} part_id={part.id} /><br />
   </TabPane>
   <TabPane tabId="service">
     <strong slot="tab">

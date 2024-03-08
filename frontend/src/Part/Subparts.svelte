@@ -1,17 +1,16 @@
 <script lang="ts">
-  import { Type } from "../lib/types";
+  import { types, Type } from "../lib/types";
   import { Table } from "@sveltestrap/sveltestrap";
   import { filterValues, by } from "../lib/mapable";
-  import { types } from "../lib/store";
   import SubType from "./SubType.svelte";
-  import Wizard from "./Wizard.svelte";
   import { Part } from "../lib/part";
   import { attachments, Attachment } from "../lib/attachment";
+  import Wizard from "./Wizard.svelte";
 
-  export let gear: Part;
+  export let part: Part;
   export let hook: Type;
 
-  $: attachees = filterValues($attachments, (a) => a.gear == gear.id);
+  $: attachees = filterValues($attachments, (a) => a.gear == part.id);
 
   type MyList = {
     attachments: Attachment[];
@@ -59,6 +58,6 @@
     </tbody>
   </Table>
 {/if}
-{#if gear.what == types[gear.what].main}
-  <Wizard {gear} {attachees} />
+{#if part.isGear()}
+  <Wizard gear={part} {attachees} />
 {/if}
