@@ -10,6 +10,7 @@
   import PartLink from "./PartLink.svelte";
   import { parts, Part } from "../lib/part";
   import type { Attachment } from "../lib/attachment";
+  import NewService from "../Service/NewService.svelte";
 
   export let attachments: Attachment[] = [];
   export let level: number = 0;
@@ -18,7 +19,9 @@
   export const hook: Type | undefined = undefined;
 
   let show_hist = false;
-  let attachPart: (p: Part) => void, replacePart: (p: Attachment) => void;
+  let attachPart: (p: Part) => void;
+  let replacePart: (p: Attachment) => void;
+  let newService: (p: Part) => void;
 </script>
 
 {#if type == undefined}
@@ -52,12 +55,15 @@
           <Usage id={part.usage} ref={part.id} />
           <td>
             <Menu>
+              <DropdownItem on:click={() => newService(part)}>
+                Log Service
+              </DropdownItem>
               <DropdownItem on:click={() => attachPart(part)}>
-                Move part</DropdownItem
-              >
+                Move part
+              </DropdownItem>
               <DropdownItem on:click={() => replacePart(att)}>
-                Replace part</DropdownItem
-              >
+                Replace part
+              </DropdownItem>
             </Menu>
           </td>
         {:else}
@@ -80,14 +86,19 @@
         <td> {att.fmtTime()} </td>
         <Usage id={att.usage} ref={att.idx} />
         <td>
-          <Menu>
-            <DropdownItem on:click={() => attachPart(part)}
-              >Attach part</DropdownItem
-            >
-            <DropdownItem on:click={() => replacePart(att)}>
-              Duplicate part</DropdownItem
-            >
-          </Menu>
+          {#if part.disposed_at == undefined}
+            <Menu>
+              <DropdownItem on:click={() => newService(part)}>
+                Log Service
+              </DropdownItem>
+              <DropdownItem on:click={() => attachPart(part)}
+                >Attach part
+              </DropdownItem>
+              <DropdownItem on:click={() => replacePart(att)}>
+                Duplicate part
+              </DropdownItem>
+            </Menu>
+          {/if}
         </td>
       </tr>
     {/if}
@@ -95,3 +106,4 @@
 {/if}
 <AttachPart bind:attachPart />
 <ReplacePart bind:replacePart />
+<NewService bind:newService />
