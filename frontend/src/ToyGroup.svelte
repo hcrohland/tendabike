@@ -2,7 +2,7 @@
   import { Col, Row } from "@sveltestrap/sveltestrap";
   import MainCard from "./Part/MainCard.svelte";
   import { filterValues, by } from "./lib/mapable";
-  import { category } from "./lib/store";
+  import { category } from "./lib/types";
   import ShowAll from "./Widgets/ShowHist.svelte";
   import SetDefault from "./Activity/SetDefault.svelte";
   import { parts } from "./lib/part";

@@ -29,9 +29,10 @@
   import About from "./About.svelte";
   import Message from "./Message.svelte";
   import Admin from "./Admin/Admin.svelte";
-  import { getTypes, initData } from "./lib/store";
+  import { initData } from "./lib/store";
   import Statistics from "./Statistics.svelte";
   import Activities from "./Activity/Activities.svelte";
+  import { getTypes } from "./lib/types";
 
   const routes = {
     "/about": About,

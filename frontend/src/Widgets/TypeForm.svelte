@@ -7,7 +7,7 @@
     Input,
   } from "@sveltestrap/sveltestrap";
   import { Type } from "../lib/types";
-  import { types, category } from "../lib/store";
+  import { types, category } from "../lib/types";
   import { filterValues } from "../lib/mapable";
   import { Part } from "../lib/part";
 

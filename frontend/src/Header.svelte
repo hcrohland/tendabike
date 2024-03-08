@@ -19,11 +19,11 @@
     handleError,
     setSummary,
     updateSummary,
-    category,
     user,
   } from "./lib/store";
   import Garmin from "./Activity/Garmin.svelte";
   import Sport from "./Widgets/Sport.svelte";
+  import { category } from "./lib/types";
 
   let userOpen = false;
   let syncOpen = false;

@@ -7,9 +7,9 @@
     InputGroup,
     Form,
   } from "@sveltestrap/sveltestrap";
-  import { handleError, types } from "../lib/store";
+  import { handleError, maxDate } from "../lib/store";
   import ModalFooter from "../Widgets/ModalFooter.svelte";
-  import { maxDate } from "../lib/types";
+  import { types } from "../lib/types";
   import { AttEvent, Attachment, attachments } from "../lib/attachment";
   import NewForm from "./PartForm.svelte";
   import Dispose from "../Widgets/Dispose.svelte";

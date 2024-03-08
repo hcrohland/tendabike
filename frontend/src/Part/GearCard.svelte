@@ -7,10 +7,11 @@
     Row,
     Col,
   } from "@sveltestrap/sveltestrap";
-  import { types, fmtSeconds, fmtDate, fmtNumber } from "../lib/store";
+  import { fmtSeconds, fmtDate, fmtNumber } from "../lib/store";
   import { Part } from "../lib/part";
   import { link } from "svelte-spa-router";
   import { usages, Usage } from "../lib/usage";
+  import { types } from "../lib/types";
 
   export let part: Part;
   export let display = false;

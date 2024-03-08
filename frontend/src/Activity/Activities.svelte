@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Card, CardHeader } from "@sveltestrap/sveltestrap";
-  import { category } from "../lib/store";
+  import { category } from "../lib/types";
   import { Activity, activities } from "../lib/activity";
   import ActTable from "./ActTable.svelte";
   import { filterValues } from "../lib/mapable";

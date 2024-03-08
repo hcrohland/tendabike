@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { Type } from "../lib/types";
+  import { types, Type } from "../lib/types";
   import { Table } from "@sveltestrap/sveltestrap";
   import { filterValues, by } from "../lib/mapable";
-  import { types } from "../lib/store";
   import SubType from "./SubType.svelte";
   import { Part } from "../lib/part";
   import { attachments, Attachment } from "../lib/attachment";

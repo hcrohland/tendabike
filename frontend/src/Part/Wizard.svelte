@@ -6,11 +6,10 @@
     Container,
     Button,
   } from "@sveltestrap/sveltestrap";
-  import { Type } from "../lib/types";
+  import { types, Type } from "../lib/types";
   import { AttEvent, Attachment } from "../lib/attachment";
   import { type Map, filterValues } from "../lib/mapable";
   import Switch from "../Widgets/Switch.svelte";
-  import { types } from "../lib/store";
   import { Part } from "../lib/part";
 
   export let gear: Part;

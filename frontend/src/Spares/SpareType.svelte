@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { types, fmtDate } from "../lib/store";
+  import { fmtDate } from "../lib/store";
   import { Button, DropdownItem } from "@sveltestrap/sveltestrap";
   import Usage from "../Usage/Usage.svelte";
   import AttachPart from "../Attachment/AttachPart.svelte";
   import NewPart from "../Part/NewPart.svelte";
-  import { Type } from "../lib/types";
+  import { types, Type } from "../lib/types";
   import Menu from "../Widgets/Menu.svelte";
   import ShowAll from "../Widgets/ShowHist.svelte";
   import PartLink from "../Part/PartLink.svelte";
