@@ -12,7 +12,7 @@
   import Plotly from "./Widgets/Plotly.svelte";
   import Switch from "./Widgets/Switch.svelte";
   import { by } from "./lib/mapable";
-  import { Activity, activities } from "./Activity/activity";
+  import { Activity, activities } from "./lib/activity";
   import { Usage } from "./Usage/usage";
   import { parts, Part } from "./lib/part";
 

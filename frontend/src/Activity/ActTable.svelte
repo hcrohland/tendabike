@@ -4,7 +4,7 @@
   import RangeSlider from "svelte-range-slider-pips";
   import { Alert } from "@sveltestrap/sveltestrap";
   import { by } from "../lib/mapable";
-  import { Activity } from "./activity";
+  import { Activity } from "../lib/activity";
   import { Usage } from "../Usage/usage";
   import { parts } from "../lib/part";
 

@@ -1,5 +1,5 @@
-import { Part } from "../lib/part";
-import { mapable, type Map } from "../lib/mapable";
+import { Part } from "./part";
+import { mapable, type Map } from "./mapable";
 
 export class Activity {
   id: number;

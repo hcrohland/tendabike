@@ -6,7 +6,7 @@
   import ShowAll from "./Widgets/ShowHist.svelte";
   import SetDefault from "./Activity/SetDefault.svelte";
   import { parts } from "./lib/part";
-  import { activities } from "./Activity/activity";
+  import { activities } from "./lib/activity";
 
   let show_hist: boolean;
 

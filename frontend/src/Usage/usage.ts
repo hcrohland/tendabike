@@ -1,4 +1,4 @@
-import { Activity } from "../Activity/activity";
+import { Activity } from "../lib/activity";
 import { mapable } from "../lib/mapable";
 
 export class Usage {
