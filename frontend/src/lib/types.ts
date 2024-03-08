@@ -58,7 +58,7 @@ export type ActType = {
 export let types: Map<Type>;
 
 export async function getTypes() {
-  let res = Promise.all([
+  return Promise.all([
     myfetch("/api/types/part").then((types) =>
       types.map((t: any) => new Type(t)).reduce(mapObject("id"), {}),
     ), // data[0]
@@ -71,8 +71,6 @@ export async function getTypes() {
       }, data[0]);
     })
     .then(() => (category = writable(types[1])));
-  console.log(types);
-  return res;
 }
 
 export let category: Writable<Type>;
