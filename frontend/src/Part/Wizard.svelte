@@ -24,8 +24,8 @@
     model: string;
   };
 
-  const groupBy = function (xs: Type[]) {
-    return xs.reduce(function (rv: Map<Group>, x) {
+  function groupBy(xs: Type[]) {
+    return xs.reduce((rv: Map<Group>, x) => {
       if (x.group) {
         (rv[x.group] = rv[x.group] || {
           types: [],
@@ -34,7 +34,7 @@
       }
       return rv;
     }, {});
-  };
+  }
 
   function groupAvailable(group: Group) {
     let res = true;
@@ -55,6 +55,7 @@
       filterValues(types, (t) => t.group != undefined && t.main == gear.what),
     ),
   );
+
   let groups = allgroups.filter(groupAvailable);
 
   // Vendor needs to be set for any enabled group
@@ -99,7 +100,7 @@
   let show_button = groups.length != allgroups.length;
 </script>
 
-{#if gear.disposed_at == null && groups.length > 0}
+{#if !gear.disposed_at && groups.length > 0}
   <Container>
     {#if show_button}
       <Button color="success" on:click={() => (show_button = false)}>

@@ -21,6 +21,7 @@ export class Type {
     this.main = t.main;
     this.hooks = t.hooks;
     this.order = t.order;
+    this.group = t.group;
 
     this.prefix = this.name.split(" ").reverse()[1] || ""; // The first word iff there were two (hack!)
     this.acts = [];
