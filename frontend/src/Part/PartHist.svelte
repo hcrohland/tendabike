@@ -4,7 +4,7 @@
   import Usage from "../Usage/Usage.svelte";
   import PartLink from "./PartLink.svelte";
   import { parts } from "../lib/part";
-  import { attachments } from "../Attachment/attachment";
+  import { attachments } from "../lib/attachment";
   import { Table } from "@sveltestrap/sveltestrap";
 
   export let id: number;

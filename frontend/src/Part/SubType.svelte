@@ -9,7 +9,7 @@
   import ShowAll from "../Widgets/ShowHist.svelte";
   import PartLink from "./PartLink.svelte";
   import { parts, Part } from "../lib/part";
-  import type { Attachment } from "../Attachment/attachment";
+  import type { Attachment } from "../lib/attachment";
 
   export let attachments: Attachment[] = [];
   export let level: number = 0;

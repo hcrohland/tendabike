@@ -14,7 +14,7 @@
   import TZPicker from "../Widgets/TZPicker.svelte";
   import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { parts } from "../lib/part";
-  import { attachments } from "../Attachment/attachment";
+  import { attachments } from "../lib/attachment";
 
   let timezone: string | undefined;
 

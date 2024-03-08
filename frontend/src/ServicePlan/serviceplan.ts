@@ -6,7 +6,7 @@ import {
   part_at_hook,
   type Attachment,
   attachment_for_part,
-} from "../Attachment/attachment";
+} from "../lib/attachment";
 import type { Usage } from "../Usage/usage";
 
 const is_set = (n: number | null) => n != null && n > 0;

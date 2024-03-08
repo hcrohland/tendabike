@@ -27,7 +27,7 @@
     plans,
     plans_for_gear,
   } from "../ServicePlan/serviceplan";
-  import { attachments } from "../Attachment/attachment";
+  import { attachments } from "../lib/attachment";
   import { services } from "../Service/service";
   import { usages } from "../Usage/usage";
 

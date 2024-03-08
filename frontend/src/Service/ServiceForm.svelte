@@ -11,7 +11,7 @@
   import { createEventDispatcher } from "svelte";
   import Switch from "../Widgets/Switch.svelte";
   import { plans, plans_for_part } from "../ServicePlan/serviceplan";
-  import { attachments } from "../Attachment/attachment";
+  import { attachments } from "../lib/attachment";
   import { parts } from "../lib/part";
   const dispatch = createEventDispatcher();
 

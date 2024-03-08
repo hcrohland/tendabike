@@ -2,7 +2,7 @@
   import { Modal, ModalHeader, ModalBody } from "@sveltestrap/sveltestrap";
   import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { types } from "../lib/store";
-  import { AttEvent } from "./attachment";
+  import { AttEvent } from "../lib/attachment";
   import AttachForm from "./AttachForm.svelte";
   import { Part } from "../lib/part";
 

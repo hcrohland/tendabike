@@ -2,10 +2,10 @@ import { writable, type Writable } from "svelte/store";
 import { mapObject } from "./mapable";
 import { Type, type ActType, type User, maxDate } from "./types";
 import { Service, services } from "../Service/service";
-import { activities, Activity } from "./activity";
+import { activities, Activity } from "../lib/activity";
 import { Usage, usages } from "../Usage/usage";
 import { parts, type Part } from "../lib/part";
-import { Attachment, attachments } from "../Attachment/attachment";
+import { Attachment, attachments } from "./attachment";
 import { plans, type ServicePlan } from "../ServicePlan/serviceplan";
 
 export const DAY = 24 * 60 * 60 * 1000;

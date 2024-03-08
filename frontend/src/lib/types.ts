@@ -1,4 +1,4 @@
-import { Activity } from "./activity";
+import { Activity } from "../lib/activity";
 import { Part } from "../lib/part";
 import { type Map, by, filterValues } from "./mapable";
 import { types } from "./store";

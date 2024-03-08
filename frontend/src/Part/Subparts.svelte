@@ -6,7 +6,7 @@
   import SubType from "./SubType.svelte";
   import Wizard from "./Wizard.svelte";
   import { Part } from "../lib/part";
-  import { attachments, Attachment } from "../Attachment/attachment";
+  import { attachments, Attachment } from "../lib/attachment";
 
   export let gear: Part;
   export let hook: Type;

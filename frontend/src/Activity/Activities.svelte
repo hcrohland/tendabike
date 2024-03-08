@@ -5,7 +5,7 @@
   import ActTable from "./ActTable.svelte";
   import { filterValues } from "../lib/mapable";
   import { parts } from "../lib/part";
-  import { attachments } from "../Attachment/attachment";
+  import { attachments } from "../lib/attachment";
 
   export let params: { part: number; start?: number };
 

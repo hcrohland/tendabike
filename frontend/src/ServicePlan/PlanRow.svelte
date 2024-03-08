@@ -5,7 +5,7 @@
   import PlanHook from "./PlanHook.svelte";
   import PlanCell from "./PlanCell.svelte";
   import { ServicePlan } from "./serviceplan";
-  import { attachments } from "../Attachment/attachment";
+  import { attachments } from "../lib/attachment";
   import { Part, parts } from "../lib/part";
   import { Service, services } from "../Service/service";
   import { usages } from "../Usage/usage";
