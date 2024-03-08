@@ -4,7 +4,7 @@
   import { Part } from "../lib/part";
   import ServiceHist from "./ServiceHist.svelte";
   import ServiceHeader from "./ServiceHeader.svelte";
-  import { services } from "./service";
+  import { services } from "../lib/service";
 
   export let part: Part;
 

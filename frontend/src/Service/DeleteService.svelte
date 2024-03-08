@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Modal, ModalHeader, ModalBody } from "@sveltestrap/sveltestrap";
   import ModalFooter from "../Widgets/ModalFooter.svelte";
-  import { Service } from "./service";
+  import { Service } from "../lib/service";
   import { fmtDate } from "../lib/store";
 
   let service: Service;

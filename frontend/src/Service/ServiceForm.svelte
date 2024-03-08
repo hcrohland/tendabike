@@ -7,10 +7,10 @@
     Col,
   } from "@sveltestrap/sveltestrap";
   import DateTime from "../Widgets/DateTime.svelte";
-  import { Service } from "./service";
+  import { Service } from "../lib/service";
   import { createEventDispatcher } from "svelte";
   import Switch from "../Widgets/Switch.svelte";
-  import { plans, plans_for_part } from "../ServicePlan/serviceplan";
+  import { plans, plans_for_part } from "../lib/serviceplan";
   import { attachments } from "../lib/attachment";
   import { parts } from "../lib/part";
   const dispatch = createEventDispatcher();

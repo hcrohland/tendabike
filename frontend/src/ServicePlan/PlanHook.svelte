@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ServicePlan } from "./serviceplan";
+  import type { ServicePlan } from "../lib/serviceplan";
   import { types } from "../lib/store";
   import { link } from "svelte-spa-router";
   import { attachments, part_at_hook } from "../lib/attachment";
