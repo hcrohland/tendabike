@@ -13,8 +13,8 @@
   import { checkStatus, handleError } from "../lib/store";
   import TZPicker from "../Widgets/TZPicker.svelte";
   import ModalFooter from "../Widgets/ModalFooter.svelte";
-  import { parts } from "../Part/part";
-  import { attachments } from "../Attachment/attachment";
+  import { parts } from "../lib/part";
+  import { attachments } from "../lib/attachment";
 
   let timezone: string | undefined;
 

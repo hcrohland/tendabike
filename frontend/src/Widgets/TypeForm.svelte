@@ -9,7 +9,7 @@
   import { Type } from "../lib/types";
   import { types, category } from "../lib/store";
   import { filterValues } from "../lib/mapable";
-  import { Part } from "../Part/part";
+  import { Part } from "../lib/part";
 
   export let gear: Part;
   export let with_body = false;

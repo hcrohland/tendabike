@@ -1,11 +1,11 @@
 <script lang="ts">
   import { Card, CardHeader } from "@sveltestrap/sveltestrap";
   import { category } from "../lib/store";
-  import { Activity, activities } from "./activity";
+  import { Activity, activities } from "../lib/activity";
   import ActTable from "./ActTable.svelte";
   import { filterValues } from "../lib/mapable";
-  import { parts } from "../Part/part";
-  import { attachments } from "../Attachment/attachment";
+  import { parts } from "../lib/part";
+  import { attachments } from "../lib/attachment";
 
   export let params: { part: number; start?: number };
 

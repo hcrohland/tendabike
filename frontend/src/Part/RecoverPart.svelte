@@ -2,7 +2,7 @@
   import { Modal, ModalHeader, ModalBody } from "@sveltestrap/sveltestrap";
   import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { types, fmtDate } from "../lib/store";
-  import { Part } from "./part";
+  import { Part } from "../lib/part";
 
   let part: Part;
   let isOpen = false;

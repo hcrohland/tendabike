@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { usages } from "../Usage/usage";
-  import { services, Service } from "./service";
+  import { usages } from "../lib/usage";
+  import { services, Service } from "../lib/service";
   import ShowHist from "../Widgets/ShowHist.svelte";
   import ServiceRow from "./ServiceRow.svelte";
-  import { parts } from "../Part/part";
+  import { parts } from "../lib/part";
 
   export let service: Service;
   export let depth = 0;

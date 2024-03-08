@@ -6,12 +6,12 @@
     ModalBody,
   } from "@sveltestrap/sveltestrap";
   import { Type, maxDate } from "../lib/types";
-  import { AttEvent, Attachment } from "./attachment";
+  import { AttEvent, Attachment } from "../lib/attachment";
   import { types, user } from "../lib/store";
   import ModalFooter from "../Widgets/ModalFooter.svelte";
   import NewForm from "../Part/PartForm.svelte";
   import Dispose from "../Widgets/Dispose.svelte";
-  import { parts, Part } from "../Part/part";
+  import { parts, Part } from "../lib/part";
 
   let part: Part, oldpart: Part, newpart: Part;
   let type: Type;

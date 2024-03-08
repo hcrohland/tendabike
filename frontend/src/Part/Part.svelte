@@ -19,17 +19,13 @@
   import PartHist from "./PartHist.svelte";
   import NewService from "../Service/NewService.svelte";
   import PlanList from "../ServicePlan/PlanList.svelte";
-  import { parts, Part } from "./part";
+  import { parts, Part } from "../lib/part";
   import NewPlan from "../ServicePlan/NewPlan.svelte";
   import ServiceList from "../Service/ServiceList.svelte";
-  import {
-    alerts_for_plans,
-    plans,
-    plans_for_gear,
-  } from "../ServicePlan/serviceplan";
-  import { attachments } from "../Attachment/attachment";
-  import { services } from "../Service/service";
-  import { usages } from "../Usage/usage";
+  import { alerts_for_plans, plans, plans_for_gear } from "../lib/serviceplan";
+  import { attachments } from "../lib/attachment";
+  import { services } from "../lib/service";
+  import { usages } from "../lib/usage";
 
   export let params: { id: number; what: number };
 

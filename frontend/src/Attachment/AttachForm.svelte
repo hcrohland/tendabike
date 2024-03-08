@@ -4,8 +4,8 @@
   import { types } from "../lib/store";
   import { maxDate } from "../lib/types";
   import { by, filterValues } from "../lib/mapable";
-  import { parts, Part } from "../Part/part";
-  import { AttEvent, attachments } from "./attachment";
+  import { parts, Part } from "../lib/part";
+  import { AttEvent, attachments } from "../lib/attachment";
 
   function lastDetach(part: Part) {
     let last = filterValues($attachments, (a) => a.part_id == part.id).sort(

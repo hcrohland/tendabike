@@ -1,6 +1,6 @@
 <script lang="ts">
   import { DropdownItem } from "@sveltestrap/sveltestrap";
-  import { usages } from "../Usage/usage";
+  import { usages } from "../lib/usage";
   import Usage from "../Usage/Usage.svelte";
   import ReplacePart from "../Attachment/ReplacePart.svelte";
   import AttachPart from "../Attachment/AttachPart.svelte";
@@ -8,8 +8,8 @@
   import Menu from "../Widgets/Menu.svelte";
   import ShowAll from "../Widgets/ShowHist.svelte";
   import PartLink from "./PartLink.svelte";
-  import { parts, Part } from "../Part/part";
-  import type { Attachment } from "../Attachment/attachment";
+  import { parts, Part } from "../lib/part";
+  import type { Attachment } from "../lib/attachment";
 
   export let attachments: Attachment[] = [];
   export let level: number = 0;

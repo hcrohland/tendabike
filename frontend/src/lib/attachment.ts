@@ -1,6 +1,6 @@
-import type { Activity } from "../Activity/activity";
-import { type Map, filterValues, mapable } from "../lib/mapable";
-import { fmtRange, handleError, myfetch, updateSummary } from "../lib/store";
+import type { Activity } from "./activity";
+import { type Map, filterValues, mapable } from "./mapable";
+import { fmtRange, handleError, myfetch, updateSummary } from "./store";
 
 export class Attachment {
   part_id: number;

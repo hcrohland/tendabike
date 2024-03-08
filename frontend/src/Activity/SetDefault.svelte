@@ -5,8 +5,8 @@
   import { Type } from "../lib/types";
   import ActivityList from "./ActivityList.svelte";
   import { filterValues } from "../lib/mapable";
-  import { activities } from "./activity";
-  import { parts } from "../Part/part";
+  import { activities } from "../lib/activity";
+  import { parts } from "../lib/part";
 
   export let type: Type;
 

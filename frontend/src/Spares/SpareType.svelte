@@ -9,8 +9,8 @@
   import ShowAll from "../Widgets/ShowHist.svelte";
   import PartLink from "../Part/PartLink.svelte";
   import { type Map, filterValues } from "../lib/mapable";
-  import { Part, parts } from "../Part/part";
-  import { attachments, Attachment } from "../Attachment/attachment";
+  import { Part, parts } from "../lib/part";
+  import { attachments, Attachment } from "../lib/attachment";
 
   export let type: Type;
   export let date = new Date();

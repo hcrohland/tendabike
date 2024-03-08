@@ -5,10 +5,10 @@
   import RedoService from "./RedoService.svelte";
   import UsageCells from "../Usage/Usage.svelte";
   import Menu from "../Widgets/Menu.svelte";
-  import { Service } from "./service";
-  import { usages } from "../Usage/usage";
-  import { Part } from "../Part/part";
-  import { Usage } from "../Usage/usage";
+  import { Service } from "../lib/service";
+  import { usages } from "../lib/usage";
+  import { Part } from "../lib/part";
+  import { Usage } from "../lib/usage";
   import { fmtRange, get_days } from "../lib/store";
 
   export let depth: number = 0;

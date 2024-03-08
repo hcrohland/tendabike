@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Modal, ModalBody, ModalHeader } from "@sveltestrap/sveltestrap";
   import ModalFooter from "../Widgets/ModalFooter.svelte";
-  import { ServicePlan } from "./serviceplan";
-  import { parts, Part } from "../Part/part";
+  import { ServicePlan } from "../lib/serviceplan";
+  import { parts, Part } from "../lib/part";
   import { types } from "../lib/store";
   import PlanForm from "./PlanForm.svelte";
 

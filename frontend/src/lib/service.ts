@@ -4,10 +4,10 @@ import {
   handleError,
   myfetch,
   updateSummary,
-} from "../lib/store";
-import { filterValues, mapable, type Map } from "../lib/mapable";
-import { Part } from "../Part/part";
-import { usages, Usage } from "../Usage/usage";
+} from "./store";
+import { filterValues, mapable, type Map } from "./mapable";
+import { Part } from "./part";
+import { usages, Usage } from "./usage";
 
 export class Service {
   id?: string;

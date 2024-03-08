@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Modal, ModalHeader, ModalBody } from "@sveltestrap/sveltestrap";
   import ModalFooter from "../Widgets/ModalFooter.svelte";
-  import { ServicePlan } from "./serviceplan";
+  import { ServicePlan } from "../lib/serviceplan";
 
   let plan: ServicePlan;
   let isOpen = false;

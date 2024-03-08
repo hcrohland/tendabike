@@ -1,13 +1,13 @@
-import { get_days, handleError, myfetch } from "../lib/store";
-import { mapable, type Map, filterValues, by } from "../lib/mapable";
-import { Service, services } from "../Service/service";
-import { Part } from "../Part/part";
+import { get_days, handleError, myfetch } from "./store";
+import { mapable, type Map, filterValues, by } from "./mapable";
+import { Service, services } from "./service";
+import { Part } from "./part";
 import {
   part_at_hook,
   type Attachment,
   attachment_for_part,
-} from "../Attachment/attachment";
-import type { Usage } from "../Usage/usage";
+} from "./attachment";
+import type { Usage } from "./usage";
 
 const is_set = (n: number | null) => n != null && n > 0;
 

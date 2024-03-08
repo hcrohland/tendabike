@@ -9,7 +9,7 @@
     InputGroup,
     InputGroupText,
   } from "@sveltestrap/sveltestrap";
-  import { Limits } from "./serviceplan";
+  import { Limits } from "../lib/serviceplan";
 
   export let select: Limits;
 

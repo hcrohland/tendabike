@@ -4,11 +4,11 @@
   import Menu from "../Widgets/Menu.svelte";
   import PlanHook from "./PlanHook.svelte";
   import PlanCell from "./PlanCell.svelte";
-  import { ServicePlan } from "./serviceplan";
-  import { attachments } from "../Attachment/attachment";
-  import { Part, parts } from "../Part/part";
-  import { Service, services } from "../Service/service";
-  import { usages } from "../Usage/usage";
+  import { ServicePlan } from "../lib/serviceplan";
+  import { attachments } from "../lib/attachment";
+  import { Part, parts } from "../lib/part";
+  import { Service, services } from "../lib/service";
+  import { usages } from "../lib/usage";
   import ShowHist from "../Widgets/ShowHist.svelte";
   import UpdatePlan from "./UpdatePlan.svelte";
   import ServiceRow from "../Service/ServiceRow.svelte";
