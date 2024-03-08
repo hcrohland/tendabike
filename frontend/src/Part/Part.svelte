@@ -31,8 +31,6 @@
   import { attachees_for_gear, attachments } from "../lib/attachment";
   import { services } from "../lib/service";
   import { usages } from "../lib/usage";
-  import { filterValues } from "../lib/mapable";
-  import Wizard from "./Wizard.svelte";
 
   export let params: { id: number; what: number };
 
@@ -106,9 +104,6 @@
       {/if}
     </strong>
     <Subparts {part} {hook} />
-    {#if part.isGear()}
-      <Wizard gear={part} {attachees} />
-    {/if}
   </TabPane>
   <TabPane tabId="plans">
     <strong slot="tab">

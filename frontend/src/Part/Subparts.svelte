@@ -5,6 +5,7 @@
   import SubType from "./SubType.svelte";
   import { Part } from "../lib/part";
   import { attachments, Attachment } from "../lib/attachment";
+  import Wizard from "./Wizard.svelte";
 
   export let part: Part;
   export let hook: Type;
@@ -56,4 +57,7 @@
       {/each}
     </tbody>
   </Table>
+{/if}
+{#if part.isGear()}
+  <Wizard gear={part} {attachees} />
 {/if}
