@@ -1,4 +1,4 @@
-import type { Activity } from "../lib/activity";
+import type { Activity } from "./activity";
 import { type Map, filterValues, mapable } from "./mapable";
 import { fmtRange, handleError, myfetch, updateSummary } from "./store";
 

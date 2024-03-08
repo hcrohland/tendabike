@@ -1,5 +1,5 @@
-import { Activity } from "../lib/activity";
-import { Part } from "../lib/part";
+import { Activity } from "./activity";
+import { Part } from "./part";
 import { type Map, by, filterValues } from "./mapable";
 import { types } from "./store";
 export const maxDate = new Date("2999-12-31");
