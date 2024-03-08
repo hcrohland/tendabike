@@ -7,7 +7,7 @@ import {
 } from "./store";
 import { filterValues, mapable, type Map } from "./mapable";
 import { Part } from "./part";
-import { usages, Usage } from "../Usage/usage";
+import { usages, Usage } from "./usage";
 
 export class Service {
   id?: string;

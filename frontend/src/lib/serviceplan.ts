@@ -7,7 +7,7 @@ import {
   type Attachment,
   attachment_for_part,
 } from "./attachment";
-import type { Usage } from "../Usage/usage";
+import type { Usage } from "./usage";
 
 const is_set = (n: number | null) => n != null && n > 0;
 

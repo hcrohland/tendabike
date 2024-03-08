@@ -1,5 +1,5 @@
-import { Activity } from "../lib/activity";
-import { mapable } from "../lib/mapable";
+import { Activity } from "./activity";
+import { mapable } from "./mapable";
 
 export class Usage {
   id: string;

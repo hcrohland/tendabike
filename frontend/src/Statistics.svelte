@@ -13,7 +13,7 @@
   import Switch from "./Widgets/Switch.svelte";
   import { by } from "./lib/mapable";
   import { Activity, activities } from "./lib/activity";
-  import { Usage } from "./Usage/usage";
+  import { Usage } from "./lib/usage";
   import { parts, Part } from "./lib/part";
 
   class Day extends Usage {

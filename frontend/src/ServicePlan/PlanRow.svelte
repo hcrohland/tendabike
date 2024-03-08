@@ -8,7 +8,7 @@
   import { attachments } from "../lib/attachment";
   import { Part, parts } from "../lib/part";
   import { Service, services } from "../lib/service";
-  import { usages } from "../Usage/usage";
+  import { usages } from "../lib/usage";
   import ShowHist from "../Widgets/ShowHist.svelte";
   import UpdatePlan from "./UpdatePlan.svelte";
   import ServiceRow from "../Service/ServiceRow.svelte";

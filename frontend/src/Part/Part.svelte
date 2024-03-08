@@ -25,7 +25,7 @@
   import { alerts_for_plans, plans, plans_for_gear } from "../lib/serviceplan";
   import { attachments } from "../lib/attachment";
   import { services } from "../lib/service";
-  import { usages } from "../Usage/usage";
+  import { usages } from "../lib/usage";
 
   export let params: { id: number; what: number };
 

@@ -3,7 +3,7 @@ import { mapObject } from "./mapable";
 import { Type, type ActType, type User, maxDate } from "./types";
 import { Service, services } from "./service";
 import { activities, Activity } from "../lib/activity";
-import { Usage, usages } from "../Usage/usage";
+import { Usage, usages } from "./usage";
 import { parts, type Part } from "../lib/part";
 import { Attachment, attachments } from "./attachment";
 import { plans, type ServicePlan } from "./serviceplan";
