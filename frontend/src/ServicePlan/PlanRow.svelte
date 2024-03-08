@@ -16,6 +16,7 @@
   import RedoService from "../Service/RedoService.svelte";
 
   export let plan: ServicePlan;
+  export let name: string;
 
   let updatePlan: (p: ServicePlan) => void;
   let deletePlan: (p: ServicePlan) => void;
@@ -36,6 +37,7 @@
       <span id={"name" + plan.id}>
         {plan.name}
         <PlanHook {plan} />
+        {@html name}
         <ShowHist bind:show_hist />
       </span>
     </div>

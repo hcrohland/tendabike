@@ -8,10 +8,10 @@
   import { Part } from "../lib/part";
   import { attachments, Attachment } from "../lib/attachment";
 
-  export let gear: Part;
+  export let part: Part;
   export let hook: Type;
 
-  $: attachees = filterValues($attachments, (a) => a.gear == gear.id);
+  $: attachees = filterValues($attachments, (a) => a.gear == part.id);
 
   type MyList = {
     attachments: Attachment[];
@@ -59,6 +59,6 @@
     </tbody>
   </Table>
 {/if}
-{#if gear.what == types[gear.what].main}
-  <Wizard {gear} {attachees} />
+{#if part.what == types[part.what].main}
+  <Wizard gear={part} {attachees} />
 {/if}

@@ -107,6 +107,17 @@ export function attachment_for_part(
   ).pop();
 }
 
+export function attachees_for_gear(
+  gear: number | undefined,
+  atts: Map<Attachment>,
+  time = new Date(),
+) {
+  return filterValues(
+    atts,
+    (att) => att.gear == gear && att.attached <= time && att.detached > time,
+  );
+}
+
 export const attachments = mapable(
   "idx",
   (a) => new Attachment(a),

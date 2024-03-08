@@ -141,6 +141,13 @@ export class ServicePlan extends Limits {
   }
 }
 
+export function plans_by_partid(
+  part_id: number | undefined,
+  plans: Map<ServicePlan>,
+) {
+  return filterValues(plans, (p) => p.part == part_id && p.hook == null);
+}
+
 export function plans_for_gear(
   part: number | undefined,
   plans: Map<ServicePlan>,
@@ -162,8 +169,7 @@ export function plans_for_part(
   plans: Map<ServicePlan>,
   atts: Map<Attachment>,
 ) {
-  if (part.isGear())
-    return filterValues(plans, (p) => p.part == part.id && p.hook == null);
+  if (part.isGear()) return plans_by_partid(part.id, plans);
   else return plans_for_gear(part.id, plans, atts, time);
 }
 
