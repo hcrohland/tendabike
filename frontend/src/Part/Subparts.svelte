@@ -4,7 +4,6 @@
   import { filterValues, by } from "../lib/mapable";
   import { types } from "../lib/store";
   import SubType from "./SubType.svelte";
-  import Wizard from "./Wizard.svelte";
   import { Part } from "../lib/part";
   import { attachments, Attachment } from "../lib/attachment";
 
@@ -58,7 +57,4 @@
       {/each}
     </tbody>
   </Table>
-{/if}
-{#if part.what == types[part.what].main}
-  <Wizard gear={part} {attachees} />
 {/if}
