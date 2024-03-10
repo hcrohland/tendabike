@@ -26,12 +26,12 @@ export class Limits {
   rides: number | null;
 
   constructor(data: any) {
-    this.days = Number(data.days) || null;
-    this.hours = Number(data.hours) || null;
-    this.km = Number(data.km) || null;
-    this.climb = Number(data.climb) || null;
-    this.descend = Number(data.descend) || null;
-    this.rides = Number(data.rides) || null;
+    this.days = parseInt(data.days) || null;
+    this.hours = parseInt(data.hours) || null;
+    this.km = parseInt(data.km) || null;
+    this.climb = parseInt(data.climb) || null;
+    this.descend = parseInt(data.descend) || null;
+    this.rides = parseInt(data.rides) || null;
   }
 
   static keys: ("days" | "hours" | "km" | "climb" | "descend" | "rides")[] = [
