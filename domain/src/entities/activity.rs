@@ -197,7 +197,8 @@ impl ActivityId {
         store
             .transaction(|store| {
                 async {
-                    self.read(user, store)
+                    let mut res = self
+                        .read(user, store)
                         .await?
                         .register(Factor::Sub, store)
                         .await?;
@@ -206,7 +207,7 @@ impl ActivityId {
 
                     info!("Updating {:?}", act);
 
-                    let res = act.register(Factor::Add, store).await?;
+                    res = res + act.register(Factor::Add, store).await?;
                     Ok(res)
                 }
                 .scope_boxed()
