@@ -42,16 +42,20 @@
   }
 
   async function poll() {
-    if ($user) {
-      do {
-        data = await myfetch("/strava/hooks").catch(handleError);
-        if (!data) break;
-        updateSummary(data);
-        number += data["activities"].length;
-      } while (data["activities"].length > 0);
-      number = 0;
+    try {
+      if ($user) {
+        do {
+          data = await myfetch("/strava/hooks");
+          if (!data) break;
+          updateSummary(data);
+          number += data["activities"].length;
+        } while (data["activities"].length > 0);
+        number = 0;
+      }
+      setTimeout(poll, 60000);
+    } catch (e) {
+      handleError(e as Error);
     }
-    setTimeout(poll, 60000);
   }
 
   poll();

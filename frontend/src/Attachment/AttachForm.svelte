@@ -4,8 +4,9 @@
   import { types } from "../lib/types";
   import { maxDate } from "../lib/store";
   import { by, filterValues } from "../lib/mapable";
-  import { parts, Part } from "../lib/part";
+  import { Part } from "../lib/part";
   import { AttEvent, attachments } from "../lib/attachment";
+  import SelectPart from "../Widgets/SelectPart.svelte";
 
   function lastDetach(part: Part) {
     let last = filterValues($attachments, (a) => a.part_id == part.id).sort(
@@ -24,17 +25,13 @@
   export let disabled = true;
 
   let type = part.type();
-  let options = filterValues(
-    $parts,
-    (p) => type.main == p.what && !p.disposed_at,
-  );
 
   let time: Date = lastDetach(part);
   let gear: number | undefined = undefined;
   let hook: number | undefined =
     type.hooks.length == 1 ? type.hooks[0] : undefined;
 
-  $: if (hook && gear && types[hook] && $parts[gear]) {
+  $: if (hook && gear && types[hook]) {
     disabled = false;
     attach = new AttEvent(part.id, time, gear, hook);
   } else {
@@ -56,12 +53,7 @@
         </select>
         <InputGroupText>of</InputGroupText>
       {/if}
-      <select name="gear" class="form-control" required bind:value={gear}>
-        <option hidden value> -- select one -- </option>
-        {#each options as gear}
-          <option value={gear.id}>{gear.name}</option>
-        {/each}
-      </select>
+      <SelectPart {type} bind:part={gear} />
     </InputGroup>
     <InputGroup class="mb-0 mr-sm-2 mb-sm-2">
       <InputGroupText>at</InputGroupText>

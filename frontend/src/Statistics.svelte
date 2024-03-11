@@ -179,20 +179,6 @@
           layout.colorway = colorway2;
         }
         data.push(trace);
-
-        if (!months) {
-          let ann = trace.y[trace.y.length - 1];
-          let result2 = {
-            x: trace.x[trace.x.length - 1],
-            y: ann,
-            xanchor: "left",
-            yanchor,
-            text: Math.round(ann),
-            showarrow: false,
-          };
-
-          layout.annotations.push(result2);
-        }
       }
       yanchor = "bottom";
     }

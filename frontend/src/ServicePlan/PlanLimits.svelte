@@ -16,7 +16,7 @@
   function handleChange(event: Event, key: keyof Limits) {
     const target = event.target as HTMLSelectElement;
     // @ts-ignore
-    select[key] = Number(target.value);
+    select[key] = parseInt(target.value);
   }
 
   // @ts-ignore
