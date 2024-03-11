@@ -389,6 +389,7 @@
       {#each c_rows as row, n}
         <slot name="row" {row} {n}>
           <tr
+            on:dblclick={() => dispatch("dblclk", row)}
             on:click={(e) => handleClickRow(e, row)}
             on:keypress={(e) => e.key === "Enter" && handleClickRow(e, row)}
             class={asStringArray([

@@ -7,9 +7,12 @@
   import { Activity } from "../lib/activity";
   import { Usage } from "../lib/usage";
   import { parts } from "../lib/part";
+  import ChangeActivity from "./ChangeActivity.svelte";
+  import { category } from "../lib/types";
 
   export let acts: Activity[];
 
+  let changeActivity: (a: Activity) => void;
   let selection: Record<string | number, any> = {};
 
   let min: number,
@@ -95,7 +98,7 @@
     },
     {
       key: "gear",
-      title: "Gear",
+      title: $category.name,
       renderValue: (a: any) => new Activity(a).gearLink($parts),
       totalsValue: () => "",
       parseHTML: true,
@@ -180,5 +183,7 @@
     classNameThead="table-secondary"
     classNameSelect="custom-select"
     classNameInput="form-control form-control-sm"
+    on:dblclk={(e) => changeActivity(e.detail)}
   />
 {/if}
+<ChangeActivity bind:changeActivity />
