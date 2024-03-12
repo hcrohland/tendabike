@@ -3,15 +3,15 @@
     Modal,
     ModalHeader,
     ModalBody,
-    Form,
     FormGroup,
     InputGroup,
     InputGroupText,
+    ModalFooter,
   } from "@sveltestrap/sveltestrap";
-  import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { handleError, myfetch } from "../lib/store";
   import type { User } from "../lib/types";
   import DateTime from "../Widgets/DateTime.svelte";
+  import Buttons from "../Widgets/Buttons.svelte";
 
   export let refresh: () => void;
   let user: User | undefined;
@@ -20,7 +20,7 @@
   let userParam: string;
   const toggle = () => (isOpen = false);
 
-  async function action() {
+  async function submit() {
     await myfetch(
       "/strava/sync?time=" + (date.getTime() / 1000).toFixed(0) + userParam,
     ).catch(handleError);
@@ -45,15 +45,17 @@
       for {user.firstname} {user.name} ({user.id})
     {/if}
   </ModalHeader>
-  <ModalBody>
-    <Form>
+  <form on:submit|preventDefault={submit}>
+    <ModalBody>
       <FormGroup check>
         <InputGroup>
           <InputGroupText>Start</InputGroupText>
           <DateTime maxdate={new Date()} bind:date />
         </InputGroup>
       </FormGroup>
-    </Form>
-  </ModalBody>
-  <ModalFooter {toggle} {action} button={"Sync"} />
+    </ModalBody>
+    <ModalFooter>
+      <Buttons {toggle} label={"Sync"} />
+    </ModalFooter>
+  </form>
 </Modal>

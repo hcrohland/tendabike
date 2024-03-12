@@ -1,17 +1,18 @@
 <script lang="ts">
   import {
-    Form,
     Modal,
     ModalHeader,
     ModalBody,
+    ModalFooter,
+    Form,
   } from "@sveltestrap/sveltestrap";
   import { AttEvent, Attachment } from "../lib/attachment";
   import { user, maxDate } from "../lib/store";
   import { types, Type } from "../lib/types";
   import { parts, Part } from "../lib/part";
-  import ModalFooter from "../Widgets/ModalFooter.svelte";
   import NewForm from "../Part/PartForm.svelte";
   import Dispose from "../Widgets/Dispose.svelte";
+  import Buttons from "../Widgets/Buttons.svelte";
 
   let part: Part, oldpart: Part, newpart: Part;
   let type: Type;
@@ -71,11 +72,13 @@
     New {prefix}
     {type.name} for {$parts[gear].name}
   </ModalHeader>
-  <ModalBody>
-    <Form>
+  <form on:submit|preventDefault={action}>
+    <ModalBody>
       <NewForm {type} {part} {mindate} on:change={setPart} />
       <Dispose bind:dispose>old {type.name}</Dispose>
-    </Form>
-  </ModalBody>
-  <ModalFooter {action} {toggle} {disabled} button={"Replace"} />
+    </ModalBody>
+    <ModalFooter>
+      <Buttons {toggle} {disabled} label={"Replace"} />
+    </ModalFooter>
+  </form>
 </Modal>

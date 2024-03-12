@@ -1,10 +1,15 @@
 <script lang="ts">
-  import { Modal, ModalBody, ModalHeader } from "@sveltestrap/sveltestrap";
-  import ModalFooter from "../Widgets/ModalFooter.svelte";
+  import {
+    Modal,
+    ModalBody,
+    ModalFooter,
+    ModalHeader,
+  } from "@sveltestrap/sveltestrap";
   import { ServicePlan } from "../lib/serviceplan";
   import { parts, Part } from "../lib/part";
   import { types } from "../lib/types";
   import PlanForm from "./PlanForm.svelte";
+  import Buttons from "../Widgets/Buttons.svelte";
 
   let part: Part;
   let plan: ServicePlan;
@@ -39,8 +44,12 @@
       {part.name}
     {/if}
   </ModalHeader>
-  <ModalBody>
-    <PlanForm bind:plan />
-  </ModalBody>
-  <ModalFooter {toggle} {disabled} action={postPlan} button={"Update"} />
+  <form on:submit|preventDefault={postPlan}>
+    <ModalBody>
+      <PlanForm bind:plan />
+    </ModalBody>
+    <ModalFooter>
+      <Buttons {toggle} {disabled} label={"Update"} />
+    </ModalFooter>
+  </form>
 </Modal>

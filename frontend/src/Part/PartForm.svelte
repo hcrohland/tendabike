@@ -49,6 +49,7 @@
       id="inputBrand"
       bind:value={vendor}
       placeholder="Brand"
+      required
     />
   </FormGroup>
   <FormGroup class=" col-md-6">
@@ -59,6 +60,7 @@
       id="inputModel"
       bind:value={model}
       placeholder="Model"
+      required
     />
   </FormGroup>
 </FormGroup>

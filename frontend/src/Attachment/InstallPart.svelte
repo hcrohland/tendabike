@@ -3,16 +3,16 @@
     Modal,
     ModalHeader,
     ModalBody,
-    Form,
+    ModalFooter,
   } from "@sveltestrap/sveltestrap";
   import { Type } from "../lib/types";
   import { user } from "../lib/store";
-  import ModalFooter from "../Widgets/ModalFooter.svelte";
   import NewForm from "../Part/PartForm.svelte";
   import TypeForm from "../Widgets/TypeForm.svelte";
   import { filterValues } from "../lib/mapable";
   import { Part } from "../lib/part";
   import { AttEvent, attachments } from "../lib/attachment";
+  import Buttons from "../Widgets/Buttons.svelte";
 
   let part: Part, newpart: Part;
   let gear: Part;
@@ -79,10 +79,12 @@
   <ModalHeader {toggle}>
     <TypeForm {gear} on:change={setType} />
   </ModalHeader>
-  <ModalBody>
-    <Form>
+  <form on:submit|preventDefault={action}>
+    <ModalBody>
       <NewForm {type} {part} mindate={gear.purchase} on:change={setPart} />
-    </Form>
-  </ModalBody>
-  <ModalFooter {action} {toggle} {disabled} button={"Install"} />
+    </ModalBody>
+    <ModalFooter>
+      <Buttons {toggle} {disabled} label={"Install"} />
+    </ModalFooter>
+  </form>
 </Modal>

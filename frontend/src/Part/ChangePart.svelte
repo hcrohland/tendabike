@@ -5,10 +5,9 @@
     ModalHeader,
     FormGroup,
     InputGroup,
-    Form,
+    ModalFooter,
   } from "@sveltestrap/sveltestrap";
   import { handleError, maxDate } from "../lib/store";
-  import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { types } from "../lib/types";
   import { AttEvent, Attachment, attachments } from "../lib/attachment";
   import NewForm from "./PartForm.svelte";
@@ -16,6 +15,7 @@
   import DateTime from "../Widgets/DateTime.svelte";
   import Switch from "../Widgets/Switch.svelte";
   import { Part } from "../lib/part";
+  import Buttons from "../Widgets/Buttons.svelte";
 
   let atts: Attachment[];
   let last: Attachment;
@@ -74,8 +74,8 @@
 
 <Modal {isOpen} {toggle} backdrop={false}>
   <ModalHeader {toggle}>Change {type.name} details</ModalHeader>
-  <ModalBody>
-    <Form>
+  <form on:submit|preventDefault={savePart}>
+    <ModalBody>
       <NewForm {type} {part} on:change={setPart} maxdate={start} />
       <FormGroup>
         {#if isGear}
@@ -110,7 +110,9 @@
           {/if}
         {/if}
       </FormGroup>
-    </Form>
-  </ModalBody>
-  <ModalFooter {toggle} {disabled} action={savePart} button={"Change"} />
+    </ModalBody>
+    <ModalFooter>
+      <Buttons {toggle} {disabled} label={"Change"} />
+    </ModalFooter>
+  </form>
 </Modal>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Form, InputGroup, InputGroupText } from "@sveltestrap/sveltestrap";
+  import { InputGroup, InputGroupText } from "@sveltestrap/sveltestrap";
   import DateTime from "../Widgets/DateTime.svelte";
   import { types } from "../lib/types";
   import { maxDate } from "../lib/store";
@@ -39,25 +39,23 @@
   }
 </script>
 
-<Form>
-  <div class="form-inline">
-    <InputGroup class="mb-0 mr-sm-2 mb-sm-2">
-      <InputGroupText>to</InputGroupText>
-      {#if type.hooks.length > 1}
-        <!-- svelte-ignore a11y-autofocus -->
-        <select name="hook" class="form-control" required bind:value={hook}>
-          <option hidden value={undefined}> -- select one -- </option>
-          {#each type.hooks as h}
-            <option value={h}>{types[h].name}</option>
-          {/each}
-        </select>
-        <InputGroupText>of</InputGroupText>
-      {/if}
-      <SelectPart {type} bind:part={gear} />
-    </InputGroup>
-    <InputGroup class="mb-0 mr-sm-2 mb-sm-2">
-      <InputGroupText>at</InputGroupText>
-      <DateTime bind:date={time} />
-    </InputGroup>
-  </div>
-</Form>
+<div class="form-inline">
+  <InputGroup class="mb-0 mr-sm-2 mb-sm-2">
+    <InputGroupText>to</InputGroupText>
+    {#if type.hooks.length > 1}
+      <!-- svelte-ignore a11y-autofocus -->
+      <select name="hook" class="form-control" required bind:value={hook}>
+        <option hidden value={undefined}> -- select one -- </option>
+        {#each type.hooks as h}
+          <option value={h}>{types[h].name}</option>
+        {/each}
+      </select>
+      <InputGroupText>of</InputGroupText>
+    {/if}
+    <SelectPart {type} bind:part={gear} />
+  </InputGroup>
+  <InputGroup class="mb-0 mr-sm-2 mb-sm-2">
+    <InputGroupText>at</InputGroupText>
+    <DateTime bind:date={time} />
+  </InputGroup>
+</div>

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Modal, ModalHeader, ModalBody } from "@sveltestrap/sveltestrap";
-  import ModalFooter from "../Widgets/ModalFooter.svelte";
+  import MyFooter from "../Widgets/MyFooter.svelte";
   import { Service } from "../lib/service";
   import { fmtDate } from "../lib/store";
 
@@ -25,5 +25,5 @@
     "{service.name}" from
     {fmtDate(service.time)}?
   </ModalHeader>
-  <ModalFooter {toggle} {action} button={"Delete"} />
+  <MyFooter {toggle} {action} label={"Delete"} />
 </Modal>

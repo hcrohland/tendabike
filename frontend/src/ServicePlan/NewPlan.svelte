@@ -1,11 +1,16 @@
 <script lang="ts">
-  import { Modal, ModalBody, ModalHeader } from "@sveltestrap/sveltestrap";
-  import ModalFooter from "../Widgets/ModalFooter.svelte";
+  import {
+    Modal,
+    ModalBody,
+    ModalFooter,
+    ModalHeader,
+  } from "@sveltestrap/sveltestrap";
   import { ServicePlan } from "../lib/serviceplan";
   import { Part } from "../lib/part";
   import TypeForm from "../Widgets/TypeForm.svelte";
   import type { Type } from "../lib/types";
   import PlanForm from "./PlanForm.svelte";
+  import Buttons from "../Widgets/Buttons.svelte";
 
   let part: Part;
   let plan: ServicePlan;
@@ -39,17 +44,21 @@
 </script>
 
 <Modal {isOpen} {toggle} backdrop={false}>
-  <ModalHeader {toggle}>
-    {#if part.isGear()}
-      <TypeForm gear={part} with_body on:change={sethook}>
-        New service plan for
-      </TypeForm>
-    {:else}
-      New service plan for {part.name}
-    {/if}
-  </ModalHeader>
-  <ModalBody>
-    <PlanForm bind:plan />
-  </ModalBody>
-  <ModalFooter {toggle} {disabled} action={createPlan} button={"Create"} />
+  <form on:submit|preventDefault={createPlan}>
+    <ModalHeader {toggle}>
+      {#if part.isGear()}
+        <TypeForm gear={part} with_body on:change={sethook}>
+          New service plan for
+        </TypeForm>
+      {:else}
+        New service plan for {part.name}
+      {/if}
+    </ModalHeader>
+    <ModalBody>
+      <PlanForm bind:plan />
+    </ModalBody>
+    <ModalFooter>
+      <Buttons {toggle} {disabled} label={"Create"} />
+    </ModalFooter>
+  </form>
 </Modal>
