@@ -5,7 +5,7 @@
   import PlanHook from "./PlanHook.svelte";
   import PlanCell from "./PlanCell.svelte";
   import { ServicePlan } from "../lib/serviceplan";
-  import { attachments } from "../lib/attachment";
+  import { Attachment, attachments } from "../lib/attachment";
   import { Part, parts } from "../lib/part";
   import { Service, services } from "../lib/service";
   import { usages } from "../lib/usage";
@@ -14,6 +14,7 @@
   import ServiceRow from "../Service/ServiceRow.svelte";
   import NewService from "../Service/NewService.svelte";
   import RedoService from "../Service/RedoService.svelte";
+  import ReplacePart from "../Attachment/ReplacePart.svelte";
 
   export let plan: ServicePlan;
   export let name: string;
@@ -21,6 +22,7 @@
   let updatePlan: (p: ServicePlan) => void;
   let deletePlan: (p: ServicePlan) => void;
   let newService: (part: Part, plans?: string[]) => void;
+  let replacePart: (a: Attachment) => void;
   let redoService: (s: Service | undefined) => void;
 
   let show_hist = false;
@@ -62,6 +64,14 @@
         <DropdownItem on:click={() => newService(part, plans)}>
           New Service for plan
         </DropdownItem>
+        {#if plan.part != part.id}
+          {@const att = part.attachments($attachments).at(0)}
+          {#if att}
+            <DropdownItem on:click={() => replacePart(att)}>
+              Replace Part
+            </DropdownItem>
+          {/if}
+        {/if}
         <DropdownItem divider />
       {/if}
       <DropdownItem on:click={() => updatePlan(plan)}>
@@ -84,3 +94,4 @@
 <DeletePlan bind:deletePlan />
 <NewService bind:newService />
 <RedoService bind:redoService />
+<ReplacePart bind:replacePart />
