@@ -33,6 +33,7 @@
       placeholder={key}
       value={select[key]}
       on:input={(e) => handleChange(e, key)}
+      required
     />
     <InputGroupText>{key}</InputGroupText>
     <Button
@@ -44,18 +45,20 @@
     >
   </InputGroup>
 {/each}
-<Dropdown direction="left" class="float-end">
-  <DropdownToggle color="light">add limit</DropdownToggle>
-  <DropdownMenu>
-    {#each Limits.keys.filter((k) => !selected.includes(k)) as key}
-      <DropdownItem
-        on:click={() => {
-          selected.push(key);
-          selected = selected;
-        }}
-      >
-        {key}
-      </DropdownItem>
-    {/each}
-  </DropdownMenu>
-</Dropdown>
+<InputGroup>
+  <Dropdown class="float-end">
+    <DropdownToggle color="light">add limit</DropdownToggle>
+    <DropdownMenu>
+      {#each Limits.keys.filter((k) => !selected.includes(k)) as key}
+        <DropdownItem
+          on:click={() => {
+            selected.push(key);
+            selected = selected;
+          }}
+        >
+          {key}
+        </DropdownItem>
+      {/each}
+    </DropdownMenu>
+  </Dropdown>
+</InputGroup>

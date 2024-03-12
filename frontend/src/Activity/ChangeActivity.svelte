@@ -1,15 +1,10 @@
 <script lang="ts">
-  import {
-    Button,
-    Form,
-    FormGroup,
-    Offcanvas,
-    Spinner,
-  } from "@sveltestrap/sveltestrap";
+  import { FormGroup, Offcanvas } from "@sveltestrap/sveltestrap";
   import { Activity } from "../lib/activity";
   import { category } from "../lib/types";
   import SelectPart from "../Widgets/SelectPart.svelte";
   import ChangeField from "./ChangeField.svelte";
+  import Buttons from "../Widgets/Buttons.svelte";
 
   export const changeActivity = (a: Activity) => {
     isOpen = true;
@@ -19,14 +14,10 @@
   let activity: Activity;
   let isOpen = false;
 
-  let spinner = false;
-
   const toggle = () => (isOpen = !isOpen);
 
   async function submit() {
-    spinner = true;
     await activity.update();
-    spinner = false;
     isOpen = false;
   }
 </script>
@@ -38,7 +29,7 @@
       {activity?.name} <br />
       at {activity?.start.toLocaleString()}
     </div>
-    <Form on:submit={submit}>
+    <form on:submit|preventDefault={submit}>
       <FormGroup floating label={$category?.name} class="mb-0 mr-sm-2 mb-sm-2">
         <SelectPart
           type={$category}
@@ -54,15 +45,8 @@
       <ChangeField label="Duration (sec)" bind:field={activity.duration} />
 
       <div class="float-end">
-        <Button type="button" on:click={toggle}>Cancel</Button>
-        <Button color="primary">
-          {#if spinner}
-            <Spinner />
-          {:else}
-            Update
-          {/if}
-        </Button>
+        <Buttons {toggle} label="Update" />
       </div>
-    </Form>
+    </form>
   </Offcanvas>
 {/if}

@@ -2,14 +2,14 @@
   import {
     Modal,
     ModalBody,
+    ModalFooter,
     ModalHeader,
-    Form,
   } from "@sveltestrap/sveltestrap";
   import NewForm from "./PartForm.svelte";
-  import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { user } from "../lib/store";
   import { Type } from "../lib/types";
   import { Part } from "../lib/part";
+  import Buttons from "../Widgets/Buttons.svelte";
 
   let part: Part, newpart: Part;
   let type: Type;
@@ -50,10 +50,12 @@
 
 <Modal {isOpen} {toggle} backdrop={false}>
   <ModalHeader {toggle}>New {type.name}</ModalHeader>
-  <ModalBody>
-    <Form>
+  <form on:submit|preventDefault={savePart}>
+    <ModalBody>
       <NewForm {type} {part} on:change={setPart} />
-    </Form>
-  </ModalBody>
-  <ModalFooter {toggle} {disabled} action={savePart} button={"Attach"} />
+    </ModalBody>
+    <ModalFooter>
+      <Buttons {toggle} {disabled} label={"Create"} />
+    </ModalFooter>
+  </form>
 </Modal>

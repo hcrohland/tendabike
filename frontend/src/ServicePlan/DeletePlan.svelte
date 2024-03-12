@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Modal, ModalHeader, ModalBody } from "@sveltestrap/sveltestrap";
-  import ModalFooter from "../Widgets/ModalFooter.svelte";
+  import MyFooter from "../Widgets/MyFooter.svelte";
   import { ServicePlan } from "../lib/serviceplan";
 
   let plan: ServicePlan;
@@ -23,5 +23,5 @@
     Do you really want to delete ServicePlan <br />
     "{plan.name}"?
   </ModalHeader>
-  <ModalFooter {toggle} {action} button={"Delete"} />
+  <MyFooter {toggle} {action} label={"Delete"} />
 </Modal>

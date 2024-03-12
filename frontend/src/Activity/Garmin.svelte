@@ -12,7 +12,7 @@
   } from "@sveltestrap/sveltestrap";
   import { checkStatus, handleError } from "../lib/store";
   import TZPicker from "../Widgets/TZPicker.svelte";
-  import ModalFooter from "../Widgets/ModalFooter.svelte";
+  import MyFooter from "../Widgets/MyFooter.svelte";
   import { parts } from "../lib/part";
   import { attachments } from "../lib/attachment";
 
@@ -21,14 +21,14 @@
   let isOpen = false;
   let files: FileList | undefined;
   let result: { good: string[]; bad: string[] } | undefined;
-  let button: string | undefined;
+  let label: string | undefined;
   const toggle = () => (isOpen = false);
 
   export const garmin = () => {
     files = undefined;
     timezone = undefined;
     result = undefined;
-    button = "Synchronize";
+    label = "Synchronize";
     isOpen = true;
   };
 
@@ -49,7 +49,7 @@
           good: a[1],
           bad: a[2],
         };
-        button = undefined;
+        label = undefined;
       })
       .catch(handleError);
   }
@@ -89,5 +89,5 @@ You can upload multiple times"
       </InputGroup>
     </ModalBody>
   {/if}
-  <ModalFooter {toggle} {disabled} action={sendFile} {button} />
+  <MyFooter {toggle} {disabled} action={sendFile} {label} />
 </Modal>

@@ -3,12 +3,12 @@
     Modal,
     ModalBody,
     ModalHeader,
-    Form,
+    ModalFooter,
   } from "@sveltestrap/sveltestrap";
-  import ModalFooter from "../Widgets/ModalFooter.svelte";
   import { Service } from "../lib/service";
   import { Part } from "../lib/part";
   import ServiceForm from "./ServiceForm.svelte";
+  import Buttons from "../Widgets/Buttons.svelte";
 
   let part: Part;
   let service: Service, newservice: Service;
@@ -49,10 +49,12 @@
     {part.vendor}
     {part.model}
   </ModalHeader>
-  <ModalBody>
-    <Form>
+  <form on:submit|preventDefault={saveService}>
+    <ModalBody>
       <ServiceForm {service} mindate={part.purchase} on:change={setService} />
-    </Form>
-  </ModalBody>
-  <ModalFooter {toggle} {disabled} action={saveService} button={"Save"} />
+    </ModalBody>
+    <ModalFooter>
+      <Buttons {toggle} {disabled} label={"Save"} />
+    </ModalFooter>
+  </form>
 </Modal>

@@ -1,10 +1,15 @@
 <script lang="ts">
-  import { Modal, ModalHeader, ModalBody } from "@sveltestrap/sveltestrap";
-  import ModalFooter from "../Widgets/ModalFooter.svelte";
+  import {
+    Modal,
+    ModalHeader,
+    ModalBody,
+    ModalFooter,
+  } from "@sveltestrap/sveltestrap";
   import { types } from "../lib/types";
   import { AttEvent } from "../lib/attachment";
   import AttachForm from "./AttachForm.svelte";
   import { Part } from "../lib/part";
+  import Buttons from "../Widgets/Buttons.svelte";
 
   let attach: AttEvent;
   let part: Part | undefined;
@@ -28,19 +33,21 @@
   };
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false}>
-  {#if part}
+{#if part}
+  <Modal {isOpen} {toggle} backdrop={false}>
     <ModalHeader {toggle}>
       Attach {types[part.what].name}
       {part.name}
       {part.vendor}
       {part.model}
     </ModalHeader>
-    <ModalBody>
-      <AttachForm bind:attach bind:disabled {part} />
-    </ModalBody>
-  {:else}
-    Error: part is not defined
-  {/if}
-  <ModalFooter {toggle} {action} {disabled} button={"Attach"} />
-</Modal>
+    <form on:submit|preventDefault={action}>
+      <ModalBody>
+        <AttachForm bind:attach bind:disabled {part} />
+      </ModalBody>
+      <ModalFooter>
+        <Buttons {toggle} {disabled} label={"Attach"} />
+      </ModalFooter>
+    </form>
+  </Modal>
+{/if}

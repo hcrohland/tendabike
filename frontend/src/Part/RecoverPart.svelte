@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Modal, ModalHeader, ModalBody } from "@sveltestrap/sveltestrap";
-  import ModalFooter from "../Widgets/ModalFooter.svelte";
+  import MyFooter from "../Widgets/MyFooter.svelte";
   import { fmtDate } from "../lib/store";
   import { Part } from "../lib/part";
   import { types } from "../lib/types";
@@ -31,5 +31,5 @@
   <ModalBody>
     You binned it on {fmtDate(part.disposed_at)}
   </ModalBody>
-  <ModalFooter {toggle} {action} button={"Recover"} />
+  <MyFooter {toggle} {action} label={"Recover"} />
 </Modal>
