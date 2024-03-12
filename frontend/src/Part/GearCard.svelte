@@ -19,8 +19,7 @@
   let isOpen = false;
   let showLink = false;
 
-  let usage = new Usage();
-  $: if ($usages[part.usage]) usage = $usages[part.usage];
+  $: usage = $usages[part.usage] ? $usages[part.usage] : new Usage();
 
   function model(part: Part) {
     if (part.model == "" && part.vendor == "") {
