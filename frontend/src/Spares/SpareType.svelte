@@ -42,7 +42,8 @@
 
 <tr>
   <th colspan="6" scope="col" class="text-nowrap">
-    {type.name}s
+    {type.name}s &NonBreakingSpace;
+    <Button size="sm" color="light" on:click={() => newPart(type)}>add</Button>
     {#if subparts.length > 0}
       <ShowAll
         on:toggle={(e) => {
@@ -54,11 +55,7 @@
       />
     {/if}
   </th>
-  <th class="text-nowrap" colspan="80">
-    <Button class="badge float-end" on:click={() => newPart(type)}>
-      New {type.name}</Button
-    >
-  </th>
+  <th class="text-nowrap" colspan="80"> </th>
 </tr>
 {#each subparts.filter((p) => show_all || !(attachedTo($attachments, p.id, date) || p.disposed_at)) as part (part.id)}
   <tr>
