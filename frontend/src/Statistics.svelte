@@ -141,7 +141,7 @@
       title: { text: title },
       legend: { orientation: "h" },
       yaxis: {
-        hoverformat: ".3r",
+        hoverformat: ".4r",
         fixedrange: true,
         rangemode: "tozero",
       },
