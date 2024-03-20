@@ -2,10 +2,6 @@
   import {
     ButtonGroup,
     Button,
-    Dropdown,
-    DropdownToggle,
-    DropdownMenu,
-    DropdownItem,
     Badge,
     TabPane,
     TabContent,
@@ -41,6 +37,8 @@
   let attachPart: (p: Part) => void;
   let newPlan: (p: Part) => void;
 
+  let tab: number | string = "parts";
+
   $: part = $parts[params.id];
   $: hook = part.type();
   $: attachees = attachees_for_gear(part.id, $attachments);
@@ -60,44 +58,28 @@
 <GearCard {part} display>
   <ButtonGroup class="float-end">
     {#if part.disposed_at}
-      <Button color="light" on:click={() => recoverPart(part)}
-        >Recover gear</Button
-      >
+      <Button color="light" on:click={() => recoverPart(part)}>
+        Recover gear
+      </Button>
     {:else}
       <Button color="light" on:click={() => changePart(part)}>
         Change details
       </Button>
-      <Dropdown direction="down">
-        <DropdownToggle color="light" caret split />
-        <DropdownMenu>
-          {#if part.isGear()}
-            <DropdownItem on:click={() => installPart(part)}>
-              New Part
-            </DropdownItem>
-            <DropdownItem divider />
-          {:else}
-            <DropdownItem on:click={() => attachPart(part)}>
-              Attach part
-            </DropdownItem>
-          {/if}
-          <DropdownItem on:click={() => newService(part)}>
-            Log Service
-          </DropdownItem>
-          <DropdownItem on:click={() => newPlan(part)}>
-            New Service Plan
-          </DropdownItem>
-        </DropdownMenu>
-      </Dropdown>
+      {#if !part.isGear()}
+        <Button color="light" on:click={() => attachPart(part)}>
+          Attach part
+        </Button>
+      {/if}
     {/if}
   </ButtonGroup>
 </GearCard>
 <br />
 <PartHist id={params.id} />
-<TabContent>
+<TabContent on:tab={(e) => (tab = e.detail)}>
   <TabPane tabId="parts" active>
     <strong slot="tab">
       Attached Parts
-      {#if part.isGear()}
+      {#if tab == "parts" && part.isGear()}
         <Button size="sm" color="light" on:click={() => installPart(part)}>
           add
         </Button>
@@ -113,18 +95,22 @@
       {:else if alerts.warn > 0}
         <Badge color="warning">{alerts.warn}</Badge>
       {/if}
-      <Button size="sm" color="light" on:click={() => newPlan(part)}>
-        add
-      </Button> &NonBreakingSpace;
+      {#if tab == "plans"}
+        <Button size="sm" color="light" on:click={() => newPlan(part)}>
+          add
+        </Button> &NonBreakingSpace;
+      {/if}
     </strong>
     <PlanList {planlist} part_id={part.id} /><br />
   </TabPane>
   <TabPane tabId="service">
     <strong slot="tab">
       Service Logs
-      <Button size="sm" color="light" on:click={() => newService(part)}>
-        add
-      </Button>
+      {#if tab == "service"}
+        <Button size="sm" color="light" on:click={() => newService(part)}>
+          add
+        </Button>
+      {/if}
     </strong>
     <ServiceList {part} /><br />
   </TabPane>
