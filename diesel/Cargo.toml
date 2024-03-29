@@ -6,12 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-diesel = { version = "2", features = ["postgres", "time", "uuid" ] }
-diesel-async = { version = "0.4", features = ["postgres", "deadpool" ] }
-scoped-futures = "0.1"
-diesel_migrations = "2"
-async-session = "3"
-anyhow = "1.0"
-time = { version = "0.3", features = ["serde", "parsing", "serde-human-readable"] }
-tb_strava = {path = "../strava"}
-tb_domain = {path = "../domain"}
+diesel = { workspace = true, features = ["postgres", "time", "uuid"] }
+diesel-async = { workspace = true, features = ["postgres", "deadpool"] }
+scoped-futures = { workspace = true }
+diesel_migrations = { workspace = true }
+async-session = { workspace = true }
+anyhow = { workspace = true }
+time = { workspace = true, features = ["serde", "parsing", "serde-human-readable"] }
+tb_strava = { workspace = true }
+tb_domain = { workspace = true }

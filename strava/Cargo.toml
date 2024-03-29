@@ -6,20 +6,20 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tb_domain = {path = "../domain"}
+tb_domain = { workspace = true }
 
-diesel = { version = "2", features = ["time"] }
-scoped-futures = "0.1"
-diesel-derive-newtype = "2"
+diesel = { workspace = true, features = ["time"] }
+scoped-futures = { workspace = true }
+diesel-derive-newtype = { workspace = true }
 
-newtype_derive = "0.1"
-async-session = "3"
-serde = "1.0"
-serde_derive = "1.0"
-serde_json = "1.0"
-anyhow = "1"
-reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "json"] }
-futures = "0.3"
-time = { version = "0.3", features = ["serde"] }
-async-recursion = "1"
-async-trait = "0.1"
+newtype_derive = { workspace = true }
+async-session = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+reqwest = { workspace = true, features = ["rustls-tls", "json"] }
+futures = { workspace = true }
+time = { workspace = true, features = ["serde"] }
+async-recursion = { workspace = true }
+async-trait = { workspace = true }
