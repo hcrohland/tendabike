@@ -6,29 +6,29 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tb_domain = {path = "../domain"}
-tb_strava = {path = "../strava"}
-tb_diesel = {path = "../diesel"}
+tb_domain = { workspace = true }
+tb_strava = { workspace = true }
+tb_diesel = { workspace = true }
 
-anyhow = "1.0"
-thiserror = "1.0"
+anyhow = { workspace = true }
+thiserror = { workspace = true }
 
-async-session = "3.0.0"
-axum = { version = "0.7"}
-headers = "0.4"
-http = "1"
-oauth2 = "4.4"
+async-session = { workspace = true }
+axum = { workspace = true }
+headers = { workspace = true }
+http = { workspace = true }
+oauth2 = { workspace = true }
 # Use Rustls because it makes it easier to cross-compile on CI
-reqwest = { version = "0.11", default-features = false, features = ["rustls-tls", "json"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_derive = "1.0"
-serde_json = "1.0"
-serde_with = { version = "3", features = ["time_0_3"] }
-time = { version = "0.3", features = ["serde", "parsing", "serde-human-readable"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tower-http = { version = "0.5", features = ["full"] }
-axum-macros = "0.4"
-lazy_static = "1.4"
-tokio = "1.35.1"
-axum-extra ={ version = "0.9.2", features = ["typed-header"]}
+reqwest = { workspace = true, features = ["rustls-tls", "json"] }
+serde = { workspace = true, features = ["derive"] }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true, features = ["time_0_3"] }
+time = { workspace = true, features = ["serde", "parsing", "serde-human-readable"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+tower-http = { workspace = true, features = ["full"] }
+axum-macros = { workspace = true }
+lazy_static = { workspace = true }
+tokio = { workspace = true }
+axum-extra ={ workspace = true, features = ["typed-header"] }
