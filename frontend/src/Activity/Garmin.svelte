@@ -36,7 +36,7 @@
 
   async function sendFile() {
     var body = files && (await files[0].text());
-    return fetch("/activ/descend?tz=" + timezone, {
+    return fetch("/api/activ/descend?tz=" + timezone, {
       method: "POST",
       credentials: "include",
       body,
