@@ -1,4 +1,4 @@
-use crate::{PartId, ServicePlan, ServicePlanId, TbResult};
+use crate::{PartId, ServicePlan, ServicePlanId, TbResult, UserId};
 
 #[async_trait::async_trait]
 /// A trait representing a store for `Usage` objects.
@@ -8,4 +8,5 @@ pub trait ServicePlanStore {
     async fn update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
     async fn delete(&mut self, plan: ServicePlanId) -> TbResult<usize>;
     async fn by_part(&mut self, part: PartId) -> TbResult<Vec<ServicePlan>>;
+    async fn by_user(&mut self, uid: &UserId) -> TbResult<Vec<ServicePlan>>;
 }

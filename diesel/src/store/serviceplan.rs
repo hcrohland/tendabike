@@ -1,7 +1,7 @@
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 
-use tb_domain::{schema, PartId, ServicePlan, ServicePlanId, TbResult};
+use tb_domain::{schema, PartId, ServicePlan, ServicePlanId, TbResult, UserId};
 
 use crate::{map_to_tb, AsyncDieselConn};
 use schema::service_plans::dsl::*;
@@ -42,6 +42,14 @@ impl tb_domain::ServicePlanStore for AsyncDieselConn {
     async fn by_part(&mut self, part_id: PartId) -> TbResult<Vec<ServicePlan>> {
         service_plans
             .filter(part.eq(part_id))
+            .get_results(self)
+            .await
+            .map_err(map_to_tb)
+    }
+
+    async fn by_user(&mut self, user_id: &UserId) -> TbResult<Vec<ServicePlan>> {
+        service_plans
+            .filter(uid.eq(user_id))
             .get_results(self)
             .await
             .map_err(map_to_tb)

@@ -7,28 +7,6 @@ use crate::*;
 use schema::service_plans;
 
 #[derive(
-    Clone,
-    Debug,
-    PartialEq,
-    Serialize,
-    Deserialize,
-    // Queryable,
-    // Identifiable,
-    // Insertable,
-    // AsChangeset,
-)]
-#[repr(i64)]
-pub enum ServiceAlert {
-    NoService,
-    Days(i32),
-    Time(i32),
-    Distance(i32),
-    Climb(i32),
-    Descend(i32),
-    Count(i32),
-}
-
-#[derive(
     DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Default,
 )]
 pub struct ServicePlanId(Uuid);
@@ -47,7 +25,7 @@ impl ServicePlanId {
 
     pub async fn delete(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Vec<Service>> {
         let plan = self.get(store).await?;
-        plan.part.checkuser(user, store).await?;
+        plan.checkuser(user, store).await?;
 
         let res = Service::reset_plan(self, store).await?;
 
@@ -55,51 +33,8 @@ impl ServicePlanId {
         ServicePlanStore::delete(store, self).await?;
         Ok(res)
     }
-    /* async fn check(
-        self,
-        last_service: OffsetDateTime,
-        usage: &Usage,
-        store: &mut impl ServicePlanStore,
-    ) -> TbResult<ServiceAlert> {
-        use time::{Duration, OffsetDateTime};
-        use ServiceAlert::*;
-        let plan = self.get(store).await?;
-        if let Some(plan) = plan.days {
-            if Duration::days((plan).into()) <= OffsetDateTime::now_utc() - last_service {
-                return Ok(Time(plan));
-            };
-        }
-        if let Some(plan) = plan.time {
-            if plan <= usage.time {
-                return Ok(Time(plan));
-            };
-        }
-        if let Some(plan) = plan.climb {
-            if plan <= usage.climb {
-                return Ok(Climb(plan));
-            };
-        }
-        if let Some(plan) = plan.descend {
-            if plan <= usage.descend {
-                return Ok(Descend(plan));
-            };
-        }
-        if let Some(plan) = plan.distance {
-            if plan <= usage.distance {
-                return Ok(Distance(plan));
-            };
-        }
-        if let Some(plan) = plan.rides {
-            if plan <= usage.rides {
-                return Ok(Count(plan));
-            };
-        }
-        Ok(NoService)
-    } */
 }
 
-///
-///
 #[derive(
     Clone,
     Debug,
@@ -118,7 +53,7 @@ pub struct ServicePlan {
     /// the gear or part involved
     /// if hook is None the plan is for a specific part
     /// if it's Some(hook) it is a generic plan for that hook
-    part: PartId,
+    part: Option<PartId>,
     /// This is only really used for generic plans
     /// for a specific part it is set to the PartType of the part
     what: PartTypeId,
@@ -137,15 +72,34 @@ pub struct ServicePlan {
     pub descend: Option<i32>,
     /// number of activities
     pub rides: Option<i32>,
+    /// User for generic plans
+    pub uid: Option<UserId>,
 }
 
 impl ServicePlan {
+    async fn checkuser(
+        &self,
+        user: &dyn Person,
+        store: &mut (impl ServicePlanStore + PartStore),
+    ) -> TbResult<()> {
+        if let Some(part) = self.part {
+            part.checkuser(user, store).await?;
+        } else if self.uid != Some(user.get_id()) {
+            return Err(crate::Error::BadRequest(format!(
+                "user mismatch {} != {:?}",
+                user.get_id(),
+                self.uid
+            )));
+        }
+        Ok(())
+    }
+
     pub async fn create(
         mut self,
         user: &dyn Person,
         store: &mut (impl ServicePlanStore + PartStore),
     ) -> TbResult<Self> {
-        self.part.checkuser(user, store).await?;
+        self.checkuser(user, store).await?;
         self.id = ServicePlanId::new();
         store.create(self).await
     }
@@ -156,7 +110,7 @@ impl ServicePlan {
         store: &mut (impl ServicePlanStore + PartStore),
     ) -> TbResult<ServicePlan> {
         let plan = self.id.get(store).await?;
-        plan.part.checkuser(user, store).await?;
+        plan.checkuser(user, store).await?;
         // You cannot change these
         self.part = plan.part;
         self.what = plan.what;
@@ -169,5 +123,12 @@ impl ServicePlan {
         store: &mut impl ServicePlanStore,
     ) -> TbResult<Vec<Self>> {
         store.by_part(part).await
+    }
+
+    pub(crate) async fn for_user(
+        uid: &UserId,
+        store: &mut impl ServicePlanStore,
+    ) -> TbResult<Vec<Self>> {
+        store.by_user(uid).await
     }
 }
