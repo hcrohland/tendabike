@@ -21,10 +21,9 @@
   import {
     plans,
     alerts_for_plans,
-    plans_by_partid,
-    plans_for_gear,
+    plans_for_part_and_attachees,
   } from "../lib/serviceplan";
-  import { attachees_for_gear, attachments } from "../lib/attachment";
+  import { attachments } from "../lib/attachment";
   import { services } from "../lib/service";
   import { usages } from "../lib/usage";
 
@@ -41,11 +40,7 @@
 
   $: part = $parts[params.id];
   $: hook = part.type();
-  $: attachees = attachees_for_gear(part.id, $attachments);
-  $: planlist = attachees.reduce(
-    (list, att) => list.concat(plans_by_partid(att.part_id, $plans)),
-    plans_for_gear(part.id, $plans, $attachments),
-  );
+  $: planlist = plans_for_part_and_attachees($attachments, $plans, part.id);
   $: alerts = alerts_for_plans(
     planlist,
     $parts,

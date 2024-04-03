@@ -6,6 +6,7 @@ import {
   part_at_hook,
   type Attachment,
   attachment_for_part,
+  attachees_for_gear,
 } from "./attachment";
 import type { Usage } from "./usage";
 
@@ -141,36 +142,47 @@ export class ServicePlan extends Limits {
   }
 }
 
-export function plans_by_partid(
+function plans_for_this_part(
   part_id: number | undefined,
   plans: Map<ServicePlan>,
 ) {
   return filterValues(plans, (p) => p.part == part_id && p.hook == null);
 }
 
-export function plans_for_gear(
-  part: number | undefined,
+function plans_for_attachee(
   plans: Map<ServicePlan>,
-  atts: Map<Attachment>,
-  time = new Date(),
+  att: Attachment | undefined,
 ) {
-  let att = attachment_for_part(part, atts, time);
   return filterValues(
     plans,
     (s) =>
-      s.part == part ||
+      s.part == att?.part_id ||
       (s.hook == att?.hook && s.part == att?.gear && s.what == att?.what),
-  ).sort(by("name", true));
+  );
 }
 
 export function plans_for_part(
-  part: Part,
-  time: Date,
   plans: Map<ServicePlan>,
   atts: Map<Attachment>,
+  part: number | undefined,
+  time: Date = new Date(),
 ) {
-  if (part.isGear()) return plans_by_partid(part.id, plans);
-  else return plans_for_gear(part.id, plans, atts, time);
+  let att = attachment_for_part(part, atts, time);
+  return att
+    ? plans_for_attachee(plans, att)
+    : plans_for_this_part(part, plans);
+}
+
+export function plans_for_part_and_attachees(
+  atts: Map<Attachment>,
+  plans: Map<ServicePlan>,
+  part: number | undefined,
+) {
+  let attachees = attachees_for_gear(part, atts);
+  return attachees.reduce(
+    (list, att) => list.concat(plans_for_attachee(plans, att)),
+    plans_for_part(plans, atts, part),
+  );
 }
 
 export function alerts_for_plans(

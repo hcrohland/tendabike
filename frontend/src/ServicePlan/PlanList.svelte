@@ -4,6 +4,7 @@
   import { parts } from "../lib/part";
   import PlanHeader from "./PlanHeader.svelte";
   import PlanRow from "./PlanRow.svelte";
+  import { by } from "../lib/mapable";
 
   export let planlist: ServicePlan[];
   export let part_id: number | undefined;
@@ -14,7 +15,7 @@
     <PlanHeader />
   </thead>
   <tbody>
-    {#each planlist as plan}
+    {#each planlist.sort(by("name", true)) as plan}
       {@const name =
         part_id == plan.part ? "" : "for " + $parts[plan.part].partLink()}
       <PlanRow {plan} {name} />
