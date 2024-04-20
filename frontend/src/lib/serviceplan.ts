@@ -153,12 +153,18 @@ function plans_for_attachee(
   plans: Map<ServicePlan>,
   att: Attachment | undefined,
 ) {
-  return filterValues(
+  let res = filterValues(
     plans,
-    (s) =>
-      s.part == att?.part_id ||
-      (s.hook == att?.hook && s.part == att?.gear && s.what == att?.what),
+    (p) =>
+      p.part == att?.part_id ||
+      (p.part == att?.gear && p.hook == att?.hook && p.what == att?.what),
   );
+  filterValues(
+    plans,
+    (p) =>
+      (p.part == null && p.hook == att?.hook && p.what == att?.what),
+  ).forEach((p) => { if (!res.some((r) => (r.hook == p.hook && r.what == p.what))) res.push(new ServicePlan({ ...p, part: att?.gear })) })
+  return res
 }
 
 export function plans_for_part(

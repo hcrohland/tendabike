@@ -77,12 +77,15 @@
         {/if}
         <DropdownItem divider />
       {/if}
-      <DropdownItem on:click={() => updatePlan(plan)}>
-        Change ServicePlan
-      </DropdownItem>
-      <DropdownItem on:click={() => deletePlan(plan)}>
-        Delete ServicePlan
-      </DropdownItem>
+      <!-- do not change generic plans -->
+      {#if no_template}
+        <DropdownItem on:click={() => updatePlan(plan)}>
+          Change ServicePlan
+        </DropdownItem>
+        <DropdownItem on:click={() => deletePlan(plan)}>
+          Delete ServicePlan
+        </DropdownItem>
+      {/if}
     </Menu>
   </td>
 </tr>
