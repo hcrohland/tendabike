@@ -38,10 +38,10 @@
       <tr>
         <th scope="row" class="text-nowrap">
           {"┃ ".repeat(level)}
-          {prefix + " " + type.name}
           {#if attachments.length > 0 || (part && $usages[part.usage].count != $usages[att.usage].count)}
             <ShowAll bind:show_hist />
           {/if}
+          {prefix + " " + type.name}
         </th>
         {#if att.isAttached()}
           <td>

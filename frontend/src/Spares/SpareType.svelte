@@ -44,6 +44,7 @@
   <th colspan="6" scope="col" class="text-nowrap">
     {type.name}s &NonBreakingSpace;
     <Button size="sm" color="light" on:click={() => newPart(type)}>add</Button>
+    &NonBreakingSpace;
     {#if subparts.length > 0}
       <ShowAll
         on:toggle={(e) => {

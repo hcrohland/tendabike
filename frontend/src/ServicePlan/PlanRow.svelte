@@ -37,14 +37,16 @@
   <td>
     <div>
       <span id={"name" + plan.id}>
+        <ShowHist bind:show_hist />
         {plan.name}
         <PlanHook {plan} />
-        {@html name}
-        <ShowHist bind:show_hist />
+        {#if plan.hook && no_template}
+          for {@html $parts[plan.part].partLink()}
+        {/if}
       </span>
     </div>
   </td>
-  <td class="text-end"> in </td>
+  <td class=""> after </td>
   <PlanCell plan={plan.days} due={due.days} />
   <PlanCell plan={plan.rides} due={due.rides} />
   <PlanCell plan={plan.hours} due={due.hours} />

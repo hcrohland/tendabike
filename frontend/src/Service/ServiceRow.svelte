@@ -33,6 +33,7 @@
   {#if service}
     <td>
       <div>
+        <slot />
         <span id={"name" + service.id}>
           {"┃ ".repeat(depth)}
           {service.name}
@@ -42,7 +43,6 @@
             {service.notes}
           </Tooltip>
         {/if}
-        <slot />
       </div>
     </td>
     <td>{fmtRange(service.time, successor?.time)}</td>
