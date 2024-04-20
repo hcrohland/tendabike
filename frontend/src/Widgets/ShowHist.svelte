@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Button } from "@sveltestrap/sveltestrap";
   import { createEventDispatcher } from "svelte";
   const dispatch = createEventDispatcher();
 
@@ -10,11 +11,10 @@
   }
 </script>
 
-<button class="btn" on:click={click}>
+<Button color="light" class="m-0 p-1" on:click={click}>
   {#if show_hist}
-    &#9650;
+    −
   {:else}
-    &#9660;
-    <slot />
+    +
   {/if}
-</button>
+</Button>

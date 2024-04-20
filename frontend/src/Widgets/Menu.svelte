@@ -12,7 +12,11 @@
 </script>
 
 <div class="float-end">
-  <Dropdown {isOpen} toggle={() => (isOpen = !isOpen)} size="sm">
+  <Dropdown
+    {isOpen}
+    toggle={() => (isOpen = !isOpen)}
+    style="position: static;"
+  >
     <DropdownToggle color="light" caret />
     <DropdownMenu end>
       <slot />

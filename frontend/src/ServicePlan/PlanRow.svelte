@@ -4,7 +4,7 @@
   import Menu from "../Widgets/Menu.svelte";
   import PlanHook from "./PlanHook.svelte";
   import PlanCell from "./PlanCell.svelte";
-  import { ServicePlan } from "../lib/serviceplan";
+  import { plans, ServicePlan } from "../lib/serviceplan";
   import { Attachment, attachments } from "../lib/attachment";
   import { Part, parts } from "../lib/part";
   import { Service, services } from "../lib/service";
@@ -27,6 +27,8 @@
 
   let show_hist = false;
 
+  let no_template = plan.id && $plans[plan.id].part;
+
   $: part = plan.getpart($parts, $attachments);
   $: serviceList = plan.services(part, $services);
 
@@ -37,14 +39,16 @@
   <td>
     <div>
       <span id={"name" + plan.id}>
+        <ShowHist bind:show_hist />
         {plan.name}
         <PlanHook {plan} />
-        {@html name}
-        <ShowHist bind:show_hist />
+        {#if plan.hook && no_template}
+          for {@html $parts[plan.part].partLink()}
+        {/if}
       </span>
     </div>
   </td>
-  <td class="text-end"> in </td>
+  <td class=""> after </td>
   <PlanCell plan={plan.days} due={due.days} />
   <PlanCell plan={plan.rides} due={due.rides} />
   <PlanCell plan={plan.hours} due={due.hours} />
