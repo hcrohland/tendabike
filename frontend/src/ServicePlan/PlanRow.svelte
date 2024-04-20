@@ -27,6 +27,8 @@
 
   let show_hist = false;
 
+  let no_template = plan.id && $plans[plan.id].part;
+
   $: part = plan.getpart($parts, $attachments);
   $: serviceList = plan.services(part, $services);
 
