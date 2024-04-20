@@ -96,7 +96,7 @@
         </Button> &NonBreakingSpace;
       {/if}
     </strong>
-    <PlanList {planlist} part_id={part.id} /><br />
+    <PlanList {planlist} /><br />
   </TabPane>
   <TabPane tabId="service">
     <strong slot="tab">

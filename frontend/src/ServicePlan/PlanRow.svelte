@@ -17,7 +17,6 @@
   import ReplacePart from "../Attachment/ReplacePart.svelte";
 
   export let plan: ServicePlan;
-  export let name: string;
 
   let updatePlan: (p: ServicePlan) => void;
   let deletePlan: (p: ServicePlan) => void;
