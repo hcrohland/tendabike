@@ -4,7 +4,7 @@
   import Menu from "../Widgets/Menu.svelte";
   import PlanHook from "./PlanHook.svelte";
   import PlanCell from "./PlanCell.svelte";
-  import { ServicePlan } from "../lib/serviceplan";
+  import { plans, ServicePlan } from "../lib/serviceplan";
   import { Attachment, attachments } from "../lib/attachment";
   import { Part, parts } from "../lib/part";
   import { Service, services } from "../lib/service";
