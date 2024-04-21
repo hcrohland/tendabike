@@ -79,19 +79,19 @@
     <Collapse {isOpen} navbar expand="md" on:update={navbarUpdate}>
       <Nav class="ms-auto float-start" navbar>
         <NavItem>
-          <NavLink href="/#/cat" class="dropdown-item text-reset"
-            >{$category.name}s</NavLink
-          >
+          <NavLink href="/#/cat" class="dropdown-item text-reset">
+            {$category.name}s
+          </NavLink>
         </NavItem>
         <NavItem>
-          <NavLink href="/#/spares" class="dropdown-item text-reset"
-            >Spare parts</NavLink
-          >
+          <NavLink href="/#/spares" class="dropdown-item text-reset">
+            Parts
+          </NavLink>
         </NavItem>
         <NavItem>
-          <NavLink href="/#/activities" class="dropdown-item text-reset"
-            >Activities</NavLink
-          >
+          <NavLink href="/#/activities" class="dropdown-item text-reset">
+            Activities
+          </NavLink>
         </NavItem>
       </Nav>
       <Nav class="ms-auto float-end" navbar>
@@ -133,9 +133,9 @@
     </Collapse>
   {:else}
     <Nav class="ml-auto float-end" navbar>
-      <a href="/strava/login"
-        ><img src="connect_with_strava.png" alt="Login with Strava" /></a
-      >
+      <a href="/strava/login">
+        <img src="connect_with_strava.png" alt="Login with Strava" />
+      </a>
     </Nav>
   {/if}
 </Navbar>
