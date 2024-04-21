@@ -115,6 +115,7 @@ impl ServicePlan {
         self.part = plan.part;
         self.what = plan.what;
         self.hook = plan.hook;
+        self.uid = plan.uid;
         store.update(self).await
     }
 
