@@ -5,12 +5,11 @@
     ModalFooter,
     ModalHeader,
   } from "@sveltestrap/sveltestrap";
-  import { ServicePlan } from "../lib/serviceplan";
+  import { plans, ServicePlan } from "../lib/serviceplan";
   import { parts, Part } from "../lib/part";
   import { category, types } from "../lib/types";
   import PlanForm from "./PlanForm.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
-  import { attachments } from "../lib/attachment";
 
   let part: Part | null;
   let plan: ServicePlan;
@@ -22,7 +21,7 @@
   }
 
   export const updatePlan = (p: ServicePlan) => {
-    part = p.getpart($parts, $attachments);
+    part = $plans[p.id!].part ? $parts[p.part!] : null;
     plan = new ServicePlan(p);
     isOpen = true;
   };
