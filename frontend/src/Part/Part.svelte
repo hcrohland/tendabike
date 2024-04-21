@@ -26,6 +26,7 @@
   import { attachments } from "../lib/attachment";
   import { services } from "../lib/service";
   import { usages } from "../lib/usage";
+  import { filterValues } from "../lib/mapable";
 
   export let params: { id: number; what: number };
 
@@ -39,7 +40,8 @@
   let tab: number | string = "parts";
 
   $: part = $parts[params.id];
-  $: hook = part.type();
+  $: attachees = filterValues($attachments, (a) => a.gear == part.id);
+
   $: planlist = plans_for_part_and_attachees($attachments, $plans, part.id);
   $: alerts = alerts_for_plans(
     planlist,
@@ -71,18 +73,20 @@
 <br />
 <PartHist id={params.id} />
 <TabContent on:tab={(e) => (tab = e.detail)}>
-  <TabPane tabId="parts" active>
-    <strong slot="tab">
-      Attached Parts
-      {#if tab == "parts" && part.isGear()}
-        <Button size="sm" color="light" on:click={() => installPart(part)}>
-          add
-        </Button>
-      {/if}
-    </strong>
-    <Subparts {part} {hook} />
-  </TabPane>
-  <TabPane tabId="plans">
+  {#if attachees.length > 0 || part.isGear()}
+    <TabPane tabId="parts" active>
+      <strong slot="tab">
+        Attached Parts
+        {#if tab == "parts" && part.isGear()}
+          <Button size="sm" color="light" on:click={() => installPart(part)}>
+            add
+          </Button>
+        {/if}
+      </strong>
+      <Subparts {part} {attachees} />
+    </TabPane>
+  {/if}
+  <TabPane tabId="plans" active={!(attachees.length > 0 || part.isGear())}>
     <strong slot="tab">
       Service Plans
       {#if alerts.alert > 0}
