@@ -2,8 +2,8 @@
   import { Table } from "@sveltestrap/sveltestrap";
   import { ServicePlan } from "../lib/serviceplan";
   import PlanHeader from "./PlanHeader.svelte";
-  import PlanRow from "./PlanRow.svelte";
   import { by } from "../lib/mapable";
+  import PlanBlock from "./PlanBlock.svelte";
 
   export let planlist: ServicePlan[];
 </script>
@@ -13,8 +13,11 @@
     <PlanHeader />
   </thead>
   <tbody>
-    {#each planlist.sort(by("name", true)) as plan}
-      <PlanRow {plan} />
+    {#each planlist
+      .sort(by("id"))
+      .sort(by("part"))
+      .sort(by("what", true)) as plan}
+      <PlanBlock {plan} />
     {/each}
   </tbody>
 </Table>

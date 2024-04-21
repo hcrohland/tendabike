@@ -9,6 +9,7 @@ import {
   attachees_for_gear,
 } from "./attachment";
 import type { Usage } from "./usage";
+import { types } from "./types";
 
 const is_set = (n: number | null) => n != null && n > 0;
 
@@ -104,8 +105,7 @@ export class ServicePlan extends Limits {
   services(part: Part | null, services: Map<Service>) {
     return filterValues(
       services,
-      // @ts-ignore
-      (s) => s.part_id == part?.id && s.plans.includes(this.id),
+      (s) => s.part_id == part?.id && s.plans.includes(this.id!),
     ).sort(by("time"));
   }
 
@@ -135,10 +135,8 @@ export class ServicePlan extends Limits {
     let due = this.due(part, service, usages);
     for (const key of ServicePlan.keys) {
       if (due[key]) {
-        //@ts-ignore
-        if (due[key] < 0) res = "alert";
-        //@ts-ignore
-        if (res == "" && due[key] < this[key] * 0.05) res = "warn";
+        if (due[key]! < 0) res = "alert";
+        if (res == "" && due[key]! < this[key]! * 0.05) res = "warn";
       }
     }
     return res;
@@ -150,6 +148,21 @@ export class ServicePlan extends Limits {
 
   partLink(parts: Map<Part>) {
     return this.part ? parts[this.part].partLink() : "";
+  }
+
+  gears(parts: Map<Part>, plans: Map<ServicePlan>) {
+    if (this.part) return [];
+
+    let main = types[this.what].main;
+    return filterValues(
+      parts,
+      (p) =>
+        p.disposed_at == null &&
+        main == p.what &&
+        !Object.values(plans).some(
+          (r) => r.part == p.id && r.hook == this.hook,
+        ),
+    );
   }
 }
 

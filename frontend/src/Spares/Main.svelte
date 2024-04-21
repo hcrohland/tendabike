@@ -1,7 +1,8 @@
 <script lang="ts">
   import { TabContent, TabPane } from "@sveltestrap/sveltestrap";
   import Spares from "./Spares.svelte";
-  import Plans from "./Plans.svelte";
+  import PlanList from "../ServicePlan/PlanList.svelte";
+  import { plans } from "../lib/serviceplan";
 </script>
 
 <TabContent>
@@ -11,6 +12,6 @@
   </TabPane>
   <TabPane tabId="plans">
     <strong slot="tab"> Serviceplans </strong>
-    <Plans />
+    <PlanList planlist={Object.values($plans)} />
   </TabPane>
 </TabContent>
