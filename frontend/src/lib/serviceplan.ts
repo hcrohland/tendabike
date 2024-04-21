@@ -140,6 +140,10 @@ export class ServicePlan extends Limits {
     }
     return res;
   }
+
+  no_template(plans: Map<ServicePlan>) {
+    return this.id && plans[this.id].part;
+  }
 }
 
 function plans_for_this_part(
@@ -161,10 +165,12 @@ function plans_for_attachee(
   );
   filterValues(
     plans,
-    (p) =>
-      (p.part == null && p.hook == att?.hook && p.what == att?.what),
-  ).forEach((p) => { if (!res.some((r) => (r.hook == p.hook && r.what == p.what))) res.push(new ServicePlan({ ...p, part: att?.gear })) })
-  return res
+    (p) => p.part == null && p.hook == att?.hook && p.what == att?.what,
+  ).forEach((p) => {
+    if (!res.some((r) => r.hook == p.hook && r.what == p.what))
+      res.push(new ServicePlan({ ...p, part: att?.gear }));
+  });
+  return res;
 }
 
 export function plans_for_part(

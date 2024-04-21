@@ -2,7 +2,7 @@
   import { DropdownItem } from "@sveltestrap/sveltestrap";
   import DeletePlan from "./DeletePlan.svelte";
   import Menu from "../Widgets/Menu.svelte";
-  import PlanHook from "./PlanHook.svelte";
+  import PlanName from "./PlanName.svelte";
   import PlanCell from "./PlanCell.svelte";
   import { plans, ServicePlan } from "../lib/serviceplan";
   import { Attachment, attachments } from "../lib/attachment";
@@ -26,8 +26,6 @@
 
   let show_hist = false;
 
-  let no_template = plan.id && $plans[plan.id].part;
-
   $: part = plan.getpart($parts, $attachments);
   $: serviceList = plan.services(part, $services);
 
@@ -39,11 +37,7 @@
     <div>
       <span id={"name" + plan.id}>
         <ShowHist bind:show_hist />
-        {plan.name}
-        <PlanHook {plan} />
-        {#if plan.hook && no_template}
-          for {@html $parts[plan.part].partLink()}
-        {/if}
+        <PlanName {plan} />
       </span>
     </div>
   </td>
@@ -78,7 +72,7 @@
         <DropdownItem divider />
       {/if}
       <!-- do not change generic plans -->
-      {#if no_template}
+      {#if plan.no_template($plans)}
         <DropdownItem on:click={() => updatePlan(plan)}>
           Change ServicePlan
         </DropdownItem>
