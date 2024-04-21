@@ -61,7 +61,7 @@ export class ServicePlan extends Limits {
   /// the gear or part involved
   /// if hook is None the plan is for a specific part
   /// if it's Some(hook) it is a generic plan for that hook
-  part: number;
+  part: number | null;
   /// This is only really used for generic plans
   /// for a specific part it is set to the PartType of the part
   what: number;
@@ -101,20 +101,23 @@ export class ServicePlan extends Limits {
     return super.valid() && this.name.length > 0 && this.what != undefined;
   }
 
-  services(part: Part, services: Map<Service>) {
+  services(part: Part | null, services: Map<Service>) {
     return filterValues(
       services,
       // @ts-ignore
-      (s) => s.part_id == part.id && s.plans.includes(this.id),
+      (s) => s.part_id == part?.id && s.plans.includes(this.id),
     ).sort(by("time"));
   }
 
   getpart(parts: Map<Part>, attaches: Map<Attachment>) {
-    return parts[part_at_hook(this.part, this.what, this.hook, attaches)];
+    return this.part
+      ? parts[part_at_hook(this.part, this.what, this.hook, attaches)]
+      : null;
   }
 
-  due(part: Part, service: Service | undefined, usages: Map<Usage>) {
+  due(part: Part | null, service: Service | undefined, usages: Map<Usage>) {
     let res = new Limits({});
+    if (part == null) return res;
     let time = service ? service.time : part.purchase;
     let usage = usages[part.usage];
     if (service) usage = usage.sub(usages[service.usage]);
@@ -143,6 +146,10 @@ export class ServicePlan extends Limits {
 
   no_template(plans: Map<ServicePlan>) {
     return this.id && plans[this.id].part;
+  }
+
+  partLink(parts: Map<Part>) {
+    return this.part ? parts[this.part].partLink() : "";
   }
 }
 
@@ -207,11 +214,13 @@ export function alerts_for_plans(
   let res = { warn: 0, alert: 0 };
   plans.forEach((plan) => {
     let part = plan.getpart(parts, attachments);
-    let serviceList = plan.services(part, services);
-    let alert = plan.alert(part, serviceList.at(0), usages);
+    if (part != null) {
+      let serviceList = plan.services(part, services);
+      let alert = plan.alert(part, serviceList.at(0), usages);
 
-    if (alert == "warn") res.warn++;
-    else if (alert == "alert") res.alert++;
+      if (alert == "warn") res.warn++;
+      else if (alert == "alert") res.alert++;
+    }
   });
   return res;
 }

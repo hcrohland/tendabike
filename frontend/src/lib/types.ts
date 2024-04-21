@@ -37,8 +37,11 @@ export class Type {
     return filterValues(parts, (p) => p.what == this.id).sort(by("last_used"));
   }
 
-  human_name(hook: number) {
-    return (this.hooks.length > 1 ? types[hook].prefix + " " : "") + this.name;
+  human_name(hook: number | null) {
+    return (
+      (hook != null && this.hooks.length > 1 ? types[hook].prefix + " " : "") +
+      this.name
+    );
   }
 }
 

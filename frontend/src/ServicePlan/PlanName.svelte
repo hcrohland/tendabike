@@ -6,7 +6,8 @@
   import { parts } from "../lib/part";
 
   export let plan: ServicePlan | undefined;
-  export let full = false;
+
+  $: partlink = plan?.part ? $parts[plan.part].partLink() : "";
 </script>
 
 {#if plan}
@@ -29,11 +30,11 @@
       {types[plan.what].human_name(plan.hook)}
     {/if}
     {#if plan.no_template($plans)}
-      for {@html $parts[plan.part].partLink()}
+      of {@html partlink}
     {:else}
-      at any {$category.name.toLocaleLowerCase()}
+      of any {$category.name.toLocaleLowerCase()}
     {/if}
-  {:else if full}
-    for {@html $parts[plan.part].partLink()}
+  {:else}
+    for {@html partlink}
   {/if}
 {/if}
