@@ -11,7 +11,7 @@
 </script>
 
 {#if plan}
-  {plan.name}
+  {plan.name} for
   {#if plan.hook}
     {#if plan.part}
       <a
@@ -35,6 +35,6 @@
       of any {$category.name.toLocaleLowerCase()}
     {/if}
   {:else}
-    for {@html partlink}
+    {@html partlink}
   {/if}
 {/if}
