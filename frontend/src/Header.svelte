@@ -24,8 +24,6 @@
   import Garmin from "./Activity/Garmin.svelte";
   import Sport from "./Widgets/Sport.svelte";
   import { category } from "./lib/types";
-  import PlanBadge from "./ServicePlan/PlanBadge.svelte";
-  import { plans } from "./lib/serviceplan";
 
   let userOpen = false;
   let syncOpen = false;
@@ -88,7 +86,6 @@
         <NavItem>
           <NavLink href="/#/plans" class="dropdown-item text-reset">
             Services
-            <PlanBadge planlist={Object.values($plans)} />
           </NavLink>
         </NavItem>
         <NavItem>
