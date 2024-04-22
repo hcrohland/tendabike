@@ -109,9 +109,10 @@ export class ServicePlan extends Limits {
     ).sort(by("time"));
   }
 
-  getpart(parts: Map<Part>, attaches: Map<Attachment>) {
-    return this.part
-      ? parts[part_at_hook(this.part, this.what, this.hook, attaches)]
+  getpart(parts: Map<Part>, attaches: Map<Attachment>, gear?: number) {
+    let part = gear ? gear : this.part;
+    return part
+      ? parts[part_at_hook(part, this.what, this.hook, attaches)]
       : null;
   }
 
@@ -151,8 +152,8 @@ export class ServicePlan extends Limits {
     return this.part ? parts[this.part].partLink() : "";
   }
 
-  gears(parts: Map<Part>, plans: Map<ServicePlan>) {
-    if (this.part) return [];
+  gears(parts: Map<Part>, plans: ServicePlan[]) {
+    if (this.part) return [parts[this.part]];
 
     let main = types[this.what].main;
     return filterValues(
@@ -227,14 +228,19 @@ export function alerts_for_plans(
 ) {
   let res = { warn: 0, alert: 0 };
   plans.forEach((plan) => {
-    let part = plan.getpart(parts, attachments);
-    if (part != null) {
-      let serviceList = plan.services(part, services);
-      let alert = plan.alert(part, serviceList.at(0), usages);
+    let gears = plan.gears(parts, plans);
+    console.log(gears);
 
-      if (alert == "warn") res.warn++;
-      else if (alert == "alert") res.alert++;
-    }
+    gears.forEach((gear) => {
+      let part = plan.getpart(parts, attachments, gear!.id);
+      if (part != null) {
+        let serviceList = plan.services(part, services);
+        let alert = plan.alert(part, serviceList.at(0), usages);
+
+        if (alert == "warn") res.warn++;
+        else if (alert == "alert") res.alert++;
+      }
+    });
   });
   return res;
 }

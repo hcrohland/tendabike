@@ -2,7 +2,6 @@
   import PlanRow from "./PlanRow.svelte";
   import { parts } from "../lib/part";
   import { plans, ServicePlan } from "../lib/serviceplan";
-  import PlanName from "./PlanName.svelte";
 
   export let plan: ServicePlan;
 </script>
@@ -11,7 +10,7 @@
   <PlanRow {plan} />
 {:else}
   <PlanRow {plan} />
-  {#each plan.gears($parts, $plans) as part}
+  {#each plan.gears($parts, Object.values($plans)) as part}
     {@const p = new ServicePlan({ ...plan, part: part.id })}
     <PlanRow plan={p} name={part.partLink()} />
   {/each}
