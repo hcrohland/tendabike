@@ -2,7 +2,6 @@
   import {
     ButtonGroup,
     Button,
-    Badge,
     TabPane,
     TabContent,
   } from "@sveltestrap/sveltestrap";
@@ -21,6 +20,7 @@
   import { plans, plans_for_part_and_attachees } from "../lib/serviceplan";
   import { attachments } from "../lib/attachment";
   import { filterValues } from "../lib/mapable";
+  import PlanBadge from "../ServicePlan/PlanBadge.svelte";
 
   export let params: { id: number; what: number };
 
@@ -32,10 +32,10 @@
   let newPlan: (p?: Part) => void;
 
   let tab: number | string = "parts";
-  let alerts = { alert: 0, warn: 0 };
 
   $: part = $parts[params.id];
   $: attachees = filterValues($attachments, (a) => a.gear == part.id);
+  $: planlist = plans_for_part_and_attachees($attachments, $plans, part.id);
 </script>
 
 <GearCard {part} display>
@@ -75,21 +75,14 @@
   <TabPane tabId="plans" active={!(attachees.length > 0 || part.isGear())}>
     <strong slot="tab">
       Service Plans
-      {#if alerts.alert > 0}
-        <Badge color="danger">{alerts.alert}</Badge>
-      {:else if alerts.warn > 0}
-        <Badge color="warning">{alerts.warn}</Badge>
-      {/if}
+      <PlanBadge {planlist} />
       {#if tab == "plans"}
         <Button size="sm" color="light" on:click={() => newPlan(part)}>
           add
         </Button> &NonBreakingSpace;
       {/if}
     </strong>
-    <PlanList
-      planlist={plans_for_part_and_attachees($attachments, $plans, part.id)}
-      bind:alerts
-    /><br />
+    <PlanList {planlist} /><br />
   </TabPane>
   <TabPane tabId="service">
     <strong slot="tab">
