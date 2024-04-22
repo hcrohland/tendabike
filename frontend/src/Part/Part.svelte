@@ -18,14 +18,8 @@
   import { parts, Part } from "../lib/part";
   import NewPlan from "../ServicePlan/NewPlan.svelte";
   import ServiceList from "../Service/ServiceList.svelte";
-  import {
-    plans,
-    alerts_for_plans,
-    plans_for_part_and_attachees,
-  } from "../lib/serviceplan";
+  import { plans, plans_for_part_and_attachees } from "../lib/serviceplan";
   import { attachments } from "../lib/attachment";
-  import { services } from "../lib/service";
-  import { usages } from "../lib/usage";
   import { filterValues } from "../lib/mapable";
 
   export let params: { id: number; what: number };
@@ -38,18 +32,10 @@
   let newPlan: (p?: Part) => void;
 
   let tab: number | string = "parts";
+  let alerts = { alert: 0, warn: 0 };
 
   $: part = $parts[params.id];
   $: attachees = filterValues($attachments, (a) => a.gear == part.id);
-
-  $: planlist = plans_for_part_and_attachees($attachments, $plans, part.id);
-  $: alerts = alerts_for_plans(
-    planlist,
-    $parts,
-    $services,
-    $usages,
-    $attachments,
-  );
 </script>
 
 <GearCard {part} display>
@@ -100,7 +86,10 @@
         </Button> &NonBreakingSpace;
       {/if}
     </strong>
-    <PlanList {planlist} /><br />
+    <PlanList
+      planlist={plans_for_part_and_attachees($attachments, $plans, part.id)}
+      bind:alerts
+    /><br />
   </TabPane>
   <TabPane tabId="service">
     <strong slot="tab">
