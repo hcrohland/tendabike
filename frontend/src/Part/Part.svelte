@@ -35,7 +35,7 @@
   let newService: (p: Part) => void;
   let recoverPart: (p: Part) => void;
   let attachPart: (p: Part) => void;
-  let newPlan: (p: Part) => void;
+  let newPlan: (p?: Part) => void;
 
   let tab: number | string = "parts";
 

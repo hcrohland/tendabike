@@ -1,17 +1,27 @@
 <script lang="ts">
-  import { TabContent, TabPane } from "@sveltestrap/sveltestrap";
+  import { Button, TabContent, TabPane } from "@sveltestrap/sveltestrap";
   import Spares from "./Spares.svelte";
   import PlanList from "../ServicePlan/PlanList.svelte";
   import { plans } from "../lib/serviceplan";
+  import NewPlan from "../ServicePlan/NewPlan.svelte";
+  let newPlan: () => void;
+
+  let tab: string | number = "parts";
 </script>
 
-<TabContent>
+<TabContent on:tab={(e) => (tab = e.detail)}>
   <TabPane tabId="parts" active>
     <strong slot="tab"> Parts </strong>
     <Spares />
   </TabPane>
   <TabPane tabId="plans">
-    <strong slot="tab"> Serviceplans </strong>
+    <strong slot="tab">
+      Serviceplans
+      {#if tab == "plans"}
+        <Button size="sm" color="light" on:click={() => newPlan()}>add</Button> &NonBreakingSpace;
+      {/if}
+    </strong>
     <PlanList planlist={Object.values($plans)} />
   </TabPane>
 </TabContent>
+<NewPlan bind:newPlan />

@@ -15,7 +15,7 @@
   import Buttons from "../Widgets/Buttons.svelte";
   import GearForm from "../Widgets/GearForm.svelte";
 
-  let part: Part;
+  let name: string | null;
   let plan: ServicePlan;
   let isOpen = false;
 
@@ -24,13 +24,14 @@
     isOpen = false;
   }
 
-  export const newPlan = (p: Part) => {
-    part = p;
-    plan = new ServicePlan(
-      part.isGear()
-        ? { part: part.id }
-        : { part: part.id, what: part.what, hook: null },
-    );
+  export const newPlan = (p?: Part) => {
+    if (p && !p.isGear()) {
+      name = p.name;
+      plan = new ServicePlan({ part: p.id, what: p.what, hook: null });
+    } else {
+      name = null;
+      plan = new ServicePlan({ part: p?.id });
+    }
     isOpen = true;
   };
 
@@ -48,16 +49,19 @@
 
 <Modal {isOpen} {toggle} backdrop={false}>
   <form on:submit|preventDefault={createPlan}>
-    <ModalHeader {toggle}>New service plan for</ModalHeader>
+    <ModalHeader {toggle}>
+      New service plan for
+      {#if name}
+        {name}
+      {/if}
+    </ModalHeader>
     <ModalBody>
-      {#if part.isGear()}
+      {#if !name}
         <InputGroup class="col-md-12">
           <TypeForm with_body on:change={sethook} />
           <InputGroupText>of</InputGroupText>
           <GearForm bind:gear={plan.part} />
         </InputGroup>
-      {:else}
-        New service plan for {part.name}
       {/if}
       <PlanForm bind:plan />
     </ModalBody>
