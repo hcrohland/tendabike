@@ -143,7 +143,8 @@ export class ServicePlan extends Limits {
   }
 
   no_template(plans: Map<ServicePlan>) {
-    return this.id && plans[this.id].part;
+    // Warning: The plan might vanish from Map during deletion!
+    return this.id && plans[this.id]?.part;
   }
 
   partLink(parts: Map<Part>) {

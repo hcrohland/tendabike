@@ -13,6 +13,7 @@
   import type { Type } from "../lib/types";
   import PlanForm from "./PlanForm.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
+  import GearForm from "../Widgets/GearForm.svelte";
 
   let part: Part;
   let plan: ServicePlan;
@@ -47,18 +48,17 @@
 
 <Modal {isOpen} {toggle} backdrop={false}>
   <form on:submit|preventDefault={createPlan}>
-    <ModalHeader {toggle}>
+    <ModalHeader {toggle}>New service plan for</ModalHeader>
+    <ModalBody>
       {#if part.isGear()}
         <InputGroup class="col-md-12">
-          <InputGroupText>New service plan for</InputGroupText>
           <TypeForm with_body on:change={sethook} />
-          <InputGroupText>of {part.name}</InputGroupText>
+          <InputGroupText>of</InputGroupText>
+          <GearForm bind:gear={plan.part} />
         </InputGroup>
       {:else}
         New service plan for {part.name}
       {/if}
-    </ModalHeader>
-    <ModalBody>
       <PlanForm bind:plan />
     </ModalBody>
     <ModalFooter>
