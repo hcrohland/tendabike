@@ -99,8 +99,8 @@ impl ServicePlan {
         user: &dyn Person,
         store: &mut (impl ServicePlanStore + PartStore),
     ) -> TbResult<Self> {
-        self.checkuser(user, store).await?;
         self.id = ServicePlanId::new();
+        self.uid = Some(user.get_id());
         store.create(self).await
     }
 
