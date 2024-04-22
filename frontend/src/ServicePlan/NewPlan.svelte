@@ -1,5 +1,7 @@
 <script lang="ts">
   import {
+    InputGroup,
+    InputGroupText,
     Modal,
     ModalBody,
     ModalFooter,
@@ -47,9 +49,11 @@
   <form on:submit|preventDefault={createPlan}>
     <ModalHeader {toggle}>
       {#if part.isGear()}
-        <TypeForm gear={part} with_body on:change={sethook}>
-          New service plan for
-        </TypeForm>
+        <InputGroup class="col-md-12">
+          <InputGroupText>New service plan for</InputGroupText>
+          <TypeForm with_body on:change={sethook} />
+          <InputGroupText>of {part.name}</InputGroupText>
+        </InputGroup>
       {:else}
         New service plan for {part.name}
       {/if}

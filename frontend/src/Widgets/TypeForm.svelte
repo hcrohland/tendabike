@@ -1,13 +1,13 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte";
-  import { InputGroup, InputGroupText, Input } from "@sveltestrap/sveltestrap";
+  import { Input } from "@sveltestrap/sveltestrap";
   import { Type } from "../lib/types";
   import { types, category } from "../lib/types";
   import { filterValues } from "../lib/mapable";
-  import { Part } from "../lib/part";
 
-  export let gear: Part;
   export let with_body = false;
+
+  $: what = $category.main;
 
   let hook: { type: Type; hook: number | null };
   const dispatch = createEventDispatcher();
@@ -18,27 +18,22 @@
   ).sort((a, b) => a.order - b.order);
 </script>
 
-<InputGroup class="col-md-12">
-  <InputGroupText><slot>New</slot></InputGroupText>
-  <!-- svelte-ignore a11y-no-onchange -->
-  <Input
-    type="select"
-    class="custom-select"
-    required
-    bind:value={hook}
-    on:change={() => dispatch("change", hook)}
-  >
-    <option hidden value> -- select one -- </option>
-    {#if with_body}
-      <option value={{ type: types[gear.what], hook: null }}> body </option>
-    {/if}
-    {#each typeList as type}
-      {#each type.hooks as hook}
-        <option value={{ type, hook }}>
-          {type.human_name(hook)}
-        </option>
-      {/each}
+<Input
+  type="select"
+  class="custom-select"
+  required
+  bind:value={hook}
+  on:change={() => dispatch("change", hook)}
+>
+  <option hidden value> -- select one -- </option>
+  {#if with_body}
+    <option value={{ type: types[what], hook: null }}> body </option>
+  {/if}
+  {#each typeList as type}
+    {#each type.hooks as hook}
+      <option value={{ type, hook }}>
+        {type.human_name(hook)}
+      </option>
     {/each}
-  </Input>
-  <InputGroupText>of {gear.name}</InputGroupText>
-</InputGroup>
+  {/each}
+</Input>
