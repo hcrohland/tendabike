@@ -162,7 +162,7 @@ export class ServicePlan extends Limits {
         p.disposed_at == null &&
         main == p.what &&
         !Object.values(plans).some(
-          (r) => r.part == p.id && r.hook == this.hook,
+          (r) => r.part == p.id && r.hook == this.hook && r.what == this.what,
         ),
     );
   }
@@ -185,14 +185,15 @@ function plans_for_attachee(
       p.part == att?.part_id ||
       (p.part == att?.gear && p.hook == att?.hook && p.what == att?.what),
   );
-  filterValues(
+  let res2 = filterValues(
     plans,
-    (p) => p.part == null && p.hook == att?.hook && p.what == att?.what,
-  ).forEach((p) => {
-    if (!res.some((r) => r.hook == p.hook && r.what == p.what))
-      res.push(new ServicePlan({ ...p, part: att?.gear }));
-  });
-  return res;
+    (p) =>
+      p.part == null &&
+      p.hook == att?.hook &&
+      p.what == att?.what &&
+      !res.some((r) => r.hook == p.hook && r.what == p.what),
+  ).map((p) => new ServicePlan({ ...p, part: att?.part_id }));
+  return res.concat(res2);
 }
 
 export function plans_for_part(
