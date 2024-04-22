@@ -4,13 +4,11 @@
   import { filterValues, by } from "../lib/mapable";
   import SubType from "./SubType.svelte";
   import { Part } from "../lib/part";
-  import { attachments, Attachment } from "../lib/attachment";
+  import { Attachment } from "../lib/attachment";
   import Wizard from "./Wizard.svelte";
 
   export let part: Part;
-  export let hook: Type;
-
-  $: attachees = filterValues($attachments, (a) => a.gear == part.id);
+  export let attachees: Attachment[];
 
   type MyList = {
     attachments: Attachment[];
@@ -52,7 +50,7 @@
       <SubType />
     </thead>
     <tbody>
-      {#each buildList([], hook, attachees, 0, "") as item (item.hook.id + "." + item.type.id)}
+      {#each buildList([], part.type(), attachees, 0, "") as item (item.hook.id + "." + item.type.id)}
         <SubType {...item} />
       {/each}
     </tbody>

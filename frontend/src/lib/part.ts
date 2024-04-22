@@ -1,7 +1,7 @@
 import { type Map, by, filterValues, mapable } from "./mapable";
 import { handleError, myfetch } from "./store";
 import { Attachment } from "./attachment";
-import { types } from "./types";
+import { Type, types } from "./types";
 
 export class Part {
   id?: number;
@@ -66,6 +66,13 @@ export class Part {
       "</a>"
     );
   }
+}
+
+export function allGear(parts: Map<Part>, category: Type) {
+  return filterValues(
+    parts,
+    (p) => p.what == category.main && p.disposed_at != null,
+  );
 }
 
 export const parts = mapable("id", (p) => new Part(p));

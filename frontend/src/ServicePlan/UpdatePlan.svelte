@@ -5,16 +5,15 @@
     ModalFooter,
     ModalHeader,
   } from "@sveltestrap/sveltestrap";
-  import { ServicePlan } from "../lib/serviceplan";
+  import { plans, ServicePlan } from "../lib/serviceplan";
   import { parts, Part } from "../lib/part";
-  import { types } from "../lib/types";
+  import { category, types } from "../lib/types";
   import PlanForm from "./PlanForm.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
 
-  let part: Part;
+  let part: Part | null;
   let plan: ServicePlan;
   let isOpen = false;
-  let update = false;
 
   async function postPlan() {
     await plan.update();
@@ -22,10 +21,9 @@
   }
 
   export const updatePlan = (p: ServicePlan) => {
-    part = $parts[p.part];
+    part = $plans[p.id!].part ? $parts[p.part!] : null;
     plan = new ServicePlan(p);
     isOpen = true;
-    update = true;
   };
 
   const toggle = () => {
@@ -38,7 +36,9 @@
 <Modal {isOpen} {toggle} backdrop={false}>
   <ModalHeader {toggle}>
     Update service plan for
-    {#if part.isGear() && plan.hook != null}
+    {#if part == null}
+      {types[plan.what].human_name(plan.hook)} of any {$category.name.toLocaleLowerCase()}
+    {:else if part.isGear() && plan.hook != null}
       {types[plan.what].human_name(plan.hook)} of {part.name}
     {:else}
       {part.name}

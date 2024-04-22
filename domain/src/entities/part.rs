@@ -217,7 +217,7 @@ impl Part {
         let mut usages = Vec::new();
         let mut attachments = Vec::new();
         let mut services = Vec::new();
-        let mut plans = Vec::new();
+        let mut plans = ServicePlan::for_user(user, store).await?;
         for part in &parts {
             usages.push(part.usage().read(store).await?);
             let (mut atts, mut uses) = Attachment::for_part_with_usage(part.id, store).await?;

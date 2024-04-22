@@ -4,6 +4,8 @@
     ModalHeader,
     ModalBody,
     ModalFooter,
+    InputGroup,
+    InputGroupText,
   } from "@sveltestrap/sveltestrap";
   import { Type } from "../lib/types";
   import { user } from "../lib/store";
@@ -76,10 +78,14 @@
 </script>
 
 <Modal {isOpen} {toggle} backdrop={false}>
-  <ModalHeader {toggle}>
-    <TypeForm {gear} on:change={setType} />
-  </ModalHeader>
   <form on:submit|preventDefault={action}>
+    <ModalHeader {toggle}>
+      <InputGroup class="col-md-12">
+        <InputGroupText>New</InputGroupText>
+        <TypeForm on:change={setType} />
+        <InputGroupText>of {gear.name}</InputGroupText>
+      </InputGroup>
+    </ModalHeader>
     <ModalBody>
       <NewForm {type} {part} mindate={gear.purchase} on:change={setPart} />
     </ModalBody>

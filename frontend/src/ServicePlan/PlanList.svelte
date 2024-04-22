@@ -1,23 +1,33 @@
 <script lang="ts">
   import { Table } from "@sveltestrap/sveltestrap";
   import { ServicePlan } from "../lib/serviceplan";
-  import { parts } from "../lib/part";
   import PlanHeader from "./PlanHeader.svelte";
-  import PlanRow from "./PlanRow.svelte";
+  import PlanBlock from "./PlanBlock.svelte";
 
   export let planlist: ServicePlan[];
-  export let part_id: number | undefined;
+
+  function cmp(p: ServicePlan, q: ServicePlan) {
+    let res;
+    if (p.what != q.what) {
+      res = p.what < q.what;
+    } else if (p.hook != q.hook) {
+      res = p.what < q.what;
+    } else if (p.part != q.part) {
+      res = p.part! < q.part!;
+    } else {
+      res = p.id! < q.id!;
+    }
+    return res ? -1 : 1;
+  }
 </script>
 
 <Table responsive hover>
   <thead>
-    <PlanHeader />
+    <PlanHeader><slot /></PlanHeader>
   </thead>
   <tbody>
-    {#each planlist as plan}
-      {@const name =
-        part_id == plan.part ? "" : "for " + $parts[plan.part].partLink()}
-      <PlanRow {plan} {name} />
+    {#each planlist.sort(cmp) as plan}
+      <PlanBlock {plan} />
     {/each}
   </tbody>
 </Table>

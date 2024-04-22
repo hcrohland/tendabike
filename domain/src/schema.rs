@@ -60,7 +60,7 @@ table! {
 table! {
     service_plans(id) {
         id -> Uuid,
-        part -> Int4,
+        part -> Nullable<Int4>,
         what -> Int4,
         hook -> Nullable<Int4>,
         name -> Text,
@@ -70,6 +70,7 @@ table! {
         climb -> Nullable<Int4>,
         descend -> Nullable<Int4>,
         rides -> Nullable<Int4>,
+        uid -> Nullable<Int4>
     }
 }
 

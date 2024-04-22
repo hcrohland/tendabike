@@ -25,6 +25,7 @@
   import ToyGroup from "./ToyGroup.svelte";
   import Header from "./Header.svelte";
   import Gear from "./Part/Part.svelte";
+  import Plans from "./ServicePlan/Plans.svelte";
   import Spares from "./Spares/Spares.svelte";
   import About from "./About.svelte";
   import Message from "./Message.svelte";
@@ -39,6 +40,7 @@
     "/": ToyGroup,
     "/cat/": ToyGroup,
     "/part/:id": Gear,
+    "/plans/": Plans,
     "/spares/": Spares,
     "/admin": Admin,
     "/stats": Statistics,

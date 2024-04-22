@@ -6,8 +6,10 @@ import {
   part_at_hook,
   type Attachment,
   attachment_for_part,
+  attachees_for_gear,
 } from "./attachment";
 import type { Usage } from "./usage";
+import { types } from "./types";
 
 const is_set = (n: number | null) => n != null && n > 0;
 
@@ -60,7 +62,7 @@ export class ServicePlan extends Limits {
   /// the gear or part involved
   /// if hook is None the plan is for a specific part
   /// if it's Some(hook) it is a generic plan for that hook
-  part: number;
+  part: number | null;
   /// This is only really used for generic plans
   /// for a specific part it is set to the PartType of the part
   what: number;
@@ -100,20 +102,23 @@ export class ServicePlan extends Limits {
     return super.valid() && this.name.length > 0 && this.what != undefined;
   }
 
-  services(part: Part, services: Map<Service>) {
+  services(part: Part | null, services: Map<Service>) {
     return filterValues(
       services,
-      // @ts-ignore
-      (s) => s.part_id == part.id && s.plans.includes(this.id),
+      (s) => s.part_id == part?.id && s.plans.includes(this.id!),
     ).sort(by("time"));
   }
 
-  getpart(parts: Map<Part>, attaches: Map<Attachment>) {
-    return parts[part_at_hook(this.part, this.what, this.hook, attaches)];
+  getpart(parts: Map<Part>, attaches: Map<Attachment>, gear?: number) {
+    let part = gear ? gear : this.part;
+    return part
+      ? parts[part_at_hook(part, this.what, this.hook, attaches)]
+      : null;
   }
 
-  due(part: Part, service: Service | undefined, usages: Map<Usage>) {
+  due(part: Part | null, service: Service | undefined, usages: Map<Usage>) {
     let res = new Limits({});
+    if (part == null) return res;
     let time = service ? service.time : part.purchase;
     let usage = usages[part.usage];
     if (service) usage = usage.sub(usages[service.usage]);
@@ -131,46 +136,87 @@ export class ServicePlan extends Limits {
     let due = this.due(part, service, usages);
     for (const key of ServicePlan.keys) {
       if (due[key]) {
-        //@ts-ignore
-        if (due[key] < 0) res = "alert";
-        //@ts-ignore
-        if (res == "" && due[key] < this[key] * 0.05) res = "warn";
+        if (due[key]! < 0) res = "alert";
+        if (res == "" && due[key]! < this[key]! * 0.05) res = "warn";
       }
     }
     return res;
   }
+
+  no_template(plans: Map<ServicePlan>) {
+    // Warning: The plan might vanish from Map during deletion!
+    return this.id && plans[this.id]?.part;
+  }
+
+  partLink(parts: Map<Part>) {
+    return this.part ? parts[this.part].partLink() : "";
+  }
+
+  gears(parts: Map<Part>, plans: ServicePlan[]) {
+    if (this.part) return [parts[this.part]];
+
+    let main = types[this.what].main;
+    return filterValues(
+      parts,
+      (p) =>
+        p.disposed_at == null &&
+        main == p.what &&
+        !Object.values(plans).some(
+          (r) => r.part == p.id && r.hook == this.hook,
+        ),
+    );
+  }
 }
 
-export function plans_by_partid(
+function plans_for_this_part(
   part_id: number | undefined,
   plans: Map<ServicePlan>,
 ) {
   return filterValues(plans, (p) => p.part == part_id && p.hook == null);
 }
 
-export function plans_for_gear(
-  part: number | undefined,
+function plans_for_attachee(
   plans: Map<ServicePlan>,
-  atts: Map<Attachment>,
-  time = new Date(),
+  att: Attachment | undefined,
 ) {
-  let att = attachment_for_part(part, atts, time);
-  return filterValues(
+  let res = filterValues(
     plans,
-    (s) =>
-      s.part == part ||
-      (s.hook == att?.hook && s.part == att?.gear && s.what == att?.what),
-  ).sort(by("name", true));
+    (p) =>
+      p.part == att?.part_id ||
+      (p.part == att?.gear && p.hook == att?.hook && p.what == att?.what),
+  );
+  filterValues(
+    plans,
+    (p) => p.part == null && p.hook == att?.hook && p.what == att?.what,
+  ).forEach((p) => {
+    if (!res.some((r) => r.hook == p.hook && r.what == p.what))
+      res.push(new ServicePlan({ ...p, part: att?.gear }));
+  });
+  return res;
 }
 
 export function plans_for_part(
-  part: Part,
-  time: Date,
   plans: Map<ServicePlan>,
   atts: Map<Attachment>,
+  part: number | undefined,
+  time: Date = new Date(),
 ) {
-  if (part.isGear()) return plans_by_partid(part.id, plans);
-  else return plans_for_gear(part.id, plans, atts, time);
+  let att = attachment_for_part(part, atts, time);
+  return att
+    ? plans_for_attachee(plans, att)
+    : plans_for_this_part(part, plans);
+}
+
+export function plans_for_part_and_attachees(
+  atts: Map<Attachment>,
+  plans: Map<ServicePlan>,
+  part: number | undefined,
+) {
+  let attachees = attachees_for_gear(part, atts);
+  return attachees.reduce(
+    (list, att) => list.concat(plans_for_attachee(plans, att)),
+    plans_for_part(plans, atts, part),
+  );
 }
 
 export function alerts_for_plans(
@@ -182,12 +228,19 @@ export function alerts_for_plans(
 ) {
   let res = { warn: 0, alert: 0 };
   plans.forEach((plan) => {
-    let part = plan.getpart(parts, attachments);
-    let serviceList = plan.services(part, services);
-    let alert = plan.alert(part, serviceList.at(0), usages);
+    let gears = plan.gears(parts, plans);
+    console.log(gears);
 
-    if (alert == "warn") res.warn++;
-    else if (alert == "alert") res.alert++;
+    gears.forEach((gear) => {
+      let part = plan.getpart(parts, attachments, gear!.id);
+      if (part != null) {
+        let serviceList = plan.services(part, services);
+        let alert = plan.alert(part, serviceList.at(0), usages);
+
+        if (alert == "warn") res.warn++;
+        else if (alert == "alert") res.alert++;
+      }
+    });
   });
   return res;
 }

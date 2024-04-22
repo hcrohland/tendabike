@@ -21,8 +21,8 @@
   <Table responsive hover>
     <thead>
       <tr>
-        <th scope="col">Part</th>
-        <th scope="col">Name</th>
+        <th scope="col"></th>
+        <th scope="col"></th>
         <Usage header />
         {#if attachee > 0}
           <th colspan="2"> Attached to </th>

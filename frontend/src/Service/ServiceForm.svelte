@@ -12,7 +12,6 @@
   import Switch from "../Widgets/Switch.svelte";
   import { plans, plans_for_part } from "../lib/serviceplan";
   import { attachments } from "../lib/attachment";
-  import { parts } from "../lib/part";
   const dispatch = createEventDispatcher();
 
   export let service: Service;
@@ -29,12 +28,7 @@
     dispatch("change", s);
   }
 
-  $: planlist = plans_for_part(
-    $parts[service.part_id],
-    time,
-    $plans,
-    $attachments,
-  );
+  $: planlist = plans_for_part($plans, $attachments, service.part_id, time);
 </script>
 
 <FormGroup row>
