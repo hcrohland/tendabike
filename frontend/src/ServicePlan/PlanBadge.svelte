@@ -18,7 +18,7 @@
 </script>
 
 {#if alerts.alert > 0}
-  <Badge color="danger">{alerts.alert}</Badge>
+  <Badge color="danger">{alerts.alert + alerts.warn}</Badge>
 {:else if alerts.warn > 0}
   <Badge color="warning">{alerts.warn}</Badge>
 {/if}
