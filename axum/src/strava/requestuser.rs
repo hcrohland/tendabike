@@ -1,7 +1,7 @@
 use anyhow::Context;
 use async_session::{
     async_trait,
-    log::{debug, trace},
+    log::{debug, trace, warn},
     MemoryStore, SessionStore,
 };
 use axum::{
@@ -9,8 +9,8 @@ use axum::{
     response::{IntoResponse, Response},
     RequestPartsExt,
 };
-use axum_extra::{typed_header::TypedHeaderRejectionReason, TypedHeader};
-use http::{header, request::Parts};
+use axum_extra::TypedHeader;
+use http::{request::Parts, StatusCode};
 use oauth2::{
     basic::BasicTokenType, reqwest::async_http_client, AccessToken, RefreshToken,
     StandardTokenResponse, TokenResponse,
@@ -21,8 +21,8 @@ use std::time::SystemTime;
 
 use super::StravaExtraTokenFields;
 use crate::{
-    error::AuthRedirect,
     strava::{oauth::STRAVACLIENT, StravaAthleteInfo},
+    AppError,
 };
 use tb_domain::{Error, Person, TbResult, UserId};
 use tb_strava::{StravaId, StravaPerson, StravaStore, StravaUser};
@@ -136,7 +136,6 @@ impl RequestUser {
         uri: &str,
         store: &mut impl StravaStore,
     ) -> TbResult<reqwest::Response> {
-        use reqwest::StatusCode;
         self.check_token(store).await?;
 
         let resp = reqwest::Client::new()
@@ -230,7 +229,7 @@ where
     S: Send + Sync,
 {
     // If anything goes wrong or no session is found, redirect to the auth page
-    type Rejection = AuthRedirect;
+    type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let store = MemoryStore::from_ref(state);
@@ -238,24 +237,20 @@ where
         let cookies = parts
             .extract::<TypedHeader<headers::Cookie>>()
             .await
-            .map_err(|e| match *e.name() {
-                header::COOKIE => match e.reason() {
-                    TypedHeaderRejectionReason::Missing => AuthRedirect,
-                    _ => panic!("unexpected error getting Cookie header(s): {}", e),
-                },
-                _ => panic!("unexpected error getting cookies: {}", e),
-            })?;
+            .map_err(anyhow::Error::new)?;
         let session_cookie = cookies
             .get(crate::strava::COOKIE_NAME)
-            .ok_or(AuthRedirect)?;
+            .ok_or(Error::NotAuth("Please authenticate".into()))?;
 
         let session = store
             .load_session(session_cookie.to_string())
             .await
             .expect("could not load session")
-            .ok_or(AuthRedirect)?;
+            .ok_or(Error::NotAuth("Please authenticate".into()))?;
 
-        let user = session.get::<RequestUser>("user").ok_or(AuthRedirect)?;
+        let user = session
+            .get::<RequestUser>("user")
+            .ok_or(Error::NotAuth("Session error".into()))?;
 
         Ok(user)
     }
