@@ -35,10 +35,10 @@ async fn def_part_api(
         .map(Json)?)
 }
 
-async fn rescan(_u: AxumAdmin, State(store): State<DbPool>) -> Result<(), AppError> {
+async fn rescan(_u: AxumAdmin, State(store): State<DbPool>) -> ApiResult<()> {
     let mut store = store.get().await?;
     Activity::rescan_all(&mut store).await?;
-    Ok(())
+    Ok(Json(()))
 }
 
 /// web interface to read an activity
