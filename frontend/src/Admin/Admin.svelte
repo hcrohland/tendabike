@@ -5,7 +5,7 @@
     Spinner,
     Table,
   } from "@sveltestrap/sveltestrap";
-  import { handleError, myfetch } from "../lib/store";
+  import { handleError, myfetch, setSummary } from "../lib/store";
   import type { User } from "../lib/types";
   import Sync from "./Sync.svelte";
   import CreateSync from "./CreateSync.svelte";
@@ -22,8 +22,11 @@
   }
 
   function rescan() {
-    promise = myfetch("/api/activ/rescan").catch(handleError);
-    refresh();
+    promise = myfetch("/api/activ/rescan")
+      .catch(handleError)
+      .then(refresh)
+      .then(() => myfetch("/api/user/summary"))
+      .then(setSummary);
   }
 
   async function disable(user: User) {
