@@ -1,7 +1,7 @@
 use anyhow::Context;
 use async_session::{
     async_trait,
-    log::{debug, trace, warn},
+    log::{debug, trace},
     MemoryStore, SessionStore,
 };
 use axum::{
