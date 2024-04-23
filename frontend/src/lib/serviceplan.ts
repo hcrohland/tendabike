@@ -229,11 +229,8 @@ export function alerts_for_plans(
 ) {
   let res = { warn: 0, alert: 0 };
   plans.forEach((plan) => {
-    let gears = plan.gears(parts, plans);
-    console.log(gears);
-
-    gears.forEach((gear) => {
-      let part = plan.getpart(parts, attachments, gear!.id);
+    plan.gears(parts, plans).forEach((gear) => {
+      let part = plan.getpart(parts, attachments, gear.id);
       if (part != null) {
         let serviceList = plan.services(part, services);
         let alert = plan.alert(part, serviceList.at(0), usages);
