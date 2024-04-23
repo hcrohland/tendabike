@@ -1,4 +1,4 @@
-import { writable } from "svelte/store";
+import { get, writable } from "svelte/store";
 import { type User } from "./types";
 import { Service, services } from "./service";
 import { activities, Activity } from "./activity";
@@ -59,8 +59,9 @@ export function checkStatus<T>(response: Response) {
   }
 
   if (response.status === 401) {
-    user.set(undefined);
     window.location.href = "/#/about";
+    if (get(user) == undefined) return;
+    user.set(undefined);
   }
 
   return response.text().then((text) => {
