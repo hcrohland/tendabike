@@ -1,20 +1,20 @@
 [workspace]
-    package.edition = "2021"
-    resolver = "2"
-    members = [
-        "app",
-        "domain",
-        "axum",
-        "strava",
-        "diesel"
-    ]
+package.edition = "2021"
+resolver = "2"
+members = [
+    "backend/app",
+    "backend/domain",
+    "backend/axum",
+    "backend/strava",
+    "backend/diesel",
+]
 
 [workspace.dependencies]
 
-tb_domain = { path = "./domain"}
-tb_axum = { path = "./axum"}
-tb_diesel = { path = "./diesel"}
-tb_strava = { path = "./strava"}
+tb_domain = { path = "./backend/domain" }
+tb_axum = { path = "./backend/axum" }
+tb_diesel = { path = "./backend/diesel" }
+tb_strava = { path = "./backend/strava" }
 
 anyhow = "1.0"
 async-recursion = "1"
