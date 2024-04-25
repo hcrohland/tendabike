@@ -19,20 +19,21 @@
  -->
 
 <script lang="ts" context="module">
-  import { Spinner, Container } from "@sveltestrap/sveltestrap";
+  import { Container, Spinner } from "@sveltestrap/sveltestrap";
   import Router from "svelte-spa-router";
 
-  import ToyGroup from "./ToyGroup.svelte";
+  import About from "./About.svelte";
+  import Activities from "./Activity/Activities.svelte";
+  import Admin from "./Admin/Admin.svelte";
   import Header from "./Header.svelte";
+  import Message from "./Message.svelte";
   import Gear from "./Part/Part.svelte";
   import Plans from "./ServicePlan/Plans.svelte";
   import Spares from "./Spares/Spares.svelte";
-  import About from "./About.svelte";
-  import Message from "./Message.svelte";
-  import Admin from "./Admin/Admin.svelte";
-  import { initData } from "./lib/store";
   import Statistics from "./Statistics.svelte";
-  import Activities from "./Activity/Activities.svelte";
+  import ToyGroup from "./ToyGroup.svelte";
+  import Actions from "./Widgets/Actions.svelte";
+  import { initData } from "./lib/store";
   import { getTypes } from "./lib/types";
 
   const routes = {
@@ -60,4 +61,5 @@
   {:catch error}
     <About />
   {/await}
+  <Actions />
 </Container>

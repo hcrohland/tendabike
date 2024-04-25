@@ -1,35 +1,23 @@
 <script lang="ts">
   import {
-    ButtonGroup,
     Button,
-    TabPane,
+    ButtonGroup,
     TabContent,
+    TabPane,
   } from "@sveltestrap/sveltestrap";
-  import InstallPart from "../Attachment/InstallPart.svelte";
-  import ChangePart from "./ChangePart.svelte";
-  import RecoverPart from "./RecoverPart.svelte";
-  import AttachPart from "../Attachment/AttachPart.svelte";
-  import Subparts from "./Subparts.svelte";
-  import GearCard from "./GearCard.svelte";
-  import PartHist from "./PartHist.svelte";
-  import NewService from "../Service/NewService.svelte";
-  import PlanList from "../ServicePlan/PlanList.svelte";
-  import { parts, Part } from "../lib/part";
-  import NewPlan from "../ServicePlan/NewPlan.svelte";
   import ServiceList from "../Service/ServiceList.svelte";
-  import { plans, plans_for_part_and_attachees } from "../lib/serviceplan";
+  import PlanBadge from "../ServicePlan/PlanBadge.svelte";
+  import PlanList from "../ServicePlan/PlanList.svelte";
+  import { actions } from "../Widgets/Actions.svelte";
   import { attachments } from "../lib/attachment";
   import { filterValues } from "../lib/mapable";
-  import PlanBadge from "../ServicePlan/PlanBadge.svelte";
+  import { parts } from "../lib/part";
+  import { plans, plans_for_part_and_attachees } from "../lib/serviceplan";
+  import GearCard from "./GearCard.svelte";
+  import PartHist from "./PartHist.svelte";
+  import Subparts from "./Subparts.svelte";
 
   export let params: { id: number; what: number };
-
-  let installPart: (p: Part) => void;
-  let changePart: (p: Part) => void;
-  let newService: (p: Part) => void;
-  let recoverPart: (p: Part) => void;
-  let attachPart: (p: Part) => void;
-  let newPlan: (p?: Part) => void;
 
   let tab: number | string = "parts";
 
@@ -41,15 +29,15 @@
 <GearCard {part} display>
   <ButtonGroup class="float-end">
     {#if part.disposed_at}
-      <Button color="light" on:click={() => recoverPart(part)}>
+      <Button color="light" on:click={() => $actions.recoverPart(part)}>
         Recover gear
       </Button>
     {:else}
-      <Button color="light" on:click={() => changePart(part)}>
+      <Button color="light" on:click={() => $actions.changePart(part)}>
         Change details
       </Button>
       {#if !part.isGear()}
-        <Button color="light" on:click={() => attachPart(part)}>
+        <Button color="light" on:click={() => $actions.attachPart(part)}>
           Attach part
         </Button>
       {/if}
@@ -64,7 +52,11 @@
       <strong slot="tab">
         Attached Parts
         {#if tab == "parts" && part.isGear()}
-          <Button size="sm" color="light" on:click={() => installPart(part)}>
+          <Button
+            size="sm"
+            color="light"
+            on:click={() => $actions.installPart(part)}
+          >
             add
           </Button>
         {/if}
@@ -77,7 +69,7 @@
       Service Plans
       <PlanBadge {planlist} />
       {#if tab == "plans"}
-        <Button size="sm" color="light" on:click={() => newPlan(part)}>
+        <Button size="sm" color="light" on:click={() => $actions.newPlan(part)}>
           add
         </Button> &NonBreakingSpace;
       {/if}
@@ -88,7 +80,11 @@
     <strong slot="tab">
       Service Logs
       {#if tab == "service"}
-        <Button size="sm" color="light" on:click={() => newService(part)}>
+        <Button
+          size="sm"
+          color="light"
+          on:click={() => $actions.newService(part)}
+        >
           add
         </Button>
       {/if}
@@ -96,9 +92,3 @@
     <ServiceList {part} /><br />
   </TabPane>
 </TabContent>
-<AttachPart bind:attachPart />
-<InstallPart bind:installPart />
-<ChangePart bind:changePart />
-<RecoverPart bind:recoverPart />
-<NewService bind:newService />
-<NewPlan bind:newPlan />

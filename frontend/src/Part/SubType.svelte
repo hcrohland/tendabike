@@ -1,16 +1,14 @@
 <script lang="ts">
   import { DropdownItem } from "@sveltestrap/sveltestrap";
-  import { usages } from "../lib/usage";
   import Usage from "../Usage/Usage.svelte";
-  import ReplacePart from "../Attachment/ReplacePart.svelte";
-  import AttachPart from "../Attachment/AttachPart.svelte";
-  import { Type } from "../lib/types";
+  import { actions } from "../Widgets/Actions.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import ShowAll from "../Widgets/ShowHist.svelte";
-  import PartLink from "./PartLink.svelte";
-  import { parts, Part } from "../lib/part";
   import type { Attachment } from "../lib/attachment";
-  import NewService from "../Service/NewService.svelte";
+  import { parts } from "../lib/part";
+  import { Type } from "../lib/types";
+  import { usages } from "../lib/usage";
+  import PartLink from "./PartLink.svelte";
 
   export let attachments: Attachment[] = [];
   export let level: number = 0;
@@ -19,9 +17,6 @@
   export const hook: Type | undefined = undefined;
 
   let show_hist = false;
-  let attachPart: (p: Part) => void;
-  let replacePart: (p: Attachment) => void;
-  let newService: (p: Part) => void;
 </script>
 
 {#if type == undefined}
@@ -55,13 +50,13 @@
           <Usage id={part.usage} ref={part.id} />
           <td>
             <Menu>
-              <DropdownItem on:click={() => newService(part)}>
+              <DropdownItem on:click={() => $actions.newService(part)}>
                 Log Service
               </DropdownItem>
-              <DropdownItem on:click={() => attachPart(part)}>
+              <DropdownItem on:click={() => $actions.attachPart(part)}>
                 Move part
               </DropdownItem>
-              <DropdownItem on:click={() => replacePart(att)}>
+              <DropdownItem on:click={() => $actions.replacePart(att)}>
                 Replace part
               </DropdownItem>
             </Menu>
@@ -88,13 +83,13 @@
         <td>
           {#if part.disposed_at == undefined}
             <Menu>
-              <DropdownItem on:click={() => newService(part)}>
+              <DropdownItem on:click={() => $actions.newService(part)}>
                 Log Service
               </DropdownItem>
-              <DropdownItem on:click={() => attachPart(part)}
+              <DropdownItem on:click={() => $actions.attachPart(part)}
                 >Attach part
               </DropdownItem>
-              <DropdownItem on:click={() => replacePart(att)}>
+              <DropdownItem on:click={() => $actions.replacePart(att)}>
                 Duplicate part
               </DropdownItem>
             </Menu>
@@ -104,6 +99,3 @@
     {/if}
   {/each}
 {/if}
-<AttachPart bind:attachPart />
-<ReplacePart bind:replacePart />
-<NewService bind:newService />

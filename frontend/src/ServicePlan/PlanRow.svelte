@@ -1,29 +1,19 @@
 <script lang="ts">
   import { DropdownItem } from "@sveltestrap/sveltestrap";
-  import DeletePlan from "./DeletePlan.svelte";
-  import Menu from "../Widgets/Menu.svelte";
-  import PlanName from "./PlanName.svelte";
-  import PlanCell from "./PlanCell.svelte";
-  import { plans, ServicePlan } from "../lib/serviceplan";
-  import { Attachment, attachments } from "../lib/attachment";
-  import { Part, parts } from "../lib/part";
-  import { Service, services } from "../lib/service";
-  import { usages } from "../lib/usage";
-  import ShowHist from "../Widgets/ShowHist.svelte";
-  import UpdatePlan from "./UpdatePlan.svelte";
   import ServiceRow from "../Service/ServiceRow.svelte";
-  import NewService from "../Service/NewService.svelte";
-  import RedoService from "../Service/RedoService.svelte";
-  import ReplacePart from "../Attachment/ReplacePart.svelte";
+  import { actions } from "../Widgets/Actions.svelte";
+  import Menu from "../Widgets/Menu.svelte";
+  import ShowHist from "../Widgets/ShowHist.svelte";
+  import { attachments } from "../lib/attachment";
+  import { parts } from "../lib/part";
+  import { services } from "../lib/service";
+  import { ServicePlan } from "../lib/serviceplan";
+  import { usages } from "../lib/usage";
+  import PlanCell from "./PlanCell.svelte";
+  import PlanName from "./PlanName.svelte";
 
   export let plan: ServicePlan;
   export let name: string | null = null;
-
-  let updatePlan: (p: ServicePlan) => void;
-  let deletePlan: (p: ServicePlan) => void;
-  let newService: (part: Part | null, plans?: string[]) => void;
-  let replacePart: (a: Attachment) => void;
-  let redoService: (s: Service | undefined) => void;
 
   let show_hist = false;
 
@@ -60,10 +50,10 @@
   <td>
     <Menu>
       {#if !name}
-        <DropdownItem on:click={() => updatePlan(plan)}>
+        <DropdownItem on:click={() => $actions.updatePlan(plan)}>
           Change ServicePlan
         </DropdownItem>
-        <DropdownItem on:click={() => deletePlan(plan)}>
+        <DropdownItem on:click={() => $actions.deletePlan(plan)}>
           Delete ServicePlan
         </DropdownItem>
       {/if}
@@ -74,18 +64,20 @@
 
       {#if part}
         {#if serviceList.at(0) != undefined}
-          <DropdownItem on:click={() => redoService(serviceList.at(0))}>
+          <DropdownItem
+            on:click={() => $actions.redoService(serviceList.at(0))}
+          >
             Repeat last service
           </DropdownItem>
         {/if}
         {@const plans = plan.id ? [plan.id] : []}
-        <DropdownItem on:click={() => newService(part, plans)}>
+        <DropdownItem on:click={() => $actions.newService(part, plans)}>
           New Service for plan
         </DropdownItem>
         {#if plan.part != part.id}
           {@const att = part.attachments($attachments).at(0)}
           {#if att}
-            <DropdownItem on:click={() => replacePart(att)}>
+            <DropdownItem on:click={() => $actions.replacePart(att)}>
               Replace Part
             </DropdownItem>
           {/if}
@@ -101,8 +93,3 @@
   {/each}
   <ServiceRow depth={name ? 1 : 0} {part} successor={serviceList.at(-1)} />
 {/if}
-<UpdatePlan bind:updatePlan />
-<DeletePlan bind:deletePlan />
-<NewService bind:newService />
-<RedoService bind:redoService />
-<ReplacePart bind:replacePart />

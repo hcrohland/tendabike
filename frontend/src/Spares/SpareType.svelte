@@ -1,24 +1,21 @@
 <script lang="ts">
-  import { fmtDate } from "../lib/store";
   import { Button, DropdownItem } from "@sveltestrap/sveltestrap";
+  import PartLink from "../Part/PartLink.svelte";
   import Usage from "../Usage/Usage.svelte";
-  import AttachPart from "../Attachment/AttachPart.svelte";
-  import NewPart from "../Part/NewPart.svelte";
-  import { types, Type } from "../lib/types";
+  import { actions } from "../Widgets/Actions.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import ShowAll from "../Widgets/ShowHist.svelte";
-  import PartLink from "../Part/PartLink.svelte";
-  import { type Map, filterValues } from "../lib/mapable";
-  import { Part, parts } from "../lib/part";
-  import { attachments, Attachment } from "../lib/attachment";
+  import { Attachment, attachments } from "../lib/attachment";
+  import { filterValues, type Map } from "../lib/mapable";
+  import { parts } from "../lib/part";
+  import { fmtDate } from "../lib/store";
+  import { Type, types } from "../lib/types";
 
   export let type: Type;
   export let date = new Date();
   export let update: (show: boolean) => void;
   export let attachee: number;
 
-  let attachPart: (part: Part) => void;
-  let newPart: (t: Type) => void;
   let show_all: boolean;
 
   function attachedTo(
@@ -37,13 +34,12 @@
   $: subparts = type.parts($parts);
 </script>
 
-<AttachPart bind:attachPart />
-<NewPart bind:newPart />
-
 <tr>
   <th colspan="6" scope="col" class="text-nowrap">
     {type.name}s &NonBreakingSpace;
-    <Button size="sm" color="light" on:click={() => newPart(type)}>add</Button>
+    <Button size="sm" color="light" on:click={() => $actions.newPart(type)}
+      >add</Button
+    >
     &NonBreakingSpace;
     {#if subparts.length > 0}
       <ShowAll
@@ -77,7 +73,7 @@
     <td>
       {#if !part.disposed_at}
         <Menu>
-          <DropdownItem on:click={() => attachPart(part)}>
+          <DropdownItem on:click={() => $actions.attachPart(part)}>
             {#if attachedTo($attachments, part.id, date)}
               Move
             {:else}
