@@ -1,14 +1,17 @@
 <script lang="ts">
   import { Button } from "@sveltestrap/sveltestrap";
-  import { plans } from "../lib/serviceplan";
-  import PlanList from "./PlanList.svelte";
-  import NewPlan from "./NewPlan.svelte";
   import { filterValues } from "../lib/mapable";
-  import { category } from "../lib/types";
+  import { plans } from "../lib/serviceplan";
+  import { category, types } from "../lib/types";
+  import NewPlan from "./NewPlan.svelte";
+  import PlanList from "./PlanList.svelte";
 
   let newPlan: () => void;
 
-  $: planlist = filterValues($plans, (p) => p.what == $category.main);
+  $: planlist = filterValues(
+    $plans,
+    (p) => types[p.what].main == $category.main,
+  );
 </script>
 
 <PlanList {planlist}>
