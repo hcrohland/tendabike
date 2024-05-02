@@ -1,5 +1,5 @@
 import type { Activity } from "./activity";
-import { type Map, filterValues, mapable } from "./mapable";
+import { filterValues, mapable, type Map } from "./mapable";
 import { fmtRange, handleError, myfetch, updateSummary } from "./store";
 
 export class Attachment {
@@ -77,6 +77,23 @@ export class AttEvent {
   }
 }
 
+/// find attachment for part at a specific hook right now
+export function att_at_hook(
+  gear: number,
+  what: number,
+  hook: number | null,
+  atts: Map<Attachment>,
+) {
+  return filterValues(
+    atts,
+    (att) =>
+      att.gear == gear &&
+      att.what == what &&
+      att.hook == hook &&
+      att.isAttached(),
+  ).pop();
+}
+
 /// find part id for part at a specific hook right now
 /// if there is no part at that hook, return parameter part
 export function part_at_hook(
@@ -85,14 +102,7 @@ export function part_at_hook(
   hook: number | null,
   atts: Map<Attachment>,
 ) {
-  let att = filterValues(
-    atts,
-    (att) =>
-      att.gear == gear &&
-      att.what == what &&
-      att.hook == hook &&
-      att.isAttached(),
-  ).pop();
+  let att = att_at_hook(gear, what, hook, atts);
   return att ? att.part_id : gear;
 }
 
