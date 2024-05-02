@@ -12,7 +12,7 @@
   import { attachments } from "../lib/attachment";
   import { filterValues } from "../lib/mapable";
   import { parts } from "../lib/part";
-  import { plans, plans_for_part_and_attachees } from "../lib/serviceplan";
+  import { plans, plans_for_part_and_subtypes } from "../lib/serviceplan";
   import GearCard from "./GearCard.svelte";
   import PartHist from "./PartHist.svelte";
   import Subparts from "./Subparts.svelte";
@@ -23,7 +23,7 @@
 
   $: part = $parts[params.id];
   $: attachees = filterValues($attachments, (a) => a.gear == part.id);
-  $: planlist = plans_for_part_and_attachees($attachments, $plans, part.id);
+  $: planlist = plans_for_part_and_subtypes($attachments, $plans, part);
 </script>
 
 <GearCard {part} display>

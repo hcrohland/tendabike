@@ -1,16 +1,16 @@
 <script lang="ts">
-  import GearCard from "./GearCard.svelte";
-  import { Part } from "../lib/part";
-  import { category } from "../lib/types";
   import { link } from "svelte-spa-router";
-  import { plans, plans_for_part_and_attachees } from "../lib/serviceplan";
-  import { attachments } from "../lib/attachment";
   import PlanBadge from "../ServicePlan/PlanBadge.svelte";
+  import { attachments } from "../lib/attachment";
+  import { Part } from "../lib/part";
+  import { plans, plans_for_part_and_subtypes } from "../lib/serviceplan";
+  import { category } from "../lib/types";
+  import GearCard from "./GearCard.svelte";
 
   export let part: Part;
   export let display: boolean;
 
-  $: planlist = plans_for_part_and_attachees($attachments, $plans, part.id);
+  $: planlist = plans_for_part_and_subtypes($attachments, $plans, part);
 </script>
 
 <GearCard {part} {display}>

@@ -1,15 +1,15 @@
-import { get_days, handleError, myfetch } from "./store";
-import { mapable, type Map, filterValues, by } from "./mapable";
-import { Service, services } from "./service";
-import { Part } from "./part";
 import {
+  att_at_hook,
+  attachment_for_part,
   part_at_hook,
   type Attachment,
-  attachment_for_part,
-  attachees_for_gear,
 } from "./attachment";
+import { by, filterValues, mapable, type Map } from "./mapable";
+import { Part } from "./part";
+import { Service, services } from "./service";
+import { get_days, handleError, myfetch } from "./store";
+import { Type, types } from "./types";
 import type { Usage } from "./usage";
-import { types } from "./types";
 
 const is_set = (n: number | null) => n != null && n > 0;
 
@@ -208,16 +208,50 @@ export function plans_for_part(
     : plans_for_this_part(part, plans);
 }
 
-export function plans_for_part_and_attachees(
+function plans_at_hook(
   atts: Map<Attachment>,
   plans: Map<ServicePlan>,
-  part: number | undefined,
+  part: Part,
+  type: Type,
+  hook: number,
 ) {
-  let attachees = attachees_for_gear(part, atts);
-  return attachees.reduce(
-    (list, att) => list.concat(plans_for_attachee(plans, att)),
-    plans_for_part(plans, atts, part),
+  let att = att_at_hook(part.id!, part.what, hook, atts);
+  if (att) return plans_for_attachee(plans, att);
+
+  let res = filterValues(
+    plans,
+    (p) => p.part == part.id && p.what == type.id && p.hook == hook,
   );
+  if (res.length > 0) return res;
+
+  return filterValues(
+    plans,
+    (p) => p.part == null && p.what == type.id && p.hook == hook,
+  ).map((p) => new ServicePlan({ ...p, part: part.id }));
+}
+
+function plans_for_subtype(
+  atts: Map<Attachment>,
+  plans: Map<ServicePlan>,
+  part: Part,
+  type: Type,
+) {
+  return type.hooks.reduce((res, hook) => {
+    return res.concat(plans_at_hook(atts, plans, part, type, hook));
+  }, [] as ServicePlan[]);
+}
+
+export function plans_for_part_and_subtypes(
+  atts: Map<Attachment>,
+  plans: Map<ServicePlan>,
+  part: Part,
+) {
+  return types[part.what]
+    .subtypes()
+    .reduce(
+      (list, type) => list.concat(plans_for_subtype(atts, plans, part, type)),
+      plans_for_part(plans, atts, part.id),
+    );
 }
 
 export function alerts_for_plans(
