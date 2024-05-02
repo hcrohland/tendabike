@@ -48,7 +48,7 @@
 <PartHist id={params.id} />
 <TabContent on:tab={(e) => (tab = e.detail)}>
   {#if attachees.length > 0 || part.isGear()}
-    <TabPane tabId="parts" active>
+    <TabPane tabId="parts" active={planlist.length == 0}>
       <strong slot="tab">
         Attached Parts
         {#if tab == "parts" && part.isGear()}
@@ -64,7 +64,10 @@
       <Subparts {part} {attachees} />
     </TabPane>
   {/if}
-  <TabPane tabId="plans" active={!(attachees.length > 0 || part.isGear())}>
+  <TabPane
+    tabId="plans"
+    active={!(attachees.length > 0 || part.isGear()) || planlist.length > 0}
+  >
     <strong slot="tab">
       Service Plans
       <PlanBadge {planlist} />
