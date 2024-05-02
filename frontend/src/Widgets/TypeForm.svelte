@@ -1,21 +1,12 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
   import { Input } from "@sveltestrap/sveltestrap";
-  import { Type } from "../lib/types";
-  import { types, category } from "../lib/types";
-  import { filterValues } from "../lib/mapable";
+  import { createEventDispatcher } from "svelte";
+  import { Type, category } from "../lib/types";
 
   export let with_body = false;
 
-  $: what = $category.main;
-
   let hook: { type: Type; hook: number | null };
   const dispatch = createEventDispatcher();
-
-  let typeList = filterValues(
-    types,
-    (t) => t.main == $category.id && t.id != t.main,
-  ).sort((a, b) => a.order - b.order);
 </script>
 
 <Input
@@ -27,9 +18,9 @@
 >
   <option hidden value> -- select one -- </option>
   {#if with_body}
-    <option value={{ type: types[what], hook: null }}> body </option>
+    <option value={{ type: $category, hook: null }}> body </option>
   {/if}
-  {#each typeList as type}
+  {#each $category.subtypes() as type}
     {#each type.hooks as hook}
       <option value={{ type, hook }}>
         {type.human_name(hook)}

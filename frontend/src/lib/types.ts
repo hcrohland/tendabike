@@ -1,8 +1,8 @@
-import { Activity } from "./activity";
-import { Part } from "./part";
-import { type Map, by, filterValues, mapObject } from "./mapable";
-import { myfetch } from "./store";
 import { writable, type Writable } from "svelte/store";
+import { Activity } from "./activity";
+import { by, filterValues, mapObject, type Map } from "./mapable";
+import { Part } from "./part";
+import { myfetch } from "./store";
 
 export class Type {
   id: number;
@@ -41,6 +41,12 @@ export class Type {
     return (
       (hook != null && this.hooks.length > 1 ? types[hook].prefix + " " : "") +
       this.name
+    );
+  }
+
+  subtypes() {
+    return filterValues(types, (t) => t.main == this.id && t.id != t.main).sort(
+      (a, b) => a.order - b.order,
     );
   }
 }
