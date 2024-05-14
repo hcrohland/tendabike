@@ -89,7 +89,7 @@
         km climbing <span class="param">{fmtNumber(usage.climb)}</span> and
         descending <span class="param">{fmtNumber(usage.descend)}</span> meters
         {#if usage.energy > 0}
-          <br />and expended
+          and expended
           <span class="param">{fmtNumber(usage.energy)}</span> kiloJoules of energy
         {/if}
       </p>
