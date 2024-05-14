@@ -63,8 +63,8 @@ pub struct Usage {
     pub climb: i32,
     /// Overall descending
     pub descend: i32,
-    /// Overall descending
-    pub power: i32,
+    /// Overall energy
+    pub energy: i32,
     /// number of activities
     pub count: i32,
 }
@@ -140,7 +140,7 @@ where
             time: self.time + rhs.time,
             climb: self.climb + rhs.climb,
             descend: self.descend + rhs.descend,
-            power: self.power + rhs.power,
+            energy: self.energy + rhs.energy,
             distance: self.distance + rhs.distance,
             count: self.count + rhs.count,
         }
@@ -162,7 +162,7 @@ where
             time: self.time + rhs.time,
             climb: self.climb + rhs.climb,
             descend: self.descend + rhs.descend,
-            power: self.power + rhs.power,
+            energy: self.energy + rhs.energy,
             distance: self.distance + rhs.distance,
             count: self.count + rhs.count,
         }
@@ -188,7 +188,7 @@ impl Sub for Usage {
             time: self.time - rhs.time,
             climb: self.climb - rhs.climb,
             descend: self.descend - rhs.descend,
-            power: self.power - rhs.power,
+            energy: self.energy - rhs.energy,
             distance: self.distance - rhs.distance,
             count: self.count - rhs.count,
         }
@@ -204,7 +204,7 @@ impl Neg for Usage {
             time: -self.time,
             climb: -self.climb,
             descend: -self.descend,
-            power: -self.power,
+            energy: -self.energy,
             distance: -self.distance,
             count: -self.count,
         }

@@ -74,8 +74,8 @@ pub struct Activity {
     pub climb: Option<i32>,
     /// Total descending
     pub descend: Option<i32>,
-    /// average power output
-    pub power: Option<i32>,
+    /// average energy output
+    pub energy: Option<i32>,
     /// Which gear did she use?
     pub gear: Option<PartId>,
 }
@@ -102,8 +102,8 @@ pub struct NewActivity {
     pub climb: Option<i32>,
     /// Total descending
     pub descend: Option<i32>,
-    /// average power output
-    pub power: Option<i32>,
+    /// average energy output
+    pub energy: Option<i32>,
     /// Which gear did she use?
     pub gear: Option<PartId>,
 }
@@ -120,7 +120,7 @@ impl From<Activity> for NewActivity {
             distance: act.distance,
             climb: act.climb,
             descend: act.descend,
-            power: act.power,
+            energy: act.energy,
             gear: act.gear,
         }
     }
@@ -175,7 +175,7 @@ impl ActivityId {
                     res.activities[0].distance = None;
                     res.activities[0].climb = None;
                     res.activities[0].descend = None;
-                    res.activities[0].power = None;
+                    res.activities[0].energy = None;
                     Ok(res)
                 }
                 .scope_boxed()
@@ -258,7 +258,7 @@ impl Activity {
             distance: self.distance.unwrap_or(0),
             climb: self.climb.unwrap_or(0),
             descend: self.descend.unwrap_or_else(|| self.climb.unwrap_or(0)),
-            power: self.power.unwrap_or(0),
+            energy: self.energy.unwrap_or(0),
             count: 1,
         }
     }
