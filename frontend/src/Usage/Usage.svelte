@@ -1,7 +1,7 @@
 <script lang="ts">
   import { link } from "svelte-spa-router";
-  import { fmtSeconds, fmtNumber } from "../lib/store";
-  import { usages, Usage } from "../lib/usage";
+  import { fmtNumber, fmtSeconds } from "../lib/store";
+  import { Usage, usages } from "../lib/usage";
 
   export let header = false;
   export let id: string | undefined = undefined;
@@ -33,10 +33,14 @@
   <td class="text-end">
     {fmtNumber(usage.descend)}
   </td>
+  <td class="text-end">
+    {fmtNumber(usage.energy)}
+  </td>
 {:else}
   <th class="text-end" scope="col" title="Number of activities">Rides</th>
   <th class="text-end" scope="col" title="Time (h)">Time</th>
   <th class="text-end" scope="col" title="Distance (km)">Distance</th>
   <th class="text-end" scope="col" title="Climb (m)">Climb</th>
   <th class="text-end" scope="col" title="Descend (m)">Descend</th>
+  <th class="text-end" scope="col" title="Energy (kJ)">Energy</th>
 {/if}

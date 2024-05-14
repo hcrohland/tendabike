@@ -74,6 +74,9 @@ pub struct ServicePlan {
     pub rides: Option<i32>,
     /// User for generic plans
     pub uid: Option<UserId>,
+    /// Energy expended
+    #[serde(rename = "kJ")]
+    pub energy: Option<i32>,
 }
 
 impl ServicePlan {

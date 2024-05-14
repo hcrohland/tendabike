@@ -9,6 +9,7 @@ export class Usage {
   distance: number;
   time: number;
   duration: number;
+  energy: number;
 
   constructor(data?: any) {
     if (data) {
@@ -19,6 +20,7 @@ export class Usage {
       this.distance = data.distance;
       this.time = data.time;
       this.duration = data.duration;
+      this.energy = data.energy;
     } else {
       this.id = "";
       this.count = 0;
@@ -27,6 +29,7 @@ export class Usage {
       this.distance = 0;
       this.time = 0;
       this.duration = 0;
+      this.energy = 0;
     }
   }
 
@@ -37,6 +40,7 @@ export class Usage {
     this.distance += a.distance || 0;
     this.time += a.time || a.duration || 0;
     this.duration += a.duration || a.time || 0;
+    this.energy += a.energy || 0;
   }
 
   sub(rhs = new Usage()) {
@@ -48,6 +52,7 @@ export class Usage {
       distance: this.distance - rhs.distance,
       time: this.time - rhs.time,
       duration: this.duration - rhs.duration,
+      energy: this.energy - rhs.energy,
     });
   }
 }

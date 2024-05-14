@@ -36,7 +36,7 @@
     {/if}
   </td>
   {#if !part}
-    <td colspan="7" />
+    <td colspan="8" />
   {:else}
     <td class=""> in </td>
     <PlanCell plan={plan.days} due={due.days} />
@@ -45,6 +45,7 @@
     <PlanCell plan={plan.km} due={due.km} />
     <PlanCell plan={plan.climb} due={due.climb} />
     <PlanCell plan={plan.descend} due={due.descend} />
+    <PlanCell plan={plan.kJ} due={due.kJ} />
   {/if}
 
   <td>

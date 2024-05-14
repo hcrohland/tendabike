@@ -9,7 +9,7 @@
     InputGroup,
     InputGroupText,
   } from "@sveltestrap/sveltestrap";
-  import { Limits } from "../lib/serviceplan";
+  import { Limits, type limit_keys } from "../lib/serviceplan";
 
   export let select: Limits;
 
@@ -19,11 +19,9 @@
     select[key] = parseInt(target.value);
   }
 
-  // @ts-ignore
-  let selected: ("days" | "hours" | "km" | "climb" | "descend" | "rides")[] =
-    Object.entries(select)
-      .filter(([k, v]) => Limits.keys.includes(k as any) && v != null)
-      .map(([k, v]) => k);
+  let selected = Object.entries(select)
+    .filter(([k, v]) => Limits.keys.includes(k as any) && v != null)
+    .map(([k, v]) => k as limit_keys);
 </script>
 
 {#each selected as key}

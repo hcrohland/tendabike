@@ -31,8 +31,8 @@ pub(crate) struct StravaActivity {
     pub distance: f64,
     /// Total climbing
     pub total_elevation_gain: f64,
-    /// average power output
-    pub average_watts: Option<f64>,
+    /// Energy excerted
+    pub kilojoules: Option<f64>,
     /// Which gear did she use?
     pub gear_id: Option<String>,
 }
@@ -70,7 +70,7 @@ impl StravaActivity {
             distance: Some(self.distance.round() as i32),
             climb: Some(self.total_elevation_gain.round() as i32),
             descend: None,
-            power: self.average_watts.map(|p| p.round() as i32),
+            energy: self.kilojoules.map(|e| e.round() as i32),
         })
     }
 

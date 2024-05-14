@@ -12,7 +12,7 @@ table! {
         distance -> Nullable<Int4>,
         climb -> Nullable<Int4>,
         descend -> Nullable<Int4>,
-        power -> Nullable<Int4>,
+        energy -> Nullable<Int4>,
         gear -> Nullable<Int4>,
     }
 }
@@ -70,7 +70,8 @@ table! {
         climb -> Nullable<Int4>,
         descend -> Nullable<Int4>,
         rides -> Nullable<Int4>,
-        uid -> Nullable<Int4>
+        uid -> Nullable<Int4>,
+        energy -> Nullable<Int4>,
     }
 }
 
@@ -84,8 +85,8 @@ table! {
         climb -> Int4,
         /// Overall descending
         descend -> Int4,
-        /// Overall descending
-        power -> Int4,
+        /// Overall energy
+        energy -> Int4,
         /// number of activities
         count -> Int4,
     }
