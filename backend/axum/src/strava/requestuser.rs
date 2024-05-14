@@ -205,6 +205,7 @@ impl StravaPerson for RequestUser {
             .text()
             .await
             .context("could not reach strava")?;
+        trace!("{uri}:\n{r}");
         Ok(serde_json::from_str::<T>(&r).context("Could not parse response body")?)
     }
 
