@@ -4,14 +4,14 @@
     Card,
     CardBody,
     CardHeader,
-    Row,
     Col,
+    Row,
   } from "@sveltestrap/sveltestrap";
-  import { fmtSeconds, fmtDate, fmtNumber } from "../lib/store";
-  import { Part } from "../lib/part";
   import { link } from "svelte-spa-router";
-  import { usages, Usage } from "../lib/usage";
+  import { Part } from "../lib/part";
+  import { fmtDate, fmtNumber, fmtSeconds } from "../lib/store";
   import { types } from "../lib/types";
+  import { Usage, usages } from "../lib/usage";
 
   export let part: Part;
   export let display = false;
@@ -88,8 +88,12 @@
         >
         km climbing <span class="param">{fmtNumber(usage.climb)}</span> and
         descending <span class="param">{fmtNumber(usage.descend)}</span> meters
-      </p></CardBody
-    >
+        {#if usage.energy > 0}
+          <br />and expended
+          <span class="param">{fmtNumber(usage.energy)}</span> kiloJoules of energy
+        {/if}
+      </p>
+    </CardBody>
     <!-- </div> -->
   {/if}
 </Card>

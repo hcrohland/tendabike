@@ -11,6 +11,15 @@ import { get_days, handleError, myfetch } from "./store";
 import { Type, types } from "./types";
 import type { Usage } from "./usage";
 
+export type limit_keys =
+  | "days"
+  | "hours"
+  | "km"
+  | "climb"
+  | "descend"
+  | "rides"
+  | "kJ";
+
 const is_set = (n: number | null) => n != null && n > 0;
 
 export class Limits {
@@ -26,6 +35,8 @@ export class Limits {
   descend: number | null;
   /// number of activities
   rides: number | null;
+  /// energy in kilJoule
+  kJ: number | null;
 
   constructor(data: any) {
     this.days = parseInt(data.days) || null;
@@ -34,15 +45,17 @@ export class Limits {
     this.climb = parseInt(data.climb) || null;
     this.descend = parseInt(data.descend) || null;
     this.rides = parseInt(data.rides) || null;
+    this.kJ = parseInt(data.kJ) || null;
   }
 
-  static keys: ("days" | "hours" | "km" | "climb" | "descend" | "rides")[] = [
+  static keys: limit_keys[] = [
     "days",
     "hours",
     "km",
     "climb",
     "descend",
     "rides",
+    "kJ",
   ];
 
   valid() {
@@ -52,7 +65,8 @@ export class Limits {
       is_set(this.km) ||
       is_set(this.climb) ||
       is_set(this.descend) ||
-      is_set(this.rides)
+      is_set(this.rides) ||
+      is_set(this.kJ)
     );
   }
 }
@@ -128,6 +142,7 @@ export class ServicePlan extends Limits {
     if (this.climb) res.climb = this.climb - usage.climb;
     if (this.descend) res.descend = this.descend - usage.descend;
     if (this.rides) res.rides = this.rides - usage.count;
+    if (this.kJ) res.kJ = this.kJ - usage.energy;
     return res;
   }
 

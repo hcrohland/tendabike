@@ -45,6 +45,7 @@
     <PlanCell plan={plan.km} due={due.km} />
     <PlanCell plan={plan.climb} due={due.climb} />
     <PlanCell plan={plan.descend} due={due.descend} />
+    <PlanCell plan={plan.kJ} due={due.kJ} />
   {/if}
 
   <td>

@@ -1,5 +1,5 @@
-import { Part } from "./part";
 import { mapable, type Map } from "./mapable";
+import { Part } from "./part";
 import { handleError, myfetch, updateSummary } from "./store";
 
 export class Activity {
@@ -20,6 +20,7 @@ export class Activity {
   distance?: number;
   time?: number;
   duration?: number;
+  energy?: number;
 
   constructor(data: any) {
     this.id = data.id;
@@ -33,6 +34,7 @@ export class Activity {
     this.distance = number_or_undefined(data.distance);
     this.time = number_or_undefined(data.time);
     this.duration = number_or_undefined(data.duration);
+    this.energy = number_or_undefined(data.energy);
   }
 
   async update() {
