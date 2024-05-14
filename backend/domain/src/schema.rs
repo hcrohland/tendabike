@@ -70,7 +70,8 @@ table! {
         climb -> Nullable<Int4>,
         descend -> Nullable<Int4>,
         rides -> Nullable<Int4>,
-        uid -> Nullable<Int4>
+        uid -> Nullable<Int4>,
+        energy -> Nullable<Int4>,
     }
 }
 
