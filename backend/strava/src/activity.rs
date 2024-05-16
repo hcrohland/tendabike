@@ -6,7 +6,7 @@
 // The file imports the OffsetDateTime struct from the time crate.
 // The file also has two comments that indicate the beginning and end of a code block.
 
-use time::OffsetDateTime;
+use time::{OffsetDateTime, UtcOffset};
 
 use crate::*;
 
@@ -23,6 +23,7 @@ pub(crate) struct StravaActivity {
     /// Start time
     #[serde(with = "time::serde::rfc3339")]
     pub start_date: OffsetDateTime,
+    pub utc_offset: f32,
     /// End time
     pub elapsed_time: i32,
     /// activity time
@@ -59,12 +60,14 @@ impl StravaActivity {
             Some(x) => Some(gear::strava_to_tb(x, user, store).await?),
             None => None,
         };
+        let offset =
+            UtcOffset::from_whole_seconds(self.utc_offset as i32).context("Utc Offset invalid")?;
         Ok(NewActivity {
             what,
             gear,
             user_id: user.tb_id(),
             name: self.name,
-            start: self.start_date,
+            start: self.start_date.to_offset(offset),
             duration: self.elapsed_time,
             time: Some(self.moving_time),
             distance: Some(self.distance.round() as i32),

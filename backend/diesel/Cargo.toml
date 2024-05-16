@@ -12,6 +12,13 @@ scoped-futures = { workspace = true }
 diesel_migrations = { workspace = true }
 async-session = { workspace = true }
 anyhow = { workspace = true }
-time = { workspace = true, features = ["serde", "parsing", "serde-human-readable"] }
+time = { workspace = true, features = [
+    "serde",
+    "parsing",
+    "serde-human-readable",
+] }
 tb_strava = { workspace = true }
 tb_domain = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+serde_with = { workspace = true, features = ["time_0_3"] }

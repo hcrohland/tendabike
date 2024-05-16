@@ -50,8 +50,7 @@ NewtypeDisplay! { () pub struct ActivityId(); }
 NewtypeFrom! { () pub struct ActivityId(i32); }
 
 /// The database's representation of an activity.
-#[derive(Debug, Clone, Identifiable, Queryable, AsChangeset, PartialEq, Serialize, Deserialize)]
-#[diesel(table_name = schema::activities)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Activity {
     /// The primary key
     pub id: ActivityId,
@@ -80,8 +79,7 @@ pub struct Activity {
     pub gear: Option<PartId>,
 }
 
-#[derive(Debug, Clone, Insertable, AsChangeset, Queryable, PartialEq, Serialize, Deserialize)]
-#[diesel(table_name = schema::activities)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// A new activity to be inserted into the database.
 pub struct NewActivity {
     pub user_id: UserId,
