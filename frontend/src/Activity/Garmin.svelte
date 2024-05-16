@@ -6,17 +6,11 @@
     ListGroup,
     ListGroupItem,
     Input,
-    InputGroup,
-    InputGroupText,
-    Label,
   } from "@sveltestrap/sveltestrap";
   import { checkStatus, handleError } from "../lib/store";
-  import TZPicker from "../Widgets/TZPicker.svelte";
   import MyFooter from "../Widgets/MyFooter.svelte";
   import { parts } from "../lib/part";
   import { attachments } from "../lib/attachment";
-
-  let timezone: string | undefined;
 
   let isOpen = false;
   let files: FileList | undefined;
@@ -26,7 +20,6 @@
 
   export const garmin = () => {
     files = undefined;
-    timezone = undefined;
     result = undefined;
     label = "Synchronize";
     isOpen = true;
@@ -36,7 +29,7 @@
 
   async function sendFile() {
     var body = files && (await files[0].text());
-    return fetch("/api/activ/descend?tz=" + timezone, {
+    return fetch("/api/activ/descend", {
       method: "POST",
       credentials: "include",
       body,
@@ -79,14 +72,10 @@
         accept="text/csv"
         title="Upload a CSV file exported from Garmin connect activities. 
 It will match activities based on the start time. 
-If there is no match it will skip the activity - maybe it was in another timezone? 
-You can upload multiple times"
+If there is no match it will skip the activity.
+You can upload multiple times."
       />
       <br />
-      <InputGroup class="mb-0 mr-sm-2 mb-sm-2">
-        <InputGroupText>Timezone of activities:</InputGroupText>
-        <TZPicker bind:timezone />
-      </InputGroup>
     </ModalBody>
   {/if}
   <MyFooter {toggle} {disabled} action={sendFile} {label} />

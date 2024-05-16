@@ -35,7 +35,6 @@ use newtype_derive::*;
 use scoped_futures::ScopedFutureExt;
 use serde_derive::{Deserialize, Serialize};
 use time::{macros::format_description, OffsetDateTime, PrimitiveDateTime};
-use time_tz::PrimitiveDateTimeExt;
 
 use crate::*;
 
@@ -335,7 +334,6 @@ impl Activity {
 
     pub async fn csv2descend(
         data: impl std::io::Read,
-        tz: String,
         user: &dyn Person,
         store: &mut impl Store,
     ) -> TbResult<(Summary, Vec<String>, Vec<String>)> {
@@ -359,8 +357,6 @@ impl Activity {
         let mut bad = Vec::new();
         let mut summary = SumHash::default();
         let mut rdr = csv::Reader::from_reader(data);
-        let tz = time_tz::timezones::get_by_name(&tz)
-            .ok_or_else(|| Error::BadRequest(format!("Unknown timezone {}", tz)))?;
 
         for result in rdr.deserialize() {
             // The iterator yields Result<StringRecord, Error>, so we check the
@@ -370,8 +366,7 @@ impl Activity {
             let description = format!("{} at {}", &record.title, &record.start);
             let rstart = PrimitiveDateTime::parse(&record.start, FORMAT)
                 .context("Could not parse start")?
-                .assume_timezone(tz)
-                .unwrap();
+                .assume_utc();
             let rdescend = record
                 .descend
                 .replace('.', "")

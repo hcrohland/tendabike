@@ -11,7 +11,7 @@ use std::collections::HashSet;
 ///
 /// Finally, the module provides an endpoint for using CSV data to update usage data for activities.
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     routing::{delete, get, post},
     Json, Router,
 };
@@ -93,18 +93,13 @@ async fn act_delete(
         .map(Json)?)
 }
 
-#[derive(serde::Deserialize)]
-struct QueryTZ {
-    tz: String,
-}
 async fn descend(
-    Query(q): Query<QueryTZ>,
     user: RequestUser,
     State(store): State<DbPool>,
     data: String,
 ) -> ApiResult<(Summary, Vec<String>, Vec<String>)> {
     let mut store = store.get().await?;
-    let res = Activity::csv2descend(data.as_bytes(), q.tz, &user, &mut store).await?;
+    let res = Activity::csv2descend(data.as_bytes(), &user, &mut store).await?;
     Ok(Json(res))
 }
 

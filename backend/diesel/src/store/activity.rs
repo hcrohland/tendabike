@@ -1,5 +1,5 @@
 use anyhow::Context;
-use diesel::prelude::*;
+use diesel::{prelude::*, sql_query};
 use diesel_async::RunQueryDsl;
 use serde_derive::{Deserialize, Serialize};
 use time::{OffsetDateTime, UtcOffset};
@@ -33,6 +33,7 @@ mod schema {
     Insertable,
     Identifiable,
     Queryable,
+    QueryableByName,
     AsChangeset,
     PartialEq,
     Serialize,
@@ -196,11 +197,13 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
         uid: UserId,
         rstart: OffsetDateTime,
     ) -> TbResult<Activity> {
-        use schema::activities::dsl::*;
-        activities
-            .filter(user_id.eq(uid))
-            .filter(start.eq(rstart))
-            .for_update()
+        use diesel::sql_types;
+        let query = sql_query(
+            "SELECT * FROM activities WHERE user_id = $1 AND date_trunc('minute',start) + make_interval(0,0,0,0,0,0,utc_offset) = date_trunc('minute',$2) FOR UPDATE",
+        )
+        .bind::<sql_types::Int4, _>(uid)
+        .bind::<sql_types::Timestamptz, _>(rstart);
+        query
             .get_result::<DbActivity>(self)
             .await
             .map_err(map_to_tb)?
