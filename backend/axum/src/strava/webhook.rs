@@ -117,6 +117,8 @@ pub(super) async fn validate_subscription(Query(hub): Query<Hub>) -> ApiResult<H
 pub(super) struct SyncQuery {
     time: i64,
     user_id: Option<i32>,
+    #[serde(default)]
+    migrate: bool,
 }
 
 pub(super) async fn sync_api(
@@ -127,7 +129,7 @@ pub(super) async fn sync_api(
     let mut store = store.get().await?;
     let user_id: Option<tb_domain::UserId> = query.user_id.map(|u| u.into());
     Ok(
-        tb_strava::event::sync_users(user_id, query.time, &mut store)
+        tb_strava::event::sync_users(user_id, query.time, query.migrate, &mut store)
             .await
             .map(Json)?,
     )

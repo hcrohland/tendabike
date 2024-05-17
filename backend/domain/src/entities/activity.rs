@@ -35,7 +35,6 @@ use newtype_derive::*;
 use scoped_futures::ScopedFutureExt;
 use serde_derive::{Deserialize, Serialize};
 use time::{macros::format_description, OffsetDateTime, PrimitiveDateTime};
-use time_tz::PrimitiveDateTimeExt;
 
 use crate::*;
 
@@ -50,8 +49,7 @@ NewtypeDisplay! { () pub struct ActivityId(); }
 NewtypeFrom! { () pub struct ActivityId(i32); }
 
 /// The database's representation of an activity.
-#[derive(Debug, Clone, Identifiable, Queryable, AsChangeset, PartialEq, Serialize, Deserialize)]
-#[diesel(table_name = schema::activities)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Activity {
     /// The primary key
     pub id: ActivityId,
@@ -80,8 +78,7 @@ pub struct Activity {
     pub gear: Option<PartId>,
 }
 
-#[derive(Debug, Clone, Insertable, AsChangeset, Queryable, PartialEq, Serialize, Deserialize)]
-#[diesel(table_name = schema::activities)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// A new activity to be inserted into the database.
 pub struct NewActivity {
     pub user_id: UserId,
@@ -190,7 +187,7 @@ impl ActivityId {
     /// checks authorization  
     pub async fn update(
         self,
-        act: &NewActivity,
+        act: NewActivity,
         user: &dyn Person,
         store: &mut impl Store,
     ) -> TbResult<Summary> {
@@ -203,7 +200,7 @@ impl ActivityId {
                         .register(Factor::Sub, store)
                         .await?;
 
-                    let act = store.activity_update(self, act).await?;
+                    let act = store.activity_update(self, &act).await?;
 
                     info!("Updating {:?}", act);
 
@@ -213,6 +210,21 @@ impl ActivityId {
                 .scope_boxed()
             })
             .await
+    }
+
+    pub async fn migrate(
+        self,
+        mut act: NewActivity,
+        user: &dyn Person,
+        store: &mut impl Store,
+    ) -> TbResult<Summary> {
+        act.time = None;
+        act.distance = None;
+        act.climb = None;
+        act.descend = None;
+        act.gear = None;
+
+        self.update(act, user, store).await
     }
 }
 
@@ -337,7 +349,6 @@ impl Activity {
 
     pub async fn csv2descend(
         data: impl std::io::Read,
-        tz: String,
         user: &dyn Person,
         store: &mut impl Store,
     ) -> TbResult<(Summary, Vec<String>, Vec<String>)> {
@@ -361,8 +372,6 @@ impl Activity {
         let mut bad = Vec::new();
         let mut summary = SumHash::default();
         let mut rdr = csv::Reader::from_reader(data);
-        let tz = time_tz::timezones::get_by_name(&tz)
-            .ok_or_else(|| Error::BadRequest(format!("Unknown timezone {}", tz)))?;
 
         for result in rdr.deserialize() {
             // The iterator yields Result<StringRecord, Error>, so we check the
@@ -372,8 +381,7 @@ impl Activity {
             let description = format!("{} at {}", &record.title, &record.start);
             let rstart = PrimitiveDateTime::parse(&record.start, FORMAT)
                 .context("Could not parse start")?
-                .assume_timezone(tz)
-                .unwrap();
+                .assume_utc();
             let rdescend = record
                 .descend
                 .replace('.', "")
@@ -450,7 +458,7 @@ async fn match_and_update(
     act.descend = Some(rdescend);
     let actid = act.id;
     let act = NewActivity::from(act);
-    actid.update(&act, user, store).await
+    actid.update(act, user, store).await
 }
 
 async fn def_part(partid: &PartId, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {

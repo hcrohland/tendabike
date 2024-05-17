@@ -6,7 +6,7 @@
 // The file imports the OffsetDateTime struct from the time crate.
 // The file also has two comments that indicate the beginning and end of a code block.
 
-use time::OffsetDateTime;
+use time::{OffsetDateTime, UtcOffset};
 
 use crate::*;
 
@@ -23,6 +23,7 @@ pub(crate) struct StravaActivity {
     /// Start time
     #[serde(with = "time::serde::rfc3339")]
     pub start_date: OffsetDateTime,
+    pub utc_offset: f32,
     /// End time
     pub elapsed_time: i32,
     /// activity time
@@ -54,6 +55,12 @@ impl StravaActivity {
         user: &mut impl StravaPerson,
         store: &mut impl StravaStore,
     ) -> TbResult<NewActivity> {
+        let mut offset = self.utc_offset as i32;
+        if offset % 1800 != 0 {
+            offset = offset + 900 - (offset + 900) % 1800;
+            warn!("rounding utc_offset for {self:?} to {offset}");
+        }
+        let offset = UtcOffset::from_whole_seconds(offset).context("Utc Offset invalid")?;
         let what = self.what()?;
         let gear = match self.gear_id {
             Some(x) => Some(gear::strava_to_tb(x, user, store).await?),
@@ -64,7 +71,7 @@ impl StravaActivity {
             gear,
             user_id: user.tb_id(),
             name: self.name,
-            start: self.start_date,
+            start: self.start_date.to_offset(offset),
             duration: self.elapsed_time,
             time: Some(self.moving_time),
             distance: Some(self.distance.round() as i32),
@@ -145,6 +152,7 @@ impl StravaActivity {
     /// A Result containing a Summary if the sending was successful, or an error if it failed.
     pub(crate) async fn send_to_tb(
         self,
+        migrate: bool,
         user: &mut impl StravaPerson,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
@@ -154,10 +162,14 @@ impl StravaActivity {
             .transaction(|store| {
                 async {
                     let tb_id = store.strava_activity_get_tbid(strava_id).await?;
+                    let time = tb.start.unix_timestamp();
 
                     let res;
                     if let Some(tb_id) = tb_id {
-                        res = tb_id.update(&tb, user, store).await?
+                        res = match migrate {
+                            true => tb_id.migrate(tb, user, store).await,
+                            _ => tb_id.update(tb, user, store).await,
+                        }?;
                     } else {
                         res = Activity::create(&tb, user, store).await?;
                         let new_id = res.activities[0].id;
@@ -167,7 +179,7 @@ impl StravaActivity {
                     }
 
                     user.strava_id()
-                        .update_last(tb.start.unix_timestamp(), store)
+                        .update_last(time, store)
                         .await
                         .context("unable to update user")?;
 
@@ -193,7 +205,7 @@ pub async fn upsert_activity(
     let act: StravaActivity = user
         .request_json(&format!("/activities/{}", id), store)
         .await?;
-    act.send_to_tb(user, store).await
+    act.send_to_tb(false, user, store).await
 }
 
 pub(crate) async fn delete_activity(
