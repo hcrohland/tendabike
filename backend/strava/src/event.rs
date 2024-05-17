@@ -123,7 +123,7 @@ impl Event {
         store: &mut impl StravaStore,
     ) -> TbResult<Option<Self>> {
         // rate limit event
-        if self.event_time > get_time() {
+        if self.object_id > get_time() {
             // still rate limited!
             return Ok(None);
         }
@@ -195,7 +195,7 @@ impl Event {
 
         // while len == batch
         {
-            let acts = next_activities(user, store, 10, start).await?;
+            let acts = next_activities(user, store, 25, start).await?;
             if acts.is_empty() {
                 self.delete(store).await?;
             } else {
