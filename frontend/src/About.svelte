@@ -31,13 +31,16 @@
         <br /> You can create parts and attach them to your bikes. You can move
         parts between bikes.
         <br /> TendaBike will calculate the use for any part you create.
+        <br /> You can also add service plans and record services and you will get
+        reminded if a service plan is due
       </p>
       <p>
-        On login, TendaBike will synchronize with Strava. With that it populates
-        the bike list.
-        <br /> To create parts switch to "Spare Parts". Here you can create and
-        attach parts.
-        <br /> To see the bike details click on the arrow next to the bike's name
+        When initially connecting TendaBike to Strava it will pull all bikes and
+        activities into the database. Don't be afraid. You can correct anything
+        later. Changes on Strava will be replicated into TendaBike
+        <br /> After connecting you can start adding service plans, part and services.
+        This is easiest done from the bike's detail page which you can find by clicking
+        on the arrow right of the bike's name
       </p>
       <h4>Elevation data</h4>
       <p>
@@ -61,20 +64,12 @@
         </li>
         <li>
           Upload this file to TendaBike via 'Sync' &rightarrow; 'With CSV file'
-          <br />You can set the timezone of the uploaded activities. It applies
-          to all activities in the file
         </li>
       </ol>
       <p></p>
     </CardBody>
     <CardFooter>
-      © Christoph Rohland 2019-2023 - Icons made by <a
-        href="https://www.flaticon.com/authors/freepik"
-        title="Freepik">Freepik</a
-      >
-      from
-      <a href="https://www.flaticon.com/" title="Flaticon">www.flaticon.com</a>
-      - Source Code at
+      © Christoph Rohland 2019-2024 - Source Code at
       <a href="https://github.com/hcrohland/tendabike" title="Repository"
         >GitHub</a
       >
