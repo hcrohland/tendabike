@@ -71,11 +71,11 @@ async fn act_put(
     Path(id): Path<i32>,
     user: RequestUser,
     State(store): State<DbPool>,
-    activity: Json<NewActivity>,
+    Json(activity): Json<NewActivity>,
 ) -> ApiResult<Summary> {
     let mut store = store.get().await?;
     Ok(ActivityId::new(id)
-        .update(&activity, &user, &mut store)
+        .update(activity, &user, &mut store)
         .await
         .map(Json)?)
 }

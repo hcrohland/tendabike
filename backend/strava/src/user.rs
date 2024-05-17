@@ -57,7 +57,7 @@ impl StravaId {
             .read(store)
             .await?
             .ok_or(Error::NotFound("StravaUser not found".to_string()))?;
-        event::insert_sync(id, user.last_activity, store)
+        event::insert_sync(id, user.last_activity, false, store)
             .await
             .context(format!("Could insert sync for user: {:?}", id))?;
         store.stravaid_update_token(id, None).await?;
@@ -152,7 +152,7 @@ impl StravaUser {
         info!("creating new user id {:?}", user);
 
         let user = store.stravauser_new(user).await?;
-        event::insert_sync(user.id, 0, store).await?;
+        event::insert_sync(user.id, 0, false, store).await?;
         Ok(user)
     }
 

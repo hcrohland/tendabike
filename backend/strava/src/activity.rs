@@ -148,6 +148,7 @@ impl StravaActivity {
     /// A Result containing a Summary if the sending was successful, or an error if it failed.
     pub(crate) async fn send_to_tb(
         self,
+        migrate: bool,
         user: &mut impl StravaPerson,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
@@ -157,10 +158,14 @@ impl StravaActivity {
             .transaction(|store| {
                 async {
                     let tb_id = store.strava_activity_get_tbid(strava_id).await?;
+                    let time = tb.start.unix_timestamp();
 
                     let res;
                     if let Some(tb_id) = tb_id {
-                        res = tb_id.update(&tb, user, store).await?
+                        res = match migrate {
+                            true => tb_id.migrate(tb, user, store).await,
+                            _ => tb_id.update(tb, user, store).await,
+                        }?;
                     } else {
                         res = Activity::create(&tb, user, store).await?;
                         let new_id = res.activities[0].id;
@@ -170,7 +175,7 @@ impl StravaActivity {
                     }
 
                     user.strava_id()
-                        .update_last(tb.start.unix_timestamp(), store)
+                        .update_last(time, store)
                         .await
                         .context("unable to update user")?;
 
@@ -196,7 +201,7 @@ pub async fn upsert_activity(
     let act: StravaActivity = user
         .request_json(&format!("/activities/{}", id), store)
         .await?;
-    act.send_to_tb(user, store).await
+    act.send_to_tb(false, user, store).await
 }
 
 pub(crate) async fn delete_activity(

@@ -12,17 +12,23 @@
   import type { User } from "../lib/types";
   import DateTime from "../Widgets/DateTime.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
+  import Switch from "../Widgets/Switch.svelte";
 
   export let refresh: () => void;
   let user: User | undefined;
   let date = new Date();
   let isOpen = false;
   let userParam: string;
+  let checked = false;
   const toggle = () => (isOpen = false);
 
   async function submit() {
     await myfetch(
-      "/strava/sync?time=" + (date.getTime() / 1000).toFixed(0) + userParam,
+      "/strava/sync?time=" +
+        (date.getTime() / 1000).toFixed(0) +
+        "&migrate=" +
+        checked +
+        userParam,
     ).catch(handleError);
     isOpen = false;
     refresh();
@@ -53,6 +59,7 @@
           <DateTime maxdate={new Date()} bind:date />
         </InputGroup>
       </FormGroup>
+      <Switch bind:checked>Migration</Switch>
     </ModalBody>
     <ModalFooter>
       <Buttons {toggle} label={"Sync"} />

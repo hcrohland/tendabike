@@ -187,7 +187,7 @@ impl ActivityId {
     /// checks authorization  
     pub async fn update(
         self,
-        act: &NewActivity,
+        act: NewActivity,
         user: &dyn Person,
         store: &mut impl Store,
     ) -> TbResult<Summary> {
@@ -200,7 +200,7 @@ impl ActivityId {
                         .register(Factor::Sub, store)
                         .await?;
 
-                    let act = store.activity_update(self, act).await?;
+                    let act = store.activity_update(self, &act).await?;
 
                     info!("Updating {:?}", act);
 
@@ -210,6 +210,21 @@ impl ActivityId {
                 .scope_boxed()
             })
             .await
+    }
+
+    pub async fn migrate(
+        self,
+        mut act: NewActivity,
+        user: &dyn Person,
+        store: &mut impl Store,
+    ) -> TbResult<Summary> {
+        act.time = None;
+        act.distance = None;
+        act.climb = None;
+        act.descend = None;
+        act.gear = None;
+
+        self.update(act, user, store).await
     }
 }
 
@@ -443,7 +458,7 @@ async fn match_and_update(
     act.descend = Some(rdescend);
     let actid = act.id;
     let act = NewActivity::from(act);
-    actid.update(&act, user, store).await
+    actid.update(act, user, store).await
 }
 
 async fn def_part(partid: &PartId, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {

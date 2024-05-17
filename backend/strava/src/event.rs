@@ -199,10 +199,10 @@ impl Event {
             if acts.is_empty() {
                 self.delete(store).await?;
             } else {
+                trace!("processing sync event at {}", start);
                 for a in acts {
                     start = std::cmp::max(start, a.start_date.unix_timestamp());
-                    trace!("processing sync event at {}", start);
-                    let ps = a.send_to_tb(user, store).await?;
+                    let ps = a.send_to_tb(self.object_id != 0, user, store).await?;
                     self.setdate(start, store).await?;
                     summary = summary + ps;
                 }
@@ -247,6 +247,7 @@ impl Event {
 pub async fn insert_sync(
     owner_id: StravaId,
     event_time: i64,
+    migrate: bool,
     store: &mut impl StravaStore,
 ) -> TbResult<()> {
     if event_time > get_time() {
@@ -255,8 +256,10 @@ pub async fn insert_sync(
             event_time
         )));
     }
+    let object_id = if migrate { 1 } else { 0 };
     let event = Event {
         owner_id,
+        object_id,
         event_time,
         object_type: "sync".to_string(),
         ..Default::default()
@@ -353,6 +356,7 @@ pub async fn process(
 pub async fn sync_users(
     user_id: Option<UserId>,
     time: i64,
+    migrate: bool,
     store: &mut impl StravaStore,
 ) -> TbResult<()> {
     let users = match user_id {
@@ -365,7 +369,7 @@ pub async fn sync_users(
             continue;
         }
         info!("Adding sync for {:?} at {}", user.strava_id(), time);
-        event::insert_sync(user.strava_id(), time, store).await?;
+        event::insert_sync(user.strava_id(), time, migrate, store).await?;
     }
     Ok(())
 }
