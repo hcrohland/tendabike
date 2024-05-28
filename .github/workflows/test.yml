@@ -1,0 +1,57 @@
+name: Test
+permissions: 
+  contents: read
+  actions: read
+  
+on:
+#   push:
+#     branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+  
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  svelte:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+      - 
+        uses: actions/checkout@v4
+      - 
+        uses: actions/setup-node@v4
+        with:
+          node-version: 21
+          cache: npm
+          cache-dependency-path: 'frontend/package-lock.json'
+      - 
+        run: npm install
+      - 
+        name: Format check
+        run: npx prettier --check .
+      - 
+        name: Check
+        run: npm run check
+  
+  rust:
+    runs-on: ubuntu-latest
+
+    steps:
+    - 
+      uses: actions/checkout@v4
+    - 
+      uses: dtolnay/rust-toolchain@stable
+    - 
+      uses: Swatinem/rust-cache@v2
+    - 
+      name: Format check
+      run: cargo fmt --check
+    - 
+      name: Test
+      run: cargo test --release
+    
