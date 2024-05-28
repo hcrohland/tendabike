@@ -1,9 +1,36 @@
-FROM rust:alpine as build-engine
+FROM rust:alpine as base
+# We only pay the installation cost once, 
+# it will be cached from the second build onwards
+# To ensure a reproducible build consider pinning 
+# the cargo-chef version with `--version X.X.X`
 
 # hack libpq...
 COPY patchlibpq ./
 RUN apk add libpq-dev openssl-dev musl-dev openssl-libs-static
 RUN ar -M < patchlibpq
+
+WORKDIR /app
+
+ENV DEBIAN_FRONTEND=noninteractive
+# install nighlty toolchain
+RUN rustup set profile minimal
+# install dependencies
+RUN cargo install cargo-chef
+FROM base as planner
+# do not copy frontend!
+
+COPY Cargo.toml Cargo.lock ./
+COPY backend backend/
+
+RUN cargo chef prepare --recipe-path recipe.json
+
+
+FROM base as cacher
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+
+
+FROM cacher as build-engine
 
 # do not copy frontend!
 COPY Cargo.toml Cargo.lock ./
@@ -27,7 +54,7 @@ USER 999:999
 WORKDIR /tendabike
 ENV STATIC_WWW="/tendabike/dist"
 
-COPY --from=build-engine /target/release/tendabike ./
+COPY --from=build-engine /app/target/release/tendabike ./
 COPY --from=build-frontend /frontend/dist dist
 
 ENTRYPOINT [ "./tendabike" ]
