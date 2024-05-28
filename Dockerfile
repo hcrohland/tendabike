@@ -1,8 +1,13 @@
-FROM lukemathwalker/cargo-chef:latest as base
+FROM rust:alpine as base
 # We only pay the installation cost once, 
 # it will be cached from the second build onwards
 # To ensure a reproducible build consider pinning 
 # the cargo-chef version with `--version X.X.X`
+
+# hack libpq...
+COPY patchlibpq ./
+RUN apk add libpq-dev openssl-dev musl-dev openssl-libs-static
+RUN ar -M < patchlibpq
 
 WORKDIR /app
 
@@ -10,10 +15,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 # install nighlty toolchain
 RUN rustup set profile minimal
 # install dependencies
-RUN apt-get update && apt-get install -y libpq-dev
-
+RUN cargo install cargo-chef
 FROM base as planner
 # do not copy frontend!
+
 COPY Cargo.toml Cargo.lock ./
 COPY backend backend/
 
@@ -43,19 +48,13 @@ RUN npm update rollup
 COPY frontend/ /frontend
 RUN npm run build
 
-FROM debian:12-slim
+FROM scratch
 
-ENV DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update && apt-get install -y libpq5 ca-certificates curl
-
-RUN useradd --system tendabike
-USER tendabike
+USER 999:999
 WORKDIR /tendabike
 ENV STATIC_WWW="/tendabike/dist"
 
 COPY --from=build-engine /app/target/release/tendabike ./
 COPY --from=build-frontend /frontend/dist dist
-RUN /bin/ls dist/assets
 
 ENTRYPOINT [ "./tendabike" ]
