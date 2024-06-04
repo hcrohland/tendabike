@@ -24,6 +24,7 @@
   import Garmin from "./Activity/Garmin.svelte";
   import Sport from "./Widgets/Sport.svelte";
   import { category } from "./lib/types";
+  import { querystring } from "svelte-spa-router";
 
   let userOpen = false;
   let syncOpen = false;
@@ -138,7 +139,7 @@
     </Collapse>
   {:else}
     <Nav class="ml-auto float-end" navbar>
-      <a href="/strava/login">
+      <a href={"/strava/login?" + $querystring}>
         <img src="connect_with_strava.png" alt="Login with Strava" />
       </a>
     </Nav>

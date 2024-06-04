@@ -6,6 +6,7 @@ import { Usage, usages } from "./usage";
 import { parts, type Part } from "./part";
 import { Attachment, attachments } from "./attachment";
 import { plans, type ServicePlan } from "./serviceplan";
+import { location } from "svelte-spa-router";
 
 export const DAY = 24 * 60 * 60 * 1000;
 export const maxDate = new Date("2999-12-31");
@@ -59,7 +60,7 @@ export function checkStatus<T>(response: Response) {
   }
 
   if (response.status === 401) {
-    window.location.href = "/#/about";
+    window.location.href = "/#/about?path=/#" + get(location);
     if (get(user) == undefined) return;
     user.set(undefined);
   }
