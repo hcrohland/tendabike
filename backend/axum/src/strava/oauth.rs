@@ -8,7 +8,11 @@
 //! Finally, it defines the `COOKIE_NAME` constant which is used to store the session cookie.
 
 use anyhow::Context;
-use async_session::{log::warn, MemoryStore, Session, SessionStore};
+use async_session::{
+    base64,
+    log::{debug, warn},
+    MemoryStore, Session, SessionStore,
+};
 use axum::{
     extract::{Query, State},
     http::{header::SET_COOKIE, HeaderMap},
@@ -30,7 +34,7 @@ use serde::{Deserialize, Serialize};
 use std::env;
 
 use crate::error::AppError;
-use tb_domain::Error;
+use tb_domain::{Error, TbResult};
 use tb_strava::StravaId;
 
 pub(crate) static COOKIE_NAME: &str = "SESSION";
@@ -106,10 +110,52 @@ pub(crate) fn strava_oauth_client() -> StravaClient {
         .set_revocation_uri(revocation_url)
 }
 
-pub(crate) async fn strava_auth() -> impl IntoResponse {
+lazy_static::lazy_static! {
+    static ref CSRF_KEY: Vec<u8> = (0..16).map(|_| rand::random::<u8>()).collect();
+}
+
+fn hmac_signature(msg: &str) -> String {
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+
+    type HmacSha256 = Hmac<Sha256>;
+
+    let mut mac = HmacSha256::new_from_slice(&CSRF_KEY).unwrap();
+    mac.update(msg.as_bytes());
+
+    let code_bytes = mac.finalize().into_bytes();
+
+    base64::encode(code_bytes)
+}
+
+fn gentoken(path: String) -> CsrfToken {
+    let random: Vec<u8> = (0..16).map(|_| rand::random::<u8>()).collect();
+    let msg = path + "+" + &base64::encode_config(random, base64::URL_SAFE_NO_PAD);
+    let sig = hmac_signature(&msg);
+
+    CsrfToken::new(msg + ":" + &sig)
+}
+
+fn getpath(state: String) -> TbResult<String> {
+    let msg = state.split(':').collect::<Vec<_>>();
+    if msg.len() != 2 || hmac_signature(msg[0]) != msg[1] {
+        return Err(Error::BadRequest(format!("CSRF token failure: {state}")));
+    };
+    Ok(msg[0].split('+').next().unwrap_or("").to_owned())
+}
+
+#[derive(Deserialize)]
+pub struct PathParam {
+    path: String,
+}
+
+pub(crate) async fn strava_auth(path: Option<Query<PathParam>>) -> impl IntoResponse {
+    let path = match path {
+        None => "/".to_owned(),
+        Some(Query(p)) => p.path,
+    };
     let (auth_url, _csrf_token) = STRAVACLIENT
-        .authorize_url(CsrfToken::new_random)
-        // .add_scope(Scope::new("activity:read_all,profile:read_all".to_string()))
+        .authorize_url(|| gentoken(path))
         .add_scope(Scope::new(
             "read,activity:read_all,profile:read_all".to_string(),
         ))
@@ -147,7 +193,7 @@ pub(crate) async fn logout(
 pub(crate) struct AuthRequest {
     code: String,
     state: String,
-    scope: String,
+    // scope: String,
 }
 
 pub(crate) async fn login_authorized(
@@ -155,11 +201,15 @@ pub(crate) async fn login_authorized(
     State(memstore): State<MemoryStore>,
     State(store): State<crate::DbPool>,
 ) -> Result<(HeaderMap, Redirect), AppError> {
+    let AuthRequest { code, state } = query;
+
+    let path = getpath(state)?;
+
     let mut store = store.get().await?;
 
     // Get an auth token
     let token = STRAVACLIENT
-        .exchange_code(AuthorizationCode::new(query.code.clone()))
+        .exchange_code(AuthorizationCode::new(code))
         .request_async(async_http_client)
         .await
         .context("token exchange failed")?;
@@ -195,5 +245,6 @@ pub(crate) async fn login_authorized(
     let mut headers = HeaderMap::new();
     headers.insert(SET_COOKIE, cookie.parse().unwrap());
 
-    Ok((headers, Redirect::to("/")))
+    debug!("Redirecting to {path}");
+    Ok((headers, Redirect::to(&path)))
 }

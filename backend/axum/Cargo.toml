@@ -24,11 +24,18 @@ serde = { workspace = true, features = ["derive"] }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true, features = ["time_0_3"] }
-time = { workspace = true, features = ["serde", "parsing", "serde-human-readable"] }
+time = { workspace = true, features = [
+    "serde",
+    "parsing",
+    "serde-human-readable",
+] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tower-http = { workspace = true, features = ["full"] }
 axum-macros = { workspace = true }
 lazy_static = { workspace = true }
 tokio = { workspace = true }
-axum-extra ={ workspace = true, features = ["typed-header"] }
+axum-extra = { workspace = true, features = ["typed-header"] }
+rand = "0.8"
+sha2 = "0.10"
+hmac = "0.12"
