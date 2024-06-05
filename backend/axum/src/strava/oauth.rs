@@ -9,9 +9,9 @@
 
 use anyhow::Context;
 use async_session::{
-    base64,
+    base64, hmac,
     log::{debug, warn},
-    MemoryStore, Session, SessionStore,
+    sha2, MemoryStore, Session, SessionStore,
 };
 use axum::{
     extract::{Query, State},
@@ -114,31 +114,29 @@ lazy_static::lazy_static! {
     static ref CSRF_KEY: Vec<u8> = (0..16).map(|_| rand::random::<u8>()).collect();
 }
 
-fn hmac_signature(msg: &str) -> String {
-    use hmac::{Hmac, Mac};
-    use sha2::Sha256;
+fn hmac_signature(key: &[u8], msg: &str) -> String {
+    use hmac::{Hmac, Mac, NewMac};
+    type HmacSha256 = Hmac<sha2::Sha256>;
 
-    type HmacSha256 = Hmac<Sha256>;
-
-    let mut mac = HmacSha256::new_from_slice(&CSRF_KEY).unwrap();
+    let mut mac = HmacSha256::new_from_slice(key).unwrap();
     mac.update(msg.as_bytes());
+    let signature = mac.finalize().into_bytes();
 
-    let code_bytes = mac.finalize().into_bytes();
-
-    base64::encode(code_bytes)
+    base64::encode(signature)
 }
 
 fn gentoken(path: String) -> CsrfToken {
-    let random: Vec<u8> = (0..16).map(|_| rand::random::<u8>()).collect();
-    let msg = path + "+" + &base64::encode_config(random, base64::URL_SAFE_NO_PAD);
-    let sig = hmac_signature(&msg);
+    let random: Vec<u8> = (0..16).map(|_| rand::random()).collect();
+    let random = base64::encode_config(random, base64::URL_SAFE_NO_PAD);
+    let msg = path + "+" + &random;
+    let sig = hmac_signature(&CSRF_KEY, &msg);
 
     CsrfToken::new(msg + ":" + &sig)
 }
 
 fn getpath(state: String) -> TbResult<String> {
     let msg = state.split(':').collect::<Vec<_>>();
-    if msg.len() != 2 || hmac_signature(msg[0]) != msg[1] {
+    if msg.len() != 2 || hmac_signature(&CSRF_KEY, msg[0]) != msg[1] {
         return Err(Error::BadRequest(format!("CSRF token failure: {state}")));
     };
     Ok(msg[0].split('+').next().unwrap_or("").to_owned())
@@ -163,29 +161,6 @@ pub(crate) async fn strava_auth(path: Option<Query<PathParam>>) -> impl IntoResp
 
     // Redirect to Strava's oauth service
     Redirect::to(auth_url.as_ref())
-}
-
-// Valid user session required. If there is none, redirect to the auth page
-pub(crate) async fn logout(
-    State(memstore): State<MemoryStore>,
-    TypedHeader(cookies): TypedHeader<headers::Cookie>,
-) -> impl IntoResponse {
-    if let Some(cookie) = cookies.get(COOKIE_NAME) {
-        let session = match memstore.load_session(cookie.to_string()).await {
-            Ok(Some(s)) => s,
-            // No session active, just redirect
-            _ => return Redirect::to("/").into_response(),
-        };
-        if memstore.destroy_session(session).await.is_err() {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to destroy session",
-            )
-                .into_response();
-        }
-    }
-
-    Redirect::to("/").into_response()
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -247,4 +222,27 @@ pub(crate) async fn login_authorized(
 
     debug!("Redirecting to {path}");
     Ok((headers, Redirect::to(&path)))
+}
+
+// Valid user session required. If there is none, redirect to the auth page
+pub(crate) async fn logout(
+    State(memstore): State<MemoryStore>,
+    TypedHeader(cookies): TypedHeader<headers::Cookie>,
+) -> impl IntoResponse {
+    if let Some(cookie) = cookies.get(COOKIE_NAME) {
+        let session = match memstore.load_session(cookie.to_string()).await {
+            Ok(Some(s)) => s,
+            // No session active, just redirect
+            _ => return Redirect::to("/").into_response(),
+        };
+        if memstore.destroy_session(session).await.is_err() {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to destroy session",
+            )
+                .into_response();
+        }
+    }
+
+    Redirect::to("/").into_response()
 }
