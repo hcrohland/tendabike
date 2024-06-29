@@ -14,13 +14,7 @@
     DropdownToggle,
     NavItem,
   } from "@sveltestrap/sveltestrap";
-  import {
-    myfetch,
-    handleError,
-    setSummary,
-    updateSummary,
-    user,
-  } from "./lib/store";
+  import { handleError, user, refresh } from "./lib/store";
   import Garmin from "./Activity/Garmin.svelte";
   import Sport from "./Widgets/Sport.svelte";
   import { category } from "./lib/types";
@@ -28,38 +22,13 @@
 
   let userOpen = false;
   let syncOpen = false;
-  let number = 0;
   let promise: Promise<void>;
-  let data = undefined;
   let garmin: () => void;
-
-  function refresh() {
-    promise = myfetch("/api/user/summary").then(setSummary);
-  }
 
   let isOpen = false;
   function navbarUpdate(event: CustomEvent<any>) {
     isOpen = event.detail.isOpen;
   }
-
-  async function poll() {
-    try {
-      if ($user) {
-        do {
-          data = await myfetch("/strava/hooks");
-          if (!data) break;
-          updateSummary(data);
-          number += data["activities"].length;
-        } while (data["activities"].length > 0);
-        number = 0;
-      }
-      setTimeout(poll, 60000);
-    } catch (e) {
-      handleError(e as Error);
-    }
-  }
-
-  poll();
 </script>
 
 <Garmin bind:garmin />
@@ -104,12 +73,7 @@
         <Dropdown nav isOpen={syncOpen} toggle={() => (syncOpen = !syncOpen)}>
           <DropdownToggle color="light" caret>
             {#await promise}
-              Syncing
-              {#if number != 0}
-                {number}
-              {:else}
-                ...
-              {/if}
+              Syncing ...
             {:then}
               Sync
             {:catch error}
@@ -117,7 +81,9 @@
             {/await}
           </DropdownToggle>
           <DropdownMenu right>
-            <DropdownItem on:click={refresh}>Refresh data</DropdownItem>
+            <DropdownItem on:click={() => (promise = refresh())}
+              >Refresh data
+            </DropdownItem>
             <DropdownItem on:click={garmin}>With CSV File</DropdownItem>
           </DropdownMenu>
         </Dropdown>
