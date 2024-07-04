@@ -1,7 +1,6 @@
 use anyhow::Context;
 use diesel::{prelude::*, sql_query};
 use diesel_async::RunQueryDsl;
-use serde_derive::{Deserialize, Serialize};
 use time::{OffsetDateTime, UtcOffset};
 
 use crate::{map_to_tb, AsyncDieselConn};
@@ -28,21 +27,12 @@ mod schema {
     }
 }
 #[derive(
-    Debug,
-    Clone,
-    Insertable,
-    Identifiable,
-    Queryable,
-    QueryableByName,
-    AsChangeset,
-    PartialEq,
-    Serialize,
-    Deserialize,
+    Debug, Clone, Insertable, Identifiable, Queryable, QueryableByName, AsChangeset, PartialEq,
 )]
 #[diesel(table_name = schema::activities)]
 struct DbActivity {
     /// The primary key
-    id: Option<ActivityId>,
+    id: Option<i32>,
     /// The athlete
     user_id: UserId,
     /// The activity type
@@ -50,7 +40,6 @@ struct DbActivity {
     /// This name of the activity.
     name: String,
     /// Start time
-    #[serde(with = "time::serde::rfc3339")]
     start: OffsetDateTime,
     /// End time
     duration: i32,
@@ -100,7 +89,7 @@ impl TryFrom<DbActivity> for Activity {
         let start = v.start.to_offset(offset);
 
         Ok(Activity {
-            id,
+            id: id.into(),
             user_id: v.user_id,
             what: v.what,
             name: v.name.clone(),
@@ -136,7 +125,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
 
     async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Activity> {
         schema::activities::table
-            .filter(schema::activities::id.eq(aid))
+            .filter(schema::activities::id.eq(i32::from(aid)))
             .for_update()
             .first::<DbActivity>(self)
             .await
@@ -146,7 +135,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
 
     async fn activity_update(&mut self, aid: ActivityId, act: &NewActivity) -> TbResult<Activity> {
         diesel::update(schema::activities::table)
-            .filter(schema::activities::id.eq(aid))
+            .filter(schema::activities::id.eq(i32::from(aid)))
             .set(DbActivity::from(act))
             .get_result::<DbActivity>(self)
             .await
@@ -156,7 +145,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
 
     async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize> {
         use schema::activities::dsl::*;
-        diesel::delete(activities.filter(id.eq(aid)))
+        diesel::delete(activities.filter(id.eq(i32::from(aid))))
             .execute(self)
             .await
             .map_err(map_to_tb)
