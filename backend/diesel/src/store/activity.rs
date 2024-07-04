@@ -3,7 +3,7 @@ use diesel::{prelude::*, sql_query};
 use diesel_async::RunQueryDsl;
 use time::{OffsetDateTime, UtcOffset};
 
-use crate::{map_to_tb, AsyncDieselConn};
+use crate::{into_domain, AsyncDieselConn};
 use tb_domain::{ActTypeId, Activity, ActivityId, NewActivity, PartId, Person, TbResult, UserId};
 mod schema {
     use diesel::prelude::*;
@@ -106,7 +106,7 @@ impl TryFrom<DbActivity> for Activity {
 }
 
 fn vec_into(db: Result<Vec<DbActivity>, diesel::result::Error>) -> TbResult<Vec<Activity>> {
-    db.map_err(map_to_tb)?
+    db.map_err(into_domain)?
         .into_iter()
         .map(|a| a.try_into())
         .collect()
@@ -119,7 +119,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .values(DbActivity::from(act))
             .get_result::<DbActivity>(self)
             .await
-            .map_err(map_to_tb)?
+            .map_err(into_domain)?
             .try_into()
     }
 
@@ -129,7 +129,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .for_update()
             .first::<DbActivity>(self)
             .await
-            .map_err(map_to_tb)?
+            .map_err(into_domain)?
             .try_into()
     }
 
@@ -139,7 +139,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
             .set(DbActivity::from(act))
             .get_result::<DbActivity>(self)
             .await
-            .map_err(map_to_tb)?
+            .map_err(into_domain)?
             .try_into()
     }
 
@@ -148,7 +148,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
         diesel::delete(activities.filter(id.eq(i32::from(aid))))
             .execute(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn get_all(&mut self, uid: &UserId) -> TbResult<Vec<Activity>> {
@@ -195,7 +195,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
         query
             .get_result::<DbActivity>(self)
             .await
-            .map_err(map_to_tb)?
+            .map_err(into_domain)?
             .try_into()
     }
 

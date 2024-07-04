@@ -2,7 +2,7 @@ use diesel::prelude::*;
 use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 
-use crate::{map_to_tb, AsyncDieselConn};
+use crate::{into_domain, AsyncDieselConn};
 use tb_domain::{ActivityId, PartId, TbResult, UserId};
 use tb_strava::{event::Event, schema, StravaId, StravaPerson, StravaUser};
 
@@ -15,7 +15,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .select(id)
             .first(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn stravaevent_store(&mut self, e: Event) -> TbResult<()> {
@@ -36,7 +36,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .first(self)
             .await
             .optional()
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn strava_gearid_get_name(&mut self, gear: i32) -> TbResult<String> {
@@ -46,7 +46,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .select(id)
             .first(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn strava_activity_get_tbid(&mut self, strava_id: i64) -> TbResult<Option<ActivityId>> {
@@ -60,7 +60,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .await
             .map(ActivityId::from)
             .optional()
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn strava_activity_new(
@@ -89,7 +89,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .select(id)
             .first(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn strava_activity_delete(&mut self, act_id: i64) -> TbResult<usize> {
@@ -97,7 +97,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
         diesel::delete(strava_activities.find(act_id))
             .execute(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn strava_activity_get_activityid(
@@ -112,7 +112,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .await
             .map(ActivityId::from)
             .optional()
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn strava_gear_new(
@@ -160,7 +160,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .first::<Event>(self)
             .await
             .optional()
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn strava_event_get_later(&mut self, obj_id: i64, oid: StravaId) -> TbResult<Vec<Event>> {
@@ -171,7 +171,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .order(event_time.asc())
             .get_results::<Event>(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn strava_events_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
@@ -188,7 +188,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
         schema::strava_users::table
             .get_results::<StravaUser>(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn stravauser_get_by_tbid(&mut self, id: UserId) -> TbResult<StravaUser> {
@@ -196,7 +196,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .filter(schema::strava_users::tendabike_id.eq(id))
             .get_result(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn stravauser_get_by_stravaid(&mut self, id: &StravaId) -> TbResult<Option<StravaUser>> {
@@ -205,7 +205,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .first::<StravaUser>(self)
             .await
             .optional()
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn stravauser_new(&mut self, user: StravaUser) -> TbResult<StravaUser> {
@@ -213,7 +213,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .values(&user)
             .get_result(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn stravauser_update_last_activity(
@@ -239,7 +239,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .set((refresh_token.eq(refresh),))
             .get_result(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     /// return the open events and the disabled status for a user.
@@ -255,7 +255,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .filter(owner_id.eq(user))
             .first(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn strava_events_delete_for_user(&mut self, user: &StravaId) -> TbResult<usize> {
@@ -264,7 +264,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
         diesel::delete(strava_events.filter(owner_id.eq(user)))
             .execute(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn stravaid_lock(&mut self, user_id: &StravaId) -> TbResult<bool> {
@@ -286,6 +286,6 @@ impl tb_strava::StravaStore for AsyncDieselConn {
         sql_query(format!("SELECT pg_advisory_unlock({});", id))
             .execute(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 }

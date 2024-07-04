@@ -1,7 +1,7 @@
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 
-use crate::{map_to_tb, AsyncDieselConn};
+use crate::{into_domain, AsyncDieselConn};
 use tb_domain::{schema, TbResult, User, UserId};
 
 #[async_session::async_trait]
@@ -11,7 +11,7 @@ impl tb_domain::UserStore for AsyncDieselConn {
             .find(uid)
             .get_result(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn create(&mut self, firstname_: &str, lastname: &str) -> TbResult<User> {
@@ -25,7 +25,7 @@ impl tb_domain::UserStore for AsyncDieselConn {
             ))
             .get_result(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn update(&mut self, uid: &UserId, firstname_: &str, lastname: &str) -> TbResult<User> {
@@ -34,6 +34,6 @@ impl tb_domain::UserStore for AsyncDieselConn {
             .set((firstname.eq(firstname_), name.eq(lastname)))
             .get_result(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 }

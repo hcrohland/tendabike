@@ -3,7 +3,7 @@ use diesel::{BoolExpressionMethods, ExpressionMethods, Identifiable, Insertable,
 use diesel_async::RunQueryDsl;
 use time::OffsetDateTime;
 
-use crate::{map_to_tb, AsyncDieselConn};
+use crate::{into_domain, AsyncDieselConn};
 use tb_domain::{schema, Attachment, PartId, PartTypeId, TbResult};
 
 #[async_session::async_trait]
@@ -12,14 +12,14 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
         att.insert_into(schema::attachments::table)
             .get_result::<Attachment>(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn delete(&mut self, att: Attachment) -> TbResult<Attachment> {
         diesel::delete(schema::attachments::table.find(att.id())) // delete the attachment in the database
             .get_result::<Attachment>(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn attachment_get_by_gear_and_time(
@@ -34,7 +34,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .filter(detached.is_null().or(detached.gt(start)))
             .get_results::<Attachment>(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn attachments_all_by_part(&mut self, id: PartId) -> TbResult<Vec<Attachment>> {
@@ -43,7 +43,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .filter(part_id.eq(id))
             .get_results(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn attachment_get_by_part_and_time(
@@ -60,7 +60,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .first::<Attachment>(self)
             .await
             .optional()
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn assembly_get_by_types_time_and_gear(
@@ -79,7 +79,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .order(hook)
             .load(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn attachment_find_part_of_type_at_hook_and_time(
@@ -105,7 +105,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .first::<Attachment>(self)
             .await
             .optional()
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     /// Return Attachment if some other part is attached to same hook after the Event
@@ -136,7 +136,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .first::<Attachment>(self)
             .await
             .optional()
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     /// Return Attachment if self.part_id is attached somewhere after the event
@@ -154,7 +154,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .first::<Attachment>(self)
             .await
             .optional()
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     /// Iff self.part_id already attached just before self.time return that attachment
@@ -175,6 +175,6 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .first::<Attachment>(self)
             .await
             .optional()
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 }

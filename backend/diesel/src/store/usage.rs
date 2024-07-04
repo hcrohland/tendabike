@@ -4,7 +4,7 @@ use diesel_async::{AsyncConnection, RunQueryDsl};
 use scoped_futures::ScopedFutureExt;
 use std::borrow::Borrow;
 
-use crate::{map_to_tb, AsyncDieselConn};
+use crate::{into_domain, AsyncDieselConn};
 use tb_domain::{schema, TbResult, Usage, UsageId, UsageStore};
 
 #[async_session::async_trait]
@@ -17,7 +17,7 @@ impl UsageStore for AsyncDieselConn {
             .get_result::<Usage>(self)
             .await
             .optional()
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn update<U>(&mut self, vec: &[U]) -> TbResult<usize>
@@ -51,7 +51,7 @@ impl UsageStore for AsyncDieselConn {
         diesel::delete(usages.find(usage))
             .get_result(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn delete_all(&mut self) -> TbResult<usize> {
@@ -60,6 +60,6 @@ impl UsageStore for AsyncDieselConn {
         diesel::delete(usages)
             .execute(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 }
