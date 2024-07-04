@@ -30,7 +30,6 @@
 use std::collections::HashSet;
 
 use anyhow::Context;
-use diesel_derive_newtype::*;
 use newtype_derive::*;
 use scoped_futures::ScopedFutureExt;
 use serde_derive::{Deserialize, Serialize};
@@ -42,7 +41,7 @@ use crate::*;
 ///
 /// Most operations for activities are done on the Id alone
 ///
-#[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActivityId(i32);
 
 NewtypeDisplay! { () pub struct ActivityId(); }

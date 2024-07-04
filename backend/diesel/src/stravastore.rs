@@ -56,8 +56,9 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .find(strava_id)
             .select(tendabike_id)
             .for_update()
-            .get_result::<ActivityId>(self)
+            .get_result::<i32>(self)
             .await
+            .map(ActivityId::from)
             .optional()
             .map_err(map_to_tb)
     }
@@ -71,7 +72,11 @@ impl tb_strava::StravaStore for AsyncDieselConn {
         use schema::strava_activities::dsl::*;
 
         diesel::insert_into(strava_activities)
-            .values((id.eq(strava_id), tendabike_id.eq(new_id), user_id.eq(uid)))
+            .values((
+                id.eq(strava_id),
+                tendabike_id.eq(i32::from(new_id)),
+                user_id.eq(uid),
+            ))
             .execute(self)
             .await?;
         Ok(())
@@ -103,8 +108,9 @@ impl tb_strava::StravaStore for AsyncDieselConn {
         strava_activities
             .find(act_id)
             .select(tendabike_id)
-            .first(self)
+            .first::<i32>(self)
             .await
+            .map(ActivityId::from)
             .optional()
             .map_err(map_to_tb)
     }
