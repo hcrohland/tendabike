@@ -3,7 +3,7 @@ use diesel_async::RunQueryDsl;
 
 use tb_domain::{schema, PartId, Service, ServiceId, TbResult};
 
-use crate::{map_to_tb, AsyncDieselConn};
+use crate::{into_domain, AsyncDieselConn};
 use schema::services::dsl::*;
 
 #[async_session::async_trait]
@@ -13,7 +13,7 @@ impl tb_domain::ServiceStore for AsyncDieselConn {
             .values(service)
             .get_result(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn get(&mut self, service: ServiceId) -> TbResult<Service> {
@@ -21,7 +21,7 @@ impl tb_domain::ServiceStore for AsyncDieselConn {
             .find(service)
             .get_result(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn update(&mut self, service: Service) -> TbResult<Service> {
@@ -29,14 +29,14 @@ impl tb_domain::ServiceStore for AsyncDieselConn {
             .set(service)
             .get_result(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn delete(&mut self, service: ServiceId) -> TbResult<usize> {
         diesel::delete(services.find(service))
             .execute(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn services_by_part(&mut self, part: PartId) -> TbResult<Vec<Service>> {
@@ -44,6 +44,6 @@ impl tb_domain::ServiceStore for AsyncDieselConn {
             .filter(part_id.eq(part))
             .get_results(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 }

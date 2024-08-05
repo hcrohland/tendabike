@@ -2,7 +2,7 @@ use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use time::OffsetDateTime;
 
-use crate::{map_to_tb, AsyncDieselConn};
+use crate::{into_domain, AsyncDieselConn};
 use tb_domain::{schema, Part, PartId, TbResult, UsageId, UserId};
 
 #[async_session::async_trait]
@@ -13,7 +13,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .find(pid)
             .first::<Part>(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn part_get_all_for_userid(&mut self, uid: &UserId) -> TbResult<Vec<Part>> {
@@ -24,7 +24,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .order_by(last_used)
             .load::<Part>(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn part_create(
@@ -49,7 +49,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .values(values)
             .get_result(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn part_update(&mut self, part: &Part) -> TbResult<usize> {
@@ -58,7 +58,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .set(part)
             .execute(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn part_change(&mut self, part: tb_domain::ChangePart) -> TbResult<Part> {
@@ -67,6 +67,6 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .set(part)
             .get_result(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 }

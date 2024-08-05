@@ -3,7 +3,7 @@ use diesel_async::RunQueryDsl;
 
 use tb_domain::{schema, PartId, ServicePlan, ServicePlanId, TbResult, UserId};
 
-use crate::{map_to_tb, AsyncDieselConn};
+use crate::{into_domain, AsyncDieselConn};
 use schema::service_plans::dsl::*;
 
 #[async_session::async_trait]
@@ -13,7 +13,7 @@ impl tb_domain::ServicePlanStore for AsyncDieselConn {
             .values(plan)
             .get_result(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn get(&mut self, plan: ServicePlanId) -> TbResult<ServicePlan> {
@@ -21,7 +21,7 @@ impl tb_domain::ServicePlanStore for AsyncDieselConn {
             .find(plan)
             .get_result(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
@@ -29,14 +29,14 @@ impl tb_domain::ServicePlanStore for AsyncDieselConn {
             .set(plan)
             .get_result(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn delete(&mut self, plan: ServicePlanId) -> TbResult<usize> {
         diesel::delete(service_plans.find(plan))
             .execute(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn by_part(&mut self, part_id: PartId) -> TbResult<Vec<ServicePlan>> {
@@ -44,7 +44,7 @@ impl tb_domain::ServicePlanStore for AsyncDieselConn {
             .filter(part.eq(part_id))
             .get_results(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 
     async fn by_user(&mut self, user_id: &UserId) -> TbResult<Vec<ServicePlan>> {
@@ -52,6 +52,6 @@ impl tb_domain::ServicePlanStore for AsyncDieselConn {
             .filter(uid.eq(user_id))
             .get_results(self)
             .await
-            .map_err(map_to_tb)
+            .map_err(into_domain)
     }
 }
