@@ -3,6 +3,7 @@ name = "tb_domain"
 version = "0.5.0"
 authors = ["Christoph Rohland <tendabike@rohland.net>"]
 edition = "2021"
+rust-version = "1.80"
 
 [dependencies]
 diesel = { workspace = true, features = ["time", "postgres"] }
@@ -11,12 +12,16 @@ diesel-derive-newtype = { workspace = true }
 
 newtype_derive = { workspace = true }
 async-session = { workspace = true }
-serde = { workspace = true } 
+serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_with = { workspace = true, features = ["time_0_3"] }
 csv = { workspace = true }
 
-time = { workspace = true, features = ["serde", "parsing", "serde-human-readable"] }
+time = { workspace = true, features = [
+    "serde",
+    "parsing",
+    "serde-human-readable",
+] }
 time-tz = { workspace = true, features = ["db"] }
 pretty_assertions = { workspace = true }
 
@@ -24,8 +29,12 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 
 async-trait = { workspace = true }
-uuid = { workspace = true, features = ["v7", "fast-rng", "macro-diagnostics", "serde"] }
-lazy_static = { workspace = true }
+uuid = { workspace = true, features = [
+    "v7",
+    "fast-rng",
+    "macro-diagnostics",
+    "serde",
+] }
 serde_json = { workspace = true }
 
 [dev-dependencies]

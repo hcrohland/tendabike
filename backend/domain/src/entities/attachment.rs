@@ -73,7 +73,7 @@ pub struct Attachment {
 /// Attachment with additional details
 ///
 /// * the name is needed for attachments to parts which were sold
-/// since the part will not be send to the client
+///   since the part will not be send to the client
 /// * 'what' is an optimization
 #[derive(Queryable, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct AttachmentDetail {
