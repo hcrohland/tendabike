@@ -1,27 +1,25 @@
 use std::collections::BTreeMap;
 
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 
 use crate::{ActTypeId, ActivityType, PartType, PartTypeId};
 
-lazy_static! {
-    pub(super) static ref ACTTYPES: BTreeMap<ActTypeId, ActivityType> = {
-        let mut m = BTreeMap::new();
-        let acttypes: Vec<ActivityType> = serde_json::from_str(ACTLIST).expect("acttypes failure");
-        for t in acttypes {
-            m.insert(t.id, t);
-        }
-        m
-    };
-    pub(super) static ref PARTTYPES: BTreeMap<PartTypeId, PartType> = {
-        let mut m = BTreeMap::new();
-        let types: Vec<PartType> = serde_json::from_str(PARTLIST).expect("parttypes failure");
-        for t in types {
-            m.insert(t.id, t);
-        }
-        m
-    };
-}
+pub(super) static ACTTYPES: LazyLock<BTreeMap<ActTypeId, ActivityType>> = LazyLock::new(|| {
+    let mut m = BTreeMap::new();
+    let acttypes: Vec<ActivityType> = serde_json::from_str(ACTLIST).expect("acttypes failure");
+    for t in acttypes {
+        m.insert(t.id, t);
+    }
+    m
+});
+pub(super) static PARTTYPES: LazyLock<BTreeMap<PartTypeId, PartType>> = LazyLock::new(|| {
+    let mut m = BTreeMap::new();
+    let types: Vec<PartType> = serde_json::from_str(PARTLIST).expect("parttypes failure");
+    for t in types {
+        m.insert(t.id, t);
+    }
+    m
+});
 
 const ACTLIST: &str = r#"
 [

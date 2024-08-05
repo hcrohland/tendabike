@@ -31,7 +31,7 @@ use oauth2::{
     TokenResponse, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
-use std::env;
+use std::{env, sync::LazyLock};
 
 use crate::error::AppError;
 use tb_domain::{Error, TbResult};
@@ -39,9 +39,7 @@ use tb_strava::StravaId;
 
 pub(crate) static COOKIE_NAME: &str = "SESSION";
 
-lazy_static::lazy_static! {
-    pub(super) static ref STRAVACLIENT: StravaClient = strava_oauth_client();
-}
+pub(super) static STRAVACLIENT: LazyLock<StravaClient> = LazyLock::new(strava_oauth_client);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct StravaAthleteInfo {
@@ -110,9 +108,8 @@ pub(crate) fn strava_oauth_client() -> StravaClient {
         .set_revocation_uri(revocation_url)
 }
 
-lazy_static::lazy_static! {
-    static ref CSRF_KEY: Vec<u8> = (0..16).map(|_| rand::random::<u8>()).collect();
-}
+static CSRF_KEY: LazyLock<Vec<u8>> =
+    LazyLock::new(|| (0..16).map(|_| rand::random::<u8>()).collect());
 
 fn hmac_signature(key: &[u8], msg: &str) -> String {
     use hmac::{Hmac, Mac, NewMac};
