@@ -2,7 +2,6 @@
   import { InputGroup, InputGroupText } from "@sveltestrap/sveltestrap";
   import DateTime from "../Widgets/DateTime.svelte";
   import { types } from "../lib/types";
-  import { maxDate } from "../lib/store";
   import { by, filterValues } from "../lib/mapable";
   import { Part } from "../lib/part";
   import { AttEvent, attachments } from "../lib/attachment";
@@ -14,7 +13,7 @@
     )[0];
 
     if (last) {
-      return last.detached < maxDate ? last.detached : last.attached;
+      return last.isDetached() ? last.detached : last.attached;
     } else {
       return part.purchase;
     }

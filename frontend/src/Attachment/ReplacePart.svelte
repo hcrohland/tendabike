@@ -7,7 +7,7 @@
     Form,
   } from "@sveltestrap/sveltestrap";
   import { AttEvent, Attachment } from "../lib/attachment";
-  import { user, maxDate } from "../lib/store";
+  import { user } from "../lib/store";
   import { types, Type } from "../lib/types";
   import { parts, Part } from "../lib/part";
   import NewForm from "../Part/PartForm.svelte";
@@ -55,7 +55,7 @@
       name: oldpart.name,
       vendor: oldpart.vendor,
       model: oldpart.model,
-      purchase: attl.detached < maxDate ? attl.detached : new Date(),
+      purchase: attl.isDetached() ? attl.detached : new Date(),
     });
     dispose = false;
     isOpen = true;
