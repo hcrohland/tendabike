@@ -156,7 +156,7 @@
   };
 </script>
 
-{#if rows.length == 0}
+{#if acts.length == 0}
   <Alert color="secondary" heading="No activities" />
 {:else}
   <RangeSlider
