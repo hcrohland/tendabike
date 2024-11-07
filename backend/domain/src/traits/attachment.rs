@@ -25,24 +25,24 @@ pub trait AttachmentStore {
     async fn attachment_get_by_part_and_time(
         &mut self,
         pid: PartId,
-        tim: OffsetDateTime,
+        time: OffsetDateTime,
     ) -> TbResult<Option<Attachment>>;
 
     /// Get all attachments for a given set of part types, gear, and time.
     async fn assembly_get_by_types_time_and_gear(
         &mut self,
         types: Vec<crate::PartTypeId>,
-        target: PartId,
-        tim: OffsetDateTime,
+        gear: PartId,
+        time: OffsetDateTime,
     ) -> TbResult<Vec<Attachment>>;
 
     /// Find an attachment for a given part type, gear, hook, and time.
     async fn attachment_find_part_of_type_at_hook_and_time(
         &mut self,
         what: PartTypeId,
-        g: PartId,
-        h: PartTypeId,
-        t: OffsetDateTime,
+        gear: PartId,
+        hook: PartTypeId,
+        time: OffsetDateTime,
     ) -> TbResult<Option<Attachment>>;
 
     /// Find the attachment that succeeds a given part.

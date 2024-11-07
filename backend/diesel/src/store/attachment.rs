@@ -49,14 +49,14 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
     async fn attachment_get_by_part_and_time(
         &mut self,
         pid: PartId,
-        tim: OffsetDateTime,
+        time: OffsetDateTime,
     ) -> TbResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         attachments
             .for_update()
             .filter(part_id.eq(pid))
-            .filter(attached.le(tim))
-            .filter(detached.gt(tim))
+            .filter(attached.le(time))
+            .filter(detached.gt(time))
             .first::<Attachment>(self)
             .await
             .optional()
@@ -66,16 +66,16 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
     async fn assembly_get_by_types_time_and_gear(
         &mut self,
         types: Vec<tb_domain::PartTypeId>,
-        target: PartId,
-        tim: OffsetDateTime,
+        gear_: PartId,
+        time: OffsetDateTime,
     ) -> TbResult<Vec<Attachment>> {
         use schema::attachments::dsl::*;
         attachments
             .for_update()
             .filter(hook.eq_any(types))
-            .filter(gear.eq(target))
-            .filter(attached.le(tim))
-            .filter(detached.gt(tim))
+            .filter(gear.eq(gear_))
+            .filter(attached.le(time))
+            .filter(detached.gt(time))
             .order(hook)
             .load(self)
             .await
@@ -84,7 +84,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
 
     async fn attachment_find_part_of_type_at_hook_and_time(
         &mut self,
-        what: PartTypeId,
+        what_: PartTypeId,
         gear_: PartId,
         hook_: PartTypeId,
         time_: OffsetDateTime,
@@ -95,7 +95,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .inner_join(
                 parts::table.on(parts::id
                     .eq(part_id) // join corresponding part
-                    .and(parts::what.eq(what))),
+                    .and(parts::what.eq(what_))),
             ) // where the part has my type
             .filter(gear.eq(gear_))
             .filter(hook.eq(hook_))
