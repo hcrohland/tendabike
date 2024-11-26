@@ -17,7 +17,6 @@
   export let service: Service;
   export let noname = false;
   export let finish = false;
-  export let maxdate: Date | undefined = undefined;
   export let mindate: Date | undefined = undefined;
   let { name, notes, time } = service;
   let done = false;
@@ -86,7 +85,7 @@
   </Col>
   <Col xs="auto">
     <InputGroup>
-      <DateTime id="inputDate" bind:date={time} {maxdate} {mindate} required />
+      <DateTime id="inputDate" bind:date={time} {mindate} required />
     </InputGroup>
   </Col>
 </FormGroup>

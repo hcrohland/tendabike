@@ -11,6 +11,13 @@ import { location } from "svelte-spa-router";
 export const DAY = 24 * 60 * 60 * 1000;
 export const maxDate = new Date("2999-12-31");
 
+export function roundTime(date: Date) {
+  date.setMinutes(Math.floor(date.getMinutes() / 15) * 15);
+  date.setSeconds(0);
+  date.setMilliseconds(0);
+  return date;
+}
+
 export function get_days(start: Date, end = new Date()) {
   return Math.floor((end.getTime() - start.getTime()) / DAY);
 }

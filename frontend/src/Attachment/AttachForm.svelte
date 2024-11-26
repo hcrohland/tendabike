@@ -6,14 +6,18 @@
   import { Part } from "../lib/part";
   import { AttEvent, attachments } from "../lib/attachment";
   import SelectPart from "../Widgets/SelectPart.svelte";
+  import { roundTime } from "../lib/store";
 
-  function lastDetach(part: Part) {
-    let last = filterValues($attachments, (a) => a.part_id == part.id).sort(
-      by("attached"),
-    )[0];
+  function prevdate(time: Date) {
+    let last = filterValues(
+      $attachments,
+      (a) => a.part_id == part.id && a.attached < time,
+    ).sort(by("attached"))[0];
 
     if (last) {
-      return last.isDetached() ? last.detached : last.attached;
+      return roundTime(time) <= roundTime(last.detached)
+        ? roundTime(last.attached)
+        : roundTime(last.detached);
     } else {
       return part.purchase;
     }
@@ -26,7 +30,6 @@
   let type = part.type();
 
   let date = new Date();
-  let prevdate: Date = lastDetach(part);
   let gear: number | undefined = undefined;
   let hook: number | undefined =
     type.hooks.length == 1 ? type.hooks[0] : undefined;
