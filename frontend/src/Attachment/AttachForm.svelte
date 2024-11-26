@@ -25,14 +25,15 @@
 
   let type = part.type();
 
-  let time: Date = lastDetach(part);
+  let date = new Date();
+  let prevdate: Date = lastDetach(part);
   let gear: number | undefined = undefined;
   let hook: number | undefined =
     type.hooks.length == 1 ? type.hooks[0] : undefined;
 
   $: if (hook && gear && types[hook]) {
     disabled = false;
-    attach = new AttEvent(part.id, time, gear, hook);
+    attach = new AttEvent(part.id, date, gear, hook);
   } else {
     disabled = true;
   }
@@ -55,6 +56,6 @@
   </InputGroup>
   <InputGroup class="mb-0 mr-sm-2 mb-sm-2">
     <InputGroupText>at</InputGroupText>
-    <DateTime bind:date={time} />
+    <DateTime bind:date {prevdate} />
   </InputGroup>
 </div>

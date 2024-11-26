@@ -2,6 +2,7 @@
   export let date = new Date();
   export let mindate: any = undefined;
   export let maxdate: any = undefined;
+  export let prevdate: any = undefined; // only usable w/o mindate
 
   const props = Object.assign({}, $$props);
   delete props.date;
@@ -60,6 +61,8 @@
 />
 {#if mindate}
   <button on:click|preventDefault={() => (date = mindate)}> &#706; </button>
+{:else if prevdate}
+  <button on:click|preventDefault={() => (date = prevdate)}> &#706; </button>
 {/if}
 {#if (!maxdate || new Date(maxdate) >= new Date()) && (!mindate || new Date(mindate) <= new Date())}
   <button on:click|preventDefault={() => (date = roundTime(new Date()))}>
