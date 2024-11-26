@@ -7,7 +7,7 @@
     InputGroup,
     ModalFooter,
   } from "@sveltestrap/sveltestrap";
-  import { handleError, maxDate } from "../lib/store";
+  import { handleError } from "../lib/store";
   import { types } from "../lib/types";
   import { AttEvent, Attachment, attachments } from "../lib/attachment";
   import NewForm from "./PartForm.svelte";
@@ -55,7 +55,7 @@
     atts = part.attachments($attachments);
     last = atts[0];
     start = atts.length > 0 ? atts[atts.length - 1].attached : undefined;
-    date = last && last.detached < maxDate ? last.detached : new Date();
+    date = last && last.isDetached() ? last.detached : new Date();
     detach = false;
     dispose = false;
     part_changed = false;
@@ -86,7 +86,7 @@
             {/if}
           </InputGroup>
         {:else if last}
-          {#if last.detached < maxDate}
+          {#if last.isDetached()}
             <InputGroup>
               <Dispose bind:dispose />
               {#if dispose}

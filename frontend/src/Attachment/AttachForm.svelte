@@ -2,19 +2,22 @@
   import { InputGroup, InputGroupText } from "@sveltestrap/sveltestrap";
   import DateTime from "../Widgets/DateTime.svelte";
   import { types } from "../lib/types";
-  import { maxDate } from "../lib/store";
   import { by, filterValues } from "../lib/mapable";
   import { Part } from "../lib/part";
   import { AttEvent, attachments } from "../lib/attachment";
   import SelectPart from "../Widgets/SelectPart.svelte";
+  import { roundTime } from "../lib/store";
 
-  function lastDetach(part: Part) {
-    let last = filterValues($attachments, (a) => a.part_id == part.id).sort(
-      by("attached"),
-    )[0];
+  function prevdate(time: Date) {
+    let last = filterValues(
+      $attachments,
+      (a) => a.part_id == part.id && a.attached < time,
+    ).sort(by("attached"))[0];
 
     if (last) {
-      return last.detached < maxDate ? last.detached : last.attached;
+      return roundTime(time) <= roundTime(last.detached)
+        ? roundTime(last.attached)
+        : roundTime(last.detached);
     } else {
       return part.purchase;
     }
@@ -26,14 +29,14 @@
 
   let type = part.type();
 
-  let time: Date = lastDetach(part);
+  let date = new Date();
   let gear: number | undefined = undefined;
   let hook: number | undefined =
     type.hooks.length == 1 ? type.hooks[0] : undefined;
 
   $: if (hook && gear && types[hook]) {
     disabled = false;
-    attach = new AttEvent(part.id, time, gear, hook);
+    attach = new AttEvent(part.id, date, gear, hook);
   } else {
     disabled = true;
   }
@@ -56,6 +59,6 @@
   </InputGroup>
   <InputGroup class="mb-0 mr-sm-2 mb-sm-2">
     <InputGroupText>at</InputGroupText>
-    <DateTime bind:date={time} />
+    <DateTime bind:date {prevdate} />
   </InputGroup>
 </div>

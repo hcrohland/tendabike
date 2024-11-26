@@ -1,6 +1,12 @@
 import type { Activity } from "./activity";
 import { filterValues, mapable, type Map } from "./mapable";
-import { fmtRange, handleError, myfetch, updateSummary } from "./store";
+import {
+  fmtRange,
+  handleError,
+  maxDate,
+  myfetch,
+  updateSummary,
+} from "./store";
 
 export class Attachment {
   part_id: number;
@@ -12,6 +18,7 @@ export class Attachment {
   name: string;
   idx: string;
   usage: string;
+
   constructor(data: any) {
     this.part_id = data.part_id;
     this.attached = new Date(data.attached);
@@ -23,18 +30,26 @@ export class Attachment {
     this.idx = this.part_id + "/" + this.attached.getTime();
     this.usage = data.usage;
   }
+
   fmtTime() {
     return fmtRange(this.attached, this.detached);
   }
+
   isAttached(time?: Date | string | number) {
     if (!time) time = new Date();
     else time = new Date(time);
 
     return this.attached <= time && time < this.detached;
   }
+
+  isDetached() {
+    return this.detached < maxDate;
+  }
+
   isEmpty() {
     return this.attached.getTime() >= this.detached.getTime();
   }
+
   activities(acts: Map<Activity>) {
     return filterValues(
       acts,
