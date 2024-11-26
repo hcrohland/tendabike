@@ -13,6 +13,8 @@
   import DateTime from "../Widgets/DateTime.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
   import Switch from "../Widgets/Switch.svelte";
+  import { by, filterValues } from "../lib/mapable";
+  import { activities } from "../lib/activity";
 
   export let refresh: () => void;
   let user: User | undefined;
@@ -34,14 +36,23 @@
     refresh();
   }
 
-  export const createSync = (user?: User) => {
-    if (user) {
-      userParam = "&user_id=" + user.id;
+  export const createSync = (u?: User) => {
+    user = u;
+    if (u) {
+      userParam = "&user_id=" + u.id;
     } else {
       userParam = "";
     }
     isOpen = true;
   };
+
+  function prevdate(date: Date) {
+    let prev = filterValues(
+      $activities,
+      (a) => a.user_id == user?.id && a.start < date,
+    ).sort(by("start"))[0];
+    return prev ? prev.start : date;
+  }
 </script>
 
 <Modal {isOpen} {toggle} backdrop={false}>
@@ -56,7 +67,7 @@
       <FormGroup check>
         <InputGroup>
           <InputGroupText>Start</InputGroupText>
-          <DateTime maxdate={new Date()} bind:date />
+          <DateTime bind:date prevdate={user ? prevdate : undefined} />
         </InputGroup>
       </FormGroup>
       <Switch bind:checked>Migration</Switch>

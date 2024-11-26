@@ -1,7 +1,6 @@
 <script lang="ts">
   export let date = new Date();
   export let mindate: any = undefined;
-  export let maxdate: any = undefined;
   export let prevdate: ((t: Date) => Date) | undefined = undefined; // only usable w/o mindate
 
   const props = Object.assign({}, $$props);
@@ -22,7 +21,6 @@
   };
 
   mindate = mindate ? roundTime(mindate) : mindate;
-  maxdate = maxdate ? roundTime(maxdate) : maxdate;
   let now = roundTime(new Date());
 
   let flatpickrOptions = {
@@ -31,7 +29,6 @@
     minuteIncrement: 15,
     dateFormat: "j. M Y H:i",
     minDate: mindate,
-    maxDate: maxdate,
   };
 
   function handleChange(event: any) {
@@ -61,11 +58,8 @@
     &#706;
   </button>
 {/if}
-{#if !((maxdate && maxdate < now) || (mindate && mindate > now))}
+{#if !(mindate && mindate > now)}
   <button on:click|preventDefault={() => (date = roundTime(new Date()))}>
     &#8226;
   </button>
-{/if}
-{#if maxdate}
-  <button on:click|preventDefault={() => (date = maxdate)}> &#707; </button>
 {/if}
