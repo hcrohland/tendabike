@@ -183,6 +183,7 @@ export class ServicePlan extends Limits {
   }
 }
 
+/*** find plans for this part only */
 function plans_for_this_part(
   part_id: number | undefined,
   plans: Map<ServicePlan>,
@@ -190,27 +191,29 @@ function plans_for_this_part(
   return filterValues(plans, (p) => p.part == part_id && p.hook == null);
 }
 
-function plans_for_attachee(
-  plans: Map<ServicePlan>,
-  att: Attachment | undefined,
-) {
+/*** return any plans for this part including generic plans defined for the gear */
+function plans_for_attachee(plans: Map<ServicePlan>, att: Attachment) {
+  // find plans for this part and generic plan for gear
   let res = filterValues(
     plans,
     (p) =>
-      p.part == att?.part_id ||
-      (p.part == att?.gear && p.hook == att?.hook && p.what == att?.what),
+      p.part == att.part_id ||
+      (p.part == att.gear && p.hook == att.hook && p.what == att.what),
   );
+  // find generic plan for this type/hook
   let res2 = filterValues(
     plans,
     (p) =>
       p.part == null &&
-      p.hook == att?.hook &&
-      p.what == att?.what &&
+      p.hook == att.hook &&
+      p.what == att.what &&
+      // only if the is none already for this part already
       !res.some((r) => r.hook == p.hook && r.what == p.what),
-  ).map((p) => new ServicePlan({ ...p, part: att?.part_id }));
+  ).map((p) => new ServicePlan({ ...p, part: att.part_id }));
   return res.concat(res2);
 }
 
+/*** find plans for a part at a given time or now */
 export function plans_for_part(
   plans: Map<ServicePlan>,
   atts: Map<Attachment>,

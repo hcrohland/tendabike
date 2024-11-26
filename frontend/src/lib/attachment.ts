@@ -106,6 +106,9 @@ export function part_at_hook(
   return att ? att.part_id : gear;
 }
 
+/***
+  return the attachment for part at time or undefined if it is not attached
+*/
 export function attachment_for_part(
   part: number | undefined,
   atts: Map<Attachment>,
