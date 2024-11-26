@@ -50,19 +50,6 @@
 
   <td>
     <Menu>
-      {#if !name}
-        <DropdownItem on:click={() => $actions.updatePlan(plan)}>
-          Change ServicePlan
-        </DropdownItem>
-        <DropdownItem on:click={() => $actions.deletePlan(plan)}>
-          Delete ServicePlan
-        </DropdownItem>
-      {/if}
-
-      {#if !name && part}
-        <DropdownItem divider />
-      {/if}
-
       {#if part}
         {#if serviceList.at(0) != undefined}
           <DropdownItem
@@ -83,6 +70,19 @@
             </DropdownItem>
           {/if}
         {/if}
+      {/if}
+
+      {#if !name && part}
+        <DropdownItem divider />
+      {/if}
+
+      {#if !name}
+        <DropdownItem on:click={() => $actions.updatePlan(plan)}>
+          Change ServicePlan
+        </DropdownItem>
+        <DropdownItem on:click={() => $actions.deletePlan(plan)}>
+          Delete ServicePlan
+        </DropdownItem>
       {/if}
     </Menu>
   </td>
