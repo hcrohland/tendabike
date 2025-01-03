@@ -141,14 +141,11 @@ fn getpath(state: String) -> TbResult<String> {
 
 #[derive(Deserialize)]
 pub struct PathParam {
-    path: String,
+    inner: Option<String>,
 }
 
-pub(crate) async fn strava_auth(path: Option<Query<PathParam>>) -> impl IntoResponse {
-    let path = match path {
-        None => "/".to_owned(),
-        Some(Query(p)) => p.path,
-    };
+pub(crate) async fn strava_auth(Query(path): Query<PathParam>) -> impl IntoResponse {
+    let path = path.inner.unwrap_or("/".to_owned());
     let (auth_url, _csrf_token) = STRAVACLIENT
         .authorize_url(|| gentoken(path))
         .add_scope(Scope::new(
