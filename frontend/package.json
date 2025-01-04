@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@sveltestrap/sveltestrap": "^6.1.1",
-    "svelte-flatpickr": "^3.3.4",
+    "date-picker-svelte": "^2.15.1",
     "svelte-spa-router": "^4.0.0"
   }
 }
