@@ -6,21 +6,13 @@
   import { Part } from "../lib/part";
   import { AttEvent, attachments } from "../lib/attachment";
   import SelectPart from "../Widgets/SelectPart.svelte";
-  import { roundTime } from "../lib/store";
 
   function prevdate(time: Date) {
     let last = filterValues(
       $attachments,
       (a) => a.part_id == part.id && a.attached < time,
     ).sort(by("attached"))[0];
-
-    if (last) {
-      return roundTime(time) <= roundTime(last.detached)
-        ? roundTime(last.attached)
-        : roundTime(last.detached);
-    } else {
-      return part.purchase;
-    }
+    return last?.attached || part.purchase;
   }
 
   export let attach: AttEvent;
