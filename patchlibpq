@@ -1,8 +1,0 @@
-open /usr/lib/libpq.a
-addlib /usr/lib/libpgcommon_shlib.a
-addlib /usr/lib/libpgcommon.a
-addlib /usr/lib/libpgport.a
-addlib /usr/lib/libssl.a
-addlib /usr/lib/libcrypto.a
-save
-end
