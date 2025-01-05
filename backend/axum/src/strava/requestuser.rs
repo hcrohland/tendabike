@@ -223,7 +223,6 @@ impl StravaPerson for RequestUser {
     }
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for RequestUser
 where
     MemoryStore: FromRef<S>,
@@ -259,7 +258,6 @@ where
 
 pub struct AxumAdmin;
 
-#[async_trait]
 impl<S> FromRequestParts<S> for AxumAdmin
 where
     MemoryStore: FromRef<S>,

@@ -10,7 +10,7 @@
 //!
 //! - `POST /`: creates a new part
 //! - `PUT /`: updates an existing part
-//! - `GET /:part`: retrieves a specific part
+//! - `GET /{part}`: retrieves a specific part
 //!
 //! The endpoints use the `AppDbConn` type to interact with the database. The `RUser` type is used to
 //! represent the authenticated user making the request.
@@ -37,7 +37,7 @@ use tb_domain::{ChangePart, NewPart, Part, PartId};
 pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route("/", put(put_part).post(post_part))
-        .route("/:part", get(get_part))
+        .route("/{part}", get(get_part))
 }
 
 async fn get_part(

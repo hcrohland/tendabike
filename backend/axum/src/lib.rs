@@ -44,11 +44,10 @@ pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
     let app_state = AppState::new(store, pool);
 
     let app = Router::new()
-        .nest_service("/", tower_http::services::ServeDir::new(path))
         .nest("/api", domain::router())
         .nest("/strava", strava::router())
         .with_state(app_state)
-        .fallback(error::fallback)
+        .fallback_service(tower_http::services::ServeDir::new(path))
         .layer(tower_http::trace::TraceLayer::new_for_http());
 
     tracing::debug!("listening on {}", addr);

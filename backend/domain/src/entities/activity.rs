@@ -321,7 +321,6 @@ impl Activity {
     ///
     /// A `Vec` of `Activity` objects representing all activities for the given user.
     ///
-
     pub async fn get_all(user: &UserId, store: &mut impl ActivityStore) -> TbResult<Vec<Activity>> {
         store.get_all(user).await
     }

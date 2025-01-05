@@ -42,6 +42,7 @@
 <Flatpickr
   options={flatpickrOptions}
   value={date}
+  children={props.children}
   on:change={handleChange}
   {...props}
 />

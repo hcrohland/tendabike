@@ -18,10 +18,6 @@ use http::StatusCode;
 
 use tb_domain::Error;
 
-pub async fn fallback() -> (StatusCode, &'static str) {
-    (StatusCode::NOT_FOUND, "Not Found")
-}
-
 pub type ApiResult<T> = Result<Json<T>, AppError>;
 
 #[derive(Debug, thiserror::Error)]

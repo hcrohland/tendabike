@@ -112,7 +112,7 @@ pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .route("/categories", get(mycats))
         .route("/descend", post(descend))
-        .route("/:id", delete(act_delete).get(act_get).put(act_put))
+        .route("/{id}", delete(act_delete).get(act_get).put(act_put))
         .route("/", post(act_post))
         .route("/rescan", get(rescan))
         .route("/defaultgear", post(def_part_api))
