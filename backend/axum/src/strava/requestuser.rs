@@ -12,8 +12,7 @@ use axum::{
 use axum_extra::TypedHeader;
 use http::{request::Parts, StatusCode};
 use oauth2::{
-    basic::BasicTokenType, reqwest::async_http_client, AccessToken, RefreshToken,
-    StandardTokenResponse, TokenResponse,
+    basic::BasicTokenType, reqwest, AccessToken, RefreshToken, StandardTokenResponse, TokenResponse,
 };
 use serde::de::DeserializeOwned;
 use serde_derive::{Deserialize, Serialize};
@@ -21,7 +20,7 @@ use std::time::SystemTime;
 
 use super::StravaExtraTokenFields;
 use crate::{
-    strava::{oauth::STRAVACLIENT, StravaAthleteInfo},
+    strava::{oauth::STRAVACLIENT, StravaAthleteInfo, HTTP_CLIENT},
     AppError,
 };
 use tb_domain::{Error, Person, TbResult, UserId};
@@ -117,7 +116,7 @@ impl RequestUser {
         debug!("refreshing token for user {}", self.id);
         let token = match STRAVACLIENT
             .exchange_refresh_token(&token)
-            .request_async(async_http_client)
+            .request_async(&*HTTP_CLIENT)
             .await
         {
             Ok(token) => token,
@@ -211,11 +210,12 @@ impl StravaPerson for RequestUser {
 
     async fn deauthorize(&mut self, store: &mut impl StravaStore) -> TbResult<()> {
         self.check_token(store).await?;
+
         STRAVACLIENT
             .revoke_token(self.access_token.clone().into())
             .context("revoke token config error")?
             .add_extra_param("access_token", self.access_token.secret()) // Strava does not follow the standard.
-            .request_async(async_http_client)
+            .request_async(&*HTTP_CLIENT)
             .await
             .context("token exchange failed")?;
         debug!("user {} token revoked", self.strava_id);
