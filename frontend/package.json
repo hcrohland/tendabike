@@ -20,7 +20,7 @@
     "svelte-range-slider-pips": "^3.1.1",
     "tslib": "^2.6.2",
     "typescript": "^5.2.2",
-    "vite": "5.4.11"
+    "vite": "^5.4.14"
   },
   "dependencies": {
     "@sveltestrap/sveltestrap": "^6.1.1",
