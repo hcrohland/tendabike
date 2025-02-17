@@ -33,7 +33,7 @@ futures = "0.3"
 headers = "0.4"
 http = "1"
 newtype_derive = "0.1"
-oauth2 = "4.4"
+oauth2 = "5.0.0"
 pretty_assertions = "1"
 reqwest = { version = "0.12", default-features = false }
 scoped-futures = "0.1"

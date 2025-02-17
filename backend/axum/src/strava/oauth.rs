@@ -25,10 +25,9 @@ use oauth2::{
         BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
         BasicTokenType,
     },
-    reqwest::async_http_client,
-    AuthUrl, AuthorizationCode, Client, ClientId, ClientSecret, CsrfToken, ExtraTokenFields,
-    RedirectUrl, RevocationUrl, Scope, StandardRevocableToken, StandardTokenResponse,
-    TokenResponse, TokenUrl,
+    reqwest, AuthUrl, AuthorizationCode, Client, ClientId, ClientSecret, CsrfToken, EndpointNotSet,
+    EndpointSet, ExtraTokenFields, RedirectUrl, RevocationUrl, Scope, StandardRevocableToken,
+    StandardTokenResponse, TokenResponse, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
 use std::{env, sync::LazyLock};
@@ -40,6 +39,7 @@ use tb_strava::StravaId;
 pub(crate) static COOKIE_NAME: &str = "SESSION";
 
 pub(super) static STRAVACLIENT: LazyLock<StravaClient> = LazyLock::new(strava_oauth_client);
+pub(super) static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(http_client);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct StravaAthleteInfo {
@@ -72,16 +72,26 @@ impl ExtraTokenFields for StravaExtraTokenFields {}
 
 type StravaTokenResponse = StandardTokenResponse<StravaExtraTokenFields, BasicTokenType>;
 
-pub(crate) type StravaClient = Client<
+pub(crate) type StravaClient<
+    HasAuthUrl = EndpointSet,
+    HasDeviceAuthUrl = EndpointNotSet,
+    HasIntrospectionUrl = EndpointNotSet,
+    HasRevocationUrl = EndpointSet,
+    HasTokenUrl = EndpointSet,
+> = Client<
     BasicErrorResponse,
     StravaTokenResponse,
-    BasicTokenType,
     BasicTokenIntrospectionResponse,
     StandardRevocableToken,
     BasicRevocationErrorResponse,
+    HasAuthUrl,
+    HasDeviceAuthUrl,
+    HasIntrospectionUrl,
+    HasRevocationUrl,
+    HasTokenUrl,
 >;
 
-pub(crate) fn strava_oauth_client() -> StravaClient {
+pub fn strava_oauth_client() -> StravaClient {
     // Environment variables (* = required):
     // *"CLIENT_ID"     "REPLACE_ME";
     // *"CLIENT_SECRET" "REPLACE_ME";
@@ -102,10 +112,21 @@ pub(crate) fn strava_oauth_client() -> StravaClient {
     let revocation_url =
         RevocationUrl::new("https://www.strava.com/oauth/deauthorize".to_string()).unwrap();
 
-    StravaClient::new(client_id, Some(client_secret), auth_url, Some(token_url))
+    StravaClient::new(client_id)
+        .set_client_secret(client_secret)
+        .set_auth_uri(auth_url)
+        .set_token_uri(token_url)
         .set_auth_type(oauth2::AuthType::RequestBody)
         .set_redirect_uri(redirect_url)
-        .set_revocation_uri(revocation_url)
+        .set_revocation_url(revocation_url)
+}
+
+fn http_client() -> reqwest::Client {
+    reqwest::ClientBuilder::new()
+        // Following redirects opens the client up to SSRF vulnerabilities.
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .expect("Client should build")
 }
 
 static CSRF_KEY: LazyLock<Vec<u8>> =
@@ -179,7 +200,7 @@ pub(crate) async fn login_authorized(
     // Get an auth token
     let token = STRAVACLIENT
         .exchange_code(AuthorizationCode::new(code))
-        .request_async(async_http_client)
+        .request_async(&*HTTP_CLIENT)
         .await
         .context("token exchange failed")?;
 
