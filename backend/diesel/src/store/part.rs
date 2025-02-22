@@ -2,8 +2,8 @@ use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use time::OffsetDateTime;
 
-use crate::{into_domain, AsyncDieselConn};
-use tb_domain::{schema, Part, PartId, TbResult, UsageId, UserId};
+use crate::{AsyncDieselConn, into_domain};
+use tb_domain::{Part, PartId, TbResult, UsageId, UserId, schema};
 
 #[async_session::async_trait]
 impl tb_domain::PartStore for AsyncDieselConn {

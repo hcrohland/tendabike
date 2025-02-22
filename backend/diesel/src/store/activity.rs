@@ -3,7 +3,7 @@ use diesel::{prelude::*, sql_query};
 use diesel_async::RunQueryDsl;
 use time::{OffsetDateTime, UtcOffset};
 
-use crate::{into_domain, AsyncDieselConn};
+use crate::{AsyncDieselConn, into_domain};
 use tb_domain::{ActTypeId, Activity, ActivityId, NewActivity, PartId, Person, TbResult, UserId};
 mod schema {
     use diesel::prelude::*;

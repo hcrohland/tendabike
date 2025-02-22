@@ -11,16 +11,16 @@ use std::collections::HashSet;
 ///
 /// Finally, the module provides an endpoint for using CSV data to update usage data for activities.
 use axum::{
+    Json, Router,
     extract::{Path, State},
     routing::{delete, get, post},
-    Json, Router,
 };
 use http::StatusCode;
 
 use crate::{
+    AxumAdmin, DbPool, RequestUser,
     appstate::AppState,
     error::{ApiResult, AppError},
-    AxumAdmin, DbPool, RequestUser,
 };
 use tb_domain::{Activity, ActivityId, NewActivity, PartId, PartTypeId, Summary};
 

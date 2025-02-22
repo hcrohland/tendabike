@@ -21,16 +21,16 @@
 //! The `router` function returns an Axum `Router` that can be mounted in a larger application.
 
 use axum::{
+    Json, Router,
     extract::{Path, State},
     routing::{get, put},
-    Json, Router,
 };
 use http::StatusCode;
 
 use crate::{
+    DbPool, RequestUser,
     appstate::AppState,
     error::{ApiResult, AppError},
-    DbPool, RequestUser,
 };
 use tb_domain::{ChangePart, NewPart, Part, PartId};
 

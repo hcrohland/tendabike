@@ -10,11 +10,11 @@ use anyhow::Context;
 use async_session::log::info;
 use diesel::prelude::*;
 use diesel_async::{
-    pooled_connection::{
-        deadpool::{Object, Pool},
-        AsyncDieselConnectionManager,
-    },
     AsyncPgConnection,
+    pooled_connection::{
+        AsyncDieselConnectionManager,
+        deadpool::{Object, Pool},
+    },
 };
 use std::ops::{Deref, DerefMut};
 
@@ -35,7 +35,7 @@ impl DerefMut for AsyncDieselConn {
     }
 }
 
-use diesel_migrations::{embed_migrations, MigrationHarness};
+use diesel_migrations::{MigrationHarness, embed_migrations};
 use tb_domain::TbResult;
 pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations = embed_migrations!("migrations");
 

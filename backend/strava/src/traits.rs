@@ -6,7 +6,7 @@ and provides additional methods for interacting with Strava data.
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 
-use crate::{event::Event, StravaId, StravaUser};
+use crate::{StravaId, StravaUser, event::Event};
 use tb_domain::{ActivityId, PartId, Person, TbResult, UserId};
 
 #[async_trait]
@@ -133,7 +133,7 @@ pub trait StravaStore: tb_domain::Store + Send {
     ///
     /// Returns an error if the ActivityId cannot be retrieved from the database.
     async fn strava_activity_get_activityid(&mut self, act_id: i64)
-        -> TbResult<Option<ActivityId>>;
+    -> TbResult<Option<ActivityId>>;
 
     /// Creates a new Strava gear with the given Strava ID, PartId, and user ID.
     ///
@@ -299,7 +299,7 @@ pub trait StravaStore: tb_domain::Store + Send {
     ///
     /// Returns an error if the user cannot be updated.
     async fn stravauser_update_last_activity(&mut self, user: &StravaId, time: i64)
-        -> TbResult<()>;
+    -> TbResult<()>;
 
     /// Updates the access token for a Strava user.
     ///

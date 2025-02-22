@@ -3,8 +3,8 @@ use diesel::{BoolExpressionMethods, ExpressionMethods, Identifiable, Insertable,
 use diesel_async::RunQueryDsl;
 use time::OffsetDateTime;
 
-use crate::{into_domain, AsyncDieselConn};
-use tb_domain::{schema, Attachment, PartId, PartTypeId, TbResult};
+use crate::{AsyncDieselConn, into_domain};
+use tb_domain::{Attachment, PartId, PartTypeId, TbResult, schema};
 
 #[async_session::async_trait]
 impl tb_domain::AttachmentStore for AsyncDieselConn {
