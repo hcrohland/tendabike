@@ -2,8 +2,7 @@
 name = "tb_domain"
 version = "0.5.0"
 authors = ["Christoph Rohland <tendabike@rohland.net>"]
-edition = "2021"
-rust-version = "1.80"
+edition = { workspace = true }
 
 [dependencies]
 diesel = { workspace = true, features = ["time", "postgres"] }

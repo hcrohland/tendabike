@@ -2,9 +2,9 @@ use diesel::prelude::*;
 use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 
-use crate::{into_domain, AsyncDieselConn};
+use crate::{AsyncDieselConn, into_domain};
 use tb_domain::{ActivityId, PartId, TbResult, UserId};
-use tb_strava::{event::Event, schema, StravaId, StravaPerson, StravaUser};
+use tb_strava::{StravaId, StravaPerson, StravaUser, event::Event, schema};
 
 #[async_session::async_trait]
 impl tb_strava::StravaStore for AsyncDieselConn {

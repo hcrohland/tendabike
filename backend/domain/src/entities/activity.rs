@@ -33,7 +33,7 @@ use anyhow::Context;
 use newtype_derive::*;
 use scoped_futures::ScopedFutureExt;
 use serde_derive::{Deserialize, Serialize};
-use time::{macros::format_description, OffsetDateTime, PrimitiveDateTime};
+use time::{OffsetDateTime, PrimitiveDateTime, macros::format_description};
 
 use crate::*;
 

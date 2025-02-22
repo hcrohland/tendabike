@@ -1,18 +1,17 @@
 use anyhow::Context;
 use async_session::{
-    async_trait,
+    MemoryStore, SessionStore, async_trait,
     log::{debug, trace},
-    MemoryStore, SessionStore,
 };
 use axum::{
+    RequestPartsExt,
     extract::{FromRef, FromRequestParts},
     response::{IntoResponse, Response},
-    RequestPartsExt,
 };
 use axum_extra::TypedHeader;
-use http::{request::Parts, StatusCode};
+use http::{StatusCode, request::Parts};
 use oauth2::{
-    basic::BasicTokenType, reqwest, AccessToken, RefreshToken, StandardTokenResponse, TokenResponse,
+    AccessToken, RefreshToken, StandardTokenResponse, TokenResponse, basic::BasicTokenType, reqwest,
 };
 use serde::de::DeserializeOwned;
 use serde_derive::{Deserialize, Serialize};
@@ -20,8 +19,8 @@ use std::time::SystemTime;
 
 use super::StravaExtraTokenFields;
 use crate::{
-    strava::{oauth::STRAVACLIENT, StravaAthleteInfo, HTTP_CLIENT},
     AppError,
+    strava::{HTTP_CLIENT, StravaAthleteInfo, oauth::STRAVACLIENT},
 };
 use tb_domain::{Error, Person, TbResult, UserId};
 use tb_strava::{StravaId, StravaPerson, StravaStore, StravaUser};
@@ -110,7 +109,7 @@ impl RequestUser {
             None => {
                 return Err(Error::NotAuth(
                     "No Refresh Token provided and Access Token expired".to_string(),
-                ))
+                ));
             }
         };
         debug!("refreshing token for user {}", self.id);

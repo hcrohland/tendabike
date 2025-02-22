@@ -6,9 +6,9 @@
 //! The module defines two async functions `attach_rt` and `detach_rt` that handle the requests to the API endpoints.
 //! The `router` function creates a new router and maps the API endpoints to their respective functions.
 
-use axum::{extract::State, routing::post, Json, Router};
+use axum::{Json, Router, extract::State, routing::post};
 
-use crate::{appstate::AppState, error::ApiResult, DbPool, RequestUser};
+use crate::{DbPool, RequestUser, appstate::AppState, error::ApiResult};
 use tb_domain::{Event, Summary};
 
 /// route for attach API

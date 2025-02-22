@@ -1,9 +1,9 @@
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 
-use tb_domain::{schema, PartId, ServicePlan, ServicePlanId, TbResult, UserId};
+use tb_domain::{PartId, ServicePlan, ServicePlanId, TbResult, UserId, schema};
 
-use crate::{into_domain, AsyncDieselConn};
+use crate::{AsyncDieselConn, into_domain};
 use schema::service_plans::dsl::*;
 
 #[async_session::async_trait]

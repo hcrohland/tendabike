@@ -22,13 +22,13 @@
 
 use async_session::log::trace;
 use axum::{
+    Json, Router,
     extract::{Path, State},
     routing::{delete, post},
-    Json, Router,
 };
 use http::StatusCode;
 
-use crate::{appstate::AppState, error::AppError, ApiResult, DbPool, RequestUser};
+use crate::{ApiResult, DbPool, RequestUser, appstate::AppState, error::AppError};
 use tb_domain::{Service, ServicePlan, ServicePlanId};
 
 pub(super) fn router() -> Router<AppState> {

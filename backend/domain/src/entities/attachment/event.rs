@@ -206,10 +206,7 @@ impl Event {
                 } else {
                     trace!(
                         "changing gear/hook from {}/{} to {}/{}",
-                        self.gear,
-                        self.hook,
-                        next.gear,
-                        next.hook
+                        self.gear, self.hook, next.gear, next.hook
                     );
                     // it is attached to a different hook later
                     // the new attachment ends when the next starts
@@ -220,15 +217,18 @@ impl Event {
         }
 
         // try to merge previous attachment
-        if let Some(prev) = store
+        match store
             .attachment_find_part_attached_already(self.part_id, self.gear, self.hook, self.time)
             .await?
         {
-            trace!("adjacent starting {}", prev.attached);
-            hash += prev.detach(end, store).await?
-        } else {
-            trace!("create {:?}\n", self);
-            hash += self.attachment(end).create(store).await?;
+            Some(prev) => {
+                trace!("adjacent starting {}", prev.attached);
+                hash += prev.detach(end, store).await?
+            }
+            _ => {
+                trace!("create {:?}\n", self);
+                hash += self.attachment(end).create(store).await?;
+            }
         }
 
         Ok((hash.into(), det))

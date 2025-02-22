@@ -51,14 +51,14 @@
 
 use async_session::log::{info, trace};
 use axum::{
-    extract::{Path, Query, State},
     Json,
+    extract::{Path, Query, State},
 };
 use serde_derive::{Deserialize, Serialize};
 
 use crate::{ApiResult, AxumAdmin, DbPool, RequestUser};
 use tb_domain::{Error, Summary, TbResult};
-use tb_strava::event::{process, InEvent};
+use tb_strava::event::{InEvent, process};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Hub {
