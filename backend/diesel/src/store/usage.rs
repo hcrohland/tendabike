@@ -4,8 +4,8 @@ use diesel_async::{AsyncConnection, RunQueryDsl};
 use scoped_futures::ScopedFutureExt;
 use std::borrow::Borrow;
 
-use crate::{into_domain, AsyncDieselConn};
-use tb_domain::{schema, TbResult, Usage, UsageId, UsageStore};
+use crate::{AsyncDieselConn, into_domain};
+use tb_domain::{TbResult, Usage, UsageId, UsageStore, schema};
 
 #[async_session::async_trait]
 impl UsageStore for AsyncDieselConn {

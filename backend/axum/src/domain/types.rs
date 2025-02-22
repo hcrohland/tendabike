@@ -3,7 +3,7 @@
 //! The `activity` and `part` functions are used to retrieve all activity and part types from the database.
 //! The `router` function is used to create a router that handles requests related to activity and part types.
 
-use axum::{routing::get, Json, Router};
+use axum::{Json, Router, routing::get};
 
 use crate::{appstate::AppState, error::ApiResult};
 use tb_domain::{ActivityType, PartType};

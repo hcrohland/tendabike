@@ -9,25 +9,26 @@
 
 use anyhow::Context;
 use async_session::{
-    base64, hmac,
+    MemoryStore, Session, SessionStore, base64, hmac,
     log::{debug, warn},
-    sha2, MemoryStore, Session, SessionStore,
+    sha2,
 };
 use axum::{
     extract::{Query, State},
-    http::{header::SET_COOKIE, HeaderMap},
+    http::{HeaderMap, header::SET_COOKIE},
     response::{IntoResponse, Redirect},
 };
 use axum_extra::TypedHeader;
 use http::StatusCode;
 use oauth2::{
+    AuthUrl, AuthorizationCode, Client, ClientId, ClientSecret, CsrfToken, EndpointNotSet,
+    EndpointSet, ExtraTokenFields, RedirectUrl, RevocationUrl, Scope, StandardRevocableToken,
+    StandardTokenResponse, TokenResponse, TokenUrl,
     basic::{
         BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
         BasicTokenType,
     },
-    reqwest, AuthUrl, AuthorizationCode, Client, ClientId, ClientSecret, CsrfToken, EndpointNotSet,
-    EndpointSet, ExtraTokenFields, RedirectUrl, RevocationUrl, Scope, StandardRevocableToken,
-    StandardTokenResponse, TokenResponse, TokenUrl,
+    reqwest,
 };
 use serde::{Deserialize, Serialize};
 use std::{env, sync::LazyLock};

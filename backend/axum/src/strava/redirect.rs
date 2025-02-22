@@ -4,12 +4,12 @@
 //!
 
 use axum::{
+    Json,
     extract::{Path, State},
     response::Redirect,
-    Json,
 };
 
-use crate::{error::AppError, ApiResult, AxumAdmin, DbPool, RequestUser};
+use crate::{ApiResult, AxumAdmin, DbPool, RequestUser, error::AppError};
 
 pub(super) async fn redirect_gear(
     Path(id): Path<i32>,
