@@ -16,6 +16,7 @@
   import GearCard from "./GearCard.svelte";
   import PartHist from "./PartHist.svelte";
   import Subparts from "./Subparts.svelte";
+  import AddButton from "./AddButton.svelte";
 
   export let params: { id: number; what: number };
 
@@ -51,15 +52,7 @@
     <TabPane tabId="parts" active={planlist.length == 0}>
       <strong slot="tab">
         Attached Parts
-        {#if tab == "parts" && part.isGear()}
-          <Button
-            size="sm"
-            color="light"
-            on:click={() => $actions.installPart(part)}
-          >
-            add
-          </Button>
-        {/if}
+        <AddButton {part} {tab} here="parts" />
       </strong>
       <Subparts {part} {attachees} />
     </TabPane>
@@ -71,26 +64,14 @@
     <strong slot="tab">
       Service Plans
       <PlanBadge {planlist} />
-      {#if tab == "plans"}
-        <Button size="sm" color="light" on:click={() => $actions.newPlan(part)}>
-          add
-        </Button> &NonBreakingSpace;
-      {/if}
+      <AddButton {part} {tab} here="plans" />
     </strong>
     <PlanList {planlist} /><br />
   </TabPane>
-  <TabPane tabId="service">
+  <TabPane tabId="services">
     <strong slot="tab">
       Service Logs
-      {#if tab == "service"}
-        <Button
-          size="sm"
-          color="light"
-          on:click={() => $actions.newService(part)}
-        >
-          add
-        </Button>
-      {/if}
+      <AddButton {part} {tab} here="services" />
     </strong>
     <ServiceList {part} /><br />
   </TabPane>
