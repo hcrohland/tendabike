@@ -46,7 +46,7 @@ COPY backend backend/
 
 RUN cargo build --release
 
-FROM node:21 AS build-frontend
+FROM node:slim AS build-frontend
 
 WORKDIR /frontend
 
