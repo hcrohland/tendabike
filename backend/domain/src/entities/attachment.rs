@@ -105,6 +105,9 @@ impl Attachment {
         self.usage.read(store).await
     }
 
+    /// Move a single part to a new gear at a certain time
+    ///
+    /// returns the time the new attachment ends
     async fn shift(
         &self,
         at_time: OffsetDateTime,
@@ -113,8 +116,8 @@ impl Attachment {
         store: &mut impl Store,
     ) -> TbResult<OffsetDateTime> {
         debug!("-- moving {} to {}", self.part_id, target);
-        let ev = Event::new(self.part_id, at_time, target, self.hook);
         *hash += self.detach(at_time, store).await?;
+        let ev = Event::new(self.part_id, at_time, target, self.hook);
         let (sum, det) = ev.attach_one(store).await?;
         *hash += sum;
         Ok(det)
