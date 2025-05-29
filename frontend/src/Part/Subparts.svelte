@@ -25,10 +25,12 @@
     level: number,
     prefix: string,
   ) {
+    // the list of types that can be attached to the hook
     const typeList = filterValues(types, (a: Type) =>
       a.hooks.includes(hook.id),
     ).sort((a: Type, b: Type) => a.order - b.order);
     typeList.forEach((type) => {
+      // the list of attachments at the hook
       let attachments = attachees.filter((a: Attachment) => {
         return a.hook == hook.id && a.what == type.id;
       });

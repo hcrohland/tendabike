@@ -52,7 +52,7 @@ pub struct PartType {
     pub id: PartTypeId,
     /// The display name
     pub name: String,
-    /// is it a main part? I.e. can it be used for an activity?
+    /// To which main gear type this part belongs
     pub main: PartTypeId,
     /// Part types that can be attached
     pub hooks: Vec<PartTypeId>,
