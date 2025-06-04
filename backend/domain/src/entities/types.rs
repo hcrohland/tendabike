@@ -127,7 +127,7 @@ impl PartTypeId {
         res
     }
 
-    /// get all the types you can attach - even indirectly - to this type_id
+    /// get all the type_ids you can attach - even indirectly - to this type_id
     pub(crate) fn subtypes(self) -> Vec<PartTypeId> {
         let mut types = PartType::all_ordered();
         self.filter_types(&mut types)

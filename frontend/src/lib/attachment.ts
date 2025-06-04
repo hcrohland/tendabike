@@ -63,11 +63,13 @@ export class AttEvent {
   time: Date;
   gear: number;
   hook: number;
+  all: boolean;
   constructor(
     part: number | undefined,
     time: Date,
     gear: number | undefined,
     hook: number,
+    all: boolean = true,
   ) {
     if (gear == undefined || part == undefined) {
       console.error("part or gear not defined: ", part, gear);
@@ -77,6 +79,7 @@ export class AttEvent {
     this.time = time;
     this.gear = gear;
     this.hook = hook;
+    this.all = all;
   }
 
   async attach() {

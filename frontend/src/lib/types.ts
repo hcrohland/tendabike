@@ -56,6 +56,10 @@ export class Type {
       (a, b) => a.order - b.order,
     );
   }
+
+  is_hook() {
+    return filterValues(types, (t) => t.hooks.includes(this.id)).length > 0;
+  }
 }
 
 export type User = {
