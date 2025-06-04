@@ -14,7 +14,6 @@
   export let level: number = 0;
   export let prefix = "";
   export let type: Type | undefined = undefined;
-  export const hook: Type | undefined = undefined;
 
   let show_hist = false;
 </script>
