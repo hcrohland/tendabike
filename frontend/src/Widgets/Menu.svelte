@@ -16,6 +16,7 @@
     {isOpen}
     toggle={() => (isOpen = !isOpen)}
     style="position: static;"
+    size="sm"
   >
     <DropdownToggle color="light" caret />
     <DropdownMenu end>

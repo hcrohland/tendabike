@@ -24,7 +24,6 @@
     <th scope="col">Name</th>
     <th scope="col">Attached</th>
     <Usage header />
-    <th></th>
   </tr>
 {:else}
   {#each attachments.map( (att) => ({ att, part: $parts[att.part_id] }), ) as { att, part }, i (att.idx)}
@@ -36,6 +35,17 @@
             <ShowAll bind:show_hist />
           {/if}
           {prefix + " " + type.name}
+          <Menu>
+            <DropdownItem on:click={() => $actions.newService(part)}>
+              Log Service
+            </DropdownItem>
+            <DropdownItem on:click={() => $actions.attachPart(part)}>
+              Move part
+            </DropdownItem>
+            <DropdownItem on:click={() => $actions.replacePart(att)}>
+              Replace part
+            </DropdownItem>
+          </Menu>
         </th>
         {#if att.isAttached()}
           <td>
@@ -47,19 +57,6 @@
           </td>
           <td> {att.fmtTime()} </td>
           <Usage id={part.usage} ref={part.id} />
-          <td>
-            <Menu>
-              <DropdownItem on:click={() => $actions.newService(part)}>
-                Log Service
-              </DropdownItem>
-              <DropdownItem on:click={() => $actions.attachPart(part)}>
-                Move part
-              </DropdownItem>
-              <DropdownItem on:click={() => $actions.replacePart(att)}>
-                Replace part
-              </DropdownItem>
-            </Menu>
-          </td>
         {:else}
           <th colspan="80" />
         {/if}
@@ -69,17 +66,6 @@
       <tr>
         <th scope="row" class="text-nowrap">
           {"┃ ".repeat(level + 1) + "▶"}
-        </th>
-        <td>
-          {#if part}
-            <PartLink {part} />
-          {:else}
-            {att.name}
-          {/if}
-        </td>
-        <td> {att.fmtTime()} </td>
-        <Usage id={att.usage} ref={att.idx} />
-        <td>
           {#if part.disposed_at == undefined}
             <Menu>
               <DropdownItem on:click={() => $actions.newService(part)}>
@@ -93,7 +79,16 @@
               </DropdownItem>
             </Menu>
           {/if}
+        </th>
+        <td>
+          {#if part}
+            <PartLink {part} />
+          {:else}
+            {att.name}
+          {/if}
         </td>
+        <td> {att.fmtTime()} </td>
+        <Usage id={att.usage} ref={att.idx} />
       </tr>
     {/if}
   {/each}
