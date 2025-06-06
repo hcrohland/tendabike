@@ -5,6 +5,7 @@
     newPart: (t: Type) => void;
     installPart: (p: Part) => void;
     changePart: (p: Part) => void;
+    disposePart: (p: Part, a?: Attachment) => void;
     recoverPart: (p: Part) => void;
     replacePart: (p: Attachment) => void;
     attachPart: (p: Part) => void;
@@ -35,11 +36,13 @@
   import type { Service } from "../lib/service";
   import type { ServicePlan } from "../lib/serviceplan";
   import type { Type } from "../lib/types";
+  import DisposePart from "../Part/DisposePart.svelte";
 
   $: actions.set({
     newPart,
     installPart,
     changePart,
+    disposePart,
     recoverPart,
     attachPart,
     replacePart,
@@ -53,6 +56,7 @@
   let newPart: (t: Type) => void;
   let installPart: (p: Part) => void;
   let changePart: (p: Part) => void;
+  let disposePart: (p: Part, a?: Attachment) => void;
   let replacePart: (p: Attachment) => void;
   let recoverPart: (p: Part) => void;
   let attachPart: (p: Part) => void;
@@ -68,6 +72,7 @@
 <NewPart bind:newPart />
 <AttachPart bind:attachPart />
 <ChangePart bind:changePart />
+<DisposePart bind:disposePart />
 <InstallPart bind:installPart />
 <RecoverPart bind:recoverPart />
 <ReplacePart bind:replacePart />

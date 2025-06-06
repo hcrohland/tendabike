@@ -2,6 +2,7 @@ import { type Map, by, filterValues, mapable } from "./mapable";
 import { handleError, myfetch } from "./store";
 import { Attachment } from "./attachment";
 import { Type, types } from "./types";
+import { Activity } from "./activity";
 
 export class Part {
   id?: number;
@@ -45,6 +46,11 @@ export class Part {
       .catch(handleError);
   }
 
+  async dispose(date: Date) {
+    this.disposed_at = date;
+    await this.update();
+  }
+
   type() {
     return types[this.what];
   }
@@ -65,6 +71,15 @@ export class Part {
       this.name +
       "</a>"
     );
+  }
+
+  /// the time when the first activity or attachment for this part started
+  firstEvent(acts: Map<Activity>, atts: Map<Attachment>) {
+    return this.isGear()
+      ? filterValues(acts, (a) => a.gear == this.id)
+          .sort(by("start"))
+          .at(-1)?.start
+      : this.attachments(atts).at(-1)?.attached;
   }
 }
 

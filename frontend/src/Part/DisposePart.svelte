@@ -1,0 +1,95 @@
+<script lang="ts">
+  import {
+    Modal,
+    ModalBody,
+    ModalHeader,
+    FormGroup,
+    InputGroup,
+    ModalFooter,
+    InputGroupText,
+  } from "@sveltestrap/sveltestrap";
+  import { handleError } from "../lib/store";
+  import { AttEvent, Attachment } from "../lib/attachment";
+  import Dispose from "../Widgets/Dispose.svelte";
+  import DateTime from "../Widgets/DateTime.svelte";
+  import { Part } from "../lib/part";
+  import Buttons from "../Widgets/Buttons.svelte";
+
+  let isOpen = false;
+  let disabled = true;
+  let last: Attachment | undefined;
+  let part: Part;
+  let name: String;
+  let detach: boolean;
+  let dispose: boolean;
+  let date: Date;
+
+  async function savePart() {
+    try {
+      disabled = true;
+      if (detach) {
+        await new AttEvent(
+          last!.part_id,
+          date,
+          last!.gear,
+          last!.hook,
+        ).detach();
+      }
+      if (dispose) {
+        await part.dispose(date);
+      }
+    } catch (e: any) {
+      handleError(e);
+    }
+
+    isOpen = false;
+  }
+
+  export const disposePart = (p: Part, last_attachment?: Attachment) => {
+    part = p;
+    name = part.type().name;
+    last = last_attachment;
+
+    if (last) {
+      if (last.isDetached()) {
+        detach = false;
+        dispose = true;
+        date = last.detached;
+      } else {
+        detach = true;
+        dispose = false;
+        date = new Date();
+      }
+    } else {
+      date = part.purchase;
+      detach = false;
+      dispose = true;
+    }
+    disabled = false;
+    isOpen = true;
+  };
+
+  const toggle = () => (isOpen = false);
+</script>
+
+<Modal {isOpen} {toggle} backdrop={false}>
+  <ModalHeader {toggle}>
+    {(detach ? "Detach " : "Dispose ") + name + " " + part.name}
+  </ModalHeader>
+  <form on:submit|preventDefault={savePart}>
+    <ModalBody>
+      <FormGroup>
+        <InputGroup>
+          <InputGroupText>At</InputGroupText>
+          <DateTime bind:date mindate={date} />
+          {#if detach}
+            <Dispose bind:dispose>{name} when detached</Dispose>
+          {/if}
+        </InputGroup>
+      </FormGroup>
+    </ModalBody>
+    <ModalFooter>
+      <Buttons {toggle} {disabled} label={detach ? "Detach" : "Dispose"} />
+    </ModalFooter>
+  </form>
+</Modal>
