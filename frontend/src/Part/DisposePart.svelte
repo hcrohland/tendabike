@@ -9,11 +9,12 @@
     InputGroupText,
   } from "@sveltestrap/sveltestrap";
   import { handleError } from "../lib/store";
-  import { AttEvent, Attachment } from "../lib/attachment";
+  import { Attachment } from "../lib/attachment";
   import Dispose from "../Widgets/Dispose.svelte";
   import DateTime from "../Widgets/DateTime.svelte";
   import { Part } from "../lib/part";
   import Buttons from "../Widgets/Buttons.svelte";
+  import Switch from "../Widgets/Switch.svelte";
 
   let isOpen = false;
   let disabled = true;
@@ -24,25 +25,20 @@
   let dispose: boolean;
   let mindate: Date;
   let date: Date;
+  let all: boolean;
 
   async function savePart() {
     try {
       disabled = true;
       if (detach) {
-        await new AttEvent(
-          last!.part_id,
-          date,
-          last!.gear,
-          last!.hook,
-        ).detach();
+        await part.detach(date, all);
       }
       if (dispose) {
-        await part.dispose(date);
+        await part.dispose(date, all);
       }
     } catch (e: any) {
       handleError(e);
     }
-
     isOpen = false;
   }
 
@@ -66,17 +62,21 @@
       detach = false;
       dispose = true;
     }
+    all = true;
     date = new Date();
     disabled = false;
     isOpen = true;
   };
 
+  $: label = detach ? "Detach " : "Dispose ";
   const toggle = () => (isOpen = false);
 </script>
 
 <Modal {isOpen} {toggle} backdrop={false}>
   <ModalHeader {toggle}>
-    {(detach ? "Detach " : "Dispose ") + name + " " + part.name}
+    {label}
+    {name}
+    {part.name}
   </ModalHeader>
   <form on:submit|preventDefault={savePart}>
     <ModalBody>
@@ -84,6 +84,7 @@
         <InputGroup>
           <InputGroupText>At</InputGroupText>
           <DateTime bind:date {mindate} />
+          <Switch bind:checked={all}>{label} all attached parts</Switch>
           {#if detach}
             <Dispose bind:dispose>{name} when detached</Dispose>
           {/if}

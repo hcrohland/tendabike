@@ -4,7 +4,7 @@
   import { types } from "../lib/types";
   import { by, filterValues } from "../lib/mapable";
   import { Part } from "../lib/part";
-  import { AttEvent, attachments } from "../lib/attachment";
+  import { attachments } from "../lib/attachment";
   import SelectPart from "../Widgets/SelectPart.svelte";
 
   function prevdate(time: Date) {
@@ -15,23 +15,17 @@
     return last?.attached || part.purchase;
   }
 
-  export let attach: AttEvent;
   export let part: Part;
   export let disabled = true;
 
   let type = part.type();
 
-  let date = new Date();
-  let gear: number | undefined = undefined;
-  let hook: number | undefined =
+  export let time = new Date();
+  export let gear: number | undefined = undefined;
+  export let hook: number | undefined =
     type.hooks.length == 1 ? type.hooks[0] : undefined;
 
-  $: if (hook && gear && types[hook]) {
-    disabled = false;
-    attach = new AttEvent(part.id, date, gear, hook);
-  } else {
-    disabled = true;
-  }
+  $: disabled = !(hook && gear && types[hook]);
 </script>
 
 <div class="form-inline">
@@ -51,6 +45,6 @@
   </InputGroup>
   <InputGroup class="mb-0 mr-sm-2 mb-sm-2">
     <InputGroupText>at</InputGroupText>
-    <DateTime bind:date {prevdate} />
+    <DateTime bind:date={time} {prevdate} />
   </InputGroup>
 </div>

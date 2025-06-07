@@ -13,7 +13,7 @@
   import TypeForm from "../Widgets/TypeForm.svelte";
   import { filterValues } from "../lib/mapable";
   import { Part } from "../lib/part";
-  import { AttEvent, attachments } from "../lib/attachment";
+  import { attachments } from "../lib/attachment";
   import Buttons from "../Widgets/Buttons.svelte";
   import Switch from "../Widgets/Switch.svelte";
 
@@ -38,7 +38,7 @@
 
   async function attachPart(part: Part | void) {
     if (!part) return;
-    await new AttEvent(part.id, part.purchase, gear.id, hook, !single).attach();
+    await part.attach(part.purchase, !single, gear.id!, hook);
   }
 
   async function action() {

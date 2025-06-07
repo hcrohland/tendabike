@@ -6,10 +6,10 @@
 //! The module defines two async functions `attach_rt` and `detach_rt` that handle the requests to the API endpoints.
 //! The `router` function creates a new router and maps the API endpoints to their respective functions.
 
+use async_session::log::debug;
 use axum::{Json, Router, extract::State, routing::post};
 use serde::Deserialize;
 use time::OffsetDateTime;
-use tracing::log::debug;
 
 use crate::{DbPool, RequestUser, appstate::AppState, error::ApiResult};
 use tb_domain::{PartId, PartTypeId, Summary};
@@ -75,13 +75,50 @@ async fn detach_rt(
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 pub struct Dispose {
-    part: PartId,
+    part_id: PartId,
+    #[serde(with = "time::serde::rfc3339")]
     time: OffsetDateTime,
     all: bool,
+}
+
+async fn dispose_rt(
+    user: RequestUser,
+    State(store): State<DbPool>,
+    Json(event): Json<Dispose>,
+) -> ApiResult<Summary> {
+    let mut store = store.get().await?;
+    debug!("{event:?}");
+    let Dispose {
+        part_id: part,
+        time,
+        all,
+    } = event;
+    Ok(
+        tb_domain::dispose_assembly(&user, part, time, all, &mut store)
+            .await
+            .map(Json)?,
+    )
+}
+
+async fn recover_rt(
+    user: RequestUser,
+    State(store): State<DbPool>,
+    Json(event): Json<Dispose>,
+) -> ApiResult<Summary> {
+    let mut store = store.get().await?;
+    debug!("Recover {event:?}");
+    let Dispose {
+        part_id: part, all, ..
+    } = event;
+    Ok(tb_domain::recover_assembly(&user, part, all, &mut store)
+        .await
+        .map(Json)?)
 }
 
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .route("/attach", post(attach_rt))
         .route("/detach", post(detach_rt))
+        .route("/dispose", post(dispose_rt))
+        .route("/recover", post(recover_rt))
 }

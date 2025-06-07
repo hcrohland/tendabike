@@ -4,9 +4,8 @@
     ModalHeader,
     ModalBody,
     ModalFooter,
-    Form,
   } from "@sveltestrap/sveltestrap";
-  import { AttEvent, Attachment } from "../lib/attachment";
+  import { Attachment } from "../lib/attachment";
   import { user } from "../lib/store";
   import { types, Type } from "../lib/types";
   import { parts, Part } from "../lib/part";
@@ -30,7 +29,7 @@
 
   async function attachPart(part: Part | void) {
     if (!part) throw "Replace: update part did fail";
-    await new AttEvent(part.id, part.purchase, gear, hook, !single).attach();
+    await part.attach(part.purchase, !single, gear, hook);
 
     if (dispose) {
       oldpart.disposed_at = part.purchase;

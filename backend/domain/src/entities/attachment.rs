@@ -499,7 +499,7 @@ pub async fn attach_assembly(
                 let end = attach_one(part.id, time, gear, hook, &mut hash, store).await?;
                 if all {
                     let subparts = subparts(part.id, part.id, time, store).await?;
-                    for attachment in dbg!(subparts) {
+                    for attachment in subparts {
                         let detached = attachment.shift(time, gear, &mut hash, store).await?;
                         if detached == end && end < attachment.detached {
                             trace!(
@@ -546,4 +546,72 @@ pub async fn detach_assembly(
             .scope_boxed()
         })
         .await
+}
+
+pub async fn dispose_assembly(
+    user: &dyn Person,
+    part_id: PartId,
+    time: OffsetDateTime,
+    all: bool,
+    store: &mut impl Store,
+) -> Result<Summary, Error> {
+    part_id.checkuser(user, store).await?;
+
+    let attachments = store.attachments_all_by_part(part_id).await?;
+
+    if let Some(attachment) = attachments
+        .iter()
+        .find(|a| a.detached < MAX_TIME && a.detached > time)
+    {
+        return Err(Error::Conflict(format!(
+            "Cannot dispose. {part_id} attached to {} after {time}",
+            attachment.gear
+        )));
+    }
+
+    let mut res = SumHash::default();
+    res += part_id.dispose(time, store).await?;
+    res += dispose_subparts(part_id, time, all, store).await?;
+
+    Ok(res.into())
+}
+
+async fn dispose_subparts(
+    part: PartId,
+    time: OffsetDateTime,
+    all: bool,
+    store: &mut impl Store,
+) -> TbResult<Summary> {
+    let sub_attachments = subparts(part, part, time, store).await?;
+    let mut res = SumHash::default();
+    for attachment in sub_attachments {
+        let attachments = store.attachments_all_by_part(attachment.part_id).await?;
+        if !all || attachments.iter().any(|a| a.attached > time) {
+            debug!("-- detaching {}", attachment.part_id);
+            res += attachment.detach(time, store).await?
+        } else {
+            res += attachment.part_id.dispose(time, store).await?
+        }
+    }
+    Ok(res.into())
+}
+
+pub async fn recover_assembly(
+    user: &dyn Person,
+    part: PartId,
+    all: bool,
+    store: &mut impl Store,
+) -> Result<Summary, Error> {
+    let mut res = SumHash::default();
+    if let Some(time) = part.part(user, store).await?.disposed_at {
+        res += part.restore(store).await?;
+        if all {
+            for attachment in subparts(part, part, time, store).await? {
+                res += attachment.part_id.restore(store).await?;
+            }
+        }
+        Ok(res.into())
+    } else {
+        Err(Error::BadRequest(format!("Part {part} is not disposed")))
+    }
 }

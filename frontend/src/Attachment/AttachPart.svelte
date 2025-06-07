@@ -6,15 +6,16 @@
     ModalFooter,
   } from "@sveltestrap/sveltestrap";
   import { types } from "../lib/types";
-  import { AttEvent } from "../lib/attachment";
   import AttachForm from "./AttachForm.svelte";
   import { Part } from "../lib/part";
   import Buttons from "../Widgets/Buttons.svelte";
 
-  let attach: AttEvent;
   let part: Part | undefined;
   let isOpen = false;
   let disabled = true;
+  let time: Date;
+  let gear: number;
+  let hook: number;
   const toggle = () => {
     part = undefined;
     isOpen = false;
@@ -23,7 +24,7 @@
   async function action() {
     disabled = true;
 
-    await attach.attach();
+    await part!.attach(time, true, gear!, hook);
     isOpen = false;
   }
 
@@ -43,7 +44,7 @@
     </ModalHeader>
     <form on:submit|preventDefault={action}>
       <ModalBody>
-        <AttachForm bind:attach bind:disabled {part} />
+        <AttachForm bind:time bind:gear bind:hook bind:disabled {part} />
       </ModalBody>
       <ModalFooter>
         <Buttons {toggle} {disabled} label={"Attach"} />

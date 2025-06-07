@@ -10,8 +10,7 @@
   const toggle = () => (isOpen = false);
 
   async function action() {
-    part.disposed_at = undefined;
-    await part.update();
+    await part.recover(true);
     isOpen = false;
   }
 

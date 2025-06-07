@@ -49,7 +49,7 @@ pub trait PartStore {
     /// # Errors
     ///
     /// This function will return an error if the part does not exist or there is a store error.
-    async fn part_update(&mut self, part: &Part) -> TbResult<usize>;
+    async fn part_update(&mut self, part: &Part) -> TbResult<Part>;
 
     /// Changes an existing `Part` object.
     ///

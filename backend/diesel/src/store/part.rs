@@ -52,11 +52,11 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .map_err(into_domain)
     }
 
-    async fn part_update(&mut self, part: &Part) -> TbResult<usize> {
+    async fn part_update(&mut self, part: &Part) -> TbResult<Part> {
         use schema::parts::dsl::*;
         diesel::update(parts.filter(id.eq(part.id)))
             .set(part)
-            .execute(self)
+            .get_result(self)
             .await
             .map_err(into_domain)
     }
