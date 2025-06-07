@@ -24,15 +24,13 @@
 //! This module also contains the implementation of the `Event` struct, which describes an attach or detach request.
 //!
 
+use scoped_futures::ScopedFutureExt;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::traits::{AttachmentStore, Store};
 
 use crate::*;
 use time::OffsetDateTime;
-
-pub use event::Event;
-mod event;
 
 /// Timeline of attachments
 ///
@@ -441,4 +439,111 @@ async fn attach_one(
     }
 
     Ok(det)
+}
+
+pub async fn attach_assembly(
+    user: &dyn Person,
+    part: PartId,
+    time: OffsetDateTime,
+    gear: PartId,
+    hook: PartTypeId,
+    all: bool,
+    store: &mut impl Store,
+) -> Result<Summary, Error> {
+    // check user
+    let part = part.part(user, store).await?;
+    let parttype = part.what.get()?;
+
+    let geartypeid = gear.part(user, store).await?.what;
+
+    if !parttype.hooks.contains(&hook) {
+        return Err(Error::BadRequest(format!(
+            "Type {} cannot be attached to hook {}",
+            parttype.name, hook
+        )));
+    };
+    if !(parttype.main == geartypeid || parttype.hooks.contains(&geartypeid)) {
+        return Err(Error::BadRequest(format!(
+            "Type {} cannot be attached to gear type {}",
+            parttype.name,
+            geartypeid
+                .get()
+                .map(|t| t.name)
+                .unwrap_or_else(|_| format!("unknown type {}", geartypeid))
+        )));
+    };
+    store
+        .transaction(|store| {
+            async move {
+                let mut hash = SumHash::default();
+
+                // detach part if it is attached already
+                if let Some(attachment) =
+                    store.attachment_get_by_part_and_time(part.id, time).await?
+                {
+                    debug!("detaching self assembly");
+                    hash += attachment.detach_assembly(time, all, store).await?;
+                }
+
+                // if there is a part attached to the gear at the hook, detach it
+                let attachment = store
+                    .attachment_find_part_of_type_at_hook_and_time(part.what, gear, hook, time)
+                    .await?;
+                if let Some(attachment) = attachment {
+                    debug!("detaching predecessor assembly {}", attachment.part_id);
+                    hash += attachment.detach_assembly(time, all, store).await?;
+                }
+
+                // reattach the assembly
+                debug!("- attaching assembly {} to {}", part.id, gear);
+                let end = attach_one(part.id, time, gear, hook, &mut hash, store).await?;
+                if all {
+                    let subparts = subparts(part.id, part.id, time, store).await?;
+                    for attachment in dbg!(subparts) {
+                        let detached = attachment.shift(time, gear, &mut hash, store).await?;
+                        if detached == end && end < attachment.detached {
+                            trace!(
+                                "reattaching {} to {} at {}",
+                                attachment.part_id, part.id, end
+                            );
+
+                            attach_one(
+                                attachment.part_id,
+                                end,
+                                part.id,
+                                attachment.hook,
+                                &mut hash,
+                                store,
+                            )
+                            .await?;
+                        }
+                    }
+                }
+                Ok(hash.into())
+            }
+            .scope_boxed()
+        })
+        .await
+}
+
+pub async fn detach_assembly(
+    user: &dyn Person,
+    part_id: PartId,
+    time: OffsetDateTime,
+    all: bool,
+    store: &mut impl Store,
+) -> Result<Summary, Error> {
+    part_id.checkuser(user, store).await?;
+    store
+        .transaction(|store| {
+            async move {
+                let attachment = store
+                    .attachment_get_by_part_and_time(part_id, time)
+                    .await?
+                    .ok_or(Error::NotFound("part not attached".into()))?;
+                attachment.detach_assembly(time, all, store).await
+            }
+            .scope_boxed()
+        })
+        .await
 }
