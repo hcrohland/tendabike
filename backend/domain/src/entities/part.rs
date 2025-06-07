@@ -42,6 +42,7 @@ use crate::*;
 #[serde_as]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Queryable, Identifiable, AsChangeset)]
 #[diesel(primary_key(id))]
+#[diesel(treat_none_as_null = true)]
 #[diesel(table_name = schema::parts)]
 pub struct Part {
     /// The primary key
@@ -184,9 +185,27 @@ impl PartId {
         let mut part = self.read(store).await?;
         if start > part.last_used {
             part.last_used = start;
-            store.part_update(&part).await?;
+            return store.part_update(&part).await;
         }
         Ok(part)
+    }
+
+    pub(crate) async fn dispose(
+        &self,
+        time: OffsetDateTime,
+        store: &mut impl Store,
+    ) -> Result<Part, Error> {
+        debug!("-- disposing part {self} at {time}");
+        let mut part = self.read(store).await?;
+        part.disposed_at = Some(time);
+        store.part_update(&part).await
+    }
+
+    pub(crate) async fn restore(&self, store: &mut impl Store) -> TbResult<Part> {
+        debug!("-- restoring part {self}");
+        let mut part = self.read(store).await?;
+        part.disposed_at = None;
+        store.part_update(&part).await
     }
 }
 

@@ -1,12 +1,6 @@
 import type { Activity } from "./activity";
 import { filterValues, mapable, type Map } from "./mapable";
-import {
-  fmtRange,
-  handleError,
-  maxDate,
-  myfetch,
-  updateSummary,
-} from "./store";
+import { fmtRange, maxDate } from "./store";
 
 export class Attachment {
   part_id: number;
@@ -55,40 +49,6 @@ export class Attachment {
       acts,
       (a) => a.gear == this.gear && this.isAttached(a.start),
     );
-  }
-}
-
-export class AttEvent {
-  part_id: number;
-  time: Date;
-  gear: number;
-  hook: number;
-  constructor(
-    part: number | undefined,
-    time: Date,
-    gear: number | undefined,
-    hook: number,
-  ) {
-    if (gear == undefined || part == undefined) {
-      console.error("part or gear not defined: ", part, gear);
-      throw "part or gear not defined";
-    }
-    this.part_id = part;
-    this.time = time;
-    this.gear = gear;
-    this.hook = hook;
-  }
-
-  async attach() {
-    return await myfetch("/api/part/attach", "POST", this)
-      .then(updateSummary)
-      .catch(handleError);
-  }
-
-  async detach() {
-    return await myfetch("/api/part/detach", "POST", this)
-      .then(updateSummary)
-      .catch(handleError);
   }
 }
 

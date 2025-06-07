@@ -52,7 +52,7 @@ pub struct PartType {
     pub id: PartTypeId,
     /// The display name
     pub name: String,
-    /// is it a main part? I.e. can it be used for an activity?
+    /// To which main gear type this part belongs
     pub main: PartTypeId,
     /// Part types that can be attached
     pub hooks: Vec<PartTypeId>,
@@ -127,7 +127,7 @@ impl PartTypeId {
         res
     }
 
-    /// get all the types you can attach - even indirectly - to this type_id
+    /// get all the type_ids you can attach - even indirectly - to this type_id
     pub(crate) fn subtypes(self) -> Vec<PartTypeId> {
         let mut types = PartType::all_ordered();
         self.filter_types(&mut types)

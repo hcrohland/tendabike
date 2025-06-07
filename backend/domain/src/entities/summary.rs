@@ -90,6 +90,12 @@ impl AddAssign<Summary> for SumHash {
     }
 }
 
+impl AddAssign<Part> for SumHash {
+    fn add_assign(&mut self, rhs: Part) {
+        self.parts.insert(rhs.id, rhs);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{SumHash, Summary, Usage, UsageId};

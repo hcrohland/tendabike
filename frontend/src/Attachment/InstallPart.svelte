@@ -13,8 +13,9 @@
   import TypeForm from "../Widgets/TypeForm.svelte";
   import { filterValues } from "../lib/mapable";
   import { Part } from "../lib/part";
-  import { AttEvent, attachments } from "../lib/attachment";
+  import { attachments } from "../lib/attachment";
   import Buttons from "../Widgets/Buttons.svelte";
+  import Switch from "../Widgets/Switch.svelte";
 
   let part: Part, newpart: Part;
   let gear: Part;
@@ -22,6 +23,8 @@
   let hook: number;
   let disabled = true;
   let isOpen = false;
+  let single = true;
+
   const toggle = () => (isOpen = false);
   export const installPart = (g: Part) => {
     gear = g;
@@ -35,7 +38,7 @@
 
   async function attachPart(part: Part | void) {
     if (!part) return;
-    await new AttEvent(part.id, part.purchase, gear.id, hook).attach();
+    await part.attach(part.purchase, !single, gear.id!, hook);
   }
 
   async function action() {
@@ -88,6 +91,9 @@
     </ModalHeader>
     <ModalBody>
       <NewForm {type} {part} mindate={gear.purchase} on:change={setPart} />
+      {#if type?.is_hook()}
+        <Switch bind:checked={single}>Keep all attached parts</Switch>
+      {/if}
     </ModalBody>
     <ModalFooter>
       <Buttons {toggle} {disabled} label={"Install"} />

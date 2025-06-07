@@ -7,7 +7,7 @@
     Button,
   } from "@sveltestrap/sveltestrap";
   import { types, Type } from "../lib/types";
-  import { AttEvent, Attachment } from "../lib/attachment";
+  import { Attachment } from "../lib/attachment";
   import { type Map, filterValues } from "../lib/mapable";
   import Switch from "../Widgets/Switch.svelte";
   import { Part } from "../lib/part";
@@ -64,7 +64,7 @@
 
   async function attachPart(part: Part | void, hook: number) {
     if (!part) throw "Wizard: part create failed";
-    await new AttEvent(part.id, part.purchase, gear.id, hook).attach();
+    await part.attach(part.purchase, true, gear.id!, hook);
   }
 
   async function installPart(newpart: Part, hook: number) {

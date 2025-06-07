@@ -6,10 +6,30 @@
 //! The module defines two async functions `attach_rt` and `detach_rt` that handle the requests to the API endpoints.
 //! The `router` function creates a new router and maps the API endpoints to their respective functions.
 
+use async_session::log::debug;
 use axum::{Json, Router, extract::State, routing::post};
+use serde::Deserialize;
+use time::OffsetDateTime;
 
 use crate::{DbPool, RequestUser, appstate::AppState, error::ApiResult};
-use tb_domain::{Event, Summary};
+use tb_domain::{PartId, PartTypeId, Summary};
+
+/// Description of an Attach or Detach request
+
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+pub struct Event {
+    /// the part which should be change
+    part_id: PartId,
+    /// when it the change happens
+    #[serde(with = "time::serde::rfc3339")]
+    time: OffsetDateTime,
+    /// The gear the part is or will be attached to
+    gear: PartId,
+    /// the hook on that gear
+    hook: PartTypeId,
+    /// if true, the the whole assembly will be detached
+    all: bool,
+}
 
 /// route for attach API
 async fn attach_rt(
@@ -18,7 +38,21 @@ async fn attach_rt(
     Json(event): Json<Event>,
 ) -> ApiResult<Summary> {
     let mut store = store.get().await?;
-    Ok(event.attach(&user, &mut store).await.map(Json)?)
+    debug!("attach {event:?}");
+
+    let Event {
+        part_id,
+        time,
+        gear,
+        hook,
+        all,
+    } = event;
+
+    Ok(
+        tb_domain::attach_assembly(&user, part_id, time, gear, hook, all, &mut store)
+            .await
+            .map(Json)?,
+    )
 }
 
 /// route for detach API
@@ -28,11 +62,63 @@ async fn detach_rt(
     Json(event): Json<Event>,
 ) -> ApiResult<Summary> {
     let mut store = store.get().await?;
-    Ok(event.detach(&user, &mut store).await.map(Json)?)
+    debug!("detach {event:?}");
+    let Event {
+        part_id, time, all, ..
+    } = event;
+    Ok(
+        tb_domain::detach_assembly(&user, part_id, time, all, &mut store)
+            .await
+            .map(Json)?,
+    )
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+pub struct Dispose {
+    part_id: PartId,
+    #[serde(with = "time::serde::rfc3339")]
+    time: OffsetDateTime,
+    all: bool,
+}
+
+async fn dispose_rt(
+    user: RequestUser,
+    State(store): State<DbPool>,
+    Json(event): Json<Dispose>,
+) -> ApiResult<Summary> {
+    let mut store = store.get().await?;
+    debug!("{event:?}");
+    let Dispose {
+        part_id: part,
+        time,
+        all,
+    } = event;
+    Ok(
+        tb_domain::dispose_assembly(&user, part, time, all, &mut store)
+            .await
+            .map(Json)?,
+    )
+}
+
+async fn recover_rt(
+    user: RequestUser,
+    State(store): State<DbPool>,
+    Json(event): Json<Dispose>,
+) -> ApiResult<Summary> {
+    let mut store = store.get().await?;
+    debug!("Recover {event:?}");
+    let Dispose {
+        part_id: part, all, ..
+    } = event;
+    Ok(tb_domain::recover_assembly(&user, part, all, &mut store)
+        .await
+        .map(Json)?)
 }
 
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .route("/attach", post(attach_rt))
         .route("/detach", post(detach_rt))
+        .route("/dispose", post(dispose_rt))
+        .route("/recover", post(recover_rt))
 }

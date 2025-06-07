@@ -4,15 +4,15 @@
     ModalHeader,
     ModalBody,
     ModalFooter,
-    Form,
   } from "@sveltestrap/sveltestrap";
-  import { AttEvent, Attachment } from "../lib/attachment";
+  import { Attachment } from "../lib/attachment";
   import { user } from "../lib/store";
   import { types, Type } from "../lib/types";
   import { parts, Part } from "../lib/part";
   import NewForm from "../Part/PartForm.svelte";
   import Dispose from "../Widgets/Dispose.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
+  import Switch from "../Widgets/Switch.svelte";
 
   let part: Part, oldpart: Part, newpart: Part;
   let type: Type;
@@ -23,11 +23,13 @@
   let dispose = false;
   let isOpen = false;
   let mindate: Date;
+  let single = false;
+
   const toggle = () => (isOpen = false);
 
   async function attachPart(part: Part | void) {
     if (!part) throw "Replace: update part did fail";
-    await new AttEvent(part.id, part.purchase, gear, hook).attach();
+    await part.attach(part.purchase, !single, gear, hook);
 
     if (dispose) {
       oldpart.disposed_at = part.purchase;
@@ -75,7 +77,12 @@
   <form on:submit|preventDefault={action}>
     <ModalBody>
       <NewForm {type} {part} {mindate} on:change={setPart} />
-      <Dispose bind:dispose>old {type.name}</Dispose>
+      {#if type.is_hook()}
+        <Switch bind:checked={single}>Keep all attached parts</Switch>
+      {/if}
+      {#if single}
+        <Dispose bind:dispose>old {type.name}</Dispose>
+      {/if}
     </ModalBody>
     <ModalFooter>
       <Buttons {toggle} {disabled} label={"Replace"} />
