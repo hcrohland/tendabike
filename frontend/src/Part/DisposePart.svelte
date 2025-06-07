@@ -22,6 +22,7 @@
   let name: String;
   let detach: boolean;
   let dispose: boolean;
+  let mindate: Date;
   let date: Date;
 
   async function savePart() {
@@ -54,17 +55,18 @@
       if (last.isDetached()) {
         detach = false;
         dispose = true;
-        date = last.detached;
+        mindate = last.detached;
       } else {
         detach = true;
         dispose = false;
-        date = new Date();
+        mindate = last.attached;
       }
     } else {
-      date = part.purchase;
+      mindate = part.purchase;
       detach = false;
       dispose = true;
     }
+    date = new Date();
     disabled = false;
     isOpen = true;
   };
@@ -81,7 +83,7 @@
       <FormGroup>
         <InputGroup>
           <InputGroupText>At</InputGroupText>
-          <DateTime bind:date mindate={date} />
+          <DateTime bind:date {mindate} />
           {#if detach}
             <Dispose bind:dispose>{name} when detached</Dispose>
           {/if}
