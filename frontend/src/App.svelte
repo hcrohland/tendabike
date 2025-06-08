@@ -56,7 +56,9 @@
 <Message />
 <Container class="mt-2">
   {#await promise}
-    <Spinner />
+    <div class="d-flex justify-content-center">
+      <Spinner size="lg" />
+    </div>
   {:then}
     <Router {routes} />
   {:catch error}
