@@ -53,7 +53,8 @@
     </thead>
     <tbody>
       {#each buildList([], part.type(), attachees, 0, "") as item (item.hook.id + "." + item.type.id)}
-        <SubType {...item} />
+        {@const { hook, ...props } = item}
+        <SubType {...props} />
       {/each}
     </tbody>
   </Table>
