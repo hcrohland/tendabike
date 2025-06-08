@@ -20,6 +20,8 @@
   import { querystring } from "svelte-spa-router";
   import SyncMenu from "./Widgets/SyncMenu.svelte";
 
+  export let promise;
+
   let userOpen = false;
 
   let isOpen = false;
@@ -65,7 +67,9 @@
         </NavItem>
       </Nav>
       <Nav class="ms-auto float-end" navbar>
-        <SyncMenu></SyncMenu>
+        {#await promise then}
+          <SyncMenu></SyncMenu>
+        {/await}
         <Dropdown nav isOpen={userOpen} toggle={() => (userOpen = !userOpen)}>
           <DropdownToggle color="light" caret>{$user.firstname}</DropdownToggle>
           <DropdownMenu right>

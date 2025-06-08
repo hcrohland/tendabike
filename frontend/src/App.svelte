@@ -49,12 +49,13 @@
   };
 
   await getTypes();
+  let promise = initData();
 </script>
 
-<Header />
+<Header {promise} />
 <Message />
 <Container class="mt-2">
-  {#await initData()}
+  {#await promise}
     <Spinner />
   {:then}
     <Router {routes} />
