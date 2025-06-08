@@ -49,13 +49,16 @@
   };
 
   await getTypes();
+  let promise = initData();
 </script>
 
-<Header />
+<Header {promise} />
 <Message />
 <Container class="mt-2">
-  {#await initData()}
-    <Spinner />
+  {#await promise}
+    <div class="d-flex justify-content-center">
+      <Spinner size="lg" />
+    </div>
   {:then}
     <Router {routes} />
   {:catch error}

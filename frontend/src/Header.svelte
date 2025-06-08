@@ -14,24 +14,21 @@
     DropdownToggle,
     NavItem,
   } from "@sveltestrap/sveltestrap";
-  import { handleError, user, refresh } from "./lib/store";
-  import Garmin from "./Activity/Garmin.svelte";
+  import { user } from "./lib/store";
   import Sport from "./Widgets/Sport.svelte";
   import { category } from "./lib/types";
   import { querystring } from "svelte-spa-router";
+  import SyncMenu from "./Widgets/SyncMenu.svelte";
+
+  export let promise;
 
   let userOpen = false;
-  let syncOpen = false;
-  let promise: Promise<void>;
-  let garmin: () => void;
 
   let isOpen = false;
   function navbarUpdate(event: CustomEvent<any>) {
     isOpen = event.detail.isOpen;
   }
 </script>
-
-<Garmin bind:garmin />
 
 <Navbar color="light" expand="md">
   <img
@@ -70,23 +67,9 @@
         </NavItem>
       </Nav>
       <Nav class="ms-auto float-end" navbar>
-        <Dropdown nav isOpen={syncOpen} toggle={() => (syncOpen = !syncOpen)}>
-          <DropdownToggle color="light" caret>
-            {#await promise}
-              Syncing ...
-            {:then}
-              Sync
-            {:catch error}
-              {handleError(error)}
-            {/await}
-          </DropdownToggle>
-          <DropdownMenu right>
-            <DropdownItem on:click={() => (promise = refresh())}
-              >Refresh data
-            </DropdownItem>
-            <DropdownItem on:click={garmin}>With CSV File</DropdownItem>
-          </DropdownMenu>
-        </Dropdown>
+        {#await promise then}
+          <SyncMenu></SyncMenu>
+        {/await}
         <Dropdown nav isOpen={userOpen} toggle={() => (userOpen = !userOpen)}>
           <DropdownToggle color="light" caret>{$user.firstname}</DropdownToggle>
           <DropdownMenu right>
