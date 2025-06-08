@@ -105,24 +105,8 @@ export async function initData() {
   return refresh();
 }
 
-export function refresh() {
-  return myfetch("/api/user/summary").then(setSummary).then(poll);
-}
-
-let timer: number;
-async function poll() {
-  clearInterval(timer);
-  let data;
-  try {
-    do {
-      data = await myfetch("/strava/hooks");
-      if (!data) break;
-      updateSummary(data);
-    } while (data["activities"].length > 0);
-    timer = setTimeout(poll, 60000);
-  } catch (e) {
-    handleError(e as Error);
-  }
+export async function refresh() {
+  await myfetch("/api/user/summary").then(setSummary);
 }
 
 type Summary = {
