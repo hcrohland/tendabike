@@ -36,11 +36,6 @@
 
 <tr>
   <th colspan="6" scope="col" class="text-nowrap">
-    {type.name}s &NonBreakingSpace;
-    <Button size="sm" color="light" on:click={() => $actions.newPart(type)}
-      >add</Button
-    >
-    &NonBreakingSpace;
     {#if subparts.length > 0}
       <ShowAll
         on:toggle={(e) => {
@@ -51,14 +46,33 @@
         }}
       />
     {/if}
+    &NonBreakingSpace;
+    {type.name}s &NonBreakingSpace;
+    <Button size="sm" color="light" on:click={() => $actions.newPart(type)}>
+      new
+    </Button>
   </th>
   <th class="text-nowrap" colspan="80"> </th>
 </tr>
 {#each subparts.filter((p) => show_all || !(attachedTo($attachments, p.id, date) || p.disposed_at)) as part (part.id)}
   <tr>
-    <td class="border-0"></td>
+    <td class="border-0"> </td>
     <td title={part.vendor + " " + part.model + " " + fmtDate(part.purchase)}>
       <PartLink {part} />
+      {#if !part.disposed_at}
+        <Button
+          color="light"
+          class="float-end"
+          size="sm"
+          on:click={() => $actions.attachPart(part)}
+        >
+          {#if attachedTo($attachments, part.id, date)}
+            Move
+          {:else}
+            Attach
+          {/if}
+        </Button>
+      {/if}
     </td>
     <Usage id={part.usage} ref={part.id} />
     {#if attachee > 0}
@@ -70,19 +84,5 @@
         {/if}
       </td>
     {/if}
-    <td>
-      {#if !part.disposed_at}
-        <Menu>
-          <DropdownItem on:click={() => $actions.attachPart(part)}>
-            {#if attachedTo($attachments, part.id, date)}
-              Move
-            {:else}
-              Attach
-            {/if}
-            {type.name}
-          </DropdownItem>
-        </Menu>
-      {/if}
-    </td>
   </tr>
 {/each}
