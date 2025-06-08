@@ -35,17 +35,19 @@
             <ShowAll bind:show_hist />
           {/if}
           {prefix + " " + type.name}
-          <Menu>
-            <DropdownItem on:click={() => $actions.newService(part)}>
-              Log Service
-            </DropdownItem>
-            <DropdownItem on:click={() => $actions.attachPart(part)}>
-              Move part
-            </DropdownItem>
-            <DropdownItem on:click={() => $actions.replacePart(att)}>
-              Replace part
-            </DropdownItem>
-          </Menu>
+          {#if att.isAttached()}
+            <Menu>
+              <DropdownItem on:click={() => $actions.newService(part)}>
+                Log Service
+              </DropdownItem>
+              <DropdownItem on:click={() => $actions.attachPart(part)}>
+                Move part
+              </DropdownItem>
+              <DropdownItem on:click={() => $actions.replacePart(att)}>
+                Replace part
+              </DropdownItem>
+            </Menu>
+          {/if}
         </th>
         {#if att.isAttached()}
           <td>
