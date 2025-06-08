@@ -13,12 +13,13 @@
 
   let syncOpen: boolean;
 
-  let hook_promise = Promise.resolve();
-  let hook_timer = setTimeout(poll);
+  let hook_timer = setTimeout(() => {});
 
   onDestroy(() => {
     clearInterval(hook_timer);
   });
+
+  let hook_promise = poll();
 
   async function poll() {
     clearInterval(hook_timer);
