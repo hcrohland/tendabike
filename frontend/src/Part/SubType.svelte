@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { DropdownItem } from "@sveltestrap/sveltestrap";
+  import { Button, DropdownItem } from "@sveltestrap/sveltestrap";
   import Usage from "../Usage/Usage.svelte";
   import { actions } from "../Widgets/Actions.svelte";
   import Menu from "../Widgets/Menu.svelte";
@@ -21,8 +21,8 @@
 {#if type == undefined}
   <tr>
     <th scope="col"> <slot /> </th>
-    <th scope="col">Name</th>
-    <th scope="col">Attached</th>
+    <th scope="col"> Name </th>
+    <th scope="col"> Attached </th>
     <Usage header />
   </tr>
 {:else}
@@ -47,6 +47,15 @@
                 Replace part
               </DropdownItem>
             </Menu>
+          {:else}
+            <Button
+              class="float-end"
+              size="sm"
+              color="light"
+              on:click={() => $actions.replacePart(att)}
+            >
+              add
+            </Button>
           {/if}
         </th>
         {#if att.isAttached()}
