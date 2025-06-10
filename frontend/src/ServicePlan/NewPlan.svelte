@@ -47,7 +47,7 @@
   $: disabled = !(plan && plan.valid());
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false}>
+<Modal {isOpen} {toggle}>
   <form on:submit|preventDefault={createPlan}>
     <ModalHeader {toggle}>
       New service plan for

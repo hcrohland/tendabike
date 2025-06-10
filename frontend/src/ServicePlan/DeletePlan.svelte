@@ -18,7 +18,7 @@
   };
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false}>
+<Modal {isOpen} {toggle}>
   <ModalHeader {toggle}>
     Do you really want to delete ServicePlan <br />
     "{plan.name}"?

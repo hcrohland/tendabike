@@ -15,7 +15,7 @@
   };
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false}>
+<Modal {isOpen} {toggle}>
   <ModalHeader {toggle}>
     <slot>Activities</slot>
   </ModalHeader>

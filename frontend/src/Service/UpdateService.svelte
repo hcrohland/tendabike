@@ -35,7 +35,7 @@
   };
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false}>
+<Modal {isOpen} {toggle}>
   <ModalHeader {toggle}>
     Update Service for {part.name}
     {part.vendor}

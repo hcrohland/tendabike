@@ -55,7 +55,7 @@
   }
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false}>
+<Modal {isOpen} {toggle}>
   <ModalHeader {toggle}>
     Create sync Event
     {#if user}
