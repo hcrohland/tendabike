@@ -48,7 +48,8 @@ pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
         .nest("/strava", strava::router())
         .with_state(app_state)
         .fallback_service(tower_http::services::ServeDir::new(path))
-        .layer(tower_http::trace::TraceLayer::new_for_http());
+        .layer(tower_http::trace::TraceLayer::new_for_http())
+        .layer(tower_http::compression::CompressionLayer::new());
 
     tracing::debug!("listening on {}", addr);
 
