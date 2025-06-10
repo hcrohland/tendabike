@@ -40,11 +40,13 @@ const MIN_TIME: OffsetDateTime = time::macros::datetime!(0000-01-01 0:00 UTC);
 /// # Panics
 ///
 /// Panics if the rounding leads to a ComponentRange error
-fn round_time(time: OffsetDateTime) -> OffsetDateTime {
+pub fn round_time(time: OffsetDateTime) -> OffsetDateTime {
     let minute = time.minute();
     time.replace_microsecond(0)
         .unwrap()
         .replace_millisecond(0)
+        .unwrap()
+        .replace_second(0)
         .unwrap()
         .replace_minute((minute / 15) * 15)
         .unwrap()
@@ -58,11 +60,11 @@ mod tests {
     #[test]
     fn test_round_time() {
         assert_eq!(
-            round_time(datetime!(2020-01-01 0:00 UTC)),
+            round_time(datetime!(2020-01-01 0:00:00.0000 UTC)),
             datetime!(2020-01-01 0:00 UTC)
         );
         assert_eq!(
-            round_time(datetime!(2020-01-01 0:07 UTC)),
+            round_time(datetime!(2020-01-01 0:07:07.0077 UTC)),
             datetime!(2020-01-01 0:00 UTC)
         );
         assert_eq!(
@@ -70,7 +72,7 @@ mod tests {
             datetime!(2020-02-28 0:15 -1)
         );
         assert_eq!(
-            round_time(datetime!(2020-02-28 0:29 -1)),
+            round_time(datetime!(2020-02-28 0:29:07.0077 -1)),
             datetime!(2020-02-28 0:15 -1)
         );
     }

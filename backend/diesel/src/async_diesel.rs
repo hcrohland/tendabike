@@ -17,6 +17,7 @@ use diesel_async::{
     },
 };
 use std::ops::{Deref, DerefMut};
+use time::macros::datetime;
 
 type MyConnection = AsyncPgConnection;
 pub struct AsyncDieselConn(Object<MyConnection>);
@@ -56,9 +57,10 @@ impl DbPool {
         run_db_migrations(&database_url);
 
         let config = AsyncDieselConnectionManager::<MyConnection>::new(database_url);
-        let pool = Pool::builder(config).build()?;
+        let pool = DbPool(Pool::builder(config).build()?);
+        crate::store::migrate(&mut pool.get().await?, datetime!(2025-06-11 00:00 UTC)).await?;
 
-        Ok(DbPool(pool))
+        Ok(pool)
     }
 
     pub async fn get(&self) -> TbResult<AsyncDieselConn> {
