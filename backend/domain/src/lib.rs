@@ -29,7 +29,49 @@ pub use entities::*;
 pub mod schema;
 
 mod traits;
+use time::OffsetDateTime;
 pub use traits::*;
 
-const MAX_TIME: time::OffsetDateTime = time::macros::datetime!(9100-01-01 0:00 UTC);
-const MIN_TIME: time::OffsetDateTime = time::macros::datetime!(0000-01-01 0:00 UTC);
+const MAX_TIME: OffsetDateTime = time::macros::datetime!(9100-01-01 0:00 UTC);
+const MIN_TIME: OffsetDateTime = time::macros::datetime!(0000-01-01 0:00 UTC);
+
+/// round time down to the quarter of an hour
+///
+/// # Panics
+///
+/// Panics if the rounding leads to a ComponentRange error
+fn round_time(time: OffsetDateTime) -> OffsetDateTime {
+    let minute = time.minute();
+    time.replace_microsecond(0)
+        .unwrap()
+        .replace_millisecond(0)
+        .unwrap()
+        .replace_minute((minute / 15) * 15)
+        .unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use time::macros::datetime;
+
+    #[test]
+    fn test_round_time() {
+        assert_eq!(
+            round_time(datetime!(2020-01-01 0:00 UTC)),
+            datetime!(2020-01-01 0:00 UTC)
+        );
+        assert_eq!(
+            round_time(datetime!(2020-01-01 0:07 UTC)),
+            datetime!(2020-01-01 0:00 UTC)
+        );
+        assert_eq!(
+            round_time(datetime!(2020-02-28 0:15 -1)),
+            datetime!(2020-02-28 0:15 -1)
+        );
+        assert_eq!(
+            round_time(datetime!(2020-02-28 0:29 -1)),
+            datetime!(2020-02-28 0:15 -1)
+        );
+    }
+}

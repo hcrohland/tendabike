@@ -450,6 +450,7 @@ pub async fn attach_assembly(
     all: bool,
     store: &mut impl Store,
 ) -> Result<Summary, Error> {
+    let time = round_time(time);
     // check user
     let part = part.part(user, store).await?;
     let parttype = part.what.get()?;
@@ -533,7 +534,9 @@ pub async fn detach_assembly(
     all: bool,
     store: &mut impl Store,
 ) -> Result<Summary, Error> {
+    let time = round_time(time);
     part_id.checkuser(user, store).await?;
+
     store
         .transaction(|store| {
             async move {
@@ -555,6 +558,8 @@ pub async fn dispose_assembly(
     all: bool,
     store: &mut impl Store,
 ) -> Result<Summary, Error> {
+    let time = round_time(time);
+
     part_id.checkuser(user, store).await?;
 
     let attachments = store.attachments_all_by_part(part_id).await?;
