@@ -326,6 +326,20 @@ impl Attachment {
         hash += self.detach(time, store).await?;
         Ok(hash.into())
     }
+
+    pub fn round_times(self) -> Option<(OffsetDateTime, OffsetDateTime)> {
+        let attached = round_time(self.attached);
+        let detached = round_time(self.detached);
+        if attached != self.attached || detached != self.detached {
+            Some((attached, detached))
+        } else {
+            None
+        }
+    }
+
+    pub fn key(&self) -> (PartId, OffsetDateTime) {
+        (self.part_id, self.attached)
+    }
 }
 
 /// moves all subparts of 'from' to 'to' at 'time'
@@ -450,6 +464,7 @@ pub async fn attach_assembly(
     all: bool,
     store: &mut impl Store,
 ) -> Result<Summary, Error> {
+    let time = round_time(time);
     // check user
     let part = part.part(user, store).await?;
     let parttype = part.what.get()?;
@@ -533,7 +548,9 @@ pub async fn detach_assembly(
     all: bool,
     store: &mut impl Store,
 ) -> Result<Summary, Error> {
+    let time = round_time(time);
     part_id.checkuser(user, store).await?;
+
     store
         .transaction(|store| {
             async move {
@@ -555,6 +572,8 @@ pub async fn dispose_assembly(
     all: bool,
     store: &mut impl Store,
 ) -> Result<Summary, Error> {
+    let time = round_time(time);
+
     part_id.checkuser(user, store).await?;
 
     let attachments = store.attachments_all_by_part(part_id).await?;

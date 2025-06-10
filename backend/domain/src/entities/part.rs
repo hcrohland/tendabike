@@ -107,9 +107,6 @@ pub struct ChangePart {
     pub model: String,
     #[serde_as(as = "Rfc3339")]
     pub purchase: OffsetDateTime,
-    /// Was it disposed? If yes, when?
-    #[serde_as(as = "Option<Rfc3339>")]
-    pub disposed_at: Option<OffsetDateTime>,
 }
 
 #[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -184,7 +181,7 @@ impl PartId {
     ) -> TbResult<Part> {
         let mut part = self.read(store).await?;
         if start > part.last_used {
-            part.last_used = start;
+            part.last_used = round_time(start);
             return store.part_update(&part).await;
         }
         Ok(part)
@@ -272,14 +269,13 @@ impl NewPart {
             format!("user {} cannot create this part", user.get_id()),
         )?;
 
-        let now = OffsetDateTime::now_utc();
-        let createtime = self.purchase.unwrap_or(now);
+        let createtime = round_time(self.purchase.unwrap_or_else(OffsetDateTime::now_utc));
         store.part_create(self, createtime, UsageId::new()).await
     }
 }
 
 impl ChangePart {
-    pub async fn change(self, user: &dyn Person, store: &mut impl PartStore) -> TbResult<Part> {
+    pub async fn change(mut self, user: &dyn Person, store: &mut impl PartStore) -> TbResult<Part> {
         info!("Change {:?}", self);
 
         user.check_owner(
@@ -287,6 +283,7 @@ impl ChangePart {
             format!("user {} cannot create this part", user.get_id()),
         )?;
 
+        self.purchase = round_time(self.purchase);
         store.part_change(self).await
     }
 }
