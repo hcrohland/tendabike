@@ -28,7 +28,7 @@
       (x) => x.part_id === partId && x.isAttached(time),
     ).pop();
     if (att == undefined) return;
-    return $parts[att.gear].name + " " + types[att.hook].prefix;
+    return $parts[att.gear];
   }
 
   $: subparts = type.parts($parts);
@@ -80,7 +80,7 @@
         {#if part.disposed_at}
           disposed {fmtDate(part.disposed_at)}
         {:else}
-          {attachedTo($attachments, part.id, date) || "-"}
+          <PartLink part={attachedTo($attachments, part.id, date)}></PartLink>
         {/if}
       </td>
     {/if}
