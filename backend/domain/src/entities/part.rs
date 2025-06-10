@@ -174,15 +174,20 @@ impl PartId {
     }
 
     /// if start is later than last_used update last_used
-    pub(crate) async fn update_last_use(
+    pub(crate) async fn update_timestamps(
         self,
         start: OffsetDateTime,
         store: &mut impl PartStore,
     ) -> TbResult<Part> {
         let mut part = self.read(store).await?;
+        let start = round_time(start);
         if start > part.last_used {
-            part.last_used = round_time(start);
-            return store.part_update(&part).await;
+            part.last_used = start;
+            part = store.part_update(&part).await?;
+        }
+        if start < part.purchase {
+            part.purchase = start;
+            part = store.part_update(&part).await?;
         }
         Ok(part)
     }

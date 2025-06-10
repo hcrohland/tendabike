@@ -168,7 +168,7 @@ impl Attachment {
         let usage = self.calculate_usage(store).await?;
 
         // add that usage to the part
-        let part = self.part_id.update_last_use(self.attached, store).await?;
+        let part = self.part_id.update_timestamps(self.attached, store).await?;
         let mut usages = vec![part.usage().read(store).await? + &usage, usage];
         // store the attachment in the database
         let attachment = store
@@ -294,7 +294,7 @@ impl Attachment {
         let partlist = attachments.iter().map(|a| a.part_id);
         // we need to add gear since it is not attached
         for part in partlist.chain([gear]) {
-            let part = part.update_last_use(start, store).await?;
+            let part = part.update_timestamps(start, store).await?;
             usages.push(part.usage());
             usages.append(&mut Service::get_usageids(part.id, start, store).await?);
             parts.push(part);
