@@ -10,9 +10,14 @@
   function prevdate(time: Date) {
     let last = filterValues(
       $attachments,
-      (a) => a.part_id == part.id && a.attached < time,
-    ).sort(by("attached"))[0];
-    return last?.attached || part.purchase;
+      (a) =>
+        (a.attached < time || a.detached < time) &&
+        (a.part_id == part.id ||
+          (a.gear == gear && a.hook == hook && a.what == part.what)),
+    )
+      .map((a) => (a.detached < time ? a.detached : a.attached))
+      .sort((a, b) => (a < b ? 1 : -1))[0];
+    return last || part.purchase;
   }
 
   export let part: Part;
