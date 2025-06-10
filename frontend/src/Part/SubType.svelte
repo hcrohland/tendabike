@@ -44,7 +44,7 @@
                 Move part
               </DropdownItem>
               <DropdownItem on:click={() => $actions.replacePart(att)}>
-                Replace part
+                New {type.name}
               </DropdownItem>
             </Menu>
           {:else}
