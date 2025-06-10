@@ -14,6 +14,7 @@
     redoService: (s: Service | undefined) => void;
     updatePlan: (p: ServicePlan) => void;
     deletePlan: (p: ServicePlan) => void;
+    deleteAttachment: (a: Attachment) => void;
   };
 
   export let actions = writable<ModalType>();
@@ -37,6 +38,7 @@
   import type { ServicePlan } from "../lib/serviceplan";
   import type { Type } from "../lib/types";
   import DisposePart from "../Part/DisposePart.svelte";
+  import DeleteAttachment from "../Attachment/DeleteAttachment.svelte";
 
   $: actions.set({
     newPart,
@@ -51,6 +53,7 @@
     newPlan,
     updatePlan,
     deletePlan,
+    deleteAttachment,
   });
 
   let newPart: (t: Type) => void;
@@ -67,6 +70,7 @@
   let newPlan: (p?: Part) => void;
   let updatePlan: (p: ServicePlan) => void;
   let deletePlan: (p: ServicePlan) => void;
+  let deleteAttachment: (a: Attachment) => void;
 </script>
 
 <NewPart bind:newPart />
@@ -83,3 +87,4 @@
 <NewPlan bind:newPlan />
 <UpdatePlan bind:updatePlan />
 <DeletePlan bind:deletePlan />
+<DeleteAttachment bind:deleteAttachment />

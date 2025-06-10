@@ -35,7 +35,7 @@
 </script>
 
 {#if part}
-  <Modal {isOpen} {toggle} backdrop={false}>
+  <Modal {isOpen} {toggle}>
     <ModalHeader {toggle}>
       Attach {types[part.what].name}
       {part.name}

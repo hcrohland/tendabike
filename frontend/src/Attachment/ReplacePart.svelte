@@ -69,7 +69,7 @@
   };
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false}>
+<Modal {isOpen} {toggle}>
   <ModalHeader {toggle}>
     New {prefix}
     {type.name} for {$parts[gear].name}

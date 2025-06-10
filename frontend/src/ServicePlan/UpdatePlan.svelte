@@ -33,7 +33,7 @@
   $: disabled = !(plan && plan.valid());
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false}>
+<Modal {isOpen} {toggle}>
   <ModalHeader {toggle}>
     Update service plan for
     {#if part == null}

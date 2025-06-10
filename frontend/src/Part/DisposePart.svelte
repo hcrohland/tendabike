@@ -72,7 +72,7 @@
   const toggle = () => (isOpen = false);
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false}>
+<Modal {isOpen} {toggle}>
   <ModalHeader {toggle}>
     {label}
     {name}

@@ -20,7 +20,7 @@
   };
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false}>
+<Modal {isOpen} {toggle}>
   <ModalHeader {toggle}>
     Do you really have {types[part.what].name}
     {part.name}

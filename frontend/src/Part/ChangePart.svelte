@@ -47,7 +47,7 @@
   };
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false}>
+<Modal {isOpen} {toggle}>
   <ModalHeader {toggle}>Change {type.name} details</ModalHeader>
   <form on:submit|preventDefault={savePart}>
     <ModalBody>

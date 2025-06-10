@@ -80,7 +80,7 @@
   };
 </script>
 
-<Modal {isOpen} {toggle} backdrop={false}>
+<Modal {isOpen} {toggle}>
   <form on:submit|preventDefault={action}>
     <ModalHeader {toggle}>
       <InputGroup class="col-md-12">
