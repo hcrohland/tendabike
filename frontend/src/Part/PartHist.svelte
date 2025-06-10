@@ -5,7 +5,9 @@
   import PartLink from "./PartLink.svelte";
   import { parts } from "../lib/part";
   import { attachments } from "../lib/attachment";
-  import { Table } from "@sveltestrap/sveltestrap";
+  import { DropdownItem, Table } from "@sveltestrap/sveltestrap";
+  import Menu from "../Widgets/Menu.svelte";
+  import { actions } from "../Widgets/Actions.svelte";
 
   export let id: number;
 
@@ -30,10 +32,16 @@
             {#if $parts[att.gear]}
               <PartLink part={$parts[att.gear]} />
               {types[att.hook].prefix}
+              <Menu>
+                <DropdownItem on:click={() => $actions.deleteAttachment(att)}>
+                  Remove
+                </DropdownItem>
+              </Menu>
             {:else}
               N/A
             {/if}
-          </td><td>{att.fmtTime()}</td>
+          </td>
+          <td> {att.fmtTime()} </td>
           <Usage id={att.usage} ref={att.idx} />
         </tr>
       {/each}
