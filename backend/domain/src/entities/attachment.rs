@@ -326,20 +326,6 @@ impl Attachment {
         hash += self.detach(time, store).await?;
         Ok(hash.into())
     }
-
-    pub fn round_times(self) -> Option<(OffsetDateTime, OffsetDateTime)> {
-        let attached = round_time(self.attached);
-        let detached = round_time(self.detached);
-        if attached != self.attached || detached != self.detached {
-            Some((attached, detached))
-        } else {
-            None
-        }
-    }
-
-    pub fn key(&self) -> (PartId, OffsetDateTime) {
-        (self.part_id, self.attached)
-    }
 }
 
 /// moves all subparts of 'from' to 'to' at 'time'
