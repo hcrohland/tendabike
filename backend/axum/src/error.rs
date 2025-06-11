@@ -9,7 +9,7 @@
 //! Finally, it defines a type alias `ApiResult<T>` for `Result<Json<T>, AppError>`.
 //!
 
-use async_session::log::{debug, error, info};
+use async_session::log::{debug, error, info, warn};
 use axum::{
     Json,
     response::{IntoResponse, Response},
@@ -47,12 +47,12 @@ impl IntoResponse for AppError {
         let any: anyhow::Error = self.into();
         let msg = format!("{:#}", any);
         match code {
-            StatusCode::INTERNAL_SERVER_ERROR => error!("{}", msg),
-            StatusCode::BAD_REQUEST | StatusCode::NOT_FOUND => info!("{}", msg),
+            StatusCode::INTERNAL_SERVER_ERROR => error!("{msg}"),
+            StatusCode::BAD_REQUEST => warn!("{msg}"),
+            StatusCode::NOT_FOUND => info!("{msg}"),
             _ => debug!(
-                "returning with error {}: {}",
-                code.canonical_reason().unwrap_or(""),
-                msg
+                "returning with error {}: {msg}",
+                code.canonical_reason().unwrap_or("")
             ),
         };
         (code, msg).into_response()
