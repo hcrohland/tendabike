@@ -23,7 +23,7 @@ use http::StatusCode;
 use oauth2::{
     AuthUrl, AuthorizationCode, Client, ClientId, ClientSecret, CsrfToken, EndpointNotSet,
     EndpointSet, ExtraTokenFields, RedirectUrl, RevocationUrl, Scope, StandardRevocableToken,
-    StandardTokenResponse, TokenResponse, TokenUrl,
+    StandardTokenResponse, TokenUrl,
     basic::{
         BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
         BasicTokenType,
@@ -156,7 +156,9 @@ fn gentoken(path: String) -> CsrfToken {
 fn getpath(state: String) -> TbResult<String> {
     let msg = state.split(':').collect::<Vec<_>>();
     if msg.len() != 2 || hmac_signature(&CSRF_KEY, msg[0]) != msg[1] {
-        return Err(Error::BadRequest(format!("CSRF token failure: {state}")));
+        return Err(Error::BadRequest(format!(
+            "Bad signature for exchange request: {state}"
+        )));
     };
     Ok(msg[0].split('+').next().unwrap_or("").to_owned())
 }
@@ -166,13 +168,13 @@ pub struct PathParam {
     inner: Option<String>,
 }
 
+const SCOPES: &str = "read,activity:read_all,profile:read_all";
+
 pub(crate) async fn strava_auth(Query(path): Query<PathParam>) -> impl IntoResponse {
     let path = path.inner.unwrap_or("/".to_owned());
     let (auth_url, _csrf_token) = STRAVACLIENT
         .authorize_url(|| gentoken(path))
-        .add_scope(Scope::new(
-            "read,activity:read_all,profile:read_all".to_string(),
-        ))
+        .add_scope(Scope::new(SCOPES.to_string()))
         .url();
 
     // Redirect to Strava's oauth service
@@ -180,23 +182,37 @@ pub(crate) async fn strava_auth(Query(path): Query<PathParam>) -> impl IntoRespo
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[allow(dead_code)]
-pub(crate) struct AuthRequest {
-    code: String,
-    state: String,
-    // scope: String,
+#[serde(untagged)]
+pub(crate) enum AuthResponse {
+    Request {
+        code: String,
+        state: String,
+        scope: String,
+    },
+    Error {
+        error: String,
+        state: String,
+    },
 }
 
 pub(crate) async fn login_authorized(
-    Query(query): Query<AuthRequest>,
+    Query(query): Query<AuthResponse>,
     State(memstore): State<MemoryStore>,
     State(store): State<crate::DbPool>,
 ) -> Result<(HeaderMap, Redirect), AppError> {
-    let AuthRequest { code, state } = query;
-
-    let path = getpath(state)?;
-
-    let mut store = store.get().await?;
+    let (code, path) = match query {
+        AuthResponse::Error { error, .. } => {
+            warn!("Authentication failed with error: {error}");
+            return Ok((HeaderMap::new(), Redirect::to("/")));
+        }
+        AuthResponse::Request { code, state, scope } => {
+            if scope != SCOPES {
+                warn!("Insufficient authorization {scope}");
+                return Ok((HeaderMap::new(), Redirect::to("/")));
+            }
+            (code, getpath(state)?)
+        }
+    };
 
     // Get an auth token
     let token = STRAVACLIENT
@@ -205,15 +221,7 @@ pub(crate) async fn login_authorized(
         .await
         .context("token exchange failed")?;
 
-    if token.scopes().is_some() {
-        warn!("Insufficient authorization {:?}", token.scopes());
-        Err(Error::NotAuth(format!(
-            "Insufficient authorization {:?}",
-            token.scopes()
-        )))?
-    }
-
-    let user = super::RequestUser::create_from_token(token, &mut store).await?;
+    let user = super::RequestUser::create_from_token(token, &mut store.get().await?).await?;
 
     // Create a new session filled with user data
     let mut session = Session::new();
