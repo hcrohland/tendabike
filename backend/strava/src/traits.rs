@@ -200,10 +200,7 @@ pub trait StravaStore: tb_domain::Store + Send {
     /// # Errors
     ///
     /// Returns an error if the event cannot be retrieved.
-    async fn strava_event_get_next_for_user(
-        &mut self,
-        user: &impl StravaPerson,
-    ) -> TbResult<Option<Event>>;
+    async fn strava_event_get_next_for_user(&mut self, user: StravaId) -> TbResult<Option<Event>>;
 
     /// Returns all Strava events with a start time later than the given time and associated with the given object ID and Strava ID.
     ///

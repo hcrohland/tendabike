@@ -4,7 +4,7 @@ use diesel_async::RunQueryDsl;
 
 use crate::{AsyncDieselConn, into_domain};
 use tb_domain::{ActivityId, PartId, TbResult, UserId};
-use tb_strava::{StravaId, StravaPerson, StravaUser, event::Event, schema};
+use tb_strava::{StravaId, StravaUser, event::Event, schema};
 
 #[async_session::async_trait]
 impl tb_strava::StravaStore for AsyncDieselConn {
@@ -151,11 +151,11 @@ impl tb_strava::StravaStore for AsyncDieselConn {
 
     async fn strava_event_get_next_for_user(
         &mut self,
-        user: &impl StravaPerson,
+        user_id: StravaId,
     ) -> TbResult<Option<Event>> {
         use schema::strava_events::dsl::*;
         strava_events
-            .filter(owner_id.eq_any(vec![0, user.strava_id().into()]))
+            .filter(owner_id.eq_any(vec![0, user_id.into()]))
             .order(event_time.asc())
             .first::<Event>(self)
             .await

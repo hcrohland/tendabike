@@ -280,7 +280,9 @@ async fn get_event(
     user: &impl StravaPerson,
     store: &mut impl StravaStore,
 ) -> TbResult<Option<Event>> {
-    let event = store.strava_event_get_next_for_user(user).await?;
+    let event = store
+        .strava_event_get_next_for_user(user.strava_id())
+        .await?;
     let event = match event {
         Some(event) => event,
         None => return Ok(None),
