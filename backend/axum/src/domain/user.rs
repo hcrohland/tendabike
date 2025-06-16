@@ -7,6 +7,7 @@
 //! Additionally, it defines the `AxumAdmin` struct, which is used as a marker type for routes that require admin privileges.
 
 use axum::{Json, Router, extract::State, routing::get};
+use serde::Serialize;
 
 use crate::{ApiResult, AxumAdmin, DbPool, RequestUser, appstate::AppState};
 use tb_domain::{Person, Summary};
@@ -17,6 +18,7 @@ pub(super) fn router() -> Router<AppState> {
         .route("/", get(getuser))
         .route("/summary", get(summary))
         .route("/all", get(userlist))
+        .route("/export", get(export))
 }
 
 async fn getuser(user: RequestUser, State(pool): State<DbPool>) -> ApiResult<tb_domain::User> {
@@ -26,9 +28,41 @@ async fn getuser(user: RequestUser, State(pool): State<DbPool>) -> ApiResult<tb_
 
 async fn summary(mut user: RequestUser, State(pool): State<DbPool>) -> ApiResult<Summary> {
     let mut store = pool.get().await?;
-    StravaUser::update_user(&mut user, &mut store).await?;
-    StravaUser::process(&mut user, &mut store).await?;
+    StravaUser::update_gear(&mut user, &mut store).await?;
     Ok(user.get_id().get_summary(&mut store).await.map(Json)?)
+}
+
+#[derive(Clone, Serialize, Debug)]
+pub struct Export {
+    pub user: tb_domain::User,
+    pub parts: Vec<tb_domain::Part>,
+    pub attachments: Vec<tb_domain::AttachmentDetail>,
+    pub services: Vec<tb_domain::Service>,
+    pub plans: Vec<tb_domain::ServicePlan>,
+    pub usages: Vec<tb_domain::Usage>,
+    pub activities: Vec<tb_domain::Activity>,
+}
+
+async fn export(user: RequestUser, State(pool): State<DbPool>) -> ApiResult<Export> {
+    let mut store = pool.get().await?;
+    let user = user.get_id().read(&mut store).await?;
+    let Summary {
+        activities,
+        parts,
+        attachments,
+        usages,
+        services,
+        plans,
+    } = user.get_id().get_summary(&mut store).await?;
+    Ok(Json(Export {
+        user,
+        activities,
+        parts,
+        attachments,
+        usages,
+        services,
+        plans,
+    }))
 }
 
 async fn userlist(

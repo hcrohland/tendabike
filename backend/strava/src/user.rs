@@ -59,7 +59,7 @@ impl StravaId {
             .ok_or(Error::NotFound("StravaUser not found".to_string()))?;
         event::insert_sync(id, user.last_activity, false, store)
             .await
-            .context(format!("Could insert sync for user: {:?}", id))?;
+            .context(format!("Could not insert sync for user: {:?}", id))?;
         store.stravaid_update_token(id, None).await?;
         Ok(())
     }
@@ -157,7 +157,7 @@ impl StravaUser {
     }
 
     /// Get list of gear for user from Strava
-    pub async fn update_user(
+    pub async fn update_gear(
         user: &mut impl StravaPerson,
         store: &mut impl StravaStore,
     ) -> TbResult<Vec<PartId>> {
@@ -235,11 +235,7 @@ pub async fn user_disable(
     }
 
     if let Err(err) = user.deauthorize(store).await {
-        warn!(
-            "could not deauthorize user {}: {:#}",
-            user.tb_id(),
-            anyhow::anyhow!(err)
-        )
+        warn!("could not deauthorize user {}: {:#}", user.tb_id(), err)
     }
 
     warn!("User {} disabled", user.tb_id());
