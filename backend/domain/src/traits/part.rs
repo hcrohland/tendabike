@@ -1,6 +1,7 @@
+#![allow(clippy::too_many_arguments)]
 use time::OffsetDateTime;
 
-use crate::{Part, PartId, TbResult, UsageId, UserId};
+use crate::{Part, PartId, PartTypeId, TbResult, UsageId, UserId};
 
 #[async_trait::async_trait]
 /// A trait representing a store for `Part` objects.
@@ -32,16 +33,19 @@ pub trait PartStore {
     /// # Arguments
     ///
     /// * `newpart` - The new `Part` object to create.
-    /// * `createtime` - The time the part was created.
     ///
     /// # Returns
     ///
     /// Returns the newly created `Part` object if it was successfully created, otherwise returns an error.
     async fn part_create(
         &mut self,
-        newpart: crate::NewPart,
-        createtime: OffsetDateTime,
+        what: PartTypeId,
+        name: String,
+        vendor: String,
+        model: String,
+        purchase: OffsetDateTime,
         usage: UsageId,
+        owner: UserId,
     ) -> TbResult<Part>;
 
     /// updates an existing part
@@ -60,5 +64,12 @@ pub trait PartStore {
     /// # Returns
     ///
     /// Returns the updated `Part` object if it was successfully updated, otherwise returns an error.
-    async fn part_change(&mut self, part: crate::ChangePart) -> TbResult<Part>;
+    async fn part_change(
+        &mut self,
+        part: PartId,
+        name: String,
+        vendor: String,
+        model: String,
+        purchase: OffsetDateTime,
+    ) -> TbResult<Part>;
 }

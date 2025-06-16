@@ -1,9 +1,25 @@
-use diesel::{ExpressionMethods, QueryDsl};
+use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use time::OffsetDateTime;
 
 use crate::{AsyncDieselConn, into_domain};
-use tb_domain::{Part, PartId, TbResult, UsageId, UserId, schema};
+use tb_domain::{Part, PartId, PartTypeId, TbResult, UsageId, UserId, schema};
+
+#[derive(Clone, Debug, PartialEq, Insertable)]
+#[diesel(table_name = schema::parts)]
+pub struct NewPart {
+    /// The owner
+    pub owner: UserId,
+    /// The type of the part
+    pub what: PartTypeId,
+    /// This name of the part.
+    pub name: String,
+    /// The vendor name
+    pub vendor: String,
+    /// The model name
+    pub model: String,
+    pub purchase: Option<OffsetDateTime>,
+}
 
 #[async_session::async_trait]
 impl tb_domain::PartStore for AsyncDieselConn {
@@ -29,20 +45,24 @@ impl tb_domain::PartStore for AsyncDieselConn {
 
     async fn part_create(
         &mut self,
-        newpart: tb_domain::NewPart,
-        createtime: OffsetDateTime,
-        usage_: UsageId,
+        in_what: PartTypeId,
+        in_name: String,
+        in_vendor: String,
+        in_model: String,
+        in_purchase: OffsetDateTime,
+        in_usage: UsageId,
+        in_owner: UserId,
     ) -> TbResult<Part> {
         use schema::parts::dsl::*;
         let values = (
-            owner.eq(newpart.owner),
-            what.eq(newpart.what),
-            name.eq(newpart.name),
-            vendor.eq(newpart.vendor),
-            model.eq(newpart.model),
-            purchase.eq(createtime),
-            last_used.eq(createtime),
-            usage.eq(usage_),
+            owner.eq(in_owner),
+            what.eq(in_what),
+            name.eq(in_name),
+            vendor.eq(in_vendor),
+            model.eq(in_model),
+            purchase.eq(in_purchase),
+            last_used.eq(in_purchase),
+            usage.eq(in_usage),
         );
 
         diesel::insert_into(parts)
@@ -61,10 +81,23 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .map_err(into_domain)
     }
 
-    async fn part_change(&mut self, part: tb_domain::ChangePart) -> TbResult<Part> {
+    async fn part_change(
+        &mut self,
+        part: PartId,
+        in_name: String,
+        in_vendor: String,
+        in_model: String,
+        in_purchase: OffsetDateTime,
+    ) -> TbResult<Part> {
         use schema::parts::dsl::*;
-        diesel::update(parts.filter(id.eq(part.id)))
-            .set(part)
+
+        diesel::update(parts.filter(id.eq(part)))
+            .set((
+                name.eq(in_name),
+                vendor.eq(in_vendor),
+                model.eq(in_model),
+                purchase.eq(in_purchase),
+            ))
             .get_result(self)
             .await
             .map_err(into_domain)

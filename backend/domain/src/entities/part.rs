@@ -34,7 +34,9 @@
 use diesel_derive_newtype::*;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
+use serde_with::serde_as;
 use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 use crate::*;
 
@@ -68,45 +70,6 @@ pub struct Part {
     pub disposed_at: Option<OffsetDateTime>,
     /// the usage tracker
     usage: UsageId,
-}
-
-#[serde_as]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Insertable)]
-#[diesel(table_name = schema::parts)]
-pub struct NewPart {
-    /// The owner
-    pub owner: UserId,
-    /// The type of the part
-    pub what: PartTypeId,
-    /// This name of the part.
-    pub name: String,
-    /// The vendor name
-    pub vendor: String,
-    /// The model name
-    pub model: String,
-    #[serde_as(as = "Option<Rfc3339>")]
-    pub purchase: Option<OffsetDateTime>,
-}
-
-use serde_with::serde_as;
-use time::format_description::well_known::Rfc3339;
-
-#[serde_as]
-#[derive(Clone, Debug, PartialEq, Deserialize, AsChangeset)]
-#[diesel(table_name = schema::parts)]
-#[diesel(treat_none_as_null = true)]
-pub struct ChangePart {
-    pub id: PartId,
-    /// The owner
-    pub owner: UserId,
-    /// This name of the part.
-    pub name: String,
-    /// The vendor name
-    pub vendor: String,
-    /// The model name
-    pub model: String,
-    #[serde_as(as = "Rfc3339")]
-    pub purchase: OffsetDateTime,
 }
 
 #[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -209,6 +172,23 @@ impl PartId {
         part.disposed_at = None;
         store.part_update(&part).await
     }
+
+    pub async fn change(
+        self,
+        name: String,
+        vendor: String,
+        model: String,
+        purchase: OffsetDateTime,
+        user: &dyn Person,
+        store: &mut impl PartStore,
+    ) -> TbResult<Part> {
+        info!("Change {:?}", self);
+
+        self.checkuser(user, store).await?;
+
+        let purchase = round_time(purchase);
+        store.part_change(self, name, vendor, model, purchase).await
+    }
 }
 
 impl Part {
@@ -263,32 +243,29 @@ impl Part {
     pub(crate) fn usage(&self) -> UsageId {
         self.usage
     }
-}
 
-impl NewPart {
-    pub async fn create(self, user: &dyn Person, store: &mut impl PartStore) -> TbResult<Part> {
-        info!("Create {:?}", self);
+    pub async fn create(
+        name: String,
+        vendor: String,
+        model: String,
+        what: PartTypeId,
+        purchase: OffsetDateTime,
+        user: &dyn Person,
+        store: &mut impl PartStore,
+    ) -> TbResult<Part> {
+        debug!("Create {name} {vendor} {model}");
 
-        user.check_owner(
-            self.owner,
-            format!("user {} cannot create this part", user.get_id()),
-        )?;
-
-        let createtime = round_time(self.purchase.unwrap_or_else(OffsetDateTime::now_utc));
-        store.part_create(self, createtime, UsageId::new()).await
-    }
-}
-
-impl ChangePart {
-    pub async fn change(mut self, user: &dyn Person, store: &mut impl PartStore) -> TbResult<Part> {
-        info!("Change {:?}", self);
-
-        user.check_owner(
-            self.owner,
-            format!("user {} cannot create this part", user.get_id()),
-        )?;
-
-        self.purchase = round_time(self.purchase);
-        store.part_change(self).await
+        let purchase = round_time(purchase);
+        store
+            .part_create(
+                what,
+                name,
+                vendor,
+                model,
+                purchase,
+                UsageId::new(),
+                user.get_id(),
+            )
+            .await
     }
 }
