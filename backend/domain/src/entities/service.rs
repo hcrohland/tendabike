@@ -1,15 +1,11 @@
-use diesel_derive_newtype::*;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::*;
-use schema::services;
 
-#[derive(
-    DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Default,
-)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ServiceId(Uuid);
 
 NewtypeDisplay! { () pub struct ServiceId(); }
@@ -57,37 +53,26 @@ impl ServiceId {
 /// * Every attachment of a part to a specified hook on a gear is an entry
 /// * Start and end time are noted
 ///
-#[derive(
-    Clone,
-    Debug,
-    PartialEq,
-    Serialize,
-    Deserialize,
-    Queryable,
-    Identifiable,
-    Insertable,
-    AsChangeset,
-)]
-#[diesel(treat_none_as_null = true)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Service {
     pub id: ServiceId,
     /// the part serviced
-    part_id: PartId,
+    pub part_id: PartId,
     /// when it was serviced
     #[serde(with = "time::serde::rfc3339")]
-    time: OffsetDateTime,
+    pub time: OffsetDateTime,
     /// when there was a new service
     #[serde(with = "time::serde::rfc3339")]
-    redone: OffsetDateTime,
+    pub redone: OffsetDateTime,
     // we do not accept theses values from the client!
-    name: String,
-    notes: String,
+    pub name: String,
+    pub notes: String,
     // we do not accept theses values from the client!
-    usage: UsageId,
+    pub usage: UsageId,
     // the predecessor Service
-    successor: Option<ServiceId>,
+    pub successor: Option<ServiceId>,
     // an optional ServicePlan it is fullfilling
-    plans: Vec<ServicePlanId>,
+    pub plans: Vec<ServicePlanId>,
 }
 
 impl Service {
@@ -112,7 +97,7 @@ impl Service {
             plans,
         };
         let usage = service.calculate_usage(store).await?.update(store).await?;
-        let service = ServiceStore::create(store, &service).await?;
+        let service = ServiceStore::create(store, service).await?;
         Ok(Summary {
             services: vec![service],
             usages: vec![usage],
