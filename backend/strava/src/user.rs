@@ -6,15 +6,12 @@
 //! The methods implemented for the StravaUser struct allow for reading and updating user data, as well as
 //! checking the validity of the user's access token.
 
-use diesel_derive_newtype::DieselNewType;
 use newtype_derive::*;
 use serde::Deserialize;
 
 use crate::*;
 
-#[derive(
-    DieselNewType, Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize,
-)]
+#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StravaId(i32);
 NewtypeDisplay! { () pub struct StravaId(); }
 NewtypeFrom! { () pub struct StravaId(i32); }
@@ -66,17 +63,16 @@ impl StravaId {
 }
 
 /// Strava User data
-#[derive(Clone, Serialize, Deserialize, Queryable, Insertable, Identifiable, Debug, Default)]
-#[diesel(table_name = crate::schema::strava_users)]
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
 pub struct StravaUser {
     /// the Strava user id
-    id: StravaId,
+    pub id: StravaId,
     /// the corresponding tendabike user id
-    tendabike_id: UserId,
+    pub tendabike_id: UserId,
     /// the time of the latest activity we have processed
-    last_activity: i64,
+    pub last_activity: i64,
     /// the refresh token to get a new access token from Strava
-    refresh_token: Option<String>,
+    pub refresh_token: Option<String>,
 }
 
 impl StravaUser {

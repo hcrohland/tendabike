@@ -72,20 +72,19 @@ impl InEvent {
         Ok(())
     }
 }
-#[derive(Debug, Default, Serialize, Deserialize, Queryable, Insertable)]
-#[diesel(table_name = crate::schema::strava_events)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Event {
-    id: Option<i32>,
+    pub id: Option<i32>,
     pub object_type: String,
     pub object_id: i64,
     // Always "create," "update," or "delete."
     pub aspect_type: String,
     // hash 	For activity update events, keys can contain "title," "type," and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone). For app deauthorization events, there is always an "authorized" : "false" key-value pair.
-    updates: String,
+    pub updates: String,
     // The athlete's ID.
-    owner_id: StravaId,
+    pub owner_id: StravaId,
     // The push subscription ID that is receiving this event.
-    subscription_id: i32,
+    pub subscription_id: i32,
     // The time that the event occurred.
     pub event_time: i64,
 }
