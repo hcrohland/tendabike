@@ -43,16 +43,21 @@ use crate::*;
     DieselNewType, Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize,
 )]
 pub struct UserId(i32);
+
+impl UserId {
+    pub fn inner(&self) -> i32 {
+        self.0
+    }
+}
 NewtypeDisplay! { () pub struct UserId(); }
 NewtypeFrom! { () pub struct UserId(i32); }
 
-#[derive(Clone, Debug, Queryable, Insertable, Serialize, Deserialize)]
-#[diesel(table_name = schema::users)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct User {
-    id: UserId,
-    name: String,
-    firstname: String,
-    is_admin: bool,
+    pub id: UserId,
+    pub name: String,
+    pub firstname: String,
+    pub is_admin: bool,
 }
 
 #[derive(Debug, Serialize)]

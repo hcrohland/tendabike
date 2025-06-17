@@ -18,7 +18,6 @@
 */
 
 use async_session::log::{debug, info, trace, warn};
-use diesel::prelude::*;
 
 mod error;
 pub use error::{Error, TbResult};
