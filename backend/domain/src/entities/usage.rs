@@ -30,28 +30,22 @@ use std::ops::{Add, Neg, Sub};
 use uuid::Uuid;
 
 use crate::*;
-use schema::usages;
 
 #[derive(
     DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Default,
 )]
 pub struct UsageId(Uuid);
 
+impl UsageId {
+    pub fn inner(&self) -> Uuid {
+        self.0
+    }
+}
+
 NewtypeDisplay! { () pub struct UsageId(); }
 NewtypeFrom! { () pub struct UsageId(Uuid); }
 
-#[derive(
-    Clone,
-    Debug,
-    PartialEq,
-    Default,
-    Serialize,
-    Deserialize,
-    Queryable,
-    Identifiable,
-    AsChangeset,
-    Insertable,
-)]
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct Usage {
     // id for referencing
     pub id: UsageId,

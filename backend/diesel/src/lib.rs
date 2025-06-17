@@ -18,3 +18,10 @@ where
 {
     from.into_iter().map(Into::into).collect()
 }
+
+fn option_into<F, T>(from: Option<F>) -> Option<T>
+where
+    T: From<F>,
+{
+    from.map(Into::into)
+}

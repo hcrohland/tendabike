@@ -1,11 +1,76 @@
 use async_session::log::debug;
-use diesel::QueryDsl;
+use diesel::prelude::*;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use scoped_futures::ScopedFutureExt;
 use std::borrow::Borrow;
+use uuid::Uuid;
 
-use crate::{AsyncDieselConn, into_domain};
+use crate::{AsyncDieselConn, into_domain, option_into};
 use tb_domain::{TbResult, Usage, UsageId, UsageStore, schema};
+
+#[derive(Clone, Debug, PartialEq, Default, Queryable, Identifiable, AsChangeset, Insertable)]
+#[diesel(table_name = schema::usages)]
+pub struct DbUsage {
+    // id for referencing
+    pub id: Uuid,
+    // usage time
+    pub time: i32,
+    /// Usage distance
+    pub distance: i32,
+    /// Overall climbing
+    pub climb: i32,
+    /// Overall descending
+    pub descend: i32,
+    /// Overall energy
+    pub energy: i32,
+    /// number of activities
+    pub count: i32,
+}
+
+impl From<&Usage> for DbUsage {
+    fn from(value: &Usage) -> Self {
+        let &Usage {
+            id,
+            time,
+            distance,
+            climb,
+            descend,
+            energy,
+            count,
+        } = value;
+        Self {
+            id: id.into(),
+            time,
+            distance,
+            climb,
+            descend,
+            energy,
+            count,
+        }
+    }
+}
+impl From<DbUsage> for Usage {
+    fn from(value: DbUsage) -> Self {
+        let DbUsage {
+            id,
+            time,
+            distance,
+            climb,
+            descend,
+            energy,
+            count,
+        } = value;
+        Self {
+            id: id.into(),
+            time,
+            distance,
+            climb,
+            descend,
+            energy,
+            count,
+        }
+    }
+}
 
 #[async_session::async_trait]
 impl UsageStore for AsyncDieselConn {
@@ -13,11 +78,12 @@ impl UsageStore for AsyncDieselConn {
         use diesel::result::OptionalExtension;
         use schema::usages;
         usages::table
-            .find(id)
-            .get_result::<Usage>(self)
+            .find(id.inner())
+            .get_result::<DbUsage>(self)
             .await
             .optional()
             .map_err(into_domain)
+            .map(option_into)
     }
 
     async fn update<U>(&mut self, vec: &[U]) -> TbResult<usize>
@@ -30,12 +96,12 @@ impl UsageStore for AsyncDieselConn {
         self.transaction(|store| {
             async move {
                 for usage in vec {
-                    let usage = usage.borrow();
+                    let usage: DbUsage = usage.borrow().into();
                     diesel::insert_into(usages::table)
-                        .values(usage)
+                        .values(&usage)
                         .on_conflict(usages::id)
                         .do_update()
-                        .set(usage)
+                        .set(&usage)
                         .execute(store)
                         .await?;
                 }
@@ -48,10 +114,11 @@ impl UsageStore for AsyncDieselConn {
 
     async fn delete(&mut self, usage: &UsageId) -> TbResult<Usage> {
         use schema::usages::dsl::*;
-        diesel::delete(usages.find(usage))
-            .get_result(self)
+        diesel::delete(usages.find(usage.inner()))
+            .get_result::<DbUsage>(self)
             .await
             .map_err(into_domain)
+            .map(Into::into)
     }
 
     async fn delete_all(&mut self) -> TbResult<usize> {
