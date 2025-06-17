@@ -31,6 +31,7 @@
 //!
 //! Finally, this module defines the `NewPart` type, which is used to create new parts in the database.
 
+#![allow(clippy::too_many_arguments)]
 use diesel_derive_newtype::*;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
@@ -70,6 +71,7 @@ pub struct Part {
     pub disposed_at: Option<OffsetDateTime>,
     /// the usage tracker
     usage: UsageId,
+    source: Option<String>,
 }
 
 #[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -249,6 +251,7 @@ impl Part {
         vendor: String,
         model: String,
         what: PartTypeId,
+        source: Option<String>,
         purchase: OffsetDateTime,
         user: &dyn Person,
         store: &mut impl PartStore,
@@ -263,6 +266,7 @@ impl Part {
                 vendor,
                 model,
                 purchase,
+                source,
                 UsageId::new(),
                 user.get_id(),
             )

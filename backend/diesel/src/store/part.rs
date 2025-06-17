@@ -19,6 +19,8 @@ pub struct NewPart {
     /// The model name
     pub model: String,
     pub purchase: Option<OffsetDateTime>,
+    /// The source id tagged by the source as {"<Source>": "<Id>"}
+    pub source: Option<String>,
 }
 
 #[async_session::async_trait]
@@ -50,6 +52,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
         in_vendor: String,
         in_model: String,
         in_purchase: OffsetDateTime,
+        in_source: Option<String>,
         in_usage: UsageId,
         in_owner: UserId,
     ) -> TbResult<Part> {
@@ -63,6 +66,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
             purchase.eq(in_purchase),
             last_used.eq(in_purchase),
             usage.eq(in_usage),
+            source.eq(in_source),
         );
 
         diesel::insert_into(parts)
@@ -90,7 +94,6 @@ impl tb_domain::PartStore for AsyncDieselConn {
         in_purchase: OffsetDateTime,
     ) -> TbResult<Part> {
         use schema::parts::dsl::*;
-
         diesel::update(parts.filter(id.eq(part)))
             .set((
                 name.eq(in_name),
