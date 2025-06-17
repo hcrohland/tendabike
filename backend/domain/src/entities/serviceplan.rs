@@ -1,14 +1,10 @@
-use diesel_derive_newtype::*;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::*;
-use schema::service_plans;
 
-#[derive(
-    DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Default,
-)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ServicePlanId(Uuid);
 
 NewtypeDisplay! { () pub struct ServicePlanId(); }
@@ -35,31 +31,20 @@ impl ServicePlanId {
     }
 }
 
-#[derive(
-    Clone,
-    Debug,
-    PartialEq,
-    Serialize,
-    Deserialize,
-    Queryable,
-    Identifiable,
-    Insertable,
-    AsChangeset,
-)]
-#[diesel(treat_none_as_null = true)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ServicePlan {
     #[serde(default = "ServicePlanId::new")]
     pub id: ServicePlanId,
     /// the gear or part involved
     /// if hook is None the plan is for a specific part
     /// if it's Some(hook) it is a generic plan for that hook
-    part: Option<PartId>,
+    pub part: Option<PartId>,
     /// This is only really used for generic plans
     /// for a specific part it is set to the PartType of the part
-    what: PartTypeId,
+    pub what: PartTypeId,
     /// where it is attached
-    hook: Option<PartTypeId>,
-    name: String,
+    pub hook: Option<PartTypeId>,
+    pub name: String,
     /// Time until service
     pub days: Option<i32>,
     /// Usage time
@@ -133,6 +118,6 @@ impl ServicePlan {
         uid: &UserId,
         store: &mut impl ServicePlanStore,
     ) -> TbResult<Vec<Self>> {
-        store.by_user(uid).await
+        store.by_user(*uid).await
     }
 }
