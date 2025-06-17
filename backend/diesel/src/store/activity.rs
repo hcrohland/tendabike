@@ -108,7 +108,7 @@ impl TryFrom<DbActivity> for Activity {
 fn vec_into(db: Result<Vec<DbActivity>, diesel::result::Error>) -> TbResult<Vec<Activity>> {
     db.map_err(into_domain)?
         .into_iter()
-        .map(|a| a.try_into())
+        .map(TryInto::try_into)
         .collect()
 }
 

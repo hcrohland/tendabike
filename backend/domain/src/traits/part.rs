@@ -54,23 +54,5 @@ pub trait PartStore {
     /// # Errors
     ///
     /// This function will return an error if the part does not exist or there is a store error.
-    async fn part_update(&mut self, part: &Part) -> TbResult<Part>;
-
-    /// Changes an existing `Part` object.
-    ///
-    /// # Arguments
-    ///
-    /// * `part` - The `ChangePart` object containing the changes to apply to the `Part`.
-    ///
-    /// # Returns
-    ///
-    /// Returns the updated `Part` object if it was successfully updated, otherwise returns an error.
-    async fn part_change(
-        &mut self,
-        part: PartId,
-        name: String,
-        vendor: String,
-        model: String,
-        purchase: OffsetDateTime,
-    ) -> TbResult<Part>;
+    async fn part_update(&mut self, part: Part) -> TbResult<Part>;
 }

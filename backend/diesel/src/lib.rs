@@ -11,3 +11,11 @@ fn into_domain(err: diesel::result::Error) -> tb_domain::Error {
         _ => tb_domain::Error::DatabaseFailure(err),
     }
 }
+
+fn vec_into<F, T>(from: Result<Vec<F>, diesel::result::Error>) -> tb_domain::TbResult<Vec<T>>
+where
+    T: From<F>,
+{
+    from.map_err(into_domain)
+        .map(|i| i.into_iter().map(Into::into).collect())
+}

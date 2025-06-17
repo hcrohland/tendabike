@@ -43,10 +43,7 @@ use crate::*;
 
 /// The database's representation of a part.
 #[serde_as]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Queryable, Identifiable, AsChangeset)]
-#[diesel(primary_key(id))]
-#[diesel(treat_none_as_null = true)]
-#[diesel(table_name = schema::parts)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Part {
     /// The primary key
     pub id: PartId,
@@ -70,8 +67,8 @@ pub struct Part {
     #[serde_as(as = "Option<Rfc3339>")]
     pub disposed_at: Option<OffsetDateTime>,
     /// the usage tracker
-    usage: UsageId,
-    source: Option<String>,
+    pub usage: UsageId,
+    pub source: Option<String>,
 }
 
 #[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -148,11 +145,11 @@ impl PartId {
         let start = round_time(start);
         if start > part.last_used {
             part.last_used = start;
-            part = store.part_update(&part).await?;
+            part = store.part_update(part).await?;
         }
         if start < part.purchase {
             part.purchase = start;
-            part = store.part_update(&part).await?;
+            part = store.part_update(part).await?;
         }
         Ok(part)
     }
@@ -165,14 +162,14 @@ impl PartId {
         debug!("-- disposing part {self} at {time}");
         let mut part = self.read(store).await?;
         part.disposed_at = Some(time);
-        store.part_update(&part).await
+        store.part_update(part).await
     }
 
     pub(crate) async fn restore(&self, store: &mut impl Store) -> TbResult<Part> {
         debug!("-- restoring part {self}");
         let mut part = self.read(store).await?;
         part.disposed_at = None;
-        store.part_update(&part).await
+        store.part_update(part).await
     }
 
     pub async fn change(
@@ -186,10 +183,17 @@ impl PartId {
     ) -> TbResult<Part> {
         info!("Change {:?}", self);
 
-        self.checkuser(user, store).await?;
+        let mut part = self.part(user, store).await?;
 
         let purchase = round_time(purchase);
-        store.part_change(self, name, vendor, model, purchase).await
+        part = Part {
+            name,
+            vendor,
+            model,
+            purchase,
+            ..part
+        };
+        store.part_update(part).await
     }
 }
 

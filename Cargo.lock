@@ -2254,6 +2254,7 @@ dependencies = [
  "tb_domain",
  "tb_strava",
  "time",
+ "uuid",
 ]
 
 [[package]]
