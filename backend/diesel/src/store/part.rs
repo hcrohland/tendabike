@@ -80,13 +80,13 @@ impl tb_domain::PartStore for AsyncDieselConn {
     async fn part_get_all_for_userid(&mut self, uid: &UserId) -> TbResult<Vec<Part>> {
         use schema::parts::dsl::*;
 
-        vec_into(
-            parts
-                .filter(owner.eq(uid))
-                .order_by(last_used)
-                .load::<DbPart>(self)
-                .await,
-        )
+        parts
+            .filter(owner.eq(uid))
+            .order_by(last_used)
+            .load::<DbPart>(self)
+            .await
+            .map(vec_into)
+            .map_err(into_domain)
     }
 
     async fn part_create(
