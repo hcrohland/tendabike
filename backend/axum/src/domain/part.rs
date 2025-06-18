@@ -19,8 +19,6 @@
 //! their lifecycle.
 //!
 //! The `router` function returns an Axum `Router` that can be mounted in a larger application.
-
-#![allow(clippy::too_many_arguments)]
 use axum::{
     Json, Router,
     extract::{Path, State},
@@ -91,7 +89,7 @@ async fn post_part(
     }): Json<NewPart>,
 ) -> Result<(StatusCode, Json<Part>), AppError> {
     let mut store = store.get().await?;
-    let part = Part::create(name, vendor, model, what, None, purchase, &user, &mut store).await?;
+    let part = Part::create(name, vendor, model, what, purchase, &user, &mut store).await?;
     Ok((StatusCode::CREATED, Json(part)))
 }
 
@@ -107,6 +105,7 @@ async fn put_part(
     }): Json<ChangePart>,
 ) -> ApiResult<Part> {
     let mut store = store.get().await?;
+
     Ok(part
         .change(name, vendor, model, purchase, &user, &mut store)
         .await

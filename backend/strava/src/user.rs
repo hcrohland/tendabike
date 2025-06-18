@@ -239,25 +239,6 @@ pub async fn user_disable(
     user.strava_id().disable(store).await
 }
 
-pub async fn user_delete(
-    user: &mut impl StravaPerson,
-    store: &mut impl StravaStore,
-) -> TbResult<()> {
-    warn!("deleting user {}", user.tb_id());
-
-    if let Err(err) = user.deauthorize(store).await {
-        warn!("could not deauthorize user {}: {:#}", user.tb_id(), err)
-    }
-
-    store
-        .strava_events_delete_for_user(&user.strava_id())
-        .await?;
-
-    // store.strava_activities_delete(&user.strava_id()).await?;
-    // store.strava
-    todo!()
-}
-
 /// Returns the Strava URL for a user with the given Strava ID.
 ///
 /// # Arguments

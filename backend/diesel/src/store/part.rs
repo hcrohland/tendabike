@@ -32,8 +32,7 @@ struct DbPart {
     /// Was it disposed? If yes, when?
     pub disposed_at: Option<OffsetDateTime>,
     /// the usage tracker
-    usage: uuid::Uuid,
-    source: Option<String>,
+    pub usage: uuid::Uuid,
 }
 
 impl From<DbPart> for Part {
@@ -49,7 +48,6 @@ impl From<DbPart> for Part {
             last_used,
             disposed_at,
             usage,
-            source,
         } = db;
         Part {
             id: id.into(),
@@ -62,7 +60,6 @@ impl From<DbPart> for Part {
             last_used,
             disposed_at,
             usage: usage.into(),
-            source,
         }
     }
 }
@@ -98,7 +95,6 @@ impl tb_domain::PartStore for AsyncDieselConn {
         in_vendor: String,
         in_model: String,
         in_purchase: OffsetDateTime,
-        in_source: Option<String>,
         in_usage: UsageId,
         in_owner: UserId,
     ) -> TbResult<Part> {
@@ -112,7 +108,6 @@ impl tb_domain::PartStore for AsyncDieselConn {
             purchase.eq(in_purchase),
             last_used.eq(in_purchase),
             usage.eq(Uuid::from(in_usage)),
-            source.eq(in_source),
         );
 
         diesel::insert_into(parts)

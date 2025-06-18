@@ -64,12 +64,11 @@ pub(crate) async fn strava_to_tb(
                 }
 
                 let what = gear.what();
-                let source = Some(gear.id);
                 let vendor = gear.brand_name.unwrap_or("".into());
                 let model = gear.model_name.unwrap_or("".into());
                 let name = gear.name;
                 let purchase = OffsetDateTime::now_utc();
-                let tbid = Part::create(name, vendor, model, what, source, purchase, user, store)
+                let tbid = Part::create(name, vendor, model, what, purchase, user, store)
                     .await?
                     .id;
 
