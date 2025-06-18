@@ -49,7 +49,36 @@ impl From<DbPart> for Part {
             disposed_at,
             usage,
         } = db;
-        Part {
+        Self {
+            id: id.into(),
+            owner: owner.into(),
+            what: what.into(),
+            name,
+            vendor,
+            model,
+            purchase,
+            last_used,
+            disposed_at,
+            usage: usage.into(),
+        }
+    }
+}
+
+impl From<Part> for DbPart {
+    fn from(value: Part) -> Self {
+        let Part {
+            id,
+            owner,
+            what,
+            name,
+            vendor,
+            model,
+            purchase,
+            last_used,
+            disposed_at,
+            usage,
+        } = value;
+        Self {
             id: id.into(),
             owner: owner.into(),
             what: what.into(),
@@ -120,20 +149,9 @@ impl tb_domain::PartStore for AsyncDieselConn {
 
     async fn part_update(&mut self, part: Part) -> TbResult<Part> {
         use schema::parts::dsl::*;
-        let values = (
-            owner.eq(i32::from(part.owner)),
-            // what.eq(part.what),
-            name.eq(part.name),
-            vendor.eq(part.vendor),
-            model.eq(part.model),
-            purchase.eq(part.purchase),
-            last_used.eq(part.purchase),
-            disposed_at.eq(part.disposed_at),
-            // usage.eq(part.usage),
-            // source.eq(part.source),
-        );
-        diesel::update(parts.find(i32::from(part.id)))
-            .set(values)
+        let part = DbPart::from(part);
+        diesel::update(parts.find(part.id))
+            .set(part)
             .get_result::<DbPart>(self)
             .await
             .map_err(into_domain)
