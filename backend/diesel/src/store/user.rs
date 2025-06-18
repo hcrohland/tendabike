@@ -1,9 +1,9 @@
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
+use super::schema;
 use crate::{AsyncDieselConn, into_domain};
-use tb_domain::{TbResult, User, UserId, schema};
-
+use tb_domain::{TbResult, User, UserId};
 #[derive(Clone, Debug, Queryable, Insertable)]
 #[diesel(table_name = schema::users)]
 pub struct DbUser {
@@ -51,7 +51,7 @@ impl From<DbUser> for User {
 impl tb_domain::UserStore for AsyncDieselConn {
     async fn get(&mut self, uid: UserId) -> TbResult<User> {
         schema::users::table
-            .find(uid.inner())
+            .find(i32::from(uid))
             .get_result::<DbUser>(self)
             .await
             .map_err(into_domain)
@@ -75,7 +75,7 @@ impl tb_domain::UserStore for AsyncDieselConn {
 
     async fn update(&mut self, uid: &UserId, firstname_: &str, lastname: &str) -> TbResult<User> {
         use schema::users::dsl::*;
-        diesel::update(users.filter(id.eq(uid.inner())))
+        diesel::update(users.find(i32::from(*uid)))
             .set((firstname.eq(firstname_), name.eq(lastname)))
             .get_result::<DbUser>(self)
             .await

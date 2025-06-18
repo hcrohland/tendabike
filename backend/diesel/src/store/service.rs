@@ -1,14 +1,12 @@
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
-use ::time::OffsetDateTime;
-use tb_domain::{
-    PartId, Service, ServiceId, TbResult,
-    schema::{self, services::table},
-};
-use uuid::Uuid;
-
+use super::schema;
 use crate::{AsyncDieselConn, into_domain, vec_into};
+use ::time::OffsetDateTime;
+use schema::services::table;
+use tb_domain::{PartId, Service, ServiceId, TbResult};
+use uuid::Uuid;
 
 #[derive(Clone, Debug, Queryable, PartialEq, Eq, Identifiable, Insertable, AsChangeset)]
 #[diesel(treat_none_as_null = true)]
@@ -119,8 +117,7 @@ impl tb_domain::ServiceStore for AsyncDieselConn {
     }
 
     async fn delete(&mut self, service: ServiceId) -> TbResult<usize> {
-        let service: Uuid = service.into();
-        diesel::delete(table.find(service))
+        diesel::delete(table.find(Uuid::from(service)))
             .execute(self)
             .await
             .map_err(into_domain)
@@ -128,7 +125,7 @@ impl tb_domain::ServiceStore for AsyncDieselConn {
 
     async fn services_by_part(&mut self, part: PartId) -> TbResult<Vec<Service>> {
         table
-            .filter(schema::services::part_id.eq(part))
+            .filter(schema::services::part_id.eq(i32::from(part)))
             .get_results::<DbService>(self)
             .await
             .map_err(into_domain)

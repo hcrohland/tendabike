@@ -3,8 +3,9 @@ use diesel_async::RunQueryDsl;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+use super::schema;
 use crate::{AsyncDieselConn, into_domain, vec_into};
-use tb_domain::{Attachment, PartId, PartTypeId, TbResult, schema};
+use tb_domain::{Attachment, PartId, PartTypeId, TbResult};
 
 use schema::attachments::table;
 
@@ -89,7 +90,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
     ) -> TbResult<Vec<Attachment>> {
         use schema::attachments::dsl::*;
         attachments
-            .filter(gear.eq(act_gear))
+            .filter(gear.eq(i32::from(act_gear)))
             .filter(attached.le(start))
             .filter(detached.is_null().or(detached.gt(start)))
             .get_results::<DbAttachment>(self)
@@ -101,7 +102,7 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
     async fn attachments_all_by_part(&mut self, id: PartId) -> TbResult<Vec<Attachment>> {
         use schema::attachments::dsl::*;
         attachments
-            .filter(part_id.eq(id))
+            .filter(part_id.eq(i32::from(id)))
             .get_results::<DbAttachment>(self)
             .await
             .map_err(into_domain)
@@ -114,10 +115,9 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
         time: OffsetDateTime,
     ) -> TbResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
-        let pid: i32 = pid.into();
         table
             .for_update()
-            .filter(part_id.eq(pid))
+            .filter(part_id.eq(i32::from(pid)))
             .filter(attached.le(time))
             .filter(detached.gt(time))
             .first::<DbAttachment>(self)
@@ -134,12 +134,10 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
         time: OffsetDateTime,
     ) -> TbResult<Vec<Attachment>> {
         use schema::attachments::dsl::*;
-        let gear_: i32 = gear_.into();
-        let types: Vec<i32> = vec_into(types);
         attachments
             .for_update()
-            .filter(hook.eq_any(types))
-            .filter(gear.eq(gear_))
+            .filter(hook.eq_any(vec_into::<_, i32>(types)))
+            .filter(gear.eq(i32::from(gear_)))
             .filter(attached.le(time))
             .filter(detached.gt(time))
             .order(hook)
@@ -191,21 +189,17 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
     ) -> TbResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
         use schema::parts;
-        let part_id_: i32 = part_id_.into();
-        let gear_: i32 = gear_.into();
-        let hook_: i32 = hook_.into();
-        let what: i32 = what.into();
 
         attachments
             .for_update()
             .inner_join(
                 parts::table.on(parts::id
                     .eq(part_id) // join corresponding part
-                    .and(parts::what.eq(what))),
+                    .and(parts::what.eq(i32::from(what)))),
             ) // where the part has my type
-            .filter(gear.eq(gear_))
-            .filter(hook.eq(hook_))
-            .filter(part_id.ne(part_id_))
+            .filter(gear.eq(i32::from(gear_)))
+            .filter(hook.eq(i32::from(hook_)))
+            .filter(part_id.ne(i32::from(part_id_)))
             .select(schema::attachments::all_columns) // return only the attachment
             .filter(attached.gt(time_))
             .order(attached)
@@ -223,10 +217,9 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
         time_: OffsetDateTime,
     ) -> TbResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
-        let part_id_: i32 = part_id_.into();
         attachments
             .for_update()
-            .filter(part_id.eq(part_id_))
+            .filter(part_id.eq(i32::from(part_id_)))
             .filter(attached.gt(time_))
             .order(attached)
             .first::<DbAttachment>(self)
@@ -245,15 +238,12 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
         time_: OffsetDateTime,
     ) -> TbResult<Option<Attachment>> {
         use schema::attachments::dsl::*;
-        let part_id_: i32 = part_id_.into();
-        let gear_: i32 = gear_.into();
-        let hook_: i32 = hook_.into();
 
         attachments
             .for_update()
-            .filter(part_id.eq(part_id_))
-            .filter(gear.eq(gear_))
-            .filter(hook.eq(hook_))
+            .filter(part_id.eq(i32::from(part_id_)))
+            .filter(gear.eq(i32::from(gear_)))
+            .filter(hook.eq(i32::from(hook_)))
             .filter(detached.eq(time_))
             .first::<DbAttachment>(self)
             .await

@@ -8,9 +8,7 @@ edition = { workspace = true }
 [dependencies]
 tb_domain = { workspace = true }
 
-diesel = { workspace = true, features = ["time"] }
 scoped-futures = { workspace = true }
-diesel-derive-newtype = { workspace = true }
 
 newtype_derive = { workspace = true }
 async-session = { workspace = true }

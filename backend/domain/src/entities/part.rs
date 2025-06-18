@@ -32,7 +32,6 @@
 //! Finally, this module defines the `NewPart` type, which is used to create new parts in the database.
 
 #![allow(clippy::too_many_arguments)]
-use diesel_derive_newtype::*;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -71,7 +70,7 @@ pub struct Part {
     pub source: Option<String>,
 }
 
-#[derive(DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PartId(i32);
 
 NewtypeDisplay! { () pub struct PartId(); }

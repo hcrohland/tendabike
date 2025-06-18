@@ -25,8 +25,6 @@ pub use error::{Error, TbResult};
 mod entities;
 pub use entities::*;
 
-pub mod schema;
-
 mod traits;
 use time::OffsetDateTime;
 pub use traits::*;

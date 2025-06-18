@@ -39,7 +39,7 @@ pub trait UsageStore {
     /// # Returns
     ///
     /// Returns the number of deleted objects or returns an error.
-    async fn delete(&mut self, usage: &UsageId) -> TbResult<Usage>;
+    async fn delete(&mut self, usage: UsageId) -> TbResult<Usage>;
 
     /// Resets all Usages.
     ///

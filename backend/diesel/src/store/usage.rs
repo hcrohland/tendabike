@@ -5,8 +5,9 @@ use scoped_futures::ScopedFutureExt;
 use std::borrow::Borrow;
 use uuid::Uuid;
 
+use super::schema;
 use crate::{AsyncDieselConn, into_domain, option_into};
-use tb_domain::{TbResult, Usage, UsageId, UsageStore, schema};
+use tb_domain::{TbResult, Usage, UsageId, UsageStore};
 
 #[derive(Clone, Debug, PartialEq, Default, Queryable, Identifiable, AsChangeset, Insertable)]
 #[diesel(table_name = schema::usages)]
@@ -78,7 +79,7 @@ impl UsageStore for AsyncDieselConn {
         use diesel::result::OptionalExtension;
         use schema::usages;
         usages::table
-            .find(id.inner())
+            .find(Uuid::from(id))
             .get_result::<DbUsage>(self)
             .await
             .optional()
@@ -96,7 +97,7 @@ impl UsageStore for AsyncDieselConn {
         self.transaction(|store| {
             async move {
                 for usage in vec {
-                    let usage: DbUsage = usage.borrow().into();
+                    let usage = DbUsage::from(usage.borrow());
                     diesel::insert_into(usages::table)
                         .values(&usage)
                         .on_conflict(usages::id)
@@ -112,9 +113,9 @@ impl UsageStore for AsyncDieselConn {
         .await
     }
 
-    async fn delete(&mut self, usage: &UsageId) -> TbResult<Usage> {
+    async fn delete(&mut self, usage: UsageId) -> TbResult<Usage> {
         use schema::usages::dsl::*;
-        diesel::delete(usages.find(usage.inner()))
+        diesel::delete(usages.find(Uuid::from(usage)))
             .get_result::<DbUsage>(self)
             .await
             .map_err(into_domain)

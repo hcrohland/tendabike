@@ -3,8 +3,9 @@ use diesel_async::RunQueryDsl;
 
 use crate::{AsyncDieselConn, into_domain, option_into, vec_into};
 use tb_domain::{ActivityId, PartId, TbResult, UserId};
-use tb_strava::{StravaId, StravaUser, event::Event, strava_schema as schema};
+use tb_strava::{StravaId, StravaUser, event::Event};
 
+mod schema;
 #[derive(Clone, Queryable, Insertable, Identifiable, Debug, Default)]
 #[diesel(table_name = schema::strava_users)]
 pub struct DbStravaUser {
@@ -181,7 +182,7 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .values((
                 id.eq(strava_id),
                 tendabike_id.eq(i32::from(new_id)),
-                user_id.eq(uid.inner()),
+                user_id.eq(i32::from(uid)),
             ))
             .execute(self)
             .await?;

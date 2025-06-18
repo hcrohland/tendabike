@@ -1,9 +1,11 @@
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use time::OffsetDateTime;
+use uuid::Uuid;
 
+use super::schema;
 use crate::{AsyncDieselConn, into_domain, vec_into};
-use tb_domain::{Part, PartId, PartTypeId, TbResult, UsageId, UserId, schema};
+use tb_domain::{Part, PartId, PartTypeId, TbResult, UsageId, UserId};
 
 /// The database's representation of a part.
 #[derive(Clone, Debug, PartialEq, Queryable, Identifiable, AsChangeset)]
@@ -70,23 +72,23 @@ impl tb_domain::PartStore for AsyncDieselConn {
     async fn partid_get_part(&mut self, pid: PartId) -> TbResult<Part> {
         use schema::parts;
         parts::table
-            .find(pid)
+            .find(i32::from(pid))
             .first::<DbPart>(self)
             .await
-            .map(Into::into)
             .map_err(into_domain)
+            .map(Into::into)
     }
 
     async fn part_get_all_for_userid(&mut self, uid: &UserId) -> TbResult<Vec<Part>> {
         use schema::parts::dsl::*;
 
         parts
-            .filter(owner.eq(uid))
+            .filter(owner.eq(i32::from(*uid)))
             .order_by(last_used)
             .load::<DbPart>(self)
             .await
-            .map(vec_into)
             .map_err(into_domain)
+            .map(vec_into)
     }
 
     async fn part_create(
@@ -102,14 +104,14 @@ impl tb_domain::PartStore for AsyncDieselConn {
     ) -> TbResult<Part> {
         use schema::parts::dsl::*;
         let values = (
-            owner.eq(in_owner),
-            what.eq(in_what),
+            owner.eq(i32::from(in_owner)),
+            what.eq(i32::from(in_what)),
             name.eq(in_name),
             vendor.eq(in_vendor),
             model.eq(in_model),
             purchase.eq(in_purchase),
             last_used.eq(in_purchase),
-            usage.eq(in_usage),
+            usage.eq(Uuid::from(in_usage)),
             source.eq(in_source),
         );
 
@@ -117,14 +119,14 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .values(values)
             .get_result::<DbPart>(self)
             .await
-            .map(Into::into)
             .map_err(into_domain)
+            .map(Into::into)
     }
 
     async fn part_update(&mut self, part: Part) -> TbResult<Part> {
         use schema::parts::dsl::*;
         let values = (
-            owner.eq(part.owner),
+            owner.eq(i32::from(part.owner)),
             // what.eq(part.what),
             name.eq(part.name),
             vendor.eq(part.vendor),
@@ -135,11 +137,11 @@ impl tb_domain::PartStore for AsyncDieselConn {
             // usage.eq(part.usage),
             // source.eq(part.source),
         );
-        diesel::update(parts.filter(id.eq(part.id)))
+        diesel::update(parts.find(i32::from(part.id)))
             .set(values)
             .get_result::<DbPart>(self)
             .await
-            .map(Into::into)
             .map_err(into_domain)
+            .map(Into::into)
     }
 }

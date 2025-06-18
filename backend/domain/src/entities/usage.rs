@@ -22,7 +22,6 @@
 //! The `Usage` struct represents the usage of a part, including time, distance, climbing, descending, power, and count.
 //! It also provides methods to add an activity to the usage.
 
-use diesel_derive_newtype::*;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
 use std::borrow::Borrow;
@@ -31,16 +30,8 @@ use uuid::Uuid;
 
 use crate::*;
 
-#[derive(
-    DieselNewType, Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Default,
-)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct UsageId(Uuid);
-
-impl UsageId {
-    pub fn inner(&self) -> Uuid {
-        self.0
-    }
-}
 
 NewtypeDisplay! { () pub struct UsageId(); }
 NewtypeFrom! { () pub struct UsageId(Uuid); }
@@ -105,7 +96,7 @@ impl UsageId {
     }
 
     pub(crate) async fn delete(self, store: &mut impl UsageStore) -> TbResult<Usage> {
-        match store.delete(&self).await {
+        match store.delete(self).await {
             Err(Error::NotFound(_)) => Ok(Usage::new(self)),
             x => x,
         }
@@ -231,7 +222,7 @@ mod tests {
             Ok(vec.len())
         }
 
-        async fn delete(&mut self, usage: &UsageId) -> TbResult<Usage> {
+        async fn delete(&mut self, usage: UsageId) -> TbResult<Usage> {
             match self.0.remove(&usage) {
                 Some(x) => Ok(x),
                 None => Err(crate::Error::NotFound(format!("Usage {} not found", usage))),
