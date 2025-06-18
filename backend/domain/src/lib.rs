@@ -18,15 +18,12 @@
 */
 
 use async_session::log::{debug, info, trace, warn};
-use diesel::prelude::*;
 
 mod error;
 pub use error::{Error, TbResult};
 
 mod entities;
 pub use entities::*;
-
-pub mod schema;
 
 mod traits;
 use time::OffsetDateTime;

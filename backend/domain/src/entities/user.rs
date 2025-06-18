@@ -33,26 +33,23 @@
 //!
 //! The `create`, `update`, `read`, and `get_stat` methods are implemented for the `UserId` type and provide CRUD functionality for `User` entities.
 
-use diesel_derive_newtype::DieselNewType;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::*;
 
-#[derive(
-    DieselNewType, Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize,
-)]
+#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserId(i32);
+
 NewtypeDisplay! { () pub struct UserId(); }
 NewtypeFrom! { () pub struct UserId(i32); }
 
-#[derive(Clone, Debug, Queryable, Insertable, Serialize, Deserialize)]
-#[diesel(table_name = schema::users)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct User {
-    id: UserId,
-    name: String,
-    firstname: String,
-    is_admin: bool,
+    pub id: UserId,
+    pub name: String,
+    pub firstname: String,
+    pub is_admin: bool,
 }
 
 #[derive(Debug, Serialize)]

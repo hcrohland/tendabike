@@ -1,17 +1,61 @@
-use diesel::{ExpressionMethods, QueryDsl};
+use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
+use super::schema;
 use crate::{AsyncDieselConn, into_domain};
-use tb_domain::{TbResult, User, UserId, schema};
+use tb_domain::{TbResult, User, UserId};
+#[derive(Clone, Debug, Queryable, Insertable)]
+#[diesel(table_name = schema::users)]
+pub struct DbUser {
+    id: i32,
+    name: String,
+    firstname: String,
+    is_admin: bool,
+}
+
+impl From<User> for DbUser {
+    fn from(value: User) -> Self {
+        let User {
+            id,
+            name,
+            firstname,
+            is_admin,
+        } = value;
+        Self {
+            id: id.into(),
+            name,
+            firstname,
+            is_admin,
+        }
+    }
+}
+
+impl From<DbUser> for User {
+    fn from(value: DbUser) -> Self {
+        let DbUser {
+            id,
+            name,
+            firstname,
+            is_admin,
+        } = value;
+        Self {
+            id: id.into(),
+            name,
+            firstname,
+            is_admin,
+        }
+    }
+}
 
 #[async_session::async_trait]
 impl tb_domain::UserStore for AsyncDieselConn {
     async fn get(&mut self, uid: UserId) -> TbResult<User> {
         schema::users::table
-            .find(uid)
-            .get_result(self)
+            .find(i32::from(uid))
+            .get_result::<DbUser>(self)
             .await
             .map_err(into_domain)
+            .map(Into::into)
     }
 
     async fn create(&mut self, firstname_: &str, lastname: &str) -> TbResult<User> {
@@ -23,17 +67,19 @@ impl tb_domain::UserStore for AsyncDieselConn {
                 name.eq(lastname),
                 is_admin.eq(false),
             ))
-            .get_result(self)
+            .get_result::<DbUser>(self)
             .await
             .map_err(into_domain)
+            .map(Into::into)
     }
 
     async fn update(&mut self, uid: &UserId, firstname_: &str, lastname: &str) -> TbResult<User> {
         use schema::users::dsl::*;
-        diesel::update(users.filter(id.eq(uid)))
+        diesel::update(users.find(i32::from(*uid)))
             .set((firstname.eq(firstname_), name.eq(lastname)))
-            .get_result(self)
+            .get_result::<DbUser>(self)
             .await
             .map_err(into_domain)
+            .map(Into::into)
     }
 }

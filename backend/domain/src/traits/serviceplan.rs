@@ -8,5 +8,5 @@ pub trait ServicePlanStore {
     async fn update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
     async fn delete(&mut self, plan: ServicePlanId) -> TbResult<usize>;
     async fn by_part(&mut self, part: PartId) -> TbResult<Vec<ServicePlan>>;
-    async fn by_user(&mut self, uid: &UserId) -> TbResult<Vec<ServicePlan>>;
+    async fn by_user(&mut self, uid: UserId) -> TbResult<Vec<ServicePlan>>;
 }

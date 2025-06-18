@@ -16,7 +16,6 @@
 
 use anyhow::Context;
 use async_session::log::{debug, info, trace, warn};
-use diesel::{Identifiable, Insertable, Queryable};
 use scoped_futures::ScopedFutureExt;
 use serde_derive::{Deserialize, Serialize};
 
@@ -31,8 +30,6 @@ pub mod gear;
 
 mod user;
 pub use user::*;
-
-pub mod schema;
 
 fn get_time() -> i64 {
     time::OffsetDateTime::now_utc().unix_timestamp()

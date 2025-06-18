@@ -41,7 +41,7 @@ export class Part {
   }
 
   async update() {
-    return await myfetch("/api/part", "PUT", this)
+    return await myfetch("/api/part/" + this.id, "PUT", this)
       .then((data) => parts.updateMap([data]))
       .catch(handleError);
   }

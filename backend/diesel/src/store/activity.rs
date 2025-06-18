@@ -3,7 +3,7 @@ use diesel::{prelude::*, sql_query};
 use diesel_async::RunQueryDsl;
 use time::{OffsetDateTime, UtcOffset};
 
-use crate::{AsyncDieselConn, into_domain};
+use crate::{AsyncDieselConn, into_domain, vec_into};
 use tb_domain::{ActTypeId, Activity, ActivityId, NewActivity, PartId, Person, TbResult, UserId};
 mod schema {
     use diesel::prelude::*;
@@ -34,9 +34,9 @@ struct DbActivity {
     /// The primary key
     id: Option<i32>,
     /// The athlete
-    user_id: UserId,
+    user_id: i32,
     /// The activity type
-    what: ActTypeId,
+    what: i32,
     /// This name of the activity.
     name: String,
     /// Start time
@@ -54,7 +54,7 @@ struct DbActivity {
     /// average energy output
     energy: Option<i32>,
     /// Which gear did she use?
-    gear: Option<PartId>,
+    gear: Option<i32>,
     /// utc offset since timstamptz does not store the timezone
     utc_offset: i32,
 }
@@ -64,8 +64,8 @@ impl From<&NewActivity> for DbActivity {
         let utc_offset = v.start.offset().whole_seconds();
         DbActivity {
             id: None,
-            user_id: v.user_id,
-            what: v.what,
+            user_id: v.user_id.into(),
+            what: v.what.into(),
             name: v.name.clone(),
             start: v.start,
             duration: v.duration,
@@ -74,7 +74,7 @@ impl From<&NewActivity> for DbActivity {
             climb: v.climb,
             descend: v.descend,
             energy: v.energy,
-            gear: v.gear,
+            gear: v.gear.map(Into::into),
             utc_offset,
         }
     }
@@ -90,8 +90,8 @@ impl TryFrom<DbActivity> for Activity {
 
         Ok(Activity {
             id: id.into(),
-            user_id: v.user_id,
-            what: v.what,
+            user_id: v.user_id.into(),
+            what: v.what.into(),
             name: v.name.clone(),
             start,
             duration: v.duration,
@@ -100,15 +100,15 @@ impl TryFrom<DbActivity> for Activity {
             climb: v.climb,
             descend: v.descend,
             energy: v.energy,
-            gear: v.gear,
+            gear: v.gear.map(Into::into),
         })
     }
 }
 
-fn vec_into(db: Result<Vec<DbActivity>, diesel::result::Error>) -> TbResult<Vec<Activity>> {
+fn vec_tryinto(db: Result<Vec<DbActivity>, diesel::result::Error>) -> TbResult<Vec<Activity>> {
     db.map_err(into_domain)?
         .into_iter()
-        .map(|a| a.try_into())
+        .map(TryInto::try_into)
         .collect()
 }
 
@@ -154,9 +154,9 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
     async fn get_all(&mut self, uid: &UserId) -> TbResult<Vec<Activity>> {
         use schema::activities::dsl::*;
 
-        vec_into(
+        vec_tryinto(
             activities
-                .filter(user_id.eq(uid))
+                .filter(user_id.eq(i32::from(*uid)))
                 .order_by(start)
                 .load::<DbActivity>(self)
                 .await,
@@ -171,9 +171,9 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
     ) -> TbResult<Vec<Activity>> {
         use schema::activities::dsl::{activities, gear, start};
 
-        vec_into(
+        vec_tryinto(
             activities
-                .filter(gear.eq(Some(part)))
+                .filter(gear.eq(Some(i32::from(part))))
                 .filter(start.ge(begin))
                 .filter(start.lt(end))
                 .load::<DbActivity>(self)
@@ -190,7 +190,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
         let query = sql_query(
             "SELECT * FROM activities WHERE user_id = $1 AND date_trunc('minute',start) + make_interval(0,0,0,0,0,0,utc_offset) = date_trunc('minute',$2) FOR UPDATE",
         )
-        .bind::<sql_types::Int4, _>(uid)
+        .bind::<sql_types::Int4, _>(i32::from(uid))
         .bind::<sql_types::Timestamptz, _>(rstart);
         query
             .get_result::<DbActivity>(self)
@@ -206,12 +206,13 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
         partid: &PartId,
     ) -> TbResult<Vec<Activity>> {
         use schema::activities::dsl::*;
-        vec_into(
+        let types: Vec<i32> = vec_into(types);
+        vec_tryinto(
             diesel::update(activities)
-                .filter(user_id.eq(user.get_id()))
+                .filter(user_id.eq(i32::from(user.get_id())))
                 .filter(gear.is_null())
                 .filter(what.eq_any(types))
-                .set(gear.eq(partid))
+                .set(gear.eq(i32::from(*partid)))
                 .get_results::<DbActivity>(self)
                 .await,
         )
@@ -219,7 +220,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
 
     async fn activity_get_really_all(&mut self) -> TbResult<Vec<Activity>> {
         use schema::activities::dsl::*;
-        vec_into(
+        vec_tryinto(
             activities
                 .order_by(id)
                 .get_results::<DbActivity>(self)

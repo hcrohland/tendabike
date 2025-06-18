@@ -5,9 +5,8 @@ authors = ["Christoph Rohland <tendabike@rohland.net>"]
 edition = { workspace = true }
 
 [dependencies]
-diesel = { workspace = true, features = ["time", "postgres"] }
+diesel = { workspace = true }
 scoped-futures = { workspace = true }
-diesel-derive-newtype = { workspace = true }
 
 newtype_derive = { workspace = true }
 async-session = { workspace = true }

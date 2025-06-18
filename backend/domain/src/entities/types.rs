@@ -24,7 +24,6 @@
 //!
 //! The types defined in this module are used throughout the application to ensure type safety and consistency.
 
-use diesel_derive_newtype::*;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
 
@@ -33,9 +32,7 @@ use crate::*;
 mod objects;
 use objects::{ACTTYPES, PARTTYPES};
 
-#[derive(
-    DieselNewType, Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize,
-)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize)]
 pub struct PartTypeId(i32);
 
 NewtypeDisplay! { () pub struct PartTypeId(); }
@@ -68,9 +65,7 @@ impl PartType {
     }
 }
 
-#[derive(
-    DieselNewType, Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize,
-)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize)]
 pub struct ActTypeId(i32);
 
 NewtypeDisplay! { () pub struct ActTypeId(); }

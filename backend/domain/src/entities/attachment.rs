@@ -37,43 +37,29 @@ use time::OffsetDateTime;
 /// * Every attachment of a part to a specified hook on a gear is an entry
 /// * Start and end time are noted
 ///
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    Serialize,
-    Deserialize,
-    Queryable,
-    Identifiable,
-    Insertable,
-    AsChangeset,
-)]
-#[diesel(primary_key(part_id, attached))]
-#[diesel(treat_none_as_null = true)]
-#[diesel(table_name = schema::attachments)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Attachment {
     /// the sub-part, which is attached to the hook
-    part_id: PartId,
+    pub part_id: PartId,
     /// when it was attached
     #[serde(with = "time::serde::rfc3339")]
-    attached: OffsetDateTime,
+    pub attached: OffsetDateTime,
     /// The gear the part is attached to
-    gear: PartId,
+    pub gear: PartId,
     /// the hook on that gear
-    hook: PartTypeId,
+    pub hook: PartTypeId,
     /// when it was removed again, "none" means "still attached"
     #[serde(with = "time::serde::rfc3339")]
-    detached: OffsetDateTime,
+    pub detached: OffsetDateTime,
     // we do not accept theses values from the client!
-    usage: UsageId,
+    pub usage: UsageId,
 }
 /// Attachment with additional details
 ///
 /// * the name is needed for attachments to parts which were sold
 ///   since the part will not be send to the client
 /// * 'what' is an optimization
-#[derive(Queryable, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct AttachmentDetail {
     #[serde(flatten)]
     pub a: Attachment,

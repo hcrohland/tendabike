@@ -76,6 +76,9 @@
             <DropdownItem href="/#/stats">Statistics</DropdownItem>
             <Sport></Sport>
             <DropdownItem href="/strava/logout">Logout</DropdownItem>
+            <DropdownItem href="/api/user/export" download="tendabike.json">
+              Export Data
+            </DropdownItem>
             <DropdownItem divider />
             <DropdownItem href="/#/about">About</DropdownItem>
             {#if $user.is_admin}

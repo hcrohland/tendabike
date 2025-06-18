@@ -3,8 +3,9 @@ use tb_domain::Store;
 use time::OffsetDateTime;
 
 mod activity;
-pub mod attachment;
+mod attachment;
 mod part;
+mod schema;
 mod service;
 mod serviceplan;
 mod usage;

@@ -2,6 +2,8 @@
 //! It also contains functions to convert StravaGear to Tendabike's Part object and to map Strava gear_id to Tendabike gear_id.
 //!
 
+use time::OffsetDateTime;
+
 use crate::*;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -25,22 +27,12 @@ pub async fn strava_url(gear: i32, store: &mut impl StravaStore) -> TbResult<Str
 }
 
 impl StravaGear {
-    fn into_tb(self, user: &impl StravaPerson) -> TbResult<NewPart> {
-        Ok(NewPart {
-            owner: user.tb_id(),
-            what: self.what().into(),
-            name: self.name,
-            vendor: self.brand_name.unwrap_or_else(|| String::from("")),
-            model: self.model_name.unwrap_or_else(|| String::from("")),
-            purchase: None,
-        })
-    }
-
-    fn what(&self) -> i32 {
+    fn what(&self) -> PartTypeId {
         match self.frame_type {
             None => 301,  // shoes
             Some(_) => 1, // bikes
         }
+        .into()
     }
 }
 
@@ -58,23 +50,31 @@ pub(crate) async fn strava_to_tb(
     }
 
     debug!("New Gear");
-    let part = user
+    let gear = user
         .request_json::<StravaGear>(&format!("/gear/{}", &strava_id), store)
         .await
-        .context("Couldn't map gear")?
-        .into_tb(user)?;
+        .context("Couldn't map gear")?;
 
     store
-        .transaction(|c| {
+        .transaction(|store| {
             async {
                 // maybe the gear was created by now?
-                if let Some(gear) = c.strava_gear_get_tbid(&strava_id).await? {
+                if let Some(gear) = store.strava_gear_get_tbid(&strava_id).await? {
                     return Ok(gear);
                 }
 
-                let tbid = part.create(user, c).await?.id;
+                let what = gear.what();
+                let vendor = gear.brand_name.unwrap_or("".into());
+                let model = gear.model_name.unwrap_or("".into());
+                let name = gear.name;
+                let purchase = OffsetDateTime::now_utc();
+                let tbid = Part::create(name, vendor, model, what, purchase, user, store)
+                    .await?
+                    .id;
 
-                c.strava_gear_new(strava_id, tbid, user.get_id()).await?;
+                store
+                    .strava_gear_new(strava_id, tbid, user.get_id())
+                    .await?;
                 Ok(tbid)
             }
             .scope_boxed()

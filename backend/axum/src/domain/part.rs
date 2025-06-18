@@ -19,51 +19,95 @@
 //! their lifecycle.
 //!
 //! The `router` function returns an Axum `Router` that can be mounted in a larger application.
-
 use axum::{
     Json, Router,
     extract::{Path, State},
-    routing::{get, put},
+    routing::{get, post},
 };
 use http::StatusCode;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     DbPool, RequestUser,
     appstate::AppState,
     error::{ApiResult, AppError},
 };
-use tb_domain::{ChangePart, NewPart, Part, PartId};
+use serde_with::serde_as;
+use tb_domain::{Part, PartId, PartTypeId};
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
+
+#[serde_as]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NewPart {
+    pub what: PartTypeId,
+    /// This name of the part.
+    pub name: String,
+    /// The vendor name
+    pub vendor: String,
+    /// The model name
+    pub model: String,
+    #[serde_as(as = "Rfc3339")]
+    pub purchase: OffsetDateTime,
+}
+
+#[serde_as]
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub struct ChangePart {
+    pub name: String,
+    /// The vendor name
+    pub vendor: String,
+    /// The model name
+    pub model: String,
+    #[serde_as(as = "Rfc3339")]
+    pub purchase: OffsetDateTime,
+}
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
-        .route("/", put(put_part).post(post_part))
-        .route("/{part}", get(get_part))
+        .route("/", post(post_part))
+        .route("/{part}", get(get_part).put(put_part))
 }
 
 async fn get_part(
-    Path(part): Path<i32>,
+    Path(part): Path<PartId>,
     user: RequestUser,
     State(store): State<DbPool>,
 ) -> ApiResult<Part> {
     let mut store = store.get().await?;
-    Ok(PartId::new(part).part(&user, &mut store).await.map(Json)?)
+    Ok(part.part(&user, &mut store).await.map(Json)?)
 }
 
 async fn post_part(
     user: RequestUser,
     State(store): State<DbPool>,
-    Json(newpart): Json<NewPart>,
+    Json(NewPart {
+        what,
+        name,
+        vendor,
+        model,
+        purchase,
+    }): Json<NewPart>,
 ) -> Result<(StatusCode, Json<Part>), AppError> {
     let mut store = store.get().await?;
-    let part = newpart.create(&user, &mut store).await?;
+    let part = Part::create(name, vendor, model, what, purchase, &user, &mut store).await?;
     Ok((StatusCode::CREATED, Json(part)))
 }
 
 async fn put_part(
     user: RequestUser,
     State(store): State<DbPool>,
-    Json(part): Json<ChangePart>,
+    Path(part): Path<PartId>,
+    Json(ChangePart {
+        name,
+        vendor,
+        model,
+        purchase,
+    }): Json<ChangePart>,
 ) -> ApiResult<Part> {
     let mut store = store.get().await?;
-    Ok(part.change(&user, &mut store).await.map(Json)?)
+
+    Ok(part
+        .change(name, vendor, model, purchase, &user, &mut store)
+        .await
+        .map(Json)?)
 }
