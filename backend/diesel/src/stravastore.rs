@@ -2,7 +2,7 @@ use diesel::{prelude::*, sql_query};
 use diesel_async::RunQueryDsl;
 
 use crate::{AsyncDieselConn, into_domain, option_into, vec_into};
-use tb_domain::{ActivityId, PartId, TbResult, UserId};
+use tb_domain::{ActivityId, TbResult, UserId};
 use tb_strava::{StravaId, StravaUser, event::Event};
 
 mod schema;
@@ -132,30 +132,6 @@ impl tb_strava::StravaStore for AsyncDieselConn {
         Ok(())
     }
 
-    async fn strava_gear_get_tbid(&mut self, strava_id: &str) -> TbResult<Option<PartId>> {
-        use schema::strava_gears::dsl::*;
-
-        strava_gears
-            .find(strava_id)
-            .select(tendabike_id)
-            .for_update()
-            .first::<i32>(self)
-            .await
-            .optional()
-            .map_err(into_domain)
-            .map(option_into)
-    }
-
-    async fn strava_gearid_get_name(&mut self, gear: i32) -> TbResult<String> {
-        use schema::strava_gears::dsl::*;
-        strava_gears
-            .filter(tendabike_id.eq(gear))
-            .select(id)
-            .first::<String>(self)
-            .await
-            .map_err(into_domain)
-    }
-
     async fn strava_activity_get_tbid(&mut self, strava_id: i64) -> TbResult<Option<ActivityId>> {
         use schema::strava_activities::dsl::*;
 
@@ -221,25 +197,6 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .optional()
             .map_err(into_domain)
             .map(option_into)
-    }
-
-    async fn strava_gear_new(
-        &mut self,
-        strava_id: String,
-        tbid: PartId,
-        user: UserId,
-    ) -> TbResult<()> {
-        use schema::strava_gears::dsl::*;
-
-        diesel::insert_into(strava_gears)
-            .values((
-                id.eq(strava_id),
-                tendabike_id.eq(i32::from(tbid)),
-                user_id.eq(i32::from(user)),
-            ))
-            .execute(self)
-            .await?;
-        Ok(())
     }
 
     async fn strava_event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {

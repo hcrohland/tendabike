@@ -23,6 +23,7 @@ table! {
         last_used -> Timestamptz,
         disposed_at -> Nullable<Timestamptz>,
         usage -> Uuid,
+        source -> Nullable<Text>
     }
 }
 

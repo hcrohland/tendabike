@@ -4,7 +4,7 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 
 use super::schema;
-use crate::{AsyncDieselConn, into_domain, vec_into};
+use crate::{AsyncDieselConn, into_domain, option_into, vec_into};
 use tb_domain::{Part, PartId, PartTypeId, TbResult, UsageId, UserId};
 
 /// The database's representation of a part.
@@ -13,26 +13,17 @@ use tb_domain::{Part, PartId, PartTypeId, TbResult, UsageId, UserId};
 #[diesel(treat_none_as_null = true)]
 #[diesel(table_name = schema::parts)]
 struct DbPart {
-    /// The primary key
-    pub id: i32,
-    /// The owner
-    pub owner: i32,
-    /// The type of the part
-    pub what: i32,
-    /// This name of the part.
-    pub name: String,
-    /// The vendor name
-    pub vendor: String,
-    /// The model name
-    pub model: String,
-    /// purchase date
-    pub purchase: OffsetDateTime,
-    /// last time it was used
-    pub last_used: OffsetDateTime,
-    /// Was it disposed? If yes, when?
-    pub disposed_at: Option<OffsetDateTime>,
-    /// the usage tracker
-    pub usage: uuid::Uuid,
+    id: i32,
+    owner: i32,
+    what: i32,
+    name: String,
+    vendor: String,
+    model: String,
+    purchase: OffsetDateTime,
+    last_used: OffsetDateTime,
+    disposed_at: Option<OffsetDateTime>,
+    usage: uuid::Uuid,
+    source: Option<String>,
 }
 
 impl From<DbPart> for Part {
@@ -48,6 +39,7 @@ impl From<DbPart> for Part {
             last_used,
             disposed_at,
             usage,
+            source,
         } = db;
         Self {
             id: id.into(),
@@ -60,6 +52,7 @@ impl From<DbPart> for Part {
             last_used,
             disposed_at,
             usage: usage.into(),
+            source,
         }
     }
 }
@@ -77,6 +70,7 @@ impl From<Part> for DbPart {
             last_used,
             disposed_at,
             usage,
+            source,
         } = value;
         Self {
             id: id.into(),
@@ -89,6 +83,7 @@ impl From<Part> for DbPart {
             last_used,
             disposed_at,
             usage: usage.into(),
+            source,
         }
     }
 }
@@ -124,6 +119,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
         in_vendor: String,
         in_model: String,
         in_purchase: OffsetDateTime,
+        in_source: Option<String>,
         in_usage: UsageId,
         in_owner: UserId,
     ) -> TbResult<Part> {
@@ -137,6 +133,7 @@ impl tb_domain::PartStore for AsyncDieselConn {
             purchase.eq(in_purchase),
             last_used.eq(in_purchase),
             usage.eq(Uuid::from(in_usage)),
+            source.eq(in_source),
         );
 
         diesel::insert_into(parts)
@@ -156,5 +153,18 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .await
             .map_err(into_domain)
             .map(Into::into)
+    }
+
+    async fn partid_get_by_source(&mut self, strava_id: &str) -> TbResult<Option<PartId>> {
+        use schema::parts::dsl::*;
+        parts
+            .filter(source.eq(strava_id))
+            .select(id)
+            .for_update()
+            .first::<i32>(self)
+            .await
+            .optional()
+            .map_err(into_domain)
+            .map(option_into)
     }
 }

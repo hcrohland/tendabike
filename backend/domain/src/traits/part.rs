@@ -44,6 +44,7 @@ pub trait PartStore {
         vendor: String,
         model: String,
         purchase: OffsetDateTime,
+        source: Option<String>,
         usage: UsageId,
         owner: UserId,
     ) -> TbResult<Part>;
@@ -54,4 +55,19 @@ pub trait PartStore {
     ///
     /// This function will return an error if the part does not exist or there is a store error.
     async fn part_update(&mut self, part: Part) -> TbResult<Part>;
+
+    /// Returns the PartId associated with the given Strava gear ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `strava_id` - The Strava ID of the gear.
+    ///
+    /// # Returns
+    ///
+    /// The PartId associated with the given Strava gear ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the PartId cannot be retrieved from the database.
+    async fn partid_get_by_source(&mut self, strava_id: &str) -> TbResult<Option<PartId>>;
 }

@@ -89,7 +89,7 @@ async fn post_part(
     }): Json<NewPart>,
 ) -> Result<(StatusCode, Json<Part>), AppError> {
     let mut store = store.get().await?;
-    let part = Part::create(name, vendor, model, what, purchase, &user, &mut store).await?;
+    let part = Part::create(name, vendor, model, what, None, purchase, &user, &mut store).await?;
     Ok((StatusCode::CREATED, Json(part)))
 }
 

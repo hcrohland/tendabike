@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 
 use crate::{StravaId, StravaUser, event::Event};
-use tb_domain::{ActivityId, PartId, Person, TbResult, UserId};
+use tb_domain::{ActivityId, Person, TbResult, UserId};
 
 #[async_trait]
 pub trait StravaStore: tb_domain::Store + Send {
@@ -25,37 +25,6 @@ pub trait StravaStore: tb_domain::Store + Send {
     ///
     /// Returns an error if the user ID cannot be retrieved from the database.
     async fn stravaid_get_user_id(&mut self, who: i32) -> TbResult<i32>;
-
-    /// Returns the PartId associated with the given Strava gear ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `strava_id` - The Strava ID of the gear.
-    ///
-    /// # Returns
-    ///
-    /// The PartId associated with the given Strava gear ID.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the PartId cannot be retrieved from the database.
-    async fn strava_gear_get_tbid(&mut self, strava_id: &str) -> TbResult<Option<PartId>>;
-
-    /// Returns the name of the gear associated with the given Strava gear ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `gear` - The Strava ID of the gear.
-    ///
-    /// # Returns
-    ///
-    /// The name of the gear associated with the given Strava gear ID.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the name cannot be retrieved from the database.
-    async fn strava_gearid_get_name(&mut self, gear: i32) -> TbResult<String>;
-
     /// Returns the ActivityId associated with the given Strava activity ID.
     ///
     /// # Arguments
@@ -134,24 +103,6 @@ pub trait StravaStore: tb_domain::Store + Send {
     /// Returns an error if the ActivityId cannot be retrieved from the database.
     async fn strava_activity_get_activityid(&mut self, act_id: i64)
     -> TbResult<Option<ActivityId>>;
-
-    /// Creates a new Strava gear with the given Strava ID, PartId, and user ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `strava_id` - The Strava ID of the gear.
-    /// * `tbid` - The PartId associated with the gear.
-    /// * `user` - The user ID associated with the gear.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the gear cannot be created.
-    async fn strava_gear_new(
-        &mut self,
-        strava_id: String,
-        tbid: PartId,
-        user: UserId,
-    ) -> TbResult<()>;
 
     /// Deletes the Strava event with the given event ID.
     ///

@@ -17,13 +17,18 @@ pub struct StravaGear {
     frame_type: Option<i32>,
 }
 
-pub async fn strava_url(gear: i32, store: &mut impl StravaStore) -> TbResult<String> {
-    let mut g = store.strava_gearid_get_name(gear).await?;
-    if g.remove(0) != 'b' {
-        return Err(Error::BadRequest(format!("'{g}' is not a bike id")));
+pub async fn strava_url(
+    gear: i32,
+    user: &mut impl StravaPerson,
+    store: &mut impl StravaStore,
+) -> TbResult<String> {
+    let part = PartId::new(gear).part(user, store).await?;
+    let g = part.source.ok_or(Error::NotFound("".to_string()))?;
+    match &g[0..1] {
+        "b" => Ok(format!("https://strava.com/bikes/{}", &g[1..])),
+        "g" => Ok("https://www.strava.com/settings/gear".into()),
+        _ => Err(Error::NotFound("".to_string())),
     }
-
-    Ok(format!("https://strava.com/bikes/{}", &g))
 }
 
 impl StravaGear {
@@ -45,7 +50,7 @@ pub(crate) async fn strava_to_tb(
     user: &mut impl StravaPerson,
     store: &mut impl StravaStore,
 ) -> TbResult<PartId> {
-    if let Some(gear) = store.strava_gear_get_tbid(&strava_id).await? {
+    if let Some(gear) = store.partid_get_by_source(&strava_id).await? {
         return Ok(gear);
     }
 
@@ -59,22 +64,19 @@ pub(crate) async fn strava_to_tb(
         .transaction(|store| {
             async {
                 // maybe the gear was created by now?
-                if let Some(gear) = store.strava_gear_get_tbid(&strava_id).await? {
+                if let Some(gear) = store.partid_get_by_source(&strava_id).await? {
                     return Ok(gear);
                 }
 
                 let what = gear.what();
+                let source = Some(gear.id);
                 let vendor = gear.brand_name.unwrap_or("".into());
                 let model = gear.model_name.unwrap_or("".into());
                 let name = gear.name;
                 let purchase = OffsetDateTime::now_utc();
-                let tbid = Part::create(name, vendor, model, what, purchase, user, store)
+                let tbid = Part::create(name, vendor, model, what, source, purchase, user, store)
                     .await?
                     .id;
-
-                store
-                    .strava_gear_new(strava_id, tbid, user.get_id())
-                    .await?;
                 Ok(tbid)
             }
             .scope_boxed()
