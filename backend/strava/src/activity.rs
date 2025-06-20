@@ -68,12 +68,8 @@ impl StravaActivity {
             kilojoules,
             gear_id,
         } = self;
-        let mut offset = utc_offset as i32;
-        if offset % 1800 != 0 {
-            warn!("rounding utc_offset {offset} for activity {id}");
-            offset = offset + 900 - (offset + 900) % 1800;
-        }
-        let offset = UtcOffset::from_whole_seconds(offset).context("Utc Offset invalid")?;
+        let offset =
+            UtcOffset::from_whole_seconds(utc_offset as i32).context("Utc Offset invalid")?;
         let what = Self::get_type(&type_)?;
         let gear = match gear_id {
             // cannot use map due to async closure
