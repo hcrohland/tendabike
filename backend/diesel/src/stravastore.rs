@@ -1,4 +1,4 @@
-use diesel::{prelude::*, sql_query};
+use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
 use crate::{AsyncDieselConn, into_domain, option_into, vec_into};
@@ -253,28 +253,6 @@ impl tb_strava::StravaStore for AsyncDieselConn {
         use schema::strava_events::dsl::*;
 
         diesel::delete(strava_events.filter(owner_id.eq(i32::from(*user))))
-            .execute(self)
-            .await
-            .map_err(into_domain)
-    }
-
-    async fn stravaid_lock(&mut self, user_id: &StravaId) -> TbResult<bool> {
-        use diesel::sql_types::Bool;
-        #[derive(QueryableByName, Debug)]
-        struct Lock {
-            #[diesel(sql_type = Bool)]
-            #[diesel(column_name = pg_try_advisory_lock)]
-            lock: bool,
-        }
-        let lock: bool = sql_query(format!("SELECT pg_try_advisory_lock({});", user_id))
-            .get_result::<Lock>(self)
-            .await?
-            .lock;
-        Ok(lock)
-    }
-
-    async fn stravaid_unlock(&mut self, id: &StravaId) -> TbResult<usize> {
-        sql_query(format!("SELECT pg_advisory_unlock({});", id))
             .execute(self)
             .await
             .map_err(into_domain)

@@ -209,36 +209,6 @@ pub trait StravaStore: tb_domain::Store + Send {
     ///
     /// Returns an error if the event count cannot be retrieved.
     async fn strava_events_delete_for_user(&mut self, user: &StravaId) -> TbResult<usize>;
-
-    /// Locks a Strava ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `user_id` - The Strava ID to lock.
-    ///
-    /// # Returns
-    ///
-    /// `true` if the lock was successful, `false` otherwise.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the lock cannot be acquired.
-    async fn stravaid_lock(&mut self, user_id: &StravaId) -> TbResult<bool>;
-
-    /// Unlocks a Strava ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `id` - The Strava ID to unlock.
-    ///
-    /// # Returns
-    ///
-    /// The number of rows affected by the unlock operation.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the unlock operation fails.
-    async fn stravaid_unlock(&mut self, id: &StravaId) -> TbResult<usize>;
 }
 
 #[async_trait]
