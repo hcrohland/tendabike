@@ -45,7 +45,7 @@ impl StravaGear {
 ///
 /// If it does not exist create it at tb
 /// None will return None
-pub(crate) async fn strava_to_tb(
+pub(crate) async fn into_partid(
     strava_id: String,
     user: &mut impl StravaPerson,
     store: &mut impl StravaStore,

@@ -2,7 +2,7 @@ use diesel::{prelude::*, sql_query};
 use diesel_async::RunQueryDsl;
 
 use crate::{AsyncDieselConn, into_domain, option_into, vec_into};
-use tb_domain::{ActivityId, TbResult, UserId};
+use tb_domain::{TbResult, UserId};
 use tb_strava::{StravaId, StravaUser, event::Event};
 
 mod schema;
@@ -125,73 +125,6 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .get_result::<DbEvent>(&mut self)
             .await?;
         Ok(())
-    }
-
-    async fn strava_activity_get_tbid(&mut self, strava_id: i64) -> TbResult<Option<ActivityId>> {
-        use schema::strava_activities::dsl::*;
-
-        strava_activities
-            .find(strava_id)
-            .select(tendabike_id)
-            .for_update()
-            .get_result::<i32>(self)
-            .await
-            .map(ActivityId::from)
-            .optional()
-            .map_err(into_domain)
-    }
-
-    async fn strava_activity_new(
-        &mut self,
-        strava_id: i64,
-        uid: UserId,
-        new_id: ActivityId,
-    ) -> TbResult<()> {
-        use schema::strava_activities::dsl::*;
-
-        diesel::insert_into(strava_activities)
-            .values((
-                id.eq(strava_id),
-                tendabike_id.eq(i32::from(new_id)),
-                user_id.eq(i32::from(uid)),
-            ))
-            .execute(self)
-            .await?;
-        Ok(())
-    }
-
-    async fn strava_activitid_get_by_tbid(&mut self, act: i32) -> TbResult<i64> {
-        use schema::strava_activities::dsl::*;
-        strava_activities
-            .filter(tendabike_id.eq(act))
-            .select(id)
-            .first(self)
-            .await
-            .map_err(into_domain)
-    }
-
-    async fn strava_activity_delete(&mut self, act_id: i64) -> TbResult<usize> {
-        use schema::strava_activities::dsl::*;
-        diesel::delete(strava_activities.find(act_id))
-            .execute(self)
-            .await
-            .map_err(into_domain)
-    }
-
-    async fn strava_activity_get_activityid(
-        &mut self,
-        act_id: i64,
-    ) -> TbResult<Option<ActivityId>> {
-        use schema::strava_activities::dsl::*;
-        strava_activities
-            .find(act_id)
-            .select(tendabike_id)
-            .first::<i32>(self)
-            .await
-            .map(ActivityId::from)
-            .optional()
-            .map_err(into_domain)
-            .map(option_into)
     }
 
     async fn strava_event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {

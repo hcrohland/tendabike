@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 
 use crate::{StravaId, StravaUser, event::Event};
-use tb_domain::{ActivityId, Person, TbResult, UserId};
+use tb_domain::{Person, TbResult, UserId};
 
 #[async_trait]
 pub trait StravaStore: tb_domain::Store + Send {
@@ -25,84 +25,6 @@ pub trait StravaStore: tb_domain::Store + Send {
     ///
     /// Returns an error if the user ID cannot be retrieved from the database.
     async fn stravaid_get_user_id(&mut self, who: i32) -> TbResult<i32>;
-    /// Returns the ActivityId associated with the given Strava activity ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `strava_id` - The Strava ID of the activity.
-    ///
-    /// # Returns
-    ///
-    /// The ActivityId associated with the given Strava activity ID.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the ActivityId cannot be retrieved from the database.
-    async fn strava_activity_get_tbid(&mut self, strava_id: i64) -> TbResult<Option<ActivityId>>;
-
-    /// Creates a new Strava activity with the given Strava ID and user ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `strava_id` - The Strava ID of the activity.
-    /// * `uid` - The user ID associated with the activity.
-    /// * `new_id` - The new ActivityId to assign to the activity.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the activity cannot be created.
-    async fn strava_activity_new(
-        &mut self,
-        strava_id: i64,
-        uid: UserId,
-        new_id: ActivityId,
-    ) -> TbResult<()>;
-
-    /// Returns the Strava activity ID associated with the given ActivityId.
-    ///
-    /// # Arguments
-    ///
-    /// * `act` - The ActivityId of the activity.
-    ///
-    /// # Returns
-    ///
-    /// The Strava activity ID associated with the given ActivityId.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the Strava activity ID cannot be retrieved from the database.
-    async fn strava_activitid_get_by_tbid(&mut self, act: i32) -> TbResult<i64>;
-
-    /// Deletes the Strava activity with the given activity ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `act_id` - The ID of the activity to delete.
-    ///
-    /// # Returns
-    ///
-    /// The number of rows affected by the delete operation.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the activity cannot be deleted.
-    async fn strava_activity_delete(&mut self, act_id: i64) -> TbResult<usize>;
-
-    /// Returns the ActivityId associated with the given Strava activity ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `act_id` - The Strava ID of the activity.
-    ///
-    /// # Returns
-    ///
-    /// The ActivityId associated with the given Strava activity ID.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the ActivityId cannot be retrieved from the database.
-    async fn strava_activity_get_activityid(&mut self, act_id: i64)
-    -> TbResult<Option<ActivityId>>;
 
     /// Deletes the Strava event with the given event ID.
     ///

@@ -201,7 +201,7 @@ impl Event {
                 trace!("processing sync event at {}", start);
                 for a in acts {
                     start = std::cmp::max(start, a.start_date.unix_timestamp());
-                    let ps = a.send_to_tb(self.object_id != 0, user, store).await?;
+                    let ps = a.send_to_tb(user, store).await?;
                     self.setdate(start, store).await?;
                     summary = summary + ps;
                 }

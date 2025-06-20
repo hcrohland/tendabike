@@ -153,7 +153,7 @@ impl StravaUser {
 
         let mut parts = Vec::new();
         for gear in ath.bikes.into_iter().chain(ath.shoes) {
-            parts.push(gear::strava_to_tb(gear.id, user, store).await?);
+            parts.push(gear::into_partid(gear.id, user, store).await?);
         }
 
         Ok(parts)

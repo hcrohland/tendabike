@@ -15,14 +15,9 @@ use axum::{
     extract::{Path, State},
     routing::{delete, get, post},
 };
-use http::StatusCode;
 
-use crate::{
-    AxumAdmin, DbPool, RequestUser,
-    appstate::AppState,
-    error::{ApiResult, AppError},
-};
-use tb_domain::{Activity, ActivityId, NewActivity, PartId, PartTypeId, Summary};
+use crate::{AxumAdmin, DbPool, RequestUser, appstate::AppState, error::ApiResult};
+use tb_domain::{Activity, ActivityId, PartId, PartTypeId, Summary};
 
 async fn def_part_api(
     user: RequestUser,
@@ -45,7 +40,7 @@ async fn rescan(_u: AxumAdmin, State(store): State<DbPool>) -> ApiResult<()> {
 async fn act_get(
     user: RequestUser,
     State(store): State<DbPool>,
-    Path(id): Path<i32>,
+    Path(id): Path<i64>,
 ) -> ApiResult<Activity> {
     let mut store = store.get().await?;
     Ok(ActivityId::new(id)
@@ -54,35 +49,25 @@ async fn act_get(
         .map(Json)?)
 }
 
-/// web interface to create an activity
-async fn act_post(
-    user: RequestUser,
-    State(store): State<DbPool>,
-    Json(activity): Json<NewActivity>,
-) -> Result<(StatusCode, Json<Summary>), AppError> {
-    let mut store = store.get().await?;
-    let assembly = Activity::create(&activity, &user, &mut store).await?;
-
-    Ok((StatusCode::CREATED, Json(assembly)))
-}
-
 /// web interface to change an activity
 async fn act_put(
-    Path(id): Path<i32>,
+    Path(id): Path<i64>,
     user: RequestUser,
     State(store): State<DbPool>,
-    Json(activity): Json<NewActivity>,
+    Json(activity): Json<Activity>,
 ) -> ApiResult<Summary> {
+    if ActivityId::from(id) != activity.id {
+        Err(tb_domain::Error::BadRequest(
+            "ActivityId does not match activity".to_string(),
+        ))?
+    }
     let mut store = store.get().await?;
-    Ok(ActivityId::new(id)
-        .update(activity, &user, &mut store)
-        .await
-        .map(Json)?)
+    Ok(activity.update(&user, &mut store).await.map(Json)?)
 }
 
 /// web interface to delete an activity
 async fn act_delete(
-    Path(id): Path<i32>,
+    Path(id): Path<i64>,
     user: RequestUser,
     State(store): State<DbPool>,
 ) -> ApiResult<Summary> {
@@ -113,7 +98,6 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/categories", get(mycats))
         .route("/descend", post(descend))
         .route("/{id}", delete(act_delete).get(act_get).put(act_put))
-        .route("/", post(act_post))
         .route("/rescan", get(rescan))
         .route("/defaultgear", post(def_part_api))
 }
