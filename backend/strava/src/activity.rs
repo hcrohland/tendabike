@@ -162,8 +162,6 @@ impl StravaActivity {
             .transaction(|store| {
                 async {
                     let tb_id = store.strava_activity_get_tbid(strava_id).await?;
-                    let time = tb.start.unix_timestamp();
-
                     let res;
                     if let Some(tb_id) = tb_id {
                         res = match migrate {
@@ -177,11 +175,6 @@ impl StravaActivity {
                             .strava_activity_new(strava_id, tb.user_id, new_id)
                             .await?;
                     }
-
-                    user.strava_id()
-                        .update_last(time, store)
-                        .await
-                        .context("unable to update user")?;
 
                     Ok(res)
                 }

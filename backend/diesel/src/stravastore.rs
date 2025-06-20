@@ -11,7 +11,6 @@ mod schema;
 pub struct DbStravaUser {
     id: i32,
     tendabike_id: i32,
-    last_activity: i64,
     refresh_token: Option<String>,
 }
 
@@ -20,13 +19,11 @@ impl From<StravaUser> for DbStravaUser {
         let StravaUser {
             id,
             tendabike_id,
-            last_activity,
             refresh_token,
         } = value;
         Self {
             id: id.into(),
             tendabike_id: tendabike_id.into(),
-            last_activity,
             refresh_token,
         }
     }
@@ -36,13 +33,11 @@ impl From<DbStravaUser> for StravaUser {
         let DbStravaUser {
             id,
             tendabike_id,
-            last_activity,
             refresh_token,
         } = value;
         Self {
             id: id.into(),
             tendabike_id: tendabike_id.into(),
-            last_activity,
             refresh_token,
         }
     }
@@ -289,19 +284,6 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .await
             .map_err(into_domain)
             .map(Into::into)
-    }
-
-    async fn stravauser_update_last_activity(
-        &mut self,
-        user: &StravaId,
-        time: i64,
-    ) -> TbResult<()> {
-        use schema::strava_users::dsl::*;
-        diesel::update(strava_users.find(i32::from(*user)))
-            .set(last_activity.eq(time))
-            .execute(self)
-            .await?;
-        Ok(())
     }
 
     async fn stravaid_update_token(

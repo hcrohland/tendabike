@@ -236,19 +236,6 @@ pub trait StravaStore: tb_domain::Store + Send {
     /// Returns an error if the user cannot be created.
     async fn stravauser_new(&mut self, user: StravaUser) -> TbResult<StravaUser>;
 
-    /// Updates the last activity time for a Strava user.
-    ///
-    /// # Arguments
-    ///
-    /// * `user` - The Strava user to update.
-    /// * `time` - The new last activity time.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the user cannot be updated.
-    async fn stravauser_update_last_activity(&mut self, user: &StravaId, time: i64)
-    -> TbResult<()>;
-
     /// Updates the access token for a Strava user.
     ///
     /// # Arguments
