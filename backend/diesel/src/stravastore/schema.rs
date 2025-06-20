@@ -9,14 +9,6 @@ table! {
 }
 
 table! {
-    strava_gears (id) {
-        id -> Text,
-        tendabike_id -> Int4,
-        user_id -> Int4,
-    }
-}
-
-table! {
     strava_events (id) {
         id -> Nullable<Int4>,
         object_type -> Text,
@@ -33,7 +25,6 @@ table! {
     strava_users (id) {
         id -> Int4,
         tendabike_id -> Int4,
-        last_activity -> Int8,
         refresh_token -> Nullable<Text>,
     }
 }
@@ -47,4 +38,4 @@ table! {
     }
 }
 
-allow_tables_to_appear_in_same_query!(strava_activities, strava_events, strava_gears, strava_users,);
+allow_tables_to_appear_in_same_query!(strava_activities, strava_events, strava_users,);

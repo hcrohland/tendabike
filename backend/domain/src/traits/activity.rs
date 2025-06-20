@@ -1,6 +1,6 @@
 use time::OffsetDateTime;
 
-use crate::{ActTypeId, Activity, ActivityId, NewActivity, PartId, Person, TbResult, UserId};
+use crate::{ActTypeId, Activity, ActivityId, PartId, Person, TbResult, UserId};
 
 // A trait for storing and retrieving activities.
 /// A trait defining the methods for storing and retrieving activities.
@@ -10,12 +10,12 @@ pub trait ActivityStore {
     ///
     /// # Arguments
     ///
-    /// * `act` - A reference to a `NewActivity` struct containing the details of the new activity.
+    /// * `act` - A reference to a `Activity` struct containing the details of the new activity.
     ///
     /// # Returns
     ///
     /// Returns a `Result` containing the newly created `Activity` or an error if the operation fails.
-    async fn activity_create(&mut self, act: &NewActivity) -> TbResult<Activity>;
+    async fn activity_create(&mut self, act: Activity) -> TbResult<Activity>;
 
     /// Retrieves an activity by its ID.
     ///
@@ -26,19 +26,18 @@ pub trait ActivityStore {
     /// # Returns
     ///
     /// Returns a `Result` containing the retrieved `Activity` or an error if the operation fails.
-    async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Activity>;
+    async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Option<Activity>>;
 
     /// Updates an existing activity.
     ///
     /// # Arguments
     ///
-    /// * `aid` - The ID of the activity to update.
-    /// * `act` - A reference to a `NewActivity` struct containing the updated details of the activity.
+    /// * `act` - A reference to a `Activity` struct containing the updated details of the activity.
     ///
     /// # Returns
     ///
     /// Returns a `Result` containing the updated `Activity` or an error if the operation fails.
-    async fn activity_update(&mut self, aid: ActivityId, act: &NewActivity) -> TbResult<Activity>;
+    async fn activity_update(&mut self, act: Activity) -> TbResult<Activity>;
 
     /// Deletes an activity by its ID.
     ///

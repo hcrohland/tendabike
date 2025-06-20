@@ -1,8 +1,8 @@
-use diesel::{prelude::*, sql_query};
+use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
 use crate::{AsyncDieselConn, into_domain, option_into, vec_into};
-use tb_domain::{ActivityId, PartId, TbResult, UserId};
+use tb_domain::{TbResult, UserId};
 use tb_strava::{StravaId, StravaUser, event::Event};
 
 mod schema;
@@ -11,7 +11,6 @@ mod schema;
 pub struct DbStravaUser {
     id: i32,
     tendabike_id: i32,
-    last_activity: i64,
     refresh_token: Option<String>,
 }
 
@@ -20,13 +19,11 @@ impl From<StravaUser> for DbStravaUser {
         let StravaUser {
             id,
             tendabike_id,
-            last_activity,
             refresh_token,
         } = value;
         Self {
             id: id.into(),
             tendabike_id: tendabike_id.into(),
-            last_activity,
             refresh_token,
         }
     }
@@ -36,13 +33,11 @@ impl From<DbStravaUser> for StravaUser {
         let DbStravaUser {
             id,
             tendabike_id,
-            last_activity,
             refresh_token,
         } = value;
         Self {
             id: id.into(),
             tendabike_id: tendabike_id.into(),
-            last_activity,
             refresh_token,
         }
     }
@@ -128,116 +123,6 @@ impl tb_strava::StravaStore for AsyncDieselConn {
         diesel::insert_into(schema::strava_events::table)
             .values(&e)
             .get_result::<DbEvent>(&mut self)
-            .await?;
-        Ok(())
-    }
-
-    async fn strava_gear_get_tbid(&mut self, strava_id: &str) -> TbResult<Option<PartId>> {
-        use schema::strava_gears::dsl::*;
-
-        strava_gears
-            .find(strava_id)
-            .select(tendabike_id)
-            .for_update()
-            .first::<i32>(self)
-            .await
-            .optional()
-            .map_err(into_domain)
-            .map(option_into)
-    }
-
-    async fn strava_gearid_get_name(&mut self, gear: i32) -> TbResult<String> {
-        use schema::strava_gears::dsl::*;
-        strava_gears
-            .filter(tendabike_id.eq(gear))
-            .select(id)
-            .first::<String>(self)
-            .await
-            .map_err(into_domain)
-    }
-
-    async fn strava_activity_get_tbid(&mut self, strava_id: i64) -> TbResult<Option<ActivityId>> {
-        use schema::strava_activities::dsl::*;
-
-        strava_activities
-            .find(strava_id)
-            .select(tendabike_id)
-            .for_update()
-            .get_result::<i32>(self)
-            .await
-            .map(ActivityId::from)
-            .optional()
-            .map_err(into_domain)
-    }
-
-    async fn strava_activity_new(
-        &mut self,
-        strava_id: i64,
-        uid: UserId,
-        new_id: ActivityId,
-    ) -> TbResult<()> {
-        use schema::strava_activities::dsl::*;
-
-        diesel::insert_into(strava_activities)
-            .values((
-                id.eq(strava_id),
-                tendabike_id.eq(i32::from(new_id)),
-                user_id.eq(i32::from(uid)),
-            ))
-            .execute(self)
-            .await?;
-        Ok(())
-    }
-
-    async fn strava_activitid_get_by_tbid(&mut self, act: i32) -> TbResult<i64> {
-        use schema::strava_activities::dsl::*;
-        strava_activities
-            .filter(tendabike_id.eq(act))
-            .select(id)
-            .first(self)
-            .await
-            .map_err(into_domain)
-    }
-
-    async fn strava_activity_delete(&mut self, act_id: i64) -> TbResult<usize> {
-        use schema::strava_activities::dsl::*;
-        diesel::delete(strava_activities.find(act_id))
-            .execute(self)
-            .await
-            .map_err(into_domain)
-    }
-
-    async fn strava_activity_get_activityid(
-        &mut self,
-        act_id: i64,
-    ) -> TbResult<Option<ActivityId>> {
-        use schema::strava_activities::dsl::*;
-        strava_activities
-            .find(act_id)
-            .select(tendabike_id)
-            .first::<i32>(self)
-            .await
-            .map(ActivityId::from)
-            .optional()
-            .map_err(into_domain)
-            .map(option_into)
-    }
-
-    async fn strava_gear_new(
-        &mut self,
-        strava_id: String,
-        tbid: PartId,
-        user: UserId,
-    ) -> TbResult<()> {
-        use schema::strava_gears::dsl::*;
-
-        diesel::insert_into(strava_gears)
-            .values((
-                id.eq(strava_id),
-                tendabike_id.eq(i32::from(tbid)),
-                user_id.eq(i32::from(user)),
-            ))
-            .execute(self)
             .await?;
         Ok(())
     }
@@ -334,19 +219,6 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .map(Into::into)
     }
 
-    async fn stravauser_update_last_activity(
-        &mut self,
-        user: &StravaId,
-        time: i64,
-    ) -> TbResult<()> {
-        use schema::strava_users::dsl::*;
-        diesel::update(strava_users.find(i32::from(*user)))
-            .set(last_activity.eq(time))
-            .execute(self)
-            .await?;
-        Ok(())
-    }
-
     async fn stravaid_update_token(
         &mut self,
         stravaid: StravaId,
@@ -381,28 +253,6 @@ impl tb_strava::StravaStore for AsyncDieselConn {
         use schema::strava_events::dsl::*;
 
         diesel::delete(strava_events.filter(owner_id.eq(i32::from(*user))))
-            .execute(self)
-            .await
-            .map_err(into_domain)
-    }
-
-    async fn stravaid_lock(&mut self, user_id: &StravaId) -> TbResult<bool> {
-        use diesel::sql_types::Bool;
-        #[derive(QueryableByName, Debug)]
-        struct Lock {
-            #[diesel(sql_type = Bool)]
-            #[diesel(column_name = pg_try_advisory_lock)]
-            lock: bool,
-        }
-        let lock: bool = sql_query(format!("SELECT pg_try_advisory_lock({});", user_id))
-            .get_result::<Lock>(self)
-            .await?
-            .lock;
-        Ok(lock)
-    }
-
-    async fn stravaid_unlock(&mut self, id: &StravaId) -> TbResult<usize> {
-        sql_query(format!("SELECT pg_advisory_unlock({});", id))
             .execute(self)
             .await
             .map_err(into_domain)

@@ -1,7 +1,7 @@
 // This file contains the implementation of the StravaActivity struct and its methods.
 // StravaActivity is a struct that represents an activity from Strava API.
 // It has fields that represent the activity's properties such as id, type, name, start date, elapsed time, moving time, distance, total elevation gain, average watts, and gear id.
-// The struct also has a method called into_tb that converts the StravaActivity into a NewActivity struct which is used to create a new activity in the Tendabike API.
+// The struct also has a method called into_tb that converts the StravaActivity into a Activity struct which is used to create a new activity in the Tendabike API.
 // The struct also has a method called what that maps Strava workout type strings to Tendabike types.
 // The file imports the OffsetDateTime struct from the time crate.
 // The file also has two comments that indicate the beginning and end of a code block.
@@ -39,7 +39,7 @@ pub(crate) struct StravaActivity {
 }
 
 impl StravaActivity {
-    /// Converts a StravaActivity into a NewActivity struct which is used to create a new activity in the Tendabike API.
+    /// Converts a StravaActivity into a Activity struct which is used to create a new activity in the Tendabike API.
     ///
     /// # Arguments
     ///
@@ -49,35 +49,46 @@ impl StravaActivity {
     ///
     /// # Returns
     ///
-    /// A Result containing a NewActivity struct if the conversion was successful, or an error if it failed.
-    async fn into_tb(
+    /// A Result containing a Activity struct if the conversion was successful, or an error if it failed.
+    async fn into_activity(
         self,
         user: &mut impl StravaPerson,
         store: &mut impl StravaStore,
-    ) -> TbResult<NewActivity> {
-        let mut offset = self.utc_offset as i32;
-        if offset % 1800 != 0 {
-            offset = offset + 900 - (offset + 900) % 1800;
-            warn!("rounding utc_offset for {self:?} to {offset}");
-        }
-        let offset = UtcOffset::from_whole_seconds(offset).context("Utc Offset invalid")?;
-        let what = self.what()?;
-        let gear = match self.gear_id {
-            Some(x) => Some(gear::strava_to_tb(x, user, store).await?),
+    ) -> TbResult<Activity> {
+        let StravaActivity {
+            id,
+            type_,
+            name,
+            start_date,
+            utc_offset,
+            elapsed_time,
+            moving_time,
+            distance,
+            total_elevation_gain,
+            kilojoules,
+            gear_id,
+        } = self;
+        let offset =
+            UtcOffset::from_whole_seconds(utc_offset as i32).context("Utc Offset invalid")?;
+        let what = Self::get_type(&type_)?;
+        let gear = match gear_id {
+            // cannot use map due to async closure
+            Some(x) => Some(gear::into_partid(x, user, store).await?),
             None => None,
         };
-        Ok(NewActivity {
+        Ok(Activity {
+            id: id.into(),
             what,
             gear,
             user_id: user.tb_id(),
-            name: self.name,
-            start: self.start_date.to_offset(offset),
-            duration: self.elapsed_time,
-            time: Some(self.moving_time),
-            distance: Some(self.distance.round() as i32),
-            climb: Some(self.total_elevation_gain.round() as i32),
+            name,
+            start: start_date.to_offset(offset),
+            duration: elapsed_time,
+            time: Some(moving_time),
+            distance: Some(distance.round() as i32),
+            climb: Some(total_elevation_gain.round() as i32),
             descend: None,
-            energy: self.kilojoules.map(|e| e.round() as i32),
+            energy: kilojoules.map(|e| e.round() as i32),
         })
     }
 
@@ -90,9 +101,7 @@ impl StravaActivity {
     /// # Returns
     ///
     /// A Result containing an ActTypeId if the mapping was successful, or an error if it failed.
-    fn what(&self) -> TbResult<ActTypeId> {
-        let t = self.type_.as_str();
-
+    fn get_type(t: &str) -> TbResult<ActTypeId> {
         Ok(match t {
             "Ride" => 1,
             "VirtualRide" => 5,
@@ -136,9 +145,7 @@ impl StravaActivity {
         }
         .into())
     }
-}
 
-impl StravaActivity {
     /// Sends the activity to Tendabike API.
     ///
     /// # Arguments
@@ -152,49 +159,22 @@ impl StravaActivity {
     /// A Result containing a Summary if the sending was successful, or an error if it failed.
     pub(crate) async fn send_to_tb(
         self,
-        migrate: bool,
         user: &mut impl StravaPerson,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
-        let strava_id = self.id;
-        let tb = self.into_tb(user, store).await?;
-        store
-            .transaction(|store| {
-                async {
-                    let tb_id = store.strava_activity_get_tbid(strava_id).await?;
-                    let time = tb.start.unix_timestamp();
+        let activity = self.into_activity(user, store).await?;
 
-                    let res;
-                    if let Some(tb_id) = tb_id {
-                        res = match migrate {
-                            true => tb_id.migrate(tb, user, store).await,
-                            _ => tb_id.update(tb, user, store).await,
-                        }?;
-                    } else {
-                        res = Activity::create(&tb, user, store).await?;
-                        let new_id = res.activities[0].id;
-                        store
-                            .strava_activity_new(strava_id, tb.user_id, new_id)
-                            .await?;
-                    }
-
-                    user.strava_id()
-                        .update_last(time, store)
-                        .await
-                        .context("unable to update user")?;
-
-                    Ok(res)
-                }
-                .scope_boxed()
-            })
-            .await
+        activity.upsert(user, store).await
     }
 }
 
-pub async fn strava_url(act: i32, store: &mut impl StravaStore) -> TbResult<String> {
-    let g = store.strava_activitid_get_by_tbid(act).await?;
-
-    Ok(format!("https://strava.com/activities/{}", &g))
+pub async fn strava_url(
+    act: i64,
+    user: &impl StravaPerson,
+    store: &mut impl StravaStore,
+) -> TbResult<String> {
+    let g = ActivityId::new(act).read(user, store).await?;
+    Ok(format!("https://strava.com/activities/{}", g.id))
 }
 
 pub async fn upsert_activity(
@@ -205,22 +185,13 @@ pub async fn upsert_activity(
     let act: StravaActivity = user
         .request_json(&format!("/activities/{}", id), store)
         .await?;
-    act.send_to_tb(false, user, store).await
+    act.send_to_tb(user, store).await
 }
 
 pub(crate) async fn delete_activity(
-    act_id: i64,
+    act: i64,
     user: &impl StravaPerson,
     store: &mut impl StravaStore,
 ) -> TbResult<Summary> {
-    let tid = store.strava_activity_get_activityid(act_id).await?;
-    let mut res = Summary::default();
-    if let Some(tid) = tid {
-        // first delete the tendabike activity
-        res = tid.delete(user, store).await?;
-        // now delete the reference to the strava activity
-        // if this fails we end up with an orphaned entry in the strava_activities table, which should not be a problem in practice
-        store.strava_activity_delete(act_id).await?;
-    }
-    Ok(res)
+    ActivityId::new(act).delete(user, store).await
 }

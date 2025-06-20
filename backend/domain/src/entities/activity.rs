@@ -42,10 +42,10 @@ use crate::*;
 /// Most operations for activities are done on the Id alone
 ///
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ActivityId(i32);
+pub struct ActivityId(i64);
 
 NewtypeDisplay! { () pub struct ActivityId(); }
-NewtypeFrom! { () pub struct ActivityId(i32); }
+NewtypeFrom! { () pub struct ActivityId(i64); }
 
 /// The database's representation of an activity.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -77,51 +77,6 @@ pub struct Activity {
     pub gear: Option<PartId>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-/// A new activity to be inserted into the database.
-pub struct NewActivity {
-    pub user_id: UserId,
-    /// The activity type
-    pub what: ActTypeId,
-    /// This name of the activity.
-    pub name: String,
-    /// Start time
-    #[serde(with = "time::serde::rfc3339")]
-    pub start: OffsetDateTime,
-    /// End time
-    pub duration: i32,
-    /// activity time
-    pub time: Option<i32>,
-    /// Covered distance
-    pub distance: Option<i32>,
-    /// Total climbing
-    pub climb: Option<i32>,
-    /// Total descending
-    pub descend: Option<i32>,
-    /// average energy output
-    pub energy: Option<i32>,
-    /// Which gear did she use?
-    pub gear: Option<PartId>,
-}
-
-impl From<Activity> for NewActivity {
-    fn from(act: Activity) -> Self {
-        Self {
-            user_id: act.user_id,
-            what: act.what,
-            name: act.name,
-            start: act.start,
-            duration: act.duration,
-            time: act.time,
-            distance: act.distance,
-            climb: act.climb,
-            descend: act.descend,
-            energy: act.energy,
-            gear: act.gear,
-        }
-    }
-}
-
 #[derive(Clone, Copy, PartialEq)]
 enum Factor {
     Add = 1,
@@ -129,8 +84,26 @@ enum Factor {
 }
 
 impl ActivityId {
-    pub fn new(id: i32) -> Self {
+    pub fn new(id: i64) -> Self {
         Self(id)
+    }
+
+    /// Read the activity with id self
+    ///
+    /// checks authorization
+    async fn read_optional(
+        self,
+        person: &dyn Person,
+        store: &mut impl ActivityStore,
+    ) -> TbResult<Option<Activity>> {
+        let act = store.activity_read_by_id(self).await?;
+        if let Some(act) = &act {
+            person.check_owner(
+                act.user_id,
+                format!("User {} cannot access activity {}", person.get_id(), self),
+            )?;
+        }
+        Ok(act)
     }
 
     /// Read the activity with id self
@@ -141,12 +114,11 @@ impl ActivityId {
         person: &dyn Person,
         store: &mut impl ActivityStore,
     ) -> TbResult<Activity> {
-        let act = store.activity_read_by_id(self).await?;
-        person.check_owner(
-            act.user_id,
-            format!("User {} cannot access activity {}", person.get_id(), self),
-        )?;
-        Ok(act)
+        self.read_optional(person, store)
+            .await?
+            .ok_or(crate::Error::NotFound(
+                "activity does not exist".to_string(),
+            ))
     }
 
     /// Delete the activity with id self
@@ -178,53 +150,6 @@ impl ActivityId {
             })
             .await
     }
-
-    /// Update the activity with id self according to the data in NewActivity
-    /// and update part usage accordingly
-    ///
-    /// returns all affected parts  
-    /// checks authorization  
-    pub async fn update(
-        self,
-        act: NewActivity,
-        user: &dyn Person,
-        store: &mut impl Store,
-    ) -> TbResult<Summary> {
-        store
-            .transaction(|store| {
-                async {
-                    let mut res = self
-                        .read(user, store)
-                        .await?
-                        .register(Factor::Sub, store)
-                        .await?;
-
-                    let act = store.activity_update(self, &act).await?;
-
-                    info!("Updating {:?}", act);
-
-                    res = res + act.register(Factor::Add, store).await?;
-                    Ok(res)
-                }
-                .scope_boxed()
-            })
-            .await
-    }
-
-    pub async fn migrate(
-        self,
-        mut act: NewActivity,
-        user: &dyn Person,
-        store: &mut impl Store,
-    ) -> TbResult<Summary> {
-        act.time = None;
-        act.distance = None;
-        act.climb = None;
-        act.descend = None;
-        act.gear = None;
-
-        self.update(act, user, store).await
-    }
 }
 
 impl Activity {
@@ -232,30 +157,54 @@ impl Activity {
     ///
     /// returns the activity and all affected parts  
     /// checks authorization  
-    pub async fn create(
-        act: &NewActivity,
-        user: &dyn Person,
-        store: &mut impl Store,
-    ) -> TbResult<Summary> {
-        user.check_owner(
-            act.user_id,
-            format!(
-                "user {} cannot create activity for user {}",
-                user.get_id(),
-                act.user_id
-            ),
-        )?;
-        info!("Creating {:?}", act);
+    pub async fn upsert(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
         store
             .transaction(|store| {
                 async {
-                    let new = store.activity_create(act).await?;
-                    // let res = new.check_geartype(res, store)?;
-                    new.register(Factor::Add, store).await
+                    if let Some(old_activity) = self.id.read_optional(user, store).await? {
+                        old_activity.replace(self, store).await
+                    } else {
+                        user.check_owner(
+                            self.user_id,
+                            format!(
+                                "user {} cannot create activity for user {}",
+                                user.get_id(),
+                                self.user_id
+                            ),
+                        )?;
+
+                        info!("Creating {:?}", &self);
+                        let new = store.activity_create(self).await?;
+                        // let res = new.check_geartype(res, store)?;
+                        new.register(Factor::Add, store).await
+                    }
                 }
                 .scope_boxed()
             })
             .await
+    }
+
+    /// Update the activity with id self according to the data in NewActivity
+    /// and update part usage accordingly
+    ///
+    /// returns all affected parts  
+    /// checks authorization  
+    pub async fn update(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
+        store
+            .transaction(|store| {
+                async { self.id.read(user, store).await?.replace(self, store).await }.scope_boxed()
+            })
+            .await
+    }
+
+    async fn replace(self, new: Activity, store: &mut impl Store) -> TbResult<Summary> {
+        info!("Updating {:?}", self);
+        let mut res = self.register(Factor::Sub, store).await?;
+
+        let act = store.activity_update(new).await?;
+
+        res = res + act.register(Factor::Add, store).await?;
+        Ok(res)
     }
 
     /// Extract the usage out of an activity
@@ -454,9 +403,7 @@ async fn match_and_update(
         act.climb = Some(rclimb);
     }
     act.descend = Some(rdescend);
-    let actid = act.id;
-    let act = NewActivity::from(act);
-    actid.update(act, user, store).await
+    act.update(user, store).await
 }
 
 async fn def_part(partid: &PartId, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {

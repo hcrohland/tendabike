@@ -23,6 +23,7 @@ table! {
         last_used -> Timestamptz,
         disposed_at -> Nullable<Timestamptz>,
         usage -> Uuid,
+        source -> Nullable<Text>
     }
 }
 
@@ -84,4 +85,21 @@ table! {
     }
 }
 
+table! {
+    activities(id) {
+        user_id -> Int4,
+        what -> Int4,
+        name -> Text,
+        start -> Timestamptz,
+        duration -> Int4,
+        time -> Nullable<Int4>,
+        distance -> Nullable<Int4>,
+        climb -> Nullable<Int4>,
+        descend -> Nullable<Int4>,
+        energy -> Nullable<Int4>,
+        gear -> Nullable<Int4>,
+        utc_offset -> Int4,
+        id -> Int8,
+    }
+}
 allow_tables_to_appear_in_same_query!(attachments, parts, users,);

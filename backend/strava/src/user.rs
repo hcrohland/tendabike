@@ -21,19 +21,6 @@ impl StravaId {
         store.stravauser_get_by_stravaid(self).await
     }
 
-    /// store last activity time for the user
-    pub(crate) async fn update_last(
-        &self,
-        time: i64,
-        store: &mut impl StravaStore,
-    ) -> TbResult<i64> {
-        // if self.last_activity >= time {
-        //     return Ok(self.last_activity);
-        // }
-        store.stravauser_update_last_activity(self, time).await?;
-        Ok(time)
-    }
-
     /// update the refresh token for the user
     ///
     /// sets a five minute buffer for the access token
@@ -50,13 +37,7 @@ impl StravaId {
     async fn disable(self, store: &mut impl StravaStore) -> TbResult<()> {
         let id = self;
         info!("disabling user {}", id);
-        let user = self
-            .read(store)
-            .await?
-            .ok_or(Error::NotFound("StravaUser not found".to_string()))?;
-        event::insert_sync(id, user.last_activity, false, store)
-            .await
-            .context(format!("Could not insert sync for user: {:?}", id))?;
+
         store.stravaid_update_token(id, None).await?;
         Ok(())
     }
@@ -69,8 +50,6 @@ pub struct StravaUser {
     pub id: StravaId,
     /// the corresponding tendabike user id
     pub tendabike_id: UserId,
-    /// the time of the latest activity we have processed
-    pub last_activity: i64,
     /// the refresh token to get a new access token from Strava
     pub refresh_token: Option<String>,
 }
@@ -174,7 +153,7 @@ impl StravaUser {
 
         let mut parts = Vec::new();
         for gear in ath.bikes.into_iter().chain(ath.shoes) {
-            parts.push(gear::strava_to_tb(gear.id, user, store).await?);
+            parts.push(gear::into_partid(gear.id, user, store).await?);
         }
 
         Ok(parts)

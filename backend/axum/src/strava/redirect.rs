@@ -12,22 +12,24 @@ use axum::{
 use crate::{ApiResult, AxumAdmin, DbPool, RequestUser, error::AppError};
 
 pub(super) async fn redirect_gear(
+    mut user: RequestUser,
     Path(id): Path<i32>,
     State(store): State<DbPool>,
 ) -> Result<Redirect, AppError> {
     let mut store = store.get().await?;
-    let uri = tb_strava::gear::strava_url(id, &mut store)
+    let uri = tb_strava::gear::strava_url(id, &mut user, &mut store)
         .await
         .unwrap_or_else(|_| "/".to_string());
     Ok(Redirect::permanent(&uri))
 }
 
 pub(super) async fn redirect_act(
-    Path(id): Path<i32>,
+    user: RequestUser,
+    Path(id): Path<i64>,
     State(store): State<DbPool>,
 ) -> Result<Redirect, AppError> {
     let mut store = store.get().await?;
-    let uri = tb_strava::activity::strava_url(id, &mut store)
+    let uri = tb_strava::activity::strava_url(id, &user, &mut store)
         .await
         .unwrap_or_else(|_| "/".to_string());
     Ok(Redirect::permanent(&uri))

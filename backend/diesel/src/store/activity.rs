@@ -3,36 +3,15 @@ use diesel::{prelude::*, sql_query};
 use diesel_async::RunQueryDsl;
 use time::{OffsetDateTime, UtcOffset};
 
+use super::schema;
 use crate::{AsyncDieselConn, into_domain, vec_into};
-use tb_domain::{ActTypeId, Activity, ActivityId, NewActivity, PartId, Person, TbResult, UserId};
-mod schema {
-    use diesel::prelude::*;
+use tb_domain::{ActTypeId, Activity, ActivityId, PartId, Person, TbResult, UserId};
 
-    table! {
-        activities (id) {
-            id -> Nullable<Int4>,
-            user_id -> Int4,
-            what -> Int4,
-            name -> Text,
-            start -> Timestamptz,
-            duration -> Int4,
-            time -> Nullable<Int4>,
-            distance -> Nullable<Int4>,
-            climb -> Nullable<Int4>,
-            descend -> Nullable<Int4>,
-            energy -> Nullable<Int4>,
-            gear -> Nullable<Int4>,
-            utc_offset -> Int4,
-        }
-    }
-}
 #[derive(
     Debug, Clone, Insertable, Identifiable, Queryable, QueryableByName, AsChangeset, PartialEq,
 )]
 #[diesel(table_name = schema::activities)]
 struct DbActivity {
-    /// The primary key
-    id: Option<i32>,
     /// The athlete
     user_id: i32,
     /// The activity type
@@ -57,24 +36,40 @@ struct DbActivity {
     gear: Option<i32>,
     /// utc offset since timstamptz does not store the timezone
     utc_offset: i32,
+    /// The primary key
+    id: i64,
 }
 
-impl From<&NewActivity> for DbActivity {
-    fn from(v: &NewActivity) -> Self {
-        let utc_offset = v.start.offset().whole_seconds();
+impl From<Activity> for DbActivity {
+    fn from(v: Activity) -> Self {
+        let Activity {
+            id,
+            user_id,
+            what,
+            name,
+            start,
+            duration,
+            time,
+            distance,
+            climb,
+            descend,
+            energy,
+            gear,
+        } = v;
+        let utc_offset = start.offset().whole_seconds();
         DbActivity {
-            id: None,
-            user_id: v.user_id.into(),
-            what: v.what.into(),
-            name: v.name.clone(),
-            start: v.start,
-            duration: v.duration,
-            time: v.time,
-            distance: v.distance,
-            climb: v.climb,
-            descend: v.descend,
-            energy: v.energy,
-            gear: v.gear.map(Into::into),
+            id: id.into(),
+            user_id: user_id.into(),
+            what: what.into(),
+            name: name.clone(),
+            start,
+            duration,
+            time,
+            distance,
+            climb,
+            descend,
+            energy,
+            gear: gear.map(Into::into),
             utc_offset,
         }
     }
@@ -84,23 +79,37 @@ impl TryFrom<DbActivity> for Activity {
     type Error = tb_domain::Error;
 
     fn try_from(v: DbActivity) -> Result<Self, Self::Error> {
-        let id = v.id.expect("DbActivity with Null id");
-        let offset = UtcOffset::from_whole_seconds(v.utc_offset).context("Utc Offset invalid")?;
-        let start = v.start.to_offset(offset);
+        let DbActivity {
+            id,
+            user_id,
+            what,
+            name,
+            start,
+            duration,
+            time,
+            distance,
+            climb,
+            descend,
+            energy,
+            gear,
+            utc_offset,
+        } = v;
+        let offset = UtcOffset::from_whole_seconds(utc_offset).context("Utc Offset invalid")?;
+        let start = start.to_offset(offset);
 
         Ok(Activity {
             id: id.into(),
-            user_id: v.user_id.into(),
-            what: v.what.into(),
-            name: v.name.clone(),
+            user_id: user_id.into(),
+            what: what.into(),
+            name: name.clone(),
             start,
-            duration: v.duration,
-            time: v.time,
-            distance: v.distance,
-            climb: v.climb,
-            descend: v.descend,
-            energy: v.energy,
-            gear: v.gear.map(Into::into),
+            duration,
+            time,
+            distance,
+            climb,
+            descend,
+            energy,
+            gear: gear.map(Into::into),
         })
     }
 }
@@ -114,29 +123,32 @@ fn vec_tryinto(db: Result<Vec<DbActivity>, diesel::result::Error>) -> TbResult<V
 
 #[async_session::async_trait]
 impl tb_domain::ActivityStore for AsyncDieselConn {
-    async fn activity_create(&mut self, act: &NewActivity) -> TbResult<Activity> {
+    async fn activity_create(&mut self, act: Activity) -> TbResult<Activity> {
+        let values = DbActivity::from(act);
         diesel::insert_into(schema::activities::table)
-            .values(DbActivity::from(act))
+            .values(&values)
             .get_result::<DbActivity>(self)
             .await
             .map_err(into_domain)?
             .try_into()
     }
 
-    async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Activity> {
+    async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Option<Activity>> {
         schema::activities::table
-            .filter(schema::activities::id.eq(i32::from(aid)))
+            .find(i64::from(aid))
             .for_update()
             .first::<DbActivity>(self)
             .await
+            .optional()
             .map_err(into_domain)?
-            .try_into()
+            .map(TryInto::try_into)
+            .transpose()
     }
 
-    async fn activity_update(&mut self, aid: ActivityId, act: &NewActivity) -> TbResult<Activity> {
-        diesel::update(schema::activities::table)
-            .filter(schema::activities::id.eq(i32::from(aid)))
-            .set(DbActivity::from(act))
+    async fn activity_update(&mut self, act: Activity) -> TbResult<Activity> {
+        let act = DbActivity::from(act);
+        diesel::update(&act)
+            .set(&act)
             .get_result::<DbActivity>(self)
             .await
             .map_err(into_domain)?
@@ -145,7 +157,7 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
 
     async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize> {
         use schema::activities::dsl::*;
-        diesel::delete(activities.filter(id.eq(i32::from(aid))))
+        diesel::delete(activities.find(i64::from(aid)))
             .execute(self)
             .await
             .map_err(into_domain)

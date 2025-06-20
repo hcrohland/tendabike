@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 
 use crate::{StravaId, StravaUser, event::Event};
-use tb_domain::{ActivityId, PartId, Person, TbResult, UserId};
+use tb_domain::{Person, TbResult, UserId};
 
 #[async_trait]
 pub trait StravaStore: tb_domain::Store + Send {
@@ -25,133 +25,6 @@ pub trait StravaStore: tb_domain::Store + Send {
     ///
     /// Returns an error if the user ID cannot be retrieved from the database.
     async fn stravaid_get_user_id(&mut self, who: i32) -> TbResult<i32>;
-
-    /// Returns the PartId associated with the given Strava gear ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `strava_id` - The Strava ID of the gear.
-    ///
-    /// # Returns
-    ///
-    /// The PartId associated with the given Strava gear ID.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the PartId cannot be retrieved from the database.
-    async fn strava_gear_get_tbid(&mut self, strava_id: &str) -> TbResult<Option<PartId>>;
-
-    /// Returns the name of the gear associated with the given Strava gear ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `gear` - The Strava ID of the gear.
-    ///
-    /// # Returns
-    ///
-    /// The name of the gear associated with the given Strava gear ID.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the name cannot be retrieved from the database.
-    async fn strava_gearid_get_name(&mut self, gear: i32) -> TbResult<String>;
-
-    /// Returns the ActivityId associated with the given Strava activity ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `strava_id` - The Strava ID of the activity.
-    ///
-    /// # Returns
-    ///
-    /// The ActivityId associated with the given Strava activity ID.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the ActivityId cannot be retrieved from the database.
-    async fn strava_activity_get_tbid(&mut self, strava_id: i64) -> TbResult<Option<ActivityId>>;
-
-    /// Creates a new Strava activity with the given Strava ID and user ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `strava_id` - The Strava ID of the activity.
-    /// * `uid` - The user ID associated with the activity.
-    /// * `new_id` - The new ActivityId to assign to the activity.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the activity cannot be created.
-    async fn strava_activity_new(
-        &mut self,
-        strava_id: i64,
-        uid: UserId,
-        new_id: ActivityId,
-    ) -> TbResult<()>;
-
-    /// Returns the Strava activity ID associated with the given ActivityId.
-    ///
-    /// # Arguments
-    ///
-    /// * `act` - The ActivityId of the activity.
-    ///
-    /// # Returns
-    ///
-    /// The Strava activity ID associated with the given ActivityId.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the Strava activity ID cannot be retrieved from the database.
-    async fn strava_activitid_get_by_tbid(&mut self, act: i32) -> TbResult<i64>;
-
-    /// Deletes the Strava activity with the given activity ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `act_id` - The ID of the activity to delete.
-    ///
-    /// # Returns
-    ///
-    /// The number of rows affected by the delete operation.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the activity cannot be deleted.
-    async fn strava_activity_delete(&mut self, act_id: i64) -> TbResult<usize>;
-
-    /// Returns the ActivityId associated with the given Strava activity ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `act_id` - The Strava ID of the activity.
-    ///
-    /// # Returns
-    ///
-    /// The ActivityId associated with the given Strava activity ID.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the ActivityId cannot be retrieved from the database.
-    async fn strava_activity_get_activityid(&mut self, act_id: i64)
-    -> TbResult<Option<ActivityId>>;
-
-    /// Creates a new Strava gear with the given Strava ID, PartId, and user ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `strava_id` - The Strava ID of the gear.
-    /// * `tbid` - The PartId associated with the gear.
-    /// * `user` - The user ID associated with the gear.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the gear cannot be created.
-    async fn strava_gear_new(
-        &mut self,
-        strava_id: String,
-        tbid: PartId,
-        user: UserId,
-    ) -> TbResult<()>;
 
     /// Deletes the Strava event with the given event ID.
     ///
@@ -285,19 +158,6 @@ pub trait StravaStore: tb_domain::Store + Send {
     /// Returns an error if the user cannot be created.
     async fn stravauser_new(&mut self, user: StravaUser) -> TbResult<StravaUser>;
 
-    /// Updates the last activity time for a Strava user.
-    ///
-    /// # Arguments
-    ///
-    /// * `user` - The Strava user to update.
-    /// * `time` - The new last activity time.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the user cannot be updated.
-    async fn stravauser_update_last_activity(&mut self, user: &StravaId, time: i64)
-    -> TbResult<()>;
-
     /// Updates the access token for a Strava user.
     ///
     /// # Arguments
@@ -349,36 +209,6 @@ pub trait StravaStore: tb_domain::Store + Send {
     ///
     /// Returns an error if the event count cannot be retrieved.
     async fn strava_events_delete_for_user(&mut self, user: &StravaId) -> TbResult<usize>;
-
-    /// Locks a Strava ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `user_id` - The Strava ID to lock.
-    ///
-    /// # Returns
-    ///
-    /// `true` if the lock was successful, `false` otherwise.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the lock cannot be acquired.
-    async fn stravaid_lock(&mut self, user_id: &StravaId) -> TbResult<bool>;
-
-    /// Unlocks a Strava ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `id` - The Strava ID to unlock.
-    ///
-    /// # Returns
-    ///
-    /// The number of rows affected by the unlock operation.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the unlock operation fails.
-    async fn stravaid_unlock(&mut self, id: &StravaId) -> TbResult<usize>;
 }
 
 #[async_trait]
