@@ -171,7 +171,13 @@ impl Event {
     ) -> TbResult<Summary> {
         let res = match self.aspect_type.as_str() {
             "create" | "update" => activity::upsert_activity(self.object_id, user, store).await?,
-            "delete" => activity::delete_activity(self.object_id, user, store).await?,
+            "delete" => match activity::delete_activity(self.object_id, user, store).await {
+                Err(Error::NotFound(_)) => {
+                    warn!("Activity {} did not exist (yet)", self.object_id);
+                    Summary::default()
+                }
+                res => res?,
+            },
             _ => {
                 warn!("Skipping unknown aspect_type {self:?}");
                 Summary::default()
