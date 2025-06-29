@@ -25,12 +25,12 @@ fn get_static_path() -> PathBuf {
 
     Path::new(&path)
         .canonicalize()
-        .unwrap_or_else(|_| panic!("STATIC_WWW Path {} does not exist", path))
+        .unwrap_or_else(|_| panic!("STATIC_WWW Path {path} does not exist"))
 }
 
 fn get_socket_address() -> SocketAddr {
     let addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8000".to_string());
 
     addr.parse::<SocketAddr>()
-        .unwrap_or_else(|_| panic!("BIND_ADDR '{}' could not be parsed", addr))
+        .unwrap_or_else(|_| panic!("BIND_ADDR '{addr}' could not be parsed"))
 }

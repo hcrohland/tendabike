@@ -127,7 +127,7 @@ impl ActivityId {
     /// returns all affected parts  
     /// checks authorization  
     pub async fn delete(self, person: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
-        info!("Deleting {:?}", self);
+        info!("Deleting {self:?}");
         store
             .transaction(|store| {
                 async {
@@ -198,7 +198,7 @@ impl Activity {
     }
 
     async fn replace(self, new: Activity, store: &mut impl Store) -> TbResult<Summary> {
-        info!("Updating {:?}", self);
+        info!("Updating {self:?}");
         let mut res = self.register(Factor::Sub, store).await?;
 
         let act = store.activity_update(new).await?;
@@ -324,7 +324,7 @@ impl Activity {
             // The iterator yields Result<StringRecord, Error>, so we check the
             // error here.
             let record: Result = result.context("record")?;
-            info!("{:?}", record);
+            info!("{record:?}");
             let description = format!("{} at {}", &record.title, &record.start);
             let rstart = PrimitiveDateTime::parse(&record.start, FORMAT)
                 .context("Could not parse start")?
@@ -354,7 +354,7 @@ impl Activity {
                     good.push(description);
                 }
                 Err(_) => {
-                    warn!("skipped {}", description);
+                    warn!("skipped {description}");
                     bad.push(description);
                 }
             }

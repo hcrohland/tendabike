@@ -39,8 +39,7 @@ impl InEvent {
             && aspects.contains(&self.aspect_type.as_str()))
         {
             return Err(Error::BadRequest(format!(
-                "unknown event received: {:?}",
-                self
+                "unknown event received: {self:?}"
             )));
         };
 
@@ -49,8 +48,7 @@ impl InEvent {
             .is_none()
         {
             return Err(Error::BadRequest(format!(
-                "Unknown event owner received: {:?}",
-                self
+                "Unknown event owner received: {self:?}"
             )));
         }
 
@@ -62,7 +60,7 @@ impl InEvent {
             owner_id: self.owner_id.into(),
             subscription_id: self.subscription_id,
             event_time: self.event_time,
-            updates: serde_json::to_string(&self.updates).unwrap_or_else(|e| format!("{:?}", e)),
+            updates: serde_json::to_string(&self.updates).unwrap_or_else(|e| format!("{e:?}")),
         })
     }
 
@@ -106,7 +104,7 @@ impl std::fmt::Display for Event {
 
 impl Event {
     async fn delete(&self, store: &mut impl StravaStore) -> TbResult<()> {
-        debug!("Deleting {}", self);
+        debug!("Deleting {self}");
         store.strava_event_delete(self.id).await
     }
 
@@ -175,7 +173,7 @@ impl Event {
             "create" | "update" => activity::upsert_activity(self.object_id, user, store).await?,
             "delete" => activity::delete_activity(self.object_id, user, store).await?,
             _ => {
-                warn!("Skipping unknown aspect_type {:?}", self);
+                warn!("Skipping unknown aspect_type {self:?}");
                 Summary::default()
             }
         };
@@ -198,7 +196,7 @@ impl Event {
             if acts.is_empty() {
                 self.delete(store).await?;
             } else {
-                trace!("processing sync event at {}", start);
+                trace!("processing sync event at {start}");
                 for a in acts {
                     start = std::cmp::max(start, a.start_date.unix_timestamp());
                     let ps = a.send_to_tb(user, store).await?;
@@ -250,10 +248,7 @@ pub async fn insert_sync(
     store: &mut impl StravaStore,
 ) -> TbResult<()> {
     if event_time > get_time() {
-        return Err(Error::BadRequest(format!(
-            "eventtime {} > now!",
-            event_time
-        )));
+        return Err(Error::BadRequest(format!("eventtime {event_time} > now!")));
     }
     let object_id = if migrate { 1 } else { 0 };
     let event = Event {
@@ -298,7 +293,7 @@ async fn get_event(
     let res = list.pop();
 
     if !list.is_empty() {
-        debug!("Dropping {:#?}", list);
+        debug!("Dropping {list:#?}");
         let values = list.into_iter().map(|l| l.id).collect::<Vec<_>>();
         store.strava_events_delete_batch(values).await?;
     }
@@ -310,7 +305,7 @@ async fn check_try_again(err: tb_domain::Error, store: &mut impl StravaStore) ->
     // Keep events for temporary failure - delete others
     match err {
         Error::TryAgain(_) => {
-            warn!("Stopping hooks for 15 minutes {:?}", err);
+            warn!("Stopping hooks for 15 minutes {err:?}");
             insert_stop(store).await?;
             Ok(Summary::default())
         }
@@ -325,7 +320,7 @@ async fn next_activities(
     start: i64,
 ) -> TbResult<Vec<StravaActivity>> {
     user.request_json(
-        &format!("/activities?after={}&per_page={}", start, per_page),
+        &format!("/activities?after={start}&per_page={per_page}"),
         store,
     )
     .await
@@ -340,14 +335,14 @@ pub async fn process(
         return Ok(Summary::default());
     };
     let event = event.unwrap();
-    info!("Processing {}", event);
+    info!("Processing {event}");
 
     match event.object_type.as_str() {
         "activity" => event.process_activity(user, store).await,
         "sync" => event.process_sync(user, store).await,
         // "athlete" => process_user(e, user),
         _ => {
-            warn!("skipping {}", event);
+            warn!("skipping {event}");
             event.delete(store).await?;
             Ok(Summary::default())
         }
@@ -369,7 +364,7 @@ pub async fn sync_users(
             warn!("user {} disabled, skipping", user.strava_id());
             continue;
         }
-        info!("Adding sync for {:?} at {}", user.strava_id(), time);
+        info!("Adding sync for {:?} at {time}", user.strava_id());
         event::insert_sync(user.strava_id(), time, migrate, store).await?;
     }
     Ok(())

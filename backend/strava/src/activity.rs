@@ -141,7 +141,7 @@ impl StravaActivity {
             "WeightTraining" => 0,
             "Wheelchair" => 0,
             "Yoga" => 0,
-            _ => return Err(Error::BadRequest(format!("unsupported activity {}", t))),
+            _ => return Err(Error::BadRequest(format!("unsupported activity {t}"))),
         }
         .into())
     }
@@ -183,7 +183,7 @@ pub async fn upsert_activity(
     store: &mut impl StravaStore,
 ) -> TbResult<Summary> {
     let act: StravaActivity = user
-        .request_json(&format!("/activities/{}", id), store)
+        .request_json(&format!("/activities/{id}"), store)
         .await?;
     act.send_to_tb(user, store).await
 }

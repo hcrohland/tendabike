@@ -102,14 +102,14 @@ pub(crate) async fn create_event(
     State(store): State<DbPool>,
     Json(event): axum::extract::Json<InEvent>,
 ) -> ApiResult<()> {
-    trace!("Received {:#?}", event);
+    trace!("Received {event:#?}");
     let mut store = store.get().await?;
     event.accept(&mut store).await?;
     Ok(Json(()))
 }
 
 pub(super) async fn validate_subscription(Query(hub): Query<Hub>) -> ApiResult<Hub> {
-    info!("Received validation callback {:?}", hub);
+    info!("Received validation callback {hub:?}");
     Ok(hub.validate().map(Json)?)
 }
 
