@@ -36,7 +36,7 @@ impl StravaId {
     /// disable a user
     async fn disable(self, store: &mut impl StravaStore) -> TbResult<()> {
         let id = self;
-        info!("disabling user {}", id);
+        info!("disabling user {id}");
 
         store.stravaid_update_token(id, None).await?;
         Ok(())
@@ -124,7 +124,7 @@ impl StravaUser {
             tendabike_id,
             ..Default::default()
         };
-        info!("creating new user id {:?}", user);
+        info!("creating new user id {user:?}");
 
         let user = store.stravauser_new(user).await?;
         event::insert_sync(user.id, 0, false, store).await?;

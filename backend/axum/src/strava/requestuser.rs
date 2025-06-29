@@ -82,8 +82,7 @@ impl RequestUser {
         let id = user.tb_id();
         let is_admin = id.is_admin(store).await?;
         let refresh_token = user.refresh_token().ok_or(Error::BadRequest(format!(
-            "User {} does not have a refresh token (disabled?)",
-            id
+            "User {id} does not have a refresh token (disabled?)"
         )))?;
 
         Ok(Self {
@@ -137,7 +136,7 @@ impl RequestUser {
         self.check_token(store).await?;
 
         let resp = reqwest::Client::new()
-            .get(format!("{}{}", API, uri))
+            .get(format!("{API}{uri}"))
             .bearer_auth(self.access_token.secret())
             .send()
             .await
@@ -156,8 +155,7 @@ impl RequestUser {
                 Err(Error::TryAgain(status.canonical_reason().unwrap()))
             }
             StatusCode::UNAUTHORIZED => Err(Error::NotAuth(format!(
-                "Strava request authorization withdrawn for {}",
-                uri
+                "Strava request authorization withdrawn for {uri}"
             ))),
             _ => Err(Error::BadRequest(format!(
                 "Strava request error: {}",

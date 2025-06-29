@@ -45,7 +45,7 @@ impl IntoResponse for AppError {
         };
 
         let any: anyhow::Error = self.into();
-        let msg = format!("{:#}", any);
+        let msg = format!("{any:#}");
         match code {
             StatusCode::INTERNAL_SERVER_ERROR => error!("{msg}"),
             StatusCode::BAD_REQUEST => warn!("{msg}"),

@@ -180,7 +180,7 @@ impl PartId {
         user: &dyn Person,
         store: &mut impl PartStore,
     ) -> TbResult<Part> {
-        info!("Change {:?}", self);
+        info!("Change {self:?}");
 
         let mut part = self.part(user, store).await?;
 

@@ -147,7 +147,7 @@ impl Attachment {
     /// - recalculates the usage counters in the attached assembly
     /// - returns all affected parts
     async fn create(mut self, store: &mut impl Store) -> TbResult<Summary> {
-        trace!("create {:?}", self);
+        trace!("create {self:?}");
 
         // create the Usage for the attachement
         self.usage = UsageId::new();
@@ -182,7 +182,7 @@ impl Attachment {
     /// - recalculates the usage counters in the attached assembly
     /// - returns all affected parts
     async fn delete(self, store: &mut impl Store) -> TbResult<Summary> {
-        trace!("delete {:?}", self);
+        trace!("delete {self:?}");
 
         // delete the attachment on the db
         let att = AttachmentStore::delete(store, self).await?;
@@ -456,7 +456,7 @@ pub async fn attach_assembly(
             geartypeid
                 .get()
                 .map(|t| t.name)
-                .unwrap_or_else(|_| format!("unknown type {}", geartypeid))
+                .unwrap_or_else(|_| format!("unknown type {geartypeid}"))
         )));
     };
     store
