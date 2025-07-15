@@ -156,6 +156,7 @@
         ],
         anchor: "y0",
       },
+      hovermode: "x",
       annotations: [],
       colorway,
       ...addlayout,
