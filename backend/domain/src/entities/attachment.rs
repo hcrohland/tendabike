@@ -385,25 +385,24 @@ async fn attach_one(
     if let Some(next) = store
         .attachment_find_later_attachment_for_part(part_id, time)
         .await?
+        && end > next.attached
     {
-        if end > next.attached {
-            // is this attachment earlier than the previous one?
-            if next.gear == gear && next.hook == hook {
-                trace!("still attached until {}", next.detached);
-                // the previous one is the real next so we keep 'det'!
-                // 'next' will be replaced by 'self' but 'end' is taken from 'next'
-                end = next.detached;
-                *hash += next.delete(store).await?;
-            } else {
-                trace!(
-                    "changing gear/hook from {}/{} to {}/{}",
-                    gear, hook, next.gear, next.hook
-                );
-                // it is attached to a different hook later
-                // the new attachment ends when the next starts
-                end = next.attached;
-                det = next.attached
-            }
+        // is this attachment earlier than the previous one?
+        if next.gear == gear && next.hook == hook {
+            trace!("still attached until {}", next.detached);
+            // the previous one is the real next so we keep 'det'!
+            // 'next' will be replaced by 'self' but 'end' is taken from 'next'
+            end = next.detached;
+            *hash += next.delete(store).await?;
+        } else {
+            trace!(
+                "changing gear/hook from {}/{} to {}/{}",
+                gear, hook, next.gear, next.hook
+            );
+            // it is attached to a different hook later
+            // the new attachment ends when the next starts
+            end = next.attached;
+            det = next.attached
         }
     }
 
