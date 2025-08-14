@@ -51,6 +51,7 @@
     mindate = attl.attached;
     type = oldpart.type();
     prefix = types[attl.hook].prefix;
+    single = !type.is_hook();
     part = new Part({
       owner: $user && $user.id,
       what: oldpart.what,
