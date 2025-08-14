@@ -32,8 +32,7 @@
     await part.attach(part.purchase, !single, gear, hook);
 
     if (dispose) {
-      oldpart.disposed_at = part.purchase;
-      await oldpart.update();
+      await oldpart.dispose(part.purchase, !single);
     }
   }
 
@@ -51,6 +50,7 @@
     mindate = attl.attached;
     type = oldpart.type();
     prefix = types[attl.hook].prefix;
+    single = !type.is_hook();
     part = new Part({
       owner: $user && $user.id,
       what: oldpart.what,
