@@ -32,8 +32,7 @@
     await part.attach(part.purchase, !single, gear, hook);
 
     if (dispose) {
-      oldpart.disposed_at = part.purchase;
-      await oldpart.update();
+      await oldpart.dispose(part.purchase, !single);
     }
   }
 
