@@ -13,3 +13,4 @@ tokio = { workspace = true, features = ["full"] }
 tb_domain = { workspace = true }
 tb_axum = { workspace = true }
 tb_diesel = { workspace = true }
+tikv-jemallocator = "0.6.0"
