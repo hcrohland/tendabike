@@ -18,8 +18,7 @@
     <a
       href="/part/{part.id}"
       use:link
-      class="badge badge-secondary text-decoration-none"
-      style="color:#9FA4FA;"
+      class="badge text-bg-light text-decoration-none"
       title={"View " + $category.name.toLowerCase() + " details"}
     >
       <PlanBadge {planlist} />
