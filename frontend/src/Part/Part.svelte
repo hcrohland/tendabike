@@ -24,7 +24,7 @@
   $: planlist = plans_for_part_and_subtypes($attachments, $plans, part);
 </script>
 
-<GearCard {part} display>
+<GearCard {part}>
   <Menu>
     {#if part.disposed_at}
       <DropdownItem color="light" on:click={() => $actions.recoverPart(part)}>

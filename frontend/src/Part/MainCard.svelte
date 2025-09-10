@@ -8,12 +8,11 @@
   import GearCard from "./GearCard.svelte";
 
   export let part: Part;
-  export let display: boolean;
 
   $: planlist = plans_for_part_and_subtypes($attachments, $plans, part);
 </script>
 
-<GearCard {part} {display}>
+<GearCard {part}>
   <div class="float-end">
     <a
       href="/part/{part.id}"

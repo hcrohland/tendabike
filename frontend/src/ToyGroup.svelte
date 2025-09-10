@@ -23,9 +23,9 @@
 {#if $category}
   <SetDefault type={$category}></SetDefault>
   <Row class="p-sm-2">
-    {#each gears as part, i (part.id)}
+    {#each gears as part (part.id)}
       <Col md="6" class="p-0 p-sm-2">
-        <MainCard {part} display={i < 4 || show_hist} />
+        <MainCard {part} />
       </Col>
     {:else}
       {#if $category.activities($activities).length == 0}
@@ -41,9 +41,9 @@
     <ShowAll bind:show_hist>Show disposed</ShowAll>
     {#if show_hist}
       <Row>
-        {#each bin as part, i (part.id)}
+        {#each bin as part (part.id)}
           <Col md="6" class="p-0 p-sm-2">
-            <MainCard {part} display />
+            <MainCard {part} />
           </Col>
         {/each}
       </Row>
