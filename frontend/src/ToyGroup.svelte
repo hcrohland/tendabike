@@ -3,12 +3,12 @@
   import MainCard from "./Part/MainCard.svelte";
   import { filterValues, by } from "./lib/mapable";
   import { category } from "./lib/types";
-  import ShowAll from "./Widgets/ShowHist.svelte";
+  import ShowMore from "./Widgets/ShowMore.svelte";
   import SetDefault from "./Activity/SetDefault.svelte";
   import { parts } from "./lib/part";
   import { activities } from "./lib/activity";
 
-  let show_hist: boolean;
+  let show_more: boolean;
 
   $: gears = filterValues(
     $parts,
@@ -38,8 +38,8 @@
   </Row>
 
   {#if bin.length > 0}
-    <ShowAll bind:show_hist>Show disposed</ShowAll>
-    {#if show_hist}
+    <ShowMore bind:show_more>Show disposed</ShowMore>
+    {#if show_more}
       <Row>
         {#each bin as part (part.id)}
           <Col md="6" class="p-0 p-sm-2">

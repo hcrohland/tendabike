@@ -1,26 +1,22 @@
 <script lang="ts">
   import { services, Service } from "../lib/service";
-  import ShowHist from "../Widgets/ShowHist.svelte";
+  import ShowMore from "../Widgets/ShowMore.svelte";
   import ServiceRow from "./ServiceRow.svelte";
   import { parts } from "../lib/part";
 
   export let service: Service;
   export let depth = 0;
 
-  export let show_all = false;
-
-  let show_hist = false;
+  let show_more = false;
 
   $: part = $parts[service.part_id];
   $: successor = service.get_successor($services);
 </script>
 
 <ServiceRow {part} {service} {successor} {depth}>
-  {#if !show_all}
-    <ShowHist bind:show_hist />
-  {/if}
+  <ShowMore bind:show_more />
 </ServiceRow>
-{#if show_hist || show_all}
+{#if show_more}
   {#each service.history(1, $services) as s (s.service?.id + "-" + s.successor?.id)}
     <ServiceRow {part} {...s} />
   {/each}

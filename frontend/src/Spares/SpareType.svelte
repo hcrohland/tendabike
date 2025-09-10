@@ -3,13 +3,12 @@
   import PartLink from "../Part/PartLink.svelte";
   import Usage from "../Usage/Usage.svelte";
   import { actions } from "../Widgets/Actions.svelte";
-  import Menu from "../Widgets/Menu.svelte";
-  import ShowAll from "../Widgets/ShowHist.svelte";
+  import ShowMore from "../Widgets/ShowMore.svelte";
   import { Attachment, attachments } from "../lib/attachment";
   import { filterValues, type Map } from "../lib/mapable";
   import { parts } from "../lib/part";
   import { fmtDate } from "../lib/store";
-  import { Type, types } from "../lib/types";
+  import { Type } from "../lib/types";
 
   export let type: Type;
   export let date = new Date();
@@ -37,7 +36,7 @@
 <tr>
   <th colspan="6" scope="col" class="text-nowrap">
     {#if subparts.length > 0}
-      <ShowAll
+      <ShowMore
         on:toggle={(e) => {
           {
             show_all = e.detail;

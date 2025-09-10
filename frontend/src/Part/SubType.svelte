@@ -3,7 +3,7 @@
   import Usage from "../Usage/Usage.svelte";
   import { actions } from "../Widgets/Actions.svelte";
   import Menu from "../Widgets/Menu.svelte";
-  import ShowAll from "../Widgets/ShowHist.svelte";
+  import ShowMore from "../Widgets/ShowMore.svelte";
   import type { Attachment } from "../lib/attachment";
   import { parts } from "../lib/part";
   import { Type } from "../lib/types";
@@ -15,7 +15,7 @@
   export let prefix = "";
   export let type: Type | undefined = undefined;
 
-  let show_hist = false;
+  let show_more = false;
 </script>
 
 {#if type == undefined}
@@ -32,7 +32,7 @@
         <th scope="row" class="text-nowrap">
           {"┃ ".repeat(level)}
           {#if attachments.length > 0 || (part && $usages[part.usage].count != $usages[att.usage].count)}
-            <ShowAll bind:show_hist />
+            <ShowMore bind:show_more />
           {/if}
           {prefix + " " + type.name}
           {#if att.isAttached()}
@@ -73,7 +73,7 @@
         {/if}
       </tr>
     {/if}
-    {#if show_hist}
+    {#if show_more}
       <tr>
         <th scope="row" class="text-nowrap">
           {"┃ ".repeat(level + 1) + "▶"}
