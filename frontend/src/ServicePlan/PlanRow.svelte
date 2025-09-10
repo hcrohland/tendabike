@@ -3,7 +3,7 @@
   import ServiceRow from "../Service/ServiceRow.svelte";
   import { actions } from "../Widgets/Actions.svelte";
   import Menu from "../Widgets/Menu.svelte";
-  import ShowHist from "../Widgets/ShowHist.svelte";
+  import ShowMore from "../Widgets/ShowMore.svelte";
   import { attachments } from "../lib/attachment";
   import { parts } from "../lib/part";
   import { services } from "../lib/service";
@@ -15,22 +15,23 @@
   export let plan: ServicePlan;
   export let name: string | null = null;
 
-  let show_hist = false;
+  let show_more = false;
 
   $: part = plan.getpart($parts, $attachments);
   $: serviceList = plan.services(part, $services);
   $: due = plan.due(part, serviceList.at(0), $usages);
+  let title = "service history";
 </script>
 
 <tr>
   <td>
     {#if name}
       ┃
-      <ShowHist bind:show_hist />
+      <ShowMore bind:show_more {title} />
       {@html name}
     {:else}
       {#if part}
-        <ShowHist bind:show_hist />
+        <ShowMore bind:show_more {title} />
       {/if}
       <PlanName {plan} />
     {/if}
@@ -87,7 +88,7 @@
     </Menu>
   </td>
 </tr>
-{#if part && show_hist}
+{#if part && show_more}
   {#each serviceList as service, i (service.id)}
     {@const successor = i > 0 ? serviceList[i - 1] : null}
     <ServiceRow depth={name ? 2 : 1} {part} {service} {successor} />
