@@ -7,10 +7,7 @@
   const props = Object.assign({}, $$props);
   delete props.date;
 
-  import Flatpickr from "svelte-flatpickr";
-
-  import "flatpickr/dist/flatpickr.css";
-  import "flatpickr/dist/themes/light.css";
+  import SveltyPicker from "svelty-picker";
   import { roundTime } from "../lib/store";
 
   const options = {
@@ -40,14 +37,15 @@
   }
 
   date = roundTime(date);
+  const minuteIncrement = 15;
 </script>
 
-<Flatpickr
-  options={flatpickrOptions}
-  value={date}
-  children={props.children}
-  on:change={handleChange}
-  {...props}
+<SveltyPicker
+  initialDate={date}
+  on:change={(e) => (date = new Date(e.detail))}
+  mode="datetime"
+  format="d. M yy h:ii"
+  {minuteIncrement}
 />
 <!-- hack to prevent spurious button clicks -->
 <button
