@@ -5,17 +5,17 @@
     CardBody,
     CardHeader,
     Col,
+    Container,
     Row,
   } from "@sveltestrap/sveltestrap";
-  import { link } from "svelte-spa-router";
+  import { link, push } from "svelte-spa-router";
   import { Part } from "../lib/part";
   import { fmtDate, fmtNumber, fmtSeconds } from "../lib/store";
   import { types } from "../lib/types";
   import { Usage, usages } from "../lib/usage";
 
   export let part: Part;
-
-  let showLink = false;
+  export let show_link = false;
 
   $: usage = $usages[part.usage] ? $usages[part.usage] : new Usage();
 
@@ -31,21 +31,23 @@
 <Card>
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
-  <div
-    class="header"
-    on:mouseenter={() => (showLink = true)}
-    on:mouseleave={() => (showLink = false)}
-  >
+  <div class="header pe-auto" on:click={() => push("/part/" + part.id)}>
     <CardHeader class="h5 mb-0">
       <Row>
         <Col>
-          {part.name}
+          {#if show_link}
+            <a href="/part/{part.id}" use:link class="text-bg-light">
+              {part.name}
+            </a>
+          {:else}
+            {part.name}
+          {/if}
         </Col>
-        {#if showLink}
-          <Col>
+        <Col>
+          <div class="float-end h6 mb-0">
             <slot />
-          </Col>
-        {/if}
+          </div>
+        </Col>
       </Row>
     </CardHeader>
   </div>
@@ -89,13 +91,3 @@
     </p>
   </CardBody>
 </Card>
-
-<style>
-  .header:hover {
-    background-color: lightgray;
-  }
-
-  .param {
-    font-weight: bold;
-  }
-</style>
