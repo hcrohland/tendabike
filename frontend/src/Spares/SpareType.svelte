@@ -43,6 +43,7 @@
             update(show_all);
           }
         }}
+        title="attached"
       />
     {/if}
     &NonBreakingSpace;

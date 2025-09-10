@@ -14,7 +14,7 @@
 </script>
 
 <ServiceRow {part} {service} {successor} {depth}>
-  <ShowMore bind:show_more />
+  <ShowMore bind:show_more title="history" />
 </ServiceRow>
 {#if show_more}
   {#each service.history(1, $services) as s (s.service?.id + "-" + s.successor?.id)}

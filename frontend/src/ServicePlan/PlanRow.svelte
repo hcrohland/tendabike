@@ -20,17 +20,18 @@
   $: part = plan.getpart($parts, $attachments);
   $: serviceList = plan.services(part, $services);
   $: due = plan.due(part, serviceList.at(0), $usages);
+  let title = "service history";
 </script>
 
 <tr>
   <td>
     {#if name}
       ┃
-      <ShowMore bind:show_more />
+      <ShowMore bind:show_more {title} />
       {@html name}
     {:else}
       {#if part}
-        <ShowMore bind:show_more />
+        <ShowMore bind:show_more {title} />
       {/if}
       <PlanName {plan} />
     {/if}

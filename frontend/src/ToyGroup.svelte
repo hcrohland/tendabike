@@ -38,7 +38,7 @@
   </Row>
 
   {#if bin.length > 0}
-    <ShowMore bind:show_more>Show disposed</ShowMore>
+    <ShowMore bind:show_more title="disposed" />
     {#if show_more}
       <Row>
         {#each bin as part (part.id)}

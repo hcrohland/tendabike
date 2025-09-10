@@ -32,7 +32,7 @@
         <th scope="row" class="text-nowrap">
           {"┃ ".repeat(level)}
           {#if attachments.length > 0 || (part && $usages[part.usage].count != $usages[att.usage].count)}
-            <ShowMore bind:show_more />
+            <ShowMore bind:show_more title="history" />
           {/if}
           {prefix + " " + type.name}
           {#if att.isAttached()}
