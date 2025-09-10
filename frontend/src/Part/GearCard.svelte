@@ -31,12 +31,19 @@
 <Card>
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
-  <div class="header pe-auto" on:click={() => push("/part/" + part.id)}>
+  <div
+    class={show_link ? "header" : ""}
+    on:click={() => show_link && push("/part/" + part.id)}
+  >
     <CardHeader class="h5 mb-0">
       <Row>
         <Col>
           {#if show_link}
-            <a href="/part/{part.id}" use:link class="text-bg-light">
+            <a
+              href="/part/{part.id}"
+              use:link
+              class="text-dark text-decoration-none"
+            >
               {part.name}
             </a>
           {:else}
@@ -91,3 +98,9 @@
     </p>
   </CardBody>
 </Card>
+
+<style>
+  .header:hover {
+    background-color: lightgray;
+  }
+</style>
