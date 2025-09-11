@@ -69,7 +69,7 @@
           <td> {att.fmtTime()} </td>
           <Usage id={part.usage} ref={part.id} />
         {:else}
-          <th colspan="80" />
+          <th colspan="80"> </th>
         {/if}
       </tr>
     {/if}

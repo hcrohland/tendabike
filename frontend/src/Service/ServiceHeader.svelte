@@ -9,5 +9,5 @@
   <th scope="col">Date</th>
   <th class="text-end"> Days</th>
   <Usage header />
-  <th />
+  <th> </th>
 </tr>

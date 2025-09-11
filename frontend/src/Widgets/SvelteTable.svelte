@@ -338,7 +338,7 @@
             </th>
           {/each}
           {#if showExpandIcon}
-            <th />
+            <th> </th>
           {/if}
         </tr>
       {/if}
@@ -363,7 +363,7 @@
             </th>
           {/each}
           {#if showExpandIcon}
-            <th />
+            <th> </th>
           {/if}
         </tr>
         {#if t_row}
@@ -377,10 +377,10 @@
                 {/if}
               </th>
             {/each}
+            {#if showExpandIcon}
+              <th> </th>
+            {/if}
           </tr>
-          {#if showExpandIcon}
-            <th />
-          {/if}
         {/if}
       </slot>
     </thead>

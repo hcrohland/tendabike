@@ -48,7 +48,7 @@
       <th>Parts</th>
       <th>Activities</th>
       <th>Events</th>
-      <th />
+      <th> </th>
     </tr>
     {#each list.sort((a, b) => a.user.id - b.user.id) as { user, parts, activities, events, disabled } (user.id)}
       <tr>
