@@ -8,16 +8,19 @@
   import { parts } from "./lib/part";
   import { activities } from "./lib/activity";
 
-  let show_more: boolean;
+  let show_more: boolean = $state(false);
 
-  $: gears = filterValues(
-    $parts,
-    (p) => p.what == $category.id && !p.disposed_at,
-  ).sort(by("last_used"));
-  $: bin = filterValues(
-    $parts,
-    (p) => p.what == $category.id && p.disposed_at != undefined,
-  ).sort(by("last_used"));
+  let gears = $derived(
+    filterValues($parts, (p) => p.what == $category.id && !p.disposed_at).sort(
+      by("last_used"),
+    ),
+  );
+  let bin = $derived(
+    filterValues(
+      $parts,
+      (p) => p.what == $category.id && p.disposed_at != undefined,
+    ).sort(by("last_used")),
+  );
 </script>
 
 {#if $category}

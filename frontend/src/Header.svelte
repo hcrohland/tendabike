@@ -20,11 +20,11 @@
   import { querystring } from "svelte-spa-router";
   import SyncMenu from "./Widgets/SyncMenu.svelte";
 
-  export let promise;
+  let { promise } = $props();
 
-  let userOpen = false;
+  let userOpen = $state(false);
 
-  let isOpen = false;
+  let isOpen = $state(false);
   function navbarUpdate(event: CustomEvent<any>) {
     isOpen = event.detail.isOpen;
   }

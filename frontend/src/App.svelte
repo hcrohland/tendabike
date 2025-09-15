@@ -18,7 +18,7 @@
 
  -->
 
-<script lang="ts" context="module">
+<script lang="ts" module>
   import { Container, Spinner } from "@sveltestrap/sveltestrap";
   import Router from "svelte-spa-router";
 

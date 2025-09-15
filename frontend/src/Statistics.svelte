@@ -189,7 +189,7 @@
     };
   }
 
-  let tab = "elevation";
+  let tab = $state("elevation");
 
   function plot(
     tab: string,
@@ -228,13 +228,13 @@
       ]);
   }
 
-  $: acts = $category.activities($activities);
-  $: gears = $category.parts($parts);
-  let gear = gears ? [...gears] : [];
-  let cumm: number;
-  let comp: number | null = null;
-  let perMonths = false;
-  $: years = buildYears(acts, gear);
+  let acts = $derived($category.activities($activities));
+  let gears = $derived($category.parts($parts));
+  let gear = $derived(gears ? [...gears] : []);
+  let cumm: any = $state(null);
+  let comp: number | null = $state(null);
+  let perMonths = $state(false);
+  let years = $derived(buildYears(acts, gear));
 </script>
 
 <Row class="p-sm-2">
@@ -288,4 +288,4 @@
   <TabPane tab="Distance" tabId="distance" />
   <TabPane tab="Time" tabId="time" />
 </TabContent>
-<Plotly {...plot(tab, perMonths, cumm, comp, years)} />
+<Plotly {...plot(tab, perMonths, cumm!, comp, years)} />
