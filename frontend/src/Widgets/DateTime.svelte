@@ -1,68 +1,72 @@
 <script lang="ts">
-  export let date = new Date();
-  export let mindate: any = undefined;
-  export let maxdate: any = undefined;
-  export let prevdate: ((t: Date) => Date) | undefined = undefined; // only usable w/o mindate
+  import { preventDefault } from "svelte/legacy";
 
-  const props = Object.assign({}, $$props);
-  delete props.date;
-
-  import SveltyPicker from "svelty-picker";
+  import SveltyPicker, { formatDate, parseDate } from "svelty-picker";
+  import { en } from "svelty-picker/i18n";
   import { roundTime } from "../lib/store";
 
-  const options = {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "numeric",
+  type Props = {
+    date?: any;
+    mindate?: Date;
+    maxdate?: Date;
+    prevdate?: (t: Date) => Date; // only usable w/o mindate
+    id?: string;
+    required?: boolean;
   };
+
+  let {
+    date = $bindable(new Date()),
+    mindate = undefined,
+    maxdate = undefined,
+    prevdate = undefined,
+    id: inputId = undefined,
+    required = undefined,
+  }: Props = $props();
 
   mindate = mindate ? roundTime(mindate) : undefined;
   maxdate = maxdate ? roundTime(maxdate) : undefined;
   let now = roundTime(new Date());
 
-  let flatpickrOptions = {
-    time_24hr: true,
-    enableTime: true,
+  const options = {
+    // time_24hr: true,
     minuteIncrement: 15,
-    dateFormat: "j. M Y H:i",
-    minDate: mindate,
-    maxDate: maxdate,
+    format: "d. M yyyy - h:ii",
+    startDate: mindate,
+    endDate: maxdate,
+    displayFormat: "d. M yyyy - h:ii",
+    displayFormatType: "standard",
+    // manualInput: true,
   };
 
-  function handleChange(event: any) {
-    const [selectedDates] = event.detail;
-    date = selectedDates[0] as Date;
-  }
-
   date = roundTime(date);
-  const minuteIncrement = 15;
 </script>
 
 <SveltyPicker
-  initialDate={date}
-  on:change={(e) => (date = new Date(e.detail))}
+  bind:value={
+    () => {
+      return formatDate(date, options.format, en, "standard");
+    },
+    (v) => {
+      date = v ? parseDate(v, options.format, en, "standard") : null;
+    }
+  }
+  placeholder={formatDate(date, options.format, en, "standard")}
   mode="datetime"
-  format="d. M yy h:ii"
-  {minuteIncrement}
+  {inputId}
+  {required}
+  {...options}
 />
-<!-- hack to prevent spurious button clicks -->
-<button
-  hidden
-  on:click|preventDefault|stopPropagation={() => {}}
-  tabindex="-1"
-/>
+
 {#if mindate}
-  <button on:click|preventDefault={() => (date = mindate)}> &#706; </button>
+  <button onclick={preventDefault(() => (date = mindate))}> &#706; </button>
 {:else if prevdate}
-  <button on:click|preventDefault={() => (date = prevdate(date))}>
+  <button onclick={preventDefault(() => (date = prevdate(date)))}>
     &#706;
   </button>
 {/if}
 {#if !(mindate && mindate > now) && !(maxdate && maxdate < now)}
-  <button on:click|preventDefault={() => (date = now)}> &#8226; </button>
+  <button onclick={preventDefault(() => (date = now))}> &#8226; </button>
 {/if}
 {#if maxdate}
-  <button on:click|preventDefault={() => (date = maxdate)}> &#707; </button>
+  <button onclick={preventDefault(() => (date = maxdate))}> &#707; </button>
 {/if}
