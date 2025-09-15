@@ -1,26 +1,33 @@
 <script lang="ts">
   import { Button, Tooltip } from "@sveltestrap/sveltestrap";
-  import { createEventDispatcher } from "svelte";
-  const dispatch = createEventDispatcher();
-
-  export let show_more = false;
-  export let title: string | undefined = undefined;
-
-  function click() {
-    show_more = !show_more;
-    dispatch("toggle", show_more);
+  interface Props {
+    show_more: boolean;
+    title?: string | undefined;
+    update?: (v: boolean) => void;
   }
-  let id = "show_more" + Math.floor(Math.random() * 100000);
+
+  let {
+    show_more = $bindable(false),
+    title = undefined,
+    update = (v) => {},
+  }: Props = $props();
+
+  function onclick() {
+    show_more = !show_more;
+    update(show_more);
+  }
+  let id = $props.id();
+
   let delay = 1000;
 </script>
 
-<Button {id} color="light" class="m-0 p-1" on:click={click}>
+<Button {id} color="light" class="m-0 p-1" {onclick}>
   {#if show_more}
     −
   {:else}
     +
     {#if title}
-      <Tooltip {delay} target={id}>Show {title}</Tooltip>
+      <Tooltip placement="left" {delay} target={id}>Show {title}</Tooltip>
     {/if}
   {/if}
 </Button>

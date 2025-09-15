@@ -15,7 +15,7 @@
   export let update: (show: boolean) => void;
   export let attachee: number;
 
-  let show_all: boolean;
+  let show_more: boolean = false;
 
   function attachedTo(
     atts: Map<Attachment>,
@@ -36,15 +36,7 @@
 <tr>
   <th colspan="6" scope="col" class="text-nowrap">
     {#if subparts.length > 0}
-      <ShowMore
-        on:toggle={(e) => {
-          {
-            show_all = e.detail;
-            update(show_all);
-          }
-        }}
-        title="attached"
-      />
+      <ShowMore bind:show_more {update} title="attached" />
     {/if}
     &NonBreakingSpace;
     {type.name}s &NonBreakingSpace;
@@ -54,7 +46,7 @@
   </th>
   <th class="text-nowrap" colspan="80"> </th>
 </tr>
-{#each subparts.filter((p) => show_all || !(attachedTo($attachments, p.id, date) || p.disposed_at)) as part (part.id)}
+{#each subparts.filter((p) => show_more || !(attachedTo($attachments, p.id, date) || p.disposed_at)) as part (part.id)}
   <tr>
     <td class="border-0"> </td>
     <td title={part.vendor + " " + part.model + " " + fmtDate(part.purchase)}>
