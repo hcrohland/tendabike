@@ -25,6 +25,6 @@
   "dependencies": {
     "@sveltestrap/sveltestrap": "7",
     "svelte-spa-router": "4",
-    "svelty-picker": "6"
+    "svelty-picker": "^6.1.6"
   }
 }
