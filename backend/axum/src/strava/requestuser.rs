@@ -1,6 +1,6 @@
 use anyhow::Context;
 use async_session::{
-    MemoryStore, SessionStore, async_trait,
+    MemoryStore, Session, SessionStore, async_trait,
     log::{debug, trace},
 };
 use axum::{
@@ -33,6 +33,8 @@ pub(crate) struct RequestUser {
     access_token: AccessToken,
     expires_at: Option<SystemTime>,
     refresh_token: Option<RefreshToken>,
+    #[serde(skip)]
+    session: Option<Session>,
 }
 
 const API: &str = "https://www.strava.com/api/v3";
@@ -68,6 +70,7 @@ impl RequestUser {
             access_token: token.access_token().clone(),
             expires_at: token.expires_in().map(|d| SystemTime::now() + d),
             refresh_token: refresh_token.cloned(),
+            session: None,
         })
     }
 
@@ -92,6 +95,7 @@ impl RequestUser {
             access_token: AccessToken::new(String::default()),
             expires_at: Some(SystemTime::UNIX_EPOCH),
             refresh_token: Some(RefreshToken::new(refresh_token)),
+            session: None,
         })
     }
 
@@ -125,6 +129,12 @@ impl RequestUser {
         self.refresh_token = token.refresh_token().cloned();
         let refresh = token.refresh_token().map(|t| t.secret());
         self.strava_id.update_token(refresh, store).await?;
+        if let Some(mut session) = self.session.clone() {
+            debug!("updating session for user {}", self.id);
+            session
+                .insert("user", self)
+                .context("session insert failed")?;
+        };
         Ok(())
     }
 
@@ -172,6 +182,11 @@ impl RequestUser {
             return self.refresh_the_token(store).await;
         }
         Ok(())
+    }
+
+    fn set_session(mut self, session: Session) -> Self {
+        self.session = Some(session);
+        self
     }
 }
 
@@ -247,7 +262,8 @@ where
 
         let user = session
             .get::<RequestUser>("user")
-            .ok_or(Error::NotAuth("Session error".into()))?;
+            .ok_or(Error::NotAuth("Session error".into()))?
+            .set_session(session);
 
         Ok(user)
     }
