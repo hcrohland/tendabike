@@ -1,13 +1,6 @@
 <script lang="ts">
   // import { slide } from 'svelte/transition';
-  import {
-    Card,
-    CardBody,
-    CardHeader,
-    Col,
-    Container,
-    Row,
-  } from "@sveltestrap/sveltestrap";
+  import { Card } from "flowbite-svelte";
   import { link, push } from "svelte-spa-router";
   import { Part } from "../lib/part";
   import { fmtDate, fmtNumber, fmtSeconds } from "../lib/store";
@@ -28,44 +21,35 @@
   }
 </script>
 
-<Card>
+<Card size="lg" class="col-auto">
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div
-    class={show_link ? "header" : ""}
+    class={show_link
+      ? "bg-gray-200 hover:bg-gray-300 p-4 cursor-pointer"
+      : "p-4"}
     on:click={() => show_link && push("/part/" + part.id)}
   >
-    <CardHeader class="h5 mb-0">
-      <Row>
-        <Col>
-          {#if show_link}
-            <a
-              href="/part/{part.id}"
-              use:link
-              class="text-dark text-decoration-none"
-            >
-              {part.name}
-            </a>
-          {:else}
-            {part.name}
-          {/if}
-        </Col>
-        <Col>
-          <div class="float-end h6 mb-0">
-            <slot />
-          </div>
-        </Col>
-      </Row>
-    </CardHeader>
+    {#if show_link}
+      <a href="/part/{part.id}" use:link class="text-xl text-decoration-none">
+        {part.name}
+      </a>
+    {:else}
+      {part.name}
+    {/if}
+    <div class="float-end h6 mb-0">
+      <slot />
+    </div>
   </div>
-  <CardBody>
+  <div class="text-wrap p-4">
     is a <span class="param">{model(part)}</span>
     {#if part.what == 1}
-      <a href={"/strava/bikes/" + part.id} target="_blank"
-        ><img
+      <a href={"/strava/bikes/" + part.id} target="_blank">
+        <img
           src="strava_grey.png"
           alt="View on Strava"
           title="View on Strava"
+          class="inline"
         />
       </a>
     {/if}
@@ -81,9 +65,9 @@
       and
     {/if}
     you used
-    <a href={"/activities/" + part.id} use:link class="param text-reset"
-      >{fmtNumber(usage.count)}</a
-    >
+    <a href={"/activities/" + part.id} use:link class="param text-reset">
+      {fmtNumber(usage.count)}
+    </a>
     times for <span class="param">{fmtSeconds(usage.time)}</span> hours.
     <p>
       You covered <span class="param"
@@ -96,11 +80,5 @@
         <span class="param">{fmtNumber(usage.energy)}</span> kiloJoules of energy
       {/if}
     </p>
-  </CardBody>
+  </div>
 </Card>
-
-<style>
-  .header:hover {
-    background-color: lightgray;
-  }
-</style>

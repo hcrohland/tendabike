@@ -7,7 +7,7 @@
     InputGroup,
     ModalFooter,
     InputGroupText,
-  } from "@sveltestrap/sveltestrap";
+  } from "flowbite-svelte";
   import { handleError } from "../lib/store";
   import { Attachment } from "../lib/attachment";
   import Dispose from "../Widgets/Dispose.svelte";

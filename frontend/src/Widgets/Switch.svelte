@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { InputGroupText, Input } from "@sveltestrap/sveltestrap";
+  import { InputGroupText, Input } from "flowbite-svelte";
   export let checked: boolean;
   export let id = "custominputneedsone";
 </script>

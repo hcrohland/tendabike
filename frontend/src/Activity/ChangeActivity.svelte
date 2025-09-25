@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { FormGroup, Offcanvas } from "@sveltestrap/sveltestrap";
+  import { FormGroup, Offcanvas } from "flowbite-svelte";
   import { Activity } from "../lib/activity";
   import { category } from "../lib/types";
   import SelectPart from "../Widgets/SelectPart.svelte";

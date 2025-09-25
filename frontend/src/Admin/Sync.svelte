@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button } from "@sveltestrap/sveltestrap";
+  import { Button } from "flowbite-svelte";
   import { handleError, myfetch } from "../lib/store";
   import type { User } from "../lib/types";
 

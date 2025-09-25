@@ -6,7 +6,7 @@
     ModalFooter,
     InputGroup,
     InputGroupText,
-  } from "@sveltestrap/sveltestrap";
+  } from "flowbite-svelte";
   import { Type } from "../lib/types";
   import { user } from "../lib/store";
   import NewForm from "../Part/PartForm.svelte";

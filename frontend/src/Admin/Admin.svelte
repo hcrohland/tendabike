@@ -1,10 +1,5 @@
 <script lang="ts">
-  import {
-    Button,
-    ButtonGroup,
-    Spinner,
-    Table,
-  } from "@sveltestrap/sveltestrap";
+  import { Button, ButtonGroup, Spinner, Table } from "flowbite-svelte";
   import { handleError, myfetch, setSummary } from "../lib/store";
   import type { User } from "../lib/types";
   import Sync from "./Sync.svelte";

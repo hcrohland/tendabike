@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { InputGroup, InputGroupText } from "@sveltestrap/sveltestrap";
+  import { InputGroup, InputGroupText } from "flowbite-svelte";
   import DateTime from "../Widgets/DateTime.svelte";
   import { types } from "../lib/types";
   import { by, filterValues } from "../lib/mapable";

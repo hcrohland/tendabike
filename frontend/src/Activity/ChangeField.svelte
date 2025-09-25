@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { FormGroup, Input } from "@sveltestrap/sveltestrap";
+  import { FormGroup, Input } from "flowbite-svelte";
 
   export let field: number | undefined;
   export let label: string;

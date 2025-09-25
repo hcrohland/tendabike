@@ -2,7 +2,7 @@
   import { DAY, fmtNumber, fmtSeconds } from "../lib/store";
   import SvelteTable from "../Widgets/SvelteTable.svelte";
   import RangeSlider from "svelte-range-slider-pips";
-  import { Alert } from "@sveltestrap/sveltestrap";
+  import { Alert } from "flowbite-svelte";
   import { by } from "../lib/mapable";
   import { Activity } from "../lib/activity";
   import { Usage } from "../lib/usage";

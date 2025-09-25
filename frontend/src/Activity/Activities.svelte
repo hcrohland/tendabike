@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Card, CardHeader } from "@sveltestrap/sveltestrap";
+  import { Card, CardHeader } from "flowbite-svelte";
   import { category } from "../lib/types";
   import { Activity, activities } from "../lib/activity";
   import ActTable from "./ActTable.svelte";

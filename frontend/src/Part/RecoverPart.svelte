@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Modal, ModalHeader, ModalBody } from "@sveltestrap/sveltestrap";
+  import { Modal, ModalHeader, ModalBody } from "flowbite-svelte";
   import MyFooter from "../Widgets/MyFooter.svelte";
   import { fmtDate } from "../lib/store";
   import { Part } from "../lib/part";

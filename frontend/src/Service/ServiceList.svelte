@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Table } from "@sveltestrap/sveltestrap";
+  import { Table } from "flowbite-svelte";
   import { filterValues, by } from "../lib/mapable";
   import { Part } from "../lib/part";
   import ServiceHist from "./ServiceHist.svelte";

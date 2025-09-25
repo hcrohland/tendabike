@@ -3,7 +3,7 @@
   import { types, category } from "../lib/types";
   import Usage from "../Usage/Usage.svelte";
   import SpareType from "./SpareType.svelte";
-  import { Table } from "@sveltestrap/sveltestrap";
+  import { Table } from "flowbite-svelte";
 
   let attachee = 0;
 

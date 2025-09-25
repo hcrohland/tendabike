@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button, ModalFooter, Spinner } from "@sveltestrap/sveltestrap";
+  import { Button, ModalFooter, Spinner } from "flowbite-svelte";
 
   export let toggle: () => void;
   export let action: () => Promise<void>;

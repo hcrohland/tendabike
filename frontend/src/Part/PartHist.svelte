@@ -5,7 +5,7 @@
   import PartLink from "./PartLink.svelte";
   import { parts } from "../lib/part";
   import { attachments } from "../lib/attachment";
-  import { DropdownItem, Table } from "@sveltestrap/sveltestrap";
+  import { DropdownItem, Table } from "flowbite-svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { actions } from "../Widgets/Actions.svelte";
 

@@ -6,7 +6,7 @@
     ListGroup,
     ListGroupItem,
     Input,
-  } from "@sveltestrap/sveltestrap";
+  } from "flowbite-svelte";
   import { checkStatus, handleError } from "../lib/store";
   import MyFooter from "../Widgets/MyFooter.svelte";
   import { parts } from "../lib/part";

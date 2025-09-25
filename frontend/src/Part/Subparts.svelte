@@ -1,6 +1,6 @@
 <script lang="ts">
   import { types, Type } from "../lib/types";
-  import { Table } from "@sveltestrap/sveltestrap";
+  import { Table } from "flowbite-svelte";
   import { filterValues, by } from "../lib/mapable";
   import SubType from "./SubType.svelte";
   import { Part } from "../lib/part";

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Input } from "@sveltestrap/sveltestrap";
+  import { Input } from "flowbite-svelte";
   import { createEventDispatcher } from "svelte";
   import { Type, category } from "../lib/types";
 

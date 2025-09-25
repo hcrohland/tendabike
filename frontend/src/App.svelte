@@ -19,20 +19,20 @@
  -->
 
 <script lang="ts" module>
-  import { Container, Spinner } from "@sveltestrap/sveltestrap";
+  // import { Container, Spinner } from "flowbite-svelte";
   import Router from "svelte-spa-router";
 
   import About from "./About.svelte";
-  import Activities from "./Activity/Activities.svelte";
-  import Admin from "./Admin/Admin.svelte";
+  // import Activities from "./Activity/Activities.svelte";
+  // import Admin from "./Admin/Admin.svelte";
   import Header from "./Header.svelte";
-  import Message from "./Message.svelte";
-  import Gear from "./Part/Part.svelte";
-  import Plans from "./ServicePlan/Plans.svelte";
-  import Spares from "./Spares/Spares.svelte";
-  import Statistics from "./Statistics.svelte";
+  // import Message from "./Message.svelte";
+  // import Gear from "./Part/Part.svelte";
+  // import Plans from "./ServicePlan/Plans.svelte";
+  // import Spares from "./Spares/Spares.svelte";
+  // import Statistics from "./Statistics.svelte";
   import ToyGroup from "./ToyGroup.svelte";
-  import Actions from "./Widgets/Actions.svelte";
+  // import Actions from "./Widgets/Actions.svelte";
   import { initData } from "./lib/store";
   import { getTypes } from "./lib/types";
 
@@ -40,29 +40,35 @@
     "/about": About,
     "/": ToyGroup,
     "/cat/": ToyGroup,
-    "/part/:id": Gear,
-    "/plans/": Plans,
-    "/spares/": Spares,
-    "/admin": Admin,
-    "/stats": Statistics,
-    "/activities/:part?/:start?": Activities,
+    // "/part/:id": Gear,
+    // "/plans/": Plans,
+    // "/spares/": Spares,
+    // "/admin": Admin,
+    // "/stats": Statistics,
+    // "/activities/:part?/:start?": Activities,
   };
 
   await getTypes();
   let promise = initData();
 </script>
 
+<script lang="ts">
+  import "./app.css";
+  import { CardPlaceholder } from "flowbite-svelte";
+</script>
+
 <Header {promise} />
-<Message />
-<Container class="mt-2">
-  {#await promise}
-    <div class="d-flex justify-content-center">
-      <Spinner size="lg" />
-    </div>
-  {:then}
-    <Router {routes} />
-  {:catch error}
-    <About />
-  {/await}
-  <Actions />
-</Container>
+
+<!-- <Message /> -->
+{#await promise}
+  <div class="columns-1 md:columns-2 xl:columns-3 m-8 space-y-8">
+    {#each [0, 1, 2, 3] as i}
+      <CardPlaceholder class="mb-4 p-4" />
+    {/each}
+  </div>
+{:then}
+  <Router {routes} />
+{:catch error}
+  <About />
+{/await}
+<!-- <Actions /> -->

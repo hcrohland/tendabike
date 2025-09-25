@@ -1,10 +1,5 @@
 <script lang="ts">
-  import {
-    Modal,
-    ModalBody,
-    ModalFooter,
-    ModalHeader,
-  } from "@sveltestrap/sveltestrap";
+  import { Modal, ModalBody, ModalFooter, ModalHeader } from "flowbite-svelte";
   import { plans, ServicePlan } from "../lib/serviceplan";
   import { parts, Part } from "../lib/part";
   import { category, types } from "../lib/types";

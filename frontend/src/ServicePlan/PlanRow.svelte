@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { DropdownItem } from "@sveltestrap/sveltestrap";
+  import { DropdownItem } from "flowbite-svelte";
   import ServiceRow from "../Service/ServiceRow.svelte";
   import { actions } from "../Widgets/Actions.svelte";
   import Menu from "../Widgets/Menu.svelte";

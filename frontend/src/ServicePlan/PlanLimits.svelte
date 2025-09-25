@@ -8,7 +8,7 @@
     Input,
     InputGroup,
     InputGroupText,
-  } from "@sveltestrap/sveltestrap";
+  } from "flowbite-svelte";
   import { Limits, type limit_keys } from "../lib/serviceplan";
 
   export let select: Limits;

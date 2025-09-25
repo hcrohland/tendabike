@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button } from "@sveltestrap/sveltestrap";
+  import { Button } from "flowbite-svelte";
   import { actions } from "../Widgets/Actions.svelte";
   import type { Part } from "../lib/part";
 

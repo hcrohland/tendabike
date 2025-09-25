@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button, Tooltip } from "@sveltestrap/sveltestrap";
+  import { Button, Tooltip } from "flowbite-svelte";
   interface Props {
     show_more: boolean;
     title?: string | undefined;

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { message } from "./lib/store";
-  import { Modal, ModalBody, ModalHeader } from "@sveltestrap/sveltestrap";
+  import { Modal, ModalBody, ModalHeader } from "flowbite-svelte";
 
   function toggle() {
     let m = $message;

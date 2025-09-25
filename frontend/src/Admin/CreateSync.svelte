@@ -7,7 +7,7 @@
     InputGroup,
     InputGroupText,
     ModalFooter,
-  } from "@sveltestrap/sveltestrap";
+  } from "flowbite-svelte";
   import { handleError, myfetch } from "../lib/store";
   import type { User } from "../lib/types";
   import DateTime from "../Widgets/DateTime.svelte";

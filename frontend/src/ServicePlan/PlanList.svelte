@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Table } from "@sveltestrap/sveltestrap";
+  import { Table } from "flowbite-svelte";
   import { ServicePlan } from "../lib/serviceplan";
   import PlanHeader from "./PlanHeader.svelte";
   import PlanBlock from "./PlanBlock.svelte";

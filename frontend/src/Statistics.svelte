@@ -8,7 +8,7 @@
     InputGroupText,
     TabPane,
     TabContent,
-  } from "@sveltestrap/sveltestrap";
+  } from "flowbite-svelte";
   import Plotly from "./Widgets/Plotly.svelte";
   import Switch from "./Widgets/Switch.svelte";
   import { by } from "./lib/mapable";

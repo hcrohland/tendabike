@@ -1,10 +1,5 @@
 <script lang="ts">
-  import {
-    Modal,
-    ModalHeader,
-    ModalBody,
-    Table,
-  } from "@sveltestrap/sveltestrap";
+  import { Modal, ModalHeader, ModalBody, Table } from "flowbite-svelte";
   import { fmtDate } from "../lib/store";
   import { Activity } from "../lib/activity";
 

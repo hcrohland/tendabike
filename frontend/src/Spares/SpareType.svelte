@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button, DropdownItem } from "@sveltestrap/sveltestrap";
+  import { Button, DropdownItem } from "flowbite-svelte";
   import PartLink from "../Part/PartLink.svelte";
   import Usage from "../Usage/Usage.svelte";
   import { actions } from "../Widgets/Actions.svelte";

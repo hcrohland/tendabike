@@ -4,31 +4,27 @@
     (data) => (categories = data),
   );
   import { myfetch, handleError } from "../lib/store";
-  import {
-    Dropdown,
-    DropdownItem,
-    DropdownMenu,
-    DropdownToggle,
-    Spinner,
-  } from "@sveltestrap/sveltestrap";
+  import { Dropdown, DropdownItem, Spinner } from "flowbite-svelte";
   import { category, types } from "../lib/types";
+  import { ChevronDownOutline } from "flowbite-svelte-icons";
 </script>
 
-<Dropdown direction="left">
-  <DropdownToggle class="dropdown-item">Switch Sport</DropdownToggle>
-  <DropdownMenu class="dropdown-submenu">
-    {#await promise}
-      <DropdownItem>
-        <Spinner />
+<DropdownItem class="cursor-pointer">
+  Switch Sport
+  <ChevronDownOutline class="inline" />
+</DropdownItem>
+<Dropdown simple>
+  {#await promise}
+    <DropdownItem>
+      <Spinner />
+    </DropdownItem>
+  {:then}
+    {#each categories.sort() as cat}
+      <DropdownItem onclick={() => category.set(types[cat])}>
+        {types[cat].name}s
       </DropdownItem>
-    {:then}
-      {#each categories.sort() as cat}
-        <DropdownItem on:click={() => category.set(types[cat])}>
-          {types[cat].name}s
-        </DropdownItem>
-      {/each}
-    {:catch error}
-      {handleError(error)}
-    {/await}
-  </DropdownMenu>
+    {/each}
+  {:catch error}
+    {handleError(error)}
+  {/await}
 </Dropdown>

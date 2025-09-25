@@ -6,7 +6,7 @@
     ModalBody,
     ModalFooter,
     ModalHeader,
-  } from "@sveltestrap/sveltestrap";
+  } from "flowbite-svelte";
   import { ServicePlan } from "../lib/serviceplan";
   import { Part } from "../lib/part";
   import TypeForm from "../Widgets/TypeForm.svelte";

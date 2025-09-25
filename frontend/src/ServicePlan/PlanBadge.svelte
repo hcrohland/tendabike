@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Badge } from "@sveltestrap/sveltestrap";
+  import { Badge } from "flowbite-svelte";
   import { ServicePlan, alerts_for_plans } from "../lib/serviceplan";
   import { parts } from "../lib/part";
   import { services } from "../lib/service";
@@ -18,7 +18,7 @@
 </script>
 
 {#if alerts.alert > 0}
-  <Badge color="danger">{alerts.alert + alerts.warn}</Badge>
+  <Badge color="red">{alerts.alert + alerts.warn}</Badge>
 {:else if alerts.warn > 0}
-  <Badge color="warning">{alerts.warn}</Badge>
+  <Badge color="amber">{alerts.warn}</Badge>
 {/if}

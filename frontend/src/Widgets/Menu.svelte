@@ -1,9 +1,5 @@
 <script>
-  import {
-    Dropdown,
-    DropdownToggle,
-    DropdownMenu,
-  } from "@sveltestrap/sveltestrap";
+  import { Dropdown, DropdownToggle, DropdownMenu } from "flowbite-svelte";
 
   /**
    * @type boolean

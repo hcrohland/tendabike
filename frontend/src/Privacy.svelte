@@ -1,11 +1,5 @@
 <script lang="ts">
-  import {
-    Row,
-    Card,
-    CardBody,
-    CardFooter,
-    CardHeader,
-  } from "@sveltestrap/sveltestrap";
+  import { Row, Card, CardBody, CardFooter, CardHeader } from "flowbite-svelte";
 </script>
 
 <Row hidden>

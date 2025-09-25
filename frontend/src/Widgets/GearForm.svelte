@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Input } from "@sveltestrap/sveltestrap";
+  import { Input } from "flowbite-svelte";
   import { category } from "../lib/types";
   import { allGear, parts } from "../lib/part";
 

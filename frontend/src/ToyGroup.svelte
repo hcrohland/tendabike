@@ -1,10 +1,9 @@
 <script lang="ts">
-  import { Col, Row } from "@sveltestrap/sveltestrap";
   import MainCard from "./Part/MainCard.svelte";
   import { filterValues, by } from "./lib/mapable";
   import { category } from "./lib/types";
-  import ShowMore from "./Widgets/ShowMore.svelte";
-  import SetDefault from "./Activity/SetDefault.svelte";
+  // import ShowMore from "./Widgets/ShowMore.svelte";
+  // import SetDefault from "./Activity/SetDefault.svelte";
   import { parts } from "./lib/part";
   import { activities } from "./lib/activity";
 
@@ -24,12 +23,10 @@
 </script>
 
 {#if $category}
-  <SetDefault type={$category}></SetDefault>
-  <Row class="p-sm-2">
+  <!-- <SetDefault type={$category}></SetDefault> -->
+  <div class="columns-1 md:columns-2 xl:columns-3 m-8 space-y-8">
     {#each gears as part (part.id)}
-      <Col md="6" class="p-0 p-sm-2">
-        <MainCard {part} />
-      </Col>
+      <MainCard {part} />
     {:else}
       {#if $category.activities($activities).length == 0}
         We did not find any {$category.name} activities on Strava (yet).
@@ -38,20 +35,7 @@
         so to get started.
       {/if}
     {/each}
-  </Row>
-
-  {#if bin.length > 0}
-    <ShowMore bind:show_more title="disposed" />
-    {#if show_more}
-      <Row>
-        {#each bin as part (part.id)}
-          <Col md="6" class="p-0 p-sm-2">
-            <MainCard {part} />
-          </Col>
-        {/each}
-      </Row>
-    {/if}
-  {/if}
+  </div>
 {:else}
   Error: Category not found!
 {/if}

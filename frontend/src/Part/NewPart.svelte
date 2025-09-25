@@ -1,10 +1,5 @@
 <script lang="ts">
-  import {
-    Modal,
-    ModalBody,
-    ModalFooter,
-    ModalHeader,
-  } from "@sveltestrap/sveltestrap";
+  import { Modal, ModalBody, ModalFooter, ModalHeader } from "flowbite-svelte";
   import NewForm from "./PartForm.svelte";
   import { user } from "../lib/store";
   import { Type } from "../lib/types";

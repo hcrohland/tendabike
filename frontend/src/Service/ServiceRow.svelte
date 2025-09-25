@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { DropdownItem, Tooltip } from "@sveltestrap/sveltestrap";
+  import { DropdownItem, Tooltip } from "flowbite-svelte";
   import DeleteService from "./DeleteService.svelte";
   import UpdateService from "./UpdateService.svelte";
   import RedoService from "./RedoService.svelte";

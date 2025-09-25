@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button, Col, InputGroup, Row } from "@sveltestrap/sveltestrap";
+  import { Button, Col, InputGroup, Row } from "flowbite-svelte";
 
   import { handleError, myfetch, updateSummary } from "../lib/store";
   import { Type } from "../lib/types";

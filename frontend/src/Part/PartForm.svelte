@@ -1,11 +1,5 @@
 <script lang="ts">
-  import {
-    Input,
-    InputGroup,
-    FormGroup,
-    Label,
-    Col,
-  } from "@sveltestrap/sveltestrap";
+  import { Input, InputGroup, FormGroup, Label, Col } from "flowbite-svelte";
   import DateTime from "../Widgets/DateTime.svelte";
   import { Type } from "../lib/types";
   import { createEventDispatcher } from "svelte";

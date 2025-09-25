@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Tooltip } from "@sveltestrap/sveltestrap";
+  import { Tooltip } from "flowbite-svelte";
   import { fmtNumber } from "../lib/store";
 
   export let plan: number | null;

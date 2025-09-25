@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { FormGroup, Input } from "@sveltestrap/sveltestrap";
+  import { FormGroup, Input } from "flowbite-svelte";
   import PlanLimits from "./PlanLimits.svelte";
   import { ServicePlan } from "../lib/serviceplan";
   export let plan: ServicePlan;

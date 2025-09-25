@@ -2,7 +2,7 @@
   import { parts } from "../lib/part";
   import { filterValues } from "../lib/mapable";
   import { Type } from "../lib/types";
-  import { Input } from "@sveltestrap/sveltestrap";
+  import { Input } from "flowbite-svelte";
   import { createEventDispatcher } from "svelte";
 
   export let type: Type;

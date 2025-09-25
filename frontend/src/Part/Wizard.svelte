@@ -1,11 +1,5 @@
 <script lang="ts">
-  import {
-    Input,
-    InputGroup,
-    Table,
-    Container,
-    Button,
-  } from "@sveltestrap/sveltestrap";
+  import { Input, InputGroup, Table, Container, Button } from "flowbite-svelte";
   import { types, Type } from "../lib/types";
   import { Attachment } from "../lib/attachment";
   import { type Map, filterValues } from "../lib/mapable";
