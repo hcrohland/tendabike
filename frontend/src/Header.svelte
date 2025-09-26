@@ -8,15 +8,19 @@
     Dropdown,
     DropdownItem,
     DropdownDivider,
+    Avatar,
+    Tooltip,
   } from "flowbite-svelte";
-  import { ChevronDownOutline } from "flowbite-svelte-icons";
   import { user } from "./lib/store";
   import Sport from "./Widgets/Sport.svelte";
   import { category } from "./lib/types";
   import { querystring } from "svelte-spa-router";
   import SyncMenu from "./Widgets/SyncMenu.svelte";
+  import { location } from "svelte-spa-router";
 
   let { promise } = $props();
+
+  let activeUrl = $derived("/#" + $location);
 </script>
 
 <Navbar>
@@ -30,39 +34,38 @@
     />
     &nbsp; Tend a {$category.name}
   </NavBrand>
-  <div class="flex items-center md:order-2">
-    {#if $user}
-      <button id="user">
+  {#if $user}
+    <div class="flex items-center md:order-2">
+      <Avatar src={$user.avatar} id="user" class="border-2" />
+      <Tooltip placement="left">
         {$user.firstname}
-        <ChevronDownOutline class=" inline " />
-      </button>
-
+        {$user.name}
+      </Tooltip>
       <Dropdown simple triggeredBy="#user">
-        <DropdownItem href="/#/stats">Statistics</DropdownItem>
-        <Sport></Sport>
-        <DropdownItem href="/strava/logout">Logout</DropdownItem>
-        <DropdownItem href="/api/user/export" download="tendabike.json">
-          Export Data
-        </DropdownItem>
         <DropdownDivider />
-        <DropdownItem href="/#/about">About</DropdownItem>
+        <Sport></Sport>
+        {#await promise then}
+          <SyncMenu></SyncMenu>
+        {/await}
         {#if $user.is_admin}
           <DropdownDivider />
           <DropdownItem href="/#/admin">Admin</DropdownItem>
         {/if}
+        <DropdownDivider />
+        <DropdownItem href="/api/user/export" download="tendabike.json">
+          Export Data
+        </DropdownItem>
+        <DropdownItem href="/#/about">About</DropdownItem>
+        <DropdownItem href="/strava/logout">Logout</DropdownItem>
       </Dropdown>
-    {/if}
-    <NavHamburger />
-  </div>
-  {#if $user}
-    <NavUl class="max-w-full">
+      <NavHamburger />
+    </div>
+    <NavUl class="max-w-full" {activeUrl}>
       <NavLi class="justify-start" href="/#/cat">{$category.name}s</NavLi>
       <NavLi href="/#/plans">Services</NavLi>
       <NavLi href="/#/spares">Parts</NavLi>
       <NavLi href="/#/activities">Activities</NavLi>
-      {#await promise then}
-        <SyncMenu></SyncMenu>
-      {/await}
+      <NavLi href="/#/stats">Statistics</NavLi>
     </NavUl>
   {:else}
     <NavUl>

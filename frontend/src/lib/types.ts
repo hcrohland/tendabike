@@ -67,6 +67,7 @@ export type User = {
   firstname: string;
   name: string;
   is_admin: boolean;
+  avatar: string | undefined;
 };
 
 export type ActType = {

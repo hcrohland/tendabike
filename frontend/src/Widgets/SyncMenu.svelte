@@ -39,16 +39,16 @@
   }
 </script>
 
-<NavLi class="cursor-pointer flex-end">
+<DropdownItem class="cursor-pointer flex-end">
   {#await hook_promise}
     Syncing
   {:then}
-    &nbsp;&nbsp;&nbsp;&nbsp; Sync
+    Sync
     <ChevronDownOutline class=" inline " />
   {:catch error}
     {handleError(error)}
   {/await}
-</NavLi>
+</DropdownItem>
 <Dropdown simple>
   <DropdownItem onclick={fullrefresh}>Refresh data</DropdownItem>
   <DropdownItem onclick={garmin}>With CSV File</DropdownItem>

@@ -27,7 +27,7 @@
   <div
     class={show_link
       ? "bg-gray-200 hover:bg-gray-300 p-4 cursor-pointer"
-      : "p-4"}
+      : "bg-gray-200 p-4"}
     on:click={() => show_link && push("/part/" + part.id)}
   >
     {#if show_link}
