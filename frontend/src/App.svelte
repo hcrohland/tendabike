@@ -27,7 +27,7 @@
   // import Admin from "./Admin/Admin.svelte";
   import Header from "./Header.svelte";
   // import Message from "./Message.svelte";
-  // import Gear from "./Part/Part.svelte";
+  import Gear from "./Part/Gear.svelte";
   // import Plans from "./ServicePlan/Plans.svelte";
   // import Spares from "./Spares/Spares.svelte";
   // import Statistics from "./Statistics.svelte";
@@ -40,7 +40,7 @@
     "/about": About,
     "/": ToyGroup,
     "/cat/": ToyGroup,
-    // "/part/:id": Gear,
+    "/part/:id": Gear,
     // "/plans/": Plans,
     // "/spares/": Spares,
     // "/admin": Admin,

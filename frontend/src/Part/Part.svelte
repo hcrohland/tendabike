@@ -1,82 +1,69 @@
 <script lang="ts">
-  import { DropdownItem, TabContent, TabPane } from "flowbite-svelte";
-  import ServiceList from "../Service/ServiceList.svelte";
-  import PlanBadge from "../ServicePlan/PlanBadge.svelte";
-  import PlanList from "../ServicePlan/PlanList.svelte";
-  import { actions } from "../Widgets/Actions.svelte";
+  import { DropdownItem, Tabs, TabItem } from "flowbite-svelte";
+  // import ServiceList from "../Service/ServiceList.svelte";
+  // import PlanBadge from "../ServicePlan/PlanBadge.svelte";
+  // import PlanList from "../ServicePlan/PlanList.svelte";
+  // import { actions } from "../Widgets/Actions.svelte";
   import { attachments } from "../lib/attachment";
   import { filterValues } from "../lib/mapable";
   import { parts } from "../lib/part";
   import { plans, plans_for_part_and_subtypes } from "../lib/serviceplan";
   import GearCard from "./GearCard.svelte";
-  import PartHist from "./PartHist.svelte";
-  import Subparts from "./Subparts.svelte";
-  import AddButton from "./AddButton.svelte";
-  import Menu from "../Widgets/Menu.svelte";
+  // import PartHist from "./PartHist.svelte";
+  // import Subparts from "./Subparts.svelte";
+  // import AddButton from "./AddButton.svelte";
+  // import Menu from "../Widgets/Menu.svelte";
 
-  export let params: { id: number };
+  interface Props {
+    id: number;
+  }
 
-  let tab: number | string = "parts";
+  let { id }: Props = $props();
 
-  $: part = $parts[params.id];
-  $: attachees = filterValues($attachments, (a) => a.gear == part.id);
-  $: last_attachment = part.attachments($attachments).at(0);
-  $: planlist = plans_for_part_and_subtypes($attachments, $plans, part);
+  let tab = $state("parts");
+
+  let part = $derived($parts[id]);
+  let attachees = $derived(
+    filterValues($attachments, (a) => a.gear == part.id),
+  );
+  let last_attachment = $derived(part.attachments($attachments).at(0));
+  let planlist = $derived(
+    plans_for_part_and_subtypes($attachments, $plans, part),
+  );
 </script>
 
-<GearCard {part}>
-  <Menu>
-    {#if part.disposed_at}
-      <DropdownItem color="light" on:click={() => $actions.recoverPart(part)}>
-        Recover gear
-      </DropdownItem>
-    {:else}
-      {#if !part.isGear()}
-        <DropdownItem color="light" on:click={() => $actions.attachPart(part)}>
-          Attach
-        </DropdownItem>
-      {/if}
-      <DropdownItem
-        color="light"
-        on:click={() => $actions.disposePart(part, last_attachment)}
-      >
-        {#if last_attachment?.isAttached()}
-          Detach
-        {:else}
-          Dispose
-        {/if}
-      </DropdownItem>
-      <DropdownItem color="light" on:click={() => $actions.changePart(part)}>
-        Change details
-      </DropdownItem>
-    {/if}
-  </Menu>
-</GearCard>
+<GearCard {part}></GearCard>
 <br />
-<PartHist id={params.id} />
-<TabContent on:tab={(e) => (tab = e.detail)}>
+<!-- <PartHist id={params.id} /> -->
+<Tabs bind:selected={tab}>
   {#if attachees.length > 0 || part.isGear()}
-    <TabPane tabId="parts" active>
-      <strong slot="tab">
-        Attached Parts
-        <AddButton {part} {tab} here="parts" />
-      </strong>
-      <Subparts {part} {attachees} />
-    </TabPane>
+    <TabItem key="parts">
+      {#snippet titleSlot()}
+        <strong>
+          Attached Parts
+          <!-- <AddButton {part} {tab} here="parts" /> -->
+        </strong>
+      {/snippet}
+      <!-- <Subparts {part} {attachees} /> -->
+    </TabItem>
   {/if}
-  <TabPane tabId="plans">
-    <strong slot="tab">
-      Service Plans
-      <PlanBadge {planlist} />
-      <AddButton {part} {tab} here="plans" />
-    </strong>
-    <PlanList {planlist} /><br />
-  </TabPane>
-  <TabPane tabId="services">
-    <strong slot="tab">
-      Service Logs
-      <AddButton {part} {tab} here="services" />
-    </strong>
-    <ServiceList {part} /><br />
-  </TabPane>
-</TabContent>
+  <TabItem key="plans">
+    {#snippet titleSlot()}
+      <strong>
+        Service Plans
+        <!-- <PlanBadge {planlist} /> -->
+        <!-- <AddButton {part} {tab} here="plans" /> -->
+      </strong>
+    {/snippet}
+    <!-- <PlanList {planlist} /><br /> -->
+  </TabItem>
+  <TabItem key="services">
+    {#snippet titleSlot()}
+      <strong>
+        Service Logs
+        <!-- <AddButton {part} {tab} here="services" /> -->
+      </strong>
+    {/snippet}
+    <!-- <ServiceList {part} /><br /> -->
+  </TabItem>
+</Tabs>
