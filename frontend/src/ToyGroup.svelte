@@ -24,7 +24,7 @@
 
 {#if $category}
   <!-- <SetDefault type={$category}></SetDefault> -->
-  <div class="columns-1 md:columns-2 xl:columns-3 m-8 space-y-8">
+  <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
     {#each gears as part (part.id)}
       <MainCard {part} />
     {:else}

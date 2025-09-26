@@ -7,10 +7,15 @@
   import { types } from "../lib/types";
   import { Usage, usages } from "../lib/usage";
 
-  export let part: Part;
-  export let show_link = false;
+  interface Props {
+    part: Part;
+    show_link?: boolean;
+    children?: import("svelte").Snippet;
+  }
 
-  $: usage = $usages[part.usage] ? $usages[part.usage] : new Usage();
+  let { part, show_link = false, children }: Props = $props();
+
+  let usage = $derived($usages[part.usage] ? $usages[part.usage] : new Usage());
 
   function model(part: Part) {
     if (part.model == "" && part.vendor == "") {
@@ -21,24 +26,25 @@
   }
 </script>
 
-<Card size="lg" class="col-auto">
-  <!-- svelte-ignore a11y-click-events-have-key-events -->
-  <!-- svelte-ignore a11y-no-static-element-interactions -->
+<Card size="xl" class="col-auto">
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class={show_link
-      ? "bg-gray-200 hover:bg-gray-300 p-4 cursor-pointer"
-      : "bg-gray-200 p-4"}
-    on:click={() => show_link && push("/part/" + part.id)}
+    class={"text-xl bg-gray-200 dark:bg-gray-700 p-4" +
+      (show_link
+        ? " hover:bg-gray-300 dark:hover:bg-gray-500 cursor-pointer"
+        : "")}
+    onclick={() => show_link && push("/part/" + part.id)}
   >
     {#if show_link}
-      <a href="/part/{part.id}" use:link class="text-xl text-decoration-none">
+      <a href="/part/{part.id}" use:link class="text-decoration-none">
         {part.name}
       </a>
     {:else}
       {part.name}
     {/if}
     <div class="float-end h6 mb-0">
-      <slot />
+      {@render children?.()}
     </div>
   </div>
   <div class="text-wrap p-4">

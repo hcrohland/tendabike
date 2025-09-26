@@ -10,6 +10,7 @@
     DropdownDivider,
     Avatar,
     Tooltip,
+    DarkMode,
   } from "flowbite-svelte";
   import { user } from "./lib/store";
   import Sport from "./Widgets/Sport.svelte";
@@ -41,6 +42,7 @@
         {$user.firstname}
         {$user.name}
       </Tooltip>
+      <DarkMode />
       <Dropdown simple triggeredBy="#user">
         <DropdownDivider />
         <Sport></Sport>
@@ -72,6 +74,7 @@
       <NavLi href={"/strava/login?" + $querystring}>
         <img src="connect_with_strava.png" alt="Login with Strava" />
       </NavLi>
+      <DarkMode />
     </NavUl>
   {/if}
 </Navbar>
