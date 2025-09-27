@@ -1,22 +1,18 @@
 <script>
-  import { Dropdown, DropdownToggle, DropdownMenu } from "flowbite-svelte";
-
+  import { Dropdown } from "flowbite-svelte";
+  import { ChevronDownOutline } from "flowbite-svelte-icons";
   /**
-   * @type boolean
+   * @typedef {Object} Props
+   * @property {import('svelte').Snippet} [children]
    */
-  let isOpen;
+
+  /** @type {Props} */
+  let { children } = $props();
 </script>
 
-<div class="float-end">
-  <Dropdown
-    {isOpen}
-    toggle={() => (isOpen = !isOpen)}
-    style="position: static;"
-    size="sm"
-  >
-    <DropdownToggle color="light" caret />
-    <DropdownMenu end>
-      <slot />
-    </DropdownMenu>
+<div>
+  <ChevronDownOutline class="cursor-pointer float-inline-right inline" />
+  <Dropdown simple>
+    {@render children?.()}
   </Dropdown>
 </div>

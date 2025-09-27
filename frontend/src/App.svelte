@@ -19,7 +19,6 @@
  -->
 
 <script lang="ts" module>
-  // import { Container, Spinner } from "flowbite-svelte";
   import Router from "svelte-spa-router";
 
   import About from "./About.svelte";

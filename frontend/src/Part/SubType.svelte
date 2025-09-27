@@ -1,7 +1,12 @@
 <script lang="ts">
-  import { Button, DropdownItem } from "flowbite-svelte";
+  import {
+    Button,
+    DropdownItem,
+    TableBodyCell,
+    TableBodyRow,
+    TableHeadCell,
+  } from "flowbite-svelte";
   import Usage from "../Usage/Usage.svelte";
-  import { actions } from "../Widgets/Actions.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import type { Attachment } from "../lib/attachment";
@@ -19,17 +24,15 @@
 </script>
 
 {#if type == undefined}
-  <tr>
-    <th scope="col"> <slot /> </th>
-    <th scope="col"> Name </th>
-    <th scope="col"> Attached </th>
-    <Usage header />
-  </tr>
+  <TableHeadCell scope="col"><slot /></TableHeadCell>
+  <TableHeadCell scope="col">Name</TableHeadCell>
+  <TableHeadCell scope="col">Attached</TableHeadCell>
+  <Usage header />
 {:else}
   {#each attachments.map( (att) => ({ att, part: $parts[att.part_id] }), ) as { att, part }, i (att.idx)}
     {#if i == 0}
       <tr>
-        <th scope="row" class="text-nowrap">
+        <TableHeadCell scope="row" class="text-nowrap flex justify-between">
           {"┃ ".repeat(level)}
           {#if attachments.length > 0 || (part && $usages[part.usage].count != $usages[att.usage].count)}
             <ShowMore bind:show_more title="history" />
@@ -37,70 +40,78 @@
           {prefix + " " + type.name}
           {#if att.isAttached()}
             <Menu>
-              <DropdownItem on:click={() => $actions.newService(part)}>
+              <DropdownItem>
+                <!-- </DropdownItem> on:click={() => $actions.newService(part)}> -->
                 Log Service
               </DropdownItem>
-              <DropdownItem on:click={() => $actions.attachPart(part)}>
+              <DropdownItem>
+                <!-- </DropdownItem> on:click={() => $actions.attachPart(part)}> -->
                 Move part
               </DropdownItem>
-              <DropdownItem on:click={() => $actions.replacePart(att)}>
+              <DropdownItem>
+                <!-- </DropdownItem> on:click={() => $actions.replacePart(att)}> -->
                 New {type.name}
               </DropdownItem>
             </Menu>
           {:else}
             <Button
-              class="float-end"
-              size="sm"
-              color="light"
-              on:click={() => $actions.replacePart(att)}
+              class="float-inline-end p-1 border-0 cursor-pointer"
+              size="xs"
+              color="alternative"
             >
+              <!-- on:click={() => $actions.replacePart(att)} -->
               add
             </Button>
           {/if}
-        </th>
+        </TableHeadCell>
         {#if att.isAttached()}
-          <td>
+          <TableBodyCell>
             {#if part}
               <PartLink {part} />
             {:else}
               {att.name}
             {/if}
-          </td>
-          <td> {att.fmtTime()} </td>
+          </TableBodyCell>
+          <TableBodyCell>{att.fmtTime()}</TableBodyCell>
           <Usage id={part.usage} ref={part.id} />
         {:else}
-          <th colspan="80"> </th>
+          <TableHeadCell colspan={80}></TableHeadCell>
         {/if}
       </tr>
     {/if}
     {#if show_more}
-      <tr>
-        <th scope="row" class="text-nowrap">
-          {"┃ ".repeat(level + 1) + "▶"}
+      <TableBodyRow>
+        <TableHeadCell scope="row" class="text-nowrap flex justify-between">
+          <div>
+            {"┃ ".repeat(level + 1) + "▶"}
+          </div>
           {#if part.disposed_at == undefined}
             <Menu>
-              <DropdownItem on:click={() => $actions.newService(part)}>
+              <DropdownItem>
+                <!-- </DropdownItem> on:click={() => $actions.newService(part)}> -->
                 Log Service
               </DropdownItem>
-              <DropdownItem on:click={() => $actions.attachPart(part)}
-                >Attach part
+              <DropdownItem>
+                <!-- </DropdownItem> on:click={() => $actions.attachPart(part)} -->
+                Attach part
               </DropdownItem>
-              <DropdownItem on:click={() => $actions.replacePart(att)}>
+              <DropdownItem>
+                <!-- </DropdownItem> on:click={() => $actions.replacePart(att)}> -->
                 Duplicate part
               </DropdownItem>
             </Menu>
           {/if}
-        </th>
-        <td>
+        </TableHeadCell>
+        <TableBodyCell>
           {#if part}
             <PartLink {part} />
           {:else}
             {att.name}
           {/if}
-        </td>
-        <td> {att.fmtTime()} </td>
+        </TableBodyCell>
+        <TableBodyCell>{att.fmtTime()}</TableBodyCell>
         <Usage id={att.usage} ref={att.idx} />
-      </tr>
+      </TableBodyRow>
     {/if}
   {/each}
 {/if}

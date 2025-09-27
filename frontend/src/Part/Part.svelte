@@ -1,18 +1,17 @@
 <script lang="ts">
-  import { DropdownItem, Tabs, TabItem } from "flowbite-svelte";
-  // import ServiceList from "../Service/ServiceList.svelte";
-  // import PlanBadge from "../ServicePlan/PlanBadge.svelte";
-  // import PlanList from "../ServicePlan/PlanList.svelte";
-  // import { actions } from "../Widgets/Actions.svelte";
+  import { Tabs, TabItem } from "flowbite-svelte";
+  import ServiceList from "../Service/ServiceList.svelte";
+  import PlanBadge from "../ServicePlan/PlanBadge.svelte";
+  import PlanList from "../ServicePlan/PlanList.svelte";
   import { attachments } from "../lib/attachment";
   import { filterValues } from "../lib/mapable";
   import { parts } from "../lib/part";
   import { plans, plans_for_part_and_subtypes } from "../lib/serviceplan";
   import GearCard from "./GearCard.svelte";
-  // import PartHist from "./PartHist.svelte";
-  // import Subparts from "./Subparts.svelte";
+  import NewPlan from "../ServicePlan/NewPlan.svelte";
+  import Subparts from "./Subparts.svelte";
+  import PartHist from "./PartHist.svelte";
   // import AddButton from "./AddButton.svelte";
-  // import Menu from "../Widgets/Menu.svelte";
 
   interface Props {
     id: number;
@@ -34,36 +33,32 @@
 
 <GearCard {part}></GearCard>
 <br />
-<!-- <PartHist id={params.id} /> -->
+<PartHist {id} />
 <Tabs bind:selected={tab}>
   {#if attachees.length > 0 || part.isGear()}
     <TabItem key="parts">
       {#snippet titleSlot()}
-        <strong>
-          Attached Parts
-          <!-- <AddButton {part} {tab} here="parts" /> -->
-        </strong>
+        Attached Parts
+        <!-- <AddButton {part} {tab} here="parts" /> -->
       {/snippet}
-      <!-- <Subparts {part} {attachees} /> -->
+      <Subparts {part} {attachees} />
     </TabItem>
   {/if}
   <TabItem key="plans">
     {#snippet titleSlot()}
-      <strong>
-        Service Plans
-        <!-- <PlanBadge {planlist} /> -->
-        <!-- <AddButton {part} {tab} here="plans" /> -->
-      </strong>
+      Service Plans
+      <PlanBadge {planlist} />
+      {#if tab == "plans"}
+        <NewPlan {part} />
+      {/if}
     {/snippet}
-    <!-- <PlanList {planlist} /><br /> -->
+    <PlanList {planlist} /><br />
   </TabItem>
   <TabItem key="services">
     {#snippet titleSlot()}
-      <strong>
-        Service Logs
-        <!-- <AddButton {part} {tab} here="services" /> -->
-      </strong>
+      Service Logs
+      <!-- <AddButton {part} {tab} here="services" /> -->
     {/snippet}
-    <!-- <ServiceList {part} /><br /> -->
+    <ServiceList {part} /><br />
   </TabItem>
 </Tabs>

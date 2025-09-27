@@ -4,6 +4,7 @@
   import SveltyPicker, { formatDate, parseDate } from "svelty-picker";
   import { en } from "svelty-picker/i18n";
   import { roundTime } from "../lib/store";
+  import { Button } from "flowbite-svelte";
 
   type Props = {
     date?: any;
@@ -58,15 +59,15 @@
 />
 
 {#if mindate}
-  <button onclick={preventDefault(() => (date = mindate))}> &#706; </button>
+  <Button onclick={preventDefault(() => (date = mindate))}>&#706;</Button>
 {:else if prevdate}
-  <button onclick={preventDefault(() => (date = prevdate(date)))}>
+  <Button onclick={preventDefault(() => (date = prevdate(date)))}>
     &#706;
-  </button>
+  </Button>
 {/if}
 {#if !(mindate && mindate > now) && !(maxdate && maxdate < now)}
-  <button onclick={preventDefault(() => (date = now))}> &#8226; </button>
+  <Button onclick={preventDefault(() => (date = now))}>&#8226;</Button>
 {/if}
 {#if maxdate}
-  <button onclick={preventDefault(() => (date = maxdate))}> &#707; </button>
+  <Button onclick={preventDefault(() => (date = maxdate))}>&#707;</Button>
 {/if}
