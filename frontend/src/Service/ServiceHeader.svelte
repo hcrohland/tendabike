@@ -1,13 +1,17 @@
 <script lang="ts">
+  import { TableBodyRow, TableHeadCell } from "flowbite-svelte";
   import Usage from "../Usage/Usage.svelte";
+  interface Props {
+    children?: import("svelte").Snippet;
+  }
+
+  let { children }: Props = $props();
 </script>
 
-<tr>
-  <th scope="col">
-    <slot />
-  </th>
-  <th scope="col">Date</th>
-  <th class="text-end"> Days</th>
-  <Usage header />
-  <th> </th>
-</tr>
+<TableHeadCell scope="col">
+  {@render children?.()}
+</TableHeadCell>
+<TableHeadCell scope="col">Date</TableHeadCell>
+<TableHeadCell class="text-end">Days</TableHeadCell>
+<Usage header />
+<TableHeadCell></TableHeadCell>

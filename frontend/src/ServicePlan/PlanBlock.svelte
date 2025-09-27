@@ -3,7 +3,11 @@
   import { parts } from "../lib/part";
   import { plans, ServicePlan } from "../lib/serviceplan";
 
-  export let plan: ServicePlan;
+  interface Props {
+    plan: ServicePlan;
+  }
+
+  let { plan }: Props = $props();
 </script>
 
 {#if plan.part}

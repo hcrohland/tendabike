@@ -4,13 +4,17 @@
   import ServiceRow from "./ServiceRow.svelte";
   import { parts } from "../lib/part";
 
-  export let service: Service;
-  export let depth = 0;
+  interface Props {
+    service: Service;
+    depth?: number;
+  }
 
-  let show_more = false;
+  let { service, depth = 0 }: Props = $props();
 
-  $: part = $parts[service.part_id];
-  $: successor = service.get_successor($services);
+  let show_more = $state(false);
+
+  let part = $derived($parts[service.part_id]);
+  let successor = $derived(service.get_successor($services));
 </script>
 
 <ServiceRow {part} {service} {successor} {depth}>

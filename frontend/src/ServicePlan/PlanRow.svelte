@@ -1,30 +1,32 @@
 <script lang="ts">
-  import { DropdownItem } from "flowbite-svelte";
+  import { TableBodyCell, TableBodyRow } from "flowbite-svelte";
   import ServiceRow from "../Service/ServiceRow.svelte";
-  import { actions } from "../Widgets/Actions.svelte";
-  import Menu from "../Widgets/Menu.svelte";
-  import ShowMore from "../Widgets/ShowMore.svelte";
   import { attachments } from "../lib/attachment";
   import { parts } from "../lib/part";
   import { services } from "../lib/service";
-  import { ServicePlan } from "../lib/serviceplan";
+  import { Limits, ServicePlan } from "../lib/serviceplan";
   import { usages } from "../lib/usage";
   import PlanCell from "./PlanCell.svelte";
   import PlanName from "./PlanName.svelte";
+  import ShowMore from "../Widgets/ShowMore.svelte";
 
-  export let plan: ServicePlan;
-  export let name: string | null = null;
+  interface Props {
+    plan: ServicePlan;
+    name?: string | null;
+  }
 
-  let show_more = false;
+  let { plan, name = null }: Props = $props();
 
-  $: part = plan.getpart($parts, $attachments);
-  $: serviceList = plan.services(part, $services);
-  $: due = plan.due(part, serviceList.at(0), $usages);
+  let show_more = $state(false);
+
+  let part = $derived(plan.getpart($parts, $attachments));
+  let serviceList = $derived(plan.services(part, $services));
+  let due = $derived(plan.due(part, serviceList.at(0), $usages));
   let title = "service history";
 </script>
 
-<tr>
-  <td>
+<TableBodyRow>
+  <TableBodyCell class="text-start text-wrap">
     {#if name}
       ┃
       <ShowMore bind:show_more {title} />
@@ -33,13 +35,11 @@
       {#if part}
         <ShowMore bind:show_more {title} />
       {/if}
-      <PlanName {plan} />
+      <PlanName {plan} /> in
     {/if}
-  </td>
-  {#if !part}
-    <td colspan="8"> </td>
-  {:else}
-    <td class=""> in </td>
+  </TableBodyCell>
+  <TableBodyCell></TableBodyCell>
+  {#if part}
     <PlanCell plan={plan.days} due={due.days} />
     <PlanCell plan={plan.rides} due={due.rides} />
     <PlanCell plan={plan.hours} due={due.hours} />
@@ -49,45 +49,8 @@
     <PlanCell plan={plan.kJ} due={due.kJ} />
   {/if}
 
-  <td>
-    <Menu>
-      {#if part}
-        {#if serviceList.at(0) != undefined}
-          <DropdownItem
-            on:click={() => $actions.redoService(serviceList.at(0))}
-          >
-            Repeat last service
-          </DropdownItem>
-        {/if}
-        {@const plans = plan.id ? [plan.id] : []}
-        <DropdownItem on:click={() => $actions.newService(part, plans)}>
-          New Service for plan
-        </DropdownItem>
-        {#if plan.part != part.id}
-          {@const att = part.attachments($attachments).at(0)}
-          {#if att}
-            <DropdownItem on:click={() => $actions.replacePart(att)}>
-              Replace Part
-            </DropdownItem>
-          {/if}
-        {/if}
-      {/if}
-
-      {#if !name && part}
-        <DropdownItem divider />
-      {/if}
-
-      {#if !name}
-        <DropdownItem on:click={() => $actions.updatePlan(plan)}>
-          Change ServicePlan
-        </DropdownItem>
-        <DropdownItem on:click={() => $actions.deletePlan(plan)}>
-          Delete ServicePlan
-        </DropdownItem>
-      {/if}
-    </Menu>
-  </td>
-</tr>
+  <TableBodyCell></TableBodyCell>
+</TableBodyRow>
 {#if part && show_more}
   {#each serviceList as service, i (service.id)}
     {@const successor = i > 0 ? serviceList[i - 1] : null}

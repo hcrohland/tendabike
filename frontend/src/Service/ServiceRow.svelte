@@ -1,75 +1,93 @@
 <script lang="ts">
-  import { DropdownItem, Tooltip } from "flowbite-svelte";
-  import DeleteService from "./DeleteService.svelte";
-  import UpdateService from "./UpdateService.svelte";
-  import RedoService from "./RedoService.svelte";
+  import {
+    DropdownItem,
+    TableBodyCell,
+    TableBodyRow,
+    Tooltip,
+  } from "flowbite-svelte";
+  // import DeleteService from "./DeleteService.svelte";
+  // import UpdateService from "./UpdateService.svelte";
+  // import RedoService from "./RedoService.svelte";
   import UsageCells from "../Usage/Usage.svelte";
-  import Menu from "../Widgets/Menu.svelte";
+  // import Menu from "../Widgets/Menu.svelte";
   import { Service } from "../lib/service";
   import { usages } from "../lib/usage";
   import { Part } from "../lib/part";
   import { Usage } from "../lib/usage";
   import { fmtRange, get_days } from "../lib/store";
+  import Menu from "../Widgets/Menu.svelte";
 
-  export let depth: number = 0;
-  export let service: Service | undefined = undefined;
-  export let successor: Service | null = null;
-  export let part: Part;
+  interface Props {
+    depth?: number;
+    service?: Service | undefined;
+    successor?: Service | null;
+    part: Part;
+    children?: import("svelte").Snippet;
+  }
+
+  let {
+    depth = 0,
+    service = undefined,
+    successor = null,
+    part,
+    children,
+  }: Props = $props();
 
   let updateService: (p: Service | undefined) => void;
   let redoService: (p: Service | undefined) => void;
   let deleteService: (p: Service | undefined) => void;
 
-  $: usage = $usages[successor ? successor.usage : part.usage].sub(
-    service ? $usages[service.usage] : new Usage(),
+  let usage = $derived(
+    $usages[successor ? successor.usage : part.usage].sub(
+      service ? $usages[service.usage] : new Usage(),
+    ),
   );
-  $: days = get_days(
-    service ? service.time : part.purchase,
-    successor ? successor.time : new Date(),
+  let days = $derived(
+    get_days(
+      service ? service.time : part.purchase,
+      successor ? successor.time : new Date(),
+    ),
   );
 </script>
 
-<tr>
+<TableBodyRow>
   {#if service}
-    <td>
+    <TableBodyCell>
       <div>
-        <slot />
+        {@render children?.()}
         <span id={"name" + service.id}>
           {"┃ ".repeat(depth)}
           {service.name}
         </span>
         {#if service.notes.length > 0}
-          <Tooltip target={"name" + service.id}>
+          <Tooltip>
             {service.notes}
           </Tooltip>
         {/if}
       </div>
-    </td>
-    <td>{fmtRange(service.time, successor?.time)}</td>
+    </TableBodyCell>
+    <TableBodyCell>{fmtRange(service.time, successor?.time)}</TableBodyCell>
   {:else}
-    <td>
+    <TableBodyCell>
       {"┃ ".repeat(depth)}┗━
-    </td>
-    <td>{fmtRange(part.purchase, successor?.time)}</td>
+    </TableBodyCell>
+    <TableBodyCell>{fmtRange(part.purchase, successor?.time)}</TableBodyCell>
   {/if}
-  <td class="text-end">{days}</td>
+  <TableBodyCell class="text-end">{days}</TableBodyCell>
   <UsageCells {usage} />
-  <td>
+  <TableBodyCell>
     {#if service}
       <Menu>
-        <DropdownItem on:click={() => updateService(service)}>
+        <DropdownItem onclick={() => alert("updateService(service)")}>
           Change Service
         </DropdownItem>
-        <DropdownItem on:click={() => redoService(service)}>
+        <DropdownItem onclick={() => alert("redoService(service)")}>
           Repeat Service
         </DropdownItem>
-        <DropdownItem on:click={() => deleteService(service)}>
+        <DropdownItem onclick={() => alert("deleteService(service)")}>
           Delete Service
         </DropdownItem>
       </Menu>
     {/if}
-  </td>
-</tr>
-<UpdateService bind:updateService />
-<DeleteService bind:deleteService />
-<RedoService bind:redoService />
+  </TableBodyCell>
+</TableBodyRow>

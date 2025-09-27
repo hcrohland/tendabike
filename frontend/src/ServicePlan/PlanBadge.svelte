@@ -6,14 +6,14 @@
   import { usages } from "../lib/usage";
   import { attachments } from "../lib/attachment";
 
-  export let planlist: ServicePlan[];
+  interface Props {
+    planlist: ServicePlan[];
+  }
 
-  $: alerts = alerts_for_plans(
-    planlist,
-    $parts,
-    $services,
-    $usages,
-    $attachments,
+  let { planlist }: Props = $props();
+
+  let alerts = $derived(
+    alerts_for_plans(planlist, $parts, $services, $usages, $attachments),
   );
 </script>
 
