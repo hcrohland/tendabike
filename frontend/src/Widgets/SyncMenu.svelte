@@ -3,9 +3,9 @@
   import { handleError, myfetch, refresh, updateSummary } from "../lib/store";
   import { onDestroy } from "svelte";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
-  // import Garmin from "../Activity/Garmin.svelte";
+  import Garmin from "../Activity/Garmin.svelte";
 
-  let garmin: () => void = () => {};
+  let openGarmin = $state(false);
 
   let hook_timer = setTimeout(() => {});
 
@@ -13,7 +13,7 @@
     clearInterval(hook_timer);
   });
 
-  let hook_promise = poll();
+  let hook_promise = $state(poll());
 
   async function poll() {
     clearInterval(hook_timer);
@@ -51,6 +51,6 @@
 </DropdownItem>
 <Dropdown simple>
   <DropdownItem onclick={fullrefresh}>Refresh data</DropdownItem>
-  <DropdownItem onclick={garmin}>With CSV File</DropdownItem>
+  <DropdownItem onclick={() => (openGarmin = true)}>With CSV File</DropdownItem>
 </Dropdown>
-<!-- <Garmin bind:garmin /> -->
+<Garmin bind:open={openGarmin} />

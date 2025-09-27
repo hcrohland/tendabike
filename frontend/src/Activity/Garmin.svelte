@@ -1,31 +1,31 @@
 <script lang="ts">
   import {
     Modal,
-    ModalBody,
-    ModalHeader,
-    ListGroup,
-    ListGroupItem,
-    Input,
+    Listgroup,
+    ListgroupItem,
+    Fileupload,
+    Button,
   } from "flowbite-svelte";
   import { checkStatus, handleError } from "../lib/store";
-  import MyFooter from "../Widgets/MyFooter.svelte";
   import { parts } from "../lib/part";
   import { attachments } from "../lib/attachment";
 
-  let isOpen = false;
-  let files: FileList | undefined;
-  let result: { good: string[]; bad: string[] } | undefined;
-  let label: string | undefined;
-  const toggle = () => (isOpen = false);
+  let files: FileList | undefined = $state();
+  let result: { good: string[]; bad: string[] } | undefined = $state();
 
-  export const garmin = () => {
+  interface Props {
+    open: boolean;
+  }
+
+  let { open = $bindable() }: Props = $props();
+
+  let disabled = $derived(!(files && files[0]));
+
+  function reset() {
     files = undefined;
+    open = false;
     result = undefined;
-    label = "Synchronize";
-    isOpen = true;
-  };
-
-  $: disabled = !(files && files[0]);
+  }
 
   async function sendFile() {
     var body = files && (await files[0].text());
@@ -42,41 +42,42 @@
           good: a[1],
           bad: a[2],
         };
-        label = undefined;
+        files = undefined;
       })
       .catch(handleError);
   }
 </script>
 
-<Modal {isOpen} {toggle} scrollable>
-  <ModalHeader {toggle}>Upload Garmin activities file</ModalHeader>
+<Modal bind:open title="Upload Garmin activities file">
   {#if result}
-    <ModalBody>
-      {#if result.good.length > 0}
-        Synchronized {result.good.length} activities.
-      {/if}
-      {#if result.bad.length > 0}
-        <br /><br />Could not match the following {result.bad.length} activities:
-        <ListGroup>
-          {#each result.bad as r}
-            <ListGroupItem>{r}</ListGroupItem>
-          {/each}
-        </ListGroup>
-      {/if}
-    </ModalBody>
+    {#if result.good.length > 0}
+      Synchronized {result.good.length} activities.
+    {/if}
+    {#if result.bad.length > 0}
+      <br /><br />Could not match the following {result.bad.length} activities:
+      <Listgroup>
+        {#each result.bad as r}
+          <ListgroupItem>{r}</ListgroupItem>
+        {/each}
+      </Listgroup>
+    {/if}
   {:else}
-    <ModalBody>
-      <Input
-        type="file"
-        bind:files
-        accept="text/csv"
-        title="Upload a CSV file exported from Garmin connect activities. 
+    <Fileupload
+      bind:files
+      accept="text/csv"
+      title="Upload a CSV file exported from Garmin connect activities. 
 It will match activities based on the start time. 
 If there is no match it will skip the activity.
 You can upload multiple times."
-      />
-      <br />
-    </ModalBody>
+    />
+    <br />
   {/if}
-  <MyFooter {toggle} {disabled} action={sendFile} {label} />
+  {#snippet footer()}
+    {#if !result}
+      <Button onclick={sendFile} {disabled}>Synchronize</Button>
+      <Button onclick={reset}>Cancel</Button>
+    {:else}
+      <Button onclick={reset}>Ok</Button>
+    {/if}
+  {/snippet}
 </Modal>
