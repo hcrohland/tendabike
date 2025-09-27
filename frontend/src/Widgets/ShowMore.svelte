@@ -21,13 +21,17 @@
   let delay = 1000;
 </script>
 
-<Button {id} color="light" class="m-0 p-1" {onclick}>
-  {#if show_more}
-    −
-  {:else}
-    +
-    {#if title}
-      <Tooltip placement="left" {delay} target={id}>Show {title}</Tooltip>
-    {/if}
-  {/if}
+<Button
+  {id}
+  size="sm"
+  color="alternative"
+  class="border-0 p-0 m-0 me-3"
+  {onclick}
+>
+  {show_more ? "-" : "+"}
 </Button>
+{#if title}
+  <Tooltip placement="top" class=" text-xs p-1 rounded-xs">
+    Show {title}
+  </Tooltip>
+{/if}

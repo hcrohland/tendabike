@@ -1,56 +1,44 @@
 <script lang="ts">
-  import { Modal, ModalBody, ModalFooter, ModalHeader } from "flowbite-svelte";
+  import { Button, Modal } from "flowbite-svelte";
   import NewForm from "./PartForm.svelte";
-  import { user } from "../lib/store";
   import { Type } from "../lib/types";
   import { Part } from "../lib/part";
-  import Buttons from "../Widgets/Buttons.svelte";
+  import { user } from "../lib/store";
 
-  let part: Part, newpart: Part;
-  let type: Type;
-  let isOpen = false;
-  let disabled = true;
-
-  async function savePart() {
-    disabled = true;
-    await newpart.create();
-    isOpen = false;
+  interface Props {
+    type: Type;
   }
 
-  export const newPart = (t: Type) => {
-    type = t;
-    part = new Part({
+  let { type }: Props = $props();
+  let part = $state(new Part({}));
+  let open = $state(false);
+
+  async function savePart() {
+    let newpart = new Part({
       owner: $user && $user.id,
       what: type.id,
-      count: 0,
-      climb: 0,
-      descend: 0,
-      distance: 0,
-      time: 0,
-      name: "",
-      vendor: "",
-      model: "",
-      purchase: new Date(),
-      last_used: new Date(),
+      purchase: part.purchase,
+      last_used: part.purchase,
+      name: part.name,
+      vendor: part.vendor,
+      model: part.model,
     });
-    isOpen = true;
-  };
-
-  const toggle = () => (isOpen = false);
-  const setPart = (e: any) => {
-    newpart = e.detail;
-    disabled = false;
-  };
+    await newpart.create();
+  }
 </script>
 
-<Modal {isOpen} {toggle}>
-  <ModalHeader {toggle}>New {type.name}</ModalHeader>
-  <form on:submit|preventDefault={savePart}>
-    <ModalBody>
-      <NewForm {type} {part} on:change={setPart} />
-    </ModalBody>
-    <ModalFooter>
-      <Buttons {toggle} {disabled} label={"Create"} />
-    </ModalFooter>
-  </form>
+<Button
+  size="xs"
+  color="alternative"
+  class="p-1 cursor-pointer"
+  onclick={() => (open = true)}>New</Button
+>
+<Modal form bind:open onaction={savePart} onclose={() => (part = new Part({}))}>
+  {#snippet header()}
+    New {type.name}
+  {/snippet}
+  <NewForm {type} bind:part />
+  {#snippet footer()}
+    <Button type="submit" value="create">Create</Button>
+  {/snippet}
 </Modal>
