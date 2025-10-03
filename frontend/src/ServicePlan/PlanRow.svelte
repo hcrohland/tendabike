@@ -1,14 +1,23 @@
 <script lang="ts">
-  import { TableBodyCell, TableBodyRow } from "flowbite-svelte";
+  import {
+    Dropdown,
+    DropdownDivider,
+    DropdownItem,
+    TableBodyCell,
+    TableBodyRow,
+  } from "flowbite-svelte";
   import ServiceRow from "../Service/ServiceRow.svelte";
   import { attachments } from "../lib/attachment";
   import { parts } from "../lib/part";
   import { services } from "../lib/service";
-  import { Limits, ServicePlan } from "../lib/serviceplan";
+  import { ServicePlan } from "../lib/serviceplan";
   import { usages } from "../lib/usage";
   import PlanCell from "./PlanCell.svelte";
   import PlanName from "./PlanName.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
+  import { ChevronDownOutline } from "flowbite-svelte-icons";
+  import DeletePlan from "./DeletePlan.svelte";
+  import UpdatePlan from "./UpdatePlan.svelte";
 
   interface Props {
     plan: ServicePlan;
@@ -49,7 +58,41 @@
     <PlanCell plan={plan.kJ} due={due.kJ} />
   {/if}
 
-  <TableBodyCell></TableBodyCell>
+  <TableBodyCell>
+    <div>
+      <ChevronDownOutline class="cursor-pointer float-inline-right inline" />
+      <Dropdown simple>
+        {#if part}
+          {#if serviceList.at(0) != undefined}
+            <DropdownItem>Repeat last service</DropdownItem>
+          {/if}
+          {@const plans = plan.id ? [plan.id] : []}
+          <DropdownItem>
+            <!-- <DropdownItem on:click={() => $actions.newService(part, plans)}> -->
+            New Service for plan
+          </DropdownItem>
+          {#if plan.part != part.id}
+            {@const att = part.attachments($attachments).at(0)}
+            {#if att}
+              <DropdownItem>
+                <!-- <DropdownItem on:click={() => $actions.replacePart(att)}> -->
+                Replace Part
+              </DropdownItem>
+            {/if}
+          {/if}
+        {/if}
+
+        {#if !name && part}
+          <DropdownDivider />
+        {/if}
+
+        {#if !name}
+          <UpdatePlan {plan} />
+          <DeletePlan {plan} />
+        {/if}
+      </Dropdown>
+    </div>
+  </TableBodyCell>
 </TableBodyRow>
 {#if part && show_more}
   {#each serviceList as service, i (service.id)}

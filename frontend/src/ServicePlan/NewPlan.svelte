@@ -1,72 +1,47 @@
 <script lang="ts">
-  import {
-    InputGroup,
-    InputGroupText,
-    Modal,
-    ModalBody,
-    ModalFooter,
-    ModalHeader,
-  } from "flowbite-svelte";
+  import { Button } from "flowbite-svelte";
   import { ServicePlan } from "../lib/serviceplan";
   import { Part } from "../lib/part";
-  import TypeForm from "../Widgets/TypeForm.svelte";
-  import type { Type } from "../lib/types";
-  import PlanForm from "./PlanForm.svelte";
-  import Buttons from "../Widgets/Buttons.svelte";
-  import GearForm from "../Widgets/GearForm.svelte";
+  import PlanModal from "./PlanModal.svelte";
 
-  let name: string | null;
-  let plan: ServicePlan;
-  let isOpen = false;
-
-  async function createPlan() {
-    await plan.create();
-    isOpen = false;
+  interface Props {
+    part?: Part | undefined;
   }
 
-  export const newPlan = (p?: Part) => {
-    if (p && !p.isGear()) {
-      name = p.name;
-      plan = new ServicePlan({ part: p.id, what: p.what, hook: null });
+  let { part = undefined }: Props = $props();
+
+  let open = $state(false);
+  let no_gear = $state(false);
+  let plan = $state(new ServicePlan({}));
+
+  async function safePlan(newplan: ServicePlan) {
+    await newplan.create();
+    open = false;
+  }
+
+  function newPlan() {
+    if (part && !part.isGear()) {
+      plan = new ServicePlan({ part: part.id, what: part.what, hook: null });
+      no_gear = true;
     } else {
-      name = null;
-      plan = new ServicePlan({ part: p?.id });
+      plan = new ServicePlan({ part: part?.id });
+      no_gear = false;
     }
-    isOpen = true;
-  };
-
-  const toggle = () => {
-    isOpen = false;
-  };
-
-  const sethook = (e: CustomEvent<{ type: Type; hook: number }>) => {
-    plan.what = e.detail.type.id;
-    plan.hook = e.detail.hook;
-  };
-
-  $: disabled = !(plan && plan.valid());
+    open = true;
+  }
 </script>
 
-<Modal {isOpen} {toggle}>
-  <form on:submit|preventDefault={createPlan}>
-    <ModalHeader {toggle}>
-      New service plan for
-      {#if name}
-        {name}
-      {/if}
-    </ModalHeader>
-    <ModalBody>
-      {#if !name}
-        <InputGroup class="col-md-12">
-          <TypeForm with_body on:change={sethook} />
-          <InputGroupText>of</InputGroupText>
-          <GearForm bind:gear={plan.part} />
-        </InputGroup>
-      {/if}
-      <PlanForm bind:plan />
-    </ModalBody>
-    <ModalFooter>
-      <Buttons {toggle} {disabled} label={"Create"} />
-    </ModalFooter>
-  </form>
-</Modal>
+<Button
+  size="xs"
+  color="alternative"
+  class="p-1 cursor-pointer"
+  onclick={newPlan}
+>
+  add
+</Button>
+<PlanModal {safePlan} {plan} bind:open {no_gear}>
+  New service plan for
+  {#if no_gear}
+    {part!.name}
+  {/if}
+</PlanModal>

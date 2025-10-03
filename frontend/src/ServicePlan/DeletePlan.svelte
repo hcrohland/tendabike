@@ -1,27 +1,31 @@
 <script lang="ts">
-  import { Modal, ModalHeader, ModalBody } from "flowbite-svelte";
-  import MyFooter from "../Widgets/MyFooter.svelte";
+  import { Modal, DropdownItem, Button } from "flowbite-svelte";
   import { ServicePlan } from "../lib/serviceplan";
 
-  let plan: ServicePlan;
-  let isOpen = false;
-  const toggle = () => (isOpen = false);
+  interface Props {
+    plan: ServicePlan;
+  }
+  let { plan } = $props();
 
-  async function action() {
+  let open = $state(false);
+
+  async function onaction() {
     await plan.delete();
-    isOpen = false;
+    open = false;
   }
 
   export const deletePlan = (p: ServicePlan) => {
     plan = p;
-    isOpen = true;
+    open = true;
   };
 </script>
 
-<Modal {isOpen} {toggle}>
-  <ModalHeader {toggle}>
+<DropdownItem onclick={() => (open = true)}>Delete ServicePlan</DropdownItem>
+<Modal form {open} {onaction}>
+  {#snippet header()}
     Do you really want to delete ServicePlan <br />
     "{plan.name}"?
-  </ModalHeader>
-  <MyFooter {toggle} {action} label={"Delete"} />
+  {/snippet}
+  <Button type="submit" value="confirm">Delete</Button>
+  <Button type="submit">Cancel</Button>
 </Modal>

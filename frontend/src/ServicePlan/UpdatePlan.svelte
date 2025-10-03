@@ -1,50 +1,44 @@
 <script lang="ts">
-  import { Modal, ModalBody, ModalFooter, ModalHeader } from "flowbite-svelte";
+  import { DropdownItem } from "flowbite-svelte";
   import { plans, ServicePlan } from "../lib/serviceplan";
   import { parts, Part } from "../lib/part";
   import { category, types } from "../lib/types";
-  import PlanForm from "./PlanForm.svelte";
-  import Buttons from "../Widgets/Buttons.svelte";
+  import PlanModal from "./PlanModal.svelte";
 
-  let part: Part | null;
-  let plan: ServicePlan;
-  let isOpen = false;
-
-  async function postPlan() {
-    await plan.update();
-    isOpen = false;
+  interface Props {
+    plan: ServicePlan;
   }
 
-  export const updatePlan = (p: ServicePlan) => {
-    part = $plans[p.id!].part ? $parts[p.part!] : null;
+  let title: string = $state("");
+
+  let { plan = $bindable() }: Props = $props();
+  let open = $state(false);
+
+  async function safePlan(newplan: ServicePlan) {
+    await newplan.update();
+    open = false;
+  }
+
+  const updatePlan = (p: ServicePlan) => {
+    if (p.part) {
+      let part = $parts[p.part];
+      if (part.isGear() && plan.hook != null) {
+        title = types[plan.what].human_name(plan.hook);
+        title += types[plan.what].human_name(plan.hook) + " of ";
+      }
+      title += part.name;
+    } else {
+      title =
+        types[plan.what].human_name(plan.hook) +
+        " of any " +
+        $category.name.toLocaleLowerCase();
+    }
     plan = new ServicePlan(p);
-    isOpen = true;
+    open = true;
   };
-
-  const toggle = () => {
-    isOpen = false;
-  };
-
-  $: disabled = !(plan && plan.valid());
 </script>
 
-<Modal {isOpen} {toggle}>
-  <ModalHeader {toggle}>
-    Update service plan for
-    {#if part == null}
-      {types[plan.what].human_name(plan.hook)} of any {$category.name.toLocaleLowerCase()}
-    {:else if part.isGear() && plan.hook != null}
-      {types[plan.what].human_name(plan.hook)} of {part.name}
-    {:else}
-      {part.name}
-    {/if}
-  </ModalHeader>
-  <form on:submit|preventDefault={postPlan}>
-    <ModalBody>
-      <PlanForm bind:plan />
-    </ModalBody>
-    <ModalFooter>
-      <Buttons {toggle} {disabled} label={"Update"} />
-    </ModalFooter>
-  </form>
-</Modal>
+<DropdownItem onclick={() => updatePlan(plan)}>Change ServicePlan</DropdownItem>
+<PlanModal bind:open {safePlan} {plan} no_gear>
+  Update service plan for {title}
+</PlanModal>

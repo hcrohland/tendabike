@@ -58,16 +58,24 @@ export class Limits {
     "kJ",
   ];
 
-  valid() {
+  static valid(l: any) {
     return (
-      is_set(this.days) ||
-      is_set(this.hours) ||
-      is_set(this.km) ||
-      is_set(this.climb) ||
-      is_set(this.descend) ||
-      is_set(this.rides) ||
-      is_set(this.kJ)
+      is_set(l.days) ||
+      is_set(l.hours) ||
+      is_set(l.km) ||
+      is_set(l.climb) ||
+      is_set(l.descend) ||
+      is_set(l.rides) ||
+      is_set(l.kJ)
     );
+  }
+
+  to_object() {
+    return { ...this };
+  }
+
+  set_from_object(a: any) {
+    Object.assign(this, a);
   }
 }
 
@@ -113,7 +121,7 @@ export class ServicePlan extends Limits {
   }
 
   valid() {
-    return super.valid() && this.name.length > 0 && this.what != undefined;
+    return Limits.valid(this) && this.name.length > 0 && this.what != undefined;
   }
 
   services(part: Part | null, services: Map<Service>) {
