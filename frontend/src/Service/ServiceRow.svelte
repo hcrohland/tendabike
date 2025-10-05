@@ -1,21 +1,12 @@
 <script lang="ts">
-  import {
-    DropdownItem,
-    TableBodyCell,
-    TableBodyRow,
-    Tooltip,
-  } from "flowbite-svelte";
-  // import DeleteService from "./DeleteService.svelte";
-  // import UpdateService from "./UpdateService.svelte";
-  // import RedoService from "./RedoService.svelte";
+  import { TableBodyCell, TableBodyRow, Tooltip } from "flowbite-svelte";
   import UsageCells from "../Usage/Usage.svelte";
-  // import Menu from "../Widgets/Menu.svelte";
   import { Service } from "../lib/service";
   import { usages } from "../lib/usage";
   import { Part } from "../lib/part";
   import { Usage } from "../lib/usage";
   import { fmtRange, get_days } from "../lib/store";
-  import Menu from "../Widgets/Menu.svelte";
+  import ServiceMenu from "./ServiceMenu.svelte";
 
   interface Props {
     depth?: number;
@@ -32,10 +23,6 @@
     part,
     children,
   }: Props = $props();
-
-  let updateService: (p: Service | undefined) => void;
-  let redoService: (p: Service | undefined) => void;
-  let deleteService: (p: Service | undefined) => void;
 
   let usage = $derived(
     $usages[successor ? successor.usage : part.usage].sub(
@@ -77,17 +64,7 @@
   <UsageCells {usage} />
   <TableBodyCell>
     {#if service}
-      <Menu>
-        <DropdownItem onclick={() => alert("updateService(service)")}>
-          Change Service
-        </DropdownItem>
-        <DropdownItem onclick={() => alert("redoService(service)")}>
-          Repeat Service
-        </DropdownItem>
-        <DropdownItem onclick={() => alert("deleteService(service)")}>
-          Delete Service
-        </DropdownItem>
-      </Menu>
+      <ServiceMenu {service} />
     {/if}
   </TableBodyCell>
 </TableBodyRow>

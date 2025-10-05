@@ -1,10 +1,19 @@
 <script lang="ts">
-  import { InputGroupText, Input } from "flowbite-svelte";
-  export let checked: boolean;
-  export let id = "custominputneedsone";
+  import { InputAddon, Toggle } from "flowbite-svelte";
+  interface Props {
+    checked: boolean;
+    id?: string;
+    children?: import("svelte").Snippet;
+  }
+
+  let {
+    checked = $bindable(),
+    id = "custominputneedsone",
+    children,
+  }: Props = $props();
 </script>
 
-<InputGroupText>
-  <Input type="switch" {id} name="customSwitch" bind:checked></Input>
-  <slot />
-</InputGroupText>
+<InputAddon>
+  <Toggle size="small" {id} name="customSwitch" bind:checked></Toggle>
+  {@render children?.()}
+</InputAddon>

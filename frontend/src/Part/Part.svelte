@@ -1,17 +1,18 @@
 <script lang="ts">
-  import { Tabs, TabItem } from "flowbite-svelte";
+  import { Tabs, TabItem, Button } from "flowbite-svelte";
   import ServiceList from "../Service/ServiceList.svelte";
   import PlanBadge from "../ServicePlan/PlanBadge.svelte";
   import PlanList from "../ServicePlan/PlanList.svelte";
   import { attachments } from "../lib/attachment";
   import { filterValues } from "../lib/mapable";
-  import { parts } from "../lib/part";
+  import { Part, parts } from "../lib/part";
   import { plans, plans_for_part_and_subtypes } from "../lib/serviceplan";
   import GearCard from "./GearCard.svelte";
   import NewPlan from "../ServicePlan/NewPlan.svelte";
   import Subparts from "./Subparts.svelte";
   import PartHist from "./PartHist.svelte";
-  // import AddButton from "./AddButton.svelte";
+  import ServiceActions from "../Service/ServiceActions.svelte";
+  import { actions } from "../Widgets/Actions.svelte";
 
   interface Props {
     id: number;
@@ -19,6 +20,8 @@
 
   let { id }: Props = $props();
 
+  let newPlan: { start: (p: Part) => void };
+  let serviceActions: { create: (p: Part) => void };
   let tab = $state("parts");
 
   let part = $derived($parts[id]);
@@ -49,7 +52,14 @@
       Service Plans
       <PlanBadge {planlist} />
       {#if tab == "plans"}
-        <NewPlan {part} />
+        <Button
+          size="xs"
+          color="alternative"
+          class="p-1 cursor-pointer"
+          onclick={() => $actions.newPlan(part)}
+        >
+          add
+        </Button>
       {/if}
     {/snippet}
     <PlanList {planlist} /><br />
@@ -57,8 +67,19 @@
   <TabItem key="services">
     {#snippet titleSlot()}
       Service Logs
-      <!-- <AddButton {part} {tab} here="services" /> -->
+      {#if tab == "services"}
+        <Button
+          size="xs"
+          color="alternative"
+          class="p-1 cursor-pointer"
+          onclick={() => $actions.newService(part)}
+        >
+          add
+        </Button>
+      {/if}
     {/snippet}
     <ServiceList {part} /><br />
   </TabItem>
 </Tabs>
+<NewPlan bind:this={newPlan} />
+<ServiceActions bind:this={serviceActions} />

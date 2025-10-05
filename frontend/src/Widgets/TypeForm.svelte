@@ -1,22 +1,26 @@
 <script lang="ts">
-  import { Input } from "flowbite-svelte";
-  import { createEventDispatcher } from "svelte";
+  import { Select } from "flowbite-svelte";
   import { Type, category } from "../lib/types";
 
-  export let with_body = false;
+  interface Result {
+    type: Type;
+    hook: number | null;
+  }
+  interface Props {
+    onChange: (t: Type, h: number | null) => void;
+    with_body?: boolean;
+  }
 
-  let hook: { type: Type; hook: number | null };
-  const dispatch = createEventDispatcher();
+  let { onChange, with_body = false }: Props = $props();
+
+  let result: Result | undefined = $state();
 </script>
 
-<Input
-  type="select"
-  class="custom-select"
+<Select
   required
-  bind:value={hook}
-  on:change={() => dispatch("change", hook)}
+  bind:value={result}
+  onchange={() => onChange(result!.type, result!.hook)}
 >
-  <option hidden value> -- select one -- </option>
   {#if with_body}
     <option value={{ type: $category, hook: null }}> body </option>
   {/if}
@@ -27,4 +31,4 @@
       </option>
     {/each}
   {/each}
-</Input>
+</Select>

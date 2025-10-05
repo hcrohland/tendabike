@@ -9,20 +9,13 @@
 
   interface Props {
     safePlan: (p: ServicePlan) => void;
-    open: boolean;
-    plan: ServicePlan;
     no_gear?: boolean;
     children?: Snippet;
   }
 
-  let {
-    safePlan,
-    open = $bindable(),
-    plan,
-    no_gear = true,
-    children,
-  }: Props = $props();
+  let { safePlan, no_gear = true, children }: Props = $props();
 
+  let open = $state(false);
   const sethook = (type: Type, h: number | null) => {
     what = type.id;
     hook = h;
@@ -38,10 +31,18 @@
       hook,
     });
     safePlan(newplan);
+    open = false;
   }
 
+  let plan = $state(new ServicePlan({}));
   let { id, part: gear, what, name, hook } = $derived(plan);
-  let limits: any = $state(plan.to_object());
+  let limits = $state({});
+
+  export function start(p: ServicePlan) {
+    plan = p;
+    limits = p.to_object();
+    open = true;
+  }
 </script>
 
 <Modal size="xs" bind:open form {onaction}>

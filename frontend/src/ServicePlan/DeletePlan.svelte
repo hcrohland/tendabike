@@ -1,11 +1,8 @@
 <script lang="ts">
-  import { Modal, DropdownItem, Button } from "flowbite-svelte";
+  import { Modal, Button } from "flowbite-svelte";
   import { ServicePlan } from "../lib/serviceplan";
 
-  interface Props {
-    plan: ServicePlan;
-  }
-  let { plan } = $props();
+  let plan = $state(new ServicePlan({}));
 
   let open = $state(false);
 
@@ -14,13 +11,12 @@
     open = false;
   }
 
-  export const deletePlan = (p: ServicePlan) => {
+  export const start = (p: ServicePlan) => {
     plan = p;
     open = true;
   };
 </script>
 
-<DropdownItem onclick={() => (open = true)}>Delete ServicePlan</DropdownItem>
 <Modal form {open} {onaction}>
   {#snippet header()}
     Do you really want to delete ServicePlan <br />

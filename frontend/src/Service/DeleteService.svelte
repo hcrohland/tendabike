@@ -1,29 +1,30 @@
 <script lang="ts">
-  import { Modal, ModalHeader, ModalBody } from "flowbite-svelte";
-  import MyFooter from "../Widgets/MyFooter.svelte";
+  import { Button, Modal } from "flowbite-svelte";
   import { Service } from "../lib/service";
   import { fmtDate } from "../lib/store";
 
-  let service: Service;
-  let isOpen = false;
-  const toggle = () => (isOpen = false);
+  let service = $state(new Service({}));
+  let open = $state(false);
 
-  async function action() {
-    await service.delete();
-    isOpen = false;
+  export function start(s: Service) {
+    service = s;
+    open = true;
   }
 
-  export const deleteService = (s: Service) => {
-    service = s;
-    isOpen = true;
-  };
+  async function onaction() {
+    await service.delete();
+    open = false;
+  }
 </script>
 
-<Modal {isOpen} {toggle}>
-  <ModalHeader {toggle}>
+<Modal form bind:open {onaction}>
+  {#snippet header()}
     Do you really want to delete Service log<br />
     "{service.name}" from
     {fmtDate(service.time)}?
-  </ModalHeader>
-  <MyFooter {toggle} {action} label={"Delete"} />
+  {/snippet}
+  {#snippet footer()}
+    <Button onclick={() => (open = false)} color="alternative">Cancel</Button>
+    <Button type="submit" value="create" class="float-end">Delete</Button>
+  {/snippet}
 </Modal>

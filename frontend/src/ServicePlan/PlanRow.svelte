@@ -8,7 +8,7 @@
   } from "flowbite-svelte";
   import ServiceRow from "../Service/ServiceRow.svelte";
   import { attachments } from "../lib/attachment";
-  import { parts } from "../lib/part";
+  import { Part, parts } from "../lib/part";
   import { services } from "../lib/service";
   import { ServicePlan } from "../lib/serviceplan";
   import { usages } from "../lib/usage";
@@ -16,8 +16,7 @@
   import PlanName from "./PlanName.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
-  import DeletePlan from "./DeletePlan.svelte";
-  import UpdatePlan from "./UpdatePlan.svelte";
+  import { actions } from "../Widgets/Actions.svelte";
 
   interface Props {
     plan: ServicePlan;
@@ -28,7 +27,7 @@
 
   let show_more = $state(false);
 
-  let part = $derived(plan.getpart($parts, $attachments));
+  let part = $derived(plan.getpart($parts, $attachments)) as Part;
   let serviceList = $derived(plan.services(part, $services));
   let due = $derived(plan.due(part, serviceList.at(0), $usages));
   let title = "service history";
@@ -63,12 +62,8 @@
       <ChevronDownOutline class="cursor-pointer float-inline-right inline" />
       <Dropdown simple>
         {#if part}
-          {#if serviceList.at(0) != undefined}
-            <DropdownItem>Repeat last service</DropdownItem>
-          {/if}
           {@const plans = plan.id ? [plan.id] : []}
-          <DropdownItem>
-            <!-- <DropdownItem on:click={() => $actions.newService(part, plans)}> -->
+          <DropdownItem onclick={() => $actions.newService(part, plan)}>
             New Service for plan
           </DropdownItem>
           {#if plan.part != part.id}
@@ -87,8 +82,12 @@
         {/if}
 
         {#if !name}
-          <UpdatePlan {plan} />
-          <DeletePlan {plan} />
+          <DropdownItem onclick={() => $actions.updatePlan(plan)}>
+            Change ServicePlan
+          </DropdownItem>
+          <DropdownItem onclick={() => $actions.deletePlan(plan)}>
+            Delete ServicePlan
+          </DropdownItem>
         {/if}
       </Dropdown>
     </div>
