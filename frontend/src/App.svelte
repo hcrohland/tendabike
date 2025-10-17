@@ -29,7 +29,7 @@
   import Gear from "./Part/Gear.svelte";
   import Plans from "./ServicePlan/Plans.svelte";
   import Spares from "./Spares/Spares.svelte";
-  // import Statistics from "./Statistics.svelte";
+  import Statistics from "./Statistics.svelte";
   import ToyGroup from "./ToyGroup.svelte";
   import { initData } from "./lib/store";
   import { getTypes } from "./lib/types";
@@ -42,7 +42,7 @@
     "/plans/": Plans,
     "/spares/": Spares,
     // "/admin": Admin,
-    // "/stats": Statistics,
+    "/stats": Statistics,
     "/activities/:part?/:start?": Activities,
   };
 
