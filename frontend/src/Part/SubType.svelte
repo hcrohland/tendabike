@@ -14,6 +14,7 @@
   import { Type } from "../lib/types";
   import { usages } from "../lib/usage";
   import PartLink from "./PartLink.svelte";
+  import { actions } from "../Widgets/Actions.svelte";
 
   export let attachments: Attachment[] = [];
   export let level: number = 0;
@@ -33,23 +34,22 @@
     {#if i == 0}
       <tr>
         <TableHeadCell scope="row" class="text-nowrap flex justify-between">
-          {"┃ ".repeat(level)}
-          {#if attachments.length > 0 || (part && $usages[part.usage].count != $usages[att.usage].count)}
-            <ShowMore bind:show_more title="history" />
-          {/if}
-          {prefix + " " + type.name}
+          <div>
+            {"┃ ".repeat(level)}
+            {#if attachments.length > 0 || (part && $usages[part.usage].count != $usages[att.usage].count)}
+              <ShowMore bind:show_more title="history" />
+            {/if}
+            {prefix + " " + type.name}
+          </div>
           {#if att.isAttached()}
             <Menu>
-              <DropdownItem>
-                <!-- </DropdownItem> on:click={() => $actions.newService(part)}> -->
+              <DropdownItem onclick={() => $actions.newService(part)}>
                 Log Service
               </DropdownItem>
-              <DropdownItem>
-                <!-- </DropdownItem> on:click={() => $actions.attachPart(part)}> -->
+              <DropdownItem onclick={() => $actions.attachPart(part)}>
                 Move part
               </DropdownItem>
-              <DropdownItem>
-                <!-- </DropdownItem> on:click={() => $actions.replacePart(att)}> -->
+              <DropdownItem onclick={() => $actions.replacePart(att)}>
                 New {type.name}
               </DropdownItem>
             </Menu>
@@ -58,8 +58,8 @@
               class="float-inline-end p-1 border-0 cursor-pointer"
               size="xs"
               color="alternative"
+              onclick={() => $actions.replacePart(att)}
             >
-              <!-- on:click={() => $actions.replacePart(att)} -->
               add
             </Button>
           {/if}
@@ -87,16 +87,13 @@
           </div>
           {#if part.disposed_at == undefined}
             <Menu>
-              <DropdownItem>
-                <!-- </DropdownItem> on:click={() => $actions.newService(part)}> -->
+              <DropdownItem onclick={() => $actions.newService(part)}>
                 Log Service
               </DropdownItem>
-              <DropdownItem>
-                <!-- </DropdownItem> on:click={() => $actions.attachPart(part)} -->
+              <DropdownItem onclick={() => $actions.attachPart(part)}>
                 Attach part
               </DropdownItem>
-              <DropdownItem>
-                <!-- </DropdownItem> on:click={() => $actions.replacePart(att)}> -->
+              <DropdownItem onclick={() => $actions.replacePart(att)}>
                 Duplicate part
               </DropdownItem>
             </Menu>

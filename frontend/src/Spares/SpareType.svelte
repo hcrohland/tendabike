@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { TableBodyCell, TableBodyRow, TableHeadCell } from "flowbite-svelte";
+  import {
+    Button,
+    TableBodyCell,
+    TableBodyRow,
+    TableHeadCell,
+  } from "flowbite-svelte";
   import PartLink from "../Part/PartLink.svelte";
   import Usage from "../Usage/Usage.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
@@ -8,7 +13,8 @@
   import { parts } from "../lib/part";
   import { fmtDate } from "../lib/store";
   import { Type } from "../lib/types";
-  import NewPart from "../Part/NewPart.svelte";
+  import { actions } from "../Widgets/Actions.svelte";
+  import XsButton from "../Widgets/XsButton.svelte";
 
   interface Props {
     type: Type;
@@ -50,7 +56,7 @@
       <ShowMore bind:show_more {update} title="attached" />
     {/if}
     {type.name}s &NonBreakingSpace;
-    <NewPart {type} />
+    <XsButton onclick={() => $actions.newPart(type)}>New</XsButton>
   </TableHeadCell>
 </tr>
 {#each subparts as part (part.id)}
@@ -60,12 +66,12 @@
       title={part.vendor + " " + part.model + " " + fmtDate(part.purchase)}
     >
       <PartLink {part} />
-      <!-- {#if !part.disposed_at}
+      {#if !part.disposed_at}
         <Button
           color="light"
           class="float-end"
           size="sm"
-          on:click={() => $actions.attachPart(part)}
+          onclick={() => $actions.attachPart(part)}
         >
           {#if attachedTo($attachments, part.id, date)}
             Move
@@ -73,7 +79,7 @@
             Attach
           {/if}
         </Button>
-      {/if} -->
+      {/if}
     </TableBodyCell>
     <Usage id={part.usage} ref={part.id} />
     {#if attachee > 0}

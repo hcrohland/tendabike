@@ -1,12 +1,5 @@
 <script lang="ts">
-  import {
-    Modal,
-    ModalHeader,
-    ModalBody,
-    ModalFooter,
-    InputGroup,
-    InputGroupText,
-  } from "flowbite-svelte";
+  import { Modal, InputAddon, ButtonGroup } from "flowbite-svelte";
   import { Type } from "../lib/types";
   import { user } from "../lib/store";
   import NewForm from "../Part/PartForm.svelte";
@@ -17,37 +10,35 @@
   import Buttons from "../Widgets/Buttons.svelte";
   import Switch from "../Widgets/Switch.svelte";
 
-  let part: Part, newpart: Part;
-  let gear: Part;
-  let type: Type | undefined;
-  let hook: number;
-  let disabled = true;
-  let isOpen = false;
-  let single = true;
+  let part = $state<any>();
+  let gear = $state(new Part({}));
+  let type = $state<Type>();
+  let hook = $state<number>();
+  let open = $state(false);
+  let single = $state(true);
 
-  const toggle = () => (isOpen = false);
-  export const installPart = (g: Part) => {
+  export const start = (g: Part) => {
     gear = g;
-    part = new Part({
-      owner: $user && $user.id,
-    });
-    disabled = true;
+    part = {
+      ...new Part({
+        owner: $user && $user.id,
+      }),
+    };
     type = undefined;
-    isOpen = true;
+    open = true;
   };
 
   async function attachPart(part: Part | void) {
     if (!part) return;
-    await part.attach(part.purchase, !single, gear.id!, hook);
+    await part.attach(part.purchase, !single, gear!.id!, hook!);
   }
 
-  async function action() {
-    disabled = true;
-    await newpart.create().then(attachPart);
-    isOpen = false;
+  async function onaction() {
+    await new Part(part).create().then(attachPart);
+    open = false;
   }
 
-  function guessDate(g: Part, t: Type, hook: number) {
+  function guessDate(g: Part, t: Type, hook: number | undefined) {
     if (!t) return new Date();
     let last = filterValues(
       $attachments,
@@ -68,35 +59,30 @@
     last_used: new Date(),
   });
 
-  const setType = (e: CustomEvent<{ type: Type; hook: number }>) => {
-    type = e.detail.type;
-    hook = e.detail.hook;
-    part.what = type.id;
-    part.purchase = guessDate(gear, type, hook);
-  };
-  const setPart = (e: CustomEvent<Part>) => {
-    newpart = new Part(e.detail);
-    disabled = false;
+  const setType = (t: Type, h: number | undefined) => {
+    part.what = t.id;
+    part.hook = h;
+    type = t;
+    hook = h;
+    part.purchase = guessDate(gear, t, h);
   };
 </script>
 
-<Modal {isOpen} {toggle}>
-  <form on:submit|preventDefault={action}>
-    <ModalHeader {toggle}>
-      <InputGroup class="col-md-12">
-        <InputGroupText>New</InputGroupText>
-        <TypeForm on:change={setType} />
-        <InputGroupText>of {gear.name}</InputGroupText>
-      </InputGroup>
-    </ModalHeader>
-    <ModalBody>
-      <NewForm {type} {part} mindate={gear.purchase} on:change={setPart} />
-      {#if type?.is_hook()}
-        <Switch bind:checked={single}>Keep all attached parts</Switch>
-      {/if}
-    </ModalBody>
-    <ModalFooter>
-      <Buttons {toggle} {disabled} label={"Install"} />
-    </ModalFooter>
-  </form>
+<Modal form {open} {onaction}>
+  {#snippet header()}
+    <ButtonGroup class="col-md-12">
+      <InputAddon>New</InputAddon>
+      <TypeForm onChange={setType} />
+      <InputAddon>of {gear.name}</InputAddon>
+    </ButtonGroup>
+  {/snippet}
+
+  <NewForm {type} bind:part mindate={gear.purchase} />
+  {#if type?.is_hook()}
+    <Switch bind:checked={single}>Keep all attached parts</Switch>
+  {/if}
+
+  {#snippet footer()}
+    <Buttons bind:open label="Install" />
+  {/snippet}
 </Modal>

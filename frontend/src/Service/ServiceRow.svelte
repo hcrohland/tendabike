@@ -53,12 +53,16 @@
         {/if}
       </div>
     </TableBodyCell>
-    <TableBodyCell>{fmtRange(service.time, successor?.time)}</TableBodyCell>
+    <TableBodyCell class="text-end">
+      {fmtRange(service.time, successor?.time)}
+    </TableBodyCell>
   {:else}
     <TableBodyCell>
       {"┃ ".repeat(depth)}┗━
     </TableBodyCell>
-    <TableBodyCell>{fmtRange(part.purchase, successor?.time)}</TableBodyCell>
+    <TableBodyCell class="text-end">
+      {fmtRange(part.purchase, successor?.time)}
+    </TableBodyCell>
   {/if}
   <TableBodyCell class="text-end">{days}</TableBodyCell>
   <UsageCells {usage} />

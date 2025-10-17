@@ -57,7 +57,7 @@
 
   const theme = {
     tableBodyCell: "px-2 py-3",
-    tableHeadCell: "px-2 pa-3",
+    tableHeadCell: "px-2 py-3",
   };
 </script>
 

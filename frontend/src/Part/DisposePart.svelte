@@ -1,13 +1,5 @@
 <script lang="ts">
-  import {
-    Modal,
-    ModalBody,
-    ModalHeader,
-    FormGroup,
-    InputGroup,
-    ModalFooter,
-    InputGroupText,
-  } from "flowbite-svelte";
+  import { Modal, ButtonGroup, InputAddon } from "flowbite-svelte";
   import { handleError } from "../lib/store";
   import { Attachment } from "../lib/attachment";
   import Dispose from "../Widgets/Dispose.svelte";
@@ -16,8 +8,7 @@
   import Buttons from "../Widgets/Buttons.svelte";
   import Switch from "../Widgets/Switch.svelte";
 
-  let isOpen = false;
-  let disabled = true;
+  let open = false;
   let last: Attachment | undefined;
   let part: Part;
   let name: String;
@@ -27,9 +18,8 @@
   let date: Date;
   let all: boolean;
 
-  async function savePart() {
+  async function onaction() {
     try {
-      disabled = true;
       if (detach) {
         await part.detach(date, all);
       }
@@ -39,10 +29,10 @@
     } catch (e: any) {
       handleError(e);
     }
-    isOpen = false;
+    open = false;
   }
 
-  export const disposePart = (p: Part, last_attachment?: Attachment) => {
+  export const start = (p: Part, last_attachment?: Attachment) => {
     part = p;
     name = part.type().name;
     last = last_attachment;
@@ -64,35 +54,31 @@
     }
     all = true;
     date = new Date();
-    disabled = false;
-    isOpen = true;
+    open = true;
   };
 
   $: label = detach ? "Detach " : "Dispose ";
-  const toggle = () => (isOpen = false);
 </script>
 
-<Modal {isOpen} {toggle}>
-  <ModalHeader {toggle}>
+<Modal form bind:open {onaction} classes={{ body: "min-h-90" }}>
+  {#snippet header()}
     {label}
     {name}
     {part.name}
-  </ModalHeader>
-  <form on:submit|preventDefault={savePart}>
-    <ModalBody>
-      <FormGroup>
-        <InputGroup>
-          <InputGroupText>At</InputGroupText>
-          <DateTime bind:date {mindate} />
-          <Switch bind:checked={all}>{label} all attached parts</Switch>
-          {#if detach}
-            <Dispose bind:dispose>{name} when detached</Dispose>
-          {/if}
-        </InputGroup>
-      </FormGroup>
-    </ModalBody>
-    <ModalFooter>
-      <Buttons {toggle} {disabled} label={detach ? "Detach" : "Dispose"} />
-    </ModalFooter>
-  </form>
+  {/snippet}
+  <!-- <form on:submit|preventDefault={savePart}> -->
+  <div>
+    <ButtonGroup>
+      <InputAddon>At</InputAddon>
+      <DateTime bind:date {mindate} />
+    </ButtonGroup>
+  </div>
+  <Switch bind:checked={all}>{label} all attached parts</Switch>
+  {#if detach}
+    <Dispose bind:dispose>{name} when detached</Dispose>
+  {/if}
+
+  {#snippet footer()}
+    <Buttons bind:open {label} />
+  {/snippet}
 </Modal>

@@ -15,6 +15,7 @@
     TableHeadCell,
   } from "flowbite-svelte";
   import Menu from "../Widgets/Menu.svelte";
+  import { actions } from "../Widgets/Actions.svelte";
 
   interface Props {
     id: number;
@@ -43,8 +44,7 @@
                 {types[att.hook].prefix}
               </div>
               <Menu>
-                <DropdownItem>
-                  <!-- </DropdownItem> onclick={() => $actions.deleteAttachment(att)}> -->
+                <DropdownItem onclick={() => $actions.deleteAttachment(att)}>
                   Remove
                 </DropdownItem>
               </Menu>

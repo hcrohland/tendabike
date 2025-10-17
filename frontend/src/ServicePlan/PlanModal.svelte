@@ -16,9 +16,9 @@
   let { safePlan, no_gear = true, children }: Props = $props();
 
   let open = $state(false);
-  const sethook = (type: Type, h: number | null) => {
+  const sethook = (type: Type, h: number | undefined) => {
     what = type.id;
-    hook = h;
+    hook = h as number | null;
   };
 
   function onaction() {

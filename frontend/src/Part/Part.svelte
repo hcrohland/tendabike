@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Tabs, TabItem, Button } from "flowbite-svelte";
+  import { Tabs, TabItem, DropdownItem } from "flowbite-svelte";
   import ServiceList from "../Service/ServiceList.svelte";
   import PlanBadge from "../ServicePlan/PlanBadge.svelte";
   import PlanList from "../ServicePlan/PlanList.svelte";
@@ -13,6 +13,8 @@
   import PartHist from "./PartHist.svelte";
   import ServiceActions from "../Service/ServiceActions.svelte";
   import { actions } from "../Widgets/Actions.svelte";
+  import XsButton from "../Widgets/XsButton.svelte";
+  import Menu from "../Widgets/Menu.svelte";
 
   interface Props {
     id: number;
@@ -34,7 +36,34 @@
   );
 </script>
 
-<GearCard {part}></GearCard>
+<GearCard {part}>
+  <Menu>
+    {#if part.disposed_at}
+      <DropdownItem color="light" onclick={() => $actions.recoverPart(part)}>
+        Recover gear
+      </DropdownItem>
+    {:else}
+      {#if !part.isGear()}
+        <DropdownItem color="light" onclick={() => $actions.attachPart(part)}>
+          Attach
+        </DropdownItem>
+      {/if}
+      <DropdownItem
+        color="light"
+        onclick={() => $actions.disposePart(part, last_attachment)}
+      >
+        {#if last_attachment?.isAttached()}
+          Detach
+        {:else}
+          Dispose
+        {/if}
+      </DropdownItem>
+      <DropdownItem color="light" onclick={() => $actions.changePart(part)}>
+        Change details
+      </DropdownItem>
+    {/if}
+  </Menu>
+</GearCard>
 <br />
 <PartHist {id} />
 <Tabs bind:selected={tab}>
@@ -42,7 +71,9 @@
     <TabItem key="parts">
       {#snippet titleSlot()}
         Attached Parts
-        <!-- <AddButton {part} {tab} here="parts" /> -->
+        {#if tab == "parts"}
+          <XsButton onclick={() => $actions.installPart(part)}>add</XsButton>
+        {/if}
       {/snippet}
       <Subparts {part} {attachees} />
     </TabItem>
@@ -52,14 +83,7 @@
       Service Plans
       <PlanBadge {planlist} />
       {#if tab == "plans"}
-        <Button
-          size="xs"
-          color="alternative"
-          class="p-1 cursor-pointer"
-          onclick={() => $actions.newPlan(part)}
-        >
-          add
-        </Button>
+        <XsButton onclick={() => $actions.newPlan(part)}>add</XsButton>
       {/if}
     {/snippet}
     <PlanList {planlist} /><br />
@@ -68,14 +92,7 @@
     {#snippet titleSlot()}
       Service Logs
       {#if tab == "services"}
-        <Button
-          size="xs"
-          color="alternative"
-          class="p-1 cursor-pointer"
-          onclick={() => $actions.newService(part)}
-        >
-          add
-        </Button>
+        <XsButton onclick={() => $actions.newService(part)}>add</XsButton>
       {/if}
     {/snippet}
     <ServiceList {part} /><br />

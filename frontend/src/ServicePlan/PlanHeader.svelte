@@ -6,7 +6,7 @@
 <TableHeadCell scope="col">
   <slot />
 </TableHeadCell>
-<TableHeadCell scope="col">Date</TableHeadCell>
+<TableHeadCell scope="col" class="text-end">Date</TableHeadCell>
 <TableHeadCell scope="col" class="text-end">Days</TableHeadCell>
 <Usage header />
 <TableHeadCell></TableHeadCell>

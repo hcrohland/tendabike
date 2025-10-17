@@ -11,7 +11,7 @@
 </script>
 
 <div>
-  <ChevronDownOutline class="cursor-pointer float-inline-right inline" />
+  <ChevronDownOutline class="cursor-pointer" />
   <Dropdown simple>
     {@render children?.()}
   </Dropdown>

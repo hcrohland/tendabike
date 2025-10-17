@@ -13,7 +13,6 @@
   }: Props = $props();
 </script>
 
-<InputAddon>
-  <Toggle size="small" {id} name="customSwitch" bind:checked></Toggle>
+<Toggle size="small" {id} name="customSwitch" bind:checked>
   {@render children?.()}
-</InputAddon>
+</Toggle>

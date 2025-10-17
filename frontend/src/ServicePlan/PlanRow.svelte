@@ -34,7 +34,7 @@
 </script>
 
 <TableBodyRow>
-  <TableBodyCell class="text-start text-wrap">
+  <TableBodyCell colspan={2} class="text-start text-wrap">
     {#if name}
       ┃
       <ShowMore bind:show_more {title} />
@@ -46,7 +46,6 @@
       <PlanName {plan} /> in
     {/if}
   </TableBodyCell>
-  <TableBodyCell></TableBodyCell>
   {#if part}
     <PlanCell plan={plan.days} due={due.days} />
     <PlanCell plan={plan.rides} due={due.rides} />
@@ -69,8 +68,7 @@
           {#if plan.part != part.id}
             {@const att = part.attachments($attachments).at(0)}
             {#if att}
-              <DropdownItem>
-                <!-- <DropdownItem on:click={() => $actions.replacePart(att)}> -->
+              <DropdownItem onclick={() => $actions.replacePart(att)}>
                 Replace Part
               </DropdownItem>
             {/if}

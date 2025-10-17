@@ -1,49 +1,39 @@
 <script lang="ts">
-  import { Modal, ModalHeader, ModalBody, ModalFooter } from "flowbite-svelte";
+  import { Modal } from "flowbite-svelte";
   import { types } from "../lib/types";
   import AttachForm from "./AttachForm.svelte";
   import { Part } from "../lib/part";
   import Buttons from "../Widgets/Buttons.svelte";
 
-  let part: Part | undefined;
-  let isOpen = false;
-  let disabled = true;
-  let time: Date;
-  let gear: number;
-  let hook: number;
-  const toggle = () => {
-    part = undefined;
-    isOpen = false;
-  };
+  let part: Part | undefined = $state();
+  let open = $state(false);
+  let time = $state<Date>();
+  let gear = $state<number>();
+  let hook = $state<number>();
 
-  async function action() {
-    disabled = true;
-
-    await part!.attach(time, true, gear!, hook);
-    isOpen = false;
+  async function onaction() {
+    await part!.attach(time!, true, gear!, hook!);
+    open = false;
   }
 
-  export const attachPart = (p: Part) => {
+  export const start = (p: Part) => {
     part = p;
-    isOpen = true;
+    open = true;
   };
 </script>
 
 {#if part}
-  <Modal {isOpen} {toggle}>
-    <ModalHeader {toggle}>
-      Attach {types[part.what].name}
-      {part.name}
-      {part.vendor}
-      {part.model}
-    </ModalHeader>
-    <form on:submit|preventDefault={action}>
-      <ModalBody>
-        <AttachForm bind:time bind:gear bind:hook bind:disabled {part} />
-      </ModalBody>
-      <ModalFooter>
-        <Buttons {toggle} {disabled} label={"Attach"} />
-      </ModalFooter>
-    </form>
+  <Modal form bind:open {onaction} classes={{ body: "min-h-90" }}>
+    {#snippet header()}
+      Attach {types[part!.what].name}
+      {part!.name}
+      {part!.vendor}
+      {part!.model}
+    {/snippet}
+    <AttachForm bind:time bind:gear bind:hook {part} />
+
+    {#snippet footer()}
+      <Buttons bind:open label={"Attach"} />
+    {/snippet}
   </Modal>
 {/if}

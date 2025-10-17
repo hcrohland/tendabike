@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { InputGroup, InputGroupText } from "flowbite-svelte";
+  import { ButtonGroup, InputAddon } from "flowbite-svelte";
   import DateTime from "../Widgets/DateTime.svelte";
   import { types } from "../lib/types";
   import { by, filterValues } from "../lib/mapable";
@@ -21,7 +21,6 @@
   }
 
   export let part: Part;
-  export let disabled = true;
 
   let type = part.type();
 
@@ -29,13 +28,11 @@
   export let gear: number | undefined = undefined;
   export let hook: number | undefined =
     type.hooks.length == 1 ? type.hooks[0] : undefined;
-
-  $: disabled = !(hook && gear && types[hook]);
 </script>
 
-<div class="form-inline">
-  <InputGroup class="mb-0 mr-sm-2 mb-sm-2">
-    <InputGroupText>to</InputGroupText>
+<div>
+  <ButtonGroup>
+    <InputAddon>to</InputAddon>
     {#if type.hooks.length > 1}
       <!-- svelte-ignore a11y-autofocus -->
       <select name="hook" class="form-control" required bind:value={hook}>
@@ -44,12 +41,12 @@
           <option value={h}>{types[h].name}</option>
         {/each}
       </select>
-      <InputGroupText>of</InputGroupText>
+      <InputAddon>of</InputAddon>
     {/if}
     <SelectPart {type} bind:part={gear} />
-  </InputGroup>
-  <InputGroup class="mb-0 mr-sm-2 mb-sm-2">
-    <InputGroupText>at</InputGroupText>
-    <DateTime bind:date={time} {prevdate} />
-  </InputGroup>
+  </ButtonGroup>
 </div>
+<ButtonGroup>
+  <InputAddon>at</InputAddon>
+  <DateTime bind:date={time} {prevdate} />
+</ButtonGroup>

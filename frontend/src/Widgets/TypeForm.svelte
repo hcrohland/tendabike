@@ -4,10 +4,10 @@
 
   interface Result {
     type: Type;
-    hook: number | null;
+    hook: number | undefined;
   }
   interface Props {
-    onChange: (t: Type, h: number | null) => void;
+    onChange: (t: Type, h: number | undefined) => void;
     with_body?: boolean;
   }
 

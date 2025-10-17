@@ -1,6 +1,5 @@
 <script lang="ts">
   import { Input, Label } from "flowbite-svelte";
-  // import DateTime from "../Widgets/DateTime.svelte";
   import { Type } from "../lib/types";
   import { Part } from "../lib/part";
   import DateTime from "../Widgets/DateTime.svelte";
