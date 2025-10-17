@@ -25,7 +25,7 @@
   import Activities from "./Activity/Activities.svelte";
   // import Admin from "./Admin/Admin.svelte";
   import Header from "./Header.svelte";
-  // import Message from "./Message.svelte";
+  import Message from "./Message.svelte";
   import Gear from "./Part/Gear.svelte";
   import Plans from "./ServicePlan/Plans.svelte";
   import Spares from "./Spares/Spares.svelte";
@@ -63,7 +63,7 @@
 
 <Header {promise} />
 
-<!-- <Message /> -->
+<Message />
 <ThemeProvider {theme}>
   <div class="m-8">
     {#await promise}
