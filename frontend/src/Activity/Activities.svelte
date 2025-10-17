@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Card, CardHeader } from "flowbite-svelte";
+  import { Card } from "flowbite-svelte";
   import { category } from "../lib/types";
   import { Activity, activities } from "../lib/activity";
   import ActTable from "./ActTable.svelte";
@@ -37,8 +37,6 @@
 </script>
 
 <Card>
-  <CardHeader class="text-center h5 mb-0" color="secondary">
-    All activities {title}
-  </CardHeader>
+  All activities {title}
 </Card>
 <ActTable {acts} />

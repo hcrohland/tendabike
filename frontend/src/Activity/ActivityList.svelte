@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Modal, ModalHeader, ModalBody, Table } from "flowbite-svelte";
+  import { Modal, Table } from "flowbite-svelte";
   import { fmtDate } from "../lib/store";
   import { Activity } from "../lib/activity";
 
@@ -10,22 +10,21 @@
   };
 </script>
 
-<Modal {isOpen} {toggle}>
-  <ModalHeader {toggle}>
+<Modal form open={isOpen}>
+  {#snippet header()}
     <slot>Activities</slot>
-  </ModalHeader>
-  <ModalBody>
-    <Table responsive hover>
+  {/snippet}
+
+  <Table hoverable>
+    <tr>
+      <th>Start</th>
+      <th>Name</th>
+    </tr>
+    {#each activities as act (act.id)}
       <tr>
-        <th>Start</th>
-        <th>Name</th>
+        <td>{fmtDate(act.start)}</td>
+        <td>{act.name}</td>
       </tr>
-      {#each activities as act (act.id)}
-        <tr>
-          <td>{fmtDate(act.start)}</td>
-          <td>{act.name}</td>
-        </tr>
-      {/each}
-    </Table>
-  </ModalBody>
+    {/each}
+  </Table>
 </Modal>
