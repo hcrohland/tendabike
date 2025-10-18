@@ -10,7 +10,7 @@
   <DropdownItem onclick={() => $actions.changeService(service)}>
     Change Service
   </DropdownItem>
-  <DropdownItem onclick={() => $actions.repeatService(service)}>
+  <DropdownItem onclick={() => $actions.redoService(service)}>
     Repeat Service
   </DropdownItem>
   <DropdownItem onclick={() => $actions.deleteService(service)}>

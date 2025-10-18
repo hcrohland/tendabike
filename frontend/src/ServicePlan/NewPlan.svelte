@@ -3,7 +3,7 @@
   import { Part } from "../lib/part";
   import PlanModal from "./PlanModal.svelte";
 
-  let part: Part | undefined = $state();
+  let partname = $state("");
   let modal: { start: (p: ServicePlan) => void };
   let no_gear = $state(false);
   let plan = $state(new ServicePlan({}));
@@ -13,6 +13,7 @@
   }
 
   export function start(p: Part) {
+    partname = p.name;
     if (p && !p.isGear()) {
       plan = new ServicePlan({ part: p.id, what: p.what, hook: null });
       no_gear = true;
@@ -26,6 +27,6 @@
 <PlanModal bind:this={modal} {safePlan} {no_gear}>
   New service plan for
   {#if no_gear}
-    {part!.name}
+    {partname}
   {/if}
 </PlanModal>

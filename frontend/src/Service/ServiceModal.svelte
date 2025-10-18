@@ -3,7 +3,6 @@
     Input,
     ButtonGroup,
     Modal,
-    Button,
     InputAddon,
     Checkbox,
     Listgroup,
@@ -15,6 +14,7 @@
   import { attachments } from "../lib/attachment";
   import type { Snippet } from "svelte";
   import { parts } from "../lib/part";
+  import Buttons from "../Widgets/Buttons.svelte";
 
   interface Props {
     saveService: (p: Service) => void;
@@ -82,7 +82,6 @@
   </ButtonGroup>
 
   {#snippet footer()}
-    <Button onclick={() => (open = false)} color="alternative">Cancel</Button>
-    <Button type="submit" value="create" class="float-end">Safe</Button>
+    <Buttons bind:open label="Safe" />
   {/snippet}
 </Modal>

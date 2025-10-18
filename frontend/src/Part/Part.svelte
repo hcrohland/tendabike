@@ -22,8 +22,6 @@
 
   let { id }: Props = $props();
 
-  let newPlan: { start: (p: Part) => void };
-  let serviceActions: { create: (p: Part) => void };
   let tab = $state("parts");
 
   let part = $derived($parts[id]);
@@ -98,5 +96,3 @@
     <ServiceList {part} /><br />
   </TabItem>
 </Tabs>
-<NewPlan bind:this={newPlan} />
-<ServiceActions bind:this={serviceActions} />

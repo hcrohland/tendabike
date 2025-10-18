@@ -6,6 +6,7 @@
   // import SetDefault from "./Activity/SetDefault.svelte";
   import { parts } from "./lib/part";
   import { activities } from "./lib/activity";
+  import ShowMore from "./Widgets/ShowMore.svelte";
 
   let show_more: boolean = $state(false);
 
@@ -36,6 +37,17 @@
       {/if}
     {/each}
   </div>
+
+  {#if bin.length > 0}
+    <ShowMore bind:show_more title="disposed" />
+    {#if show_more}
+      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        {#each bin as part (part.id)}
+          <MainCard {part} />
+        {/each}
+      </div>
+    {/if}
+  {/if}
 {:else}
   Error: Category not found!
 {/if}

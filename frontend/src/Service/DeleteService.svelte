@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { Button, Modal } from "flowbite-svelte";
+  import { Modal } from "flowbite-svelte";
   import { Service } from "../lib/service";
   import { fmtDate } from "../lib/store";
+  import Buttons from "../Widgets/Buttons.svelte";
 
   let service = $state(new Service({}));
   let open = $state(false);
@@ -24,7 +25,6 @@
     {fmtDate(service.time)}?
   {/snippet}
   {#snippet footer()}
-    <Button onclick={() => (open = false)} color="alternative">Cancel</Button>
-    <Button type="submit" value="create" class="float-end">Delete</Button>
+    <Buttons bind:open label="Delete" />
   {/snippet}
 </Modal>

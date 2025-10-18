@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { Modal, Button } from "flowbite-svelte";
+  import { Modal } from "flowbite-svelte";
   import { ServicePlan } from "../lib/serviceplan";
+  import Buttons from "../Widgets/Buttons.svelte";
 
   let plan = $state(new ServicePlan({}));
 
@@ -22,6 +23,7 @@
     Do you really want to delete ServicePlan <br />
     "{plan.name}"?
   {/snippet}
-  <Button type="submit" value="confirm">Delete</Button>
-  <Button type="submit">Cancel</Button>
+  {#snippet footer()}
+    <Buttons bind:open label="Delete" />
+  {/snippet}
 </Modal>

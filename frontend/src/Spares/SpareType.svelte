@@ -67,10 +67,8 @@
     >
       <PartLink {part} />
       {#if !part.disposed_at}
-        <Button
-          color="light"
-          class="float-end"
-          size="sm"
+        <XsButton
+          class="p-1 cursor-pointer rounded-md float-end"
           onclick={() => $actions.attachPart(part)}
         >
           {#if attachedTo($attachments, part.id, date)}
@@ -78,7 +76,7 @@
           {:else}
             Attach
           {/if}
-        </Button>
+        </XsButton>
       {/if}
     </TableBodyCell>
     <Usage id={part.usage} ref={part.id} />

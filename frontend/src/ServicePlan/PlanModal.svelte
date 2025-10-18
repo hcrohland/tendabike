@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { Button, Input, Label, Modal } from "flowbite-svelte";
-  import { Limits, ServicePlan } from "../lib/serviceplan";
+  import { ButtonGroup, Input, InputAddon, Modal } from "flowbite-svelte";
+  import { ServicePlan } from "../lib/serviceplan";
   import TypeForm from "../Widgets/TypeForm.svelte";
   import GearForm from "../Widgets/GearForm.svelte";
   import type { Type } from "../lib/types";
   import type { Snippet } from "svelte";
   import PlanLimits from "./PlanLimits.svelte";
+  import Buttons from "../Widgets/Buttons.svelte";
 
   interface Props {
     safePlan: (p: ServicePlan) => void;
@@ -50,9 +51,11 @@
     {@render children?.()}
   {/snippet}
   {#if !no_gear}
-    <TypeForm with_body onChange={sethook} />
-    <Label>of</Label>
-    <GearForm bind:gear />
+    <ButtonGroup>
+      <TypeForm with_body onChange={sethook} />
+      <InputAddon>of</InputAddon>
+      <GearForm bind:gear />
+    </ButtonGroup>
   {/if}
   <Input
     type="text"
@@ -64,14 +67,6 @@
   />
   <PlanLimits bind:select={limits} />
   {#snippet footer()}
-    <Button onclick={() => (open = false)} color="alternative">Cancel</Button>
-    <Button
-      type="submit"
-      value="create"
-      disabled={!Limits.valid(limits)}
-      class="float-end"
-    >
-      Safe
-    </Button>
+    <Buttons bind:open label="Safe" />
   {/snippet}
 </Modal>
