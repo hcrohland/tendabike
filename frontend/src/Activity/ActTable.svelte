@@ -159,18 +159,20 @@
 {#if acts.length == 0}
   <Alert color="secondary">No activities</Alert>
 {:else}
-  <RangeSlider
-    {min}
-    {max}
-    range
-    pushy
-    pips
-    first="label"
-    last="label"
-    float
-    {formatter}
-    bind:values
-  ></RangeSlider>
+  <div class="mb-20">
+    <RangeSlider
+      {min}
+      {max}
+      range
+      pushy
+      pips
+      first="label"
+      last="label"
+      float
+      {formatter}
+      bind:values
+    ></RangeSlider>
+  </div>
 
   <SvelteTable
     {columns}

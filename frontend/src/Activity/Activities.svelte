@@ -36,7 +36,9 @@
   }
 </script>
 
-<Card>
-  All activities {title}
-</Card>
+<div class="flex justify-around">
+  <Card class="flex text-xl text-center p-4 mb-4">
+    All activities {title}
+  </Card>
+</div>
 <ActTable {acts} />
