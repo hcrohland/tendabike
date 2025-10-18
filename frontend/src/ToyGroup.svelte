@@ -2,8 +2,6 @@
   import MainCard from "./Part/MainCard.svelte";
   import { filterValues, by } from "./lib/mapable";
   import { category } from "./lib/types";
-  // import ShowMore from "./Widgets/ShowMore.svelte";
-  // import SetDefault from "./Activity/SetDefault.svelte";
   import { parts } from "./lib/part";
   import { activities } from "./lib/activity";
   import ShowMore from "./Widgets/ShowMore.svelte";
@@ -24,7 +22,6 @@
 </script>
 
 {#if $category}
-  <!-- <SetDefault type={$category}></SetDefault> -->
   <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
     {#each gears as part (part.id)}
       <MainCard {part} />
