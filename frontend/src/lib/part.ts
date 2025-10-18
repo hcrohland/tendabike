@@ -23,7 +23,7 @@ export class Part {
     this.name = data.name || "";
     this.vendor = data.vendor || "";
     this.model = data.model || "";
-    this.purchase = new Date(data.purchase);
+    this.purchase = data.purchase ? new Date(data.purchase) : new Date();
     this.last_used = new Date(data.last_used);
     this.disposed_at = data.disposed_at
       ? new Date(data.disposed_at)
