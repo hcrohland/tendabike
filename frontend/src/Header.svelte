@@ -9,8 +9,8 @@
     DropdownItem,
     DropdownDivider,
     Avatar,
-    Tooltip,
     DarkMode,
+    DropdownHeader,
   } from "flowbite-svelte";
   import { user } from "./lib/store";
   import Sport from "./Widgets/Sport.svelte";
@@ -38,12 +38,12 @@
   {#if $user}
     <div class="flex items-center md:order-2">
       <Avatar src={$user.avatar} id="user" class="border-2" />
-      <Tooltip placement="left">
-        {$user.firstname}
-        {$user.name}
-      </Tooltip>
       <DarkMode />
       <Dropdown simple triggeredBy="#user">
+        <DropdownHeader>
+          {$user.firstname}
+          {$user.name}
+        </DropdownHeader>
         <DropdownDivider />
         <Sport></Sport>
         {#await promise then}
