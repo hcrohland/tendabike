@@ -34,7 +34,7 @@
 
 {#await request}
   ...
-{:then list}
+{:then list: any[]}
   <Table>
     <tr>
       <th>Id</th>
@@ -56,9 +56,11 @@
         <td>
           {#if !disabled}
             <ButtonGroup>
-              <Button on:click={() => createSync(user)}>Add Sync Event</Button>
+              <Button onclick={() => createSync.start(user)}>
+                Add Sync Event
+              </Button>
               <Sync {user} {refresh} />
-              <Button on:click={() => disable(user)}>Disable user</Button>
+              <Button onclick={() => disable(user)}>Disable user</Button>
             </ButtonGroup>
           {/if}
         </td>
@@ -66,8 +68,8 @@
     {/each}
   </Table>
   <ButtonGroup>
-    <Button on:click={createSync()}>Add Sync Event for all</Button>
-    <Button on:click={rescan}>
+    <Button onclick={createSync}>Add Sync Event for all</Button>
+    <Button onclick={rescan}>
       {#await promise}
         <Spinner />
       {:then value}
@@ -75,6 +77,6 @@
       {/await}
     </Button>
   </ButtonGroup>
-  <Button on:click={refresh}>Refresh</Button>
+  <Button onclick={refresh}>Refresh</Button>
 {/await}
-<CreateSync {refresh} bind:createSync />
+<CreateSync {refresh} bind:this={createSync} />

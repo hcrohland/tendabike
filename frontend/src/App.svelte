@@ -23,7 +23,7 @@
 
   import About from "./About.svelte";
   import Activities from "./Activity/Activities.svelte";
-  // import Admin from "./Admin/Admin.svelte";
+  import Admin from "./Admin/Admin.svelte";
   import Header from "./Header.svelte";
   import Message from "./Message.svelte";
   import Gear from "./Part/Gear.svelte";
@@ -41,7 +41,7 @@
     "/part/:id": Gear,
     "/plans/": Plans,
     "/spares/": Spares,
-    // "/admin": Admin,
+    "/admin": Admin,
     "/stats": Statistics,
     "/activities/:part?/:start?": Activities,
   };

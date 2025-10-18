@@ -24,7 +24,7 @@
   }
 </script>
 
-<Button on:click={() => sync(user.id)}>
+<Button onclick={() => sync(user.id)}>
   {#await promise}
     Processed {count} ...
   {:then}
