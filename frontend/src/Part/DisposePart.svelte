@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Modal, ButtonGroup, InputAddon } from "flowbite-svelte";
+  import { ButtonGroup, InputAddon } from "flowbite-svelte";
   import { handleError } from "../lib/store";
   import { Attachment } from "../lib/attachment";
   import Dispose from "../Widgets/Dispose.svelte";
@@ -7,6 +7,7 @@
   import { Part } from "../lib/part";
   import Buttons from "../Widgets/Buttons.svelte";
   import Switch from "../Widgets/Switch.svelte";
+  import Modal from "../Widgets/Modal.svelte";
 
   let open = false;
   let last: Attachment | undefined;
@@ -60,13 +61,12 @@
   $: label = detach ? "Detach " : "Dispose ";
 </script>
 
-<Modal form bind:open {onaction} classes={{ body: "min-h-90" }}>
+<Modal bind:open {onaction}>
   {#snippet header()}
     {label}
     {name}
     {part.name}
   {/snippet}
-  <!-- <form on:submit|preventDefault={savePart}> -->
   <div>
     <ButtonGroup>
       <InputAddon>At</InputAddon>

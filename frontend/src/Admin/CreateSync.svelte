@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ButtonGroup, InputAddon, Modal } from "flowbite-svelte";
+  import { ButtonGroup, InputAddon } from "flowbite-svelte";
   import { handleError, myfetch } from "../lib/store";
   import type { User } from "../lib/types";
   import DateTime from "../Widgets/DateTime.svelte";
@@ -7,6 +7,7 @@
   import Switch from "../Widgets/Switch.svelte";
   import { by, filterValues } from "../lib/mapable";
   import { activities } from "../lib/activity";
+  import Modal from "../Widgets/Modal.svelte";
 
   export let refresh: () => void;
   let user: User | undefined;
@@ -46,7 +47,7 @@
   }
 </script>
 
-<Modal form {open} {onaction}>
+<Modal bind:open {onaction}>
   {#snippet header()}
     Create sync Event
     {#if user}

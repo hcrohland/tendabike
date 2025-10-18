@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ButtonGroup, Input, InputAddon, Modal } from "flowbite-svelte";
+  import { ButtonGroup, Input, InputAddon } from "flowbite-svelte";
   import { ServicePlan } from "../lib/serviceplan";
   import TypeForm from "../Widgets/TypeForm.svelte";
   import GearForm from "../Widgets/GearForm.svelte";
@@ -7,6 +7,7 @@
   import type { Snippet } from "svelte";
   import PlanLimits from "./PlanLimits.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
+  import Modal from "../Widgets/Modal.svelte";
 
   interface Props {
     safePlan: (p: ServicePlan) => void;
@@ -46,7 +47,7 @@
   }
 </script>
 
-<Modal size="xs" bind:open form {onaction}>
+<Modal size="xs" bind:open {onaction}>
   {#snippet header()}
     {@render children?.()}
   {/snippet}

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { Modal } from "flowbite-svelte";
   import { ServicePlan } from "../lib/serviceplan";
   import Buttons from "../Widgets/Buttons.svelte";
+  import Modal from "../Widgets/Modal.svelte";
 
   let plan = $state(new ServicePlan({}));
 
@@ -18,7 +18,7 @@
   };
 </script>
 
-<Modal form bind:open {onaction}>
+<Modal bind:open {onaction}>
   {#snippet header()}
     Do you really want to delete ServicePlan <br />
     "{plan.name}"?

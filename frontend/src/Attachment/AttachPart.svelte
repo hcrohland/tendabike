@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { Modal } from "flowbite-svelte";
   import { types } from "../lib/types";
   import AttachForm from "./AttachForm.svelte";
   import { Part } from "../lib/part";
   import Buttons from "../Widgets/Buttons.svelte";
+  import Modal from "../Widgets/Modal.svelte";
 
   let part: Part | undefined = $state();
   let open = $state(false);
@@ -23,7 +23,7 @@
 </script>
 
 {#if part}
-  <Modal form bind:open {onaction} classes={{ body: "min-h-90" }}>
+  <Modal bind:open {onaction}>
     {#snippet header()}
       Attach {types[part!.what].name}
       {part!.name}

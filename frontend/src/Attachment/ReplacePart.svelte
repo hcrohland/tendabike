@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Modal } from "flowbite-svelte";
   import { Attachment } from "../lib/attachment";
   import { user } from "../lib/store";
   import { types, Type } from "../lib/types";
@@ -8,6 +7,7 @@
   import Dispose from "../Widgets/Dispose.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
   import Switch from "../Widgets/Switch.svelte";
+  import Modal from "../Widgets/Modal.svelte";
 
   let part: any = $state();
   let oldpart: Part;
@@ -57,7 +57,7 @@
   };
 </script>
 
-<Modal form bind:open {onaction}>
+<Modal bind:open {onaction}>
   {#snippet header()}
     New {prefix}
     {type!.name} for {$parts[gear].name}

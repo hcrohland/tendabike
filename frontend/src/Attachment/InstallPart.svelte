@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Modal, InputAddon, ButtonGroup } from "flowbite-svelte";
+  import { InputAddon, ButtonGroup } from "flowbite-svelte";
   import { Type } from "../lib/types";
   import { user } from "../lib/store";
   import NewForm from "../Part/PartForm.svelte";
@@ -9,6 +9,7 @@
   import { attachments } from "../lib/attachment";
   import Buttons from "../Widgets/Buttons.svelte";
   import Switch from "../Widgets/Switch.svelte";
+  import Modal from "../Widgets/Modal.svelte";
 
   let part = $state<any>();
   let gear = $state(new Part({}));
@@ -68,7 +69,7 @@
   };
 </script>
 
-<Modal form bind:open {onaction} classes={{ body: "overflow-visible" }}>
+<Modal bind:open {onaction}>
   {#snippet header()}
     <ButtonGroup class="col-md-12">
       <InputAddon>New</InputAddon>

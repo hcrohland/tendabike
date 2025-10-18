@@ -1,6 +1,5 @@
 <script lang="ts">
   import {
-    Modal,
     Listgroup,
     ListgroupItem,
     Fileupload,
@@ -9,6 +8,7 @@
   import { checkStatus, handleError } from "../lib/store";
   import { parts } from "../lib/part";
   import { attachments } from "../lib/attachment";
+  import Modal from "../Widgets/Modal.svelte";
 
   let files: FileList | undefined = $state();
   let result: { good: string[]; bad: string[] } | undefined = $state();

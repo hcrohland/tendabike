@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { ButtonGroup, Drawer, InputAddon, Modal } from "flowbite-svelte";
+  import { ButtonGroup, InputAddon } from "flowbite-svelte";
+  import Modal from "../Widgets/Modal.svelte";
   import { Activity } from "../lib/activity";
   import { category } from "../lib/types";
   import SelectPart from "../Widgets/SelectPart.svelte";
   import ChangeField from "./ChangeField.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
-  import Header from "../Header.svelte";
 
   export const start = (a: Activity) => {
     open = true;
@@ -22,7 +22,7 @@
 </script>
 
 {#if activity}
-  <Modal form bind:open {onaction} size="xs">
+  <Modal bind:open {onaction} size="xs">
     {#snippet header()}
       Change Activity <br />
       {activity?.name} <br />

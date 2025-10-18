@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { Modal } from "flowbite-svelte";
   import { Service } from "../lib/service";
   import { fmtDate } from "../lib/store";
   import Buttons from "../Widgets/Buttons.svelte";
+  import Modal from "../Widgets/Modal.svelte";
 
   let service = $state(new Service({}));
   let open = $state(false);
@@ -18,7 +18,7 @@
   }
 </script>
 
-<Modal form bind:open {onaction}>
+<Modal bind:open {onaction}>
   {#snippet header()}
     Do you really want to delete Service log<br />
     "{service.name}" from

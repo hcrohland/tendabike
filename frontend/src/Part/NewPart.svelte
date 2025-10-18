@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Modal } from "flowbite-svelte";
+  import Modal from "../Widgets/Modal.svelte";
   import NewForm from "./PartForm.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
   import { Type } from "../lib/types";
@@ -22,7 +22,7 @@
   }
 </script>
 
-<Modal form bind:open {onaction} onclose={() => (part = new Part({}))}>
+<Modal bind:open {onaction}>
   {#snippet header()}
     New {type!.name}
   {/snippet}

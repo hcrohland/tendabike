@@ -2,7 +2,6 @@
   import {
     Input,
     ButtonGroup,
-    Modal,
     InputAddon,
     Checkbox,
     Listgroup,
@@ -15,6 +14,7 @@
   import type { Snippet } from "svelte";
   import { parts } from "../lib/part";
   import Buttons from "../Widgets/Buttons.svelte";
+  import Modal from "../Widgets/Modal.svelte";
 
   interface Props {
     saveService: (p: Service) => void;
@@ -50,7 +50,7 @@
   }
 </script>
 
-<Modal size="sm" bind:open form {onaction}>
+<Modal size="sm" bind:open {onaction}>
   {#snippet header()}
     {@render children?.()} Service for {part.name}
     {part.vendor}

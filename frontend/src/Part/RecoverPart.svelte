@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { Modal } from "flowbite-svelte";
   import { fmtDate } from "../lib/store";
   import { Part } from "../lib/part";
   import { types } from "../lib/types";
   import Buttons from "../Widgets/Buttons.svelte";
+  import Modal from "../Widgets/Modal.svelte";
 
   let part = $state(new Part({}));
   let open = $state(false);
@@ -19,7 +19,7 @@
   };
 </script>
 
-<Modal form bind:open {onaction}>
+<Modal bind:open {onaction}>
   {#snippet header()}
     Do you really have {types[part.what].name}
     {part.name}

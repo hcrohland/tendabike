@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { Modal } from "flowbite-svelte";
   import { Attachment } from "../lib/attachment";
   import { Part, parts } from "../lib/part";
   import { fmtDate } from "../lib/store";
   import { types } from "../lib/types";
   import Buttons from "../Widgets/Buttons.svelte";
+  import Modal from "../Widgets/Modal.svelte";
 
   let attachment = $state(new Attachment({}));
   let part = $state(new Part({}));
@@ -22,7 +22,7 @@
   };
 </script>
 
-<Modal form bind:open {onaction}>
+<Modal bind:open {onaction}>
   {#snippet header()}
     Do you really want to remove the {types[part.what].name}
     {part.name}

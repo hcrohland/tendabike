@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Modal } from "flowbite-svelte";
   import { handleError } from "../lib/store";
   import { Type, types } from "../lib/types";
   import { attachments } from "../lib/attachment";
@@ -7,6 +6,7 @@
   import { Part } from "../lib/part";
   import Buttons from "../Widgets/Buttons.svelte";
   import { activities } from "../lib/activity";
+  import Modal from "../Widgets/Modal.svelte";
 
   let open = $state(false);
 
@@ -32,7 +32,7 @@
   };
 </script>
 
-<Modal form bind:open {onaction}>
+<Modal bind:open {onaction}>
   {#snippet header()}
     Change {type.name} details
   {/snippet}
