@@ -54,7 +54,9 @@
       Synchronized {result.good.length} activities.
     {/if}
     {#if result.bad.length > 0}
-      <br /><br />Could not match the following {result.bad.length} activities:
+      <br />
+      Could not match the following {result.bad.length} activities:
+      <br />
       <Listgroup>
         {#each result.bad as r}
           <ListgroupItem>{r}</ListgroupItem>
