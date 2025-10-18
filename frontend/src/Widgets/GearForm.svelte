@@ -12,7 +12,7 @@
   let save = gear;
 </script>
 
-<Select bind:value={gear}>
+<Select bind:value={gear} classes={{ select: "rounded-l-none h-full" }}>
   <option value={null}> any {$category.name.toLocaleLowerCase()} </option>
   {#each save ? [$parts[save]] : allGear($parts, $category) as part}
     <option value={part.id}>

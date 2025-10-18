@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ButtonGroup, InputAddon } from "flowbite-svelte";
+  import { ButtonGroup, InputAddon, Select } from "flowbite-svelte";
   import DateTime from "../Widgets/DateTime.svelte";
   import { types } from "../lib/types";
   import { by, filterValues } from "../lib/mapable";
@@ -35,12 +35,16 @@
     <InputAddon>to</InputAddon>
     {#if type.hooks.length > 1}
       <!-- svelte-ignore a11y-autofocus -->
-      <select name="hook" class="form-control" required bind:value={hook}>
-        <option hidden value={undefined}> -- select one -- </option>
+      <Select
+        name="hook"
+        required
+        bind:value={hook}
+        classes={{ select: "rounded-none" }}
+      >
         {#each type.hooks as h}
           <option value={h}>{types[h].name}</option>
         {/each}
-      </select>
+      </Select>
       <InputAddon>of</InputAddon>
     {/if}
     <SelectPart {type} bind:part={gear} />

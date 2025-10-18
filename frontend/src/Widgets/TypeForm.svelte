@@ -9,9 +9,10 @@
   interface Props {
     onChange: (t: Type, h: number | undefined) => void;
     with_body?: boolean;
+    classes?: any;
   }
 
-  let { onChange, with_body = false }: Props = $props();
+  let { onChange, with_body = false, ...rest }: Props = $props();
 
   let result: Result | undefined = $state();
 </script>
@@ -20,6 +21,7 @@
   required
   bind:value={result}
   onchange={() => onChange(result!.type, result!.hook)}
+  {...rest}
 >
   {#if with_body}
     <option value={{ type: $category, hook: null }}> body </option>

@@ -72,7 +72,10 @@
   {#snippet header()}
     <ButtonGroup class="col-md-12">
       <InputAddon>New</InputAddon>
-      <TypeForm onChange={setType} />
+      <TypeForm
+        onChange={setType}
+        classes={{ select: "rounded-none h-full" }}
+      />
       <InputAddon>of {gear.name}</InputAddon>
     </ButtonGroup>
   {/snippet}

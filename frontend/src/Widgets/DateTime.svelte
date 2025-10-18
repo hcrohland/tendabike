@@ -4,7 +4,7 @@
   import SveltyPicker, { formatDate, parseDate } from "svelty-picker";
   import { en } from "svelty-picker/i18n";
   import { roundTime } from "../lib/store";
-  import { Button } from "flowbite-svelte";
+  import { Button, ButtonGroup } from "flowbite-svelte";
 
   type Props = {
     date?: any;
@@ -42,32 +42,34 @@
   date = roundTime(date);
 </script>
 
-<SveltyPicker
-  bind:value={
-    () => {
-      return formatDate(date, options.format, en, "standard");
-    },
-    (v) => {
-      date = v ? parseDate(v, options.format, en, "standard") : null;
+<ButtonGroup>
+  <SveltyPicker
+    bind:value={
+      () => {
+        return formatDate(date, options.format, en, "standard");
+      },
+      (v) => {
+        date = v ? parseDate(v, options.format, en, "standard") : null;
+      }
     }
-  }
-  placeholder={formatDate(date, options.format, en, "standard")}
-  mode="datetime"
-  {inputId}
-  {required}
-  {...options}
-/>
+    placeholder={formatDate(date, options.format, en, "standard")}
+    mode="datetime"
+    {inputId}
+    {required}
+    {...options}
+  />
 
-{#if mindate}
-  <Button onclick={preventDefault(() => (date = mindate))}>&#706;</Button>
-{:else if prevdate}
-  <Button onclick={preventDefault(() => (date = prevdate(date)))}>
-    &#706;
-  </Button>
-{/if}
-{#if !(mindate && mindate > now) && !(maxdate && maxdate < now)}
-  <Button onclick={preventDefault(() => (date = now))}>&#8226;</Button>
-{/if}
-{#if maxdate}
-  <Button onclick={preventDefault(() => (date = maxdate))}>&#707;</Button>
-{/if}
+  {#if mindate}
+    <Button onclick={preventDefault(() => (date = mindate))}>&#706;</Button>
+  {:else if prevdate}
+    <Button onclick={preventDefault(() => (date = prevdate(date)))}>
+      &#706;
+    </Button>
+  {/if}
+  {#if !(mindate && mindate > now) && !(maxdate && maxdate < now)}
+    <Button onclick={preventDefault(() => (date = now))}>&#8226;</Button>
+  {/if}
+  {#if maxdate}
+    <Button onclick={preventDefault(() => (date = maxdate))}>&#707;</Button>
+  {/if}
+</ButtonGroup>

@@ -52,7 +52,11 @@
   {/snippet}
   {#if !no_gear}
     <ButtonGroup>
-      <TypeForm with_body onChange={sethook} />
+      <TypeForm
+        with_body
+        onChange={sethook}
+        classes={{ select: "rounded-r-none h-full" }}
+      />
       <InputAddon>of</InputAddon>
       <GearForm bind:gear />
     </ButtonGroup>
