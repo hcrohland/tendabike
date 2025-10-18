@@ -21,6 +21,7 @@
   required
   bind:value={result}
   onchange={() => onChange(result!.type, result!.hook)}
+  placeholder="Choose part"
   {...rest}
 >
   {#if with_body}

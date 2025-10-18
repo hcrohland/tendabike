@@ -8,10 +8,8 @@
   import { Part, parts } from "../lib/part";
   import { plans, plans_for_part_and_subtypes } from "../lib/serviceplan";
   import GearCard from "./GearCard.svelte";
-  import NewPlan from "../ServicePlan/NewPlan.svelte";
   import Subparts from "./Subparts.svelte";
   import PartHist from "./PartHist.svelte";
-  import ServiceActions from "../Service/ServiceActions.svelte";
   import { actions } from "../Widgets/Actions.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
   import Menu from "../Widgets/Menu.svelte";
@@ -37,26 +35,23 @@
 <GearCard {part}>
   <Menu>
     {#if part.disposed_at}
-      <DropdownItem color="light" onclick={() => $actions.recoverPart(part)}>
+      <DropdownItem onclick={() => $actions.recoverPart(part)}>
         Recover gear
       </DropdownItem>
     {:else}
       {#if !part.isGear()}
-        <DropdownItem color="light" onclick={() => $actions.attachPart(part)}>
+        <DropdownItem onclick={() => $actions.attachPart(part)}>
           Attach
         </DropdownItem>
       {/if}
-      <DropdownItem
-        color="light"
-        onclick={() => $actions.disposePart(part, last_attachment)}
-      >
+      <DropdownItem onclick={() => $actions.disposePart(part, last_attachment)}>
         {#if last_attachment?.isAttached()}
           Detach
         {:else}
           Dispose
         {/if}
       </DropdownItem>
-      <DropdownItem color="light" onclick={() => $actions.changePart(part)}>
+      <DropdownItem onclick={() => $actions.changePart(part)}>
         Change details
       </DropdownItem>
     {/if}

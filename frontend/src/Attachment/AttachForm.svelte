@@ -2,7 +2,7 @@
   import { ButtonGroup, InputAddon, Select } from "flowbite-svelte";
   import DateTime from "../Widgets/DateTime.svelte";
   import { types } from "../lib/types";
-  import { by, filterValues } from "../lib/mapable";
+  import { filterValues } from "../lib/mapable";
   import { Part } from "../lib/part";
   import { attachments } from "../lib/attachment";
   import SelectPart from "../Widgets/SelectPart.svelte";
@@ -34,11 +34,11 @@
   <ButtonGroup>
     <InputAddon>to</InputAddon>
     {#if type.hooks.length > 1}
-      <!-- svelte-ignore a11y-autofocus -->
       <Select
         name="hook"
         required
         bind:value={hook}
+        placeholder="Select part"
         classes={{ select: "rounded-none" }}
       >
         {#each type.hooks as h}
