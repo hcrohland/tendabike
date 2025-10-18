@@ -54,12 +54,6 @@
     }
   }
 
-  part = new Part({
-    owner: $user && $user.id,
-    purchase: new Date(),
-    last_used: new Date(),
-  });
-
   const setType = (t: Type, h: number | undefined) => {
     part.what = t.id;
     part.hook = h;
