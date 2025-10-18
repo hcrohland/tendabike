@@ -236,21 +236,22 @@
   let years = $derived(buildYears(acts, gear));
 </script>
 
-<div class="p-0 p-sm-2">
-  <ButtonGroup class="justify-between">
+<div class="flex flex-wrap pb-10 gap-2 justify-between">
+  <ButtonGroup>
     <InputAddon>Your statistics for</InputAddon>
     <Select
       bind:value={cumm}
       onchange={() => {
         if (cumm == comp) comp = null;
       }}
+      classes={{ select: "rounded-none h-full" }}
     >
       {#each years as item, i}
         <option value={i}>{item.year}</option>
       {/each}
     </Select>
     <InputAddon>vs</InputAddon>
-    <Select bind:value={comp}>
+    <Select bind:value={comp} classes={{ select: "rounded-none h-full" }}>
       {#each years as item, i (item.year)}
         {@const selected = (comp ? comp : cumm) == i}
         {#if i != cumm}
@@ -260,16 +261,20 @@
         {/if}
       {/each}
     </Select>
-    <Switch id="months" bind:checked={perMonths} class="px-10">Per Month</Switch
-    >
+    <InputAddon>
+      <Switch id="months" bind:checked={perMonths} class="">Per Month</Switch>
+    </InputAddon>
   </ButtonGroup>
   <MultiSelect
     placeholder="Select bikes..."
-    items={gears.map((g) => ({ value: g, name: g.name, id: g.id }))}
+    items={gears
+      .sort(by("purchase"))
+      .map((g, n) => ({ value: g, name: n + " - " + g.name, id: g.id }))}
     bind:value={gear}
-    class="float-end"
-  ></MultiSelect>
+    class="max-w-150"
+  />
 </div>
+
 <Tabs bind:selected={title}>
   <TabItem title="Elevation" key="elevation" />
   <TabItem title="Distance" key="distance" />
