@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Input, InputGroup, Table, Container, Button } from "flowbite-svelte";
+  import { Input, ButtonGroup, Table, Button } from "flowbite-svelte";
   import { types, Type } from "../lib/types";
   import { Attachment } from "../lib/attachment";
   import { type Map, filterValues } from "../lib/mapable";
@@ -94,13 +94,13 @@
 </script>
 
 {#if !gear.disposed_at && groups.length > 0}
-  <Container>
+  <div>
     {#if show_button}
-      <Button color="success" on:click={() => (show_button = false)}>
+      <Button color="primary" onclick={() => (show_button = false)}>
         Add more component groups
       </Button>
     {:else}
-      <Table borderless>
+      <Table>
         <tbody>
           <tr>
             <th colspan="80"> Add components groups: </th>
@@ -113,10 +113,9 @@
                 </Switch>
               </th>
               <td>
-                <InputGroup>
+                <ButtonGroup>
                   <Input
                     type="text"
-                    class="form-control"
                     id="inputBrand"
                     bind:value={g.vendor}
                     placeholder="Brand"
@@ -124,19 +123,18 @@
                   />
                   <Input
                     type="text"
-                    class="form-control"
                     id="inputModel"
                     bind:value={g.model}
                     placeholder="Model"
                     disabled={!g.enabled}
                   />
-                </InputGroup>
+                </ButtonGroup>
               </td>
             </tr>
           {/each}
         </tbody>
       </Table>
-      <Button {disabled} on:click={save}>Set</Button>
+      <Button {disabled} onclick={save}>Set</Button>
     {/if}
-  </Container>
+  </div>
 {/if}

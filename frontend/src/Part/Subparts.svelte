@@ -5,7 +5,7 @@
   import SubType from "./SubType.svelte";
   import { Part } from "../lib/part";
   import { Attachment } from "../lib/attachment";
-  // import Wizard from "./Wizard.svelte";
+  import Wizard from "./Wizard.svelte";
 
   interface Props {
     part: Part;
@@ -63,6 +63,6 @@
     </TableBody>
   </Table>
 {/if}
-<!-- {#if part.isGear()}
+{#if part.isGear()}
   <Wizard gear={part} {attachees} />
-{/if} -->
+{/if}
