@@ -18,7 +18,7 @@
   };
 </script>
 
-<Modal form {open} {onaction}>
+<Modal form bind:open {onaction}>
   {#snippet header()}
     Do you really want to delete ServicePlan <br />
     "{plan.name}"?

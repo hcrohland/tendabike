@@ -32,7 +32,7 @@
   };
 </script>
 
-<Modal form {open} {onaction}>
+<Modal form bind:open {onaction}>
   {#snippet header()}
     Change {type.name} details
   {/snippet}

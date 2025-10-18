@@ -57,7 +57,7 @@
   };
 </script>
 
-<Modal form {open} {onaction}>
+<Modal form bind:open {onaction}>
   {#snippet header()}
     New {prefix}
     {type!.name} for {$parts[gear].name}

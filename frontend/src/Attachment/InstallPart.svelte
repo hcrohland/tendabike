@@ -68,7 +68,7 @@
   };
 </script>
 
-<Modal form {open} {onaction}>
+<Modal form bind:open {onaction} classes={{ body: "overflow-visible" }}>
   {#snippet header()}
     <ButtonGroup class="col-md-12">
       <InputAddon>New</InputAddon>
