@@ -70,11 +70,11 @@
       <NavLi href="/#/stats">Statistics</NavLi>
     </NavUl>
   {:else}
-    <NavUl>
-      <NavLi href={"/strava/login?" + $querystring}>
+    <div class="flex items-center md:order-2">
+      <a href={"/strava/login?" + $querystring}>
         <img src="connect_with_strava.png" alt="Login with Strava" />
-      </NavLi>
+      </a>
       <DarkMode />
-    </NavUl>
+    </div>
   {/if}
 </Navbar>

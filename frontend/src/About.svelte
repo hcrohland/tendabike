@@ -2,22 +2,12 @@
   import { Card, Heading, Hr, Li, List, P } from "flowbite-svelte";
 </script>
 
-<Card size="lg" class="p-4 sm:p-6 md:p-8 m-8">
-  <div>
-    <a
-      href="http://www.strava.com"
-      class="float-end items-start"
-      target="_blank"
-    >
-      <img
-        src="api_logo_pwrdBy_strava.png"
-        alt="powered by Strava"
-        height="20"
-      />
-    </a>
-    <Heading tag="h3">Tend your bike for a happy ride</Heading>
-    <P>Know how long your parts last and when to maintain them</P>
-  </div>
+<div class="p-4 sm:p-6 md:p-8 m-8 max-w-200">
+  <a href="http://www.strava.com" class="float-end items-start" target="_blank">
+    <img src="api_logo_pwrdBy_strava.png" alt="powered by Strava" height="20" />
+  </a>
+  <Heading tag="h3">Tend your bike for a happy ride</Heading>
+  <P>Know how long your parts last and when to maintain them</P>
   <Heading tag="h5">General use</Heading>
   <P>
     TendaBike fetches all your activities and bikes from Strava.
@@ -64,15 +54,11 @@
   </P>
   <Hr />
   <P>
-    <div class="float-right">
-      © Christoph Rohland 2019-2025 - Source Code at
-      <a
-        href="https://github.com/hcrohland/tendabike"
-        title="Repository"
-        class="inline"
-      >
+    <div class="flex justify-end">
+      © Christoph Rohland 2019-2025 - Source Code at&MediumSpace;
+      <a href="https://github.com/hcrohland/tendabike" title="Repository">
         GitHub
       </a>
     </div>
   </P>
-</Card>
+</div>
