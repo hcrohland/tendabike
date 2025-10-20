@@ -50,7 +50,7 @@
 {/snippet}
 
 <TableBodyRow>
-  <TableBodyCell colspan={2}>
+  <TableBodyCell>
     <div class="text-nowrap flex justify-between">
       <div>
         {#if name}
@@ -61,12 +61,13 @@
           {#if part}
             <ShowMore bind:show_more {title} />
           {/if}
-          <PlanName {plan} /> in
+          <PlanName {plan} />
         {/if}
       </div>
       <PlanMenu {plan} {name} />
     </div>
   </TableBodyCell>
+  <TableBodyCell>in</TableBodyCell>
   {#if part}
     {#each Limits.keys as key}
       {@render cell(key as any)}
