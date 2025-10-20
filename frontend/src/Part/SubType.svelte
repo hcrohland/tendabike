@@ -41,70 +41,77 @@
             {/if}
             {prefix + " " + type.name}
           </div>
-          {#if att.isAttached()}
-            <Menu>
-              <DropdownItem onclick={() => $actions.newService(part)}>
-                Log Service
-              </DropdownItem>
-              <DropdownItem onclick={() => $actions.attachPart(part)}>
-                Move part
-              </DropdownItem>
-              <DropdownItem onclick={() => $actions.replacePart(att)}>
-                New {type.name}
-              </DropdownItem>
-            </Menu>
-          {:else}
-            <Button
-              class="float-inline-end p-1 border-0 cursor-pointer"
-              size="xs"
-              color="alternative"
-              onclick={() => $actions.replacePart(att)}
-            >
-              add
-            </Button>
-          {/if}
         </TableHeadCell>
         {#if att.isAttached()}
           <TableBodyCell>
-            {#if part}
-              <PartLink {part} />
-            {:else}
-              {att.name}
-            {/if}
+            <div class="text-nowrap flex justify-between">
+              <div>
+                {#if part}
+                  <PartLink {part} />
+                {:else}
+                  {att.name}
+                {/if}
+              </div>
+              <Menu>
+                <DropdownItem onclick={() => $actions.newService(part)}>
+                  Log Service
+                </DropdownItem>
+                <DropdownItem onclick={() => $actions.attachPart(part)}>
+                  Move part
+                </DropdownItem>
+                <DropdownItem onclick={() => $actions.replacePart(att)}>
+                  New {type.name}
+                </DropdownItem>
+              </Menu>
+            </div>
           </TableBodyCell>
           <TableBodyCell>{att.fmtTime()}</TableBodyCell>
           <Usage id={part.usage} ref={part.id} />
         {:else}
-          <TableHeadCell colspan={80}></TableHeadCell>
+          <TableBodyCell>
+            <div class="flex justify-end">
+              <Button
+                class="p-1 border-0 cursor-pointer"
+                size="xs"
+                color="alternative"
+                onclick={() => $actions.replacePart(att)}
+              >
+                add
+              </Button>
+            </div>
+          </TableBodyCell>
+          <TableBodyCell colspan={80}></TableBodyCell>
         {/if}
       </tr>
     {/if}
     {#if show_more}
       <TableBodyRow>
-        <TableHeadCell scope="row" class="text-nowrap flex justify-between">
-          <div>
-            {"┃ ".repeat(level + 1) + "▶"}
-          </div>
-          {#if part.disposed_at == undefined}
-            <Menu>
-              <DropdownItem onclick={() => $actions.newService(part)}>
-                Log Service
-              </DropdownItem>
-              <DropdownItem onclick={() => $actions.attachPart(part)}>
-                Attach part
-              </DropdownItem>
-              <DropdownItem onclick={() => $actions.replacePart(att)}>
-                Duplicate part
-              </DropdownItem>
-            </Menu>
-          {/if}
+        <TableHeadCell scope="row">
+          {"┃ ".repeat(level + 1) + "▶"}
         </TableHeadCell>
         <TableBodyCell>
-          {#if part}
-            <PartLink {part} />
-          {:else}
-            {att.name}
-          {/if}
+          <div class="text-nowrap flex justify-between">
+            <div>
+              {#if part}
+                <PartLink {part} />
+              {:else}
+                {att.name}
+              {/if}
+            </div>
+            {#if part.disposed_at == undefined}
+              <Menu>
+                <DropdownItem onclick={() => $actions.newService(part)}>
+                  Log Service
+                </DropdownItem>
+                <DropdownItem onclick={() => $actions.attachPart(part)}>
+                  Attach part
+                </DropdownItem>
+                <DropdownItem onclick={() => $actions.replacePart(att)}>
+                  Duplicate part
+                </DropdownItem>
+              </Menu>
+            {/if}
+          </div>
         </TableBodyCell>
         <TableBodyCell>{att.fmtTime()}</TableBodyCell>
         <Usage id={att.usage} ref={att.idx} />
