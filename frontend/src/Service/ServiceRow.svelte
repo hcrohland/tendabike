@@ -39,7 +39,7 @@
 
 <TableBodyRow>
   {#if service}
-    <TableBodyCell>
+    <TableBodyCell class="text-nowrap flex justify-between">
       <div>
         {@render children?.()}
         <span id={"name" + service.id}>
@@ -52,6 +52,9 @@
           </Tooltip>
         {/if}
       </div>
+      {#if service}
+        <ServiceMenu {service} />
+      {/if}
     </TableBodyCell>
     <TableBodyCell class="text-end">
       {fmtRange(service.time, successor?.time)}
@@ -66,9 +69,5 @@
   {/if}
   <TableBodyCell class="text-end">{days}</TableBodyCell>
   <UsageCells {usage} />
-  <TableBodyCell>
-    {#if service}
-      <ServiceMenu {service} />
-    {/if}
-  </TableBodyCell>
+  <TableBodyCell></TableBodyCell>
 </TableBodyRow>

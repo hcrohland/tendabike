@@ -9,4 +9,3 @@
 <TableHeadCell scope="col" class="text-end">Date</TableHeadCell>
 <TableHeadCell scope="col" class="text-end">Days</TableHeadCell>
 <Usage header />
-<TableHeadCell></TableHeadCell>
