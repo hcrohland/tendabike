@@ -9,7 +9,6 @@
     DropdownItem,
     DropdownDivider,
     Avatar,
-    DarkMode,
     DropdownHeader,
   } from "flowbite-svelte";
   import { user } from "./lib/store";
@@ -38,7 +37,6 @@
   {#if $user}
     <div class="flex items-center md:order-2">
       <Avatar src={$user.avatar} id="user" class="border-2" />
-      <DarkMode />
       <Dropdown simple triggeredBy="#user">
         <DropdownHeader>
           {$user.firstname}
@@ -74,7 +72,6 @@
       <a href={"/strava/login?" + $querystring}>
         <img src="connect_with_strava.png" alt="Login with Strava" />
       </a>
-      <DarkMode />
     </div>
   {/if}
 </Navbar>
