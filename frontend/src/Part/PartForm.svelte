@@ -56,6 +56,6 @@
     <Label class="mb-2">
       New {type?.name || ""} day was
     </Label>
-    <DateTime bind:date={part.purchase} {maxdate} {mindate} required />
+    <DateTime bind:date={part.purchase} {maxdate} {mindate} required rounded />
   </div>
 </div>

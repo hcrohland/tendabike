@@ -11,22 +11,26 @@
     mindate?: Date;
     maxdate?: Date;
     prevdate?: (t: Date) => Date; // only usable w/o mindate
-    id?: string;
     required?: boolean;
+    rounded?: boolean;
   };
 
   let {
-    date = $bindable(new Date()),
+    date = $bindable(roundTime(new Date())),
     mindate = undefined,
     maxdate = undefined,
     prevdate = undefined,
-    id: inputId = undefined,
     required = undefined,
+    rounded = false,
   }: Props = $props();
 
   mindate = mindate ? roundTime(mindate) : undefined;
   maxdate = maxdate ? roundTime(maxdate) : undefined;
   let now = roundTime(new Date());
+
+  let inputClasses = $derived(
+    "dark:bg-gray-700 " + (rounded ? "rounded-l-md" : "rounded-none"),
+  );
 
   const options = {
     // time_24hr: true,
@@ -54,9 +58,8 @@
     }
     placeholder={formatDate(date, options.format, en, "standard")}
     mode="datetime"
-    {inputId}
     {required}
-    inputClasses="dark:bg-gray-700 rounded-l-md"
+    {inputClasses}
     {...options}
   />
 
