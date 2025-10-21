@@ -40,14 +40,7 @@
     return $parts[att.gear];
   }
 
-  let subparts = $derived(
-    type
-      .parts($parts)
-      .filter(
-        (p) =>
-          show_more || !(attachedTo($attachments, p.id, date) || p.disposed_at),
-      ),
-  );
+  let subparts = $derived(type.parts($parts));
 </script>
 
 <tr>
@@ -59,7 +52,7 @@
     <XsButton onclick={() => $actions.newPart(type)}>New</XsButton>
   </TableHeadCell>
 </tr>
-{#each subparts as part (part.id)}
+{#each subparts.filter((p) => show_more || !(attachedTo($attachments, p.id, date) || p.disposed_at)) as part (part.id)}
   <TableBodyRow class="border-0">
     <TableBodyCell class="border-0"></TableBodyCell>
     <TableBodyCell
