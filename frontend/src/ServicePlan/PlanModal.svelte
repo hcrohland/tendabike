@@ -62,14 +62,7 @@
       <GearForm bind:gear />
     </ButtonGroup>
   {/if}
-  <Input
-    type="text"
-    id="inputName"
-    bind:value={name}
-    autofocus
-    required
-    placeholder="Name"
-  />
+  <Input type="text" bind:value={name} autofocus required placeholder="Name" />
   <PlanLimits bind:select={limits} />
   {#snippet footer()}
     <Buttons bind:open label="Safe" />

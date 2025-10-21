@@ -20,12 +20,11 @@
 </script>
 
 <div>
-  <Label class="mb-2" for="inputName">You call it</Label>
+  <Label class="mb-2">You call it</Label>
   <!-- svelte-ignore a11y_autofocus -->
   <Input
     type="text"
     class="form-control"
-    id="inputName"
     bind:value={part.name}
     autofocus
     required
@@ -34,37 +33,29 @@
 </div>
 <div class="grid gap-4 md:grid-cols-2">
   <div>
-    <Label class="mb-2" for="inputBrand">and it is a</Label>
+    <Label class="mb-2">and it is a</Label>
     <Input
       type="text"
       class="form-control"
-      id="inputBrand"
       bind:value={part.vendor}
       placeholder="Brand"
       required
     />
   </div>
   <div>
-    <Label class="mb-2 invisible" for="inputModel">...</Label>
+    <Label class="mb-2 invisible">...</Label>
     <Input
       type="text"
       class="form-control"
-      id="inputModel"
       bind:value={part.model}
       placeholder="Model"
       required
     />
   </div>
   <div>
-    <Label class="mb-2" for="inputDate">
+    <Label class="mb-2">
       New {type?.name || ""} day was
     </Label>
-    <DateTime
-      id="inputDate"
-      bind:date={part.purchase}
-      {maxdate}
-      {mindate}
-      required
-    />
+    <DateTime bind:date={part.purchase} {maxdate} {mindate} required />
   </div>
 </div>

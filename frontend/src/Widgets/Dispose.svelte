@@ -3,7 +3,7 @@
   export let dispose: boolean;
 </script>
 
-<Switch id="dispose" bind:checked={dispose}>
+<Switch bind:checked={dispose}>
   {#if dispose}
     disposing <slot />
   {:else}

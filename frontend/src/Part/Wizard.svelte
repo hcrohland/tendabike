@@ -116,14 +116,12 @@
                 <ButtonGroup>
                   <Input
                     type="text"
-                    id="inputBrand"
                     bind:value={g.vendor}
                     placeholder="Brand"
                     disabled={!g.enabled}
                   />
                   <Input
                     type="text"
-                    id="inputModel"
                     bind:value={g.model}
                     placeholder="Model"
                     disabled={!g.enabled}

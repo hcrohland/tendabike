@@ -262,7 +262,7 @@
       {/each}
     </Select>
     <InputAddon>
-      <Switch id="months" bind:checked={perMonths} class="">Per Month</Switch>
+      <Switch bind:checked={perMonths} class="">Per Month</Switch>
     </InputAddon>
   </ButtonGroup>
   <MultiSelect
