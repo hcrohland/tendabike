@@ -19,8 +19,7 @@
 <div class="table-responsive">
   <Table hoverable striped>
     <TableHead>
-      <TableHeadCell scope="col"></TableHeadCell>
-      <TableHeadCell scope="col"></TableHeadCell>
+      <TableHeadCell colspan={3} scope="col">&NonBreakingSpace;</TableHeadCell>
       <Usage header />
       {#if attachee > 0}
         <TableHeadCell colspan={2}>Attached to</TableHeadCell>
