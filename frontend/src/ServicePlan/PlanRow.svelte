@@ -67,11 +67,13 @@
       <PlanMenu {plan} {name} />
     </div>
   </TableBodyCell>
-  <TableBodyCell>in</TableBodyCell>
   {#if part}
+    <TableBodyCell>in</TableBodyCell>
     {#each Limits.keys as key}
       {@render cell(key as any)}
     {/each}
+  {:else}
+    <TableBodyCell colspan={80} />
   {/if}
 </TableBodyRow>
 {#if part && show_more}
