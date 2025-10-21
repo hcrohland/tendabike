@@ -38,7 +38,9 @@
     {fmtNumber(usage.energy)}
   </TableBodyCell>
 {:else}
-  <TableHeadCell scope="col" title="Number of activities">Rides</TableHeadCell>
+  <TableHeadCell class="text-end" scope="col" title="Number of activities">
+    Rides
+  </TableHeadCell>
   <TableHeadCell class="text-end" scope="col" title="Time (h)">
     Time
   </TableHeadCell>
