@@ -41,20 +41,32 @@
   }
 
   let subparts = $derived(type.parts($parts));
+  let subshow = $derived(
+    subparts.filter(
+      (p) =>
+        show_more || !(attachedTo($attachments, p.id, date) || p.disposed_at),
+    ),
+  );
 </script>
 
 <tr>
-  <TableHeadCell colspan={80} scope="col" class="text-nowrap">
+  <TableHeadCell
+    rowspan={subshow.length + 1}
+    scope="col"
+    class="text-nowrap align-top px-0 mx-0"
+  >
     {#if subparts.length > 0}
       <ShowMore bind:show_more {update} title="attached" />
     {/if}
+  </TableHeadCell>
+  <TableHeadCell colspan={80} scope="col" class="text-nowrap">
     {type.name}s &NonBreakingSpace;
     <XsButton onclick={() => $actions.newPart(type)}>New</XsButton>
   </TableHeadCell>
 </tr>
-{#each subparts.filter((p) => show_more || !(attachedTo($attachments, p.id, date) || p.disposed_at)) as part (part.id)}
+{#each subshow as part (part.id)}
   <TableBodyRow class="border-0">
-    <TableBodyCell class="border-0"></TableBodyCell>
+    <TableHeadCell scope="row" class="border-0"></TableHeadCell>
     <TableBodyCell
       title={part.vendor + " " + part.model + " " + fmtDate(part.purchase)}
     >

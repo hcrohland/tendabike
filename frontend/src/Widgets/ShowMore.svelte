@@ -25,7 +25,7 @@
   {id}
   size="sm"
   color="alternative"
-  class="border-0 p-0 m-0 me-3"
+  class="border-0 p-0 m-0 mx-1"
   {onclick}
 >
   {show_more ? "-" : "+"}
