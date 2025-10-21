@@ -16,6 +16,13 @@
   }: Props = $props();
 </script>
 
-<Toggle size="small" {id} name="customSwitch" bind:checked {...rest}>
+<Toggle
+  size="small"
+  {id}
+  name="customSwitch"
+  classes={{ span: "-z-10" }}
+  bind:checked
+  {...rest}
+>
   {@render children?.()}
 </Toggle>
