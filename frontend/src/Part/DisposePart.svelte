@@ -18,6 +18,7 @@
   let mindate: Date;
   let date: Date;
   let all: boolean;
+  let hook: boolean;
 
   async function onaction() {
     try {
@@ -35,7 +36,9 @@
 
   export const start = (p: Part, last_attachment?: Attachment) => {
     part = p;
-    name = part.type().name;
+    let type = part.type();
+    name = type.name;
+    hook = type.is_hook();
     last = last_attachment;
 
     if (last) {
@@ -73,7 +76,9 @@
       <DateTime bind:date {mindate} />
     </ButtonGroup>
   </div>
-  <Switch bind:checked={all}>{label} all attached parts</Switch>
+  {#if hook}
+    <Switch bind:checked={all}>{label} all attached parts</Switch>
+  {/if}
   {#if detach}
     <Dispose bind:dispose>{name} when detached</Dispose>
   {/if}
