@@ -50,6 +50,7 @@ impl RequestUser {
             id,
             firstname,
             lastname,
+            avatar,
             ..
         } = token
             .extra_fields()
@@ -57,9 +58,14 @@ impl RequestUser {
             .as_ref()
             .ok_or(Error::BadRequest("No Athlete Info from Strava".to_string()))?;
 
+        // make sure you have a non-local url
+        let avatar = match avatar {
+            Some(a) if !a.starts_with("http") => &None,
+            _ => avatar,
+        };
         let refresh_token = token.refresh_token();
         let refresh = refresh_token.map(|t| t.secret());
-        let user = StravaUser::upsert(*id, firstname, lastname, refresh, store).await?;
+        let user = StravaUser::upsert(*id, firstname, lastname, avatar, refresh, store).await?;
         let id = user.tb_id();
         let is_admin = id.is_admin(store).await?;
 

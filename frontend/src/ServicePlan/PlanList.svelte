@@ -1,10 +1,15 @@
 <script lang="ts">
-  import { Table } from "@sveltestrap/sveltestrap";
+  import { Table, TableBody, TableHead } from "flowbite-svelte";
   import { ServicePlan } from "../lib/serviceplan";
   import PlanHeader from "./PlanHeader.svelte";
   import PlanBlock from "./PlanBlock.svelte";
 
-  export let planlist: ServicePlan[];
+  interface Props {
+    planlist: ServicePlan[];
+    children?: import("svelte").Snippet;
+  }
+
+  let { planlist, children }: Props = $props();
 
   function cmp(p: ServicePlan, q: ServicePlan) {
     let res;
@@ -21,13 +26,13 @@
   }
 </script>
 
-<Table responsive hover>
-  <thead>
-    <PlanHeader><slot /></PlanHeader>
-  </thead>
-  <tbody>
+<Table border={false} striped hoverable>
+  <TableHead>
+    <PlanHeader>{@render children?.()}</PlanHeader>
+  </TableHead>
+  <TableBody>
     {#each planlist.sort(cmp) as plan}
       <PlanBlock {plan} />
     {/each}
-  </tbody>
+  </TableBody>
 </Table>

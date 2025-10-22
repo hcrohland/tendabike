@@ -2,7 +2,11 @@
   import { link } from "svelte-spa-router";
   import { Part } from "../lib/part";
 
-  export let part: Part | undefined;
+  interface Props {
+    part: Part | undefined;
+  }
+
+  let { part }: Props = $props();
 </script>
 
 {#if part}

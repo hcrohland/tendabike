@@ -1,13 +1,11 @@
 <script lang="ts">
+  import { TableHeadCell } from "flowbite-svelte";
   import Usage from "../Usage/Usage.svelte";
 </script>
 
-<tr>
-  <th scope="col">
-    <slot />
-  </th>
-  <th scope="col">Date</th>
-  <th class="text-end"> Days</th>
-  <Usage header />
-  <th />
-</tr>
+<TableHeadCell scope="col">
+  <slot />
+</TableHeadCell>
+<TableHeadCell scope="col" class="text-end">Date</TableHeadCell>
+<TableHeadCell scope="col" class="text-end">Days</TableHeadCell>
+<Usage header />

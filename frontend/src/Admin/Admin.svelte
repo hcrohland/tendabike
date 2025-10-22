@@ -4,7 +4,10 @@
     ButtonGroup,
     Spinner,
     Table,
-  } from "@sveltestrap/sveltestrap";
+    TableBodyCell,
+    TableBodyRow,
+    TableHeadCell,
+  } from "flowbite-svelte";
   import { handleError, myfetch, setSummary } from "../lib/store";
   import type { User } from "../lib/types";
   import Sync from "./Sync.svelte";
@@ -39,40 +42,48 @@
 
 {#await request}
   ...
-{:then list}
+{:then list: any[]}
   <Table>
-    <tr>
-      <th>Id</th>
-      <th>Name</th>
-      <th>Role</th>
-      <th>Parts</th>
-      <th>Activities</th>
-      <th>Events</th>
-      <th />
-    </tr>
+    <TableBodyRow>
+      <TableHeadCell>Id</TableHeadCell>
+      <TableHeadCell>Name</TableHeadCell>
+      <TableHeadCell>Role</TableHeadCell>
+      <TableHeadCell>Parts</TableHeadCell>
+      <TableHeadCell>Activities</TableHeadCell>
+      <TableHeadCell>Events</TableHeadCell>
+      <TableHeadCell></TableHeadCell>
+    </TableBodyRow>
     {#each list.sort((a, b) => a.user.id - b.user.id) as { user, parts, activities, events, disabled } (user.id)}
-      <tr>
-        <td> {user.id}</td>
-        <td> {user.firstname} {user.name} </td>
-        <td> {disabled ? "Disabled" : user.is_admin ? "Admin" : "User"}</td>
-        <td> {parts}</td>
-        <td> {activities}</td>
-        <td> {events}</td>
-        <td>
+      <TableBodyRow>
+        <TableBodyCell>{user.id}</TableBodyCell>
+        <TableBodyCell>{user.firstname} {user.name}</TableBodyCell>
+        <TableBodyCell>
+          {disabled
+            ? "Disabled"
+            : user.is_admin
+              ? "Admin"
+              : "User"}</TableBodyCell
+        >
+        <TableBodyCell>{parts}</TableBodyCell>
+        <TableBodyCell>{activities}</TableBodyCell>
+        <TableBodyCell>{events}</TableBodyCell>
+        <TableBodyCell>
           {#if !disabled}
             <ButtonGroup>
-              <Button on:click={() => createSync(user)}>Add Sync Event</Button>
+              <Button onclick={() => createSync.start(user)}>
+                Add Sync Event
+              </Button>
               <Sync {user} {refresh} />
-              <Button on:click={() => disable(user)}>Disable user</Button>
+              <Button onclick={() => disable(user)}>Disable user</Button>
             </ButtonGroup>
           {/if}
-        </td>
-      </tr>
+        </TableBodyCell>
+      </TableBodyRow>
     {/each}
   </Table>
   <ButtonGroup>
-    <Button on:click={createSync()}>Add Sync Event for all</Button>
-    <Button on:click={rescan}>
+    <Button onclick={createSync}>Add Sync Event for all</Button>
+    <Button onclick={rescan}>
       {#await promise}
         <Spinner />
       {:then value}
@@ -80,6 +91,6 @@
       {/await}
     </Button>
   </ButtonGroup>
-  <Button on:click={refresh}>Refresh</Button>
+  <Button onclick={refresh}>Refresh</Button>
 {/await}
-<CreateSync {refresh} bind:createSync />
+<CreateSync {refresh} bind:this={createSync} />

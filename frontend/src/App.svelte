@@ -18,8 +18,7 @@
 
  -->
 
-<script lang="ts" context="module">
-  import { Container, Spinner } from "@sveltestrap/sveltestrap";
+<script lang="ts" module>
   import Router from "svelte-spa-router";
 
   import About from "./About.svelte";
@@ -27,12 +26,11 @@
   import Admin from "./Admin/Admin.svelte";
   import Header from "./Header.svelte";
   import Message from "./Message.svelte";
-  import Gear from "./Part/Part.svelte";
+  import Gear from "./Part/Gear.svelte";
   import Plans from "./ServicePlan/Plans.svelte";
   import Spares from "./Spares/Spares.svelte";
   import Statistics from "./Statistics.svelte";
   import ToyGroup from "./ToyGroup.svelte";
-  import Actions from "./Widgets/Actions.svelte";
   import { initData } from "./lib/store";
   import { getTypes } from "./lib/types";
 
@@ -52,17 +50,33 @@
   let promise = initData();
 </script>
 
+<script lang="ts">
+  import "./app.css";
+  import { CardPlaceholder, ThemeProvider } from "flowbite-svelte";
+  import Actions from "./Widgets/Actions.svelte";
+
+  const theme = {
+    tableBodyCell: "px-2 py-3",
+    tableHeadCell: "px-2 py-3",
+  };
+</script>
+
 <Header {promise} />
+
 <Message />
-<Container class="mt-2">
-  {#await promise}
-    <div class="d-flex justify-content-center">
-      <Spinner size="lg" />
-    </div>
-  {:then}
-    <Router {routes} />
-  {:catch error}
-    <About />
-  {/await}
-  <Actions />
-</Container>
+<ThemeProvider {theme}>
+  <div class="m-8">
+    {#await promise}
+      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        {#each [0, 1, 2, 3] as i}
+          <CardPlaceholder class="mb-4 p-4" />
+        {/each}
+      </div>
+    {:then}
+      <Router {routes} />
+    {:catch error}
+      <About />
+    {/await}
+  </div>
+</ThemeProvider>
+<Actions />

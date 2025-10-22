@@ -1,16 +1,23 @@
 <script lang="ts">
-  import { Button } from "@sveltestrap/sveltestrap";
+  import { Button } from "flowbite-svelte";
 
-  export let toggle: () => void;
-  export let disabled = false;
-  export let label: any;
+  interface Props {
+    open: boolean;
+    label?: string;
+  }
+
+  let { open = $bindable(false), label = undefined }: Props = $props();
+
+  function onclick() {
+    open = false;
+  }
 </script>
 
 {#if label}
-  <Button type="button" on:click={toggle}>Cancel</Button>
-  <Button type="submit" color="primary" {disabled}>
+  <Button {onclick} color="alternative">Cancel</Button>
+  <Button type="submit" value="commit" class="float-end">
     {label}
   </Button>
 {:else}
-  <Button type="button" color="primary" on:click={toggle}>Close</Button>
+  <Button {onclick}>Close</Button>
 {/if}

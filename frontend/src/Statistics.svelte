@@ -1,14 +1,13 @@
 <script lang="ts">
   import { category } from "./lib/types";
   import {
-    Row,
-    Col,
-    Input,
-    InputGroup,
-    InputGroupText,
-    TabPane,
-    TabContent,
-  } from "@sveltestrap/sveltestrap";
+    ButtonGroup,
+    InputAddon,
+    MultiSelect,
+    Select,
+    TabItem,
+    Tabs,
+  } from "flowbite-svelte";
   import Plotly from "./Widgets/Plotly.svelte";
   import Switch from "./Widgets/Switch.svelte";
   import { by } from "./lib/mapable";
@@ -189,16 +188,16 @@
     };
   }
 
-  let tab = "elevation";
+  let title = $state("elevation");
 
   function plot(
-    tab: string,
+    title: string,
     perMonths: boolean,
     cumm: number,
     comp: number | null,
     years: Year[],
   ) {
-    if (tab == "time") {
+    if (title == "time") {
       if (perMonths)
         return getPlot(
           years,
@@ -217,7 +216,7 @@
           ["time", "moving time"],
           ["duration", "outdoor time"],
         ]);
-    } else if (tab == "distance")
+    } else if (title == "distance")
       return getPlot(years, cumm, comp, perMonths, "Distance (km)", [
         ["distance"],
       ]);
@@ -228,64 +227,57 @@
       ]);
   }
 
-  $: acts = $category.activities($activities);
-  $: gears = $category.parts($parts);
-  let gear = gears ? [...gears] : [];
-  let cumm: number;
-  let comp: number | null = null;
-  let perMonths = false;
-  $: years = buildYears(acts, gear);
+  let acts = $derived($category.activities($activities));
+  let gears = $derived($category.parts($parts));
+  let gear = $state([]);
+  let cumm: any = $state(0);
+  let comp: number | null = $state(null);
+  let perMonths = $state(false);
+  let years = $derived(buildYears(acts, gear));
 </script>
 
-<Row class="p-sm-2">
-  <Col xs="auto" class="p-0 p-sm-2">
-    <InputGroup>
-      <InputGroupText>Your statistics for</InputGroupText>
-      <Input
-        type="select"
-        class="custom-select"
-        bind:value={cumm}
-        on:change={() => {
-          if (cumm == comp) comp = null;
-        }}
-      >
-        {#each years as item, i}
-          <option value={i}>{item.year}</option>
-        {/each}
-      </Input>
-      <InputGroupText>vs</InputGroupText>
-      <Input type="select" class="custom-select" bind:value={comp}>
-        {#each years as item, i (item.year)}
-          {@const selected = (comp ? comp : cumm) == i}
-          {#if i != cumm}
-            <option value={i} {selected}>{item.year}</option>
-          {:else}
-            <option value={null} {selected}>-- None --</option>
-          {/if}
-        {/each}
-      </Input>
-      <Switch id="months" bind:checked={perMonths}>Per Month</Switch>
-    </InputGroup>
-  </Col>
-  <Col class="p-0 p-sm-2" />
-  <Col xs="auto" class="p-0 p-sm-2">
-    <InputGroup>
-      <select
-        class="form-select"
-        multiple
-        placeholder="Select bikes..."
-        bind:value={gear}
-      >
-        {#each gears as item, i}
-          <option value={item}>{item.name}</option>
-        {/each}
-      </select>
-    </InputGroup>
-  </Col>
-</Row>
-<TabContent on:tab={(e) => (tab = e.detail.toString())}>
-  <TabPane tab="Elevation" tabId="elevation" active />
-  <TabPane tab="Distance" tabId="distance" />
-  <TabPane tab="Time" tabId="time" />
-</TabContent>
-<Plotly {...plot(tab, perMonths, cumm, comp, years)} />
+<div class="flex flex-wrap pb-10 gap-2 justify-between">
+  <ButtonGroup>
+    <InputAddon>Your statistics for</InputAddon>
+    <Select
+      bind:value={cumm}
+      onchange={() => {
+        if (cumm == comp) comp = null;
+      }}
+      classes={{ select: "rounded-none h-full" }}
+    >
+      {#each years as item, i}
+        <option value={i}>{item.year}</option>
+      {/each}
+    </Select>
+    <InputAddon>vs</InputAddon>
+    <Select bind:value={comp} classes={{ select: "rounded-none h-full" }}>
+      {#each years as item, i (item.year)}
+        {@const selected = (comp ? comp : cumm) == i}
+        {#if i != cumm}
+          <option value={i} {selected}>{item.year}</option>
+        {:else}
+          <option value={null} {selected}>-- None --</option>
+        {/if}
+      {/each}
+    </Select>
+    <InputAddon>
+      <Switch bind:checked={perMonths} class="">Per Month</Switch>
+    </InputAddon>
+  </ButtonGroup>
+  <MultiSelect
+    placeholder="Select bikes..."
+    items={gears
+      .sort(by("purchase"))
+      .map((g, n) => ({ value: g, name: n + " - " + g.name, id: g.id }))}
+    bind:value={gear}
+    class="max-w-150"
+  />
+</div>
+
+<Tabs bind:selected={title}>
+  <TabItem title="Elevation" key="elevation" />
+  <TabItem title="Distance" key="distance" />
+  <TabItem title="Time" key="time" />
+</Tabs>
+<Plotly {...plot(title, perMonths, cumm!, comp, years)} />

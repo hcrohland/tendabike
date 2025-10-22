@@ -2,6 +2,7 @@
   import { link } from "svelte-spa-router";
   import { fmtNumber, fmtSeconds } from "../lib/store";
   import { Usage, usages } from "../lib/usage";
+  import { TableBodyCell, TableHeadCell } from "flowbite-svelte";
 
   export let header = false;
   export let id: string | undefined = undefined;
@@ -12,7 +13,7 @@
 </script>
 
 {#if !header}
-  <td class="text-end">
+  <TableBodyCell class="text-end">
     {#if ref}
       <a class="text-reset" use:link href={"/activities/" + ref}>
         {fmtNumber(usage.count)}
@@ -20,27 +21,39 @@
     {:else}
       {fmtNumber(usage.count)}
     {/if}
-  </td>
-  <td class="text-end">
+  </TableBodyCell>
+  <TableBodyCell class="text-end">
     {fmtSeconds(usage.time)}
-  </td>
-  <td class="text-end">
+  </TableBodyCell>
+  <TableBodyCell class="text-end">
     {fmtNumber(Math.round((usage.distance || 0) / 1000))}
-  </td>
-  <td class="text-end">
+  </TableBodyCell>
+  <TableBodyCell class="text-end">
     {fmtNumber(usage.climb)}
-  </td>
-  <td class="text-end">
+  </TableBodyCell>
+  <TableBodyCell class="text-end">
     {fmtNumber(usage.descend)}
-  </td>
-  <td class="text-end">
+  </TableBodyCell>
+  <TableBodyCell class="text-end">
     {fmtNumber(usage.energy)}
-  </td>
+  </TableBodyCell>
 {:else}
-  <th class="text-end" scope="col" title="Number of activities">Rides</th>
-  <th class="text-end" scope="col" title="Time (h)">Time</th>
-  <th class="text-end" scope="col" title="Distance (km)">Distance</th>
-  <th class="text-end" scope="col" title="Climb (m)">Climb</th>
-  <th class="text-end" scope="col" title="Descend (m)">Descend</th>
-  <th class="text-end" scope="col" title="Energy (kJ)">Energy</th>
+  <TableHeadCell class="text-end" scope="col" title="Number of activities">
+    Rides
+  </TableHeadCell>
+  <TableHeadCell class="text-end" scope="col" title="Time (h)">
+    Time
+  </TableHeadCell>
+  <TableHeadCell class="text-end" scope="col" title="Distance (km)">
+    Distance
+  </TableHeadCell>
+  <TableHeadCell class="text-end" scope="col" title="Climb (m)">
+    Climb
+  </TableHeadCell>
+  <TableHeadCell class="text-end" scope="col" title="Descend (m)">
+    Descend
+  </TableHeadCell>
+  <TableHeadCell class="text-end" scope="col" title="Energy (kJ)">
+    Energy
+  </TableHeadCell>
 {/if}

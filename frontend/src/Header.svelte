@@ -1,99 +1,76 @@
 <script lang="ts">
   import {
-    Collapse,
     Navbar,
-    Nav,
-    NavbarToggler,
-    NavbarBrand,
-    NavLink,
-  } from "@sveltestrap/sveltestrap";
-  import {
+    NavBrand,
+    NavLi,
+    NavUl,
+    NavHamburger,
     Dropdown,
     DropdownItem,
-    DropdownMenu,
-    DropdownToggle,
-    NavItem,
-  } from "@sveltestrap/sveltestrap";
+    DropdownDivider,
+    Avatar,
+    DropdownHeader,
+  } from "flowbite-svelte";
   import { user } from "./lib/store";
   import Sport from "./Widgets/Sport.svelte";
   import { category } from "./lib/types";
   import { querystring } from "svelte-spa-router";
   import SyncMenu from "./Widgets/SyncMenu.svelte";
+  import { location } from "svelte-spa-router";
 
-  export let promise;
+  let { promise } = $props();
 
-  let userOpen = false;
-
-  let isOpen = false;
-  function navbarUpdate(event: CustomEvent<any>) {
-    isOpen = event.detail.isOpen;
-  }
+  let activeUrl = $derived("/#" + $location);
 </script>
 
-<Navbar color="light" expand="md">
-  <img
-    src="favicon.png"
-    alt="TendaBike"
-    title="TendaBike"
-    width="60"
-    class="rounded-circle"
-  />
-  <NavbarBrand class="text-decoration-none" href="/#/cat">
+<Navbar>
+  <NavBrand href="/#/cat">
+    <img
+      src="favicon.png"
+      alt="TendaBike"
+      title="TendaBike"
+      class="rounded-circle h-11"
+    />
     &nbsp; Tend a {$category.name}
-  </NavbarBrand>
-  <NavbarToggler on:click={() => (isOpen = !isOpen)} />
+  </NavBrand>
   {#if $user}
-    <Collapse {isOpen} navbar expand="md" on:update={navbarUpdate}>
-      <Nav class="ms-auto float-start" navbar>
-        <NavItem>
-          <NavLink href="/#/cat" class="dropdown-item text-reset">
-            {$category.name}s
-          </NavLink>
-        </NavItem>
-        <NavItem>
-          <NavLink href="/#/plans" class="dropdown-item text-reset">
-            Services
-          </NavLink>
-        </NavItem>
-        <NavItem>
-          <NavLink href="/#/spares" class="dropdown-item text-reset">
-            Parts
-          </NavLink>
-        </NavItem>
-        <NavItem>
-          <NavLink href="/#/activities" class="dropdown-item text-reset">
-            Activities
-          </NavLink>
-        </NavItem>
-      </Nav>
-      <Nav class="ms-auto float-end" navbar>
+    <div class="flex items-center md:order-2">
+      <Avatar src={$user.avatar} id="user" class="border-2" />
+      <Dropdown simple triggeredBy="#user">
+        <DropdownHeader>
+          {$user.firstname}
+          {$user.name}
+        </DropdownHeader>
+        <DropdownDivider />
+        <Sport></Sport>
         {#await promise then}
           <SyncMenu></SyncMenu>
         {/await}
-        <Dropdown nav isOpen={userOpen} toggle={() => (userOpen = !userOpen)}>
-          <DropdownToggle color="light" caret>{$user.firstname}</DropdownToggle>
-          <DropdownMenu right>
-            <DropdownItem href="/#/stats">Statistics</DropdownItem>
-            <Sport></Sport>
-            <DropdownItem href="/strava/logout">Logout</DropdownItem>
-            <DropdownItem href="/api/user/export" download="tendabike.json">
-              Export Data
-            </DropdownItem>
-            <DropdownItem divider />
-            <DropdownItem href="/#/about">About</DropdownItem>
-            {#if $user.is_admin}
-              <DropdownItem divider />
-              <DropdownItem href="/#/admin">Admin</DropdownItem>
-            {/if}
-          </DropdownMenu>
-        </Dropdown>
-      </Nav>
-    </Collapse>
+        {#if $user.is_admin}
+          <DropdownDivider />
+          <DropdownItem href="/#/admin">Admin</DropdownItem>
+        {/if}
+        <DropdownDivider />
+        <DropdownItem href="/api/user/export" download="tendabike.json">
+          Export Data
+        </DropdownItem>
+        <DropdownItem href="/#/about">About</DropdownItem>
+        <DropdownItem href="/strava/logout">Logout</DropdownItem>
+      </Dropdown>
+      <NavHamburger />
+    </div>
+    <NavUl class="max-w-full" {activeUrl}>
+      <NavLi class="justify-start" href="/#/cat">{$category.name}s</NavLi>
+      <NavLi href="/#/plans">Services</NavLi>
+      <NavLi href="/#/spares">Parts</NavLi>
+      <NavLi href="/#/activities">Activities</NavLi>
+      <NavLi href="/#/stats">Statistics</NavLi>
+    </NavUl>
   {:else}
-    <Nav class="ml-auto float-end" navbar>
+    <div class="flex items-center md:order-2">
       <a href={"/strava/login?" + $querystring}>
         <img src="connect_with_strava.png" alt="Login with Strava" />
       </a>
-    </Nav>
+    </div>
   {/if}
 </Navbar>

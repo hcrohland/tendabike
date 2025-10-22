@@ -1,14 +1,18 @@
 <script lang="ts">
   import { types, Type } from "../lib/types";
-  import { Table } from "@sveltestrap/sveltestrap";
+  import { Table, TableBody, TableHead } from "flowbite-svelte";
   import { filterValues, by } from "../lib/mapable";
   import SubType from "./SubType.svelte";
   import { Part } from "../lib/part";
   import { Attachment } from "../lib/attachment";
   import Wizard from "./Wizard.svelte";
 
-  export let part: Part;
-  export let attachees: Attachment[];
+  interface Props {
+    part: Part;
+    attachees: Attachment[];
+  }
+
+  let { part, attachees }: Props = $props();
 
   type MyList = {
     attachments: Attachment[];
@@ -47,16 +51,16 @@
 </script>
 
 {#if attachees.length > 0}
-  <Table responsive hover>
-    <thead>
+  <Table hoverable striped>
+    <TableHead>
       <SubType />
-    </thead>
-    <tbody>
+    </TableHead>
+    <TableBody>
       {#each buildList([], part.type(), attachees, 0, "") as item (item.hook.id + "." + item.type.id)}
         {@const { hook, ...props } = item}
         <SubType {...props} />
       {/each}
-    </tbody>
+    </TableBody>
   </Table>
 {/if}
 {#if part.isGear()}

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button } from "@sveltestrap/sveltestrap";
+  import { Button } from "flowbite-svelte";
   import { handleError, myfetch } from "../lib/store";
   import type { User } from "../lib/types";
 
@@ -24,7 +24,7 @@
   }
 </script>
 
-<Button on:click={() => sync(user.id)}>
+<Button onclick={() => sync(user.id)}>
   {#await promise}
     Processed {count} ...
   {:then}

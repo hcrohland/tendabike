@@ -1,60 +1,44 @@
 <script lang="ts">
-  import {
-    Modal,
-    ModalBody,
-    ModalHeader,
-    ModalFooter,
-  } from "@sveltestrap/sveltestrap";
   import { handleError } from "../lib/store";
-  import { Type } from "../lib/types";
+  import { Type, types } from "../lib/types";
   import { attachments } from "../lib/attachment";
   import NewForm from "./PartForm.svelte";
   import { Part } from "../lib/part";
   import Buttons from "../Widgets/Buttons.svelte";
   import { activities } from "../lib/activity";
+  import Modal from "../Widgets/Modal.svelte";
 
-  let isOpen = false;
-  let disabled = true;
+  let open = $state(false);
 
-  let start: Date | undefined;
-  let part: Part;
-  let newpart: Part;
-  let type: Type;
+  let maxdate: Date | undefined = $state();
+  let part: any = $state();
+  let type: Type = $state(types[0]);
 
-  async function savePart() {
+  async function onaction() {
     try {
-      disabled = true;
-      await newpart.update();
+      await new Part(part).update();
     } catch (e: any) {
       handleError(e);
     }
 
-    isOpen = false;
+    open = false;
   }
 
-  export const changePart = (p: Part) => {
-    part = p;
-    type = part.type();
-    start = part.firstEvent($activities, $attachments);
-    disabled = true;
-    isOpen = true;
-  };
-
-  const toggle = () => (isOpen = false);
-  const setPart = (e: CustomEvent<Part>) => {
-    newpart = new Part(e.detail);
-    disabled = false;
+  export const start = (p: Part) => {
+    part = { ...p };
+    type = p.type();
+    maxdate = p.firstEvent($activities, $attachments);
+    open = true;
   };
 </script>
 
-<Modal {isOpen} {toggle}>
-  <ModalHeader {toggle}>Change {type.name} details</ModalHeader>
-  <form on:submit|preventDefault={savePart}>
-    <ModalBody>
-      <NewForm {type} {part} on:change={setPart} maxdate={start} />
-    </ModalBody>
-    <ModalFooter>
-      <Buttons {toggle} {disabled} label={"Change"} />
-    </ModalFooter>
-  </form>
+<Modal bind:open {onaction}>
+  {#snippet header()}
+    Change {type.name} details
+  {/snippet}
+  <NewForm {type} bind:part {maxdate} />
+
+  {#snippet footer()}
+    <Buttons bind:open label="Change" />
+  {/snippet}
 </Modal>

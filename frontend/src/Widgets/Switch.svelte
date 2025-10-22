@@ -1,10 +1,20 @@
 <script lang="ts">
-  import { InputGroupText, Input } from "@sveltestrap/sveltestrap";
-  export let checked: boolean;
-  export let id = "custominputneedsone";
+  import { Toggle } from "flowbite-svelte";
+  interface Props {
+    checked: boolean;
+    children?: import("svelte").Snippet;
+    class?: string;
+  }
+
+  let { checked = $bindable(), children, ...rest }: Props = $props();
 </script>
 
-<InputGroupText>
-  <Input type="switch" {id} name="customSwitch" bind:checked></Input>
-  <slot />
-</InputGroupText>
+<Toggle
+  size="small"
+  name="customSwitch"
+  classes={{ span: "-z-10" }}
+  bind:checked
+  {...rest}
+>
+  {@render children?.()}
+</Toggle>

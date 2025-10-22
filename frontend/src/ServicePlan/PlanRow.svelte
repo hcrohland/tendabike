@@ -1,93 +1,81 @@
 <script lang="ts">
-  import { DropdownItem } from "@sveltestrap/sveltestrap";
+  import { TableBodyCell, TableBodyRow, Tooltip } from "flowbite-svelte";
   import ServiceRow from "../Service/ServiceRow.svelte";
-  import { actions } from "../Widgets/Actions.svelte";
-  import Menu from "../Widgets/Menu.svelte";
-  import ShowMore from "../Widgets/ShowMore.svelte";
   import { attachments } from "../lib/attachment";
-  import { parts } from "../lib/part";
+  import { Part, parts } from "../lib/part";
   import { services } from "../lib/service";
-  import { ServicePlan } from "../lib/serviceplan";
+  import { Limits, ServicePlan } from "../lib/serviceplan";
   import { usages } from "../lib/usage";
-  import PlanCell from "./PlanCell.svelte";
   import PlanName from "./PlanName.svelte";
+  import ShowMore from "../Widgets/ShowMore.svelte";
+  import PlanMenu from "./PlanMenu.svelte";
+  import { fmtNumber } from "../lib/store";
 
-  export let plan: ServicePlan;
-  export let name: string | null = null;
+  interface Props {
+    plan: ServicePlan;
+    name?: string | null;
+  }
 
-  let show_more = false;
+  let { plan, name = null }: Props = $props();
 
-  $: part = plan.getpart($parts, $attachments);
-  $: serviceList = plan.services(part, $services);
-  $: due = plan.due(part, serviceList.at(0), $usages);
+  let show_more = $state(false);
+
+  let part = $derived(plan.getpart($parts, $attachments)) as Part;
+  let serviceList = $derived(plan.services(part, $services));
+  let due = $derived(plan.due(part, serviceList.at(0), $usages));
   let title = "service history";
+
+  function get_class(plan: number, due: number) {
+    if (due < 0) return "rounded p-1 bg-red-600 text-white";
+    if (due < plan * 0.05) return "rounded p-1 text-gray-900 bg-yellow-200";
+    return "";
+  }
 </script>
 
-<tr>
-  <td>
-    {#if name}
-      ┃
-      <ShowMore bind:show_more {title} />
-      {@html name}
+{#snippet cell(key: keyof Limits)}
+  {@const p = plan[key] as number}
+  {@const d = due[key] as number}
+  <TableBodyCell class="text-end">
+    {#if p != null && d != null}
+      <span class={get_class(p, d)}>
+        {fmtNumber(d)}
+      </span>
+      <Tooltip>
+        {fmtNumber(p - d)} / {fmtNumber(p)}
+      </Tooltip>
     {:else}
-      {#if part}
-        <ShowMore bind:show_more {title} />
-      {/if}
-      <PlanName {plan} />
+      -
     {/if}
-  </td>
-  {#if !part}
-    <td colspan="8" />
-  {:else}
-    <td class=""> in </td>
-    <PlanCell plan={plan.days} due={due.days} />
-    <PlanCell plan={plan.rides} due={due.rides} />
-    <PlanCell plan={plan.hours} due={due.hours} />
-    <PlanCell plan={plan.km} due={due.km} />
-    <PlanCell plan={plan.climb} due={due.climb} />
-    <PlanCell plan={plan.descend} due={due.descend} />
-    <PlanCell plan={plan.kJ} due={due.kJ} />
-  {/if}
+  </TableBodyCell>
+{/snippet}
 
-  <td>
-    <Menu>
-      {#if part}
-        {#if serviceList.at(0) != undefined}
-          <DropdownItem
-            on:click={() => $actions.redoService(serviceList.at(0))}
-          >
-            Repeat last service
-          </DropdownItem>
-        {/if}
-        {@const plans = plan.id ? [plan.id] : []}
-        <DropdownItem on:click={() => $actions.newService(part, plans)}>
-          New Service for plan
-        </DropdownItem>
-        {#if plan.part != part.id}
-          {@const att = part.attachments($attachments).at(0)}
-          {#if att}
-            <DropdownItem on:click={() => $actions.replacePart(att)}>
-              Replace Part
-            </DropdownItem>
+<TableBodyRow>
+  <TableBodyCell>
+    <div class="text-nowrap flex justify-between">
+      <div>
+        {#if name}
+          &NonBreakingSpace;&NonBreakingSpace;┃
+          <ShowMore bind:show_more {title} />
+          {@html name}
+        {:else}
+          {#if part}
+            <ShowMore bind:show_more {title} />
           {/if}
+          <PlanName {plan} />
         {/if}
-      {/if}
-
-      {#if !name && part}
-        <DropdownItem divider />
-      {/if}
-
-      {#if !name}
-        <DropdownItem on:click={() => $actions.updatePlan(plan)}>
-          Change ServicePlan
-        </DropdownItem>
-        <DropdownItem on:click={() => $actions.deletePlan(plan)}>
-          Delete ServicePlan
-        </DropdownItem>
-      {/if}
-    </Menu>
-  </td>
-</tr>
+      </div>
+      <PlanMenu {plan} {name} />
+    </div>
+  </TableBodyCell>
+  {#if part}
+    <TableBodyCell>in</TableBodyCell>
+    {#each Limits.keys as key}
+      {@render cell(key as any)}
+    {/each}
+  {:else}
+    <TableBodyCell colspan={80} />
+  {/if}
+</TableBodyRow>
 {#if part && show_more}
   {#each serviceList as service, i (service.id)}
     {@const successor = i > 0 ? serviceList[i - 1] : null}

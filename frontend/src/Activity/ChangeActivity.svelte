@@ -1,52 +1,53 @@
 <script lang="ts">
-  import { FormGroup, Offcanvas } from "@sveltestrap/sveltestrap";
+  import { ButtonGroup, InputAddon } from "flowbite-svelte";
+  import Modal from "../Widgets/Modal.svelte";
   import { Activity } from "../lib/activity";
   import { category } from "../lib/types";
   import SelectPart from "../Widgets/SelectPart.svelte";
   import ChangeField from "./ChangeField.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
 
-  export const changeActivity = (a: Activity) => {
-    isOpen = true;
-    activity = new Activity(a);
+  export const start = (a: Activity) => {
+    open = true;
+    activity = { ...a };
   };
 
-  let activity: Activity;
-  let isOpen = false;
+  let activity: any;
+  let open = false;
 
-  const toggle = () => (isOpen = !isOpen);
-
-  async function submit() {
-    await activity.update();
-    isOpen = false;
+  async function onaction() {
+    await new Activity(activity).update();
+    open = false;
   }
 </script>
 
 {#if activity}
-  <Offcanvas placement="end" {isOpen} {toggle}>
-    <div slot="header">
+  <Modal bind:open {onaction} size="xs">
+    {#snippet header()}
       Change Activity <br />
       {activity?.name} <br />
       at {activity?.start.toLocaleString()}
-    </div>
-    <form on:submit|preventDefault={submit}>
-      <FormGroup floating label={$category?.name} class="mb-0 mr-sm-2 mb-sm-2">
+    {/snippet}
+    <!-- <form on:submit|preventDefault={submit}> -->
+    <div>
+      <ButtonGroup>
+        <InputAddon>{$category.name}</InputAddon>
         <SelectPart
           type={$category}
           bind:part={activity.gear}
           none={!activity.gear}
         />
-      </FormGroup>
-
+      </ButtonGroup>
+    </div>
+    <div>
       <ChangeField label="Climb (m)" bind:field={activity.climb} />
       <ChangeField label="Descend (m)" bind:field={activity.descend} />
       <ChangeField label="Distance (m)" bind:field={activity.distance} />
       <ChangeField label="Time (sec)" bind:field={activity.time} />
       <ChangeField label="Duration (sec)" bind:field={activity.duration} />
-
-      <div class="float-end">
-        <Buttons {toggle} label="Update" />
-      </div>
-    </form>
-  </Offcanvas>
+    </div>
+    {#snippet footer()}
+      <Buttons bind:open label="Update" />
+    {/snippet}
+  </Modal>
 {/if}

@@ -1,11 +1,13 @@
 <script lang="ts">
   import {
     Input,
-    InputGroup,
+    ButtonGroup,
     Table,
-    Container,
     Button,
-  } from "@sveltestrap/sveltestrap";
+    TableBodyRow,
+    TableHeadCell,
+    TableBodyCell,
+  } from "flowbite-svelte";
   import { types, Type } from "../lib/types";
   import { Attachment } from "../lib/attachment";
   import { type Map, filterValues } from "../lib/mapable";
@@ -100,49 +102,45 @@
 </script>
 
 {#if !gear.disposed_at && groups.length > 0}
-  <Container>
+  <div>
     {#if show_button}
-      <Button color="success" on:click={() => (show_button = false)}>
+      <Button color="primary" onclick={() => (show_button = false)}>
         Add more component groups
       </Button>
     {:else}
-      <Table borderless>
+      <Table>
         <tbody>
-          <tr>
-            <th colspan="80"> Add components groups: </th>
-          </tr>
+          <TableBodyRow>
+            <TableHeadCell colspan={80}>Add components groups:</TableHeadCell>
+          </TableBodyRow>
           {#each groups as g, i}
-            <tr>
-              <th>
+            <TableBodyRow>
+              <TableHeadCell>
                 <Switch bind:checked={g.enabled}>
                   {g.group}:
                 </Switch>
-              </th>
-              <td>
-                <InputGroup>
+              </TableHeadCell>
+              <TableBodyCell>
+                <ButtonGroup>
                   <Input
                     type="text"
-                    class="form-control"
-                    id="inputBrand"
                     bind:value={g.vendor}
                     placeholder="Brand"
                     disabled={!g.enabled}
                   />
                   <Input
                     type="text"
-                    class="form-control"
-                    id="inputModel"
                     bind:value={g.model}
                     placeholder="Model"
                     disabled={!g.enabled}
                   />
-                </InputGroup>
-              </td>
-            </tr>
+                </ButtonGroup>
+              </TableBodyCell>
+            </TableBodyRow>
           {/each}
         </tbody>
       </Table>
-      <Button {disabled} on:click={save}>Set</Button>
+      <Button {disabled} onclick={save}>Set</Button>
     {/if}
-  </Container>
+  </div>
 {/if}

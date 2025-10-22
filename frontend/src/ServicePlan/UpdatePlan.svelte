@@ -1,55 +1,33 @@
 <script lang="ts">
-  import {
-    Modal,
-    ModalBody,
-    ModalFooter,
-    ModalHeader,
-  } from "@sveltestrap/sveltestrap";
-  import { plans, ServicePlan } from "../lib/serviceplan";
-  import { parts, Part } from "../lib/part";
+  import { ServicePlan } from "../lib/serviceplan";
+  import { parts } from "../lib/part";
   import { category, types } from "../lib/types";
-  import PlanForm from "./PlanForm.svelte";
-  import Buttons from "../Widgets/Buttons.svelte";
+  import PlanModal from "./PlanModal.svelte";
 
-  let part: Part | null;
-  let plan: ServicePlan;
-  let isOpen = false;
+  let title: string = $state("");
+  let modal: { start: (p: ServicePlan) => void };
 
-  async function postPlan() {
-    await plan.update();
-    isOpen = false;
+  async function safePlan(newplan: ServicePlan) {
+    await newplan.update();
   }
 
-  export const updatePlan = (p: ServicePlan) => {
-    part = $plans[p.id!].part ? $parts[p.part!] : null;
-    plan = new ServicePlan(p);
-    isOpen = true;
-  };
-
-  const toggle = () => {
-    isOpen = false;
-  };
-
-  $: disabled = !(plan && plan.valid());
+  export function start(p: ServicePlan) {
+    if (p.part) {
+      let part = $parts[p.part];
+      if (part.isGear() && p.hook != null) {
+        title += types[p.what].human_name(p.hook) + " of ";
+      }
+      title += part.name;
+    } else {
+      title =
+        types[p.what].human_name(p.hook) +
+        " of any " +
+        $category.name.toLocaleLowerCase();
+    }
+    modal.start(new ServicePlan(p));
+  }
 </script>
 
-<Modal {isOpen} {toggle}>
-  <ModalHeader {toggle}>
-    Update service plan for
-    {#if part == null}
-      {types[plan.what].human_name(plan.hook)} of any {$category.name.toLocaleLowerCase()}
-    {:else if part.isGear() && plan.hook != null}
-      {types[plan.what].human_name(plan.hook)} of {part.name}
-    {:else}
-      {part.name}
-    {/if}
-  </ModalHeader>
-  <form on:submit|preventDefault={postPlan}>
-    <ModalBody>
-      <PlanForm bind:plan />
-    </ModalBody>
-    <ModalFooter>
-      <Buttons {toggle} {disabled} label={"Update"} />
-    </ModalFooter>
-  </form>
-</Modal>
+<PlanModal bind:this={modal} {safePlan} no_gear>
+  Update service plan for {title}
+</PlanModal>

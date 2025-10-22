@@ -1,17 +1,11 @@
 <script lang="ts">
-  import {
-    Dropdown,
-    DropdownItem,
-    DropdownMenu,
-    DropdownToggle,
-  } from "@sveltestrap/sveltestrap";
+  import { Dropdown, DropdownItem, NavLi } from "flowbite-svelte";
   import { handleError, myfetch, refresh, updateSummary } from "../lib/store";
   import { onDestroy } from "svelte";
+  import { ChevronDownOutline } from "flowbite-svelte-icons";
   import Garmin from "../Activity/Garmin.svelte";
 
-  let garmin: () => void;
-
-  let syncOpen: boolean;
+  let openGarmin = $state(false);
 
   let hook_timer = setTimeout(() => {});
 
@@ -19,7 +13,7 @@
     clearInterval(hook_timer);
   });
 
-  let hook_promise = poll();
+  let hook_promise = $state(poll());
 
   async function poll() {
     clearInterval(hook_timer);
@@ -45,19 +39,18 @@
   }
 </script>
 
-<Dropdown nav isOpen={syncOpen} toggle={() => (syncOpen = !syncOpen)}>
-  <DropdownToggle color="light" caret>
-    {#await hook_promise}
-      Syncing
-    {:then}
-      &nbsp;&nbsp;&nbsp;&nbsp; Sync
-    {:catch error}
-      {handleError(error)}
-    {/await}
-  </DropdownToggle>
-  <DropdownMenu right>
-    <DropdownItem on:click={fullrefresh}>Refresh data</DropdownItem>
-    <DropdownItem on:click={garmin}>With CSV File</DropdownItem>
-  </DropdownMenu>
+<DropdownItem class="cursor-pointer flex-end">
+  {#await hook_promise}
+    Syncing
+  {:then}
+    Sync
+    <ChevronDownOutline class=" inline " />
+  {:catch error}
+    {handleError(error)}
+  {/await}
+</DropdownItem>
+<Dropdown simple>
+  <DropdownItem onclick={fullrefresh}>Refresh data</DropdownItem>
+  <DropdownItem onclick={() => (openGarmin = true)}>With CSV File</DropdownItem>
 </Dropdown>
-<Garmin bind:garmin />
+<Garmin bind:open={openGarmin} />

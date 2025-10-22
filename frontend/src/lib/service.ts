@@ -67,7 +67,7 @@ export class Service {
     usages.deleteItem(this.usage);
   }
 
-  async redo() {
+  async repeat() {
     return await myfetch("/api/service/redo", "POST", this)
       .then(updateSummary)
       .catch(handleError);

@@ -1,29 +1,30 @@
 <script lang="ts">
-  import { Modal, ModalHeader, ModalBody } from "@sveltestrap/sveltestrap";
-  import MyFooter from "../Widgets/MyFooter.svelte";
   import { Service } from "../lib/service";
   import { fmtDate } from "../lib/store";
+  import Buttons from "../Widgets/Buttons.svelte";
+  import Modal from "../Widgets/Modal.svelte";
 
-  let service: Service;
-  let isOpen = false;
-  const toggle = () => (isOpen = false);
+  let service = $state(new Service({}));
+  let open = $state(false);
 
-  async function action() {
-    await service.delete();
-    isOpen = false;
+  export function start(s: Service) {
+    service = s;
+    open = true;
   }
 
-  export const deleteService = (s: Service) => {
-    service = s;
-    isOpen = true;
-  };
+  async function onaction() {
+    await service.delete();
+    open = false;
+  }
 </script>
 
-<Modal {isOpen} {toggle}>
-  <ModalHeader {toggle}>
+<Modal bind:open {onaction}>
+  {#snippet header()}
     Do you really want to delete Service log<br />
     "{service.name}" from
     {fmtDate(service.time)}?
-  </ModalHeader>
-  <MyFooter {toggle} {action} label={"Delete"} />
+  {/snippet}
+  {#snippet footer()}
+    <Buttons bind:open label="Delete" />
+  {/snippet}
 </Modal>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Card, CardHeader } from "@sveltestrap/sveltestrap";
+  import { Card } from "flowbite-svelte";
   import { category } from "../lib/types";
   import { Activity, activities } from "../lib/activity";
   import ActTable from "./ActTable.svelte";
@@ -36,9 +36,9 @@
   }
 </script>
 
-<Card>
-  <CardHeader class="text-center h5 mb-0" color="secondary">
+<div class="flex justify-around">
+  <Card class="flex text-xl text-center p-4 mb-4">
     All activities {title}
-  </CardHeader>
-</Card>
+  </Card>
+</div>
 <ActTable {acts} />

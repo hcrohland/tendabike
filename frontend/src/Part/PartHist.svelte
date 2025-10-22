@@ -5,46 +5,57 @@
   import PartLink from "./PartLink.svelte";
   import { parts } from "../lib/part";
   import { attachments } from "../lib/attachment";
-  import { DropdownItem, Table } from "@sveltestrap/sveltestrap";
+  import {
+    DropdownItem,
+    Table,
+    TableBody,
+    TableBodyCell,
+    TableBodyRow,
+    TableHead,
+    TableHeadCell,
+  } from "flowbite-svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { actions } from "../Widgets/Actions.svelte";
 
-  export let id: number;
+  interface Props {
+    id: number;
+  }
 
-  $: atts = filterValues($attachments, (a) => a.part_id == id).sort(
-    by("attached"),
+  let { id }: Props = $props();
+
+  let atts = $derived(
+    filterValues($attachments, (a) => a.part_id == id).sort(by("attached")),
   );
 </script>
 
 {#if atts.length > 0}
-  <Table responsive hover>
-    <thead>
-      <tr>
-        <th scope="col">Attached to</th>
-        <th scope="col"> </th>
-        <Usage header />
-      </tr>
-    </thead>
-    <tbody>
+  <Table hoverable striped>
+    <TableHead>
+      <TableHeadCell colspan={2} scope="col">Attached to</TableHeadCell>
+      <Usage header />
+    </TableHead>
+    <TableBody>
       {#each atts as att (att.attached)}
-        <tr>
-          <td>
+        <TableBodyRow>
+          <TableBodyCell class="text-nowrap flex justify-between">
             {#if $parts[att.gear]}
-              <PartLink part={$parts[att.gear]} />
-              {types[att.hook].prefix}
+              <div>
+                <PartLink part={$parts[att.gear]} />
+                {types[att.hook].prefix}
+              </div>
               <Menu>
-                <DropdownItem on:click={() => $actions.deleteAttachment(att)}>
+                <DropdownItem onclick={() => $actions.deleteAttachment(att)}>
                   Remove
                 </DropdownItem>
               </Menu>
             {:else}
               N/A
             {/if}
-          </td>
-          <td> {att.fmtTime()} </td>
+          </TableBodyCell>
+          <TableBodyCell>{att.fmtTime()}</TableBodyCell>
           <Usage id={att.usage} ref={att.idx} />
-        </tr>
+        </TableBodyRow>
       {/each}
-    </tbody>
+    </TableBody>
   </Table>
 {/if}

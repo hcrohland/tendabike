@@ -104,6 +104,7 @@ impl StravaUser {
         id: StravaId,
         firstname: &str,
         lastname: &str,
+        avatar: &Option<String>,
         refresh: Option<&String>,
         store: &mut impl StravaStore,
     ) -> TbResult<StravaUser> {
@@ -111,13 +112,15 @@ impl StravaUser {
 
         let user = id.read(store).await?;
         if let Some(user) = user {
-            user.tendabike_id.update(firstname, lastname, store).await?;
+            user.tendabike_id
+                .update(firstname, lastname, avatar, store)
+                .await?;
             store.stravaid_update_token(user.id, refresh).await?;
             return Ok(user);
         }
 
         // create new user!
-        let tendabike_id = crate::UserId::create(firstname, lastname, store).await?;
+        let tendabike_id = crate::UserId::create(firstname, lastname, avatar, store).await?;
 
         let user = StravaUser {
             id,

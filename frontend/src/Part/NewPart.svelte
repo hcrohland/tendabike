@@ -1,61 +1,33 @@
 <script lang="ts">
-  import {
-    Modal,
-    ModalBody,
-    ModalFooter,
-    ModalHeader,
-  } from "@sveltestrap/sveltestrap";
+  import Modal from "../Widgets/Modal.svelte";
   import NewForm from "./PartForm.svelte";
-  import { user } from "../lib/store";
+  import Buttons from "../Widgets/Buttons.svelte";
   import { Type } from "../lib/types";
   import { Part } from "../lib/part";
-  import Buttons from "../Widgets/Buttons.svelte";
+  import { user } from "../lib/store";
 
-  let part: Part, newpart: Part;
-  let type: Type;
-  let isOpen = false;
-  let disabled = true;
+  let type = $state<Type>();
+  let part = $state<any>();
+  let open = $state(false);
 
-  async function savePart() {
-    disabled = true;
-    await newpart.create();
-    isOpen = false;
+  async function onaction() {
+    await new Part(part).create();
+    open = false;
   }
 
-  export const newPart = (t: Type) => {
+  export function start(t: Type) {
     type = t;
-    part = new Part({
-      owner: $user && $user.id,
-      what: type.id,
-      count: 0,
-      climb: 0,
-      descend: 0,
-      distance: 0,
-      time: 0,
-      name: "",
-      vendor: "",
-      model: "",
-      purchase: new Date(),
-      last_used: new Date(),
-    });
-    isOpen = true;
-  };
-
-  const toggle = () => (isOpen = false);
-  const setPart = (e: any) => {
-    newpart = e.detail;
-    disabled = false;
-  };
+    part = { ...new Part({ owner: $user?.id, what: t.id }) };
+    open = true;
+  }
 </script>
 
-<Modal {isOpen} {toggle}>
-  <ModalHeader {toggle}>New {type.name}</ModalHeader>
-  <form on:submit|preventDefault={savePart}>
-    <ModalBody>
-      <NewForm {type} {part} on:change={setPart} />
-    </ModalBody>
-    <ModalFooter>
-      <Buttons {toggle} {disabled} label={"Create"} />
-    </ModalFooter>
-  </form>
+<Modal bind:open {onaction}>
+  {#snippet header()}
+    New {type!.name}
+  {/snippet}
+  <NewForm {type} bind:part />
+  {#snippet footer()}
+    <Buttons bind:open label="Create" />
+  {/snippet}
 </Modal>

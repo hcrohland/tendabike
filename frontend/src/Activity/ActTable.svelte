@@ -2,7 +2,7 @@
   import { DAY, fmtNumber, fmtSeconds } from "../lib/store";
   import SvelteTable from "../Widgets/SvelteTable.svelte";
   import RangeSlider from "svelte-range-slider-pips";
-  import { Alert } from "@sveltestrap/sveltestrap";
+  import { Alert } from "flowbite-svelte";
   import { by } from "../lib/mapable";
   import { Activity } from "../lib/activity";
   import { Usage } from "../lib/usage";
@@ -12,7 +12,7 @@
 
   export let acts: Activity[];
 
-  let changeActivity: (a: Activity) => void;
+  let changeActivity: { start: (a: Activity) => void };
   let selection: Record<string | number, any> = {};
 
   let min: number,
@@ -89,9 +89,9 @@
         v.id
           ? '<a href="/strava/activities/' +
             v.id +
-            '" style="text-decoration:none" class="text-reset" target="_blank">' +
+            '" target="_blank">' +
             v.name +
-            '&nbsp;&nbsp;<img src="strava_grey.png" alt="View on Strava" title="View on Strava" />'
+            '&nbsp;&nbsp;<img src="strava_grey.png" alt="View on Strava" title="View on Strava" class="inline"/>'
           : v.name,
       totalsValue: (a: Activity) => a.count + " activities",
       parseHTML: true,
@@ -157,20 +157,22 @@
 </script>
 
 {#if acts.length == 0}
-  <Alert color="secondary" heading="No activities" />
+  <Alert color="secondary">No activities</Alert>
 {:else}
-  <RangeSlider
-    {min}
-    {max}
-    range
-    pushy
-    pips
-    first="label"
-    last="label"
-    float
-    {formatter}
-    bind:values
-  ></RangeSlider>
+  <div class="mb-20">
+    <RangeSlider
+      {min}
+      {max}
+      range
+      pushy
+      pips
+      first="label"
+      last="label"
+      float
+      {formatter}
+      bind:values
+    ></RangeSlider>
+  </div>
 
   <SvelteTable
     {columns}
@@ -179,11 +181,9 @@
     sortBy="start"
     {totalsFunc}
     bind:filterSelections={selection}
-    classNameTable="table table-hover"
-    classNameThead="table-secondary"
-    classNameSelect="custom-select"
-    classNameInput="form-control form-control-sm"
-    on:dblclk={(e) => changeActivity(e.detail)}
+    classNameSelect="w-auto"
+    classNameInput="w-auto p-1 dark:bg-gray-500 bg-gray-200"
+    on:dblclk={(e) => changeActivity.start(e.detail)}
   />
 {/if}
-<ChangeActivity bind:changeActivity />
+<ChangeActivity bind:this={changeActivity} />

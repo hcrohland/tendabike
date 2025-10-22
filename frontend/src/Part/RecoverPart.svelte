@@ -1,34 +1,35 @@
 <script lang="ts">
-  import { Modal, ModalHeader, ModalBody } from "@sveltestrap/sveltestrap";
-  import MyFooter from "../Widgets/MyFooter.svelte";
   import { fmtDate } from "../lib/store";
   import { Part } from "../lib/part";
   import { types } from "../lib/types";
+  import Buttons from "../Widgets/Buttons.svelte";
+  import Modal from "../Widgets/Modal.svelte";
 
-  let part: Part;
-  let isOpen = false;
-  const toggle = () => (isOpen = false);
+  let part = $state(new Part({}));
+  let open = $state(false);
 
-  async function action() {
+  async function onaction() {
     await part.recover(true);
-    isOpen = false;
+    open = false;
   }
 
-  export const recoverPart = (p: Part) => {
+  export const start = (p: Part) => {
     part = p;
-    isOpen = true;
+    open = true;
   };
 </script>
 
-<Modal {isOpen} {toggle}>
-  <ModalHeader {toggle}>
+<Modal bind:open {onaction}>
+  {#snippet header()}
     Do you really have {types[part.what].name}
     {part.name}
     {part.vendor}
     {part.model} back?
-  </ModalHeader>
-  <ModalBody>
-    You binned it on {fmtDate(part.disposed_at)}
-  </ModalBody>
-  <MyFooter {toggle} {action} label={"Recover"} />
+  {/snippet}
+
+  You binned it on {fmtDate(part.disposed_at)}
+
+  {#snippet footer()}
+    <Buttons bind:open label={"Recover"} />
+  {/snippet}
 </Modal>

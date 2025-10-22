@@ -82,6 +82,7 @@ table! {
         name -> Text,
         firstname -> Text,
         is_admin -> Bool,
+        avatar -> Nullable<Text>
     }
 }
 

@@ -1,5 +1,15 @@
 <script>
   // @ts-nocheck
+  import {
+    Input,
+    Select,
+    Table,
+    TableBody,
+    TableBodyCell,
+    TableBodyRow,
+    TableHead,
+    TableHeadCell,
+  } from "flowbite-svelte";
   import { createEventDispatcher } from "svelte";
 
   /** @type {TableColumns<any>} */
@@ -310,88 +320,84 @@
 </script>
 
 <div class="table-responsive">
-  <table class={asStringArray(classNameTable)}>
-    <thead class={asStringArray(classNameThead)}>
+  <Table class={asStringArray(classNameTable)}>
+    <TableHead class={asStringArray(classNameThead)}>
       {#if showFilterHeader}
-        <tr>
-          {#each columns as col}
-            <th class={asStringArray([col.headerFilterClass])}>
-              {#if !col.hideFilterHeader && col.searchValue !== undefined}
-                <input
-                  bind:value={filterSelections[col.key]}
-                  class={asStringArray(classNameInput)}
-                  placeholder={col.filterPlaceholder}
-                />
-              {:else if !col.hideFilterHeader && filterValues[col.key] !== undefined}
-                <select
-                  bind:value={filterSelections[col.key]}
-                  class={asStringArray(classNameSelect)}
-                >
-                  <option value={undefined}
-                    >{col.filterPlaceholder || ""}</option
-                  >
-                  {#each filterValues[col.key] as option}
-                    <option value={option.value}>{option.name}</option>
-                  {/each}
-                </select>
-              {/if}
-            </th>
-          {/each}
-          {#if showExpandIcon}
-            <th />
-          {/if}
-        </tr>
-      {/if}
-      <slot name="header" {sortOrder} {sortBy}>
-        <tr>
-          {#each columns as col}
-            <th
-              on:click={(e) => handleClickCol(e, col)}
-              on:keypress={(e) => e.key === "Enter" && handleClickCol(e, col)}
-              class={asStringArray([
-                col.sortable ? "isSortable" : "",
-                col.headerClass,
-              ])}
-              tabindex="0"
-            >
-              {col.title}
-              {#if sortBy === col.key}
-                {@html sortOrder === 1 ? iconAsc : iconDesc}
-              {:else if col.sortable}
-                {@html iconSortable}
-              {/if}
-            </th>
-          {/each}
-          {#if showExpandIcon}
-            <th />
-          {/if}
-        </tr>
-        {#if t_row}
-          <tr>
-            {#each columns as col}
-              <th class={col.headerClass}>
-                {#if col.totalsValue}
-                  {col.totalsValue(t_row)}
-                {:else}
-                  {col.renderValue ? col.renderValue(t_row) : col.value(t_row)}
-                {/if}
-              </th>
-            {/each}
-          </tr>
-          {#if showExpandIcon}
-            <th />
-          {/if}
+        {#each columns as col}
+          <TableHeadCell class={asStringArray([col.headerFilterClass])}>
+            {#if !col.hideFilterHeader && col.searchValue !== undefined}
+              <Input
+                bind:value={filterSelections[col.key]}
+                class={asStringArray(classNameInput)}
+                placeholder={col.filterPlaceholder}
+              />
+            {:else if !col.hideFilterHeader && filterValues[col.key] !== undefined}
+              <Select
+                bind:value={filterSelections[col.key]}
+                class={asStringArray(classNameSelect)}
+              >
+                <option value={undefined}>{col.filterPlaceholder || ""}</option>
+                {#each filterValues[col.key] as option}
+                  <option value={option.value}>{option.name}</option>
+                {/each}
+              </Select>
+            {/if}
+          </TableHeadCell>
+        {/each}
+        {#if showExpandIcon}
+          <TableHeadCell></TableHeadCell>
         {/if}
-      </slot>
-    </thead>
+      {/if}
+    </TableHead>
+    <slot name="header" {sortOrder} {sortBy}>
+      <TableHead>
+        {#each columns as col}
+          <TableHeadCell
+            onclick={(e) => handleClickCol(e, col)}
+            onkeypress={(e) => e.key === "Enter" && handleClickCol(e, col)}
+            class={asStringArray([
+              col.sortable ? "isSortable" : "",
+              col.headerClass,
+            ])}
+            tabindex="0"
+          >
+            {col.title}
+            {#if sortBy === col.key}
+              {@html sortOrder === 1 ? iconAsc : iconDesc}
+            {:else if col.sortable}
+              {@html iconSortable}
+            {/if}
+          </TableHeadCell>
+        {/each}
+        {#if showExpandIcon}
+          <TableHeadCell></TableHeadCell>
+        {/if}
+      </TableHead>
+      {#if t_row}
+        <TableHead>
+          {#each columns as col}
+            <TableHeadCell class={col.headerClass}>
+              {#if col.totalsValue}
+                {col.totalsValue(t_row)}
+              {:else}
+                {col.renderValue ? col.renderValue(t_row) : col.value(t_row)}
+              {/if}
+            </TableHeadCell>
+          {/each}
+          {#if showExpandIcon}
+            <TableHeadCell></TableHeadCell>
+          {/if}
+        </TableHead>
+      {/if}
+    </slot>
 
-    <tbody class={asStringArray(classNameTbody)}>
+    <TableBody class={asStringArray(classNameTbody)}>
       {#each c_rows as row, n}
         <slot name="row" {row} {n}>
-          <tr
-            on:dblclick={() => dispatch("dblclk", row)}
-            on:click={(e) => handleClickRow(e, row)}
-            on:keypress={(e) => e.key === "Enter" && handleClickRow(e, row)}
+          <TableBodyRow
+            ondblclick={() => dispatch("dblclk", row)}
+            onclick={(e) => handleClickRow(e, row)}
+            onkeypress={(e) => e.key === "Enter" && handleClickRow(e, row)}
             class={asStringArray([
               typeof classNameRow === "string" ? classNameRow : null,
               typeof classNameRow === "function" ? classNameRow(row, n) : null,
@@ -401,9 +407,9 @@
             tabIndex={selectOnClick ? "0" : null}
           >
             {#each columns as col, colIndex}
-              <td
-                on:click={(e) => handleClickCell(e, row, col.key)}
-                on:keypress={(e) =>
+              <TableBodyCell
+                onclick={(e) => handleClickCell(e, row, col.key)}
+                onkeypress={(e) =>
                   e.key === "Enter" && handleClickCell(e, row, col.key)}
                 class={asStringArray([
                   typeof col.class === "string" ? col.class : null,
@@ -429,49 +435,32 @@
                     ? col.renderValue(row, n, colIndex)
                     : col.value(row, n, colIndex)}
                 {/if}
-              </td>
+              </TableBodyCell>
             {/each}
             {#if showExpandIcon}
-              <td class={asStringArray(classNameCellExpand)}>
+              <TableBodyCell class={asStringArray(classNameCellExpand)}>
                 <span
                   class="isClickable"
-                  on:click={(e) => handleClickExpand(e, row)}
-                  on:keypress={(e) =>
+                  onclick={(e) => handleClickExpand(e, row)}
+                  onkeypress={(e) =>
                     e.key === "Enter" && handleClickExpand(e, row)}
                   tabindex="0"
                   role="button"
                 >
                   {@html row.$expanded ? iconExpand : iconExpanded}
                 </span>
-              </td>
+              </TableBodyCell>
             {/if}
-          </tr>
+          </TableBodyRow>
           {#if row.$expanded}
-            <tr class={asStringArray(classNameExpandedContent)}
-              ><td {colspan}>
+            <TableBodyRow class={asStringArray(classNameExpandedContent)}
+              ><TableBodyCell {colspan}>
                 <slot name="expanded" {row} {n} />
-              </td></tr
+              </TableBodyCell></TableBodyRow
             >
           {/if}
         </slot>
       {/each}
-    </tbody>
-  </table>
+    </TableBody>
+  </Table>
 </div>
-
-<style>
-  table {
-    width: 100%;
-  }
-  .isSortable {
-    cursor: pointer;
-  }
-
-  .isClickable {
-    cursor: pointer;
-  }
-
-  tr th select {
-    width: 100%;
-  }
-</style>

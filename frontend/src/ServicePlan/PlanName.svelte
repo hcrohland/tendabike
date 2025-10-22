@@ -5,9 +5,13 @@
   import { attachments, part_at_hook } from "../lib/attachment";
   import { parts } from "../lib/part";
 
-  export let plan: ServicePlan | undefined;
+  interface Props {
+    plan: ServicePlan | undefined;
+  }
 
-  $: partlink = plan?.part ? $parts[plan.part].partLink() : "";
+  let { plan }: Props = $props();
+
+  let partlink = $derived(plan?.part ? $parts[plan.part].partLink() : "");
 </script>
 
 {#if plan}
@@ -22,7 +26,6 @@
           $attachments,
         )}"
         use:link
-        class="text-reset"
       >
         {types[plan.what].human_name(plan.hook)}
       </a>

@@ -1,84 +1,61 @@
 <script lang="ts">
-  import {
-    Input,
-    InputGroup,
-    FormGroup,
-    Label,
-    Col,
-  } from "@sveltestrap/sveltestrap";
-  import DateTime from "../Widgets/DateTime.svelte";
+  import { Input, Label } from "flowbite-svelte";
   import { Type } from "../lib/types";
-  import { createEventDispatcher } from "svelte";
   import { Part } from "../lib/part";
-  const dispatch = createEventDispatcher();
+  import DateTime from "../Widgets/DateTime.svelte";
 
-  export let type: Type | undefined;
-  export let part: Part;
-  export let maxdate: Date | undefined = undefined;
-  export let mindate: Date | undefined = undefined;
-  let { name, vendor, model } = part;
-
-  $: if (type && name.length > 0 && vendor.length > 0 && model.length > 0) {
-    part = new Part({ ...part, name, vendor, model });
-    part.last_used = part.purchase;
-    dispatch("change", part);
+  interface Props {
+    type: Type | undefined;
+    part: Part;
+    maxdate?: Date | undefined;
+    mindate?: Date | undefined;
   }
+
+  let {
+    type,
+    part = $bindable(),
+    maxdate = undefined,
+    mindate = undefined,
+  }: Props = $props();
 </script>
 
-<FormGroup row>
-  <FormGroup class="col-md-12">
-    <Label for="inputName">You call it</Label>
-    <!-- svelte-ignore a11y-autofocus -->
+<div>
+  <Label class="mb-2">You call it</Label>
+  <!-- svelte-ignore a11y_autofocus -->
+  <Input
+    type="text"
+    class="form-control"
+    bind:value={part.name}
+    autofocus
+    required
+    placeholder="Name"
+  />
+</div>
+<div class="grid gap-4 md:grid-cols-2">
+  <div>
+    <Label class="mb-2">and it is a</Label>
     <Input
       type="text"
       class="form-control"
-      id="inputName"
-      bind:value={name}
-      autofocus
-      required
-      placeholder="Name"
-    />
-  </FormGroup>
-</FormGroup>
-<FormGroup row>
-  <FormGroup class="col-md-6">
-    <Label for="inputBrand">and it is a</Label>
-    <Input
-      type="text"
-      class="form-control"
-      id="inputBrand"
-      bind:value={vendor}
+      bind:value={part.vendor}
       placeholder="Brand"
       required
     />
-  </FormGroup>
-  <FormGroup class=" col-md-6">
-    <Label for="inputModel">&nbsp.</Label>
+  </div>
+  <div>
+    <Label class="mb-2 invisible">...</Label>
     <Input
       type="text"
       class="form-control"
-      id="inputModel"
-      bind:value={model}
+      bind:value={part.model}
       placeholder="Model"
       required
     />
-  </FormGroup>
-</FormGroup>
-<FormGroup row>
-  <Col>
-    <Label for="inputDate" class="text-end">
-      New {(type && type.name) || ""} day was
+  </div>
+  <div>
+    <Label class="mb-2">
+      New {type?.name || ""} day was
     </Label>
-  </Col>
-  <Col xs="auto">
-    <InputGroup>
-      <DateTime
-        id="inputDate"
-        bind:date={part.purchase}
-        {maxdate}
-        {mindate}
-        required
-      />
-    </InputGroup>
-  </Col>
-</FormGroup>
+    <DateTime bind:date={part.purchase} {maxdate} {mindate} required rounded />
+  </div>
+</div>

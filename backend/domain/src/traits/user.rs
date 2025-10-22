@@ -24,7 +24,12 @@ pub trait UserStore {
     /// # Returns
     ///
     /// The newly created user.
-    async fn create(&mut self, firstname: &str, lastname: &str) -> TbResult<User>;
+    async fn create(
+        &mut self,
+        firstname: &str,
+        lastname: &str,
+        avatar: &Option<String>,
+    ) -> TbResult<User>;
 
     /// Updates an existing user.
     ///
@@ -37,5 +42,11 @@ pub trait UserStore {
     /// # Returns
     ///
     /// The updated user.
-    async fn update(&mut self, uid: &UserId, firstname: &str, lastname: &str) -> TbResult<User>;
+    async fn update(
+        &mut self,
+        uid: &UserId,
+        firstname: &str,
+        lastname: &str,
+        avatar: &Option<String>,
+    ) -> TbResult<User>;
 }
