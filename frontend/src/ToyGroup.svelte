@@ -36,7 +36,9 @@
   </div>
 
   {#if bin.length > 0}
-    <ShowMore bind:show_more title="disposed" />
+    <div class="p-4">
+      <ShowMore bind:show_more title="disposed" />
+    </div>
     {#if show_more}
       <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {#each bin as part (part.id)}
