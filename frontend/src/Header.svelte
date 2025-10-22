@@ -29,8 +29,7 @@
       src="favicon.png"
       alt="TendaBike"
       title="TendaBike"
-      width="60"
-      class="rounded-circle"
+      class="rounded-circle h-11"
     />
     &nbsp; Tend a {$category.name}
   </NavBrand>
