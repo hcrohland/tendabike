@@ -70,5 +70,4 @@
   {/if}
   <TableBodyCell class="text-end">{days}</TableBodyCell>
   <UsageCells {usage} />
-  <TableBodyCell></TableBodyCell>
 </TableBodyRow>

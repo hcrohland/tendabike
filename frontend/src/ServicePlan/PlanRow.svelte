@@ -54,7 +54,7 @@
     <div class="text-nowrap flex justify-between">
       <div>
         {#if name}
-          ┃
+          &NonBreakingSpace;&NonBreakingSpace;┃
           <ShowMore bind:show_more {title} />
           {@html name}
         {:else}
