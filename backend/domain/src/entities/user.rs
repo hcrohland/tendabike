@@ -49,6 +49,7 @@ pub struct User {
     pub id: UserId,
     pub name: String,
     pub firstname: String,
+    pub avatar: Option<String>,
     pub is_admin: bool,
 }
 
@@ -78,18 +79,26 @@ impl UserId {
     pub async fn create(
         firstname: &str,
         lastname: &str,
+        avatar: &Option<String>,
         store: &mut impl UserStore,
     ) -> TbResult<Self> {
-        store.create(firstname, lastname).await.map(|u| u.id)
+        store
+            .create(firstname, lastname, avatar)
+            .await
+            .map(|u| u.id)
     }
 
     pub async fn update(
         &self,
         firstname_: &str,
         lastname: &str,
+        avatar: &Option<String>,
         store: &mut impl UserStore,
     ) -> TbResult<Self> {
-        store.update(self, firstname_, lastname).await.map(|u| u.id)
+        store
+            .update(self, firstname_, lastname, avatar)
+            .await
+            .map(|u| u.id)
     }
 
     pub async fn is_admin(&self, store: &mut impl UserStore) -> TbResult<bool> {

@@ -11,6 +11,7 @@ pub struct DbUser {
     name: String,
     firstname: String,
     is_admin: bool,
+    avatar: Option<String>,
 }
 
 impl From<User> for DbUser {
@@ -19,12 +20,14 @@ impl From<User> for DbUser {
             id,
             name,
             firstname,
+            avatar,
             is_admin,
         } = value;
         Self {
             id: id.into(),
             name,
             firstname,
+            avatar,
             is_admin,
         }
     }
@@ -36,12 +39,14 @@ impl From<DbUser> for User {
             id,
             name,
             firstname,
+            avatar,
             is_admin,
         } = value;
         Self {
             id: id.into(),
             name,
             firstname,
+            avatar,
             is_admin,
         }
     }
@@ -58,7 +63,12 @@ impl tb_domain::UserStore for AsyncDieselConn {
             .map(Into::into)
     }
 
-    async fn create(&mut self, firstname_: &str, lastname: &str) -> TbResult<User> {
+    async fn create(
+        &mut self,
+        firstname_: &str,
+        lastname: &str,
+        avatar_: &Option<String>,
+    ) -> TbResult<User> {
         use schema::users::dsl::*;
 
         diesel::insert_into(users)
@@ -66,6 +76,7 @@ impl tb_domain::UserStore for AsyncDieselConn {
                 firstname.eq(firstname_),
                 name.eq(lastname),
                 is_admin.eq(false),
+                avatar.eq(avatar_),
             ))
             .get_result::<DbUser>(self)
             .await
@@ -73,10 +84,20 @@ impl tb_domain::UserStore for AsyncDieselConn {
             .map(Into::into)
     }
 
-    async fn update(&mut self, uid: &UserId, firstname_: &str, lastname: &str) -> TbResult<User> {
+    async fn update(
+        &mut self,
+        uid: &UserId,
+        firstname_: &str,
+        lastname: &str,
+        avatar_: &Option<String>,
+    ) -> TbResult<User> {
         use schema::users::dsl::*;
         diesel::update(users.find(i32::from(*uid)))
-            .set((firstname.eq(firstname_), name.eq(lastname)))
+            .set((
+                firstname.eq(firstname_),
+                name.eq(lastname),
+                avatar.eq(avatar_),
+            ))
             .get_result::<DbUser>(self)
             .await
             .map_err(into_domain)

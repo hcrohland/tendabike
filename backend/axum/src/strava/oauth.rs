@@ -47,8 +47,9 @@ pub(crate) struct StravaAthleteInfo {
     pub id: StravaId,
     pub firstname: String,
     pub lastname: String,
-    #[serde(flatten)]
-    other: serde_json::Value,
+    #[serde(rename = "profile_medium")]
+    pub avatar: Option<String>,
+    // profile: String,
     // bio: String,
     // city: String,
     // state: String,
@@ -60,8 +61,8 @@ pub(crate) struct StravaAthleteInfo {
     // updated_at: String,
     // badge_type_id: i32,
     // weight: f32,
-    // profile_medium: String,
-    // profile: String,
+    #[serde(flatten)]
+    other: serde_json::Value,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

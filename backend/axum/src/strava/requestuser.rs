@@ -50,6 +50,7 @@ impl RequestUser {
             id,
             firstname,
             lastname,
+            avatar,
             ..
         } = token
             .extra_fields()
@@ -59,7 +60,7 @@ impl RequestUser {
 
         let refresh_token = token.refresh_token();
         let refresh = refresh_token.map(|t| t.secret());
-        let user = StravaUser::upsert(*id, firstname, lastname, refresh, store).await?;
+        let user = StravaUser::upsert(*id, firstname, lastname, avatar, refresh, store).await?;
         let id = user.tb_id();
         let is_admin = id.is_admin(store).await?;
 
