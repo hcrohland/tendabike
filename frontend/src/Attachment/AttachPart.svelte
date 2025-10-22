@@ -18,6 +18,9 @@
 
   export const start = (p: Part) => {
     part = p;
+    time = undefined;
+    gear = undefined;
+    hook = undefined;
     open = true;
   };
 </script>
