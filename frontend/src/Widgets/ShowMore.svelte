@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Button, Tooltip } from "flowbite-svelte";
+  import { CircleMinusOutline, CirclePlusOutline } from "flowbite-svelte-icons";
   interface Props {
     show_more: boolean;
     title?: string | undefined;
@@ -16,22 +17,29 @@
     show_more = !show_more;
     update(show_more);
   }
-  let id = $props.id();
 
   let delay = 1000;
 </script>
 
 <Button
-  {id}
   size="sm"
   color="alternative"
-  class="border-0 p-0 m-0 mx-1"
+  class="align-middle justify-center rounded-full border-0 p-0 m-0 mx-1"
   {onclick}
 >
-  {show_more ? "-" : "+"}
+  {#if show_more}
+    <CircleMinusOutline class="shrink-0 h-5 w-5" />
+    {#if title}
+      <Tooltip placement="top" class=" text-xs p-1 rounded-xs">
+        Hide {title}
+      </Tooltip>
+    {/if}
+  {:else}
+    <CirclePlusOutline class="shrink-0 h-5 w-5" />
+    {#if title}
+      <Tooltip placement="top" class=" text-xs p-1 rounded-xs">
+        Show {title}
+      </Tooltip>
+    {/if}
+  {/if}
 </Button>
-{#if title}
-  <Tooltip placement="top" class=" text-xs p-1 rounded-xs">
-    Show {title}
-  </Tooltip>
-{/if}

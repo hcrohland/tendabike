@@ -1,6 +1,5 @@
 <script lang="ts">
   import {
-    Button,
     DropdownItem,
     TableBodyCell,
     TableBodyRow,
@@ -15,6 +14,7 @@
   import { usages } from "../lib/usage";
   import PartLink from "./PartLink.svelte";
   import { actions } from "../Widgets/Actions.svelte";
+  import XsButton from "../Widgets/XsButton.svelte";
 
   export let attachments: Attachment[] = [];
   export let level: number = 0;
@@ -32,10 +32,10 @@
 {:else}
   {#each attachments.map( (att) => ({ att, part: $parts[att.part_id] }), ) as { att, part }, i (att.idx)}
     {#if i == 0}
-      <tr>
-        <TableHeadCell scope="row" class="text-nowrap flex justify-between">
+      <TableBodyRow>
+        <TableHeadCell scope="row" class="text-nowrap">
           <div>
-            {"┃ ".repeat(level)}
+            {@html "&NonBreakingSpace;&NonBreakingSpace;┃ ".repeat(level)}
             {#if attachments.length > 0 || (part && $usages[part.usage].count != $usages[att.usage].count)}
               <ShowMore bind:show_more title="history" />
             {/if}
@@ -70,24 +70,18 @@
         {:else}
           <TableBodyCell>
             <div class="flex justify-end">
-              <Button
-                class="p-1 border-0 cursor-pointer"
-                size="xs"
-                color="alternative"
-                onclick={() => $actions.replacePart(att)}
-              >
-                add
-              </Button>
+              <XsButton onclick={() => $actions.replacePart(att)}>add</XsButton>
             </div>
           </TableBodyCell>
           <TableBodyCell colspan={80}></TableBodyCell>
         {/if}
-      </tr>
+      </TableBodyRow>
     {/if}
     {#if show_more}
       <TableBodyRow>
         <TableHeadCell scope="row">
-          {"┃ ".repeat(level + 1) + "▶"}
+          {@html "&NonBreakingSpace;&NonBreakingSpace;┃ ".repeat(level + 1) +
+            "▶"}
         </TableHeadCell>
         <TableBodyCell>
           <div class="text-nowrap flex justify-between">

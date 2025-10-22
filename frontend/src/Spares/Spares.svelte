@@ -16,19 +16,17 @@
   }
 </script>
 
-<div class="table-responsive">
-  <Table hoverable striped>
-    <TableHead>
-      <TableHeadCell colspan={3} scope="col">&NonBreakingSpace;</TableHeadCell>
-      <Usage header />
-      {#if attachee > 0}
-        <TableHeadCell colspan={2}>Attached to</TableHeadCell>
-      {/if}
-    </TableHead>
-    <TableBody>
-      {#each spareTypes as type (type.id)}
-        <SpareType {type} {attachee} {update} />
-      {/each}
-    </TableBody>
-  </Table>
-</div>
+<Table hoverable striped>
+  <TableHead>
+    <TableHeadCell colspan={2} scope="col">&NonBreakingSpace;</TableHeadCell>
+    <Usage header />
+    {#if attachee > 0}
+      <TableHeadCell colspan={2}>Attached to</TableHeadCell>
+    {/if}
+  </TableHead>
+  <TableBody>
+    {#each spareTypes as type (type.id)}
+      <SpareType {type} {attachee} {update} />
+    {/each}
+  </TableBody>
+</Table>

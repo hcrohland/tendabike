@@ -43,7 +43,7 @@
       <div>
         {@render children?.()}
         <span id={"name" + service.id}>
-          {"┃ ".repeat(depth)}
+          {@html "&NonBreakingSpace;&NonBreakingSpace;┃ ".repeat(depth)}
           {service.name}
         </span>
         {#if service.notes.length > 0}
@@ -61,7 +61,8 @@
     </TableBodyCell>
   {:else}
     <TableBodyCell>
-      {"┃ ".repeat(depth)}┗━
+      {@html "&NonBreakingSpace;&NonBreakingSpace;┃ ".repeat(depth)}
+      &NonBreakingSpace; ┗━
     </TableBodyCell>
     <TableBodyCell class="text-end">
       {fmtRange(part.purchase, successor?.time)}

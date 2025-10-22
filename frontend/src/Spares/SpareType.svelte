@@ -1,10 +1,5 @@
 <script lang="ts">
-  import {
-    Button,
-    TableBodyCell,
-    TableBodyRow,
-    TableHeadCell,
-  } from "flowbite-svelte";
+  import { TableBodyCell, TableBodyRow, TableHeadCell } from "flowbite-svelte";
   import PartLink from "../Part/PartLink.svelte";
   import Usage from "../Usage/Usage.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
@@ -49,33 +44,32 @@
   );
 </script>
 
-<tr>
-  <TableHeadCell
-    rowspan={subshow.length + 1}
-    scope="col"
-    class="text-nowrap align-top px-0 mx-0"
-  >
+<TableBodyRow>
+  <TableHeadCell colspan={80} scope="col" class="text-nowrap">
     {#if subparts.length > 0}
       <ShowMore bind:show_more {update} title="attached" />
     {/if}
-  </TableHeadCell>
-  <TableHeadCell colspan={80} scope="col" class="text-nowrap">
     {type.name}s &NonBreakingSpace;
     <XsButton onclick={() => $actions.newPart(type)}>New</XsButton>
   </TableHeadCell>
-</tr>
-{#each subshow as part (part.id)}
-  <TableBodyRow class="border-0">
-    <TableHeadCell scope="row" class="border-0"></TableHeadCell>
+</TableBodyRow>
+{#each subshow as part, i (part.id)}
+  <TableBodyRow>
+    <TableHeadCell scope="row" class="ps-4">
+      {#if i == subshow.length - 1}
+        ┗
+      {:else}
+        ┃
+      {/if}
+    </TableHeadCell>
+
     <TableBodyCell
       title={part.vendor + " " + part.model + " " + fmtDate(part.purchase)}
+      class="flex justify-between"
     >
       <PartLink {part} />
       {#if !part.disposed_at}
-        <XsButton
-          class="p-1 cursor-pointer rounded-md float-end"
-          onclick={() => $actions.attachPart(part)}
-        >
+        <XsButton onclick={() => $actions.attachPart(part)}>
           {#if attachedTo($attachments, part.id, date)}
             Move
           {:else}
