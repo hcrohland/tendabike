@@ -7,7 +7,7 @@
 <Button
   size="xs"
   color="alternative"
-  class="p-1 rounded-md cursor-pointer"
+  class="py-0 px-1 ms-2 rounded-xs cursor-pointer"
   {...rest}
 >
   {@render children()}

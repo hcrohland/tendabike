@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button, Tooltip } from "flowbite-svelte";
-  import { CircleMinusOutline, CirclePlusOutline } from "flowbite-svelte-icons";
+  import { CaretDownSolid, CaretUpSolid } from "flowbite-svelte-icons";
   interface Props {
     show_more: boolean;
     title?: string | undefined;
@@ -28,14 +28,14 @@
   {onclick}
 >
   {#if show_more}
-    <CircleMinusOutline class="shrink-0 h-5 w-5" />
+    <CaretUpSolid class="shrink-0 h-4 w-4" />
     {#if title}
       <Tooltip placement="top" class=" text-xs p-1 rounded-xs">
         Hide {title}
       </Tooltip>
     {/if}
   {:else}
-    <CirclePlusOutline class="shrink-0 h-5 w-5" />
+    <CaretDownSolid class="shrink-0 h-4 w-4" />
     {#if title}
       <Tooltip placement="top" class=" text-xs p-1 rounded-xs">
         Show {title}
