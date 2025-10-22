@@ -5,6 +5,11 @@
   import { en } from "svelty-picker/i18n";
   import { roundTime } from "../lib/store";
   import { Button, ButtonGroup } from "flowbite-svelte";
+  import {
+    AngleLeftOutline,
+    AngleRightOutline,
+    ClockOutline,
+  } from "flowbite-svelte-icons";
 
   type Props = {
     date?: any;
@@ -64,17 +69,23 @@
   />
 
   {#if mindate}
-    <Button onclick={preventDefault(() => (date = mindate))}>&#706;</Button>
+    <Button onclick={preventDefault(() => (date = mindate))}>
+      <AngleLeftOutline class="shrink-0 h-5 w-5" />
+    </Button>
   {:else if prevdate}
     <Button onclick={preventDefault(() => (date = prevdate(date)))}>
-      &#706;
+      <AngleLeftOutline class="shrink-0 h-5 w-5" />
     </Button>
   {/if}
   {#if !(mindate && mindate > now) && !(maxdate && maxdate < now)}
-    <Button onclick={preventDefault(() => (date = now))}>&#8226;</Button>
+    <Button onclick={preventDefault(() => (date = now))}>
+      <ClockOutline class="shrink-0 h-5 w-5" />
+    </Button>
   {/if}
   {#if maxdate}
-    <Button onclick={preventDefault(() => (date = maxdate))}>&#707;</Button>
+    <Button onclick={preventDefault(() => (date = maxdate))}>
+      <AngleRightOutline class="shrink-0 h-5 w-5" />
+    </Button>
   {/if}
 </ButtonGroup>
 
