@@ -35,7 +35,7 @@
 {#snippet cell(key: keyof Limits)}
   {@const p = plan[key] as number}
   {@const d = due[key] as number}
-  <td class="text-end">
+  <TableBodyCell class="text-end">
     {#if p != null && d != null}
       <span class={get_class(p, d)}>
         {fmtNumber(d)}
@@ -46,7 +46,7 @@
     {:else}
       -
     {/if}
-  </td>
+  </TableBodyCell>
 {/snippet}
 
 <TableBodyRow>

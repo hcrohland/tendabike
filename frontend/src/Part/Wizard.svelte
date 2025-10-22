@@ -1,5 +1,13 @@
 <script lang="ts">
-  import { Input, ButtonGroup, Table, Button } from "flowbite-svelte";
+  import {
+    Input,
+    ButtonGroup,
+    Table,
+    Button,
+    TableBodyRow,
+    TableHeadCell,
+    TableBodyCell,
+  } from "flowbite-svelte";
   import { types, Type } from "../lib/types";
   import { Attachment } from "../lib/attachment";
   import { type Map, filterValues } from "../lib/mapable";
@@ -102,17 +110,17 @@
     {:else}
       <Table>
         <tbody>
-          <tr>
-            <th colspan="80"> Add components groups: </th>
-          </tr>
+          <TableBodyRow>
+            <TableHeadCell colspan={80}>Add components groups:</TableHeadCell>
+          </TableBodyRow>
           {#each groups as g, i}
-            <tr>
-              <th>
+            <TableBodyRow>
+              <TableHeadCell>
                 <Switch bind:checked={g.enabled}>
                   {g.group}:
                 </Switch>
-              </th>
-              <td>
+              </TableHeadCell>
+              <TableBodyCell>
                 <ButtonGroup>
                   <Input
                     type="text"
@@ -127,8 +135,8 @@
                     disabled={!g.enabled}
                   />
                 </ButtonGroup>
-              </td>
-            </tr>
+              </TableBodyCell>
+            </TableBodyRow>
           {/each}
         </tbody>
       </Table>

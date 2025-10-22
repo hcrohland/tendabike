@@ -1,5 +1,13 @@
 <script lang="ts">
-  import { Button, ButtonGroup, Spinner, Table } from "flowbite-svelte";
+  import {
+    Button,
+    ButtonGroup,
+    Spinner,
+    Table,
+    TableBodyCell,
+    TableBodyRow,
+    TableHeadCell,
+  } from "flowbite-svelte";
   import { handleError, myfetch, setSummary } from "../lib/store";
   import type { User } from "../lib/types";
   import Sync from "./Sync.svelte";
@@ -36,24 +44,30 @@
   ...
 {:then list: any[]}
   <Table>
-    <tr>
-      <th>Id</th>
-      <th>Name</th>
-      <th>Role</th>
-      <th>Parts</th>
-      <th>Activities</th>
-      <th>Events</th>
-      <th> </th>
-    </tr>
+    <TableBodyRow>
+      <TableHeadCell>Id</TableHeadCell>
+      <TableHeadCell>Name</TableHeadCell>
+      <TableHeadCell>Role</TableHeadCell>
+      <TableHeadCell>Parts</TableHeadCell>
+      <TableHeadCell>Activities</TableHeadCell>
+      <TableHeadCell>Events</TableHeadCell>
+      <TableHeadCell></TableHeadCell>
+    </TableBodyRow>
     {#each list.sort((a, b) => a.user.id - b.user.id) as { user, parts, activities, events, disabled } (user.id)}
-      <tr>
-        <td> {user.id}</td>
-        <td> {user.firstname} {user.name} </td>
-        <td> {disabled ? "Disabled" : user.is_admin ? "Admin" : "User"}</td>
-        <td> {parts}</td>
-        <td> {activities}</td>
-        <td> {events}</td>
-        <td>
+      <TableBodyRow>
+        <TableBodyCell>{user.id}</TableBodyCell>
+        <TableBodyCell>{user.firstname} {user.name}</TableBodyCell>
+        <TableBodyCell>
+          {disabled
+            ? "Disabled"
+            : user.is_admin
+              ? "Admin"
+              : "User"}</TableBodyCell
+        >
+        <TableBodyCell>{parts}</TableBodyCell>
+        <TableBodyCell>{activities}</TableBodyCell>
+        <TableBodyCell>{events}</TableBodyCell>
+        <TableBodyCell>
           {#if !disabled}
             <ButtonGroup>
               <Button onclick={() => createSync.start(user)}>
@@ -63,8 +77,8 @@
               <Button onclick={() => disable(user)}>Disable user</Button>
             </ButtonGroup>
           {/if}
-        </td>
-      </tr>
+        </TableBodyCell>
+      </TableBodyRow>
     {/each}
   </Table>
   <ButtonGroup>
