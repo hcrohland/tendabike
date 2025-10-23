@@ -5,6 +5,7 @@
     newPart: (t: Type) => void;
     installPart: (p: Part) => void;
     changePart: (p: Part) => void;
+    deletePart: (p: Part) => void;
     disposePart: (p: Part, a?: Attachment) => void;
     recoverPart: (p: Part) => void;
     replacePart: (p: Attachment) => void;
@@ -43,11 +44,13 @@
   import AttachPart from "../Attachment/AttachPart.svelte";
   import ChangeActivity from "../Activity/ChangeActivity.svelte";
   import type { Activity } from "../lib/activity";
+  import DeletePart from "../Part/DeletePart.svelte";
 
   $: actions.set({
     newPart: newPart?.start,
     installPart: installPart?.start,
     changePart: changePart?.start,
+    deletePart: deletePart?.start,
     disposePart: disposePart?.start,
     recoverPart: recoverPart?.start,
     attachPart: attachPart?.start,
@@ -66,6 +69,7 @@
   let newPart: { start: (t: Type) => void };
   let installPart: { start: (p: Part) => void };
   let changePart: { start: (p: Part) => void };
+  let deletePart: { start: (p: Part) => void };
   let disposePart: { start: (p: Part, a?: Attachment) => void };
   let replacePart: { start: (p: Attachment) => void };
   let recoverPart: { start: (p: Part) => void };
@@ -85,6 +89,7 @@
 
 <NewPart bind:this={newPart} />
 <ChangePart bind:this={changePart} />
+<DeletePart bind:this={deletePart} />
 <ServiceActions bind:this={serviceActions} />
 <NewPlan bind:this={newPlan} />
 <UpdatePlan bind:this={updatePlan} />

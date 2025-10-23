@@ -155,6 +155,14 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .map(Into::into)
     }
 
+    async fn part_delete(&mut self, pid: PartId) -> TbResult<PartId> {
+        use schema::parts::dsl::*;
+        diesel::delete(parts.find(i32::from(pid)))
+            .execute(self)
+            .await?;
+        Ok(pid)
+    }
+
     async fn partid_get_by_source(&mut self, strava_id: &str) -> TbResult<Option<PartId>> {
         use schema::parts::dsl::*;
         parts

@@ -85,6 +85,25 @@ impl PartId {
         PartId(id).checkuser(user, store).await
     }
 
+    pub async fn delete(self, user: &dyn Person, store: &mut impl Store) -> TbResult<PartId> {
+        self.checkuser(user, store).await?;
+
+        let (attachments, _) = Attachment::for_part_with_usage(self, store).await?;
+        if !attachments.is_empty() {
+            return Err(Error::Conflict("Part is still attached".into()));
+        }
+        let (services, _) = Service::for_part_with_usage(self, store).await?;
+        if !services.is_empty() {
+            return Err(Error::Conflict("Part has services logged".into()));
+        }
+
+        let plans = ServicePlan::for_part(self, store).await?;
+        if !plans.is_empty() {
+            return Err(Error::Conflict("Part has active serviceplan".into()));
+        }
+        store.part_delete(self).await
+    }
+
     pub(crate) async fn read(self, store: &mut impl PartStore) -> TbResult<Part> {
         store.partid_get_part(self).await
     }
