@@ -64,8 +64,7 @@ impl RequestUser {
             _ => avatar,
         };
         let refresh_token = token.refresh_token();
-        let refresh = refresh_token.map(|t| t.secret());
-        let user = StravaUser::upsert(*id, firstname, lastname, avatar, refresh, store).await?;
+        let user = StravaUser::upsert(*id, firstname, lastname, avatar, store).await?;
         let id = user.tb_id();
         let is_admin = id.is_admin(store).await?;
 
@@ -80,31 +79,6 @@ impl RequestUser {
         })
     }
 
-    pub(crate) async fn create_from_id(
-        _admin: AxumAdmin,
-        user: UserId,
-        store: &mut impl StravaStore,
-    ) -> TbResult<RequestUser> {
-        let user = StravaUser::read(user, store).await?;
-
-        let strava_id = user.strava_id();
-        let id = user.tb_id();
-        let is_admin = id.is_admin(store).await?;
-        let refresh_token = user.refresh_token().ok_or(Error::BadRequest(format!(
-            "User {id} does not have a refresh token (disabled?)"
-        )))?;
-
-        Ok(Self {
-            id,
-            strava_id,
-            is_admin,
-            access_token: AccessToken::new(String::default()),
-            expires_at: Some(SystemTime::UNIX_EPOCH),
-            refresh_token: Some(RefreshToken::new(refresh_token)),
-            session: None,
-        })
-    }
-
     fn is_expired(&self) -> bool {
         match self.expires_at {
             Some(expires_at) => SystemTime::now() > expires_at,
@@ -112,7 +86,7 @@ impl RequestUser {
         }
     }
 
-    async fn refresh_the_token(&mut self, store: &mut impl StravaStore) -> TbResult<()> {
+    async fn refresh_the_token(&mut self) -> TbResult<()> {
         let token = match self.refresh_token.clone() {
             Some(token) => token,
             None => {
@@ -133,8 +107,6 @@ impl RequestUser {
         self.access_token = token.access_token().clone();
         self.expires_at = token.expires_in().map(|d| SystemTime::now() + d);
         self.refresh_token = token.refresh_token().cloned();
-        let refresh = token.refresh_token().map(|t| t.secret());
-        self.strava_id.update_token(refresh, store).await?;
         if let Some(mut session) = self.session.clone() {
             debug!("updating session for user {}", self.id);
             session
@@ -144,12 +116,8 @@ impl RequestUser {
         Ok(())
     }
 
-    async fn get_strava(
-        &mut self,
-        uri: &str,
-        store: &mut impl StravaStore,
-    ) -> TbResult<reqwest::Response> {
-        self.check_token(store).await?;
+    async fn get_strava(&mut self, uri: &str) -> TbResult<reqwest::Response> {
+        self.check_token().await?;
 
         let resp = reqwest::Client::new()
             .get(format!("{API}{uri}"))
@@ -182,10 +150,10 @@ impl RequestUser {
         }
     }
 
-    async fn check_token(&mut self, store: &mut impl StravaStore) -> TbResult<()> {
+    async fn check_token(&mut self) -> TbResult<()> {
         if self.is_expired() {
             debug!("access token for user {} is expired", self.id);
-            return self.refresh_the_token(store).await;
+            return self.refresh_the_token().await;
         }
         Ok(())
     }
@@ -211,13 +179,9 @@ impl StravaPerson for RequestUser {
         self.strava_id
     }
 
-    async fn request_json<T: DeserializeOwned>(
-        &mut self,
-        uri: &str,
-        store: &mut impl StravaStore,
-    ) -> TbResult<T> {
+    async fn request_json<T: DeserializeOwned>(&mut self, uri: &str) -> TbResult<T> {
         let r = self
-            .get_strava(uri, store)
+            .get_strava(uri)
             .await?
             .text()
             .await
@@ -226,8 +190,8 @@ impl StravaPerson for RequestUser {
         Ok(serde_json::from_str::<T>(&r).context("Could not parse response body")?)
     }
 
-    async fn deauthorize(&mut self, store: &mut impl StravaStore) -> TbResult<()> {
-        self.check_token(store).await?;
+    async fn deauthorize(&mut self) -> TbResult<()> {
+        self.check_token().await?;
 
         STRAVACLIENT
             .revoke_token(self.access_token.clone().into())

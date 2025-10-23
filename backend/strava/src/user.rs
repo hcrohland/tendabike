@@ -20,27 +20,6 @@ impl StravaId {
     pub async fn read(&self, store: &mut impl StravaStore) -> TbResult<Option<StravaUser>> {
         store.stravauser_get_by_stravaid(self).await
     }
-
-    /// update the refresh token for the user
-    ///
-    /// sets a five minute buffer for the access token
-    /// returns the updated user
-    pub async fn update_token(
-        self,
-        refresh: Option<&String>,
-        store: &mut impl StravaStore,
-    ) -> TbResult<StravaUser> {
-        store.stravaid_update_token(self, refresh).await
-    }
-
-    /// disable a user
-    async fn disable(self, store: &mut impl StravaStore) -> TbResult<()> {
-        let id = self;
-        info!("disabling user {id}");
-
-        store.stravaid_update_token(id, None).await?;
-        Ok(())
-    }
 }
 
 /// Strava User data
@@ -50,8 +29,6 @@ pub struct StravaUser {
     pub id: StravaId,
     /// the corresponding tendabike user id
     pub tendabike_id: UserId,
-    /// the refresh token to get a new access token from Strava
-    pub refresh_token: Option<String>,
 }
 
 impl StravaUser {
@@ -80,14 +57,6 @@ impl StravaUser {
         self.id
     }
 
-    pub fn refresh_token(&self) -> Option<String> {
-        self.refresh_token.clone()
-    }
-
-    pub(crate) fn disabled(&self) -> bool {
-        self.refresh_token.is_none()
-    }
-
     /// Upsert a Strava user by ID, updating their Tendabike user ID if they already exist, or creating a new user if they don't.
     ///
     /// # Arguments
@@ -105,7 +74,6 @@ impl StravaUser {
         firstname: &str,
         lastname: &str,
         avatar: &Option<String>,
-        refresh: Option<&String>,
         store: &mut impl StravaStore,
     ) -> TbResult<StravaUser> {
         debug!("got id {}: {} {}", id, &firstname, &lastname);
@@ -115,18 +83,13 @@ impl StravaUser {
             user.tendabike_id
                 .update(firstname, lastname, avatar, store)
                 .await?;
-            store.stravaid_update_token(user.id, refresh).await?;
             return Ok(user);
         }
 
         // create new user!
         let tendabike_id = crate::UserId::create(firstname, lastname, avatar, store).await?;
 
-        let user = StravaUser {
-            id,
-            tendabike_id,
-            ..Default::default()
-        };
+        let user = StravaUser { id, tendabike_id };
         info!("creating new user id {user:?}");
 
         let user = store.stravauser_new(user).await?;
@@ -152,7 +115,7 @@ impl StravaUser {
             shoes: Vec<Gear>,
         }
 
-        let ath: Athlete = user.request_json("/athlete", store).await?;
+        let ath: Athlete = user.request_json("/athlete").await?;
 
         let mut parts = Vec::new();
         for gear in ath.bikes.into_iter().chain(ath.shoes) {
@@ -175,7 +138,6 @@ pub struct StravaStat {
     #[serde(flatten)]
     stat: Stat,
     events: i64,
-    disabled: bool,
 }
 
 pub async fn get_all_stats(store: &mut impl StravaStore) -> TbResult<Vec<StravaStat>> {
@@ -185,40 +147,9 @@ pub async fn get_all_stats(store: &mut impl StravaStore) -> TbResult<Vec<StravaS
     for u in users {
         let stat = u.tendabike_id.get_stat(store).await?;
         let events = store.strava_events_get_count_for_user(&u.id).await?;
-        res.push(StravaStat {
-            stat,
-            events,
-            disabled: u.disabled(),
-        });
+        res.push(StravaStat { stat, events });
     }
     Ok(res)
-}
-
-/// disable a user
-///
-/// # Errors
-///
-/// This function will return an error if the user does not exist, is already disabled
-/// or has open events and if strava or the database is not reachable.
-pub async fn user_disable(
-    user: &mut impl StravaPerson,
-    store: &mut impl StravaStore,
-) -> TbResult<()> {
-    let events = store
-        .strava_events_delete_for_user(&user.strava_id())
-        .await?;
-
-    if events > 0 {
-        warn!("deleted {} open events for user {}", events, user.tb_id());
-    }
-
-    if let Err(err) = user.deauthorize(store).await {
-        warn!("could not deauthorize user {}: {:#}", user.tb_id(), err)
-    }
-
-    warn!("User {} disabled", user.tb_id());
-
-    user.strava_id().disable(store).await
 }
 
 /// Returns the Strava URL for a user with the given Strava ID.

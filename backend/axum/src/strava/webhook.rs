@@ -52,7 +52,7 @@
 use async_session::log::{info, trace};
 use axum::{
     Json,
-    extract::{Path, Query, State},
+    extract::{Query, State},
 };
 use serde_derive::{Deserialize, Serialize};
 
@@ -133,19 +133,4 @@ pub(super) async fn sync_api(
             .await
             .map(Json)?,
     )
-}
-
-pub(super) async fn sync(
-    Path(tbid): Path<i32>,
-    admin: AxumAdmin,
-    State(store): State<DbPool>,
-) -> ApiResult<Summary> {
-    let mut store = store.get().await?;
-    let store = &mut store;
-    let mut user = RequestUser::create_from_id(admin, tbid.into(), store).await?;
-    let res = process(&mut user, store).await.map_err(|e| match e {
-        Error::NotAuth(_) => Error::AnyFailure(anyhow::anyhow!("User not authenticated at Strava")),
-        err => err,
-    })?;
-    Ok(Json(res))
 }
