@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { TableBodyCell, TableBodyRow, TableHeadCell } from "flowbite-svelte";
+  import {
+    DropdownItem,
+    TableBodyCell,
+    TableBodyRow,
+    TableHeadCell,
+  } from "flowbite-svelte";
   import PartLink from "../Part/PartLink.svelte";
   import Usage from "../Usage/Usage.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
@@ -10,6 +15,7 @@
   import { Type } from "../lib/types";
   import { actions } from "../Widgets/Actions.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
+  import Menu from "../Widgets/Menu.svelte";
 
   interface Props {
     type: Type;
@@ -69,13 +75,15 @@
     >
       <PartLink {part} />
       {#if !part.disposed_at}
-        <XsButton onclick={() => $actions.attachPart(part)}>
-          {#if attachedTo($attachments, part.id, date)}
-            Move
-          {:else}
-            Attach
-          {/if}
-        </XsButton>
+        <Menu>
+          <DropdownItem onclick={() => $actions.attachPart(part)}>
+            {#if attachedTo($attachments, part.id, date)}
+              Move
+            {:else}
+              Attach
+            {/if}
+          </DropdownItem>
+        </Menu>
       {/if}
     </TableBodyCell>
     <Usage id={part.usage} ref={part.id} />
