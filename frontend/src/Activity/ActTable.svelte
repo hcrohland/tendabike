@@ -7,12 +7,11 @@
   import { Activity } from "../lib/activity";
   import { Usage } from "../lib/usage";
   import { parts } from "../lib/part";
-  import ChangeActivity from "./ChangeActivity.svelte";
   import { category } from "../lib/types";
+  import ActName from "./ActName.svelte";
 
   export let acts: Activity[];
 
-  let changeActivity: { start: (a: Activity) => void };
   let selection: Record<string | number, any> = {};
 
   let min: number,
@@ -52,13 +51,19 @@
 
   const createFilterOptions = (acts: Activity[]) => {
     let types: any = {};
+    // we assume acts is sorted by start. Maybe wrongly so?
     acts.forEach((act) => {
-      if (act.gear && types[act.gear] === undefined) {
-        let name = act.gearName($parts);
-        types[act.gear] = { name: name, value: act.gear };
+      if (types[act.gear || 0] === undefined) {
+        if (act.gear) {
+          let name = act.gearName($parts);
+          types[act.gear] = { name: name, value: act.gear, start: act.start };
+        } else {
+          types[0] = { name: "-- none --", value: 0, start: new Date() };
+        }
       }
     });
-    let res = Object.values(types).sort(by<any>("value"));
+    let res = Object.values(types).sort(by<any>("start"));
+
     return res.length > 1 ? res : undefined;
   };
 
@@ -85,14 +90,7 @@
       value: (v: Activity) => v.name || "",
       searchValue: (v: Activity) => v.name,
       sortable: true,
-      renderValue: (v: Activity) =>
-        v.id
-          ? '<a href="/strava/activities/' +
-            v.id +
-            '" target="_blank">' +
-            v.name +
-            '&nbsp;&nbsp;<img src="strava_grey.png" alt="View on Strava" title="View on Strava" class="inline"/>'
-          : v.name,
+      renderComponent: ActName,
       totalsValue: (a: Activity) => a.count + " activities",
       parseHTML: true,
     },
@@ -103,7 +101,8 @@
       totalsValue: () => "",
       parseHTML: true,
       sortable: true,
-      filterValue: (v: Activity) => v.gear,
+      filterPlaceholder: "All",
+      filterValue: (a: Activity, f: any) => f === (a.gear ? a.gear : 0),
       filterOptions: createFilterOptions(acts),
     },
     {
@@ -183,7 +182,5 @@
     bind:filterSelections={selection}
     classNameSelect="w-auto"
     classNameInput="w-auto p-1 dark:bg-gray-500 bg-gray-200"
-    on:dblclk={(e) => changeActivity.start(e.detail)}
   />
 {/if}
-<ChangeActivity bind:this={changeActivity} />

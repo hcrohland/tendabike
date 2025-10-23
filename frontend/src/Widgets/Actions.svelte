@@ -17,6 +17,7 @@
     updatePlan: (p: ServicePlan) => void;
     deletePlan: (p: ServicePlan) => void;
     deleteAttachment: (a: Attachment) => void;
+    changeActivity: (a: Activity) => void;
   };
 
   export let actions = writable<ModalType>();
@@ -40,6 +41,8 @@
   import ChangePart from "../Part/ChangePart.svelte";
   import DeleteAttachment from "../Attachment/DeleteAttachment.svelte";
   import AttachPart from "../Attachment/AttachPart.svelte";
+  import ChangeActivity from "../Activity/ChangeActivity.svelte";
+  import type { Activity } from "../lib/activity";
 
   $: actions.set({
     newPart: newPart?.start,
@@ -57,6 +60,7 @@
     updatePlan: updatePlan?.start,
     deletePlan: deletePlan?.start,
     deleteAttachment: deleteAttachment?.start,
+    changeActivity: changeActivity?.start,
   });
 
   let newPart: { start: (t: Type) => void };
@@ -76,6 +80,7 @@
   let newPlan: { start: (p: Part) => void };
   let updatePlan: { start: (p: ServicePlan) => void };
   let deletePlan: { start: (p: ServicePlan) => void };
+  let changeActivity: { start: (a: Activity) => void };
 </script>
 
 <NewPart bind:this={newPart} />
@@ -90,3 +95,4 @@
 <ReplacePart bind:this={replacePart} />
 <AttachPart bind:this={attachPart} />
 <DeleteAttachment bind:this={deleteAttachment} />
+<ChangeActivity bind:this={changeActivity} />
