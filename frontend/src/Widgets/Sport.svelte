@@ -1,8 +1,15 @@
 <script lang="ts">
-  let categories: number[];
-  let promise = myfetch("/api/activ/categories").then(
-    (data) => (categories = data),
-  );
+  let categories: number[] = [];
+
+  let promise: any;
+  function ontoggle(e: any) {
+    if (e.newState == "open") {
+      promise = myfetch("/api/activ/categories").then(
+        (data) => (categories = data),
+      );
+    }
+  }
+
   import { myfetch, handleError } from "../lib/store";
   import { Dropdown, DropdownItem, Spinner } from "flowbite-svelte";
   import { category, types } from "../lib/types";
@@ -13,7 +20,7 @@
   Switch Sport
   <ChevronDownOutline class="inline" />
 </DropdownItem>
-<Dropdown simple>
+<Dropdown simple {ontoggle}>
   {#await promise}
     <DropdownItem>
       <Spinner />

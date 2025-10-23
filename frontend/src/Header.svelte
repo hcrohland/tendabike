@@ -10,16 +10,57 @@
     DropdownDivider,
     Avatar,
     DropdownHeader,
+    Spinner,
   } from "flowbite-svelte";
-  import { user } from "./lib/store";
+  import {
+    handleError,
+    myfetch,
+    refresh,
+    updateSummary,
+    user,
+  } from "./lib/store";
   import Sport from "./Widgets/Sport.svelte";
   import { category } from "./lib/types";
   import { querystring } from "svelte-spa-router";
-  import SyncMenu from "./Widgets/SyncMenu.svelte";
   import { location } from "svelte-spa-router";
+  import { onDestroy } from "svelte";
+  import { ChevronDownOutline } from "flowbite-svelte-icons";
+  import Garmin from "./Activity/Garmin.svelte";
 
   let { promise } = $props();
 
+  let openGarmin = $state(false);
+
+  let hook_timer = setTimeout(() => {});
+
+  onDestroy(() => {
+    clearInterval(hook_timer);
+  });
+
+  let hook_promise = $state(poll());
+
+  async function poll() {
+    clearInterval(hook_timer);
+    let data;
+    try {
+      do {
+        data = await myfetch("/strava/hooks");
+        if (!data) break;
+        updateSummary(data);
+      } while (data["activities"].length > 0);
+      hook_timer = setTimeout(() => {
+        hook_promise = poll();
+      }, 60000);
+    } catch (e) {
+      console.error(e);
+      handleError(e as Error);
+    }
+  }
+
+  function fullrefresh() {
+    clearInterval(hook_timer);
+    hook_promise = refresh().then(poll);
+  }
   let activeUrl = $derived("/#" + $location);
 </script>
 
@@ -35,7 +76,15 @@
   </NavBrand>
   {#if $user}
     <div class="flex items-center md:order-2">
-      <Avatar src={$user.avatar} id="user" class="border-2" />
+      <div id="user">
+        {#await hook_promise}
+          <Spinner size="10" />
+        {:then}
+          <Avatar src={$user.avatar} class="border-2" />
+        {:catch error}
+          {handleError(error)}
+        {/await}
+      </div>
       <Dropdown simple triggeredBy="#user">
         <DropdownHeader>
           {$user.firstname}
@@ -44,7 +93,17 @@
         <DropdownDivider />
         <Sport></Sport>
         {#await promise then}
-          <SyncMenu></SyncMenu>
+          <DropdownItem class="cursor-pointer flex-end">
+            Sync
+            <ChevronDownOutline class=" inline " />
+          </DropdownItem>
+          <Dropdown simple>
+            <DropdownItem onclick={fullrefresh}>Refresh data</DropdownItem>
+            <DropdownItem onclick={() => (openGarmin = true)}>
+              With CSV File
+            </DropdownItem>
+          </Dropdown>
+          <Garmin bind:open={openGarmin} />
         {/await}
         {#if $user.is_admin}
           <DropdownDivider />
