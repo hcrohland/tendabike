@@ -109,6 +109,7 @@
       totalsValue: () => "",
       parseHTML: true,
       sortable: true,
+      filterPlaceholder: "All",
       filterValue: (a: Activity, f: any) => f === (a.gear ? a.gear : 0),
       filterOptions: createFilterOptions(acts),
     },
