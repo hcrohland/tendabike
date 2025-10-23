@@ -83,6 +83,15 @@
               Attach
             {/if}
           </DropdownItem>
+          {#if part.attachments($attachments).length == 0}
+            <DropdownItem onclick={() => $actions.deletePart(part)}>
+              Delete
+            </DropdownItem>
+          {:else}
+            <DropdownItem onclick={() => $actions.disposePart(part)}>
+              Dispose
+            </DropdownItem>
+          {/if}
         </Menu>
       {/if}
     </TableBodyCell>

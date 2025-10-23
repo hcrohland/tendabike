@@ -65,7 +65,7 @@ pub struct ChangePart {
 pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route("/", post(post_part))
-        .route("/{part}", get(get_part).put(put_part))
+        .route("/{part}", get(get_part).put(put_part).delete(delete_part))
 }
 
 async fn get_part(
@@ -91,6 +91,15 @@ async fn post_part(
     let mut store = store.get().await?;
     let part = Part::create(name, vendor, model, what, None, purchase, &user, &mut store).await?;
     Ok((StatusCode::CREATED, Json(part)))
+}
+
+async fn delete_part(
+    Path(part): Path<PartId>,
+    user: RequestUser,
+    State(store): State<DbPool>,
+) -> ApiResult<PartId> {
+    let mut store = store.get().await?;
+    Ok(part.delete(&user, &mut store).await.map(Json)?)
 }
 
 async fn put_part(

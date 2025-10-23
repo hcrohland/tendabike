@@ -13,6 +13,7 @@
   import { actions } from "../Widgets/Actions.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
   import Menu from "../Widgets/Menu.svelte";
+  import { pop } from "svelte-spa-router";
 
   interface Props {
     id: number;
@@ -53,6 +54,16 @@
       </DropdownItem>
       <DropdownItem onclick={() => $actions.changePart(part)}>
         Change details
+      </DropdownItem>
+    {/if}
+    {#if !part.isGear() && part.attachments($attachments).length == 0}
+      <DropdownItem
+        onclick={() => {
+          $actions.deletePart(part);
+          pop();
+        }}
+      >
+        Delete
       </DropdownItem>
     {/if}
   </Menu>

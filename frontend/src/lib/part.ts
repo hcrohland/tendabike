@@ -45,6 +45,13 @@ export class Part {
       .then((data) => parts.updateMap([data]))
       .catch(handleError);
   }
+
+  async delete() {
+    return await myfetch("/api/part/" + this.id, "DELETE")
+      .then((data) => parts.deleteItem(data))
+      .catch(handleError);
+  }
+
   async detach(date: Date, all: boolean) {
     await new AttEvent(this.id!, date, all, 0, 0).detach();
   }
