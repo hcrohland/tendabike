@@ -198,7 +198,7 @@ impl Event {
 
         // while len == batch
         {
-            let acts = next_activities(user, store, 25, start).await?;
+            let acts = next_activities(user, 25, start).await?;
             if acts.is_empty() {
                 self.delete(store).await?;
             } else {
@@ -321,15 +321,11 @@ async fn check_try_again(err: tb_domain::Error, store: &mut impl StravaStore) ->
 
 async fn next_activities(
     user: &mut impl StravaPerson,
-    store: &mut impl StravaStore,
     per_page: usize,
     start: i64,
 ) -> TbResult<Vec<StravaActivity>> {
-    user.request_json(
-        &format!("/activities?after={start}&per_page={per_page}"),
-        store,
-    )
-    .await
+    user.request_json(&format!("/activities?after={start}&per_page={per_page}"))
+        .await
 }
 
 pub async fn process(
@@ -366,10 +362,6 @@ pub async fn sync_users(
         None => store.stravausers_get_all().await?,
     };
     for user in users {
-        if user.disabled() {
-            warn!("user {} disabled, skipping", user.strava_id());
-            continue;
-        }
         info!("Adding sync for {:?} at {time}", user.strava_id());
         event::insert_sync(user.strava_id(), time, migrate, store).await?;
     }

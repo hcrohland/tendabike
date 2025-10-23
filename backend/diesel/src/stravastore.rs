@@ -11,34 +11,23 @@ mod schema;
 pub struct DbStravaUser {
     id: i32,
     tendabike_id: i32,
-    refresh_token: Option<String>,
 }
 
 impl From<StravaUser> for DbStravaUser {
     fn from(value: StravaUser) -> Self {
-        let StravaUser {
-            id,
-            tendabike_id,
-            refresh_token,
-        } = value;
+        let StravaUser { id, tendabike_id } = value;
         Self {
             id: id.into(),
             tendabike_id: tendabike_id.into(),
-            refresh_token,
         }
     }
 }
 impl From<DbStravaUser> for StravaUser {
     fn from(value: DbStravaUser) -> Self {
-        let DbStravaUser {
-            id,
-            tendabike_id,
-            refresh_token,
-        } = value;
+        let DbStravaUser { id, tendabike_id } = value;
         Self {
             id: id.into(),
             tendabike_id: tendabike_id.into(),
-            refresh_token,
         }
     }
 }
@@ -213,20 +202,6 @@ impl tb_strava::StravaStore for AsyncDieselConn {
     async fn stravauser_new(&mut self, user: StravaUser) -> TbResult<StravaUser> {
         diesel::insert_into(schema::strava_users::table)
             .values(DbStravaUser::from(user))
-            .get_result::<DbStravaUser>(self)
-            .await
-            .map_err(into_domain)
-            .map(Into::into)
-    }
-
-    async fn stravaid_update_token(
-        &mut self,
-        stravaid: StravaId,
-        refresh: Option<&String>,
-    ) -> TbResult<StravaUser> {
-        use schema::strava_users::dsl::*;
-        diesel::update(strava_users.find(i32::from(stravaid)))
-            .set((refresh_token.eq(refresh),))
             .get_result::<DbStravaUser>(self)
             .await
             .map_err(into_domain)

@@ -34,9 +34,7 @@ pub(crate) fn router() -> Router<AppState> {
             post(webhook::create_event).get(webhook::validate_subscription),
         )
         .route("/sync", get(webhook::sync_api))
-        .route("/sync/{id}", get(webhook::sync))
         .route("/bikes/{id}", get(redirect::redirect_gear))
         .route("/activities/{id}", get(redirect::redirect_act))
         .route("/users/{id}", get(redirect::redirect_user))
-        .route("/disable/{id}", post(redirect::revoke_user))
 }
