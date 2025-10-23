@@ -268,7 +268,7 @@
   <MultiSelect
     placeholder="Select bikes..."
     items={gears
-      .sort(by("purchase"))
+      .sort(by("last_used"))
       .map((g, n) => ({ value: g, name: n + " - " + g.name, id: g.id }))}
     bind:value={gear}
     class="max-w-150"
