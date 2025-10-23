@@ -94,6 +94,7 @@ impl TryFrom<DbActivity> for Activity {
             gear,
             utc_offset,
         } = v;
+        let utc_offset = ((utc_offset + 900) / 1800) * 1800; //round it to 1800s
         let offset = UtcOffset::from_whole_seconds(utc_offset).context("Utc Offset invalid")?;
         let start = start.to_offset(offset);
 
