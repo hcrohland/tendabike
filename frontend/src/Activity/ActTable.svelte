@@ -52,13 +52,19 @@
 
   const createFilterOptions = (acts: Activity[]) => {
     let types: any = {};
+    // we assume acts is sorted by start. Maybe wrongly so?
     acts.forEach((act) => {
-      if (act.gear && types[act.gear] === undefined) {
-        let name = act.gearName($parts);
-        types[act.gear] = { name: name, value: act.gear };
+      if (types[act.gear || 0] === undefined) {
+        if (act.gear) {
+          let name = act.gearName($parts);
+          types[act.gear] = { name: name, value: act.gear, start: act.start };
+        } else {
+          types[0] = { name: "-- none --", value: 0, start: new Date() };
+        }
       }
     });
-    let res = Object.values(types).sort(by<any>("value"));
+    let res = Object.values(types).sort(by<any>("start"));
+
     return res.length > 1 ? res : undefined;
   };
 
@@ -103,7 +109,7 @@
       totalsValue: () => "",
       parseHTML: true,
       sortable: true,
-      filterValue: (v: Activity) => v.gear,
+      filterValue: (a: Activity, f: any) => f === (a.gear ? a.gear : 0),
       filterOptions: createFilterOptions(acts),
     },
     {
