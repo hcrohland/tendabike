@@ -417,9 +417,6 @@
           >
             {#each columns as col, colIndex}
               <TableBodyCell
-                onclick={(e) => handleClickCell(e, row, col.key)}
-                onkeypress={(e) =>
-                  e.key === "Enter" && handleClickCell(e, row, col.key)}
                 class={asStringArray([
                   typeof col.class === "string" ? col.class : null,
                   typeof col.class === "function"

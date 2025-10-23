@@ -7,12 +7,11 @@
   import { Activity } from "../lib/activity";
   import { Usage } from "../lib/usage";
   import { parts } from "../lib/part";
-  import ChangeActivity from "./ChangeActivity.svelte";
   import { category } from "../lib/types";
+  import ActName from "./ActName.svelte";
 
   export let acts: Activity[];
 
-  let changeActivity: { start: (a: Activity) => void };
   let selection: Record<string | number, any> = {};
 
   let min: number,
@@ -91,14 +90,7 @@
       value: (v: Activity) => v.name || "",
       searchValue: (v: Activity) => v.name,
       sortable: true,
-      renderValue: (v: Activity) =>
-        v.id
-          ? '<a href="/strava/activities/' +
-            v.id +
-            '" target="_blank">' +
-            v.name +
-            '&nbsp;&nbsp;<img src="strava_grey.png" alt="View on Strava" title="View on Strava" class="inline"/>'
-          : v.name,
+      renderComponent: ActName,
       totalsValue: (a: Activity) => a.count + " activities",
       parseHTML: true,
     },
@@ -190,7 +182,5 @@
     bind:filterSelections={selection}
     classNameSelect="w-auto"
     classNameInput="w-auto p-1 dark:bg-gray-500 bg-gray-200"
-    on:dblclk={(e) => changeActivity.start(e.detail)}
   />
 {/if}
-<ChangeActivity bind:this={changeActivity} />
