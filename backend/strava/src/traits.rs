@@ -158,6 +158,28 @@ pub trait StravaStore: tb_domain::Store + Send {
     /// Returns an error if the user cannot be created.
     async fn stravauser_new(&mut self, user: StravaUser) -> TbResult<StravaUser>;
 
+    /// Updates the access token for a Strava user.
+    ///
+    /// # Arguments
+    ///
+    /// * `stravaid` - The Strava ID of the user.
+    /// * `access` - The new access token.
+    /// * `exp` - The expiration time of the access token.
+    /// * `refresh` - The new refresh token, if any.
+    ///
+    /// # Returns
+    ///
+    /// The updated Strava user.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the user cannot be updated.
+    async fn stravaid_update_token(
+        &mut self,
+        stravaid: StravaId,
+        refresh: Option<&String>,
+    ) -> TbResult<StravaUser>;
+
     /// Returns the number of Strava events for a given user.
     ///
     /// # Arguments
@@ -202,7 +224,11 @@ pub trait StravaPerson: Person {
         self.get_id()
     }
 
-    async fn request_json<T: DeserializeOwned>(&mut self, uri: &str) -> TbResult<T>;
+    async fn request_json<T: DeserializeOwned>(
+        &mut self,
+        uri: &str,
+        store: &mut impl StravaStore,
+    ) -> TbResult<T>;
 
-    async fn deauthorize(&mut self) -> TbResult<()>;
+    async fn deauthorize(&mut self, store: &mut impl StravaStore) -> TbResult<()>;
 }

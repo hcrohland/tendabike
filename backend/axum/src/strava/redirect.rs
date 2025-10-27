@@ -4,11 +4,12 @@
 //!
 
 use axum::{
+    Json,
     extract::{Path, State},
     response::Redirect,
 };
 
-use crate::{DbPool, RequestUser, error::AppError};
+use crate::{ApiResult, AxumAdmin, DbPool, RequestUser, error::AppError};
 
 pub(super) async fn redirect_gear(
     mut user: RequestUser,
@@ -43,4 +44,15 @@ pub(super) async fn redirect_user(
         .await
         .unwrap_or_else(|_| "/".to_string());
     Ok(Redirect::permanent(&uri))
+}
+
+pub(super) async fn revoke_user(
+    admin: AxumAdmin,
+    Path(tbid): Path<i32>,
+    State(pool): State<DbPool>,
+) -> ApiResult<()> {
+    let mut store = pool.get().await?;
+    let store = &mut store;
+    let mut user = RequestUser::create_from_id(admin, tbid.into(), store).await?;
+    Ok(tb_strava::user_disable(&mut user, store).await.map(Json)?)
 }
