@@ -75,28 +75,19 @@
     );
   }
 
-  function buildYears(acts1: Activity[], gear: Part[]): Year[] {
-    const g = gear.map((g) => g.id);
-
-    const minyear = acts1
-      .reduce((min, a) => (min <= a.start ? min : a.start), new Date())
-      .getFullYear();
+  function buildYears(acts: Activity[]): Year[] {
     const thisyear = new Date().getFullYear();
     let ret = [];
     let year: number;
     for (year = thisyear; year >= minyear; year--) {
       // get a copy of all bike activities for year year
-      let acts = acts1
-        .filter(
-          (a) =>
-            a.start.getFullYear() == year &&
-            (g.length == 0 || g.includes(a.gear)),
-        )
+      let days = acts
+        .filter((a) => a.start.getFullYear() == year)
         .map((a) => new Day(a));
       ret.push({
         year,
-        days: aggregateDays(acts),
-        months: sumByMonths(acts),
+        days: aggregateDays(days),
+        months: sumByMonths(days),
       });
     }
     return ret;
@@ -173,6 +164,7 @@
         },
       ];
     }
+
     let yanchor = "middle";
     for (const field of fields.values()) {
       for (const [indx, y] of [ncumm, ncomp].entries()) {
@@ -239,20 +231,24 @@
       ]);
   }
 
-  let acts = $derived($category.activities($activities));
-  let gears = $derived($category.parts($parts));
-  let gear: Part[] = $state([]);
+  let all_acts = $derived($category.activities($activities));
+  let minyear = $derived(
+    all_acts
+      .reduce((min, a) => (min <= a.start ? min : a.start), new Date())
+      .getFullYear(),
+  );
+  let acts = $derived(
+    all_acts.filter(
+      (a) => gears.length == 0 || gears.some((g) => g.id == a.gear),
+    ),
+  );
+  let all_gears = $derived($category.parts($parts));
+  let gears: Part[] = $state([]);
   let cumm: any = $state(0);
   let comp: number | null = $state(null);
   let perMonths = $state(false);
-  let years = $derived(buildYears(acts, gear));
-  let garmin = $derived(
-    acts.some(
-      (a) =>
-        (gear.length == 0 || gear.some((g) => g.id == a.gear)) &&
-        a.external_id?.startsWith("garmin"),
-    ),
-  );
+  let years = $derived(buildYears(acts));
+  let garmin = $derived(acts.some((a) => a.device_name?.startsWith("Garmin")));
 </script>
 
 <div class="flex flex-wrap pb-10 gap-2 justify-between">
@@ -286,10 +282,10 @@
   </ButtonGroup>
   <MultiSelect
     placeholder="Select bikes..."
-    items={gears
+    items={all_gears
       .sort(by("last_used"))
       .map((g, n) => ({ value: g, name: n + " - " + g.name, id: g.id }))}
-    bind:value={gear}
+    bind:value={gears}
     class="max-w-150"
   />
 </div>
