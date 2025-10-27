@@ -10,6 +10,7 @@
   } from "flowbite-svelte";
   import { handleError, myfetch, setSummary } from "../lib/store";
   import type { User } from "../lib/types";
+  import Sync from "./Sync.svelte";
   import CreateSync from "./CreateSync.svelte";
 
   let promise: Promise<void>, createSync: any;
@@ -31,6 +32,11 @@
       .then(setSummary);
   }
 
+  async function disable(user: User) {
+    await myfetch("/strava/disable/" + user.id, "POST").catch(handleError);
+    refresh();
+  }
+
   refresh();
 </script>
 
@@ -47,22 +53,30 @@
       <TableHeadCell>Events</TableHeadCell>
       <TableHeadCell></TableHeadCell>
     </TableBodyRow>
-    {#each list.sort((a, b) => a.user.id - b.user.id) as { user, parts, activities, events } (user.id)}
+    {#each list.sort((a, b) => a.user.id - b.user.id) as { user, parts, activities, events, disabled } (user.id)}
       <TableBodyRow>
         <TableBodyCell>{user.id}</TableBodyCell>
         <TableBodyCell>{user.firstname} {user.name}</TableBodyCell>
         <TableBodyCell>
-          {user.is_admin ? "Admin" : "User"}
-        </TableBodyCell>
+          {disabled
+            ? "Disabled"
+            : user.is_admin
+              ? "Admin"
+              : "User"}</TableBodyCell
+        >
         <TableBodyCell>{parts}</TableBodyCell>
         <TableBodyCell>{activities}</TableBodyCell>
         <TableBodyCell>{events}</TableBodyCell>
         <TableBodyCell>
-          <ButtonGroup>
-            <Button onclick={() => createSync.start(user)}>
-              Add Sync Event
-            </Button>
-          </ButtonGroup>
+          {#if !disabled}
+            <ButtonGroup>
+              <Button onclick={() => createSync.start(user)}>
+                Add Sync Event
+              </Button>
+              <Sync {user} {refresh} />
+              <Button onclick={() => disable(user)}>Disable user</Button>
+            </ButtonGroup>
+          {/if}
         </TableBodyCell>
       </TableBodyRow>
     {/each}

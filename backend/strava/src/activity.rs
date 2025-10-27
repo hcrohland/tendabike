@@ -182,7 +182,9 @@ pub async fn upsert_activity(
     user: &mut impl StravaPerson,
     store: &mut impl StravaStore,
 ) -> TbResult<Summary> {
-    let act: StravaActivity = user.request_json(&format!("/activities/{id}")).await?;
+    let act: StravaActivity = user
+        .request_json(&format!("/activities/{id}"), store)
+        .await?;
     act.send_to_tb(user, store).await
 }
 

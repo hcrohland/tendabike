@@ -25,6 +25,7 @@ table! {
     strava_users (id) {
         id -> Int4,
         tendabike_id -> Int4,
+        refresh_token -> Nullable<Text>,
     }
 }
 
