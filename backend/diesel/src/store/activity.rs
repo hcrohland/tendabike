@@ -242,11 +242,11 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
         )
     }
 
-    async fn activities_delete(&mut self, acts: &[Activity]) -> TbResult<usize> {
+    async fn activities_delete(&mut self, list: &[Activity]) -> TbResult<usize> {
         use schema::activities::dsl::*;
-        let acts: Vec<_> = acts.iter().map(|s| i64::from(s.id)).collect();
+        let list: Vec<_> = list.iter().map(|s| i64::from(s.id)).collect();
 
-        diesel::delete(activities.filter(id.eq_any(acts)))
+        diesel::delete(activities.filter(id.eq_any(list)))
             .execute(self)
             .await
             .map_err(into_domain)
