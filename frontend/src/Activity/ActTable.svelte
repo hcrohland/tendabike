@@ -135,7 +135,7 @@
       value: (v: Activity) => v.descend || v.climb,
       renderValue: (v: Activity) => fmtNumber(v.descend || v.climb),
       sortable: true,
-      class: "text-end",
+      class: "text-end text-wrap",
     },
     {
       key: "energy",
@@ -144,6 +144,14 @@
       renderValue: (v: Activity) => fmtNumber(v.energy),
       sortable: true,
       class: "text-end",
+    },
+    {
+      key: "device_name",
+      title: "Data Source",
+      value: (a: Activity) => a.device_name || "",
+      searchValue: (v: Activity) => v.device_name,
+      sortable: true,
+      parseHTML: true,
     },
   ];
 
@@ -181,6 +189,6 @@
     {totalsFunc}
     bind:filterSelections={selection}
     classNameSelect="w-auto"
-    classNameInput="w-auto p-1 dark:bg-gray-500 bg-gray-200"
+    classNameInput="p-1 dark:bg-gray-500 bg-gray-200"
   />
 {/if}

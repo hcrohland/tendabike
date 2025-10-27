@@ -21,6 +21,7 @@ export class Activity {
   time?: number;
   duration?: number;
   energy?: number;
+  device_name?: string;
 
   constructor(data: any) {
     this.id = data.id;
@@ -35,6 +36,7 @@ export class Activity {
     this.time = number_or_undefined(data.time);
     this.duration = number_or_undefined(data.duration);
     this.energy = number_or_undefined(data.energy);
+    this.device_name = data.device_name;
   }
 
   async update() {
