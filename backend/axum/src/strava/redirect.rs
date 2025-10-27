@@ -8,6 +8,7 @@ use axum::{
     extract::{Path, State},
     response::Redirect,
 };
+use tb_domain::UserId;
 
 use crate::{ApiResult, AxumAdmin, DbPool, RequestUser, error::AppError};
 
@@ -48,11 +49,25 @@ pub(super) async fn redirect_user(
 
 pub(super) async fn revoke_user(
     admin: AxumAdmin,
-    Path(tbid): Path<i32>,
+    Path(tbid): Path<UserId>,
     State(pool): State<DbPool>,
 ) -> ApiResult<()> {
     let mut store = pool.get().await?;
     let store = &mut store;
-    let mut user = RequestUser::create_from_id(admin, tbid.into(), store).await?;
+    let mut user = RequestUser::create_from_id(admin, tbid, store).await?;
     Ok(tb_strava::user_disable(&mut user, store).await.map(Json)?)
+}
+
+pub(super) async fn deleteuser(
+    admin: AxumAdmin,
+    Path(tbid): Path<UserId>,
+    State(pool): State<DbPool>,
+) -> ApiResult<()> {
+    let mut store = pool.get().await?;
+    let store = &mut store;
+    let mut user = RequestUser::create_from_id(admin, tbid, store).await?;
+    let mut store = pool.get().await?;
+    Ok(tb_strava::user_delete(&mut user, &mut store)
+        .await
+        .map(Json)?)
 }

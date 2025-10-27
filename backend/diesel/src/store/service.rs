@@ -131,4 +131,14 @@ impl tb_domain::ServiceStore for AsyncDieselConn {
             .map_err(into_domain)
             .map(vec_into)
     }
+
+    async fn services_delete(&mut self, list: &[Service]) -> TbResult<usize> {
+        use schema::services::dsl::*;
+        let list: Vec<_> = list.iter().map(|s| Uuid::from(s.id)).collect();
+
+        diesel::delete(services.filter(id.eq_any(list)))
+            .execute(self)
+            .await
+            .map_err(into_domain)
+    }
 }

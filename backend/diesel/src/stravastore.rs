@@ -257,4 +257,13 @@ impl tb_strava::StravaStore for AsyncDieselConn {
             .await
             .map_err(into_domain)
     }
+
+    async fn stravauser_delete(&mut self, user: UserId) -> TbResult<usize> {
+        use schema::strava_users::dsl::*;
+
+        diesel::delete(strava_users.filter(tendabike_id.eq(i32::from(user))))
+            .execute(self)
+            .await
+            .map_err(into_domain)
+    }
 }

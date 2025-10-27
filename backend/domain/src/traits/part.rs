@@ -58,10 +58,21 @@ pub trait PartStore {
 
     /// updates an existing part
     ///
-    /// # Errors
+    /// # Arguments
     ///
     /// This function will return an error if the part does not exist or there is a store error.
     async fn part_delete(&mut self, part: PartId) -> TbResult<PartId>;
+
+    /// Deletes an array of parts
+    ///
+    /// # Arguments
+    ///
+    /// * `parts` - A Vector of parts to delete
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing the number of deleted parts or an error if the operation fails.
+    async fn parts_delete(&mut self, parts: &[Part]) -> TbResult<usize>;
 
     /// Returns the PartId associated with the given Strava gear ID.
     ///

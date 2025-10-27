@@ -204,16 +204,16 @@ pub async fn user_disable(
     user: &mut impl StravaPerson,
     store: &mut impl StravaStore,
 ) -> TbResult<()> {
+    if let Err(err) = user.deauthorize(store).await {
+        warn!("could not deauthorize user {}: {:#}", user.tb_id(), err)
+    }
+
     let events = store
         .strava_events_delete_for_user(&user.strava_id())
         .await?;
 
     if events > 0 {
         warn!("deleted {} open events for user {}", events, user.tb_id());
-    }
-
-    if let Err(err) = user.deauthorize(store).await {
-        warn!("could not deauthorize user {}: {:#}", user.tb_id(), err)
     }
 
     warn!("User {} disabled", user.tb_id());
@@ -234,4 +234,16 @@ pub async fn user_disable(
 pub async fn strava_url(strava_id: i32, store: &mut impl StravaStore) -> TbResult<String> {
     let user_id = store.stravaid_get_user_id(strava_id).await?;
     Ok(format!("https://strava.com/athletes/{}", &user_id))
+}
+
+pub async fn user_delete(
+    user: &mut impl StravaPerson,
+    store: &mut impl StravaStore,
+) -> TbResult<()> {
+    let tbuser = user.tb_id();
+    debug!("Deauthorizing user");
+    user_disable(user, store).await?;
+    let n = store.stravauser_delete(tbuser).await?;
+    debug!("Deleted {n} strava user");
+    tbuser.delete(store).await
 }

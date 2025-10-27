@@ -49,9 +49,11 @@
 
 <Modal bind:open {onaction}>
   {#snippet header()}
-    Create sync Event
+    Create sync Event for
     {#if user}
-      for {user.firstname} {user.name} ({user.id})
+      {user.firstname} {user.name} ({user.id})
+    {:else}
+      all users
     {/if}
   {/snippet}
   <ButtonGroup>

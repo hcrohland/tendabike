@@ -50,6 +50,17 @@ pub trait ActivityStore {
     /// Returns a `Result` containing the number of deleted activities or an error if the operation fails.
     async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize>;
 
+    /// Deletes an activity by its ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `activities` - An Vector of activities to delete
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing the number of deleted activities or an error if the operation fails.
+    async fn activities_delete(&mut self, activities: &[Activity]) -> TbResult<usize>;
+
     /// Retrieves all activities for a given user ID.
     ///
     /// # Arguments

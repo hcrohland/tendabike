@@ -103,4 +103,13 @@ impl tb_domain::UserStore for AsyncDieselConn {
             .map_err(into_domain)
             .map(Into::into)
     }
+
+    async fn user_delete(&mut self, user: &UserId) -> TbResult<usize> {
+        use schema::users::dsl::*;
+
+        diesel::delete(users.find(i32::from(*user)))
+            .execute(self)
+            .await
+            .map_err(into_domain)
+    }
 }

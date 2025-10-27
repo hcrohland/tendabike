@@ -251,4 +251,15 @@ impl tb_domain::AttachmentStore for AsyncDieselConn {
             .map_err(into_domain)
             .map(|a| a.map(Into::into))
     }
+
+    async fn attachments_delete_by_parts(&mut self, list: &[tb_domain::Part]) -> TbResult<usize> {
+        use schema::attachments::dsl::*;
+
+        let list: Vec<_> = list.iter().map(|s| i32::from(s.id)).collect();
+
+        diesel::delete(attachments.filter(part_id.eq_any(list)))
+            .execute(self)
+            .await
+            .map_err(into_domain)
+    }
 }

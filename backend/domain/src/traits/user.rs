@@ -49,4 +49,15 @@ pub trait UserStore {
         lastname: &str,
         avatar: &Option<String>,
     ) -> TbResult<User>;
+
+    /// Deletes a user
+    ///
+    /// # Arguments
+    ///
+    /// * `user` - The user to delete
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing 1 or an error if the operation fails.
+    async fn user_delete(&mut self, user: &UserId) -> TbResult<usize>;
 }
