@@ -209,6 +209,8 @@ pub trait StravaStore: tb_domain::Store + Send {
     ///
     /// Returns an error if the event count cannot be retrieved.
     async fn strava_events_delete_for_user(&mut self, user: &StravaId) -> TbResult<usize>;
+
+    async fn stravauser_delete(&mut self, user: UserId) -> TbResult<usize>;
 }
 
 #[async_trait]

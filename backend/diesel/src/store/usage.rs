@@ -130,4 +130,15 @@ impl UsageStore for AsyncDieselConn {
             .await
             .map_err(into_domain)
     }
+
+    async fn usages_delete(&mut self, list: &[Usage]) -> TbResult<usize> {
+        use schema::usages::dsl::*;
+
+        let list: Vec<_> = list.iter().map(|s| Uuid::from(s.id)).collect();
+
+        diesel::delete(usages.filter(id.eq_any(list)))
+            .execute(self)
+            .await
+            .map_err(into_domain)
+    }
 }

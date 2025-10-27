@@ -175,4 +175,15 @@ impl tb_domain::PartStore for AsyncDieselConn {
             .map_err(into_domain)
             .map(option_into)
     }
+
+    async fn parts_delete(&mut self, list: &[Part]) -> TbResult<usize> {
+        use schema::parts::dsl::*;
+
+        let list: Vec<_> = list.iter().map(|s| i32::from(s.id)).collect();
+
+        diesel::delete(parts.filter(id.eq_any(list)))
+            .execute(self)
+            .await
+            .map_err(into_domain)
+    }
 }

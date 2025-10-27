@@ -11,6 +11,17 @@ pub trait AttachmentStore {
     /// Delete an attachment.
     async fn delete(&mut self, att: Attachment) -> TbResult<Attachment>;
 
+    /// Deletes an array of attachments
+    ///
+    /// # Arguments
+    ///
+    /// * `attachments` - A Vector of attachments to delete
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing the number of deleted activities or an error if the operation fails.
+    async fn attachments_delete_by_parts(&mut self, parts: &[crate::Part]) -> TbResult<usize>;
+
     /// Get all attachments for a given gear and time.
     async fn attachment_get_by_gear_and_time(
         &mut self,

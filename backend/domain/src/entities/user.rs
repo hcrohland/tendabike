@@ -33,6 +33,7 @@
 //!
 //! The `create`, `update`, `read`, and `get_stat` methods are implemented for the `UserId` type and provide CRUD functionality for `User` entities.
 
+use anyhow::Context;
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
 
@@ -66,9 +67,15 @@ impl UserId {
     }
 
     pub async fn get_stat(&self, store: &mut impl Store) -> TbResult<Stat> {
-        let user = self.read(store).await?;
-        let parts = Part::get_all(self, store).await?.len() as i64;
-        let activities = Activity::get_all(self, store).await?.len() as i64;
+        let user = self.read(store).await.context("User record")?;
+        let parts = Part::get_all(self, store)
+            .await
+            .context("User parts")?
+            .len() as i64;
+        let activities = Activity::get_all(self, store)
+            .await
+            .context("User activities")?
+            .len() as i64;
         Ok(Stat {
             user,
             parts,
@@ -114,6 +121,32 @@ impl UserId {
             activities,
             ..summary
         })
+    }
+
+    pub async fn delete(&self, store: &mut impl Store) -> TbResult<()> {
+        let Summary {
+            activities,
+            parts,
+            usages,
+            services,
+            plans,
+            ..
+        } = self.get_summary(store).await?;
+        let n = store.services_delete(&services).await?;
+        debug!("deleted {n} services");
+        let n = store.serviceplans_delete(&plans).await?;
+        debug!("deleted {n} serviceplans");
+        let n = store.attachments_delete_by_parts(&parts).await?;
+        debug!("deleted {n} attachments");
+        let n = store.activities_delete(&activities).await?;
+        debug!("deleted {n} activities");
+        let n = store.parts_delete(&parts).await?;
+        debug!("deleted {n} parts");
+        let n = store.usages_delete(&usages).await?;
+        debug!("deleted {n} usages");
+        let n = store.user_delete(self).await?;
+        debug!("deleted {n} user");
+        Ok(())
     }
 }
 

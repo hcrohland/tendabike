@@ -151,4 +151,15 @@ impl tb_domain::ServicePlanStore for AsyncDieselConn {
             .map_err(into_domain)
             .map(vec_into)
     }
+
+    async fn serviceplans_delete(&mut self, plans: &[ServicePlan]) -> TbResult<usize> {
+        use schema::service_plans::dsl::*;
+
+        let plans: Vec<_> = plans.iter().map(|s| Uuid::from(s.id)).collect();
+
+        diesel::delete(service_plans.filter(id.eq_any(plans)))
+            .execute(self)
+            .await
+            .map_err(into_domain)
+    }
 }

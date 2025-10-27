@@ -90,9 +90,7 @@ impl RequestUser {
         let strava_id = user.strava_id();
         let id = user.tb_id();
         let is_admin = id.is_admin(store).await?;
-        let refresh_token = user.refresh_token().ok_or(Error::BadRequest(format!(
-            "User {id} does not have a refresh token (disabled?)"
-        )))?;
+        let refresh_token = user.refresh_token().map(RefreshToken::new);
 
         Ok(Self {
             id,
@@ -100,7 +98,7 @@ impl RequestUser {
             is_admin,
             access_token: AccessToken::new(String::default()),
             expires_at: Some(SystemTime::UNIX_EPOCH),
-            refresh_token: Some(RefreshToken::new(refresh_token)),
+            refresh_token,
             session: None,
         })
     }

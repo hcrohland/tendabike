@@ -41,6 +41,17 @@ pub trait UsageStore {
     /// Returns the number of deleted objects or returns an error.
     async fn delete(&mut self, usage: UsageId) -> TbResult<Usage>;
 
+    /// Deletes an array of usages
+    ///
+    /// # Arguments
+    ///
+    /// * `usages` - A Vector of usages to delete
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing the number of deleted usages or an error if the operation fails.
+    async fn usages_delete(&mut self, usages: &[Usage]) -> TbResult<usize>;
+
     /// Resets all Usages.
     ///
     /// # Returns

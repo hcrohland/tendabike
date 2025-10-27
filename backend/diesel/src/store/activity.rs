@@ -1,11 +1,12 @@
-use anyhow::Context;
-use diesel::{prelude::*, sql_query};
-use diesel_async::RunQueryDsl;
-use time::{OffsetDateTime, UtcOffset};
-
 use super::schema;
 use crate::{AsyncDieselConn, into_domain, vec_into};
+use anyhow::Context;
+use diesel::expression_methods::ExpressionMethods;
+
+use diesel::{prelude::*, sql_query};
+use diesel_async::RunQueryDsl;
 use tb_domain::{ActTypeId, Activity, ActivityId, PartId, Person, TbResult, UserId};
+use time::{OffsetDateTime, UtcOffset};
 
 #[derive(
     Debug, Clone, Insertable, Identifiable, Queryable, QueryableByName, AsChangeset, PartialEq,
@@ -239,5 +240,15 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
                 .get_results::<DbActivity>(self)
                 .await,
         )
+    }
+
+    async fn activities_delete(&mut self, acts: &[Activity]) -> TbResult<usize> {
+        use schema::activities::dsl::*;
+        let acts: Vec<_> = acts.iter().map(|s| i64::from(s.id)).collect();
+
+        diesel::delete(activities.filter(id.eq_any(acts)))
+            .execute(self)
+            .await
+            .map_err(into_domain)
     }
 }

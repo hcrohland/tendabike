@@ -9,7 +9,7 @@
 
 use axum::{
     Router,
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 
 use crate::appstate::AppState;
@@ -39,4 +39,5 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/activities/{id}", get(redirect::redirect_act))
         .route("/users/{id}", get(redirect::redirect_user))
         .route("/disable/{id}", post(redirect::revoke_user))
+        .route("/delete/{id}", delete(redirect::deleteuser))
 }

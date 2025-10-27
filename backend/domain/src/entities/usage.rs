@@ -234,6 +234,10 @@ mod tests {
             self.0.clear();
             Ok(res)
         }
+
+        async fn usages_delete(&mut self, _: &[Usage]) -> TbResult<usize> {
+            todo!()
+        }
     }
 
     #[tokio::test]

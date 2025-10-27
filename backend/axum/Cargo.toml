@@ -14,7 +14,7 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 
 async-session = { workspace = true }
-axum = { workspace = true }
+axum = { workspace = true, features = ["macros"] }
 headers = { workspace = true }
 http = { workspace = true }
 oauth2 = { workspace = true }

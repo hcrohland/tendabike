@@ -12,6 +12,7 @@
   import type { User } from "../lib/types";
   import Sync from "./Sync.svelte";
   import CreateSync from "./CreateSync.svelte";
+  import DeleteUser from "./DeleteUser.svelte";
 
   let promise: Promise<void>, createSync: any;
   let request:
@@ -23,6 +24,8 @@
   function refresh() {
     request = myfetch("/api/user/all").catch(handleError);
   }
+
+  let deleteuser = { start: (u: User) => {} };
 
   function rescan() {
     promise = myfetch("/api/activ/rescan")
@@ -41,7 +44,7 @@
 </script>
 
 {#await request}
-  ...
+  <Spinner size="16" class="justify-center" />
 {:then list: any[]}
   <Table>
     <TableBodyRow>
@@ -68,21 +71,26 @@
         <TableBodyCell>{activities}</TableBodyCell>
         <TableBodyCell>{events}</TableBodyCell>
         <TableBodyCell>
-          {#if !disabled}
-            <ButtonGroup>
+          <ButtonGroup>
+            {#if !disabled}
               <Button onclick={() => createSync.start(user)}>
                 Add Sync Event
               </Button>
               <Sync {user} {refresh} />
               <Button onclick={() => disable(user)}>Disable user</Button>
-            </ButtonGroup>
-          {/if}
+            {/if}
+            <Button
+              onclick={() => {
+                deleteuser?.start(user);
+              }}>Delete User</Button
+            >
+          </ButtonGroup>
         </TableBodyCell>
       </TableBodyRow>
     {/each}
   </Table>
-  <ButtonGroup>
-    <Button onclick={createSync}>Add Sync Event for all</Button>
+  <ButtonGroup class="p-6">
+    <Button onclick={() => createSync.start()}>Add Sync Event for all</Button>
     <Button onclick={rescan}>
       {#await promise}
         <Spinner />
@@ -94,3 +102,4 @@
   <Button onclick={refresh}>Refresh</Button>
 {/await}
 <CreateSync {refresh} bind:this={createSync} />
+<DeleteUser bind:this={deleteuser} {refresh} />
