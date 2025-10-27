@@ -101,6 +101,8 @@ table! {
         gear -> Nullable<Int4>,
         utc_offset -> Int4,
         id -> Int8,
+        device_name -> Nullable<Text>,
+        external_id -> Nullable<Text>,
     }
 }
 allow_tables_to_appear_in_same_query!(attachments, parts, users,);

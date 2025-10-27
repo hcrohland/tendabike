@@ -36,6 +36,12 @@ pub(crate) struct StravaActivity {
     pub kilojoules: Option<f64>,
     /// Which gear did she use?
     pub gear_id: Option<String>,
+    /// the original device name
+    /// Only provided by the specific activity request
+    pub device_name: Option<String>,
+    /// An identifier for the original source
+    /// Garmin activities seem to start with "garmin..."
+    pub external_id: Option<String>,
 }
 
 impl StravaActivity {
@@ -67,6 +73,8 @@ impl StravaActivity {
             total_elevation_gain,
             kilojoules,
             gear_id,
+            device_name,
+            external_id,
         } = self;
         let offset =
             UtcOffset::from_whole_seconds(utc_offset as i32).context("Utc Offset invalid")?;
@@ -89,6 +97,8 @@ impl StravaActivity {
             climb: Some(total_elevation_gain.round() as i32),
             descend: None,
             energy: kilojoules.map(|e| e.round() as i32),
+            device_name,
+            external_id,
         })
     }
 

@@ -39,6 +39,10 @@ struct DbActivity {
     utc_offset: i32,
     /// The primary key
     id: i64,
+    /// device name
+    ///
+    device_name: Option<String>,
+    external_id: Option<String>,
 }
 
 impl From<Activity> for DbActivity {
@@ -56,6 +60,8 @@ impl From<Activity> for DbActivity {
             descend,
             energy,
             gear,
+            device_name,
+            external_id,
         } = v;
         let utc_offset = start.offset().whole_seconds();
         DbActivity {
@@ -72,6 +78,8 @@ impl From<Activity> for DbActivity {
             energy,
             gear: gear.map(Into::into),
             utc_offset,
+            device_name,
+            external_id,
         }
     }
 }
@@ -94,6 +102,8 @@ impl TryFrom<DbActivity> for Activity {
             energy,
             gear,
             utc_offset,
+            device_name,
+            external_id,
         } = v;
         let utc_offset = ((utc_offset + 900) / 1800) * 1800; //round it to 1800s
         let offset = UtcOffset::from_whole_seconds(utc_offset).context("Utc Offset invalid")?;
@@ -112,6 +122,8 @@ impl TryFrom<DbActivity> for Activity {
             descend,
             energy,
             gear: gear.map(Into::into),
+            device_name,
+            external_id,
         })
     }
 }

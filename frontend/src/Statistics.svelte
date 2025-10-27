@@ -161,6 +161,18 @@
       ...addlayout,
     };
 
+    if (garmin) {
+      layout.annotations = [
+        {
+          text: "Insights derived in part from<br>Garmin device-sourced data",
+          showarrow: false,
+          xref: "paper",
+          yref: "paper",
+          x: 1,
+          y: 0,
+        },
+      ];
+    }
     let yanchor = "middle";
     for (const field of fields.values()) {
       for (const [indx, y] of [ncumm, ncomp].entries()) {
@@ -229,11 +241,18 @@
 
   let acts = $derived($category.activities($activities));
   let gears = $derived($category.parts($parts));
-  let gear = $state([]);
+  let gear: Part[] = $state([]);
   let cumm: any = $state(0);
   let comp: number | null = $state(null);
   let perMonths = $state(false);
   let years = $derived(buildYears(acts, gear));
+  let garmin = $derived(
+    acts.some(
+      (a) =>
+        (gear.length == 0 || gear.some((g) => g.id == a.gear)) &&
+        a.external_id?.startsWith("garmin"),
+    ),
+  );
 </script>
 
 <div class="flex flex-wrap pb-10 gap-2 justify-between">

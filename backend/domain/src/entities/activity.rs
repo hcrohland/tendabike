@@ -75,6 +75,11 @@ pub struct Activity {
     pub energy: Option<i32>,
     /// Which gear did she use?
     pub gear: Option<PartId>,
+    /// The name of the recording device
+    pub device_name: Option<String>,
+    /// opaque identifier for the source file
+    /// seems to start with "garmin" for garmin connect provided data
+    pub external_id: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
