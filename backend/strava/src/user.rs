@@ -125,7 +125,7 @@ impl StravaUser {
         let user = StravaUser {
             id,
             tendabike_id,
-            ..Default::default()
+            refresh_token: refresh.cloned(),
         };
         info!("creating new user id {user:?}");
 
