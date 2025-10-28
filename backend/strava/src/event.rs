@@ -1,4 +1,5 @@
 use async_recursion::async_recursion;
+use async_session::log::error;
 use std::collections::HashMap;
 
 use crate::activity::StravaActivity;
@@ -7,11 +8,15 @@ use crate::*;
 #[derive(Debug, Serialize, Deserialize)]
 /// A struct representing an incoming Strava event.
 pub struct InEvent {
+    // Always either "activity" or "athlete."
     object_type: String,
     object_id: i64,
     // Always "create," "update," or "delete."
     aspect_type: String,
-    // hash 	For activity update strava_events, keys can contain "title," "type," and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone). For app deauthorization events, there is always an "authorized" : "false" key-value pair.
+    // For activity update strava_events,
+    //     keys can contain "title," "type,"
+    //     and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone).
+    // For app deauthorization events, there is always an "authorized" : "false" key-value pair.
     updates: HashMap<String, String>,
     // The athlete's ID.
     owner_id: i32,
@@ -66,7 +71,11 @@ impl InEvent {
 
     pub async fn accept(self, store: &mut impl StravaStore) -> TbResult<()> {
         let event = self.to_event(store).await?;
-        store.stravaevent_store(event).await?;
+        if event.object_type.as_str() == "athlete" {
+            event.process_user(store).await?;
+        } else {
+            store.stravaevent_store(event).await?;
+        }
         Ok(())
     }
 }
@@ -77,7 +86,10 @@ pub struct Event {
     pub object_id: i64,
     // Always "create," "update," or "delete."
     pub aspect_type: String,
-    // hash 	For activity update events, keys can contain "title," "type," and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone). For app deauthorization events, there is always an "authorized" : "false" key-value pair.
+    // For activity update strava_events,
+    //     keys can contain "title," "type,"
+    //     and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone).
+    // For app deauthorization events, there is always an "authorized" : "false" key-value pair.
     pub updates: String,
     // The athlete's ID.
     pub owner_id: StravaId,
@@ -226,6 +238,22 @@ impl Event {
         }
         summary
     }
+
+    async fn process_user(&self, store: &mut impl StravaStore) -> TbResult<()> {
+        debug!(
+            "processing event user {}: {}",
+            &self.object_id, &self.aspect_type,
+        );
+
+        let res = match self.aspect_type.as_str() {
+            "delete" => self.owner_id.disable(store).await,
+            x => Err(Error::BadRequest(format!("user event with aspect {x}"))),
+        };
+        if let Err(err) = res {
+            error!("user disable returned: {err:#}")
+        }
+        Ok(())
+    }
 }
 
 /// Inserts a new sync event into the database.
@@ -346,7 +374,6 @@ pub async fn process(
     match event.object_type.as_str() {
         "activity" => event.process_activity(user, store).await,
         "sync" => event.process_sync(user, store).await,
-        // "athlete" => process_user(e, user),
         _ => {
             warn!("skipping {event}");
             event.delete(store).await?;
