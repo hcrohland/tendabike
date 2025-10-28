@@ -1,4 +1,5 @@
 use async_recursion::async_recursion;
+use async_session::log::error;
 use std::collections::HashMap;
 
 use crate::activity::StravaActivity;
@@ -7,11 +8,15 @@ use crate::*;
 #[derive(Debug, Serialize, Deserialize)]
 /// A struct representing an incoming Strava event.
 pub struct InEvent {
+    // Always either "activity" or "athlete."
     object_type: String,
     object_id: i64,
     // Always "create," "update," or "delete."
     aspect_type: String,
-    // hash 	For activity update strava_events, keys can contain "title," "type," and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone). For app deauthorization events, there is always an "authorized" : "false" key-value pair.
+    // For activity update strava_events,
+    //     keys can contain "title," "type,"
+    //     and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone).
+    // For app deauthorization events, there is always an "authorized" : "false" key-value pair.
     updates: HashMap<String, String>,
     // The athlete's ID.
     owner_id: i32,
@@ -31,18 +36,7 @@ impl InEvent {
     /// # Returns
     ///
     /// Returns a `Result` containing an `Event` struct if the conversion is successful, or an `anyhow::Error` if it fails.
-    pub async fn to_event(self, store: &mut impl StravaStore) -> TbResult<Event> {
-        let objects = ["activity", "athlete"];
-        let aspects = ["create", "update", "delete"];
-
-        if !(objects.contains(&self.object_type.as_str())
-            && aspects.contains(&self.aspect_type.as_str()))
-        {
-            return Err(Error::BadRequest(format!(
-                "unknown event received: {self:?}"
-            )));
-        };
-
+    pub async fn into_event(self, store: &mut impl StravaStore) -> TbResult<Event> {
         if StravaId::read(&self.owner_id.into(), store)
             .await?
             .is_none()
@@ -51,34 +45,121 @@ impl InEvent {
                 "Unknown event owner received: {self:?}"
             )));
         }
-
+        let InEvent {
+            object_type,
+            object_id,
+            aspect_type,
+            updates,
+            owner_id,
+            subscription_id,
+            event_time,
+        } = self;
+        let object_type = object_type.try_into()?;
+        let aspect_type = aspect_type.try_into()?;
+        let owner_id = owner_id.into();
         Ok(Event {
             id: None,
-            object_type: self.object_type,
-            object_id: self.object_id,
-            aspect_type: self.aspect_type,
-            owner_id: self.owner_id.into(),
-            subscription_id: self.subscription_id,
-            event_time: self.event_time,
-            updates: serde_json::to_string(&self.updates).unwrap_or_else(|e| format!("{e:?}")),
+            object_type,
+            object_id,
+            aspect_type,
+            owner_id,
+            subscription_id,
+            event_time,
+            updates,
         })
     }
 
     pub async fn accept(self, store: &mut impl StravaStore) -> TbResult<()> {
-        let event = self.to_event(store).await?;
-        store.stravaevent_store(event).await?;
+        let event = self.into_event(store).await?;
+        if event.object_type == ObjectType::Athlete {
+            event.process_user(store).await?;
+        } else {
+            store.stravaevent_store(event).await?;
+        }
         Ok(())
     }
 }
+
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
+pub enum ObjectType {
+    #[default]
+    Activity,
+    Athlete,
+    Sync,
+    Stop,
+}
+
+impl TryFrom<String> for ObjectType {
+    type Error = tb_domain::Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        use ObjectType::*;
+        Ok(match value.as_str() {
+            "activity" => Activity,
+            "athlete" => Athlete,
+            "stop" => Stop,
+            "sync" => Sync,
+            _ => return Err(Error::BadRequest(format!("Unknown object type {value}"))),
+        })
+    }
+}
+
+impl From<ObjectType> for String {
+    fn from(value: ObjectType) -> Self {
+        use ObjectType::*;
+        String::from(match value {
+            Activity => "activity",
+            Athlete => "athlete",
+            Stop => "stop",
+            Sync => "sync",
+        })
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
+pub enum AspectType {
+    #[default]
+    Create,
+    Update,
+    Delete,
+}
+
+impl TryFrom<String> for AspectType {
+    type Error = tb_domain::Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Ok(match value.as_str() {
+            "create" => AspectType::Create,
+            "update" => AspectType::Update,
+            "delete" => AspectType::Delete,
+            _ => return Err(Error::BadRequest(format!("Unknown aspect type {value}"))),
+        })
+    }
+}
+
+impl From<AspectType> for String {
+    fn from(value: AspectType) -> Self {
+        use AspectType::*;
+        String::from(match value {
+            Create => "create",
+            Update => "update",
+            Delete => "delete",
+        })
+    }
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Event {
     pub id: Option<i32>,
-    pub object_type: String,
+    pub object_type: ObjectType,
     pub object_id: i64,
     // Always "create," "update," or "delete."
-    pub aspect_type: String,
-    // hash 	For activity update events, keys can contain "title," "type," and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone). For app deauthorization events, there is always an "authorized" : "false" key-value pair.
-    pub updates: String,
+    pub aspect_type: AspectType,
+    // For activity update strava_events,
+    //     keys can contain "title," "type,"
+    //     and "private," which is always "true" (activity visibility set to Only You) or "false" (activity visibility set to Followers Only or Everyone).
+    // For app deauthorization events, there is always an "authorized" : "false" key-value pair.
+    pub updates: HashMap<String, String>,
     // The athlete's ID.
     pub owner_id: StravaId,
     // The push subscription ID that is receiving this event.
@@ -91,7 +172,7 @@ impl std::fmt::Display for Event {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Event {}: {} {} {} at {}, owner:{}",
+            "Event {}: {:?} {:?} {} at {}, owner:{}",
             self.id.unwrap_or(0),
             self.aspect_type,
             self.object_type,
@@ -169,18 +250,18 @@ impl Event {
         user: &mut impl StravaPerson,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
-        let res = match self.aspect_type.as_str() {
-            "create" | "update" => activity::upsert_activity(self.object_id, user, store).await?,
-            "delete" => match activity::delete_activity(self.object_id, user, store).await {
-                Err(Error::NotFound(_)) => {
-                    warn!("Activity {} did not exist (yet)", self.object_id);
-                    Summary::default()
+        let res = match self.aspect_type {
+            AspectType::Create | AspectType::Update => {
+                activity::upsert_activity(self.object_id, user, store).await?
+            }
+            AspectType::Delete => {
+                match activity::delete_activity(self.object_id, user, store).await {
+                    Err(Error::NotFound(_)) => {
+                        warn!("Activity {} did not exist (yet)", self.object_id);
+                        Summary::default()
+                    }
+                    res => res?,
                 }
-                res => res?,
-            },
-            _ => {
-                warn!("Skipping unknown aspect_type {self:?}");
-                Summary::default()
             }
         };
         self.delete(store).await?;
@@ -226,6 +307,29 @@ impl Event {
         }
         summary
     }
+
+    async fn process_user(&self, store: &mut impl StravaStore) -> TbResult<()> {
+        debug!(
+            "processing event user {}: {:?}",
+            &self.object_id, &self.aspect_type,
+        );
+
+        match &self.aspect_type {
+            AspectType::Update => {
+                if self.updates.get("authorized") == Some(&String::from("false")) {
+                    let res = self.owner_id.disable(store).await;
+                    if let Err(err) = res {
+                        error!("user disable returned: {err:#}")
+                    }
+                } else {
+                    error!("Unknown updates {:?}", self.updates)
+                }
+            }
+            x => error!("user event with {x:?}"),
+        };
+
+        Ok(())
+    }
 }
 
 /// Inserts a new sync event into the database.
@@ -261,7 +365,7 @@ pub async fn insert_sync(
         owner_id,
         object_id,
         event_time,
-        object_type: "sync".to_string(),
+        object_type: ObjectType::Sync,
         ..Default::default()
     };
     store.stravaevent_store(event).await
@@ -269,7 +373,7 @@ pub async fn insert_sync(
 
 pub async fn insert_stop(store: &mut impl StravaStore) -> TbResult<()> {
     let e = Event {
-        object_type: "stop".to_string(),
+        object_type: ObjectType::Stop,
         object_id: get_time() + 900,
         ..Default::default()
     };
@@ -287,7 +391,7 @@ async fn get_event(
         Some(event) => event,
         None => return Ok(None),
     };
-    if event.object_type.as_str() == "stop" {
+    if event.object_type == ObjectType::Stop {
         return event.rate_limit(user, store).await;
     }
 
@@ -343,10 +447,9 @@ pub async fn process(
     let event = event.unwrap();
     info!("Processing {event}");
 
-    match event.object_type.as_str() {
-        "activity" => event.process_activity(user, store).await,
-        "sync" => event.process_sync(user, store).await,
-        // "athlete" => process_user(e, user),
+    match event.object_type {
+        ObjectType::Activity => event.process_activity(user, store).await,
+        ObjectType::Sync => event.process_sync(user, store).await,
         _ => {
             warn!("skipping {event}");
             event.delete(store).await?;

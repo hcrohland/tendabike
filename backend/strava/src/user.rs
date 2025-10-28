@@ -7,6 +7,7 @@
 //! checking the validity of the user's access token.
 
 use newtype_derive::*;
+use oauth2::RefreshToken;
 use serde::Deserialize;
 
 use crate::*;
@@ -34,11 +35,16 @@ impl StravaId {
     }
 
     /// disable a user
-    async fn disable(self, store: &mut impl StravaStore) -> TbResult<()> {
-        let id = self;
-        info!("disabling user {id}");
+    pub(crate) async fn disable(self, store: &mut impl StravaStore) -> TbResult<()> {
+        info!("disabling user {self}");
 
-        store.stravaid_update_token(id, None).await?;
+        let events = store.strava_events_delete_for_user(&self).await?;
+
+        if events > 0 {
+            info!("deleted {} open events for strava user {}", events, &self);
+        }
+
+        store.stravaid_update_token(self, None).await?;
         Ok(())
     }
 }
@@ -51,7 +57,7 @@ pub struct StravaUser {
     /// the corresponding tendabike user id
     pub tendabike_id: UserId,
     /// the refresh token to get a new access token from Strava
-    pub refresh_token: Option<String>,
+    pub refresh_token: Option<RefreshToken>,
 }
 
 impl StravaUser {
@@ -80,7 +86,7 @@ impl StravaUser {
         self.id
     }
 
-    pub fn refresh_token(&self) -> Option<String> {
+    pub fn refresh_token(&self) -> Option<RefreshToken> {
         self.refresh_token.clone()
     }
 
@@ -105,7 +111,7 @@ impl StravaUser {
         firstname: &str,
         lastname: &str,
         avatar: &Option<String>,
-        refresh: Option<&String>,
+        refresh: Option<&RefreshToken>,
         store: &mut impl StravaStore,
     ) -> TbResult<StravaUser> {
         debug!("got id {}: {} {}", id, &firstname, &lastname);
@@ -115,7 +121,9 @@ impl StravaUser {
             user.tendabike_id
                 .update(firstname, lastname, avatar, store)
                 .await?;
-            store.stravaid_update_token(user.id, refresh).await?;
+            store
+                .stravaid_update_token(user.id, refresh.map(RefreshToken::secret))
+                .await?;
             return Ok(user);
         }
 
@@ -125,7 +133,7 @@ impl StravaUser {
         let user = StravaUser {
             id,
             tendabike_id,
-            ..Default::default()
+            refresh_token: refresh.cloned(),
         };
         info!("creating new user id {user:?}");
 
@@ -200,7 +208,7 @@ pub async fn get_all_stats(store: &mut impl StravaStore) -> TbResult<Vec<StravaS
 ///
 /// This function will return an error if the user does not exist, is already disabled
 /// or has open events and if strava or the database is not reachable.
-pub async fn user_disable(
+pub async fn user_deauthorize(
     user: &mut impl StravaPerson,
     store: &mut impl StravaStore,
 ) -> TbResult<()> {
@@ -208,15 +216,7 @@ pub async fn user_disable(
         warn!("could not deauthorize user {}: {:#}", user.tb_id(), err)
     }
 
-    let events = store
-        .strava_events_delete_for_user(&user.strava_id())
-        .await?;
-
-    if events > 0 {
-        warn!("deleted {} open events for user {}", events, user.tb_id());
-    }
-
-    warn!("User {} disabled", user.tb_id());
+    warn!("User {} deauthorized", user.tb_id());
 
     user.strava_id().disable(store).await
 }
@@ -242,7 +242,7 @@ pub async fn user_delete(
 ) -> TbResult<()> {
     let tbuser = user.tb_id();
     debug!("Deauthorizing user");
-    user_disable(user, store).await?;
+    user_deauthorize(user, store).await?;
     let n = store.stravauser_delete(tbuser).await?;
     debug!("Deleted {n} strava user");
     tbuser.delete(store).await

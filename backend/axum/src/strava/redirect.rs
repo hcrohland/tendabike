@@ -55,7 +55,9 @@ pub(super) async fn revoke_user(
     let mut store = pool.get().await?;
     let store = &mut store;
     let mut user = RequestUser::create_from_id(admin, tbid, store).await?;
-    Ok(tb_strava::user_disable(&mut user, store).await.map(Json)?)
+    Ok(tb_strava::user_deauthorize(&mut user, store)
+        .await
+        .map(Json)?)
 }
 
 pub(super) async fn deleteuser(

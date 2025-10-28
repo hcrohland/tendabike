@@ -64,8 +64,8 @@ impl RequestUser {
             _ => avatar,
         };
         let refresh_token = token.refresh_token();
-        let refresh = refresh_token.map(|t| t.secret());
-        let user = StravaUser::upsert(*id, firstname, lastname, avatar, refresh, store).await?;
+        let user =
+            StravaUser::upsert(*id, firstname, lastname, avatar, refresh_token, store).await?;
         let id = user.tb_id();
         let is_admin = id.is_admin(store).await?;
 
@@ -90,7 +90,7 @@ impl RequestUser {
         let strava_id = user.strava_id();
         let id = user.tb_id();
         let is_admin = id.is_admin(store).await?;
-        let refresh_token = user.refresh_token().map(RefreshToken::new);
+        let refresh_token = user.refresh_token();
 
         Ok(Self {
             id,
