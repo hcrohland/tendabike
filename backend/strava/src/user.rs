@@ -7,6 +7,7 @@
 //! checking the validity of the user's access token.
 
 use newtype_derive::*;
+use oauth2::RefreshToken;
 use serde::Deserialize;
 
 use crate::*;
@@ -51,7 +52,7 @@ pub struct StravaUser {
     /// the corresponding tendabike user id
     pub tendabike_id: UserId,
     /// the refresh token to get a new access token from Strava
-    pub refresh_token: Option<String>,
+    pub refresh_token: Option<RefreshToken>,
 }
 
 impl StravaUser {
@@ -80,7 +81,7 @@ impl StravaUser {
         self.id
     }
 
-    pub fn refresh_token(&self) -> Option<String> {
+    pub fn refresh_token(&self) -> Option<RefreshToken> {
         self.refresh_token.clone()
     }
 
@@ -105,7 +106,7 @@ impl StravaUser {
         firstname: &str,
         lastname: &str,
         avatar: &Option<String>,
-        refresh: Option<&String>,
+        refresh: Option<&RefreshToken>,
         store: &mut impl StravaStore,
     ) -> TbResult<StravaUser> {
         debug!("got id {}: {} {}", id, &firstname, &lastname);
@@ -115,7 +116,9 @@ impl StravaUser {
             user.tendabike_id
                 .update(firstname, lastname, avatar, store)
                 .await?;
-            store.stravaid_update_token(user.id, refresh).await?;
+            store
+                .stravaid_update_token(user.id, refresh.map(RefreshToken::secret))
+                .await?;
             return Ok(user);
         }
 

@@ -1,5 +1,6 @@
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use oauth2::RefreshToken;
 
 use crate::{AsyncDieselConn, into_domain, option_into, vec_into};
 use tb_domain::{TbResult, UserId};
@@ -24,7 +25,7 @@ impl From<StravaUser> for DbStravaUser {
         Self {
             id: id.into(),
             tendabike_id: tendabike_id.into(),
-            refresh_token,
+            refresh_token: refresh_token.map(RefreshToken::into_secret),
         }
     }
 }
@@ -38,7 +39,7 @@ impl From<DbStravaUser> for StravaUser {
         Self {
             id: id.into(),
             tendabike_id: tendabike_id.into(),
-            refresh_token,
+            refresh_token: refresh_token.map(RefreshToken::new),
         }
     }
 }

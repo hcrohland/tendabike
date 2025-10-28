@@ -16,3 +16,4 @@ time = { workspace = true }
 tb_strava = { workspace = true }
 tb_domain = { workspace = true }
 uuid = { workspace = true }
+oauth2 = { workspace = true }
