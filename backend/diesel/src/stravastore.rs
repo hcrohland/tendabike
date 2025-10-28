@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+
+use async_session::{log::error, serde_json};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use oauth2::RefreshToken;
@@ -69,11 +72,15 @@ impl From<Event> for DbEvent {
             subscription_id,
             event_time,
         } = value;
+        let updates = serde_json::to_string(&updates).unwrap_or_else(|e| {
+            error!("{e:?}");
+            String::default()
+        });
         Self {
             id,
-            object_type,
+            object_type: object_type.into(),
             object_id,
-            aspect_type,
+            aspect_type: aspect_type.into(),
             updates,
             owner_id: owner_id.into(),
             subscription_id,
@@ -94,6 +101,9 @@ impl From<DbEvent> for Event {
             subscription_id,
             event_time,
         } = value;
+        let object_type = object_type.try_into().unwrap();
+        let aspect_type = aspect_type.try_into().unwrap();
+        let updates: HashMap<String, String> = serde_json::from_str(&updates).unwrap();
         Self {
             id,
             object_type,
