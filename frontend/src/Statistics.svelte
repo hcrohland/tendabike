@@ -284,7 +284,7 @@
     placeholder="Select bikes..."
     items={all_gears
       .sort(by("last_used"))
-      .map((g, n) => ({ value: g, name: n + " - " + g.name, id: g.id }))}
+      .map((g) => ({ value: g, name: g.name, id: g.id }))}
     bind:value={gears}
     class="max-w-150"
   />
