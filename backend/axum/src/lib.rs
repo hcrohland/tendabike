@@ -16,7 +16,7 @@ use axum::Router;
 use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use tb_diesel::DbPool;
+use tb_sqlx::DbPool;
 
 mod domain;
 

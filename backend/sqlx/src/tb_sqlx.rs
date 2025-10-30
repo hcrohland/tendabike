@@ -9,7 +9,6 @@ use anyhow::Context;
 use async_session::log::info;
 use sqlx::{PgPool, Postgres, pool::PoolConnection};
 use std::ops::{Deref, DerefMut};
-use time::macros::datetime;
 
 use tb_domain::TbResult;
 
@@ -51,7 +50,6 @@ impl DbPool {
         sqlx::migrate!("./migrations").run(&pool).await?;
 
         let pool = DbPool(pool);
-        crate::store::migrate(&mut pool.get().await?, datetime!(2025-06-11 00:00 UTC)).await?;
 
         Ok(pool)
     }

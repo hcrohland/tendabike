@@ -12,4 +12,4 @@ anyhow = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tb_domain = { workspace = true }
 tb_axum = { workspace = true }
-tb_diesel = { workspace = true }
+tb_sqlx = { workspace = true }

@@ -1,8 +1,8 @@
-pub use async_diesel::*;
+pub use tb_sqlx::*;
 
-mod async_diesel;
 mod store;
 mod stravastore;
+mod tb_sqlx;
 
 fn into_domain(err: sqlx::Error) -> tb_domain::Error {
     match err {

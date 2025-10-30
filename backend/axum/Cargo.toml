@@ -8,7 +8,7 @@ edition = { workspace = true }
 [dependencies]
 tb_domain = { workspace = true }
 tb_strava = { workspace = true }
-tb_diesel = { workspace = true }
+tb_sqlx = { workspace = true }
 
 anyhow = { workspace = true }
 thiserror = { workspace = true }
