@@ -1,16 +1,11 @@
-use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use sqlx::FromRow;
 
 use tb_domain::{PartId, ServicePlan, ServicePlanId, TbResult, UserId};
 use uuid::Uuid;
 
-use super::schema;
-use crate::{AsyncDieselConn, into_domain, vec_into};
-use schema::service_plans::table;
+use crate::{SqlxConn, into_domain, vec_into};
 
-#[derive(Clone, Debug, PartialEq, Queryable, Identifiable, Insertable, AsChangeset)]
-#[diesel(treat_none_as_null = true)]
-#[diesel(table_name = schema::service_plans)]
+#[derive(Clone, Debug, PartialEq, FromRow)]
 struct DbServicePlan {
     pub id: Uuid,
     pub part: Option<i32>,
@@ -98,20 +93,37 @@ impl From<DbServicePlan> for ServicePlan {
 }
 
 #[async_session::async_trait]
-impl tb_domain::ServicePlanStore for AsyncDieselConn {
+impl tb_domain::ServicePlanStore for SqlxConn {
     async fn create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
-        diesel::insert_into(table)
-            .values(DbServicePlan::from(plan))
-            .get_result::<DbServicePlan>(self)
-            .await
-            .map_err(into_domain)
-            .map(Into::into)
+        let plan = DbServicePlan::from(plan);
+        sqlx::query_as::<_, DbServicePlan>(
+            "INSERT INTO service_plans (id, part, what, hook, name, days, hours, km, climb, descend, rides, uid, energy)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+             RETURNING *"
+        )
+        .bind(plan.id)
+        .bind(plan.part)
+        .bind(plan.what)
+        .bind(plan.hook)
+        .bind(plan.name)
+        .bind(plan.days)
+        .bind(plan.hours)
+        .bind(plan.km)
+        .bind(plan.climb)
+        .bind(plan.descend)
+        .bind(plan.rides)
+        .bind(plan.uid)
+        .bind(plan.energy)
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(Into::into)
     }
 
     async fn get(&mut self, plan: ServicePlanId) -> TbResult<ServicePlan> {
-        table
-            .find(Uuid::from(plan))
-            .get_result::<DbServicePlan>(self)
+        sqlx::query_as::<_, DbServicePlan>("SELECT * FROM service_plans WHERE id = $1")
+            .bind(Uuid::from(plan))
+            .fetch_one(&mut **self.inner())
             .await
             .map_err(into_domain)
             .map(Into::into)
@@ -119,47 +131,69 @@ impl tb_domain::ServicePlanStore for AsyncDieselConn {
 
     async fn update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
         let plan: DbServicePlan = plan.into();
-        diesel::update(table.find(plan.id))
-            .set(plan)
-            .get_result::<DbServicePlan>(self)
-            .await
-            .map_err(into_domain)
-            .map(Into::into)
+        sqlx::query_as::<_, DbServicePlan>(
+            "UPDATE service_plans
+             SET part = $2, what = $3, hook = $4, name = $5, days = $6, hours = $7,
+                 km = $8, climb = $9, descend = $10, rides = $11, uid = $12, energy = $13
+             WHERE id = $1
+             RETURNING *",
+        )
+        .bind(plan.id)
+        .bind(plan.part)
+        .bind(plan.what)
+        .bind(plan.hook)
+        .bind(plan.name)
+        .bind(plan.days)
+        .bind(plan.hours)
+        .bind(plan.km)
+        .bind(plan.climb)
+        .bind(plan.descend)
+        .bind(plan.rides)
+        .bind(plan.uid)
+        .bind(plan.energy)
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(Into::into)
     }
 
     async fn delete(&mut self, plan: ServicePlanId) -> TbResult<usize> {
-        diesel::delete(table.find(Uuid::from(plan)))
-            .execute(self)
+        let result = sqlx::query("DELETE FROM service_plans WHERE id = $1")
+            .bind(Uuid::from(plan))
+            .execute(&mut **self.inner())
             .await
-            .map_err(into_domain)
+            .map_err(into_domain)?;
+
+        Ok(result.rows_affected() as usize)
     }
 
     async fn by_part(&mut self, part_id: PartId) -> TbResult<Vec<ServicePlan>> {
-        table
-            .filter(schema::service_plans::part.eq(i32::from(part_id)))
-            .get_results::<DbServicePlan>(self)
+        sqlx::query_as::<_, DbServicePlan>("SELECT * FROM service_plans WHERE part = $1")
+            .bind(i32::from(part_id))
+            .fetch_all(&mut **self.inner())
             .await
             .map_err(into_domain)
             .map(vec_into)
     }
 
     async fn by_user(&mut self, user_id: UserId) -> TbResult<Vec<ServicePlan>> {
-        table
-            .filter(schema::service_plans::uid.eq(i32::from(user_id)))
-            .get_results::<DbServicePlan>(self)
+        sqlx::query_as::<_, DbServicePlan>("SELECT * FROM service_plans WHERE uid = $1")
+            .bind(i32::from(user_id))
+            .fetch_all(&mut **self.inner())
             .await
             .map_err(into_domain)
             .map(vec_into)
     }
 
     async fn serviceplans_delete(&mut self, plans: &[ServicePlan]) -> TbResult<usize> {
-        use schema::service_plans::dsl::*;
-
         let plans: Vec<_> = plans.iter().map(|s| Uuid::from(s.id)).collect();
 
-        diesel::delete(service_plans.filter(id.eq_any(plans)))
-            .execute(self)
+        let result = sqlx::query("DELETE FROM service_plans WHERE id = ANY($1)")
+            .bind(&plans)
+            .execute(&mut **self.inner())
             .await
-            .map_err(into_domain)
+            .map_err(into_domain)?;
+
+        Ok(result.rows_affected() as usize)
     }
 }

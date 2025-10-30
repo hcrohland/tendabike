@@ -1,17 +1,12 @@
-use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use sqlx::FromRow;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-use super::schema;
-use crate::{AsyncDieselConn, into_domain, option_into, vec_into};
+use crate::{SqlxConn, into_domain, option_into, vec_into};
 use tb_domain::{Part, PartId, PartTypeId, TbResult, UsageId, UserId};
 
 /// The database's representation of a part.
-#[derive(Clone, Debug, PartialEq, Queryable, Identifiable, AsChangeset)]
-#[diesel(primary_key(id))]
-#[diesel(treat_none_as_null = true)]
-#[diesel(table_name = schema::parts)]
+#[derive(Clone, Debug, PartialEq, FromRow)]
 struct DbPart {
     id: i32,
     owner: i32,
@@ -89,24 +84,20 @@ impl From<Part> for DbPart {
 }
 
 #[async_session::async_trait]
-impl tb_domain::PartStore for AsyncDieselConn {
+impl tb_domain::PartStore for SqlxConn {
     async fn partid_get_part(&mut self, pid: PartId) -> TbResult<Part> {
-        use schema::parts;
-        parts::table
-            .find(i32::from(pid))
-            .first::<DbPart>(self)
+        sqlx::query_as::<_, DbPart>("SELECT * FROM parts WHERE id = $1")
+            .bind(i32::from(pid))
+            .fetch_one(&mut **self.inner())
             .await
             .map_err(into_domain)
             .map(Into::into)
     }
 
     async fn part_get_all_for_userid(&mut self, uid: &UserId) -> TbResult<Vec<Part>> {
-        use schema::parts::dsl::*;
-
-        parts
-            .filter(owner.eq(i32::from(*uid)))
-            .order_by(last_used)
-            .load::<DbPart>(self)
+        sqlx::query_as::<_, DbPart>("SELECT * FROM parts WHERE owner = $1 ORDER BY last_used")
+            .bind(i32::from(*uid))
+            .fetch_all(&mut **self.inner())
             .await
             .map_err(into_domain)
             .map(vec_into)
@@ -123,67 +114,79 @@ impl tb_domain::PartStore for AsyncDieselConn {
         in_usage: UsageId,
         in_owner: UserId,
     ) -> TbResult<Part> {
-        use schema::parts::dsl::*;
-        let values = (
-            owner.eq(i32::from(in_owner)),
-            what.eq(i32::from(in_what)),
-            name.eq(in_name),
-            vendor.eq(in_vendor),
-            model.eq(in_model),
-            purchase.eq(in_purchase),
-            last_used.eq(in_purchase),
-            usage.eq(Uuid::from(in_usage)),
-            source.eq(in_source),
-        );
-
-        diesel::insert_into(parts)
-            .values(values)
-            .get_result::<DbPart>(self)
-            .await
-            .map_err(into_domain)
-            .map(Into::into)
+        sqlx::query_as::<_, DbPart>(
+            "INSERT INTO parts (owner, what, name, vendor, model, purchase, last_used, usage, source)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             RETURNING *"
+        )
+        .bind(i32::from(in_owner))
+        .bind(i32::from(in_what))
+        .bind(in_name)
+        .bind(in_vendor)
+        .bind(in_model)
+        .bind(in_purchase)
+        .bind(in_purchase) // last_used = purchase
+        .bind(Uuid::from(in_usage))
+        .bind(in_source)
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(Into::into)
     }
 
     async fn part_update(&mut self, part: Part) -> TbResult<Part> {
-        use schema::parts::dsl::*;
         let part = DbPart::from(part);
-        diesel::update(parts.find(part.id))
-            .set(part)
-            .get_result::<DbPart>(self)
-            .await
-            .map_err(into_domain)
-            .map(Into::into)
+        sqlx::query_as::<_, DbPart>(
+            "UPDATE parts
+             SET owner = $2, what = $3, name = $4, vendor = $5, model = $6,
+                 purchase = $7, last_used = $8, disposed_at = $9, usage = $10, source = $11
+             WHERE id = $1
+             RETURNING *",
+        )
+        .bind(part.id)
+        .bind(part.owner)
+        .bind(part.what)
+        .bind(part.name)
+        .bind(part.vendor)
+        .bind(part.model)
+        .bind(part.purchase)
+        .bind(part.last_used)
+        .bind(part.disposed_at)
+        .bind(part.usage)
+        .bind(part.source)
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(Into::into)
     }
 
     async fn part_delete(&mut self, pid: PartId) -> TbResult<PartId> {
-        use schema::parts::dsl::*;
-        diesel::delete(parts.find(i32::from(pid)))
-            .execute(self)
-            .await?;
+        sqlx::query("DELETE FROM parts WHERE id = $1")
+            .bind(i32::from(pid))
+            .execute(&mut **self.inner())
+            .await
+            .map_err(into_domain)?;
         Ok(pid)
     }
 
     async fn partid_get_by_source(&mut self, strava_id: &str) -> TbResult<Option<PartId>> {
-        use schema::parts::dsl::*;
-        parts
-            .filter(source.eq(strava_id))
-            .select(id)
-            .for_update()
-            .first::<i32>(self)
+        sqlx::query_scalar::<_, i32>("SELECT id FROM parts WHERE source = $1 FOR UPDATE")
+            .bind(strava_id)
+            .fetch_optional(&mut **self.inner())
             .await
-            .optional()
             .map_err(into_domain)
             .map(option_into)
     }
 
     async fn parts_delete(&mut self, list: &[Part]) -> TbResult<usize> {
-        use schema::parts::dsl::*;
-
         let list: Vec<_> = list.iter().map(|s| i32::from(s.id)).collect();
 
-        diesel::delete(parts.filter(id.eq_any(list)))
-            .execute(self)
+        let result = sqlx::query("DELETE FROM parts WHERE id = ANY($1)")
+            .bind(&list)
+            .execute(&mut **self.inner())
             .await
-            .map_err(into_domain)
+            .map_err(into_domain)?;
+
+        Ok(result.rows_affected() as usize)
     }
 }

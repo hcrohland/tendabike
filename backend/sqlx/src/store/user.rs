@@ -1,11 +1,9 @@
-use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
+use sqlx::FromRow;
 
-use super::schema;
-use crate::{AsyncDieselConn, into_domain};
+use crate::{SqlxConn, into_domain};
 use tb_domain::{TbResult, User, UserId};
-#[derive(Clone, Debug, Queryable, Insertable)]
-#[diesel(table_name = schema::users)]
+
+#[derive(Clone, Debug, FromRow)]
 pub struct DbUser {
     id: i32,
     name: String,
@@ -53,11 +51,11 @@ impl From<DbUser> for User {
 }
 
 #[async_session::async_trait]
-impl tb_domain::UserStore for AsyncDieselConn {
+impl tb_domain::UserStore for SqlxConn {
     async fn get(&mut self, uid: UserId) -> TbResult<User> {
-        schema::users::table
-            .find(i32::from(uid))
-            .get_result::<DbUser>(self)
+        sqlx::query_as::<_, DbUser>("SELECT * FROM users WHERE id = $1")
+            .bind(i32::from(uid))
+            .fetch_one(&mut **self.inner())
             .await
             .map_err(into_domain)
             .map(Into::into)
@@ -69,19 +67,19 @@ impl tb_domain::UserStore for AsyncDieselConn {
         lastname: &str,
         avatar_: &Option<String>,
     ) -> TbResult<User> {
-        use schema::users::dsl::*;
-
-        diesel::insert_into(users)
-            .values((
-                firstname.eq(firstname_),
-                name.eq(lastname),
-                is_admin.eq(false),
-                avatar.eq(avatar_),
-            ))
-            .get_result::<DbUser>(self)
-            .await
-            .map_err(into_domain)
-            .map(Into::into)
+        sqlx::query_as::<_, DbUser>(
+            "INSERT INTO users (firstname, name, is_admin, avatar)
+             VALUES ($1, $2, $3, $4)
+             RETURNING *",
+        )
+        .bind(firstname_)
+        .bind(lastname)
+        .bind(false)
+        .bind(avatar_)
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(Into::into)
     }
 
     async fn update(
@@ -91,25 +89,29 @@ impl tb_domain::UserStore for AsyncDieselConn {
         lastname: &str,
         avatar_: &Option<String>,
     ) -> TbResult<User> {
-        use schema::users::dsl::*;
-        diesel::update(users.find(i32::from(*uid)))
-            .set((
-                firstname.eq(firstname_),
-                name.eq(lastname),
-                avatar.eq(avatar_),
-            ))
-            .get_result::<DbUser>(self)
-            .await
-            .map_err(into_domain)
-            .map(Into::into)
+        sqlx::query_as::<_, DbUser>(
+            "UPDATE users
+             SET firstname = $2, name = $3, avatar = $4
+             WHERE id = $1
+             RETURNING *",
+        )
+        .bind(i32::from(*uid))
+        .bind(firstname_)
+        .bind(lastname)
+        .bind(avatar_)
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(Into::into)
     }
 
     async fn user_delete(&mut self, user: &UserId) -> TbResult<usize> {
-        use schema::users::dsl::*;
-
-        diesel::delete(users.find(i32::from(*user)))
-            .execute(self)
+        let result = sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(i32::from(*user))
+            .execute(&mut **self.inner())
             .await
-            .map_err(into_domain)
+            .map_err(into_domain)?;
+
+        Ok(result.rows_affected() as usize)
     }
 }

@@ -39,7 +39,10 @@ pub trait Store:
             + Send
             + 'a,
         E: From<diesel::result::Error> + Send + 'a,
-        R: Send + 'a;
+        R: Send + 'a,
+    {
+        callback(self).await
+    }
 }
 
 /// A trait that represents a person.

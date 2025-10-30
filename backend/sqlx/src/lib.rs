@@ -4,10 +4,9 @@ mod async_diesel;
 mod store;
 mod stravastore;
 
-fn into_domain(err: diesel::result::Error) -> tb_domain::Error {
-    use diesel::result::Error;
+fn into_domain(err: sqlx::Error) -> tb_domain::Error {
     match err {
-        Error::NotFound => tb_domain::Error::NotFound(err.to_string()),
+        sqlx::Error::RowNotFound => tb_domain::Error::NotFound(err.to_string()),
         _ => tb_domain::Error::AnyFailure(err.into()),
     }
 }

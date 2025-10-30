@@ -6,10 +6,12 @@ edition = { workspace = true }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-diesel = { workspace = true, features = ["postgres", "time", "uuid"] }
-diesel-async = { workspace = true, features = ["postgres", "deadpool"] }
-scoped-futures = { workspace = true }
-diesel_migrations = { workspace = true }
+sqlx = { version = "0.8", features = [
+    "postgres",
+    "runtime-tokio",
+    "time",
+    "uuid",
+] }
 async-session = { workspace = true }
 anyhow = { workspace = true }
 time = { workspace = true }

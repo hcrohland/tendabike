@@ -1,17 +1,10 @@
-use super::schema;
-use crate::{AsyncDieselConn, into_domain, vec_into};
+use crate::{SqlxConn, into_domain, vec_into};
 use anyhow::Context;
-use diesel::expression_methods::ExpressionMethods;
-
-use diesel::{prelude::*, sql_query};
-use diesel_async::RunQueryDsl;
+use sqlx::FromRow;
 use tb_domain::{ActTypeId, Activity, ActivityId, PartId, Person, TbResult, UserId};
 use time::{OffsetDateTime, UtcOffset};
 
-#[derive(
-    Debug, Clone, Insertable, Identifiable, Queryable, QueryableByName, AsChangeset, PartialEq,
-)]
-#[diesel(table_name = schema::activities)]
+#[derive(Debug, Clone, FromRow, PartialEq)]
 struct DbActivity {
     /// The athlete
     user_id: i32,
@@ -40,7 +33,6 @@ struct DbActivity {
     /// The primary key
     id: i64,
     /// device name
-    ///
     device_name: Option<String>,
     external_id: Option<String>,
 }
@@ -128,7 +120,7 @@ impl TryFrom<DbActivity> for Activity {
     }
 }
 
-fn vec_tryinto(db: Result<Vec<DbActivity>, diesel::result::Error>) -> TbResult<Vec<Activity>> {
+fn vec_tryinto(db: Result<Vec<DbActivity>, sqlx::Error>) -> TbResult<Vec<Activity>> {
     db.map_err(into_domain)?
         .into_iter()
         .map(TryInto::try_into)
@@ -136,24 +128,39 @@ fn vec_tryinto(db: Result<Vec<DbActivity>, diesel::result::Error>) -> TbResult<V
 }
 
 #[async_session::async_trait]
-impl tb_domain::ActivityStore for AsyncDieselConn {
+impl tb_domain::ActivityStore for SqlxConn {
     async fn activity_create(&mut self, act: Activity) -> TbResult<Activity> {
         let values = DbActivity::from(act);
-        diesel::insert_into(schema::activities::table)
-            .values(&values)
-            .get_result::<DbActivity>(self)
-            .await
-            .map_err(into_domain)?
-            .try_into()
+        sqlx::query_as::<_, DbActivity>(
+            "INSERT INTO activities (user_id, what, name, start, duration, time, distance, climb, descend, energy, gear, utc_offset, device_name, external_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+             RETURNING *"
+        )
+        .bind(values.user_id)
+        .bind(values.what)
+        .bind(values.name)
+        .bind(values.start)
+        .bind(values.duration)
+        .bind(values.time)
+        .bind(values.distance)
+        .bind(values.climb)
+        .bind(values.descend)
+        .bind(values.energy)
+        .bind(values.gear)
+        .bind(values.utc_offset)
+        .bind(values.device_name)
+        .bind(values.external_id)
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)?
+        .try_into()
     }
 
     async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Option<Activity>> {
-        schema::activities::table
-            .find(i64::from(aid))
-            .for_update()
-            .first::<DbActivity>(self)
+        sqlx::query_as::<_, DbActivity>("SELECT * FROM activities WHERE id = $1 FOR UPDATE")
+            .bind(i64::from(aid))
+            .fetch_optional(&mut **self.inner())
             .await
-            .optional()
             .map_err(into_domain)?
             .map(TryInto::try_into)
             .transpose()
@@ -161,31 +168,53 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
 
     async fn activity_update(&mut self, act: Activity) -> TbResult<Activity> {
         let act = DbActivity::from(act);
-        diesel::update(&act)
-            .set(&act)
-            .get_result::<DbActivity>(self)
-            .await
-            .map_err(into_domain)?
-            .try_into()
+        sqlx::query_as::<_, DbActivity>(
+            "UPDATE activities
+             SET user_id = $2, what = $3, name = $4, start = $5, duration = $6, time = $7,
+                 distance = $8, climb = $9, descend = $10, energy = $11, gear = $12,
+                 utc_offset = $13, device_name = $14, external_id = $15
+             WHERE id = $1
+             RETURNING *",
+        )
+        .bind(act.id)
+        .bind(act.user_id)
+        .bind(act.what)
+        .bind(act.name)
+        .bind(act.start)
+        .bind(act.duration)
+        .bind(act.time)
+        .bind(act.distance)
+        .bind(act.climb)
+        .bind(act.descend)
+        .bind(act.energy)
+        .bind(act.gear)
+        .bind(act.utc_offset)
+        .bind(act.device_name)
+        .bind(act.external_id)
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)?
+        .try_into()
     }
 
     async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize> {
-        use schema::activities::dsl::*;
-        diesel::delete(activities.find(i64::from(aid)))
-            .execute(self)
+        let result = sqlx::query("DELETE FROM activities WHERE id = $1")
+            .bind(i64::from(aid))
+            .execute(&mut **self.inner())
             .await
-            .map_err(into_domain)
+            .map_err(into_domain)?;
+
+        Ok(result.rows_affected() as usize)
     }
 
     async fn get_all(&mut self, uid: &UserId) -> TbResult<Vec<Activity>> {
-        use schema::activities::dsl::*;
-
         vec_tryinto(
-            activities
-                .filter(user_id.eq(i32::from(*uid)))
-                .order_by(start)
-                .load::<DbActivity>(self)
-                .await,
+            sqlx::query_as::<_, DbActivity>(
+                "SELECT * FROM activities WHERE user_id = $1 ORDER BY start",
+            )
+            .bind(i32::from(*uid))
+            .fetch_all(&mut **self.inner())
+            .await,
         )
     }
 
@@ -195,15 +224,15 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
         begin: OffsetDateTime,
         end: OffsetDateTime,
     ) -> TbResult<Vec<Activity>> {
-        use schema::activities::dsl::{activities, gear, start};
-
         vec_tryinto(
-            activities
-                .filter(gear.eq(Some(i32::from(part))))
-                .filter(start.ge(begin))
-                .filter(start.lt(end))
-                .load::<DbActivity>(self)
-                .await,
+            sqlx::query_as::<_, DbActivity>(
+                "SELECT * FROM activities WHERE gear = $1 AND start >= $2 AND start < $3",
+            )
+            .bind(i32::from(part))
+            .bind(begin)
+            .bind(end)
+            .fetch_all(&mut **self.inner())
+            .await,
         )
     }
 
@@ -212,17 +241,18 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
         uid: UserId,
         rstart: OffsetDateTime,
     ) -> TbResult<Activity> {
-        use diesel::sql_types;
-        let query = sql_query(
-            "SELECT * FROM activities WHERE user_id = $1 AND date_trunc('minute',start) + make_interval(0,0,0,0,0,0,utc_offset) = date_trunc('minute',$2) FOR UPDATE",
+        sqlx::query_as::<_, DbActivity>(
+            "SELECT * FROM activities
+             WHERE user_id = $1
+               AND date_trunc('minute', start) + make_interval(0,0,0,0,0,0,utc_offset) = date_trunc('minute', $2)
+             FOR UPDATE"
         )
-        .bind::<sql_types::Int4, _>(i32::from(uid))
-        .bind::<sql_types::Timestamptz, _>(rstart);
-        query
-            .get_result::<DbActivity>(self)
-            .await
-            .map_err(into_domain)?
-            .try_into()
+        .bind(i32::from(uid))
+        .bind(rstart)
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)?
+        .try_into()
     }
 
     async fn activity_set_gear_if_null(
@@ -231,36 +261,39 @@ impl tb_domain::ActivityStore for AsyncDieselConn {
         types: Vec<ActTypeId>,
         partid: &PartId,
     ) -> TbResult<Vec<Activity>> {
-        use schema::activities::dsl::*;
         let types: Vec<i32> = vec_into(types);
         vec_tryinto(
-            diesel::update(activities)
-                .filter(user_id.eq(i32::from(user.get_id())))
-                .filter(gear.is_null())
-                .filter(what.eq_any(types))
-                .set(gear.eq(i32::from(*partid)))
-                .get_results::<DbActivity>(self)
-                .await,
+            sqlx::query_as::<_, DbActivity>(
+                "UPDATE activities
+                 SET gear = $3
+                 WHERE user_id = $1 AND gear IS NULL AND what = ANY($2)
+                 RETURNING *",
+            )
+            .bind(i32::from(user.get_id()))
+            .bind(&types)
+            .bind(i32::from(*partid))
+            .fetch_all(&mut **self.inner())
+            .await,
         )
     }
 
     async fn activity_get_really_all(&mut self) -> TbResult<Vec<Activity>> {
-        use schema::activities::dsl::*;
         vec_tryinto(
-            activities
-                .order_by(id)
-                .get_results::<DbActivity>(self)
+            sqlx::query_as::<_, DbActivity>("SELECT * FROM activities ORDER BY id")
+                .fetch_all(&mut **self.inner())
                 .await,
         )
     }
 
     async fn activities_delete(&mut self, list: &[Activity]) -> TbResult<usize> {
-        use schema::activities::dsl::*;
         let list: Vec<_> = list.iter().map(|s| i64::from(s.id)).collect();
 
-        diesel::delete(activities.filter(id.eq_any(list)))
-            .execute(self)
+        let result = sqlx::query("DELETE FROM activities WHERE id = ANY($1)")
+            .bind(&list)
+            .execute(&mut **self.inner())
             .await
-            .map_err(into_domain)
+            .map_err(into_domain)?;
+
+        Ok(result.rows_affected() as usize)
     }
 }

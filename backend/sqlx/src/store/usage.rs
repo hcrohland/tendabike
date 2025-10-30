@@ -1,16 +1,12 @@
 use async_session::log::debug;
-use diesel::prelude::*;
-use diesel_async::{AsyncConnection, RunQueryDsl};
-use scoped_futures::ScopedFutureExt;
+use sqlx::{Acquire, FromRow};
 use std::borrow::Borrow;
 use uuid::Uuid;
 
-use super::schema;
-use crate::{AsyncDieselConn, into_domain, option_into};
+use crate::{SqlxConn, into_domain, option_into};
 use tb_domain::{TbResult, Usage, UsageId, UsageStore};
 
-#[derive(Clone, Debug, PartialEq, Default, Queryable, Identifiable, AsChangeset, Insertable)]
-#[diesel(table_name = schema::usages)]
+#[derive(Clone, Debug, PartialEq, Default, FromRow)]
 pub struct DbUsage {
     // id for referencing
     pub id: Uuid,
@@ -74,15 +70,12 @@ impl From<DbUsage> for Usage {
 }
 
 #[async_session::async_trait]
-impl UsageStore for AsyncDieselConn {
+impl UsageStore for SqlxConn {
     async fn get(&mut self, id: UsageId) -> TbResult<Option<Usage>> {
-        use diesel::result::OptionalExtension;
-        use schema::usages;
-        usages::table
-            .find(Uuid::from(id))
-            .get_result::<DbUsage>(self)
+        sqlx::query_as::<_, DbUsage>("SELECT * FROM usages WHERE id = $1")
+            .bind(Uuid::from(id))
+            .fetch_optional(&mut **self.inner())
             .await
-            .optional()
             .map_err(into_domain)
             .map(option_into)
     }
@@ -91,54 +84,65 @@ impl UsageStore for AsyncDieselConn {
     where
         U: Borrow<Usage> + Sync,
     {
-        use schema::usages;
-
         let len = vec.len();
-        self.transaction(|store| {
-            async move {
-                for usage in vec {
-                    let usage = DbUsage::from(usage.borrow());
-                    diesel::insert_into(usages::table)
-                        .values(&usage)
-                        .on_conflict(usages::id)
-                        .do_update()
-                        .set(&usage)
-                        .execute(store)
-                        .await?;
-                }
-                Ok(len)
-            }
-            .scope_boxed()
-        })
-        .await
+
+        // Start a SQLx transaction
+        let mut tx = self.begin().await.map_err(into_domain)?;
+
+        for usage in vec {
+            let usage = DbUsage::from(usage.borrow());
+            sqlx::query(
+                "INSERT INTO usages (id, time, distance, climb, descend, energy, count)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)
+                 ON CONFLICT (id) DO UPDATE
+                 SET time = $2, distance = $3, climb = $4, descend = $5, energy = $6, count = $7",
+            )
+            .bind(usage.id)
+            .bind(usage.time)
+            .bind(usage.distance)
+            .bind(usage.climb)
+            .bind(usage.descend)
+            .bind(usage.energy)
+            .bind(usage.count)
+            .execute(&mut *tx)
+            .await
+            .map_err(into_domain)?;
+        }
+
+        // Commit the transaction
+        tx.commit().await.map_err(into_domain)?;
+
+        Ok(len)
     }
 
     async fn delete(&mut self, usage: UsageId) -> TbResult<Usage> {
-        use schema::usages::dsl::*;
-        diesel::delete(usages.find(Uuid::from(usage)))
-            .get_result::<DbUsage>(self)
+        sqlx::query_as::<_, DbUsage>("DELETE FROM usages WHERE id = $1 RETURNING *")
+            .bind(Uuid::from(usage))
+            .fetch_one(&mut **self.inner())
             .await
             .map_err(into_domain)
             .map(Into::into)
     }
 
     async fn delete_all(&mut self) -> TbResult<usize> {
-        use schema::usages::dsl::*;
         debug!("resetting all usages");
-        diesel::delete(usages)
-            .execute(self)
+        let result = sqlx::query("DELETE FROM usages")
+            .execute(&mut **self.inner())
             .await
-            .map_err(into_domain)
+            .map_err(into_domain)?;
+
+        Ok(result.rows_affected() as usize)
     }
 
     async fn usages_delete(&mut self, list: &[Usage]) -> TbResult<usize> {
-        use schema::usages::dsl::*;
-
         let list: Vec<_> = list.iter().map(|s| Uuid::from(s.id)).collect();
 
-        diesel::delete(usages.filter(id.eq_any(list)))
-            .execute(self)
+        let result = sqlx::query("DELETE FROM usages WHERE id = ANY($1)")
+            .bind(&list)
+            .execute(&mut **self.inner())
             .await
-            .map_err(into_domain)
+            .map_err(into_domain)?;
+
+        Ok(result.rows_affected() as usize)
     }
 }
