@@ -8,8 +8,6 @@ edition = { workspace = true }
 [dependencies]
 tb_domain = { workspace = true }
 
-scoped-futures = { workspace = true }
-
 newtype_derive = { workspace = true }
 async-session = { workspace = true }
 serde = { workspace = true }

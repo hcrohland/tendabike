@@ -40,7 +40,7 @@ pub enum Error {
     #[error("Try again: {0}")]
     TryAgain(&'static str),
     #[error(transparent)]
-    DatabaseFailure(#[from] diesel::result::Error),
+    DatabaseFailure(anyhow::Error),
     #[error(transparent)]
     AnyFailure(#[from] anyhow::Error),
 }

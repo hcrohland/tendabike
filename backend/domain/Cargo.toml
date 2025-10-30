@@ -5,8 +5,6 @@ authors = ["Christoph Rohland <tendabike@rohland.net>"]
 edition = { workspace = true }
 
 [dependencies]
-diesel = { workspace = true }
-scoped-futures = { workspace = true }
 
 newtype_derive = { workspace = true }
 async-session = { workspace = true }
