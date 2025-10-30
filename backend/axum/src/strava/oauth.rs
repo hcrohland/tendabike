@@ -34,7 +34,7 @@ use serde::{Deserialize, Serialize};
 use std::{env, sync::LazyLock};
 
 use crate::error::AppError;
-use tb_domain::{Error, TbResult};
+use tb_domain::{Error, Store, TbResult};
 use tb_strava::StravaId;
 
 pub(crate) static COOKIE_NAME: &str = "SESSION";
@@ -222,7 +222,9 @@ pub(crate) async fn login_authorized(
         .await
         .context("token exchange failed")?;
 
-    let user = super::RequestUser::create_from_token(token, &mut store.get().await?).await?;
+    let mut conn = store.begin().await?;
+    let user = super::RequestUser::create_from_token(token, &mut conn).await?;
+    conn.commit().await?;
 
     // Create a new session filled with user data
     let mut session = Session::new();

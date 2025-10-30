@@ -30,7 +30,7 @@ use serde_derive::Deserialize;
 use time::OffsetDateTime;
 
 use crate::{ApiResult, DbPool, RequestUser, appstate::AppState, error::AppError};
-use tb_domain::{PartId, Service, ServiceId, ServicePlanId, Summary};
+use tb_domain::{PartId, Service, ServiceId, ServicePlanId, Store, Summary};
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
@@ -59,9 +59,10 @@ async fn create(
         plans,
     }): Json<NewService>,
 ) -> Result<(StatusCode, Json<Summary>), AppError> {
-    let mut store = store.get().await?;
+    let mut store = store.begin().await?;
     part_id.checkuser(&user, &mut store).await?;
     let summary = Service::create(part_id, time, name, notes, None, plans, &mut store).await?;
+    store.commit().await?;
     Ok((StatusCode::CREATED, Json(summary)))
 }
 
@@ -70,8 +71,10 @@ async fn update(
     State(store): State<DbPool>,
     Json(service): Json<Service>,
 ) -> ApiResult<Summary> {
-    let mut store = store.get().await?;
-    Ok(service.update(&user, &mut store).await.map(Json)?)
+    let mut store = store.begin().await?;
+    let res = service.update(&user, &mut store).await.map(Json)?;
+    store.commit().await?;
+    Ok(res)
 }
 
 async fn delete_service(
@@ -79,8 +82,10 @@ async fn delete_service(
     State(pool): State<DbPool>,
     Path(id): Path<ServiceId>,
 ) -> ApiResult<Summary> {
-    let mut store = pool.get().await?;
-    Ok(id.delete(&user, &mut store).await.map(Json)?)
+    let mut store = pool.begin().await?;
+    let res = id.delete(&user, &mut store).await.map(Json)?;
+    store.commit().await?;
+    Ok(res)
 }
 
 async fn redo(
@@ -88,6 +93,8 @@ async fn redo(
     State(store): State<DbPool>,
     Json(service): Json<Service>,
 ) -> ApiResult<Summary> {
-    let mut store = store.get().await?;
-    Ok(service.redo(&user, &mut store).await.map(Json)?)
+    let mut store = store.begin().await?;
+    let res = service.redo(&user, &mut store).await.map(Json)?;
+    store.commit().await?;
+    Ok(res)
 }

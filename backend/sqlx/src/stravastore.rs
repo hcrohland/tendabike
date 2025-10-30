@@ -114,7 +114,7 @@ impl From<DbEvent> for Event {
 }
 
 #[async_session::async_trait]
-impl tb_strava::StravaStore for SqlxConn {
+impl<'c> tb_strava::StravaStore for SqlxConn<'c> {
     async fn stravaid_get_user_id(&mut self, who: i32) -> TbResult<i32> {
         sqlx::query_scalar!("SELECT id FROM strava_users WHERE tendabike_id = $1", who)
             .fetch_one(&mut **self.inner())

@@ -128,7 +128,7 @@ fn vec_tryinto(db: Result<Vec<DbActivity>, sqlx::Error>) -> TbResult<Vec<Activit
 }
 
 #[async_session::async_trait]
-impl tb_domain::ActivityStore for SqlxConn {
+impl<'c> tb_domain::ActivityStore for SqlxConn<'c> {
     async fn activity_create(&mut self, act: Activity) -> TbResult<Activity> {
         let values = DbActivity::from(act);
         sqlx::query_as!(

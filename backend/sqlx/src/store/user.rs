@@ -51,7 +51,7 @@ impl From<DbUser> for User {
 }
 
 #[async_session::async_trait]
-impl tb_domain::UserStore for SqlxConn {
+impl<'c> tb_domain::UserStore for SqlxConn<'c> {
     async fn get(&mut self, uid: UserId) -> TbResult<User> {
         sqlx::query_as!(DbUser, "SELECT * FROM users WHERE id = $1", i32::from(uid))
             .fetch_one(&mut **self.inner())

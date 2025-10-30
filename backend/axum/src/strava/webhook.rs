@@ -57,7 +57,7 @@ use axum::{
 use serde_derive::{Deserialize, Serialize};
 
 use crate::{ApiResult, AxumAdmin, DbPool, RequestUser};
-use tb_domain::{Error, Summary, TbResult};
+use tb_domain::{Error, Store, Summary, TbResult};
 use tb_strava::event::{InEvent, process};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -93,8 +93,9 @@ pub(crate) async fn hooks(
     mut user: RequestUser,
     State(store): State<DbPool>,
 ) -> ApiResult<Summary> {
-    let mut store = store.get().await?;
+    let mut store = store.begin().await?;
     let res = process(&mut user, &mut store).await;
+    store.commit().await?;
     Ok(Json(res?))
 }
 
@@ -103,8 +104,9 @@ pub(crate) async fn create_event(
     Json(event): axum::extract::Json<InEvent>,
 ) -> ApiResult<()> {
     trace!("Received {event:#?}");
-    let mut store = store.get().await?;
+    let mut store = store.begin().await?;
     event.accept(&mut store).await?;
+    store.commit().await?;
     Ok(Json(()))
 }
 
@@ -126,13 +128,14 @@ pub(super) async fn sync_api(
     State(store): State<DbPool>,
     Query(query): Query<SyncQuery>,
 ) -> ApiResult<()> {
-    let mut store = store.get().await?;
+    let mut store = store.begin().await?;
     let user_id: Option<tb_domain::UserId> = query.user_id.map(|u| u.into());
-    Ok(
-        tb_strava::event::sync_users(user_id, query.time, query.migrate, &mut store)
-            .await
-            .map(Json)?,
-    )
+    let res = tb_strava::event::sync_users(user_id, query.time, query.migrate, &mut store)
+        .await
+        .map(Json)?;
+    store.commit().await?;
+
+    Ok(res)
 }
 
 pub(super) async fn sync(
@@ -140,12 +143,12 @@ pub(super) async fn sync(
     admin: AxumAdmin,
     State(store): State<DbPool>,
 ) -> ApiResult<Summary> {
-    let mut store = store.get().await?;
-    let store = &mut store;
-    let mut user = RequestUser::create_from_id(admin, tbid.into(), store).await?;
-    let res = process(&mut user, store).await.map_err(|e| match e {
+    let mut store = store.begin().await?;
+    let mut user = RequestUser::create_from_id(admin, tbid.into(), &mut store).await?;
+    let res = process(&mut user, &mut store).await.map_err(|e| match e {
         Error::NotAuth(_) => Error::AnyFailure(anyhow::anyhow!("User not authenticated at Strava")),
         err => err,
     })?;
+    store.commit().await?;
     Ok(Json(res))
 }

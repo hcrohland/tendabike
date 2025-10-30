@@ -7,30 +7,36 @@
 
 use anyhow::Context;
 use async_session::log::info;
-use sqlx::{PgPool, Postgres, pool::PoolConnection};
+use sqlx::{PgPool, PgTransaction};
 use std::ops::{Deref, DerefMut};
 
 use tb_domain::TbResult;
 
-pub struct SqlxConn(PoolConnection<Postgres>);
+pub struct SqlxConn<'conn>(PgTransaction<'conn>);
 
-impl Deref for SqlxConn {
-    type Target = PoolConnection<Postgres>;
+impl<'c> Deref for SqlxConn<'c> {
+    type Target = PgTransaction<'c>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl DerefMut for SqlxConn {
+impl<'c> DerefMut for SqlxConn<'c> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl SqlxConn {
-    pub(crate) fn inner(&mut self) -> &mut PoolConnection<Postgres> {
+impl<'c> SqlxConn<'c> {
+    pub(crate) fn inner(&mut self) -> &mut PgTransaction<'c> {
         &mut self.0
+    }
+}
+
+impl<'c> SqlxConn<'c> {
+    pub(crate) fn into_inner(self) -> PgTransaction<'c> {
+        self.0
     }
 }
 
@@ -54,10 +60,10 @@ impl DbPool {
         Ok(pool)
     }
 
-    pub async fn get(&self) -> TbResult<SqlxConn> {
+    pub async fn begin(&self) -> TbResult<SqlxConn<'_>> {
         let conn = self
             .0
-            .acquire()
+            .begin()
             .await
             .context("Could not get pool connection")?;
         Ok(SqlxConn(conn))

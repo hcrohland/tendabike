@@ -79,7 +79,7 @@ impl From<DbService> for Service {
 }
 
 #[async_session::async_trait]
-impl tb_domain::ServiceStore for SqlxConn {
+impl<'c> tb_domain::ServiceStore for SqlxConn<'c> {
     async fn create(&mut self, service: Service) -> TbResult<Service> {
         let service: DbService = service.into();
         sqlx::query_as!(

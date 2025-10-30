@@ -19,7 +19,7 @@ pub use service::*;
 mod serviceplan;
 pub use serviceplan::*;
 
-use crate::UserId;
+use crate::{TbResult, UserId};
 
 #[async_trait::async_trait]
 /// A trait that represents a store for various tb_domain models.
@@ -33,6 +33,7 @@ pub trait Store:
     + ServiceStore
     + ServicePlanStore
 {
+    async fn commit(self) -> TbResult<()>;
 }
 
 /// A trait that represents a person.

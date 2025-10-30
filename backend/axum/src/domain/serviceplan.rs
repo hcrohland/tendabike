@@ -29,7 +29,7 @@ use axum::{
 use http::StatusCode;
 
 use crate::{ApiResult, DbPool, RequestUser, appstate::AppState, error::AppError};
-use tb_domain::{Service, ServicePlan, ServicePlanId};
+use tb_domain::{Service, ServicePlan, ServicePlanId, Store};
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
@@ -43,8 +43,9 @@ async fn create(
     Json(plan): Json<ServicePlan>,
 ) -> Result<(StatusCode, Json<ServicePlan>), AppError> {
     trace!("ServicePlan::create");
-    let mut store = store.get().await?;
+    let mut store = store.begin().await?;
     let summary = plan.create(&user, &mut store).await?;
+    store.commit().await?;
     Ok((StatusCode::CREATED, Json(summary)))
 }
 
@@ -53,8 +54,10 @@ async fn update(
     State(store): State<DbPool>,
     Json(plan): Json<ServicePlan>,
 ) -> ApiResult<ServicePlan> {
-    let mut store = store.get().await?;
-    Ok(plan.update(&user, &mut store).await.map(Json)?)
+    let mut store = store.begin().await?;
+    let res = plan.update(&user, &mut store).await.map(Json)?;
+    store.commit().await?;
+    Ok(res)
 }
 
 async fn delete_plan(
@@ -62,6 +65,8 @@ async fn delete_plan(
     State(pool): State<DbPool>,
     Path(id): Path<ServicePlanId>,
 ) -> ApiResult<Vec<Service>> {
-    let mut store = pool.get().await?;
-    Ok(id.delete(&user, &mut store).await.map(Json)?)
+    let mut store = pool.begin().await?;
+    let res = id.delete(&user, &mut store).await.map(Json)?;
+    store.commit().await?;
+    Ok(res)
 }

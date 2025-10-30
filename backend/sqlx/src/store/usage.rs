@@ -70,7 +70,7 @@ impl From<DbUsage> for Usage {
 }
 
 #[async_session::async_trait]
-impl UsageStore for SqlxConn {
+impl<'c> UsageStore for SqlxConn<'c> {
     async fn get(&mut self, id: UsageId) -> TbResult<Option<Usage>> {
         sqlx::query_as!(
             DbUsage,

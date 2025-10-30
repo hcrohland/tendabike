@@ -57,7 +57,7 @@ impl From<DbAttachment> for Attachment {
 }
 
 #[async_session::async_trait]
-impl tb_domain::AttachmentStore for SqlxConn {
+impl<'c> tb_domain::AttachmentStore for SqlxConn<'c> {
     async fn attachment_create(&mut self, att: Attachment) -> TbResult<Attachment> {
         let att: DbAttachment = att.into();
         sqlx::query_as!(

@@ -22,7 +22,7 @@ pub async fn strava_url(
     user: &mut impl StravaPerson,
     store: &mut impl StravaStore,
 ) -> TbResult<String> {
-    let part = PartId::new(gear).part(user, store).await?;
+    let part = PartId::from(gear).part(user, store).await?;
     let g = part.source.ok_or(Error::NotFound("".to_string()))?;
     match &g[0..1] {
         "b" => Ok(format!("https://strava.com/bikes/{}", &g[1..])),
