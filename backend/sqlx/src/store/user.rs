@@ -53,8 +53,7 @@ impl From<DbUser> for User {
 #[async_session::async_trait]
 impl tb_domain::UserStore for SqlxConn {
     async fn get(&mut self, uid: UserId) -> TbResult<User> {
-        sqlx::query_as::<_, DbUser>("SELECT * FROM users WHERE id = $1")
-            .bind(i32::from(uid))
+        sqlx::query_as!(DbUser, "SELECT * FROM users WHERE id = $1", i32::from(uid))
             .fetch_one(&mut **self.inner())
             .await
             .map_err(into_domain)
@@ -67,15 +66,16 @@ impl tb_domain::UserStore for SqlxConn {
         lastname: &str,
         avatar_: &Option<String>,
     ) -> TbResult<User> {
-        sqlx::query_as::<_, DbUser>(
+        sqlx::query_as!(
+            DbUser,
             "INSERT INTO users (firstname, name, is_admin, avatar)
              VALUES ($1, $2, $3, $4)
              RETURNING *",
+            firstname_,
+            lastname,
+            false,
+            avatar_ as _
         )
-        .bind(firstname_)
-        .bind(lastname)
-        .bind(false)
-        .bind(avatar_)
         .fetch_one(&mut **self.inner())
         .await
         .map_err(into_domain)
@@ -89,16 +89,17 @@ impl tb_domain::UserStore for SqlxConn {
         lastname: &str,
         avatar_: &Option<String>,
     ) -> TbResult<User> {
-        sqlx::query_as::<_, DbUser>(
+        sqlx::query_as!(
+            DbUser,
             "UPDATE users
              SET firstname = $2, name = $3, avatar = $4
              WHERE id = $1
              RETURNING *",
+            i32::from(*uid),
+            firstname_,
+            lastname,
+            avatar_ as _
         )
-        .bind(i32::from(*uid))
-        .bind(firstname_)
-        .bind(lastname)
-        .bind(avatar_)
         .fetch_one(&mut **self.inner())
         .await
         .map_err(into_domain)
@@ -106,8 +107,7 @@ impl tb_domain::UserStore for SqlxConn {
     }
 
     async fn user_delete(&mut self, user: &UserId) -> TbResult<usize> {
-        let result = sqlx::query("DELETE FROM users WHERE id = $1")
-            .bind(i32::from(*user))
+        let result = sqlx::query!("DELETE FROM users WHERE id = $1", i32::from(*user))
             .execute(&mut **self.inner())
             .await
             .map_err(into_domain)?;

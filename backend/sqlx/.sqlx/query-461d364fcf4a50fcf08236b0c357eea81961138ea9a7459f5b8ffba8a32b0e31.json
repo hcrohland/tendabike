@@ -1,0 +1,108 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE activities\n                 SET gear = $3\n                 WHERE user_id = $1 AND gear IS NULL AND what = ANY($2)\n                 RETURNING *",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "what",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "start",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "duration",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "time",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "distance",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "climb",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "descend",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "energy",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "gear",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "utc_offset",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 13,
+        "name": "device_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "external_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4Array",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "461d364fcf4a50fcf08236b0c357eea81961138ea9a7459f5b8ffba8a32b0e31"
+}

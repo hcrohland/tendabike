@@ -60,17 +60,18 @@ impl From<DbAttachment> for Attachment {
 impl tb_domain::AttachmentStore for SqlxConn {
     async fn attachment_create(&mut self, att: Attachment) -> TbResult<Attachment> {
         let att: DbAttachment = att.into();
-        sqlx::query_as::<_, DbAttachment>(
+        sqlx::query_as!(
+            DbAttachment,
             "INSERT INTO attachments (part_id, attached, gear, hook, detached, usage)
              VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING *",
+            att.part_id,
+            att.attached,
+            att.gear,
+            att.hook,
+            att.detached,
+            att.usage
         )
-        .bind(att.part_id)
-        .bind(att.attached)
-        .bind(att.gear)
-        .bind(att.hook)
-        .bind(att.detached)
-        .bind(att.usage)
         .fetch_one(&mut **self.inner())
         .await
         .map_err(into_domain)
@@ -79,13 +80,14 @@ impl tb_domain::AttachmentStore for SqlxConn {
 
     async fn delete(&mut self, att: Attachment) -> TbResult<Attachment> {
         let att: DbAttachment = att.into();
-        sqlx::query_as::<_, DbAttachment>(
+        sqlx::query_as!(
+            DbAttachment,
             "DELETE FROM attachments
              WHERE part_id = $1 AND attached = $2
              RETURNING *",
+            att.part_id,
+            att.attached
         )
-        .bind(att.part_id)
-        .bind(att.attached)
         .fetch_one(&mut **self.inner())
         .await
         .map_err(into_domain)
@@ -97,14 +99,15 @@ impl tb_domain::AttachmentStore for SqlxConn {
         act_gear: PartId,
         start: OffsetDateTime,
     ) -> TbResult<Vec<Attachment>> {
-        sqlx::query_as::<_, DbAttachment>(
+        sqlx::query_as!(
+            DbAttachment,
             "SELECT * FROM attachments
              WHERE gear = $1
                AND attached <= $2
                AND (detached IS NULL OR detached > $2)",
+            i32::from(act_gear),
+            start
         )
-        .bind(i32::from(act_gear))
-        .bind(start)
         .fetch_all(&mut **self.inner())
         .await
         .map_err(into_domain)
@@ -112,11 +115,12 @@ impl tb_domain::AttachmentStore for SqlxConn {
     }
 
     async fn attachments_all_by_part(&mut self, id: PartId) -> TbResult<Vec<Attachment>> {
-        sqlx::query_as::<_, DbAttachment>(
+        sqlx::query_as!(
+            DbAttachment,
             "SELECT * FROM attachments
              WHERE part_id = $1",
+            i32::from(id)
         )
-        .bind(i32::from(id))
         .fetch_all(&mut **self.inner())
         .await
         .map_err(into_domain)
@@ -128,15 +132,16 @@ impl tb_domain::AttachmentStore for SqlxConn {
         pid: PartId,
         time: OffsetDateTime,
     ) -> TbResult<Option<Attachment>> {
-        sqlx::query_as::<_, DbAttachment>(
+        sqlx::query_as!(
+            DbAttachment,
             "SELECT * FROM attachments
              WHERE part_id = $1
                AND attached <= $2
                AND detached > $2
              FOR UPDATE",
+            i32::from(pid),
+            time
         )
-        .bind(i32::from(pid))
-        .bind(time)
         .fetch_optional(&mut **self.inner())
         .await
         .map_err(into_domain)
@@ -150,7 +155,8 @@ impl tb_domain::AttachmentStore for SqlxConn {
         time: OffsetDateTime,
     ) -> TbResult<Vec<Attachment>> {
         let types_i32: Vec<i32> = vec_into(types);
-        sqlx::query_as::<_, DbAttachment>(
+        sqlx::query_as!(
+            DbAttachment,
             "SELECT * FROM attachments
              WHERE hook = ANY($1)
                AND gear = $2
@@ -158,10 +164,10 @@ impl tb_domain::AttachmentStore for SqlxConn {
                AND detached > $3
              ORDER BY hook
              FOR UPDATE",
+            &types_i32 as _,
+            i32::from(gear_),
+            time
         )
-        .bind(&types_i32)
-        .bind(i32::from(gear_))
-        .bind(time)
         .fetch_all(&mut **self.inner())
         .await
         .map_err(into_domain)
@@ -179,18 +185,19 @@ impl tb_domain::AttachmentStore for SqlxConn {
         let gear_: i32 = gear_.into();
         let hook_: i32 = hook_.into();
 
-        sqlx::query_as::<_, DbAttachment>(
+        sqlx::query_as!(
+            DbAttachment,
             "SELECT a.* FROM attachments a
              INNER JOIN parts p ON p.id = a.part_id AND p.what = $1
              WHERE a.gear = $2
                AND a.hook = $3
                AND a.attached <= $4
                AND a.detached > $4",
+            what_,
+            gear_,
+            hook_,
+            time_
         )
-        .bind(what_)
-        .bind(gear_)
-        .bind(hook_)
-        .bind(time_)
         .fetch_optional(&mut **self.inner())
         .await
         .map_err(into_domain)
@@ -206,7 +213,8 @@ impl tb_domain::AttachmentStore for SqlxConn {
         time_: OffsetDateTime,
         what: PartTypeId,
     ) -> TbResult<Option<Attachment>> {
-        sqlx::query_as::<_, DbAttachment>(
+        sqlx::query_as!(
+            DbAttachment,
             "SELECT a.* FROM attachments a
              INNER JOIN parts p ON p.id = a.part_id AND p.what = $1
              WHERE a.gear = $2
@@ -216,12 +224,12 @@ impl tb_domain::AttachmentStore for SqlxConn {
              ORDER BY a.attached
              FOR UPDATE
              LIMIT 1",
+            i32::from(what),
+            i32::from(gear_),
+            i32::from(hook_),
+            i32::from(part_id_),
+            time_
         )
-        .bind(i32::from(what))
-        .bind(i32::from(gear_))
-        .bind(i32::from(hook_))
-        .bind(i32::from(part_id_))
-        .bind(time_)
         .fetch_optional(&mut **self.inner())
         .await
         .map_err(into_domain)
@@ -234,16 +242,17 @@ impl tb_domain::AttachmentStore for SqlxConn {
         part_id_: PartId,
         time_: OffsetDateTime,
     ) -> TbResult<Option<Attachment>> {
-        sqlx::query_as::<_, DbAttachment>(
+        sqlx::query_as!(
+            DbAttachment,
             "SELECT * FROM attachments
              WHERE part_id = $1
                AND attached > $2
              ORDER BY attached
              FOR UPDATE
              LIMIT 1",
+            i32::from(part_id_),
+            time_
         )
-        .bind(i32::from(part_id_))
-        .bind(time_)
         .fetch_optional(&mut **self.inner())
         .await
         .map_err(into_domain)
@@ -258,18 +267,19 @@ impl tb_domain::AttachmentStore for SqlxConn {
         hook_: PartTypeId,
         time_: OffsetDateTime,
     ) -> TbResult<Option<Attachment>> {
-        sqlx::query_as::<_, DbAttachment>(
+        sqlx::query_as!(
+            DbAttachment,
             "SELECT * FROM attachments
              WHERE part_id = $1
                AND gear = $2
                AND hook = $3
                AND detached = $4
              FOR UPDATE",
+            i32::from(part_id_),
+            i32::from(gear_),
+            i32::from(hook_),
+            time_
         )
-        .bind(i32::from(part_id_))
-        .bind(i32::from(gear_))
-        .bind(i32::from(hook_))
-        .bind(time_)
         .fetch_optional(&mut **self.inner())
         .await
         .map_err(into_domain)
@@ -279,11 +289,11 @@ impl tb_domain::AttachmentStore for SqlxConn {
     async fn attachments_delete_by_parts(&mut self, list: &[tb_domain::Part]) -> TbResult<usize> {
         let list: Vec<i32> = list.iter().map(|s| i32::from(s.id)).collect();
 
-        let result = sqlx::query(
+        let result = sqlx::query!(
             "DELETE FROM attachments
              WHERE part_id = ANY($1)",
+            &list as _
         )
-        .bind(&list)
         .execute(&mut **self.inner())
         .await
         .map_err(into_domain)?;

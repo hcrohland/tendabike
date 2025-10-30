@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE strava_users\n             SET refresh_token = $2\n             WHERE id = $1\n             RETURNING *",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "tendabike_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "refresh_token",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "b9c5d1a438e51a57443c40e099fca33751aa5ecdbad578d645495743ee02af49"
+}

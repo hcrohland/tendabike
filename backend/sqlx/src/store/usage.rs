@@ -11,17 +11,17 @@ pub struct DbUsage {
     // id for referencing
     pub id: Uuid,
     // usage time
-    pub time: i32,
+    pub time: Option<i32>,
     /// Usage distance
-    pub distance: i32,
+    pub distance: Option<i32>,
     /// Overall climbing
-    pub climb: i32,
+    pub climb: Option<i32>,
     /// Overall descending
-    pub descend: i32,
+    pub descend: Option<i32>,
     /// Overall energy
     pub energy: i32,
     /// number of activities
-    pub count: i32,
+    pub count: Option<i32>,
 }
 
 impl From<&Usage> for DbUsage {
@@ -37,12 +37,12 @@ impl From<&Usage> for DbUsage {
         } = value;
         Self {
             id: id.into(),
-            time,
-            distance,
-            climb,
-            descend,
+            time: Some(time),
+            distance: Some(distance),
+            climb: Some(climb),
+            descend: Some(descend),
             energy,
-            count,
+            count: Some(count),
         }
     }
 }
@@ -59,12 +59,12 @@ impl From<DbUsage> for Usage {
         } = value;
         Self {
             id: id.into(),
-            time,
-            distance,
-            climb,
-            descend,
+            time: time.unwrap_or(0),
+            distance: distance.unwrap_or(0),
+            climb: climb.unwrap_or(0),
+            descend: descend.unwrap_or(0),
             energy,
-            count,
+            count: count.unwrap_or(0),
         }
     }
 }
@@ -72,8 +72,11 @@ impl From<DbUsage> for Usage {
 #[async_session::async_trait]
 impl UsageStore for SqlxConn {
     async fn get(&mut self, id: UsageId) -> TbResult<Option<Usage>> {
-        sqlx::query_as::<_, DbUsage>("SELECT * FROM usages WHERE id = $1")
-            .bind(Uuid::from(id))
+        sqlx::query_as!(
+            DbUsage,
+            r#"SELECT id, time, distance, climb, descend, energy as "energy!", count FROM usages WHERE id = $1"#,
+            Uuid::from(id)
+        )
             .fetch_optional(&mut **self.inner())
             .await
             .map_err(into_domain)
@@ -91,19 +94,19 @@ impl UsageStore for SqlxConn {
 
         for usage in vec {
             let usage = DbUsage::from(usage.borrow());
-            sqlx::query(
+            sqlx::query!(
                 "INSERT INTO usages (id, time, distance, climb, descend, energy, count)
                  VALUES ($1, $2, $3, $4, $5, $6, $7)
                  ON CONFLICT (id) DO UPDATE
                  SET time = $2, distance = $3, climb = $4, descend = $5, energy = $6, count = $7",
+                usage.id,
+                usage.time,
+                usage.distance,
+                usage.climb,
+                usage.descend,
+                usage.energy,
+                usage.count
             )
-            .bind(usage.id)
-            .bind(usage.time)
-            .bind(usage.distance)
-            .bind(usage.climb)
-            .bind(usage.descend)
-            .bind(usage.energy)
-            .bind(usage.count)
             .execute(&mut *tx)
             .await
             .map_err(into_domain)?;
@@ -116,8 +119,11 @@ impl UsageStore for SqlxConn {
     }
 
     async fn delete(&mut self, usage: UsageId) -> TbResult<Usage> {
-        sqlx::query_as::<_, DbUsage>("DELETE FROM usages WHERE id = $1 RETURNING *")
-            .bind(Uuid::from(usage))
+        sqlx::query_as!(
+            DbUsage,
+            r#"DELETE FROM usages WHERE id = $1 RETURNING id, time, distance, climb, descend, energy as "energy!", count"#,
+            Uuid::from(usage)
+        )
             .fetch_one(&mut **self.inner())
             .await
             .map_err(into_domain)
@@ -126,7 +132,7 @@ impl UsageStore for SqlxConn {
 
     async fn delete_all(&mut self) -> TbResult<usize> {
         debug!("resetting all usages");
-        let result = sqlx::query("DELETE FROM usages")
+        let result = sqlx::query!("DELETE FROM usages")
             .execute(&mut **self.inner())
             .await
             .map_err(into_domain)?;
@@ -137,8 +143,7 @@ impl UsageStore for SqlxConn {
     async fn usages_delete(&mut self, list: &[Usage]) -> TbResult<usize> {
         let list: Vec<_> = list.iter().map(|s| Uuid::from(s.id)).collect();
 
-        let result = sqlx::query("DELETE FROM usages WHERE id = ANY($1)")
-            .bind(&list)
+        let result = sqlx::query!("DELETE FROM usages WHERE id = ANY($1)", &list as _)
             .execute(&mut **self.inner())
             .await
             .map_err(into_domain)?;

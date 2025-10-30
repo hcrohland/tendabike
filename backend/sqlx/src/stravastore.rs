@@ -116,8 +116,7 @@ impl From<DbEvent> for Event {
 #[async_session::async_trait]
 impl tb_strava::StravaStore for SqlxConn {
     async fn stravaid_get_user_id(&mut self, who: i32) -> TbResult<i32> {
-        sqlx::query_scalar::<_, i32>("SELECT id FROM strava_users WHERE tendabike_id = $1")
-            .bind(who)
+        sqlx::query_scalar!("SELECT id FROM strava_users WHERE tendabike_id = $1", who)
             .fetch_one(&mut **self.inner())
             .await
             .map_err(into_domain)
@@ -125,19 +124,19 @@ impl tb_strava::StravaStore for SqlxConn {
 
     async fn stravaevent_store(&mut self, e: Event) -> TbResult<()> {
         let e: DbEvent = e.into();
-        sqlx::query_as::<_, DbEvent>(
-            "INSERT INTO strava_events (id, object_type, object_id, aspect_type, updates, owner_id, subscription_id, event_time)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-             RETURNING *"
+        sqlx::query_as!(
+            DbEvent,
+            r#"INSERT INTO strava_events (object_type, object_id, aspect_type, updates, owner_id, subscription_id, event_time)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             RETURNING id, object_type as "object_type!", object_id, aspect_type as "aspect_type!", updates as "updates!", owner_id, subscription_id, event_time"#,
+            e.object_type,
+            e.object_id,
+            e.aspect_type,
+            e.updates,
+            e.owner_id,
+            e.subscription_id,
+            e.event_time
         )
-        .bind(e.id)
-        .bind(e.object_type)
-        .bind(e.object_id)
-        .bind(e.aspect_type)
-        .bind(e.updates)
-        .bind(e.owner_id)
-        .bind(e.subscription_id)
-        .bind(e.event_time)
         .fetch_one(&mut **self.inner())
         .await
         .map_err(into_domain)?;
@@ -145,8 +144,7 @@ impl tb_strava::StravaStore for SqlxConn {
     }
 
     async fn strava_event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {
-        sqlx::query("DELETE FROM strava_events WHERE id = $1")
-            .bind(event_id)
+        sqlx::query!("DELETE FROM strava_events WHERE id = $1", event_id)
             .execute(&mut **self.inner())
             .await
             .map_err(into_domain)?;
@@ -154,12 +152,14 @@ impl tb_strava::StravaStore for SqlxConn {
     }
 
     async fn strava_event_set_time(&mut self, e_id: Option<i32>, e_time: i64) -> TbResult<()> {
-        sqlx::query("UPDATE strava_events SET event_time = $2 WHERE id = $1")
-            .bind(e_id)
-            .bind(e_time)
-            .execute(&mut **self.inner())
-            .await
-            .map_err(into_domain)?;
+        sqlx::query!(
+            "UPDATE strava_events SET event_time = $2 WHERE id = $1",
+            e_id,
+            e_time
+        )
+        .execute(&mut **self.inner())
+        .await
+        .map_err(into_domain)?;
         Ok(())
     }
 
@@ -167,13 +167,14 @@ impl tb_strava::StravaStore for SqlxConn {
         &mut self,
         user_id: StravaId,
     ) -> TbResult<Option<Event>> {
-        sqlx::query_as::<_, DbEvent>(
-            "SELECT * FROM strava_events
+        sqlx::query_as!(
+            DbEvent,
+            r#"SELECT id, object_type as "object_type!", object_id, aspect_type as "aspect_type!", updates as "updates!", owner_id, subscription_id, event_time FROM strava_events
              WHERE owner_id = ANY($1)
              ORDER BY event_time ASC
-             LIMIT 1",
+             LIMIT 1"#,
+            &vec![0, user_id.into()] as _
         )
-        .bind(vec![0, user_id.into()])
         .fetch_optional(&mut **self.inner())
         .await
         .map_err(into_domain)
@@ -181,13 +182,14 @@ impl tb_strava::StravaStore for SqlxConn {
     }
 
     async fn strava_event_get_later(&mut self, obj_id: i64, oid: StravaId) -> TbResult<Vec<Event>> {
-        sqlx::query_as::<_, DbEvent>(
-            "SELECT * FROM strava_events
+        sqlx::query_as!(
+            DbEvent,
+            r#"SELECT id, object_type as "object_type!", object_id, aspect_type as "aspect_type!", updates as "updates!", owner_id, subscription_id, event_time FROM strava_events
              WHERE object_id = $1 AND owner_id = $2
-             ORDER BY event_time ASC",
+             ORDER BY event_time ASC"#,
+            obj_id,
+            i32::from(oid)
         )
-        .bind(obj_id)
-        .bind(i32::from(oid))
         .fetch_all(&mut **self.inner())
         .await
         .map_err(into_domain)
@@ -195,8 +197,7 @@ impl tb_strava::StravaStore for SqlxConn {
     }
 
     async fn strava_events_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
-        sqlx::query("DELETE FROM strava_events WHERE id = ANY($1)")
-            .bind(values)
+        sqlx::query!("DELETE FROM strava_events WHERE id = ANY($1)", values as _)
             .execute(&mut **self.inner())
             .await
             .map_err(into_domain)?;
@@ -204,7 +205,7 @@ impl tb_strava::StravaStore for SqlxConn {
     }
 
     async fn stravausers_get_all(&mut self) -> TbResult<Vec<StravaUser>> {
-        sqlx::query_as::<_, DbStravaUser>("SELECT * FROM strava_users")
+        sqlx::query_as!(DbStravaUser, "SELECT * FROM strava_users")
             .fetch_all(&mut **self.inner())
             .await
             .map_err(into_domain)
@@ -212,33 +213,40 @@ impl tb_strava::StravaStore for SqlxConn {
     }
 
     async fn stravauser_get_by_tbid(&mut self, id: UserId) -> TbResult<StravaUser> {
-        sqlx::query_as::<_, DbStravaUser>("SELECT * FROM strava_users WHERE tendabike_id = $1")
-            .bind(i32::from(id))
-            .fetch_one(&mut **self.inner())
-            .await
-            .map_err(into_domain)
-            .map(Into::into)
+        sqlx::query_as!(
+            DbStravaUser,
+            "SELECT * FROM strava_users WHERE tendabike_id = $1",
+            i32::from(id)
+        )
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(Into::into)
     }
 
     async fn stravauser_get_by_stravaid(&mut self, id: &StravaId) -> TbResult<Option<StravaUser>> {
-        sqlx::query_as::<_, DbStravaUser>("SELECT * FROM strava_users WHERE id = $1")
-            .bind(i32::from(*id))
-            .fetch_optional(&mut **self.inner())
-            .await
-            .map_err(into_domain)
-            .map(option_into)
+        sqlx::query_as!(
+            DbStravaUser,
+            "SELECT * FROM strava_users WHERE id = $1",
+            i32::from(*id)
+        )
+        .fetch_optional(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(option_into)
     }
 
     async fn stravauser_new(&mut self, user: StravaUser) -> TbResult<StravaUser> {
         let db_user = DbStravaUser::from(user);
-        sqlx::query_as::<_, DbStravaUser>(
+        sqlx::query_as!(
+            DbStravaUser,
             "INSERT INTO strava_users (id, tendabike_id, refresh_token)
              VALUES ($1, $2, $3)
              RETURNING *",
+            db_user.id,
+            db_user.tendabike_id,
+            db_user.refresh_token as _
         )
-        .bind(db_user.id)
-        .bind(db_user.tendabike_id)
-        .bind(db_user.refresh_token)
         .fetch_one(&mut **self.inner())
         .await
         .map_err(into_domain)
@@ -250,14 +258,15 @@ impl tb_strava::StravaStore for SqlxConn {
         stravaid: StravaId,
         refresh: Option<&String>,
     ) -> TbResult<StravaUser> {
-        sqlx::query_as::<_, DbStravaUser>(
+        sqlx::query_as!(
+            DbStravaUser,
             "UPDATE strava_users
              SET refresh_token = $2
              WHERE id = $1
              RETURNING *",
+            i32::from(stravaid),
+            refresh
         )
-        .bind(i32::from(stravaid))
-        .bind(refresh)
         .fetch_one(&mut **self.inner())
         .await
         .map_err(into_domain)
@@ -270,29 +279,36 @@ impl tb_strava::StravaStore for SqlxConn {
     ///
     /// This function will return an error if the database connection fails.
     async fn strava_events_get_count_for_user(&mut self, user: &StravaId) -> TbResult<i64> {
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM strava_events WHERE owner_id = $1")
-            .bind(i32::from(*user))
-            .fetch_one(&mut **self.inner())
-            .await
-            .map_err(into_domain)
+        let count = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM strava_events WHERE owner_id = $1",
+            i32::from(*user)
+        )
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)?;
+        Ok(count.unwrap_or(0))
     }
 
     async fn strava_events_delete_for_user(&mut self, user: &StravaId) -> TbResult<usize> {
-        let result = sqlx::query("DELETE FROM strava_events WHERE owner_id = $1")
-            .bind(i32::from(*user))
-            .execute(&mut **self.inner())
-            .await
-            .map_err(into_domain)?;
+        let result = sqlx::query!(
+            "DELETE FROM strava_events WHERE owner_id = $1",
+            i32::from(*user)
+        )
+        .execute(&mut **self.inner())
+        .await
+        .map_err(into_domain)?;
 
         Ok(result.rows_affected() as usize)
     }
 
     async fn stravauser_delete(&mut self, user: UserId) -> TbResult<usize> {
-        let result = sqlx::query("DELETE FROM strava_users WHERE tendabike_id = $1")
-            .bind(i32::from(user))
-            .execute(&mut **self.inner())
-            .await
-            .map_err(into_domain)?;
+        let result = sqlx::query!(
+            "DELETE FROM strava_users WHERE tendabike_id = $1",
+            i32::from(user)
+        )
+        .execute(&mut **self.inner())
+        .await
+        .map_err(into_domain)?;
 
         Ok(result.rows_affected() as usize)
     }

@@ -131,25 +131,27 @@ fn vec_tryinto(db: Result<Vec<DbActivity>, sqlx::Error>) -> TbResult<Vec<Activit
 impl tb_domain::ActivityStore for SqlxConn {
     async fn activity_create(&mut self, act: Activity) -> TbResult<Activity> {
         let values = DbActivity::from(act);
-        sqlx::query_as::<_, DbActivity>(
-            "INSERT INTO activities (user_id, what, name, start, duration, time, distance, climb, descend, energy, gear, utc_offset, device_name, external_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-             RETURNING *"
+        sqlx::query_as!(
+            DbActivity,
+            "INSERT INTO activities (id, user_id, what, name, start, duration, time, distance, climb, descend, energy, gear, utc_offset, device_name, external_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+             RETURNING *",
+            values.id,
+            values.user_id,
+            values.what,
+            values.name,
+            values.start,
+            values.duration,
+            values.time,
+            values.distance,
+            values.climb,
+            values.descend,
+            values.energy,
+            values.gear,
+            values.utc_offset,
+            values.device_name,
+            values.external_id
         )
-        .bind(values.user_id)
-        .bind(values.what)
-        .bind(values.name)
-        .bind(values.start)
-        .bind(values.duration)
-        .bind(values.time)
-        .bind(values.distance)
-        .bind(values.climb)
-        .bind(values.descend)
-        .bind(values.energy)
-        .bind(values.gear)
-        .bind(values.utc_offset)
-        .bind(values.device_name)
-        .bind(values.external_id)
         .fetch_one(&mut **self.inner())
         .await
         .map_err(into_domain)?
@@ -157,40 +159,44 @@ impl tb_domain::ActivityStore for SqlxConn {
     }
 
     async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Option<Activity>> {
-        sqlx::query_as::<_, DbActivity>("SELECT * FROM activities WHERE id = $1 FOR UPDATE")
-            .bind(i64::from(aid))
-            .fetch_optional(&mut **self.inner())
-            .await
-            .map_err(into_domain)?
-            .map(TryInto::try_into)
-            .transpose()
+        sqlx::query_as!(
+            DbActivity,
+            "SELECT * FROM activities WHERE id = $1 FOR UPDATE",
+            i64::from(aid)
+        )
+        .fetch_optional(&mut **self.inner())
+        .await
+        .map_err(into_domain)?
+        .map(TryInto::try_into)
+        .transpose()
     }
 
     async fn activity_update(&mut self, act: Activity) -> TbResult<Activity> {
         let act = DbActivity::from(act);
-        sqlx::query_as::<_, DbActivity>(
+        sqlx::query_as!(
+            DbActivity,
             "UPDATE activities
              SET user_id = $2, what = $3, name = $4, start = $5, duration = $6, time = $7,
                  distance = $8, climb = $9, descend = $10, energy = $11, gear = $12,
                  utc_offset = $13, device_name = $14, external_id = $15
              WHERE id = $1
              RETURNING *",
+            act.id,
+            act.user_id,
+            act.what,
+            act.name,
+            act.start,
+            act.duration,
+            act.time,
+            act.distance,
+            act.climb,
+            act.descend,
+            act.energy,
+            act.gear,
+            act.utc_offset,
+            act.device_name,
+            act.external_id
         )
-        .bind(act.id)
-        .bind(act.user_id)
-        .bind(act.what)
-        .bind(act.name)
-        .bind(act.start)
-        .bind(act.duration)
-        .bind(act.time)
-        .bind(act.distance)
-        .bind(act.climb)
-        .bind(act.descend)
-        .bind(act.energy)
-        .bind(act.gear)
-        .bind(act.utc_offset)
-        .bind(act.device_name)
-        .bind(act.external_id)
         .fetch_one(&mut **self.inner())
         .await
         .map_err(into_domain)?
@@ -198,8 +204,7 @@ impl tb_domain::ActivityStore for SqlxConn {
     }
 
     async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize> {
-        let result = sqlx::query("DELETE FROM activities WHERE id = $1")
-            .bind(i64::from(aid))
+        let result = sqlx::query!("DELETE FROM activities WHERE id = $1", i64::from(aid))
             .execute(&mut **self.inner())
             .await
             .map_err(into_domain)?;
@@ -209,10 +214,11 @@ impl tb_domain::ActivityStore for SqlxConn {
 
     async fn get_all(&mut self, uid: &UserId) -> TbResult<Vec<Activity>> {
         vec_tryinto(
-            sqlx::query_as::<_, DbActivity>(
+            sqlx::query_as!(
+                DbActivity,
                 "SELECT * FROM activities WHERE user_id = $1 ORDER BY start",
+                i32::from(*uid)
             )
-            .bind(i32::from(*uid))
             .fetch_all(&mut **self.inner())
             .await,
         )
@@ -225,12 +231,13 @@ impl tb_domain::ActivityStore for SqlxConn {
         end: OffsetDateTime,
     ) -> TbResult<Vec<Activity>> {
         vec_tryinto(
-            sqlx::query_as::<_, DbActivity>(
+            sqlx::query_as!(
+                DbActivity,
                 "SELECT * FROM activities WHERE gear = $1 AND start >= $2 AND start < $3",
+                i32::from(part),
+                begin,
+                end
             )
-            .bind(i32::from(part))
-            .bind(begin)
-            .bind(end)
             .fetch_all(&mut **self.inner())
             .await,
         )
@@ -241,14 +248,15 @@ impl tb_domain::ActivityStore for SqlxConn {
         uid: UserId,
         rstart: OffsetDateTime,
     ) -> TbResult<Activity> {
-        sqlx::query_as::<_, DbActivity>(
+        sqlx::query_as!(
+            DbActivity,
             "SELECT * FROM activities
              WHERE user_id = $1
-               AND date_trunc('minute', start) + make_interval(0,0,0,0,0,0,utc_offset) = date_trunc('minute', $2)
-             FOR UPDATE"
+               AND date_trunc('minute', start) + make_interval(0,0,0,0,0,0,utc_offset) = date_trunc('minute', $2::timestamptz)
+             FOR UPDATE",
+            i32::from(uid),
+            rstart
         )
-        .bind(i32::from(uid))
-        .bind(rstart)
         .fetch_one(&mut **self.inner())
         .await
         .map_err(into_domain)?
@@ -263,15 +271,16 @@ impl tb_domain::ActivityStore for SqlxConn {
     ) -> TbResult<Vec<Activity>> {
         let types: Vec<i32> = vec_into(types);
         vec_tryinto(
-            sqlx::query_as::<_, DbActivity>(
+            sqlx::query_as!(
+                DbActivity,
                 "UPDATE activities
                  SET gear = $3
                  WHERE user_id = $1 AND gear IS NULL AND what = ANY($2)
                  RETURNING *",
+                i32::from(user.get_id()),
+                &types,
+                i32::from(*partid)
             )
-            .bind(i32::from(user.get_id()))
-            .bind(&types)
-            .bind(i32::from(*partid))
             .fetch_all(&mut **self.inner())
             .await,
         )
@@ -279,7 +288,7 @@ impl tb_domain::ActivityStore for SqlxConn {
 
     async fn activity_get_really_all(&mut self) -> TbResult<Vec<Activity>> {
         vec_tryinto(
-            sqlx::query_as::<_, DbActivity>("SELECT * FROM activities ORDER BY id")
+            sqlx::query_as!(DbActivity, "SELECT * FROM activities ORDER BY id")
                 .fetch_all(&mut **self.inner())
                 .await,
         )
@@ -288,8 +297,7 @@ impl tb_domain::ActivityStore for SqlxConn {
     async fn activities_delete(&mut self, list: &[Activity]) -> TbResult<usize> {
         let list: Vec<_> = list.iter().map(|s| i64::from(s.id)).collect();
 
-        let result = sqlx::query("DELETE FROM activities WHERE id = ANY($1)")
-            .bind(&list)
+        let result = sqlx::query!("DELETE FROM activities WHERE id = ANY($1)", &list as _)
             .execute(&mut **self.inner())
             .await
             .map_err(into_domain)?;

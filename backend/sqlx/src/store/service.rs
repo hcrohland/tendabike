@@ -82,20 +82,21 @@ impl From<DbService> for Service {
 impl tb_domain::ServiceStore for SqlxConn {
     async fn create(&mut self, service: Service) -> TbResult<Service> {
         let service: DbService = service.into();
-        sqlx::query_as::<_, DbService>(
-            "INSERT INTO services (id, part_id, time, redone, name, notes, usage, successor, plans)
+        sqlx::query_as!(
+            DbService,
+            r#"INSERT INTO services (id, part_id, time, redone, name, notes, usage, successor, plans)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-             RETURNING *",
+             RETURNING id, part_id, time, redone, name, notes, usage, successor, plans as "plans!""#,
+            service.id,
+            service.part_id,
+            service.time,
+            service.redone,
+            service.name,
+            service.notes,
+            service.usage,
+            service.successor,
+            &service.plans as _
         )
-        .bind(service.id)
-        .bind(service.part_id)
-        .bind(service.time)
-        .bind(service.redone)
-        .bind(service.name)
-        .bind(service.notes)
-        .bind(service.usage)
-        .bind(service.successor)
-        .bind(service.plans)
         .fetch_one(&mut **self.inner())
         .await
         .map_err(into_domain)
@@ -103,32 +104,36 @@ impl tb_domain::ServiceStore for SqlxConn {
     }
 
     async fn get(&mut self, service: ServiceId) -> TbResult<Service> {
-        sqlx::query_as::<_, DbService>("SELECT * FROM services WHERE id = $1")
-            .bind(Uuid::from(service))
-            .fetch_one(&mut **self.inner())
-            .await
-            .map_err(into_domain)
-            .map(Into::into)
+        sqlx::query_as!(
+            DbService,
+            r#"SELECT id, part_id, time, redone, name, notes, usage, successor, plans as "plans!" FROM services WHERE id = $1"#,
+            Uuid::from(service)
+        )
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(Into::into)
     }
 
     async fn update(&mut self, service: Service) -> TbResult<Service> {
         let service: DbService = service.into();
-        sqlx::query_as::<_, DbService>(
-            "UPDATE services
+        sqlx::query_as!(
+            DbService,
+            r#"UPDATE services
              SET part_id = $2, time = $3, redone = $4, name = $5, notes = $6,
                  usage = $7, successor = $8, plans = $9
              WHERE id = $1
-             RETURNING *",
+             RETURNING id, part_id, time, redone, name, notes, usage, successor, plans as "plans!""#,
+            service.id,
+            service.part_id,
+            service.time,
+            service.redone,
+            service.name,
+            service.notes,
+            service.usage,
+            service.successor,
+            &service.plans as _
         )
-        .bind(service.id)
-        .bind(service.part_id)
-        .bind(service.time)
-        .bind(service.redone)
-        .bind(service.name)
-        .bind(service.notes)
-        .bind(service.usage)
-        .bind(service.successor)
-        .bind(service.plans)
         .fetch_one(&mut **self.inner())
         .await
         .map_err(into_domain)
@@ -136,8 +141,7 @@ impl tb_domain::ServiceStore for SqlxConn {
     }
 
     async fn delete(&mut self, service: ServiceId) -> TbResult<usize> {
-        let result = sqlx::query("DELETE FROM services WHERE id = $1")
-            .bind(Uuid::from(service))
+        let result = sqlx::query!("DELETE FROM services WHERE id = $1", Uuid::from(service))
             .execute(&mut **self.inner())
             .await
             .map_err(into_domain)?;
@@ -146,19 +150,21 @@ impl tb_domain::ServiceStore for SqlxConn {
     }
 
     async fn services_by_part(&mut self, part: PartId) -> TbResult<Vec<Service>> {
-        sqlx::query_as::<_, DbService>("SELECT * FROM services WHERE part_id = $1")
-            .bind(i32::from(part))
-            .fetch_all(&mut **self.inner())
-            .await
-            .map_err(into_domain)
-            .map(vec_into)
+        sqlx::query_as!(
+            DbService,
+            r#"SELECT id, part_id, time, redone, name, notes, usage, successor, plans as "plans!" FROM services WHERE part_id = $1"#,
+            i32::from(part)
+        )
+        .fetch_all(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(vec_into)
     }
 
     async fn services_delete(&mut self, list: &[Service]) -> TbResult<usize> {
         let list: Vec<_> = list.iter().map(|s| Uuid::from(s.id)).collect();
 
-        let result = sqlx::query("DELETE FROM services WHERE id = ANY($1)")
-            .bind(&list)
+        let result = sqlx::query!("DELETE FROM services WHERE id = ANY($1)", &list as _)
             .execute(&mut **self.inner())
             .await
             .map_err(into_domain)?;

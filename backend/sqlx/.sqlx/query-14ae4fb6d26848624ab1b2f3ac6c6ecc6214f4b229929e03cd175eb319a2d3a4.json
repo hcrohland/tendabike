@@ -1,0 +1,107 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM activities\n             WHERE user_id = $1\n               AND date_trunc('minute', start) + make_interval(0,0,0,0,0,0,utc_offset) = date_trunc('minute', $2::timestamptz)\n             FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "what",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "start",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "duration",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "time",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "distance",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "climb",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "descend",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "energy",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "gear",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "utc_offset",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 13,
+        "name": "device_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "external_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "14ae4fb6d26848624ab1b2f3ac6c6ecc6214f4b229929e03cd175eb319a2d3a4"
+}

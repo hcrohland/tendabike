@@ -1,0 +1,78 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO services (id, part_id, time, redone, name, notes, usage, successor, plans)\n             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\n             RETURNING id, part_id, time, redone, name, notes, usage, successor, plans as \"plans!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "part_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "time",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "redone",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "usage",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "successor",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "plans!",
+        "type_info": "UuidArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "a69356f4b66a5384573fb229bb07f01b194fc1aaeb518547b6d892c8e6b91f06"
+}
