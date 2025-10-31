@@ -6,6 +6,7 @@ import { Usage, usages } from "./usage";
 import { parts, type Part } from "./part";
 import { Attachment, attachments } from "./attachment";
 import { plans, type ServicePlan } from "./serviceplan";
+import { Garage, garages } from "./garage";
 import { location } from "svelte-spa-router";
 
 export const DAY = 24 * 60 * 60 * 1000;
@@ -116,6 +117,7 @@ type Summary = {
   usages: Usage[];
   services: Service[];
   plans: ServicePlan[];
+  garages: Garage[];
 };
 
 export function setSummary(data: Summary) {
@@ -125,15 +127,21 @@ export function setSummary(data: Summary) {
   activities.setMap(data.activities);
   services.setMap(data.services);
   plans.setMap(data.plans);
+  garages.setMap(data.garages);
 }
 
-export function updateSummary(data: Summary) {
+export function updateSummary(data?: Summary) {
+  if (!data) {
+    refresh();
+    return;
+  }
   parts.updateMap(data.parts);
   attachments.updateMap(data.attachments);
   activities.updateMap(data.activities);
   services.updateMap(data.services);
   plans.updateMap(data.plans);
   usages.updateMap(data.usages);
+  garages.updateMap(data.garages);
 }
 
 export const user = writable<User | undefined>(undefined);

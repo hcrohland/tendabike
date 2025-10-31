@@ -4,6 +4,9 @@ pub use part::*;
 mod user;
 pub use user::*;
 
+mod garage;
+pub use garage::*;
+
 mod activity;
 pub use activity::*;
 

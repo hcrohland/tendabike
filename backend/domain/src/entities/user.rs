@@ -117,8 +117,10 @@ impl UserId {
         use crate::*;
         let activities = Activity::get_all(self, store).await?;
         let summary = Part::get_part_summary(self, store).await?;
+        let garages = Garage::get_all_for_user(self, store).await?;
         Ok(Summary {
             activities,
+            garages,
             ..summary
         })
     }

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT part_id FROM garage_parts WHERE garage_id = $1 ORDER BY registered_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "part_id",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8b91eac2b54ed561ae95bf8e0a33f6a00a4054f3d5cc3f13e943824ef475bf41"
+}
