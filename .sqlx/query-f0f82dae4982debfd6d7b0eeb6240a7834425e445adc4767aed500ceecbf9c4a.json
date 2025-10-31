@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, time, distance, climb, descend, energy as \"energy!\", count FROM usages WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "time",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "distance",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "climb",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "descend",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "energy!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "count",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "f0f82dae4982debfd6d7b0eeb6240a7834425e445adc4767aed500ceecbf9c4a"
+}

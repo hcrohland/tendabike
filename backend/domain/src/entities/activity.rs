@@ -31,7 +31,6 @@ use std::collections::HashSet;
 
 use anyhow::Context;
 use newtype_derive::*;
-use scoped_futures::ScopedFutureExt;
 use serde_derive::{Deserialize, Serialize};
 use time::{OffsetDateTime, PrimitiveDateTime, macros::format_description};
 
@@ -133,27 +132,20 @@ impl ActivityId {
     /// checks authorization  
     pub async fn delete(self, person: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
         info!("Deleting {self:?}");
-        store
-            .transaction(|store| {
-                async {
-                    let mut res = self
-                        .read(person, store)
-                        .await?
-                        .register(Factor::Sub, store)
-                        .await?;
-                    store.activity_delete(self).await?;
-                    res.activities[0].gear = None;
-                    res.activities[0].duration = 0;
-                    res.activities[0].time = None;
-                    res.activities[0].distance = None;
-                    res.activities[0].climb = None;
-                    res.activities[0].descend = None;
-                    res.activities[0].energy = None;
-                    Ok(res)
-                }
-                .scope_boxed()
-            })
-            .await
+        let mut res = self
+            .read(person, store)
+            .await?
+            .register(Factor::Sub, store)
+            .await?;
+        store.activity_delete(self).await?;
+        res.activities[0].gear = None;
+        res.activities[0].duration = 0;
+        res.activities[0].time = None;
+        res.activities[0].distance = None;
+        res.activities[0].climb = None;
+        res.activities[0].descend = None;
+        res.activities[0].energy = None;
+        Ok(res)
     }
 }
 
@@ -163,30 +155,23 @@ impl Activity {
     /// returns the activity and all affected parts  
     /// checks authorization  
     pub async fn upsert(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
-        store
-            .transaction(|store| {
-                async {
-                    if let Some(old_activity) = self.id.read_optional(user, store).await? {
-                        old_activity.replace(self, store).await
-                    } else {
-                        user.check_owner(
-                            self.user_id,
-                            format!(
-                                "user {} cannot create activity for user {}",
-                                user.get_id(),
-                                self.user_id
-                            ),
-                        )?;
+        if let Some(old_activity) = self.id.read_optional(user, store).await? {
+            old_activity.replace(self, store).await
+        } else {
+            user.check_owner(
+                self.user_id,
+                format!(
+                    "user {} cannot create activity for user {}",
+                    user.get_id(),
+                    self.user_id
+                ),
+            )?;
 
-                        info!("Creating {:?}", &self);
-                        let new = store.activity_create(self).await?;
-                        // let res = new.check_geartype(res, store)?;
-                        new.register(Factor::Add, store).await
-                    }
-                }
-                .scope_boxed()
-            })
-            .await
+            info!("Creating {:?}", &self);
+            let new = store.activity_create(self).await?;
+            // let res = new.check_geartype(res, store)?;
+            new.register(Factor::Add, store).await
+        }
     }
 
     /// Update the activity with id self according to the data in NewActivity
@@ -195,11 +180,7 @@ impl Activity {
     /// returns all affected parts  
     /// checks authorization  
     pub async fn update(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
-        store
-            .transaction(|store| {
-                async { self.id.read(user, store).await?.replace(self, store).await }.scope_boxed()
-            })
-            .await
+        self.id.read(user, store).await?.replace(self, store).await
     }
 
     async fn replace(self, new: Activity, store: &mut impl Store) -> TbResult<Summary> {
@@ -348,12 +329,7 @@ impl Activity {
                 ),
                 None => None,
             };
-            match store
-                .transaction(|store| {
-                    match_and_update(store, user, rstart, rclimb, rdescend).scope_boxed()
-                })
-                .await
-            {
+            match match_and_update(store, user, rstart, rclimb, rdescend).await {
                 Ok(res) => {
                     summary += res;
                     good.push(description);
@@ -372,28 +348,28 @@ impl Activity {
         user: &dyn Person,
         store: &mut impl Store,
     ) -> TbResult<Summary> {
-        store
-            .transaction(|store| def_part(&gear_id, user, store).scope_boxed())
-            .await
+        let part = gear_id.part(user, store).await?;
+        let types = part.what.act_types();
+        let acts = store
+            .activity_set_gear_if_null(user, types, &gear_id)
+            .await?;
+        let mut hash = SumHash::default();
+        for act in acts {
+            hash += act.register(Factor::Add, store).await?;
+        }
+        Ok(hash.into())
     }
 
     pub async fn rescan_all(store: &mut impl Store) -> TbResult<()> {
         warn!("rescanning all activities!");
-        store
-            .transaction(|store| rescan(store).scope_boxed())
-            .await?;
+        Usage::delete_all(store).await?;
+        for a in store.activity_get_really_all().await? {
+            debug!("registering activity {}", a.id);
+            a.register(Factor::Add, store).await?;
+        }
         warn!("Done rescanning");
         Ok(())
     }
-}
-
-async fn rescan(store: &mut impl Store) -> TbResult<()> {
-    Usage::delete_all(store).await?;
-    for a in store.activity_get_really_all().await? {
-        debug!("registering activity {}", a.id);
-        a.register(Factor::Add, store).await?;
-    }
-    Ok(())
 }
 
 async fn match_and_update(
@@ -409,17 +385,4 @@ async fn match_and_update(
     }
     act.descend = Some(rdescend);
     act.update(user, store).await
-}
-
-async fn def_part(partid: &PartId, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
-    let part = partid.part(user, store).await?;
-    let types = part.what.act_types();
-
-    let acts = store.activity_set_gear_if_null(user, types, partid).await?;
-
-    let mut hash = SumHash::default();
-    for act in acts {
-        hash += act.register(Factor::Add, store).await?;
-    }
-    Ok(hash.into())
 }

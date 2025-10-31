@@ -77,10 +77,6 @@ NewtypeDisplay! { () pub struct PartId(); }
 NewtypeFrom! { () pub struct PartId(i32); }
 
 impl PartId {
-    pub fn new(id: i32) -> PartId {
-        PartId(id)
-    }
-
     pub async fn get(id: i32, user: &dyn Person, store: &mut impl PartStore) -> TbResult<PartId> {
         PartId(id).checkuser(user, store).await
     }

@@ -12,7 +12,7 @@ use serde::Deserialize;
 use time::OffsetDateTime;
 
 use crate::{DbPool, RequestUser, appstate::AppState, error::ApiResult};
-use tb_domain::{PartId, PartTypeId, Summary};
+use tb_domain::{PartId, PartTypeId, Store, Summary};
 
 /// Description of an Attach or Detach request
 
@@ -37,7 +37,7 @@ async fn attach_rt(
     State(store): State<DbPool>,
     Json(event): Json<Event>,
 ) -> ApiResult<Summary> {
-    let mut store = store.get().await?;
+    let mut store = store.begin().await?;
     debug!("attach {event:?}");
 
     let Event {
@@ -48,11 +48,11 @@ async fn attach_rt(
         all,
     } = event;
 
-    Ok(
-        tb_domain::attach_assembly(&user, part_id, time, gear, hook, all, &mut store)
-            .await
-            .map(Json)?,
-    )
+    let res = tb_domain::attach_assembly(&user, part_id, time, gear, hook, all, &mut store)
+        .await
+        .map(Json)?;
+    store.commit().await?;
+    Ok(res)
 }
 
 /// route for detach API
@@ -61,16 +61,16 @@ async fn detach_rt(
     State(store): State<DbPool>,
     Json(event): Json<Event>,
 ) -> ApiResult<Summary> {
-    let mut store = store.get().await?;
+    let mut store = store.begin().await?;
     debug!("detach {event:?}");
     let Event {
         part_id, time, all, ..
     } = event;
-    Ok(
-        tb_domain::detach_assembly(&user, part_id, time, all, &mut store)
-            .await
-            .map(Json)?,
-    )
+    let res = tb_domain::detach_assembly(&user, part_id, time, all, &mut store)
+        .await
+        .map(Json)?;
+    store.commit().await?;
+    Ok(res)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
@@ -86,18 +86,18 @@ async fn dispose_rt(
     State(store): State<DbPool>,
     Json(event): Json<Dispose>,
 ) -> ApiResult<Summary> {
-    let mut store = store.get().await?;
+    let mut store = store.begin().await?;
     debug!("{event:?}");
     let Dispose {
         part_id: part,
         time,
         all,
     } = event;
-    Ok(
-        tb_domain::dispose_assembly(&user, part, time, all, &mut store)
-            .await
-            .map(Json)?,
-    )
+    let res = tb_domain::dispose_assembly(&user, part, time, all, &mut store)
+        .await
+        .map(Json)?;
+    store.commit().await?;
+    Ok(res)
 }
 
 async fn recover_rt(
@@ -105,14 +105,16 @@ async fn recover_rt(
     State(store): State<DbPool>,
     Json(event): Json<Dispose>,
 ) -> ApiResult<Summary> {
-    let mut store = store.get().await?;
+    let mut store = store.begin().await?;
     debug!("Recover {event:?}");
     let Dispose {
         part_id: part, all, ..
     } = event;
-    Ok(tb_domain::recover_assembly(&user, part, all, &mut store)
+    let res = tb_domain::recover_assembly(&user, part, all, &mut store)
         .await
-        .map(Json)?)
+        .map(Json)?;
+    store.commit().await?;
+    Ok(res)
 }
 
 pub(crate) fn router() -> Router<AppState> {

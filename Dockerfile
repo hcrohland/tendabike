@@ -4,18 +4,7 @@ FROM rust:alpine AS base
 # To ensure a reproducible build consider pinning 
 # the cargo-chef version with `--version X.X.X`
 
-RUN apk add libpq-dev openssl-dev musl-dev openssl-libs-static
-# hack libpq...
-RUN <<EOF ar -M
-open /usr/lib/libpq.a
-addlib /usr/lib/libpgcommon_shlib.a
-addlib /usr/lib/libpgcommon.a
-addlib /usr/lib/libpgport.a
-addlib /usr/lib/libssl.a
-addlib /usr/lib/libcrypto.a
-save
-end
-EOF
+RUN apk add  musl-dev
 
 WORKDIR /app
 
@@ -32,7 +21,6 @@ COPY backend backend/
 
 RUN cargo chef prepare --recipe-path recipe.json
 
-
 FROM base AS cacher
 COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
@@ -40,8 +28,10 @@ RUN cargo chef cook --release --recipe-path recipe.json
 
 FROM cacher AS build-engine
 
-# do not copy frontend!
+
+ENV SQLX_OFFLINE=true
 COPY Cargo.toml Cargo.lock ./
+COPY .sqlx .sqlx/
 COPY backend backend/
 
 RUN cargo build --release

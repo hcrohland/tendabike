@@ -1,0 +1,78 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE services\n             SET part_id = $2, time = $3, redone = $4, name = $5, notes = $6,\n                 usage = $7, successor = $8, plans = $9\n             WHERE id = $1\n             RETURNING id, part_id, time, redone, name, notes, usage, successor, plans as \"plans!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "part_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "time",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "redone",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "usage",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "successor",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "plans!",
+        "type_info": "UuidArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Timestamptz",
+        "Timestamptz",
+        "Text",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "ef92e1a3d5fe84b6e13d1809a67d35bf4159891bd9f8506582703da27a816b3b"
+}

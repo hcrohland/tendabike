@@ -33,7 +33,7 @@ use crate::{
     error::{ApiResult, AppError},
 };
 use serde_with::serde_as;
-use tb_domain::{Part, PartId, PartTypeId};
+use tb_domain::{Part, PartId, PartTypeId, Store};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 #[serde_as]
@@ -73,7 +73,7 @@ async fn get_part(
     user: RequestUser,
     State(store): State<DbPool>,
 ) -> ApiResult<Part> {
-    let mut store = store.get().await?;
+    let mut store = store.begin().await?;
     Ok(part.part(&user, &mut store).await.map(Json)?)
 }
 
@@ -88,8 +88,9 @@ async fn post_part(
         purchase,
     }): Json<NewPart>,
 ) -> Result<(StatusCode, Json<Part>), AppError> {
-    let mut store = store.get().await?;
+    let mut store = store.begin().await?;
     let part = Part::create(name, vendor, model, what, None, purchase, &user, &mut store).await?;
+    store.commit().await?;
     Ok((StatusCode::CREATED, Json(part)))
 }
 
@@ -98,8 +99,10 @@ async fn delete_part(
     user: RequestUser,
     State(store): State<DbPool>,
 ) -> ApiResult<PartId> {
-    let mut store = store.get().await?;
-    Ok(part.delete(&user, &mut store).await.map(Json)?)
+    let mut store = store.begin().await?;
+    let res = part.delete(&user, &mut store).await.map(Json)?;
+    store.commit().await?;
+    Ok(res)
 }
 
 async fn put_part(
@@ -113,10 +116,12 @@ async fn put_part(
         purchase,
     }): Json<ChangePart>,
 ) -> ApiResult<Part> {
-    let mut store = store.get().await?;
+    let mut store = store.begin().await?;
 
-    Ok(part
+    let res = part
         .change(name, vendor, model, purchase, &user, &mut store)
         .await
-        .map(Json)?)
+        .map(Json)?;
+    store.commit().await?;
+    Ok(res)
 }

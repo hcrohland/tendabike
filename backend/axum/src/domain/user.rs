@@ -10,7 +10,7 @@ use axum::{Json, Router, extract::State, routing::get};
 use serde::Serialize;
 
 use crate::{ApiResult, AxumAdmin, DbPool, RequestUser, appstate::AppState};
-use tb_domain::{Person, Summary};
+use tb_domain::{Person, Store, Summary};
 use tb_strava::StravaUser;
 
 pub(super) fn router() -> Router<AppState> {
@@ -22,14 +22,16 @@ pub(super) fn router() -> Router<AppState> {
 }
 
 async fn getuser(user: RequestUser, State(pool): State<DbPool>) -> ApiResult<tb_domain::User> {
-    let mut store = pool.get().await?;
+    let mut store = pool.begin().await?;
     Ok(user.get_id().read(&mut store).await.map(Json)?)
 }
 
 async fn summary(mut user: RequestUser, State(pool): State<DbPool>) -> ApiResult<Summary> {
-    let mut store = pool.get().await?;
+    let mut store = pool.begin().await?;
     StravaUser::update_gear(&mut user, &mut store).await?;
-    Ok(user.get_id().get_summary(&mut store).await.map(Json)?)
+    let res = user.get_id().get_summary(&mut store).await.map(Json)?;
+    store.commit().await?;
+    Ok(res)
 }
 
 #[derive(Clone, Serialize, Debug)]
@@ -44,7 +46,7 @@ pub struct Export {
 }
 
 async fn export(user: RequestUser, State(pool): State<DbPool>) -> ApiResult<Export> {
-    let mut store = pool.get().await?;
+    let mut store = pool.begin().await?;
     let user = user.get_id().read(&mut store).await?;
     let Summary {
         activities,
@@ -69,6 +71,6 @@ async fn userlist(
     _u: AxumAdmin,
     State(pool): State<DbPool>,
 ) -> ApiResult<Vec<tb_strava::StravaStat>> {
-    let mut store = pool.get().await?;
+    let mut store = pool.begin().await?;
     Ok(tb_strava::get_all_stats(&mut store).await.map(Json)?)
 }

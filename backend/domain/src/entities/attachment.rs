@@ -24,7 +24,6 @@
 //! This module also contains the implementation of the `Event` struct, which describes an attach or detach request.
 //!
 
-use scoped_futures::ScopedFutureExt;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::traits::{AttachmentStore, Store};
@@ -458,58 +457,49 @@ pub async fn attach_assembly(
                 .unwrap_or_else(|_| format!("unknown type {geartypeid}"))
         )));
     };
-    store
-        .transaction(|store| {
-            async move {
-                let mut hash = SumHash::default();
+    let mut hash = SumHash::default();
 
-                // detach part if it is attached already
-                if let Some(attachment) =
-                    store.attachment_get_by_part_and_time(part.id, time).await?
-                {
-                    debug!("detaching self assembly");
-                    hash += attachment.detach_assembly(time, all, store).await?;
-                }
+    // detach part if it is attached already
+    if let Some(attachment) = store.attachment_get_by_part_and_time(part.id, time).await? {
+        debug!("detaching self assembly");
+        hash += attachment.detach_assembly(time, all, store).await?;
+    }
 
-                // if there is a part attached to the gear at the hook, detach it
-                let attachment = store
-                    .attachment_find_part_of_type_at_hook_and_time(part.what, gear, hook, time)
-                    .await?;
-                if let Some(attachment) = attachment {
-                    debug!("detaching predecessor assembly {}", attachment.part_id);
-                    hash += attachment.detach_assembly(time, all, store).await?;
-                }
+    // if there is a part attached to the gear at the hook, detach it
+    let attachment = store
+        .attachment_find_part_of_type_at_hook_and_time(part.what, gear, hook, time)
+        .await?;
+    if let Some(attachment) = attachment {
+        debug!("detaching predecessor assembly {}", attachment.part_id);
+        hash += attachment.detach_assembly(time, all, store).await?;
+    }
 
-                // reattach the assembly
-                debug!("- attaching assembly {} to {}", part.id, gear);
-                let end = attach_one(part.id, time, gear, hook, &mut hash, store).await?;
-                if all {
-                    let subparts = subparts(part.id, part.id, time, store).await?;
-                    for attachment in subparts {
-                        let detached = attachment.shift(time, gear, &mut hash, store).await?;
-                        if detached == end && end < attachment.detached {
-                            trace!(
-                                "reattaching {} to {} at {}",
-                                attachment.part_id, part.id, end
-                            );
+    // reattach the assembly
+    debug!("- attaching assembly {} to {}", part.id, gear);
+    let end = attach_one(part.id, time, gear, hook, &mut hash, store).await?;
+    if all {
+        let subparts = subparts(part.id, part.id, time, store).await?;
+        for attachment in subparts {
+            let detached = attachment.shift(time, gear, &mut hash, store).await?;
+            if detached == end && end < attachment.detached {
+                trace!(
+                    "reattaching {} to {} at {}",
+                    attachment.part_id, part.id, end
+                );
 
-                            attach_one(
-                                attachment.part_id,
-                                end,
-                                part.id,
-                                attachment.hook,
-                                &mut hash,
-                                store,
-                            )
-                            .await?;
-                        }
-                    }
-                }
-                Ok(hash.into())
+                attach_one(
+                    attachment.part_id,
+                    end,
+                    part.id,
+                    attachment.hook,
+                    &mut hash,
+                    store,
+                )
+                .await?;
             }
-            .scope_boxed()
-        })
-        .await
+        }
+    }
+    Ok(hash.into())
 }
 
 pub async fn detach_assembly(
@@ -522,18 +512,11 @@ pub async fn detach_assembly(
     let time = round_time(time);
     part_id.checkuser(user, store).await?;
 
-    store
-        .transaction(|store| {
-            async move {
-                let attachment = store
-                    .attachment_get_by_part_and_time(part_id, time)
-                    .await?
-                    .ok_or(Error::NotFound("part not attached".into()))?;
-                attachment.detach_assembly(time, all, store).await
-            }
-            .scope_boxed()
-        })
-        .await
+    let attachment = store
+        .attachment_get_by_part_and_time(part_id, time)
+        .await?
+        .ok_or(Error::NotFound("part not attached".into()))?;
+    attachment.detach_assembly(time, all, store).await
 }
 
 pub async fn dispose_assembly(

@@ -9,7 +9,7 @@ use std::{
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
 
-    let db = tb_diesel::DbPool::new().await?;
+    let db = tb_sqlx::DbPool::new().await?;
     let path = get_static_path();
     let socket = get_socket_address();
 

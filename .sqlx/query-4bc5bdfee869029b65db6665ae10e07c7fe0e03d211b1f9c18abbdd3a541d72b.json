@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO usages (id, time, distance, climb, descend, energy, count)\n                 VALUES ($1, $2, $3, $4, $5, $6, $7)\n                 ON CONFLICT (id) DO UPDATE\n                 SET time = $2, distance = $3, climb = $4, descend = $5, energy = $6, count = $7",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4bc5bdfee869029b65db6665ae10e07c7fe0e03d211b1f9c18abbdd3a541d72b"
+}

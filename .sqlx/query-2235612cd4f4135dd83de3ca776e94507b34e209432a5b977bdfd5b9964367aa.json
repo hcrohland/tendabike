@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM strava_users WHERE tendabike_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2235612cd4f4135dd83de3ca776e94507b34e209432a5b977bdfd5b9964367aa"
+}

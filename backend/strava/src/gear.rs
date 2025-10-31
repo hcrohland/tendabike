@@ -22,7 +22,7 @@ pub async fn strava_url(
     user: &mut impl StravaPerson,
     store: &mut impl StravaStore,
 ) -> TbResult<String> {
-    let part = PartId::new(gear).part(user, store).await?;
+    let part = PartId::from(gear).part(user, store).await?;
     let g = part.source.ok_or(Error::NotFound("".to_string()))?;
     match &g[0..1] {
         "b" => Ok(format!("https://strava.com/bikes/{}", &g[1..])),
@@ -60,26 +60,19 @@ pub(crate) async fn into_partid(
         .await
         .context("Couldn't map gear")?;
 
-    store
-        .transaction(|store| {
-            async {
-                // maybe the gear was created by now?
-                if let Some(gear) = store.partid_get_by_source(&strava_id).await? {
-                    return Ok(gear);
-                }
+    // maybe the gear was created by now?
+    if let Some(gear) = store.partid_get_by_source(&strava_id).await? {
+        return Ok(gear);
+    }
 
-                let what = gear.what();
-                let source = Some(gear.id);
-                let vendor = gear.brand_name.unwrap_or("".into());
-                let model = gear.model_name.unwrap_or("".into());
-                let name = gear.name;
-                let purchase = OffsetDateTime::now_utc();
-                let tbid = Part::create(name, vendor, model, what, source, purchase, user, store)
-                    .await?
-                    .id;
-                Ok(tbid)
-            }
-            .scope_boxed()
-        })
-        .await
+    let what = gear.what();
+    let source = Some(gear.id);
+    let vendor = gear.brand_name.unwrap_or("".into());
+    let model = gear.model_name.unwrap_or("".into());
+    let name = gear.name;
+    let purchase = OffsetDateTime::now_utc();
+    let tbid = Part::create(name, vendor, model, what, source, purchase, user, store)
+        .await?
+        .id;
+    Ok(tbid)
 }

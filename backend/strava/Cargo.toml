@@ -1,14 +1,12 @@
 [package]
 name = "tb_strava"
-version = "0.3.1"
+version = "0.7.0"
 edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 tb_domain = { workspace = true }
-
-scoped-futures = { workspace = true }
 
 newtype_derive = { workspace = true }
 async-session = { workspace = true }

@@ -17,22 +17,23 @@ use axum::{
 };
 
 use crate::{AxumAdmin, DbPool, RequestUser, appstate::AppState, error::ApiResult};
-use tb_domain::{Activity, ActivityId, PartId, PartTypeId, Summary};
+use tb_domain::{Activity, ActivityId, PartId, PartTypeId, Store, Summary};
 
 async fn def_part_api(
     user: RequestUser,
     State(store): State<DbPool>,
     Json(gear_id): Json<PartId>,
 ) -> ApiResult<Summary> {
-    let mut store = store.get().await?;
-    Ok(Activity::set_default_part(gear_id, &user, &mut store)
-        .await
-        .map(Json)?)
+    let mut store = store.begin().await?;
+    let res = Activity::set_default_part(gear_id, &user, &mut store).await?;
+    store.commit().await?;
+    Ok(Json(res))
 }
 
 async fn rescan(_u: AxumAdmin, State(store): State<DbPool>) -> ApiResult<()> {
-    let mut store = store.get().await?;
+    let mut store = store.begin().await?;
     Activity::rescan_all(&mut store).await?;
+    store.commit().await?;
     Ok(Json(()))
 }
 
@@ -42,7 +43,7 @@ async fn act_get(
     State(store): State<DbPool>,
     Path(id): Path<i64>,
 ) -> ApiResult<Activity> {
-    let mut store = store.get().await?;
+    let mut store = store.begin().await?;
     Ok(ActivityId::new(id)
         .read(&user, &mut store)
         .await
@@ -61,8 +62,10 @@ async fn act_put(
             "ActivityId does not match activity".to_string(),
         ))?
     }
-    let mut store = store.get().await?;
-    Ok(activity.update(&user, &mut store).await.map(Json)?)
+    let mut store = store.begin().await?;
+    let res = activity.update(&user, &mut store).await.map(Json)?;
+    store.commit().await?;
+    Ok(res)
 }
 
 /// web interface to delete an activity
@@ -71,11 +74,13 @@ async fn act_delete(
     user: RequestUser,
     State(store): State<DbPool>,
 ) -> ApiResult<Summary> {
-    let mut store = store.get().await?;
-    Ok(ActivityId::new(id)
+    let mut store = store.begin().await?;
+    let res = ActivityId::new(id)
         .delete(&user, &mut store)
         .await
-        .map(Json)?)
+        .map(Json)?;
+    store.commit().await?;
+    Ok(res)
 }
 
 async fn descend(
@@ -83,13 +88,14 @@ async fn descend(
     State(store): State<DbPool>,
     data: String,
 ) -> ApiResult<(Summary, Vec<String>, Vec<String>)> {
-    let mut store = store.get().await?;
+    let mut store = store.begin().await?;
     let res = Activity::csv2descend(data.as_bytes(), &user, &mut store).await?;
+    store.commit().await?;
     Ok(Json(res))
 }
 
 async fn mycats(user: RequestUser, State(store): State<DbPool>) -> ApiResult<HashSet<PartTypeId>> {
-    let mut store = store.get().await?;
+    let mut store = store.begin().await?;
     Ok(Activity::categories(&user, &mut store).await.map(Json)?)
 }
 

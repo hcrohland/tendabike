@@ -1,1 +1,0 @@
-ALTER TABLE "service_plans" drop COLUMN "energy";
