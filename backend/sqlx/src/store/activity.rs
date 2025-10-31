@@ -174,13 +174,12 @@ impl<'c> tb_domain::ActivityStore for SqlxConn<'c> {
     async fn activity_update(&mut self, act: Activity) -> TbResult<Activity> {
         let act = DbActivity::from(act);
 
-        // do not update the offset. It is lost in the frontend
+        // do not update the offset, device_name and external_id. They might be lost in the frontend
         sqlx::query_as!(
             DbActivity,
             "UPDATE activities
              SET user_id = $2, what = $3, name = $4, start = $5, duration = $6, time = $7,
-                 distance = $8, climb = $9, descend = $10, energy = $11, gear = $12,
-                 device_name = $13, external_id = $14
+                 distance = $8, climb = $9, descend = $10, energy = $11, gear = $12
              WHERE id = $1
              RETURNING *",
             act.id,
@@ -195,8 +194,6 @@ impl<'c> tb_domain::ActivityStore for SqlxConn<'c> {
             act.descend,
             act.energy,
             act.gear,
-            act.device_name,
-            act.external_id
         )
         .fetch_one(&mut **self.inner())
         .await
