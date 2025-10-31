@@ -2549,7 +2549,7 @@ dependencies = [
 
 [[package]]
 name = "tb_axum"
-version = "0.5.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-session",
@@ -2578,7 +2578,7 @@ dependencies = [
 
 [[package]]
 name = "tb_domain"
-version = "0.5.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-session",
@@ -2599,7 +2599,7 @@ dependencies = [
 
 [[package]]
 name = "tb_sqlx"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-session",
@@ -2613,7 +2613,7 @@ dependencies = [
 
 [[package]]
 name = "tb_strava"
-version = "0.3.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -2632,7 +2632,7 @@ dependencies = [
 
 [[package]]
 name = "tendabike"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "dotenvy",
