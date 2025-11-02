@@ -43,7 +43,7 @@ pub struct Export {
     pub plans: Vec<tb_domain::ServicePlan>,
     pub usages: Vec<tb_domain::Usage>,
     pub activities: Vec<tb_domain::Activity>,
-    pub garages: Vec<tb_domain::Garage>,
+    pub garages: Vec<tb_domain::GarageWithOwner>,
 }
 
 async fn export(user: RequestUser, State(pool): State<DbPool>) -> ApiResult<Export> {

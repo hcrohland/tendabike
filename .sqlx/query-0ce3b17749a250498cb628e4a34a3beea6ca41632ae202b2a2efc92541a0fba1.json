@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO garage_registration_requests (garage_id, part_id, requester_id, message, status)\n             VALUES ($1, $2, $3, $4, 'pending')\n             RETURNING *",
+  "query": "SELECT id, garage_id, user_id, status, message, response_message, created_at, updated_at\n                 FROM garage_subscriptions\n                 WHERE garage_id = $1 AND status = $2\n                 ORDER BY created_at DESC",
   "describe": {
     "columns": [
       {
@@ -15,22 +15,22 @@
       },
       {
         "ordinal": 2,
-        "name": "part_id",
+        "name": "user_id",
         "type_info": "Int4"
       },
       {
         "ordinal": 3,
-        "name": "requester_id",
-        "type_info": "Int4"
-      },
-      {
-        "ordinal": 4,
         "name": "status",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 5,
+        "ordinal": 4,
         "name": "message",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "response_message",
         "type_info": "Text"
       },
       {
@@ -47,8 +47,6 @@
     "parameters": {
       "Left": [
         "Int4",
-        "Int4",
-        "Int4",
         "Text"
       ]
     },
@@ -57,11 +55,11 @@
       false,
       false,
       false,
-      false,
+      true,
       true,
       false,
       false
     ]
   },
-  "hash": "ed5a1432c240df31a2546fe41732721c873a0c611f94274b14c4aff026783409"
+  "hash": "0ce3b17749a250498cb628e4a34a3beea6ca41632ae202b2a2efc92541a0fba1"
 }

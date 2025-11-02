@@ -25,7 +25,7 @@ pub struct Summary {
     pub usages: Vec<Usage>,
     pub services: Vec<Service>,
     pub plans: Vec<ServicePlan>,
-    pub garages: Vec<Garage>,
+    pub garages: Vec<GarageWithOwner>,
 }
 
 impl From<SumHash> for Summary {
@@ -59,7 +59,7 @@ pub(crate) struct SumHash {
     uses: HashMap<UsageId, Usage>,
     servs: HashMap<ServiceId, Service>,
     plans: HashMap<ServicePlanId, ServicePlan>,
-    garages: HashMap<GarageId, Garage>,
+    garages: HashMap<GarageId, GarageWithOwner>,
 }
 
 impl From<Summary> for SumHash {

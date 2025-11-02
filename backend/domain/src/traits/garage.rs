@@ -143,53 +143,64 @@ pub trait GarageStore {
     /// A vector of garages matching the search query.
     async fn garages_search(&mut self, query: &str) -> TbResult<Vec<Garage>>;
 
-    // Registration request methods
+    // Subscription methods
 
-    /// Creates a new registration request.
-    async fn registration_request_create(
+    /// Creates a new subscription request.
+    async fn subscription_create(
         &mut self,
         garage_id: crate::GarageId,
-        part_id: crate::PartId,
-        requester_id: UserId,
+        user_id: UserId,
         message: Option<String>,
-    ) -> TbResult<crate::GarageRegistrationRequest>;
+    ) -> TbResult<crate::GarageSubscription>;
 
-    /// Gets a registration request by ID.
-    async fn registration_request_get(
+    /// Gets a subscription by ID.
+    async fn subscription_get(
         &mut self,
-        id: crate::RegistrationRequestId,
-    ) -> TbResult<crate::GarageRegistrationRequest>;
+        id: crate::SubscriptionId,
+    ) -> TbResult<crate::GarageSubscription>;
 
-    /// Finds a pending registration request for a specific garage and part.
-    async fn registration_request_find_pending(
-        &mut self,
-        garage_id: crate::GarageId,
-        part_id: crate::PartId,
-    ) -> TbResult<Option<crate::GarageRegistrationRequest>>;
-
-    /// Updates the status of a registration request.
-    async fn registration_request_update_status(
-        &mut self,
-        id: crate::RegistrationRequestId,
-        status: crate::RegistrationRequestStatus,
-    ) -> TbResult<crate::GarageRegistrationRequest>;
-
-    /// Deletes a registration request.
-    async fn registration_request_delete(
-        &mut self,
-        id: crate::RegistrationRequestId,
-    ) -> TbResult<()>;
-
-    /// Gets all registration requests for a garage, optionally filtered by status.
-    async fn registration_requests_for_garage(
+    /// Finds an active subscription for a specific garage and user.
+    async fn subscription_find_active(
         &mut self,
         garage_id: crate::GarageId,
-        status: Option<crate::RegistrationRequestStatus>,
-    ) -> TbResult<Vec<crate::GarageRegistrationRequest>>;
+        user_id: UserId,
+    ) -> TbResult<Option<crate::GarageSubscription>>;
 
-    /// Gets all registration requests made by a user.
-    async fn registration_requests_for_user(
+    /// Finds a pending subscription for a specific garage and user.
+    async fn subscription_find_pending(
+        &mut self,
+        garage_id: crate::GarageId,
+        user_id: UserId,
+    ) -> TbResult<Option<crate::GarageSubscription>>;
+
+    /// Updates the status of a subscription.
+    async fn subscription_update_status(
+        &mut self,
+        id: crate::SubscriptionId,
+        status: crate::SubscriptionStatus,
+    ) -> TbResult<crate::GarageSubscription>;
+
+    /// Approves or rejects a subscription with an optional response message.
+    async fn subscription_approve(
+        &mut self,
+        id: crate::SubscriptionId,
+        status: crate::SubscriptionStatus,
+        response_message: Option<String>,
+    ) -> TbResult<crate::GarageSubscription>;
+
+    /// Deletes a subscription.
+    async fn subscription_delete(&mut self, id: crate::SubscriptionId) -> TbResult<()>;
+
+    /// Gets all subscriptions for a garage, optionally filtered by status.
+    async fn subscriptions_for_garage(
+        &mut self,
+        garage_id: crate::GarageId,
+        status: Option<crate::SubscriptionStatus>,
+    ) -> TbResult<Vec<crate::GarageSubscription>>;
+
+    /// Gets all subscriptions for a user.
+    async fn subscriptions_for_user(
         &mut self,
         user_id: UserId,
-    ) -> TbResult<Vec<crate::GarageRegistrationRequest>>;
+    ) -> TbResult<Vec<crate::GarageSubscription>>;
 }

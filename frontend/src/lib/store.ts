@@ -64,6 +64,10 @@ export function myfetch(url: string, method?: any, data?: any) {
 
 export function checkStatus<T>(response: Response) {
   if (response.ok) {
+    // Handle NO_CONTENT responses that have no body
+    if (response.status === 204) {
+      return Promise.resolve(null);
+    }
     return response.json();
   }
 

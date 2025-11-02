@@ -48,6 +48,42 @@ pub struct Garage {
     pub created_at: OffsetDateTime,
 }
 
+/// Garage with owner information for API responses
+#[serde_as]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct GarageWithOwner {
+    /// The primary key
+    pub id: GarageId,
+    /// The owner ID of the garage
+    pub owner: UserId,
+    /// The owner's first name
+    pub owner_firstname: String,
+    /// The owner's last name
+    pub owner_name: String,
+    /// The name of the garage
+    pub name: String,
+    /// Optional description of the garage
+    pub description: Option<String>,
+    /// Creation timestamp
+    #[serde_as(as = "Rfc3339")]
+    pub created_at: OffsetDateTime,
+}
+
+impl GarageWithOwner {
+    /// Create a GarageWithOwner from a Garage and User
+    pub fn from_garage_and_user(garage: Garage, user: User) -> Self {
+        Self {
+            id: garage.id,
+            owner: garage.owner,
+            owner_firstname: user.firstname,
+            owner_name: user.name,
+            name: garage.name,
+            description: garage.description,
+            created_at: garage.created_at,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GarageId(i32);
 
@@ -112,16 +148,33 @@ impl GarageId {
     }
 
     /// Register a part (bike) to this garage
+    /// Can be done by garage owner or any user with an active subscription
     pub async fn register_part(
         self,
         part_id: PartId,
         user: &dyn Person,
         store: &mut impl Store,
     ) -> TbResult<()> {
-        self.checkuser(user, store).await?;
-
-        // Verify the part exists and user has access to it
+        // Verify the part exists and user owns it
         part_id.checkuser(user, store).await?;
+
+        // Check if user is garage owner OR has active subscription
+        let garage = store.garage_get(self).await?;
+        let is_owner = garage.owner == user.get_id() || user.is_admin();
+        let has_subscription = if !is_owner {
+            store
+                .subscription_find_active(self, user.get_id())
+                .await?
+                .is_some()
+        } else {
+            false
+        };
+
+        if !is_owner && !has_subscription {
+            return Err(Error::Forbidden(
+                "You must subscribe to this garage before registering bikes".into(),
+            ));
+        }
 
         store.garage_register_part(self, part_id).await
     }
@@ -138,12 +191,30 @@ impl GarageId {
     }
 
     /// Get all parts registered to this garage
+    /// Can be accessed by garage owner or users with active subscription
     pub async fn get_parts(
         self,
         user: &dyn Person,
-        store: &mut impl GarageStore,
+        store: &mut impl Store,
     ) -> TbResult<Vec<PartId>> {
-        self.checkuser(user, store).await?;
+        // Check if user is garage owner OR has active subscription
+        let garage = store.garage_get(self).await?;
+        let is_owner = garage.owner == user.get_id() || user.is_admin();
+        let has_subscription = if !is_owner {
+            store
+                .subscription_find_active(self, user.get_id())
+                .await?
+                .is_some()
+        } else {
+            false
+        };
+
+        if !is_owner && !has_subscription {
+            return Err(Error::Forbidden(
+                "You must be the garage owner or have an active subscription to view bikes".into(),
+            ));
+        }
+
         store.garage_get_parts(self).await
     }
 
@@ -167,213 +238,285 @@ impl Garage {
     pub async fn search(query: &str, store: &mut impl GarageStore) -> TbResult<Vec<Garage>> {
         store.garages_search(query).await
     }
+
+    /// Convert a list of garages to garages with owner information
+    pub async fn with_owner_info(
+        garages: Vec<Garage>,
+        store: &mut impl Store,
+    ) -> TbResult<Vec<GarageWithOwner>> {
+        let mut result = Vec::new();
+        for garage in garages {
+            let owner = garage.owner.read(store).await?;
+            result.push(GarageWithOwner::from_garage_and_user(garage, owner));
+        }
+        Ok(result)
+    }
 }
 
-/// Registration request status
+/// Subscription status
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum RegistrationRequestStatus {
+pub enum SubscriptionStatus {
     Pending,
-    Approved,
+    Active,
     Rejected,
+    Cancelled,
 }
 
-impl std::fmt::Display for RegistrationRequestStatus {
+impl std::fmt::Display for SubscriptionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RegistrationRequestStatus::Pending => write!(f, "pending"),
-            RegistrationRequestStatus::Approved => write!(f, "approved"),
-            RegistrationRequestStatus::Rejected => write!(f, "rejected"),
+            SubscriptionStatus::Pending => write!(f, "pending"),
+            SubscriptionStatus::Active => write!(f, "active"),
+            SubscriptionStatus::Rejected => write!(f, "rejected"),
+            SubscriptionStatus::Cancelled => write!(f, "cancelled"),
         }
     }
 }
 
-/// A request to register a bike to a garage
+/// A subscription to a garage, allowing a user to register their bikes
 #[serde_as]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct GarageRegistrationRequest {
-    pub id: RegistrationRequestId,
+pub struct GarageSubscription {
+    pub id: SubscriptionId,
     pub garage_id: GarageId,
-    pub part_id: PartId,
-    pub requester_id: UserId,
-    pub status: RegistrationRequestStatus,
+    pub user_id: UserId,
+    pub status: SubscriptionStatus,
     pub message: Option<String>,
+    pub response_message: Option<String>,
     #[serde_as(as = "Rfc3339")]
     pub created_at: OffsetDateTime,
     #[serde_as(as = "Rfc3339")]
     pub updated_at: OffsetDateTime,
 }
 
+/// A subscription with garage details for API responses
+#[serde_as]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct GarageSubscriptionWithDetails {
+    pub id: SubscriptionId,
+    pub garage_id: GarageId,
+    pub garage_name: String,
+    pub garage_owner_firstname: String,
+    pub garage_owner_name: String,
+    pub user_id: UserId,
+    pub status: SubscriptionStatus,
+    pub message: Option<String>,
+    pub response_message: Option<String>,
+    #[serde_as(as = "Rfc3339")]
+    pub created_at: OffsetDateTime,
+    #[serde_as(as = "Rfc3339")]
+    pub updated_at: OffsetDateTime,
+}
+
+impl GarageSubscriptionWithDetails {
+    /// Create from subscription and garage with owner
+    pub fn from_subscription_and_garage(
+        subscription: GarageSubscription,
+        garage: GarageWithOwner,
+    ) -> Self {
+        Self {
+            id: subscription.id,
+            garage_id: subscription.garage_id,
+            garage_name: garage.name,
+            garage_owner_firstname: garage.owner_firstname,
+            garage_owner_name: garage.owner_name,
+            user_id: subscription.user_id,
+            status: subscription.status,
+            message: subscription.message,
+            response_message: subscription.response_message,
+            created_at: subscription.created_at,
+            updated_at: subscription.updated_at,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RegistrationRequestId(i32);
+pub struct SubscriptionId(i32);
 
-NewtypeDisplay! { () pub struct RegistrationRequestId(); }
-NewtypeFrom! { () pub struct RegistrationRequestId(i32); }
+NewtypeDisplay! { () pub struct SubscriptionId(); }
+NewtypeFrom! { () pub struct SubscriptionId(i32); }
 
-impl RegistrationRequestId {
-    /// Create a new registration request
+impl SubscriptionId {
+    /// Create a new subscription request
     pub async fn create(
         garage_id: GarageId,
-        part_id: PartId,
         message: Option<String>,
         user: &dyn Person,
         store: &mut impl Store,
-    ) -> TbResult<GarageRegistrationRequest> {
-        // Verify the garage exists
-        garage_id.read(user, store).await?;
+    ) -> TbResult<GarageSubscription> {
+        // Verify the garage exists (don't check ownership - users can subscribe to any garage)
+        store.garage_get(garage_id).await?;
 
-        // Verify the user owns the part
-        part_id.checkuser(user, store).await?;
-
-        // Check if there's already a pending request
+        // Check if there's already a pending subscription
         let existing = store
-            .registration_request_find_pending(garage_id, part_id)
+            .subscription_find_pending(garage_id, user.get_id())
             .await?;
         if existing.is_some() {
             return Err(Error::Conflict(
-                "A pending request already exists for this bike".into(),
+                "A pending subscription request already exists".into(),
             ));
         }
 
-        // Check if the part is already registered to this garage
-        let garage_parts = store.garage_get_parts(garage_id).await?;
-        if garage_parts.contains(&part_id) {
+        // Check if there's already an active subscription
+        let active = store
+            .subscription_find_active(garage_id, user.get_id())
+            .await?;
+        if active.is_some() {
             return Err(Error::Conflict(
-                "This bike is already registered to the garage".into(),
+                "You are already subscribed to this garage".into(),
             ));
         }
 
         store
-            .registration_request_create(garage_id, part_id, user.get_id(), message)
+            .subscription_create(garage_id, user.get_id(), message)
             .await
     }
 
-    /// Get a registration request by ID
+    /// Get a subscription by ID
     pub async fn get(
         id: i32,
         user: &dyn Person,
         store: &mut impl Store,
-    ) -> TbResult<RegistrationRequestId> {
-        RegistrationRequestId(id).checkuser(user, store).await
+    ) -> TbResult<SubscriptionId> {
+        SubscriptionId(id).checkuser(user, store).await
     }
 
-    /// Read a registration request from the database
+    /// Read a subscription from the database
     pub async fn read(
         self,
         user: &dyn Person,
         store: &mut impl Store,
-    ) -> TbResult<GarageRegistrationRequest> {
+    ) -> TbResult<GarageSubscription> {
         self.checkuser(user, store).await?;
-        store.registration_request_get(self).await
+        store.subscription_get(self).await
     }
 
-    /// Check if the user has access to this request (either requester or garage owner)
+    /// Check if the user has access to this subscription (either subscriber or garage owner)
     pub async fn checkuser(
         self,
         user: &dyn Person,
         store: &mut impl Store,
-    ) -> TbResult<RegistrationRequestId> {
-        let request = store.registration_request_get(self).await?;
+    ) -> TbResult<SubscriptionId> {
+        let subscription = store.subscription_get(self).await?;
 
-        // Allow access if user is the requester
-        if request.requester_id == user.get_id() {
+        // Allow access if user is the subscriber
+        if subscription.user_id == user.get_id() {
             return Ok(self);
         }
 
         // Allow access if user owns the garage
-        let garage = store.garage_get(request.garage_id).await?;
-        user.check_owner(
-            garage.owner,
-            "Access denied to registration request".to_string(),
-        )?;
+        let garage = store.garage_get(subscription.garage_id).await?;
+        user.check_owner(garage.owner, "Access denied to subscription".to_string())?;
 
         Ok(self)
     }
 
-    /// Approve a registration request (garage owner only)
+    /// Approve a subscription (garage owner only)
     pub async fn approve(
         self,
+        response_message: Option<String>,
         user: &dyn Person,
         store: &mut impl Store,
-    ) -> TbResult<GarageRegistrationRequest> {
-        let request = store.registration_request_get(self).await?;
+    ) -> TbResult<GarageSubscription> {
+        let subscription = store.subscription_get(self).await?;
 
         // Verify user owns the garage
-        let garage_id = request.garage_id;
+        let garage_id = subscription.garage_id;
         garage_id.checkuser(user, store).await?;
 
-        if request.status != RegistrationRequestStatus::Pending {
-            return Err(Error::Conflict("Request is not pending".into()));
+        if subscription.status != SubscriptionStatus::Pending {
+            return Err(Error::Conflict("Subscription is not pending".into()));
         }
 
-        // Register the part to the garage
+        // Update subscription status to active with response message
         store
-            .garage_register_part(request.garage_id, request.part_id)
-            .await?;
-
-        // Update request status
-        store
-            .registration_request_update_status(self, RegistrationRequestStatus::Approved)
+            .subscription_approve(self, SubscriptionStatus::Active, response_message)
             .await
     }
 
-    /// Reject a registration request (garage owner only)
+    /// Reject a subscription (garage owner only)
     pub async fn reject(
         self,
+        response_message: Option<String>,
         user: &dyn Person,
         store: &mut impl Store,
-    ) -> TbResult<GarageRegistrationRequest> {
-        let request = store.registration_request_get(self).await?;
+    ) -> TbResult<GarageSubscription> {
+        let subscription = store.subscription_get(self).await?;
 
         // Verify user owns the garage
-        let garage_id = request.garage_id;
+        let garage_id = subscription.garage_id;
         garage_id.checkuser(user, store).await?;
 
-        if request.status != RegistrationRequestStatus::Pending {
-            return Err(Error::Conflict("Request is not pending".into()));
+        if subscription.status != SubscriptionStatus::Pending {
+            return Err(Error::Conflict("Subscription is not pending".into()));
         }
 
         store
-            .registration_request_update_status(self, RegistrationRequestStatus::Rejected)
+            .subscription_approve(self, SubscriptionStatus::Rejected, response_message)
             .await
     }
 
-    /// Cancel a registration request (requester only)
+    /// Cancel a subscription (subscriber only)
+    /// Allows deletion of pending, active, and rejected subscriptions
     pub async fn cancel(self, user: &dyn Person, store: &mut impl Store) -> TbResult<()> {
-        let request = store.registration_request_get(self).await?;
+        let subscription = store.subscription_get(self).await?;
 
-        // Verify user is the requester
+        // Verify user is the subscriber
         user.check_owner(
-            request.requester_id,
-            "Access denied - not the requester".to_string(),
+            subscription.user_id,
+            "Access denied - not the subscriber".to_string(),
         )?;
 
-        if request.status != RegistrationRequestStatus::Pending {
-            return Err(Error::Conflict("Can only cancel pending requests".into()));
+        if subscription.status != SubscriptionStatus::Pending
+            && subscription.status != SubscriptionStatus::Active
+            && subscription.status != SubscriptionStatus::Rejected
+        {
+            return Err(Error::Conflict(
+                "Can only cancel pending, active, or rejected subscriptions".into(),
+            ));
         }
 
-        store.registration_request_delete(self).await
+        store.subscription_delete(self).await
     }
 }
 
-impl GarageRegistrationRequest {
-    /// Get all pending requests for a garage (garage owner only)
+impl GarageSubscription {
+    /// Get all pending subscriptions for a garage (garage owner only)
     pub async fn get_pending_for_garage(
         garage_id: GarageId,
         user: &dyn Person,
         store: &mut impl Store,
-    ) -> TbResult<Vec<GarageRegistrationRequest>> {
+    ) -> TbResult<Vec<GarageSubscription>> {
         garage_id.checkuser(user, store).await?;
         store
-            .registration_requests_for_garage(garage_id, Some(RegistrationRequestStatus::Pending))
+            .subscriptions_for_garage(garage_id, Some(SubscriptionStatus::Pending))
             .await
     }
 
-    /// Get all requests made by a user
+    /// Get all subscriptions made by a user
     pub async fn get_for_user(
         user: &dyn Person,
         store: &mut impl Store,
-    ) -> TbResult<Vec<GarageRegistrationRequest>> {
-        store.registration_requests_for_user(user.get_id()).await
+    ) -> TbResult<Vec<GarageSubscription>> {
+        store.subscriptions_for_user(user.get_id()).await
+    }
+
+    /// Convert a list of subscriptions to subscriptions with garage details
+    pub async fn with_garage_details(
+        subscriptions: Vec<GarageSubscription>,
+        store: &mut impl Store,
+    ) -> TbResult<Vec<GarageSubscriptionWithDetails>> {
+        let mut result = Vec::new();
+        for subscription in subscriptions {
+            let garage = store.garage_get(subscription.garage_id).await?;
+            let owner = garage.owner.read(store).await?;
+            let garage_with_owner = GarageWithOwner::from_garage_and_user(garage, owner);
+            result.push(GarageSubscriptionWithDetails::from_subscription_and_garage(
+                subscription,
+                garage_with_owner,
+            ));
+        }
+        Ok(result)
     }
 }

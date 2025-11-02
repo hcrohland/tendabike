@@ -122,6 +122,7 @@
       <NavLi class="justify-start" href="/#/cat">{$category.name}s</NavLi>
       <NavLi href="/#/plans">Services</NavLi>
       <NavLi href="/#/spares">Parts</NavLi>
+      <NavLi href="/#/garages">Garages</NavLi>
       <NavLi href="/#/activities">Activities</NavLi>
       <NavLi href="/#/stats">Statistics</NavLi>
     </NavUl>

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT * FROM garage_registration_requests\n                     WHERE garage_id = $1 AND status = $2\n                     ORDER BY created_at DESC",
+  "query": "SELECT id, garage_id, user_id, status, message, response_message, created_at, updated_at\n             FROM garage_subscriptions\n             WHERE garage_id = $1 AND user_id = $2 AND status = 'active'",
   "describe": {
     "columns": [
       {
@@ -15,22 +15,22 @@
       },
       {
         "ordinal": 2,
-        "name": "part_id",
+        "name": "user_id",
         "type_info": "Int4"
       },
       {
         "ordinal": 3,
-        "name": "requester_id",
-        "type_info": "Int4"
-      },
-      {
-        "ordinal": 4,
         "name": "status",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 5,
+        "ordinal": 4,
         "name": "message",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "response_message",
         "type_info": "Text"
       },
       {
@@ -47,7 +47,7 @@
     "parameters": {
       "Left": [
         "Int4",
-        "Text"
+        "Int4"
       ]
     },
     "nullable": [
@@ -55,11 +55,11 @@
       false,
       false,
       false,
-      false,
+      true,
       true,
       false,
       false
     ]
   },
-  "hash": "395f476aab9f5b82a78e184637448d8d9364b131d42a3aa7404ba173e0652a7c"
+  "hash": "f5811550383768f8d339aaf310ff4380cfbc2747d4d8e637debfd7daf82682a3"
 }

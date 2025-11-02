@@ -2,9 +2,7 @@ use sqlx::FromRow;
 use time::OffsetDateTime;
 
 use crate::{SqlxConn, into_domain};
-use tb_domain::{
-    Garage, GarageId, GarageRegistrationRequest, RegistrationRequestStatus, TbResult, UserId,
-};
+use tb_domain::{Garage, GarageId, GarageSubscription, SubscriptionStatus, TbResult, UserId};
 
 #[derive(Clone, Debug, FromRow)]
 pub struct DbGarage {
@@ -54,43 +52,44 @@ impl From<DbGarage> for Garage {
 }
 
 #[derive(Clone, Debug, FromRow)]
-pub struct DbRegistrationRequest {
+pub struct DbSubscription {
     id: i32,
     garage_id: i32,
-    part_id: i32,
-    requester_id: i32,
+    user_id: i32,
     status: String,
     message: Option<String>,
+    response_message: Option<String>,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
 }
 
-impl From<DbRegistrationRequest> for GarageRegistrationRequest {
-    fn from(value: DbRegistrationRequest) -> Self {
-        let DbRegistrationRequest {
+impl From<DbSubscription> for GarageSubscription {
+    fn from(value: DbSubscription) -> Self {
+        let DbSubscription {
             id,
             garage_id,
-            part_id,
-            requester_id,
+            user_id,
             status,
             message,
+            response_message,
             created_at,
             updated_at,
         } = value;
 
         let status = match status.as_str() {
-            "approved" => RegistrationRequestStatus::Approved,
-            "rejected" => RegistrationRequestStatus::Rejected,
-            _ => RegistrationRequestStatus::Pending,
+            "active" => SubscriptionStatus::Active,
+            "rejected" => SubscriptionStatus::Rejected,
+            "cancelled" => SubscriptionStatus::Cancelled,
+            _ => SubscriptionStatus::Pending,
         };
 
         Self {
             id: id.into(),
             garage_id: garage_id.into(),
-            part_id: part_id.into(),
-            requester_id: requester_id.into(),
+            user_id: user_id.into(),
             status,
             message,
+            response_message,
             created_at,
             updated_at,
         }
@@ -240,7 +239,19 @@ impl<'c> tb_domain::GarageStore for SqlxConn<'c> {
         let search_pattern = format!("%{}%", query);
         sqlx::query_as!(
             DbGarage,
-            "SELECT * FROM garages WHERE name ILIKE $1 ORDER BY name LIMIT 50",
+            r#"
+            SELECT DISTINCT g.id, g.owner, g.name, g.description, g.created_at
+            FROM garages g
+            LEFT JOIN users u ON g.owner = u.id
+            WHERE g.name ILIKE $1
+               OR COALESCE(u.firstname, '') ILIKE $1
+               OR COALESCE(u.name, '') ILIKE $1
+               OR CONCAT(COALESCE(u.firstname, ''), ' ', COALESCE(u.name, '')) ILIKE $1
+               OR CONCAT(g.name, ' ', COALESCE(u.firstname, ''), ' ', COALESCE(u.name, '')) ILIKE $1
+               OR CONCAT(COALESCE(u.firstname, ''), ' ', COALESCE(u.name, ''), ' ', g.name) ILIKE $1
+            ORDER BY g.name
+            LIMIT 50
+            "#,
             search_pattern
         )
         .fetch_all(&mut **self.inner())
@@ -249,21 +260,19 @@ impl<'c> tb_domain::GarageStore for SqlxConn<'c> {
         .map(|garages| garages.into_iter().map(Into::into).collect())
     }
 
-    async fn registration_request_create(
+    async fn subscription_create(
         &mut self,
         garage_id: tb_domain::GarageId,
-        part_id: tb_domain::PartId,
-        requester_id: tb_domain::UserId,
+        user_id: tb_domain::UserId,
         message: Option<String>,
-    ) -> TbResult<tb_domain::GarageRegistrationRequest> {
+    ) -> TbResult<tb_domain::GarageSubscription> {
         sqlx::query_as!(
-            DbRegistrationRequest,
-            "INSERT INTO garage_registration_requests (garage_id, part_id, requester_id, message, status)
-             VALUES ($1, $2, $3, $4, 'pending')
-             RETURNING *",
+            DbSubscription,
+            "INSERT INTO garage_subscriptions (garage_id, user_id, message, status)
+             VALUES ($1, $2, $3, 'pending')
+             RETURNING id, garage_id, user_id, status, message, response_message, created_at, updated_at",
             i32::from(garage_id),
-            i32::from(part_id),
-            i32::from(requester_id),
+            i32::from(user_id),
             message
         )
         .fetch_one(&mut **self.inner())
@@ -272,13 +281,14 @@ impl<'c> tb_domain::GarageStore for SqlxConn<'c> {
         .map(Into::into)
     }
 
-    async fn registration_request_get(
+    async fn subscription_get(
         &mut self,
-        id: tb_domain::RegistrationRequestId,
-    ) -> TbResult<tb_domain::GarageRegistrationRequest> {
+        id: tb_domain::SubscriptionId,
+    ) -> TbResult<tb_domain::GarageSubscription> {
         sqlx::query_as!(
-            DbRegistrationRequest,
-            "SELECT * FROM garage_registration_requests WHERE id = $1",
+            DbSubscription,
+            "SELECT id, garage_id, user_id, status, message, response_message, created_at, updated_at
+             FROM garage_subscriptions WHERE id = $1",
             i32::from(id)
         )
         .fetch_one(&mut **self.inner())
@@ -287,17 +297,18 @@ impl<'c> tb_domain::GarageStore for SqlxConn<'c> {
         .map(Into::into)
     }
 
-    async fn registration_request_find_pending(
+    async fn subscription_find_active(
         &mut self,
         garage_id: tb_domain::GarageId,
-        part_id: tb_domain::PartId,
-    ) -> TbResult<Option<tb_domain::GarageRegistrationRequest>> {
+        user_id: tb_domain::UserId,
+    ) -> TbResult<Option<tb_domain::GarageSubscription>> {
         sqlx::query_as!(
-            DbRegistrationRequest,
-            "SELECT * FROM garage_registration_requests
-             WHERE garage_id = $1 AND part_id = $2 AND status = 'pending'",
+            DbSubscription,
+            "SELECT id, garage_id, user_id, status, message, response_message, created_at, updated_at
+             FROM garage_subscriptions
+             WHERE garage_id = $1 AND user_id = $2 AND status = 'active'",
             i32::from(garage_id),
-            i32::from(part_id)
+            i32::from(user_id)
         )
         .fetch_optional(&mut **self.inner())
         .await
@@ -305,14 +316,35 @@ impl<'c> tb_domain::GarageStore for SqlxConn<'c> {
         .map(|opt| opt.map(Into::into))
     }
 
-    async fn registration_request_update_status(
+    async fn subscription_find_pending(
         &mut self,
-        id: tb_domain::RegistrationRequestId,
-        status: tb_domain::RegistrationRequestStatus,
-    ) -> TbResult<tb_domain::GarageRegistrationRequest> {
+        garage_id: tb_domain::GarageId,
+        user_id: tb_domain::UserId,
+    ) -> TbResult<Option<tb_domain::GarageSubscription>> {
         sqlx::query_as!(
-            DbRegistrationRequest,
-            "UPDATE garage_registration_requests SET status = $2 WHERE id = $1 RETURNING *",
+            DbSubscription,
+            "SELECT id, garage_id, user_id, status, message, response_message, created_at, updated_at
+             FROM garage_subscriptions
+             WHERE garage_id = $1 AND user_id = $2 AND status = 'pending'",
+            i32::from(garage_id),
+            i32::from(user_id)
+        )
+        .fetch_optional(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(|opt| opt.map(Into::into))
+    }
+
+    async fn subscription_update_status(
+        &mut self,
+        id: tb_domain::SubscriptionId,
+        status: tb_domain::SubscriptionStatus,
+    ) -> TbResult<tb_domain::GarageSubscription> {
+        sqlx::query_as!(
+            DbSubscription,
+            "UPDATE garage_subscriptions SET status = $2
+             WHERE id = $1
+             RETURNING id, garage_id, user_id, status, message, response_message, created_at, updated_at",
             i32::from(id),
             status.to_string()
         )
@@ -322,12 +354,30 @@ impl<'c> tb_domain::GarageStore for SqlxConn<'c> {
         .map(Into::into)
     }
 
-    async fn registration_request_delete(
+    async fn subscription_approve(
         &mut self,
-        id: tb_domain::RegistrationRequestId,
-    ) -> TbResult<()> {
+        id: tb_domain::SubscriptionId,
+        status: tb_domain::SubscriptionStatus,
+        response_message: Option<String>,
+    ) -> TbResult<tb_domain::GarageSubscription> {
+        sqlx::query_as!(
+            DbSubscription,
+            "UPDATE garage_subscriptions SET status = $2, response_message = $3
+             WHERE id = $1
+             RETURNING id, garage_id, user_id, status, message, response_message, created_at, updated_at",
+            i32::from(id),
+            status.to_string(),
+            response_message
+        )
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(Into::into)
+    }
+
+    async fn subscription_delete(&mut self, id: tb_domain::SubscriptionId) -> TbResult<()> {
         sqlx::query!(
-            "DELETE FROM garage_registration_requests WHERE id = $1",
+            "DELETE FROM garage_subscriptions WHERE id = $1",
             i32::from(id)
         )
         .execute(&mut **self.inner())
@@ -336,52 +386,55 @@ impl<'c> tb_domain::GarageStore for SqlxConn<'c> {
         .map(|_| ())
     }
 
-    async fn registration_requests_for_garage(
+    async fn subscriptions_for_garage(
         &mut self,
         garage_id: tb_domain::GarageId,
-        status: Option<tb_domain::RegistrationRequestStatus>,
-    ) -> TbResult<Vec<tb_domain::GarageRegistrationRequest>> {
+        status: Option<tb_domain::SubscriptionStatus>,
+    ) -> TbResult<Vec<tb_domain::GarageSubscription>> {
         match status {
             Some(status) => sqlx::query_as!(
-                DbRegistrationRequest,
-                "SELECT * FROM garage_registration_requests
-                     WHERE garage_id = $1 AND status = $2
-                     ORDER BY created_at DESC",
+                DbSubscription,
+                "SELECT id, garage_id, user_id, status, message, response_message, created_at, updated_at
+                 FROM garage_subscriptions
+                 WHERE garage_id = $1 AND status = $2
+                 ORDER BY created_at DESC",
                 i32::from(garage_id),
                 status.to_string()
             )
             .fetch_all(&mut **self.inner())
             .await
             .map_err(into_domain)
-            .map(|requests| requests.into_iter().map(Into::into).collect()),
+            .map(|subscriptions| subscriptions.into_iter().map(Into::into).collect()),
             None => sqlx::query_as!(
-                DbRegistrationRequest,
-                "SELECT * FROM garage_registration_requests
-                     WHERE garage_id = $1
-                     ORDER BY created_at DESC",
+                DbSubscription,
+                "SELECT id, garage_id, user_id, status, message, response_message, created_at, updated_at
+                 FROM garage_subscriptions
+                 WHERE garage_id = $1
+                 ORDER BY created_at DESC",
                 i32::from(garage_id)
             )
             .fetch_all(&mut **self.inner())
             .await
             .map_err(into_domain)
-            .map(|requests| requests.into_iter().map(Into::into).collect()),
+            .map(|subscriptions| subscriptions.into_iter().map(Into::into).collect()),
         }
     }
 
-    async fn registration_requests_for_user(
+    async fn subscriptions_for_user(
         &mut self,
         user_id: tb_domain::UserId,
-    ) -> TbResult<Vec<tb_domain::GarageRegistrationRequest>> {
+    ) -> TbResult<Vec<tb_domain::GarageSubscription>> {
         sqlx::query_as!(
-            DbRegistrationRequest,
-            "SELECT * FROM garage_registration_requests
-             WHERE requester_id = $1
+            DbSubscription,
+            "SELECT id, garage_id, user_id, status, message, response_message, created_at, updated_at
+             FROM garage_subscriptions
+             WHERE user_id = $1
              ORDER BY created_at DESC",
             i32::from(user_id)
         )
         .fetch_all(&mut **self.inner())
         .await
         .map_err(into_domain)
-        .map(|requests| requests.into_iter().map(Into::into).collect())
+        .map(|subscriptions| subscriptions.into_iter().map(Into::into).collect())
     }
 }

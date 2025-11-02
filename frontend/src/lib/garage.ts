@@ -4,6 +4,8 @@ import { mapable } from "./mapable";
 export class Garage {
   id?: number;
   owner: number;
+  owner_firstname: string;
+  owner_name: string;
   name: string;
   description?: string;
   created_at: Date;
@@ -11,6 +13,8 @@ export class Garage {
   constructor(data: any) {
     this.id = data.id;
     this.owner = data.owner;
+    this.owner_firstname = data.owner_firstname || "";
+    this.owner_name = data.owner_name || "";
     this.name = data.name || "";
     this.description = data.description;
     this.created_at = new Date(data.created_at);
@@ -66,6 +70,13 @@ export class Garage {
       handleError,
     );
   }
+
+  async requestSubscription(message?: string) {
+    return await myfetch("/api/garage/subscriptions", "POST", {
+      garage_id: this.id,
+      message: message,
+    }).catch(handleError);
+  }
 }
 
-export const garages = mapable<Garage>("id");
+export const garages = mapable<Garage>("id", (data) => new Garage(data));

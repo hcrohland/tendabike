@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "DELETE FROM garage_registration_requests WHERE id = $1",
+  "query": "DELETE FROM garage_subscriptions WHERE id = $1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -10,5 +10,5 @@
     },
     "nullable": []
   },
-  "hash": "4b01f2cb1ed0872b4db38a9d22bef4486b9db00a6b582c69a2a02d245e3dcde2"
+  "hash": "9ac403e0db9fd29557ca2a3ae563ba748d31437aefe9de0f7ae0452fdba4f344"
 }
