@@ -62,12 +62,18 @@ export class Type {
   }
 }
 
+export type OnboardingStatus =
+  | "pending"
+  | "completed"
+  | "initial_sync_postponed";
+
 export type User = {
   id: number;
   firstname: string;
   name: string;
   is_admin: boolean;
   avatar: string | undefined;
+  onboarding_status: OnboardingStatus;
 };
 
 export type ActType = {

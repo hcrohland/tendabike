@@ -1,7 +1,7 @@
 use sqlx::FromRow;
 
 use crate::{SqlxConn, into_domain};
-use tb_domain::{TbResult, User, UserId};
+use tb_domain::{OnboardingStatus, TbResult, User, UserId};
 
 #[derive(Clone, Debug, FromRow)]
 pub struct DbUser {
@@ -10,6 +10,7 @@ pub struct DbUser {
     firstname: String,
     is_admin: bool,
     avatar: Option<String>,
+    onboarding_status: i32,
 }
 
 impl From<User> for DbUser {
@@ -20,6 +21,7 @@ impl From<User> for DbUser {
             firstname,
             avatar,
             is_admin,
+            onboarding_status,
         } = value;
         Self {
             id: id.into(),
@@ -27,6 +29,7 @@ impl From<User> for DbUser {
             firstname,
             avatar,
             is_admin,
+            onboarding_status: onboarding_status.into(),
         }
     }
 }
@@ -39,6 +42,7 @@ impl From<DbUser> for User {
             firstname,
             avatar,
             is_admin,
+            onboarding_status,
         } = value;
         Self {
             id: id.into(),
@@ -46,6 +50,8 @@ impl From<DbUser> for User {
             firstname,
             avatar,
             is_admin,
+            onboarding_status: OnboardingStatus::try_from(onboarding_status)
+                .expect("Invalid onboarding status in database"),
         }
     }
 }
@@ -53,11 +59,15 @@ impl From<DbUser> for User {
 #[async_session::async_trait]
 impl<'c> tb_domain::UserStore for SqlxConn<'c> {
     async fn get(&mut self, uid: UserId) -> TbResult<User> {
-        sqlx::query_as!(DbUser, "SELECT * FROM users WHERE id = $1", i32::from(uid))
-            .fetch_one(&mut **self.inner())
-            .await
-            .map_err(into_domain)
-            .map(Into::into)
+        sqlx::query_as!(
+            DbUser,
+            "SELECT id, name, firstname, is_admin, avatar, onboarding_status FROM users WHERE id = $1",
+            i32::from(uid)
+        )
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(Into::into)
     }
 
     async fn create(
@@ -66,15 +76,17 @@ impl<'c> tb_domain::UserStore for SqlxConn<'c> {
         lastname: &str,
         avatar_: &Option<String>,
     ) -> TbResult<User> {
+        let onboarding_status = i32::from(OnboardingStatus::Pending);
         sqlx::query_as!(
             DbUser,
-            "INSERT INTO users (firstname, name, is_admin, avatar)
-             VALUES ($1, $2, $3, $4)
+            "INSERT INTO users (firstname, name, is_admin, avatar, onboarding_status)
+             VALUES ($1, $2, $3, $4, $5)
              RETURNING *",
             firstname_,
             lastname,
             false,
-            avatar_ as _
+            avatar_ as _,
+            onboarding_status
         )
         .fetch_one(&mut **self.inner())
         .await
@@ -113,5 +125,25 @@ impl<'c> tb_domain::UserStore for SqlxConn<'c> {
             .map_err(into_domain)?;
 
         Ok(result.rows_affected() as usize)
+    }
+
+    async fn update_onboarding_status(
+        &mut self,
+        uid: &UserId,
+        status: OnboardingStatus,
+    ) -> TbResult<User> {
+        sqlx::query_as!(
+            DbUser,
+            "UPDATE users
+             SET onboarding_status = $2
+             WHERE id = $1
+             RETURNING *",
+            i32::from(*uid),
+            i32::from(status)
+        )
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(Into::into)
     }
 }

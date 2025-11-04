@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 /// This module contains the web interface for managing activities.
 ///
 /// Activities are a central concept in the Tendabike application. They represent
@@ -17,7 +15,7 @@ use axum::{
 };
 
 use crate::{AxumAdmin, DbPool, RequestUser, appstate::AppState, error::ApiResult};
-use tb_domain::{Activity, ActivityId, PartId, PartTypeId, Store, Summary};
+use tb_domain::{Activity, ActivityId, PartId, Store, Summary};
 
 async fn def_part_api(
     user: RequestUser,
@@ -94,14 +92,8 @@ async fn descend(
     Ok(Json(res))
 }
 
-async fn mycats(user: RequestUser, State(store): State<DbPool>) -> ApiResult<HashSet<PartTypeId>> {
-    let mut store = store.begin().await?;
-    Ok(Activity::categories(&user, &mut store).await.map(Json)?)
-}
-
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
-        .route("/categories", get(mycats))
         .route("/descend", post(descend))
         .route("/{id}", delete(act_delete).get(act_get).put(act_put))
         .route("/rescan", get(rescan))

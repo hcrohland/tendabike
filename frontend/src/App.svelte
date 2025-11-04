@@ -54,16 +54,22 @@
   import "./app.css";
   import { CardPlaceholder, ThemeProvider } from "flowbite-svelte";
   import Actions from "./Widgets/Actions.svelte";
+  import InitialSyncDialog from "./lib/InitialSyncDialog.svelte";
+  import { user } from "./lib/store";
 
   const theme = {
     tableBodyCell: "px-2 py-3",
     tableHeadCell: "px-2 py-3",
   };
+
+  let showInitialSyncDialog = false;
+  $: showInitialSyncDialog = $user?.onboarding_status === "pending";
 </script>
 
 <Header {promise} />
 
 <Message />
+<InitialSyncDialog bind:open={showInitialSyncDialog} />
 <ThemeProvider {theme}>
   <div class="m-8">
     {#await promise}
