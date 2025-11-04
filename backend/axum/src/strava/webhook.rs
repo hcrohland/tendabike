@@ -57,7 +57,8 @@ use axum::{
 use serde_derive::{Deserialize, Serialize};
 
 use crate::{ApiResult, AxumAdmin, DbPool, RequestUser};
-use tb_domain::{Error, Store, Summary, TbResult};
+use tb_domain::{Error, OnboardingStatus, Store, Summary, TbResult, UserStore};
+use tb_strava::StravaPerson;
 use tb_strava::event::{InEvent, process};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -151,4 +152,66 @@ pub(super) async fn sync(
     })?;
     store.commit().await?;
     Ok(Json(res))
+}
+
+#[derive(Deserialize)]
+pub(super) struct InitialSyncQuery {
+    #[serde(default)]
+    time: i64,
+}
+
+/// Trigger initial sync for a user
+/// This endpoint allows users to trigger their first activity sync after registration.
+/// It can only be called once - if the user has already completed initial sync, it returns an error.
+/// Returns the updated user object.
+pub(crate) async fn trigger_initial_sync(
+    user: RequestUser,
+    State(store): State<DbPool>,
+    Query(query): Query<InitialSyncQuery>,
+) -> ApiResult<tb_domain::User> {
+    let mut store = store.begin().await?;
+
+    // Check if user has already completed initial sync
+    let user_data = user.tb_id().read(&mut store).await?;
+    if user_data.onboarding_status.is_initial_sync_completed() {
+        return Err(Error::BadRequest("Initial sync already triggered".to_string()).into());
+    }
+
+    // Insert sync event
+    tb_strava::event::insert_sync(user.strava_id(), query.time, false, &mut store).await?;
+
+    // Mark initial sync as completed and return updated user
+    let updated_user = store
+        .update_onboarding_status(&user.tb_id(), OnboardingStatus::Completed)
+        .await?;
+
+    store.commit().await?;
+    Ok(Json(updated_user))
+}
+
+/// Postpone initial sync for a user
+/// This endpoint allows users to postpone the initial activity sync.
+/// It can only be called if the user is still in pending status.
+/// Returns the updated user object.
+pub(crate) async fn postpone_initial_sync(
+    user: RequestUser,
+    State(store): State<DbPool>,
+) -> ApiResult<tb_domain::User> {
+    let mut store = store.begin().await?;
+
+    // Check if user is still pending
+    let user_data = user.tb_id().read(&mut store).await?;
+    if user_data.onboarding_status != OnboardingStatus::Pending {
+        return Err(
+            Error::BadRequest("Initial sync already completed or postponed".to_string()).into(),
+        );
+    }
+
+    // Mark as postponed and return updated user
+    let updated_user = store
+        .update_onboarding_status(&user.tb_id(), OnboardingStatus::InitialSyncPostponed)
+        .await?;
+
+    store.commit().await?;
+    Ok(Json(updated_user))
 }

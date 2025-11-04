@@ -32,6 +32,8 @@
 //! Finally, this module defines the `NewPart` type, which is used to create new parts in the database.
 
 #![allow(clippy::too_many_arguments)]
+use std::collections::HashSet;
+
 use newtype_derive::*;
 use serde_derive::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -289,5 +291,20 @@ impl Part {
                 user.get_id(),
             )
             .await
+    }
+
+    pub async fn categories(
+        user: &dyn Person,
+        store: &mut impl Store,
+    ) -> TbResult<HashSet<PartTypeId>> {
+        let parts = store.part_get_all_for_userid(&user.get_id()).await?;
+        let mut res = HashSet::new();
+        for part in parts {
+            if part.what.is_main()? {
+                res.insert(part.what);
+            }
+        }
+
+        Ok(res)
     }
 }

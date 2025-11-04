@@ -4,7 +4,7 @@
   let promise: any;
   function ontoggle(e: any) {
     if (e.newState == "open") {
-      promise = myfetch("/api/activ/categories").then(
+      promise = myfetch("/api/part/categories").then(
         (data) => (categories = data),
       );
     }

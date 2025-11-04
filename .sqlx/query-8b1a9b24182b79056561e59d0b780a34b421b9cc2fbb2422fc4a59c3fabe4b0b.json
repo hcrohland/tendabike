@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE users\n             SET firstname = $2, name = $3, avatar = $4\n             WHERE id = $1\n             RETURNING *",
+  "query": "UPDATE users\n             SET onboarding_status = $2\n             WHERE id = $1\n             RETURNING *",
   "describe": {
     "columns": [
       {
@@ -37,9 +37,7 @@
     "parameters": {
       "Left": [
         "Int4",
-        "Text",
-        "Text",
-        "Text"
+        "Int4"
       ]
     },
     "nullable": [
@@ -51,5 +49,5 @@
       false
     ]
   },
-  "hash": "600ebc54076554439d3f84368b16ad09650148cfa18f648a453b2b2c365fea68"
+  "hash": "8b1a9b24182b79056561e59d0b780a34b421b9cc2fbb2422fc4a59c3fabe4b0b"
 }

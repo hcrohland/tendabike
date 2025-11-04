@@ -19,6 +19,8 @@
 //! their lifecycle.
 //!
 //! The `router` function returns an Axum `Router` that can be mounted in a larger application.
+use std::collections::HashSet;
+
 use axum::{
     Json, Router,
     extract::{Path, State},
@@ -66,6 +68,7 @@ pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route("/", post(post_part))
         .route("/{part}", get(get_part).put(put_part).delete(delete_part))
+        .route("/categories", get(mycats))
 }
 
 async fn get_part(
@@ -124,4 +127,9 @@ async fn put_part(
         .map(Json)?;
     store.commit().await?;
     Ok(res)
+}
+
+async fn mycats(user: RequestUser, State(store): State<DbPool>) -> ApiResult<HashSet<PartTypeId>> {
+    let mut store = store.begin().await?;
+    Ok(Part::categories(&user, &mut store).await.map(Json)?)
 }

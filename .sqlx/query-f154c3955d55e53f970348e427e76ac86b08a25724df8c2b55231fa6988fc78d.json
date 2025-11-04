@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO users (firstname, name, is_admin, avatar)\n             VALUES ($1, $2, $3, $4)\n             RETURNING *",
+  "query": "INSERT INTO users (firstname, name, is_admin, avatar, onboarding_status)\n             VALUES ($1, $2, $3, $4, $5)\n             RETURNING *",
   "describe": {
     "columns": [
       {
@@ -27,6 +27,11 @@
         "ordinal": 4,
         "name": "avatar",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "onboarding_status",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
@@ -34,7 +39,8 @@
         "Text",
         "Text",
         "Bool",
-        "Text"
+        "Text",
+        "Int4"
       ]
     },
     "nullable": [
@@ -42,8 +48,9 @@
       false,
       false,
       false,
-      true
+      true,
+      false
     ]
   },
-  "hash": "3bbf44a1c640a7762bd62271c47a631ce669a0b18f182ad987ea32e23522a25c"
+  "hash": "f154c3955d55e53f970348e427e76ac86b08a25724df8c2b55231fa6988fc78d"
 }

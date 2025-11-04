@@ -1,4 +1,4 @@
-use crate::{TbResult, User, UserId};
+use crate::{OnboardingStatus, TbResult, User, UserId};
 
 #[async_trait::async_trait]
 /// A trait representing a user store.
@@ -60,4 +60,20 @@ pub trait UserStore {
     ///
     /// Returns a `Result` containing 1 or an error if the operation fails.
     async fn user_delete(&mut self, user: &UserId) -> TbResult<usize>;
+
+    /// Updates the onboarding status for a user
+    ///
+    /// # Arguments
+    ///
+    /// * `uid` - The ID of the user to update
+    /// * `status` - The new onboarding status
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing the updated user or an error if the operation fails.
+    async fn update_onboarding_status(
+        &mut self,
+        uid: &UserId,
+        status: OnboardingStatus,
+    ) -> TbResult<User>;
 }
