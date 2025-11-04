@@ -3,19 +3,27 @@
   import GarageCard from "./GarageCard.svelte";
   import type { Garage } from "../lib/garage";
   import { actions } from "../Widgets/Actions.svelte";
-  import { user } from "../lib/store";
+  import { user, enterGarage } from "../lib/store";
+  import type { Snippet } from "svelte";
 
   interface Props {
     garages: Garage[];
+    sub?: Snippet<[Garage]>;
+    showEnterGarage?: boolean; // Only show "Enter Garage" if user has access
   }
 
-  let { garages }: Props = $props();
+  let { sub, garages, showEnterGarage = false }: Props = $props();
 </script>
 
-<div class="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+<div class="grid gap-4 grid-cols-1">
   {#each garages as garage}
     {@const isOwner = garage.owner === $user?.id}
-    <GarageCard {garage} {isOwner}>
+    <GarageCard {garage} {isOwner} {sub}>
+      {#if showEnterGarage}
+        <DropdownItem onclick={() => enterGarage(garage.id!)}>
+          Enter Garage
+        </DropdownItem>
+      {/if}
       {#if isOwner}
         <DropdownItem onclick={() => $actions.editGarage(garage)}>
           Edit Garage

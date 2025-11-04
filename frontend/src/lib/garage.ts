@@ -48,20 +48,16 @@ export class Garage {
   }
 
   async registerPart(partId: number) {
-    return await myfetch(`/api/garage/${this.id}/parts/${partId}`, "POST")
-      .then(() => {
-        // Optionally trigger a refresh of the summary
-        updateSummary();
-      })
+    return await myfetch(`/api/garage/${this.id}/parts`, "POST", {
+      part_id: partId,
+    })
+      .then((data) => updateSummary(data))
       .catch(handleError);
   }
 
   async unregisterPart(partId: number) {
     return await myfetch(`/api/garage/${this.id}/parts/${partId}`, "DELETE")
-      .then(() => {
-        // Optionally trigger a refresh of the summary
-        updateSummary();
-      })
+      .then((data) => updateSummary(data))
       .catch(handleError);
   }
 

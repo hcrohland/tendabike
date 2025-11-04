@@ -156,3 +156,44 @@ export const message = writable({
   message: "No message",
   status: "",
 });
+
+// Garage mode state
+export const garageMode = writable<{
+  active: boolean;
+  garage?: Garage;
+}>({ active: false });
+
+// Enter garage mode: replaces stores with garage-specific data
+export async function enterGarage(garageId: number) {
+  try {
+    const data = await myfetch(`/api/garage/${garageId}/details`, "GET");
+
+    // Replace stores with garage data
+    setSummary({
+      parts: data.parts,
+      attachments: data.attachments,
+      activities: [], // Hidden in garage mode
+      usages: data.usages,
+      services: data.services,
+      plans: data.plans,
+      garages: [], // Don't show garages in garage mode
+    });
+
+    // Set garage mode active
+    garageMode.set({ active: true, garage: new Garage(data.garage) });
+
+    // Navigate to bikes page to show garage bikes
+    window.location.hash = "#/cat";
+  } catch (error) {
+    handleError(error as Error);
+  }
+}
+
+// Exit garage mode: refresh data from backend
+export async function exitGarage() {
+  garageMode.set({ active: false });
+  await refresh();
+
+  // Navigate back to garages page
+  window.location.hash = "#/garages";
+}

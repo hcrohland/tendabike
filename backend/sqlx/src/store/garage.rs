@@ -164,7 +164,11 @@ impl<'c> tb_domain::GarageStore for SqlxConn<'c> {
     async fn garages_get_all_for_user(&mut self, user_id: UserId) -> TbResult<Vec<Garage>> {
         sqlx::query_as!(
             DbGarage,
-            "SELECT * FROM garages WHERE owner = $1 ORDER BY name",
+            "SELECT DISTINCT g.* FROM garages g
+             LEFT JOIN garage_subscriptions gs ON g.id = gs.garage_id AND gs.user_id = $1
+             WHERE g.owner = $1
+                OR (gs.status = 'active')
+             ORDER BY g.name",
             i32::from(user_id)
         )
         .fetch_all(&mut **self.inner())

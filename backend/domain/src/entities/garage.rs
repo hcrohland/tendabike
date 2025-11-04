@@ -48,6 +48,17 @@ pub struct Garage {
     pub created_at: OffsetDateTime,
 }
 
+/// Garage summary with related data for garage mode
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct GarageSummary {
+    pub garage: Garage,
+    pub parts: Vec<Part>,
+    pub attachments: Vec<AttachmentDetail>,
+    pub services: Vec<Service>,
+    pub plans: Vec<ServicePlan>,
+    pub usages: Vec<Usage>,
+}
+
 /// Garage with owner information for API responses
 #[serde_as]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -91,7 +102,7 @@ NewtypeDisplay! { () pub struct GarageId(); }
 NewtypeFrom! { () pub struct GarageId(i32); }
 
 impl GarageId {
-    /// Get a garage by ID, checking that the user has access to it
+    /// Get a garage by ID, checking that the user has access to it (ownership only)
     pub async fn get(
         id: i32,
         user: &dyn Person,
@@ -100,7 +111,16 @@ impl GarageId {
         GarageId(id).checkuser(user, store).await
     }
 
-    /// Check if the user owns this garage or is an admin
+    /// Get a garage by ID for read access (owner, or active subscriber)
+    pub async fn get_for_read(
+        id: i32,
+        user: &dyn Person,
+        store: &mut impl Store,
+    ) -> TbResult<GarageId> {
+        GarageId(id).check_read_access(user, store).await
+    }
+
+    /// Check if the user owns this garage
     pub async fn checkuser(
         self,
         user: &dyn Person,
@@ -109,6 +129,26 @@ impl GarageId {
         let garage = store.garage_get(self).await?;
         user.check_owner(garage.owner, "Access denied to garage".to_string())?;
         Ok(self)
+    }
+
+    /// Check if the user has read access to this garage (owner, or active subscriber)
+    pub async fn check_read_access(
+        self,
+        user: &dyn Person,
+        store: &mut impl Store,
+    ) -> TbResult<GarageId> {
+        let garage = store.garage_get(self).await?;
+        let is_owner = garage.owner == user.get_id();
+
+        if is_owner {
+            return Ok(self);
+        }
+
+        if self.has_subscription(user, store).await? {
+            return Ok(self);
+        }
+
+        Err(Error::Forbidden("Access denied to garage".into()))
     }
 
     /// Create a new garage
@@ -149,45 +189,111 @@ impl GarageId {
 
     /// Register a part (bike) to this garage
     /// Can be done by garage owner or any user with an active subscription
+    /// Automatically registers all currently attached parts (cascading registration)
+    /// Returns a Summary with the registered part and its attachments
     pub async fn register_part(
         self,
         part_id: PartId,
         user: &dyn Person,
         store: &mut impl Store,
-    ) -> TbResult<()> {
+    ) -> TbResult<crate::Summary> {
         // Verify the part exists and user owns it
         part_id.checkuser(user, store).await?;
 
         // Check if user is garage owner OR has active subscription
         let garage = store.garage_get(self).await?;
-        let is_owner = garage.owner == user.get_id() || user.is_admin();
-        let has_subscription = if !is_owner {
-            store
-                .subscription_find_active(self, user.get_id())
-                .await?
-                .is_some()
-        } else {
-            false
-        };
+        let is_owner = garage.owner == user.get_id();
+        let has_subscription = self.has_subscription(user, store).await?;
 
-        if !is_owner && !has_subscription {
+        if !(is_owner || has_subscription) {
             return Err(Error::Forbidden(
                 "You must subscribe to this garage before registering bikes".into(),
             ));
         }
 
-        store.garage_register_part(self, part_id).await
+        // Build summary to return
+        let mut hash = crate::SumHash::default();
+
+        // Register the part (bike or spare) to the garage
+        store.garage_register_part(self, part_id).await?;
+
+        // Add the registered part to the summary
+        let part = part_id.read(store).await?;
+        hash += part.clone();
+
+        // For display purposes: if this is a main part (bike), include its current attachments in the response
+        // Note: These attachments are NOT stored in garage_parts, they will be fetched dynamically later
+        let (attachments, _) = crate::Attachment::for_part_with_usage(part_id, store).await?;
+        let now = time::OffsetDateTime::now_utc();
+
+        for attachment in attachments {
+            // Only include currently attached parts (now < detached)
+            if now < attachment.a.detached {
+                // Add attached part to response summary (for UI display)
+                if let Ok(attached_part) = attachment.a.part_id.read(store).await {
+                    hash += attached_part;
+                }
+
+                // Add attachment detail to response summary
+                hash += crate::Summary {
+                    attachments: vec![attachment],
+                    ..Default::default()
+                };
+            }
+        }
+
+        // Add usage for the registered part
+        if let Ok(usage) = part.usage.read(store).await {
+            hash += crate::Summary {
+                usages: vec![usage],
+                ..Default::default()
+            };
+        }
+
+        Ok(hash.into())
+    }
+
+    async fn has_subscription(
+        self,
+        user: &dyn Person,
+        store: &mut impl Store,
+    ) -> Result<bool, Error> {
+        Ok(store
+            .subscription_find_active(self, user.get_id())
+            .await?
+            .is_some())
     }
 
     /// Unregister a part (bike) from this garage
+    /// Can be done by garage owner OR part owner
+    /// Returns an empty Summary (for consistency with other endpoints)
     pub async fn unregister_part(
         self,
         part_id: PartId,
         user: &dyn Person,
         store: &mut impl Store,
-    ) -> TbResult<()> {
-        self.checkuser(user, store).await?;
-        store.garage_unregister_part(self, part_id).await
+    ) -> TbResult<crate::Summary> {
+        // Check if user is garage owner OR part owner
+        let garage = store.garage_get(self).await?;
+        let is_garage_owner = garage.owner == user.get_id();
+
+        // Check if user owns the part
+        let is_part_owner = if let Ok(part) = part_id.read(store).await {
+            part.owner == user.get_id()
+        } else {
+            false
+        };
+
+        if !is_garage_owner && !is_part_owner {
+            return Err(Error::Forbidden(
+                "You must be the garage owner or part owner to unregister this part".into(),
+            ));
+        }
+
+        store.garage_unregister_part(self, part_id).await?;
+
+        // Return empty summary (part is removed, nothing to update)
+        Ok(crate::Summary::default())
     }
 
     /// Get all parts registered to this garage
@@ -199,15 +305,8 @@ impl GarageId {
     ) -> TbResult<Vec<PartId>> {
         // Check if user is garage owner OR has active subscription
         let garage = store.garage_get(self).await?;
-        let is_owner = garage.owner == user.get_id() || user.is_admin();
-        let has_subscription = if !is_owner {
-            store
-                .subscription_find_active(self, user.get_id())
-                .await?
-                .is_some()
-        } else {
-            false
-        };
+        let is_owner = garage.owner == user.get_id();
+        let has_subscription = self.has_subscription(user, store).await?;
 
         if !is_owner && !has_subscription {
             return Err(Error::Forbidden(
@@ -218,9 +317,92 @@ impl GarageId {
         store.garage_get_parts(self).await
     }
 
+    /// Get garage details with all related data (for garage mode)
+    /// Returns parts, attachments, services, plans, and usages (NOT activities)
+    pub async fn get_details(
+        self,
+        user: &dyn Person,
+        store: &mut impl Store,
+    ) -> TbResult<crate::GarageSummary> {
+        // Check permissions (garage owner or active subscriber)
+        let garage = store.garage_get(self).await?;
+        let is_owner = garage.owner == user.get_id();
+        let has_subscription = self.has_subscription(user, store).await?;
+
+        if !is_owner && !has_subscription {
+            return Err(Error::Forbidden(
+                "You must be the garage owner or have an active subscription to view garage details".into(),
+            ));
+        }
+
+        // Get all part IDs registered to this garage
+        let part_ids = store.garage_get_parts(self).await?;
+
+        // Fetch full part details
+        let mut parts = Vec::new();
+        for part_id in &part_ids {
+            let part = part_id.read(store).await?;
+            // Privacy filter: non-owners only see their own parts
+            if is_owner || part.owner == user.get_id() {
+                parts.push(part);
+            }
+        }
+
+        // Get attachments - DYNAMIC
+        let mut attachments = Vec::new();
+        let now = time::OffsetDateTime::now_utc();
+        for part in &mut parts {
+            // Only fetch attachments for main parts (bikes/gears)
+            let (part_attachments, _) =
+                crate::Attachment::for_part_with_usage(part.id, store).await?;
+            // Only include currently attached parts (now < detached)
+            for attachment in part_attachments {
+                if now < attachment.a.detached {
+                    attachments.push(attachment);
+                }
+            }
+        }
+
+        for attachment in &attachments {
+            parts.push(attachment.a.part_id.read(store).await?);
+        }
+
+        // Get services for these parts
+        let mut services = Vec::new();
+        for part in &parts {
+            let (part_services, _) = crate::Service::for_part_with_usage(part.id, store).await?;
+            services.extend(part_services);
+        }
+
+        // Get service plans for these parts
+        let mut plans = Vec::new();
+        for part in &parts {
+            let part_plans = crate::ServicePlan::for_part(part.id, store).await?;
+            plans.extend(part_plans);
+        }
+
+        // Get usages for these parts
+        let mut usages = Vec::new();
+        for part in &parts {
+            if let Ok(usage) = part.usage.read(store).await {
+                usages.push(usage);
+            }
+        }
+
+        Ok(crate::GarageSummary {
+            garage,
+            parts,
+            attachments,
+            services,
+            plans,
+            usages,
+        })
+    }
+
     /// Read a garage from the database
-    pub async fn read(self, user: &dyn Person, store: &mut impl GarageStore) -> TbResult<Garage> {
-        self.checkuser(user, store).await?;
+    /// Allows access for owners, and active subscribers
+    pub async fn read(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Garage> {
+        self.check_read_access(user, store).await?;
         store.garage_get(self).await
     }
 }

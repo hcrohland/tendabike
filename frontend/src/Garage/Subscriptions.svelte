@@ -14,7 +14,7 @@
     Tooltip,
   } from "flowbite-svelte";
   import { onMount } from "svelte";
-  import { myfetch, handleError } from "../lib/store";
+  import { myfetch, handleError, enterGarage } from "../lib/store";
   import { garages, Garage } from "../lib/garage";
   import { user } from "../lib/store";
   import GarageList from "./GarageList.svelte";
@@ -348,7 +348,7 @@
                               responseMessage,
                             )}
                         >
-                          Confirm Approve
+                          Approve
                         </Button>
                         <Button
                           size="xs"
@@ -359,7 +359,7 @@
                               responseMessage,
                             )}
                         >
-                          Confirm Reject
+                          Reject
                         </Button>
                         <Button
                           size="xs"
@@ -416,6 +416,13 @@
                           </Button>
                         {/if}
                       {:else if subscription.status === "active" && showMySubscriptions}
+                        <Button
+                          size="xs"
+                          color="blue"
+                          onclick={() => enterGarage(subscription.garage_id)}
+                        >
+                          Enter Garage
+                        </Button>
                         <Button
                           size="xs"
                           color="alternative"

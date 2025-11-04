@@ -3,13 +3,16 @@
   import { onMount } from "svelte";
   import GarageList from "./GarageList.svelte";
   import Subscriptions from "./Subscriptions.svelte";
-  import { garages } from "../lib/garage";
+  import { Garage, garages } from "../lib/garage";
   import { actions } from "../Widgets/Actions.svelte";
+  import { user } from "../lib/store";
 
   let activeTab = $state<string>("my-subscriptions");
 
-  // Get user's garages from the store
-  let myGarages = $derived(Object.values($garages));
+  // Get all user's garages from the store (owned + subscribed)
+  let myGarages = $derived(
+    Object.values($garages).filter((g) => g.owner === $user?.id),
+  );
 
   onMount(() => {
     // Garages are loaded via the summary endpoint automatically
@@ -48,29 +51,14 @@
             >
               Your Garages
             </h2>
-            <GarageList garages={myGarages} />
-          </div>
-
-          <!-- Pending Subscription Requests -->
-          <div>
-            <h2
-              class="mb-4 text-xl font-semibold text-gray-900 dark:text-white"
-            >
-              Pending Subscription Requests
-            </h2>
-            {#each myGarages as garage}
-              <div class="mb-6">
-                <h3
-                  class="mb-3 text-lg font-medium text-gray-800 dark:text-gray-200"
-                >
-                  {garage.name}
-                </h3>
+            <GarageList garages={myGarages} showEnterGarage={true}>
+              {#snippet sub(garage: Garage)}
                 <Subscriptions
                   garageId={garage.id}
                   showMySubscriptions={false}
                 />
-              </div>
-            {/each}
+              {/snippet}
+            </GarageList>
           </div>
         {/if}
       </div>

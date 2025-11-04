@@ -333,7 +333,7 @@ async fn shift_subparts(
 }
 
 /// find all subparts which are attached to target at self.time
-async fn subparts(
+pub(crate) async fn subparts(
     part: PartId,
     gear: PartId,
     time: OffsetDateTime,

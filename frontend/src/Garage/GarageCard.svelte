@@ -8,10 +8,11 @@
   interface Props {
     garage: Garage;
     isOwner?: boolean;
+    sub?: Snippet<[Garage]>;
     children?: Snippet;
   }
 
-  let { garage, isOwner = false, children }: Props = $props();
+  let { sub, garage, isOwner = false, children }: Props = $props();
 
   // Get bikes registered to this garage
   let partsCount = $state(0);
@@ -52,7 +53,7 @@
   });
 </script>
 
-<Card class="relative">
+<Card size="xl" class="relative col-auto p-4">
   {#if children}
     <div class="absolute top-4 right-4">
       <DotsVerticalOutline class="cursor-pointer" />
@@ -94,5 +95,8 @@
     <div class="text-xs text-gray-500 dark:text-gray-400">
       Created {new Date(garage.created_at).toLocaleDateString()}
     </div>
+    {#if sub}
+      {@render sub(garage)}
+    {/if}
   </div>
 </Card>

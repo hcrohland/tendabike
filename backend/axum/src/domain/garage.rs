@@ -70,6 +70,7 @@ pub(super) fn router() -> Router<AppState> {
             "/{garage}",
             get(get_garage).put(update_garage).delete(delete_garage),
         )
+        .route("/{garage}/details", get(get_garage_details))
         .route("/{garage}/parts", get(get_garage_parts).post(register_part))
         .route("/{garage}/parts/{part}", delete(unregister_part))
         // Subscriptions
@@ -116,7 +117,7 @@ async fn get_garage(
     State(pool): State<DbPool>,
 ) -> ApiResult<Garage> {
     let mut store = pool.begin().await?;
-    let garage_id = GarageId::get(garage_id, &user, &mut store).await?;
+    let garage_id = GarageId::get_for_read(garage_id, &user, &mut store).await?;
     Ok(garage_id.read(&user, &mut store).await.map(Json)?)
 }
 
@@ -147,13 +148,24 @@ async fn delete_garage(
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn get_garage_details(
+    Path(garage_id): Path<i32>,
+    user: RequestUser,
+    State(pool): State<DbPool>,
+) -> ApiResult<tb_domain::GarageSummary> {
+    let mut store = pool.begin().await?;
+    let garage_id = GarageId::get_for_read(garage_id, &user, &mut store).await?;
+    let summary = garage_id.get_details(&user, &mut store).await?;
+    Ok(Json(summary))
+}
+
 async fn get_garage_parts(
     Path(garage_id): Path<i32>,
     user: RequestUser,
     State(pool): State<DbPool>,
 ) -> ApiResult<Vec<PartId>> {
     let mut store = pool.begin().await?;
-    let garage_id = GarageId::get(garage_id, &user, &mut store).await?;
+    let garage_id = GarageId::get_for_read(garage_id, &user, &mut store).await?;
     Ok(garage_id.get_parts(&user, &mut store).await.map(Json)?)
 }
 
@@ -162,27 +174,27 @@ async fn register_part(
     user: RequestUser,
     State(pool): State<DbPool>,
     Json(RegisterPartRequest { part_id }): Json<RegisterPartRequest>,
-) -> Result<StatusCode, AppError> {
+) -> ApiResult<tb_domain::Summary> {
     let mut store = pool.begin().await?;
     let garage_id = GarageId::get(garage_id, &user, &mut store).await?;
     let part_id = PartId::get(part_id, &user, &mut store).await?;
-    garage_id.register_part(part_id, &user, &mut store).await?;
+    let summary = garage_id.register_part(part_id, &user, &mut store).await?;
     store.commit().await?;
-    Ok(StatusCode::NO_CONTENT)
+    Ok(Json(summary))
 }
 
 async fn unregister_part(
     Path((garage_id, part_id)): Path<(i32, i32)>,
     user: RequestUser,
     State(pool): State<DbPool>,
-) -> Result<StatusCode, AppError> {
+) -> ApiResult<tb_domain::Summary> {
     let mut store = pool.begin().await?;
     let garage_id = GarageId::get(garage_id, &user, &mut store).await?;
-    garage_id
+    let summary = garage_id
         .unregister_part(part_id.into(), &user, &mut store)
         .await?;
     store.commit().await?;
-    Ok(StatusCode::NO_CONTENT)
+    Ok(Json(summary))
 }
 
 // Search garages
