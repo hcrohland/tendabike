@@ -27,7 +27,7 @@
       <MainCard {part} />
     {:else}
       {#if $category.activities($activities).length == 0}
-        We did not find any {$category.name} activities on Strava (yet).
+        We did not find any {$category.name} on Strava (yet).
       {:else}
         You have no {$category.name} assigned to any activity on Strava. Please do
         so to get started.

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT * FROM users WHERE id = $1",
+  "query": "SELECT id, name, firstname, is_admin, avatar, onboarding_status FROM users WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -27,6 +27,11 @@
         "ordinal": 4,
         "name": "avatar",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "onboarding_status",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
@@ -39,8 +44,9 @@
       false,
       false,
       false,
-      true
+      true,
+      false
     ]
   },
-  "hash": "843923b9a0257cf80f1dff554e7dc8fdfc05f489328e8376513124dfb42996e3"
+  "hash": "512d9fc4ef27118491218e1d91fc77ae55cb607e142a7acc792f821c0ea31c7d"
 }

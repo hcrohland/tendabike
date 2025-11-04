@@ -19,6 +19,7 @@
     updateSummary,
     user,
   } from "./lib/store";
+  import { activities } from "./lib/activity";
   import Sport from "./Widgets/Sport.svelte";
   import { category } from "./lib/types";
   import { querystring } from "svelte-spa-router";
@@ -61,6 +62,17 @@
     clearInterval(hook_timer);
     hook_promise = refresh().then(poll);
   }
+
+  async function triggerHistoricSync() {
+    try {
+      const updatedUser = await myfetch("/strava/onboarding/sync", "POST");
+      $user = updatedUser;
+      fullrefresh();
+    } catch (e) {
+      handleError(e as Error);
+    }
+  }
+
   let activeUrl = $derived("/#" + $location);
 </script>
 
@@ -75,7 +87,16 @@
     &nbsp; Tend a {$category.name}
   </NavBrand>
   {#if $user}
-    <div class="flex items-center md:order-2">
+    <div class="flex items-center gap-4 md:order-2">
+      {#if ($user.onboarding_status === "pending" || $user.onboarding_status === "initial_sync_postponed") && Object.keys($activities).length === 0}
+        <button
+          class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-4 py-2"
+          onclick={triggerHistoricSync}
+          type="button"
+        >
+          Import Activities
+        </button>
+      {/if}
       <div id="user">
         {#await hook_promise}
           <Spinner size="10" />
@@ -102,6 +123,12 @@
             <DropdownItem onclick={() => (openGarmin = true)}>
               With CSV File
             </DropdownItem>
+            {#if $user.onboarding_status === "initial_sync_postponed"}
+              <DropdownDivider />
+              <DropdownItem onclick={triggerHistoricSync}>
+                Import Historic Activities
+              </DropdownItem>
+            {/if}
           </Dropdown>
           <Garmin bind:open={openGarmin} />
         {/await}

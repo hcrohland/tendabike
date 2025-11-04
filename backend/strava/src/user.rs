@@ -138,7 +138,7 @@ impl StravaUser {
         info!("creating new user id {user:?}");
 
         let user = store.stravauser_new(user).await?;
-        event::insert_sync(user.id, 0, false, store).await?;
+        // Note: Automatic sync removed - user must manually trigger initial activity import
         Ok(user)
     }
 

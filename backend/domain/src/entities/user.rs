@@ -45,6 +45,53 @@ pub struct UserId(i32);
 NewtypeDisplay! { () pub struct UserId(); }
 NewtypeFrom! { () pub struct UserId(i32); }
 
+/// Onboarding status enum for tracking user setup progress
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[repr(i32)]
+pub enum OnboardingStatus {
+    /// User has not completed initial activity sync
+    Pending = 0,
+    /// User chose to postpone initial activity sync
+    InitialSyncPostponed = 2,
+    /// User has completed onboarding
+    Completed = 99,
+}
+
+impl std::convert::TryFrom<i32> for OnboardingStatus {
+    type Error = Error;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Pending),
+            2 => Ok(Self::InitialSyncPostponed),
+            99 => Ok(Self::Completed),
+            _ => Err(Error::BadRequest(format!(
+                "Invalid onboarding status: {}",
+                value
+            ))),
+        }
+    }
+}
+
+impl From<OnboardingStatus> for i32 {
+    fn from(status: OnboardingStatus) -> i32 {
+        status as i32
+    }
+}
+
+impl OnboardingStatus {
+    pub fn is_initial_sync_completed(&self) -> bool {
+        matches!(self, Self::Completed)
+    }
+}
+
+impl Default for OnboardingStatus {
+    fn default() -> Self {
+        Self::Pending
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct User {
     pub id: UserId,
@@ -52,6 +99,7 @@ pub struct User {
     pub firstname: String,
     pub avatar: Option<String>,
     pub is_admin: bool,
+    pub onboarding_status: OnboardingStatus,
 }
 
 #[derive(Debug, Serialize)]
