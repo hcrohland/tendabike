@@ -1,8 +1,5 @@
 use anyhow::Context;
-use async_session::{
-    MemoryStore, Session, SessionStore, async_trait,
-    log::{debug, trace},
-};
+use async_session::{MemoryStore, Session, SessionStore};
 use axum::{
     RequestPartsExt,
     extract::{FromRef, FromRequestParts},
@@ -10,6 +7,7 @@ use axum::{
 };
 use axum_extra::TypedHeader;
 use http::{StatusCode, request::Parts};
+use log::{debug, trace};
 use oauth2::{
     AccessToken, RefreshToken, StandardTokenResponse, TokenResponse, basic::BasicTokenType, reqwest,
 };
@@ -203,7 +201,7 @@ impl Person for RequestUser {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl StravaPerson for RequestUser {
     fn strava_id(&self) -> StravaId {
         self.strava_id

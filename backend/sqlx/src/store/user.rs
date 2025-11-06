@@ -56,7 +56,7 @@ impl From<DbUser> for User {
     }
 }
 
-#[async_session::async_trait]
+#[async_trait::async_trait]
 impl<'c> tb_domain::UserStore for SqlxConn<'c> {
     async fn get(&mut self, uid: UserId) -> TbResult<User> {
         sqlx::query_as!(

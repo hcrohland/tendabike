@@ -3,13 +3,12 @@ This file defines the StravaStore trait, which extends the tb_domain::traits::St
 and provides additional methods for interacting with Strava data.
 */
 
-use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 
 use crate::{StravaId, StravaUser, event::Event};
 use tb_domain::{Person, TbResult, UserId};
 
-#[async_trait]
+#[async_trait::async_trait]
 pub trait StravaStore: tb_domain::Store + Send {
     /// Returns the user ID associated with the given Strava ID.
     ///
@@ -213,7 +212,7 @@ pub trait StravaStore: tb_domain::Store + Send {
     async fn stravauser_delete(&mut self, user: UserId) -> TbResult<usize>;
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 pub trait StravaPerson: Person {
     /// Returns the Strava ID of the user.
     ///

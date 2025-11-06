@@ -49,11 +49,11 @@
 //! only accessible to users with the `admin` role.
 //!
 
-use async_session::log::{info, trace};
 use axum::{
     Json,
     extract::{Path, Query, State},
 };
+use log::{info, trace};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::{ApiResult, AxumAdmin, DbPool, RequestUser};
