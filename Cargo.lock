@@ -2641,6 +2641,7 @@ version = "0.7.0"
 dependencies = [
  "anyhow",
  "dotenvy",
+ "log",
  "tb_axum",
  "tb_domain",
  "tb_sqlx",
