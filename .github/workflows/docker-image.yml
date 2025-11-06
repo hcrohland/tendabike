@@ -41,6 +41,4 @@ jobs:
         file: Dockerfile
         tags: ghcr.io/hcrohland/tendabike:${{ env.TAG }}
         context: .
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
       
