@@ -5,8 +5,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use log::error;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    error!("trigger build");
     dotenvy::dotenv().ok();
 
     let db = tb_sqlx::DbPool::new().await?;
