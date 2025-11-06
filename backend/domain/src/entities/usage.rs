@@ -205,7 +205,7 @@ mod tests {
 
     struct MemStore(std::collections::HashMap<UsageId, Usage>);
 
-    #[async_session::async_trait]
+    #[async_trait::async_trait]
     impl UsageStore for MemStore {
         async fn get(&mut self, id: UsageId) -> TbResult<Option<Usage>> {
             Ok(self.0.get(&id).cloned())

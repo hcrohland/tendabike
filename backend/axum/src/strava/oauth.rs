@@ -8,11 +8,8 @@
 //! Finally, it defines the `COOKIE_NAME` constant which is used to store the session cookie.
 
 use anyhow::Context;
-use async_session::{
-    MemoryStore, Session, SessionStore, base64, hmac,
-    log::{debug, warn},
-    sha2,
-};
+use async_session::{MemoryStore, Session, SessionStore};
+
 use axum::{
     extract::{Query, State},
     http::{HeaderMap, header::SET_COOKIE},
@@ -20,6 +17,7 @@ use axum::{
 };
 use axum_extra::TypedHeader;
 use http::StatusCode;
+use log::{debug, warn};
 use oauth2::{
     AuthUrl, AuthorizationCode, Client, ClientId, ClientSecret, CsrfToken, EndpointNotSet,
     EndpointSet, ExtraTokenFields, RedirectUrl, RevocationUrl, Scope, StandardRevocableToken,
@@ -135,19 +133,23 @@ static CSRF_KEY: LazyLock<Vec<u8>> =
     LazyLock::new(|| (0..16).map(|_| rand::random::<u8>()).collect());
 
 fn hmac_signature(key: &[u8], msg: &str) -> String {
-    use hmac::{Hmac, Mac, NewMac};
+    use base64::prelude::*;
+    use hmac::{Hmac, Mac};
+
     type HmacSha256 = Hmac<sha2::Sha256>;
 
     let mut mac = HmacSha256::new_from_slice(key).unwrap();
     mac.update(msg.as_bytes());
     let signature = mac.finalize().into_bytes();
 
-    base64::encode(signature)
+    BASE64_STANDARD.encode(signature)
 }
 
 fn gentoken(path: String) -> CsrfToken {
+    use base64::prelude::*;
+
     let random: Vec<u8> = (0..16).map(|_| rand::random()).collect();
-    let random = base64::encode_config(random, base64::URL_SAFE_NO_PAD);
+    let random = BASE64_URL_SAFE_NO_PAD.encode(random);
     let msg = path + "+" + &random;
     let sig = hmac_signature(&CSRF_KEY, &msg);
 

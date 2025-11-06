@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use async_session::{log::error, serde_json};
+use log::error;
 use oauth2::RefreshToken;
 use sqlx::FromRow;
 
@@ -113,7 +113,7 @@ impl From<DbEvent> for Event {
     }
 }
 
-#[async_session::async_trait]
+#[async_trait::async_trait]
 impl<'c> tb_strava::StravaStore for SqlxConn<'c> {
     async fn stravaid_get_user_id(&mut self, who: i32) -> TbResult<i32> {
         sqlx::query_scalar!("SELECT id FROM strava_users WHERE tendabike_id = $1", who)

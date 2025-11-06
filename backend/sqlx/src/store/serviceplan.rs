@@ -92,7 +92,7 @@ impl From<DbServicePlan> for ServicePlan {
     }
 }
 
-#[async_session::async_trait]
+#[async_trait::async_trait]
 impl<'c> tb_domain::ServicePlanStore for SqlxConn<'c> {
     async fn create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
         let plan = DbServicePlan::from(plan);

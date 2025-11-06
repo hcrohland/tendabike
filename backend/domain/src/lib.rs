@@ -17,7 +17,7 @@
 
 */
 
-use async_session::log::{debug, info, trace, warn};
+use log::{debug, info, trace, warn};
 
 mod error;
 pub use error::{Error, TbResult};

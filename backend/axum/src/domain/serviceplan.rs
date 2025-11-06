@@ -20,13 +20,13 @@
 //!
 //! The `router` function returns an Axum `Router` that can be mounted in a larger application.
 
-use async_session::log::trace;
 use axum::{
     Json, Router,
     extract::{Path, State},
     routing::{delete, post},
 };
 use http::StatusCode;
+use log::trace;
 
 use crate::{ApiResult, DbPool, RequestUser, appstate::AppState, error::AppError};
 use tb_domain::{Service, ServicePlan, ServicePlanId, Store};

@@ -6,8 +6,8 @@
 //! The module defines two async functions `attach_rt` and `detach_rt` that handle the requests to the API endpoints.
 //! The `router` function creates a new router and maps the API endpoints to their respective functions.
 
-use async_session::log::debug;
 use axum::{Json, Router, extract::State, routing::post};
+use log::debug;
 use serde::Deserialize;
 use time::OffsetDateTime;
 

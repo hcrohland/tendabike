@@ -15,7 +15,7 @@
 //!
 
 use anyhow::Context;
-use async_session::log::{debug, info, trace, warn};
+use log::{debug, info, trace, warn};
 use serde_derive::{Deserialize, Serialize};
 
 use tb_domain::*;

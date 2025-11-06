@@ -13,9 +13,11 @@ sqlx = { version = "0.8", features = [
     "uuid",
     "macros",
 ] }
-async-session = { workspace = true }
+async-trait = { workspace = true }
+log = { workspace = true }
 anyhow = { workspace = true }
 time = { workspace = true }
+serde_json = { workspace = true }
 tb_strava = { workspace = true }
 tb_domain = { workspace = true }
 uuid = { workspace = true }

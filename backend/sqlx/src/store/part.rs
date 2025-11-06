@@ -83,7 +83,7 @@ impl From<Part> for DbPart {
     }
 }
 
-#[async_session::async_trait]
+#[async_trait::async_trait]
 impl<'c> tb_domain::PartStore for SqlxConn<'c> {
     async fn partid_get_part(&mut self, pid: PartId) -> TbResult<Part> {
         sqlx::query_as!(DbPart, "SELECT * FROM parts WHERE id = $1", i32::from(pid))
