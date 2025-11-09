@@ -243,7 +243,8 @@ pub(crate) async fn login_authorized(
     };
 
     // Build the cookie
-    let cookie = format!("{COOKIE_NAME}={cookie}; SameSite=Lax; Path=/");
+    let cookie =
+        format!("{COOKIE_NAME}={cookie}; httpOnly=true; Secure=true; SameSite=Strict; Path=/");
 
     // Set cookie
     let mut headers = HeaderMap::new();
