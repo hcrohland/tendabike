@@ -9,12 +9,6 @@
   let { checked = $bindable(), children, ...rest }: Props = $props();
 </script>
 
-<Toggle
-  size="small"
-  name="customSwitch"
-  classes={{ span: "-z-10" }}
-  bind:checked
-  {...rest}
->
+<Toggle size="small" bind:checked {...rest}>
   {@render children?.()}
 </Toggle>
