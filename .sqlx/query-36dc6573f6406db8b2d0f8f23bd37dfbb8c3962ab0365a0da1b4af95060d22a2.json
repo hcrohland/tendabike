@@ -57,6 +57,11 @@
         "ordinal": 10,
         "name": "source",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "notes",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -75,7 +80,8 @@
       false,
       true,
       false,
-      true
+      true,
+      false
     ]
   },
   "hash": "36dc6573f6406db8b2d0f8f23bd37dfbb8c3962ab0365a0da1b4af95060d22a2"

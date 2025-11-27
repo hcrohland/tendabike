@@ -15,6 +15,7 @@ export class Part {
   last_used: Date;
   disposed_at?: Date;
   usage: string;
+  notes: string;
 
   constructor(data: any) {
     this.id = data.id;
@@ -29,6 +30,7 @@ export class Part {
       ? new Date(data.disposed_at)
       : undefined;
     this.usage = data.usage;
+    this.notes = data.notes || "";
   }
 
   async create() {

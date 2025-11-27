@@ -1,27 +1,50 @@
 <script lang="ts">
   // import { slide } from 'svelte/transition';
-  import { Card } from "flowbite-svelte";
+  import { Card, Textarea, Button } from "flowbite-svelte";
+  import { EditOutline } from "flowbite-svelte-icons";
   import { link, push } from "svelte-spa-router";
   import { Part } from "../lib/part";
-  import { fmtDate, fmtNumber, fmtSeconds } from "../lib/store";
+  import { fmtDate, fmtNumber, fmtSeconds, handleError } from "../lib/store";
   import { types } from "../lib/types";
   import { Usage, usages } from "../lib/usage";
 
   interface Props {
     part: Part;
-    show_link?: boolean;
+    summary?: boolean;
     children?: import("svelte").Snippet;
   }
 
-  let { part, show_link = false, children }: Props = $props();
+  let { part, summary = false, children }: Props = $props();
 
   let usage = $derived($usages[part.usage] ? $usages[part.usage] : new Usage());
+  let editingNotes = $state(false);
+  let notesValue = $state("");
 
   function model(part: Part) {
     if (part.model == "" && part.vendor == "") {
       return "unknown model";
     } else {
       return part.vendor + " " + part.model;
+    }
+  }
+
+  function startEditNotes() {
+    notesValue = part.notes;
+    editingNotes = true;
+  }
+
+  function cancelEditNotes() {
+    editingNotes = false;
+    notesValue = "";
+  }
+
+  async function saveNotes() {
+    try {
+      const updatedPart = new Part({ ...part, notes: notesValue });
+      await updatedPart.update();
+      editingNotes = false;
+    } catch (e: any) {
+      handleError(e);
     }
   }
 </script>
@@ -31,12 +54,12 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class={"text-xl bg-gray-200 dark:bg-gray-700 p-4" +
-      (show_link
+      (summary
         ? " hover:bg-gray-300 dark:hover:bg-gray-500 cursor-pointer"
         : "")}
-    onclick={() => show_link && push("/part/" + part.id)}
+    onclick={() => summary && push("/part/" + part.id)}
   >
-    {#if show_link}
+    {#if summary}
       <a href="/part/{part.id}" use:link class="text-decoration-none">
         {part.name}
       </a>
@@ -86,5 +109,36 @@
         <span class="param">{fmtNumber(usage.energy)}</span> kiloJoules of energy
       {/if}
     </p>
+    {#if !summary}
+      <div class="mt-3">
+        <div class="flex items-center gap-2 mb-2">
+          <strong>Notes:</strong>
+          {#if !editingNotes}
+            <EditOutline
+              class="w-4 h-4 cursor-pointer text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              onclick={startEditNotes}
+            />
+          {/if}
+        </div>
+        {#if editingNotes}
+          <Textarea
+            bind:value={notesValue}
+            placeholder="Add any notes about this part..."
+            rows={3}
+            class="mb-2 w-full"
+          />
+          <div class="flex gap-2">
+            <Button size="sm" onclick={saveNotes}>Save</Button>
+            <Button size="sm" color="alternative" onclick={cancelEditNotes}>
+              Cancel
+            </Button>
+          </div>
+        {:else if part.notes}
+          <p class="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+            {part.notes}
+          </p>
+        {/if}
+      </div>
+    {/if}
   </div>
 </Card>

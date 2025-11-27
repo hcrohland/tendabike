@@ -46,11 +46,12 @@ NewtypeDisplay! { () pub struct UserId(); }
 NewtypeFrom! { () pub struct UserId(i32); }
 
 /// Onboarding status enum for tracking user setup progress
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 #[repr(i32)]
 pub enum OnboardingStatus {
     /// User has not completed initial activity sync
+    #[default]
     Pending = 0,
     /// User chose to postpone initial activity sync
     InitialSyncPostponed = 2,
@@ -83,12 +84,6 @@ impl From<OnboardingStatus> for i32 {
 impl OnboardingStatus {
     pub fn is_initial_sync_completed(&self) -> bool {
         matches!(self, Self::Completed)
-    }
-}
-
-impl Default for OnboardingStatus {
-    fn default() -> Self {
-        Self::Pending
     }
 }
 

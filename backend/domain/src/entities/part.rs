@@ -70,6 +70,8 @@ pub struct Part {
     /// the usage tracker
     pub usage: UsageId,
     pub source: Option<String>,
+    /// notes about the part
+    pub notes: String,
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -194,6 +196,7 @@ impl PartId {
         vendor: String,
         model: String,
         purchase: OffsetDateTime,
+        notes: String,
         user: &dyn Person,
         store: &mut impl PartStore,
     ) -> TbResult<Part> {
@@ -207,6 +210,7 @@ impl PartId {
             vendor,
             model,
             purchase,
+            notes,
             ..part
         };
         store.part_update(part).await
@@ -273,6 +277,7 @@ impl Part {
         what: PartTypeId,
         source: Option<String>,
         purchase: OffsetDateTime,
+        notes: String,
         user: &dyn Person,
         store: &mut impl PartStore,
     ) -> TbResult<Part> {
@@ -287,6 +292,7 @@ impl Part {
                 model,
                 purchase,
                 source,
+                notes,
                 UsageId::new(),
                 user.get_id(),
             )
