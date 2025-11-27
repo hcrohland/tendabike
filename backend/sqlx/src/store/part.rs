@@ -19,6 +19,7 @@ struct DbPart {
     disposed_at: Option<OffsetDateTime>,
     usage: uuid::Uuid,
     source: Option<String>,
+    notes: String,
 }
 
 impl From<DbPart> for Part {
@@ -35,6 +36,7 @@ impl From<DbPart> for Part {
             disposed_at,
             usage,
             source,
+            notes,
         } = db;
         Self {
             id: id.into(),
@@ -48,6 +50,7 @@ impl From<DbPart> for Part {
             disposed_at,
             usage: usage.into(),
             source,
+            notes,
         }
     }
 }
@@ -66,6 +69,7 @@ impl From<Part> for DbPart {
             disposed_at,
             usage,
             source,
+            notes,
         } = value;
         Self {
             id: id.into(),
@@ -79,6 +83,7 @@ impl From<Part> for DbPart {
             disposed_at,
             usage: usage.into(),
             source,
+            notes,
         }
     }
 }
@@ -113,13 +118,14 @@ impl<'c> tb_domain::PartStore for SqlxConn<'c> {
         in_model: String,
         in_purchase: OffsetDateTime,
         in_source: Option<String>,
+        in_notes: String,
         in_usage: UsageId,
         in_owner: UserId,
     ) -> TbResult<Part> {
         sqlx::query_as!(
             DbPart,
-            "INSERT INTO parts (owner, what, name, vendor, model, purchase, last_used, usage, source)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            "INSERT INTO parts (owner, what, name, vendor, model, purchase, last_used, usage, source, notes)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
              RETURNING *",
             i32::from(in_owner),
             i32::from(in_what),
@@ -129,7 +135,8 @@ impl<'c> tb_domain::PartStore for SqlxConn<'c> {
             in_purchase,
             in_purchase, // last_used = purchase
             Uuid::from(in_usage),
-            in_source
+            in_source,
+            in_notes
         )
         .fetch_one(&mut **self.inner())
         .await
@@ -143,7 +150,7 @@ impl<'c> tb_domain::PartStore for SqlxConn<'c> {
             DbPart,
             "UPDATE parts
              SET owner = $2, what = $3, name = $4, vendor = $5, model = $6,
-                 purchase = $7, last_used = $8, disposed_at = $9, usage = $10, source = $11
+                 purchase = $7, last_used = $8, disposed_at = $9, usage = $10, source = $11, notes = $12
              WHERE id = $1
              RETURNING *",
             part.id,
@@ -156,7 +163,8 @@ impl<'c> tb_domain::PartStore for SqlxConn<'c> {
             part.last_used,
             part.disposed_at,
             part.usage,
-            part.source
+            part.source,
+            part.notes
         )
         .fetch_one(&mut **self.inner())
         .await

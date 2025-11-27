@@ -45,6 +45,7 @@ pub trait PartStore {
         model: String,
         purchase: OffsetDateTime,
         source: Option<String>,
+        notes: String,
         usage: UsageId,
         owner: UserId,
     ) -> TbResult<Part>;

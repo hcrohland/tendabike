@@ -10,6 +10,6 @@
   $: planlist = plans_for_part_and_subtypes($attachments, $plans, part);
 </script>
 
-<GearCard {part} show_link>
+<GearCard {part} summary>
   <PlanBadge {planlist} />
 </GearCard>

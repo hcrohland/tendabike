@@ -50,6 +50,8 @@ pub struct NewPart {
     pub model: String,
     #[serde_as(as = "Rfc3339")]
     pub purchase: OffsetDateTime,
+    /// Notes about the part
+    pub notes: String,
 }
 
 #[serde_as]
@@ -62,6 +64,8 @@ pub struct ChangePart {
     pub model: String,
     #[serde_as(as = "Rfc3339")]
     pub purchase: OffsetDateTime,
+    /// Notes about the part
+    pub notes: String,
 }
 
 pub(super) fn router() -> Router<AppState> {
@@ -89,10 +93,14 @@ async fn post_part(
         vendor,
         model,
         purchase,
+        notes,
     }): Json<NewPart>,
 ) -> Result<(StatusCode, Json<Part>), AppError> {
     let mut store = store.begin().await?;
-    let part = Part::create(name, vendor, model, what, None, purchase, &user, &mut store).await?;
+    let part = Part::create(
+        name, vendor, model, what, None, purchase, notes, &user, &mut store,
+    )
+    .await?;
     store.commit().await?;
     Ok((StatusCode::CREATED, Json(part)))
 }
@@ -117,12 +125,13 @@ async fn put_part(
         vendor,
         model,
         purchase,
+        notes,
     }): Json<ChangePart>,
 ) -> ApiResult<Part> {
     let mut store = store.begin().await?;
 
     let res = part
-        .change(name, vendor, model, purchase, &user, &mut store)
+        .change(name, vendor, model, purchase, notes, &user, &mut store)
         .await
         .map(Json)?;
     store.commit().await?;

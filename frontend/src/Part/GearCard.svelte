@@ -9,11 +9,11 @@
 
   interface Props {
     part: Part;
-    show_link?: boolean;
+    summary?: boolean;
     children?: import("svelte").Snippet;
   }
 
-  let { part, show_link = false, children }: Props = $props();
+  let { part, summary = false, children }: Props = $props();
 
   let usage = $derived($usages[part.usage] ? $usages[part.usage] : new Usage());
 
@@ -31,12 +31,12 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class={"text-xl bg-gray-200 dark:bg-gray-700 p-4" +
-      (show_link
+      (summary
         ? " hover:bg-gray-300 dark:hover:bg-gray-500 cursor-pointer"
         : "")}
-    onclick={() => show_link && push("/part/" + part.id)}
+    onclick={() => summary && push("/part/" + part.id)}
   >
-    {#if show_link}
+    {#if summary}
       <a href="/part/{part.id}" use:link class="text-decoration-none">
         {part.name}
       </a>
@@ -86,5 +86,13 @@
         <span class="param">{fmtNumber(usage.energy)}</span> kiloJoules of energy
       {/if}
     </p>
+    {#if !summary && part.notes}
+      <div class="mt-3">
+        <strong>Notes:</strong>
+        <p class="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+          {part.notes}
+        </p>
+      </div>
+    {/if}
   </div>
 </Card>
