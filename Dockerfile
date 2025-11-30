@@ -1,4 +1,4 @@
-FROM rust:alpine AS base
+FROM rust:alpine AS build-engine
 # We only pay the installation cost once, 
 # it will be cached from the second build onwards
 # To ensure a reproducible build consider pinning 
@@ -7,26 +7,24 @@ FROM rust:alpine AS base
 RUN apk add  musl-dev
 
 WORKDIR /app
-
-ENV DEBIAN_FRONTEND=noninteractive
 # install nighlty toolchain
 RUN rustup set profile minimal
 # install dependencies
-RUN cargo install cargo-chef
-FROM base AS planner
-# do not copy frontend!
+# RUN cargo install cargo-chef
+# FROM base AS planner
+# # do not copy frontend!
 
-COPY Cargo.toml Cargo.lock ./
-COPY backend backend/
+# COPY Cargo.toml Cargo.lock ./
+# COPY backend backend/
 
-RUN cargo chef prepare --recipe-path recipe.json
+# RUN cargo chef prepare --recipe-path recipe.json
 
-FROM base AS cacher
-COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+# FROM base AS cacher
+# COPY --from=planner /app/recipe.json recipe.json
+# RUN cargo chef cook --release --recipe-path recipe.json
 
 
-FROM cacher AS build-engine
+# FROM cacher AS build-engine
 
 
 ENV SQLX_OFFLINE=true

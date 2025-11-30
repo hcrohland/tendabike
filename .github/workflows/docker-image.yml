@@ -33,7 +33,7 @@ jobs:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ github.token }}
-    - 
+    -
       name: Build and push
       uses: docker/build-push-action@v5
       with:
@@ -41,6 +41,4 @@ jobs:
         file: Dockerfile
         tags: ghcr.io/hcrohland/tendabike:${{ env.TAG }}
         context: .
-        cache-from: type=gha
-        cache-to: type=gha
       

@@ -9,12 +9,12 @@
 //! Finally, it defines a type alias `ApiResult<T>` for `Result<Json<T>, AppError>`.
 //!
 
-use async_session::log::{debug, error, info, warn};
 use axum::{
     Json,
     response::{IntoResponse, Response},
 };
 use http::StatusCode;
+use log::{debug, error, info, warn};
 
 use tb_domain::Error;
 

@@ -13,7 +13,12 @@ tb_sqlx = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 
+hmac = "*"
+sha2 = "*"
+base64 = "*"
+async-trait = { workspace = true }
 async-session = { workspace = true }
+log = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
 headers = { workspace = true }
 http = { workspace = true }

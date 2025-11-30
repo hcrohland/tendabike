@@ -1,5 +1,5 @@
 use async_recursion::async_recursion;
-use async_session::log::error;
+use log::error;
 use std::collections::HashMap;
 
 use crate::activity::StravaActivity;

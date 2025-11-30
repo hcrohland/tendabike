@@ -10,9 +10,9 @@ mod serviceplan;
 mod usage;
 mod user;
 
-#[async_session::async_trait]
+#[async_trait::async_trait]
 impl<'c> Store for SqlxConn<'c> {
-    async fn commit(mut self) -> TbResult<()> {
+    async fn commit(self) -> TbResult<()> {
         self.into_inner()
             .commit()
             .await

@@ -71,8 +71,11 @@ pub(crate) async fn into_partid(
     let model = gear.model_name.unwrap_or("".into());
     let name = gear.name;
     let purchase = OffsetDateTime::now_utc();
-    let tbid = Part::create(name, vendor, model, what, source, purchase, user, store)
-        .await?
-        .id;
+    let notes = String::new();
+    let tbid = Part::create(
+        name, vendor, model, what, source, purchase, notes, user, store,
+    )
+    .await?
+    .id;
     Ok(tbid)
 }

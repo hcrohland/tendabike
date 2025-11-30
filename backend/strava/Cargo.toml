@@ -8,8 +8,8 @@ edition = { workspace = true }
 [dependencies]
 tb_domain = { workspace = true }
 
+log = { workspace = true }
 newtype_derive = { workspace = true }
-async-session = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }

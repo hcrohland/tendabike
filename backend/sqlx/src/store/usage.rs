@@ -1,4 +1,4 @@
-use async_session::log::debug;
+use log::debug;
 use sqlx::{Acquire, FromRow};
 use std::borrow::Borrow;
 use uuid::Uuid;
@@ -69,7 +69,7 @@ impl From<DbUsage> for Usage {
     }
 }
 
-#[async_session::async_trait]
+#[async_trait::async_trait]
 impl<'c> UsageStore for SqlxConn<'c> {
     async fn get(&mut self, id: UsageId) -> TbResult<Option<Usage>> {
         sqlx::query_as!(

@@ -6,7 +6,7 @@
 //! This module is used by other modules in the application to interact with the database.
 
 use anyhow::Context;
-use async_session::log::info;
+use log::info;
 use sqlx::{PgPool, PgTransaction};
 use std::ops::{Deref, DerefMut};
 
