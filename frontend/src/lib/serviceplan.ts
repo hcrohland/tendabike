@@ -50,11 +50,11 @@ export class Limits {
 
   static keys: limit_keys[] = [
     "days",
+    "rides",
     "hours",
     "km",
     "climb",
     "descend",
-    "rides",
     "kJ",
   ];
 
