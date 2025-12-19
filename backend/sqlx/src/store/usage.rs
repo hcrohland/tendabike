@@ -11,17 +11,17 @@ pub struct DbUsage {
     // id for referencing
     pub id: Uuid,
     // usage time
-    pub time: Option<i32>,
+    pub time: i32,
     /// Usage distance
-    pub distance: Option<i32>,
+    pub distance: i32,
     /// Overall climbing
-    pub climb: Option<i32>,
+    pub climb: i32,
     /// Overall descending
-    pub descend: Option<i32>,
+    pub descend: i32,
     /// Overall energy
     pub energy: i32,
     /// number of activities
-    pub count: Option<i32>,
+    pub count: i32,
 }
 
 impl From<&Usage> for DbUsage {
@@ -37,12 +37,12 @@ impl From<&Usage> for DbUsage {
         } = value;
         Self {
             id: id.into(),
-            time: Some(time),
-            distance: Some(distance),
-            climb: Some(climb),
-            descend: Some(descend),
+            time,
+            distance,
+            climb,
+            descend,
             energy,
-            count: Some(count),
+            count,
         }
     }
 }
@@ -59,12 +59,12 @@ impl From<DbUsage> for Usage {
         } = value;
         Self {
             id: id.into(),
-            time: time.unwrap_or(0),
-            distance: distance.unwrap_or(0),
-            climb: climb.unwrap_or(0),
-            descend: descend.unwrap_or(0),
+            time,
+            distance,
+            climb,
+            descend,
             energy,
-            count: count.unwrap_or(0),
+            count,
         }
     }
 }
