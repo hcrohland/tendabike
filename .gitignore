@@ -25,7 +25,7 @@
 *.http
 .vscode/*
 .secrets
-Rocket.toml
 **/.env
 **/launch.json
 .cargo/*
+.claude/*
