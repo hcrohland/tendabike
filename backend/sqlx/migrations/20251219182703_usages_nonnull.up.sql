@@ -1,0 +1,14 @@
+-- Add up migration script here
+ALTER TABLE "public"."usages"
+  ALTER COLUMN "time" SET DEFAULT '0',
+  ALTER COLUMN "distance" SET DEFAULT '0',
+  ALTER COLUMN "climb" SET DEFAULT '0',
+  ALTER COLUMN "descend" SET DEFAULT '0',
+  ALTER COLUMN "energy" SET DEFAULT '0',
+  ALTER COLUMN "count" SET DEFAULT '0',
+  ALTER COLUMN "time" SET NOT NULL,
+  ALTER COLUMN "distance" SET NOT NULL,
+  ALTER COLUMN "climb" SET NOT NULL,
+  ALTER COLUMN "descend" SET NOT NULL,
+  ALTER COLUMN "energy" SET NOT NULL,
+  ALTER COLUMN "count" SET NOT NULL;
