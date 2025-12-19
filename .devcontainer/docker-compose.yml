@@ -1,0 +1,22 @@
+services:
+  database:
+    image: postgres:18-alpine
+    environment:
+      - POSTGRES_PASSWORD=fDebD5pyKBMmdDi
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    network_mode: host
+    
+  app:
+    image: mcr.microsoft.com/devcontainers/base:trixie
+    network_mode: service:database
+    volumes:
+      - ..:/workspaces/tendabike:cached
+      - rust-target:/workspaces/tendabike/target
+      - node_modules:/workspaces/tendabike/frontend/node_modules
+    command: sleep infinity
+
+volumes:
+  postgres-data:
+  rust-target:
+  node_modules:
