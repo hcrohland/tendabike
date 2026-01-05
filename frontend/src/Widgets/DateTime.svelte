@@ -29,8 +29,8 @@
     rounded = false,
   }: Props = $props();
 
-  mindate = mindate ? roundTime(mindate) : undefined;
-  maxdate = maxdate ? roundTime(maxdate) : undefined;
+  const min = () => (mindate ? roundTime(mindate) : undefined);
+  const max = () => (maxdate ? roundTime(maxdate) : undefined);
   let now = roundTime(new Date());
 
   let inputClasses = $derived(
@@ -41,8 +41,8 @@
     // time_24hr: true,
     minuteIncrement: 15,
     format: "d. M yyyy - h:ii",
-    startDate: mindate,
-    endDate: maxdate,
+    startDate: min(),
+    endDate: max(),
     displayFormat: "d. M yyyy - h:ii",
     displayFormatType: "standard",
     todayBtn: false,
@@ -70,7 +70,7 @@
   />
 
   {#if mindate}
-    <Button onclick={preventDefault(() => (date = mindate))}>
+    <Button onclick={preventDefault(() => (date = min()))}>
       <AngleLeftOutline class="shrink-0 h-5 w-5" />
     </Button>
   {:else if prevdate}
@@ -78,13 +78,13 @@
       <AngleLeftOutline class="shrink-0 h-5 w-5" />
     </Button>
   {/if}
-  {#if !(mindate && mindate > now) && !(maxdate && maxdate < now)}
+  {#if !(mindate && mindate > now) && !(max() && max()! < now)}
     <Button onclick={preventDefault(() => (date = now))}>
       <ClockOutline class="shrink-0 h-5 w-5" />
     </Button>
   {/if}
   {#if maxdate}
-    <Button onclick={preventDefault(() => (date = maxdate))}>
+    <Button onclick={preventDefault(() => (date = max()))}>
       <AngleRightOutline class="shrink-0 h-5 w-5" />
     </Button>
   {/if}
