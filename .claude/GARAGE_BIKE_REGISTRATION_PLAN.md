@@ -35,8 +35,7 @@ From [backend/domain/src/entities/garage.rs](backend/domain/src/entities/garage.
 **Unregistration (`unregister_part`)**:
 - Garage owners can unregister any parts (bikes or spare parts)
 - Part owners can unregister their own parts
-- Verified via `checkuser()` which ensures garage owner or admin
-- **TODO**: Backend needs update to allow part owners to unregister their own parts
+- Verified via `checkuser()` which ensures garage owner
 
 **View Parts (`get_parts`)**:
 - Returns `Vec<PartId>` (just IDs, not full Part objects)

@@ -174,9 +174,10 @@ async fn register_part(
     Json(RegisterPartRequest { part_id }): Json<RegisterPartRequest>,
 ) -> ApiResult<tb_domain::Summary> {
     let mut store = pool.begin().await?;
-    let shop_id = ShopId::get(shop_id, &user, &mut store).await?;
-    let part_id = PartId::get(part_id, &user, &mut store).await?;
-    let summary = shop_id.register_part(part_id, &user, &mut store).await?;
+    let shop_id: ShopId = shop_id.into();
+    let summary = shop_id
+        .register_part(part_id.into(), &user, &mut store)
+        .await?;
     store.commit().await?;
     Ok(Json(summary))
 }
@@ -187,7 +188,7 @@ async fn unregister_part(
     State(pool): State<DbPool>,
 ) -> ApiResult<tb_domain::Summary> {
     let mut store = pool.begin().await?;
-    let shop_id = ShopId::get(shop_id, &user, &mut store).await?;
+    let shop_id: ShopId = shop_id.into();
     let summary = shop_id
         .unregister_part(part_id.into(), &user, &mut store)
         .await?;
