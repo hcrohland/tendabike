@@ -40,8 +40,8 @@ pub trait Store:
     async fn commit(self) -> TbResult<()>;
 }
 
-/// A trait that represents a person.
-pub trait Person: Send + Sync {
+/// A trait that represents a session.
+pub trait Session: Send + Sync {
     fn get_id(&self) -> UserId;
     fn is_admin(&self) -> bool;
     fn check_owner(&self, owner: UserId, error: String) -> crate::TbResult<()> {

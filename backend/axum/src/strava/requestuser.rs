@@ -1,5 +1,5 @@
 use anyhow::Context;
-use async_session::{MemoryStore, Session, SessionStore};
+use async_session::{MemoryStore, Session as AsyncSession, SessionStore};
 use axum::{
     RequestPartsExt,
     extract::{FromRef, FromRequestParts},
@@ -20,11 +20,11 @@ use crate::{
     AppError,
     strava::{HTTP_CLIENT, StravaAthleteInfo, oauth::STRAVACLIENT},
 };
-use tb_domain::{Error, Person, TbResult, UserId};
+use tb_domain::{Error, Session as TbSession, TbResult, UserId};
 use tb_strava::{StravaId, StravaPerson, StravaStore, StravaUser};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub(crate) struct RequestUser {
+pub(crate) struct RequestSession {
     id: UserId,
     strava_id: StravaId,
     is_admin: bool,
@@ -32,12 +32,12 @@ pub(crate) struct RequestUser {
     expires_at: Option<SystemTime>,
     refresh_token: Option<RefreshToken>,
     #[serde(skip)]
-    session: Option<Session>,
+    session: Option<AsyncSession>,
 }
 
 const API: &str = "https://www.strava.com/api/v3";
 
-impl RequestUser {
+impl RequestSession {
     pub(crate) async fn create_from_token(
         token: StandardTokenResponse<StravaExtraTokenFields, BasicTokenType>,
         store: &mut impl StravaStore,
@@ -82,7 +82,7 @@ impl RequestUser {
         _admin: AxumAdmin,
         user: UserId,
         store: &mut impl StravaStore,
-    ) -> TbResult<RequestUser> {
+    ) -> TbResult<RequestSession> {
         let user = StravaUser::read(user, store).await?;
 
         let strava_id = user.strava_id();
@@ -186,13 +186,13 @@ impl RequestUser {
         Ok(())
     }
 
-    fn set_session(mut self, session: Session) -> Self {
+    fn set_session(mut self, session: AsyncSession) -> Self {
         self.session = Some(session);
         self
     }
 }
 
-impl Person for RequestUser {
+impl TbSession for RequestSession {
     fn get_id(&self) -> UserId {
         self.id
     }
@@ -202,7 +202,7 @@ impl Person for RequestUser {
 }
 
 #[async_trait::async_trait]
-impl StravaPerson for RequestUser {
+impl StravaPerson for RequestSession {
     fn strava_id(&self) -> StravaId {
         self.strava_id
     }
@@ -237,7 +237,7 @@ impl StravaPerson for RequestUser {
     }
 }
 
-impl<S> FromRequestParts<S> for RequestUser
+impl<S> FromRequestParts<S> for RequestSession
 where
     MemoryStore: FromRef<S>,
     S: Send + Sync,
@@ -263,7 +263,7 @@ where
             .ok_or(Error::NotAuth("Please authenticate".into()))?;
 
         let user = session
-            .get::<RequestUser>("user")
+            .get::<RequestSession>("user")
             .ok_or(Error::NotAuth("Session error".into()))?
             .set_session(session);
 
@@ -281,7 +281,7 @@ where
     type Rejection = Response;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let user = RequestUser::from_request_parts(parts, state)
+        let user = RequestSession::from_request_parts(parts, state)
             .await
             .map_err(IntoResponse::into_response)?;
         if !user.is_admin() {

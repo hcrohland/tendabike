@@ -10,10 +10,10 @@ use axum::{
 };
 use tb_domain::{Store, UserId};
 
-use crate::{ApiResult, AxumAdmin, DbPool, RequestUser, error::AppError};
+use crate::{ApiResult, AxumAdmin, DbPool, RequestSession, error::AppError};
 
 pub(super) async fn redirect_gear(
-    mut user: RequestUser,
+    mut user: RequestSession,
     Path(id): Path<i32>,
     State(store): State<DbPool>,
 ) -> Result<Redirect, AppError> {
@@ -25,7 +25,7 @@ pub(super) async fn redirect_gear(
 }
 
 pub(super) async fn redirect_act(
-    user: RequestUser,
+    user: RequestSession,
     Path(id): Path<i64>,
     State(store): State<DbPool>,
 ) -> Result<Redirect, AppError> {
@@ -53,7 +53,7 @@ pub(super) async fn revoke_user(
     State(pool): State<DbPool>,
 ) -> ApiResult<()> {
     let mut store = pool.begin().await?;
-    let mut user = RequestUser::create_from_id(admin, tbid, &mut store).await?;
+    let mut user = RequestSession::create_from_id(admin, tbid, &mut store).await?;
     let res = tb_strava::user_deauthorize(&mut user, &mut store)
         .await
         .map(Json)?;
@@ -67,7 +67,7 @@ pub(super) async fn deleteuser(
     State(pool): State<DbPool>,
 ) -> ApiResult<()> {
     let mut store = pool.begin().await?;
-    let mut user = RequestUser::create_from_id(admin, tbid, &mut store).await?;
+    let mut user = RequestSession::create_from_id(admin, tbid, &mut store).await?;
     let res = tb_strava::user_delete(&mut user, &mut store)
         .await
         .map(Json)?;

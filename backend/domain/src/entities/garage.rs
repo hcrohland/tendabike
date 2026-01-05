@@ -105,7 +105,7 @@ impl GarageId {
     /// Get a garage by ID, checking that the user has access to it (ownership only)
     pub async fn get(
         id: i32,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl GarageStore,
     ) -> TbResult<GarageId> {
         GarageId(id).checkuser(user, store).await
@@ -114,7 +114,7 @@ impl GarageId {
     /// Get a garage by ID for read access (owner, or active subscriber)
     pub async fn get_for_read(
         id: i32,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<GarageId> {
         GarageId(id).check_read_access(user, store).await
@@ -123,7 +123,7 @@ impl GarageId {
     /// Check if the user owns this garage
     pub async fn checkuser(
         self,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl GarageStore,
     ) -> TbResult<GarageId> {
         let garage = store.garage_get(self).await?;
@@ -134,7 +134,7 @@ impl GarageId {
     /// Check if the user has read access to this garage (owner, or active subscriber)
     pub async fn check_read_access(
         self,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<GarageId> {
         let garage = store.garage_get(self).await?;
@@ -155,7 +155,7 @@ impl GarageId {
     pub async fn create(
         name: String,
         description: Option<String>,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl GarageStore,
     ) -> TbResult<Garage> {
         store.garage_create(name, description, user.get_id()).await
@@ -166,7 +166,7 @@ impl GarageId {
         self,
         name: String,
         description: Option<String>,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl GarageStore,
     ) -> TbResult<Garage> {
         self.checkuser(user, store).await?;
@@ -174,7 +174,7 @@ impl GarageId {
     }
 
     /// Delete a garage (only if it has no bikes)
-    pub async fn delete(self, user: &dyn Person, store: &mut impl Store) -> TbResult<GarageId> {
+    pub async fn delete(self, user: &dyn Session, store: &mut impl Store) -> TbResult<GarageId> {
         self.checkuser(user, store).await?;
 
         // Check if garage has any bikes
@@ -194,7 +194,7 @@ impl GarageId {
     pub async fn register_part(
         self,
         part_id: PartId,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<crate::Summary> {
         // Verify the part exists and user owns it
@@ -255,7 +255,7 @@ impl GarageId {
 
     async fn has_subscription(
         self,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> Result<bool, Error> {
         Ok(store
@@ -270,7 +270,7 @@ impl GarageId {
     pub async fn unregister_part(
         self,
         part_id: PartId,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<crate::Summary> {
         // Check if user is garage owner OR part owner
@@ -300,7 +300,7 @@ impl GarageId {
     /// Can be accessed by garage owner or users with active subscription
     pub async fn get_parts(
         self,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<Vec<PartId>> {
         // Check if user is garage owner OR has active subscription
@@ -321,7 +321,7 @@ impl GarageId {
     /// Returns parts, attachments, services, plans, and usages (NOT activities)
     pub async fn get_details(
         self,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<crate::GarageSummary> {
         // Check permissions (garage owner or active subscriber)
@@ -401,7 +401,7 @@ impl GarageId {
 
     /// Read a garage from the database
     /// Allows access for owners, and active subscribers
-    pub async fn read(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Garage> {
+    pub async fn read(self, user: &dyn Session, store: &mut impl Store) -> TbResult<Garage> {
         self.check_read_access(user, store).await?;
         store.garage_get(self).await
     }
@@ -524,7 +524,7 @@ impl SubscriptionId {
     pub async fn create(
         garage_id: GarageId,
         message: Option<String>,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<GarageSubscription> {
         // Verify the garage exists (don't check ownership - users can subscribe to any garage)
@@ -558,7 +558,7 @@ impl SubscriptionId {
     /// Get a subscription by ID
     pub async fn get(
         id: i32,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<SubscriptionId> {
         SubscriptionId(id).checkuser(user, store).await
@@ -567,7 +567,7 @@ impl SubscriptionId {
     /// Read a subscription from the database
     pub async fn read(
         self,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<GarageSubscription> {
         self.checkuser(user, store).await?;
@@ -577,7 +577,7 @@ impl SubscriptionId {
     /// Check if the user has access to this subscription (either subscriber or garage owner)
     pub async fn checkuser(
         self,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<SubscriptionId> {
         let subscription = store.subscription_get(self).await?;
@@ -598,7 +598,7 @@ impl SubscriptionId {
     pub async fn approve(
         self,
         response_message: Option<String>,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<GarageSubscription> {
         let subscription = store.subscription_get(self).await?;
@@ -621,7 +621,7 @@ impl SubscriptionId {
     pub async fn reject(
         self,
         response_message: Option<String>,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<GarageSubscription> {
         let subscription = store.subscription_get(self).await?;
@@ -641,7 +641,7 @@ impl SubscriptionId {
 
     /// Cancel a subscription (subscriber only)
     /// Allows deletion of pending, active, and rejected subscriptions
-    pub async fn cancel(self, user: &dyn Person, store: &mut impl Store) -> TbResult<()> {
+    pub async fn cancel(self, user: &dyn Session, store: &mut impl Store) -> TbResult<()> {
         let subscription = store.subscription_get(self).await?;
 
         // Verify user is the subscriber
@@ -667,7 +667,7 @@ impl GarageSubscription {
     /// Get all pending subscriptions for a garage (garage owner only)
     pub async fn get_pending_for_garage(
         garage_id: GarageId,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<Vec<GarageSubscription>> {
         garage_id.checkuser(user, store).await?;
@@ -678,7 +678,7 @@ impl GarageSubscription {
 
     /// Get all subscriptions made by a user
     pub async fn get_for_user(
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<Vec<GarageSubscription>> {
         store.subscriptions_for_user(user.get_id()).await

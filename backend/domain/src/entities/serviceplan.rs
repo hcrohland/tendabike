@@ -19,7 +19,11 @@ impl ServicePlanId {
         store.get(self).await
     }
 
-    pub async fn delete(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Vec<Service>> {
+    pub async fn delete(
+        self,
+        user: &dyn Session,
+        store: &mut impl Store,
+    ) -> TbResult<Vec<Service>> {
         let plan = self.get(store).await?;
         plan.checkuser(user, store).await?;
 
@@ -67,7 +71,7 @@ pub struct ServicePlan {
 impl ServicePlan {
     async fn checkuser(
         &self,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut (impl ServicePlanStore + PartStore),
     ) -> TbResult<()> {
         if let Some(part) = self.part {
@@ -84,7 +88,7 @@ impl ServicePlan {
 
     pub async fn create(
         mut self,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut (impl ServicePlanStore + PartStore),
     ) -> TbResult<Self> {
         self.id = ServicePlanId::new();
@@ -94,7 +98,7 @@ impl ServicePlan {
 
     pub async fn update(
         mut self,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut (impl ServicePlanStore + PartStore),
     ) -> TbResult<ServicePlan> {
         let plan = self.id.get(store).await?;

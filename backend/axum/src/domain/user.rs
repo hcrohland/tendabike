@@ -9,8 +9,8 @@
 use axum::{Json, Router, extract::State, routing::get};
 use serde::Serialize;
 
-use crate::{ApiResult, AxumAdmin, DbPool, RequestUser, appstate::AppState};
-use tb_domain::{Person, Store, Summary};
+use crate::{ApiResult, AxumAdmin, DbPool, RequestSession, appstate::AppState};
+use tb_domain::{Session, Store, Summary};
 use tb_strava::StravaUser;
 
 pub(super) fn router() -> Router<AppState> {
@@ -21,12 +21,12 @@ pub(super) fn router() -> Router<AppState> {
         .route("/export", get(export))
 }
 
-async fn getuser(user: RequestUser, State(pool): State<DbPool>) -> ApiResult<tb_domain::User> {
+async fn getuser(user: RequestSession, State(pool): State<DbPool>) -> ApiResult<tb_domain::User> {
     let mut store = pool.begin().await?;
     Ok(user.get_id().read(&mut store).await.map(Json)?)
 }
 
-async fn summary(mut user: RequestUser, State(pool): State<DbPool>) -> ApiResult<Summary> {
+async fn summary(mut user: RequestSession, State(pool): State<DbPool>) -> ApiResult<Summary> {
     let mut store = pool.begin().await?;
     StravaUser::update_gear(&mut user, &mut store).await?;
     let res = user.get_id().get_summary(&mut store).await.map(Json)?;
@@ -46,7 +46,7 @@ pub struct Export {
     pub garages: Vec<tb_domain::GarageWithOwner>,
 }
 
-async fn export(user: RequestUser, State(pool): State<DbPool>) -> ApiResult<Export> {
+async fn export(user: RequestSession, State(pool): State<DbPool>) -> ApiResult<Export> {
     let mut store = pool.begin().await?;
     let user = user.get_id().read(&mut store).await?;
     let Summary {

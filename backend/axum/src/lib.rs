@@ -21,7 +21,7 @@ use tb_sqlx::DbPool;
 mod domain;
 
 mod strava;
-use strava::{AxumAdmin, RequestUser};
+use strava::{AxumAdmin, RequestSession};
 
 mod appstate;
 use appstate::*;

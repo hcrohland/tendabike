@@ -56,7 +56,7 @@ use axum::{
 use log::{info, trace};
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{ApiResult, AxumAdmin, DbPool, RequestUser};
+use crate::{ApiResult, AxumAdmin, DbPool, RequestSession};
 use tb_domain::{Error, OnboardingStatus, Store, Summary, TbResult, UserStore};
 use tb_strava::StravaPerson;
 use tb_strava::event::{InEvent, process};
@@ -91,7 +91,7 @@ impl Hub {
 const VERIFY_TOKEN: &str = "tendabike_strava";
 
 pub(crate) async fn hooks(
-    mut user: RequestUser,
+    mut user: RequestSession,
     State(store): State<DbPool>,
 ) -> ApiResult<Summary> {
     let mut store = store.begin().await?;
@@ -145,7 +145,7 @@ pub(super) async fn sync(
     State(store): State<DbPool>,
 ) -> ApiResult<Summary> {
     let mut store = store.begin().await?;
-    let mut user = RequestUser::create_from_id(admin, tbid.into(), &mut store).await?;
+    let mut user = RequestSession::create_from_id(admin, tbid.into(), &mut store).await?;
     let res = process(&mut user, &mut store).await.map_err(|e| match e {
         Error::NotAuth(_) => Error::AnyFailure(anyhow::anyhow!("User not authenticated at Strava")),
         err => err,
@@ -165,7 +165,7 @@ pub(super) struct InitialSyncQuery {
 /// It can only be called once - if the user has already completed initial sync, it returns an error.
 /// Returns the updated user object.
 pub(crate) async fn trigger_initial_sync(
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
     Query(query): Query<InitialSyncQuery>,
 ) -> ApiResult<tb_domain::User> {
@@ -194,7 +194,7 @@ pub(crate) async fn trigger_initial_sync(
 /// It can only be called if the user is still in pending status.
 /// Returns the updated user object.
 pub(crate) async fn postpone_initial_sync(
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
 ) -> ApiResult<tb_domain::User> {
     let mut store = store.begin().await?;

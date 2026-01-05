@@ -24,13 +24,13 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    DbPool, RequestUser,
+    DbPool, RequestSession,
     appstate::AppState,
     error::{ApiResult, AppError},
 };
 use tb_domain::{
     Garage, GarageId, GarageSubscription, GarageSubscriptionWithDetails, GarageWithOwner, PartId,
-    Person, Store, SubscriptionId,
+    Session, Store, SubscriptionId,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -93,7 +93,7 @@ pub(super) fn router() -> Router<AppState> {
         .route("/{garage}/subscriptions", get(list_garage_subscriptions))
 }
 
-async fn list_garages(user: RequestUser, State(pool): State<DbPool>) -> ApiResult<Vec<Garage>> {
+async fn list_garages(user: RequestSession, State(pool): State<DbPool>) -> ApiResult<Vec<Garage>> {
     let mut store = pool.begin().await?;
     Ok(Garage::get_all_for_user(&user.get_id(), &mut store)
         .await
@@ -101,7 +101,7 @@ async fn list_garages(user: RequestUser, State(pool): State<DbPool>) -> ApiResul
 }
 
 async fn create_garage(
-    user: RequestUser,
+    user: RequestSession,
     State(pool): State<DbPool>,
     Json(NewGarage { name, description }): Json<NewGarage>,
 ) -> Result<(StatusCode, Json<Garage>), AppError> {
@@ -113,7 +113,7 @@ async fn create_garage(
 
 async fn get_garage(
     Path(garage_id): Path<i32>,
-    user: RequestUser,
+    user: RequestSession,
     State(pool): State<DbPool>,
 ) -> ApiResult<Garage> {
     let mut store = pool.begin().await?;
@@ -123,7 +123,7 @@ async fn get_garage(
 
 async fn update_garage(
     Path(garage_id): Path<i32>,
-    user: RequestUser,
+    user: RequestSession,
     State(pool): State<DbPool>,
     Json(UpdateGarage { name, description }): Json<UpdateGarage>,
 ) -> ApiResult<Garage> {
@@ -138,7 +138,7 @@ async fn update_garage(
 
 async fn delete_garage(
     Path(garage_id): Path<i32>,
-    user: RequestUser,
+    user: RequestSession,
     State(pool): State<DbPool>,
 ) -> Result<StatusCode, AppError> {
     let mut store = pool.begin().await?;
@@ -150,7 +150,7 @@ async fn delete_garage(
 
 async fn get_garage_details(
     Path(garage_id): Path<i32>,
-    user: RequestUser,
+    user: RequestSession,
     State(pool): State<DbPool>,
 ) -> ApiResult<tb_domain::GarageSummary> {
     let mut store = pool.begin().await?;
@@ -161,7 +161,7 @@ async fn get_garage_details(
 
 async fn get_garage_parts(
     Path(garage_id): Path<i32>,
-    user: RequestUser,
+    user: RequestSession,
     State(pool): State<DbPool>,
 ) -> ApiResult<Vec<PartId>> {
     let mut store = pool.begin().await?;
@@ -171,7 +171,7 @@ async fn get_garage_parts(
 
 async fn register_part(
     Path(garage_id): Path<i32>,
-    user: RequestUser,
+    user: RequestSession,
     State(pool): State<DbPool>,
     Json(RegisterPartRequest { part_id }): Json<RegisterPartRequest>,
 ) -> ApiResult<tb_domain::Summary> {
@@ -185,7 +185,7 @@ async fn register_part(
 
 async fn unregister_part(
     Path((garage_id, part_id)): Path<(i32, i32)>,
-    user: RequestUser,
+    user: RequestSession,
     State(pool): State<DbPool>,
 ) -> ApiResult<tb_domain::Summary> {
     let mut store = pool.begin().await?;
@@ -212,7 +212,7 @@ async fn search_garages(
 // Subscription handlers
 
 async fn create_subscription(
-    user: RequestUser,
+    user: RequestSession,
     State(pool): State<DbPool>,
     Json(NewSubscriptionRequest { garage_id, message }): Json<NewSubscriptionRequest>,
 ) -> Result<(StatusCode, Json<GarageSubscription>), AppError> {
@@ -223,7 +223,7 @@ async fn create_subscription(
 }
 
 async fn list_my_subscriptions(
-    user: RequestUser,
+    user: RequestSession,
     State(pool): State<DbPool>,
 ) -> ApiResult<Vec<GarageSubscriptionWithDetails>> {
     let mut store = pool.begin().await?;
@@ -235,7 +235,7 @@ async fn list_my_subscriptions(
 
 async fn list_garage_subscriptions(
     Path(garage_id): Path<i32>,
-    user: RequestUser,
+    user: RequestSession,
     State(pool): State<DbPool>,
 ) -> ApiResult<Vec<GarageSubscription>> {
     let mut store = pool.begin().await?;
@@ -249,7 +249,7 @@ async fn list_garage_subscriptions(
 
 async fn get_subscription(
     Path(subscription_id): Path<i32>,
-    user: RequestUser,
+    user: RequestSession,
     State(pool): State<DbPool>,
 ) -> ApiResult<GarageSubscription> {
     let mut store = pool.begin().await?;
@@ -259,7 +259,7 @@ async fn get_subscription(
 
 async fn approve_subscription(
     Path(subscription_id): Path<i32>,
-    user: RequestUser,
+    user: RequestSession,
     State(pool): State<DbPool>,
     Json(req): Json<SubscriptionResponseRequest>,
 ) -> ApiResult<GarageSubscription> {
@@ -274,7 +274,7 @@ async fn approve_subscription(
 
 async fn reject_subscription(
     Path(subscription_id): Path<i32>,
-    user: RequestUser,
+    user: RequestSession,
     State(pool): State<DbPool>,
     Json(req): Json<SubscriptionResponseRequest>,
 ) -> ApiResult<GarageSubscription> {
@@ -289,7 +289,7 @@ async fn reject_subscription(
 
 async fn cancel_subscription(
     Path(subscription_id): Path<i32>,
-    user: RequestUser,
+    user: RequestSession,
     State(pool): State<DbPool>,
 ) -> Result<StatusCode, AppError> {
     let mut store = pool.begin().await?;

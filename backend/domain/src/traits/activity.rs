@@ -1,6 +1,6 @@
 use time::OffsetDateTime;
 
-use crate::{ActTypeId, Activity, ActivityId, PartId, Person, TbResult, UserId};
+use crate::{ActTypeId, Activity, ActivityId, PartId, Session, TbResult, UserId};
 
 // A trait for storing and retrieving activities.
 /// A trait defining the methods for storing and retrieving activities.
@@ -119,7 +119,7 @@ pub trait ActivityStore {
     /// Returns a `Result` containing a vector of `Activity` structs or an error if the operation fails.
     async fn activity_set_gear_if_null(
         &mut self,
-        user: &dyn Person,
+        user: &dyn Session,
         types: Vec<ActTypeId>,
         partid: &PartId,
     ) -> TbResult<Vec<Activity>>;

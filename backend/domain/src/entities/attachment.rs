@@ -426,7 +426,7 @@ async fn attach_one(
 }
 
 pub async fn attach_assembly(
-    user: &dyn Person,
+    user: &dyn Session,
     part: PartId,
     time: OffsetDateTime,
     gear: PartId,
@@ -503,7 +503,7 @@ pub async fn attach_assembly(
 }
 
 pub async fn detach_assembly(
-    user: &dyn Person,
+    user: &dyn Session,
     part_id: PartId,
     time: OffsetDateTime,
     all: bool,
@@ -520,7 +520,7 @@ pub async fn detach_assembly(
 }
 
 pub async fn dispose_assembly(
-    user: &dyn Person,
+    user: &dyn Session,
     part_id: PartId,
     time: OffsetDateTime,
     all: bool,
@@ -570,7 +570,7 @@ async fn dispose_subparts(
 }
 
 pub async fn recover_assembly(
-    user: &dyn Person,
+    user: &dyn Session,
     part: PartId,
     all: bool,
     store: &mut impl Store,

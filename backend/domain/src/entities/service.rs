@@ -20,7 +20,7 @@ impl ServiceId {
         ServiceStore::get(store, self).await
     }
 
-    pub async fn delete(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
+    pub async fn delete(self, user: &dyn Session, store: &mut impl Store) -> TbResult<Summary> {
         let service = self.get(store).await?;
         service.part_id.checkuser(user, store).await?;
 
@@ -115,7 +115,7 @@ impl Service {
         .fold(Usage::new(self.usage), |usage, act| usage + &act.usage()))
     }
 
-    pub async fn redo(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
+    pub async fn redo(self, user: &dyn Session, store: &mut impl Store) -> TbResult<Summary> {
         let Service {
             id,
             notes,
@@ -162,7 +162,7 @@ impl Service {
         })
     }
 
-    pub async fn update(mut self, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
+    pub async fn update(mut self, user: &dyn Session, store: &mut impl Store) -> TbResult<Summary> {
         self.part_id.checkuser(user, store).await?;
         let service = self.id.get(store).await?;
         self.usage = service.usage;

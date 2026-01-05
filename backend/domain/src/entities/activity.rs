@@ -97,14 +97,14 @@ impl ActivityId {
     /// checks authorization
     async fn read_optional(
         self,
-        person: &dyn Person,
+        session: &dyn Session,
         store: &mut impl ActivityStore,
     ) -> TbResult<Option<Activity>> {
         let act = store.activity_read_by_id(self).await?;
         if let Some(act) = &act {
-            person.check_owner(
+            session.check_owner(
                 act.user_id,
-                format!("User {} cannot access activity {}", person.get_id(), self),
+                format!("User {} cannot access activity {}", session.get_id(), self),
             )?;
         }
         Ok(act)
@@ -115,10 +115,10 @@ impl ActivityId {
     /// checks authorization
     pub async fn read(
         self,
-        person: &dyn Person,
+        session: &dyn Session,
         store: &mut impl ActivityStore,
     ) -> TbResult<Activity> {
-        self.read_optional(person, store)
+        self.read_optional(session, store)
             .await?
             .ok_or(crate::Error::NotFound(
                 "activity does not exist".to_string(),
@@ -130,10 +130,10 @@ impl ActivityId {
     ///
     /// returns all affected parts  
     /// checks authorization  
-    pub async fn delete(self, person: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
+    pub async fn delete(self, session: &dyn Session, store: &mut impl Store) -> TbResult<Summary> {
         info!("Deleting {self:?}");
         let mut res = self
-            .read(person, store)
+            .read(session, store)
             .await?
             .register(Factor::Sub, store)
             .await?;
@@ -154,7 +154,7 @@ impl Activity {
     ///
     /// returns the activity and all affected parts  
     /// checks authorization  
-    pub async fn upsert(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
+    pub async fn upsert(self, user: &dyn Session, store: &mut impl Store) -> TbResult<Summary> {
         if let Some(old_activity) = self.id.read_optional(user, store).await? {
             old_activity.replace(self, store).await
         } else {
@@ -179,7 +179,7 @@ impl Activity {
     ///
     /// returns all affected parts  
     /// checks authorization  
-    pub async fn update(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Summary> {
+    pub async fn update(self, user: &dyn Session, store: &mut impl Store) -> TbResult<Summary> {
         self.id.read(user, store).await?.replace(self, store).await
     }
 
@@ -261,7 +261,7 @@ impl Activity {
     }
 
     pub async fn categories(
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<HashSet<PartTypeId>> {
         let act_types = store
@@ -282,7 +282,7 @@ impl Activity {
 
     pub async fn csv2descend(
         data: impl std::io::Read,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<(Summary, Vec<String>, Vec<String>)> {
         #[derive(Debug, Deserialize)]
@@ -345,7 +345,7 @@ impl Activity {
 
     pub async fn set_default_part(
         gear_id: PartId,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<Summary> {
         let part = gear_id.part(user, store).await?;
@@ -374,7 +374,7 @@ impl Activity {
 
 async fn match_and_update(
     store: &mut impl Store,
-    user: &dyn Person,
+    user: &dyn Session,
     rstart: OffsetDateTime,
     rclimb: Option<i32>,
     rdescend: i32,

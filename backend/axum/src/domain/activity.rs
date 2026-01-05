@@ -14,11 +14,11 @@ use axum::{
     routing::{delete, get, post},
 };
 
-use crate::{AxumAdmin, DbPool, RequestUser, appstate::AppState, error::ApiResult};
+use crate::{AxumAdmin, DbPool, RequestSession, appstate::AppState, error::ApiResult};
 use tb_domain::{Activity, ActivityId, PartId, Store, Summary};
 
 async fn def_part_api(
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
     Json(gear_id): Json<PartId>,
 ) -> ApiResult<Summary> {
@@ -37,7 +37,7 @@ async fn rescan(_u: AxumAdmin, State(store): State<DbPool>) -> ApiResult<()> {
 
 /// web interface to read an activity
 async fn act_get(
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
     Path(id): Path<i64>,
 ) -> ApiResult<Activity> {
@@ -51,7 +51,7 @@ async fn act_get(
 /// web interface to change an activity
 async fn act_put(
     Path(id): Path<i64>,
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
     Json(activity): Json<Activity>,
 ) -> ApiResult<Summary> {
@@ -69,7 +69,7 @@ async fn act_put(
 /// web interface to delete an activity
 async fn act_delete(
     Path(id): Path<i64>,
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
 ) -> ApiResult<Summary> {
     let mut store = store.begin().await?;
@@ -82,7 +82,7 @@ async fn act_delete(
 }
 
 async fn descend(
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
     data: String,
 ) -> ApiResult<(Summary, Vec<String>, Vec<String>)> {

@@ -225,7 +225,7 @@ pub(crate) async fn login_authorized(
         .context("token exchange failed")?;
 
     let mut conn = store.begin().await?;
-    let user = super::RequestUser::create_from_token(token, &mut conn).await?;
+    let user = super::RequestSession::create_from_token(token, &mut conn).await?;
     conn.commit().await?;
 
     // Create a new session filled with user data

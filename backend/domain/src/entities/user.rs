@@ -196,7 +196,7 @@ impl UserId {
     }
 }
 
-impl Person for User {
+impl Session for User {
     fn get_id(&self) -> UserId {
         self.id
     }

@@ -81,11 +81,11 @@ NewtypeDisplay! { () pub struct PartId(); }
 NewtypeFrom! { () pub struct PartId(i32); }
 
 impl PartId {
-    pub async fn get(id: i32, user: &dyn Person, store: &mut impl PartStore) -> TbResult<PartId> {
+    pub async fn get(id: i32, user: &dyn Session, store: &mut impl PartStore) -> TbResult<PartId> {
         PartId(id).checkuser(user, store).await
     }
 
-    pub async fn delete(self, user: &dyn Person, store: &mut impl Store) -> TbResult<PartId> {
+    pub async fn delete(self, user: &dyn Session, store: &mut impl Store) -> TbResult<PartId> {
         self.checkuser(user, store).await?;
 
         let (attachments, _) = Attachment::for_part_with_usage(self, store).await?;
@@ -109,7 +109,7 @@ impl PartId {
     }
 
     /// get the part with id part
-    pub async fn part(self, user: &dyn Person, store: &mut impl PartStore) -> TbResult<Part> {
+    pub async fn part(self, user: &dyn Session, store: &mut impl PartStore) -> TbResult<Part> {
         let part = self.read(store).await?;
         user.check_owner(
             part.owner,
@@ -138,7 +138,7 @@ impl PartId {
     /// Returns Forbidden if not.
     pub async fn checkuser(
         self,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl PartStore,
     ) -> TbResult<PartId> {
         let own = self.read(store).await?.owner;
@@ -197,7 +197,7 @@ impl PartId {
         model: String,
         purchase: OffsetDateTime,
         notes: String,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl PartStore,
     ) -> TbResult<Part> {
         info!("Change {self:?}");
@@ -278,7 +278,7 @@ impl Part {
         source: Option<String>,
         purchase: OffsetDateTime,
         notes: String,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl PartStore,
     ) -> TbResult<Part> {
         debug!("Create {name} {vendor} {model}");
@@ -300,7 +300,7 @@ impl Part {
     }
 
     pub async fn categories(
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<HashSet<PartTypeId>> {
         let parts = store.part_get_all_for_userid(&user.get_id()).await?;
