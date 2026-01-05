@@ -96,7 +96,7 @@ impl From<DbSubscription> for GarageSubscription {
     }
 }
 
-#[async_session::async_trait]
+#[async_trait::async_trait]
 impl<'c> tb_domain::GarageStore for SqlxConn<'c> {
     async fn garage_create(
         &mut self,
