@@ -1,10 +1,10 @@
 -- Drop indexes
-DROP INDEX IF EXISTS idx_garage_parts_part;
-DROP INDEX IF EXISTS idx_garage_parts_garage;
-DROP INDEX IF EXISTS idx_garages_owner;
+DROP INDEX IF EXISTS idx_shop_parts_part;
+DROP INDEX IF EXISTS idx_shop_parts_shop;
+DROP INDEX IF EXISTS idx_shops_owner;
 
 -- Drop junction table
-DROP TABLE IF EXISTS garage_parts;
+DROP TABLE IF EXISTS shop_parts;
 
--- Drop garages table
-DROP TABLE IF EXISTS garages;
+-- Drop shops table
+DROP TABLE IF EXISTS shops;

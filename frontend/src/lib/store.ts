@@ -6,7 +6,7 @@ import { Usage, usages } from "./usage";
 import { parts, type Part } from "./part";
 import { Attachment, attachments } from "./attachment";
 import { plans, type ServicePlan } from "./serviceplan";
-import { Garage, garages } from "./garage";
+import { Shop, shops } from "./shop";
 import { location } from "svelte-spa-router";
 
 export const DAY = 24 * 60 * 60 * 1000;
@@ -121,7 +121,7 @@ type Summary = {
   usages: Usage[];
   services: Service[];
   plans: ServicePlan[];
-  garages: Garage[];
+  shops: Shop[];
 };
 
 export function setSummary(data: Summary) {
@@ -131,7 +131,7 @@ export function setSummary(data: Summary) {
   activities.setMap(data.activities);
   services.setMap(data.services);
   plans.setMap(data.plans);
-  garages.setMap(data.garages);
+  shops.setMap(data.shops);
 }
 
 export function updateSummary(data?: Summary) {
@@ -145,7 +145,7 @@ export function updateSummary(data?: Summary) {
   services.updateMap(data.services);
   plans.updateMap(data.plans);
   usages.updateMap(data.usages);
-  garages.updateMap(data.garages);
+  shops.updateMap(data.shops);
 }
 
 export const user = writable<User | undefined>(undefined);
@@ -157,43 +157,43 @@ export const message = writable({
   status: "",
 });
 
-// Garage mode state
-export const garageMode = writable<{
+// Shop mode state
+export const shopMode = writable<{
   active: boolean;
-  garage?: Garage;
+  shop?: Shop;
 }>({ active: false });
 
-// Enter garage mode: replaces stores with garage-specific data
-export async function enterGarage(garageId: number) {
+// Enter shop mode: replaces stores with shop-specific data
+export async function enterShop(shopId: number) {
   try {
-    const data = await myfetch(`/api/garage/${garageId}/details`, "GET");
+    const data = await myfetch(`/api/shop/${shopId}/details`, "GET");
 
-    // Replace stores with garage data
+    // Replace stores with shop data
     setSummary({
       parts: data.parts,
       attachments: data.attachments,
-      activities: [], // Hidden in garage mode
+      activities: [], // Hidden in shop mode
       usages: data.usages,
       services: data.services,
       plans: data.plans,
-      garages: [], // Don't show garages in garage mode
+      shops: [], // Don't show shops in shop mode
     });
 
-    // Set garage mode active
-    garageMode.set({ active: true, garage: new Garage(data.garage) });
+    // Set shop mode active
+    shopMode.set({ active: true, shop: new Shop(data.shop) });
 
-    // Navigate to bikes page to show garage bikes
+    // Navigate to bikes page to show shop bikes
     window.location.hash = "#/cat";
   } catch (error) {
     handleError(error as Error);
   }
 }
 
-// Exit garage mode: refresh data from backend
-export async function exitGarage() {
-  garageMode.set({ active: false });
+// Exit shop mode: refresh data from backend
+export async function exitShop() {
+  shopMode.set({ active: false });
   await refresh();
 
-  // Navigate back to garages page
-  window.location.hash = "#/garages";
+  // Navigate back to shops page
+  window.location.hash = "#/shops";
 }

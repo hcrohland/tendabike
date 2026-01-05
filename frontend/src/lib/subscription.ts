@@ -7,9 +7,9 @@ export type SubscriptionStatus =
   | "rejected"
   | "cancelled";
 
-export class GarageSubscription {
+export class ShopSubscription {
   id?: number;
-  garage_id: number;
+  shop_id: number;
   user_id: number;
   status: SubscriptionStatus;
   message?: string;
@@ -18,7 +18,7 @@ export class GarageSubscription {
 
   constructor(data: any) {
     this.id = data.id;
-    this.garage_id = data.garage_id;
+    this.shop_id = data.shop_id;
     this.user_id = data.user_id;
     this.status = data.status;
     this.message = data.message;
@@ -27,42 +27,42 @@ export class GarageSubscription {
   }
 
   async approve() {
-    return await myfetch(`/api/garage/subscriptions/${this.id}/approve`, "POST")
+    return await myfetch(`/api/shop/subscriptions/${this.id}/approve`, "POST")
       .then((data) => subscriptions.updateMap([data]))
       .catch(handleError);
   }
 
   async reject() {
-    return await myfetch(`/api/garage/subscriptions/${this.id}/reject`, "POST")
+    return await myfetch(`/api/shop/subscriptions/${this.id}/reject`, "POST")
       .then((data) => subscriptions.updateMap([data]))
       .catch(handleError);
   }
 
   async cancel() {
-    return await myfetch(`/api/garage/subscriptions/${this.id}`, "DELETE")
+    return await myfetch(`/api/shop/subscriptions/${this.id}`, "DELETE")
       .then(() => subscriptions.deleteItem(this.id?.toString()))
       .catch(handleError);
   }
 
-  static async getMySubscriptions(): Promise<GarageSubscription[]> {
-    return await myfetch("/api/garage/subscriptions", "GET")
+  static async getMySubscriptions(): Promise<ShopSubscription[]> {
+    return await myfetch("/api/shop/subscriptions", "GET")
       .then((data) => {
         subscriptions.setMap(data);
-        return data.map((s: any) => new GarageSubscription(s));
+        return data.map((s: any) => new ShopSubscription(s));
       })
       .catch(handleError);
   }
 
-  static async getGarageSubscriptions(
-    garageId: number,
-  ): Promise<GarageSubscription[]> {
-    return await myfetch(`/api/garage/${garageId}/subscriptions`, "GET")
-      .then((data) => data.map((s: any) => new GarageSubscription(s)))
+  static async getShopSubscriptions(
+    shopId: number,
+  ): Promise<ShopSubscription[]> {
+    return await myfetch(`/api/shop/${shopId}/subscriptions`, "GET")
+      .then((data) => data.map((s: any) => new ShopSubscription(s)))
       .catch(handleError);
   }
 }
 
-export const subscriptions = mapable<GarageSubscription>(
+export const subscriptions = mapable<ShopSubscription>(
   "id",
-  (data) => new GarageSubscription(data),
+  (data) => new ShopSubscription(data),
 );

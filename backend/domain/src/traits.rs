@@ -4,8 +4,8 @@ pub use part::*;
 mod user;
 pub use user::*;
 
-mod garage;
-pub use garage::*;
+mod shop;
+pub use shop::*;
 
 mod activity;
 pub use activity::*;
@@ -30,7 +30,7 @@ pub trait Store:
     Send
     + PartStore
     + UserStore
-    + GarageStore
+    + ShopStore
     + ActivityStore
     + AttachmentStore
     + UsageStore

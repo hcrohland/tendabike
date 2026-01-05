@@ -3,10 +3,10 @@ use tb_domain::{Store, TbResult};
 
 mod activity;
 mod attachment;
-mod garage;
 mod part;
 mod service;
 mod serviceplan;
+mod shop;
 mod usage;
 mod user;
 

@@ -43,7 +43,7 @@ pub struct Export {
     pub plans: Vec<tb_domain::ServicePlan>,
     pub usages: Vec<tb_domain::Usage>,
     pub activities: Vec<tb_domain::Activity>,
-    pub garages: Vec<tb_domain::GarageWithOwner>,
+    pub shops: Vec<tb_domain::ShopWithOwner>,
 }
 
 async fn export(user: RequestSession, State(pool): State<DbPool>) -> ApiResult<Export> {
@@ -56,7 +56,7 @@ async fn export(user: RequestSession, State(pool): State<DbPool>) -> ApiResult<E
         usages,
         services,
         plans,
-        garages,
+        shops,
     } = user.get_id().get_summary(&mut store).await?;
     Ok(Json(Export {
         user,
@@ -66,7 +66,7 @@ async fn export(user: RequestSession, State(pool): State<DbPool>) -> ApiResult<E
         usages,
         services,
         plans,
-        garages,
+        shops,
     }))
 }
 

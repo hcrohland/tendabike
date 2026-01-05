@@ -20,8 +20,8 @@
   import XsButton from "../Widgets/XsButton.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { pop } from "svelte-spa-router";
-  import { garageMode, user, updateSummary } from "../lib/store";
-  import { garages, type Garage } from "../lib/garage";
+  import { shopMode, user, updateSummary } from "../lib/store";
+  import { shops, type Shop } from "../lib/shop";
   import { onMount } from "svelte";
 
   interface Props {
@@ -41,89 +41,89 @@
     plans_for_part_and_subtypes($attachments, $plans, part),
   );
 
-  // Check if user can unregister this part from the current garage
+  // Check if user can unregister this part from the current shop
   let canUnregister = $derived(
-    $garageMode.active &&
-      $garageMode.garage &&
-      ($garageMode.garage.owner === $user?.id || part.owner === $user?.id),
+    $shopMode.active &&
+      $shopMode.shop &&
+      ($shopMode.shop.owner === $user?.id || part.owner === $user?.id),
   );
 
-  // Fetch user's garages (only owned garages, not in garage mode)
-  let userGarages = $derived($garageMode.active ? [] : Object.values($garages));
+  // Fetch user's shops (only owned shops, not in shop mode)
+  let userShops = $derived($shopMode.active ? [] : Object.values($shops));
 
-  // Track which garages this part is registered to
-  let partRegisteredGarages = $state<number[]>([]);
+  // Track which shops this part is registered to
+  let partRegisteredShops = $state<number[]>([]);
 
-  async function unregisterFromGarage() {
-    if (!$garageMode.garage) return;
+  async function unregisterFromShop() {
+    if (!$shopMode.shop) return;
     try {
-      await $garageMode.garage.unregisterPart(part.id!);
+      await $shopMode.shop.unregisterPart(part.id!);
       updateSummary();
     } catch (error) {
       console.error("Error unregistering part:", error);
     }
   }
 
-  // Load which garages this part is registered to
-  async function loadPartGarages() {
-    if (!part.id || userGarages.length === 0) {
-      partRegisteredGarages = [];
+  // Load which shops this part is registered to
+  async function loadPartShops() {
+    if (!part.id || userShops.length === 0) {
+      partRegisteredShops = [];
       return;
     }
 
     try {
-      const promises = userGarages.map(async (garage) => {
+      const promises = userShops.map(async (shop) => {
         try {
-          const partIds = await garage.getParts();
+          const partIds = await shop.getParts();
           // partIds is an array of numbers, not objects
-          return partIds.includes(part.id!) ? garage.id : null;
+          return partIds.includes(part.id!) ? shop.id : null;
         } catch {
           return null;
         }
       });
 
       const results = await Promise.all(promises);
-      partRegisteredGarages = results.filter((id): id is number => id !== null);
+      partRegisteredShops = results.filter((id): id is number => id !== null);
     } catch (error) {
-      console.error("Error loading part garages:", error);
-      partRegisteredGarages = [];
+      console.error("Error loading part shops:", error);
+      partRegisteredShops = [];
     }
   }
 
-  // Toggle registration of this part to a garage
-  async function toggleGarageRegistration(garage: Garage) {
-    if (!part.id || !garage.id) return;
+  // Toggle registration of this part to a shop
+  async function toggleShopRegistration(shop: Shop) {
+    if (!part.id || !shop.id) return;
 
-    const isRegistered = partRegisteredGarages.includes(garage.id);
+    const isRegistered = partRegisteredShops.includes(shop.id);
 
     try {
       if (isRegistered) {
-        await garage.unregisterPart(part.id);
-        partRegisteredGarages = partRegisteredGarages.filter(
-          (id) => id !== garage.id,
+        await shop.unregisterPart(part.id);
+        partRegisteredShops = partRegisteredShops.filter(
+          (id) => id !== shop.id,
         );
       } else {
-        await garage.registerPart(part.id);
-        partRegisteredGarages = [...partRegisteredGarages, garage.id];
+        await shop.registerPart(part.id);
+        partRegisteredShops = [...partRegisteredShops, shop.id];
       }
     } catch (error) {
-      console.error("Error toggling garage registration:", error);
+      console.error("Error toggling shop registration:", error);
       // Reload to ensure UI reflects actual state
-      await loadPartGarages();
+      await loadPartShops();
     }
   }
 
-  // Load registered garages on mount
+  // Load registered shops on mount
   onMount(() => {
-    loadPartGarages();
+    loadPartShops();
   });
 </script>
 
 <GearCard {part}>
   <Menu>
     {#if canUnregister}
-      <DropdownItem onclick={unregisterFromGarage}>
-        Unregister from {$garageMode.garage?.name}
+      <DropdownItem onclick={unregisterFromShop}>
+        Unregister from {$shopMode.shop?.name}
       </DropdownItem>
     {/if}
     {#if part.disposed_at}
@@ -158,21 +158,21 @@
       </DropdownItem>
     {/if}
 
-    <!-- Garage Registration Section -->
-    {#if !$garageMode.active && $user?.id === part.owner && userGarages.length > 0}
+    <!-- Shop Registration Section -->
+    {#if !$shopMode.active && $user?.id === part.owner && userShops.length > 0}
       <DropdownDivider />
       <div class="px-3 py-2">
         <p class="text-sm font-medium text-gray-900 dark:text-white">
-          Register to Garages
+          Register to Shops
         </p>
       </div>
-      {#each userGarages as garage}
+      {#each userShops as shop}
         <DropdownItem class="flex items-center gap-2">
           <Checkbox
-            checked={partRegisteredGarages.includes(garage.id!)}
-            onchange={() => toggleGarageRegistration(garage)}
+            checked={partRegisteredShops.includes(shop.id!)}
+            onchange={() => toggleShopRegistration(shop)}
           />
-          <span>{garage.name}</span>
+          <span>{shop.name}</span>
         </DropdownItem>
       {/each}
     {/if}

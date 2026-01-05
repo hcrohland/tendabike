@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO shop_parts (shop_id, part_id)\n             VALUES ($1, $2)\n             ON CONFLICT (shop_id, part_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a299b3414f8ca309e3738ba981b1950b36ace80d460e6f2fb2326865b1cbd494"
+}

@@ -1,3 +1,3 @@
 -- Remove response_message field
-ALTER TABLE garage_subscriptions
+ALTER TABLE shop_subscriptions
 DROP COLUMN IF EXISTS response_message;

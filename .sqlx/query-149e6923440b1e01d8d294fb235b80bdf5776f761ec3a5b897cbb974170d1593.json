@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT part_id FROM shop_parts WHERE shop_id = $1 ORDER BY registered_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "part_id",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "149e6923440b1e01d8d294fb235b80bdf5776f761ec3a5b897cbb974170d1593"
+}

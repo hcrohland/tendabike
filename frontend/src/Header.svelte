@@ -18,8 +18,8 @@
     refresh,
     updateSummary,
     user,
-    garageMode,
-    exitGarage,
+    shopMode,
+    exitShop,
   } from "./lib/store";
   import { activities } from "./lib/activity";
   import Sport from "./Widgets/Sport.svelte";
@@ -86,12 +86,12 @@
       title="TendaBike"
       class="rounded-circle h-11"
     />
-    {#if $garageMode.active && $garageMode.garage}
-      &nbsp; Viewing: {$garageMode.garage.name}
+    {#if $shopMode.active && $shopMode.shop}
+      &nbsp; Viewing: {$shopMode.shop.name}
       <button
         class="ml-4 text-sm underline"
-        onclick={exitGarage}
-        title="Exit garage mode"
+        onclick={exitShop}
+        title="Exit shop mode"
       >
         Exit
       </button>
@@ -162,8 +162,8 @@
       <NavLi class="justify-start" href="/#/cat">{$category.name}s</NavLi>
       <NavLi href="/#/plans">Services</NavLi>
       <NavLi href="/#/spares">Parts</NavLi>
-      {#if !$garageMode.active}
-        <NavLi href="/#/garages">Garages</NavLi>
+      {#if !$shopMode.active}
+        <NavLi href="/#/shops">Shops</NavLi>
         <NavLi href="/#/activities">Activities</NavLi>
       {/if}
       <NavLi href="/#/stats">Statistics</NavLi>
