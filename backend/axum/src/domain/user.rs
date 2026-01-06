@@ -48,7 +48,7 @@ pub struct Export {
 
 async fn export(user: RequestSession, State(pool): State<DbPool>) -> ApiResult<Export> {
     let mut store = pool.begin().await?;
-    let user = user.get_id().read(&mut store).await?;
+    let user_id = user.get_id();
     let Summary {
         activities,
         parts,
@@ -57,7 +57,8 @@ async fn export(user: RequestSession, State(pool): State<DbPool>) -> ApiResult<E
         services,
         plans,
         shops,
-    } = user.get_id().get_summary(&mut store).await?;
+    } = user_id.get_summary(&mut store).await?;
+    let user = user_id.read(&mut store).await?;
     Ok(Json(Export {
         user,
         activities,

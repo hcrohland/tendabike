@@ -58,7 +58,7 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::{ApiResult, AxumAdmin, DbPool, RequestSession};
 use tb_domain::{Error, OnboardingStatus, Store, Summary, TbResult, UserStore};
-use tb_strava::StravaPerson;
+use tb_strava::StravaSession;
 use tb_strava::event::{InEvent, process};
 
 #[derive(Debug, Deserialize, Serialize)]

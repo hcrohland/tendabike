@@ -213,7 +213,7 @@ pub trait StravaStore: tb_domain::Store + Send {
 }
 
 #[async_trait::async_trait]
-pub trait StravaPerson: Session {
+pub trait StravaSession: Session {
     /// Returns the Strava ID of the user.
     ///
     /// # Returns

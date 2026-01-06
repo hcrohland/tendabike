@@ -19,7 +19,7 @@ pub struct StravaGear {
 
 pub async fn strava_url(
     gear: i32,
-    user: &mut impl StravaPerson,
+    user: &mut impl StravaSession,
     store: &mut impl StravaStore,
 ) -> TbResult<String> {
     let part = PartId::from(gear).part(user, store).await?;
@@ -47,7 +47,7 @@ impl StravaGear {
 /// None will return None
 pub(crate) async fn into_partid(
     strava_id: String,
-    user: &mut impl StravaPerson,
+    user: &mut impl StravaSession,
     store: &mut impl StravaStore,
 ) -> TbResult<PartId> {
     if let Some(gear) = store.partid_get_by_source(&strava_id).await? {

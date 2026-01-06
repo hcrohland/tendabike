@@ -141,15 +141,14 @@ impl PartId {
         user: &dyn Session,
         store: &mut impl PartStore,
     ) -> TbResult<PartId> {
-        let own = self.read(store).await?.owner;
-        if user.get_id() == own {
+        let part = self.read(store).await?;
+        let user_id = user.get_id();
+        if user_id == part.owner {
             return Ok(self);
         }
 
         Err(crate::Error::NotFound(format!(
-            "user {} cannot access part {}",
-            user.get_id(),
-            self
+            "user {user_id} cannot access part {self}"
         )))
     }
 

@@ -22,7 +22,7 @@ pub use service::*;
 mod serviceplan;
 pub use serviceplan::*;
 
-use crate::{TbResult, UserId};
+use crate::{ShopId, TbResult, UserId};
 
 #[async_trait::async_trait]
 /// A trait that represents a store for various tb_domain models.
@@ -43,9 +43,10 @@ pub trait Store:
 /// A trait that represents a session.
 pub trait Session: Send + Sync {
     fn get_id(&self) -> UserId;
+    fn shop(&self) -> Option<ShopId>;
     fn is_admin(&self) -> bool;
     fn check_owner(&self, owner: UserId, error: String) -> crate::TbResult<()> {
-        if self.get_id() == owner || self.is_admin() {
+        if self.get_id() == owner {
             Ok(())
         } else {
             Err(crate::Error::Forbidden(error))

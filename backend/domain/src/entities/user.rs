@@ -195,12 +195,3 @@ impl UserId {
         Ok(())
     }
 }
-
-impl Session for User {
-    fn get_id(&self) -> UserId {
-        self.id
-    }
-    fn is_admin(&self) -> bool {
-        self.is_admin
-    }
-}

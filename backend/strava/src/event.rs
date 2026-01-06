@@ -197,7 +197,7 @@ impl Event {
     #[async_recursion]
     async fn rate_limit(
         self,
-        user: &impl StravaPerson,
+        user: &impl StravaSession,
         store: &mut impl StravaStore,
     ) -> TbResult<Option<Self>> {
         // rate limit event
@@ -214,7 +214,7 @@ impl Event {
 
     async fn process_activity(
         self,
-        user: &mut impl StravaPerson,
+        user: &mut impl StravaSession,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
         let summary = self.process_hook(user, store).await;
@@ -247,7 +247,7 @@ impl Event {
     ///
     async fn process_hook(
         &self,
-        user: &mut impl StravaPerson,
+        user: &mut impl StravaSession,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
         let res = match self.aspect_type {
@@ -270,7 +270,7 @@ impl Event {
 
     async fn sync(
         mut self,
-        user: &mut impl StravaPerson,
+        user: &mut impl StravaSession,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
         // let mut len = batch;
@@ -298,7 +298,7 @@ impl Event {
 
     async fn process_sync(
         self,
-        user: &mut impl StravaPerson,
+        user: &mut impl StravaSession,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
         let summary = self.sync(user, store).await;
@@ -381,7 +381,7 @@ pub async fn insert_stop(store: &mut impl StravaStore) -> TbResult<()> {
 }
 
 async fn get_event(
-    user: &impl StravaPerson,
+    user: &impl StravaSession,
     store: &mut impl StravaStore,
 ) -> TbResult<Option<Event>> {
     let event = store
@@ -424,7 +424,7 @@ async fn check_try_again(err: tb_domain::Error, store: &mut impl StravaStore) ->
 }
 
 async fn next_activities(
-    user: &mut impl StravaPerson,
+    user: &mut impl StravaSession,
     store: &mut impl StravaStore,
     per_page: usize,
     start: i64,
@@ -437,7 +437,7 @@ async fn next_activities(
 }
 
 pub async fn process(
-    user: &mut impl StravaPerson,
+    user: &mut impl StravaSession,
     store: &mut impl StravaStore,
 ) -> TbResult<Summary> {
     let event = get_event(user, store).await?;

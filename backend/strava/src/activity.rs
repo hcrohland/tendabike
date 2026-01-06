@@ -58,7 +58,7 @@ impl StravaActivity {
     /// A Result containing a Activity struct if the conversion was successful, or an error if it failed.
     async fn into_activity(
         self,
-        user: &mut impl StravaPerson,
+        user: &mut impl StravaSession,
         store: &mut impl StravaStore,
     ) -> TbResult<Activity> {
         let StravaActivity {
@@ -169,7 +169,7 @@ impl StravaActivity {
     /// A Result containing a Summary if the sending was successful, or an error if it failed.
     pub(crate) async fn send_to_tb(
         self,
-        user: &mut impl StravaPerson,
+        user: &mut impl StravaSession,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
         let activity = self.into_activity(user, store).await?;
@@ -180,7 +180,7 @@ impl StravaActivity {
 
 pub async fn strava_url(
     act: i64,
-    user: &impl StravaPerson,
+    user: &impl StravaSession,
     store: &mut impl StravaStore,
 ) -> TbResult<String> {
     let g = ActivityId::new(act).read(user, store).await?;
@@ -189,7 +189,7 @@ pub async fn strava_url(
 
 pub async fn upsert_activity(
     id: i64,
-    user: &mut impl StravaPerson,
+    user: &mut impl StravaSession,
     store: &mut impl StravaStore,
 ) -> TbResult<Summary> {
     let act: StravaActivity = user
@@ -200,7 +200,7 @@ pub async fn upsert_activity(
 
 pub(crate) async fn delete_activity(
     act: i64,
-    user: &impl StravaPerson,
+    user: &impl StravaSession,
     store: &mut impl StravaStore,
 ) -> TbResult<Summary> {
     ActivityId::new(act).delete(user, store).await

@@ -351,7 +351,7 @@ impl Activity {
         let part = gear_id.part(user, store).await?;
         let types = part.what.act_types();
         let acts = store
-            .activity_set_gear_if_null(user, types, &gear_id)
+            .activity_set_gear_if_null(user.get_id(), types, &gear_id)
             .await?;
         let mut hash = SumHash::default();
         for act in acts {

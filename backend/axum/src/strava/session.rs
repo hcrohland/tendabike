@@ -20,8 +20,8 @@ use crate::{
     AppError,
     strava::{HTTP_CLIENT, StravaAthleteInfo, oauth::STRAVACLIENT},
 };
-use tb_domain::{Error, Session as TbSession, TbResult, UserId};
-use tb_strava::{StravaId, StravaPerson, StravaStore, StravaUser};
+use tb_domain::{Error, Session as TbSession, ShopId, TbResult, UserId};
+use tb_strava::{StravaId, StravaSession, StravaStore, StravaUser};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct RequestSession {
@@ -33,6 +33,8 @@ pub(crate) struct RequestSession {
     refresh_token: Option<RefreshToken>,
     #[serde(skip)]
     session: Option<AsyncSession>,
+    #[serde(skip)]
+    shop: Option<ShopId>,
 }
 
 const API: &str = "https://www.strava.com/api/v3";
@@ -75,6 +77,7 @@ impl RequestSession {
             expires_at: token.expires_in().map(|d| SystemTime::now() + d),
             refresh_token: refresh_token.cloned(),
             session: None,
+            shop: None,
         })
     }
 
@@ -98,6 +101,7 @@ impl RequestSession {
             expires_at: Some(SystemTime::UNIX_EPOCH),
             refresh_token,
             session: None,
+            shop: None,
         })
     }
 
@@ -199,10 +203,13 @@ impl TbSession for RequestSession {
     fn is_admin(&self) -> bool {
         self.is_admin
     }
+    fn shop(&self) -> Option<ShopId> {
+        self.shop
+    }
 }
 
 #[async_trait::async_trait]
-impl StravaPerson for RequestSession {
+impl StravaSession for RequestSession {
     fn strava_id(&self) -> StravaId {
         self.strava_id
     }

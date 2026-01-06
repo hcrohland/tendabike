@@ -104,7 +104,7 @@ NewtypeFrom! { () pub struct ShopId(i32); }
 impl ShopId {
     /// Get a shop by ID, checking that the user has access to it (ownership only)
     pub async fn get(id: i32, user: &dyn Session, store: &mut impl ShopStore) -> TbResult<ShopId> {
-        ShopId(id).checkuser(user, store).await
+        ShopId(id).checkowner(user, store).await
     }
 
     /// Get a shop by ID for read access (owner, or active subscriber)
@@ -117,7 +117,7 @@ impl ShopId {
     }
 
     /// Check if the user owns this shop
-    pub async fn checkuser(
+    pub async fn checkowner(
         self,
         user: &dyn Session,
         store: &mut impl ShopStore,
@@ -136,11 +136,7 @@ impl ShopId {
         let shop = store.shop_get(self).await?;
         let is_owner = shop.owner == user.get_id();
 
-        if is_owner {
-            return Ok(self);
-        }
-
-        if self.has_subscription(user, store).await? {
+        if is_owner || self.has_subscription(user, store).await? {
             return Ok(self);
         }
 
@@ -165,13 +161,13 @@ impl ShopId {
         user: &dyn Session,
         store: &mut impl ShopStore,
     ) -> TbResult<Shop> {
-        self.checkuser(user, store).await?;
+        self.checkowner(user, store).await?;
         store.shop_update(self, name, description).await
     }
 
     /// Delete a shop (only if it has no bikes)
     pub async fn delete(self, user: &dyn Session, store: &mut impl Store) -> TbResult<ShopId> {
-        self.checkuser(user, store).await?;
+        self.checkowner(user, store).await?;
 
         // Check if shop has any bikes
         let parts = store.shop_get_parts(self).await?;
@@ -599,7 +595,7 @@ impl SubscriptionId {
 
         // Verify user owns the shop
         let shop_id = subscription.shop_id;
-        shop_id.checkuser(user, store).await?;
+        shop_id.checkowner(user, store).await?;
 
         if subscription.status != SubscriptionStatus::Pending {
             return Err(Error::Conflict("Subscription is not pending".into()));
@@ -622,7 +618,7 @@ impl SubscriptionId {
 
         // Verify user owns the shop
         let shop_id = subscription.shop_id;
-        shop_id.checkuser(user, store).await?;
+        shop_id.checkowner(user, store).await?;
 
         if subscription.status != SubscriptionStatus::Pending {
             return Err(Error::Conflict("Subscription is not pending".into()));
@@ -664,7 +660,7 @@ impl ShopSubscription {
         user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<Vec<ShopSubscription>> {
-        shop_id.checkuser(user, store).await?;
+        shop_id.checkowner(user, store).await?;
         store
             .subscriptions_for_shop(shop_id, Some(SubscriptionStatus::Pending))
             .await
