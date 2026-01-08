@@ -11,7 +11,7 @@
   import PlanList from "../ServicePlan/PlanList.svelte";
   import { attachments } from "../lib/attachment";
   import { filterValues } from "../lib/mapable";
-  import { Part, parts } from "../lib/part";
+  import { parts } from "../lib/part";
   import { plans, plans_for_part_and_subtypes } from "../lib/serviceplan";
   import GearCard from "./GearCard.svelte";
   import Subparts from "./Subparts.svelte";
@@ -171,6 +171,7 @@
           <Checkbox
             checked={partRegisteredShops.includes(shop.id!)}
             onchange={() => toggleShopRegistration(shop)}
+            disabled={!(attachees.length > 0 || part.isGear())}
           />
           <span>{shop.name}</span>
         </DropdownItem>

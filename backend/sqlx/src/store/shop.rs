@@ -2,7 +2,7 @@ use sqlx::FromRow;
 use time::OffsetDateTime;
 
 use crate::{SqlxConn, into_domain};
-use tb_domain::{Shop, ShopId, ShopSubscription, SubscriptionStatus, TbResult, UserId};
+use tb_domain::{PartId, Shop, ShopId, ShopSubscription, SubscriptionStatus, TbResult, UserId};
 
 #[derive(Clone, Debug, FromRow)]
 pub struct DbShop {
@@ -173,17 +173,21 @@ impl<'c> tb_domain::ShopStore for SqlxConn<'c> {
         .map(|shops| shops.into_iter().map(Into::into).collect())
     }
 
-    async fn shop_register_part(
+    async fn shop_register_parts(
         &mut self,
-        shop_id: tb_domain::ShopId,
-        part_id: tb_domain::PartId,
+        shop_id: ShopId,
+        part_ids: Vec<PartId>,
     ) -> TbResult<()> {
+        let part_ids: Vec<i32> = part_ids.into_iter().map(Into::into).collect();
         sqlx::query!(
-            "INSERT INTO shop_parts (shop_id, part_id)
-             VALUES ($1, $2)
-             ON CONFLICT (shop_id, part_id) DO NOTHING",
+            r#"
+    INSERT INTO shop_parts (shop_id, part_id)
+    SELECT $1, part_id
+    FROM UNNEST($2::int[]) AS t(part_id)
+    ON CONFLICT (shop_id, part_id) DO NOTHING
+    "#,
             i32::from(shop_id),
-            i32::from(part_id)
+            &part_ids,
         )
         .execute(&mut **self.inner())
         .await
@@ -193,13 +197,14 @@ impl<'c> tb_domain::ShopStore for SqlxConn<'c> {
 
     async fn shop_unregister_part(
         &mut self,
-        shop_id: tb_domain::ShopId,
-        part_id: tb_domain::PartId,
+        shop_id: ShopId,
+        part_ids: Vec<PartId>,
     ) -> TbResult<()> {
+        let part_ids: Vec<i32> = part_ids.into_iter().map(Into::into).collect();
         sqlx::query!(
-            "DELETE FROM shop_parts WHERE shop_id = $1 AND part_id = $2",
+            "DELETE FROM shop_parts WHERE shop_id = $1 AND part_id = Any($2)",
             i32::from(shop_id),
-            i32::from(part_id)
+            &part_ids
         )
         .execute(&mut **self.inner())
         .await

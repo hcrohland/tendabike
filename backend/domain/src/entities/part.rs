@@ -81,7 +81,7 @@ NewtypeDisplay! { () pub struct PartId(); }
 NewtypeFrom! { () pub struct PartId(i32); }
 
 impl PartId {
-    pub async fn get(id: i32, user: &dyn Session, store: &mut impl PartStore) -> TbResult<PartId> {
+    pub async fn get(id: i32, user: &dyn Session, store: &mut impl Store) -> TbResult<PartId> {
         PartId(id).checkuser(user, store).await
     }
 
@@ -109,12 +109,23 @@ impl PartId {
     }
 
     /// get the part with id part
-    pub async fn part(self, user: &dyn Session, store: &mut impl PartStore) -> TbResult<Part> {
+    pub async fn part(self, session: &dyn Session, store: &mut impl Store) -> TbResult<Part> {
         let part = self.read(store).await?;
-        user.check_owner(
-            part.owner,
-            format!("user {} cannot access part {}", user.get_id(), part.id),
-        )?;
+
+        let user = session.user_id();
+        if part.owner != user {
+            match session.shop() {
+                Some(shop) => {
+                    shop.check_part_and_user(part.id, user, store).await?;
+                }
+                None => {
+                    return Err(Error::Forbidden(format!(
+                        "user {user} cannot access part {}",
+                        part.id
+                    )));
+                }
+            }
+        }
         Ok(part)
     }
 
@@ -134,22 +145,14 @@ impl PartId {
         part.what.is_main()
     }
 
-    /// check if the given user is the owner or an admin.
+    /// check if the given user is the owner or an authorized shop owner.
     /// Returns Forbidden if not.
     pub async fn checkuser(
         self,
-        user: &dyn Session,
-        store: &mut impl PartStore,
+        session: &dyn Session,
+        store: &mut impl Store,
     ) -> TbResult<PartId> {
-        let part = self.read(store).await?;
-        let user_id = user.get_id();
-        if user_id == part.owner {
-            return Ok(self);
-        }
-
-        Err(crate::Error::NotFound(format!(
-            "user {user_id} cannot access part {self}"
-        )))
+        self.part(session, store).await.map(|p| p.id)
     }
 
     /// if start is later than last_used update last_used
@@ -197,7 +200,7 @@ impl PartId {
         purchase: OffsetDateTime,
         notes: String,
         user: &dyn Session,
-        store: &mut impl PartStore,
+        store: &mut impl Store,
     ) -> TbResult<Part> {
         info!("Change {self:?}");
 
@@ -219,50 +222,6 @@ impl PartId {
 impl Part {
     pub(crate) async fn get_all(pid: &UserId, store: &mut impl Store) -> TbResult<Vec<Part>> {
         store.part_get_all_for_userid(pid).await
-    }
-
-    /// Returns a list of all parts owned by the given user.
-    ///
-    /// # Arguments
-    ///
-    /// * `user` - A reference to a `dyn Person` trait object representing the user.
-    /// * `store` - A mutable reference to an `AppConn` object representing the database connection.
-    ///
-    /// # Returns
-    ///
-    /// A `Vec` of `Part` objects owned by the given user.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `TbResult` object that may contain a `diesel::result::Error` if the query fails.
-    pub(crate) async fn get_part_summary(
-        user: &UserId,
-        store: &mut impl Store,
-    ) -> TbResult<Summary> {
-        let parts = store.part_get_all_for_userid(user).await?;
-        let mut usages = Vec::new();
-        let mut attachments = Vec::new();
-        let mut services = Vec::new();
-        let mut plans = ServicePlan::for_user(user, store).await?;
-        for part in &parts {
-            usages.push(part.usage().read(store).await?);
-            let (mut atts, mut uses) = Attachment::for_part_with_usage(part.id, store).await?;
-            usages.append(&mut uses);
-            attachments.append(&mut atts);
-            let (mut servs, mut uses) = Service::for_part_with_usage(part.id, store).await?;
-            let mut splans = ServicePlan::for_part(part.id, store).await?;
-            usages.append(&mut uses);
-            services.append(&mut servs);
-            plans.append(&mut splans)
-        }
-        Ok(Summary {
-            parts,
-            usages,
-            attachments,
-            services,
-            plans,
-            ..Default::default()
-        })
     }
 
     pub(crate) fn usage(&self) -> UsageId {
@@ -293,7 +252,7 @@ impl Part {
                 source,
                 notes,
                 UsageId::new(),
-                user.get_id(),
+                user.user_id(),
             )
             .await
     }
@@ -302,7 +261,7 @@ impl Part {
         user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<HashSet<PartTypeId>> {
-        let parts = store.part_get_all_for_userid(&user.get_id()).await?;
+        let parts = store.part_get_all_for_userid(&user.user_id()).await?;
         let mut res = HashSet::new();
         for part in parts {
             if part.what.is_main()? {

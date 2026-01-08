@@ -110,8 +110,9 @@ export async function initData() {
   return refresh();
 }
 
-export async function refresh() {
-  await myfetch("/api/user/summary").then(setSummary);
+export async function refresh(shop?: number) {
+  let query = shop ? "?shop=" + shop : "";
+  await myfetch("/api/user/summary" + query).then(setSummary);
 }
 
 type Summary = {
@@ -165,28 +166,12 @@ export const shopMode = writable<{
 
 // Enter shop mode: replaces stores with shop-specific data
 export async function enterShop(shopId: number) {
-  try {
-    const data = await myfetch(`/api/shop/${shopId}/details`, "GET");
+  // Set shop mode active
+  shopMode.set({ active: true, shop: new Shop(shopId) });
+  await refresh(shopId);
 
-    // Replace stores with shop data
-    setSummary({
-      parts: data.parts,
-      attachments: data.attachments,
-      activities: [], // Hidden in shop mode
-      usages: data.usages,
-      services: data.services,
-      plans: data.plans,
-      shops: [], // Don't show shops in shop mode
-    });
-
-    // Set shop mode active
-    shopMode.set({ active: true, shop: new Shop(data.shop) });
-
-    // Navigate to bikes page to show shop bikes
-    window.location.hash = "#/cat";
-  } catch (error) {
-    handleError(error as Error);
-  }
+  // Navigate to main page
+  window.location.hash = "#/cat";
 }
 
 // Exit shop mode: refresh data from backend
@@ -194,6 +179,6 @@ export async function exitShop() {
   shopMode.set({ active: false });
   await refresh();
 
-  // Navigate back to shops page
-  window.location.hash = "#/shops";
+  // Navigate to main page
+  window.location.hash = "#/cat";
 }

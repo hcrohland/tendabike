@@ -31,13 +31,13 @@ pub(crate) struct RequestSession {
     access_token: AccessToken,
     expires_at: Option<SystemTime>,
     refresh_token: Option<RefreshToken>,
+    shop: Option<ShopId>,
     #[serde(skip)]
     session: Option<AsyncSession>,
-    #[serde(skip)]
-    shop: Option<ShopId>,
 }
 
 const API: &str = "https://www.strava.com/api/v3";
+pub(crate) const SESSION_KEY: &str = "session";
 
 impl RequestSession {
     pub(crate) async fn create_from_token(
@@ -81,6 +81,7 @@ impl RequestSession {
         })
     }
 
+    /// User for admin actions to impersonate user
     pub(crate) async fn create_from_id(
         _admin: AxumAdmin,
         user: UserId,
@@ -135,10 +136,14 @@ impl RequestSession {
         self.refresh_token = token.refresh_token().cloned();
         let refresh = token.refresh_token().map(|t| t.secret());
         self.strava_id.update_token(refresh, store).await?;
+        self.update()
+    }
+
+    fn update(&self) -> TbResult<()> {
         if let Some(mut session) = self.session.clone() {
             debug!("updating session for user {}", self.id);
             session
-                .insert("user", self)
+                .insert(SESSION_KEY, self)
                 .context("session insert failed")?;
         };
         Ok(())
@@ -197,14 +202,21 @@ impl RequestSession {
 }
 
 impl TbSession for RequestSession {
-    fn get_id(&self) -> UserId {
+    fn user_id(&self) -> UserId {
         self.id
     }
+
     fn is_admin(&self) -> bool {
         self.is_admin
     }
+
     fn shop(&self) -> Option<ShopId> {
         self.shop
+    }
+
+    fn set_shop(&mut self, shop: Option<ShopId>) -> TbResult<()> {
+        self.shop = shop;
+        self.update()
     }
 }
 
@@ -263,18 +275,18 @@ where
             .get(crate::strava::COOKIE_NAME)
             .ok_or(Error::NotAuth("Please authenticate".into()))?;
 
-        let session = store
+        let sessionstore = store
             .load_session(session_cookie.to_string())
             .await
             .expect("could not load session")
             .ok_or(Error::NotAuth("Please authenticate".into()))?;
 
-        let user = session
-            .get::<RequestSession>("user")
+        let session = sessionstore
+            .get::<RequestSession>(SESSION_KEY)
             .ok_or(Error::NotAuth("Session error".into()))?
-            .set_session(session);
+            .set_session(sessionstore);
 
-        Ok(user)
+        Ok(session)
     }
 }
 

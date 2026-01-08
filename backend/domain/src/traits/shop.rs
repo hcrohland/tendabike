@@ -1,4 +1,4 @@
-use crate::{Shop, ShopId, TbResult, UserId};
+use crate::{PartId, Shop, ShopId, TbResult, UserId};
 
 #[async_trait::async_trait]
 /// A trait representing a shop store.
@@ -82,11 +82,7 @@ pub trait ShopStore {
     /// # Returns
     ///
     /// Returns Ok(()) if successful, error otherwise.
-    async fn shop_register_part(
-        &mut self,
-        shop_id: crate::ShopId,
-        part_id: crate::PartId,
-    ) -> TbResult<()>;
+    async fn shop_register_parts(&mut self, shop_id: ShopId, part_id: Vec<PartId>) -> TbResult<()>;
 
     /// Unregisters a part (bike) from a shop.
     ///
@@ -100,8 +96,8 @@ pub trait ShopStore {
     /// Returns Ok(()) if successful, error otherwise.
     async fn shop_unregister_part(
         &mut self,
-        shop_id: crate::ShopId,
-        part_id: crate::PartId,
+        shop_id: ShopId,
+        part_ids: Vec<PartId>,
     ) -> TbResult<()>;
 
     /// Gets all part IDs registered to a shop.

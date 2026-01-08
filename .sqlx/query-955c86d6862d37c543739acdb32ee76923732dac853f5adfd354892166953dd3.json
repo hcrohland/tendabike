@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM shop_parts WHERE shop_id = $1 AND part_id = Any($2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "955c86d6862d37c543739acdb32ee76923732dac853f5adfd354892166953dd3"
+}

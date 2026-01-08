@@ -104,7 +104,7 @@ impl ActivityId {
         if let Some(act) = &act {
             session.check_owner(
                 act.user_id,
-                format!("User {} cannot access activity {}", session.get_id(), self),
+                format!("User {} cannot access activity {}", session.user_id(), self),
             )?;
         }
         Ok(act)
@@ -162,7 +162,7 @@ impl Activity {
                 self.user_id,
                 format!(
                     "user {} cannot create activity for user {}",
-                    user.get_id(),
+                    user.user_id(),
                     self.user_id
                 ),
             )?;
@@ -265,7 +265,7 @@ impl Activity {
         store: &mut impl Store,
     ) -> TbResult<HashSet<PartTypeId>> {
         let act_types = store
-            .get_all(&user.get_id())
+            .get_all(&user.user_id())
             .await?
             .into_iter()
             .map(|a| a.what)
@@ -351,7 +351,7 @@ impl Activity {
         let part = gear_id.part(user, store).await?;
         let types = part.what.act_types();
         let acts = store
-            .activity_set_gear_if_null(user.get_id(), types, &gear_id)
+            .activity_set_gear_if_null(user.user_id(), types, &gear_id)
             .await?;
         let mut hash = SumHash::default();
         for act in acts {
@@ -379,7 +379,7 @@ async fn match_and_update(
     rclimb: Option<i32>,
     rdescend: i32,
 ) -> TbResult<Summary> {
-    let mut act = store.get_by_user_and_time(user.get_id(), rstart).await?;
+    let mut act = store.get_by_user_and_time(user.user_id(), rstart).await?;
     if let Some(rclimb) = rclimb {
         act.climb = Some(rclimb);
     }

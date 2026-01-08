@@ -31,7 +31,7 @@ use oauth2::{
 use serde::{Deserialize, Serialize};
 use std::{env, sync::LazyLock};
 
-use crate::error::AppError;
+use crate::{error::AppError, strava::SESSION_KEY};
 use tb_domain::{Error, Store, TbResult};
 use tb_strava::StravaId;
 
@@ -231,7 +231,7 @@ pub(crate) async fn login_authorized(
     // Create a new session filled with user data
     let mut session = Session::new();
     session
-        .insert("user", &user)
+        .insert(SESSION_KEY, &user)
         .context("session insert failed")?;
 
     // Store session and get corresponding cookie

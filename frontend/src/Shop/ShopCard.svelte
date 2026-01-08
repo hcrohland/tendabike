@@ -82,9 +82,10 @@
 
     <div class="flex items-center gap-2">
       {#if isOwner}
-        <Badge color="blue"
-          >{partsCount} {partsCount === 1 ? "bike" : "bikes"}</Badge
-        >
+        <Badge color="blue">
+          {partsCount}
+          {partsCount === 1 ? "part" : "parts"}
+        </Badge>
         <Badge color="green">Owner</Badge>
       {/if}
     </div>

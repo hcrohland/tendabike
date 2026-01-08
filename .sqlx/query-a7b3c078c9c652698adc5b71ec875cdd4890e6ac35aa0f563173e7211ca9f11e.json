@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    INSERT INTO shop_parts (shop_id, part_id)\n    SELECT $1, part_id\n    FROM UNNEST($2::int[]) AS t(part_id)\n    ON CONFLICT (shop_id, part_id) DO NOTHING\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a7b3c078c9c652698adc5b71ec875cdd4890e6ac35aa0f563173e7211ca9f11e"
+}

@@ -222,7 +222,7 @@ pub trait StravaSession: Session {
     fn strava_id(&self) -> StravaId;
 
     fn tb_id(&self) -> UserId {
-        self.get_id()
+        self.user_id()
     }
 
     async fn request_json<T: DeserializeOwned>(

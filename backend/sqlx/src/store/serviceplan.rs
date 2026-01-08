@@ -133,7 +133,7 @@ impl<'c> tb_domain::ServicePlanStore for SqlxConn<'c> {
         .map(Into::into)
     }
 
-    async fn update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
+    async fn plan_update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
         let plan: DbServicePlan = plan.into();
         sqlx::query_as!(
             DbServicePlan,

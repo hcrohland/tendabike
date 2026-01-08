@@ -48,17 +48,6 @@ pub struct Shop {
     pub created_at: OffsetDateTime,
 }
 
-/// Shop summary with related data for shop mode
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct ShopSummary {
-    pub shop: Shop,
-    pub parts: Vec<Part>,
-    pub attachments: Vec<AttachmentDetail>,
-    pub services: Vec<Service>,
-    pub plans: Vec<ServicePlan>,
-    pub usages: Vec<Usage>,
-}
-
 /// Shop with owner information for API responses
 #[serde_as]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -103,38 +92,26 @@ NewtypeFrom! { () pub struct ShopId(i32); }
 
 impl ShopId {
     /// Get a shop by ID, checking that the user has access to it (ownership only)
-    pub async fn get(id: i32, user: &dyn Session, store: &mut impl ShopStore) -> TbResult<ShopId> {
+    pub async fn get(id: i32, user: UserId, store: &mut impl ShopStore) -> TbResult<ShopId> {
         ShopId(id).checkowner(user, store).await
     }
 
     /// Get a shop by ID for read access (owner, or active subscriber)
-    pub async fn get_for_read(
-        id: i32,
-        user: &dyn Session,
-        store: &mut impl Store,
-    ) -> TbResult<ShopId> {
+    pub async fn get_for_read(id: i32, user: UserId, store: &mut impl Store) -> TbResult<ShopId> {
         ShopId(id).check_read_access(user, store).await
     }
 
     /// Check if the user owns this shop
-    pub async fn checkowner(
-        self,
-        user: &dyn Session,
-        store: &mut impl ShopStore,
-    ) -> TbResult<ShopId> {
+    pub async fn checkowner(self, user: UserId, store: &mut impl ShopStore) -> TbResult<ShopId> {
         let shop = store.shop_get(self).await?;
         user.check_owner(shop.owner, "Access denied to shop".to_string())?;
         Ok(self)
     }
 
     /// Check if the user has read access to this shop (owner, or active subscriber)
-    pub async fn check_read_access(
-        self,
-        user: &dyn Session,
-        store: &mut impl Store,
-    ) -> TbResult<ShopId> {
+    pub async fn check_read_access(self, user: UserId, store: &mut impl Store) -> TbResult<ShopId> {
         let shop = store.shop_get(self).await?;
-        let is_owner = shop.owner == user.get_id();
+        let is_owner = shop.owner == user;
 
         if is_owner || self.has_subscription(user, store).await? {
             return Ok(self);
@@ -147,10 +124,10 @@ impl ShopId {
     pub async fn create(
         name: String,
         description: Option<String>,
-        user: &dyn Session,
+        user: UserId,
         store: &mut impl ShopStore,
     ) -> TbResult<Shop> {
-        store.shop_create(name, description, user.get_id()).await
+        store.shop_create(name, description, user).await
     }
 
     /// Update an existing shop
@@ -158,7 +135,7 @@ impl ShopId {
         self,
         name: String,
         description: Option<String>,
-        user: &dyn Session,
+        user: UserId,
         store: &mut impl ShopStore,
     ) -> TbResult<Shop> {
         self.checkowner(user, store).await?;
@@ -166,7 +143,7 @@ impl ShopId {
     }
 
     /// Delete a shop (only if it has no bikes)
-    pub async fn delete(self, user: &dyn Session, store: &mut impl Store) -> TbResult<ShopId> {
+    pub async fn delete(self, user: UserId, store: &mut impl Store) -> TbResult<ShopId> {
         self.checkowner(user, store).await?;
 
         // Check if shop has any bikes
@@ -186,74 +163,19 @@ impl ShopId {
     pub async fn register_part(
         self,
         part_id: PartId,
-        user: &dyn Session,
+        session: &dyn Session,
         store: &mut impl Store,
-    ) -> TbResult<crate::Summary> {
-        // Verify the part exists and user owns it
-        part_id.checkuser(user, store).await?;
+    ) -> TbResult<Summary> {
+        let parts = parts_for_register(part_id, session, store).await?;
 
-        // Check if user is shop owner OR has active subscription
-        let shop = store.shop_get(self).await?;
-        let is_owner = shop.owner == user.get_id();
-        let has_subscription = self.has_subscription(user, store).await?;
+        // Register the parts to the shop
+        store.shop_register_parts(self, parts).await?;
 
-        if !(is_owner || has_subscription) {
-            return Err(Error::Forbidden(
-                "You must subscribe to this shop before registering bikes".into(),
-            ));
-        }
-
-        // Build summary to return
-        let mut hash = crate::SumHash::default();
-
-        // Register the part (bike or spare) to the shop
-        store.shop_register_part(self, part_id).await?;
-
-        // Add the registered part to the summary
-        let part = part_id.read(store).await?;
-        hash += part.clone();
-
-        // For display purposes: if this is a main part (bike), include its current attachments in the response
-        // Note: These attachments are NOT stored in shop_parts, they will be fetched dynamically later
-        let (attachments, _) = crate::Attachment::for_part_with_usage(part_id, store).await?;
-        let now = time::OffsetDateTime::now_utc();
-
-        for attachment in attachments {
-            // Only include currently attached parts (now < detached)
-            if now < attachment.a.detached {
-                // Add attached part to response summary (for UI display)
-                if let Ok(attached_part) = attachment.a.part_id.read(store).await {
-                    hash += attached_part;
-                }
-
-                // Add attachment detail to response summary
-                hash += crate::Summary {
-                    attachments: vec![attachment],
-                    ..Default::default()
-                };
-            }
-        }
-
-        // Add usage for the registered part
-        if let Ok(usage) = part.usage.read(store).await {
-            hash += crate::Summary {
-                usages: vec![usage],
-                ..Default::default()
-            };
-        }
-
-        Ok(hash.into())
+        Ok(Summary::default())
     }
 
-    async fn has_subscription(
-        self,
-        user: &dyn Session,
-        store: &mut impl Store,
-    ) -> Result<bool, Error> {
-        Ok(store
-            .subscription_find_active(self, user.get_id())
-            .await?
-            .is_some())
+    async fn has_subscription(self, user: UserId, store: &mut impl Store) -> Result<bool, Error> {
+        Ok(store.subscription_find_active(self, user).await?.is_some())
     }
 
     /// Unregister a part (bike) from this shop
@@ -262,42 +184,23 @@ impl ShopId {
     pub async fn unregister_part(
         self,
         part_id: PartId,
-        user: &dyn Session,
+        session: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<crate::Summary> {
-        // Check if user is shop owner OR part owner
-        let shop = store.shop_get(self).await?;
-        let is_shop_owner = shop.owner == user.get_id();
+        let parts = parts_for_register(part_id, session, store).await?;
 
-        // Check if user owns the part
-        let is_part_owner = if let Ok(part) = part_id.read(store).await {
-            part.owner == user.get_id()
-        } else {
-            false
-        };
-
-        if !is_shop_owner && !is_part_owner {
-            return Err(Error::Forbidden(
-                "You must be the shop owner or part owner to unregister this part".into(),
-            ));
-        }
-
-        store.shop_unregister_part(self, part_id).await?;
+        store.shop_unregister_part(self, parts).await?;
 
         // Return empty summary (part is removed, nothing to update)
         Ok(crate::Summary::default())
     }
 
-    /// Get all parts registered to this shop
+    /// Get all partidss registered to this shop
     /// Can be accessed by shop owner or users with active subscription
-    pub async fn get_parts(
-        self,
-        user: &dyn Session,
-        store: &mut impl Store,
-    ) -> TbResult<Vec<PartId>> {
+    pub async fn get_partids(self, user: UserId, store: &mut impl Store) -> TbResult<Vec<PartId>> {
         // Check if user is shop owner OR has active subscription
         let shop = store.shop_get(self).await?;
-        let is_owner = shop.owner == user.get_id();
+        let is_owner = shop.owner == user;
         let has_subscription = self.has_subscription(user, store).await?;
 
         if !is_owner && !has_subscription {
@@ -309,95 +212,61 @@ impl ShopId {
         store.shop_get_parts(self).await
     }
 
-    /// Get shop details with all related data (for shop mode)
-    /// Returns parts, attachments, services, plans, and usages (NOT activities)
-    pub async fn get_details(
-        self,
-        user: &dyn Session,
-        store: &mut impl Store,
-    ) -> TbResult<crate::ShopSummary> {
-        // Check permissions (shop owner or active subscriber)
+    /// Get all parts and their subparts registered to this shop
+    /// Can be accessed by shop owner
+    pub async fn get_parts(self, user: UserId, store: &mut impl Store) -> TbResult<Vec<Part>> {
+        // Check if user is shop owner OR has active subscription
         let shop = store.shop_get(self).await?;
-        let is_owner = shop.owner == user.get_id();
-        let has_subscription = self.has_subscription(user, store).await?;
-
-        if !is_owner && !has_subscription {
+        if !(shop.owner == user) {
             return Err(Error::Forbidden(
-                "You must be the shop owner or have an active subscription to view shop details"
-                    .into(),
+                "You must be the shop owner to view bikes".into(),
             ));
         }
 
-        // Get all part IDs registered to this shop
-        let part_ids = store.shop_get_parts(self).await?;
-
-        // Fetch full part details
-        let mut parts = Vec::new();
-        for part_id in &part_ids {
-            let part = part_id.read(store).await?;
-            // Privacy filter: non-owners only see their own parts
-            if is_owner || part.owner == user.get_id() {
-                parts.push(part);
-            }
+        let ids = store.shop_get_parts(self).await?;
+        let mut res = Vec::new();
+        for id in ids {
+            res.push(id.read(store).await?);
         }
-
-        // Get attachments - DYNAMIC
-        let mut attachments = Vec::new();
-        let now = time::OffsetDateTime::now_utc();
-        for part in &mut parts {
-            // Only fetch attachments for main parts (bikes/gears)
-            let (part_attachments, _) =
-                crate::Attachment::for_part_with_usage(part.id, store).await?;
-            // Only include currently attached parts (now < detached)
-            for attachment in part_attachments {
-                if now < attachment.a.detached {
-                    attachments.push(attachment);
-                }
-            }
-        }
-
-        for attachment in &attachments {
-            parts.push(attachment.a.part_id.read(store).await?);
-        }
-
-        // Get services for these parts
-        let mut services = Vec::new();
-        for part in &parts {
-            let (part_services, _) = crate::Service::for_part_with_usage(part.id, store).await?;
-            services.extend(part_services);
-        }
-
-        // Get service plans for these parts
-        let mut plans = Vec::new();
-        for part in &parts {
-            let part_plans = crate::ServicePlan::for_part(part.id, store).await?;
-            plans.extend(part_plans);
-        }
-
-        // Get usages for these parts
-        let mut usages = Vec::new();
-        for part in &parts {
-            if let Ok(usage) = part.usage.read(store).await {
-                usages.push(usage);
-            }
-        }
-
-        Ok(crate::ShopSummary {
-            shop,
-            parts,
-            attachments,
-            services,
-            plans,
-            usages,
-        })
+        Ok(res)
     }
 
     /// Read a shop from the database
     /// Allows access for owners, and active subscribers
-    pub async fn read(self, user: &dyn Session, store: &mut impl Store) -> TbResult<Shop> {
+    pub async fn read(self, user: UserId, store: &mut impl Store) -> TbResult<Shop> {
         self.check_read_access(user, store).await?;
         store.shop_get(self).await
     }
+
+    pub(crate) async fn check_part_and_user(
+        &self,
+        id: PartId,
+        user: UserId,
+        store: &mut impl Store,
+    ) -> TbResult<PartId> {
+        self.get_partids(user, store)
+            .await?
+            .into_iter()
+            .find(|p| *p == id)
+            .ok_or(Error::Forbidden(format!("part {id} not in shop {self}")))
+    }
+}
+
+async fn parts_for_register(
+    part_id: PartId,
+    session: &dyn Session,
+    store: &mut impl Store,
+) -> TbResult<Vec<PartId>> {
+    part_id.checkuser(session, store).await?;
+    let time = OffsetDateTime::now_utc();
+    if is_attached(part_id, time, store).await? {
+        return Err(Error::BadRequest(
+            "You can only register parts which are not attached".to_string(),
+        ));
+    };
+    let mut parts = subparts(part_id, time, store).await?;
+    parts.push(part_id);
+    Ok(parts)
 }
 
 impl Shop {
@@ -514,16 +383,14 @@ impl SubscriptionId {
     pub async fn create(
         shop_id: ShopId,
         message: Option<String>,
-        user: &dyn Session,
+        user: UserId,
         store: &mut impl Store,
     ) -> TbResult<ShopSubscription> {
         // Verify the shop exists (don't check ownership - users can subscribe to any shop)
         store.shop_get(shop_id).await?;
 
         // Check if there's already a pending subscription
-        let existing = store
-            .subscription_find_pending(shop_id, user.get_id())
-            .await?;
+        let existing = store.subscription_find_pending(shop_id, user).await?;
         if existing.is_some() {
             return Err(Error::Conflict(
                 "A pending subscription request already exists".into(),
@@ -531,49 +398,33 @@ impl SubscriptionId {
         }
 
         // Check if there's already an active subscription
-        let active = store
-            .subscription_find_active(shop_id, user.get_id())
-            .await?;
+        let active = store.subscription_find_active(shop_id, user).await?;
         if active.is_some() {
             return Err(Error::Conflict(
                 "You are already subscribed to this shop".into(),
             ));
         }
 
-        store
-            .subscription_create(shop_id, user.get_id(), message)
-            .await
+        store.subscription_create(shop_id, user, message).await
     }
 
     /// Get a subscription by ID
-    pub async fn get(
-        id: i32,
-        user: &dyn Session,
-        store: &mut impl Store,
-    ) -> TbResult<SubscriptionId> {
+    pub async fn get(id: i32, user: UserId, store: &mut impl Store) -> TbResult<SubscriptionId> {
         SubscriptionId(id).checkuser(user, store).await
     }
 
     /// Read a subscription from the database
-    pub async fn read(
-        self,
-        user: &dyn Session,
-        store: &mut impl Store,
-    ) -> TbResult<ShopSubscription> {
+    pub async fn read(self, user: UserId, store: &mut impl Store) -> TbResult<ShopSubscription> {
         self.checkuser(user, store).await?;
         store.subscription_get(self).await
     }
 
     /// Check if the user has access to this subscription (either subscriber or shop owner)
-    pub async fn checkuser(
-        self,
-        user: &dyn Session,
-        store: &mut impl Store,
-    ) -> TbResult<SubscriptionId> {
+    pub async fn checkuser(self, user: UserId, store: &mut impl Store) -> TbResult<SubscriptionId> {
         let subscription = store.subscription_get(self).await?;
 
         // Allow access if user is the subscriber
-        if subscription.user_id == user.get_id() {
+        if subscription.user_id == user {
             return Ok(self);
         }
 
@@ -588,7 +439,7 @@ impl SubscriptionId {
     pub async fn approve(
         self,
         response_message: Option<String>,
-        user: &dyn Session,
+        user: UserId,
         store: &mut impl Store,
     ) -> TbResult<ShopSubscription> {
         let subscription = store.subscription_get(self).await?;
@@ -611,7 +462,7 @@ impl SubscriptionId {
     pub async fn reject(
         self,
         response_message: Option<String>,
-        user: &dyn Session,
+        user: UserId,
         store: &mut impl Store,
     ) -> TbResult<ShopSubscription> {
         let subscription = store.subscription_get(self).await?;
@@ -631,7 +482,7 @@ impl SubscriptionId {
 
     /// Cancel a subscription (subscriber only)
     /// Allows deletion of pending, active, and rejected subscriptions
-    pub async fn cancel(self, user: &dyn Session, store: &mut impl Store) -> TbResult<()> {
+    pub async fn cancel(self, user: UserId, store: &mut impl Store) -> TbResult<()> {
         let subscription = store.subscription_get(self).await?;
 
         // Verify user is the subscriber
@@ -657,7 +508,7 @@ impl ShopSubscription {
     /// Get all pending subscriptions for a shop (shop owner only)
     pub async fn get_pending_for_shop(
         shop_id: ShopId,
-        user: &dyn Session,
+        user: UserId,
         store: &mut impl Store,
     ) -> TbResult<Vec<ShopSubscription>> {
         shop_id.checkowner(user, store).await?;
@@ -668,10 +519,10 @@ impl ShopSubscription {
 
     /// Get all subscriptions made by a user
     pub async fn get_for_user(
-        user: &dyn Session,
+        user: UserId,
         store: &mut impl Store,
     ) -> TbResult<Vec<ShopSubscription>> {
-        store.subscriptions_for_user(user.get_id()).await
+        store.subscriptions_for_user(user).await
     }
 
     /// Convert a list of subscriptions to subscriptions with shop details

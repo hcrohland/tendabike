@@ -42,14 +42,11 @@ pub trait Store:
 
 /// A trait that represents a session.
 pub trait Session: Send + Sync {
-    fn get_id(&self) -> UserId;
+    fn user_id(&self) -> UserId;
     fn shop(&self) -> Option<ShopId>;
+    fn set_shop(&mut self, shop: Option<ShopId>) -> TbResult<()>;
     fn is_admin(&self) -> bool;
     fn check_owner(&self, owner: UserId, error: String) -> crate::TbResult<()> {
-        if self.get_id() == owner {
-            Ok(())
-        } else {
-            Err(crate::Error::Forbidden(error))
-        }
+        self.user_id().check_owner(owner, error)
     }
 }
