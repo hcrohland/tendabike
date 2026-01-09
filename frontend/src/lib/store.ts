@@ -159,15 +159,12 @@ export const message = writable({
 });
 
 // Shop mode state
-export const shopMode = writable<{
-  active: boolean;
-  shop?: Shop;
-}>({ active: false });
+export const shop = writable<Shop | undefined>(undefined);
 
 // Enter shop mode: replaces stores with shop-specific data
 export async function enterShop(shopId: number) {
   // Set shop mode active
-  shopMode.set({ active: true, shop: new Shop(shopId) });
+  shop.set(get(shops)[shopId]);
   await refresh(shopId);
 
   // Navigate to main page
@@ -176,7 +173,7 @@ export async function enterShop(shopId: number) {
 
 // Exit shop mode: refresh data from backend
 export async function exitShop() {
-  shopMode.set({ active: false });
+  shop.set(undefined);
   await refresh();
 
   // Navigate to main page

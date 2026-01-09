@@ -32,7 +32,7 @@ export function mapable<V>(
     },
     updateMap: (arr: V[]) =>
       update((map) => arr.map(prepfn1).reduce(mapObject(field, delfn), map)),
-    deleteItem: (id: string | undefined) =>
+    deleteItem: (id: string | number | undefined) =>
       update((map: Map<V>) => {
         if (id) {
           delete map[id];

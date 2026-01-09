@@ -1,6 +1,6 @@
 import { handleError, myfetch, updateSummary } from "./store";
 import { mapable } from "./mapable";
-import type { Part } from "./part";
+import { parts, type Part } from "./part";
 
 export class Shop {
   id?: number;

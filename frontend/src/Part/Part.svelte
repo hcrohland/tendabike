@@ -21,7 +21,7 @@
   import XsButton from "../Widgets/XsButton.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { pop } from "svelte-spa-router";
-  import { shopMode, user } from "../lib/store";
+  import { shop, user } from "../lib/store";
   import { shops, Shop } from "../lib/shop";
 
   interface Props {
@@ -43,13 +43,11 @@
 
   // Check if user can unregister this part from the current shop
   let canUnregister = $derived(
-    $shopMode.active &&
-      $shopMode.shop &&
-      ($shopMode.shop.owner === $user?.id || part.owner === $user?.id),
+    $shop?.owner === $user!.id || part.owner === $user!.id,
   );
 
   // Fetch user's shops (only owned shops, not in shop mode)
-  let userShops = $derived($shopMode.active ? [] : Object.values($shops));
+  let userShops = $derived($shop ? [] : Object.values($shops));
 
   async function unregisterFromShop() {
     try {
@@ -75,9 +73,9 @@
 
 <GearCard {part}>
   <Menu>
-    {#if canUnregister}
+    {#if $shop}
       <DropdownItem onclick={unregisterFromShop}>
-        Unregister from {$shopMode.shop?.name}
+        Unregister from {$shop?.name}
       </DropdownItem>
     {/if}
     {#if part.disposed_at}
@@ -113,7 +111,7 @@
     {/if}
 
     <!-- Shop Registration Section -->
-    {#if !$shopMode.active && $user?.id === part.owner && userShops.length > 0}
+    {#if !$shop && $user?.id === part.owner && userShops.length > 0}
       <DropdownDivider />
       <DropdownItem class="flex items-center gap-2">
         <Label>
@@ -121,7 +119,11 @@
           <Select
             value={part.shop}
             onchange={(e: any) => changeShopRegistration(e.target.value)}
-            disabled={!(attachees.length > 0 || part.isGear())}
+            disabled={!(
+              !last_attachment ||
+              !last_attachment.isAttached() ||
+              part.isGear()
+            )}
             placeholder=""
           >
             <option value={null}> -- None -- </option>

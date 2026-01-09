@@ -1,6 +1,5 @@
 <script lang="ts">
   import { Button, Tabs, TabItem } from "flowbite-svelte";
-  import { onMount } from "svelte";
   import ShopList from "./ShopList.svelte";
   import Subscriptions from "./Subscriptions.svelte";
   import { Shop, shops } from "../lib/shop";
@@ -13,10 +12,6 @@
   let myShops = $derived(
     Object.values($shops).filter((g) => g.owner === $user?.id),
   );
-
-  onMount(() => {
-    // Shops are loaded via the summary endpoint automatically
-  });
 </script>
 
 <div class="space-y-6">
@@ -26,13 +21,13 @@
   </div>
 
   <Tabs style="underline" bind:selected={activeTab}>
-    <TabItem key="my-subscriptions" title="My Subscriptions" open>
+    <TabItem key="my-subscriptions" title="My Subscriptions">
       <div class="py-4">
         <Subscriptions showMySubscriptions={true} />
       </div>
     </TabItem>
 
-    <TabItem key="my-shops" title="My Shops">
+    <TabItem key="my-shops" title="My Shops" open={myShops.length > 0}>
       <div class="py-4 space-y-8">
         {#if myShops.length === 0}
           <div class="py-12 text-center">

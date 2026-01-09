@@ -18,7 +18,7 @@
     refresh,
     updateSummary,
     user,
-    shopMode,
+    shop,
     exitShop,
   } from "./lib/store";
   import { activities } from "./lib/activity";
@@ -62,7 +62,7 @@
 
   function fullrefresh() {
     clearInterval(hook_timer);
-    hook_promise = refresh().then(poll);
+    hook_promise = refresh($shop?.id).then(poll);
   }
 
   async function triggerHistoricSync() {
@@ -86,8 +86,8 @@
       title="TendaBike"
       class="rounded-circle h-11"
     />
-    {#if $shopMode.active && $shopMode.shop}
-      &nbsp; Viewing: {$shopMode.shop.name}
+    {#if $shop}
+      &nbsp; Viewing: {$shop.name}
       <button
         class="ml-4 text-sm underline"
         onclick={exitShop}
@@ -162,7 +162,7 @@
       <NavLi class="justify-start" href="/#/cat">{$category.name}s</NavLi>
       <NavLi href="/#/plans">Services</NavLi>
       <NavLi href="/#/spares">Parts</NavLi>
-      {#if !$shopMode.active}
+      {#if !$shop}
         <NavLi href="/#/shops">Shops</NavLi>
         <NavLi href="/#/activities">Activities</NavLi>
       {/if}

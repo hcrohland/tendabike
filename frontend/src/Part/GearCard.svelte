@@ -1,10 +1,16 @@
 <script lang="ts">
   // import { slide } from 'svelte/transition';
-  import { Card, Textarea, Button } from "flowbite-svelte";
+  import { Card, Textarea, Button, Badge, Indicator } from "flowbite-svelte";
   import { EditOutline } from "flowbite-svelte-icons";
   import { link, push } from "svelte-spa-router";
   import { Part } from "../lib/part";
-  import { fmtDate, fmtNumber, fmtSeconds, handleError } from "../lib/store";
+  import {
+    fmtDate,
+    fmtNumber,
+    fmtSeconds,
+    handleError,
+    user,
+  } from "../lib/store";
   import { types } from "../lib/types";
   import { Usage, usages } from "../lib/usage";
 
@@ -49,7 +55,7 @@
   }
 </script>
 
-<Card size="xl" class="col-auto">
+<Card size="xl" class="col-auto relative">
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
@@ -59,12 +65,16 @@
         : "")}
     onclick={() => summary && push("/part/" + part.id)}
   >
-    {#if summary}
-      <a href="/part/{part.id}" use:link class="text-decoration-none">
+    {#if part.owner == $user!.id}
+      {#if summary}
+        <a href="/part/{part.id}" use:link class="text-decoration-none">
+          {part.name}
+        </a>
+      {:else}
         {part.name}
-      </a>
+      {/if}
     {:else}
-      {part.name}
+      {part.name} <Indicator placement="top-left"></Indicator>
     {/if}
     <div class="float-end h6 mb-0">
       {@render children?.()}
