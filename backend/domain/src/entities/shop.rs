@@ -169,9 +169,12 @@ impl ShopId {
         let parts = parts_for_register(part_id, session, store).await?;
 
         // Register the parts to the shop
-        store.shop_register_parts(self, parts).await?;
+        let parts = store.parts_register_shop(self, parts).await?;
 
-        Ok(Summary::default())
+        Ok(Summary {
+            parts,
+            ..Default::default()
+        })
     }
 
     async fn has_subscription(self, user: UserId, store: &mut impl Store) -> Result<bool, Error> {
@@ -189,46 +192,21 @@ impl ShopId {
     ) -> TbResult<crate::Summary> {
         let parts = parts_for_register(part_id, session, store).await?;
 
-        store.shop_unregister_part(self, parts).await?;
+        let parts = store.parts_unregister_shop(parts).await?;
 
-        // Return empty summary (part is removed, nothing to update)
-        Ok(crate::Summary::default())
-    }
-
-    /// Get all partidss registered to this shop
-    /// Can be accessed by shop owner or users with active subscription
-    pub async fn get_partids(self, user: UserId, store: &mut impl Store) -> TbResult<Vec<PartId>> {
-        // Check if user is shop owner OR has active subscription
-        let shop = store.shop_get(self).await?;
-        let is_owner = shop.owner == user;
-        let has_subscription = self.has_subscription(user, store).await?;
-
-        if !is_owner && !has_subscription {
-            return Err(Error::Forbidden(
-                "You must be the shop owner or have an active subscription to view bikes".into(),
-            ));
-        }
-
-        store.shop_get_parts(self).await
+        Ok(Summary {
+            parts,
+            ..Default::default()
+        })
     }
 
     /// Get all parts and their subparts registered to this shop
     /// Can be accessed by shop owner
     pub async fn get_parts(self, user: UserId, store: &mut impl Store) -> TbResult<Vec<Part>> {
         // Check if user is shop owner OR has active subscription
-        let shop = store.shop_get(self).await?;
-        if !(shop.owner == user) {
-            return Err(Error::Forbidden(
-                "You must be the shop owner to view bikes".into(),
-            ));
-        }
+        self.check_owner(user, store).await?;
 
-        let ids = store.shop_get_parts(self).await?;
-        let mut res = Vec::new();
-        for id in ids {
-            res.push(id.read(store).await?);
-        }
-        Ok(res)
+        store.shop_get_parts(self).await
     }
 
     /// Read a shop from the database
@@ -238,17 +216,14 @@ impl ShopId {
         store.shop_get(self).await
     }
 
-    pub(crate) async fn check_part_and_user(
-        &self,
-        id: PartId,
-        user: UserId,
-        store: &mut impl Store,
-    ) -> TbResult<PartId> {
-        self.get_partids(user, store)
-            .await?
-            .into_iter()
-            .find(|p| *p == id)
-            .ok_or(Error::Forbidden(format!("part {id} not in shop {self}")))
+    pub(crate) async fn check_owner(&self, user: UserId, store: &mut impl Store) -> TbResult<()> {
+        let shop = store.shop_get(*self).await?;
+        if user != shop.owner {
+            return Err(Error::Forbidden(
+                "You must be the shop owner to access this shop".into(),
+            ));
+        }
+        Ok(())
     }
 }
 

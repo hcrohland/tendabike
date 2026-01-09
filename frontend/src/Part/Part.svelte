@@ -3,8 +3,9 @@
     Tabs,
     TabItem,
     DropdownItem,
-    Checkbox,
     DropdownDivider,
+    Label,
+    Select,
   } from "flowbite-svelte";
   import ServiceList from "../Service/ServiceList.svelte";
   import PlanBadge from "../ServicePlan/PlanBadge.svelte";
@@ -20,9 +21,8 @@
   import XsButton from "../Widgets/XsButton.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { pop } from "svelte-spa-router";
-  import { shopMode, user, updateSummary } from "../lib/store";
-  import { shops, type Shop } from "../lib/shop";
-  import { onMount } from "svelte";
+  import { shopMode, user } from "../lib/store";
+  import { shops, Shop } from "../lib/shop";
 
   interface Props {
     id: number;
@@ -51,72 +51,26 @@
   // Fetch user's shops (only owned shops, not in shop mode)
   let userShops = $derived($shopMode.active ? [] : Object.values($shops));
 
-  // Track which shops this part is registered to
-  let partRegisteredShops = $state<number[]>([]);
-
   async function unregisterFromShop() {
-    if (!$shopMode.shop) return;
     try {
-      await $shopMode.shop.unregisterPart(part.id!);
-      updateSummary();
+      await Shop.unregisterPart(part);
     } catch (error) {
       console.error("Error unregistering part:", error);
     }
   }
 
-  // Load which shops this part is registered to
-  async function loadPartShops() {
-    if (!part.id || userShops.length === 0) {
-      partRegisteredShops = [];
-      return;
-    }
-
-    try {
-      const promises = userShops.map(async (shop) => {
-        try {
-          const partIds = await shop.getParts();
-          // partIds is an array of numbers, not objects
-          return partIds.includes(part.id!) ? shop.id : null;
-        } catch {
-          return null;
-        }
-      });
-
-      const results = await Promise.all(promises);
-      partRegisteredShops = results.filter((id): id is number => id !== null);
-    } catch (error) {
-      console.error("Error loading part shops:", error);
-      partRegisteredShops = [];
-    }
-  }
-
   // Toggle registration of this part to a shop
-  async function toggleShopRegistration(shop: Shop) {
-    if (!part.id || !shop.id) return;
-
-    const isRegistered = partRegisteredShops.includes(shop.id);
-
+  async function changeShopRegistration(shopid?: number) {
     try {
-      if (isRegistered) {
-        await shop.unregisterPart(part.id);
-        partRegisteredShops = partRegisteredShops.filter(
-          (id) => id !== shop.id,
-        );
+      if (shopid) {
+        await Shop.registerPart(part, shopid);
       } else {
-        await shop.registerPart(part.id);
-        partRegisteredShops = [...partRegisteredShops, shop.id];
+        await unregisterFromShop();
       }
     } catch (error) {
-      console.error("Error toggling shop registration:", error);
-      // Reload to ensure UI reflects actual state
-      await loadPartShops();
+      console.error("Error changing shop registration:", error);
     }
   }
-
-  // Load registered shops on mount
-  onMount(() => {
-    loadPartShops();
-  });
 </script>
 
 <GearCard {part}>
@@ -161,21 +115,24 @@
     <!-- Shop Registration Section -->
     {#if !$shopMode.active && $user?.id === part.owner && userShops.length > 0}
       <DropdownDivider />
-      <div class="px-3 py-2">
-        <p class="text-sm font-medium text-gray-900 dark:text-white">
-          Register to Shops
-        </p>
-      </div>
-      {#each userShops as shop}
-        <DropdownItem class="flex items-center gap-2">
-          <Checkbox
-            checked={partRegisteredShops.includes(shop.id!)}
-            onchange={() => toggleShopRegistration(shop)}
+      <DropdownItem class="flex items-center gap-2">
+        <Label>
+          In shop
+          <Select
+            value={part.shop}
+            onchange={(e: any) => changeShopRegistration(e.target.value)}
             disabled={!(attachees.length > 0 || part.isGear())}
-          />
-          <span>{shop.name}</span>
-        </DropdownItem>
-      {/each}
+            placeholder=""
+          >
+            <option value={null}> -- None -- </option>
+            {#each userShops as shop}
+              <option value={shop.id}>
+                {shop.name}
+              </option>
+            {/each}
+          </Select>
+        </Label>
+      </DropdownItem>
     {/if}
   </Menu>
 </GearCard>

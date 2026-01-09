@@ -16,6 +16,7 @@ export class Part {
   disposed_at?: Date;
   usage: string;
   notes: string;
+  shop?: number;
 
   constructor(data: any) {
     this.id = data.id;
@@ -31,6 +32,7 @@ export class Part {
       : undefined;
     this.usage = data.usage;
     this.notes = data.notes || "";
+    this.shop = data.shop;
   }
 
   async create() {

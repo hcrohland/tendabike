@@ -1,4 +1,4 @@
-use crate::{PartId, Shop, ShopId, TbResult, UserId};
+use crate::{Shop, ShopId, TbResult, UserId};
 
 #[async_trait::async_trait]
 /// A trait representing a shop store.
@@ -71,56 +71,6 @@ pub trait ShopStore {
     ///
     /// A vector of shops owned by the user.
     async fn shops_get_all_for_user(&mut self, user_id: UserId) -> TbResult<Vec<Shop>>;
-
-    /// Registers a part (bike) to a shop.
-    ///
-    /// # Arguments
-    ///
-    /// * `shop_id` - The ID of the shop.
-    /// * `part_id` - The ID of the part to register.
-    ///
-    /// # Returns
-    ///
-    /// Returns Ok(()) if successful, error otherwise.
-    async fn shop_register_parts(&mut self, shop_id: ShopId, part_id: Vec<PartId>) -> TbResult<()>;
-
-    /// Unregisters a part (bike) from a shop.
-    ///
-    /// # Arguments
-    ///
-    /// * `shop_id` - The ID of the shop.
-    /// * `part_id` - The ID of the part to unregister.
-    ///
-    /// # Returns
-    ///
-    /// Returns Ok(()) if successful, error otherwise.
-    async fn shop_unregister_part(
-        &mut self,
-        shop_id: ShopId,
-        part_ids: Vec<PartId>,
-    ) -> TbResult<()>;
-
-    /// Gets all part IDs registered to a shop.
-    ///
-    /// # Arguments
-    ///
-    /// * `shop_id` - The ID of the shop.
-    ///
-    /// # Returns
-    ///
-    /// A vector of PartIds registered to the shop.
-    async fn shop_get_parts(&mut self, shop_id: crate::ShopId) -> TbResult<Vec<crate::PartId>>;
-
-    /// Gets the shop ID that a part is registered to, if any.
-    ///
-    /// # Arguments
-    ///
-    /// * `part_id` - The ID of the part.
-    ///
-    /// # Returns
-    ///
-    /// Optional ShopId if the part is registered to a shop.
-    async fn part_get_shop(&mut self, part_id: crate::PartId) -> TbResult<Option<crate::ShopId>>;
 
     /// Searches for shops by name.
     ///

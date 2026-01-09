@@ -56,7 +56,7 @@
   import "./app.css";
   import { CardPlaceholder, ThemeProvider } from "flowbite-svelte";
   import Actions from "./Widgets/Actions.svelte";
-  import InitialSyncDialog from "./lib/InitialSyncDialog.svelte";
+  import InitialSyncDialog from "./Widgets/InitialSyncDialog.svelte";
   import { user } from "./lib/store";
 
   const theme = {

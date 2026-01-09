@@ -2,7 +2,7 @@ use sqlx::FromRow;
 use time::OffsetDateTime;
 
 use crate::{SqlxConn, into_domain};
-use tb_domain::{PartId, Shop, ShopId, ShopSubscription, SubscriptionStatus, TbResult, UserId};
+use tb_domain::{Shop, ShopId, ShopSubscription, SubscriptionStatus, TbResult, UserId};
 
 #[derive(Clone, Debug, FromRow)]
 pub struct DbShop {
@@ -171,73 +171,6 @@ impl<'c> tb_domain::ShopStore for SqlxConn<'c> {
         .await
         .map_err(into_domain)
         .map(|shops| shops.into_iter().map(Into::into).collect())
-    }
-
-    async fn shop_register_parts(
-        &mut self,
-        shop_id: ShopId,
-        part_ids: Vec<PartId>,
-    ) -> TbResult<()> {
-        let part_ids: Vec<i32> = part_ids.into_iter().map(Into::into).collect();
-        sqlx::query!(
-            r#"
-    INSERT INTO shop_parts (shop_id, part_id)
-    SELECT $1, part_id
-    FROM UNNEST($2::int[]) AS t(part_id)
-    ON CONFLICT (shop_id, part_id) DO NOTHING
-    "#,
-            i32::from(shop_id),
-            &part_ids,
-        )
-        .execute(&mut **self.inner())
-        .await
-        .map_err(into_domain)
-        .map(|_| ())
-    }
-
-    async fn shop_unregister_part(
-        &mut self,
-        shop_id: ShopId,
-        part_ids: Vec<PartId>,
-    ) -> TbResult<()> {
-        let part_ids: Vec<i32> = part_ids.into_iter().map(Into::into).collect();
-        sqlx::query!(
-            "DELETE FROM shop_parts WHERE shop_id = $1 AND part_id = Any($2)",
-            i32::from(shop_id),
-            &part_ids
-        )
-        .execute(&mut **self.inner())
-        .await
-        .map_err(into_domain)
-        .map(|_| ())
-    }
-
-    async fn shop_get_parts(
-        &mut self,
-        shop_id: tb_domain::ShopId,
-    ) -> TbResult<Vec<tb_domain::PartId>> {
-        sqlx::query!(
-            "SELECT part_id FROM shop_parts WHERE shop_id = $1 ORDER BY registered_at",
-            i32::from(shop_id)
-        )
-        .fetch_all(&mut **self.inner())
-        .await
-        .map_err(into_domain)
-        .map(|rows| rows.into_iter().map(|r| r.part_id.into()).collect())
-    }
-
-    async fn part_get_shop(
-        &mut self,
-        part_id: tb_domain::PartId,
-    ) -> TbResult<Option<tb_domain::ShopId>> {
-        sqlx::query!(
-            "SELECT shop_id FROM shop_parts WHERE part_id = $1",
-            i32::from(part_id)
-        )
-        .fetch_optional(&mut **self.inner())
-        .await
-        .map_err(into_domain)
-        .map(|row| row.map(|r| r.shop_id.into()))
     }
 
     async fn shops_search(&mut self, query: &str) -> TbResult<Vec<tb_domain::Shop>> {

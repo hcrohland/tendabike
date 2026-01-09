@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT * FROM parts WHERE owner = $1 ORDER BY last_used",
+  "query": "UPDATE parts\n             SET  shop = $1\n             WHERE id = Any($2)\n             RETURNING *",
   "describe": {
     "columns": [
       {
@@ -71,7 +71,8 @@
     ],
     "parameters": {
       "Left": [
-        "Int4"
+        "Int4",
+        "Int4Array"
       ]
     },
     "nullable": [
@@ -90,5 +91,5 @@
       true
     ]
   },
-  "hash": "15f97a1183f7db24c8038e5d511811a7732ec0757c0cd961b91044bcb8ff38e4"
+  "hash": "266d34ca081a08f1a40a155360da8dcf7cc38cfc0f5f26199f0393ede4f65915"
 }

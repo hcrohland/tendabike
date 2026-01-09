@@ -62,6 +62,11 @@
         "ordinal": 11,
         "name": "notes",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "shop",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
@@ -81,7 +86,8 @@
       true,
       false,
       true,
-      false
+      false,
+      true
     ]
   },
   "hash": "36dc6573f6406db8b2d0f8f23bd37dfbb8c3962ab0365a0da1b4af95060d22a2"

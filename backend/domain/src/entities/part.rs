@@ -72,6 +72,8 @@ pub struct Part {
     pub source: Option<String>,
     /// notes about the part
     pub notes: String,
+    /// Optional shop for delegated maintenance
+    pub shop: Option<ShopId>,
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -116,7 +118,7 @@ impl PartId {
         if part.owner != user {
             match session.shop() {
                 Some(shop) => {
-                    shop.check_part_and_user(part.id, user, store).await?;
+                    shop.check_owner(user, store).await?;
                 }
                 None => {
                     return Err(Error::Forbidden(format!(
@@ -253,6 +255,7 @@ impl Part {
                 notes,
                 UsageId::new(),
                 user.user_id(),
+                user.shop(),
             )
             .await
     }

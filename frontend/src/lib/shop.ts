@@ -1,5 +1,6 @@
 import { handleError, myfetch, updateSummary } from "./store";
 import { mapable } from "./mapable";
+import type { Part } from "./part";
 
 export class Shop {
   id?: number;
@@ -47,16 +48,16 @@ export class Shop {
       .catch(handleError);
   }
 
-  async registerPart(partId: number) {
-    return await myfetch(`/api/shop/${this.id}/parts`, "POST", {
-      part_id: partId,
+  static async registerPart(part: Part, shopid: number) {
+    return await myfetch(`/api/shop/${shopid}/parts`, "POST", {
+      part_id: part.id,
     })
       .then((data) => updateSummary(data))
       .catch(handleError);
   }
 
-  async unregisterPart(partId: number) {
-    return await myfetch(`/api/shop/${this.id}/parts/${partId}`, "DELETE")
+  static async unregisterPart(part: Part) {
+    return await myfetch(`/api/shop/0/parts/${part.id}`, "DELETE")
       .then((data) => updateSummary(data))
       .catch(handleError);
   }

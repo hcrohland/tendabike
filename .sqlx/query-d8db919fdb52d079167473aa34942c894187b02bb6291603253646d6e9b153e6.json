@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE parts\n             SET owner = $2, what = $3, name = $4, vendor = $5, model = $6,\n                 purchase = $7, last_used = $8, disposed_at = $9, usage = $10, source = $11, notes = $12\n             WHERE id = $1\n             RETURNING *",
+  "query": "INSERT INTO parts (owner, what, name, vendor, model, purchase, last_used, usage, source, notes, shop)\n             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)\n             RETURNING *",
   "describe": {
     "columns": [
       {
@@ -62,22 +62,26 @@
         "ordinal": 11,
         "name": "notes",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "shop",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
       "Left": [
         "Int4",
         "Int4",
-        "Int4",
         "Text",
         "Text",
         "Text",
-        "Timestamptz",
         "Timestamptz",
         "Timestamptz",
         "Uuid",
         "Text",
-        "Text"
+        "Text",
+        "Int4"
       ]
     },
     "nullable": [
@@ -92,8 +96,9 @@
       true,
       false,
       true,
-      false
+      false,
+      true
     ]
   },
-  "hash": "4cd3c3b2e75dc5a491675ad3289468c20a83e318cf21696f7fd5213e735217c0"
+  "hash": "d8db919fdb52d079167473aa34942c894187b02bb6291603253646d6e9b153e6"
 }

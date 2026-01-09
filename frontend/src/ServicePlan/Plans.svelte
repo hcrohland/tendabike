@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Button } from "flowbite-svelte";
   import { filterValues } from "../lib/mapable";
   import { plans } from "../lib/serviceplan";
   import { category, types } from "../lib/types";

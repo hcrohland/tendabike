@@ -20,7 +20,7 @@
 
 <script lang="ts">
   import { Modal, P, Heading, Button } from "flowbite-svelte";
-  import { myfetch, handleError, user } from "./store";
+  import { myfetch, handleError, user } from "../lib/store";
 
   export let open = false;
 

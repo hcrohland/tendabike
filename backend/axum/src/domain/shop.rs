@@ -29,7 +29,7 @@ use crate::{
     error::{ApiResult, AppError},
 };
 use tb_domain::{
-    PartId, Session, Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails, ShopWithOwner,
+    Part, Session, Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails, ShopWithOwner,
     Store, SubscriptionId,
 };
 
@@ -152,11 +152,11 @@ async fn get_shop_parts(
     Path(shop_id): Path<i32>,
     session: RequestSession,
     State(pool): State<DbPool>,
-) -> ApiResult<Vec<PartId>> {
+) -> ApiResult<Vec<Part>> {
     let mut store = pool.begin().await?;
     let user = session.user_id();
     let shop_id = ShopId::get_for_read(shop_id, user, &mut store).await?;
-    Ok(shop_id.get_partids(user, &mut store).await.map(Json)?)
+    Ok(shop_id.get_parts(user, &mut store).await.map(Json)?)
 }
 
 async fn register_part(

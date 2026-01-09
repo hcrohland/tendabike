@@ -3,7 +3,7 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::{SqlxConn, into_domain, option_into, vec_into};
-use tb_domain::{Part, PartId, PartTypeId, TbResult, UsageId, UserId};
+use tb_domain::{Part, PartId, PartTypeId, ShopId, TbResult, UsageId, UserId};
 
 /// The database's representation of a part.
 #[derive(Clone, Debug, PartialEq, FromRow)]
@@ -20,6 +20,7 @@ struct DbPart {
     usage: uuid::Uuid,
     source: Option<String>,
     notes: String,
+    shop: Option<i32>,
 }
 
 impl From<DbPart> for Part {
@@ -37,6 +38,7 @@ impl From<DbPart> for Part {
             usage,
             source,
             notes,
+            shop,
         } = db;
         Self {
             id: id.into(),
@@ -51,6 +53,7 @@ impl From<DbPart> for Part {
             usage: usage.into(),
             source,
             notes,
+            shop: shop.map(Into::into),
         }
     }
 }
@@ -70,6 +73,7 @@ impl From<Part> for DbPart {
             usage,
             source,
             notes,
+            shop,
         } = value;
         Self {
             id: id.into(),
@@ -84,6 +88,7 @@ impl From<Part> for DbPart {
             usage: usage.into(),
             source,
             notes,
+            shop: shop.map(Into::into),
         }
     }
 }
@@ -121,11 +126,13 @@ impl<'c> tb_domain::PartStore for SqlxConn<'c> {
         in_notes: String,
         in_usage: UsageId,
         in_owner: UserId,
+        in_shop: Option<ShopId>,
     ) -> TbResult<Part> {
+        let in_shop: Option<i32> = in_shop.map(Into::into);
         sqlx::query_as!(
             DbPart,
-            "INSERT INTO parts (owner, what, name, vendor, model, purchase, last_used, usage, source, notes)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            "INSERT INTO parts (owner, what, name, vendor, model, purchase, last_used, usage, source, notes, shop)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
              RETURNING *",
             i32::from(in_owner),
             i32::from(in_what),
@@ -136,7 +143,8 @@ impl<'c> tb_domain::PartStore for SqlxConn<'c> {
             in_purchase, // last_used = purchase
             Uuid::from(in_usage),
             in_source,
-            in_notes
+            in_notes,
+            in_shop
         )
         .fetch_one(&mut **self.inner())
         .await
@@ -150,7 +158,7 @@ impl<'c> tb_domain::PartStore for SqlxConn<'c> {
             DbPart,
             "UPDATE parts
              SET owner = $2, what = $3, name = $4, vendor = $5, model = $6,
-                 purchase = $7, last_used = $8, disposed_at = $9, usage = $10, source = $11, notes = $12
+                 purchase = $7, last_used = $8, disposed_at = $9, usage = $10, source = $11, notes = $12, shop = $13
              WHERE id = $1
              RETURNING *",
             part.id,
@@ -164,7 +172,8 @@ impl<'c> tb_domain::PartStore for SqlxConn<'c> {
             part.disposed_at,
             part.usage,
             part.source,
-            part.notes
+            part.notes,
+            part.shop
         )
         .fetch_one(&mut **self.inner())
         .await
@@ -200,5 +209,54 @@ impl<'c> tb_domain::PartStore for SqlxConn<'c> {
             .map_err(into_domain)?;
 
         Ok(result.rows_affected() as usize)
+    }
+
+    async fn parts_register_shop(
+        &mut self,
+        shop_id: ShopId,
+        part_ids: Vec<PartId>,
+    ) -> TbResult<Vec<Part>> {
+        let part_ids: Vec<i32> = part_ids.into_iter().map(Into::into).collect();
+        sqlx::query_as!(
+            DbPart,
+            "UPDATE parts
+             SET  shop = $1
+             WHERE id = Any($2)
+             RETURNING *",
+            i32::from(shop_id),
+            &part_ids,
+        )
+        .fetch_all(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(vec_into)
+    }
+
+    async fn parts_unregister_shop(&mut self, part_ids: Vec<PartId>) -> TbResult<Vec<Part>> {
+        let part_ids: Vec<i32> = part_ids.into_iter().map(Into::into).collect();
+        sqlx::query_as!(
+            DbPart,
+            "UPDATE parts
+             SET shop = Null
+             WHERE id = Any($1)
+             RETURNING *",
+            &part_ids,
+        )
+        .fetch_all(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(vec_into)
+    }
+
+    async fn shop_get_parts(&mut self, shop_id: ShopId) -> TbResult<Vec<Part>> {
+        sqlx::query_as!(
+            DbPart,
+            "SELECT * FROM parts WHERE shop = $1 ORDER BY last_used",
+            i32::from(shop_id)
+        )
+        .fetch_all(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(vec_into)
     }
 }
