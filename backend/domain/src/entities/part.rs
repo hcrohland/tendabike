@@ -138,10 +138,6 @@ impl PartId {
         Ok(self.read(store).await?.name)
     }
 
-    pub async fn what(self, store: &mut impl PartStore) -> TbResult<PartTypeId> {
-        Ok(self.read(store).await?.what)
-    }
-
     pub async fn is_main(self, store: &mut impl PartStore) -> TbResult<bool> {
         let part = self.read(store).await?;
         part.what.is_main()
@@ -218,6 +214,16 @@ impl PartId {
             ..part
         };
         store.part_update(part).await
+    }
+
+    pub(crate) async fn setowner(&self, gear: PartId, store: &mut impl Store) -> TbResult<Part> {
+        let mut part = self.read(store).await?;
+        let gear = gear.read(store).await?;
+        if part.owner != gear.owner {
+            part.owner = gear.owner;
+            return store.part_update(part).await;
+        }
+        Ok(part)
     }
 }
 

@@ -339,7 +339,7 @@ async fn subattachments(
     time: OffsetDateTime,
     store: &mut impl Store,
 ) -> TbResult<Vec<Attachment>> {
-    let types = part.what(store).await?.subtypes();
+    let types = part.read(store).await?.what.subtypes();
     store
         .assembly_get_by_types_time_and_gear(types, gear, time)
         .await
@@ -380,7 +380,7 @@ async fn attach_one(
     // we need this to reattach subparts
     let mut det = MAX_TIME;
 
-    let what = part_id.what(store).await?;
+    let what = part_id.setowner(gear, store).await?.what;
 
     if let Some(next) = store
         .attachment_find_successor(part_id, gear, hook, time, what)

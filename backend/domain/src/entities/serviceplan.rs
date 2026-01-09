@@ -88,7 +88,10 @@ impl ServicePlan {
         store: &mut (impl ServicePlanStore + PartStore),
     ) -> TbResult<Self> {
         self.id = ServicePlanId::new();
-        self.uid = Some(user.user_id());
+        self.uid = match self.part {
+            Some(_) => None,
+            None => Some(user.user_id()),
+        };
         store.create(self).await
     }
 
