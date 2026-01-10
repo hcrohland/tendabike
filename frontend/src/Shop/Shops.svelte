@@ -14,11 +14,6 @@
 </script>
 
 <div class="space-y-6">
-  <div class="flex items-center justify-between">
-    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Shops</h1>
-    <Button onclick={() => $actions.createShop()}>Create Shop</Button>
-  </div>
-
   <Tabs style="underline" bind:selected={activeTab}>
     <TabItem key="my-subscriptions" title="My Subscriptions">
       <div class="py-4">
@@ -40,17 +35,13 @@
         {:else}
           <!-- Shop Cards -->
           <div>
-            <h2
-              class="mb-4 text-xl font-semibold text-gray-900 dark:text-white"
-            >
-              Your Shops
-            </h2>
             <ShopList shops={myShops} showEnterShop={true}>
               {#snippet sub(shop: Shop)}
                 <Subscriptions shopId={shop.id} showMySubscriptions={false} />
               {/snippet}
             </ShopList>
           </div>
+          <Button onclick={() => $actions.createShop()}>Create Shop</Button>
         {/if}
       </div>
     </TabItem>

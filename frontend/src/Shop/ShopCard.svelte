@@ -53,10 +53,7 @@
 <Card size="xl" class="relative col-auto p-4">
   {#if children}
     <div class="absolute top-4 right-4">
-      <DotsVerticalOutline class="cursor-pointer" />
-      <Dropdown>
-        {@render children?.()}
-      </Dropdown>
+      {@render children?.()}
     </div>
   {/if}
 

@@ -138,7 +138,7 @@
     if (subscription.shop_name) {
       const ownerName =
         subscription.shop_owner_firstname && subscription.shop_owner_name
-          ? ` (${subscription.shop_owner_firstname} ${subscription.shop_owner_name})`
+          ? ` by ${subscription.shop_owner_firstname} ${subscription.shop_owner_name}`
           : "";
       return `${subscription.shop_name}${ownerName}`;
     }
@@ -199,7 +199,13 @@
         `/api/shop/search?q=${encodeURIComponent(searchQuery)}`,
         "GET",
       );
-      searchResults = results.map((g: any) => new Shop(g));
+      searchResults = results
+        .map((g: any) => new Shop(g))
+        .filter(
+          (s: any) =>
+            s.owner != $user!.id &&
+            subscriptions.every((su) => su.shop_id != s.id),
+        );
     } catch (error) {
       handleError(error as Error);
     } finally {
@@ -276,9 +282,9 @@
                 {#if showMySubscriptions}
                   <TableBodyCell>{getShopName(subscription)}</TableBodyCell>
                 {:else}
-                  <TableBodyCell
-                    >{getUserName(subscription.user_id)}</TableBodyCell
-                  >
+                  <TableBodyCell>
+                    {getUserName(subscription.user_id)}
+                  </TableBodyCell>
                 {/if}
                 <TableBodyCell>
                   {#if subscription.message && subscription.message.length > 50}
@@ -418,13 +424,13 @@
                           </Button>
                         {/if}
                       {:else if subscription.status === "active" && showMySubscriptions}
-                        <Button
+                        <!-- <Button
                           size="xs"
                           color="blue"
                           onclick={() => enterShop(subscription.shop_id)}
                         >
                           Enter Shop
-                        </Button>
+                        </Button> -->
                         <Button
                           size="xs"
                           color="alternative"
@@ -465,7 +471,6 @@
       </h3>
       <div class="space-y-4">
         <div>
-          <Label for="search" class="mb-2">Search for shops</Label>
           <div class="flex gap-2">
             <Input
               id="search"
@@ -474,7 +479,6 @@
               oninput={handleSearchInput}
               placeholder="Search for shops to request subscription"
             />
-            <Button onclick={performSearch}>Search</Button>
           </div>
         </div>
 

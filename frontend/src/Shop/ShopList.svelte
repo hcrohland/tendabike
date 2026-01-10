@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { DropdownItem } from "flowbite-svelte";
+  import { Button, Dropdown, DropdownItem } from "flowbite-svelte";
   import ShopCard from "./ShopCard.svelte";
   import type { Shop } from "../lib/shop";
   import { actions } from "../Widgets/Actions.svelte";
   import { user, enterShop } from "../lib/store";
   import type { Snippet } from "svelte";
+  import { DotsVerticalOutline } from "flowbite-svelte-icons";
 
   interface Props {
     shops: Shop[];
@@ -19,22 +20,23 @@
   {#each shops as shop}
     {@const isOwner = shop.owner === $user?.id}
     <ShopCard {shop} {isOwner} {sub}>
-      {#if showEnterShop}
-        <DropdownItem onclick={() => enterShop(shop.id!)}>
-          Enter Shop
-        </DropdownItem>
-      {/if}
       {#if isOwner}
-        <DropdownItem onclick={() => $actions.editShop(shop)}>
-          Edit Shop
-        </DropdownItem>
-        <DropdownItem onclick={() => $actions.deleteShop(shop)}>
-          Delete Shop
-        </DropdownItem>
+        <DotsVerticalOutline class="cursor-pointer" />
+        <Dropdown>
+          <DropdownItem onclick={() => enterShop(shop.id!)}>
+            Enter Shop
+          </DropdownItem>
+          <DropdownItem onclick={() => $actions.editShop(shop)}>
+            Edit Shop
+          </DropdownItem>
+          <DropdownItem onclick={() => $actions.deleteShop(shop)}>
+            Delete Shop
+          </DropdownItem>
+        </Dropdown>
       {:else}
-        <DropdownItem onclick={() => $actions.requestSubscription(shop)}>
+        <Button onclick={() => $actions.requestSubscription(shop)}>
           Request Subscription
-        </DropdownItem>
+        </Button>
       {/if}
     </ShopCard>
   {/each}
