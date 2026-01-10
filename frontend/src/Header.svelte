@@ -29,6 +29,7 @@
   import { onDestroy } from "svelte";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
   import Garmin from "./Activity/Garmin.svelte";
+  import ShopMenu from "./Shop/ShopMenu.svelte";
 
   let { promise } = $props();
 
@@ -145,6 +146,7 @@
           </Dropdown>
           <Garmin bind:open={openGarmin} />
         {/await}
+        <ShopMenu />
         {#if $user.is_admin}
           <DropdownDivider />
           <DropdownItem href="/#/admin">Admin</DropdownItem>
@@ -163,10 +165,9 @@
       <NavLi href="/#/plans">Services</NavLi>
       <NavLi href="/#/spares">Parts</NavLi>
       {#if !$shop}
-        <NavLi href="/#/shops">Shops</NavLi>
         <NavLi href="/#/activities">Activities</NavLi>
+        <NavLi href="/#/stats">Statistics</NavLi>
       {/if}
-      <NavLi href="/#/stats">Statistics</NavLi>
     </NavUl>
   {:else}
     <div class="flex items-center md:order-2">

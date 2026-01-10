@@ -2,7 +2,7 @@
   import { Button } from "flowbite-svelte";
   import type { Snippet } from "svelte";
   import Modal from "../Widgets/Modal.svelte";
-  import type { Shop } from "../lib/shop";
+  import { shops, type Shop } from "../lib/shop";
 
   interface Props {
     children?: Snippet;
@@ -15,7 +15,7 @@
 
   async function onaction() {
     if (shop) {
-      await shop.delete();
+      await shop.delete().then(() => shops.deleteItem(shop!.id));
     }
     open = false;
   }

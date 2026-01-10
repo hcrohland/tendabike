@@ -123,7 +123,9 @@
 
   async function cancelSubscription(subscriptionId: number) {
     try {
-      await myfetch(`/api/shop/subscriptions/${subscriptionId}`, "DELETE");
+      await myfetch(`/api/shop/subscriptions/${subscriptionId}`, "DELETE").then(
+        () => shops.deleteItem(subscriptionId),
+      );
       confirmingAction = null;
       await loadSubscriptions();
     } catch (error) {
