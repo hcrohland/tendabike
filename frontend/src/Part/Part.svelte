@@ -21,8 +21,7 @@
   import XsButton from "../Widgets/XsButton.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { pop } from "svelte-spa-router";
-  import { user } from "../lib/store";
-  import { shop, shops, Shop } from "../lib/shop";
+  import ShopRegistration from "../Shop/ShopRegistration.svelte";
 
   interface Props {
     id: number;
@@ -40,44 +39,10 @@
   let planlist = $derived(
     plans_for_part_and_subtypes($attachments, $plans, part),
   );
-
-  // Check if user can unregister this part from the current shop
-  let canUnregister = $derived(
-    $shop?.owner === $user!.id || part.owner === $user!.id,
-  );
-
-  // Fetch user's shops (only owned shops, not in shop mode)
-  let userShops = $derived($shop ? [] : Object.values($shops));
-
-  async function unregisterFromShop() {
-    try {
-      await Shop.unregisterPart(part);
-    } catch (error) {
-      console.error("Error unregistering part:", error);
-    }
-  }
-
-  // Toggle registration of this part to a shop
-  async function changeShopRegistration(shopid?: number) {
-    try {
-      if (shopid) {
-        await Shop.registerPart(part, shopid);
-      } else {
-        await unregisterFromShop();
-      }
-    } catch (error) {
-      console.error("Error changing shop registration:", error);
-    }
-  }
 </script>
 
 <GearCard {part}>
   <Menu>
-    {#if $shop}
-      <DropdownItem onclick={unregisterFromShop}>
-        Unregister from {$shop?.name}
-      </DropdownItem>
-    {/if}
     {#if part.disposed_at}
       <DropdownItem onclick={() => $actions.recoverPart(part)}>
         Recover gear
@@ -110,32 +75,7 @@
       </DropdownItem>
     {/if}
 
-    <!-- Shop Registration Section -->
-    {#if !$shop && $user?.id === part.owner && userShops.length > 0}
-      <DropdownDivider />
-      <DropdownItem class="flex items-center gap-2">
-        <Label>
-          In shop
-          <Select
-            value={part.shop}
-            onchange={(e: any) => changeShopRegistration(e.target.value)}
-            disabled={!(
-              !last_attachment ||
-              !last_attachment.isAttached() ||
-              part.isGear()
-            )}
-            placeholder=""
-          >
-            <option value={null}> -- None -- </option>
-            {#each userShops as shop}
-              <option value={shop.id}>
-                {shop.name}
-              </option>
-            {/each}
-          </Select>
-        </Label>
-      </DropdownItem>
-    {/if}
+    <ShopRegistration {part} {last_attachment} />
   </Menu>
 </GearCard>
 <br />

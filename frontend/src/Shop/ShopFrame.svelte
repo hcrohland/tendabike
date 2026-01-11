@@ -8,8 +8,8 @@
 <div class={$shop != undefined ? "border border-gray p-4 rounded-xl" : ""}>
   {#if $shop}
     <Button onclick={exitShop} color="gray" class="mb-8">
-      <Tooltip class="p-1">Click to exit</Tooltip>
-      Working in shop {$shop!.name}
+      <!-- <Tooltip class="p-1">Click to exit</Tooltip> -->
+      Exit shop {$shop!.name}
     </Button>
     {@render children()}
   {:else}
