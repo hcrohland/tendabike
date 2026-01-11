@@ -22,14 +22,12 @@
   import Router from "svelte-spa-router";
 
   import About from "./About.svelte";
-  import Activities from "./Activity/Activities.svelte";
   import Admin from "./Admin/Admin.svelte";
   import Header from "./Header.svelte";
   import Message from "./Message.svelte";
   import Gear from "./Part/Gear.svelte";
   import Plans from "./ServicePlan/Plans.svelte";
   import Spares from "./Spares/Spares.svelte";
-  import Statistics from "./Statistics.svelte";
   import ToyGroup from "./ToyGroup.svelte";
   import Shops from "./Shop/Shops.svelte";
   import { initData } from "./lib/store";
@@ -44,8 +42,14 @@
     "/spares/": Spares,
     "/shops": Shops,
     "/admin": Admin,
-    "/stats": Statistics,
-    "/activities/:part?/:start?": Activities,
+    "/stats": wrap({
+      //@ts-ignore
+      asyncComponent: () => import("./Statistics.svelte"),
+    }),
+    "/activities/:part?/:start?": wrap({
+      //@ts-ignore
+      asyncComponent: () => import("./Activity/Activities.svelte"),
+    }),
   };
 
   await getTypes();
@@ -58,6 +62,7 @@
   import Actions from "./Widgets/Actions.svelte";
   import InitialSyncDialog from "./Widgets/InitialSyncDialog.svelte";
   import ShopFrame from "./Shop/ShopFrame.svelte";
+  import wrap from "svelte-spa-router/wrap";
 
   const theme = {
     tableBodyCell: "px-2 py-3",
