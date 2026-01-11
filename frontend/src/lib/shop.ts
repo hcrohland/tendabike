@@ -45,7 +45,7 @@ export class Shop {
 
   async delete() {
     return await myfetch("/api/shop/" + this.id, "DELETE")
-      .then((data) => shops.deleteItem(data))
+      .then(() => shops.deleteItem(this.id))
       .catch(handleError);
   }
 
