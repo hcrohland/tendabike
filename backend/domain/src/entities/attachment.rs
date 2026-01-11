@@ -380,7 +380,7 @@ async fn attach_one(
     // we need this to reattach subparts
     let mut det = MAX_TIME;
 
-    let what = part_id.setowner(gear, store).await?.what;
+    let what = part_id.set_owner_and_shop(gear, store).await?.what;
 
     if let Some(next) = store
         .attachment_find_successor(part_id, gear, hook, time, what)

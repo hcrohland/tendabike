@@ -216,11 +216,16 @@ impl PartId {
         store.part_update(part).await
     }
 
-    pub(crate) async fn setowner(&self, gear: PartId, store: &mut impl Store) -> TbResult<Part> {
+    pub(crate) async fn set_owner_and_shop(
+        &self,
+        gear: PartId,
+        store: &mut impl Store,
+    ) -> TbResult<Part> {
         let mut part = self.read(store).await?;
         let gear = gear.read(store).await?;
-        if part.owner != gear.owner {
+        if part.owner != gear.owner || part.shop != gear.shop {
             part.owner = gear.owner;
+            part.shop = gear.shop;
             return store.part_update(part).await;
         }
         Ok(part)
