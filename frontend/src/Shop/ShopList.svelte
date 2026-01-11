@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button, Dropdown, DropdownItem } from "flowbite-svelte";
   import ShopCard from "./ShopCard.svelte";
-  import { enterShop, type Shop } from "../lib/shop";
+  import { type Shop } from "../lib/shop";
   import { actions } from "../Widgets/Actions.svelte";
   import { user } from "../lib/store";
   import type { Snippet } from "svelte";
@@ -13,7 +13,7 @@
     showEnterShop?: boolean; // Only show "Enter Shop" if user has access
   }
 
-  let { sub, shops, showEnterShop = false }: Props = $props();
+  let { sub, shops }: Props = $props();
 </script>
 
 <div class="grid gap-4 grid-cols-1">
@@ -23,9 +23,6 @@
       {#if isOwner}
         <DotsVerticalOutline class="cursor-pointer" />
         <Dropdown>
-          <DropdownItem onclick={() => enterShop(shop.id!)}>
-            Enter Shop
-          </DropdownItem>
           <DropdownItem onclick={() => $actions.editShop(shop)}>
             Edit Shop
           </DropdownItem>

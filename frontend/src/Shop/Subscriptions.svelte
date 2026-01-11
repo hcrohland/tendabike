@@ -9,7 +9,6 @@
     Badge,
     Button,
     Input,
-    Label,
     Spinner,
     Tooltip,
   } from "flowbite-svelte";
@@ -424,13 +423,6 @@
                           </Button>
                         {/if}
                       {:else if subscription.status === "active" && showMySubscriptions}
-                        <!-- <Button
-                          size="xs"
-                          color="blue"
-                          onclick={() => enterShop(subscription.shop_id)}
-                        >
-                          Enter Shop
-                        </Button> -->
                         <Button
                           size="xs"
                           color="alternative"

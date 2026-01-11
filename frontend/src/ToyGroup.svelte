@@ -5,18 +5,26 @@
   import { parts } from "./lib/part";
   import { activities } from "./lib/activity";
   import ShowMore from "./Widgets/ShowMore.svelte";
+  import { shop } from "./lib/shop";
 
   let show_more: boolean = $state(false);
 
   let gears = $derived(
-    filterValues($parts, (p) => p.what == $category.id && !p.disposed_at).sort(
-      by("last_used"),
-    ),
+    filterValues(
+      $parts,
+      (p) =>
+        ($shop ? p.shop == $shop.id : true) &&
+        p.what == $category.id &&
+        !p.disposed_at,
+    ).sort(by("last_used")),
   );
   let bin = $derived(
     filterValues(
       $parts,
-      (p) => p.what == $category.id && p.disposed_at != undefined,
+      (p) =>
+        ($shop ? p.shop == $shop.id : true) &&
+        p.what == $category.id &&
+        p.disposed_at != undefined,
     ).sort(by("last_used")),
   );
 </script>

@@ -1,12 +1,22 @@
 <script lang="ts">
   import { Dropdown, DropdownDivider, DropdownItem } from "flowbite-svelte";
   import { shops } from "../lib/shop";
-  import { user } from "../lib/store";
-  import { enterShop, shop } from "../lib/shop";
-  import { filterValues } from "../lib/mapable";
+  import { refresh, user } from "../lib/store";
+  import { shop } from "../lib/shop";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
 
-  let myshops = $derived(filterValues($shops, (g) => g.owner === $user?.id));
+  let myshops = $derived(Object.values($shops));
+
+  // Enter shop mode: replaces stores with shop-specific data
+  async function enterShop(shopId: number) {
+    // Set shop mode active
+    let myshop = $shops[shopId];
+    shop.set(myshop);
+    if (myshop.owner == $user?.id) await refresh(shopId);
+
+    // Navigate to main page
+    window.location.hash = "#/cat";
+  }
 </script>
 
 {#if !$shop}

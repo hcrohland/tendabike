@@ -19,7 +19,7 @@
   let selected = $state(
     Object.entries(select || {})
       .filter(([k, v]) => Limits.keys.includes(k as any) && v != null)
-      .map(([k, v]) => k as limit_keys),
+      .map(([k, _]) => k as limit_keys),
   );
 </script>
 

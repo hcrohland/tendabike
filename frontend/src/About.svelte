@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Card, Heading, Hr, Li, List, P } from "flowbite-svelte";
+  import { Heading, Hr, Li, List, P } from "flowbite-svelte";
 </script>
 
 <div class="p-4 sm:p-6 md:p-8 m-8 max-w-200">

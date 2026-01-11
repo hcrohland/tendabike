@@ -18,7 +18,6 @@
 <ChevronDownOutline class="cursor-pointer float-inline-right inline" />
 <Dropdown simple>
   {#if part}
-    {@const plans = plan.id ? [plan.id] : []}
     <DropdownItem onclick={() => $actions.newService(part, plan)}>
       New Service for plan
     </DropdownItem>

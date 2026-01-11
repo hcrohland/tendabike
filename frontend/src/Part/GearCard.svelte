@@ -1,6 +1,6 @@
 <script lang="ts">
   // import { slide } from 'svelte/transition';
-  import { Card, Textarea, Button, Badge, Indicator } from "flowbite-svelte";
+  import { Card, Textarea, Button, Indicator } from "flowbite-svelte";
   import { EditOutline } from "flowbite-svelte-icons";
   import { link, push } from "svelte-spa-router";
   import { Part } from "../lib/part";

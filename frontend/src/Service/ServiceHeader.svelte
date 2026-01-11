@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { TableBodyRow, TableHeadCell } from "flowbite-svelte";
+  import { TableHeadCell } from "flowbite-svelte";
   import Usage from "../Usage/Usage.svelte";
   interface Props {
     children?: import("svelte").Snippet;

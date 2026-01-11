@@ -117,7 +117,7 @@
           <TableBodyRow>
             <TableHeadCell colspan={80}>Add components groups:</TableHeadCell>
           </TableBodyRow>
-          {#each groups as g, i}
+          {#each groups as g}
             <TableBodyRow>
               <TableHeadCell>
                 <Switch bind:checked={g.enabled}>

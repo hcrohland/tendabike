@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { Card, Badge, Dropdown } from "flowbite-svelte";
-  import { DotsVerticalOutline } from "flowbite-svelte-icons";
+  import { Card, Badge } from "flowbite-svelte";
   import type { Snippet } from "svelte";
   import type { Shop } from "../lib/shop";
   import { onMount, onDestroy } from "svelte";

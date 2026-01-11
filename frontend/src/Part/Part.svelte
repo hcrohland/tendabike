@@ -1,12 +1,5 @@
 <script lang="ts">
-  import {
-    Tabs,
-    TabItem,
-    DropdownItem,
-    DropdownDivider,
-    Label,
-    Select,
-  } from "flowbite-svelte";
+  import { Tabs, TabItem, DropdownItem } from "flowbite-svelte";
   import ServiceList from "../Service/ServiceList.svelte";
   import PlanBadge from "../ServicePlan/PlanBadge.svelte";
   import PlanList from "../ServicePlan/PlanList.svelte";

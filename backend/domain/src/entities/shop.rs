@@ -475,6 +475,15 @@ impl SubscriptionId {
             ));
         }
 
+        if store
+            .shop_get_parts(subscription.shop_id)
+            .await?
+            .iter()
+            .any(|p| p.owner == user)
+        {
+            return Err(Error::Conflict("You have still parts in the shop".into()));
+        }
+
         store.subscription_delete(self).await
     }
 }

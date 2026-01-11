@@ -165,7 +165,6 @@
       ];
     }
 
-    let yanchor = "middle";
     for (const field of fields.values()) {
       for (const [indx, y] of [ncumm, ncomp].entries()) {
         if (y == undefined) break;
@@ -184,7 +183,6 @@
         }
         data.push(trace);
       }
-      yanchor = "bottom";
     }
     return {
       data,

@@ -62,7 +62,7 @@ export function myfetch(url: string, method?: any, data?: any) {
   return fetch(url, option).then(checkStatus);
 }
 
-export function checkStatus<T>(response: Response) {
+export function checkStatus(response: Response) {
   if (response.ok) {
     // Handle NO_CONTENT responses that have no body
     if (response.status === 204) {

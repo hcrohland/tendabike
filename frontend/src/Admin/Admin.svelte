@@ -25,7 +25,7 @@
     request = myfetch("/api/user/all").catch(handleError);
   }
 
-  let deleteuser = { start: (u: User) => {} };
+  let deleteuser = { start: (_: User) => {} };
 
   function rescan() {
     promise = myfetch("/api/activ/rescan")
@@ -94,7 +94,7 @@
     <Button onclick={rescan}>
       {#await promise}
         <Spinner />
-      {:then value}
+      {:then}
         Rescan all activities
       {/await}
     </Button>

@@ -73,7 +73,7 @@
   <div class="m-8">
     {#await promise}
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {#each [0, 1, 2, 3] as i}
+        {#each [0, 1, 2, 3]}
           <CardPlaceholder class="mb-4 p-4" />
         {/each}
       </div>
@@ -81,7 +81,7 @@
       <ShopFrame>
         <Router {routes} />
       </ShopFrame>
-    {:catch error}
+    {:catch}
       <About />
     {/await}
   </div>
