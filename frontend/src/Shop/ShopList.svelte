@@ -1,9 +1,9 @@
 <script lang="ts">
   import { Button, Dropdown, DropdownItem } from "flowbite-svelte";
   import ShopCard from "./ShopCard.svelte";
-  import type { Shop } from "../lib/shop";
+  import { enterShop, type Shop } from "../lib/shop";
   import { actions } from "../Widgets/Actions.svelte";
-  import { user, enterShop } from "../lib/store";
+  import { user } from "../lib/store";
   import type { Snippet } from "svelte";
   import { DotsVerticalOutline } from "flowbite-svelte-icons";
 

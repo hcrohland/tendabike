@@ -22,7 +22,7 @@
 </script>
 
 {#if $category}
-  <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
     {#each gears as part (part.id)}
       <MainCard {part} />
     {:else}

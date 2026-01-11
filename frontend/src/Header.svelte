@@ -18,8 +18,6 @@
     refresh,
     updateSummary,
     user,
-    shop,
-    exitShop,
   } from "./lib/store";
   import { activities } from "./lib/activity";
   import Sport from "./Widgets/Sport.svelte";
@@ -30,6 +28,7 @@
   import { ChevronDownOutline } from "flowbite-svelte-icons";
   import Garmin from "./Activity/Garmin.svelte";
   import ShopMenu from "./Shop/ShopMenu.svelte";
+  import { shop } from "./lib/shop";
 
   let { promise } = $props();
 
@@ -87,18 +86,7 @@
       title="TendaBike"
       class="rounded-circle h-11"
     />
-    {#if $shop}
-      &nbsp; Viewing: {$shop.name}
-      <button
-        class="ml-4 text-sm underline"
-        onclick={exitShop}
-        title="Exit shop mode"
-      >
-        Exit
-      </button>
-    {:else}
-      &nbsp; Tend a {$category.name}
-    {/if}
+    &nbsp; Tend a {$category.name}
   </NavBrand>
   {#if $user}
     <div class="flex items-center gap-4 md:order-2">

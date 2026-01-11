@@ -157,25 +157,3 @@ export const message = writable({
   message: "No message",
   status: "",
 });
-
-// Shop mode state
-export const shop = writable<Shop | undefined>(undefined);
-
-// Enter shop mode: replaces stores with shop-specific data
-export async function enterShop(shopId: number) {
-  // Set shop mode active
-  shop.set(get(shops)[shopId]);
-  await refresh(shopId);
-
-  // Navigate to main page
-  window.location.hash = "#/cat";
-}
-
-// Exit shop mode: refresh data from backend
-export async function exitShop() {
-  shop.set(undefined);
-  await refresh();
-
-  // Navigate to main page
-  window.location.hash = "#/cat";
-}

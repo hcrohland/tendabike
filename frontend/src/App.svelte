@@ -57,31 +57,30 @@
   import { CardPlaceholder, ThemeProvider } from "flowbite-svelte";
   import Actions from "./Widgets/Actions.svelte";
   import InitialSyncDialog from "./Widgets/InitialSyncDialog.svelte";
-  import { user } from "./lib/store";
+  import ShopFrame from "./Shop/ShopFrame.svelte";
 
   const theme = {
     tableBodyCell: "px-2 py-3",
     tableHeadCell: "px-2 py-3",
   };
-
-  let showInitialSyncDialog = false;
-  $: showInitialSyncDialog = $user?.onboarding_status === "pending";
 </script>
 
 <Header {promise} />
 
 <Message />
-<InitialSyncDialog bind:open={showInitialSyncDialog} />
+<InitialSyncDialog />
 <ThemeProvider {theme}>
   <div class="m-8">
     {#await promise}
-      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {#each [0, 1, 2, 3] as i}
           <CardPlaceholder class="mb-4 p-4" />
         {/each}
       </div>
     {:then}
-      <Router {routes} />
+      <ShopFrame>
+        <Router {routes} />
+      </ShopFrame>
     {:catch error}
       <About />
     {/await}

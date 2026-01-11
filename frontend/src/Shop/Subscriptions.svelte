@@ -14,7 +14,7 @@
     Tooltip,
   } from "flowbite-svelte";
   import { onMount } from "svelte";
-  import { myfetch, handleError, enterShop } from "../lib/store";
+  import { myfetch, handleError } from "../lib/store";
   import { shops, Shop } from "../lib/shop";
   import { user } from "../lib/store";
   import ShopList from "./ShopList.svelte";

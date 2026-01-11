@@ -21,8 +21,8 @@
   import XsButton from "../Widgets/XsButton.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { pop } from "svelte-spa-router";
-  import { shop, user } from "../lib/store";
-  import { shops, Shop } from "../lib/shop";
+  import { user } from "../lib/store";
+  import { shop, shops, Shop } from "../lib/shop";
 
   interface Props {
     id: number;
