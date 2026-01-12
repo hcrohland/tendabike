@@ -105,10 +105,7 @@ export class Part {
 }
 
 export function allGear(parts: Map<Part>, category: Type) {
-  return filterValues(
-    parts,
-    (p) => p.what == category.main && p.disposed_at != null,
-  );
+  return filterValues(parts, (p) => p.what == category.id && !p.disposed_at);
 }
 
 export const parts = mapable("id", (p) => new Part(p));

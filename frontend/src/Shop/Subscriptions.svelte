@@ -1,5 +1,14 @@
 <script lang="ts">
-  import { Table, TableHead, TableBody, Button } from "flowbite-svelte";
+  import {
+    Table,
+    TableHead,
+    TableBody,
+    Button,
+    ButtonGroup,
+    Dropdown,
+    Checkbox,
+    Li,
+  } from "flowbite-svelte";
   import { onMount } from "svelte";
   import { myfetch, handleError } from "../lib/store";
   import { Shop, shops } from "../lib/shop";
@@ -7,6 +16,8 @@
   import type { ShopSubscriptionFull } from "../lib/subscription";
   import SubscriptionRow from "./SubscriptionRow.svelte";
   import { actions } from "../Widgets/Actions.svelte";
+  import { allGear, Part, parts } from "../lib/part";
+  import { category } from "../lib/types";
 
   interface Props {
     shopid?: number;
@@ -56,26 +67,13 @@
   }
 
   function getShopName(subscription: ShopSubscriptionFull): string {
-    // If subscription includes shop details, use them
-    if (subscription.shop_name) {
-      const ownerName =
-        subscription.shop_owner_firstname && subscription.shop_owner_name
-          ? ` by ${subscription.shop_owner_firstname} ${subscription.shop_owner_name}`
-          : "";
-      return `${subscription.shop_name}${ownerName}`;
-    }
-
-    // Fall back to looking up in shops store
-    const shop = Object.values($shops).find(
-      (g) => g.id === subscription.shop_id,
+    return (
+      subscription.shop_name +
+      ` by ` +
+      subscription.shop_owner_firstname +
+      ` ` +
+      subscription.shop_owner_name
     );
-    if (!shop) return `Shop #${subscription.shop_id}`;
-
-    const ownerName =
-      shop.owner_firstname && shop.owner_name
-        ? ` (${shop.owner_firstname} ${shop.owner_name})`
-        : "";
-    return `${shop.name}${ownerName}`;
   }
 
   async function register() {
@@ -85,6 +83,17 @@
         .then((shop) => $actions.requestSubscription(shop))
         .catch(handleError);
       shopid = undefined;
+    }
+  }
+
+  let mygear = $derived(allGear($parts, $category));
+
+  async function registerGear(part: Part, shopid: number, checked: boolean) {
+    try {
+      if (checked) await Shop.registerPart(part, shopid);
+      else await Shop.unregisterPart(part);
+    } catch (error) {
+      console.error("Error unregistering part:", error);
     }
   }
 
@@ -169,14 +178,39 @@
                         Cancel
                       </Button>
                     {:else if subscription.status === "active"}
-                      <Button
-                        size="xs"
-                        color="alternative"
-                        onclick={() =>
-                          startConfirmation(subscription.id, "unsubscribe")}
-                      >
-                        Unsubscribe
-                      </Button>
+                      <ButtonGroup>
+                        <Button size="xs" color="alternative">
+                          Register {$category.name}s
+                        </Button>
+                        <Dropdown simple>
+                          {#each mygear as gear}
+                            <Li class="m-3">
+                              <Checkbox
+                                checked={gear.shop == subscription.shop_id}
+                                onchange={(e: any) =>
+                                  registerGear(
+                                    gear,
+                                    subscription.shop_id,
+                                    e.target.checked,
+                                  )}
+                              >
+                                {gear.name}
+                              </Checkbox>
+                            </Li>
+                          {/each}
+                        </Dropdown>
+                        <Button
+                          size="xs"
+                          color="alternative"
+                          onclick={() =>
+                            startConfirmation(subscription.id, "unsubscribe")}
+                          disabled={Object.values($parts).some(
+                            (p) => p.shop == subscription.shop_id,
+                          )}
+                        >
+                          Unsubscribe
+                        </Button>
+                      </ButtonGroup>
                     {:else if subscription.status === "rejected"}
                       <Button
                         size="xs"
