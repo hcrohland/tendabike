@@ -19,7 +19,11 @@ impl ServicePlanId {
         store.get(self).await
     }
 
-    pub async fn delete(self, user: &dyn Person, store: &mut impl Store) -> TbResult<Vec<Service>> {
+    pub async fn delete(
+        self,
+        user: &dyn Session,
+        store: &mut impl Store,
+    ) -> TbResult<Vec<Service>> {
         let plan = self.get(store).await?;
         plan.checkuser(user, store).await?;
 
@@ -65,17 +69,13 @@ pub struct ServicePlan {
 }
 
 impl ServicePlan {
-    async fn checkuser(
-        &self,
-        user: &dyn Person,
-        store: &mut (impl ServicePlanStore + PartStore),
-    ) -> TbResult<()> {
+    async fn checkuser(&self, user: &dyn Session, store: &mut impl Store) -> TbResult<()> {
         if let Some(part) = self.part {
             part.checkuser(user, store).await?;
-        } else if self.uid != Some(user.get_id()) {
+        } else if self.uid != Some(user.user_id()) {
             return Err(crate::Error::BadRequest(format!(
                 "user mismatch {} != {:?}",
-                user.get_id(),
+                user.user_id(),
                 self.uid
             )));
         }
@@ -84,18 +84,21 @@ impl ServicePlan {
 
     pub async fn create(
         mut self,
-        user: &dyn Person,
+        user: &dyn Session,
         store: &mut (impl ServicePlanStore + PartStore),
     ) -> TbResult<Self> {
         self.id = ServicePlanId::new();
-        self.uid = Some(user.get_id());
+        self.uid = match self.part {
+            Some(_) => None,
+            None => Some(user.user_id()),
+        };
         store.create(self).await
     }
 
     pub async fn update(
         mut self,
-        user: &dyn Person,
-        store: &mut (impl ServicePlanStore + PartStore),
+        user: &dyn Session,
+        store: &mut impl Store,
     ) -> TbResult<ServicePlan> {
         let plan = self.id.get(store).await?;
         plan.checkuser(user, store).await?;
@@ -104,7 +107,7 @@ impl ServicePlan {
         self.what = plan.what;
         self.hook = plan.hook;
         self.uid = plan.uid;
-        store.update(self).await
+        store.plan_update(self).await
     }
 
     pub(crate) async fn for_part(

@@ -1,6 +1,6 @@
 [package]
 name = "tb_domain"
-version = "0.7.0"
+version = "0.9.0"
 authors = ["Christoph Rohland <tendabike@rohland.net>"]
 edition = { workspace = true }
 

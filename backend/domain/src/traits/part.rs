@@ -1,7 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 use time::OffsetDateTime;
 
-use crate::{Part, PartId, PartTypeId, TbResult, UsageId, UserId};
+use crate::{Part, PartId, PartTypeId, ShopId, TbResult, UsageId, UserId};
 
 #[async_trait::async_trait]
 /// A trait representing a store for `Part` objects.
@@ -48,6 +48,7 @@ pub trait PartStore {
         notes: String,
         usage: UsageId,
         owner: UserId,
+        shop: Option<ShopId>,
     ) -> TbResult<Part>;
 
     /// updates an existing part
@@ -89,4 +90,43 @@ pub trait PartStore {
     ///
     /// Returns an error if the PartId cannot be retrieved from the database.
     async fn partid_get_by_source(&mut self, strava_id: &str) -> TbResult<Option<PartId>>;
+
+    /// Registers a part (bike) to a shop.
+    ///
+    /// # Arguments
+    ///
+    /// * `shop_id` - The ID of the shop.
+    /// * `part_id` - The ID of the part to register.
+    ///
+    /// # Returns
+    ///
+    /// Returns Ok(()) if successful, error otherwise.
+    async fn parts_register_shop(
+        &mut self,
+        shop_id: ShopId,
+        part_id: Vec<PartId>,
+    ) -> TbResult<Vec<Part>>;
+
+    /// Unregisters a part (bike) from a shop.
+    ///
+    /// # Arguments
+    ///
+    /// * `shop_id` - The ID of the shop.
+    /// * `part_id` - The ID of the part to unregister.
+    ///
+    /// # Returns
+    ///
+    /// Returns Ok(()) if successful, error otherwise.
+    async fn parts_unregister_shop(&mut self, part_ids: Vec<PartId>) -> TbResult<Vec<Part>>;
+
+    /// Gets all part IDs registered to a shop.
+    ///
+    /// # Arguments
+    ///
+    /// * `shop_id` - The ID of the shop.
+    ///
+    /// # Returns
+    ///
+    /// A vector of PartIds registered to the shop.
+    async fn shop_get_parts(&mut self, shop_id: ShopId) -> TbResult<Vec<Part>>;
 }

@@ -1,5 +1,5 @@
 use anyhow::Context;
-use async_session::{MemoryStore, Session, SessionStore};
+use async_session::{MemoryStore, Session as AsyncSession, SessionStore};
 use axum::{
     RequestPartsExt,
     extract::{FromRef, FromRequestParts},
@@ -20,24 +20,26 @@ use crate::{
     AppError,
     strava::{HTTP_CLIENT, StravaAthleteInfo, oauth::STRAVACLIENT},
 };
-use tb_domain::{Error, Person, TbResult, UserId};
-use tb_strava::{StravaId, StravaPerson, StravaStore, StravaUser};
+use tb_domain::{Error, Session as TbSession, ShopId, TbResult, UserId};
+use tb_strava::{StravaId, StravaSession, StravaStore, StravaUser};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub(crate) struct RequestUser {
+pub(crate) struct RequestSession {
     id: UserId,
     strava_id: StravaId,
     is_admin: bool,
     access_token: AccessToken,
     expires_at: Option<SystemTime>,
     refresh_token: Option<RefreshToken>,
+    shop: Option<ShopId>,
     #[serde(skip)]
-    session: Option<Session>,
+    session: Option<AsyncSession>,
 }
 
 const API: &str = "https://www.strava.com/api/v3";
+pub(crate) const SESSION_KEY: &str = "session";
 
-impl RequestUser {
+impl RequestSession {
     pub(crate) async fn create_from_token(
         token: StandardTokenResponse<StravaExtraTokenFields, BasicTokenType>,
         store: &mut impl StravaStore,
@@ -75,14 +77,16 @@ impl RequestUser {
             expires_at: token.expires_in().map(|d| SystemTime::now() + d),
             refresh_token: refresh_token.cloned(),
             session: None,
+            shop: None,
         })
     }
 
+    /// User for admin actions to impersonate user
     pub(crate) async fn create_from_id(
         _admin: AxumAdmin,
         user: UserId,
         store: &mut impl StravaStore,
-    ) -> TbResult<RequestUser> {
+    ) -> TbResult<RequestSession> {
         let user = StravaUser::read(user, store).await?;
 
         let strava_id = user.strava_id();
@@ -98,6 +102,7 @@ impl RequestUser {
             expires_at: Some(SystemTime::UNIX_EPOCH),
             refresh_token,
             session: None,
+            shop: None,
         })
     }
 
@@ -131,10 +136,14 @@ impl RequestUser {
         self.refresh_token = token.refresh_token().cloned();
         let refresh = token.refresh_token().map(|t| t.secret());
         self.strava_id.update_token(refresh, store).await?;
+        self.update()
+    }
+
+    fn update(&self) -> TbResult<()> {
         if let Some(mut session) = self.session.clone() {
-            debug!("updating session for user {}", self.id);
+            trace!("updating session for user {}", self.id);
             session
-                .insert("user", self)
+                .insert(SESSION_KEY, self)
                 .context("session insert failed")?;
         };
         Ok(())
@@ -186,23 +195,33 @@ impl RequestUser {
         Ok(())
     }
 
-    fn set_session(mut self, session: Session) -> Self {
+    fn set_session(mut self, session: AsyncSession) -> Self {
         self.session = Some(session);
         self
     }
 }
 
-impl Person for RequestUser {
-    fn get_id(&self) -> UserId {
+impl TbSession for RequestSession {
+    fn user_id(&self) -> UserId {
         self.id
     }
+
     fn is_admin(&self) -> bool {
         self.is_admin
+    }
+
+    fn shop(&self) -> Option<ShopId> {
+        self.shop
+    }
+
+    fn set_shop(&mut self, shop: Option<ShopId>) -> TbResult<()> {
+        self.shop = shop;
+        self.update()
     }
 }
 
 #[async_trait::async_trait]
-impl StravaPerson for RequestUser {
+impl StravaSession for RequestSession {
     fn strava_id(&self) -> StravaId {
         self.strava_id
     }
@@ -237,7 +256,7 @@ impl StravaPerson for RequestUser {
     }
 }
 
-impl<S> FromRequestParts<S> for RequestUser
+impl<S> FromRequestParts<S> for RequestSession
 where
     MemoryStore: FromRef<S>,
     S: Send + Sync,
@@ -256,18 +275,18 @@ where
             .get(crate::strava::COOKIE_NAME)
             .ok_or(Error::NotAuth("Please authenticate".into()))?;
 
-        let session = store
+        let sessionstore = store
             .load_session(session_cookie.to_string())
             .await
             .expect("could not load session")
             .ok_or(Error::NotAuth("Please authenticate".into()))?;
 
-        let user = session
-            .get::<RequestUser>("user")
+        let session = sessionstore
+            .get::<RequestSession>(SESSION_KEY)
             .ok_or(Error::NotAuth("Session error".into()))?
-            .set_session(session);
+            .set_session(sessionstore);
 
-        Ok(user)
+        Ok(session)
     }
 }
 
@@ -281,7 +300,7 @@ where
     type Rejection = Response;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let user = RequestUser::from_request_parts(parts, state)
+        let user = RequestSession::from_request_parts(parts, state)
             .await
             .map_err(IntoResponse::into_response)?;
         if !user.is_admin() {

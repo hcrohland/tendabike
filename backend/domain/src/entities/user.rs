@@ -156,13 +156,68 @@ impl UserId {
     }
 
     /// get all parts, attachments and activities for the user
-    pub async fn get_summary(&self, store: &mut impl Store) -> TbResult<Summary> {
+    pub async fn get_summary(
+        &self,
+        shop: Option<ShopId>,
+        store: &mut impl Store,
+    ) -> TbResult<Summary> {
         use crate::*;
         let activities = Activity::get_all(self, store).await?;
-        let summary = Part::get_part_summary(self, store).await?;
+        let shops = Shop::get_all_for_user(self, store).await?;
+        let shops = Shop::with_owner_info(shops, store).await?;
+        let parts = match shop {
+            None => Part::get_all(self, store).await?,
+            Some(shop) => shop.get_parts(*self, store).await?,
+        };
+        let summary = self.get_part_summary(parts, store).await?;
         Ok(Summary {
             activities,
+            shops,
             ..summary
+        })
+    }
+
+    /// Returns a summary for the user self and the list of parts provided
+    ///
+    /// # Arguments
+    ///
+    /// * `parts` - list of parts
+    /// * `store` - A mutable reference to an `AppConn` object representing the database connection.
+    ///
+    /// # Returns
+    ///
+    /// A `Summary` with all entities related to parts`
+    ///
+    /// # Errors
+    ///
+    /// Returns an `TbResult` object that may contain a `diesel::result::Error` if the query fails.
+    async fn get_part_summary(
+        &self,
+        parts: Vec<Part>,
+        store: &mut impl Store,
+    ) -> TbResult<Summary> {
+        let mut usages = Vec::new();
+        let mut attachments = Vec::new();
+        let mut services = Vec::new();
+        let mut plans = ServicePlan::for_user(self, store).await?;
+        for part in &parts {
+            usages.push(part.usage().read(store).await?);
+            let (mut atts, mut uses) = Attachment::for_part_with_usage(part.id, store).await?;
+            usages.append(&mut uses);
+            attachments.append(&mut atts);
+            let (mut servs, mut uses) = Service::for_part_with_usage(part.id, store).await?;
+            let mut splans = ServicePlan::for_part(part.id, store).await?;
+            usages.append(&mut uses);
+            services.append(&mut servs);
+            plans.append(&mut splans)
+        }
+        Ok(Summary {
+            parts,
+            usages,
+            attachments,
+            services,
+            plans,
+            ..Default::default()
         })
     }
 
@@ -174,7 +229,7 @@ impl UserId {
             services,
             plans,
             ..
-        } = self.get_summary(store).await?;
+        } = self.get_summary(None, store).await?;
         let n = store.services_delete(&services).await?;
         debug!("deleted {n} services");
         let n = store.serviceplans_delete(&plans).await?;
@@ -191,13 +246,12 @@ impl UserId {
         debug!("deleted {n} user");
         Ok(())
     }
-}
 
-impl Person for User {
-    fn get_id(&self) -> UserId {
-        self.id
-    }
-    fn is_admin(&self) -> bool {
-        self.is_admin
+    pub(crate) fn check_owner(&self, owner: UserId, error: String) -> TbResult<()> {
+        if *self == owner {
+            Ok(())
+        } else {
+            Err(crate::Error::Forbidden(error))
+        }
     }
 }

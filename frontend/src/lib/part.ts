@@ -16,6 +16,7 @@ export class Part {
   disposed_at?: Date;
   usage: string;
   notes: string;
+  shop?: number;
 
   constructor(data: any) {
     this.id = data.id;
@@ -31,6 +32,7 @@ export class Part {
       : undefined;
     this.usage = data.usage;
     this.notes = data.notes || "";
+    this.shop = data.shop;
   }
 
   async create() {
@@ -103,10 +105,7 @@ export class Part {
 }
 
 export function allGear(parts: Map<Part>, category: Type) {
-  return filterValues(
-    parts,
-    (p) => p.what == category.main && p.disposed_at != null,
-  );
+  return filterValues(parts, (p) => p.what == category.id && !p.disposed_at);
 }
 
 export const parts = mapable("id", (p) => new Part(p));

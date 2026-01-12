@@ -325,7 +325,7 @@ async fn shift_subparts(
     hash: &mut SumHash,
     store: &mut impl Store,
 ) -> TbResult<()> {
-    let sub_attachments = subparts(to, from, time, store).await?;
+    let sub_attachments = subattachments(to, from, time, store).await?;
     for attachment in sub_attachments {
         attachment.shift(time, to, hash, store).await?;
     }
@@ -333,16 +333,28 @@ async fn shift_subparts(
 }
 
 /// find all subparts which are attached to target at self.time
-async fn subparts(
+async fn subattachments(
     part: PartId,
     gear: PartId,
     time: OffsetDateTime,
     store: &mut impl Store,
 ) -> TbResult<Vec<Attachment>> {
-    let types = part.what(store).await?.subtypes();
+    let types = part.read(store).await?.what.subtypes();
     store
         .assembly_get_by_types_time_and_gear(types, gear, time)
         .await
+}
+
+pub(crate) async fn subparts(
+    part: PartId,
+    time: OffsetDateTime,
+    store: &mut impl Store,
+) -> TbResult<Vec<PartId>> {
+    Ok(subattachments(part, part, time, store)
+        .await?
+        .into_iter()
+        .map(|a| a.part_id)
+        .collect())
 }
 
 /// create Attachment for one part according to self
@@ -368,7 +380,7 @@ async fn attach_one(
     // we need this to reattach subparts
     let mut det = MAX_TIME;
 
-    let what = part_id.what(store).await?;
+    let what = part_id.set_owner_and_shop(gear, store).await?.what;
 
     if let Some(next) = store
         .attachment_find_successor(part_id, gear, hook, time, what)
@@ -426,7 +438,7 @@ async fn attach_one(
 }
 
 pub async fn attach_assembly(
-    user: &dyn Person,
+    user: &dyn Session,
     part: PartId,
     time: OffsetDateTime,
     gear: PartId,
@@ -478,7 +490,7 @@ pub async fn attach_assembly(
     debug!("- attaching assembly {} to {}", part.id, gear);
     let end = attach_one(part.id, time, gear, hook, &mut hash, store).await?;
     if all {
-        let subparts = subparts(part.id, part.id, time, store).await?;
+        let subparts = subattachments(part.id, part.id, time, store).await?;
         for attachment in subparts {
             let detached = attachment.shift(time, gear, &mut hash, store).await?;
             if detached == end && end < attachment.detached {
@@ -503,7 +515,7 @@ pub async fn attach_assembly(
 }
 
 pub async fn detach_assembly(
-    user: &dyn Person,
+    user: &dyn Session,
     part_id: PartId,
     time: OffsetDateTime,
     all: bool,
@@ -520,7 +532,7 @@ pub async fn detach_assembly(
 }
 
 pub async fn dispose_assembly(
-    user: &dyn Person,
+    user: &dyn Session,
     part_id: PartId,
     time: OffsetDateTime,
     all: bool,
@@ -555,7 +567,7 @@ async fn dispose_subparts(
     all: bool,
     store: &mut impl Store,
 ) -> TbResult<Summary> {
-    let sub_attachments = subparts(part, part, time, store).await?;
+    let sub_attachments = subattachments(part, part, time, store).await?;
     let mut res = SumHash::default();
     for attachment in sub_attachments {
         let attachments = store.attachments_all_by_part(attachment.part_id).await?;
@@ -570,7 +582,7 @@ async fn dispose_subparts(
 }
 
 pub async fn recover_assembly(
-    user: &dyn Person,
+    user: &dyn Session,
     part: PartId,
     all: bool,
     store: &mut impl Store,
@@ -579,7 +591,7 @@ pub async fn recover_assembly(
     if let Some(time) = part.part(user, store).await?.disposed_at {
         res += part.restore(store).await?;
         if all {
-            for attachment in subparts(part, part, time, store).await? {
+            for attachment in subattachments(part, part, time, store).await? {
                 res += attachment.part_id.restore(store).await?;
             }
         }
@@ -587,4 +599,15 @@ pub async fn recover_assembly(
     } else {
         Err(Error::BadRequest(format!("Part {part} is not disposed")))
     }
+}
+
+pub async fn is_attached(
+    part: PartId,
+    time: OffsetDateTime,
+    store: &mut impl Store,
+) -> TbResult<bool> {
+    Ok(store
+        .attachment_get_by_part_and_time(part, time)
+        .await?
+        .is_some())
 }

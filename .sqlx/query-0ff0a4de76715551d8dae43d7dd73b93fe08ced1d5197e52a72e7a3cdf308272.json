@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM parts WHERE shop = $1 ORDER BY last_used",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "what",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "vendor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "model",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "purchase",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "last_used",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "disposed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "usage",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "notes",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "shop",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "0ff0a4de76715551d8dae43d7dd73b93fe08ced1d5197e52a72e7a3cdf308272"
+}

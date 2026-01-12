@@ -27,6 +27,8 @@
   import { onDestroy } from "svelte";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
   import Garmin from "./Activity/Garmin.svelte";
+  import ShopMenu from "./Shop/ShopMenu.svelte";
+  import { shop } from "./lib/shop";
 
   let { promise } = $props();
 
@@ -60,7 +62,7 @@
 
   function fullrefresh() {
     clearInterval(hook_timer);
-    hook_promise = refresh().then(poll);
+    hook_promise = refresh($shop?.id).then(poll);
   }
 
   async function triggerHistoricSync() {
@@ -132,6 +134,7 @@
           </Dropdown>
           <Garmin bind:open={openGarmin} />
         {/await}
+        <ShopMenu />
         {#if $user.is_admin}
           <DropdownDivider />
           <DropdownItem href="/#/admin">Admin</DropdownItem>
@@ -149,8 +152,10 @@
       <NavLi class="justify-start" href="/#/cat">{$category.name}s</NavLi>
       <NavLi href="/#/plans">Services</NavLi>
       <NavLi href="/#/spares">Parts</NavLi>
-      <NavLi href="/#/activities">Activities</NavLi>
-      <NavLi href="/#/stats">Statistics</NavLi>
+      {#if !$shop}
+        <NavLi href="/#/activities">Activities</NavLi>
+        <NavLi href="/#/stats">Statistics</NavLi>
+      {/if}
     </NavUl>
   {:else}
     <div class="flex items-center md:order-2">

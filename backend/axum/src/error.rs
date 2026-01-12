@@ -33,7 +33,8 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let code = match &self {
             Self::TbError(err) => match err {
-                Error::Forbidden(_) | Error::NotAuth(_) => StatusCode::UNAUTHORIZED,
+                Error::NotAuth(_) => StatusCode::UNAUTHORIZED,
+                Error::Forbidden(_) => StatusCode::FORBIDDEN,
                 Error::NotFound(_) => StatusCode::NOT_FOUND,
                 Error::BadRequest(_) => StatusCode::BAD_REQUEST,
                 Error::Conflict(_) => StatusCode::CONFLICT,

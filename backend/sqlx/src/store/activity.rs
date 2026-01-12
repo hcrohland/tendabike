@@ -1,7 +1,7 @@
 use crate::{SqlxConn, into_domain, vec_into};
 use anyhow::Context;
 use sqlx::FromRow;
-use tb_domain::{ActTypeId, Activity, ActivityId, PartId, Person, TbResult, UserId};
+use tb_domain::{ActTypeId, Activity, ActivityId, PartId, TbResult, UserId};
 use time::{OffsetDateTime, UtcOffset};
 
 #[derive(Debug, Clone, FromRow, PartialEq)]
@@ -263,7 +263,7 @@ impl<'c> tb_domain::ActivityStore for SqlxConn<'c> {
 
     async fn activity_set_gear_if_null(
         &mut self,
-        user: &dyn Person,
+        user: UserId,
         types: Vec<ActTypeId>,
         partid: &PartId,
     ) -> TbResult<Vec<Activity>> {
@@ -275,7 +275,7 @@ impl<'c> tb_domain::ActivityStore for SqlxConn<'c> {
                  SET gear = $3
                  WHERE user_id = $1 AND gear IS NULL AND what = ANY($2)
                  RETURNING *",
-                i32::from(user.get_id()),
+                i32::from(user),
                 &types,
                 i32::from(*partid)
             )

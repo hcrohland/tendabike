@@ -6,11 +6,15 @@
 //! This module also defines the `RUser` struct, which represents a user in the system and is used throughout the module.
 //! Additionally, it defines the `AxumAdmin` struct, which is used as a marker type for routes that require admin privileges.
 
-use axum::{Json, Router, extract::State, routing::get};
+use axum::{
+    Json, Router,
+    extract::{Query, State},
+    routing::get,
+};
 use serde::Serialize;
 
-use crate::{ApiResult, AxumAdmin, DbPool, RequestUser, appstate::AppState};
-use tb_domain::{Person, Store, Summary};
+use crate::{ApiResult, AxumAdmin, DbPool, RequestSession, appstate::AppState};
+use tb_domain::{Session, ShopId, Store, Summary};
 use tb_strava::StravaUser;
 
 pub(super) fn router() -> Router<AppState> {
@@ -21,15 +25,28 @@ pub(super) fn router() -> Router<AppState> {
         .route("/export", get(export))
 }
 
-async fn getuser(user: RequestUser, State(pool): State<DbPool>) -> ApiResult<tb_domain::User> {
+async fn getuser(user: RequestSession, State(pool): State<DbPool>) -> ApiResult<tb_domain::User> {
     let mut store = pool.begin().await?;
-    Ok(user.get_id().read(&mut store).await.map(Json)?)
+    Ok(user.user_id().read(&mut store).await.map(Json)?)
 }
 
-async fn summary(mut user: RequestUser, State(pool): State<DbPool>) -> ApiResult<Summary> {
+#[derive(serde::Deserialize)]
+struct ShopQuery {
+    shop: Option<ShopId>,
+}
+async fn summary(
+    mut session: RequestSession,
+    State(pool): State<DbPool>,
+    Query(ShopQuery { shop }): Query<ShopQuery>,
+) -> ApiResult<Summary> {
     let mut store = pool.begin().await?;
-    StravaUser::update_gear(&mut user, &mut store).await?;
-    let res = user.get_id().get_summary(&mut store).await.map(Json)?;
+    session.set_shop(shop)?;
+    StravaUser::update_gear(&mut session, &mut store).await?;
+    let res = session
+        .user_id()
+        .get_summary(session.shop(), &mut store)
+        .await
+        .map(Json)?;
     store.commit().await?;
     Ok(res)
 }
@@ -43,11 +60,12 @@ pub struct Export {
     pub plans: Vec<tb_domain::ServicePlan>,
     pub usages: Vec<tb_domain::Usage>,
     pub activities: Vec<tb_domain::Activity>,
+    pub shops: Vec<tb_domain::ShopWithOwner>,
 }
 
-async fn export(user: RequestUser, State(pool): State<DbPool>) -> ApiResult<Export> {
+async fn export(user: RequestSession, State(pool): State<DbPool>) -> ApiResult<Export> {
     let mut store = pool.begin().await?;
-    let user = user.get_id().read(&mut store).await?;
+    let user_id = user.user_id();
     let Summary {
         activities,
         parts,
@@ -55,7 +73,9 @@ async fn export(user: RequestUser, State(pool): State<DbPool>) -> ApiResult<Expo
         usages,
         services,
         plans,
-    } = user.get_id().get_summary(&mut store).await?;
+        shops,
+    } = user_id.get_summary(None, &mut store).await?;
+    let user = user_id.read(&mut store).await?;
     Ok(Json(Export {
         user,
         activities,
@@ -64,6 +84,7 @@ async fn export(user: RequestUser, State(pool): State<DbPool>) -> ApiResult<Expo
         usages,
         services,
         plans,
+        shops,
     }))
 }
 

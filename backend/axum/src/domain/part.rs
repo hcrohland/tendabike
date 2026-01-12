@@ -30,7 +30,7 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    DbPool, RequestUser,
+    DbPool, RequestSession,
     appstate::AppState,
     error::{ApiResult, AppError},
 };
@@ -77,7 +77,7 @@ pub(super) fn router() -> Router<AppState> {
 
 async fn get_part(
     Path(part): Path<PartId>,
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
 ) -> ApiResult<Part> {
     let mut store = store.begin().await?;
@@ -85,7 +85,7 @@ async fn get_part(
 }
 
 async fn post_part(
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
     Json(NewPart {
         what,
@@ -107,7 +107,7 @@ async fn post_part(
 
 async fn delete_part(
     Path(part): Path<PartId>,
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
 ) -> ApiResult<PartId> {
     let mut store = store.begin().await?;
@@ -117,7 +117,7 @@ async fn delete_part(
 }
 
 async fn put_part(
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
     Path(part): Path<PartId>,
     Json(ChangePart {
@@ -138,7 +138,10 @@ async fn put_part(
     Ok(res)
 }
 
-async fn mycats(user: RequestUser, State(store): State<DbPool>) -> ApiResult<HashSet<PartTypeId>> {
+async fn mycats(
+    user: RequestSession,
+    State(store): State<DbPool>,
+) -> ApiResult<HashSet<PartTypeId>> {
     let mut store = store.begin().await?;
     Ok(Part::categories(&user, &mut store).await.map(Json)?)
 }

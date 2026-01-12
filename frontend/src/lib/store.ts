@@ -6,6 +6,7 @@ import { Usage, usages } from "./usage";
 import { parts, type Part } from "./part";
 import { Attachment, attachments } from "./attachment";
 import { plans, type ServicePlan } from "./serviceplan";
+import { Shop, shops } from "./shop";
 import { location } from "svelte-spa-router";
 
 export const DAY = 24 * 60 * 60 * 1000;
@@ -61,8 +62,12 @@ export function myfetch(url: string, method?: any, data?: any) {
   return fetch(url, option).then(checkStatus);
 }
 
-export function checkStatus<T>(response: Response) {
+export function checkStatus(response: Response) {
   if (response.ok) {
+    // Handle NO_CONTENT responses that have no body
+    if (response.status === 204) {
+      return Promise.resolve(null);
+    }
     return response.json();
   }
 
@@ -105,8 +110,9 @@ export async function initData() {
   return refresh();
 }
 
-export async function refresh() {
-  await myfetch("/api/user/summary").then(setSummary);
+export async function refresh(shop?: number) {
+  let query = shop ? "?shop=" + shop : "";
+  await myfetch("/api/user/summary" + query).then(setSummary);
 }
 
 type Summary = {
@@ -116,6 +122,7 @@ type Summary = {
   usages: Usage[];
   services: Service[];
   plans: ServicePlan[];
+  shops: Shop[];
 };
 
 export function setSummary(data: Summary) {
@@ -125,15 +132,21 @@ export function setSummary(data: Summary) {
   activities.setMap(data.activities);
   services.setMap(data.services);
   plans.setMap(data.plans);
+  shops.setMap(data.shops);
 }
 
-export function updateSummary(data: Summary) {
+export function updateSummary(data?: Summary) {
+  if (!data) {
+    refresh();
+    return;
+  }
   parts.updateMap(data.parts);
   attachments.updateMap(data.attachments);
   activities.updateMap(data.activities);
   services.updateMap(data.services);
   plans.updateMap(data.plans);
   usages.updateMap(data.usages);
+  shops.updateMap(data.shops);
 }
 
 export const user = writable<User | undefined>(undefined);

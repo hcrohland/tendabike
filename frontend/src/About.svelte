@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Card, Heading, Hr, Li, List, P } from "flowbite-svelte";
+  import { Heading, Hr, Li, List, P } from "flowbite-svelte";
 </script>
 
 <div class="p-4 sm:p-6 md:p-8 m-8 max-w-200">
@@ -55,7 +55,7 @@
   <Hr />
   <P>
     <div class="flex justify-end">
-      © Christoph Rohland 2019-2025 - Source Code at&MediumSpace;
+      © Christoph Rohland 2019-2026 - Source Code at&MediumSpace;
       <a href="https://github.com/hcrohland/tendabike" title="Repository">
         GitHub
       </a>

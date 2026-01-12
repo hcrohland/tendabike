@@ -5,7 +5,7 @@
   import PlanList from "../ServicePlan/PlanList.svelte";
   import { attachments } from "../lib/attachment";
   import { filterValues } from "../lib/mapable";
-  import { Part, parts } from "../lib/part";
+  import { parts } from "../lib/part";
   import { plans, plans_for_part_and_subtypes } from "../lib/serviceplan";
   import GearCard from "./GearCard.svelte";
   import Subparts from "./Subparts.svelte";
@@ -14,6 +14,7 @@
   import XsButton from "../Widgets/XsButton.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { pop } from "svelte-spa-router";
+  import ShopRegistration from "../Shop/ShopRegistration.svelte";
 
   interface Props {
     id: number;
@@ -66,6 +67,8 @@
         Delete
       </DropdownItem>
     {/if}
+
+    <ShopRegistration {part} {last_attachment} />
   </Menu>
 </GearCard>
 <br />

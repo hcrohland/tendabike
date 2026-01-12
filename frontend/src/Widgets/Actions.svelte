@@ -19,6 +19,10 @@
     deletePlan: (p: ServicePlan) => void;
     deleteAttachment: (a: Attachment) => void;
     changeActivity: (a: Activity) => void;
+    createShop: () => void;
+    editShop: (g: Shop) => void;
+    deleteShop: (g: Shop) => void;
+    requestSubscription: (g: Shop) => void;
   };
 
   export let actions = writable<ModalType>();
@@ -45,6 +49,10 @@
   import ChangeActivity from "../Activity/ChangeActivity.svelte";
   import type { Activity } from "../lib/activity";
   import DeletePart from "../Part/DeletePart.svelte";
+  import ShopModal from "../Shop/ShopModal.svelte";
+  import DeleteShop from "../Shop/DeleteShop.svelte";
+  import SubscriptionRequestModal from "../Shop/SubscriptionRequestModal.svelte";
+  import type { Shop } from "../lib/shop";
 
   $: actions.set({
     newPart: newPart?.start,
@@ -64,6 +72,10 @@
     deletePlan: deletePlan?.start,
     deleteAttachment: deleteAttachment?.start,
     changeActivity: changeActivity?.start,
+    createShop: () => shopModal?.start(),
+    editShop: shopModal?.start,
+    deleteShop: deleteShop?.start,
+    requestSubscription: subscriptionRequestModal?.start,
   });
 
   let newPart: { start: (t: Type) => void };
@@ -85,6 +97,9 @@
   let updatePlan: { start: (p: ServicePlan) => void };
   let deletePlan: { start: (p: ServicePlan) => void };
   let changeActivity: { start: (a: Activity) => void };
+  let shopModal: { start: (g?: Shop) => void };
+  let deleteShop: { start: (g: Shop) => void };
+  let subscriptionRequestModal: { start: (g: Shop) => void };
 </script>
 
 <NewPart bind:this={newPart} />
@@ -101,3 +116,6 @@
 <AttachPart bind:this={attachPart} />
 <DeleteAttachment bind:this={deleteAttachment} />
 <ChangeActivity bind:this={changeActivity} />
+<ShopModal bind:this={shopModal} />
+<DeleteShop bind:this={deleteShop} />
+<SubscriptionRequestModal bind:this={subscriptionRequestModal} />

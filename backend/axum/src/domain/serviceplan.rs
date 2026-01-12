@@ -28,7 +28,7 @@ use axum::{
 use http::StatusCode;
 use log::trace;
 
-use crate::{ApiResult, DbPool, RequestUser, appstate::AppState, error::AppError};
+use crate::{ApiResult, DbPool, RequestSession, appstate::AppState, error::AppError};
 use tb_domain::{Service, ServicePlan, ServicePlanId, Store};
 
 pub(super) fn router() -> Router<AppState> {
@@ -38,7 +38,7 @@ pub(super) fn router() -> Router<AppState> {
 }
 
 async fn create(
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
     Json(plan): Json<ServicePlan>,
 ) -> Result<(StatusCode, Json<ServicePlan>), AppError> {
@@ -50,7 +50,7 @@ async fn create(
 }
 
 async fn update(
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
     Json(plan): Json<ServicePlan>,
 ) -> ApiResult<ServicePlan> {
@@ -61,7 +61,7 @@ async fn update(
 }
 
 async fn delete_plan(
-    user: RequestUser,
+    user: RequestSession,
     State(pool): State<DbPool>,
     Path(id): Path<ServicePlanId>,
 ) -> ApiResult<Vec<Service>> {

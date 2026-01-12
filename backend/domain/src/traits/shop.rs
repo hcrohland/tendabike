@@ -1,0 +1,142 @@
+use crate::{Shop, ShopId, ShopSubscription, SubscriptionId, SubscriptionStatus, TbResult, UserId};
+
+#[async_trait::async_trait]
+/// A trait representing a shop store.
+pub trait ShopStore {
+    /// Creates a new shop.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the shop.
+    /// * `description` - Optional description of the shop.
+    /// * `owner` - The user ID of the shop owner.
+    ///
+    /// # Returns
+    ///
+    /// The newly created shop.
+    async fn shop_create(
+        &mut self,
+        name: String,
+        description: Option<String>,
+        auto_approve: bool,
+        owner: UserId,
+    ) -> TbResult<Shop>;
+
+    /// Reads a shop by its ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The ID of the shop to read.
+    ///
+    /// # Returns
+    ///
+    /// The shop with the given ID, if it exists.
+    async fn shop_get(&mut self, id: ShopId) -> TbResult<Shop>;
+
+    /// Updates an existing shop.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The ID of the shop to update.
+    /// * `name` - The new name of the shop.
+    /// * `description` - The new description of the shop.
+    ///
+    /// # Returns
+    ///
+    /// The updated shop.
+    async fn shop_update(
+        &mut self,
+        id: ShopId,
+        name: String,
+        description: Option<String>,
+        auto_approve: bool,
+    ) -> TbResult<Shop>;
+
+    /// Deletes a shop.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The ID of the shop to delete.
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Result` containing 1 or an error if the operation fails.
+    async fn shop_delete(&mut self, id: ShopId) -> TbResult<usize>;
+
+    /// Gets all shops for a specific user.
+    ///
+    /// # Arguments
+    ///
+    /// * `user_id` - The ID of the user.
+    ///
+    /// # Returns
+    ///
+    /// A vector of shops owned by the user.
+    async fn shops_get_all_for_user(&mut self, user_id: UserId) -> TbResult<Vec<Shop>>;
+
+    /// Searches for shops by name.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The search query string.
+    ///
+    /// # Returns
+    ///
+    /// A vector of shops matching the search query.
+    async fn shops_search(&mut self, query: &str) -> TbResult<Vec<Shop>>;
+
+    // Subscription methods
+
+    /// Creates a new subscription request.
+    async fn subscription_create(
+        &mut self,
+        shop_id: ShopId,
+        user_id: UserId,
+        message: Option<String>,
+    ) -> TbResult<ShopSubscription>;
+
+    /// Gets a subscription by ID.
+    async fn subscription_get(&mut self, id: SubscriptionId) -> TbResult<ShopSubscription>;
+
+    /// Finds an active subscription for a specific shop and user.
+    async fn subscription_find_active(
+        &mut self,
+        shop_id: ShopId,
+        user_id: UserId,
+    ) -> TbResult<Option<ShopSubscription>>;
+
+    /// Finds a pending subscription for a specific shop and user.
+    async fn subscription_find_pending(
+        &mut self,
+        shop_id: ShopId,
+        user_id: UserId,
+    ) -> TbResult<Option<ShopSubscription>>;
+
+    /// Updates the status of a subscription.
+    async fn subscription_update_status(
+        &mut self,
+        id: SubscriptionId,
+        status: SubscriptionStatus,
+    ) -> TbResult<ShopSubscription>;
+
+    /// Approves or rejects a subscription with an optional response message.
+    async fn subscription_approve(
+        &mut self,
+        id: SubscriptionId,
+        status: SubscriptionStatus,
+        response_message: Option<String>,
+    ) -> TbResult<ShopSubscription>;
+
+    /// Deletes a subscription.
+    async fn subscription_delete(&mut self, id: SubscriptionId) -> TbResult<()>;
+
+    /// Gets all subscriptions for a shop, optionally filtered by status.
+    async fn subscriptions_for_shop(
+        &mut self,
+        shop_id: ShopId,
+        status: Option<SubscriptionStatus>,
+    ) -> TbResult<Vec<ShopSubscription>>;
+
+    /// Gets all subscriptions for a user.
+    async fn subscriptions_for_user(&mut self, user_id: UserId) -> TbResult<Vec<ShopSubscription>>;
+}

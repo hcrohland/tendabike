@@ -17,8 +17,8 @@ use crate::appstate::AppState;
 mod oauth;
 pub(crate) use oauth::*;
 
-mod requestuser;
-pub(crate) use requestuser::*;
+mod session;
+pub(crate) use session::*;
 
 mod redirect;
 mod webhook;

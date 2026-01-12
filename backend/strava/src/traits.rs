@@ -6,7 +6,7 @@ and provides additional methods for interacting with Strava data.
 use serde::de::DeserializeOwned;
 
 use crate::{StravaId, StravaUser, event::Event};
-use tb_domain::{Person, TbResult, UserId};
+use tb_domain::{Session, TbResult, UserId};
 
 #[async_trait::async_trait]
 pub trait StravaStore: tb_domain::Store + Send {
@@ -213,7 +213,7 @@ pub trait StravaStore: tb_domain::Store + Send {
 }
 
 #[async_trait::async_trait]
-pub trait StravaPerson: Person {
+pub trait StravaSession: Session {
     /// Returns the Strava ID of the user.
     ///
     /// # Returns
@@ -222,7 +222,7 @@ pub trait StravaPerson: Person {
     fn strava_id(&self) -> StravaId;
 
     fn tb_id(&self) -> UserId {
-        self.get_id()
+        self.user_id()
     }
 
     async fn request_json<T: DeserializeOwned>(

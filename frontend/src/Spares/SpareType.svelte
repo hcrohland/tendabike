@@ -16,6 +16,7 @@
   import { actions } from "../Widgets/Actions.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
   import Menu from "../Widgets/Menu.svelte";
+  import { shop } from "../lib/shop";
 
   interface Props {
     type: Type;
@@ -41,7 +42,9 @@
     return $parts[att.gear];
   }
 
-  let subparts = $derived(type.parts($parts));
+  let subparts = $derived(
+    type.parts($parts).filter((p) => ($shop ? p.shop == $shop.id : true)),
+  );
   let subshow = $derived(
     subparts.filter(
       (p) =>

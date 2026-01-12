@@ -29,7 +29,7 @@ use http::StatusCode;
 use serde_derive::Deserialize;
 use time::OffsetDateTime;
 
-use crate::{ApiResult, DbPool, RequestUser, appstate::AppState, error::AppError};
+use crate::{ApiResult, DbPool, RequestSession, appstate::AppState, error::AppError};
 use tb_domain::{PartId, Service, ServiceId, ServicePlanId, Store, Summary};
 
 pub(super) fn router() -> Router<AppState> {
@@ -49,7 +49,7 @@ struct NewService {
     plans: Vec<ServicePlanId>,
 }
 async fn create(
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
     Json(NewService {
         part_id,
@@ -67,7 +67,7 @@ async fn create(
 }
 
 async fn update(
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
     Json(service): Json<Service>,
 ) -> ApiResult<Summary> {
@@ -78,7 +78,7 @@ async fn update(
 }
 
 async fn delete_service(
-    user: RequestUser,
+    user: RequestSession,
     State(pool): State<DbPool>,
     Path(id): Path<ServiceId>,
 ) -> ApiResult<Summary> {
@@ -89,7 +89,7 @@ async fn delete_service(
 }
 
 async fn redo(
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
     Json(service): Json<Service>,
 ) -> ApiResult<Summary> {

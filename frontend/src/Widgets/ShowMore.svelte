@@ -10,15 +10,13 @@
   let {
     show_more = $bindable(false),
     title = undefined,
-    update = (v) => {},
+    update = (_) => {},
   }: Props = $props();
 
   function onclick() {
     show_more = !show_more;
     update(show_more);
   }
-
-  let delay = 1000;
 </script>
 
 <Button

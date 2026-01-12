@@ -11,7 +11,7 @@ use log::debug;
 use serde::Deserialize;
 use time::OffsetDateTime;
 
-use crate::{DbPool, RequestUser, appstate::AppState, error::ApiResult};
+use crate::{DbPool, RequestSession, appstate::AppState, error::ApiResult};
 use tb_domain::{PartId, PartTypeId, Store, Summary};
 
 /// Description of an Attach or Detach request
@@ -33,7 +33,7 @@ pub struct Event {
 
 /// route for attach API
 async fn attach_rt(
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
     Json(event): Json<Event>,
 ) -> ApiResult<Summary> {
@@ -57,7 +57,7 @@ async fn attach_rt(
 
 /// route for detach API
 async fn detach_rt(
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
     Json(event): Json<Event>,
 ) -> ApiResult<Summary> {
@@ -82,7 +82,7 @@ pub struct Dispose {
 }
 
 async fn dispose_rt(
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
     Json(event): Json<Dispose>,
 ) -> ApiResult<Summary> {
@@ -101,7 +101,7 @@ async fn dispose_rt(
 }
 
 async fn recover_rt(
-    user: RequestUser,
+    user: RequestSession,
     State(store): State<DbPool>,
     Json(event): Json<Dispose>,
 ) -> ApiResult<Summary> {

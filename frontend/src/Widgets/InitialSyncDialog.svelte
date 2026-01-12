@@ -20,11 +20,11 @@
 
 <script lang="ts">
   import { Modal, P, Heading, Button } from "flowbite-svelte";
-  import { myfetch, handleError, user } from "./store";
+  import { myfetch, handleError, user } from "../lib/store";
 
-  export let open = false;
+  let open = $state($user?.onboarding_status === "pending");
 
-  let loading = false;
+  let loading = $state(false);
 
   async function triggerSync() {
     loading = true;

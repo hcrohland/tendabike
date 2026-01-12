@@ -6,6 +6,7 @@ mod attachment;
 mod part;
 mod service;
 mod serviceplan;
+mod shop;
 mod usage;
 mod user;
 

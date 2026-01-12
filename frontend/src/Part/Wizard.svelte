@@ -104,7 +104,11 @@
 {#if !gear.disposed_at && groups.length > 0}
   <div>
     {#if show_button}
-      <Button color="primary" onclick={() => (show_button = false)}>
+      <Button
+        color="primary"
+        class="mt-8"
+        onclick={() => (show_button = false)}
+      >
         Add more component groups
       </Button>
     {:else}
@@ -113,7 +117,7 @@
           <TableBodyRow>
             <TableHeadCell colspan={80}>Add components groups:</TableHeadCell>
           </TableBodyRow>
-          {#each groups as g, i}
+          {#each groups as g}
             <TableBodyRow>
               <TableHeadCell>
                 <Switch bind:checked={g.enabled}>

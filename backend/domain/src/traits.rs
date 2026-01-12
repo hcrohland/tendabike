@@ -4,6 +4,9 @@ pub use part::*;
 mod user;
 pub use user::*;
 
+mod shop;
+pub use shop::*;
+
 mod activity;
 pub use activity::*;
 
@@ -19,7 +22,7 @@ pub use service::*;
 mod serviceplan;
 pub use serviceplan::*;
 
-use crate::{TbResult, UserId};
+use crate::{ShopId, TbResult, UserId};
 
 #[async_trait::async_trait]
 /// A trait that represents a store for various tb_domain models.
@@ -27,6 +30,7 @@ pub trait Store:
     Send
     + PartStore
     + UserStore
+    + ShopStore
     + ActivityStore
     + AttachmentStore
     + UsageStore
@@ -36,15 +40,13 @@ pub trait Store:
     async fn commit(self) -> TbResult<()>;
 }
 
-/// A trait that represents a person.
-pub trait Person: Send + Sync {
-    fn get_id(&self) -> UserId;
+/// A trait that represents a session.
+pub trait Session: Send + Sync {
+    fn user_id(&self) -> UserId;
+    fn shop(&self) -> Option<ShopId>;
+    fn set_shop(&mut self, shop: Option<ShopId>) -> TbResult<()>;
     fn is_admin(&self) -> bool;
     fn check_owner(&self, owner: UserId, error: String) -> crate::TbResult<()> {
-        if self.get_id() == owner {
-            Ok(())
-        } else {
-            Err(crate::Error::Forbidden(error))
-        }
+        self.user_id().check_owner(owner, error)
     }
 }
