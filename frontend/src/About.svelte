@@ -55,7 +55,7 @@
   <Hr />
   <P>
     <div class="flex justify-end">
-      © Christoph Rohland 2019-2025 - Source Code at&MediumSpace;
+      © Christoph Rohland 2019-2026 - Source Code at&MediumSpace;
       <a href="https://github.com/hcrohland/tendabike" title="Repository">
         GitHub
       </a>
