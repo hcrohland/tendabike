@@ -30,6 +30,7 @@
   import Spares from "./Spares/Spares.svelte";
   import ToyGroup from "./ToyGroup.svelte";
   import Shops from "./Shop/Shops.svelte";
+  import Register from "./Shop/Register.svelte";
   import { initData } from "./lib/store";
   import { getTypes } from "./lib/types";
 
@@ -41,6 +42,7 @@
     "/plans/": Plans,
     "/spares/": Spares,
     "/shops": Shops,
+    "/register/:shopid": Register,
     "/admin": Admin,
     "/stats": wrap({
       //@ts-ignore

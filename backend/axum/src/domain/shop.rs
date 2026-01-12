@@ -125,13 +125,17 @@ async fn create_shop(
 
 async fn get_shop(
     Path(shop_id): Path<i32>,
-    session: RequestSession,
+    _session: RequestSession,
     State(pool): State<DbPool>,
-) -> ApiResult<Shop> {
+) -> ApiResult<ShopWithOwner> {
     let mut store = pool.begin().await?;
-    let user = session.user_id();
-    let shop_id = ShopId::get_for_read(shop_id, user, &mut store).await?;
-    Ok(shop_id.read(user, &mut store).await.map(Json)?)
+    // let shop_id = ShopId::get_for_read(shop_id, user, &mut store).await?;
+    Ok(ShopId::from(shop_id)
+        .read(&mut store)
+        .await?
+        .add_owner(&mut store)
+        .await
+        .map(Json)?)
 }
 
 async fn update_shop(

@@ -2,10 +2,17 @@
   import { Table, TableHead, TableBody, Button } from "flowbite-svelte";
   import { onMount } from "svelte";
   import { myfetch, handleError } from "../lib/store";
-  import { shops } from "../lib/shop";
+  import { Shop, shops } from "../lib/shop";
   import ShopSearch from "./ShopSearch.svelte";
   import type { ShopSubscriptionFull } from "../lib/subscription";
   import SubscriptionRow from "./SubscriptionRow.svelte";
+  import { actions } from "../Widgets/Actions.svelte";
+
+  interface Props {
+    shopid?: number;
+  }
+
+  let { shopid }: Props = $props();
 
   let subscriptions = $state<ShopSubscriptionFull[]>([]);
   let loading = $state(true);
@@ -71,7 +78,34 @@
     return `${shop.name}${ownerName}`;
   }
 
-  onMount(loadSubscriptions);
+  async function register() {
+    if (shopid) {
+      myfetch(`/api/shop/` + shopid)
+        .then((s) => new Shop(s))
+        .then((shop) => $actions.requestSubscription(shop))
+        .catch(handleError);
+      shopid = undefined;
+    }
+  }
+
+  onMount(() => {
+    loadSubscriptions();
+
+    // Listen for subscription updates from other components
+    const handleSubscriptionUpdate = () => {
+      loadSubscriptions();
+    };
+    window.addEventListener("subscription-updated", handleSubscriptionUpdate);
+
+    register();
+
+    return () => {
+      window.removeEventListener(
+        "subscription-updated",
+        handleSubscriptionUpdate,
+      );
+    };
+  });
 </script>
 
 <div class="space-y-6">

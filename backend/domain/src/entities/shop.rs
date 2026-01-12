@@ -224,9 +224,8 @@ impl ShopId {
     }
 
     /// Read a shop from the database
-    /// Allows access for owners, and active subscribers
-    pub async fn read(self, user: UserId, store: &mut impl Store) -> TbResult<Shop> {
-        self.check_read_access(user, store).await?;
+    /// Everybiódy should be able to read this
+    pub async fn read(self, store: &mut impl Store) -> TbResult<Shop> {
         store.shop_get(self).await
     }
 
@@ -279,9 +278,13 @@ impl Shop {
     ) -> TbResult<Vec<ShopWithOwner>> {
         let mut result = Vec::new();
         for shop in shops {
-            let owner = shop.owner.read(store).await?;
-            result.push(ShopWithOwner::from_shop_and_user(shop, owner));
+            result.push(shop.add_owner(store).await?);
         }
         Ok(result)
+    }
+
+    pub async fn add_owner(self, store: &mut impl Store) -> TbResult<ShopWithOwner> {
+        let owner = self.owner.read(store).await?;
+        Ok(ShopWithOwner::from_shop_and_user(self, owner))
     }
 }
