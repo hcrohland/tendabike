@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE shops\n             SET name = $2, description = $3\n             WHERE id = $1\n             RETURNING *",
+  "query": "UPDATE shops\n             SET name = $2, description = $3, auto_approve = $4\n             WHERE id = $1\n             RETURNING *",
   "describe": {
     "columns": [
       {
@@ -27,13 +27,19 @@
         "ordinal": 4,
         "name": "created_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "auto_approve",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
         "Int4",
         "Varchar",
-        "Text"
+        "Text",
+        "Bool"
       ]
     },
     "nullable": [
@@ -41,8 +47,9 @@
       false,
       false,
       true,
+      false,
       false
     ]
   },
-  "hash": "25d4db044dc95393aa1b07349b05d1f693137b59081cf5fe5999d93b26f4e5d4"
+  "hash": "4dcabaf4a3401befac36c8be4be5da307318c3a10358630c605863a3a6eb550c"
 }

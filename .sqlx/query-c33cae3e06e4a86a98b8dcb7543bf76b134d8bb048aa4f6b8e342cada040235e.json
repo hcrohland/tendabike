@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO shops (owner, name, description)\n             VALUES ($1, $2, $3)\n             RETURNING *",
+  "query": "INSERT INTO shops (owner, name, description, auto_approve)\n             VALUES ($1, $2, $3, $4)\n             RETURNING *",
   "describe": {
     "columns": [
       {
@@ -27,13 +27,19 @@
         "ordinal": 4,
         "name": "created_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "auto_approve",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
         "Int4",
         "Varchar",
-        "Text"
+        "Text",
+        "Bool"
       ]
     },
     "nullable": [
@@ -41,8 +47,9 @@
       false,
       false,
       true,
+      false,
       false
     ]
   },
-  "hash": "c6590a3fabece3089d6f2256addeb1449e4d30fe6f234e4d0a6d0ed859a3ddfb"
+  "hash": "c33cae3e06e4a86a98b8dcb7543bf76b134d8bb048aa4f6b8e342cada040235e"
 }

@@ -11,6 +11,7 @@ pub struct DbShop {
     name: String,
     description: Option<String>,
     created_at: OffsetDateTime,
+    auto_approve: bool,
 }
 
 impl From<Shop> for DbShop {
@@ -20,6 +21,7 @@ impl From<Shop> for DbShop {
             owner,
             name,
             description,
+            auto_approve,
             created_at,
         } = value;
         Self {
@@ -27,6 +29,7 @@ impl From<Shop> for DbShop {
             owner: owner.into(),
             name,
             description,
+            auto_approve,
             created_at,
         }
     }
@@ -39,6 +42,7 @@ impl From<DbShop> for Shop {
             owner,
             name,
             description,
+            auto_approve,
             created_at,
         } = value;
         Self {
@@ -46,6 +50,7 @@ impl From<DbShop> for Shop {
             owner: owner.into(),
             name,
             description,
+            auto_approve,
             created_at,
         }
     }
@@ -102,16 +107,18 @@ impl<'c> tb_domain::ShopStore for SqlxConn<'c> {
         &mut self,
         name: String,
         description: Option<String>,
+        auto_approve: bool,
         owner: UserId,
     ) -> TbResult<Shop> {
         sqlx::query_as!(
             DbShop,
-            "INSERT INTO shops (owner, name, description)
-             VALUES ($1, $2, $3)
+            "INSERT INTO shops (owner, name, description, auto_approve)
+             VALUES ($1, $2, $3, $4)
              RETURNING *",
             i32::from(owner),
             name,
-            description
+            description,
+            auto_approve
         )
         .fetch_one(&mut **self.inner())
         .await
@@ -132,16 +139,18 @@ impl<'c> tb_domain::ShopStore for SqlxConn<'c> {
         id: ShopId,
         name: String,
         description: Option<String>,
+        auto_approve: bool,
     ) -> TbResult<Shop> {
         sqlx::query_as!(
             DbShop,
             "UPDATE shops
-             SET name = $2, description = $3
+             SET name = $2, description = $3, auto_approve = $4
              WHERE id = $1
              RETURNING *",
             i32::from(id),
             name,
-            description
+            description,
+            auto_approve
         )
         .fetch_one(&mut **self.inner())
         .await
@@ -178,7 +187,7 @@ impl<'c> tb_domain::ShopStore for SqlxConn<'c> {
         sqlx::query_as!(
             DbShop,
             r#"
-            SELECT DISTINCT g.id, g.owner, g.name, g.description, g.created_at
+            SELECT DISTINCT g.id, g.owner, g.name, g.description, g.created_at, g.auto_approve
             FROM shops g
             LEFT JOIN users u ON g.owner = u.id
             WHERE g.name ILIKE $1

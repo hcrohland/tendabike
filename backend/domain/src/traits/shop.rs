@@ -1,4 +1,4 @@
-use crate::{Shop, ShopId, TbResult, UserId};
+use crate::{Shop, ShopId, ShopSubscription, SubscriptionId, SubscriptionStatus, TbResult, UserId};
 
 #[async_trait::async_trait]
 /// A trait representing a shop store.
@@ -18,6 +18,7 @@ pub trait ShopStore {
         &mut self,
         name: String,
         description: Option<String>,
+        auto_approve: bool,
         owner: UserId,
     ) -> TbResult<Shop>;
 
@@ -48,6 +49,7 @@ pub trait ShopStore {
         id: ShopId,
         name: String,
         description: Option<String>,
+        auto_approve: bool,
     ) -> TbResult<Shop>;
 
     /// Deletes a shop.
@@ -88,59 +90,53 @@ pub trait ShopStore {
     /// Creates a new subscription request.
     async fn subscription_create(
         &mut self,
-        shop_id: crate::ShopId,
+        shop_id: ShopId,
         user_id: UserId,
         message: Option<String>,
-    ) -> TbResult<crate::ShopSubscription>;
+    ) -> TbResult<ShopSubscription>;
 
     /// Gets a subscription by ID.
-    async fn subscription_get(
-        &mut self,
-        id: crate::SubscriptionId,
-    ) -> TbResult<crate::ShopSubscription>;
+    async fn subscription_get(&mut self, id: SubscriptionId) -> TbResult<ShopSubscription>;
 
     /// Finds an active subscription for a specific shop and user.
     async fn subscription_find_active(
         &mut self,
-        shop_id: crate::ShopId,
+        shop_id: ShopId,
         user_id: UserId,
-    ) -> TbResult<Option<crate::ShopSubscription>>;
+    ) -> TbResult<Option<ShopSubscription>>;
 
     /// Finds a pending subscription for a specific shop and user.
     async fn subscription_find_pending(
         &mut self,
-        shop_id: crate::ShopId,
+        shop_id: ShopId,
         user_id: UserId,
-    ) -> TbResult<Option<crate::ShopSubscription>>;
+    ) -> TbResult<Option<ShopSubscription>>;
 
     /// Updates the status of a subscription.
     async fn subscription_update_status(
         &mut self,
-        id: crate::SubscriptionId,
-        status: crate::SubscriptionStatus,
-    ) -> TbResult<crate::ShopSubscription>;
+        id: SubscriptionId,
+        status: SubscriptionStatus,
+    ) -> TbResult<ShopSubscription>;
 
     /// Approves or rejects a subscription with an optional response message.
     async fn subscription_approve(
         &mut self,
-        id: crate::SubscriptionId,
-        status: crate::SubscriptionStatus,
+        id: SubscriptionId,
+        status: SubscriptionStatus,
         response_message: Option<String>,
-    ) -> TbResult<crate::ShopSubscription>;
+    ) -> TbResult<ShopSubscription>;
 
     /// Deletes a subscription.
-    async fn subscription_delete(&mut self, id: crate::SubscriptionId) -> TbResult<()>;
+    async fn subscription_delete(&mut self, id: SubscriptionId) -> TbResult<()>;
 
     /// Gets all subscriptions for a shop, optionally filtered by status.
     async fn subscriptions_for_shop(
         &mut self,
-        shop_id: crate::ShopId,
-        status: Option<crate::SubscriptionStatus>,
-    ) -> TbResult<Vec<crate::ShopSubscription>>;
+        shop_id: ShopId,
+        status: Option<SubscriptionStatus>,
+    ) -> TbResult<Vec<ShopSubscription>>;
 
     /// Gets all subscriptions for a user.
-    async fn subscriptions_for_user(
-        &mut self,
-        user_id: UserId,
-    ) -> TbResult<Vec<crate::ShopSubscription>>;
+    async fn subscriptions_for_user(&mut self, user_id: UserId) -> TbResult<Vec<ShopSubscription>>;
 }

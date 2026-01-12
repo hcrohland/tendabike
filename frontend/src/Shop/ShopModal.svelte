@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Input, Label, Textarea } from "flowbite-svelte";
+  import { Checkbox, Input, Label, Textarea } from "flowbite-svelte";
   import type { Snippet } from "svelte";
   import Modal from "../Widgets/Modal.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
@@ -15,11 +15,13 @@
   let shop = $state(new Shop({}));
   let name = $state("");
   let description = $state("");
+  let auto_approve = $state(false);
   let title = $state("Create Shop");
 
   async function onaction() {
     shop.name = name;
     shop.description = description || undefined;
+    shop.auto_approve = auto_approve;
 
     if (shop.id) {
       await shop.update();
@@ -35,11 +37,13 @@
       shop = g;
       name = g.name;
       description = g.description || "";
+      auto_approve = g.auto_approve;
       title = "Edit Shop";
     } else {
       shop = new Shop({});
       name = "";
       description = "";
+      auto_approve = false;
       title = "Create Shop";
     }
     open = true;
@@ -72,6 +76,12 @@
         placeholder="Describe your shop..."
         rows={3}
       />
+    </div>
+    <div>
+      <Label for="auto_approve" class="mb-2"
+        >If registration requests are automatically approved</Label
+      >
+      <Checkbox id="auto_approve" bind:checked={auto_approve} />
     </div>
   </div>
 

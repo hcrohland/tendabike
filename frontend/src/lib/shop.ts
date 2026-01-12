@@ -10,6 +10,7 @@ export class Shop {
   owner_name: string;
   name: string;
   description?: string;
+  auto_approve: boolean;
   created_at: Date;
 
   constructor(data: any) {
@@ -20,12 +21,14 @@ export class Shop {
     this.name = data.name || "";
     this.description = data.description;
     this.created_at = new Date(data.created_at);
+    this.auto_approve = data.auto_approve;
   }
 
   async create() {
     return await myfetch("/api/shop", "POST", {
       name: this.name,
       description: this.description,
+      auto_approve: this.auto_approve,
     })
       .then((data) => {
         shops.updateMap([data]);
@@ -38,6 +41,7 @@ export class Shop {
     return await myfetch("/api/shop/" + this.id, "PUT", {
       name: this.name,
       description: this.description,
+      auto_approve: this.auto_approve,
     })
       .then((data) => shops.updateMap([data]))
       .catch(handleError);

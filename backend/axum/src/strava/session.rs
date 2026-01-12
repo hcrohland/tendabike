@@ -141,7 +141,7 @@ impl RequestSession {
 
     fn update(&self) -> TbResult<()> {
         if let Some(mut session) = self.session.clone() {
-            debug!("updating session for user {}", self.id);
+            trace!("updating session for user {}", self.id);
             session
                 .insert(SESSION_KEY, self)
                 .context("session insert failed")?;

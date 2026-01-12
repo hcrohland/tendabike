@@ -10,7 +10,6 @@
   interface Props {
     shops: Shop[];
     sub?: Snippet<[Shop]>;
-    showEnterShop?: boolean; // Only show "Enter Shop" if user has access
   }
 
   let { sub, shops }: Props = $props();

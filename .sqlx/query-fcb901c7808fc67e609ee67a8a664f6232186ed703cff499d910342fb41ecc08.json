@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT DISTINCT g.* FROM shops g\n             LEFT JOIN shop_subscriptions gs ON g.id = gs.shop_id AND gs.user_id = $1\n             WHERE g.owner = $1\n                OR (gs.status = 'active')\n             ORDER BY g.name",
+  "query": "\n            SELECT DISTINCT g.id, g.owner, g.name, g.description, g.created_at, g.auto_approve\n            FROM shops g\n            LEFT JOIN users u ON g.owner = u.id\n            WHERE g.name ILIKE $1\n               OR COALESCE(u.firstname, '') ILIKE $1\n               OR COALESCE(u.name, '') ILIKE $1\n               OR CONCAT(COALESCE(u.firstname, ''), ' ', COALESCE(u.name, '')) ILIKE $1\n               OR CONCAT(g.name, ' ', COALESCE(u.firstname, ''), ' ', COALESCE(u.name, '')) ILIKE $1\n               OR CONCAT(COALESCE(u.firstname, ''), ' ', COALESCE(u.name, ''), ' ', g.name) ILIKE $1\n            ORDER BY g.name\n            LIMIT 50\n            ",
   "describe": {
     "columns": [
       {
@@ -36,7 +36,7 @@
     ],
     "parameters": {
       "Left": [
-        "Int4"
+        "Text"
       ]
     },
     "nullable": [
@@ -48,5 +48,5 @@
       false
     ]
   },
-  "hash": "012258019786947c7a06164071a35302996c52ce37ba9f3608bdd190ca680681"
+  "hash": "fcb901c7808fc67e609ee67a8a664f6232186ed703cff499d910342fb41ecc08"
 }

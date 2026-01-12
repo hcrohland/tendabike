@@ -6,6 +6,7 @@
   import { actions } from "../Widgets/Actions.svelte";
   import { user } from "../lib/store";
   import { filterValues } from "../lib/mapable";
+  import ShopSubscriptions from "./ShopSubscriptions.svelte";
 
   let activeTab = $state<string>("my-subscriptions");
 
@@ -17,7 +18,7 @@
   <Tabs style="underline" bind:selected={activeTab}>
     <TabItem key="my-subscriptions" title="My Subscriptions">
       <div class="py-4">
-        <Subscriptions showMySubscriptions={true} />
+        <Subscriptions />
       </div>
     </TabItem>
 
@@ -35,9 +36,9 @@
         {:else}
           <!-- Shop Cards -->
           <div>
-            <ShopList shops={myShops} showEnterShop={true}>
+            <ShopList shops={myShops}>
               {#snippet sub(shop: Shop)}
-                <Subscriptions shopId={shop.id} showMySubscriptions={false} />
+                <ShopSubscriptions shopId={shop.id!} />
               {/snippet}
             </ShopList>
           </div>

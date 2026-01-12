@@ -37,12 +37,14 @@ use tb_domain::{
 pub struct NewShop {
     pub name: String,
     pub description: Option<String>,
+    pub auto_approve: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UpdateShop {
     pub name: String,
     pub description: Option<String>,
+    pub auto_approve: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -102,10 +104,21 @@ async fn list_shops(session: RequestSession, State(pool): State<DbPool>) -> ApiR
 async fn create_shop(
     session: RequestSession,
     State(pool): State<DbPool>,
-    Json(NewShop { name, description }): Json<NewShop>,
+    Json(NewShop {
+        name,
+        description,
+        auto_approve,
+    }): Json<NewShop>,
 ) -> Result<(StatusCode, Json<Shop>), AppError> {
     let mut store = pool.begin().await?;
-    let shop = ShopId::create(name, description, session.user_id(), &mut store).await?;
+    let shop = ShopId::create(
+        name,
+        description,
+        auto_approve,
+        session.user_id(),
+        &mut store,
+    )
+    .await?;
     store.commit().await?;
     Ok((StatusCode::CREATED, Json(shop)))
 }
@@ -125,12 +138,18 @@ async fn update_shop(
     Path(shop_id): Path<i32>,
     session: RequestSession,
     State(pool): State<DbPool>,
-    Json(UpdateShop { name, description }): Json<UpdateShop>,
+    Json(UpdateShop {
+        name,
+        description,
+        auto_approve,
+    }): Json<UpdateShop>,
 ) -> ApiResult<Shop> {
     let mut store = pool.begin().await?;
     let user = session.user_id();
     let shop_id = ShopId::get(shop_id, user, &mut store).await?;
-    let shop = shop_id.update(name, description, user, &mut store).await?;
+    let shop = shop_id
+        .update(name, description, auto_approve, user, &mut store)
+        .await?;
     store.commit().await?;
     Ok(Json(shop))
 }
