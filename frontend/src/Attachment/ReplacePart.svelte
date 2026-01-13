@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Attachment } from "../lib/attachment";
-  import { user } from "../lib/store";
+  import { user } from "../lib/user";
   import { types, Type } from "../lib/types";
   import { parts, Part } from "../lib/part";
   import NewForm from "../Part/PartForm.svelte";

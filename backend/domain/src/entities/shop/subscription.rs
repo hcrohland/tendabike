@@ -3,8 +3,6 @@ use crate::Store;
 use crate::TbResult;
 use crate::UserId;
 
-use super::ShopWithOwner;
-
 use derive_more::Display;
 use derive_more::From;
 use derive_more::Into;
@@ -30,44 +28,6 @@ pub struct ShopSubscription {
     pub created_at: OffsetDateTime,
     #[serde_as(as = "Rfc3339")]
     pub updated_at: OffsetDateTime,
-}
-
-/// A subscription with shop details for API responses
-#[serde_as]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct ShopSubscriptionWithDetails {
-    pub id: SubscriptionId,
-    pub shop_id: ShopId,
-    pub shop_name: String,
-    pub shop_owner_firstname: String,
-    pub shop_owner_name: String,
-    pub user_id: UserId,
-    pub status: SubscriptionStatus,
-    pub message: Option<String>,
-    pub response_message: Option<String>,
-    #[serde_as(as = "Rfc3339")]
-    pub created_at: OffsetDateTime,
-    #[serde_as(as = "Rfc3339")]
-    pub updated_at: OffsetDateTime,
-}
-
-impl ShopSubscriptionWithDetails {
-    /// Create from subscription and shop with owner
-    pub fn from_subscription_and_shop(subscription: ShopSubscription, shop: ShopWithOwner) -> Self {
-        Self {
-            id: subscription.id,
-            shop_id: subscription.shop_id,
-            shop_name: shop.name,
-            shop_owner_firstname: shop.owner_firstname,
-            shop_owner_name: shop.owner_name,
-            user_id: subscription.user_id,
-            status: subscription.status,
-            message: subscription.message,
-            response_message: subscription.response_message,
-            created_at: subscription.created_at,
-            updated_at: subscription.updated_at,
-        }
-    }
 }
 
 /// Subscription status
@@ -249,9 +209,19 @@ impl ShopSubscription {
         store: &mut impl Store,
     ) -> TbResult<Vec<ShopSubscription>> {
         shop_id.checkowner(user, store).await?;
-        store
-            .subscriptions_for_shop(shop_id, Some(SubscriptionStatus::Pending))
-            .await
+        Ok(store
+            .subscriptions_for_shop(shop_id)
+            .await?
+            .into_iter()
+            .filter(|s| s.status == SubscriptionStatus::Pending)
+            .collect())
+    }
+
+    pub async fn get_for_shop(
+        shop_id: ShopId,
+        store: &mut impl Store,
+    ) -> TbResult<Vec<ShopSubscription>> {
+        store.subscriptions_for_shop(shop_id).await
     }
 
     /// Get all subscriptions made by a user
@@ -260,23 +230,5 @@ impl ShopSubscription {
         store: &mut impl Store,
     ) -> TbResult<Vec<ShopSubscription>> {
         store.subscriptions_for_user(user).await
-    }
-
-    /// Convert a list of subscriptions to subscriptions with shop details
-    pub async fn with_shop_details(
-        subscriptions: Vec<ShopSubscription>,
-        store: &mut impl Store,
-    ) -> TbResult<Vec<ShopSubscriptionWithDetails>> {
-        let mut result = Vec::new();
-        for subscription in subscriptions {
-            let shop = store.shop_get(subscription.shop_id).await?;
-            let owner = shop.owner.read(store).await?;
-            let shop_with_owner = ShopWithOwner::from_shop_and_user(shop, owner);
-            result.push(ShopSubscriptionWithDetails::from_subscription_and_shop(
-                subscription,
-                shop_with_owner,
-            ));
-        }
-        Ok(result)
     }
 }

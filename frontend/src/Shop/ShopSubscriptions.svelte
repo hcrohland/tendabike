@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Table, TableHead, TableBody, Button, Input } from "flowbite-svelte";
   import { myfetch, handleError } from "../lib/store";
-  import { user } from "../lib/store";
+  import { user } from "../lib/user";
   import type { ShopSubscriptionFull } from "../lib/subscription";
   import { onMount } from "svelte";
   import { shops } from "../lib/shop";

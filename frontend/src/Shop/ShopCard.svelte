@@ -3,6 +3,7 @@
   import type { Snippet } from "svelte";
   import type { Shop } from "../lib/shop";
   import { onMount, onDestroy } from "svelte";
+  import { users } from "../lib/user";
 
   interface Props {
     shop: Shop;
@@ -12,6 +13,8 @@
   }
 
   let { sub, shop, isOwner = false, children }: Props = $props();
+
+  let owner = $derived($users[shop.owner]);
 
   // Get bikes registered to this shop
   let partsCount = $state(0);
@@ -63,10 +66,10 @@
       >
         {shop.name}
       </h5>
-      {#if !isOwner && shop.owner_firstname && shop.owner_name}
+      {#if !isOwner && owner.firstname && owner.name}
         <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          by {shop.owner_firstname}
-          {shop.owner_name}
+          by {owner.firstname}
+          {owner.name}
         </p>
       {/if}
       {#if shop.description}

@@ -18,6 +18,8 @@
   import { actions } from "../Widgets/Actions.svelte";
   import { allGear, Part, parts } from "../lib/part";
   import { category } from "../lib/types";
+  import { type UserPublic, users } from "../lib/user";
+  import { type Map } from "../lib/mapable";
 
   interface Props {
     shopid?: number;
@@ -66,14 +68,14 @@
     }
   }
 
-  function getShopName(subscription: ShopSubscriptionFull): string {
-    return (
-      subscription.shop_name +
-      ` by ` +
-      subscription.shop_owner_firstname +
-      ` ` +
-      subscription.shop_owner_name
-    );
+  function getShopName(
+    subscription: ShopSubscriptionFull,
+    shops: Map<Shop>,
+    users: Map<UserPublic>,
+  ): string {
+    let shop = shops[subscription.shop_id];
+    let owner = users[shop.owner];
+    return shop.name + ` by ` + owner.firstname + ` ` + owner.name;
   }
 
   async function register() {
@@ -141,7 +143,10 @@
           </TableHead>
           <TableBody>
             {#each subscriptions as subscription}
-              <SubscriptionRow {subscription} name={getShopName(subscription)}>
+              <SubscriptionRow
+                {subscription}
+                name={getShopName(subscription, $shops, $users)}
+              >
                 {#if confirmingAction?.id === subscription.id}
                   <!-- Confirmation dialog -->
                   <div class="flex flex-col gap-2 min-w-48">

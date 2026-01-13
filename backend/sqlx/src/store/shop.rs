@@ -1,7 +1,7 @@
 use sqlx::FromRow;
 use time::OffsetDateTime;
 
-use crate::{SqlxConn, into_domain};
+use crate::{SqlxConn, into_domain, vec_into};
 use tb_domain::{Shop, ShopId, ShopSubscription, SubscriptionStatus, TbResult, UserId};
 
 #[derive(Clone, Debug, FromRow)]
@@ -336,35 +336,19 @@ impl<'c> tb_domain::ShopStore for SqlxConn<'c> {
     async fn subscriptions_for_shop(
         &mut self,
         shop_id: tb_domain::ShopId,
-        status: Option<tb_domain::SubscriptionStatus>,
     ) -> TbResult<Vec<tb_domain::ShopSubscription>> {
-        match status {
-            Some(status) => sqlx::query_as!(
-                DbSubscription,
-                "SELECT id, shop_id, user_id, status, message, response_message, created_at, updated_at
-                 FROM shop_subscriptions
-                 WHERE shop_id = $1 AND status = $2
-                 ORDER BY created_at DESC",
-                i32::from(shop_id),
-                status.to_string()
-            )
-            .fetch_all(&mut **self.inner())
-            .await
-            .map_err(into_domain)
-            .map(|subscriptions| subscriptions.into_iter().map(Into::into).collect()),
-            None => sqlx::query_as!(
-                DbSubscription,
-                "SELECT id, shop_id, user_id, status, message, response_message, created_at, updated_at
+        sqlx::query_as!(
+            DbSubscription,
+            "SELECT id, shop_id, user_id, status, message, response_message, created_at, updated_at
                  FROM shop_subscriptions
                  WHERE shop_id = $1
                  ORDER BY created_at DESC",
-                i32::from(shop_id)
-            )
-            .fetch_all(&mut **self.inner())
-            .await
-            .map_err(into_domain)
-            .map(|subscriptions| subscriptions.into_iter().map(Into::into).collect()),
-        }
+            i32::from(shop_id)
+        )
+        .fetch_all(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(vec_into)
     }
 
     async fn subscriptions_for_user(

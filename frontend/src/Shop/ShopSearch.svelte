@@ -1,9 +1,10 @@
 <script lang="ts">
   import { Input, Spinner } from "flowbite-svelte";
   import ShopList from "./ShopList.svelte";
-  import { handleError, myfetch, user } from "../lib/store";
+  import { handleError, myfetch } from "../lib/store";
   import { Shop } from "../lib/shop";
   import { type ShopSubscriptionFull } from "../lib/subscription";
+  import { user } from "../lib/user";
 
   interface Props {
     subscriptions: ShopSubscriptionFull[];

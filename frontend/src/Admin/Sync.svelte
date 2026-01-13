@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Button } from "flowbite-svelte";
   import { handleError, myfetch } from "../lib/store";
-  import type { User } from "../lib/types";
+  import type { User } from "../lib/user";
 
   export let user: User;
   export let refresh: () => void;

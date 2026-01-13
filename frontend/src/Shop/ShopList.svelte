@@ -10,7 +10,7 @@
   import ShopCard from "./ShopCard.svelte";
   import { type Shop } from "../lib/shop";
   import { actions } from "../Widgets/Actions.svelte";
-  import { user } from "../lib/store";
+  import { user } from "../lib/user";
   import type { Snippet } from "svelte";
   import {
     CheckOutline,

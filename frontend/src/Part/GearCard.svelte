@@ -1,18 +1,13 @@
 <script lang="ts">
   // import { slide } from 'svelte/transition';
-  import { Card, Textarea, Button, Indicator } from "flowbite-svelte";
+  import { Card, Textarea, Button, Indicator, Tooltip } from "flowbite-svelte";
   import { EditOutline } from "flowbite-svelte-icons";
   import { link, push } from "svelte-spa-router";
   import { Part } from "../lib/part";
-  import {
-    fmtDate,
-    fmtNumber,
-    fmtSeconds,
-    handleError,
-    user,
-  } from "../lib/store";
+  import { fmtDate, fmtNumber, fmtSeconds, handleError } from "../lib/store";
   import { types } from "../lib/types";
   import { Usage, usages } from "../lib/usage";
+  import { user, users } from "../lib/user";
 
   interface Props {
     part: Part;
@@ -74,7 +69,13 @@
         {part.name}
       {/if}
     {:else}
-      {part.name} <Indicator placement="top-left"></Indicator>
+      {@const owner = $users[part.owner]}
+      {part.name}
+      <Indicator placement="top-left">
+        <Tooltip>
+          {owner.firstname + " " + owner.name}
+        </Tooltip>
+      </Indicator>
     {/if}
     <div class="float-end h6 mb-0">
       {@render children?.()}

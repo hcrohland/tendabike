@@ -1,8 +1,9 @@
 import { type Map, by, filterValues, mapable } from "./mapable";
-import { handleError, myfetch, updateSummary } from "./store";
+import { handleError, myfetch } from "./store";
 import { Attachment } from "./attachment";
 import { Type, types } from "./types";
 import { Activity } from "./activity";
+import { updateSummary } from "./user";
 
 export class Part {
   id?: number;

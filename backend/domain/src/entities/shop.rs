@@ -23,6 +23,8 @@
 //! A `Shop` represents a collection of bikes owned by a shop owner. Users can register
 //! their bikes to a shop, delegating maintenance to the shop owner.
 
+use std::collections::HashMap;
+
 use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -269,19 +271,31 @@ impl Shop {
     }
 
     /// Convert a list of shops to shops with owner information
-    pub async fn with_owner_info(
-        shops: Vec<Shop>,
+    pub async fn get_users(
+        shops: &Vec<Shop>,
+        user: &UserId,
         store: &mut impl Store,
-    ) -> TbResult<Vec<ShopWithOwner>> {
-        let mut result = Vec::new();
+    ) -> TbResult<Vec<UserPublic>> {
+        let mut result: HashMap<UserId, UserPublic> = HashMap::new();
         for shop in shops {
-            result.push(shop.add_owner(store).await?);
+            let owner = shop.owner.get_public(store).await?;
+            result.insert(owner.id, owner);
+            if *user == shop.owner {
+                shop.add_subscribers(&mut result, store).await?;
+            }
         }
-        Ok(result)
+        Ok(result.into_values().collect())
     }
 
-    pub async fn add_owner(self, store: &mut impl Store) -> TbResult<ShopWithOwner> {
-        let owner = self.owner.read(store).await?;
-        Ok(ShopWithOwner::from_shop_and_user(self, owner))
+    async fn add_subscribers(
+        &self,
+        result: &mut HashMap<UserId, UserPublic>,
+        store: &mut impl Store,
+    ) -> TbResult<()> {
+        for subscription in ShopSubscription::get_for_shop(self.id, store).await? {
+            let user = subscription.user_id.get_public(store).await?;
+            result.insert(user.id, user);
+        }
+        Ok(())
     }
 }

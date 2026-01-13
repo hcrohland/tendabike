@@ -1,13 +1,6 @@
 import { get, writable } from "svelte/store";
-import { type User } from "./types";
-import { Service, services } from "./service";
-import { activities, Activity } from "./activity";
-import { Usage, usages } from "./usage";
-import { parts, type Part } from "./part";
-import { Attachment, attachments } from "./attachment";
-import { plans, type ServicePlan } from "./serviceplan";
-import { Shop, shops } from "./shop";
 import { location } from "svelte-spa-router";
+import { user } from "./user";
 
 export const DAY = 24 * 60 * 60 * 1000;
 export const maxDate = new Date("2999-12-31");
@@ -100,58 +93,6 @@ export const icons = new Map([
   [303, "flaticon-ski"],
 ]);
 
-export async function initData() {
-  let u = await myfetch("/api/user");
-  if (u) {
-    user.set(u);
-  } else {
-    return;
-  }
-  return refresh();
-}
-
-export async function refresh(shop?: number) {
-  let query = shop ? "?shop=" + shop : "";
-  await myfetch("/api/user/summary" + query).then(setSummary);
-}
-
-type Summary = {
-  parts: Part[];
-  attachments: Attachment[];
-  activities: Activity[];
-  usages: Usage[];
-  services: Service[];
-  plans: ServicePlan[];
-  shops: Shop[];
-};
-
-export function setSummary(data: Summary) {
-  usages.setMap(data.usages);
-  parts.setMap(data.parts);
-  attachments.setMap(data.attachments);
-  activities.setMap(data.activities);
-  services.setMap(data.services);
-  plans.setMap(data.plans);
-  shops.setMap(data.shops);
-}
-
-export function updateSummary(data?: Summary) {
-  if (!data) {
-    refresh();
-    return;
-  }
-  parts.updateMap(data.parts);
-  attachments.updateMap(data.attachments);
-  activities.updateMap(data.activities);
-  services.updateMap(data.services);
-  plans.updateMap(data.plans);
-  usages.updateMap(data.usages);
-  shops.updateMap(data.shops);
-}
-
-export const user = writable<User | undefined>(undefined);
-
-export const state = writable({ show_all_spares: false });
 export const message = writable({
   active: false,
   message: "No message",

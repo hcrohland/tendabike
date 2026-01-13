@@ -60,7 +60,7 @@ pub struct Export {
     pub plans: Vec<tb_domain::ServicePlan>,
     pub usages: Vec<tb_domain::Usage>,
     pub activities: Vec<tb_domain::Activity>,
-    pub shops: Vec<tb_domain::ShopWithOwner>,
+    pub shops: Vec<tb_domain::Shop>,
 }
 
 async fn export(user: RequestSession, State(pool): State<DbPool>) -> ApiResult<Export> {
@@ -74,6 +74,7 @@ async fn export(user: RequestSession, State(pool): State<DbPool>) -> ApiResult<E
         services,
         plans,
         shops,
+        ..
     } = user_id.get_summary(None, &mut store).await?;
     let user = user_id.read(&mut store).await?;
     Ok(Json(Export {

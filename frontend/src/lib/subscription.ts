@@ -69,9 +69,6 @@ export const subscriptions = mapable<ShopSubscription>(
 export interface ShopSubscriptionFull {
   id: number;
   shop_id: number;
-  shop_name?: string;
-  shop_owner_firstname?: string;
-  shop_owner_name?: string;
   user_id: number;
   status: "pending" | "active" | "rejected" | "cancelled";
   message?: string;

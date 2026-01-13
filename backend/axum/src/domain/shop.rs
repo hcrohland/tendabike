@@ -28,10 +28,7 @@ use crate::{
     appstate::AppState,
     error::{ApiResult, AppError},
 };
-use tb_domain::{
-    Part, Session, Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails, ShopWithOwner,
-    Store, SubscriptionId,
-};
+use tb_domain::{Part, Session, Shop, ShopId, ShopSubscription, Store, SubscriptionId};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewShop {
@@ -127,15 +124,10 @@ async fn get_shop(
     Path(shop_id): Path<i32>,
     _session: RequestSession,
     State(pool): State<DbPool>,
-) -> ApiResult<ShopWithOwner> {
+) -> ApiResult<Shop> {
     let mut store = pool.begin().await?;
     // let shop_id = ShopId::get_for_read(shop_id, user, &mut store).await?;
-    Ok(ShopId::from(shop_id)
-        .read(&mut store)
-        .await?
-        .add_owner(&mut store)
-        .await
-        .map(Json)?)
+    Ok(ShopId::from(shop_id).read(&mut store).await.map(Json)?)
 }
 
 async fn update_shop(
@@ -215,12 +207,11 @@ async fn unregister_part(
 async fn search_shops(
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
     State(pool): State<DbPool>,
-) -> ApiResult<Vec<ShopWithOwner>> {
+) -> ApiResult<Vec<Shop>> {
     let query = params.get("q").map(|s| s.as_str()).unwrap_or("");
     let mut store = pool.begin().await?;
     let shops = Shop::search(query, &mut store).await?;
-    let shops_with_owner = Shop::with_owner_info(shops, &mut store).await?;
-    Ok(Json(shops_with_owner))
+    Ok(Json(shops))
 }
 
 // Subscription handlers
@@ -240,12 +231,10 @@ async fn create_subscription(
 async fn list_my_subscriptions(
     session: RequestSession,
     State(pool): State<DbPool>,
-) -> ApiResult<Vec<ShopSubscriptionWithDetails>> {
+) -> ApiResult<Vec<ShopSubscription>> {
     let mut store = pool.begin().await?;
     let subscriptions = ShopSubscription::get_for_user(session.user_id(), &mut store).await?;
-    let subscriptions_with_details =
-        ShopSubscription::with_shop_details(subscriptions, &mut store).await?;
-    Ok(Json(subscriptions_with_details))
+    Ok(Json(subscriptions))
 }
 
 async fn list_shop_subscriptions(

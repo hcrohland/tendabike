@@ -45,7 +45,7 @@ use crate::*;
 pub struct UserId(i32);
 
 /// Onboarding status enum for tracking user setup progress
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 #[repr(i32)]
 pub enum OnboardingStatus {
@@ -96,6 +96,32 @@ pub struct User {
     pub onboarding_status: OnboardingStatus,
 }
 
+#[derive(Clone, Debug, Serialize, PartialEq)]
+pub struct UserPublic {
+    pub id: UserId,
+    pub name: String,
+    pub firstname: String,
+    pub avatar: Option<String>,
+}
+
+impl From<User> for UserPublic {
+    fn from(value: User) -> Self {
+        let User {
+            id,
+            name,
+            firstname,
+            avatar,
+            ..
+        } = value;
+        Self {
+            id,
+            name,
+            firstname,
+            avatar,
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 pub struct Stat {
     pub user: User,
@@ -106,6 +132,22 @@ pub struct Stat {
 impl UserId {
     pub async fn read(self, store: &mut impl UserStore) -> TbResult<User> {
         store.get(self).await
+    }
+
+    pub async fn get_public(self, store: &mut impl UserStore) -> TbResult<UserPublic> {
+        let User {
+            id,
+            name,
+            firstname,
+            avatar,
+            ..
+        } = store.get(self).await?;
+        Ok(UserPublic {
+            id,
+            name,
+            firstname,
+            avatar,
+        })
     }
 
     pub async fn get_stat(&self, store: &mut impl Store) -> TbResult<Stat> {
@@ -163,15 +205,18 @@ impl UserId {
         use crate::*;
         let activities = Activity::get_all(self, store).await?;
         let shops = Shop::get_all_for_user(self, store).await?;
-        let shops = Shop::with_owner_info(shops, store).await?;
-        let parts = match shop {
-            None => Part::get_all(self, store).await?,
-            Some(shop) => shop.get_parts(*self, store).await?,
+        let users = Shop::get_users(&shops, self, store).await?;
+        let summary = {
+            let parts = match shop {
+                None => Part::get_all(self, store).await?,
+                Some(shop) => shop.get_parts(*self, store).await?,
+            };
+            self.get_part_summary(parts, store).await?
         };
-        let summary = self.get_part_summary(parts, store).await?;
         Ok(Summary {
             activities,
             shops,
+            users,
             ..summary
         })
     }
