@@ -5,7 +5,9 @@ use crate::UserId;
 
 use super::ShopWithOwner;
 
-use newtype_derive::*;
+use derive_more::Display;
+use derive_more::From;
+use derive_more::Into;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::serde_as;
@@ -89,11 +91,8 @@ impl std::fmt::Display for SubscriptionStatus {
     }
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Display, From, Into, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SubscriptionId(i32);
-
-NewtypeDisplay! { () pub struct SubscriptionId(); }
-NewtypeFrom! { () pub struct SubscriptionId(i32); }
 
 impl SubscriptionId {
     /// Create a new subscription request

@@ -22,7 +22,7 @@
 //! The `Usage` struct represents the usage of a part, including time, distance, climbing, descending, power, and count.
 //! It also provides methods to add an activity to the usage.
 
-use newtype_derive::*;
+use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::ops::{Add, Neg, Sub};
@@ -30,11 +30,10 @@ use uuid::Uuid;
 
 use crate::*;
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(
+    Clone, Copy, Debug, Display, From, Into, Hash, PartialEq, Eq, Serialize, Deserialize, Default,
+)]
 pub struct UsageId(Uuid);
-
-NewtypeDisplay! { () pub struct UsageId(); }
-NewtypeFrom! { () pub struct UsageId(Uuid); }
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct Usage {

@@ -34,7 +34,7 @@
 #![allow(clippy::too_many_arguments)]
 use std::collections::HashSet;
 
-use newtype_derive::*;
+use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
 use serde_with::serde_as;
 use time::OffsetDateTime;
@@ -76,11 +76,8 @@ pub struct Part {
     pub shop: Option<ShopId>,
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Display, From, Into, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PartId(i32);
-
-NewtypeDisplay! { () pub struct PartId(); }
-NewtypeFrom! { () pub struct PartId(i32); }
 
 impl PartId {
     pub async fn get(id: i32, user: &dyn Session, store: &mut impl Store) -> TbResult<PartId> {

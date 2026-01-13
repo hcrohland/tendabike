@@ -6,7 +6,7 @@ edition = { workspace = true }
 
 [dependencies]
 
-newtype_derive = { workspace = true }
+derive_more = { workspace = true, features = ["from", "into", "display"] }
 log = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }

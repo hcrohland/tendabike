@@ -24,7 +24,7 @@
 //!
 //! The types defined in this module are used throughout the application to ensure type safety and consistency.
 
-use newtype_derive::*;
+use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::*;
@@ -32,11 +32,22 @@ use crate::*;
 mod objects;
 use objects::{ACTTYPES, PARTTYPES};
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Display,
+    From,
+    Into,
+    Hash,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    Eq,
+    Serialize,
+    Deserialize,
+)]
 pub struct PartTypeId(i32);
-
-NewtypeDisplay! { () pub struct PartTypeId(); }
-NewtypeFrom! { () pub struct PartTypeId(i32); }
 
 /// List of of all valid part types.
 ///
@@ -65,11 +76,22 @@ impl PartType {
     }
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Display,
+    From,
+    Into,
+    Hash,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    Eq,
+    Serialize,
+    Deserialize,
+)]
 pub struct ActTypeId(i32);
-
-NewtypeDisplay! { () pub struct ActTypeId(); }
-NewtypeFrom! { () pub struct ActTypeId(i32); }
 
 /// The list of activity types
 /// Includes the kind of gear which can be used for this activity

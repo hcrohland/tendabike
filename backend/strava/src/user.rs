@@ -6,16 +6,16 @@
 //! The methods implemented for the StravaUser struct allow for reading and updating user data, as well as
 //! checking the validity of the user's access token.
 
-use newtype_derive::*;
+use derive_more::{Display, From, Into};
 use oauth2::RefreshToken;
 use serde::Deserialize;
 
 use crate::*;
 
-#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Display, From, Into, Default, Hash, PartialEq, Eq, Serialize, Deserialize,
+)]
 pub struct StravaId(i32);
-NewtypeDisplay! { () pub struct StravaId(); }
-NewtypeFrom! { () pub struct StravaId(i32); }
 
 impl StravaId {
     pub async fn read(&self, store: &mut impl StravaStore) -> TbResult<Option<StravaUser>> {

@@ -1,14 +1,13 @@
-use newtype_derive::*;
+use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::*;
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(
+    Clone, Copy, Debug, Display, From, Into, Hash, PartialEq, Eq, Serialize, Deserialize, Default,
+)]
 pub struct ServicePlanId(Uuid);
-
-NewtypeDisplay! { () pub struct ServicePlanId(); }
-NewtypeFrom! { () pub struct ServicePlanId(Uuid); }
 
 impl ServicePlanId {
     pub(crate) fn new() -> Self {
