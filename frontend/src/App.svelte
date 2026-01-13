@@ -31,7 +31,7 @@
   import ToyGroup from "./ToyGroup.svelte";
   import Shops from "./Shop/Shops.svelte";
   import Register from "./Shop/Register.svelte";
-  import { initData } from "./lib/store";
+  import { initData } from "./lib/user";
   import { getTypes } from "./lib/types";
 
   const routes = {

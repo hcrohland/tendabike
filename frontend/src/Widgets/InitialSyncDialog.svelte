@@ -20,7 +20,8 @@
 
 <script lang="ts">
   import { Modal, P, Heading, Button } from "flowbite-svelte";
-  import { myfetch, handleError, user } from "../lib/store";
+  import { myfetch, handleError } from "../lib/store";
+  import { user } from "../lib/user";
 
   let open = $state($user?.onboarding_status === "pending");
 

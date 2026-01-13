@@ -1,4 +1,5 @@
-import { handleError, myfetch, refresh, updateSummary } from "./store";
+import { handleError, myfetch } from "./store";
+import { refresh, updateSummary } from "./user";
 import { mapable } from "./mapable";
 import { type Part } from "./part";
 import { writable } from "svelte/store";
@@ -6,8 +7,6 @@ import { writable } from "svelte/store";
 export class Shop {
   id?: number;
   owner: number;
-  owner_firstname: string;
-  owner_name: string;
   name: string;
   description?: string;
   auto_approve: boolean;
@@ -16,8 +15,6 @@ export class Shop {
   constructor(data: any) {
     this.id = data.id;
     this.owner = data.owner;
-    this.owner_firstname = data.owner_firstname || "";
-    this.owner_name = data.owner_name || "";
     this.name = data.name || "";
     this.description = data.description;
     this.created_at = new Date(data.created_at);

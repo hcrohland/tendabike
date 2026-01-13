@@ -131,11 +131,7 @@ pub trait ShopStore {
     async fn subscription_delete(&mut self, id: SubscriptionId) -> TbResult<()>;
 
     /// Gets all subscriptions for a shop, optionally filtered by status.
-    async fn subscriptions_for_shop(
-        &mut self,
-        shop_id: ShopId,
-        status: Option<SubscriptionStatus>,
-    ) -> TbResult<Vec<ShopSubscription>>;
+    async fn subscriptions_for_shop(&mut self, shop_id: ShopId) -> TbResult<Vec<ShopSubscription>>;
 
     /// Gets all subscriptions for a user.
     async fn subscriptions_for_user(&mut self, user_id: UserId) -> TbResult<Vec<ShopSubscription>>;

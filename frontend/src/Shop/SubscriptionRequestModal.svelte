@@ -3,7 +3,7 @@
   import type { Snippet } from "svelte";
   import Modal from "../Widgets/Modal.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
-  import type { Shop } from "../lib/shop";
+  import { type Shop } from "../lib/shop";
   import { handleError } from "../lib/store";
 
   interface Props {

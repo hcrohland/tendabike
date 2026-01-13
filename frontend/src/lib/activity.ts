@@ -1,6 +1,7 @@
 import { mapable, type Map } from "./mapable";
 import { Part } from "./part";
-import { handleError, myfetch, updateSummary } from "./store";
+import { handleError, myfetch } from "./store";
+import { updateSummary } from "./user";
 
 export class Activity {
   id: number;

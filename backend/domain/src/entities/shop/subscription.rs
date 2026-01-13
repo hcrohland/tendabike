@@ -1,15 +1,7 @@
-use crate::Error;
-use crate::Store;
-use crate::TbResult;
-use crate::UserId;
+use crate::{Error, Shop, Store, TbResult, UserId};
 
-use super::ShopWithOwner;
-
-use derive_more::Display;
-use derive_more::From;
-use derive_more::Into;
-use serde::Deserialize;
-use serde::Serialize;
+use derive_more::{Display, From, Into};
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
@@ -34,13 +26,10 @@ pub struct ShopSubscription {
 
 /// A subscription with shop details for API responses
 #[serde_as]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct ShopSubscriptionWithDetails {
     pub id: SubscriptionId,
     pub shop_id: ShopId,
-    pub shop_name: String,
-    pub shop_owner_firstname: String,
-    pub shop_owner_name: String,
     pub user_id: UserId,
     pub status: SubscriptionStatus,
     pub message: Option<String>,
@@ -49,25 +38,7 @@ pub struct ShopSubscriptionWithDetails {
     pub created_at: OffsetDateTime,
     #[serde_as(as = "Rfc3339")]
     pub updated_at: OffsetDateTime,
-}
-
-impl ShopSubscriptionWithDetails {
-    /// Create from subscription and shop with owner
-    pub fn from_subscription_and_shop(subscription: ShopSubscription, shop: ShopWithOwner) -> Self {
-        Self {
-            id: subscription.id,
-            shop_id: subscription.shop_id,
-            shop_name: shop.name,
-            shop_owner_firstname: shop.owner_firstname,
-            shop_owner_name: shop.owner_name,
-            user_id: subscription.user_id,
-            status: subscription.status,
-            message: subscription.message,
-            response_message: subscription.response_message,
-            created_at: subscription.created_at,
-            updated_at: subscription.updated_at,
-        }
-    }
+    pub shop: Shop,
 }
 
 /// Subscription status
@@ -174,7 +145,7 @@ impl SubscriptionId {
 
         // Verify user owns the shop
         let shop_id = subscription.shop_id;
-        shop_id.checkowner(user, store).await?;
+        shop_id.check_owner(user, store).await?;
 
         if subscription.status != SubscriptionStatus::Pending {
             return Err(Error::Conflict("Subscription is not pending".into()));
@@ -197,7 +168,7 @@ impl SubscriptionId {
 
         // Verify user owns the shop
         let shop_id = subscription.shop_id;
-        shop_id.checkowner(user, store).await?;
+        shop_id.check_owner(user, store).await?;
 
         if subscription.status != SubscriptionStatus::Pending {
             return Err(Error::Conflict("Subscription is not pending".into()));
@@ -247,11 +218,22 @@ impl ShopSubscription {
         shop_id: ShopId,
         user: UserId,
         store: &mut impl Store,
+    ) -> TbResult<Vec<ShopSubscriptionWithDetails>> {
+        let shop = shop_id.check_owner(user, store).await?;
+        Ok(store
+            .subscriptions_for_shop(shop_id)
+            .await?
+            .into_iter()
+            .filter(|s| s.status == SubscriptionStatus::Pending)
+            .map(|s| s.add_shop(shop.clone()))
+            .collect())
+    }
+
+    pub async fn get_for_shop(
+        shop_id: ShopId,
+        store: &mut impl Store,
     ) -> TbResult<Vec<ShopSubscription>> {
-        shop_id.checkowner(user, store).await?;
-        store
-            .subscriptions_for_shop(shop_id, Some(SubscriptionStatus::Pending))
-            .await
+        store.subscriptions_for_shop(shop_id).await
     }
 
     /// Get all subscriptions made by a user
@@ -270,13 +252,32 @@ impl ShopSubscription {
         let mut result = Vec::new();
         for subscription in subscriptions {
             let shop = store.shop_get(subscription.shop_id).await?;
-            let owner = shop.owner.read(store).await?;
-            let shop_with_owner = ShopWithOwner::from_shop_and_user(shop, owner);
-            result.push(ShopSubscriptionWithDetails::from_subscription_and_shop(
-                subscription,
-                shop_with_owner,
-            ));
+            result.push(subscription.add_shop(shop));
         }
         Ok(result)
+    }
+
+    pub(super) async fn check(shop: ShopId, user: UserId, store: &mut impl Store) -> TbResult<()> {
+        let subs = store.subscriptions_for_user(user).await?;
+        match subs.into_iter().find(|s| s.shop_id == shop) {
+            Some(s) if s.status == SubscriptionStatus::Active => Ok(()),
+            _ => Err(Error::Forbidden(
+                "You are not subscribed to this shop".to_string(),
+            )),
+        }
+    }
+
+    pub fn add_shop(self, shop: Shop) -> ShopSubscriptionWithDetails {
+        ShopSubscriptionWithDetails {
+            id: self.id,
+            shop_id: self.shop_id,
+            user_id: self.user_id,
+            status: self.status,
+            message: self.message,
+            response_message: self.response_message,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+            shop,
+        }
     }
 }

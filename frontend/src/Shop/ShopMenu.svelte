@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Dropdown, DropdownDivider, DropdownItem } from "flowbite-svelte";
   import { Shop, shops } from "../lib/shop";
-  import { refresh, user } from "../lib/store";
+  import { refresh, user } from "../lib/user";
   import { shop } from "../lib/shop";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
 

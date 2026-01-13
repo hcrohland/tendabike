@@ -8,8 +8,8 @@
     TableBodyRow,
     TableHeadCell,
   } from "flowbite-svelte";
-  import { handleError, myfetch, setSummary } from "../lib/store";
-  import type { User } from "../lib/types";
+  import { handleError, myfetch } from "../lib/store";
+  import { type User, setSummary } from "../lib/user";
   import Sync from "./Sync.svelte";
   import CreateSync from "./CreateSync.svelte";
   import DeleteUser from "./DeleteUser.svelte";

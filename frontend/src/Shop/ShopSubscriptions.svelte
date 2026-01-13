@@ -1,8 +1,7 @@
 <script lang="ts">
   import { Table, TableHead, TableBody, Button, Input } from "flowbite-svelte";
   import { myfetch, handleError } from "../lib/store";
-  import { user } from "../lib/store";
-  import type { ShopSubscriptionFull } from "../lib/subscription";
+  import type { ShopSubscription } from "../lib/subscription";
   import { onMount } from "svelte";
   import { shops } from "../lib/shop";
   import SubscriptionRow from "./SubscriptionRow.svelte";
@@ -13,7 +12,7 @@
 
   let { shopId }: Props = $props();
 
-  let subscriptions = $state<ShopSubscriptionFull[]>([]);
+  let subscriptions = $state<ShopSubscription[]>([]);
   let loading = $state(true);
   let respondingTo = $state<number | null>(null);
   let responseMessage = $state("");
@@ -73,11 +72,6 @@
     responseMessage = "";
   }
 
-  function getUserName(userId: number): string {
-    // For now, just show the user ID. In a real app, you'd fetch user names
-    return $user?.id === userId ? "You" : `User #${userId}`;
-  }
-
   onMount(loadSubscriptions);
 </script>
 
@@ -102,14 +96,11 @@
         <div class="overflow-x-auto">
           <Table>
             <TableHead>
-              <SubscriptionRow name={"User"} />
+              <SubscriptionRow />
             </TableHead>
             <TableBody>
               {#each subscriptions as subscription}
-                <SubscriptionRow
-                  {subscription}
-                  name={getUserName(subscription.user_id)}
-                >
+                <SubscriptionRow {subscription}>
                   {#if respondingTo === subscription.id}
                     <!-- Response form -->
                     <div class="flex flex-col gap-2 min-w-48">
@@ -125,7 +116,7 @@
                           color="green"
                           onclick={() =>
                             approveSubscription(
-                              subscription.id,
+                              subscription.id!,
                               responseMessage,
                             )}
                         >
@@ -136,7 +127,7 @@
                           color="red"
                           onclick={() =>
                             rejectSubscription(
-                              subscription.id,
+                              subscription.id!,
                               responseMessage,
                             )}
                         >
@@ -157,7 +148,7 @@
                         <Button
                           size="xs"
                           color="alternative"
-                          onclick={() => startResponding(subscription.id)}
+                          onclick={() => startResponding(subscription.id!)}
                         >
                           Respond
                         </Button>

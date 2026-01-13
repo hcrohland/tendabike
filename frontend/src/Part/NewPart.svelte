@@ -4,7 +4,7 @@
   import Buttons from "../Widgets/Buttons.svelte";
   import { Type } from "../lib/types";
   import { Part } from "../lib/part";
-  import { user } from "../lib/store";
+  import { user } from "../lib/user";
 
   let type = $state<Type>();
   let part = $state<any>();

@@ -7,15 +7,23 @@
     Tooltip,
   } from "flowbite-svelte";
   import type { Snippet } from "svelte";
-  import type { ShopSubscriptionFull } from "../lib/subscription";
+  import type { ShopSubscription } from "../lib/subscription";
+  import { shops } from "../lib/shop";
 
   interface Props {
-    subscription?: ShopSubscriptionFull;
-    name: string;
+    subscription?: ShopSubscription;
     children?: Snippet;
   }
 
-  let { subscription, name, children }: Props = $props();
+  let { subscription, children }: Props = $props();
+
+  let name = $derived(
+    subscription
+      ? subscription.shop
+        ? subscription.shop.name
+        : $shops[subscription.id!].name
+      : "",
+  );
 
   function getStatusColor(
     status: string,
@@ -99,7 +107,7 @@
   </TableBodyRow>
 {:else}
   <!-- Header Row -->
-  <TableHeadCell>{name}</TableHeadCell>
+  <TableHeadCell>Shop</TableHeadCell>
   <TableHeadCell>Request Message</TableHeadCell>
   <TableHeadCell>Response</TableHeadCell>
   <TableHeadCell>Status</TableHeadCell>

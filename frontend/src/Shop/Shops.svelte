@@ -4,7 +4,7 @@
   import Subscriptions from "./Subscriptions.svelte";
   import { Shop, shops } from "../lib/shop";
   import { actions } from "../Widgets/Actions.svelte";
-  import { user } from "../lib/store";
+  import { user, users } from "../lib/user";
   import { filterValues } from "../lib/mapable";
   import ShopSubscriptions from "./ShopSubscriptions.svelte";
 
@@ -36,7 +36,7 @@
         {:else}
           <!-- Shop Cards -->
           <div>
-            <ShopList shops={myShops}>
+            <ShopList shops={myShops} users={$users}>
               {#snippet sub(shop: Shop)}
                 <ShopSubscriptions shopId={shop.id!} />
               {/snippet}

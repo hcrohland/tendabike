@@ -6,7 +6,7 @@
     Select,
   } from "flowbite-svelte";
   import { Shop, shop, shops } from "../lib/shop";
-  import { user } from "../lib/store";
+  import { user } from "../lib/user";
   import type { Part } from "../lib/part";
   import type { Attachment } from "../lib/attachment";
 

@@ -29,8 +29,8 @@ use crate::{
     error::{ApiResult, AppError},
 };
 use tb_domain::{
-    Part, Session, Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails, ShopWithOwner,
-    Store, SubscriptionId,
+    Part, Session, Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails, Store,
+    SubscriptionId, UserPublic,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -127,15 +127,10 @@ async fn get_shop(
     Path(shop_id): Path<i32>,
     _session: RequestSession,
     State(pool): State<DbPool>,
-) -> ApiResult<ShopWithOwner> {
+) -> ApiResult<Shop> {
     let mut store = pool.begin().await?;
     // let shop_id = ShopId::get_for_read(shop_id, user, &mut store).await?;
-    Ok(ShopId::from(shop_id)
-        .read(&mut store)
-        .await?
-        .add_owner(&mut store)
-        .await
-        .map(Json)?)
+    Ok(ShopId::from(shop_id).read(&mut store).await.map(Json)?)
 }
 
 async fn update_shop(
@@ -214,13 +209,14 @@ async fn unregister_part(
 // Search shops
 async fn search_shops(
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+    session: RequestSession,
     State(pool): State<DbPool>,
-) -> ApiResult<Vec<ShopWithOwner>> {
+) -> ApiResult<(Vec<Shop>, Vec<UserPublic>)> {
     let query = params.get("q").map(|s| s.as_str()).unwrap_or("");
     let mut store = pool.begin().await?;
     let shops = Shop::search(query, &mut store).await?;
-    let shops_with_owner = Shop::with_owner_info(shops, &mut store).await?;
-    Ok(Json(shops_with_owner))
+    let users = Shop::get_users(&shops, &session.user_id(), &mut store).await?;
+    Ok(Json((shops, users)))
 }
 
 // Subscription handlers
@@ -252,7 +248,7 @@ async fn list_shop_subscriptions(
     Path(shop_id): Path<i32>,
     session: RequestSession,
     State(pool): State<DbPool>,
-) -> ApiResult<Vec<ShopSubscription>> {
+) -> ApiResult<Vec<ShopSubscriptionWithDetails>> {
     let mut store = pool.begin().await?;
     let user = session.user_id();
     let shop_id = ShopId::get(shop_id, user, &mut store).await?;

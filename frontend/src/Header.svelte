@@ -12,13 +12,8 @@
     DropdownHeader,
     Spinner,
   } from "flowbite-svelte";
-  import {
-    handleError,
-    myfetch,
-    refresh,
-    updateSummary,
-    user,
-  } from "./lib/store";
+  import { handleError, myfetch } from "./lib/store";
+  import { refresh, updateSummary, user } from "./lib/user";
   import { activities } from "./lib/activity";
   import Sport from "./Widgets/Sport.svelte";
   import { category } from "./lib/types";

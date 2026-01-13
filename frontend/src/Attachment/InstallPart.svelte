@@ -1,7 +1,7 @@
 <script lang="ts">
   import { InputAddon, ButtonGroup } from "flowbite-svelte";
   import { Type } from "../lib/types";
-  import { user } from "../lib/store";
+  import { user } from "../lib/user";
   import NewForm from "../Part/PartForm.svelte";
   import TypeForm from "../Widgets/TypeForm.svelte";
   import { filterValues } from "../lib/mapable";

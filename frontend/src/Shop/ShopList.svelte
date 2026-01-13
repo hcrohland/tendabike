@@ -1,71 +1,36 @@
 <script lang="ts">
-  import {
-    Button,
-    Clipboard,
-    Dropdown,
-    DropdownItem,
-    Input,
-    Tooltip,
-  } from "flowbite-svelte";
+  import { Button } from "flowbite-svelte";
   import ShopCard from "./ShopCard.svelte";
   import { type Shop } from "../lib/shop";
   import { actions } from "../Widgets/Actions.svelte";
-  import { user } from "../lib/store";
+  import { user, users as global_users, type UserPublic } from "../lib/user";
   import type { Snippet } from "svelte";
-  import {
-    CheckOutline,
-    ClipboardCleanSolid,
-    DotsVerticalOutline,
-  } from "flowbite-svelte-icons";
+  import ShopOwnerMenu from "./ShopOwnerMenu.svelte";
+  import { type Map } from "../lib/mapable";
 
   interface Props {
     shops: Shop[];
+    users: Map<UserPublic>;
     sub?: Snippet<[Shop]>;
   }
 
-  let { sub, shops }: Props = $props();
+  let { sub, shops, users }: Props = $props();
+
+  function request(shop: Shop) {
+    // add the owner to the global stores
+    global_users.updateMap([users[shop.owner]]);
+    $actions.requestSubscription(shop);
+  }
 </script>
 
 <div class="grid gap-4 grid-cols-1">
   {#each shops as shop}
     {@const isOwner = shop.owner === $user?.id}
-    <ShopCard {shop} {isOwner} {sub}>
+    <ShopCard {shop} {isOwner} {users} {sub}>
       {#if isOwner}
-        <DotsVerticalOutline class="cursor-pointer" />
-        <Dropdown>
-          <DropdownItem onclick={() => $actions.editShop(shop)}>
-            Edit Shop
-          </DropdownItem>
-          <DropdownItem onclick={() => $actions.deleteShop(shop)}>
-            Delete Shop
-          </DropdownItem>
-          <DropdownItem>Registration Link</DropdownItem>
-          <Dropdown simple>
-            <DropdownItem>
-              {@const value = window.location.origin + "/#/register/" + shop.id}
-              <Input {value} readonly>
-                {#snippet right()}
-                  <Clipboard {value} embedded>
-                    {#snippet children(success)}
-                      <Tooltip isOpen={success}>
-                        {success ? "Copied" : "Copy to clipboard"}
-                      </Tooltip>
-                      {#if success}
-                        <CheckOutline />
-                      {:else}
-                        <ClipboardCleanSolid />
-                      {/if}
-                    {/snippet}
-                  </Clipboard>
-                {/snippet}
-              </Input>
-            </DropdownItem>
-          </Dropdown>
-        </Dropdown>
+        <ShopOwnerMenu {shop} />
       {:else}
-        <Button onclick={() => $actions.requestSubscription(shop)}>
-          Request Subscription
-        </Button>
+        <Button onclick={() => request(shop)}>Request Subscription</Button>
       {/if}
     </ShopCard>
   {/each}

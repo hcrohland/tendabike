@@ -23,6 +23,8 @@
 //! A `Shop` represents a collection of bikes owned by a shop owner. Users can register
 //! their bikes to a shop, delegating maintenance to the shop owner.
 
+use std::collections::HashMap;
+
 use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -53,52 +55,13 @@ pub struct Shop {
     pub created_at: OffsetDateTime,
 }
 
-/// Shop with owner information for API responses
-#[serde_as]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct ShopWithOwner {
-    /// The primary key
-    pub id: ShopId,
-    /// The owner ID of the shop
-    pub owner: UserId,
-    /// The owner's first name
-    pub owner_firstname: String,
-    /// The owner's last name
-    pub owner_name: String,
-    /// The name of the shop
-    pub name: String,
-    /// Optional description of the shop
-    pub description: Option<String>,
-    /// If registration requests need approval
-    pub auto_approve: bool,
-    /// Creation timestamp
-    #[serde_as(as = "Rfc3339")]
-    pub created_at: OffsetDateTime,
-}
-
-impl ShopWithOwner {
-    /// Create a ShopWithOwner from a Shop and User
-    pub fn from_shop_and_user(shop: Shop, user: User) -> Self {
-        Self {
-            id: shop.id,
-            owner: shop.owner,
-            owner_firstname: user.firstname,
-            owner_name: user.name,
-            name: shop.name,
-            description: shop.description,
-            auto_approve: shop.auto_approve,
-            created_at: shop.created_at,
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, Display, From, Into, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ShopId(i32);
 
 impl ShopId {
     /// Get a shop by ID, checking that the user has access to it (ownership only)
-    pub async fn get(id: i32, user: UserId, store: &mut impl ShopStore) -> TbResult<ShopId> {
-        ShopId(id).checkowner(user, store).await
+    pub async fn get(id: i32, user: UserId, store: &mut impl Store) -> TbResult<ShopId> {
+        Ok(ShopId(id).check_owner(user, store).await?.id)
     }
 
     /// Get a shop by ID for read access (owner, or active subscriber)
@@ -106,11 +69,14 @@ impl ShopId {
         ShopId(id).check_read_access(user, store).await
     }
 
-    /// Check if the user owns this shop
-    pub async fn checkowner(self, user: UserId, store: &mut impl ShopStore) -> TbResult<ShopId> {
-        let shop = store.shop_get(self).await?;
-        user.check_owner(shop.owner, "Access denied to shop".to_string())?;
-        Ok(self)
+    pub(crate) async fn check_owner(&self, user: UserId, store: &mut impl Store) -> TbResult<Shop> {
+        let shop = store.shop_get(*self).await?;
+        if user != shop.owner {
+            return Err(Error::Forbidden(
+                "You must be the shop owner to access this shop".into(),
+            ));
+        }
+        Ok(shop)
     }
 
     /// Check if the user has read access to this shop (owner, or active subscriber)
@@ -145,9 +111,9 @@ impl ShopId {
         description: Option<String>,
         auto_approve: bool,
         user: UserId,
-        store: &mut impl ShopStore,
+        store: &mut impl Store,
     ) -> TbResult<Shop> {
-        self.checkowner(user, store).await?;
+        self.check_owner(user, store).await?;
         store
             .shop_update(self, name, description, auto_approve)
             .await
@@ -155,7 +121,7 @@ impl ShopId {
 
     /// Delete a shop (only if it has no bikes)
     pub async fn delete(self, user: UserId, store: &mut impl Store) -> TbResult<ShopId> {
-        self.checkowner(user, store).await?;
+        self.check_owner(user, store).await?;
 
         // Check if shop has any bikes
         let parts = store.shop_get_parts(self).await?;
@@ -177,6 +143,7 @@ impl ShopId {
         session: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<Summary> {
+        ShopSubscription::check(self, session.user_id(), store).await?;
         let parts = parts_for_register(part_id, session, store).await?;
 
         // Register the parts to the shop
@@ -225,16 +192,6 @@ impl ShopId {
     pub async fn read(self, store: &mut impl Store) -> TbResult<Shop> {
         store.shop_get(self).await
     }
-
-    pub(crate) async fn check_owner(&self, user: UserId, store: &mut impl Store) -> TbResult<()> {
-        let shop = store.shop_get(*self).await?;
-        if user != shop.owner {
-            return Err(Error::Forbidden(
-                "You must be the shop owner to access this shop".into(),
-            ));
-        }
-        Ok(())
-    }
 }
 
 async fn parts_for_register(
@@ -269,19 +226,31 @@ impl Shop {
     }
 
     /// Convert a list of shops to shops with owner information
-    pub async fn with_owner_info(
-        shops: Vec<Shop>,
+    pub async fn get_users(
+        shops: &Vec<Shop>,
+        user: &UserId,
         store: &mut impl Store,
-    ) -> TbResult<Vec<ShopWithOwner>> {
-        let mut result = Vec::new();
+    ) -> TbResult<Vec<UserPublic>> {
+        let mut result: HashMap<UserId, UserPublic> = HashMap::new();
         for shop in shops {
-            result.push(shop.add_owner(store).await?);
+            let owner = shop.owner.get_public(store).await?;
+            result.insert(owner.id, owner);
+            if *user == shop.owner {
+                shop.add_subscribers(&mut result, store).await?;
+            }
         }
-        Ok(result)
+        Ok(result.into_values().collect())
     }
 
-    pub async fn add_owner(self, store: &mut impl Store) -> TbResult<ShopWithOwner> {
-        let owner = self.owner.read(store).await?;
-        Ok(ShopWithOwner::from_shop_and_user(self, owner))
+    async fn add_subscribers(
+        &self,
+        result: &mut HashMap<UserId, UserPublic>,
+        store: &mut impl Store,
+    ) -> TbResult<()> {
+        for subscription in ShopSubscription::get_for_shop(self.id, store).await? {
+            let user = subscription.user_id.get_public(store).await?;
+            result.insert(user.id, user);
+        }
+        Ok(())
     }
 }
