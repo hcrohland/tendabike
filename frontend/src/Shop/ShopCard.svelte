@@ -3,18 +3,20 @@
   import type { Snippet } from "svelte";
   import type { Shop } from "../lib/shop";
   import { onMount, onDestroy } from "svelte";
-  import { users } from "../lib/user";
+  import { type UserPublic } from "../lib/user";
+  import { type Map } from "../lib/mapable";
 
   interface Props {
     shop: Shop;
+    users: Map<UserPublic>;
     isOwner?: boolean;
     sub?: Snippet<[Shop]>;
     children?: Snippet;
   }
 
-  let { sub, shop, isOwner = false, children }: Props = $props();
+  let { sub, shop, users, isOwner = false, children }: Props = $props();
 
-  let owner = $derived($users[shop.owner]);
+  let owner = $derived(users[shop.owner]);
 
   // Get bikes registered to this shop
   let partsCount = $state(0);

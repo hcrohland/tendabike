@@ -28,7 +28,7 @@ use crate::{
     appstate::AppState,
     error::{ApiResult, AppError},
 };
-use tb_domain::{Part, Session, Shop, ShopId, ShopSubscription, Store, SubscriptionId};
+use tb_domain::{Part, Session, Shop, ShopId, ShopSubscription, Store, SubscriptionId, UserPublic};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewShop {
@@ -206,12 +206,14 @@ async fn unregister_part(
 // Search shops
 async fn search_shops(
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+    session: RequestSession,
     State(pool): State<DbPool>,
-) -> ApiResult<Vec<Shop>> {
+) -> ApiResult<(Vec<Shop>, Vec<UserPublic>)> {
     let query = params.get("q").map(|s| s.as_str()).unwrap_or("");
     let mut store = pool.begin().await?;
     let shops = Shop::search(query, &mut store).await?;
-    Ok(Json(shops))
+    let users = Shop::get_users(&shops, &session.user_id(), &mut store).await?;
+    Ok(Json((shops, users)))
 }
 
 // Subscription handlers
