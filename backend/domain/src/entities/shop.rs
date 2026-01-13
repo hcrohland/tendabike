@@ -55,45 +55,6 @@ pub struct Shop {
     pub created_at: OffsetDateTime,
 }
 
-/// Shop with owner information for API responses
-#[serde_as]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct ShopWithOwner {
-    /// The primary key
-    pub id: ShopId,
-    /// The owner ID of the shop
-    pub owner: UserId,
-    /// The owner's first name
-    pub owner_firstname: String,
-    /// The owner's last name
-    pub owner_name: String,
-    /// The name of the shop
-    pub name: String,
-    /// Optional description of the shop
-    pub description: Option<String>,
-    /// If registration requests need approval
-    pub auto_approve: bool,
-    /// Creation timestamp
-    #[serde_as(as = "Rfc3339")]
-    pub created_at: OffsetDateTime,
-}
-
-impl ShopWithOwner {
-    /// Create a ShopWithOwner from a Shop and User
-    pub fn from_shop_and_user(shop: Shop, user: User) -> Self {
-        Self {
-            id: shop.id,
-            owner: shop.owner,
-            owner_firstname: user.firstname,
-            owner_name: user.name,
-            name: shop.name,
-            description: shop.description,
-            auto_approve: shop.auto_approve,
-            created_at: shop.created_at,
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, Display, From, Into, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ShopId(i32);
 
