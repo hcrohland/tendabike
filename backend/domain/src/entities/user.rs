@@ -34,16 +34,15 @@
 //! The `create`, `update`, `read`, and `get_stat` methods are implemented for the `UserId` type and provide CRUD functionality for `User` entities.
 
 use anyhow::Context;
-use newtype_derive::*;
+use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::*;
 
-#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize, From, Into, Display,
+)]
 pub struct UserId(i32);
-
-NewtypeDisplay! { () pub struct UserId(); }
-NewtypeFrom! { () pub struct UserId(i32); }
 
 /// Onboarding status enum for tracking user setup progress
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]

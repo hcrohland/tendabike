@@ -30,7 +30,7 @@
 use std::collections::HashSet;
 
 use anyhow::Context;
-use newtype_derive::*;
+use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
 use time::{OffsetDateTime, PrimitiveDateTime, macros::format_description};
 
@@ -40,11 +40,8 @@ use crate::*;
 ///
 /// Most operations for activities are done on the Id alone
 ///
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, From, Into, Display)]
 pub struct ActivityId(i64);
-
-NewtypeDisplay! { () pub struct ActivityId(); }
-NewtypeFrom! { () pub struct ActivityId(i64); }
 
 /// The database's representation of an activity.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

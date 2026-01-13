@@ -23,7 +23,7 @@
 //! A `Shop` represents a collection of bikes owned by a shop owner. Users can register
 //! their bikes to a shop, delegating maintenance to the shop owner.
 
-use newtype_derive::*;
+use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
 use serde_with::serde_as;
 use time::OffsetDateTime;
@@ -92,11 +92,8 @@ impl ShopWithOwner {
     }
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Display, From, Into, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ShopId(i32);
-
-NewtypeDisplay! { () pub struct ShopId(); }
-NewtypeFrom! { () pub struct ShopId(i32); }
 
 impl ShopId {
     /// Get a shop by ID, checking that the user has access to it (ownership only)
