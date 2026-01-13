@@ -13,21 +13,20 @@
   import { myfetch, handleError } from "../lib/store";
   import { Shop, shops } from "../lib/shop";
   import ShopSearch from "./ShopSearch.svelte";
-  import type { ShopSubscriptionFull } from "../lib/subscription";
+  import type { ShopSubscription } from "../lib/subscription";
   import SubscriptionRow from "./SubscriptionRow.svelte";
   import { actions } from "../Widgets/Actions.svelte";
   import { allGear, Part, parts } from "../lib/part";
   import { category } from "../lib/types";
-  import { type UserPublic, users } from "../lib/user";
-  import { type Map } from "../lib/mapable";
 
   interface Props {
     shopid?: number;
   }
 
+  // coming from the subscription link
   let { shopid }: Props = $props();
 
-  let subscriptions = $state<ShopSubscriptionFull[]>([]);
+  let subscriptions = $state<ShopSubscription[]>([]);
   let loading = $state(true);
   let confirmingAction = $state<{
     id: number;
@@ -38,6 +37,10 @@
     loading = true;
     try {
       subscriptions = await myfetch("/api/shop/subscriptions", "GET");
+      // make sure subscribed shops are visible
+      shops.updateMap(
+        subscriptions.filter((s) => s.status == "active").map((s) => s.shop),
+      );
     } catch (error) {
       handleError(error as Error);
     } finally {
@@ -56,11 +59,12 @@
     confirmingAction = null;
   }
 
-  async function cancelSubscription(subscriptionId: number) {
+  async function cancelSubscription(subscription: ShopSubscription) {
     try {
-      await myfetch(`/api/shop/subscriptions/${subscriptionId}`, "DELETE").then(
-        () => shops.deleteItem(subscriptionId),
-      );
+      await myfetch(
+        `/api/shop/subscriptions/${subscription.id}`,
+        "DELETE",
+      ).then(() => shops.deleteItem(subscription.shop_id));
       confirmingAction = null;
       await loadSubscriptions();
     } catch (error) {
@@ -68,16 +72,8 @@
     }
   }
 
-  function getShopName(
-    subscription: ShopSubscriptionFull,
-    shops: Map<Shop>,
-    users: Map<UserPublic>,
-  ): string {
-    let shop = shops[subscription.shop_id];
-    let owner = users[shop.owner];
-    return shop.name + ` by ` + owner.firstname + ` ` + owner.name;
-  }
-
+  /// the registration link sets the shopid
+  /// to trigger an automatic subscription dialog
   async function register() {
     if (shopid) {
       myfetch(`/api/shop/` + shopid)
@@ -139,19 +135,16 @@
       <div class="overflow-x-auto">
         <Table>
           <TableHead>
-            <SubscriptionRow name={"Shop"} />
+            <SubscriptionRow />
           </TableHead>
           <TableBody>
             {#each subscriptions as subscription}
-              <SubscriptionRow
-                {subscription}
-                name={getShopName(subscription, $shops, $users)}
-              >
+              <SubscriptionRow {subscription}>
                 {#if confirmingAction?.id === subscription.id}
                   <!-- Confirmation dialog -->
                   <div class="flex flex-col gap-2 min-w-48">
                     <p class="text-sm text-gray-700 dark:text-gray-300">
-                      {confirmingAction.action === "unsubscribe"
+                      {confirmingAction!.action === "unsubscribe"
                         ? "Unsubscribe from this shop?"
                         : "Delete this rejected request?"}
                     </p>
@@ -159,7 +152,7 @@
                       <Button
                         size="xs"
                         color="red"
-                        onclick={() => cancelSubscription(subscription.id)}
+                        onclick={() => cancelSubscription(subscription)}
                       >
                         Confirm
                       </Button>
@@ -178,7 +171,7 @@
                       <Button
                         size="xs"
                         color="alternative"
-                        onclick={() => cancelSubscription(subscription.id)}
+                        onclick={() => cancelSubscription(subscription)}
                       >
                         Cancel
                       </Button>
@@ -208,7 +201,7 @@
                           size="xs"
                           color="alternative"
                           onclick={() =>
-                            startConfirmation(subscription.id, "unsubscribe")}
+                            startConfirmation(subscription.id!, "unsubscribe")}
                           disabled={Object.values($parts).some(
                             (p) => p.shop == subscription.shop_id,
                           )}
@@ -221,7 +214,7 @@
                         size="xs"
                         color="red"
                         onclick={() =>
-                          startConfirmation(subscription.id, "delete")}
+                          startConfirmation(subscription.id!, "delete")}
                       >
                         Delete
                       </Button>

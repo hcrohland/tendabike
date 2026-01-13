@@ -60,8 +60,8 @@ pub struct ShopId(i32);
 
 impl ShopId {
     /// Get a shop by ID, checking that the user has access to it (ownership only)
-    pub async fn get(id: i32, user: UserId, store: &mut impl ShopStore) -> TbResult<ShopId> {
-        ShopId(id).checkowner(user, store).await
+    pub async fn get(id: i32, user: UserId, store: &mut impl Store) -> TbResult<ShopId> {
+        Ok(ShopId(id).check_owner(user, store).await?.id)
     }
 
     /// Get a shop by ID for read access (owner, or active subscriber)
@@ -69,11 +69,14 @@ impl ShopId {
         ShopId(id).check_read_access(user, store).await
     }
 
-    /// Check if the user owns this shop
-    pub async fn checkowner(self, user: UserId, store: &mut impl ShopStore) -> TbResult<ShopId> {
-        let shop = store.shop_get(self).await?;
-        user.check_owner(shop.owner, "Access denied to shop".to_string())?;
-        Ok(self)
+    pub(crate) async fn check_owner(&self, user: UserId, store: &mut impl Store) -> TbResult<Shop> {
+        let shop = store.shop_get(*self).await?;
+        if user != shop.owner {
+            return Err(Error::Forbidden(
+                "You must be the shop owner to access this shop".into(),
+            ));
+        }
+        Ok(shop)
     }
 
     /// Check if the user has read access to this shop (owner, or active subscriber)
@@ -108,9 +111,9 @@ impl ShopId {
         description: Option<String>,
         auto_approve: bool,
         user: UserId,
-        store: &mut impl ShopStore,
+        store: &mut impl Store,
     ) -> TbResult<Shop> {
-        self.checkowner(user, store).await?;
+        self.check_owner(user, store).await?;
         store
             .shop_update(self, name, description, auto_approve)
             .await
@@ -118,7 +121,7 @@ impl ShopId {
 
     /// Delete a shop (only if it has no bikes)
     pub async fn delete(self, user: UserId, store: &mut impl Store) -> TbResult<ShopId> {
-        self.checkowner(user, store).await?;
+        self.check_owner(user, store).await?;
 
         // Check if shop has any bikes
         let parts = store.shop_get_parts(self).await?;
@@ -140,6 +143,7 @@ impl ShopId {
         session: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<Summary> {
+        ShopSubscription::check(self, session.user_id(), store).await?;
         let parts = parts_for_register(part_id, session, store).await?;
 
         // Register the parts to the shop
@@ -187,16 +191,6 @@ impl ShopId {
     /// Everybiódy should be able to read this
     pub async fn read(self, store: &mut impl Store) -> TbResult<Shop> {
         store.shop_get(self).await
-    }
-
-    pub(crate) async fn check_owner(&self, user: UserId, store: &mut impl Store) -> TbResult<()> {
-        let shop = store.shop_get(*self).await?;
-        if user != shop.owner {
-            return Err(Error::Forbidden(
-                "You must be the shop owner to access this shop".into(),
-            ));
-        }
-        Ok(())
     }
 }
 

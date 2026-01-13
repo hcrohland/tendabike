@@ -3,12 +3,12 @@
   import ShopList from "./ShopList.svelte";
   import { handleError, myfetch } from "../lib/store";
   import { Shop } from "../lib/shop";
-  import { type ShopSubscriptionFull } from "../lib/subscription";
+  import { type ShopSubscription } from "../lib/subscription";
   import { user, type UserPublic } from "../lib/user";
   import { type Map } from "../lib/mapable";
 
   interface Props {
-    subscriptions: ShopSubscriptionFull[];
+    subscriptions: ShopSubscription[];
   }
 
   let { subscriptions }: Props = $props();

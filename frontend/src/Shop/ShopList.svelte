@@ -3,7 +3,7 @@
   import ShopCard from "./ShopCard.svelte";
   import { type Shop } from "../lib/shop";
   import { actions } from "../Widgets/Actions.svelte";
-  import { user, type UserPublic } from "../lib/user";
+  import { user, users as global_users, type UserPublic } from "../lib/user";
   import type { Snippet } from "svelte";
   import ShopOwnerMenu from "./ShopOwnerMenu.svelte";
   import { type Map } from "../lib/mapable";
@@ -15,6 +15,12 @@
   }
 
   let { sub, shops, users }: Props = $props();
+
+  function request(shop: Shop) {
+    // add the owner to the global stores
+    global_users.updateMap([users[shop.owner]]);
+    $actions.requestSubscription(shop);
+  }
 </script>
 
 <div class="grid gap-4 grid-cols-1">
@@ -24,9 +30,7 @@
       {#if isOwner}
         <ShopOwnerMenu {shop} />
       {:else}
-        <Button onclick={() => $actions.requestSubscription(shop)}>
-          Request Subscription
-        </Button>
+        <Button onclick={() => request(shop)}>Request Subscription</Button>
       {/if}
     </ShopCard>
   {/each}

@@ -28,7 +28,10 @@ use crate::{
     appstate::AppState,
     error::{ApiResult, AppError},
 };
-use tb_domain::{Part, Session, Shop, ShopId, ShopSubscription, Store, SubscriptionId, UserPublic};
+use tb_domain::{
+    Part, Session, Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails, Store,
+    SubscriptionId, UserPublic,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewShop {
@@ -233,17 +236,19 @@ async fn create_subscription(
 async fn list_my_subscriptions(
     session: RequestSession,
     State(pool): State<DbPool>,
-) -> ApiResult<Vec<ShopSubscription>> {
+) -> ApiResult<Vec<ShopSubscriptionWithDetails>> {
     let mut store = pool.begin().await?;
     let subscriptions = ShopSubscription::get_for_user(session.user_id(), &mut store).await?;
-    Ok(Json(subscriptions))
+    let subscriptions_with_details =
+        ShopSubscription::with_shop_details(subscriptions, &mut store).await?;
+    Ok(Json(subscriptions_with_details))
 }
 
 async fn list_shop_subscriptions(
     Path(shop_id): Path<i32>,
     session: RequestSession,
     State(pool): State<DbPool>,
-) -> ApiResult<Vec<ShopSubscription>> {
+) -> ApiResult<Vec<ShopSubscriptionWithDetails>> {
     let mut store = pool.begin().await?;
     let user = session.user_id();
     let shop_id = ShopId::get(shop_id, user, &mut store).await?;
