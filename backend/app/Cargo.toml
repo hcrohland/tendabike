@@ -14,3 +14,4 @@ tb_domain = { workspace = true }
 tb_axum = { workspace = true }
 tb_sqlx = { workspace = true }
 log = { workspace = true }
+mimalloc = { version = "*", features = ["secure"] }
