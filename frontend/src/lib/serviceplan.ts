@@ -199,7 +199,10 @@ function plans_for_this_part(
   return filterValues(plans, (p) => p.part == part_id && p.hook == null);
 }
 
-/*** return any plans for this part including generic plans defined for the gear */
+/** return plans for this part.
+ *
+ * If there is a specific plan for this part, the generic plans do not apply
+ */
 function plans_for_attachee(plans: Map<ServicePlan>, att: Attachment) {
   // find plans for this part and generic plan for gear
   let res = filterValues(
@@ -208,8 +211,10 @@ function plans_for_attachee(plans: Map<ServicePlan>, att: Attachment) {
       p.part == att.part_id ||
       (p.part == att.gear && p.hook == att.hook && p.what == att.what),
   );
-  // find generic plan for this type/hook
-  let res2 = filterValues(
+  if (res.length != 0) return res;
+
+  // find generic plans for this type/hook
+  return filterValues(
     plans,
     (p) =>
       p.part == null &&
@@ -218,7 +223,6 @@ function plans_for_attachee(plans: Map<ServicePlan>, att: Attachment) {
       // only if the is none already for this part already
       !res.some((r) => r.hook == p.hook && r.what == p.what),
   ).map((p) => new ServicePlan({ ...p, part: att.part_id }));
-  return res.concat(res2);
 }
 
 /*** find plans for a part at a given time or now */
@@ -241,7 +245,7 @@ function plans_at_hook(
   type: Type,
   hook: number,
 ) {
-  let att = att_at_hook(part.id!, part.what, hook, atts);
+  let att = att_at_hook(part.id!, type.id, hook, atts);
   if (att) return plans_for_attachee(plans, att);
 
   let res = filterValues(
