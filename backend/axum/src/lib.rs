@@ -52,7 +52,7 @@ pub async fn start(database_url: &str, path: std::path::PathBuf, addr: SocketAdd
     let deletion_task = tokio::task::spawn(
         session_store
             .clone()
-            .continuously_delete_expired(tokio::time::Duration::from_secs(60)),
+            .continuously_delete_expired(tokio::time::Duration::from_secs(600)),
     );
 
     let session_layer = SessionManagerLayer::new(session_store)
@@ -83,10 +83,8 @@ pub async fn start(database_url: &str, path: std::path::PathBuf, addr: SocketAdd
         .await
         .context("Main server")?;
 
-    Ok(deletion_task
-        .await
-        .unwrap()
-        .context("session deletion task")?)
+    deletion_task.await.ok();
+    Ok(())
 }
 
 async fn shutdown_signal(deletion_task_abort_handle: tokio::task::AbortHandle) {
