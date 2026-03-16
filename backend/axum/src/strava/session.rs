@@ -1,11 +1,8 @@
 use anyhow::Context;
-use async_session::{MemoryStore, Session as AsyncSession, SessionStore};
 use axum::{
-    RequestPartsExt,
-    extract::{FromRef, FromRequestParts},
+    extract::FromRequestParts,
     response::{IntoResponse, Response},
 };
-use axum_extra::TypedHeader;
 use http::{StatusCode, request::Parts};
 use log::{debug, trace};
 use oauth2::{
@@ -14,12 +11,10 @@ use oauth2::{
 use serde::de::DeserializeOwned;
 use serde_derive::{Deserialize, Serialize};
 use std::time::SystemTime;
+use tower_sessions::Session as TowerSession;
 
 use super::StravaExtraTokenFields;
-use crate::{
-    AppError,
-    strava::{HTTP_CLIENT, StravaAthleteInfo, oauth::STRAVACLIENT},
-};
+use crate::strava::{HTTP_CLIENT, StravaAthleteInfo, oauth::STRAVACLIENT};
 use tb_domain::{Error, Session as TbSession, ShopId, TbResult, UserId};
 use tb_strava::{StravaId, StravaSession, StravaStore, StravaUser};
 
@@ -33,7 +28,7 @@ pub(crate) struct RequestSession {
     refresh_token: Option<RefreshToken>,
     shop: Option<ShopId>,
     #[serde(skip)]
-    session: Option<AsyncSession>,
+    session: Option<TowerSession>,
 }
 
 const API: &str = "https://www.strava.com/api/v3";
@@ -136,14 +131,15 @@ impl RequestSession {
         self.refresh_token = token.refresh_token().cloned();
         let refresh = token.refresh_token().map(|t| t.secret());
         self.strava_id.update_token(refresh, store).await?;
-        self.update()
+        self.update().await
     }
 
-    fn update(&self) -> TbResult<()> {
-        if let Some(mut session) = self.session.clone() {
+    async fn update(&self) -> TbResult<()> {
+        if let Some(session) = self.session.clone() {
             trace!("updating session for user {}", self.id);
             session
                 .insert(SESSION_KEY, self)
+                .await
                 .context("session insert failed")?;
         };
         Ok(())
@@ -195,7 +191,7 @@ impl RequestSession {
         Ok(())
     }
 
-    fn set_session(mut self, session: AsyncSession) -> Self {
+    fn set_session(mut self, session: TowerSession) -> Self {
         self.session = Some(session);
         self
     }
@@ -216,7 +212,8 @@ impl TbSession for RequestSession {
 
     fn set_shop(&mut self, shop: Option<ShopId>) -> TbResult<()> {
         self.shop = shop;
-        self.update()
+        // Keep the trait dyn compatible
+        tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(self.update()))
     }
 }
 
@@ -258,35 +255,27 @@ impl StravaSession for RequestSession {
 
 impl<S> FromRequestParts<S> for RequestSession
 where
-    MemoryStore: FromRef<S>,
     S: Send + Sync,
 {
     // If anything goes wrong or no session is found, redirect to the auth page
-    type Rejection = AppError;
+    type Rejection = (StatusCode, &'static str);
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let store = MemoryStore::from_ref(state);
+        let towersession = TowerSession::from_request_parts(parts, state).await?;
 
-        let cookies = parts
-            .extract::<TypedHeader<headers::Cookie>>()
-            .await
-            .map_err(anyhow::Error::new)?;
-        let session_cookie = cookies
-            .get(crate::strava::COOKIE_NAME)
-            .ok_or(Error::NotAuth("Please authenticate".into()))?;
-
-        let sessionstore = store
-            .load_session(session_cookie.to_string())
-            .await
-            .expect("could not load session")
-            .ok_or(Error::NotAuth("Please authenticate".into()))?;
-
-        let session = sessionstore
+        if let Some(session) = towersession
             .get::<RequestSession>(SESSION_KEY)
-            .ok_or(Error::NotAuth("Session error".into()))?
-            .set_session(sessionstore);
-
-        Ok(session)
+            .await
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Get Session"))?
+        {
+            session
+                .update()
+                .await
+                .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Update Session"))?;
+            Ok(session.set_session(towersession))
+        } else {
+            Err((StatusCode::UNAUTHORIZED, "Please login"))
+        }
     }
 }
 
@@ -294,7 +283,6 @@ pub struct AxumAdmin;
 
 impl<S> FromRequestParts<S> for AxumAdmin
 where
-    MemoryStore: FromRef<S>,
     S: Send + Sync,
 {
     type Rejection = Response;

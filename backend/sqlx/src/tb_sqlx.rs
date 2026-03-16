@@ -68,4 +68,8 @@ impl DbPool {
             .context("Could not get pool connection")?;
         Ok(SqlxConn(conn))
     }
+
+    pub fn raw(&self) -> PgPool {
+        self.0.clone()
+    }
 }
