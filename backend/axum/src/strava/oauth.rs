@@ -8,16 +8,13 @@
 //! Finally, it defines the `COOKIE_NAME` constant which is used to store the session cookie.
 
 use anyhow::Context;
-use async_session::{MemoryStore, Session, SessionStore};
+use tower_sessions::Session;
 
 use axum::{
     extract::{Query, State},
-    http::{HeaderMap, header::SET_COOKIE},
     response::{IntoResponse, Redirect},
 };
-use axum_extra::TypedHeader;
-use http::StatusCode;
-use log::{debug, warn};
+use log::{debug, error, warn};
 use oauth2::{
     AuthUrl, AuthorizationCode, Client, ClientId, ClientSecret, CsrfToken, EndpointNotSet,
     EndpointSet, ExtraTokenFields, RedirectUrl, RevocationUrl, Scope, StandardRevocableToken,
@@ -34,8 +31,6 @@ use std::{env, sync::LazyLock};
 use crate::{error::AppError, strava::SESSION_KEY};
 use tb_domain::{Error, Store, TbResult};
 use tb_strava::StravaId;
-
-pub(crate) static COOKIE_NAME: &str = "SESSION";
 
 pub(super) static STRAVACLIENT: LazyLock<StravaClient> = LazyLock::new(strava_oauth_client);
 pub(super) static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(http_client);
@@ -200,18 +195,18 @@ pub(crate) enum AuthResponse {
 
 pub(crate) async fn login_authorized(
     Query(query): Query<AuthResponse>,
-    State(memstore): State<MemoryStore>,
+    session: Session,
     State(store): State<crate::DbPool>,
-) -> Result<(HeaderMap, Redirect), AppError> {
+) -> Result<Redirect, AppError> {
     let (code, path) = match query {
         AuthResponse::Error { error, .. } => {
             warn!("Authentication failed with error: {error}");
-            return Ok((HeaderMap::new(), Redirect::to("/")));
+            return Ok(Redirect::to("/"));
         }
         AuthResponse::Request { code, state, scope } => {
             if scope != SCOPES {
                 warn!("Insufficient authorization {scope}");
-                return Ok((HeaderMap::new(), Redirect::to("/")));
+                return Ok(Redirect::to("/"));
             }
             (code, getpath(state)?)
         }
@@ -228,51 +223,18 @@ pub(crate) async fn login_authorized(
     let user = super::RequestSession::create_from_token(token, &mut conn).await?;
     conn.commit().await?;
 
-    // Create a new session filled with user data
-    let mut session = Session::new();
     session
         .insert(SESSION_KEY, &user)
+        .await
         .context("session insert failed")?;
 
-    // Store session and get corresponding cookie
-    let cookie = match memstore.store_session(session).await? {
-        Some(cookie) => cookie,
-        None => Err(Error::AnyFailure(anyhow::anyhow!(
-            "Failed to store session".to_string(),
-        )))?,
-    };
-
-    // Build the cookie
-    let cookie =
-        format!("{COOKIE_NAME}={cookie}; httpOnly=true; Secure=true; SameSite=Strict; Path=/");
-
-    // Set cookie
-    let mut headers = HeaderMap::new();
-    headers.insert(SET_COOKIE, cookie.parse().unwrap());
-
     debug!("Redirecting to {path}");
-    Ok((headers, Redirect::to(&path)))
+    Ok(Redirect::to(&path))
 }
 
-// Valid user session required. If there is none, redirect to the auth page
-pub(crate) async fn logout(
-    State(memstore): State<MemoryStore>,
-    TypedHeader(cookies): TypedHeader<headers::Cookie>,
-) -> impl IntoResponse {
-    if let Some(cookie) = cookies.get(COOKIE_NAME) {
-        let session = match memstore.load_session(cookie.to_string()).await {
-            Ok(Some(s)) => s,
-            // No session active, just redirect
-            _ => return Redirect::to("/").into_response(),
-        };
-        if memstore.destroy_session(session).await.is_err() {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to destroy session",
-            )
-                .into_response();
-        }
+pub(crate) async fn logout(session: Session) -> impl IntoResponse {
+    if session.delete().await.is_err() {
+        error!("Failed to destroy session");
     }
-
     Redirect::to("/").into_response()
 }

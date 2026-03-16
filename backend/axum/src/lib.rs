@@ -11,9 +11,10 @@
 //! of the Tendabike server, such as users, parts, attachments, activities, and Strava integration.
 //!
 
-use async_session::MemoryStore;
 use axum::Router;
 use std::net::SocketAddr;
+use tower_sessions::{SessionManagerLayer, session_store::ExpiredDeletion};
+use tower_sessions_sqlx_store::PostgresStore;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use tb_sqlx::DbPool;
@@ -38,10 +39,25 @@ pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // `MemoryStore` is just used as an example. Don't use this in production.
-    let store = MemoryStore::new();
+    let session_store = PostgresStore::new(pool.raw());
+    session_store
+        .migrate()
+        .await
+        .expect("Session store migration must succeed");
 
-    let app_state = AppState::new(store, pool);
+    let deletion_task = tokio::task::spawn(
+        session_store
+            .clone()
+            .continuously_delete_expired(tokio::time::Duration::from_secs(60)),
+    );
+
+    let session_layer = SessionManagerLayer::new(session_store)
+        .with_expiry(tower_sessions::Expiry::OnInactivity(time::Duration::days(
+            10,
+        )))
+        .with_secure(false);
+
+    let app_state = AppState::new(pool);
 
     let app = Router::new()
         .nest("/api", domain::router())
@@ -49,10 +65,45 @@ pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
         .with_state(app_state)
         .fallback_service(tower_http::services::ServeDir::new(path))
         .layer(tower_http::trace::TraceLayer::new_for_http())
-        .layer(tower_http::compression::CompressionLayer::new());
+        .layer(tower_http::compression::CompressionLayer::new())
+        .layer(session_layer);
 
     tracing::debug!("listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal(deletion_task.abort_handle()))
+        .await
+        .unwrap();
+
+    deletion_task
+        .await
+        .expect("session deletion task should finish")
+        .unwrap();
+}
+
+async fn shutdown_signal(deletion_task_abort_handle: tokio::task::AbortHandle) {
+    use tokio::signal;
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => { deletion_task_abort_handle.abort() },
+        _ = terminate => { deletion_task_abort_handle.abort() },
+    }
 }
