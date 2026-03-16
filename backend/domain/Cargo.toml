@@ -6,20 +6,19 @@ edition = { workspace = true }
 
 [dependencies]
 
+csv = "1.3"
+
 derive_more = { workspace = true, features = ["from", "into", "display"] }
 log = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_with = { workspace = true, features = ["time_0_3"] }
-csv = { workspace = true }
 
 time = { workspace = true, features = [
     "serde",
     "parsing",
     "serde-human-readable",
 ] }
-time-tz = { workspace = true, features = ["db"] }
-pretty_assertions = { workspace = true }
 
 thiserror = { workspace = true }
 anyhow = { workspace = true }
@@ -35,3 +34,6 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }
+
+[lib]
+doctest = false
