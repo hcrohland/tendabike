@@ -11,8 +11,10 @@
 //! of the Tendabike server, such as users, parts, attachments, activities, and Strava integration.
 //!
 
+use anyhow::Context;
 use axum::Router;
 use std::net::SocketAddr;
+use tb_domain::TbResult;
 use tower_sessions::{SessionManagerLayer, session_store::ExpiredDeletion};
 use tower_sessions_sqlx_store::PostgresStore;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -30,7 +32,7 @@ use appstate::*;
 mod error;
 use error::*;
 
-pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
+pub async fn start(database_url: &str, path: std::path::PathBuf, addr: SocketAddr) -> TbResult<()> {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -39,11 +41,13 @@ pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    let pool = tb_sqlx::DbPool::new(database_url).await?;
+
     let session_store = PostgresStore::new(pool.raw());
     session_store
         .migrate()
         .await
-        .expect("Session store migration must succeed");
+        .context("Session store migration")?;
 
     let deletion_task = tokio::task::spawn(
         session_store
@@ -70,17 +74,19 @@ pub async fn start(pool: DbPool, path: std::path::PathBuf, addr: SocketAddr) {
 
     tracing::debug!("listening on {}", addr);
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .context("Binding address")?;
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal(deletion_task.abort_handle()))
         .await
-        .unwrap();
+        .context("Main server")?;
 
-    deletion_task
+    Ok(deletion_task
         .await
-        .expect("session deletion task should finish")
-        .unwrap();
+        .unwrap()
+        .context("session deletion task")?)
 }
 
 async fn shutdown_signal(deletion_task_abort_handle: tokio::task::AbortHandle) {

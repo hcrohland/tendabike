@@ -44,13 +44,10 @@ impl<'c> SqlxConn<'c> {
 pub struct DbPool(PgPool);
 
 impl DbPool {
-    pub async fn new() -> anyhow::Result<Self> {
-        let database_url =
-            std::env::var("DB_URL").unwrap_or("postgres://localhost/tendabike".to_string());
-
+    pub async fn new(database_url: &str) -> anyhow::Result<Self> {
         info!("Connecting to database: {}", database_url);
 
-        let pool = PgPool::connect(&database_url).await?;
+        let pool = PgPool::connect(database_url).await?;
 
         // Run migrations if needed
         sqlx::migrate!("./migrations").run(&pool).await?;
