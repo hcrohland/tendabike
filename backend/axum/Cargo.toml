@@ -10,19 +10,20 @@ tb_domain = { workspace = true }
 tb_strava = { workspace = true }
 tb_sqlx = { workspace = true }
 
-hmac = "*"
-sha2 = "*"
-base64 = "*"
-rand = "0.10"
-axum = { version = "0.8", features = ["macros"] }
-http = "1"
-reqwest = { version = "0.13", features = [
+reqwest = { version = "0.12", default-features = false, features = [
+    "rustls-tls",
     "json",
     "gzip",
     "brotli",
     "deflate",
     "zstd",
 ] }
+hmac = "*"
+sha2 = "*"
+base64 = "*"
+rand = "0.10"
+axum = { version = "0.8", features = ["macros"] }
+http = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tower-http = { version = "0.6", features = ["full"] }

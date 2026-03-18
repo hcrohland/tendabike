@@ -28,7 +28,7 @@ use oauth2::{
 use serde::{Deserialize, Serialize};
 use std::{env, sync::LazyLock};
 
-use crate::{error::AppError, strava::SESSION_KEY};
+use crate::error::AppError;
 use tb_domain::{Error, Store, TbResult};
 use tb_strava::StravaId;
 
@@ -65,7 +65,7 @@ pub(crate) struct StravaExtraTokenFields {
 
 impl ExtraTokenFields for StravaExtraTokenFields {}
 
-type StravaTokenResponse = StandardTokenResponse<StravaExtraTokenFields, BasicTokenType>;
+pub(crate) type StravaTokenResponse = StandardTokenResponse<StravaExtraTokenFields, BasicTokenType>;
 
 pub(crate) type StravaClient<
     HasAuthUrl = EndpointSet,
@@ -220,13 +220,8 @@ pub(crate) async fn login_authorized(
         .context("token exchange failed")?;
 
     let mut conn = store.begin().await?;
-    let user = super::RequestSession::create_from_token(token, &mut conn).await?;
+    super::RequestSession::create_from_token(token, session, &mut conn).await?;
     conn.commit().await?;
-
-    session
-        .insert(SESSION_KEY, &user)
-        .await
-        .context("session insert failed")?;
 
     debug!("Redirecting to {path}");
     Ok(Redirect::to(&path))

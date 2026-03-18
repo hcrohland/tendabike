@@ -5,16 +5,14 @@ use axum::{
 };
 use http::{StatusCode, request::Parts};
 use log::{debug, trace};
-use oauth2::{
-    AccessToken, RefreshToken, StandardTokenResponse, TokenResponse, basic::BasicTokenType, reqwest,
-};
+use oauth2::{AccessToken, RefreshToken, TokenResponse};
 use serde::de::DeserializeOwned;
 use serde_derive::{Deserialize, Serialize};
 use std::time::SystemTime;
+use time::{Duration, UtcDateTime};
 use tower_sessions::Session as TowerSession;
 
-use super::StravaExtraTokenFields;
-use crate::strava::{HTTP_CLIENT, StravaAthleteInfo, oauth::STRAVACLIENT};
+use crate::strava::{HTTP_CLIENT, StravaAthleteInfo, StravaTokenResponse, oauth::STRAVACLIENT};
 use tb_domain::{Error, Session as TbSession, ShopId, TbResult, UserId};
 use tb_strava::{StravaId, StravaSession, StravaStore, StravaUser};
 
@@ -32,13 +30,15 @@ pub(crate) struct RequestSession {
 }
 
 const API: &str = "https://www.strava.com/api/v3";
-pub(crate) const SESSION_KEY: &str = "session";
+const SESSION_KEY: &str = "session";
+const SESSION_NEXT_UPDATE: &str = "update";
 
 impl RequestSession {
     pub(crate) async fn create_from_token(
-        token: StandardTokenResponse<StravaExtraTokenFields, BasicTokenType>,
+        token: StravaTokenResponse,
+        session: TowerSession,
         store: &mut impl StravaStore,
-    ) -> TbResult<Self> {
+    ) -> TbResult<()> {
         trace!("got token {:?})", &token);
 
         let StravaAthleteInfo {
@@ -64,16 +64,18 @@ impl RequestSession {
         let id = user.tb_id();
         let is_admin = id.is_admin(store).await?;
 
-        Ok(Self {
+        Self {
             id,
             strava_id: user.strava_id(),
             is_admin,
             access_token: token.access_token().clone(),
             expires_at: token.expires_in().map(|d| SystemTime::now() + d),
             refresh_token: refresh_token.cloned(),
-            session: None,
+            session: Some(session),
             shop: None,
-        })
+        }
+        .update()
+        .await
     }
 
     /// User for admin actions to impersonate user
@@ -132,6 +134,23 @@ impl RequestSession {
         let refresh = token.refresh_token().map(|t| t.secret());
         self.strava_id.update_token(refresh, store).await?;
         self.update().await
+    }
+
+    async fn check_update(&self) -> TbResult<()> {
+        if let Some(session) = self.session.clone()
+            && let Some(next) = session
+                .get::<UtcDateTime>(SESSION_NEXT_UPDATE)
+                .await
+                .context("session get")?
+            && next < UtcDateTime::now()
+        {
+            session
+                .insert(SESSION_NEXT_UPDATE, UtcDateTime::now() + Duration::days(1))
+                .await
+                .context("session insert")?;
+        }
+
+        Ok(())
     }
 
     async fn update(&self) -> TbResult<()> {
@@ -263,19 +282,19 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let towersession = TowerSession::from_request_parts(parts, state).await?;
 
-        if let Some(session) = towersession
+        let Some(session) = towersession
             .get::<RequestSession>(SESSION_KEY)
             .await
             .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Get Session"))?
-        {
-            session
-                .update()
-                .await
-                .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Update Session"))?;
-            Ok(session.set_session(towersession))
-        } else {
-            Err((StatusCode::UNAUTHORIZED, "Please login"))
-        }
+        else {
+            return Err((StatusCode::UNAUTHORIZED, "Please login"));
+        };
+
+        session
+            .check_update()
+            .await
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Update Session"))?;
+        Ok(session.set_session(towersession))
     }
 }
 
