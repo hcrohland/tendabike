@@ -22,7 +22,7 @@ jobs:
       TAG: ${{ github.event_name == 'pull_request' && format('PR_{0}, ghcr.io/hcrohland/tendabike:staging', github.event.pull_request.number) || 'latest'}}
     steps:
     - 
-      uses: actions/checkout@latest
+      uses: actions/checkout@Latest
     -
       name: Set up Docker Buildx
       uses: docker/setup-buildx-action@latest
