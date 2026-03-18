@@ -5,17 +5,14 @@ use axum::{
 };
 use http::{StatusCode, request::Parts};
 use log::{debug, trace};
-use oauth2::{
-    AccessToken, RefreshToken, StandardTokenResponse, TokenResponse, basic::BasicTokenType, reqwest,
-};
+use oauth2::{AccessToken, RefreshToken, TokenResponse};
 use serde::de::DeserializeOwned;
 use serde_derive::{Deserialize, Serialize};
 use std::time::SystemTime;
 use time::{Duration, UtcDateTime};
 use tower_sessions::Session as TowerSession;
 
-use super::StravaExtraTokenFields;
-use crate::strava::{HTTP_CLIENT, StravaAthleteInfo, oauth::STRAVACLIENT};
+use crate::strava::{HTTP_CLIENT, StravaAthleteInfo, StravaTokenResponse, oauth::STRAVACLIENT};
 use tb_domain::{Error, Session as TbSession, ShopId, TbResult, UserId};
 use tb_strava::{StravaId, StravaSession, StravaStore, StravaUser};
 
@@ -38,7 +35,7 @@ const SESSION_NEXT_UPDATE: &str = "update";
 
 impl RequestSession {
     pub(crate) async fn create_from_token(
-        token: StandardTokenResponse<StravaExtraTokenFields, BasicTokenType>,
+        token: StravaTokenResponse,
         session: TowerSession,
         store: &mut impl StravaStore,
     ) -> TbResult<()> {

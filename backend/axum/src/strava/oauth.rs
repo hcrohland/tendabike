@@ -65,7 +65,7 @@ pub(crate) struct StravaExtraTokenFields {
 
 impl ExtraTokenFields for StravaExtraTokenFields {}
 
-type StravaTokenResponse = StandardTokenResponse<StravaExtraTokenFields, BasicTokenType>;
+pub(crate) type StravaTokenResponse = StandardTokenResponse<StravaExtraTokenFields, BasicTokenType>;
 
 pub(crate) type StravaClient<
     HasAuthUrl = EndpointSet,
