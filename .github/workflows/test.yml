@@ -47,7 +47,7 @@ jobs:
     - 
       uses: dtolnay/rust-toolchain@stable
     - 
-      uses: Swatinem/rust-cache@v2latest
+      uses: Swatinem/rust-cache@latest
     - 
       name: Format check
       run: cargo fmt --check
