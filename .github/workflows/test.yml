@@ -43,7 +43,7 @@ jobs:
 
     steps:
     - 
-      uses: actions/checkout@Latest
+      uses: actions/checkout@v6
     - 
       uses: dtolnay/rust-toolchain@stable
     - 
