@@ -14,7 +14,8 @@ use axum::{
     extract::{Query, State},
     response::{IntoResponse, Redirect},
 };
-use log::{debug, error, warn};
+use hmac::KeyInit;
+use log::{debug, error, warn}; // Mac re-exports KeyInit in 0.12+
 use oauth2::{
     AuthUrl, AuthorizationCode, Client, ClientId, ClientSecret, CsrfToken, EndpointNotSet,
     EndpointSet, ExtraTokenFields, RedirectUrl, RevocationUrl, Scope, StandardRevocableToken,
