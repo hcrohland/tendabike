@@ -153,7 +153,7 @@ fn gentoken(path: String) -> CsrfToken {
 
 fn getpath(state: String) -> TbResult<String> {
     let msg = state.split(':').collect::<Vec<_>>();
-    if msg.len() != 2 || hmac_signature(&CSRF_KEY, msg[0]) != msg[1] {
+    if msg.len() != 2 || dbg!(hmac_signature(&CSRF_KEY, msg[0])) != dbg!(msg[1]) {
         return Err(Error::BadRequest(format!(
             "Bad signature for exchange request: {state}"
         )));
