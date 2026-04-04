@@ -129,15 +129,15 @@ static CSRF_KEY: LazyLock<Vec<u8>> =
 
 fn hmac_signature(key: &[u8], msg: &str) -> String {
     use base64::prelude::*;
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
 
     type HmacSha256 = Hmac<sha2::Sha256>;
 
-    let mut mac = HmacSha256::new_from_slice(dbg!(key)).unwrap();
+    let mut mac = HmacSha256::new_from_slice(key).unwrap();
     mac.update(msg.as_bytes());
     let signature = mac.finalize().into_bytes();
 
-    BASE64_STANDARD.encode(dbg!(signature))
+    BASE64_STANDARD.encode(signature)
 }
 
 fn gentoken(path: String) -> CsrfToken {
