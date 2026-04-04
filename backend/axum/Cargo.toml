@@ -48,6 +48,7 @@ time = { workspace = true, features = [
     "serde-human-readable",
 ] }
 tokio = { workspace = true }
+hex = "0.4.3"
 
 [lib]
 test = false

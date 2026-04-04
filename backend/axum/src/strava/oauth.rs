@@ -124,8 +124,14 @@ fn http_client() -> reqwest::Client {
         .expect("Client should build")
 }
 
-static CSRF_KEY: LazyLock<Vec<u8>> =
-    LazyLock::new(|| (0..16).map(|_| rand::random::<u8>()).collect());
+static CSRF_KEY: LazyLock<Vec<u8>> = LazyLock::new(|| {
+    if let Ok(secret) = std::env::var("CSRF_SECRET") {
+        hex::decode(secret).expect("CSRF_SECRET must be valid hex")
+    } else {
+        warn!("generating random CSRF secret. This dose not work for distributed systems");
+        (0..16).map(|_| rand::random::<u8>()).collect()
+    }
+});
 
 fn hmac_signature(key: &[u8], msg: &str) -> String {
     use base64::prelude::*;
