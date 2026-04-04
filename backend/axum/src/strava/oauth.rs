@@ -133,11 +133,11 @@ fn hmac_signature(key: &[u8], msg: &str) -> String {
 
     type HmacSha256 = Hmac<sha2::Sha256>;
 
-    let mut mac = HmacSha256::new_from_slice(key).unwrap();
+    let mut mac = HmacSha256::new_from_slice(dbg!(key)).unwrap();
     mac.update(msg.as_bytes());
     let signature = mac.finalize().into_bytes();
 
-    BASE64_STANDARD.encode(signature)
+    BASE64_STANDARD.encode(dbg!(signature))
 }
 
 fn gentoken(path: String) -> CsrfToken {
@@ -153,8 +153,7 @@ fn gentoken(path: String) -> CsrfToken {
 
 fn getpath(state: String) -> TbResult<String> {
     let msg = state.split(':').collect::<Vec<_>>();
-    dbg!(&msg);
-    if msg.len() != 2 || dbg!(hmac_signature(&CSRF_KEY, msg[0])) != dbg!(msg[1]) {
+    if msg.len() != 2 || hmac_signature(&CSRF_KEY, msg[0]) != msg[1] {
         return Err(Error::BadRequest(format!(
             "Bad signature for exchange request: {state}"
         )));
