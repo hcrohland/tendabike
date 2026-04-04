@@ -129,7 +129,7 @@ static CSRF_KEY: LazyLock<Vec<u8>> =
 
 fn hmac_signature(key: &[u8], msg: &str) -> String {
     use base64::prelude::*;
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
 
     type HmacSha256 = Hmac<sha2::Sha256>;
 
