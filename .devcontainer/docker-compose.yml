@@ -13,7 +13,7 @@ services:
     volumes:
       - ..:/workspaces/tendabike:cached
       - rust-target:/workspaces/tendabike/target
-      - node_modules:/workspaces/tendabike/frontend/node_modules
+      - node_modules:/workspaces/tendabike/node_modules
     command: sleep infinity
 
 volumes:
