@@ -1,5 +1,4 @@
 <script lang="ts">
-  // import { slide } from 'svelte/transition';
   import { Card, Textarea, Button, Indicator, Tooltip } from "flowbite-svelte";
   import { EditOutline } from "flowbite-svelte-icons";
   import { link, push } from "svelte-spa-router";
@@ -27,6 +26,13 @@
     } else {
       return part.vendor + " " + part.model;
     }
+  }
+
+  function typeName(part: Part) {
+    if (part.what != types[part.what].main) {
+      return types[part.what].name.toLowerCase();
+    }
+    return "";
   }
 
   function startEditNotes() {
@@ -81,47 +87,78 @@
       {@render children?.()}
     </div>
   </div>
-  <div class="text-wrap p-4">
-    is a <span class="param">{model(part)}</span>
-    {#if part.what == 1}
-      <a href={"/strava/bikes/" + part.id} target="_blank">
-        <img
-          src="strava_grey.png"
-          alt="View on Strava"
-          title="View on Strava"
-          class="inline"
-        />
-      </a>
-    {/if}
-    {#if part.what != types[part.what].main}
-      {types[part.what].name.toLowerCase()}
-    {/if}
-    {#if !part.disposed_at}
-      purchased <span class="param">{fmtDate(part.purchase)}</span>
-      which
-    {:else}
-      you owned from <span class="param">{fmtDate(part.purchase)}</span>
-      until <span class="param">{fmtDate(part.disposed_at)}</span>
-      and
-    {/if}
-    you used
-    <a href={"/activities/" + part.id} use:link class="param text-reset">
-      {fmtNumber(usage.count)}
-    </a>
-    times for <span class="param">{fmtSeconds(usage.time)}</span> hours.
-    <p>
-      You covered <span class="param"
-        >{fmtNumber(parseFloat((usage.distance / 1000).toFixed(1)))}</span
-      >
-      km climbing <span class="param">{fmtNumber(usage.climb)}</span> and
-      descending <span class="param">{fmtNumber(usage.descend)}</span> meters
-      {#if usage.energy > 0}
-        and expended
-        <span class="param">{fmtNumber(usage.energy)}</span> kiloJoules of energy
+
+  <div class="p-4">
+    <!-- Meta line: model · type · date range -->
+    <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+      {model(part)}{typeName(part) ? " · " + typeName(part) : ""}
+      {#if part.what == 1}
+        <a href={"/strava/bikes/" + part.id} target="_blank">
+          <img
+            src="strava_grey.png"
+            alt="View on Strava"
+            title="View on Strava"
+            class="inline ml-1"
+          />
+        </a>
+      {/if}
+      ·
+      {#if !part.disposed_at}
+        since {fmtDate(part.purchase)}
+      {:else}
+        {fmtDate(part.purchase)} – {fmtDate(part.disposed_at)}
       {/if}
     </p>
+
+    <!-- Stat chips -->
+    <div class="grid grid-cols-3 gap-2 mb-1 max-w-md whitespace-nowrap">
+      <a href={"/activities/" + part.id} use:link>
+        <div
+          class="flex items-center gap-1 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 shrink-0"
+        >
+          <span class="font-semibold text-sm">{fmtNumber(usage.count)} </span>
+          <span class="font-normal text-xs uppercase tracking-wide">rides</span>
+        </div>
+      </a>
+      <div
+        class="items-center px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 shrink-0"
+      >
+        <span class="font-semibold text-sm">{fmtSeconds(usage.time)}</span>
+        <span class="font-normal text-xs uppercase tracking-wide">hours</span>
+      </div>
+      <div
+        class="items-center px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 shrink-0"
+      >
+        <span class="font-semibold text-sm"
+          >{fmtNumber(parseFloat((usage.distance / 1000).toFixed(1)))}</span
+        >
+        <span class="font-normal text-xs uppercase tracking-wide">km</span>
+      </div>
+      <div
+        class="items-center px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 shrink-0"
+      >
+        <span class="font-semibold text-sm">{fmtNumber(usage.climb)}</span>
+        <span class="font-normal text-xs uppercase tracking-wide">↑ m</span>
+      </div>
+      <div
+        class="items-center px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 shrink-0"
+      >
+        <span class="font-semibold text-sm">{fmtNumber(usage.descend)}</span>
+        <span class="font-normal text-xs uppercase tracking-wide">↓ m</span>
+      </div>
+      {#if usage.energy > 0}
+        <div
+          class="items-center px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 shrink-0"
+        >
+          <span class="font-semibold text-sm">{fmtNumber(usage.energy)}</span>
+          <span class="font-normal text-xs uppercase tracking-wide">kJ</span>
+        </div>
+      {/if}
+    </div>
+
+    <!-- Notes (detail view only) -->
     {#if !summary}
-      <div class="mt-3">
+      <div class="mt-4">
         <div class="flex items-center gap-2 mb-2">
           <strong>Notes:</strong>
           {#if !editingNotes}
@@ -140,9 +177,9 @@
           />
           <div class="flex gap-2">
             <Button size="sm" onclick={saveNotes}>Save</Button>
-            <Button size="sm" color="alternative" onclick={cancelEditNotes}>
-              Cancel
-            </Button>
+            <Button size="sm" color="alternative" onclick={cancelEditNotes}
+              >Cancel</Button
+            >
           </div>
         {:else if part.notes}
           <p class="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
