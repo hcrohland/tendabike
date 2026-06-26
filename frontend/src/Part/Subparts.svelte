@@ -1,8 +1,7 @@
 <script lang="ts">
   import { types, Type } from "../lib/types";
-  import { Table, TableBody, TableHead } from "flowbite-svelte";
   import { filterValues, by } from "../lib/mapable";
-  import SubType from "./SubType.svelte";
+  import PartCard from "./PartCard.svelte";
   import { Part } from "../lib/part";
   import { Attachment } from "../lib/attachment";
   import Wizard from "./Wizard.svelte";
@@ -29,12 +28,10 @@
     level: number,
     prefix: string,
   ) {
-    // the list of types that can be attached to the hook
     const typeList = filterValues(types, (a: Type) =>
       a.hooks.includes(hook.id),
     ).sort((a: Type, b: Type) => a.order - b.order);
     typeList.forEach((type) => {
-      // the list of attachments at the hook
       let attachments = attachees.filter((a: Attachment) => {
         return a.hook == hook.id && a.what == type.id;
       });
@@ -51,18 +48,14 @@
 </script>
 
 {#if attachees.length > 0}
-  <Table hoverable striped>
-    <TableHead>
-      <SubType />
-    </TableHead>
-    <TableBody>
-      {#each buildList([], part.type(), attachees, 0, "") as item (item.hook.id + "." + item.type.id)}
-        {@const { hook, ...props } = item}
-        <SubType {...props} />
-      {/each}
-    </TableBody>
-  </Table>
+  <div class="flex flex-col gap-3">
+    {#each buildList([], part.type(), attachees, 0, "") as item (item.hook.id + "." + item.type.id)}
+      {@const { hook, ...props } = item}
+      <PartCard {...props} />
+    {/each}
+  </div>
 {/if}
+
 {#if part.isGear()}
   <Wizard gear={part} {attachees} />
 {/if}
