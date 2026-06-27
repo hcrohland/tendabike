@@ -11,26 +11,34 @@
   import { actions } from "../Widgets/Actions.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
 
+  type TreeNode = {
+    attachments: Attachment[];
+    prefix: string;
+    type: Type;
+    children: TreeNode[];
+  };
+
   export let attachments: Attachment[] = [];
-  export let level: number = 0;
   export let prefix = "";
   export let type: Type;
+  export let children: TreeNode[] = [];
+  export let light = true;
 
+  let background = light
+    ? "bg-gray-50 dark:bg-gray-700"
+    : "bg-gray-250 dark:bg-gray-800";
   let show_more = false;
 </script>
 
 {#each attachments.map( (att) => ({ att, part: $parts[att.part_id] }), ) as { att, part }, i (att.idx)}
   {#if i == 0}
     <div
-      class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-3"
-      style="margin-left: {level * 1.25}rem"
+      class={"rounded-lg border border-gray-200 dark:border-gray-600 p-3 " +
+        background}
     >
       <!-- Header row: type · name · menu -->
       <div class="flex items-center justify-between gap-2">
         <div class="flex items-center gap-2 min-w-0">
-          {#if attachments.length > 1 || (part && $usages[part.usage].count != $usages[att.usage].count)}
-            <ShowMore bind:show_more title="history" />
-          {/if}
           <span
             class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 shrink-0"
           >
@@ -44,8 +52,16 @@
                 {att.name}
               {/if}
             </span>
+            ·
+            <span class="text-xs text-gray-500 dark:text-gray-400">
+              since {att.fmtTime()}
+            </span>
+            {#if attachments.length > 1 || (part && $usages[part.usage].count != $usages[att.usage].count)}
+              <ShowMore bind:show_more title="history" />
+            {/if}
           {/if}
         </div>
+        <!-- Attached date + current stats -->
         {#if att.isAttached()}
           <div class="shrink-0">
             <Menu>
@@ -65,14 +81,9 @@
         {/if}
       </div>
 
-      <!-- Attached date -->
+      <!-- Attached date + current stats -->
       {#if att.isAttached()}
-        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-          since {att.fmtTime()}
-        </div>
-
-        <!-- Current stats -->
-        <UsageChips id={part.usage} ref={part.id} />
+        <UsageChips id={part.usage} ref={part.id} {light} />
       {/if}
 
       <!-- History cards -->
@@ -112,8 +123,17 @@
                   </div>
                 {/if}
               </div>
-              <UsageChips id={a.usage} ref={a.idx} />
+              <UsageChips id={a.usage} ref={a.idx} {light} />
             </div>
+          {/each}
+        </div>
+      {/if}
+
+      <!-- Child cards nested inside -->
+      {#if children.length > 0}
+        <div class="mt-3 flex flex-col gap-2">
+          {#each children as child (child.type.id)}
+            <svelte:self {...child} light={!light} />
           {/each}
         </div>
       {/if}

@@ -3,10 +3,10 @@
   import { EditOutline } from "flowbite-svelte-icons";
   import { link, push } from "svelte-spa-router";
   import { Part } from "../lib/part";
-  import { fmtDate, fmtNumber, fmtSeconds, handleError } from "../lib/store";
+  import { fmtDate, handleError } from "../lib/store";
   import { types } from "../lib/types";
-  import { Usage, usages } from "../lib/usage";
   import { user, users } from "../lib/user";
+  import UsageChips from "../Usage/UsageChips.svelte";
 
   interface Props {
     part: Part;
@@ -16,7 +16,6 @@
 
   let { part, summary = false, children }: Props = $props();
 
-  let usage = $derived($usages[part.usage] ? $usages[part.usage] : new Usage());
   let editingNotes = $state(false);
   let notesValue = $state("");
 
@@ -111,50 +110,7 @@
     </p>
 
     <!-- Stat chips -->
-    <div class="grid grid-cols-3 gap-2 mb-1 max-w-md whitespace-nowrap">
-      <a href={"/activities/" + part.id} use:link>
-        <div
-          class="flex items-center gap-1 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 shrink-0"
-        >
-          <span class="font-semibold text-sm">{fmtNumber(usage.count)} </span>
-          <span class="font-normal text-xs uppercase tracking-wide">rides</span>
-        </div>
-      </a>
-      <div
-        class="items-center px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 shrink-0"
-      >
-        <span class="font-semibold text-sm">{fmtSeconds(usage.time)}</span>
-        <span class="font-normal text-xs uppercase tracking-wide">hours</span>
-      </div>
-      <div
-        class="items-center px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 shrink-0"
-      >
-        <span class="font-semibold text-sm"
-          >{fmtNumber(parseFloat((usage.distance / 1000).toFixed(1)))}</span
-        >
-        <span class="font-normal text-xs uppercase tracking-wide">km</span>
-      </div>
-      <div
-        class="items-center px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 shrink-0"
-      >
-        <span class="font-semibold text-sm">{fmtNumber(usage.climb)}</span>
-        <span class="font-normal text-xs uppercase tracking-wide">↑ m</span>
-      </div>
-      <div
-        class="items-center px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 shrink-0"
-      >
-        <span class="font-semibold text-sm">{fmtNumber(usage.descend)}</span>
-        <span class="font-normal text-xs uppercase tracking-wide">↓ m</span>
-      </div>
-      {#if usage.energy > 0}
-        <div
-          class="items-center px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 shrink-0"
-        >
-          <span class="font-semibold text-sm">{fmtNumber(usage.energy)}</span>
-          <span class="font-normal text-xs uppercase tracking-wide">kJ</span>
-        </div>
-      {/if}
-    </div>
+    <UsageChips id={part.usage} ref={part.id} gridclass="grid-cols-3" />
 
     <!-- Notes (detail view only) -->
     {#if !summary}

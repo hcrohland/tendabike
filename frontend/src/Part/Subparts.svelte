@@ -13,45 +13,42 @@
 
   let { part, attachees }: Props = $props();
 
-  type MyList = {
+  type TreeNode = {
     attachments: Attachment[];
     prefix: string;
-    level: number;
     type: Type;
-    hook: Type;
+    children: TreeNode[];
   };
 
-  function buildList(
-    list: MyList[],
+  function buildTree(
     hook: Type,
     attachees: Attachment[],
-    level: number,
     prefix: string,
-  ) {
+  ): TreeNode[] {
     const typeList = filterValues(types, (a: Type) =>
       a.hooks.includes(hook.id),
     ).sort((a: Type, b: Type) => a.order - b.order);
-    typeList.forEach((type) => {
+
+    return typeList.map((type) => {
       let attachments = attachees.filter((a: Attachment) => {
         return a.hook == hook.id && a.what == type.id;
       });
       attachments.sort(by("attached"));
-      list.push({ attachments, prefix, level, type, hook });
-      if (attachments.length > 0) {
-        buildList(list, type, attachees, level + 1, "");
-      } else {
-        buildList(list, type, attachees, level, type.prefix);
-      }
+
+      const children =
+        attachments.length > 0
+          ? buildTree(type, attachees, "")
+          : buildTree(type, attachees, type.prefix);
+
+      return { attachments, prefix, type, children };
     });
-    return list;
   }
 </script>
 
 {#if attachees.length > 0}
-  <div class="flex flex-col gap-3">
-    {#each buildList([], part.type(), attachees, 0, "") as item (item.hook.id + "." + item.type.id)}
-      {@const { hook, ...props } = item}
-      <PartCard {...props} />
+  <div class="flex flex-col gap-3 max-w-3xl">
+    {#each buildTree(part.type(), attachees, "") as node (node.type.id)}
+      <PartCard {...node} />
     {/each}
   </div>
 {/if}
