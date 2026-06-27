@@ -46,7 +46,7 @@
 </script>
 
 {#if attachees.length > 0}
-  <div class="flex flex-col gap-3 max-w-3xl">
+  <div class="flex flex-col gap-3">
     {#each buildTree(part.type(), attachees, "") as node (node.type.id)}
       <PartCard {...node} />
     {/each}
