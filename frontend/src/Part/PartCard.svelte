@@ -33,19 +33,19 @@
 {#each attachments.map( (att) => ({ att, part: $parts[att.part_id] }), ) as { att, part }, i (att.idx)}
   {#if i == 0}
     <div
-      class={"rounded-lg border border-gray-200 dark:border-gray-600 p-3 " +
+      class={"rounded-lg border border-gray-200 dark:border-gray-600 p-1 md:p-3 " +
         background}
     >
       <!-- Header row: type · name · menu -->
       <div class="flex items-center justify-between gap-2">
-        <div class="flex items-center gap-2 min-w-0">
+        <div class="flex items-center gap-2 p-2 min-w-0">
           <span
-            class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 shrink-0"
+            class="text-xs uppercase text-gray-500 dark:text-gray-400 shrink-0 truncate"
           >
             {prefix + " " + type.name}
           </span>
           {#if att.isAttached()}
-            <span class="font-medium text-sm truncate">
+            <span class="font-medium text-sm whitespace-nowrap">
               {#if part}
                 <PartLink {part} />
               {:else}
@@ -88,7 +88,7 @@
 
       <!-- History cards -->
       {#if show_more}
-        <div class="mt-3 flex flex-col gap-2">
+        <div class="mt-3 flex flex-col gap-2 p-3">
           {#each attachments.map( (a) => ({ a, p: $parts[a.part_id] }), ) as { a, p }}
             <div
               class="rounded-lg border border-gray-200 dark:border-gray-500 bg-gray-100 dark:bg-gray-600 p-3"

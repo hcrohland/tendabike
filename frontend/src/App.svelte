@@ -77,7 +77,7 @@
 <Message />
 <InitialSyncDialog />
 <ThemeProvider {theme}>
-  <div class="m-8">
+  <div class="m-1 md:m-8 max-w-3xl">
     {#await promise}
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {#each [0, 1, 2, 3]}

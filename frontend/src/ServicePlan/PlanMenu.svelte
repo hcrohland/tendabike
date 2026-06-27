@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Dropdown, DropdownDivider, DropdownItem } from "flowbite-svelte";
-  import { ChevronDownOutline } from "flowbite-svelte-icons";
+  import { DotsVerticalOutline } from "flowbite-svelte-icons";
   import { actions } from "../Widgets/Actions.svelte";
   import { attachments } from "../lib/attachment";
   import type { ServicePlan } from "../lib/serviceplan";
@@ -15,7 +15,7 @@
   let part = $derived(plan.getpart($parts, $attachments)) as Part;
 </script>
 
-<ChevronDownOutline class="cursor-pointer float-inline-right inline" />
+<DotsVerticalOutline class="cursor-pointer float-inline-right inline" />
 <Dropdown simple>
   {#if part}
     <DropdownItem onclick={() => $actions.newService(part, plan)}>

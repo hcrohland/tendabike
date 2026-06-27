@@ -73,16 +73,18 @@
 </GearCard>
 <br />
 <PartHist {id} />
-<Tabs bind:selected={tab}>
+<Tabs bind:selected={tab} classes={{ content: "m-0 p-0 md:m-2 md:p-2" }}>
   {#if attachees.length > 0 || part.isGear()}
-    <TabItem key="parts">
+    <TabItem key="parts" class="m-0 p-0">
       {#snippet titleSlot()}
         Attached Parts
         {#if tab == "parts"}
           <XsButton onclick={() => $actions.installPart(part)}>add</XsButton>
         {/if}
       {/snippet}
-      <Subparts {part} {attachees} />
+      <div class="m-0">
+        <Subparts {part} {attachees} />
+      </div>
     </TabItem>
   {/if}
   <TabItem key="plans">
