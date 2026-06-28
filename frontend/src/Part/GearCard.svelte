@@ -89,7 +89,7 @@
 
   <div class="p-4">
     <!-- Meta line: model · type · date range -->
-    <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+    <p class="text-sm mb-3">
       {model(part)}{typeName(part) ? " · " + typeName(part) : ""}
       {#if part.what == 1}
         <a href={"/strava/bikes/" + part.id} target="_blank">
@@ -101,12 +101,14 @@
           />
         </a>
       {/if}
-      ·
-      {#if !part.disposed_at}
-        since {fmtDate(part.purchase)}
-      {:else}
-        {fmtDate(part.purchase)} – {fmtDate(part.disposed_at)}
-      {/if}
+      <span class="text-gray-500 dark:text-gray-400">
+        ·
+        {#if !part.disposed_at}
+          since {fmtDate(part.purchase)}
+        {:else}
+          {fmtDate(part.purchase)} – {fmtDate(part.disposed_at)}
+        {/if}
+      </span>
     </p>
 
     <!-- Stat chips -->

@@ -1,18 +1,20 @@
 <script lang="ts">
-  import { TableBodyCell, TableBodyRow, Tooltip } from "flowbite-svelte";
-  import UsageCells from "../Usage/Usage.svelte";
+  import UsageChips from "../Usage/UsageChips.svelte";
   import { Service } from "../lib/service";
   import { usages } from "../lib/usage";
   import { Part } from "../lib/part";
   import { Usage } from "../lib/usage";
   import { fmtRange, get_days } from "../lib/store";
   import ServiceMenu from "./ServiceMenu.svelte";
+  import ServiceBadge from "../Widgets/ServiceBadge.svelte";
+  import type { limit_keys } from "../lib/serviceplan";
 
   interface Props {
     depth?: number;
     service?: Service | undefined;
     successor?: Service | null;
     part: Part;
+    dues?: Partial<Record<limit_keys, { due: number; plan: number }>>;
     children?: import("svelte").Snippet;
   }
 
@@ -21,6 +23,7 @@
     service = undefined,
     successor = null,
     part,
+    dues,
     children,
   }: Props = $props();
 
@@ -37,37 +40,38 @@
   );
 </script>
 
-<TableBodyRow>
-  {#if service}
-    <TableBodyCell class="text-nowrap flex justify-between">
-      <div>
-        {@render children?.()}
-        <span id={"name" + service.id}>
-          {@html "&NonBreakingSpace;&NonBreakingSpace;┃ ".repeat(depth)}
-          {service.name}
+<div
+  class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-3"
+  style="margin-left: {depth * 1.25}rem"
+>
+  <div class="flex items-start justify-between gap-2">
+    <div class="min-w-0">
+      {#if service}
+        <span class="flex items-center gap-2">
+          {@render children?.()}
+          <span class="font-medium text-sm">{service.name}</span>
         </span>
         {#if service.notes.length > 0}
-          <Tooltip>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
             {service.notes}
-          </Tooltip>
+          </p>
         {/if}
-      </div>
-      {#if service}
-        <ServiceMenu {service} />
+      {:else}
+        <span class="text-xs text-gray-500 dark:text-gray-400">
+          since purchase
+        </span>
       {/if}
-    </TableBodyCell>
-    <TableBodyCell class="text-end">
-      {fmtRange(service.time, successor?.time)}
-    </TableBodyCell>
-  {:else}
-    <TableBodyCell>
-      {@html "&NonBreakingSpace;&NonBreakingSpace;┃ ".repeat(depth)}
-      &NonBreakingSpace; ┗━
-    </TableBodyCell>
-    <TableBodyCell class="text-end">
-      {fmtRange(part.purchase, successor?.time)}
-    </TableBodyCell>
-  {/if}
-  <TableBodyCell class="text-end">{days}</TableBodyCell>
-  <UsageCells {usage} />
-</TableBodyRow>
+      <span class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+        {fmtRange(service ? service.time : part.purchase, successor?.time)}
+        · {days} days
+        <ServiceBadge service={dues?.days} />
+      </span>
+    </div>
+    {#if service}
+      <div class="shrink-0">
+        <ServiceMenu {service} />
+      </div>
+    {/if}
+  </div>
+  <UsageChips {usage} light {dues} />
+</div>

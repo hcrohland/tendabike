@@ -38,114 +38,115 @@
   $: part = list[0]?.part;
   $: dues = next_due(
     part,
-    plans_for_part($plans, $atts, part.id),
+    plans_for_part($plans, $atts, part?.id),
     $services,
     $usages,
   );
 </script>
 
-<div
-  class={"relative rounded-lg border border-gray-200 dark:border-gray-600 p-1 md:p-3 " +
-    background}
->
-  <!-- Header row: type · name · menu -->
-  <div class="flex items-center justify-between gap-2">
-    <div class="flex items-center gap-2 p-2 min-w-0">
-      <span
-        class="text-xs uppercase text-gray-500 dark:text-gray-400 shrink-0 truncate"
-      >
-        {prefix + " " + type.name}
-      </span>
-      {#if att.isAttached()}
-        <span class="font-medium text-sm whitespace-nowrap">
-          {#if part}
-            <PartLink {part} />
-          {:else}
-            {att.name}
-          {/if}
-        </span>
-        ·
-        <span class="text-xs text-gray-500 dark:text-gray-400">
-          since {att.fmtTime()}
-        </span>
-        <ServiceBadge service={dues?.days} />
-        {#if attachments.length > 1 || (part && $usages[part.usage].count != $usages[att.usage].count)}
-          <ShowMore bind:show_more title="history" />
-        {/if}
-      {/if}
-    </div>
-    <div class="flex items-center gap-2 shrink-0">
-      {#if att.isAttached() && part}
-        <Menu>
-          <DropdownItem onclick={() => $actions.newService(part)}
-            >Log Service</DropdownItem
-          >
-          <DropdownItem onclick={() => $actions.attachPart(part)}
-            >Move part</DropdownItem
-          >
-          <DropdownItem onclick={() => $actions.replacePart(att)}
-            >New {type.name}</DropdownItem
-          >
-        </Menu>
-      {:else}
-        <XsButton onclick={() => $actions.replacePart(att)}>add</XsButton>
-      {/if}
-    </div>
-  </div>
-
-  <!-- Current stats -->
-  {#if att.isAttached()}
-    <UsageChips id={part.usage} ref={part.id} {light} {dues} />
-  {/if}
-
-  <!-- History cards -->
-  {#if show_more}
-    <div class="mt-3 flex flex-col gap-2 p-3">
-      {#each list as { att: a, part: p } (a.idx)}
-        <div
-          class="rounded-lg border border-gray-200 dark:border-gray-500 bg-gray-100 dark:bg-gray-600 p-3"
+{#if att}
+  <div
+    class={"relative rounded-lg border border-gray-200 dark:border-gray-600 p-1 md:p-3 " +
+      background}
+  >
+    <!-- Header row: type · name · menu -->
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2 p-2 min-w-0">
+        <span
+          class="text-xs uppercase text-gray-500 dark:text-gray-400 shrink-0 truncate"
         >
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2 min-w-0">
-              <span class="font-medium text-sm truncate">
-                {#if p}
-                  <PartLink part={p} />
-                {:else}
-                  {a.name}
-                {/if}
-              </span>
-              <span class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
-                >{a.fmtTime()}</span
-              >
-            </div>
-            {#if p && p.disposed_at == undefined}
-              <div class="shrink-0">
-                <Menu>
-                  <DropdownItem onclick={() => $actions.newService(p)}>
-                    Log Service
-                  </DropdownItem>
-                  <DropdownItem onclick={() => $actions.attachPart(p)}>
-                    Attach part
-                  </DropdownItem>
-                  <DropdownItem onclick={() => $actions.replacePart(a)}>
-                    Duplicate part
-                  </DropdownItem>
-                </Menu>
-              </div>
+          {prefix + " " + type.name}
+        </span>
+        {#if att.isAttached()}
+          <span class="font-medium text-sm whitespace-nowrap">
+            {#if part}
+              <PartLink {part} />
+            {:else}
+              {att?.name}
             {/if}
-          </div>
-          <UsageChips id={a.usage} ref={a.idx} {light} />
-        </div>
-      {/each}
+          </span>
+          ·
+          <span class="text-xs text-gray-500 dark:text-gray-400">
+            since {att.fmtTime()}
+          </span>
+          <ServiceBadge service={dues?.days} />
+          {#if attachments.length > 1 || (part && $usages[part.usage].count != $usages[att.usage].count)}
+            <ShowMore bind:show_more title="history" />
+          {/if}
+        {/if}
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        {#if att.isAttached() && part}
+          <Menu>
+            <DropdownItem onclick={() => $actions.newService(part)}
+              >Log Service</DropdownItem
+            >
+            <DropdownItem onclick={() => $actions.attachPart(part)}
+              >Move part</DropdownItem
+            >
+            <DropdownItem onclick={() => $actions.replacePart(att)}
+              >New {type.name}</DropdownItem
+            >
+          </Menu>
+        {:else}
+          <XsButton onclick={() => $actions.replacePart(att)}>add</XsButton>
+        {/if}
+      </div>
     </div>
-  {/if}
 
-  <!-- Child cards nested inside -->
-  {#if children.length > 0}
-    <div class="mt-3 flex flex-col gap-2">
-      {#each children as child (child.type.id)}
-        <svelte:self {...child} light={!light} />
-      {/each}
-    </div>
-  {/if}
-</div>
+    <!-- Current stats -->
+    {#if att.isAttached()}
+      <UsageChips id={part.usage} ref={part.id} {light} {dues} />
+    {/if}
+    <!-- History cards -->
+    {#if show_more}
+      <div class="mt-3 flex flex-col gap-2 p-3">
+        {#each list as { att: a, part: p } (a.idx)}
+          <div
+            class="rounded-lg border border-gray-200 dark:border-gray-500 bg-gray-100 dark:bg-gray-600 p-3"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="font-medium text-sm truncate">
+                  {#if p}
+                    <PartLink part={p} />
+                  {:else}
+                    {a.name}
+                  {/if}
+                </span>
+                <span class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
+                  >{a.fmtTime()}</span
+                >
+              </div>
+              {#if p && p.disposed_at == undefined}
+                <div class="shrink-0">
+                  <Menu>
+                    <DropdownItem onclick={() => $actions.newService(p)}>
+                      Log Service
+                    </DropdownItem>
+                    <DropdownItem onclick={() => $actions.attachPart(p)}>
+                      Attach part
+                    </DropdownItem>
+                    <DropdownItem onclick={() => $actions.replacePart(a)}>
+                      Duplicate part
+                    </DropdownItem>
+                  </Menu>
+                </div>
+              {/if}
+            </div>
+            <UsageChips id={a.usage} ref={a.idx} {light} />
+          </div>
+        {/each}
+      </div>
+    {/if}
+
+    <!-- Child cards nested inside -->
+    {#if children.length > 0}
+      <div class="mt-3 flex flex-col gap-2">
+        {#each children as child (child.type.id)}
+          <svelte:self {...child} light={!light} />
+        {/each}
+      </div>
+    {/if}
+  </div>
+{/if}

@@ -10,12 +10,14 @@
   let { plan }: Props = $props();
 </script>
 
-{#if plan.part}
-  <PlanRow {plan} />
-{:else}
-  <PlanRow {plan} />
-  {#each plan.gears($parts, Object.values($plans)) as part}
-    {@const p = new ServicePlan({ ...plan, part: part.id })}
-    <PlanRow plan={p} name={part.partLink()} />
-  {/each}
-{/if}
+<div class="flex flex-col gap-2">
+  {#if plan.part}
+    <PlanRow {plan} />
+  {:else}
+    <PlanRow {plan} />
+    {#each plan.gears($parts, Object.values($plans)) as part}
+      {@const p = new ServicePlan({ ...plan, part: part.id })}
+      <PlanRow plan={p} name={part.partLink()} />
+    {/each}
+  {/if}
+</div>

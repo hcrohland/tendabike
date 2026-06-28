@@ -308,7 +308,7 @@ export function alerts_for_plans(
 }
 
 export function next_due(
-  part: Part,
+  part: Part | null,
   plans: ServicePlan[],
   serviceMap: Map<Service>,
   usages: Map<Usage>,

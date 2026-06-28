@@ -1,9 +1,7 @@
 <script lang="ts">
-  import { Table, TableBody, TableHead } from "flowbite-svelte";
   import { filterValues, by } from "../lib/mapable";
   import { Part } from "../lib/part";
   import ServiceHist from "./ServiceHist.svelte";
-  import ServiceHeader from "./ServiceHeader.svelte";
   import { services } from "../lib/service";
 
   interface Props {
@@ -20,13 +18,8 @@
   );
 </script>
 
-<Table hoverable striped>
-  <TableHead>
-    <ServiceHeader />
-  </TableHead>
-  <TableBody>
-    {#each servs as service (service.id)}
-      <ServiceHist {service} />
-    {/each}
-  </TableBody>
-</Table>
+<div class="flex flex-col gap-3">
+  {#each servs as service (service.id)}
+    <ServiceHist {service} />
+  {/each}
+</div>

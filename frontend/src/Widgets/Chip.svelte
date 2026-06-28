@@ -14,7 +14,7 @@
 </script>
 
 <div class={"relative rounded-lg shrink-0 " + background}>
-  <ServiceBadge {service} pos="absolute -top-0 -right-0"></ServiceBadge>
+  <ServiceBadge {service} pos="absolute -top-2 -right-0"></ServiceBadge>
   {#if href}
     <a
       {href}
