@@ -72,25 +72,27 @@
   };
 </script>
 
-<Header {promise} />
+<div class="max-w-4xl">
+  <Header {promise} />
 
-<Message />
-<InitialSyncDialog />
-<ThemeProvider {theme}>
-  <div class="m-8">
-    {#await promise}
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {#each [0, 1, 2, 3]}
-          <CardPlaceholder class="mb-4 p-4" />
-        {/each}
-      </div>
-    {:then}
-      <ShopFrame>
-        <Router {routes} />
-      </ShopFrame>
-    {:catch}
-      <About />
-    {/await}
-  </div>
-</ThemeProvider>
-<Actions />
+  <Message />
+  <InitialSyncDialog />
+  <ThemeProvider {theme}>
+    <div class="m-1 md:m-8">
+      {#await promise}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {#each [0, 1, 2, 3]}
+            <CardPlaceholder class="mb-4 p-4" />
+          {/each}
+        </div>
+      {:then}
+        <ShopFrame>
+          <Router {routes} />
+        </ShopFrame>
+      {:catch}
+        <About />
+      {/await}
+    </div>
+  </ThemeProvider>
+  <Actions />
+</div>

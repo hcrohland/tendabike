@@ -1,7 +1,5 @@
 <script lang="ts">
-  import { Table, TableBody, TableHead } from "flowbite-svelte";
   import { ServicePlan } from "../lib/serviceplan";
-  import PlanHeader from "./PlanHeader.svelte";
   import PlanBlock from "./PlanBlock.svelte";
 
   interface Props {
@@ -26,13 +24,13 @@
   }
 </script>
 
-<Table border={false} striped hoverable>
-  <TableHead>
-    <PlanHeader>{@render children?.()}</PlanHeader>
-  </TableHead>
-  <TableBody>
-    {#each planlist.sort(cmp) as plan}
-      <PlanBlock {plan} />
-    {/each}
-  </TableBody>
-</Table>
+<div class="flex flex-col gap-3">
+  {#if children}
+    <div class="flex justify-end">
+      {@render children?.()}
+    </div>
+  {/if}
+  {#each planlist.sort(cmp) as plan (plan.id)}
+    <PlanBlock {plan} />
+  {/each}
+</div>

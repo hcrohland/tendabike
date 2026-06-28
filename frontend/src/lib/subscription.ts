@@ -2,10 +2,7 @@ import { Shop } from "./shop";
 import type { UserPublic } from "./user";
 
 export type SubscriptionStatus =
-  | "pending"
-  | "active"
-  | "rejected"
-  | "cancelled";
+  "pending" | "active" | "rejected" | "cancelled";
 
 export class ShopSubscription {
   id?: number;

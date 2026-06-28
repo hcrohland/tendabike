@@ -1,15 +1,14 @@
 <script lang="ts">
-  import { TableBodyCell, TableBodyRow, Tooltip } from "flowbite-svelte";
   import ServiceRow from "../Service/ServiceRow.svelte";
   import { attachments } from "../lib/attachment";
   import { Part, parts } from "../lib/part";
   import { services } from "../lib/service";
-  import { Limits, ServicePlan } from "../lib/serviceplan";
+  import { next_due, ServicePlan } from "../lib/serviceplan";
   import { usages } from "../lib/usage";
   import PlanName from "./PlanName.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import PlanMenu from "./PlanMenu.svelte";
-  import { fmtNumber } from "../lib/store";
+  import { fmtDate } from "../lib/store";
 
   interface Props {
     plan: ServicePlan;
@@ -22,64 +21,58 @@
 
   let part = $derived(plan.getpart($parts, $attachments)) as Part;
   let serviceList = $derived(plan.services(part, $services));
-  let due = $derived(plan.due(part, serviceList.at(0), $usages));
+  let lastService = $derived(serviceList.at(0));
   let title = "service history";
-
-  function get_class(plan: number, due: number) {
-    if (due < 0) return "rounded p-1 bg-red-600 text-white";
-    if (due < plan * 0.05) return "rounded p-1 text-gray-900 bg-yellow-200";
-    return "";
-  }
+  let dues: any = $derived(next_due(part, [plan], $services, $usages));
 </script>
 
-{#snippet cell(key: keyof Limits)}
-  {@const p = plan[key] as number}
-  {@const d = due[key] as number}
-  <TableBodyCell class="text-end">
-    {#if p != null && d != null}
-      <span class={get_class(p, d)}>
-        {fmtNumber(d)}
-      </span>
-      <Tooltip>
-        {fmtNumber(p - d)} / {fmtNumber(p)}
-      </Tooltip>
-    {:else}
-      -
-    {/if}
-  </TableBodyCell>
-{/snippet}
-
-<TableBodyRow>
-  <TableBodyCell>
-    <div class="text-nowrap flex justify-between">
-      <div>
-        {#if name}
-          &NonBreakingSpace;&NonBreakingSpace;┃
-          <ShowMore bind:show_more {title} />
-          {@html name}
-        {:else}
-          {#if part}
-            <ShowMore bind:show_more {title} />
+{#if part}
+  <div
+    class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-3"
+  >
+    <!-- Header -->
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="text-sm shrink-0">
+          {#if name}
+            {@html name}
+          {:else}
+            <PlanName {plan} />
           {/if}
-          <PlanName {plan} />
+        </span>
+        {#if lastService}
+          <span class="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+            · since {fmtDate(lastService.time)}
+          </span>
+        {:else}
+          <span class="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+            · since purchase
+          </span>
+        {/if}
+
+        {#if serviceList.length > 0}
+          <ShowMore bind:show_more {title} />
         {/if}
       </div>
       <PlanMenu {plan} {name} />
     </div>
-  </TableBodyCell>
-  {#if part}
-    <TableBodyCell>in</TableBodyCell>
-    {#each Limits.keys as key}
-      {@render cell(key as any)}
-    {/each}
-  {:else}
-    <TableBodyCell colspan={80} />
-  {/if}
-</TableBodyRow>
-{#if part && show_more}
-  {#each serviceList as service, i (service.id)}
-    {@const successor = i > 0 ? serviceList[i - 1] : null}
-    <ServiceRow depth={name ? 2 : 1} {part} {service} {successor} />
-  {/each}
-  <ServiceRow depth={name ? 1 : 0} {part} successor={serviceList.at(-1)} />
+
+    <!-- Service history -->
+    <div class="flex flex-col gap-2 mt-3">
+      {#if show_more}
+        {#each serviceList as service, i (service.id)}
+          {@const successor = i > 0 ? serviceList[i - 1] : null}
+          <ServiceRow
+            {part}
+            {service}
+            {successor}
+            dues={i == 0 ? dues : null}
+          />
+        {/each}
+        <ServiceRow {part} successor={serviceList.at(-1)} />
+      {:else}
+        <ServiceRow {part} service={serviceList[0]} {dues} />
+      {/if}
+    </div>
+  </div>
 {/if}

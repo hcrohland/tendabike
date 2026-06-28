@@ -1,23 +1,24 @@
 <script lang="ts">
-  // import { slide } from 'svelte/transition';
   import { Card, Textarea, Button, Indicator, Tooltip } from "flowbite-svelte";
   import { EditOutline } from "flowbite-svelte-icons";
   import { link, push } from "svelte-spa-router";
   import { Part } from "../lib/part";
-  import { fmtDate, fmtNumber, fmtSeconds, handleError } from "../lib/store";
+  import { fmtDate, handleError } from "../lib/store";
   import { types } from "../lib/types";
-  import { Usage, usages } from "../lib/usage";
   import { user, users } from "../lib/user";
+  import UsageChips from "../Usage/UsageChips.svelte";
+  import ServiceBadge from "../Widgets/ServiceBadge.svelte";
 
   interface Props {
     part: Part;
     summary?: boolean;
+    dues?: any;
+    gridclass?: string;
     children?: import("svelte").Snippet;
   }
 
-  let { part, summary = false, children }: Props = $props();
+  let { part, summary = false, dues, gridclass, children }: Props = $props();
 
-  let usage = $derived($usages[part.usage] ? $usages[part.usage] : new Usage());
   let editingNotes = $state(false);
   let notesValue = $state("");
 
@@ -27,6 +28,13 @@
     } else {
       return part.vendor + " " + part.model;
     }
+  }
+
+  function typeName(part: Part) {
+    if (part.what != types[part.what].main) {
+      return types[part.what].name.toLowerCase();
+    }
+    return "";
   }
 
   function startEditNotes() {
@@ -81,47 +89,38 @@
       {@render children?.()}
     </div>
   </div>
-  <div class="text-wrap p-4">
-    is a <span class="param">{model(part)}</span>
-    {#if part.what == 1}
-      <a href={"/strava/bikes/" + part.id} target="_blank">
-        <img
-          src="strava_grey.png"
-          alt="View on Strava"
-          title="View on Strava"
-          class="inline"
-        />
-      </a>
-    {/if}
-    {#if part.what != types[part.what].main}
-      {types[part.what].name.toLowerCase()}
-    {/if}
-    {#if !part.disposed_at}
-      purchased <span class="param">{fmtDate(part.purchase)}</span>
-      which
-    {:else}
-      you owned from <span class="param">{fmtDate(part.purchase)}</span>
-      until <span class="param">{fmtDate(part.disposed_at)}</span>
-      and
-    {/if}
-    you used
-    <a href={"/activities/" + part.id} use:link class="param text-reset">
-      {fmtNumber(usage.count)}
-    </a>
-    times for <span class="param">{fmtSeconds(usage.time)}</span> hours.
-    <p>
-      You covered <span class="param"
-        >{fmtNumber(parseFloat((usage.distance / 1000).toFixed(1)))}</span
-      >
-      km climbing <span class="param">{fmtNumber(usage.climb)}</span> and
-      descending <span class="param">{fmtNumber(usage.descend)}</span> meters
-      {#if usage.energy > 0}
-        and expended
-        <span class="param">{fmtNumber(usage.energy)}</span> kiloJoules of energy
+
+  <div class="p-4">
+    <!-- Meta line: model · type · date range -->
+    <p class="text-sm mb-3">
+      {model(part)}{typeName(part) ? " · " + typeName(part) : ""}
+      {#if part.what == 1}
+        <a href={"/strava/bikes/" + part.id} target="_blank">
+          <img
+            src="strava_grey.png"
+            alt="View on Strava"
+            title="View on Strava"
+            class="inline ml-1"
+          />
+        </a>
       {/if}
+      <span class="text-gray-500 dark:text-gray-400">
+        ·
+        {#if !part.disposed_at}
+          since {fmtDate(part.purchase)}
+        {:else}
+          {fmtDate(part.purchase)} – {fmtDate(part.disposed_at)}
+        {/if}
+        <ServiceBadge service={dues?.days} />
+      </span>
     </p>
+
+    <!-- Stat chips -->
+    <UsageChips id={part.usage} ref={part.id} {gridclass} {dues} />
+
+    <!-- Notes (detail view only) -->
     {#if !summary}
-      <div class="mt-3">
+      <div class="mt-4">
         <div class="flex items-center gap-2 mb-2">
           <strong>Notes:</strong>
           {#if !editingNotes}
@@ -140,9 +139,9 @@
           />
           <div class="flex gap-2">
             <Button size="sm" onclick={saveNotes}>Save</Button>
-            <Button size="sm" color="alternative" onclick={cancelEditNotes}>
-              Cancel
-            </Button>
+            <Button size="sm" color="alternative" onclick={cancelEditNotes}
+              >Cancel</Button
+            >
           </div>
         {:else if part.notes}
           <p class="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">

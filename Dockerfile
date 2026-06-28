@@ -36,12 +36,13 @@ RUN cargo build --release
 
 FROM node:slim AS build-frontend
 
-WORKDIR /frontend
+WORKDIR /build
 
-COPY frontend/package.json frontend/package-lock.json /frontend/
+COPY package.json package-lock.json /build/
+COPY frontend/package.json frontend/package-lock.json /build/frontend/
 RUN npm update rollup
 
-COPY frontend/ /frontend
+COPY frontend/ /build/frontend
 RUN npm run build
 
 FROM scratch
@@ -51,6 +52,6 @@ WORKDIR /tendabike
 ENV STATIC_WWW="/tendabike/dist"
 
 COPY --from=build-engine /app/target/release/tendabike ./
-COPY --from=build-frontend /frontend/dist dist
+COPY --from=build-frontend /build/frontend/dist dist
 
 ENTRYPOINT [ "./tendabike" ]

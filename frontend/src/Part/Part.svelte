@@ -6,7 +6,11 @@
   import { attachments } from "../lib/attachment";
   import { filterValues } from "../lib/mapable";
   import { parts } from "../lib/part";
-  import { plans, plans_for_part_and_subtypes } from "../lib/serviceplan";
+  import {
+    next_due,
+    plans,
+    plans_for_part_and_subtypes,
+  } from "../lib/serviceplan";
   import GearCard from "./GearCard.svelte";
   import Subparts from "./Subparts.svelte";
   import PartHist from "./PartHist.svelte";
@@ -15,14 +19,14 @@
   import Menu from "../Widgets/Menu.svelte";
   import { pop } from "svelte-spa-router";
   import ShopRegistration from "../Shop/ShopRegistration.svelte";
+  import { services } from "../lib/service";
+  import { usages } from "../lib/usage";
 
   interface Props {
     id: number;
   }
 
   let { id }: Props = $props();
-
-  let tab = $state("parts");
 
   let part = $derived($parts[id]);
   let attachees = $derived(
@@ -32,9 +36,17 @@
   let planlist = $derived(
     plans_for_part_and_subtypes($attachments, $plans, part),
   );
+  let gearplans = $derived(
+    planlist.filter(
+      (plan) =>
+        (plan.part == part.id || plan.part == null) && plan.what == part.what,
+    ),
+  );
+  let dues = $derived(next_due(part, gearplans, $services, $usages));
+  let tab = $derived(attachees.length > 0 ? "parts" : "plans");
 </script>
 
-<GearCard {part}>
+<GearCard {part} {dues}>
   <Menu>
     {#if part.disposed_at}
       <DropdownItem onclick={() => $actions.recoverPart(part)}>
@@ -73,16 +85,18 @@
 </GearCard>
 <br />
 <PartHist {id} />
-<Tabs bind:selected={tab}>
+<Tabs bind:selected={tab} classes={{ content: "m-0 p-0 md:m-2 md:p-2" }}>
   {#if attachees.length > 0 || part.isGear()}
-    <TabItem key="parts">
+    <TabItem key="parts" class="m-0 p-0">
       {#snippet titleSlot()}
         Attached Parts
         {#if tab == "parts"}
           <XsButton onclick={() => $actions.installPart(part)}>add</XsButton>
         {/if}
       {/snippet}
-      <Subparts {part} {attachees} />
+      <div class="m-0">
+        <Subparts {part} {attachees} />
+      </div>
     </TabItem>
   {/if}
   <TabItem key="plans">

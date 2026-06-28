@@ -21,7 +21,9 @@
   <ShowMore bind:show_more title="history" />
 </ServiceRow>
 {#if show_more}
-  {#each service.history(1, $services) as s (s.service?.id + "-" + s.successor?.id)}
-    <ServiceRow {part} {...s} />
-  {/each}
+  <div class="flex flex-col gap-2 mt-2">
+    {#each service.history(1, $services) as s (s.service?.id + "-" + s.successor?.id)}
+      <ServiceRow {part} {...s} depth={depth + 1} />
+    {/each}
+  </div>
 {/if}

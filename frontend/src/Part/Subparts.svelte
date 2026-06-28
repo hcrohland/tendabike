@@ -1,8 +1,7 @@
 <script lang="ts">
   import { types, Type } from "../lib/types";
-  import { Table, TableBody, TableHead } from "flowbite-svelte";
   import { filterValues, by } from "../lib/mapable";
-  import SubType from "./SubType.svelte";
+  import PartCard from "./PartCard.svelte";
   import { Part } from "../lib/part";
   import { Attachment } from "../lib/attachment";
   import Wizard from "./Wizard.svelte";
@@ -14,55 +13,46 @@
 
   let { part, attachees }: Props = $props();
 
-  type MyList = {
+  type TreeNode = {
     attachments: Attachment[];
     prefix: string;
-    level: number;
     type: Type;
-    hook: Type;
+    children: TreeNode[];
   };
 
-  function buildList(
-    list: MyList[],
+  function buildTree(
     hook: Type,
     attachees: Attachment[],
-    level: number,
     prefix: string,
-  ) {
-    // the list of types that can be attached to the hook
+  ): TreeNode[] {
     const typeList = filterValues(types, (a: Type) =>
       a.hooks.includes(hook.id),
     ).sort((a: Type, b: Type) => a.order - b.order);
-    typeList.forEach((type) => {
-      // the list of attachments at the hook
+
+    return typeList.map((type) => {
       let attachments = attachees.filter((a: Attachment) => {
         return a.hook == hook.id && a.what == type.id;
       });
       attachments.sort(by("attached"));
-      list.push({ attachments, prefix, level, type, hook });
-      if (attachments.length > 0) {
-        buildList(list, type, attachees, level + 1, "");
-      } else {
-        buildList(list, type, attachees, level, type.prefix);
-      }
+
+      const children =
+        attachments.length > 0
+          ? buildTree(type, attachees, "")
+          : buildTree(type, attachees, type.prefix);
+
+      return { attachments, prefix, type, children };
     });
-    return list;
   }
 </script>
 
 {#if attachees.length > 0}
-  <Table hoverable striped>
-    <TableHead>
-      <SubType />
-    </TableHead>
-    <TableBody>
-      {#each buildList([], part.type(), attachees, 0, "") as item (item.hook.id + "." + item.type.id)}
-        {@const { hook, ...props } = item}
-        <SubType {...props} />
-      {/each}
-    </TableBody>
-  </Table>
+  <div class="flex flex-col gap-3">
+    {#each buildTree(part.type(), attachees, "") as node (node.type.id)}
+      <PartCard {...node} />
+    {/each}
+  </div>
 {/if}
+
 {#if part.isGear()}
   <Wizard gear={part} {attachees} />
 {/if}
