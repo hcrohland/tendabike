@@ -7,14 +7,17 @@
   import { types } from "../lib/types";
   import { user, users } from "../lib/user";
   import UsageChips from "../Usage/UsageChips.svelte";
+  import ServiceBadge from "../Widgets/ServiceBadge.svelte";
 
   interface Props {
     part: Part;
     summary?: boolean;
+    dues?: any;
+    gridclass?: string;
     children?: import("svelte").Snippet;
   }
 
-  let { part, summary = false, children }: Props = $props();
+  let { part, summary = false, dues, gridclass, children }: Props = $props();
 
   let editingNotes = $state(false);
   let notesValue = $state("");
@@ -108,11 +111,12 @@
         {:else}
           {fmtDate(part.purchase)} – {fmtDate(part.disposed_at)}
         {/if}
+        <ServiceBadge service={dues?.days} />
       </span>
     </p>
 
     <!-- Stat chips -->
-    <UsageChips id={part.usage} ref={part.id} gridclass="grid-cols-3" />
+    <UsageChips id={part.usage} ref={part.id} {gridclass} {dues} />
 
     <!-- Notes (detail view only) -->
     {#if !summary}

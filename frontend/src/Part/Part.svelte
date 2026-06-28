@@ -6,7 +6,11 @@
   import { attachments } from "../lib/attachment";
   import { filterValues } from "../lib/mapable";
   import { parts } from "../lib/part";
-  import { plans, plans_for_part_and_subtypes } from "../lib/serviceplan";
+  import {
+    next_due,
+    plans,
+    plans_for_part_and_subtypes,
+  } from "../lib/serviceplan";
   import GearCard from "./GearCard.svelte";
   import Subparts from "./Subparts.svelte";
   import PartHist from "./PartHist.svelte";
@@ -15,6 +19,8 @@
   import Menu from "../Widgets/Menu.svelte";
   import { pop } from "svelte-spa-router";
   import ShopRegistration from "../Shop/ShopRegistration.svelte";
+  import { services } from "../lib/service";
+  import { usages } from "../lib/usage";
 
   interface Props {
     id: number;
@@ -30,10 +36,18 @@
   let planlist = $derived(
     plans_for_part_and_subtypes($attachments, $plans, part),
   );
+  let gearplans = $derived(
+    planlist.filter(
+      (plan) =>
+        (plan.part == part.id || plan.part == null) && plan.what == part.what,
+    ),
+  );
+  let dues = $derived(next_due(part, gearplans, $services, $usages));
   let tab = $derived(attachees.length > 0 ? "parts" : "plans");
 </script>
 
-<GearCard {part}>
+{@debug planlist}
+<GearCard {part} {dues}>
   <Menu>
     {#if part.disposed_at}
       <DropdownItem onclick={() => $actions.recoverPart(part)}>
