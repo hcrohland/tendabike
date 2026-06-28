@@ -46,7 +46,6 @@
   let tab = $derived(attachees.length > 0 ? "parts" : "plans");
 </script>
 
-{@debug planlist}
 <GearCard {part} {dues}>
   <Menu>
     {#if part.disposed_at}

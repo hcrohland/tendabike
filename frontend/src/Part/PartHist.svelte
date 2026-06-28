@@ -16,9 +16,7 @@
   let { id }: Props = $props();
 
   let atts = $derived(
-    filterValues($attachments, (a) => a.part_id == id)
-      .sort(by("attached"))
-      .reverse(),
+    filterValues($attachments, (a) => a.part_id == id).sort(by("attached")),
   );
 </script>
 

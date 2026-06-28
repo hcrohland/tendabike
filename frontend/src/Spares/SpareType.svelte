@@ -99,13 +99,13 @@
                 {attachedTo($attachments, part.id, date) ? "Move" : "Attach"}
               </DropdownItem>
               {#if part.attachments($attachments).length == 0}
-                <DropdownItem onclick={() => $actions.deletePart(part)}
-                  >Delete</DropdownItem
-                >
+                <DropdownItem onclick={() => $actions.deletePart(part)}>
+                  Delete
+                </DropdownItem>
               {:else}
-                <DropdownItem onclick={() => $actions.disposePart(part)}
-                  >Dispose</DropdownItem
-                >
+                <DropdownItem onclick={() => $actions.disposePart(part)}>
+                  Dispose
+                </DropdownItem>
               {/if}
             </Menu>
           </div>
