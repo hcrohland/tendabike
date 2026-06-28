@@ -43,7 +43,8 @@
     ),
   );
   let dues = $derived(next_due(part, gearplans, $services, $usages));
-  let tab = $derived(attachees.length > 0 ? "parts" : "plans");
+
+  let tab = $state("");
 </script>
 
 <GearCard {part} {dues}>
