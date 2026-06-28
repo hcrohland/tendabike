@@ -22,8 +22,6 @@
 
   let { id }: Props = $props();
 
-  let tab = $state("parts");
-
   let part = $derived($parts[id]);
   let attachees = $derived(
     filterValues($attachments, (a) => a.gear == part.id),
@@ -32,6 +30,7 @@
   let planlist = $derived(
     plans_for_part_and_subtypes($attachments, $plans, part),
   );
+  let tab = $derived(attachees.length > 0 ? "parts" : "plans");
 </script>
 
 <GearCard {part}>
