@@ -307,4 +307,26 @@ export function alerts_for_plans(
   return res;
 }
 
+export function next_due(
+  part: Part,
+  plans: ServicePlan[],
+  serviceMap: Map<Service>,
+  usages: Map<Usage>,
+): Partial<Record<limit_keys, { due: number; plan: number }>> {
+  const result: Partial<Record<limit_keys, { due: number; plan: number }>> = {};
+  for (const plan of plans) {
+    const serviceList = plan.services(part, serviceMap);
+    const due = plan.due(part, serviceList.at(0), usages);
+    for (const key of Limits.keys) {
+      const p = plan[key] as number | null;
+      const d = due[key] as number | null;
+      if (p == null || d == null) continue;
+      if (result[key] == null || d < result[key]!.due) {
+        result[key] = { due: d, plan: p };
+      }
+    }
+  }
+  return result;
+}
+
 export const plans = mapable("id", (s) => new ServicePlan(s));
