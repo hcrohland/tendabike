@@ -32,9 +32,7 @@ export type UserPublic = {
 };
 
 export type OnboardingStatus =
-  | "pending"
-  | "completed"
-  | "initial_sync_postponed";
+  "pending" | "completed" | "initial_sync_postponed";
 
 export type User = {
   id: number;

@@ -9,5 +9,8 @@
     "check": "npm run check --workspace=frontend",
     "format": "npm run format --workspace=frontend",
     "fmtcheck": "npm run fmtcheck --workspace=frontend"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true
   }
 }

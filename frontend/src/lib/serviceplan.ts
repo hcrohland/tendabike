@@ -12,13 +12,7 @@ import { Type, types } from "./types";
 import type { Usage } from "./usage";
 
 export type limit_keys =
-  | "days"
-  | "hours"
-  | "km"
-  | "climb"
-  | "descend"
-  | "rides"
-  | "kJ";
+  "days" | "hours" | "km" | "climb" | "descend" | "rides" | "kJ";
 
 const is_set = (n: number | null) => n != null && n > 0;
 

@@ -5,16 +5,13 @@ export type TableColumn<T> = {
   title: string;
   value?: (row: T, rowIndex?: number, colIndex?: number) => string | number;
   class?:
-    | string
-    | ((row: T, rowIndex?: number, colIndex?: number) => string | null);
+    string | ((row: T, rowIndex?: number, colIndex?: number) => string | null);
   sortable?: boolean;
   searchValue?:
-    | ((row: T, searchTerm?: string) => boolean)
-    | ((row: T) => string | number);
+    ((row: T, searchTerm?: string) => boolean) | ((row: T) => string | number);
   filterOptions?: ((rows: T[]) => any) | any[];
   filterValue?:
-    | ((row: T, searchTerm?: string) => string)
-    | ((row: T) => boolean);
+    ((row: T, searchTerm?: string) => string) | ((row: T) => boolean);
   filterPlaceholder?: string;
   headerClass?: string;
   headerFilterClass?: string;
