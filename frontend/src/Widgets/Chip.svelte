@@ -12,7 +12,7 @@
 </script>
 
 <div class={"relative rounded-lg shrink-0 " + background}>
-  <ServiceBadge {service} pos="absolute -top-2 -right-0" />
+  <ServiceBadge {service} pos="absolute -top-3 -right-0" />
   {#if href}
     <a
       {href}
@@ -20,18 +20,14 @@
       class="flex items-center gap-1 px-3 py-2 text-reset no-underline"
     >
       <span class="font-semibold text-sm"> {value} </span>
-      <span
-        class="font-normal text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400"
-      >
+      <span class="font-normal text-xs uppercase tracking-wide text-text-1">
         {label}
       </span>
     </a>
   {:else}
     <div class={"flex items-center gap-1 px-3 py-2 "}>
       <span class="font-semibold text-sm"> {value} </span>
-      <span
-        class="font-normal text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400"
-      >
+      <span class="font-normal text-xs uppercase tracking-wide text-text-1">
         {label}
       </span>
     </div>

@@ -87,9 +87,9 @@
       </div>
 
       {#if loading}
-        <p class="text-gray-500 dark:text-gray-400">Loading...</p>
+        <p class="text-text-1">Loading...</p>
       {:else if subscriptions.length === 0}
-        <p class="text-gray-500 dark:text-gray-400">
+        <p class="text-text-1">
           "No pending subscription requests for this shop."
         </p>
       {:else}

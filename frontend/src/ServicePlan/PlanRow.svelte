@@ -39,13 +39,11 @@
           {/if}
         </span>
         {#if lastService}
-          <span class="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+          <span class="text-xs text-text-1 shrink-0">
             · since {fmtDate(lastService.time)}
           </span>
         {:else}
-          <span class="text-xs text-gray-500 dark:text-gray-400 shrink-0">
-            · since purchase
-          </span>
+          <span class="text-xs text-text-1 shrink-0"> · since purchase </span>
         {/if}
 
         {#if serviceList.length > 0}

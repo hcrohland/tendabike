@@ -55,9 +55,7 @@
       {#if subparts.length > 0}
         <ShowMore bind:show_more {update} title="attached" />
       {/if}
-      <span
-        class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400"
-      >
+      <span class="text-xs uppercase tracking-wide text-text-1">
         {type.name}s
       </span>
     </div>
@@ -81,7 +79,7 @@
             <PartLink {part} />
           </span>
           <span
-            class="text-xs text-gray-500 dark:text-gray-400 ml-1"
+            class="text-xs text-text-1 ml-1"
             title={part.vendor +
               " " +
               part.model +
@@ -121,7 +119,7 @@
 
       <!-- Attached to -->
       {#if attachee > 0}
-        <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+        <div class="mt-2 text-xs text-text-1">
           {#if part.disposed_at}
             disposed {fmtDate(part.disposed_at)}
           {:else}

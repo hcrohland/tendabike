@@ -91,7 +91,7 @@
       {/if}
     </div>
 
-    <div class="text-xs text-gray-500 dark:text-gray-400">
+    <div class="text-xs text-text-1">
       Created {new Date(shop.created_at).toLocaleDateString()}
     </div>
     {#if sub}

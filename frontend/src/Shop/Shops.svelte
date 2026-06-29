@@ -26,9 +26,7 @@
       <div class="py-4 space-y-8">
         {#if myShops.length === 0}
           <div class="py-12 text-center">
-            <p class="mb-4 text-gray-500 dark:text-gray-400">
-              You don't have any shops yet.
-            </p>
+            <p class="mb-4 text-text-1">You don't have any shops yet.</p>
             <Button onclick={() => $actions.createShop()}>
               Create Your First Shop
             </Button>

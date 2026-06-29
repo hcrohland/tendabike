@@ -51,9 +51,7 @@
     <!-- Header row: type · name · menu -->
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-2 p-2 min-w-0">
-        <span
-          class="text-xs uppercase text-gray-500 dark:text-gray-400 shrink-0 truncate"
-        >
+        <span class="text-xs uppercase text-text-1 shrink-0 truncate">
           {prefix + " " + type.name}
         </span>
         {#if att.isAttached()}
@@ -65,7 +63,7 @@
             {/if}
           </span>
           ·
-          <span class="text-xs text-gray-500 dark:text-gray-400">
+          <span class="text-xs text-text-1">
             since {att.fmtTime()}
           </span>
           <ServiceBadge service={dues?.days} />
@@ -114,7 +112,7 @@
                     {a.name}
                   {/if}
                 </span>
-                <span class="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+                <span class="text-xs text-text-1 shrink-0">
                   {a.fmtTime()}
                 </span>
               </div>

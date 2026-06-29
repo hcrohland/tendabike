@@ -38,7 +38,7 @@
 
 {#if shops.length === 0}
   <div class="py-12 text-center">
-    <p class="text-gray-500 dark:text-gray-400">
+    <p class="text-text-1">
       No shops found. Create your first shop to get started!
     </p>
   </div>

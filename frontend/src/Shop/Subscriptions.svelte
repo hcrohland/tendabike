@@ -126,11 +126,9 @@
     </div>
 
     {#if loading}
-      <p class="text-gray-500 dark:text-gray-400">Loading...</p>
+      <p class="text-text-1">Loading...</p>
     {:else if subscriptions.length === 0}
-      <p class="text-gray-500 dark:text-gray-400">
-        You haven't subscribed to any shops yet.
-      </p>
+      <p class="text-text-1">You haven't subscribed to any shops yet.</p>
     {:else}
       <div class="overflow-x-auto">
         <Table>

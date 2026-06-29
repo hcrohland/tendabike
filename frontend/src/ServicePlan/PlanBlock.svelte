@@ -33,9 +33,7 @@
         {/each}
       </div>
     {:else}
-      <p class="text-xs text-gray-500 dark:text-gray-400">
-        No bikes match this plan.
-      </p>
+      <p class="text-xs text-text-1">No bikes match this plan.</p>
     {/if}
   </div>
 {/if}

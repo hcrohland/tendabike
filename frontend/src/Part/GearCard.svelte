@@ -104,7 +104,7 @@
           />
         </a>
       {/if}
-      <span class="text-gray-500 dark:text-gray-400">
+      <span class="text-text-1">
         ·
         {#if !part.disposed_at}
           since {fmtDate(part.purchase)}
@@ -125,7 +125,7 @@
           <strong>Notes:</strong>
           {#if !editingNotes}
             <EditOutline
-              class="w-4 h-4 cursor-pointer text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              class="w-4 h-4 cursor-pointer text-gray-400 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
               onclick={startEditNotes}
             />
           {/if}

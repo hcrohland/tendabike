@@ -62,29 +62,26 @@
   outsideclose={false}
 >
   <div class="text-center">
-    <Heading
-      tag="h3"
-      class="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400"
-    >
+    <Heading tag="h3" class="mb-5 text-lg font-normal text-text-1">
       Welcome to TendaBike!
     </Heading>
     <P class="mb-4 text-left">
       Would you like to import your historic activities from Strava?
     </P>
-    <P class="mb-6 text-left text-sm text-gray-500 dark:text-gray-400">
+    <P class="mb-6 text-left text-sm text-text-1">
       This will sync all your past activities to help you track your bike
       maintenance.
     </P>
-    <P class="mb-6 text-left text-sm text-gray-500 dark:text-gray-400">
+    <P class="mb-6 text-left text-sm text-text-1">
       It will run in the background and may take a few minutes depending on how
       many activities you have.
     </P>
-    <P class="mb-6 text-left text-sm text-gray-500 dark:text-gray-400">
+    <P class="mb-6 text-left text-sm text-text-1">
       You can also skip this step. In that case you can pull the old activities
       later any time in the user menu under Sync &RightArrow; "Import Historic
       Activities"
     </P>
-    <P class="mb-6 text-left text-sm text-gray-500 dark:text-gray-400">
+    <P class="mb-6 text-left text-sm text-text-1">
       In any case the app will pull in new activities automatically. <br />
     </P>
     <div class="flex justify-center gap-4">
