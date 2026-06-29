@@ -45,7 +45,7 @@
 
 {#if att}
   <div
-    class={"relative rounded-lg border border-gray-200 dark:border-gray-600 p-1 md:p-3 " +
+    class={"relative rounded-lg border border-border-subtle p-1 md:p-3 " +
       background}
   >
     <!-- Header row: type · name · menu -->
@@ -102,7 +102,7 @@
       <div class="mt-3 flex flex-col gap-2 p-3">
         {#each list as { att: a, part: p } (a.idx)}
           <div
-            class={"rounded-lg border border-gray-200 dark:border-gray-500 opacity-70 p-3 " +
+            class={"rounded-lg border border-border-strong opacity-70 p-3 " +
               background2}
           >
             <div class="flex items-center justify-between gap-2">

@@ -9,8 +9,8 @@
   --color-surface-2: var(--color-gray-300);
   --color-surface-3: var(--color-gray-200);
   --color-surface-4: #ffffff;
-  --color-border-subtle: var(--color-gray-200);
-  --color-border-strong: var(--color-gray-300);
+  --color-border-subtle: var(--color-gray-300);
+  --color-border-strong: var(--color-gray-400);
 }
 
 .dark {

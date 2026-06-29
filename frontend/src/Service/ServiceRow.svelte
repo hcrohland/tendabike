@@ -41,7 +41,7 @@
 </script>
 
 <div
-  class="rounded-lg border border-gray-200 dark:border-gray-600 bg-surface-1 p-3"
+  class="rounded-lg border border-border-subtle bg-surface-1 p-3"
   style="margin-left: {depth * 1.25}rem"
 >
   <div class="flex items-start justify-between gap-2">

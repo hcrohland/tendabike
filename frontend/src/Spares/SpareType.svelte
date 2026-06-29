@@ -67,7 +67,7 @@
   <!-- Part cards -->
   {#each subshow as part (part.id)}
     <div
-      class={"rounded-lg border border-gray-200 dark:border-gray-600 p-3 " +
+      class={"rounded-lg border border-border-subtle p-3 " +
         (part.disposed_at
           ? "bg-surface-2 opacity-70"
           : attachedTo($attachments, part.id, date)

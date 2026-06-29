@@ -27,9 +27,7 @@
 </script>
 
 {#if part}
-  <div
-    class="rounded-lg border border-gray-200 dark:border-gray-600 bg-surface-2 p-3"
-  >
+  <div class="rounded-lg border border-border-strong bg-surface-2 p-3">
     <!-- Header -->
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-2 min-w-0">
