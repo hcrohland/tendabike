@@ -15,7 +15,7 @@
 
 {#if color}
   <span class={pos}>
-    <Badge {color} class="p-1">
+    <Badge {color} class="p-1.5 py-0.5">
       {Math.round(((service!.plan - service!.due) / service!.plan) * 100)}%
       <Tooltip>{service!.plan - service!.due}/{service!.plan}</Tooltip>
     </Badge>

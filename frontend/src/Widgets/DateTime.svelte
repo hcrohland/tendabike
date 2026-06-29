@@ -34,7 +34,7 @@
   let now = roundTime(new Date());
 
   let inputClasses = $derived(
-    "dark:bg-gray-700 " + (rounded ? "rounded-l-md" : "rounded-none"),
+    "bg-surface-3 " + (rounded ? "rounded-l-md" : "rounded-none"),
   );
 
   const options = {

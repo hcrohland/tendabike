@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Card, Textarea, Button, Indicator, Tooltip } from "flowbite-svelte";
+  import { Card, Textarea, Button, Badge } from "flowbite-svelte";
   import { EditOutline } from "flowbite-svelte-icons";
   import { link, push } from "svelte-spa-router";
   import { Part } from "../lib/part";
@@ -62,7 +62,7 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class={"text-xl bg-gray-200 dark:bg-gray-700 p-4" +
+    class={"text-xl bg-surface-2 p-4" +
       (summary
         ? " hover:bg-gray-300 dark:hover:bg-gray-500 cursor-pointer"
         : "")}
@@ -79,18 +79,14 @@
     {:else}
       {@const owner = $users[part.owner]}
       {part.name}
-      <Indicator placement="top-left">
-        <Tooltip>
-          {owner.firstname + " " + owner.name}
-        </Tooltip>
-      </Indicator>
+      <Badge color="green" class="relative -top-3 -right-1">
+        {owner.firstname + " " + owner.name}
+      </Badge>
     {/if}
-    <div class="float-end h6 mb-0">
-      {@render children?.()}
-    </div>
+    {@render children?.()}
   </div>
 
-  <div class="p-4">
+  <div class="p-4 bg-surface-1">
     <!-- Meta line: model · type · date range -->
     <p class="text-sm mb-3">
       {model(part)}{typeName(part) ? " · " + typeName(part) : ""}
@@ -104,7 +100,7 @@
           />
         </a>
       {/if}
-      <span class="text-gray-500 dark:text-gray-400">
+      <span class="text-text-1">
         ·
         {#if !part.disposed_at}
           since {fmtDate(part.purchase)}
@@ -116,7 +112,7 @@
     </p>
 
     <!-- Stat chips -->
-    <UsageChips id={part.usage} ref={part.id} {gridclass} {dues} />
+    <UsageChips id={part.usage} ref={part.id} {gridclass} {dues} light />
 
     <!-- Notes (detail view only) -->
     {#if !summary}
@@ -125,7 +121,7 @@
           <strong>Notes:</strong>
           {#if !editingNotes}
             <EditOutline
-              class="w-4 h-4 cursor-pointer text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              class="w-4 h-4 cursor-pointer text-gray-400 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
               onclick={startEditNotes}
             />
           {/if}

@@ -17,9 +17,7 @@
 {#if plan.part}
   <PlanRow {plan} />
 {:else}
-  <div
-    class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-3"
-  >
+  <div class="rounded-lg border border-border-strong bg-surface-1 p-3">
     <!-- Template header -->
     <div class="flex items-center justify-between gap-2 mb-2">
       <span class="font-medium text-sm"><PlanName {plan} /></span>
@@ -35,9 +33,7 @@
         {/each}
       </div>
     {:else}
-      <p class="text-xs text-gray-500 dark:text-gray-400">
-        No bikes match this plan.
-      </p>
+      <p class="text-xs text-text-1">No bikes match this plan.</p>
     {/if}
   </div>
 {/if}

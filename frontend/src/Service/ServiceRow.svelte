@@ -41,7 +41,7 @@
 </script>
 
 <div
-  class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-3"
+  class="rounded-lg border border-border-subtle bg-surface-1 p-3"
   style="margin-left: {depth * 1.25}rem"
 >
   <div class="flex items-start justify-between gap-2">
@@ -52,16 +52,14 @@
           <span class="font-medium text-sm">{service.name}</span>
         </span>
         {#if service.notes.length > 0}
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          <p class="text-xs text-text-1 mt-1">
             {service.notes}
           </p>
         {/if}
       {:else}
-        <span class="text-xs text-gray-500 dark:text-gray-400">
-          since purchase
-        </span>
+        <span class="text-xs text-text-1"> since purchase </span>
       {/if}
-      <span class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+      <span class="text-xs text-text-1 mt-1">
         {fmtRange(service ? service.time : part.purchase, successor?.time)}
         · {days} days
         <ServiceBadge service={dues?.days} />

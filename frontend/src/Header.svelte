@@ -11,6 +11,7 @@
     Avatar,
     DropdownHeader,
     Spinner,
+    DarkMode,
   } from "flowbite-svelte";
   import { handleError, myfetch } from "./lib/store";
   import { refresh, updateSummary, user } from "./lib/user";
@@ -71,9 +72,27 @@
   }
 
   let activeUrl = $derived("/#" + $location);
+
+  // main.ts oder app.svelte
+  const isDev = import.meta.env.DEV;
+
+  if (isDev) {
+    // Dev: manuell togglebar, folgt localStorage
+    const stored = localStorage.getItem("theme");
+    if (stored === "dark") {
+      document.documentElement.classList.add("dark");
+    }
+  } else {
+    // Production: Browser folgen, kein manueller Toggle
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    document.documentElement.classList.toggle("dark", mq.matches);
+    mq.addEventListener("change", (e) => {
+      document.documentElement.classList.toggle("dark", e.matches);
+    });
+  }
 </script>
 
-<Navbar>
+<Navbar class="text-text-1">
   <NavBrand href="/#/cat">
     <img
       src="favicon.png"
@@ -103,6 +122,9 @@
           {handleError(error)}
         {/await}
       </div>
+      {#if isDev}
+        <DarkMode />
+      {/if}
       <Dropdown simple triggeredBy="#user">
         <DropdownHeader>
           {$user.firstname}
@@ -143,7 +165,7 @@
       </Dropdown>
       <NavHamburger />
     </div>
-    <NavUl class="max-w-full" {activeUrl}>
+    <NavUl class="max-w-full" activeClass="text-text-1 font-bold" {activeUrl}>
       <NavLi class="justify-start" href="/#/cat">{$category.name}s</NavLi>
       <NavLi href="/#/plans">Services</NavLi>
       <NavLi href="/#/spares">Parts</NavLi>

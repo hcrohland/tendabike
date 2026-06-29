@@ -83,7 +83,7 @@
     {:else if searchResults.length > 0}
       <ShopList shops={searchResults} {users} />
     {:else if searchQuery.trim()}
-      <p class="py-8 text-center text-gray-500 dark:text-gray-400">
+      <p class="py-8 text-center text-text-1">
         No shops found matching "{searchQuery}"
       </p>
     {/if}

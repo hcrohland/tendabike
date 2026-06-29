@@ -28,9 +28,8 @@
   export let children: TreeNode[] = [];
   export let light = true;
 
-  let background = light
-    ? "bg-gray-50 dark:bg-gray-700"
-    : "bg-gray-250 dark:bg-gray-800";
+  let background = light ? "bg-surface-1" : "bg-surface-2";
+  let background2 = !light ? "bg-surface-1" : "bg-surface-2";
   let show_more = false;
 
   $: list = attachments.map((att) => ({ att, part: $parts[att.part_id] }));
@@ -46,15 +45,13 @@
 
 {#if att}
   <div
-    class={"relative rounded-lg border border-gray-200 dark:border-gray-600 p-1 md:p-3 " +
+    class={"relative rounded-lg border border-border-subtle p-1 md:p-3 " +
       background}
   >
     <!-- Header row: type · name · menu -->
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-2 p-2 min-w-0">
-        <span
-          class="text-xs uppercase text-gray-500 dark:text-gray-400 shrink-0 truncate"
-        >
+        <span class="text-xs uppercase text-text-1 shrink-0 truncate">
           {prefix + " " + type.name}
         </span>
         {#if att.isAttached()}
@@ -66,7 +63,7 @@
             {/if}
           </span>
           ·
-          <span class="text-xs text-gray-500 dark:text-gray-400">
+          <span class="text-xs text-text-1">
             since {att.fmtTime()}
           </span>
           <ServiceBadge service={dues?.days} />
@@ -78,15 +75,15 @@
       <div class="flex items-center gap-2 shrink-0">
         {#if att.isAttached() && part}
           <Menu>
-            <DropdownItem onclick={() => $actions.newService(part)}
-              >Log Service</DropdownItem
-            >
-            <DropdownItem onclick={() => $actions.attachPart(part)}
-              >Move part</DropdownItem
-            >
-            <DropdownItem onclick={() => $actions.replacePart(att)}
-              >New {type.name}</DropdownItem
-            >
+            <DropdownItem onclick={() => $actions.newService(part)}>
+              Log Service
+            </DropdownItem>
+            <DropdownItem onclick={() => $actions.attachPart(part)}>
+              Move part
+            </DropdownItem>
+            <DropdownItem onclick={() => $actions.replacePart(att)}>
+              New {type.name}
+            </DropdownItem>
           </Menu>
         {:else}
           <XsButton onclick={() => $actions.replacePart(att)}>add</XsButton>
@@ -103,7 +100,8 @@
       <div class="mt-3 flex flex-col gap-2 p-3">
         {#each list as { att: a, part: p } (a.idx)}
           <div
-            class="rounded-lg border border-gray-200 dark:border-gray-500 bg-gray-100 dark:bg-gray-600 p-3"
+            class={"rounded-lg border border-border-strong opacity-70 p-3 " +
+              background2}
           >
             <div class="flex items-center justify-between gap-2">
               <div class="flex items-center gap-2 min-w-0">
@@ -114,9 +112,9 @@
                     {a.name}
                   {/if}
                 </span>
-                <span class="text-xs text-gray-500 dark:text-gray-400 shrink-0"
-                  >{a.fmtTime()}</span
-                >
+                <span class="text-xs text-text-1 shrink-0">
+                  {a.fmtTime()}
+                </span>
               </div>
               {#if p && p.disposed_at == undefined}
                 <div class="shrink-0">
@@ -134,7 +132,7 @@
                 </div>
               {/if}
             </div>
-            <UsageChips id={a.usage} ref={a.idx} {light} />
+            <UsageChips id={a.usage} ref={a.idx} light={!light} />
           </div>
         {/each}
       </div>

@@ -43,7 +43,7 @@
   let subshow = $derived(
     subparts.filter(
       (p) =>
-        show_more || !(attachedTo($attachments, p.id, date) || p.disposed_at),
+        show_more || (!p.disposed_at && !attachedTo($attachments, p.id, date)),
     ),
   );
 </script>
@@ -55,9 +55,7 @@
       {#if subparts.length > 0}
         <ShowMore bind:show_more {update} title="attached" />
       {/if}
-      <span
-        class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400"
-      >
+      <span class="text-xs uppercase tracking-wide text-text-1">
         {type.name}s
       </span>
     </div>
@@ -67,12 +65,12 @@
   <!-- Part cards -->
   {#each subshow as part (part.id)}
     <div
-      class={"rounded-lg border border-gray-200 dark:border-gray-600 p-3 " +
+      class={"rounded-lg border border-border-subtle p-3 " +
         (part.disposed_at
-          ? "bg-gray-100 dark:bg-gray-700 opacity-70"
+          ? "bg-surface-2 opacity-70"
           : attachedTo($attachments, part.id, date)
-            ? "bg-gray-50 dark:bg-gray-600"
-            : "bg-gray-50 dark:bg-gray-700")}
+            ? "bg-surface-2"
+            : "bg-surface-1")}
     >
       <!-- Name + menu -->
       <div class="flex items-center justify-between gap-2">
@@ -81,7 +79,7 @@
             <PartLink {part} />
           </span>
           <span
-            class="text-xs text-gray-500 dark:text-gray-400 ml-1"
+            class="text-xs text-text-1 ml-1"
             title={part.vendor +
               " " +
               part.model +
@@ -113,11 +111,15 @@
       </div>
 
       <!-- Stats -->
-      <UsageChips id={part.usage} ref={part.id} light />
+      <UsageChips
+        id={part.usage}
+        ref={part.id}
+        light={!part.disposed_at && !attachedTo($attachments, part.id, date)}
+      />
 
       <!-- Attached to -->
       {#if attachee > 0}
-        <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+        <div class="mt-2 text-xs text-text-1">
           {#if part.disposed_at}
             disposed {fmtDate(part.disposed_at)}
           {:else}

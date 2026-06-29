@@ -27,9 +27,7 @@
 </script>
 
 {#if part}
-  <div
-    class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-3"
-  >
+  <div class="rounded-lg border border-border-strong bg-surface-2 p-3">
     <!-- Header -->
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-2 min-w-0">
@@ -41,13 +39,11 @@
           {/if}
         </span>
         {#if lastService}
-          <span class="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+          <span class="text-xs text-text-1 shrink-0">
             · since {fmtDate(lastService.time)}
           </span>
         {:else}
-          <span class="text-xs text-gray-500 dark:text-gray-400 shrink-0">
-            · since purchase
-          </span>
+          <span class="text-xs text-text-1 shrink-0"> · since purchase </span>
         {/if}
 
         {#if serviceList.length > 0}
