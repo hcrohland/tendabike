@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Card, Textarea, Button, Indicator, Tooltip } from "flowbite-svelte";
+  import { Card, Textarea, Button, Badge } from "flowbite-svelte";
   import { EditOutline } from "flowbite-svelte-icons";
   import { link, push } from "svelte-spa-router";
   import { Part } from "../lib/part";
@@ -79,15 +79,11 @@
     {:else}
       {@const owner = $users[part.owner]}
       {part.name}
-      <Indicator placement="top-left">
-        <Tooltip>
-          {owner.firstname + " " + owner.name}
-        </Tooltip>
-      </Indicator>
+      <Badge color="green" class="relative -top-3 -right-1">
+        {owner.firstname + " " + owner.name}
+      </Badge>
     {/if}
-    <div class="float-end h6 mb-0">
-      {@render children?.()}
-    </div>
+    {@render children?.()}
   </div>
 
   <div class="p-4 bg-surface-1">

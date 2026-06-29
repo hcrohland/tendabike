@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Badge } from "flowbite-svelte";
+  import { Indicator } from "flowbite-svelte";
   import { ServicePlan, alerts_for_plans } from "../lib/serviceplan";
   import { parts } from "../lib/part";
   import { services } from "../lib/service";
@@ -17,8 +17,14 @@
   );
 </script>
 
-{#if alerts.alert > 0}
-  <Badge color="red">{alerts.alert + alerts.warn}</Badge>
-{:else if alerts.warn > 0}
-  <Badge color="amber">{alerts.warn}</Badge>
-{/if}
+<span class="relative -top-2 -right-1">
+  {#if alerts.alert > 0}
+    <Indicator color="red" class="text-xs text-gray-300 p-2">
+      {alerts.alert + alerts.warn}
+    </Indicator>
+  {:else if alerts.warn > 0}
+    <Indicator color="amber" class="text-xs text-gray-700 p-2">
+      {alerts.warn}
+    </Indicator>
+  {/if}
+</span>

@@ -48,41 +48,45 @@
 </script>
 
 <GearCard {part} {dues}>
-  <Menu>
-    {#if part.disposed_at}
-      <DropdownItem onclick={() => $actions.recoverPart(part)}>
-        Recover gear
-      </DropdownItem>
-    {:else}
-      {#if !part.isGear()}
-        <DropdownItem onclick={() => $actions.attachPart(part)}>
-          Attach
+  <div class="float-end h6 mb-0">
+    <Menu>
+      {#if part.disposed_at}
+        <DropdownItem onclick={() => $actions.recoverPart(part)}>
+          Recover gear
+        </DropdownItem>
+      {:else}
+        {#if !part.isGear()}
+          <DropdownItem onclick={() => $actions.attachPart(part)}>
+            Attach
+          </DropdownItem>
+        {/if}
+        <DropdownItem
+          onclick={() => $actions.disposePart(part, last_attachment)}
+        >
+          {#if last_attachment?.isAttached()}
+            Detach
+          {:else}
+            Dispose
+          {/if}
+        </DropdownItem>
+        <DropdownItem onclick={() => $actions.changePart(part)}>
+          Change details
         </DropdownItem>
       {/if}
-      <DropdownItem onclick={() => $actions.disposePart(part, last_attachment)}>
-        {#if last_attachment?.isAttached()}
-          Detach
-        {:else}
-          Dispose
-        {/if}
-      </DropdownItem>
-      <DropdownItem onclick={() => $actions.changePart(part)}>
-        Change details
-      </DropdownItem>
-    {/if}
-    {#if !part.isGear() && part.attachments($attachments).length == 0}
-      <DropdownItem
-        onclick={() => {
-          $actions.deletePart(part);
-          pop();
-        }}
-      >
-        Delete
-      </DropdownItem>
-    {/if}
+      {#if !part.isGear() && part.attachments($attachments).length == 0}
+        <DropdownItem
+          onclick={() => {
+            $actions.deletePart(part);
+            pop();
+          }}
+        >
+          Delete
+        </DropdownItem>
+      {/if}
 
-    <ShopRegistration {part} {last_attachment} />
-  </Menu>
+      <ShopRegistration {part} {last_attachment} />
+    </Menu>
+  </div>
 </GearCard>
 <br />
 <PartHist {id} />
