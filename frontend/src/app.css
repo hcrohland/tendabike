@@ -11,6 +11,7 @@
   --color-border-subtle: var(--color-gray-300);
   --color-border-strong: var(--color-gray-400);
   --color-text-1: var(--color-gray-600);
+  --color-text-2: var(--color-gray-900);
 }
 
 .dark {
@@ -20,6 +21,7 @@
   --color-border-subtle: var(--color-gray-700);
   --color-border-strong: var(--color-gray-600);
   --color-text-1: var(--color-gray-400);
+  --color-text-2: var(--color-gray-300);
 }
 
 @source "../../node_modules/flowbite-svelte/dist";
