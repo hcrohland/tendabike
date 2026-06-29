@@ -62,7 +62,7 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class={"text-xl bg-gray-200 dark:bg-gray-700 p-4" +
+    class={"text-xl bg-surface-2 p-4" +
       (summary
         ? " hover:bg-gray-300 dark:hover:bg-gray-500 cursor-pointer"
         : "")}
@@ -90,7 +90,7 @@
     </div>
   </div>
 
-  <div class="p-4">
+  <div class="p-4 bg-surface-1">
     <!-- Meta line: model · type · date range -->
     <p class="text-sm mb-3">
       {model(part)}{typeName(part) ? " · " + typeName(part) : ""}
@@ -116,7 +116,7 @@
     </p>
 
     <!-- Stat chips -->
-    <UsageChips id={part.usage} ref={part.id} {gridclass} {dues} />
+    <UsageChips id={part.usage} ref={part.id} {gridclass} {dues} light />
 
     <!-- Notes (detail view only) -->
     {#if !summary}

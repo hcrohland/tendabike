@@ -29,7 +29,7 @@
   <div class="flex flex-col gap-2">
     {#each atts as att (att.attached)}
       <div
-        class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 p-3"
+        class="rounded-lg border border-gray-200 dark:border-gray-600 bg-surface-1 p-3"
       >
         <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-2 min-w-0">

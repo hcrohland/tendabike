@@ -8,32 +8,32 @@
   export let light = false;
   export let service: { due: number; plan: number } | undefined = undefined;
 
-  let background = !light
-    ? "bg-gray-50 dark:bg-gray-700"
-    : "bg-gray-250 dark:bg-gray-800";
+  let background = light ? "bg-surface-2" : "bg-surface-1";
 </script>
 
 <div class={"relative rounded-lg shrink-0 " + background}>
-  <ServiceBadge {service} pos="absolute -top-2 -right-0"></ServiceBadge>
+  <ServiceBadge {service} pos="absolute -top-2 -right-0" />
   {#if href}
     <a
       {href}
       use:link
       class="flex items-center gap-1 px-3 py-2 text-reset no-underline"
     >
-      <span class="font-semibold text-sm">{value}</span>
+      <span class="font-semibold text-sm"> {value} </span>
       <span
         class="font-normal text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400"
-        >{label}</span
       >
+        {label}
+      </span>
     </a>
   {:else}
     <div class={"flex items-center gap-1 px-3 py-2 "}>
-      <span class="font-semibold text-sm">{value}</span>
+      <span class="font-semibold text-sm"> {value} </span>
       <span
         class="font-normal text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400"
-        >{label}</span
       >
+        {label}
+      </span>
     </div>
   {/if}
 </div>
