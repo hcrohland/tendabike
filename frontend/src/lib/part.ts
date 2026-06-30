@@ -85,12 +85,12 @@ export class Part {
     return this.type().main == this.what;
   }
 
-  partLink() {
+  partLink(name?: string) {
     return (
       '<a href="/#/part/' +
       this.id +
       '" style="text-decoration1:none" class="text-reset">' +
-      this.name +
+      (name ? name : this.name) +
       "</a>"
     );
   }

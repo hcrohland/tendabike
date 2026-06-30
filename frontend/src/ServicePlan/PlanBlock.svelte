@@ -2,34 +2,37 @@
   import PlanRow from "./PlanRow.svelte";
   import PlanMenu from "./PlanMenu.svelte";
   import PlanName from "./PlanName.svelte";
-  import { parts } from "../lib/part";
+  import { Part, parts } from "../lib/part";
   import { plans, ServicePlan } from "../lib/serviceplan";
 
   interface Props {
     plan: ServicePlan;
+    part?: Part;
   }
 
-  let { plan }: Props = $props();
+  let { plan, part }: Props = $props();
 
   let gears = $derived(plan.gears($parts, Object.values($plans)));
 </script>
 
-{#if plan.part}
+{#if part}
   <PlanRow {plan} />
 {:else}
-  <div class="rounded-lg border border-border-strong bg-surface-1 p-3">
+  <div
+    class="rounded-lg border border-border-subtle bg-surface-2 0 p-0 md:m-2 md:p-2"
+  >
     <!-- Template header -->
-    <div class="flex items-center justify-between gap-2 mb-2">
+    <div class="flex items-center justify-between gap-1 md:gap-2 p-1">
       <span class="font-medium text-sm"><PlanName {plan} /></span>
       <PlanMenu {plan} />
     </div>
 
     <!-- Per-gear rows nested inside -->
     {#if gears.length > 0}
-      <div class="flex flex-col gap-2">
+      <div class="flex flex-col gap-1 md:gap-2">
         {#each gears as part}
           {@const p = new ServicePlan({ ...plan, part: part.id })}
-          <PlanRow plan={p} name={part.partLink()} />
+          <PlanRow plan={p} name={part.name} />
         {/each}
       </div>
     {:else}

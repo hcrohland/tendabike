@@ -10,7 +10,6 @@
   import type { limit_keys } from "../lib/serviceplan";
 
   interface Props {
-    depth?: number;
     service?: Service | undefined;
     successor?: Service | null;
     part: Part;
@@ -19,7 +18,6 @@
   }
 
   let {
-    depth = 0,
     service = undefined,
     successor = null,
     part,
@@ -40,36 +38,43 @@
   );
 </script>
 
-<div
-  class="rounded-lg border border-border-subtle bg-surface-1 p-3"
-  style="margin-left: {depth * 1.25}rem"
->
-  <div class="flex items-start justify-between gap-2">
-    <div class="min-w-0">
-      {#if service}
-        <span class="flex items-center gap-2">
-          {@render children?.()}
-          <span class="font-medium text-sm">{service.name}</span>
-        </span>
-        {#if service.notes.length > 0}
-          <p class="text-xs text-text-1 mt-1">
-            {service.notes}
-          </p>
-        {/if}
-      {:else}
-        <span class="text-xs text-text-1"> since purchase </span>
-      {/if}
-      <span class="text-xs text-text-1 mt-1">
-        {fmtRange(service ? service.time : part.purchase, successor?.time)}
-        · {days} days
-        <ServiceBadge service={dues?.days} />
-      </span>
-    </div>
+<span class="text-xs text-text-1 mt-1">
+  {days} days
+  <ServiceBadge service={dues?.days} />
+</span>
+
+{@render children?.()}
+
+<UsageChips {usage} light {dues} />
+
+<div class="flex items-start justify-between gap-2">
+  <div class="min-w-0">
     {#if service}
-      <div class="shrink-0">
-        <ServiceMenu {service} />
-      </div>
+      <span class="flex items-center gap-2">
+        <span class="font-medium text-sm">
+          {service.name}
+        </span>
+        <span class="text-xs text-text-1 mt-1">
+          · {fmtRange(service ? service.time : part.purchase, successor?.time)}
+        </span>
+      </span>
+      {#if service.notes.length > 0}
+        <p class="text-xs text-text-1 mt-1">
+          {service.notes}
+        </p>
+      {/if}
+    {:else}
+      <span class="text-xs text-text-1 mt-1">
+        {#if !successor}
+          Since
+        {/if}
+        {fmtRange(part.purchase, successor?.time)}
+      </span>
     {/if}
   </div>
-  <UsageChips {usage} light {dues} />
+  {#if service}
+    <div class="shrink-0">
+      <ServiceMenu {service} />
+    </div>
+  {/if}
 </div>

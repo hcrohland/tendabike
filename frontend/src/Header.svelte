@@ -165,7 +165,10 @@
       </Dropdown>
       <NavHamburger />
     </div>
-    <NavUl class="max-w-full" activeClass="text-text-1 font-bold" {activeUrl}>
+    <NavUl
+      class="max-w-full classes={{ active: 'text-text-1' }} font-bold"
+      {activeUrl}
+    >
       <NavLi class="justify-start" href="/#/cat">{$category.name}s</NavLi>
       <NavLi href="/#/plans">Services</NavLi>
       <NavLi href="/#/spares">Parts</NavLi>

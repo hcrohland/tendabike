@@ -14,7 +14,7 @@
   }
 </script>
 
-<div class="flex flex-col gap-6">
+<div class="flex flex-col gap-2">
   {#each spareTypes as type (type.id)}
     <SpareType {type} {attachee} {update} />
   {/each}

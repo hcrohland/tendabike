@@ -48,14 +48,16 @@
   );
 </script>
 
-<div class="flex flex-col gap-2">
+<div
+  class="flex flex-col gap-1 rounded-lg border bg-surface-2 border-border-subtle p-3"
+>
   <!-- Type header -->
-  <div class="flex items-center justify-between gap-2 px-1">
+  <div class="flex items-center justify-between gap-2 pb-2">
     <div class="flex items-center gap-2">
       {#if subparts.length > 0}
         <ShowMore bind:show_more {update} title="attached" />
       {/if}
-      <span class="text-xs uppercase tracking-wide text-text-1">
+      <span class="text-xs uppercase tracking-wide text-text-2">
         {type.name}s
       </span>
     </div>
@@ -65,12 +67,12 @@
   <!-- Part cards -->
   {#each subshow as part (part.id)}
     <div
-      class={"rounded-lg border border-border-subtle p-3 " +
+      class={"rounded-lg border p-3 " +
         (part.disposed_at
-          ? "bg-surface-2 opacity-70"
+          ? "bg-surface-2 opacity-70 border-border-strong"
           : attachedTo($attachments, part.id, date)
-            ? "bg-surface-2"
-            : "bg-surface-1")}
+            ? "bg-surface-2 border-gray-strong"
+            : "bg-surface-1 border-border-subtle")}
     >
       <!-- Name + menu -->
       <div class="flex items-center justify-between gap-2">

@@ -18,7 +18,7 @@
   );
 </script>
 
-<div class="flex flex-col gap-3">
+<div class="flex flex-col gap-3 0 p-0 md:m-2 md:p-2">
   {#each servs as service (service.id)}
     <ServiceHist {service} />
   {/each}
