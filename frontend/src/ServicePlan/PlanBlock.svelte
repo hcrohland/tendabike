@@ -2,22 +2,23 @@
   import PlanRow from "./PlanRow.svelte";
   import PlanMenu from "./PlanMenu.svelte";
   import PlanName from "./PlanName.svelte";
-  import { parts } from "../lib/part";
+  import { Part, parts } from "../lib/part";
   import { plans, ServicePlan } from "../lib/serviceplan";
 
   interface Props {
     plan: ServicePlan;
+    part?: Part;
   }
 
-  let { plan }: Props = $props();
+  let { plan, part }: Props = $props();
 
   let gears = $derived(plan.gears($parts, Object.values($plans)));
 </script>
 
-{#if plan.part}
+{#if part}
   <PlanRow {plan} />
 {:else}
-  <div class="rounded-lg border border-border-strong bg-surface-1 p-3">
+  <div class="rounded-lg border border-border-subtle bg-surface-2 p-3">
     <!-- Template header -->
     <div class="flex items-center justify-between gap-2 mb-2">
       <span class="font-medium text-sm"><PlanName {plan} /></span>

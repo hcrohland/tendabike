@@ -11,6 +11,5 @@
 </script>
 
 <PlanList {planlist}>
-  Serviceplans
   <NewPlan />
 </PlanList>

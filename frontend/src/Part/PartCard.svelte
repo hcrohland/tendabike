@@ -26,7 +26,7 @@
   export let prefix = "";
   export let type: Type;
   export let children: TreeNode[] = [];
-  export let light = true;
+  export let light = false;
 
   let background = light ? "bg-surface-1" : "bg-surface-2";
   let background2 = !light ? "bg-surface-1" : "bg-surface-2";

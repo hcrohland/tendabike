@@ -8,7 +8,6 @@
   import PlanName from "./PlanName.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import PlanMenu from "./PlanMenu.svelte";
-  import { fmtDate } from "../lib/store";
 
   interface Props {
     plan: ServicePlan;
@@ -21,13 +20,12 @@
 
   let part = $derived(plan.getpart($parts, $attachments)) as Part;
   let serviceList = $derived(plan.services(part, $services));
-  let lastService = $derived(serviceList.at(0));
   let title = "service history";
   let dues: any = $derived(next_due(part, [plan], $services, $usages));
 </script>
 
 {#if part}
-  <div class="rounded-lg border border-border-strong bg-surface-2 p-3">
+  <div class="rounded-lg border border-border-subtle bg-surface-1 p-3">
     <!-- Header -->
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-2 min-w-0">
@@ -38,13 +36,6 @@
             <PlanName {plan} />
           {/if}
         </span>
-        {#if lastService}
-          <span class="text-xs text-text-1 shrink-0">
-            · since {fmtDate(lastService.time)}
-          </span>
-        {:else}
-          <span class="text-xs text-text-1 shrink-0"> · since purchase </span>
-        {/if}
 
         {#if serviceList.length > 0}
           <ShowMore bind:show_more {title} />

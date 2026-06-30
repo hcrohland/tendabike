@@ -36,12 +36,7 @@
   let planlist = $derived(
     plans_for_part_and_subtypes($attachments, $plans, part),
   );
-  let gearplans = $derived(
-    planlist.filter(
-      (plan) =>
-        (plan.part == part.id || plan.part == null) && plan.what == part.what,
-    ),
-  );
+  let gearplans = $derived(planlist.filter((plan) => plan.what == part.what));
   let dues = $derived(next_due(part, gearplans, $services, $usages));
 
   let tab = $state("");
