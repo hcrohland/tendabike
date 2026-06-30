@@ -64,7 +64,12 @@
         </p>
       {/if}
     {:else}
-      <span class="text-xs text-text-1"> since purchase </span>
+      <span class="text-xs text-text-1 mt-1">
+        {#if !successor}
+          Since
+        {/if}
+        {fmtRange(part.purchase, successor?.time)}
+      </span>
     {/if}
   </div>
   {#if service}
