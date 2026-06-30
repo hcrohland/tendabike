@@ -31,7 +31,7 @@
       <div class="flex items-center gap-2 min-w-0">
         <span class="text-sm shrink-0">
           {#if name}
-            {@html name}
+            {@html part.partLink(name)}
           {:else}
             <PlanName {plan} />
           {/if}

@@ -30,7 +30,7 @@
       <div class="flex flex-col gap-2">
         {#each gears as part}
           {@const p = new ServicePlan({ ...plan, part: part.id })}
-          <PlanRow plan={p} name={part.partLink()} />
+          <PlanRow plan={p} name={part.name} />
         {/each}
       </div>
     {:else}
