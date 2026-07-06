@@ -1,0 +1,16 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "nav_services": "Services",
+  "nav_parts": "Parts",
+  "nav_activities": "Activities",
+  "nav_statistics": "Statistics",
+  "header_import_activities": "Import Activities",
+  "header_sync": "Sync",
+  "header_refresh": "Refresh data",
+  "header_csv": "With CSV File",
+  "header_import_historic": "Import Historic Activities",
+  "header_admin": "Admin",
+  "header_export": "Export Data",
+  "header_about": "About",
+  "header_logout": "Logout"
+}

@@ -12,6 +12,7 @@
     DropdownHeader,
     Spinner,
     DarkMode,
+    Select,
   } from "flowbite-svelte";
   import { handleError, myfetch } from "./lib/store";
   import { refresh, updateSummary, user } from "./lib/user";
@@ -25,6 +26,8 @@
   import Garmin from "./Activity/Garmin.svelte";
   import ShopMenu from "./Shop/ShopMenu.svelte";
   import { shop } from "./lib/shop";
+  import * as m from "./lib/paraglide/messages";
+  import { getLocale, setLocale, locales } from "./lib/paraglide/runtime";
 
   let { promise } = $props();
 
@@ -73,17 +76,14 @@
 
   let activeUrl = $derived("/#" + $location);
 
-  // main.ts oder app.svelte
   const isDev = import.meta.env.DEV;
 
   if (isDev) {
-    // Dev: manuell togglebar, folgt localStorage
     const stored = localStorage.getItem("theme");
     if (stored === "dark") {
       document.documentElement.classList.add("dark");
     }
   } else {
-    // Production: Browser folgen, kein manueller Toggle
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     document.documentElement.classList.toggle("dark", mq.matches);
     mq.addEventListener("change", (e) => {
@@ -110,7 +110,7 @@
           onclick={triggerHistoricSync}
           type="button"
         >
-          Import Activities
+          {m.header_import_activities()}
         </button>
       {/if}
       <div id="user">
@@ -122,30 +122,30 @@
           {handleError(error)}
         {/await}
       </div>
-      {#if isDev}
-        <DarkMode />
-      {/if}
+
       <Dropdown simple triggeredBy="#user">
         <DropdownHeader>
           {$user.firstname}
           {$user.name}
         </DropdownHeader>
         <DropdownDivider />
-        <Sport></Sport>
+        <Sport />
         {#await promise then}
           <DropdownItem class="cursor-pointer flex-end">
-            Sync
-            <ChevronDownOutline class=" inline " />
+            {m.header_sync()}
+            <ChevronDownOutline class="inline" />
           </DropdownItem>
           <Dropdown simple>
-            <DropdownItem onclick={fullrefresh}>Refresh data</DropdownItem>
+            <DropdownItem onclick={fullrefresh}
+              >{m.header_refresh()}</DropdownItem
+            >
             <DropdownItem onclick={() => (openGarmin = true)}>
-              With CSV File
+              {m.header_csv()}
             </DropdownItem>
             {#if $user.onboarding_status === "initial_sync_postponed"}
               <DropdownDivider />
               <DropdownItem onclick={triggerHistoricSync}>
-                Import Historic Activities
+                {m.header_import_historic()}
               </DropdownItem>
             {/if}
           </Dropdown>
@@ -154,27 +154,30 @@
         <ShopMenu />
         {#if $user.is_admin}
           <DropdownDivider />
-          <DropdownItem href="/#/admin">Admin</DropdownItem>
+          <DropdownItem href="/#/admin">{m.header_admin()}</DropdownItem>
         {/if}
         <DropdownDivider />
         <DropdownItem href="/api/user/export" download="tendabike.json">
-          Export Data
+          {m.header_export()}
         </DropdownItem>
-        <DropdownItem href="/#/about">About</DropdownItem>
-        <DropdownItem href="/strava/logout">Logout</DropdownItem>
+        <DropdownItem href="/#/about">{m.header_about()}</DropdownItem>
+        <DropdownItem href="/strava/logout">{m.header_logout()}</DropdownItem>
       </Dropdown>
+
       <NavHamburger />
     </div>
     <NavUl
-      class="max-w-full classes={{ active: 'text-text-1' }} font-bold"
+      class="max-w-full"
       {activeUrl}
+      activeClass="text-primary-600 dark:text-primary-400 font-semibold"
+      nonActiveClass="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400"
     >
       <NavLi class="justify-start" href="/#/cat">{$category.name}s</NavLi>
-      <NavLi href="/#/plans">Services</NavLi>
-      <NavLi href="/#/spares">Parts</NavLi>
+      <NavLi href="/#/plans">{m.nav_services()}</NavLi>
+      <NavLi href="/#/spares">{m.nav_parts()}</NavLi>
       {#if !$shop}
-        <NavLi href="/#/activities">Activities</NavLi>
-        <NavLi href="/#/stats">Statistics</NavLi>
+        <NavLi href="/#/activities">{m.nav_activities()}</NavLi>
+        <NavLi href="/#/stats">{m.nav_statistics()}</NavLi>
       {/if}
     </NavUl>
   {:else}
@@ -184,4 +187,19 @@
       </a>
     </div>
   {/if}
+  <div class="flex">
+    {#if isDev}
+      <DarkMode />
+      <!-- Language switcher -->
+      <Select
+        value={getLocale()}
+        onchange={(e) => setLocale(e.currentTarget.value as any)}
+        placeholder=""
+      >
+        {#each locales as lang}
+          <option value={lang}>{lang.toUpperCase()}</option>
+        {/each}
+      </Select>
+    {/if}
+  </div>
 </Navbar>
