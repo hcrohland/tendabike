@@ -15,10 +15,10 @@
     "checkJs": true,
     "isolatedModules": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedParameters": true,
+    "noEmit": true
   },
   "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte"],
-  "exclude": ["./src/lib/paraglide"],
   "references": [
     {
       "path": "./tsconfig.node.json"
