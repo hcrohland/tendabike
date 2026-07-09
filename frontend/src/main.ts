@@ -1,7 +1,7 @@
 import "./app.css";
 import { mount } from "svelte";
 import App from "./App.svelte";
-import { setLocale, extractLocaleFromNavigator } from "./lib/paraglide/runtime";
+import { setLocale, extractLocaleFromNavigator } from "../paraglide/runtime";
 
 const isDev = import.meta.env.DEV;
 

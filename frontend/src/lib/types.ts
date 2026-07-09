@@ -3,6 +3,7 @@ import { Activity } from "./activity";
 import { by, filterValues, mapObject, type Map } from "./mapable";
 import { Part } from "./part";
 import { myfetch } from "./store";
+import * as m from "../../paraglide/messages";
 
 export class Type {
   id: number;
@@ -49,6 +50,43 @@ export class Type {
       (hook != null && this.hooks.length > 1 ? types[hook].prefix + " " : "") +
       this.name
     );
+  }
+
+  /** translated display name, falls back to the raw backend name
+   * if no translation key exists for this type id */
+  localizedName(): string {
+    const key = `type_${this.id}`;
+    const fn = (m as unknown as Record<string, () => string>)[key];
+    return typeof fn === "function" ? fn() : this.name;
+  }
+
+  /** translated position prefix (front/rear/left/right etc), falls back
+   * to the raw prefix if no translation key exists */
+  localizedPrefix(): string {
+    if (!this.prefix) return "";
+    const key = `position_${this.prefix.toLowerCase()}`;
+    const fn = (m as unknown as Record<string, () => string>)[key];
+    return typeof fn === "function" ? fn() : this.prefix;
+  }
+
+  /** translated group name, falls back to the raw group name
+   * if no translation key exists */
+  localizedGroup(): string {
+    if (!this.group) return "";
+    const key = `group_${this.group.toLowerCase().replace(/\s+/g, "_")}`;
+    const fn = (m as unknown as Record<string, () => string>)[key];
+    return typeof fn === "function" ? fn() : this.group;
+  }
+
+  /** composed "position + name" label, e.g. "front tire" / "Vorderreifen",
+   * used for types attached at a specific hook position */
+  labelWithPosition(prefix: string): string {
+    const name = this.localizedName();
+    if (!prefix) return name;
+    const key = `position_${prefix.toLowerCase()}`;
+    const fn = (m as unknown as Record<string, () => string>)[key];
+    const position = typeof fn === "function" ? fn() : prefix;
+    return m.type_with_position({ position, name });
   }
 
   subtypes() {

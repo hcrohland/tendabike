@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { m } from "../../paraglide/messages";
   import type { limit_keys } from "../lib/serviceplan";
   import { fmtNumber, fmtSeconds } from "../lib/store";
   import { Usage, usages } from "../lib/usage";
@@ -20,7 +21,7 @@
 <div class={"grid gap-2 m-2 " + gridclass}>
   <Chip
     value={fmtNumber(usage.count)}
-    label="rides"
+    label={m.usage_rides()}
     href={ridesHref}
     {light}
     service={dues?.rides}

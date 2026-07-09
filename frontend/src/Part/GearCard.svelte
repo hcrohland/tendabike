@@ -8,6 +8,7 @@
   import { user, users } from "../lib/user";
   import UsageChips from "../Usage/UsageChips.svelte";
   import ServiceBadge from "../Widgets/ServiceBadge.svelte";
+  import * as m from "../../paraglide/messages";
 
   interface Props {
     part: Part;
@@ -24,7 +25,7 @@
 
   function model(part: Part) {
     if (part.model == "" && part.vendor == "") {
-      return "unknown model";
+      return m.gearcard_unknown_model();
     } else {
       return part.vendor + " " + part.model;
     }
@@ -94,8 +95,8 @@
         <a href={"/strava/bikes/" + part.id} target="_blank">
           <img
             src="strava_grey.png"
-            alt="View on Strava"
-            title="View on Strava"
+            alt={m.gearcard_view_on_strava()}
+            title={m.gearcard_view_on_strava()}
             class="inline ml-1"
           />
         </a>
@@ -103,7 +104,7 @@
       <span class="text-text-1">
         ·
         {#if !part.disposed_at}
-          since {fmtDate(part.purchase)}
+          {m.time_since()} {fmtDate(part.purchase)}
         {:else}
           {fmtDate(part.purchase)} – {fmtDate(part.disposed_at)}
         {/if}
@@ -118,7 +119,7 @@
     {#if !summary}
       <div class="mt-4">
         <div class="flex items-center gap-2 mb-2">
-          <strong>Notes:</strong>
+          <strong>{m.gearcard_notes()}:</strong>
           {#if !editingNotes}
             <EditOutline
               class="w-4 h-4 cursor-pointer text-gray-400 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
@@ -129,15 +130,15 @@
         {#if editingNotes}
           <Textarea
             bind:value={notesValue}
-            placeholder="Add any notes about this part..."
+            placeholder={m.gearcard_notes_placeholder()}
             rows={3}
             class="mb-2 w-full"
           />
           <div class="flex gap-2">
-            <Button size="sm" onclick={saveNotes}>Save</Button>
-            <Button size="sm" color="alternative" onclick={cancelEditNotes}
-              >Cancel</Button
-            >
+            <Button size="sm" onclick={saveNotes}>{m.gearcard_save()}</Button>
+            <Button size="sm" color="alternative" onclick={cancelEditNotes}>
+              {m.gearcard_cancel()}
+            </Button>
           </div>
         {:else if part.notes}
           <p class="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">

@@ -21,6 +21,7 @@
   import ShopRegistration from "../Shop/ShopRegistration.svelte";
   import { services } from "../lib/service";
   import { usages } from "../lib/usage";
+  import { m } from "../../paraglide/messages";
 
   interface Props {
     id: number;
@@ -91,7 +92,9 @@
       {#snippet titleSlot()}
         Attached Parts
         {#if tab == "parts"}
-          <XsButton onclick={() => $actions.installPart(part)}>add</XsButton>
+          <XsButton onclick={() => $actions.installPart(part)}>
+            {m.partcard_add()}
+          </XsButton>
         {/if}
       {/snippet}
       <div class="m-0">
@@ -104,7 +107,9 @@
       Service Plans
       <PlanBadge {planlist} />
       {#if tab == "plans"}
-        <XsButton onclick={() => $actions.newPlan(part)}>add</XsButton>
+        <XsButton onclick={() => $actions.newPlan(part)}>
+          {m.partcard_add()}
+        </XsButton>
       {/if}
     {/snippet}
     <PlanList {planlist} /><br />
@@ -113,7 +118,9 @@
     {#snippet titleSlot()}
       Service Logs
       {#if tab == "services"}
-        <XsButton onclick={() => $actions.newService(part)}>add</XsButton>
+        <XsButton onclick={() => $actions.newService(part)}>
+          {m.partcard_add()}
+        </XsButton>
       {/if}
     {/snippet}
     <ServiceList {part} /><br />

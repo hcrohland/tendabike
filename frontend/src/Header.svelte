@@ -26,8 +26,8 @@
   import Garmin from "./Activity/Garmin.svelte";
   import ShopMenu from "./Shop/ShopMenu.svelte";
   import { shop } from "./lib/shop";
-  import * as m from "./lib/paraglide/messages";
-  import { getLocale, setLocale, locales } from "./lib/paraglide/runtime";
+  import * as m from "../paraglide/messages";
+  import { getLocale, setLocale, locales } from "../paraglide/runtime";
 
   let { promise } = $props();
 

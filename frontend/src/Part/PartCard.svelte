@@ -14,16 +14,15 @@
   import XsButton from "../Widgets/XsButton.svelte";
   import { services } from "../lib/service";
   import ServiceBadge from "../Widgets/ServiceBadge.svelte";
+  import * as m from "../../paraglide/messages";
 
   type TreeNode = {
     attachments: Attachment[];
-    prefix: string;
     type: Type;
     children: TreeNode[];
   };
 
   export let attachments: Attachment[] = [];
-  export let prefix = "";
   export let type: Type;
   export let children: TreeNode[] = [];
   export let light = false;
@@ -52,7 +51,7 @@
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-2 p-2 min-w-0">
         <span class="text-xs uppercase text-text-1 shrink-0 truncate">
-          {prefix + " " + type.name}
+          {type.localizedName()}
         </span>
         {#if att.isAttached()}
           <span class="font-medium text-sm whitespace-nowrap">
@@ -64,11 +63,12 @@
           </span>
           ·
           <span class="text-xs text-text-1">
-            since {att.fmtTime()}
+            {m.time_since()}
+            {att.fmtTime()}
           </span>
           <ServiceBadge service={dues?.days} />
           {#if attachments.length > 1 || (part && $usages[part.usage].count != $usages[att.usage].count)}
-            <ShowMore bind:show_more title="history" />
+            <ShowMore bind:show_more title={m.partcard_history()} />
           {/if}
         {/if}
       </div>
@@ -76,17 +76,19 @@
         {#if att.isAttached() && part}
           <Menu>
             <DropdownItem onclick={() => $actions.newService(part)}>
-              Log Service
+              {m.partcard_log_service()}
             </DropdownItem>
             <DropdownItem onclick={() => $actions.attachPart(part)}>
-              Move part
+              {m.partcard_move_part()}
             </DropdownItem>
             <DropdownItem onclick={() => $actions.replacePart(att)}>
-              New {type.name}
+              {m.partcard_new_type({ type: type.localizedName() })}
             </DropdownItem>
           </Menu>
         {:else}
-          <XsButton onclick={() => $actions.replacePart(att)}>add</XsButton>
+          <XsButton onclick={() => $actions.replacePart(att)}>
+            {m.partcard_add()}
+          </XsButton>
         {/if}
       </div>
     </div>
@@ -95,6 +97,7 @@
     {#if att.isAttached()}
       <UsageChips id={part.usage} ref={part.id} {light} {dues} />
     {/if}
+
     <!-- History cards -->
     {#if show_more}
       <div class="mt-3 flex flex-col gap-2 p-3">
@@ -120,13 +123,13 @@
                 <div class="shrink-0">
                   <Menu>
                     <DropdownItem onclick={() => $actions.newService(p)}>
-                      Log Service
+                      {m.partcard_log_service()}
                     </DropdownItem>
                     <DropdownItem onclick={() => $actions.attachPart(p)}>
-                      Attach part
+                      {m.partcard_attach_part()}
                     </DropdownItem>
                     <DropdownItem onclick={() => $actions.replacePart(a)}>
-                      Duplicate part
+                      {m.partcard_duplicate_part()}
                     </DropdownItem>
                   </Menu>
                 </div>
