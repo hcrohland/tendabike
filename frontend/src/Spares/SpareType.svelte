@@ -12,6 +12,7 @@
   import { Type } from "../lib/types";
   import { actions } from "../Widgets/Actions.svelte";
   import { shop } from "../lib/shop";
+  import * as m from "../../paraglide/messages";
 
   interface Props {
     type: Type;
@@ -55,13 +56,13 @@
   <div class="flex items-center justify-between gap-2 pb-2">
     <div class="flex items-center gap-2">
       {#if subparts.length > 0}
-        <ShowMore bind:show_more {update} title="attached" />
+        <ShowMore bind:show_more {update} title={m.sparetype_attached()} />
       {/if}
       <span class="text-xs uppercase tracking-wide text-text-2">
-        {type.name}s
+        {type.localizedName()}
       </span>
     </div>
-    <XsButton onclick={() => $actions.newPart(type)}>New</XsButton>
+    <XsButton onclick={() => $actions.newPart(type)}>{m.action_new()}</XsButton>
   </div>
 
   <!-- Part cards -->
@@ -96,15 +97,17 @@
           <div class="shrink-0">
             <Menu>
               <DropdownItem onclick={() => $actions.attachPart(part)}>
-                {attachedTo($attachments, part.id, date) ? "Move" : "Attach"}
+                {attachedTo($attachments, part.id, date)
+                  ? m.action_move()
+                  : m.action_attach()}
               </DropdownItem>
               {#if part.attachments($attachments).length == 0}
                 <DropdownItem onclick={() => $actions.deletePart(part)}>
-                  Delete
+                  {m.action_delete()}
                 </DropdownItem>
               {:else}
                 <DropdownItem onclick={() => $actions.disposePart(part)}>
-                  Dispose
+                  {m.action_dispose()}
                 </DropdownItem>
               {/if}
             </Menu>
@@ -123,11 +126,11 @@
       {#if attachee > 0}
         <div class="mt-2 text-xs text-text-1">
           {#if part.disposed_at}
-            disposed {fmtDate(part.disposed_at)}
+            {m.sparetype_disposed()} {fmtDate(part.disposed_at)}
           {:else}
             {@const attachedPart = attachedTo($attachments, part.id, date)}
             {#if attachedPart}
-              Attached to:
+              {m.attached_to()}
               <span class="text-xs text-gray-500 dark:text-gray-200 ml-1">
                 <PartLink part={attachedPart} />
               </span>

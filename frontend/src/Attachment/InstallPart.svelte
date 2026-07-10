@@ -10,6 +10,7 @@
   import Buttons from "../Widgets/Buttons.svelte";
   import Switch from "../Widgets/Switch.svelte";
   import Modal from "../Widgets/Modal.svelte";
+  import { m } from "../../paraglide/messages";
 
   let part = $state<any>();
   let gear = $state(new Part({}));
@@ -66,21 +67,21 @@
 <Modal bind:open {onaction}>
   {#snippet header()}
     <ButtonGroup class="col-md-12">
-      <InputAddon>New</InputAddon>
+      <InputAddon>{m.action_new()}</InputAddon>
       <TypeForm
         onChange={setType}
         classes={{ select: "rounded-none h-full" }}
       />
-      <InputAddon>of {gear.name}</InputAddon>
+      <InputAddon>{m.installpart_of({ gear: gear.name })}</InputAddon>
     </ButtonGroup>
   {/snippet}
 
   <NewForm {type} bind:part mindate={gear.purchase} />
   {#if type?.is_hook()}
-    <Switch bind:checked={single}>Keep all attached parts</Switch>
+    <Switch bind:checked={single}>{m.installpart_keep_attached()}</Switch>
   {/if}
 
   {#snippet footer()}
-    <Buttons bind:open label="Install" />
+    <Buttons bind:open label={m.action_install()} />
   {/snippet}
 </Modal>

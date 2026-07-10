@@ -33,7 +33,7 @@
 
   function typeName(part: Part) {
     if (part.what != types[part.what].main) {
-      return types[part.what].name.toLowerCase();
+      return types[part.what].localizedName();
     }
     return "";
   }

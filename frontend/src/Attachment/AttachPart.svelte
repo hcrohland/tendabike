@@ -4,6 +4,7 @@
   import { Part } from "../lib/part";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";
+  import { m } from "../../paraglide/messages";
 
   let part: Part | undefined = $state();
   let open = $state(false);
@@ -28,15 +29,17 @@
 {#if part}
   <Modal bind:open {onaction}>
     {#snippet header()}
-      Attach {types[part!.what].name}
-      {part!.name}
-      {part!.vendor}
-      {part!.model}
+      {m.attachpart_header({
+        type: types[part!.what].localizedName(),
+        name: part!.name,
+        vendor: part!.vendor,
+        model: part!.model,
+      })}
     {/snippet}
     <AttachForm bind:time bind:gear bind:hook {part} />
 
     {#snippet footer()}
-      <Buttons bind:open label={"Attach"} />
+      <Buttons bind:open label={m.action_attach()} />
     {/snippet}
   </Modal>
 {/if}

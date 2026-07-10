@@ -79,7 +79,7 @@
               {m.partcard_log_service()}
             </DropdownItem>
             <DropdownItem onclick={() => $actions.attachPart(part)}>
-              {m.partcard_move_part()}
+              {m.action_move()}
             </DropdownItem>
             <DropdownItem onclick={() => $actions.replacePart(att)}>
               {m.partcard_new_type({ type: type.localizedName() })}
@@ -126,7 +126,7 @@
                       {m.partcard_log_service()}
                     </DropdownItem>
                     <DropdownItem onclick={() => $actions.attachPart(p)}>
-                      {m.partcard_attach_part()}
+                      {m.action_attach()}
                     </DropdownItem>
                     <DropdownItem onclick={() => $actions.replacePart(a)}>
                       {m.partcard_duplicate_part()}

@@ -5,6 +5,7 @@
   import { types } from "../lib/types";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";
+  import { m } from "../../paraglide/messages";
 
   let attachment = $state(new Attachment({}));
   let part = $state(new Part({}));
@@ -24,12 +25,14 @@
 
 <Modal bind:open {onaction}>
   {#snippet header()}
-    Do you really want to remove the {types[part.what].name}
-    {part.name}
-    from
-    {$parts[attachment.gear].name} at {fmtDate(attachment.attached)}?
+    {m.deleteattachment_header({
+      type: types[part.what].localizedName(),
+      name: part.name,
+      gear: $parts[attachment.gear].name,
+      date: fmtDate(attachment.attached),
+    })}
   {/snippet}
   {#snippet footer()}
-    <Buttons bind:open label={"Confirm"} />
+    <Buttons bind:open label={m.action_confirm()} />
   {/snippet}
 </Modal>

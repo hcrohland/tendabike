@@ -4,6 +4,7 @@
   import PlanName from "./PlanName.svelte";
   import { Part, parts } from "../lib/part";
   import { plans, ServicePlan } from "../lib/serviceplan";
+  import * as m from "../../paraglide/messages";
 
   interface Props {
     plan: ServicePlan;
@@ -36,7 +37,7 @@
         {/each}
       </div>
     {:else}
-      <p class="text-xs text-text-1">No bikes match this plan.</p>
+      <p class="text-xs text-text-1">{m.planblock_no_bikes()}</p>
     {/if}
   </div>
 {/if}

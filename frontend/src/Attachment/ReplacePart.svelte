@@ -8,6 +8,7 @@
   import Buttons from "../Widgets/Buttons.svelte";
   import Switch from "../Widgets/Switch.svelte";
   import Modal from "../Widgets/Modal.svelte";
+  import { m } from "../../paraglide/messages";
 
   let part: any = $state();
   let oldpart: Part;
@@ -59,18 +60,22 @@
 
 <Modal bind:open {onaction}>
   {#snippet header()}
-    New {prefix}
-    {type!.name} for {$parts[gear].name}
+    {m.replacepart_header({
+      type: type!.labelWithPosition(prefix),
+      gear: $parts[gear].name,
+    })}
   {/snippet}
   <NewForm {type} bind:part {mindate} />
   {#if type!.is_hook()}
-    <Switch bind:checked={single}>Keep all attached parts</Switch>
+    <Switch bind:checked={single}>{m.installpart_keep_attached()}</Switch>
   {/if}
   {#if single}
-    <Dispose bind:dispose>old {type!.name}</Dispose>
+    <Dispose bind:dispose>
+      {m.replacepart_old({ type: type!.localizedName() })}
+    </Dispose>
   {/if}
 
   {#snippet footer()}
-    <Buttons bind:open label={"Replace"} />
+    <Buttons bind:open label={m.action_replace()} />
   {/snippet}
 </Modal>
