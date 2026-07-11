@@ -3,6 +3,7 @@
   import { filterValues } from "../lib/mapable";
   import { category, Type } from "../lib/types";
   import { Select } from "flowbite-svelte";
+  import { m } from "../../paraglide/messages";
 
   export let type: Type;
   export let part: number | undefined;
@@ -14,11 +15,13 @@
 <Select
   required
   bind:value={part}
-  placeholder={"Select " + $category.name}
+  placeholder={m.selectpart_placeholder({
+    category: $category.localizedName(),
+  })}
   classes={{ select: "rounded-l-none" }}
 >
   {#if none}
-    <option value={undefined}> -- None -- </option>
+    <option value={undefined}>{m.selectpart_none()}</option>
   {/if}
   {#each gears as gear}
     <option value={gear.id}>{gear.name}</option>

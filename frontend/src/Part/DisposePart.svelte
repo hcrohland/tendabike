@@ -67,7 +67,7 @@
 
 <Modal bind:open {onaction}>
   {#snippet header()}
-    {m.disposepart_header({ action, type: typeName, name: part.name })}
+    {m.dispose_question({ name: typeName + " " + part.name })}
   {/snippet}
   <div>
     <ButtonGroup>
@@ -81,9 +81,10 @@
     </Switch>
   {/if}
   {#if detach}
-    <Dispose bind:dispose>
-      {m.disposepart_when_detached({ type: typeName })}
-    </Dispose>
+    <Dispose
+      bind:dispose
+      name={m.disposepart_when_detached({ type: typeName })}
+    />
   {/if}
 
   {#snippet footer()}

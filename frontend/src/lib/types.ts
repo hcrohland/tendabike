@@ -46,10 +46,10 @@ export class Type {
   }
 
   human_name(hook: number | null) {
-    return (
-      (hook != null && this.hooks.length > 1 ? types[hook].prefix + " " : "") +
-      this.name
-    );
+    if (hook != null && this.hooks.length > 1) {
+      return this.labelWithPosition(types[hook].prefix);
+    }
+    return this.localizedName();
   }
 
   /** translated display name, falls back to the raw backend name

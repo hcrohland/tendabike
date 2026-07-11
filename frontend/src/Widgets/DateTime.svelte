@@ -2,7 +2,6 @@
   import { preventDefault } from "svelte/legacy";
 
   import SveltyPicker, { formatDate, parseDate } from "svelty-picker";
-  import { en } from "svelty-picker/i18n";
   import { roundTime } from "../lib/store";
   import { Button, ButtonGroup } from "flowbite-svelte";
   import {
@@ -10,6 +9,8 @@
     AngleRightOutline,
     ClockOutline,
   } from "flowbite-svelte-icons";
+  import { en, de } from "svelty-picker/i18n";
+  import { getLocale } from "../../paraglide/runtime";
 
   type Props = {
     date?: any;
@@ -29,6 +30,7 @@
     rounded = false,
   }: Props = $props();
 
+  const pickerLocale = getLocale() === "de" ? de : en;
   const min = () => (mindate ? roundTime(mindate) : undefined);
   const max = () => (maxdate ? roundTime(maxdate) : undefined);
   let now = roundTime(new Date());
@@ -56,13 +58,20 @@
   <SveltyPicker
     bind:value={
       () => {
-        return formatDate(roundTime(date), options.format, en, "standard");
+        return formatDate(
+          roundTime(date),
+          options.format,
+          pickerLocale,
+          "standard",
+        );
       },
       (v) => {
-        date = v ? parseDate(v, options.format, en, "standard") : null;
+        date = v
+          ? parseDate(v, options.format, pickerLocale, "standard")
+          : null;
       }
     }
-    placeholder={formatDate(date, options.format, en, "standard")}
+    placeholder={formatDate(date, options.format, pickerLocale, "standard")}
     mode="datetime"
     {required}
     {inputClasses}

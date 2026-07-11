@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Select } from "flowbite-svelte";
   import { Type, category } from "../lib/types";
+  import { m } from "../../paraglide/messages";
 
   interface Result {
     type: Type;
@@ -21,11 +22,11 @@
   required
   bind:value={result}
   onchange={() => onChange(result!.type, result!.hook)}
-  placeholder="Choose part"
+  placeholder={m.typeform_choose_part()}
   {...rest}
 >
   {#if with_body}
-    <option value={{ type: $category, hook: null }}> body </option>
+    <option value={{ type: $category, hook: null }}>{m.typeform_body()}</option>
   {/if}
   {#each $category.subtypes() as type}
     {#each type.hooks as hook}

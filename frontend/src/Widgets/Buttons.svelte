@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Button } from "flowbite-svelte";
+  import { m } from "../../paraglide/messages";
 
   interface Props {
     open: boolean;
@@ -19,10 +20,10 @@
 </script>
 
 {#if label}
-  <Button {onclick} color="alternative">Cancel</Button>
+  <Button {onclick} color="alternative">{m.action_cancel()}</Button>
   <Button type="submit" value="commit" class="float-end" {disabled}>
     {label}
   </Button>
 {:else}
-  <Button {onclick}>Close</Button>
+  <Button {onclick}>{m.action_close()}</Button>
 {/if}

@@ -82,7 +82,7 @@
               {m.action_move()}
             </DropdownItem>
             <DropdownItem onclick={() => $actions.replacePart(att)}>
-              {m.partcard_new_type({ type: type.localizedName() })}
+              {m.partcard_replace_type({ type: type.localizedName() })}
             </DropdownItem>
           </Menu>
         {:else}
