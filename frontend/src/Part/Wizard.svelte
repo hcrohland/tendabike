@@ -8,11 +8,12 @@
     TableHeadCell,
     TableBodyCell,
   } from "flowbite-svelte";
-  import { types, Type } from "../lib/types";
+  import { types, Type, localizeGroupName } from "../lib/types";
   import { Attachment } from "../lib/attachment";
   import { type Map, filterValues } from "../lib/mapable";
   import Switch from "../Widgets/Switch.svelte";
   import { Part } from "../lib/part";
+  import { m } from "../../paraglide/messages";
 
   export let gear: Part;
   export let attachees: Attachment[];
@@ -109,19 +110,19 @@
         class="mt-8"
         onclick={() => (show_button = false)}
       >
-        Add more component groups
+        {m.wizard_add_more_groups()}
       </Button>
     {:else}
       <Table>
         <tbody>
           <TableBodyRow>
-            <TableHeadCell colspan={80}>Add components groups:</TableHeadCell>
+            <TableHeadCell colspan={80}>{m.wizard_add_groups()}</TableHeadCell>
           </TableBodyRow>
           {#each groups as g}
             <TableBodyRow>
               <TableHeadCell>
                 <Switch bind:checked={g.enabled}>
-                  {g.group}:
+                  {localizeGroupName(g.group)}:
                 </Switch>
               </TableHeadCell>
               <TableBodyCell>
@@ -129,13 +130,13 @@
                   <Input
                     type="text"
                     bind:value={g.vendor}
-                    placeholder="Brand"
+                    placeholder={m.partform_brand()}
                     disabled={!g.enabled}
                   />
                   <Input
                     type="text"
                     bind:value={g.model}
-                    placeholder="Model"
+                    placeholder={m.partform_model()}
                     disabled={!g.enabled}
                   />
                 </ButtonGroup>
@@ -144,7 +145,7 @@
           {/each}
         </tbody>
       </Table>
-      <Button {disabled} onclick={save}>Set</Button>
+      <Button {disabled} onclick={save}>{m.action_set()}</Button>
     {/if}
   </div>
 {/if}

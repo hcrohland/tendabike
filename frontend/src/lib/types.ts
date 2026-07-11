@@ -72,10 +72,7 @@ export class Type {
   /** translated group name, falls back to the raw group name
    * if no translation key exists */
   localizedGroup(): string {
-    if (!this.group) return "";
-    const key = `group_${this.group.toLowerCase().replace(/\s+/g, "_")}`;
-    const fn = (m as unknown as Record<string, () => string>)[key];
-    return typeof fn === "function" ? fn() : this.group;
+    return localizeGroupName(this.group);
   }
 
   /** composed "position + name" label, e.g. "front tire" / "Vorderreifen",
@@ -122,6 +119,13 @@ export async function getTypes() {
   }, partTypes);
 
   category = writable(types[1]);
+}
+
+export function localizeGroupName(group: string | undefined): string {
+  if (!group) return "";
+  const key = `group_${group.toLowerCase().replace(/\s+/g, "_")}`;
+  const fn = (m as unknown as Record<string, () => string>)[key];
+  return typeof fn === "function" ? fn() : group;
 }
 
 export let category: Writable<Type>;

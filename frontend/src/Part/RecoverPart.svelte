@@ -4,6 +4,7 @@
   import { types } from "../lib/types";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";
+  import { m } from "../../paraglide/messages";
 
   let part = $state(new Part({}));
   let open = $state(false);
@@ -21,15 +22,17 @@
 
 <Modal bind:open {onaction}>
   {#snippet header()}
-    Do you really have {types[part.what].name}
-    {part.name}
-    {part.vendor}
-    {part.model} back?
+    {m.recoverpart_header({
+      type: types[part.what].localizedName(),
+      name: part.name,
+      vendor: part.vendor,
+      model: part.model,
+    })}
   {/snippet}
 
-  You binned it on {fmtDate(part.disposed_at)}
+  {m.recoverpart_binned_on({ date: fmtDate(part.disposed_at) })}
 
   {#snippet footer()}
-    <Buttons bind:open label={"Recover"} />
+    <Buttons bind:open label={m.action_recover()} />
   {/snippet}
 </Modal>
