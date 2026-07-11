@@ -3,6 +3,7 @@
   import { fmtDate } from "../lib/store";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";
+  import { m } from "../../paraglide/messages";
 
   let service = $state(new Service({}));
   let open = $state(false);
@@ -20,11 +21,12 @@
 
 <Modal bind:open {onaction}>
   {#snippet header()}
-    Do you really want to delete Service log<br />
-    "{service.name}" from
-    {fmtDate(service.time)}?
+    {m.deleteservice_header({
+      name: service.name,
+      date: fmtDate(service.time),
+    })}
   {/snippet}
   {#snippet footer()}
-    <Buttons bind:open label="Delete" />
+    <Buttons bind:open label={m.action_delete()} />
   {/snippet}
 </Modal>

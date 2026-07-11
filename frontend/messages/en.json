@@ -149,5 +149,12 @@
   "showmore_show": "Show {title}",
   "sport_switch": "Switch Sport",
   "typeform_choose_part": "Choose part",
-  "typeform_body": "body"
+  "typeform_body": "body",
+  "servicemodal_header": "Service for {name} {vendor} {model}",
+  "servicemodal_resolves": "Resolves:",
+  "servicemenu_change": "Change Service",
+  "servicemenu_repeat": "Repeat Service",
+  "servicemenu_delete": "Delete Service",
+  "action_repeat": "Repeat",
+  "deleteservice_header": "Do you really want to delete Service log \"{name}\" from {date}?"
 }

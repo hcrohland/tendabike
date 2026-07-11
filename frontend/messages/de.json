@@ -149,5 +149,12 @@
   "showmore_show": "{title} anzeigen",
   "sport_switch": "Sportart wechseln",
   "typeform_choose_part": "Teil auswählen",
-  "typeform_body": "Rahmen"
+  "typeform_body": "Rahmen",
+  "servicemodal_header": "Service für {name} {vendor} {model}",
+  "servicemodal_resolves": "Löst auf:",
+  "servicemenu_change": "Service ändern",
+  "servicemenu_repeat": "Service wiederholen",
+  "servicemenu_delete": "Service löschen",
+  "action_repeat": "Wiederholen",
+  "deleteservice_header": "Möchtest du den Service-Eintrag \"{name}\" vom {date} wirklich löschen?"
 }
