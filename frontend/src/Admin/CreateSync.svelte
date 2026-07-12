@@ -8,6 +8,7 @@
   import { by, filterValues } from "../lib/mapable";
   import { activities } from "../lib/activity";
   import Modal from "../Widgets/Modal.svelte";
+  import * as m from "../../paraglide/messages";
 
   export let refresh: () => void;
   let user: User | undefined;
@@ -49,20 +50,22 @@
 
 <Modal bind:open {onaction}>
   {#snippet header()}
-    Create sync Event for
     {#if user}
-      {user.firstname} {user.name} ({user.id})
+      {m.sync_create_header_named({
+        name: `${user.firstname} ${user.name}`,
+        id: user.id,
+      })}
     {:else}
-      all users
+      {m.sync_create_header_all()}
     {/if}
   {/snippet}
   <ButtonGroup>
-    <InputAddon>Start</InputAddon>
+    <InputAddon>{m.sync_start_label()}</InputAddon>
     <DateTime bind:date prevdate={user ? prevdate : undefined} />
   </ButtonGroup>
-  <Switch bind:checked>Migration</Switch>
+  <Switch bind:checked>{m.sync_migration_label()}</Switch>
 
   {#snippet footer()}
-    <Buttons bind:open label="Sync" />
+    <Buttons bind:open label={m.header_sync()} />
   {/snippet}
 </Modal>
