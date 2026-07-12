@@ -2,6 +2,7 @@
   import { ServicePlan } from "../lib/serviceplan";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";
+  import { m } from "../../paraglide/messages";
 
   let plan = $state(new ServicePlan({}));
 
@@ -20,10 +21,9 @@
 
 <Modal bind:open {onaction}>
   {#snippet header()}
-    Do you really want to delete ServicePlan <br />
-    "{plan.name}"?
+    {m.deleteplan_header({ name: plan.name })}
   {/snippet}
   {#snippet footer()}
-    <Buttons bind:open label="Delete" />
+    <Buttons bind:open label={m.action_delete()} />
   {/snippet}
 </Modal>

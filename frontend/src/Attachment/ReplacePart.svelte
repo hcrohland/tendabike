@@ -70,10 +70,7 @@
     <Switch bind:checked={single}>{m.installpart_keep_attached()}</Switch>
   {/if}
   {#if single}
-    <Dispose
-      bind:dispose
-      name={m.replacepart_old({ type: type!.localizedName() })}
-    />
+    <Dispose bind:dispose name={type!.localizedOldAccusative()} />
   {/if}
 
   {#snippet footer()}

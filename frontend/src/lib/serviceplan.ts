@@ -10,6 +10,7 @@ import { Service, services } from "./service";
 import { get_days, handleError, myfetch } from "./store";
 import { Type, types } from "./types";
 import type { Usage } from "./usage";
+import { m } from "../../paraglide/messages";
 
 export type limit_keys =
   "days" | "hours" | "km" | "climb" | "descend" | "rides" | "kJ";
@@ -321,6 +322,11 @@ export function next_due(
     }
   }
   return result;
+}
+
+export function localizeLimitKey(key: limit_keys): string {
+  const fn = (m as unknown as Record<string, () => string>)[`limit_${key}`];
+  return typeof fn === "function" ? fn() : key;
 }
 
 export const plans = mapable("id", (s) => new ServicePlan(s));

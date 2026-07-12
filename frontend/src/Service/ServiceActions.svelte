@@ -19,7 +19,7 @@
 
   export function create(part: Part, plan?: ServicePlan) {
     saveService = saveNew;
-    title = m.action_create();
+    title = m.servicemodal_new();
     modal.start(
       new Service({ part_id: part.id, plans: plan ? [plan.id] : [] }),
     );

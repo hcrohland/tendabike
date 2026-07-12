@@ -95,6 +95,24 @@ export class Type {
   is_hook() {
     return filterValues(types, (t) => t.hooks.includes(this.id)).length > 0;
   }
+
+  localizedAnyNominative(): string {
+    const key = `category_any_nom_${this.id}`;
+    const fn = (m as unknown as Record<string, () => string>)[key];
+    return typeof fn === "function" ? fn() : `any ${this.name}`;
+  }
+
+  localizedAnyDative(): string {
+    const key = `category_any_dat_${this.id}`;
+    const fn = (m as unknown as Record<string, () => string>)[key];
+    return typeof fn === "function" ? fn() : `any ${this.name}`;
+  }
+
+  localizedOldAccusative(): string {
+    const key = `type_old_acc_${this.id}`;
+    const fn = (m as unknown as Record<string, () => string>)[key];
+    return typeof fn === "function" ? fn() : `old ${this.name}`;
+  }
 }
 
 export type ActType = {
