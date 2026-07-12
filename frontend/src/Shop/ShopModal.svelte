@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Checkbox, Input, Label, Textarea } from "flowbite-svelte";
   import type { Snippet } from "svelte";
+  import * as m from "../../paraglide/messages";
   import Modal from "../Widgets/Modal.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
   import { Shop } from "../lib/shop";
@@ -16,7 +17,7 @@
   let name = $state("");
   let description = $state("");
   let auto_approve = $state(false);
-  let title = $state("Create Shop");
+  let editing = $state(false);
 
   async function onaction() {
     shop.name = name;
@@ -38,13 +39,13 @@
       name = g.name;
       description = g.description || "";
       auto_approve = g.auto_approve;
-      title = "Edit Shop";
+      editing = true;
     } else {
       shop = new Shop({});
       name = "";
       description = "";
       auto_approve = false;
-      title = "Create Shop";
+      editing = false;
     }
     open = true;
   }
@@ -52,41 +53,44 @@
 
 <Modal size="sm" bind:open {onaction}>
   {#snippet header()}
-    {title}
+    {editing ? m.shop_edit() : m.shop_create()}
   {/snippet}
 
   <div class="space-y-4">
     <div>
-      <Label for="name" class="mb-2">Shop Name</Label>
+      <Label for="name" class="mb-2">{m.shop_name()}</Label>
       <Input
         id="name"
         type="text"
         bind:value={name}
-        placeholder="My Bike Shop"
+        placeholder={m.shop_name_placeholder()}
         autofocus
         required
       />
     </div>
 
     <div>
-      <Label for="description" class="mb-2">Description (optional)</Label>
+      <Label for="description" class="mb-2">
+        {m.shop_description()}
+      </Label>
       <Textarea
         id="description"
         bind:value={description}
-        placeholder="Describe your shop..."
+        placeholder={m.shop_description_placeholder()}
         rows={3}
       />
     </div>
+
     <div>
-      <Label for="auto_approve" class="mb-2"
-        >If registration requests are automatically approved</Label
-      >
+      <Label for="auto_approve" class="mb-2">
+        {m.shop_autoapprove()}
+      </Label>
       <Checkbox id="auto_approve" bind:checked={auto_approve} />
     </div>
   </div>
 
   {#snippet footer()}
-    <Buttons bind:open label="Save" />
+    <Buttons bind:open label={m.gearcard_save()} />
   {/snippet}
 </Modal>
 

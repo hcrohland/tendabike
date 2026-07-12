@@ -1,9 +1,10 @@
 <script lang="ts">
   import { Dropdown, DropdownDivider, DropdownItem } from "flowbite-svelte";
-  import { Shop, shops } from "../lib/shop";
-  import { refresh, user } from "../lib/user";
-  import { shop } from "../lib/shop";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
+  import * as m from "../../paraglide/messages";
+
+  import { Shop, shops, shop } from "../lib/shop";
+  import { refresh, user } from "../lib/user";
 
   let myshops = $derived(Object.values($shops));
 
@@ -19,15 +20,17 @@
 
 {#if !$shop}
   <DropdownDivider />
+
   {#if myshops.length == 1}
     <DropdownItem onclick={() => enterShop(myshops[0])}>
-      Enter {myshops[0].name}
+      {m.shop_enter_named({ name: myshops[0].name })}
     </DropdownItem>
   {:else if myshops.length > 1}
     <DropdownItem class="cursor-pointer flex-end">
-      Enter shop
-      <ChevronDownOutline class=" inline " />
+      {m.shop_enter()}
+      <ChevronDownOutline class="inline" />
     </DropdownItem>
+
     <Dropdown simple>
       {#each myshops as shop}
         <DropdownItem onclick={() => enterShop(shop)}>
@@ -36,5 +39,8 @@
       {/each}
     </Dropdown>
   {/if}
-  <DropdownItem href="/#/shops">Manage shops</DropdownItem>
+
+  <DropdownItem href="/#/shops">
+    {m.shop_manage()}
+  </DropdownItem>
 {/if}

@@ -10,6 +10,7 @@
     Li,
   } from "flowbite-svelte";
   import { onMount } from "svelte";
+  import * as m from "../../paraglide/messages";
   import { myfetch, handleError } from "../lib/store";
   import { Shop, shops } from "../lib/shop";
   import ShopSearch from "./ShopSearch.svelte";
@@ -98,7 +99,6 @@
   onMount(() => {
     loadSubscriptions();
 
-    // Listen for subscription updates from other components
     const handleSubscriptionUpdate = () => {
       loadSubscriptions();
     };
@@ -116,50 +116,56 @@
 </script>
 
 <div class="space-y-6">
-  <!-- Subscriptions list -->
   <div>
     <div class="mb-4 flex items-center justify-between">
       <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-        My Subscriptions
+        {m.shop_my_subscriptions()}
       </h3>
-      <Button size="sm" onclick={loadSubscriptions}>Refresh</Button>
+
+      <Button size="sm" onclick={loadSubscriptions}>
+        {m.header_refresh()}
+      </Button>
     </div>
 
     {#if loading}
-      <p class="text-text-1">Loading...</p>
+      <p class="text-text-1">{m.loading()}</p>
     {:else if subscriptions.length === 0}
-      <p class="text-text-1">You haven't subscribed to any shops yet.</p>
+      <p class="text-text-1">
+        {m.shop_no_subscriptions()}
+      </p>
     {:else}
       <div class="overflow-x-auto">
         <Table>
           <TableHead>
             <SubscriptionRow />
           </TableHead>
+
           <TableBody>
             {#each subscriptions as subscription}
               <SubscriptionRow {subscription}>
                 {#if confirmingAction?.id === subscription.id}
-                  <!-- Confirmation dialog -->
                   <div class="flex flex-col gap-2 min-w-48">
                     <p class="text-sm text-gray-700 dark:text-gray-300">
                       {confirmingAction!.action === "unsubscribe"
-                        ? "Unsubscribe from this shop?"
-                        : "Delete this rejected request?"}
+                        ? m.shop_confirm_unsubscribe()
+                        : m.shop_confirm_delete_request()}
                     </p>
+
                     <div class="flex gap-2">
                       <Button
                         size="xs"
                         color="red"
                         onclick={() => cancelSubscription(subscription)}
                       >
-                        Confirm
+                        {m.action_confirm()}
                       </Button>
+
                       <Button
                         size="xs"
                         color="alternative"
                         onclick={cancelConfirmation}
                       >
-                        Cancel
+                        {m.action_cancel()}
                       </Button>
                     </div>
                   </div>
@@ -171,13 +177,14 @@
                         color="alternative"
                         onclick={() => cancelSubscription(subscription)}
                       >
-                        Cancel
+                        {m.action_cancel()}
                       </Button>
                     {:else if subscription.status === "active"}
                       <ButtonGroup>
                         <Button size="xs" color="alternative">
-                          Register {$category.name}s
+                          {m.shop_register_gear({ category: $category.name })}
                         </Button>
+
                         <Dropdown simple>
                           {#each mygear as gear}
                             <Li class="m-3">
@@ -195,6 +202,7 @@
                             </Li>
                           {/each}
                         </Dropdown>
+
                         <Button
                           size="xs"
                           color="alternative"
@@ -204,7 +212,7 @@
                             (p) => p.shop == subscription.shop_id,
                           )}
                         >
-                          Unsubscribe
+                          {m.shop_unsubscribe()}
                         </Button>
                       </ButtonGroup>
                     {:else if subscription.status === "rejected"}
@@ -214,7 +222,7 @@
                         onclick={() =>
                           startConfirmation(subscription.id!, "delete")}
                       >
-                        Delete
+                        {m.action_delete()}
                       </Button>
                     {/if}
                   </div>

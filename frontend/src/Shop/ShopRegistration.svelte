@@ -5,6 +5,7 @@
     Label,
     Select,
   } from "flowbite-svelte";
+  import * as m from "../../paraglide/messages";
   import { Shop, shop, shops } from "../lib/shop";
   import { user } from "../lib/user";
   import type { Part } from "../lib/part";
@@ -46,17 +47,17 @@
   {#if part.shop && !disabled}
     <DropdownDivider />
     <DropdownItem onclick={unregisterFromShop}>
-      Move out of {$shops[part.shop]?.name}
+      {m.shop_unregister_from({ name: $shops[part.shop]?.name ?? "" })}
     </DropdownItem>
   {:else if !$shop && $user?.id === part.owner && userShops.length > 0}
     <DropdownDivider />
     <DropdownItem class="flex items-center gap-2">
       <Label>
-        Put into
+        {m.shop_register_to()}
         <Select
           onchange={(e: any) => registerToShop(e.target.value)}
           {disabled}
-          placeholder="Choose shop..."
+          placeholder={m.shop_choose_placeholder()}
         >
           {#each userShops as shop}
             <option value={shop.id}>

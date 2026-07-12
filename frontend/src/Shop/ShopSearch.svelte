@@ -1,5 +1,7 @@
 <script lang="ts">
   import { Input, Spinner } from "flowbite-svelte";
+  import * as m from "../../paraglide/messages";
+
   import ShopList from "./ShopList.svelte";
   import { handleError, myfetch } from "../lib/store";
   import { Shop } from "../lib/shop";
@@ -55,25 +57,22 @@
   }
 </script>
 
-<!-- Divider -->
-<hr class="border-gray-200 dark:border-gray-700 my-4" />
+<hr class="my-4 border-gray-200 dark:border-gray-700" />
 
-<!-- Search for shops -->
 <div>
   <h3 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-    Find Shops
+    {m.shop_search_header()}
   </h3>
+
   <div class="space-y-4">
-    <div>
-      <div class="flex gap-2">
-        <Input
-          id="search"
-          type="text"
-          bind:value={searchQuery}
-          oninput={handleSearchInput}
-          placeholder="Search for shops to request subscription"
-        />
-      </div>
+    <div class="flex gap-2">
+      <Input
+        id="search"
+        type="text"
+        bind:value={searchQuery}
+        oninput={handleSearchInput}
+        placeholder={m.shop_search_placeholder()}
+      />
     </div>
 
     {#if isSearching}
@@ -84,7 +83,7 @@
       <ShopList shops={searchResults} {users} />
     {:else if searchQuery.trim()}
       <p class="py-8 text-center text-text-1">
-        No shops found matching "{searchQuery}"
+        {m.shop_search_none({ query: searchQuery })}
       </p>
     {/if}
   </div>

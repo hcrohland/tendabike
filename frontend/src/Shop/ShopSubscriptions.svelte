@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Table, TableHead, TableBody, Button, Input } from "flowbite-svelte";
+  import * as m from "../../paraglide/messages";
   import { myfetch, handleError } from "../lib/store";
   import type { ShopSubscription } from "../lib/subscription";
   import { onMount } from "svelte";
@@ -77,20 +78,22 @@
 
 <div class="space-y-6">
   {#if !($shops[shopId].auto_approve && subscriptions.length === 0)}
-    <!-- Subscriptions list -->
     <div>
       <div class="mb-4 flex items-center justify-between">
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-          "Pending Subscription Requests"
+          {m.shop_pending_requests()}
         </h3>
-        <Button size="sm" onclick={loadSubscriptions}>Refresh</Button>
+
+        <Button size="sm" onclick={loadSubscriptions}>
+          {m.header_refresh()}
+        </Button>
       </div>
 
       {#if loading}
-        <p class="text-text-1">Loading...</p>
+        <p class="text-text-1">{m.loading()}</p>
       {:else if subscriptions.length === 0}
         <p class="text-text-1">
-          "No pending subscription requests for this shop."
+          {m.shop_no_pending_requests()}
         </p>
       {:else}
         <div class="overflow-x-auto">
@@ -102,12 +105,11 @@
               {#each subscriptions as subscription}
                 <SubscriptionRow {subscription}>
                   {#if respondingTo === subscription.id}
-                    <!-- Response form -->
-                    <div class="flex flex-col gap-2 min-w-48">
+                    <div class="flex min-w-48 flex-col gap-2">
                       <Input
                         type="text"
                         bind:value={responseMessage}
-                        placeholder="Optional message..."
+                        placeholder={m.shop_response_placeholder()}
                         size="sm"
                       />
                       <div class="flex gap-2">
@@ -120,7 +122,7 @@
                               responseMessage,
                             )}
                         >
-                          Approve
+                          {m.action_approve()}
                         </Button>
                         <Button
                           size="xs"
@@ -131,28 +133,26 @@
                               responseMessage,
                             )}
                         >
-                          Reject
+                          {m.action_reject()}
                         </Button>
                         <Button
                           size="xs"
                           color="alternative"
                           onclick={cancelResponding}
                         >
-                          Cancel
+                          {m.action_cancel()}
                         </Button>
                       </div>
                     </div>
-                  {:else}
+                  {:else if subscription.status === "pending"}
                     <div class="flex gap-2">
-                      {#if subscription.status === "pending"}
-                        <Button
-                          size="xs"
-                          color="alternative"
-                          onclick={() => startResponding(subscription.id!)}
-                        >
-                          Respond
-                        </Button>
-                      {/if}
+                      <Button
+                        size="xs"
+                        color="alternative"
+                        onclick={() => startResponding(subscription.id!)}
+                      >
+                        {m.action_respond()}
+                      </Button>
                     </div>
                   {/if}
                 </SubscriptionRow>

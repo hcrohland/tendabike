@@ -1,8 +1,10 @@
 <script lang="ts">
   import { Card, Badge } from "flowbite-svelte";
   import type { Snippet } from "svelte";
-  import type { Shop } from "../lib/shop";
   import { onMount, onDestroy } from "svelte";
+  import * as m from "../../paraglide/messages";
+
+  import type { Shop } from "../lib/shop";
   import { type UserPublic } from "../lib/user";
   import { type Map } from "../lib/mapable";
 
@@ -18,7 +20,6 @@
 
   let owner = $derived(users[shop.owner]);
 
-  // Get bikes registered to this shop
   let partsCount = $state(0);
 
   async function loadPartsCount() {
@@ -28,7 +29,6 @@
         partsCount = parts.length;
       } catch (error) {
         console.error("Error loading shop parts:", error);
-        // Silently fail - user might not have permission
       }
     }
   }
@@ -39,10 +39,8 @@
     }
   }
 
-  // Load parts count on mount
   onMount(() => {
     loadPartsCount();
-    // Listen for shop updates
     window.addEventListener("shop-updated", handleShopUpdate as EventListener);
   });
 
@@ -68,12 +66,15 @@
       >
         {shop.name}
       </h5>
+
       {#if !isOwner && owner.firstname && owner.name}
         <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          by {owner.firstname}
+          {m.shop_by()}
+          {owner.firstname}
           {owner.name}
         </p>
       {/if}
+
       {#if shop.description}
         <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
           {shop.description}
@@ -85,15 +86,20 @@
       {#if isOwner}
         <Badge color="blue">
           {partsCount}
-          {partsCount === 1 ? "part" : "parts"}
+          {partsCount === 1 ? m.shop_part() : m.shop_parts()}
         </Badge>
-        <Badge color="green">Owner</Badge>
+
+        <Badge color="green">
+          {m.shop_owner()}
+        </Badge>
       {/if}
     </div>
 
     <div class="text-xs text-text-1">
-      Created {new Date(shop.created_at).toLocaleDateString()}
+      {m.shop_created()}
+      {new Date(shop.created_at).toLocaleDateString()}
     </div>
+
     {#if sub}
       {@render sub(shop)}
     {/if}
