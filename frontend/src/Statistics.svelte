@@ -14,6 +14,7 @@
   import { Activity, activities } from "./lib/activity";
   import { Usage } from "./lib/usage";
   import { parts, Part } from "./lib/part";
+  import * as m from "../paraglide/messages";
 
   class Day extends Usage {
     start: Date;
@@ -155,7 +156,7 @@
     if (garmin) {
       layout.annotations = [
         {
-          text: "Insights derived in part from<br>Garmin device-sourced data",
+          text: m.stats_garmin_annotation(),
           showarrow: false,
           xref: "paper",
           yref: "paper",
@@ -206,26 +207,26 @@
           cumm,
           null,
           perMonths,
-          "Time (h)",
+          m.stats_time_h(),
           [
-            ["time", "moving time"],
-            ["duration", "pause", "time"],
+            ["time", m.stats_moving_time()],
+            ["duration", m.stats_pause(), "time"],
           ],
           { barmode: "stack" },
         );
       else
-        return getPlot(years, cumm, comp, perMonths, "Time (h)", [
-          ["time", "moving time"],
-          ["duration", "outdoor time"],
+        return getPlot(years, cumm, comp, perMonths, m.stats_time_h(), [
+          ["time", m.stats_moving_time()],
+          ["duration", m.stats_outdoor_time()],
         ]);
     } else if (title == "distance")
-      return getPlot(years, cumm, comp, perMonths, "Distance (km)", [
-        ["distance"],
+      return getPlot(years, cumm, comp, perMonths, m.stats_distance_km(), [
+        ["distance", m.act_col_distance()],
       ]);
     else
-      return getPlot(years, cumm, comp, perMonths, "Elevation (m)", [
-        ["climb"],
-        ["descend"],
+      return getPlot(years, cumm, comp, perMonths, m.stats_elevation_m(), [
+        ["climb", m.limit_climb()],
+        ["descend", m.limit_descend()],
       ]);
   }
 
@@ -251,7 +252,7 @@
 
 <div class="flex flex-wrap pb-10 gap-2 justify-between">
   <ButtonGroup>
-    <InputAddon>Your statistics for</InputAddon>
+    <InputAddon>{m.stats_your_stats_for()}</InputAddon>
     <Select
       bind:value={cumm}
       onchange={() => {
@@ -263,23 +264,23 @@
         <option value={i}>{item.year}</option>
       {/each}
     </Select>
-    <InputAddon>vs</InputAddon>
+    <InputAddon>{m.stats_vs()}</InputAddon>
     <Select bind:value={comp} classes={{ select: "rounded-none h-full" }}>
       {#each years as item, i (item.year)}
         {@const selected = (comp ? comp : cumm) == i}
         {#if i != cumm}
           <option value={i} {selected}>{item.year}</option>
         {:else}
-          <option value={null} {selected}>-- None --</option>
+          <option value={null} {selected}>{m.selectpart_none()}</option>
         {/if}
       {/each}
     </Select>
     <InputAddon>
-      <Switch bind:checked={perMonths} class="">Per Month</Switch>
+      <Switch bind:checked={perMonths} class="">{m.stats_per_month()}</Switch>
     </InputAddon>
   </ButtonGroup>
   <MultiSelect
-    placeholder="Select bikes..."
+    placeholder={m.stats_select_bikes_placeholder()}
     items={all_gears
       .sort(by("last_used"))
       .map((g) => ({ value: g, name: g.name, id: g.id }))}
@@ -289,8 +290,8 @@
 </div>
 
 <Tabs bind:selected={title}>
-  <TabItem title="Elevation" key="elevation" />
-  <TabItem title="Distance" key="distance" />
-  <TabItem title="Time" key="time" />
+  <TabItem title={m.stats_tab_elevation()} key="elevation" />
+  <TabItem title={m.act_col_distance()} key="distance" />
+  <TabItem title={m.act_col_time()} key="time" />
 </Tabs>
 <Plotly {...plot(title, perMonths, cumm!, comp, years)} />
