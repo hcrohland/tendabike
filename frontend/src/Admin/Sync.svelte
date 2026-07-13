@@ -2,6 +2,7 @@
   import { Button } from "flowbite-svelte";
   import { handleError, myfetch } from "../lib/store";
   import type { User } from "../lib/user";
+  import * as m from "../../paraglide/messages";
 
   export let user: User;
   export let refresh: () => void;
@@ -26,8 +27,8 @@
 
 <Button onclick={() => sync(user.id)}>
   {#await promise}
-    Processed {count} ...
+    {m.sync_processed({ count })}
   {:then}
-    Process Event Queue
+    {m.sync_process_queue()}
   {/await}
 </Button>

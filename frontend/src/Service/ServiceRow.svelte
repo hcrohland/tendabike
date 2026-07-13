@@ -8,6 +8,7 @@
   import ServiceMenu from "./ServiceMenu.svelte";
   import ServiceBadge from "../Widgets/ServiceBadge.svelte";
   import type { limit_keys } from "../lib/serviceplan";
+  import { m } from "../../paraglide/messages";
 
   interface Props {
     service?: Service | undefined;
@@ -39,7 +40,8 @@
 </script>
 
 <span class="text-xs text-text-1 mt-1">
-  {days} days
+  {days}
+  {m.time_days()}
   <ServiceBadge service={dues?.days} />
 </span>
 
@@ -66,7 +68,7 @@
     {:else}
       <span class="text-xs text-text-1 mt-1">
         {#if !successor}
-          Since
+          {m.time_since()}
         {/if}
         {fmtRange(part.purchase, successor?.time)}
       </span>

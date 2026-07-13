@@ -7,6 +7,7 @@
   import Buttons from "../Widgets/Buttons.svelte";
   import { activities } from "../lib/activity";
   import Modal from "../Widgets/Modal.svelte";
+  import { m } from "../../paraglide/messages";
 
   let open = $state(false);
 
@@ -34,11 +35,11 @@
 
 <Modal bind:open {onaction}>
   {#snippet header()}
-    Change {type.name} details
+    {m.changepart_header({ type: type.localizedName() })}
   {/snippet}
   <NewForm {type} bind:part {maxdate} />
 
   {#snippet footer()}
-    <Buttons bind:open label="Change" />
+    <Buttons bind:open label={m.action_change()} />
   {/snippet}
 </Modal>

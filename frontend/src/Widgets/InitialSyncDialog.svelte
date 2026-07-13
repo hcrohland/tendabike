@@ -17,11 +17,11 @@
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
  -->
-
 <script lang="ts">
   import { Modal, P, Heading, Button } from "flowbite-svelte";
   import { myfetch, handleError } from "../lib/store";
   import { user } from "../lib/user";
+  import { m } from "../../paraglide/messages";
 
   let open = $state($user?.onboarding_status === "pending");
 
@@ -63,33 +63,32 @@
 >
   <div class="text-center">
     <Heading tag="h3" class="mb-5 text-lg font-normal text-text-1">
-      Welcome to TendaBike!
+      {m.initialsync_welcome()}
     </Heading>
     <P class="mb-4 text-left">
-      Would you like to import your historic activities from Strava?
+      {m.initialsync_question()}
     </P>
     <P class="mb-6 text-left text-sm text-text-1">
-      This will sync all your past activities to help you track your bike
-      maintenance.
+      {m.initialsync_desc1()}
     </P>
     <P class="mb-6 text-left text-sm text-text-1">
-      It will run in the background and may take a few minutes depending on how
-      many activities you have.
+      {m.initialsync_desc2()}
     </P>
     <P class="mb-6 text-left text-sm text-text-1">
-      You can also skip this step. In that case you can pull the old activities
-      later any time in the user menu under Sync &RightArrow; "Import Historic
-      Activities"
+      {m.initialsync_desc3({
+        sync: m.header_sync(),
+        historic: m.header_import_historic(),
+      })}
     </P>
     <P class="mb-6 text-left text-sm text-text-1">
-      In any case the app will pull in new activities automatically. <br />
+      {m.initialsync_desc4()} <br />
     </P>
     <div class="flex justify-center gap-4">
       <Button color="blue" disabled={loading} onclick={triggerSync}>
-        {loading ? "Importing..." : "Import Activities"}
+        {loading ? m.action_importing() : m.header_import_activities()}
       </Button>
       <Button color="alternative" disabled={loading} onclick={skipSync}>
-        Skip for Now
+        {m.initialsync_skip()}
       </Button>
     </div>
   </div>

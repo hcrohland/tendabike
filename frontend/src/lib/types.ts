@@ -3,6 +3,7 @@ import { Activity } from "./activity";
 import { by, filterValues, mapObject, type Map } from "./mapable";
 import { Part } from "./part";
 import { myfetch } from "./store";
+import * as m from "../../paraglide/messages";
 
 export class Type {
   id: number;
@@ -45,10 +46,44 @@ export class Type {
   }
 
   human_name(hook: number | null) {
-    return (
-      (hook != null && this.hooks.length > 1 ? types[hook].prefix + " " : "") +
-      this.name
-    );
+    if (hook != null && this.hooks.length > 1) {
+      return this.labelWithPosition(types[hook].prefix);
+    }
+    return this.localizedName();
+  }
+
+  /** translated display name, falls back to the raw backend name
+   * if no translation key exists for this type id */
+  localizedName(): string {
+    const key = `type_${this.id}`;
+    const fn = (m as unknown as Record<string, () => string>)[key];
+    return typeof fn === "function" ? fn() : this.name;
+  }
+
+  /** translated position prefix (front/rear/left/right etc), falls back
+   * to the raw prefix if no translation key exists */
+  localizedPrefix(): string {
+    if (!this.prefix) return "";
+    const key = `position_${this.prefix.toLowerCase()}`;
+    const fn = (m as unknown as Record<string, () => string>)[key];
+    return typeof fn === "function" ? fn() : this.prefix;
+  }
+
+  /** translated group name, falls back to the raw group name
+   * if no translation key exists */
+  localizedGroup(): string {
+    return localizeGroupName(this.group);
+  }
+
+  /** composed "position + name" label, e.g. "front tire" / "Vorderreifen",
+   * used for types attached at a specific hook position */
+  labelWithPosition(prefix: string): string {
+    const name = this.localizedName();
+    if (!prefix) return name;
+    const key = `position_${prefix.toLowerCase()}`;
+    const fn = (m as unknown as Record<string, () => string>)[key];
+    const position = typeof fn === "function" ? fn() : prefix;
+    return m.type_with_position({ position, name });
   }
 
   subtypes() {
@@ -59,6 +94,24 @@ export class Type {
 
   is_hook() {
     return filterValues(types, (t) => t.hooks.includes(this.id)).length > 0;
+  }
+
+  localizedAnyNominative(): string {
+    const key = `category_any_nom_${this.id}`;
+    const fn = (m as unknown as Record<string, () => string>)[key];
+    return typeof fn === "function" ? fn() : `any ${this.name}`;
+  }
+
+  localizedAnyDative(): string {
+    const key = `category_any_dat_${this.id}`;
+    const fn = (m as unknown as Record<string, () => string>)[key];
+    return typeof fn === "function" ? fn() : `any ${this.name}`;
+  }
+
+  localizedOldAccusative(): string {
+    const key = `type_old_acc_${this.id}`;
+    const fn = (m as unknown as Record<string, () => string>)[key];
+    return typeof fn === "function" ? fn() : `old ${this.name}`;
   }
 }
 
@@ -84,6 +137,13 @@ export async function getTypes() {
   }, partTypes);
 
   category = writable(types[1]);
+}
+
+export function localizeGroupName(group: string | undefined): string {
+  if (!group) return "";
+  const key = `group_${group.toLowerCase().replace(/\s+/g, "_")}`;
+  const fn = (m as unknown as Record<string, () => string>)[key];
+  return typeof fn === "function" ? fn() : group;
 }
 
 export let category: Writable<Type>;

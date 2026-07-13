@@ -1,11 +1,13 @@
 <script lang="ts">
   import { Heading, Hr, Li, List, P } from "flowbite-svelte";
+  import * as m from "../../paraglide/messages";
 </script>
 
 <div class="p-4 sm:p-6 md:p-8 m-8 max-w-200">
   <a href="http://www.strava.com" class="float-end items-start" target="_blank">
     <img src="api_logo_pwrdBy_strava.png" alt="powered by Strava" height="20" />
   </a>
+
   <Heading tag="h3">Tend your bike for a happy ride</Heading>
   <P>Know how long your parts last and when to maintain them</P>
   <Heading tag="h5">General use</Heading>
@@ -22,8 +24,7 @@
     activities into the database. Don't be afraid. You can correct anything
     later. Changes on Strava will be replicated into TendaBike
     <br /> After connecting you can start adding service plans, part and services.
-    This is easiest done from the bike's detail page which you can find by clicking
-    on the arrow right of the bike's name
+    This is easiest done from the bike's detail page
   </P>
 
   <Heading tag="h5">Elevation data</Heading>
@@ -48,7 +49,7 @@
         <br /> The resulting file will include the elevation loss
       </Li>
       <Li>
-        Upload this file to TendaBike via 'Sync' &rightarrow; 'With CSV file'
+        Upload this file to TendaBike via '{m.header_sync()}' &rightarrow; '{m.header_csv()}'
       </Li>
     </List>
   </P>

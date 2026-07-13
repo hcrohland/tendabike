@@ -9,6 +9,7 @@
   import { parts } from "../lib/part";
   import { attachments } from "../lib/attachment";
   import Modal from "../Widgets/Modal.svelte";
+  import * as m from "../../paraglide/messages";
 
   let files: FileList | undefined = $state();
   let result: { good: string[]; bad: string[] } | undefined = $state();
@@ -48,14 +49,14 @@
   }
 </script>
 
-<Modal bind:open title="Upload Garmin activities file">
+<Modal bind:open title={m.garmin_upload_title()}>
   {#if result}
     {#if result.good.length > 0}
-      Synchronized {result.good.length} activities.
+      {m.garmin_sync_success({ count: result.good.length })}
     {/if}
     {#if result.bad.length > 0}
       <br />
-      Could not match the following {result.bad.length} activities:
+      {m.garmin_sync_failed({ count: result.bad.length })}
       <br />
       <Listgroup>
         {#each result.bad as r}
@@ -64,22 +65,15 @@
       </Listgroup>
     {/if}
   {:else}
-    <Fileupload
-      bind:files
-      accept="text/csv"
-      title="Upload a CSV file exported from Garmin connect activities. 
-It will match activities based on the start time. 
-If there is no match it will skip the activity.
-You can upload multiple times."
-    />
+    <Fileupload bind:files accept="text/csv" title={m.garmin_upload_hint()} />
     <br />
   {/if}
   {#snippet footer()}
     {#if !result}
-      <Button onclick={sendFile} {disabled}>Synchronize</Button>
-      <Button onclick={reset}>Cancel</Button>
+      <Button onclick={sendFile} {disabled}>{m.action_synchronize()}</Button>
+      <Button onclick={reset}>{m.action_cancel()}</Button>
     {:else}
-      <Button onclick={reset}>Ok</Button>
+      <Button onclick={reset}>{m.action_ok()}</Button>
     {/if}
   {/snippet}
 </Modal>

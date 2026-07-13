@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Label, Textarea } from "flowbite-svelte";
   import type { Snippet } from "svelte";
+  import * as m from "../../paraglide/messages";
   import Modal from "../Widgets/Modal.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
   import { type Shop } from "../lib/shop";
@@ -41,28 +42,30 @@
 
 <Modal size="sm" bind:open {onaction}>
   {#snippet header()}
-    Request Shop Subscription
+    {m.shop_request_subscription()}
   {/snippet}
 
   <div class="space-y-4">
     <p class="text-sm text-gray-600 dark:text-gray-400">
-      Request to subscribe to <strong>{shop?.name}</strong>. Once approved, you
-      can register any of your bikes to this shop.
+      {m.shop_request_subscription_description({ name: shop?.name ?? "" })}
     </p>
 
     <div>
-      <Label for="message" class="mb-2">Message (optional)</Label>
+      <Label for="message" class="mb-2">
+        {m.shop_request_message()}
+      </Label>
+
       <Textarea
         id="message"
         bind:value={message}
-        placeholder="Add a message to the shop owner..."
+        placeholder={m.shop_request_message_placeholder()}
         rows={3}
       />
     </div>
   </div>
 
   {#snippet footer()}
-    <Buttons bind:open label="Send Request" />
+    <Buttons bind:open label={m.shop_send_request()} />
   {/snippet}
 </Modal>
 

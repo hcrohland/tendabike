@@ -4,6 +4,7 @@
   import { link } from "svelte-spa-router";
   import { attachments, part_at_hook } from "../lib/attachment";
   import { parts } from "../lib/part";
+  import { m } from "../../paraglide/messages";
 
   interface Props {
     plan: ServicePlan | undefined;
@@ -15,7 +16,8 @@
 </script>
 
 {#if plan}
-  {plan.name} for
+  {plan.name}
+  {m.planname_for()}
   {#if plan.hook}
     {#if plan.part}
       <a
@@ -33,9 +35,9 @@
       {types[plan.what].human_name(plan.hook)}
     {/if}
     {#if plan.no_template($plans)}
-      of {@html partlink}
+      {m.attachform_of()} {@html partlink}
     {:else}
-      of any {$category.name.toLocaleLowerCase()}
+      {m.attachform_of()} {$category.localizedAnyDative()}
     {/if}
   {:else}
     {@html partlink}

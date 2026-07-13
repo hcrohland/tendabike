@@ -3,6 +3,7 @@
   import ShowMore from "../Widgets/ShowMore.svelte";
   import ServiceRow from "./ServiceRow.svelte";
   import { parts } from "../lib/part";
+  import { m } from "../../paraglide/messages";
 
   interface Props {
     service: Service;
@@ -18,7 +19,7 @@
 
 <div class="rounded-lg border border-border-subtle bg-surface-1 p-2">
   <ServiceRow {part} {service} {successor}>
-    <ShowMore bind:show_more title="history" />
+    <ShowMore bind:show_more title={m.partcard_history()} />
   </ServiceRow>
   {#if show_more}
     <div class="rounded-lg border border-border-subtle bg-surface-1 p-2">

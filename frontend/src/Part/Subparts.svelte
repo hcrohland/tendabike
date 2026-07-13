@@ -15,16 +15,11 @@
 
   type TreeNode = {
     attachments: Attachment[];
-    prefix: string;
     type: Type;
     children: TreeNode[];
   };
 
-  function buildTree(
-    hook: Type,
-    attachees: Attachment[],
-    prefix: string,
-  ): TreeNode[] {
+  function buildTree(hook: Type, attachees: Attachment[]): TreeNode[] {
     const typeList = filterValues(types, (a: Type) =>
       a.hooks.includes(hook.id),
     ).sort((a: Type, b: Type) => a.order - b.order);
@@ -35,19 +30,16 @@
       });
       attachments.sort(by("attached"));
 
-      const children =
-        attachments.length > 0
-          ? buildTree(type, attachees, "")
-          : buildTree(type, attachees, type.prefix);
+      const children = buildTree(type, attachees);
 
-      return { attachments, prefix, type, children };
+      return { attachments, type, children };
     });
   }
 </script>
 
 {#if attachees.length > 0}
   <div class="flex flex-col gap-3">
-    {#each buildTree(part.type(), attachees, "") as node (node.type.id)}
+    {#each buildTree(part.type(), attachees) as node (node.type.id)}
       <PartCard {...node} />
     {/each}
   </div>

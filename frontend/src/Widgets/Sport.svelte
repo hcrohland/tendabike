@@ -14,10 +14,11 @@
   import { Dropdown, DropdownItem, Spinner } from "flowbite-svelte";
   import { category, types } from "../lib/types";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
+  import { m } from "../../paraglide/messages";
 </script>
 
 <DropdownItem class="cursor-pointer">
-  Switch Sport
+  {m.sport_switch()}
   <ChevronDownOutline class="inline" />
 </DropdownItem>
 <Dropdown simple {ontoggle}>
@@ -28,7 +29,7 @@
   {:then}
     {#each categories.sort() as cat}
       <DropdownItem onclick={() => category.set(types[cat])}>
-        {types[cat].name}s
+        {types[cat].localizedName()}
       </DropdownItem>
     {/each}
   {:catch error}

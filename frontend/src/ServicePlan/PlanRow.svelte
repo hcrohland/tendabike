@@ -8,6 +8,7 @@
   import PlanName from "./PlanName.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import PlanMenu from "./PlanMenu.svelte";
+  import * as m from "../../paraglide/messages";
 
   interface Props {
     plan: ServicePlan;
@@ -20,7 +21,7 @@
 
   let part = $derived(plan.getpart($parts, $attachments)) as Part;
   let serviceList = $derived(plan.services(part, $services));
-  let title = "service history";
+  let title = m.planrow_service_history();
   let dues: any = $derived(next_due(part, [plan], $services, $usages));
 </script>
 

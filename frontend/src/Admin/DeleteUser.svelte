@@ -3,6 +3,7 @@
   import type { User } from "../lib/user";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";
+  import * as m from "../../paraglide/messages";
 
   let user = $state<any>();
 
@@ -25,11 +26,9 @@
 
 <Modal size="xs" bind:open {onaction}>
   {#snippet header()}
-    Do you really want to delete User <br />
-    {user.firstname}
-    {user.name}?
+    {m.admin_delete_user_confirm({ name: `${user.firstname} ${user.name}` })}
   {/snippet}
   {#snippet footer()}
-    <Buttons bind:open label="Delete" />
+    <Buttons bind:open label={m.action_delete()} />
   {/snippet}
 </Modal>

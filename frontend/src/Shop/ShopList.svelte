@@ -1,10 +1,12 @@
 <script lang="ts">
   import { Button } from "flowbite-svelte";
+  import type { Snippet } from "svelte";
+  import * as m from "../../paraglide/messages";
+
   import ShopCard from "./ShopCard.svelte";
   import { type Shop } from "../lib/shop";
   import { actions } from "../Widgets/Actions.svelte";
   import { user, users as global_users, type UserPublic } from "../lib/user";
-  import type { Snippet } from "svelte";
   import ShopOwnerMenu from "./ShopOwnerMenu.svelte";
   import { type Map } from "../lib/mapable";
 
@@ -30,7 +32,9 @@
       {#if isOwner}
         <ShopOwnerMenu {shop} />
       {:else}
-        <Button onclick={() => request(shop)}>Request Subscription</Button>
+        <Button onclick={() => request(shop)}>
+          {m.shop_request_subscription()}
+        </Button>
       {/if}
     </ShopCard>
   {/each}
@@ -39,7 +43,7 @@
 {#if shops.length === 0}
   <div class="py-12 text-center">
     <p class="text-text-1">
-      No shops found. Create your first shop to get started!
+      {m.shop_none_found()}
     </p>
   </div>
 {/if}

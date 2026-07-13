@@ -6,6 +6,7 @@
   import { filterValues } from "../lib/mapable";
   import { parts } from "../lib/part";
   import { attachments } from "../lib/attachment";
+  import * as m from "../../paraglide/messages";
 
   export let params: { part: number; start?: number };
 
@@ -13,7 +14,7 @@
   let title: string;
   $: if (params.part) {
     let part = $parts[params.part];
-    title = " for " + part.name;
+    title = m.act_heading_for({ name: part.name });
     if (part.isGear()) {
       acts = filterValues($activities, (a) => a.gear == part.id);
     } else {
@@ -23,22 +24,23 @@
         .filter((a) => (start ? a.isAttached(start) : true));
       acts = atts.map((att) => att.activities($activities)).flat();
       if (start)
-        title =
-          title +
-          " attached to " +
-          ($parts[atts[0].gear] ? $parts[atts[0].gear].name : "unknown part") +
-          " since " +
-          atts[0].fmtTime();
+        title = m.act_heading_attached({
+          name: part.name,
+          part: $parts[atts[0].gear]
+            ? $parts[atts[0].gear].name
+            : m.act_unknown_part(),
+          date: atts[0].fmtTime(),
+        });
     }
   } else {
-    title = "";
+    title = m.act_heading_all();
     acts = $category.activities($activities);
   }
 </script>
 
 <div class="flex justify-around">
   <Card class="flex text-xl text-center p-4 mb-4">
-    All activities {title}
+    {title}
   </Card>
 </div>
 <ActTable {acts} />

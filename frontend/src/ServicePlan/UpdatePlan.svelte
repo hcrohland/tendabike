@@ -3,8 +3,9 @@
   import { parts } from "../lib/part";
   import { category, types } from "../lib/types";
   import PlanModal from "./PlanModal.svelte";
+  import { m } from "../../paraglide/messages";
 
-  let title: string = $state("");
+  let header: string = $state("");
   let modal: { start: (p: ServicePlan) => void };
 
   async function safePlan(newplan: ServicePlan) {
@@ -15,19 +16,23 @@
     if (p.part) {
       let part = $parts[p.part];
       if (part.isGear() && p.hook != null) {
-        title += types[p.what].human_name(p.hook) + " of ";
+        header = m.updateplan_header_hook_part({
+          hook: types[p.what].human_name(p.hook),
+          name: part.name,
+        });
+      } else {
+        header = m.updateplan_header_part({ name: part.name });
       }
-      title += part.name;
     } else {
-      title =
-        types[p.what].human_name(p.hook) +
-        " of any " +
-        $category.name.toLocaleLowerCase();
+      header = m.updateplan_header_generic({
+        hook: types[p.what].human_name(p.hook),
+        any: $category.localizedAnyDative(),
+      });
     }
     modal.start(new ServicePlan(p));
   }
 </script>
 
 <PlanModal bind:this={modal} {safePlan} no_gear>
-  Update service plan for {title}
+  {header}
 </PlanModal>

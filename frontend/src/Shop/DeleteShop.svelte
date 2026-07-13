@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Button } from "flowbite-svelte";
   import type { Snippet } from "svelte";
+  import * as m from "../../paraglide/messages";
   import Modal from "../Widgets/Modal.svelte";
   import { type Shop } from "../lib/shop";
 
@@ -28,22 +29,25 @@
 
 <Modal size="sm" bind:open {onaction}>
   {#snippet header()}
-    Delete Shop
+    {m.shop_delete()}
   {/snippet}
 
   <div class="space-y-4">
     <p class="text-gray-700 dark:text-gray-300">
-      Are you sure you want to delete <strong>{shop?.name}</strong>?
+      {m.shop_delete_confirm({ name: shop?.name ?? "" })}
     </p>
     <p class="text-sm text-gray-600 dark:text-gray-400">
-      You can only delete shops that have no bikes assigned. This action cannot
-      be undone.
+      {m.shop_delete_hint()}
     </p>
   </div>
 
   {#snippet footer()}
-    <Button color="alternative" onclick={() => (open = false)}>Cancel</Button>
-    <Button color="red" onclick={onaction}>Delete</Button>
+    <Button color="alternative" onclick={() => (open = false)}>
+      {m.action_cancel()}
+    </Button>
+    <Button color="red" onclick={onaction}>
+      {m.action_delete()}
+    </Button>
   {/snippet}
 </Modal>
 

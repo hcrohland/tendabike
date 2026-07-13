@@ -6,6 +6,7 @@
   import { Part } from "../lib/part";
   import { attachments } from "../lib/attachment";
   import SelectPart from "../Widgets/SelectPart.svelte";
+  import { m } from "../../paraglide/messages";
 
   function prevdate(time: Date) {
     let last = filterValues(
@@ -32,25 +33,25 @@
 
 <div>
   <ButtonGroup>
-    <InputAddon>to</InputAddon>
+    <InputAddon>{m.attachform_to()}</InputAddon>
     {#if type.hooks.length > 1}
       <Select
         name="hook"
         required
         bind:value={hook}
-        placeholder="Select part"
+        placeholder={m.attachform_select_part()}
         classes={{ select: "rounded-none" }}
       >
         {#each type.hooks as h}
-          <option value={h}>{types[h].name}</option>
+          <option value={h}>{types[h].localizedName()}</option>
         {/each}
       </Select>
-      <InputAddon>of</InputAddon>
+      <InputAddon>{m.attachform_of()}</InputAddon>
     {/if}
     <SelectPart {type} bind:part={gear} />
   </ButtonGroup>
 </div>
 <ButtonGroup>
-  <InputAddon>at</InputAddon>
+  <InputAddon>{m.attachform_at()}</InputAddon>
   <DateTime bind:date={time} {prevdate} />
 </ButtonGroup>

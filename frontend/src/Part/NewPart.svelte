@@ -5,6 +5,7 @@
   import { Type } from "../lib/types";
   import { Part } from "../lib/part";
   import { user } from "../lib/user";
+  import { m } from "../../paraglide/messages";
 
   let type = $state<Type>();
   let part = $state<any>();
@@ -24,10 +25,10 @@
 
 <Modal bind:open {onaction}>
   {#snippet header()}
-    New {type!.name}
+    {m.newpart_header({ type: type!.localizedName() })}
   {/snippet}
   <NewForm {type} bind:part />
   {#snippet footer()}
-    <Buttons bind:open label="Create" />
+    <Buttons bind:open label={m.action_create()} />
   {/snippet}
 </Modal>

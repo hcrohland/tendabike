@@ -3,6 +3,7 @@
   import { Activity } from "../lib/activity";
   import Menu from "../Widgets/Menu.svelte";
   import { actions } from "../Widgets/Actions.svelte";
+  import * as m from "../../paraglide/messages";
 
   export let row: Activity;
 </script>
@@ -12,14 +13,14 @@
     {row.name}
     <img
       src="strava_grey.png"
-      alt="View on Strava"
-      title="View on Strava"
+      alt={m.gearcard_view_on_strava()}
+      title={m.gearcard_view_on_strava()}
       class="inline mx-2"
     />
   </a>
   <Menu>
     <DropdownItem onclick={() => $actions.changeActivity(row)}>
-      Change
+      {m.action_change()}
     </DropdownItem>
   </Menu>
 </div>

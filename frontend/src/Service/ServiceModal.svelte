@@ -15,6 +15,7 @@
   import { parts } from "../lib/part";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";
+  import { m } from "../../paraglide/messages";
 
   interface Props {
     saveService: (p: Service) => void;
@@ -52,9 +53,12 @@
 
 <Modal size="sm" bind:open {onaction}>
   {#snippet header()}
-    {@render children?.()} Service for {part.name}
-    {part.vendor}
-    {part.model}
+    {@render children?.()}
+    {m.servicemodal_header({
+      name: part.name,
+      vendor: part.vendor,
+      model: part.model,
+    })}
   {/snippet}
   <!-- svelte-ignore a11y_autofocus -->
   <Input
@@ -63,25 +67,25 @@
     disabled={noname}
     autofocus
     required
-    placeholder="Name"
+    placeholder={m.partform_name()}
   />
   <ButtonGroup>
-    <Textarea bind:value={notes} placeholder="Notes" />
+    <Textarea bind:value={notes} placeholder={m.gearcard_notes()} />
   </ButtonGroup>
   <div class="flex">
     {#if choices.length > 0}
-      <InputAddon>Resolves:</InputAddon>
+      <InputAddon>{m.servicemodal_resolves()}</InputAddon>
       <Listgroup class="gap-1 mx-2">
         <Checkbox bind:group={plans} {choices} />
       </Listgroup>
     {/if}
   </div>
   <ButtonGroup>
-    <InputAddon class="text-end">at</InputAddon>
+    <InputAddon class="text-end">{m.attachform_at()}</InputAddon>
     <DateTime bind:date={time} {mindate} required />
   </ButtonGroup>
 
   {#snippet footer()}
-    <Buttons bind:open label="Safe" />
+    <Buttons bind:open label={m.gearcard_save()} />
   {/snippet}
 </Modal>

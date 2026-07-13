@@ -21,7 +21,7 @@
 <script lang="ts" module>
   import Router from "svelte-spa-router";
 
-  import About from "./About.svelte";
+  import About from "./About/About.svelte";
   import Admin from "./Admin/Admin.svelte";
   import Header from "./Header.svelte";
   import Message from "./Message.svelte";

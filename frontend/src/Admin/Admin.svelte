@@ -13,6 +13,7 @@
   import Sync from "./Sync.svelte";
   import CreateSync from "./CreateSync.svelte";
   import DeleteUser from "./DeleteUser.svelte";
+  import * as m from "../../paraglide/messages";
 
   let promise: Promise<void>, createSync: any;
   let request:
@@ -48,12 +49,12 @@
 {:then list: any[]}
   <Table>
     <TableBodyRow>
-      <TableHeadCell>Id</TableHeadCell>
-      <TableHeadCell>Name</TableHeadCell>
-      <TableHeadCell>Role</TableHeadCell>
-      <TableHeadCell>Parts</TableHeadCell>
-      <TableHeadCell>Activities</TableHeadCell>
-      <TableHeadCell>Events</TableHeadCell>
+      <TableHeadCell>{m.admin_col_id()}</TableHeadCell>
+      <TableHeadCell>{m.partform_name()}</TableHeadCell>
+      <TableHeadCell>{m.admin_col_role()}</TableHeadCell>
+      <TableHeadCell>{m.nav_parts()}</TableHeadCell>
+      <TableHeadCell>{m.nav_activities()}</TableHeadCell>
+      <TableHeadCell>{m.admin_col_events()}</TableHeadCell>
       <TableHeadCell></TableHeadCell>
     </TableBodyRow>
     {#each list.sort((a, b) => a.user.id - b.user.id) as { user, parts, activities, events, disabled } (user.id)}
@@ -62,10 +63,10 @@
         <TableBodyCell>{user.firstname} {user.name}</TableBodyCell>
         <TableBodyCell>
           {disabled
-            ? "Disabled"
+            ? m.admin_role_disabled()
             : user.is_admin
-              ? "Admin"
-              : "User"}</TableBodyCell
+              ? m.header_admin()
+              : m.admin_role_user()}</TableBodyCell
         >
         <TableBodyCell>{parts}</TableBodyCell>
         <TableBodyCell>{activities}</TableBodyCell>
@@ -74,32 +75,38 @@
           <ButtonGroup>
             {#if !disabled}
               <Button onclick={() => createSync.start(user)}>
-                Add Sync Event
+                {m.admin_add_sync_event()}
               </Button>
               <Sync {user} {refresh} />
-              <Button onclick={() => disable(user)}>Disable user</Button>
+              <Button onclick={() => disable(user)}>
+                {m.admin_disable_user()}
+              </Button>
             {/if}
             <Button
               onclick={() => {
                 deleteuser?.start(user);
-              }}>Delete User</Button
+              }}
             >
+              {m.admin_delete_user()}
+            </Button>
           </ButtonGroup>
         </TableBodyCell>
       </TableBodyRow>
     {/each}
   </Table>
   <ButtonGroup class="p-6">
-    <Button onclick={() => createSync.start()}>Add Sync Event for all</Button>
+    <Button onclick={() => createSync.start()}
+      >{m.admin_add_sync_event_all()}</Button
+    >
     <Button onclick={rescan}>
       {#await promise}
         <Spinner />
       {:then}
-        Rescan all activities
+        {m.admin_rescan_all()}
       {/await}
     </Button>
   </ButtonGroup>
-  <Button onclick={refresh}>Refresh</Button>
+  <Button onclick={refresh}>{m.action_refresh()}</Button>
 {/await}
 <CreateSync {refresh} bind:this={createSync} />
 <DeleteUser bind:this={deleteuser} {refresh} />

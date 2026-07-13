@@ -8,6 +8,7 @@
   import PlanLimits from "./PlanLimits.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";
+  import { m } from "../../paraglide/messages";
 
   interface Props {
     safePlan: (p: ServicePlan) => void;
@@ -66,13 +67,19 @@
         onChange={sethook}
         classes={{ select: "rounded-r-none h-full" }}
       />
-      <InputAddon>of</InputAddon>
+      <InputAddon>{m.attachform_of()}</InputAddon>
       <GearForm bind:gear={part} />
     </ButtonGroup>
   {/if}
-  <Input type="text" bind:value={name} autofocus required placeholder="Name" />
+  <Input
+    type="text"
+    bind:value={name}
+    autofocus
+    required
+    placeholder={m.partform_name()}
+  />
   <PlanLimits bind:select={limits} />
   {#snippet footer()}
-    <Buttons bind:open label="Safe" />
+    <Buttons bind:open label={m.gearcard_save()} />
   {/snippet}
 </Modal>

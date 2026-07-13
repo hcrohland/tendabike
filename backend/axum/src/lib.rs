@@ -15,7 +15,7 @@ use anyhow::Context;
 use axum::Router;
 use std::net::SocketAddr;
 use tb_domain::TbResult;
-use tower_sessions::{SessionManagerLayer, session_store::ExpiredDeletion};
+use tower_sessions::{ExpiredDeletion, SessionManagerLayer};
 use tower_sessions_sqlx_store::PostgresStore;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 

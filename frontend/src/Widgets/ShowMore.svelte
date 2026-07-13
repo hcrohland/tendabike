@@ -1,6 +1,8 @@
 <script lang="ts">
   import { Button, Tooltip } from "flowbite-svelte";
   import { ClockOutline, CloseCircleOutline } from "flowbite-svelte-icons";
+  import { m } from "../../paraglide/messages";
+
   interface Props {
     show_more: boolean;
     title?: string | undefined;
@@ -29,14 +31,14 @@
     <CloseCircleOutline class="shrink-0 h-4 w-4" />
     {#if title}
       <Tooltip placement="top" class=" text-xs p-1 rounded-xs">
-        Hide {title}
+        {m.showmore_hide({ title })}
       </Tooltip>
     {/if}
   {:else}
     <ClockOutline class="shrink-0 h-4 w-4" />
     {#if title}
       <Tooltip placement="top" class=" text-xs p-1 rounded-xs">
-        Show {title}
+        {m.showmore_show({ title })}
       </Tooltip>
     {/if}
   {/if}

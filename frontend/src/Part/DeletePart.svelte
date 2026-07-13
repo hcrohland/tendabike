@@ -2,6 +2,7 @@
   import { Part } from "../lib/part";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";
+  import { m } from "../../paraglide/messages";
 
   let part = $state(new Part({}));
 
@@ -20,10 +21,9 @@
 
 <Modal bind:open {onaction}>
   {#snippet header()}
-    Do you really want to delete Part <br />
-    "{part.name}"?
+    {m.deletepart_header({ name: part.name })}
   {/snippet}
   {#snippet footer()}
-    <Buttons bind:open label="Delete" />
+    <Buttons bind:open label={m.action_delete()} />
   {/snippet}
 </Modal>

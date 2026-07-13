@@ -6,6 +6,7 @@
   import SelectPart from "../Widgets/SelectPart.svelte";
   import ChangeField from "./ChangeField.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
+  import * as m from "../../paraglide/messages";
 
   export const start = (a: Activity) => {
     open = true;
@@ -24,9 +25,9 @@
 {#if activity}
   <Modal bind:open {onaction} size="xs">
     {#snippet header()}
-      Change Activity <br />
+      {m.act_change_header()} <br />
       {activity?.name} <br />
-      at {activity?.start.toLocaleString()}
+      {m.act_at_time({ time: activity?.start.toLocaleString() })}
     {/snippet}
     <!-- <form on:submit|preventDefault={submit}> -->
     <div>
@@ -40,14 +41,23 @@
       </ButtonGroup>
     </div>
     <div>
-      <ChangeField label="Climb (m)" bind:field={activity.climb} />
-      <ChangeField label="Descend (m)" bind:field={activity.descend} />
-      <ChangeField label="Distance (m)" bind:field={activity.distance} />
-      <ChangeField label="Time (sec)" bind:field={activity.time} />
-      <ChangeField label="Duration (sec)" bind:field={activity.duration} />
+      <ChangeField label={m.act_field_climb()} bind:field={activity.climb} />
+      <ChangeField
+        label={m.act_field_descend()}
+        bind:field={activity.descend}
+      />
+      <ChangeField
+        label={m.act_field_distance()}
+        bind:field={activity.distance}
+      />
+      <ChangeField label={m.act_field_time()} bind:field={activity.time} />
+      <ChangeField
+        label={m.act_field_duration()}
+        bind:field={activity.duration}
+      />
     </div>
     {#snippet footer()}
-      <Buttons bind:open label="Update" />
+      <Buttons bind:open label={m.action_update()} />
     {/snippet}
   </Modal>
 {/if}

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { Button, Tabs, TabItem } from "flowbite-svelte";
+  import * as m from "../../paraglide/messages";
+
   import ShopList from "./ShopList.svelte";
   import Subscriptions from "./Subscriptions.svelte";
   import { Shop, shops } from "../lib/shop";
@@ -16,23 +18,25 @@
 
 <div class="space-y-6">
   <Tabs style="underline" bind:selected={activeTab}>
-    <TabItem key="my-subscriptions" title="My Subscriptions">
+    <TabItem key="my-subscriptions" title={m.shop_my_subscriptions()}>
       <div class="py-4">
         <Subscriptions />
       </div>
     </TabItem>
 
-    <TabItem key="my-shops" title="My Shops" open={myShops.length > 0}>
+    <TabItem key="my-shops" title={m.shop_my_shops()} open={myShops.length > 0}>
       <div class="py-4 space-y-8">
         {#if myShops.length === 0}
           <div class="py-12 text-center">
-            <p class="mb-4 text-text-1">You don't have any shops yet.</p>
+            <p class="mb-4 text-text-1">
+              {m.shop_none_owned()}
+            </p>
+
             <Button onclick={() => $actions.createShop()}>
-              Create Your First Shop
+              {m.shop_create_first()}
             </Button>
           </div>
         {:else}
-          <!-- Shop Cards -->
           <div>
             <ShopList shops={myShops} users={$users}>
               {#snippet sub(shop: Shop)}
@@ -40,7 +44,10 @@
               {/snippet}
             </ShopList>
           </div>
-          <Button onclick={() => $actions.createShop()}>Create Shop</Button>
+
+          <Button onclick={() => $actions.createShop()}>
+            {m.shop_create()}
+          </Button>
         {/if}
       </div>
     </TabItem>

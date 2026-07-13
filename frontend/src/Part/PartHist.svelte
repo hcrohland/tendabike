@@ -8,6 +8,7 @@
   import { DropdownItem } from "flowbite-svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { actions } from "../Widgets/Actions.svelte";
+  import { m } from "../../paraglide/messages";
 
   interface Props {
     id: number;
@@ -23,7 +24,7 @@
 {#if atts.length > 0}
   <div class="rounded-lg border border-border-subtle bg-surface-1 p-3 m-2">
     <div class="text-xs uppercase tracking-wide text-text-1 pb-3">
-      Attached to
+      {m.parthist_attached_to()}
     </div>
     <div class="flex flex-col gap-2">
       {#each atts as att (att.attached)}
@@ -35,20 +36,20 @@
                   <PartLink part={$parts[att.gear]} />
                 </span>
                 <span class="text-xs text-text-1 shrink-0">
-                  {types[att.hook].prefix}
+                  {types[att.hook].localizedPrefix()}
                 </span>
                 <span class="text-xs text-text-1 shrink-0">
                   · {att.fmtTime()}
                 </span>
               {:else}
-                <span class="text-sm text-text-1">N/A</span>
+                <span class="text-sm text-text-1">{m.parthist_na()}</span>
               {/if}
             </div>
             {#if $parts[att.gear]}
               <div class="shrink-0">
                 <Menu>
                   <DropdownItem onclick={() => $actions.deleteAttachment(att)}>
-                    Remove
+                    {m.parthist_remove()}
                   </DropdownItem>
                 </Menu>
               </div>

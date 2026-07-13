@@ -8,11 +8,12 @@
   import Buttons from "../Widgets/Buttons.svelte";
   import Switch from "../Widgets/Switch.svelte";
   import Modal from "../Widgets/Modal.svelte";
+  import { m } from "../../paraglide/messages";
 
   let open = false;
   let last: Attachment | undefined;
   let part: Part;
-  let name: String;
+  let typeName: string;
   let detach: boolean;
   let dispose: boolean;
   let mindate: Date;
@@ -37,7 +38,7 @@
   export const start = (p: Part, last_attachment?: Attachment) => {
     part = p;
     let type = part.type();
-    name = type.name;
+    typeName = type.localizedName();
     hook = type.is_hook();
     last = last_attachment;
 
@@ -61,29 +62,32 @@
     open = true;
   };
 
-  $: label = detach ? "Detach " : "Dispose ";
+  $: action = detach ? m.action_detach() : m.action_dispose();
 </script>
 
 <Modal bind:open {onaction}>
   {#snippet header()}
-    {label}
-    {name}
-    {part.name}
+    {m.dispose_question({ name: typeName + " " + part.name })}
   {/snippet}
   <div>
     <ButtonGroup>
-      <InputAddon>At</InputAddon>
+      <InputAddon>{m.attachform_at()}</InputAddon>
       <DateTime bind:date {mindate} />
     </ButtonGroup>
   </div>
   {#if hook}
-    <Switch bind:checked={all}>{label} all attached parts</Switch>
+    <Switch bind:checked={all}>
+      {m.disposepart_all({ action })}
+    </Switch>
   {/if}
   {#if detach}
-    <Dispose bind:dispose>{name} when detached</Dispose>
+    <Dispose
+      bind:dispose
+      name={m.disposepart_when_detached({ type: typeName })}
+    />
   {/if}
 
   {#snippet footer()}
-    <Buttons bind:open {label} />
+    <Buttons bind:open label={action} />
   {/snippet}
 </Modal>

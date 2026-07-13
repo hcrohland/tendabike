@@ -21,6 +21,7 @@
   import ShopRegistration from "../Shop/ShopRegistration.svelte";
   import { services } from "../lib/service";
   import { usages } from "../lib/usage";
+  import { m } from "../../paraglide/messages";
 
   interface Props {
     id: number;
@@ -47,25 +48,25 @@
     <Menu>
       {#if part.disposed_at}
         <DropdownItem onclick={() => $actions.recoverPart(part)}>
-          Recover gear
+          {m.part_recover_gear()}
         </DropdownItem>
       {:else}
         {#if !part.isGear()}
           <DropdownItem onclick={() => $actions.attachPart(part)}>
-            Attach
+            {m.action_attach()}
           </DropdownItem>
         {/if}
         <DropdownItem
           onclick={() => $actions.disposePart(part, last_attachment)}
         >
           {#if last_attachment?.isAttached()}
-            Detach
+            {m.action_detach()}
           {:else}
-            Dispose
+            {m.action_dispose()}
           {/if}
         </DropdownItem>
         <DropdownItem onclick={() => $actions.changePart(part)}>
-          Change details
+          {m.part_change_details()}
         </DropdownItem>
       {/if}
       {#if !part.isGear() && part.attachments($attachments).length == 0}
@@ -75,7 +76,7 @@
             pop();
           }}
         >
-          Delete
+          {m.action_delete()}
         </DropdownItem>
       {/if}
 
@@ -89,9 +90,11 @@
   {#if attachees.length > 0 || part.isGear()}
     <TabItem key="parts" class="m-0 p-0">
       {#snippet titleSlot()}
-        Attached Parts
+        {m.part_tab_attached_parts()}
         {#if tab == "parts"}
-          <XsButton onclick={() => $actions.installPart(part)}>add</XsButton>
+          <XsButton onclick={() => $actions.installPart(part)}>
+            {m.partcard_add()}
+          </XsButton>
         {/if}
       {/snippet}
       <div class="m-0">
@@ -101,19 +104,23 @@
   {/if}
   <TabItem key="plans">
     {#snippet titleSlot()}
-      Service Plans
+      {m.part_tab_service_plans()}
       <PlanBadge {planlist} />
       {#if tab == "plans"}
-        <XsButton onclick={() => $actions.newPlan(part)}>add</XsButton>
+        <XsButton onclick={() => $actions.newPlan(part)}>
+          {m.partcard_add()}
+        </XsButton>
       {/if}
     {/snippet}
     <PlanList {planlist} /><br />
   </TabItem>
   <TabItem key="services">
     {#snippet titleSlot()}
-      Service Logs
+      {m.part_tab_service_logs()}
       {#if tab == "services"}
-        <XsButton onclick={() => $actions.newService(part)}>add</XsButton>
+        <XsButton onclick={() => $actions.newService(part)}>
+          {m.partcard_add()}
+        </XsButton>
       {/if}
     {/snippet}
     <ServiceList {part} /><br />

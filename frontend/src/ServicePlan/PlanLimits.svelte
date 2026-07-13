@@ -7,7 +7,11 @@
     Input,
     InputAddon,
   } from "flowbite-svelte";
-  import { Limits, type limit_keys } from "../lib/serviceplan";
+  import {
+    Limits,
+    localizeLimitKey,
+    type limit_keys,
+  } from "../lib/serviceplan";
   import { CircleMinusOutline, CirclePlusOutline } from "flowbite-svelte-icons";
 
   interface Props {
@@ -29,11 +33,11 @@
       <ButtonGroup class="w-full">
         <Input
           type="number"
-          placeholder={key}
+          placeholder={localizeLimitKey(key)}
           bind:value={select[key]}
           required
         />
-        <InputAddon>{key}</InputAddon>
+        <InputAddon>{localizeLimitKey(key)}</InputAddon>
         <Button
           color="light"
           onclick={() => {
@@ -58,7 +62,7 @@
         selected = selected;
       }}
     >
-      {key}
+      {localizeLimitKey(key)}
     </DropdownItem>
   {/each}
 </Dropdown>

@@ -9,6 +9,7 @@
   import { parts } from "../lib/part";
   import { category } from "../lib/types";
   import ActName from "./ActName.svelte";
+  import * as m from "../../paraglide/messages";
 
   export let acts: Activity[];
 
@@ -58,7 +59,11 @@
           let name = act.gearName($parts);
           types[act.gear] = { name: name, value: act.gear, start: act.start };
         } else {
-          types[0] = { name: "-- none --", value: 0, start: new Date() };
+          types[0] = {
+            name: m.filter_none_option(),
+            value: 0,
+            start: new Date(),
+          };
         }
       }
     });
@@ -70,7 +75,7 @@
   $: columns = [
     {
       key: "start",
-      title: "Start",
+      title: m.act_col_start(),
       value: (v: Activity) => v.start,
       sortable: true,
       searchValue: (v: Activity) =>
@@ -81,17 +86,17 @@
             "&nbsp;" +
             v.start.toLocaleTimeString()
           : "",
-      totalsValue: () => "Total:",
+      totalsValue: () => m.act_total(),
       parseHTML: true,
     },
     {
       key: "name",
-      title: "Name",
+      title: m.partform_name(),
       value: (v: Activity) => v.name || "",
       searchValue: (v: Activity) => v.name,
       sortable: true,
       renderComponent: ActName,
-      totalsValue: (a: Activity) => a.count + " activities",
+      totalsValue: (a: Activity) => a.count + " " + m.act_activities(),
       parseHTML: true,
     },
     {
@@ -101,13 +106,13 @@
       totalsValue: () => "",
       parseHTML: true,
       sortable: true,
-      filterPlaceholder: "All",
+      filterPlaceholder: m.filter_all(),
       filterValue: (a: Activity, f: any) => f === (a.gear ? a.gear : 0),
       filterOptions: createFilterOptions(acts),
     },
     {
       key: "time",
-      title: "Time",
+      title: m.act_col_time(),
       value: (v: Activity) => v.time,
       renderValue: (v: Activity) => fmtSeconds(v.time),
       sortable: true,
@@ -115,7 +120,7 @@
     },
     {
       key: "distance",
-      title: "Distance",
+      title: m.act_col_distance(),
       value: (v: Activity) => v.distance,
       renderValue: (v: Activity) => fmtNumber(v.distance),
       sortable: true,
@@ -123,7 +128,7 @@
     },
     {
       key: "climb",
-      title: "Climb",
+      title: m.limit_climb(),
       value: (v: Activity) => v.climb,
       renderValue: (v: Activity) => fmtNumber(v.climb),
       sortable: true,
@@ -131,7 +136,7 @@
     },
     {
       key: "descend",
-      title: "Descend",
+      title: m.limit_descend(),
       value: (v: Activity) => v.descend || v.climb,
       renderValue: (v: Activity) => fmtNumber(v.descend || v.climb),
       sortable: true,
@@ -139,7 +144,7 @@
     },
     {
       key: "energy",
-      title: "Energy",
+      title: m.limit_kJ(),
       value: (v: Activity) => v.energy,
       renderValue: (v: Activity) => fmtNumber(v.energy),
       sortable: true,
@@ -147,7 +152,7 @@
     },
     {
       key: "device_name",
-      title: "Data Source",
+      title: m.act_col_data_source(),
       value: (a: Activity) => a.device_name || "",
       searchValue: (v: Activity) => v.device_name,
       sortable: true,
@@ -164,7 +169,7 @@
 </script>
 
 {#if acts.length == 0}
-  <Alert color="secondary">No activities</Alert>
+  <Alert color="secondary">{m.act_no_activities()}</Alert>
 {:else}
   <div class="mb-20">
     <RangeSlider

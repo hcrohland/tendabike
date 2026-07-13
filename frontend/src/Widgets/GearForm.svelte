@@ -13,7 +13,7 @@
 </script>
 
 <Select bind:value={gear} classes={{ select: "rounded-l-none h-full" }}>
-  <option value={null}> any {$category.name.toLocaleLowerCase()} </option>
+  <option value={null}>{$category.localizedAnyDative()}</option>
   {#each save ? [$parts[save]] : allGear($parts, $category) as part}
     <option value={part.id}>
       {part.name}

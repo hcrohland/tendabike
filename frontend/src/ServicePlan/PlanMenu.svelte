@@ -5,6 +5,7 @@
   import { attachments } from "../lib/attachment";
   import type { ServicePlan } from "../lib/serviceplan";
   import { Part, parts } from "../lib/part";
+  import { m } from "../../paraglide/messages";
 
   interface Props {
     plan: ServicePlan;
@@ -19,13 +20,13 @@
 <Dropdown simple>
   {#if part}
     <DropdownItem onclick={() => $actions.newService(part, plan)}>
-      New Service for plan
+      {m.planmenu_new_service()}
     </DropdownItem>
     {#if plan.part != part.id}
       {@const att = part.attachments($attachments).at(0)}
       {#if att}
         <DropdownItem onclick={() => $actions.replacePart(att)}>
-          Replace Part
+          {m.action_replace()}
         </DropdownItem>
       {/if}
     {/if}
@@ -37,10 +38,10 @@
 
   {#if !name}
     <DropdownItem onclick={() => $actions.updatePlan(plan)}>
-      Change ServicePlan
+      {m.planmenu_change()}
     </DropdownItem>
     <DropdownItem onclick={() => $actions.deletePlan(plan)}>
-      Delete ServicePlan
+      {m.planmenu_delete()}
     </DropdownItem>
   {/if}
 </Dropdown>
