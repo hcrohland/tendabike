@@ -160,8 +160,26 @@
         <DropdownItem href="/api/user/export" download="tendabike.json">
           {m.header_export()}
         </DropdownItem>
+
         <DropdownItem href="/#/about">{m.header_about()}</DropdownItem>
         <DropdownItem href="/strava/logout">{m.header_logout()}</DropdownItem>
+        <DropdownItem>
+          <!-- Language switcher -->
+          <Select
+            value={getLocale()}
+            onchange={(e) => setLocale(e.currentTarget.value as any)}
+            placeholder=""
+          >
+            {#each locales as lang}
+              <option value={lang}>{lang.toUpperCase()}</option>
+            {/each}
+          </Select>
+        </DropdownItem>
+        {#if isDev}
+          <DropdownItem>
+            <DarkMode />
+          </DropdownItem>
+        {/if}
       </Dropdown>
 
       <NavHamburger />
@@ -172,7 +190,9 @@
       activeClass="text-primary-600 dark:text-primary-400 font-semibold"
       nonActiveClass="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400"
     >
-      <NavLi class="justify-start" href="/#/cat">{$category.name}s</NavLi>
+      <NavLi class="justify-start" href="/#/cat">
+        {$category.localizedName()}s
+      </NavLi>
       <NavLi href="/#/plans">{m.nav_services()}</NavLi>
       <NavLi href="/#/spares">{m.nav_parts()}</NavLi>
       {#if !$shop}
@@ -187,19 +207,4 @@
       </a>
     </div>
   {/if}
-  <div class="flex">
-    {#if isDev}
-      <DarkMode />
-      <!-- Language switcher -->
-      <Select
-        value={getLocale()}
-        onchange={(e) => setLocale(e.currentTarget.value as any)}
-        placeholder=""
-      >
-        {#each locales as lang}
-          <option value={lang}>{lang.toUpperCase()}</option>
-        {/each}
-      </Select>
-    {/if}
-  </div>
 </Navbar>

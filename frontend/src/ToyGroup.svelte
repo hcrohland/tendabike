@@ -48,7 +48,7 @@
       <ShowMore bind:show_more title={m.sparetype_disposed()} />
     </div>
     {#if show_more}
-      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {#each bin as part (part.id)}
           <MainCard {part} />
         {/each}

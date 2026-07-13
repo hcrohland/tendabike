@@ -9,6 +9,7 @@ export default defineConfig({
     paraglideVitePlugin({
       project: "./project.inlang",
       outdir: "./paraglide",
+      strategy: ["cookie", "preferredLanguage", "baseLocale"],
     }),
     tailwindcss(),
     svelte(),

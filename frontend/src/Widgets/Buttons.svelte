@@ -14,11 +14,14 @@
   }
 </script>
 
-{#if label}
-  <Button {onclick} color="alternative">{m.action_cancel()}</Button>
-  <Button type="submit" class="border border-border-subtle hover:bg-surface-2">
-    {label}
-  </Button>
-{:else}
-  <Button {onclick}>{m.action_close()}</Button>
-{/if}
+<div class="flex justify-end w-full gap-2">
+  <!-- <div class="ms-auto"> -->
+  {#if label}
+    <Button {onclick} color="alternative">{m.action_cancel()}</Button>
+    <Button type="submit" value="commit" color="gray">
+      {label}
+    </Button>
+  {:else}
+    <Button {onclick}>{m.action_close()}</Button>
+  {/if}
+</div>
