@@ -5,66 +5,66 @@
 
 <div class="p-4 sm:p-6 md:p-8 m-8 max-w-200">
   <a href="http://www.strava.com" class="float-end items-start" target="_blank">
-    <img src="api_logo_pwrdBy_strava.png" alt="powered by Strava" height="20" />
+    <img
+      src="api_logo_pwrdBy_strava.png"
+      alt="understützt vo Strava"
+      height="20"
+    />
   </a>
 
-  <Heading tag="h3">Lueg zu dim Velo für no meh Fahrfreud</Heading>
-  <P>Behalt im Blick, wie lang dini Teili halte und wänn sie Service bruuche.</P
+  <Heading tag="h3">Pfläg dis Velo für e sorgefreii Fahrt</Heading>
+  <P
+    >Behalt im Blick, wie lang dini Teili haltet und wenn si gwartet werde müend</P
   >
-
-  <Heading tag="h5">Allgemein</Heading>
+  <Heading tag="h5">Allgemeini Nutzig</Heading>
   <P>
-    TendaBike holt alli dini Aktivitäte und Velos vo Strava.
-    <br /> Du chasch Teili erfasse und dine Velos zueordne. Teili chönd au
-    zwüsche de Velos verschobe werde.
-    <br /> TendaBike berechnet d'Belastig für alli Teili, wo du erfasst hesch.
-    <br /> Du chasch Serviceplän aalege, Service erfasse und wirsch erinnert, wenn
-    en Service fällig isch.
+    TendaBike lädt alli dini Aktivitäte und Velos vo Strava.
+    <br /> Du chasch Teili aalege und a dine Velos aabaue. Du chasch Teili
+    zwüsche Velos verschiebe.
+    <br /> TendaBike bereched d'Nutzig für jedes Teil, wo du aalegsch.
+    <br /> Du chasch usserdem Wartigspläni aalege und Services iitrage. Du wirsch
+    erinneret, sobald e Wartigsplan fällig isch.
+  </P>
+  <P>
+    Wenn du TendaBike zum erste Mal mit Strava verbindsch, werded alli Velos und
+    Aktivitäte in d'Datebank glade. Kei Sorge, du chasch spöter alles
+    korrigiere. Änderige uf Strava werded au i TendaBike übernoh.
+    <br /> Nachdem Verbinde chasch Wartigspläni, Teili und Services derzuefüege. Am
+    eifachste gaht das über d'Detailsiite vomene Velo, wo du über dr Pfeil rächts
+    näbe em Veloname erreichsch.
   </P>
 
+  <Heading tag="h5">Höchedate</Heading>
   <P>
-    Bi de erschte Verbindig mit Strava lädt TendaBike alli Velos und Aktivitäte
-    i d'Datebank. Kei Angscht – du chasch nachträglich alles korrigiere.
-    Änderige uf Strava wärde automatisch i TendaBike übernoh.
-    <br /> Nach em Verbinde chasch Serviceplän, Teili und Service erfasse. Am eifachschte
-    geit das uf dr Detailsite vom Velo.
+    Strava erfasst nur dr Höchegwinn. Das isch ungünstig, wenn du Lift oder
+    Shuttles benutzisch.
+    <br />Brämse verschleisse bergab dütlich schneller als berguf, während z. B.
+    Chette eher bim Bergufffahre verschleisse.
+    <br /> Wenn du es aktuells Garmin-Gerät und Garmin Connect benutzisch, hend mir
+    e Lösig für dich!
   </P>
-
-  <Heading tag="h5">Höhemeter</Heading>
-  <P>
-    Strava speicheret nume de Ufstieg. Das isch unpraktisch, wenn du mit Lift
-    oder Posti underwägs bisch.
-    <br /> Bremse verschliissed zum Biispiel bi de Abfahrt viel stärker, während
-    Chettene vor allem bi de Ufstieg beansprucht wärde.
-    <br /> Falls du es neus Garmin-Grät und Garmin Connect bruchsch, hämmer au dafür
-    e Lösig.
-  </P>
-
-  <P>So gaht's:</P>
-
+  <P>Das chasch du mache:</P>
   <P>
     <List tag="ol">
       <Li>
-        Stopp d'Uufzeichnig während Lift- oder Postifahrte. So wird dä Höhegwünn
-        vo dä Abschnitte nöd uf Strava übernoh.
+        Stopp d'Ufzeichnig i Lift und Shuttles. Dadurch sött Strava dr
+        Höchegwinn vom Shuttle nüme erfasse.
       </Li>
       <Li>
-        Lad dini Aktivitäte us Garmin Connect als CSV-Datei mit dütscher Sprach
-        iistellig abe.
-        <br /> Die exportierti Datei enthält au de Abstig.
+        Lad d'Aktivitätsliste vo dr Garmin-Connect-Website mit dütsche
+        Spracheinstellige ache.
+        <br /> Die Datei wo drus entstaht, het dr Höcheverlust drin.
       </Li>
       <Li>
-        Lad d'Datei i TendaBike über '{m.header_sync()}' &rightarrow; '{m.header_csv()}'
-        uuf.
+        Lad die Datei über '{m.header_sync()}' &rightarrow; '{m.header_csv()}' i
+        TendaBike ui.
       </Li>
     </List>
   </P>
-
   <Hr />
-
   <P>
     <div class="flex justify-end">
-      © Christoph Rohland 2019–2026 – Quellcode uf
+      © Christoph Rohland 2019-2026 - Sourcecode uf&MediumSpace;
       <a href="https://github.com/hcrohland/tendabike" title="Repository">
         GitHub
       </a>
