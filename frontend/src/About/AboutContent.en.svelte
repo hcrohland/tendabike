@@ -24,8 +24,7 @@
     activities into the database. Don't be afraid. You can correct anything
     later. Changes on Strava will be replicated into TendaBike
     <br /> After connecting you can start adding service plans, part and services.
-    This is easiest done from the bike's detail page which you can find by clicking
-    on the arrow right of the bike's name
+    This is easiest done from the bike's detail page
   </P>
 
   <Heading tag="h5">Elevation data</Heading>

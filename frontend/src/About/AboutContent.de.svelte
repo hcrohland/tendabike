@@ -32,8 +32,7 @@
     später alles korrigieren. Änderungen auf Strava werden auch in TendaBike
     übernommen.
     <br /> Nach dem Verbinden kannst du Wartungspläne, Teile und Services hinzufügen.
-    Am einfachsten geht das über die Detailseite eines Fahrrads, die du über den Pfeil
-    rechts neben dem Fahrradnamen erreichst.
+    Am einfachsten geht das über die Detailseite eines Fahrrads.
   </P>
 
   <Heading tag="h5">Höhendaten</Heading>
