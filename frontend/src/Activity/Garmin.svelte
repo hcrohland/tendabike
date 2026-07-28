@@ -6,10 +6,9 @@
     Button,
   } from "flowbite-svelte";
   import { checkStatus, handleError } from "../lib/store";
-  import { parts } from "../lib/part";
-  import { attachments } from "../lib/attachment";
   import Modal from "../Widgets/Modal.svelte";
   import * as m from "../../paraglide/messages";
+  import { updateSummary } from "../lib/user";
 
   let files: FileList | undefined = $state();
   let result: { good: string[]; bad: string[] } | undefined = $state();
@@ -37,8 +36,7 @@
     })
       .then(checkStatus)
       .then((a) => {
-        parts.updateMap(a[0].parts);
-        attachments.updateMap(a[0].attachments);
+        updateSummary(a[0]);
         result = {
           good: a[1],
           bad: a[2],
