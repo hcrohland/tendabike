@@ -67,9 +67,9 @@
             {att.fmtTime()}
           </span>
           <ServiceBadge service={dues?.days} />
-          {#if attachments.length > 1 || (part && $usages[part.usage].count != $usages[att.usage].count)}
-            <ShowMore bind:show_more title={m.partcard_history()} />
-          {/if}
+        {/if}
+        {#if attachments.length > 1 || (part && $usages[part.usage].count != $usages[att.usage].count)}
+          <ShowMore bind:show_more title={m.partcard_history()} />
         {/if}
       </div>
       <div class="flex items-center gap-2 shrink-0">
