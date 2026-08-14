@@ -135,9 +135,10 @@ export class ServicePlan extends Limits {
 
   due(part: Part | null, service: Service | undefined, usages: Map<Usage>) {
     let res = new Limits({});
-    if (part == null || service == undefined) return res;
-    let time = service.time;
-    let usage = usages[part.usage].sub(usages[service.usage]);
+    if (part == null || part.what != this.what) return res;
+    let time = service ? service.time : part.purchase;
+    let usage = usages[part.usage];
+    if (service) usage = usage.sub(usages[service.usage]);
     if (this.days) res.days = this.days - get_days(time);
     if (this.hours) res.hours = this.hours - Math.floor(usage.time / 3600);
     if (this.km) res.km = this.km - Math.floor(usage.distance / 1000);
@@ -169,6 +170,12 @@ export class ServicePlan extends Limits {
     return this.part ? parts[this.part].partLink() : "";
   }
 
+  /**
+   * Determines the physical parts this service plan is associated with.
+   * If linked to a specific part directly, it returns that one immediately.
+   * For generic plans, it resolves to all active matching components
+   * that do not already have a dedicated maintenance plan assigned.
+   */
   gears(parts: Map<Part>, plans: ServicePlan[]) {
     if (this.part) return [parts[this.part]];
 
