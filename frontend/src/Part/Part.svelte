@@ -6,11 +6,7 @@
   import { attachments } from "../lib/attachment";
   import { filterValues } from "../lib/mapable";
   import { parts } from "../lib/part";
-  import {
-    next_due,
-    plans,
-    plans_for_part_and_subtypes,
-  } from "../lib/serviceplan";
+  import { plans, plans_for_part_and_subtypes } from "../lib/serviceplan";
   import GearCard from "./GearCard.svelte";
   import Subparts from "./Subparts.svelte";
   import PartHist from "./PartHist.svelte";
@@ -19,8 +15,6 @@
   import Menu from "../Widgets/Menu.svelte";
   import { pop } from "svelte-spa-router";
   import ShopRegistration from "../Shop/ShopRegistration.svelte";
-  import { services } from "../lib/service";
-  import { usages } from "../lib/usage";
   import { m } from "../../paraglide/messages";
 
   interface Props {
@@ -37,13 +31,11 @@
   let planlist = $derived(
     plans_for_part_and_subtypes($attachments, $plans, part),
   );
-  let gearplans = $derived(planlist.filter((plan) => plan.what == part.what));
-  let dues = $derived(next_due(part, gearplans, $services, $usages));
 
   let tab = $state("");
 </script>
 
-<GearCard {part} {dues}>
+<GearCard {part}>
   <div class="float-end h6 mb-0">
     <Menu>
       {#if part.disposed_at}
