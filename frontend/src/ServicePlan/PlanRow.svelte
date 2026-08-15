@@ -59,8 +59,8 @@
           {/if}
         </Menu>
       {:else}
-        <XsButton onclick={() => alert("not implemented")}>
-          {m.action_install()}
+        <XsButton onclick={() => $actions.installPart(part)}>
+          {m.action_new()}
         </XsButton>
       {/if}
     </div>
