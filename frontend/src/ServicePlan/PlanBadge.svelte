@@ -1,17 +1,23 @@
 <script lang="ts">
   import { Indicator } from "flowbite-svelte";
-  import { ServicePlan, alerts_for_plans } from "../lib/serviceplan";
-  import { parts } from "../lib/part";
+  import {
+    alerts_for_plans,
+    plans,
+    plans_for_part_and_subtypes,
+  } from "../lib/serviceplan";
+  import { Part, parts } from "../lib/part";
   import { services } from "../lib/service";
   import { usages } from "../lib/usage";
   import { attachments } from "../lib/attachment";
 
   interface Props {
-    planlist: ServicePlan[];
+    part: Part;
   }
 
-  let { planlist }: Props = $props();
-
+  let { part }: Props = $props();
+  let planlist = $derived(
+    plans_for_part_and_subtypes($attachments, $plans, part),
+  );
   let alerts = $derived(
     alerts_for_plans(planlist, $parts, $services, $usages, $attachments),
   );

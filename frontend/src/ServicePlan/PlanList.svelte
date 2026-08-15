@@ -1,14 +1,26 @@
 <script lang="ts">
-  import { ServicePlan } from "../lib/serviceplan";
+  import { attachments } from "../lib/attachment";
+  import { filterValues } from "../lib/mapable";
+  import type { Part } from "../lib/part";
+  import {
+    plans,
+    plans_for_part_and_subtypes,
+    ServicePlan,
+  } from "../lib/serviceplan";
+  import { category, types } from "../lib/types";
   import PlanBlock from "./PlanBlock.svelte";
 
   interface Props {
-    planlist: ServicePlan[];
+    part?: Part | undefined;
     children?: import("svelte").Snippet;
   }
 
-  let { planlist, children }: Props = $props();
-
+  let { part: gear, children }: Props = $props();
+  let planlist = $derived(
+    gear
+      ? plans_for_part_and_subtypes($attachments, $plans, gear)
+      : filterValues($plans, (p) => types[p.what].main == $category.main),
+  );
   function cmp(p: ServicePlan, q: ServicePlan) {
     let res;
     if (p.what != q.what) {

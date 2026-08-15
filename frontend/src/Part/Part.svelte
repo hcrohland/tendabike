@@ -6,7 +6,6 @@
   import { attachments } from "../lib/attachment";
   import { filterValues } from "../lib/mapable";
   import { parts } from "../lib/part";
-  import { plans, plans_for_part_and_subtypes } from "../lib/serviceplan";
   import GearCard from "./GearCard.svelte";
   import Subparts from "./Subparts.svelte";
   import PartHist from "./PartHist.svelte";
@@ -28,9 +27,6 @@
     filterValues($attachments, (a) => a.gear == part.id),
   );
   let last_attachment = $derived(part.attachments($attachments).at(0));
-  let planlist = $derived(
-    plans_for_part_and_subtypes($attachments, $plans, part),
-  );
 
   let tab = $state("");
 </script>
@@ -97,14 +93,14 @@
   <TabItem key="plans">
     {#snippet titleSlot()}
       {m.part_tab_service_plans()}
-      <PlanBadge {planlist} />
+      <PlanBadge {part} />
       {#if tab == "plans"}
         <XsButton onclick={() => $actions.newPlan(part)}>
           {m.partcard_add()}
         </XsButton>
       {/if}
     {/snippet}
-    <PlanList {planlist} /><br />
+    <PlanList {part} /><br />
   </TabItem>
   <TabItem key="services">
     {#snippet titleSlot()}
