@@ -187,8 +187,11 @@
     <NavUl
       class="max-w-full"
       {activeUrl}
-      activeClass="text-primary-600 dark:text-primary-400 font-semibold"
-      nonActiveClass="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400"
+      classes={{
+        active: "text-primary-600 dark:text-primary-400 font-semibold",
+        nonActive:
+          "text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400",
+      }}
     >
       <NavLi class="justify-start" href="/#/cat">
         {$category.localizedName()}s

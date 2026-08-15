@@ -5,23 +5,26 @@
   import { services } from "../lib/service";
   import { next_due, ServicePlan } from "../lib/serviceplan";
   import { usages } from "../lib/usage";
-  import PlanName from "./PlanName.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
-  import PlanMenu from "./PlanMenu.svelte";
   import * as m from "../../paraglide/messages";
+  import Menu from "../Widgets/Menu.svelte";
+  import { DropdownItem } from "flowbite-svelte";
+  import { actions } from "../Widgets/Actions.svelte";
+  import XsButton from "../Widgets/XsButton.svelte";
 
   interface Props {
     plan: ServicePlan;
-    name?: string | null;
+    gear?: Part | undefined;
   }
 
-  let { plan, name = null }: Props = $props();
+  let { plan, gear = undefined }: Props = $props();
 
   let show_more = $state(false);
 
-  let part = $derived(plan.getpart($parts, $attachments)) as Part;
-  let serviceList = $derived(plan.services(part, $services));
-  let title = m.planrow_service_history();
+  let part = $derived(plan.getpart($parts, $attachments, gear?.id)) as Part;
+  let [ActiveService, ...serviceList] = $derived(
+    plan.services(part, $services),
+  );
   let dues: any = $derived(next_due(part, [plan], $services, $usages));
 </script>
 
@@ -31,36 +34,49 @@
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-2 min-w-0">
         <span class="text-sm shrink-0">
-          {#if name}
-            {@html part.partLink(name)}
-          {:else}
-            <PlanName {plan} />
+          {#if gear?.id != part.id && plan.part != gear?.id}
+            {@html gear!.partLink()}:
           {/if}
+          {@html part.partLink()}
         </span>
 
         {#if serviceList.length > 0}
-          <ShowMore bind:show_more {title} />
+          <ShowMore bind:show_more title={m.planrow_service_history()} />
         {/if}
       </div>
-      <PlanMenu {plan} {name} />
-    </div>
-
-    <!-- Service history -->
-    <div class="flex flex-col gap-2 mt-3">
-      {#if show_more}
-        {#each serviceList as service, i (service.id)}
-          {@const successor = i > 0 ? serviceList[i - 1] : null}
-          <ServiceRow
-            {part}
-            {service}
-            {successor}
-            dues={i == 0 ? dues : null}
-          />
-        {/each}
-        <ServiceRow {part} successor={serviceList.at(-1)} />
+      {#if plan.what == part.what}
+        <Menu>
+          <DropdownItem onclick={() => $actions.newService(part, plan)}>
+            {m.planmenu_new_service()}
+          </DropdownItem>
+          {#if plan.part != part.id}
+            {@const att = part.attachments($attachments).at(0)}
+            {#if att}
+              <DropdownItem onclick={() => $actions.replacePart(att)}>
+                {m.action_replace()}
+              </DropdownItem>
+            {/if}
+          {/if}
+        </Menu>
       {:else}
-        <ServiceRow {part} service={serviceList[0]} {dues} />
+        <XsButton onclick={() => $actions.installPart(part)}>
+          {m.action_new()}
+        </XsButton>
       {/if}
     </div>
+
+    {#if plan.what == part.what}
+      <!-- Service history -->
+      <div class="flex flex-col gap-2 mt-3">
+        <ServiceRow {part} service={ActiveService} {dues} />
+        {#if show_more}
+          {#each serviceList as service, i (service.id)}
+            {@const successor = i > 0 ? serviceList[i - 1] : ActiveService}
+            <ServiceRow {part} {service} {successor} />
+          {/each}
+          <ServiceRow {part} successor={serviceList.at(-1)} />
+        {/if}
+      </div>
+    {/if}
   </div>
 {/if}
