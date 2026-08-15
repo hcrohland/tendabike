@@ -1,15 +1,13 @@
 <script lang="ts">
-  import type { Part } from "../lib/part";
   import { ServicePlan } from "../lib/serviceplan";
   import PlanBlock from "./PlanBlock.svelte";
 
   interface Props {
     planlist: ServicePlan[];
-    part?: Part;
     children?: import("svelte").Snippet;
   }
 
-  let { planlist, part, children }: Props = $props();
+  let { planlist, children }: Props = $props();
 
   function cmp(p: ServicePlan, q: ServicePlan) {
     let res;
@@ -33,6 +31,6 @@
     </div>
   {/if}
   {#each planlist.sort(cmp) as plan (plan.id)}
-    <PlanBlock {plan} {part} />
+    <PlanBlock {plan} />
   {/each}
 </div>
