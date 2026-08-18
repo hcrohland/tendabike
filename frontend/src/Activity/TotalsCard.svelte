@@ -185,6 +185,7 @@
   <!-- Date Range Slider -->
   <div class="mx-8 mt-6">
     <RangeSlider
+      style="font-size: 0.75rem"
       {min}
       {max}
       range
@@ -198,18 +199,3 @@
     />
   </div>
 </div>
-
-<style>
-  :global(.rangeSlider) {
-    font-size: 0.75rem;
-  }
-  :global(.rangeSlider .rangeFloat) {
-    font-size: 0.65rem;
-    padding: 0.2em 0.4em;
-  }
-  :global(.rangeSlider .rangeHandle) {
-    width: 1rem;
-    height: 1em;
-    top: 0.2em;
-  }
-</style>
