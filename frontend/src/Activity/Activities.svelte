@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { Card } from "flowbite-svelte";
   import { category } from "../lib/types";
   import { Activity, activities } from "../lib/activity";
-  import ActTable from "./ActTable.svelte";
+  import ActList from "./ActList.svelte";
   import { filterValues } from "../lib/mapable";
   import { parts } from "../lib/part";
   import { attachments } from "../lib/attachment";
@@ -38,9 +37,4 @@
   }
 </script>
 
-<div class="flex justify-around">
-  <Card class="flex text-xl text-center p-4 mb-4">
-    {title}
-  </Card>
-</div>
-<ActTable {acts} />
+<ActList {acts} {title} />

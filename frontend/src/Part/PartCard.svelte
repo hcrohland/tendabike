@@ -43,13 +43,15 @@
 </script>
 
 {#if att}
+  <!-- PartCard responsive spacing: mobile (default) uses compact padding, sm: breakpoint applies larger spacing -->
+  <!-- Pattern: p-1→p-2, p-2→p-3, gap-1→gap-2, gap-2→gap-3 across all sections -->
   <div
-    class={"relative rounded-lg border border-border-subtle p-1 md:p-3 " +
+    class={"relative rounded-lg border border-border-subtle p-1 sm:p-2 " +
       background}
   >
     <!-- Header row: type · name · menu -->
-    <div class="flex items-center justify-between gap-2">
-      <div class="flex items-center gap-2 p-2 min-w-0">
+    <div class="flex items-center justify-between gap-1 sm:gap-2">
+      <div class="flex items-center gap-1 sm:gap-2 p-1 sm:p-2 min-w-0">
         <span class="text-xs uppercase text-text-1 shrink-0 truncate">
           {type.localizedName()}
         </span>
@@ -72,7 +74,8 @@
           <ShowMore bind:show_more title={m.partcard_history()} />
         {/if}
       </div>
-      <div class="flex items-center gap-2 shrink-0">
+      <div class="flex items-center gap-1 sm:gap-2 shrink-0">
+        <!-- Menu area: compact on mobile -->
         {#if att.isAttached() && part}
           <Menu>
             <DropdownItem onclick={() => $actions.newService(part)}>
@@ -100,14 +103,16 @@
 
     <!-- History cards -->
     {#if show_more}
-      <div class="mt-3 flex flex-col gap-2 p-3">
+      <div class="mt-3 flex flex-col gap-1 sm:gap-2 p-2 sm:p-3">
+        <!-- History: compact padding on mobile -->
         {#each list as { att: a, part: p } (a.idx)}
           <div
-            class={"rounded-lg border border-border-strong opacity-70 p-3 " +
+            class={"rounded-lg border border-border-strong opacity-70 p-1 sm:p-2 " +
               background2}
           >
-            <div class="flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2 min-w-0">
+            <div class="flex items-center justify-between gap-1 sm:gap-2">
+              <!-- History card header: compact spacing -->
+              <div class="flex items-center gap-1 sm:gap-2 min-w-0">
                 <span class="font-medium text-sm truncate">
                   {#if p}
                     <PartLink part={p} />
@@ -143,7 +148,8 @@
 
     <!-- Child cards nested inside -->
     {#if children.length > 0}
-      <div class="mt-3 flex flex-col gap-2">
+      <div class="mt-3 flex flex-col gap-1 sm:gap-2">
+        <!-- Children: compact gap on mobile -->
         {#each children as child (child.type.id)}
           <svelte:self {...child} light={!light} />
         {/each}

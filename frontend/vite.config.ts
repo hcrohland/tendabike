@@ -17,8 +17,7 @@ export default defineConfig({
   build: { target: "es2022" },
   server: {
     hmr: {
-      protocol: "ws",
-      host: "localhost",
+      host: "127.0.0.1",
     },
     proxy: {
       "^/(api)|(strava)": {

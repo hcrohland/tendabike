@@ -63,7 +63,7 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class={"text-xl bg-surface-2 p-4" +
+    class={"text-xl bg-surface-2 p-2 sm:p-4" +
       (summary
         ? " hover:bg-gray-300 dark:hover:bg-gray-500 cursor-pointer"
         : "")}
@@ -87,7 +87,7 @@
     {@render children?.()}
   </div>
 
-  <div class="p-4 bg-surface-1">
+  <div class="p-2 sm:p-4 bg-surface-1">
     <!-- Meta line: model · type · date range -->
     <p class="text-sm mb-3">
       {model(part)}{typeName(part) ? " · " + typeName(part) : ""}
