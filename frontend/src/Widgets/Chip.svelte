@@ -45,6 +45,17 @@
   let isLinked = $derived(!!href);
 </script>
 
+{#snippet chipContent()}
+  <ServiceBadge {service} pos="absolute -top-3 -right-0" />
+  <span class="font-semibold text-sm"> {value} </span>
+  <span class="font-normal text-xs uppercase tracking-wide text-text-1">
+    {label}
+  </span>
+  {#if indicator}
+    <span class="text-xs font-bold text-primary"> {indicator} </span>
+  {/if}
+{/snippet}
+
 {#if isButton && isLinked}
   <button
     {onclick}
@@ -56,14 +67,7 @@
       class="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-2 text-reset no-underline w-full"
       onclick={(e) => e.stopPropagation()}
     >
-      <ServiceBadge {service} pos="absolute -top-3 -right-0" />
-      <span class="font-semibold text-sm"> {value} </span>
-      <span class="font-normal text-xs uppercase tracking-wide text-text-1">
-        {label}
-      </span>
-      {#if indicator}
-        <span class="text-xs font-bold text-primary"> {indicator} </span>
-      {/if}
+      {@render chipContent()}
     </a>
   </button>
 {:else if isButton}
@@ -74,38 +78,23 @@
     <div
       class="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-2 w-full relative"
     >
-      <ServiceBadge {service} pos="absolute -top-3 -right-0" />
-      <span class="font-semibold text-sm"> {value} </span>
-      <span class="font-normal text-xs uppercase tracking-wide text-text-1">
-        {label}
-      </span>
-      {#if indicator}
-        <span class="text-xs font-bold text-primary"> {indicator} </span>
-      {/if}
+      {@render chipContent()}
     </div>
   </button>
 {:else if isLinked}
   <div class="relative rounded-lg shrink-0 {background}">
-    <ServiceBadge {service} pos="absolute -top-3 -right-0" />
     <a
       {href}
       use:link
       class="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-2 text-reset no-underline"
     >
-      <span class="font-semibold text-sm"> {value} </span>
-      <span class="font-normal text-xs uppercase tracking-wide text-text-1">
-        {label}
-      </span>
+      {@render chipContent()}
     </a>
   </div>
 {:else}
   <div class="relative rounded-lg shrink-0 {background}">
-    <ServiceBadge {service} pos="absolute -top-3 -right-0" />
     <div class="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-2">
-      <span class="font-semibold text-sm"> {value} </span>
-      <span class="font-normal text-xs uppercase tracking-wide text-text-1">
-        {label}
-      </span>
+      {@render chipContent()}
     </div>
   </div>
 {/if}

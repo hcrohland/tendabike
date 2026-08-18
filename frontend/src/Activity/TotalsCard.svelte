@@ -33,6 +33,7 @@
   };
 
   type Props = {
+    title: string;
     activities: Activity[];
     filterOptions: FilterOption[] | undefined;
     dateValues: number[];
@@ -45,6 +46,7 @@
   };
 
   let {
+    title,
     activities,
     filterOptions,
     dateValues = $bindable(),
@@ -103,16 +105,11 @@
   }
 </script>
 
-<div
-  class="rounded-lg border border-border-subtle bg-surface-2 p-4 top-16 z-10"
->
-  <!-- Totals Row: label + filters on top line, chips below -->
+<div class="rounded-lg border border-border-subtle bg-surface-2 p-4">
+  <!-- Top line: title + gear filter + search -->
   <div class="mb-3">
-    <!-- Top line: TOTALS label + gear filter + search -->
     <div class="flex items-center justify-between gap-2 mb-2">
-      <div class="text-sm font-bold uppercase text-text-1">
-        {m.act_total()}
-      </div>
+      <div class="text-sm font-bold uppercase text-text-1">{title}</div>
       <div class="flex items-center gap-2">
         <!-- Gear Filter (first) -->
         {#if filterOptions}

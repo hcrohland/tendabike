@@ -28,7 +28,7 @@
   import { parts } from "../lib/part";
   import * as m from "../../paraglide/messages";
 
-  let { acts }: { acts: Activity[] } = $props();
+  let { acts, title = "" }: { acts: Activity[]; title?: string } = $props();
 
   // Date range state (owned by ActList, bound to TotalsCard RangeSlider)
   let dateValues = $state<number[]>([0, 0]);
@@ -86,6 +86,31 @@
     }),
   );
 
+  // Valid sort keys with their value types for type-safe comparison
+  type SortKey =
+    | "start"
+    | "time"
+    | "distance"
+    | "climb"
+    | "descend"
+    | "energy"
+    | "name"
+    | "device_name";
+
+  // Type guard to validate sort key at runtime
+  function isSortKey(key: string): key is SortKey {
+    return [
+      "start",
+      "time",
+      "distance",
+      "climb",
+      "descend",
+      "energy",
+      "name",
+      "device_name",
+    ].includes(key);
+  }
+
   // Sort activities by column and direction
   function sortActivities(
     activities: Activity[],
@@ -93,29 +118,41 @@
     dir: number,
   ): Activity[] {
     return [...activities].sort((a: Activity, b: Activity) => {
-      let valA: any = a[key as keyof Activity];
-      let valB: any = b[key as keyof Activity];
-      if (key === "descend") {
-        if (valA === undefined) valA = a.climb || 0;
-        if (valB === undefined) valB = b.climb || 0;
+      // Guard against invalid keys
+      if (!isSortKey(key)) return 0;
+
+      // Handle each key type explicitly for type safety
+      switch (key) {
+        case "start":
+          return dir * (a.start.getTime() - b.start.getTime());
+
+        case "time":
+        case "distance":
+        case "climb":
+        case "energy": {
+          let valA = a[key] ?? 0;
+          let valB = b[key] ?? 0;
+          if (valA == null) return dir;
+          if (valB == null) return -dir;
+          return dir * (valA - valB);
+        }
+
+        case "descend": {
+          // descend falls back to climb when undefined
+          let valA = a.descend ?? a.climb ?? 0;
+          let valB = b.descend ?? b.climb ?? 0;
+          if (valA == null) return dir;
+          if (valB == null) return -dir;
+          return dir * (valA - valB);
+        }
+
+        case "name":
+        case "device_name": {
+          let valA = a[key] ?? "";
+          let valB = b[key] ?? "";
+          return dir * valA.toString().localeCompare(valB.toString());
+        }
       }
-
-      // Handle undefined/null values
-      if (valA == null) return dir;
-      if (valB == null) return -dir;
-
-      // Date comparison for 'start'
-      if (key === "start") {
-        return dir * (a.start.getTime() - b.start.getTime());
-      }
-
-      // Numeric comparison for time, distance, climb, descend, energy
-      if (["time", "distance", "climb", "descend", "energy"].includes(key)) {
-        return dir * (valA - valB);
-      }
-
-      // String comparison for name, device_name
-      return dir * valA.toString().localeCompare(valB.toString());
     });
   }
 
@@ -151,6 +188,7 @@
 <div class="flex flex-col gap-1 sm:gap-2 max-w-4xl mx-auto">
   <!-- Totals & Controls (date slider + filters + sort) -->
   <TotalsCard
+    {title}
     activities={displayed}
     {filterOptions}
     bind:dateValues
