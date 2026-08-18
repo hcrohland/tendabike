@@ -134,13 +134,13 @@
         <input
           type="text"
           bind:value={searchText}
-          class="text-sm p-1 rounded bg-surface-1 border border-border-subtle w-24 sm:w-32 md:w-48"
+          class="text-sm p-1 rounded bg-surface-1 border border-border-subtle w-24 sm:w-48"
           placeholder="Search..."
         />
       </div>
     </div>
     <!-- Chips grid -->
-    <div class="grid grid-cols-3 md:grid-cols-6 gap-2 m-4">
+    <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 m-4">
       <Chip
         value={fmtNumber(totals.count)}
         label={m.usage_rides()}

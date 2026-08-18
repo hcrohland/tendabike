@@ -148,7 +148,7 @@
   );
 </script>
 
-<div class="flex flex-col gap-4 max-w-4xl mx-auto">
+<div class="flex flex-col gap-1 sm:gap-2 max-w-4xl mx-auto">
   <!-- Totals & Controls (date slider + filters + sort) -->
   <TotalsCard
     activities={displayed}

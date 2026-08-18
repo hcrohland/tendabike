@@ -15,17 +15,18 @@
 
 	You should have received a copy of the GNU Affero General Public License
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
- 
+	
  -->
 
 <script lang="ts">
   import { Activity } from "../lib/activity";
   import { Usage } from "../lib/usage";
   import { parts } from "../lib/part";
-  import UsageChips from "../Usage/UsageChips.svelte";
+  import Chip from "../Widgets/Chip.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { DropdownItem } from "flowbite-svelte";
   import { actions } from "../Widgets/Actions.svelte";
+  import { fmtNumber, fmtSeconds } from "../lib/store";
   import * as m from "../../paraglide/messages";
 
   let { activity }: { activity: Activity } = $props();
@@ -41,26 +42,35 @@
       energy: activity.energy || 0,
     }),
   );
+
+  // Gear name derived from activity
+  let gearName = $derived(
+    activity.gear && $parts[activity.gear] ? $parts[activity.gear].name : "-",
+  );
 </script>
 
-<div class="rounded-lg border border-border-subtle bg-surface-1 p-4">
-  <!-- Header Row: Start — Title — Gear | Device -->
-  <div class="flex items-start justify-between gap-2">
-    <!-- Left: Start — Title — Gear + Device (flex-wrap on mobile) -->
-    <div class="min-w-0 flex-1">
-      <div class="flex items-center flex-wrap gap-x-1">
-        <!-- Start -->
+<div class="rounded-lg border border-border-subtle bg-surface-1 p-2 sm:p-3">
+  <!-- Header Row: 4-column grid layout (same on mobile and desktop) -->
+  <!-- Col 1-3 (col-span-3): Date + Time + Activity Name (wraps freely) -->
+  <!-- Col 4 (col-span-1): Device name (right-aligned) + Menu (shrink-0) -->
+  <!-- Layout: [Date — Time + Title ...........] [Device] [Menu] -->
+  <div class="grid grid-cols-4 items-center gap-1 sm:gap-2 mb-2 sm:mb-3">
+    <!-- Columns 1-3: Date + Time + Activity Name -->
+    <div class="col-span-3 min-w-0">
+      <div class="flex items-center gap-x-0.5 sm:gap-x-1">
+        <!-- Date + Time -->
         <span class="text-sm text-text-1 shrink-0">
           {activity.start.toLocaleDateString()}
           {activity.start.toLocaleTimeString()}
         </span>
-        <!-- Separator (desktop only, shows gap between Start and Title) -->
-        <span class="hidden md:inline text-text-1"> — </span>
-        <!-- Title -->
+        <!-- Gap between Start and Title (em-dash on desktop, thin space on mobile) -->
+        <span class="hidden sm:inline text-text-1"> — </span>
+        <span class="sm:hidden text-text-1">&thinsp;</span>
+        <!-- Title (wraps on long names) -->
         <a
           href="/strava/activities/{activity.id}"
           target="_blank"
-          class="text-sm font-bold truncate"
+          class="text-sm font-bold wrap-break-word"
         >
           {activity.name}
           <img
@@ -71,40 +81,44 @@
           />
         </a>
       </div>
-      <!-- Gear + Device row (wraps on mobile, shows on both sizes) -->
-      <div class="flex items-center flex-wrap gap-x-2 mt-1">
-        <!-- Desktop separator before Gear -->
-        <span class="hidden md:inline text-text-1"> — </span>
-        <!-- Gear -->
-        <span class="min-w-0 truncate text-sm">
-          {@html activity.gear && $parts[activity.gear]
-            ? $parts[activity.gear].partLink()
-            : "-"}
-        </span>
-        <!-- Gap between Gear and Device -->
-        <span class="text-text-1"> | </span>
-        <!-- Device (smaller font) -->
-        <span
-          class="text-xs text-text-1 shrink-0 truncate"
-          title={activity.device_name}
-        >
-          {activity.device_name || "-"}
-        </span>
-      </div>
     </div>
-    <!-- Edit menu -->
-    <Menu>
-      <DropdownItem onclick={() => $actions.changeActivity(activity)}>
-        {m.action_change()}
-      </DropdownItem>
-    </Menu>
+    <!-- Column 4: Device (right-aligned, truncates) + Menu -->
+    <div class="col-span-1 flex items-center justify-end gap-1 shrink-0">
+      <!-- Device name (right-aligned via sm:text-right, truncates on overflow) -->
+      <span
+        class="text-xs text-text-1 truncate sm:text-right"
+        title={activity.device_name}
+      >
+        {activity.device_name || "-"}
+      </span>
+      <!-- Edit Menu -->
+      <Menu>
+        <DropdownItem onclick={() => $actions.changeActivity(activity)}>
+          {m.action_change()}
+        </DropdownItem>
+      </Menu>
+    </div>
   </div>
 
-  <!-- Usage Chips -->
-  <UsageChips
-    {usage}
-    ref={activity.id}
-    light
-    gridclass="grid grid-cols-3 md:grid-cols-6 gap-2"
-  />
+  <!-- Metrics Grid: Gear | Time | Distance | Climb | Descend | Energy -->
+  <div class="grid grid-cols-3 sm:grid-cols-6 gap-1 sm:gap-2">
+    <!-- Gear Chip (replaces count) -->
+    <Chip value={gearName} label="" light />
+    <!-- Time -->
+    <Chip value={fmtSeconds(usage.time)} label="h" light />
+    <!-- Distance -->
+    <Chip
+      value={fmtNumber(Math.round((usage.distance || 0) / 1000))}
+      label="km"
+      light
+    />
+    <!-- Climb -->
+    <Chip value={fmtNumber(usage.climb)} label="↑m" light />
+    <!-- Descend -->
+    <Chip value={fmtNumber(usage.descend)} label="↓m" light />
+    <!-- Energy (only if > 0) -->
+    {#if usage.energy > 0}
+      <Chip value={fmtNumber(usage.energy)} label="kJ" light />
+    {/if}
+  </div>
 </div>
