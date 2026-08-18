@@ -24,6 +24,7 @@
   import Chip from "../Widgets/Chip.svelte";
   import { DAY, fmtNumber, fmtSeconds } from "../lib/store";
   import RangeSlider from "svelte-range-slider-pips";
+  import { tick } from "svelte";
   import * as m from "../../paraglide/messages";
 
   type FilterOption = {
@@ -58,6 +59,11 @@
     sortDir = $bindable(-1),
   }: Props = $props();
 
+  // Internal sorting state for loading indicator
+  let sorting = $state(false);
+  // Tracks which chip label is currently the sorting target
+  let sortTarget = $state("");
+
   // Ensure defaults with $derived
   let safeActivities = $derived(activities ?? []);
 
@@ -82,24 +88,40 @@
   };
 
   // Toggle sort by clicking a metric chip
-  function toggleSort(label: string) {
-    const field = sortMapping[label];
-    if (!field) return;
+  async function toggleSort(label: string) {
+    sortTarget = sortMapping[label];
+    if (!sortTarget) return;
 
-    if (sortBy === field) {
+    sorting = true;
+
+    // Wait for the browser to paint at least one frame with the loading state.
+    // tick() ensures Svelte processes the sorting=true state change,
+    // then two requestAnimationFrame calls ensure one full paint cycle happens
+    // before we apply the sort change.
+    await tick();
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(resolve);
+      });
+    });
+
+    if (sortBy === sortTarget) {
       // Same column: toggle direction (1 = asc, -1 = desc)
       sortDir = sortDir === 1 ? -1 : 1;
     } else {
       // Different column: sort descending by default
-      sortBy = field;
+      sortBy = sortTarget;
       sortDir = -1;
     }
+
+    // Reset sorting state after sorting completes
+    sorting = false;
   }
 
   // Show direction indicator only for the currently sorted column
   function sortIndicator(label: string): string | undefined {
     const field = sortMapping[label];
-    if (sortBy !== field) return undefined;
+    if (sortTarget !== field) return undefined;
     // -1 = descending (▼), 1 = ascending (▲)
     return sortDir === -1 ? "▼" : "▲";
   }
@@ -143,30 +165,35 @@
         label={m.usage_rides()}
         onclick={() => toggleSort("rides")}
         indicator={sortIndicator("rides")}
+        disabled={sorting}
       />
       <Chip
         value={fmtSeconds(totals.time)}
         label="h"
         onclick={() => toggleSort("time")}
         indicator={sortIndicator("time")}
+        disabled={sorting}
       />
       <Chip
         value={fmtNumber(Math.round((totals.distance || 0) / 1000))}
         label="km"
         onclick={() => toggleSort("distance")}
         indicator={sortIndicator("distance")}
+        disabled={sorting}
       />
       <Chip
         value={fmtNumber(totals.climb)}
         label="↑m"
         onclick={() => toggleSort("climb")}
         indicator={sortIndicator("climb")}
+        disabled={sorting}
       />
       <Chip
         value={fmtNumber(totals.descend)}
         label="↓m"
         onclick={() => toggleSort("descend")}
         indicator={sortIndicator("descend")}
+        disabled={sorting}
       />
       {#if totals.energy > 0}
         <Chip
@@ -174,6 +201,7 @@
           label="kJ"
           onclick={() => toggleSort("energy")}
           indicator={sortIndicator("energy")}
+          disabled={sorting}
         />
       {/if}
     </div>

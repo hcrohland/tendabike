@@ -20,6 +20,7 @@
 
 <script lang="ts">
   import { link } from "svelte-spa-router";
+  import { Spinner } from "flowbite-svelte";
   import ServiceBadge from "./ServiceBadge.svelte";
 
   let {
@@ -30,6 +31,7 @@
     service = undefined,
     onclick = undefined,
     indicator = undefined,
+    disabled = false,
   }: {
     label: string;
     value: string;
@@ -38,10 +40,11 @@
     service?: { due: number; plan: number };
     onclick?: () => void;
     indicator?: string;
+    disabled?: boolean;
   } = $props();
 
   let background = $derived(light ? "bg-surface-2" : "bg-surface-1");
-  let isButton = $derived(!!onclick);
+  let isButton = $derived(!!onclick && !disabled);
   let isLinked = $derived(!!href);
 </script>
 
@@ -52,13 +55,20 @@
     {label}
   </span>
   {#if indicator}
-    <span class="text-xs font-bold text-primary"> {indicator} </span>
+    {#if disabled}
+      <span>
+        <Spinner size="4" color="red" />
+      </span>
+    {:else}
+      <span class="text-xs font-bold text-primary"> {indicator} </span>
+    {/if}
   {/if}
 {/snippet}
 
 {#if isButton && isLinked}
   <button
     {onclick}
+    {disabled}
     class="cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary rounded-lg {background} shrink-0"
   >
     <a
@@ -73,6 +83,7 @@
 {:else if isButton}
   <button
     {onclick}
+    {disabled}
     class="cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary rounded-lg {background} shrink-0"
   >
     <div
