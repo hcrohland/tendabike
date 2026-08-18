@@ -53,7 +53,7 @@
     <a
       {href}
       use:link
-      class="flex items-center gap-1 px-3 py-2 text-reset no-underline w-full"
+      class="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-2 text-reset no-underline w-full"
       onclick={(e) => e.stopPropagation()}
     >
       <ServiceBadge {service} pos="absolute -top-3 -right-0" />
@@ -71,7 +71,9 @@
     {onclick}
     class="cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary rounded-lg {background} shrink-0"
   >
-    <div class="flex items-center gap-1 px-3 py-2 w-full relative">
+    <div
+      class="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-2 w-full relative"
+    >
       <ServiceBadge {service} pos="absolute -top-3 -right-0" />
       <span class="font-semibold text-sm"> {value} </span>
       <span class="font-normal text-xs uppercase tracking-wide text-text-1">
@@ -88,7 +90,7 @@
     <a
       {href}
       use:link
-      class="flex items-center gap-1 px-3 py-2 text-reset no-underline"
+      class="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-2 text-reset no-underline"
     >
       <span class="font-semibold text-sm"> {value} </span>
       <span class="font-normal text-xs uppercase tracking-wide text-text-1">
@@ -99,7 +101,7 @@
 {:else}
   <div class="relative rounded-lg shrink-0 {background}">
     <ServiceBadge {service} pos="absolute -top-3 -right-0" />
-    <div class="flex items-center gap-1 px-3 py-2">
+    <div class="flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-2">
       <span class="font-semibold text-sm"> {value} </span>
       <span class="font-normal text-xs uppercase tracking-wide text-text-1">
         {label}
