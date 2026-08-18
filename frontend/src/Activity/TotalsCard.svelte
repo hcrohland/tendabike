@@ -21,8 +21,8 @@
 <script lang="ts">
   import { Activity } from "../lib/activity";
   import { Usage } from "../lib/usage";
-  import UsageChips from "../Usage/UsageChips.svelte";
-  import { DAY } from "../lib/store";
+  import Chip from "../Widgets/Chip.svelte";
+  import { DAY, fmtNumber, fmtSeconds } from "../lib/store";
   import RangeSlider from "svelte-range-slider-pips";
   import * as m from "../../paraglide/messages";
 
@@ -69,96 +69,147 @@
 
   const formatter = (v: number) => new Date(v * DAY).toLocaleDateString();
 
-  // Sort options
-  type SortOption = { key: string; label: string };
-  const sortOptions: SortOption[] = [
-    { key: "start", label: m.act_col_start() },
-    { key: "name", label: m.partform_name() },
-    { key: "time", label: m.act_col_time() },
-    { key: "distance", label: m.act_col_distance() },
-    { key: "climb", label: m.limit_climb() },
-    { key: "descend", label: m.limit_descend() },
-    { key: "energy", label: m.limit_kJ() },
-  ];
+  // Map from chip label key to sort field
+  const sortMapping: Record<string, string> = {
+    rides: "start", // Count -> sort by date
+    time: "time", // Time -> sort by duration
+    distance: "distance",
+    climb: "climb",
+    descend: "descend",
+    energy: "energy",
+  };
+
+  // Toggle sort by clicking a metric chip
+  function toggleSort(label: string) {
+    const field = sortMapping[label];
+    if (!field) return;
+
+    if (sortBy === field) {
+      // Same column: toggle direction (1 = asc, -1 = desc)
+      sortDir = sortDir === 1 ? -1 : 1;
+    } else {
+      // Different column: sort descending by default
+      sortBy = field;
+      sortDir = -1;
+    }
+  }
+
+  // Show direction indicator only for the currently sorted column
+  function sortIndicator(label: string): string | undefined {
+    const field = sortMapping[label];
+    if (sortBy !== field) return undefined;
+    // -1 = descending (▼), 1 = ascending (▲)
+    return sortDir === -1 ? "▼" : "▲";
+  }
 </script>
 
 <div
-  class="rounded-lg border border-border-subtle bg-surface-2 p-4 sticky top-16 z-10"
+  class="rounded-lg border border-border-subtle bg-surface-2 p-4 top-16 z-10"
 >
-  <!-- Totals Row -->
+  <!-- Totals Row: label + filters on top line, chips below -->
   <div class="mb-3">
-    <div class="text-sm font-bold uppercase text-text-1 mb-2">
-      {m.act_total()}
+    <!-- Top line: TOTALS label + gear filter + search -->
+    <div class="flex items-center justify-between gap-2 mb-2">
+      <div class="text-sm font-bold uppercase text-text-1">
+        {m.act_total()}
+      </div>
+      <div class="flex items-center gap-2">
+        <!-- Gear Filter (first) -->
+        {#if filterOptions}
+          <select
+            value={gearFilter ?? ""}
+            oninput={(e) => {
+              const v = e.currentTarget.value;
+              gearFilter = v === "" ? undefined : Number(v);
+            }}
+            class="text-sm p-1 rounded bg-surface-1 border border-border-subtle"
+          >
+            <option value={undefined}>{m.filter_all()}</option>
+            {#each filterOptions as opt}
+              <option value={opt.value}>{opt.name}</option>
+            {/each}
+          </select>
+        {/if}
+        <!-- Search Input (second) -->
+        <input
+          type="text"
+          bind:value={searchText}
+          class="text-sm p-1 rounded bg-surface-1 border border-border-subtle w-24 sm:w-32 md:w-48"
+          placeholder="Search..."
+        />
+      </div>
     </div>
-    <UsageChips
-      usage={totals}
-      gridclass="grid grid-cols-3 md:grid-cols-6 gap-2"
-    />
-  </div>
-
-  <!-- Filters Row -->
-  <div class="flex flex-wrap gap-2 items-center mb-3">
-    <!-- Search Input -->
-    <input
-      type="text"
-      bind:value={searchText}
-      class="text-sm p-1 rounded bg-surface-1 border border-border-subtle w-full md:w-48"
-      placeholder="Search name or device..."
-    />
-
-    <!-- Gear Filter -->
-    {#if filterOptions}
-      <select
-        value={gearFilter ?? ""}
-        oninput={(e) => {
-          const v = e.currentTarget.value;
-          gearFilter = v === "" ? undefined : Number(v);
-        }}
-        class="text-sm p-1 rounded bg-surface-1 border border-border-subtle"
-      >
-        <option value={undefined}>{m.filter_all()}</option>
-        {#each filterOptions as opt}
-          <option value={opt.value}>{opt.name}</option>
-        {/each}
-      </select>
-    {/if}
-
-    <!-- Sort By -->
-    <select
-      value={sortBy}
-      oninput={(e) => {
-        sortBy = e.currentTarget.value;
-      }}
-      class="text-sm p-1 rounded bg-surface-1 border border-border-subtle"
-    >
-      {#each sortOptions as opt}
-        <option value={opt.key}>{opt.label}</option>
-      {/each}
-    </select>
-
-    <!-- Sort Order Toggle -->
-    <button
-      onclick={() => {
-        sortDir = sortDir === -1 ? 1 : -1;
-      }}
-      class="text-sm p-1 px-2 rounded bg-surface-1 border border-border-subtle"
-      title={sortDir === -1 ? "▼ Desc" : "▲ Asc"}
-    >
-      {sortDir === -1 ? "▼" : "▲"}
-    </button>
+    <!-- Chips grid -->
+    <div class="grid grid-cols-3 md:grid-cols-6 gap-2 m-4">
+      <Chip
+        value={fmtNumber(totals.count)}
+        label={m.usage_rides()}
+        onclick={() => toggleSort("rides")}
+        indicator={sortIndicator("rides")}
+      />
+      <Chip
+        value={fmtSeconds(totals.time)}
+        label="h"
+        onclick={() => toggleSort("time")}
+        indicator={sortIndicator("time")}
+      />
+      <Chip
+        value={fmtNumber(Math.round((totals.distance || 0) / 1000))}
+        label="km"
+        onclick={() => toggleSort("distance")}
+        indicator={sortIndicator("distance")}
+      />
+      <Chip
+        value={fmtNumber(totals.climb)}
+        label="↑m"
+        onclick={() => toggleSort("climb")}
+        indicator={sortIndicator("climb")}
+      />
+      <Chip
+        value={fmtNumber(totals.descend)}
+        label="↓m"
+        onclick={() => toggleSort("descend")}
+        indicator={sortIndicator("descend")}
+      />
+      {#if totals.energy > 0}
+        <Chip
+          value={fmtNumber(totals.energy)}
+          label="kJ"
+          onclick={() => toggleSort("energy")}
+          indicator={sortIndicator("energy")}
+        />
+      {/if}
+    </div>
   </div>
 
   <!-- Date Range Slider -->
-  <RangeSlider
-    {min}
-    {max}
-    range
-    pushy
-    pips
-    first="label"
-    last="label"
-    float
-    {formatter}
-    bind:values={dateValues}
-  />
+  <div class="mx-8 mt-6">
+    <RangeSlider
+      {min}
+      {max}
+      range
+      pushy
+      pips
+      first="label"
+      last="label"
+      float
+      {formatter}
+      bind:values={dateValues}
+    />
+  </div>
 </div>
+
+<style>
+  :global(.rangeSlider) {
+    font-size: 0.75rem;
+  }
+  :global(.rangeSlider .rangeFloat) {
+    font-size: 0.65rem;
+    padding: 0.2em 0.4em;
+  }
+  :global(.rangeSlider .rangeHandle) {
+    width: 1rem;
+    height: 1em;
+    top: 0.2em;
+  }
+</style>

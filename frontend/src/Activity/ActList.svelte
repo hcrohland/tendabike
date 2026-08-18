@@ -143,7 +143,7 @@
         }
       });
       let res = Object.values(types).sort(by<any>("start"));
-      return res.length >= 1 ? res : undefined;
+      return res.length >= 2 ? res : undefined;
     })(),
   );
 </script>
