@@ -3,7 +3,6 @@
   import * as m from "../../paraglide/messages";
   import { myfetch, handleError } from "../lib/store";
   import type { ShopSubscription } from "../lib/subscription";
-  import { onMount } from "svelte";
   import { shops } from "../lib/shop";
   import SubscriptionRow from "./SubscriptionRow.svelte";
 
@@ -73,7 +72,9 @@
     responseMessage = "";
   }
 
-  onMount(loadSubscriptions);
+  $effect(() => {
+    loadSubscriptions();
+  });
 </script>
 
 <div class="space-y-6">

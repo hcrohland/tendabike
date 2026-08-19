@@ -21,7 +21,6 @@
   import { category } from "./lib/types";
   import { querystring } from "svelte-spa-router";
   import { location } from "svelte-spa-router";
-  import { onDestroy } from "svelte";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
   import Garmin from "./Activity/Garmin.svelte";
   import ShopMenu from "./Shop/ShopMenu.svelte";
@@ -33,16 +32,22 @@
 
   let openGarmin = $state(false);
 
-  let hook_timer = setTimeout(() => {});
+  let hook_timer: number = 0;
 
-  onDestroy(() => {
-    clearInterval(hook_timer);
+  $effect(() => {
+    return () => {
+      if (hook_timer) {
+        clearInterval(hook_timer);
+      }
+    };
   });
 
   let hook_promise = $state(poll());
 
   async function poll() {
-    clearInterval(hook_timer);
+    if (hook_timer) {
+      clearInterval(hook_timer);
+    }
     let data;
     try {
       do {
@@ -60,7 +65,10 @@
   }
 
   function fullrefresh() {
-    clearInterval(hook_timer);
+    if (hook_timer) {
+      clearInterval(hook_timer);
+      hook_timer = 0;
+    }
     hook_promise = refresh($shop?.id).then(poll);
   }
 
