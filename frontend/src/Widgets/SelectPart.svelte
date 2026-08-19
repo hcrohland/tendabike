@@ -5,11 +5,15 @@
   import { Select } from "flowbite-svelte";
   import { m } from "../../paraglide/messages";
 
-  export let type: Type;
-  export let part: number | undefined;
-  export let none = false;
+  let {
+    type,
+    part = $bindable(),
+    none,
+  }: { type: Type; part: number | undefined; none?: boolean } = $props();
 
-  $: gears = filterValues($parts, (p) => type.main == p.what && !p.disposed_at);
+  let gears = $derived(
+    filterValues($parts, (p) => type.main == p.what && !p.disposed_at),
+  );
 </script>
 
 <Select

@@ -15,8 +15,7 @@
   import { Part } from "../lib/part";
   import { m } from "../../paraglide/messages";
 
-  export let gear: Part;
-  export let attachees: Attachment[];
+  let { gear, attachees }: { gear: Part; attachees: Attachment[] } = $props();
 
   type Group = {
     group: string;
@@ -58,12 +57,15 @@
     ),
   );
 
-  let groups = allgroups.filter(groupAvailable);
+  let groups = $state(allgroups.filter(groupAvailable));
 
-  // Vendor needs to be set for any enabled group
-  $: disabled = !groups.reduce((r: boolean, v: Group) => {
-    return r && (!v.enabled || (v.enabled && v.vendor != ""));
-  }, true);
+  let disabled = $state(true);
+
+  $effect(() => {
+    disabled = !groups.reduce((r: boolean, v: Group) => {
+      return r && (!v.enabled || (v.enabled && v.vendor != ""));
+    }, true);
+  });
 
   async function attachPart(part: Part | void, hook: number) {
     if (!part) throw "Wizard: part create failed";
@@ -92,14 +94,17 @@
     });
   }
 
+  let show_button = $state(allgroups.length !== groups.length);
+
+  $effect(() => {
+    show_button = allgroups.length !== groups.length;
+  });
+
   function save() {
     groups.forEach((g) => {
       if (g.enabled) setGroup(g);
     });
-    groups = groups.filter((g) => !g.enabled);
-    show_button = true;
   }
-  let show_button = groups.length != allgroups.length;
 </script>
 
 {#if !gear.disposed_at && groups.length > 0}

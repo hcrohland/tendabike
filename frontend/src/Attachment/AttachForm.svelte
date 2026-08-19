@@ -8,27 +8,36 @@
   import SelectPart from "../Widgets/SelectPart.svelte";
   import { m } from "../../paraglide/messages";
 
+  let {
+    part,
+    time = $bindable(),
+    gear = $bindable(),
+    hook = $bindable(),
+  }: {
+    part: Part;
+    time: Date;
+    gear?: number | undefined;
+    hook?: number | undefined;
+  } = $props();
+
+  let type = $derived(part.type());
+
+  let computedHook = $derived(
+    hook ?? (type.hooks.length == 1 ? type.hooks[0] : undefined),
+  );
+
   function prevdate(time: Date) {
     let last = filterValues(
       $attachments,
       (a) =>
         (a.attached < time || a.detached < time) &&
         (a.part_id == part.id ||
-          (a.gear == gear && a.hook == hook && a.what == part.what)),
+          (a.gear == gear && a.hook == computedHook && a.what == part.what)),
     )
       .map((a) => (a.detached < time ? a.detached : a.attached))
       .sort((a, b) => (a < b ? 1 : -1))[0];
     return last || part.purchase;
   }
-
-  export let part: Part;
-
-  let type = part.type();
-
-  export let time = new Date();
-  export let gear: number | undefined = undefined;
-  export let hook: number | undefined =
-    type.hooks.length == 1 ? type.hooks[0] : undefined;
 </script>
 
 <div>

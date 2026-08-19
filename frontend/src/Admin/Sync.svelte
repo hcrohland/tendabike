@@ -4,10 +4,10 @@
   import type { User } from "../lib/user";
   import * as m from "../../paraglide/messages";
 
-  export let user: User;
-  export let refresh: () => void;
+  let { user, refresh }: { user: User; refresh: () => void } = $props();
 
-  let promise: Promise<void>, count: number;
+  let promise = $state<Promise<void>>(),
+    count = $state(0);
 
   const sync = (id: number) => {
     promise = getdata(id);

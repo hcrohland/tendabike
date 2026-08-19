@@ -1,19 +1,15 @@
-<script>
-  // @ts-nocheck
-  import { onMount } from "svelte";
-  export let data;
-  export let layout = undefined;
+<script lang="ts">
+  let { data, layout }: { data?: any; layout?: any } = $props();
 
   let config = { responsive: true };
-  let redraw = (a, b, c) => {};
 
-  let plotDiv;
+  let plotDiv: HTMLDivElement;
 
-  onMount(() => {
-    redraw = (d, l, c) => Plotly.newPlot(plotDiv, d, l, c);
+  $effect(() => {
+    if (plotDiv && typeof (window as any).Plotly !== "undefined") {
+      (window as any).Plotly.newPlot(plotDiv, data, layout, config);
+    }
   });
-
-  $: redraw(data, layout, config);
 </script>
 
 <div bind:this={plotDiv}>

@@ -1,8 +1,8 @@
 <script lang="ts">
   import { ButtonGroup, Input, InputAddon } from "flowbite-svelte";
 
-  export let field: number | undefined;
-  export let label: string;
+  let { field = $bindable(), label }: { field?: number; label: string } =
+    $props();
 
   let required = field != undefined;
 </script>

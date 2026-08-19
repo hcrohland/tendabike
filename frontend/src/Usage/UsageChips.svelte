@@ -5,54 +5,66 @@
   import { Usage, usages } from "../lib/usage";
   import Chip from "../Widgets/Chip.svelte";
 
-  export let id: string | undefined = undefined;
-  export let usage: Usage = new Usage();
-  export let ref: string | number | undefined = undefined;
-  export let light = false;
-  export let gridclass = "md:grid-cols-6 grid-cols-3";
-  export let dues: Partial<Record<limit_keys, { due: number; plan: number }>> =
-    {};
+  let {
+    id,
+    usage = $bindable(),
+    ref,
+    light = false,
+    gridclass = "md:grid-cols-6 grid-cols-3",
+    dues,
+  }: {
+    id?: string;
+    usage?: Usage;
+    ref?: string | number;
+    light?: boolean;
+    gridclass?: string;
+    dues?: Partial<Record<limit_keys, { due: number; plan: number }>>;
+  } = $props();
 
-  $: if (id && $usages[id]) usage = $usages[id];
+  let currentUsage = $derived.by(() => {
+    if (usage) return usage;
+    if (id && $usages[id]) return $usages[id];
+    return new Usage();
+  });
 
-  $: ridesHref = ref ? "/activities/" + ref : undefined;
+  let ridesHref = $derived.by(() => (ref ? "/activities/" + ref : undefined));
 </script>
 
 <div class={"grid gap-2 m-2 " + gridclass}>
   <Chip
-    value={fmtNumber(usage.count)}
+    value={fmtNumber(currentUsage.count)}
     label={m.usage_rides()}
     href={ridesHref}
     {light}
     service={dues?.rides}
   />
   <Chip
-    value={fmtSeconds(usage.time)}
+    value={fmtSeconds(currentUsage.time)}
     label="h"
     {light}
     service={dues?.hours}
   />
   <Chip
-    value={fmtNumber(Math.round((usage.distance || 0) / 1000))}
+    value={fmtNumber(Math.round((currentUsage.distance || 0) / 1000))}
     label="km"
     {light}
     service={dues?.km}
   />
   <Chip
-    value={fmtNumber(usage.climb)}
+    value={fmtNumber(currentUsage.climb)}
     label="↑m"
     {light}
     service={dues?.climb}
   />
   <Chip
-    value={fmtNumber(usage.descend)}
+    value={fmtNumber(currentUsage.descend)}
     label="↓m"
     {light}
     service={dues?.descend}
   />
-  {#if usage.energy > 0}
+  {#if currentUsage.energy > 0}
     <Chip
-      value={fmtNumber(usage.energy)}
+      value={fmtNumber(currentUsage.energy)}
       label="kJ"
       {light}
       service={dues?.kJ}

@@ -8,7 +8,7 @@
 
   let part: Part | undefined = $state();
   let open = $state(false);
-  let time = $state<Date>();
+  let time = $state<Date>(new Date());
   let gear = $state<number>();
   let hook = $state<number>();
 
@@ -19,7 +19,7 @@
 
   export const start = (p: Part) => {
     part = p;
-    time = undefined;
+    time = new Date();
     gear = undefined;
     hook = undefined;
     open = true;
