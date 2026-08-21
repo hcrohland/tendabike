@@ -86,13 +86,19 @@ export class Part {
   }
 
   partLink(name?: string) {
+    const href = this.link();
+    const label = name ?? this.name ?? "-";
+    if (!href) return label;
     return (
-      '<a href="/#/part/' +
-      this.id +
-      '" style="text-decoration1:none" class="text-reset">' +
-      (name ? name : this.name) +
+      `<a href="/#${href}" style="text-decoration1:none" class="text-reset">` +
+      label +
       "</a>"
     );
+  }
+
+  /// Returns the part link href, or undefined if no id
+  link() {
+    return this.id ? `/part/${this.id}` : undefined;
   }
 
   /// the time when the first activity or attachment for this part started
