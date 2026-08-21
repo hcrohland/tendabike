@@ -1,7 +1,6 @@
 <script lang="ts">
   import { Card, Badge } from "flowbite-svelte";
   import type { Snippet } from "svelte";
-  import { onMount, onDestroy } from "svelte";
   import * as m from "../../paraglide/messages";
 
   import type { Shop } from "../lib/shop";
@@ -39,16 +38,15 @@
     }
   }
 
-  onMount(() => {
+  $effect(() => {
     loadPartsCount();
     window.addEventListener("shop-updated", handleShopUpdate as EventListener);
-  });
-
-  onDestroy(() => {
-    window.removeEventListener(
-      "shop-updated",
-      handleShopUpdate as EventListener,
-    );
+    return () => {
+      window.removeEventListener(
+        "shop-updated",
+        handleShopUpdate as EventListener,
+      );
+    };
   });
 </script>
 

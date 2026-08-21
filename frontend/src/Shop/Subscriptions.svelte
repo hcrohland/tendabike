@@ -9,7 +9,6 @@
     Checkbox,
     Li,
   } from "flowbite-svelte";
-  import { onMount } from "svelte";
   import * as m from "../../paraglide/messages";
   import { myfetch, handleError } from "../lib/store";
   import { Shop, shops } from "../lib/shop";
@@ -96,7 +95,7 @@
     }
   }
 
-  onMount(() => {
+  $effect(() => {
     loadSubscriptions();
 
     const handleSubscriptionUpdate = () => {

@@ -4,7 +4,7 @@
   import Part from "./Part.svelte";
   import { m } from "../../paraglide/messages";
 
-  export let params: { id: number };
+  let { params }: { params: { id: number } } = $props();
 </script>
 
 {#if $parts[params.id]}

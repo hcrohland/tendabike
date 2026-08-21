@@ -14,7 +14,15 @@ export default defineConfig({
     tailwindcss(),
     svelte(),
   ],
-  build: { target: "es2022" },
+
+  build: {
+    rolldownOptions: {
+      checks: {
+        pluginTimings: false, // disable the warning
+      },
+    },
+    target: "es2022",
+  },
   server: {
     hmr: {
       host: "127.0.0.1",

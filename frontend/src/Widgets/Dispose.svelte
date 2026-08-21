@@ -2,8 +2,8 @@
   import Switch from "../Widgets/Switch.svelte";
   import { m } from "../../paraglide/messages";
 
-  export let dispose: boolean;
-  export let name: string;
+  let { dispose = $bindable(), name }: { dispose: boolean; name: string } =
+    $props();
 </script>
 
 <Switch bind:checked={dispose}>

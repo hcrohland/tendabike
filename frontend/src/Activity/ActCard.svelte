@@ -20,7 +20,6 @@
 
 <script lang="ts">
   import { Activity } from "../lib/activity";
-  import { Usage } from "../lib/usage";
   import { parts } from "../lib/part";
   import Chip from "../Widgets/Chip.svelte";
   import Menu from "../Widgets/Menu.svelte";
@@ -31,21 +30,9 @@
 
   let { activity }: { activity: Activity } = $props();
 
-  let usage = $derived(
-    new Usage({
-      count: activity.count,
-      climb: activity.climb || 0,
-      descend: activity.descend || activity.climb || 0,
-      distance: activity.distance || 0,
-      time: activity.time || activity.duration || 0,
-      duration: activity.duration || activity.time || 0,
-      energy: activity.energy || 0,
-    }),
-  );
-
-  // Gear name derived from activity
-  let gearName = $derived(
-    activity.gear && $parts[activity.gear] ? $parts[activity.gear].name : "-",
+  // Gear part derived from activity
+  let gearPart = $derived(
+    activity.gear && $parts[activity.gear] ? $parts[activity.gear] : null,
   );
 </script>
 
@@ -102,23 +89,36 @@
 
   <!-- Metrics Grid: Gear | Time | Distance | Climb | Descend | Energy -->
   <div class="grid grid-cols-3 sm:grid-cols-6 gap-1 sm:gap-2">
-    <!-- Gear Chip (replaces count) -->
-    <Chip value={gearName} label="" light />
+    <!-- Gear Chip (link) -->
+    <Chip
+      value={gearPart?.name ?? "-"}
+      label=""
+      href={gearPart?.link()}
+      light
+    />
     <!-- Time -->
-    <Chip value={fmtSeconds(usage.time)} label="h" light />
+    <Chip
+      value={fmtSeconds(activity.time || activity.duration || 0)}
+      label="h"
+      light
+    />
     <!-- Distance -->
     <Chip
-      value={fmtNumber(Math.round((usage.distance || 0) / 1000))}
+      value={fmtNumber(Math.round((activity.distance || 0) / 1000))}
       label="km"
       light
     />
     <!-- Climb -->
-    <Chip value={fmtNumber(usage.climb)} label="↑m" light />
+    <Chip value={fmtNumber(activity.climb || 0)} label="↑m" light />
     <!-- Descend -->
-    <Chip value={fmtNumber(usage.descend)} label="↓m" light />
+    <Chip
+      value={fmtNumber(activity.descend || activity.climb || 0)}
+      label="↓m"
+      light
+    />
     <!-- Energy (only if > 0) -->
-    {#if usage.energy > 0}
-      <Chip value={fmtNumber(usage.energy)} label="kJ" light />
+    {#if (activity.energy || 0) > 0}
+      <Chip value={fmtNumber(activity.energy || 0)} label="kJ" light />
     {/if}
   </div>
 </div>

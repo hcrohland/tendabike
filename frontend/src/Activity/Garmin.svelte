@@ -67,11 +67,15 @@
     <br />
   {/if}
   {#snippet footer()}
-    {#if !result}
-      <Button onclick={sendFile} {disabled}>{m.action_synchronize()}</Button>
-      <Button onclick={reset}>{m.action_cancel()}</Button>
-    {:else}
-      <Button onclick={reset}>{m.action_ok()}</Button>
-    {/if}
+    <div class="flex justify-end w-full gap-2">
+      {#if !result}
+        <Button onclick={sendFile} color="dark" class="border" {disabled}>
+          {m.action_synchronize()}
+        </Button>
+        <Button onclick={reset} color="alternative">{m.action_cancel()}</Button>
+      {:else}
+        <Button onclick={reset}>{m.action_ok()}</Button>
+      {/if}
+    </div>
   {/snippet}
 </Modal>

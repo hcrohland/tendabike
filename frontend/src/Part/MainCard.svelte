@@ -3,7 +3,7 @@
   import { Part } from "../lib/part";
   import GearCard from "./GearCard.svelte";
 
-  export let part: Part;
+  let { part }: { part: Part } = $props();
 </script>
 
 <GearCard {part} summary gridclass="grid-cols-3">

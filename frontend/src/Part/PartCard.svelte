@@ -14,6 +14,7 @@
   import XsButton from "../Widgets/XsButton.svelte";
   import { services } from "../lib/service";
   import ServiceBadge from "../Widgets/ServiceBadge.svelte";
+  import PartCard from "./PartCard.svelte";
   import * as m from "../../paraglide/messages";
 
   type TreeNode = {
@@ -22,24 +23,34 @@
     children: TreeNode[];
   };
 
-  export let attachments: Attachment[] = [];
-  export let type: Type;
-  export let children: TreeNode[] = [];
-  export let light = false;
+  let {
+    attachments = $bindable([]),
+    type,
+    children = $bindable([]),
+    light = $bindable(false),
+  }: {
+    attachments: Attachment[];
+    type: Type;
+    children: TreeNode[];
+    light?: boolean;
+  } = $props();
 
-  let background = light ? "bg-surface-1" : "bg-surface-2";
-  let background2 = !light ? "bg-surface-1" : "bg-surface-2";
-  let show_more = false;
+  let background = $derived(light ? "bg-surface-1" : "bg-surface-2");
+  let background2 = $derived(!light ? "bg-surface-1" : "bg-surface-2");
+  let show_more = $state(false);
 
-  $: list = attachments.map((att) => ({ att, part: $parts[att.part_id] }));
-  $: att = list[0]?.att;
-  $: part = list[0]?.part;
-  $: dues = next_due(
-    part,
-    plans_for_part($plans, $atts, part?.id),
-    $services,
-    $usages,
-  );
+  let { list, att, part, dues } = $derived.by(() => {
+    const list = attachments.map((a) => ({ att: a, part: $parts[a.part_id] }));
+    const att = list[0]?.att;
+    const part = list[0]?.part;
+    const dues = next_due(
+      part,
+      plans_for_part($plans, $atts, part?.id),
+      $services,
+      $usages,
+    );
+    return { list, att, part, dues };
+  });
 </script>
 
 {#if att}
@@ -151,7 +162,7 @@
       <div class="mt-3 flex flex-col gap-1 sm:gap-2">
         <!-- Children: compact gap on mobile -->
         {#each children as child (child.type.id)}
-          <svelte:self {...child} light={!light} />
+          <PartCard {...child} light={!light} />
         {/each}
       </div>
     {/if}

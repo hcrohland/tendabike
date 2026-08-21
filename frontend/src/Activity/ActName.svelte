@@ -5,7 +5,7 @@
   import { actions } from "../Widgets/Actions.svelte";
   import * as m from "../../paraglide/messages";
 
-  export let row: Activity;
+  let { row }: { row: Activity } = $props();
 </script>
 
 <div class="flex justify-between">
