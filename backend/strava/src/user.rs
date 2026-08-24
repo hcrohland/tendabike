@@ -41,7 +41,7 @@ impl StravaId {
         let events = store.strava_events_delete_for_user(&self).await?;
 
         if events > 0 {
-            info!("deleted {} open events for strava user {}", events, &self);
+            info!("deleted {} open events for strava user {}", events, self);
         }
 
         store.stravaid_update_token(self, None).await?;
@@ -114,7 +114,7 @@ impl StravaUser {
         refresh: Option<&RefreshToken>,
         store: &mut impl StravaStore,
     ) -> TbResult<StravaUser> {
-        debug!("got id {}: {} {}", id, &firstname, &lastname);
+        debug!("got id {}: {} {}", id, firstname, lastname);
 
         let user = id.read(store).await?;
         if let Some(user) = user {
@@ -233,7 +233,7 @@ pub async fn user_deauthorize(
 /// An `TbResult` containing a `String` representing the Strava URL for the user.
 pub async fn strava_url(strava_id: i32, store: &mut impl StravaStore) -> TbResult<String> {
     let user_id = store.stravaid_get_user_id(strava_id).await?;
-    Ok(format!("https://strava.com/athletes/{}", &user_id))
+    Ok(format!("https://strava.com/athletes/{}", user_id))
 }
 
 pub async fn user_delete(

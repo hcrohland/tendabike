@@ -164,7 +164,7 @@ impl Activity {
                 ),
             )?;
 
-            info!("Creating {:?}", &self);
+            info!("Creating {:?}", self);
             let new = store.activity_create(self).await?;
             // let res = new.check_geartype(res, store)?;
             new.register(Factor::Add, store).await
@@ -308,7 +308,7 @@ impl Activity {
             // error here.
             let record: Result = result.context("record")?;
             info!("{record:?}");
-            let description = format!("{} at {}", &record.title, &record.start);
+            let description = format!("{} at {}", record.title, record.start);
             let rstart = PrimitiveDateTime::parse(&record.start, FORMAT)
                 .context("Could not parse start")?
                 .assume_utc();
