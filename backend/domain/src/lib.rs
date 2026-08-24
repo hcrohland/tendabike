@@ -50,27 +50,4 @@ pub fn round_time(time: OffsetDateTime) -> OffsetDateTime {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use time::macros::datetime;
-
-    #[test]
-    fn test_round_time() {
-        assert_eq!(
-            round_time(datetime!(2020-01-01 0:00:00.0000 UTC)),
-            datetime!(2020-01-01 0:00 UTC)
-        );
-        assert_eq!(
-            round_time(datetime!(2020-01-01 0:07:07.0077 UTC)),
-            datetime!(2020-01-01 0:00 UTC)
-        );
-        assert_eq!(
-            round_time(datetime!(2020-02-28 0:15 -1)),
-            datetime!(2020-02-28 0:15 -1)
-        );
-        assert_eq!(
-            round_time(datetime!(2020-02-28 0:29:07.0077 -1)),
-            datetime!(2020-02-28 0:15 -1)
-        );
-    }
-}
+pub mod test_support;
