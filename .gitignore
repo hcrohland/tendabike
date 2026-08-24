@@ -30,3 +30,4 @@
 .cargo/*
 .claude/*
 node_modules
+.roo/*
