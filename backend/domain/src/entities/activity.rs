@@ -383,3 +383,428 @@ async fn match_and_update(
     act.descend = Some(rdescend);
     act.update(user, store).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{MemStore, TestSession};
+    use time::OffsetDateTime;
+
+    fn test_user() -> UserId {
+        UserId::from(1)
+    }
+
+    fn test_session() -> TestSession {
+        TestSession::new(test_user())
+    }
+
+    fn activity_start() -> OffsetDateTime {
+        OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
+    }
+
+    fn later_start() -> OffsetDateTime {
+        OffsetDateTime::from_unix_timestamp(1700100000).unwrap()
+    }
+
+    fn sample_activity() -> Activity {
+        Activity {
+            id: ActivityId::new(1),
+            user_id: test_user(),
+            what: ActTypeId::from(1),
+            name: "Morning Ride".to_string(),
+            start: activity_start(),
+            duration: 3600,
+            time: Some(3500),
+            distance: Some(50000),
+            climb: Some(500),
+            descend: Some(300),
+            energy: Some(1000),
+            gear: None,
+            device_name: Some("Garmin Edge".to_string()),
+            external_id: Some("garmin_12345".to_string()),
+        }
+    }
+
+    // === ActivityId tests ===
+
+    /// ActivityId::new creates an ActivityId with the given value
+    #[test]
+    fn activityid_new_creates_with_value() {
+        let id = ActivityId::new(42);
+        assert_eq!(format!("{}", id), "42");
+    }
+
+    /// ActivityId::read_optional returns None for non-existent activity
+    #[tokio::test]
+    async fn activityid_read_optional_returns_none_for_missing() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let result = ActivityId::new(999)
+            .read_optional(&test_session(), &mut store)
+            .await?;
+        assert!(result.is_none());
+        Ok(())
+    }
+
+    /// ActivityId::read_optional returns Some for existing activity
+    #[tokio::test]
+    async fn activityid_read_optional_returns_some_for_existing() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let act = sample_activity();
+        store.activity_create(act).await?;
+
+        let result = ActivityId::new(1)
+            .read_optional(&test_session(), &mut store)
+            .await?;
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().name, "Morning Ride");
+        Ok(())
+    }
+
+    /// ActivityId::read returns existing activity
+    #[tokio::test]
+    async fn activityid_read_returns_existing() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let act = sample_activity();
+        store.activity_create(act).await?;
+
+        let result = ActivityId::new(1).read(&test_session(), &mut store).await?;
+        assert_eq!(result.name, "Morning Ride");
+        assert_eq!(result.user_id, test_user());
+        Ok(())
+    }
+
+    /// ActivityId::read returns NotFound for non-existent activity
+    #[tokio::test]
+    async fn activityid_read_returns_not_found() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let result = ActivityId::new(999).read(&test_session(), &mut store).await;
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    /// ActivityId::read rejects cross-user access
+    #[tokio::test]
+    async fn activityid_read_rejects_cross_user() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let act = sample_activity();
+        store.activity_create(act).await?;
+
+        // User 2 tries to access user 1's activity
+        let other_session = TestSession::new(UserId::from(2));
+        let result = ActivityId::new(1).read(&other_session, &mut store).await;
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    // === Activity tests ===
+
+    /// Activity::usage extracts Usage from activity
+    #[test]
+    fn activity_usage_returns_usage() {
+        let act = sample_activity();
+        let usage = act.usage();
+
+        assert_eq!(usage.time, 3500);
+        assert_eq!(usage.distance, 50000);
+        assert_eq!(usage.climb, 500);
+        assert_eq!(usage.descend, 300);
+        assert_eq!(usage.energy, 1000);
+        assert_eq!(usage.count, 1);
+    }
+
+    /// Activity::usage defaults descend to climb when descend is None
+    #[test]
+    fn activity_usage_defaults_descend_to_climb() {
+        let mut act = sample_activity();
+        act.descend = None;
+        let usage = act.usage();
+
+        assert_eq!(usage.descend, 500); // climb value
+    }
+
+    /// Activity::usage defaults time to 0 when time is None
+    #[test]
+    fn activity_usage_defaults_time_to_zero() {
+        let mut act = sample_activity();
+        act.time = None;
+        let usage = act.usage();
+
+        assert_eq!(usage.time, 0);
+    }
+
+    /// Activity::get_all returns all activities for a user
+    #[tokio::test]
+    async fn activity_get_all_returns_user_activities() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let act1 = sample_activity();
+        store.activity_create(act1).await?;
+
+        let act2 = Activity {
+            id: ActivityId::new(2),
+            user_id: test_user(),
+            what: ActTypeId::from(3),
+            name: "Evening Ride".to_string(),
+            start: later_start(),
+            duration: 1800,
+            time: None,
+            distance: Some(25000),
+            climb: Some(200),
+            descend: Some(100),
+            energy: None,
+            gear: None,
+            device_name: None,
+            external_id: None,
+        };
+        store.activity_create(act2).await?;
+
+        let acts = Activity::get_all(&test_user(), &mut store).await?;
+        assert_eq!(acts.len(), 2);
+        Ok(())
+    }
+
+    /// Activity::get_all returns empty for user with no activities
+    #[tokio::test]
+    async fn activity_get_all_empty_for_user() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let acts = Activity::get_all(&test_user(), &mut store).await?;
+        assert!(acts.is_empty());
+        Ok(())
+    }
+
+    /// Activity::categories returns unique gear types from activities
+    #[tokio::test]
+    async fn activity_categories_returns_unique_gear_types() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let act1 = sample_activity(); // what = ActTypeId(1) -> gear_type for Bike
+        store.activity_create(act1).await?;
+
+        let act2 = Activity {
+            id: ActivityId::new(2),
+            user_id: test_user(),
+            what: ActTypeId::from(1), // same type
+            name: "Another Ride".to_string(),
+            start: later_start(),
+            duration: 1800,
+            time: None,
+            distance: Some(25000),
+            climb: Some(200),
+            descend: Some(100),
+            energy: None,
+            gear: None,
+            device_name: None,
+            external_id: None,
+        };
+        store.activity_create(act2).await?;
+
+        let categories = Activity::categories(&test_session(), &mut store).await?;
+        assert_eq!(categories.len(), 1);
+        Ok(())
+    }
+
+    /// Activity::categories returns empty for user with no activities
+    #[tokio::test]
+    async fn activity_categories_empty_for_no_activities() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let categories = Activity::categories(&test_session(), &mut store).await?;
+        assert!(categories.is_empty());
+        Ok(())
+    }
+
+    /// Activity::find finds activities by gear in time range
+    #[tokio::test]
+    async fn activity_find_by_gear_and_time() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let part = Part::create(
+            "Road Bike".to_string(),
+            "Trek".to_string(),
+            "Domane".to_string(),
+            PartTypeId::from(1),
+            None,
+            sample_purchase_date(),
+            "Notes".to_string(),
+            &test_session(),
+            &mut store,
+        )
+        .await?;
+
+        let act1 = Activity {
+            id: ActivityId::new(1),
+            user_id: test_user(),
+            what: ActTypeId::from(1),
+            name: "Morning Ride".to_string(),
+            start: activity_start(),
+            duration: 3600,
+            time: Some(3500),
+            distance: Some(50000),
+            climb: Some(500),
+            descend: Some(300),
+            energy: Some(1000),
+            gear: Some(part.id),
+            device_name: None,
+            external_id: None,
+        };
+        store.activity_create(act1).await?;
+
+        let acts = Activity::find(
+            part.id,
+            OffsetDateTime::from_unix_timestamp(1699999000).unwrap(),
+            OffsetDateTime::from_unix_timestamp(1700001000).unwrap(),
+            &mut store,
+        )
+        .await?;
+
+        assert_eq!(acts.len(), 1);
+        assert_eq!(acts[0].id, ActivityId::new(1));
+        Ok(())
+    }
+
+    /// Activity::find returns only activities within the specified time range
+    #[tokio::test]
+    async fn activity_find_empty_in_time_range() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let part = Part::create(
+            "Road Bike".to_string(),
+            "Trek".to_string(),
+            "Domane".to_string(),
+            PartTypeId::from(1),
+            None,
+            sample_purchase_date(),
+            "Notes".to_string(),
+            &test_session(),
+            &mut store,
+        )
+        .await?;
+
+        // Create an activity starting 1 hour after the search window end
+        let outside_activity = Activity {
+            id: ActivityId::new(1),
+            user_id: test_user(),
+            what: ActTypeId::from(1),
+            name: "Later Ride".to_string(),
+            start: OffsetDateTime::from_unix_timestamp(1000002000).unwrap(),
+            duration: 3600,
+            time: Some(3500),
+            distance: Some(50000),
+            climb: Some(500),
+            descend: Some(300),
+            energy: Some(1000),
+            gear: None,
+            device_name: Some("Garmin Edge".to_string()),
+            external_id: Some("garmin_outside".to_string()),
+        };
+        store.activity_create(outside_activity).await?;
+
+        // Search for activities in an earlier time range
+        let acts = Activity::find(
+            part.id,
+            OffsetDateTime::from_unix_timestamp(1000000000).unwrap(),
+            OffsetDateTime::from_unix_timestamp(1000001000).unwrap(),
+            &mut store,
+        )
+        .await?;
+
+        // Should be empty since the only activity is outside the time range
+        assert!(acts.is_empty());
+        Ok(())
+    }
+
+    /// Activity::upsert creates new activity when it doesn't exist
+    #[tokio::test]
+    async fn activity_upsert_creates_new() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let new_id = ActivityId::new(100);
+        let act = Activity {
+            id: new_id,
+            user_id: test_user(),
+            what: ActTypeId::from(1),
+            name: "New Activity".to_string(),
+            start: activity_start(),
+            duration: 3600,
+            time: Some(3500),
+            distance: Some(50000),
+            climb: Some(500),
+            descend: Some(300),
+            energy: Some(1000),
+            gear: None,
+            device_name: None,
+            external_id: None,
+        };
+
+        let summary = act.upsert(&test_session(), &mut store).await?;
+        assert_eq!(summary.activities.len(), 1);
+        assert_eq!(summary.activities[0].name, "New Activity");
+        Ok(())
+    }
+
+    /// Activity::upsert updates existing activity
+    #[tokio::test]
+    async fn activity_upsert_updates_existing() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let act = sample_activity();
+        store.activity_create(act.clone()).await?;
+
+        // Modify the activity
+        let modified = Activity {
+            name: "Updated Activity".to_string(),
+            ..act.clone()
+        };
+
+        let summary = modified.upsert(&test_session(), &mut store).await?;
+        assert_eq!(summary.activities.len(), 1);
+        assert_eq!(summary.activities[0].name, "Updated Activity");
+        Ok(())
+    }
+
+    /// Activity::update updates and returns summary
+    #[tokio::test]
+    async fn activity_update_returns_summary() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let act = sample_activity();
+        store.activity_create(act.clone()).await?;
+
+        let modified = Activity {
+            name: "Modified Ride".to_string(),
+            ..act.clone()
+        };
+
+        let summary = modified.update(&test_session(), &mut store).await?;
+        assert_eq!(summary.activities.len(), 1);
+        Ok(())
+    }
+
+    /// Activity::delete unregisters usage and returns summary
+    #[tokio::test]
+    async fn activity_delete_returns_summary() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let act = sample_activity();
+        store.activity_create(act.clone()).await?;
+
+        let summary = ActivityId::new(1)
+            .delete(&test_session(), &mut store)
+            .await?;
+        assert_eq!(summary.activities.len(), 1);
+        // After delete, gear should be None and duration/time zeroed
+        assert_eq!(summary.activities[0].gear, None);
+        Ok(())
+    }
+
+    /// Activity::delete returns forbidden for non-owner session
+    #[tokio::test]
+    async fn activity_delete_rejects_non_owner() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let act = sample_activity();
+        store.activity_create(act.clone()).await?;
+
+        // Create a different user's session
+        let other_session = TestSession::new(UserId::from(99));
+        let result = ActivityId::new(1).delete(&other_session, &mut store).await;
+        assert!(matches!(result, Err(Error::Forbidden(_))));
+        Ok(())
+    }
+
+    // === Helper functions for sample data ===
+
+    fn sample_purchase_date() -> OffsetDateTime {
+        OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
+    }
+}

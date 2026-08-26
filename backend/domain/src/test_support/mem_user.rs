@@ -3,37 +3,37 @@ use crate::{OnboardingStatus, TbResult, User, UserId};
 
 #[async_trait::async_trait]
 impl UserStore for MemStore {
-    async fn get(&mut self, uid: UserId) -> TbResult<User> {
+    async fn get(&mut self, _uid: UserId) -> TbResult<User> {
         todo!()
     }
 
     async fn create(
         &mut self,
-        firstname: &str,
-        lastname: &str,
-        avatar: &Option<String>,
+        _firstname: &str,
+        _lastname: &str,
+        _avatar: &Option<String>,
     ) -> TbResult<User> {
         todo!()
     }
 
     async fn update(
         &mut self,
-        uid: &UserId,
-        firstname: &str,
-        lastname: &str,
-        avatar: &Option<String>,
+        _uid: &UserId,
+        _firstname: &str,
+        _lastname: &str,
+        _avatar: &Option<String>,
     ) -> TbResult<User> {
         todo!()
     }
 
-    async fn user_delete(&mut self, user: &UserId) -> TbResult<usize> {
+    async fn user_delete(&mut self, _user: &UserId) -> TbResult<usize> {
         todo!()
     }
 
     async fn update_onboarding_status(
         &mut self,
-        uid: &UserId,
-        status: OnboardingStatus,
+        _uid: &UserId,
+        _status: OnboardingStatus,
     ) -> TbResult<User> {
         todo!()
     }

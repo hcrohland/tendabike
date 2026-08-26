@@ -1,34 +1,24 @@
 // backend/domain/src/test_support.rs
 
 mod mem_usage;
-pub use mem_usage::*;
 
 mod mem_user;
-pub use mem_user::*;
 
 mod mem_shop;
-pub use mem_shop::*;
 
 mod mem_part;
-pub use mem_part::*;
 
 mod mem_activity;
-pub use mem_activity::*;
 
 mod mem_attachment;
-pub use mem_attachment::*;
 
 mod mem_service;
-pub use mem_service::*;
 
 mod mem_serviceplan;
-pub use mem_serviceplan::*;
 
 // --- Core types shared by all subtrait impls ---
 
-use std::borrow::Borrow;
 use std::collections::HashMap;
-use time::OffsetDateTime;
 
 use crate::*;
 
@@ -79,6 +69,11 @@ impl Session for TestSession {
     fn is_admin(&self) -> bool {
         self.admin
     }
+
+    // Unused parameters in check_owner use the default implementation
+    fn check_owner(&self, owner: UserId, error: String) -> crate::TbResult<()> {
+        self.user_id.check_owner(owner, error)
+    }
 }
 
 /// In-memory store implementing all 8 subtraits + Store
@@ -90,16 +85,16 @@ pub struct MemStore {
     activities: Vec<Activity>,
 
     /// Attachments for timeline queries
-    attachments: Vec<Attachment>,
+    attachments: HashMap<(PartId, time::OffsetDateTime), Attachment>,
 
     /// Usages keyed by UsageId
     usages: HashMap<UsageId, Usage>,
 
     /// Services stored as Vec (need iteration for filter ops)
-    services: Vec<Service>,
+    services: HashMap<ServiceId, Service>,
 
     /// Service plans stored as Vec (need iteration for filter ops)
-    service_plans: Vec<ServicePlan>,
+    service_plans: HashMap<ServicePlanId, ServicePlan>,
 
     /// Users keyed by UserId
     users: HashMap<UserId, User>,
@@ -109,6 +104,13 @@ pub struct MemStore {
 
     /// Subscriptions
     subscriptions: Vec<ShopSubscription>,
+
+    /// Auto-increment counter for PartId
+    next_part_id: i32,
+
+    /// Auto-increment counter for ActivityId
+    #[allow(dead_code)]
+    next_activity_id: i64,
 }
 
 impl MemStore {
@@ -116,13 +118,15 @@ impl MemStore {
         Self {
             parts: HashMap::new(),
             activities: Vec::new(),
-            attachments: Vec::new(),
+            attachments: HashMap::new(),
             usages: HashMap::new(),
-            services: Vec::new(),
-            service_plans: Vec::new(),
+            services: HashMap::new(),
+            service_plans: HashMap::new(),
             users: HashMap::new(),
             shops: HashMap::new(),
             subscriptions: Vec::new(),
+            next_part_id: 1,
+            next_activity_id: 1,
         }
     }
 }
