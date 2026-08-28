@@ -16,6 +16,37 @@ mod mem_service;
 
 mod mem_serviceplan;
 
+pub mod fixtures;
+
+// --- Test constants for use in unit tests ---
+
+/// PartTypeId constants for tests (UPPERCASE per Rust naming conventions).
+/// These replace the constants that were previously defined in PartTypeId impl block.
+pub mod part_type_ids {
+    use crate::PartTypeId;
+
+    pub const CHAIN: PartTypeId = PartTypeId::from_id(4);
+    pub const BIKE: PartTypeId = PartTypeId::from_id(1);
+    pub const REAR_WHEEL: PartTypeId = PartTypeId::from_id(5);
+    pub const CASSETTE: PartTypeId = PartTypeId::from_id(9);
+    pub const SEATPOST: PartTypeId = PartTypeId::from_id(10);
+    pub const SADDLE: PartTypeId = PartTypeId::from_id(11);
+    pub const DERAILLEUR: PartTypeId = PartTypeId::from_id(12);
+    pub const CRANK: PartTypeId = PartTypeId::from_id(13);
+    pub const CHAINRING: PartTypeId = PartTypeId::from_id(14);
+    pub const BRAKE_ROTOR: PartTypeId = PartTypeId::from_id(15);
+    pub const FORK: PartTypeId = PartTypeId::from_id(16);
+    pub const REAR_SHOCK: PartTypeId = PartTypeId::from_id(17);
+    pub const HANDLEBAR: PartTypeId = PartTypeId::from_id(18);
+    pub const BOTTOM_BRACKET: PartTypeId = PartTypeId::from_id(19);
+    pub const HEADSET: PartTypeId = PartTypeId::from_id(20);
+    pub const FRONT_WHEEL: PartTypeId = PartTypeId::from_id(2);
+    pub const TIRE: PartTypeId = PartTypeId::from_id(3);
+    pub const BRAKE_PAD: PartTypeId = PartTypeId::from_id(6);
+    pub const FRONT_BRAKE: PartTypeId = PartTypeId::from_id(7);
+    pub const REAR_BRAKE: PartTypeId = PartTypeId::from_id(8);
+}
+
 // --- Core types shared by all subtrait impls ---
 
 use std::collections::HashMap;
@@ -84,8 +115,9 @@ pub struct MemStore {
     /// Activities stored as Vec (need iteration for time-range queries)
     activities: Vec<Activity>,
 
-    /// Attachments for timeline queries
-    attachments: HashMap<(PartId, time::OffsetDateTime), Attachment>,
+    /// Attachments for timeline queries (keyed by part_id, attached_time, and unique counter)
+    attachments: HashMap<(PartId, time::OffsetDateTime, u64), Attachment>,
+    attachment_counter: u64,
 
     /// Usages keyed by UsageId
     usages: HashMap<UsageId, Usage>,
@@ -96,21 +128,8 @@ pub struct MemStore {
     /// Service plans stored as Vec (need iteration for filter ops)
     service_plans: HashMap<ServicePlanId, ServicePlan>,
 
-    /// Users keyed by UserId
-    users: HashMap<UserId, User>,
-
-    /// Shops keyed by ShopId
-    shops: HashMap<ShopId, Shop>,
-
-    /// Subscriptions
-    subscriptions: Vec<ShopSubscription>,
-
     /// Auto-increment counter for PartId
     next_part_id: i32,
-
-    /// Auto-increment counter for ActivityId
-    #[allow(dead_code)]
-    next_activity_id: i64,
 }
 
 impl MemStore {
@@ -119,14 +138,11 @@ impl MemStore {
             parts: HashMap::new(),
             activities: Vec::new(),
             attachments: HashMap::new(),
+            attachment_counter: 0,
             usages: HashMap::new(),
             services: HashMap::new(),
             service_plans: HashMap::new(),
-            users: HashMap::new(),
-            shops: HashMap::new(),
-            subscriptions: Vec::new(),
             next_part_id: 1,
-            next_activity_id: 1,
         }
     }
 }

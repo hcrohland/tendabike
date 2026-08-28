@@ -198,50 +198,11 @@ impl Neg for Usage {
 #[cfg(test)]
 mod tests {
 
-    use std::{borrow::Borrow, collections::HashMap};
-
-    use crate::{TbResult, Usage, UsageId, UsageStore};
-
-    struct MemStore(std::collections::HashMap<UsageId, Usage>);
-
-    #[async_trait::async_trait]
-    impl UsageStore for MemStore {
-        async fn get(&mut self, id: UsageId) -> TbResult<Option<Usage>> {
-            Ok(self.0.get(&id).cloned())
-        }
-
-        async fn update<U>(&mut self, vec: &[U]) -> TbResult<usize>
-        where
-            U: Borrow<Usage> + Sync,
-        {
-            for usage in vec {
-                let usage = usage.borrow();
-                self.0.insert(usage.id, usage.clone());
-            }
-            Ok(vec.len())
-        }
-
-        async fn delete(&mut self, usage: UsageId) -> TbResult<Usage> {
-            match self.0.remove(&usage) {
-                Some(x) => Ok(x),
-                None => Err(crate::Error::NotFound(format!("Usage {} not found", usage))),
-            }
-        }
-
-        async fn delete_all(&mut self) -> TbResult<usize> {
-            let res = self.0.len();
-            self.0.clear();
-            Ok(res)
-        }
-
-        async fn usages_delete(&mut self, _: &[Usage]) -> TbResult<usize> {
-            todo!()
-        }
-    }
+    use crate::{TbResult, Usage, UsageId, test_support::MemStore};
 
     #[tokio::test]
     async fn create_usage_returns() -> TbResult<()> {
-        let mut store = MemStore(HashMap::new());
+        let mut store = MemStore::new();
         let store = &mut store;
         let usage = UsageId::new().read(store).await?;
         assert_eq!(usage.climb, 0);

@@ -176,6 +176,12 @@ impl PartId {
     ) -> Result<Part, Error> {
         debug!("-- disposing part {self} at {time}");
         let mut part = self.read(store).await?;
+        if part.disposed_at.is_some() {
+            return Err(Error::BadRequest(format!(
+                "part {} already disposed",
+                part.id
+            )));
+        }
         part.disposed_at = Some(time);
         store.part_update(part).await
     }
