@@ -12,6 +12,7 @@ services:
     network_mode: service:database
     volumes:
       - ..:/workspaces/tendabike:cached
+      - ./home:/home/vscode
       - rust-target:/workspaces/tendabike/target
       - node_modules:/workspaces/tendabike/node_modules
     command: sleep infinity

@@ -31,3 +31,4 @@
 .claude/*
 node_modules
 .roo/*
+.devcontainer/home

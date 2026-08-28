@@ -41,7 +41,6 @@
 		"vscode": {
 			"extensions": [
 				"eamodio.gitlens",
-				"zoocodeorganization.zoo-code",
 				"fill-labs.dependi",
 				"inlang.vs-code-extension",
 				"rust-lang.rust-analyzer",
