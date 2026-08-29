@@ -46,3 +46,10 @@ This file provides guidance to agents when working with code in this repository.
 - SQLx queries return `Db*` structs (e.g., [`DbActivity`](src/sqlx/src/store/activity.rs:8)) with DB-native types (`i32`, `i64`)
 - Conversion via `impl From<DomainType> for DbType` and `impl TryFrom<DbType> for DomainType` in `sqlx/src/store/*.rs`
 - Helper functions in [`sqlx/src/lib.rs`](src/sqlx/src/lib.rs:14): `vec_into()`, `option_into()`, `into_domain()`
+
+## Test Data Rule: Do Not Modify Prepopulated Data Without Asking
+
+- **Never modify `domain/src/test_support/prepopulated_data.rs` or its generated JSON snapshot without explicit user approval.**
+- The snapshot (`SNAPSHOT_JSON`) contains a fixed set of parts, attachments, usages, and activities. Tests must adapt to this existing data — reuse available part IDs, owners, and types rather than creating new entries in the snapshot.
+- When a test needs isolation (e.g., creating parts without affecting other tests), create them explicitly in the test and/or use user IDs that do not overlap with prepopulated owners (e.g., `UserId::from(98)` has no parts; `UserId::from(99)` is unused).
+- The only acceptable reason to modify the snapshot is when there is an actual inconsistency between prepopulated_data.rs and the code that loads/generates it.

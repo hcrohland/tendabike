@@ -136,7 +136,7 @@ mod tests {
     /// SP-01: ServicePlan create with specific part
     #[tokio::test]
     async fn service_plan_create_specific_part() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
 
         let plan = ServicePlan {
@@ -166,7 +166,7 @@ mod tests {
     /// SP-02: ServicePlan create generic plan (no specific part)
     #[tokio::test]
     async fn service_plan_create_generic_plan() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
 
         let plan = ServicePlan {
             id: ServicePlanId::new(),
@@ -193,7 +193,7 @@ mod tests {
     /// SP-03: ServicePlan create stores what as-provided (not auto-set from part type)
     #[tokio::test]
     async fn service_plan_create_sets_what_to_part_type() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
 
         // create() does NOT auto-set what from part type; it stores as-is
@@ -221,7 +221,7 @@ mod tests {
     /// SP-04: ServicePlan create with thresholds
     #[tokio::test]
     async fn service_plan_create_with_thresholds() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
 
         let plan = ServicePlan {
             id: ServicePlanId::new(),
@@ -248,7 +248,7 @@ mod tests {
     /// SP-05: ServicePlan get returns stored plan
     #[tokio::test]
     async fn service_plan_get_returns_stored_plan() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let plan = ServicePlan {
             id: ServicePlanId::new(),
             part: None,
@@ -274,7 +274,7 @@ mod tests {
     /// SP-06: ServicePlan by_part returns matching plans
     #[tokio::test]
     async fn serviceplan_by_part_returns_matching_plans() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part_a = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let part_b = Part::create(
             "Part B".to_string(),
@@ -345,7 +345,7 @@ mod tests {
     /// SP-07: ServicePlan by_user returns generic plans
     #[tokio::test]
     async fn serviceplan_by_user_returns_generic_plans() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let session1 = TestSession::new(UserId::from(1));
         let session2 = TestSession::new(UserId::from(2));
 
@@ -424,7 +424,7 @@ mod tests {
     /// SP-08: ServicePlan update preserves immutable fields
     #[tokio::test]
     async fn service_plan_update_preserves_immutable_fields() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let plan = ServicePlan {
             id: ServicePlanId::new(),
             part: None,
@@ -471,7 +471,7 @@ mod tests {
     /// SP-09: ServicePlan update requires ownership (specific part)
     #[tokio::test]
     async fn service_plan_update_requires_ownership_specific() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
 
         let plan = ServicePlan {
@@ -516,7 +516,7 @@ mod tests {
     /// SP-10: ServicePlan update requires ownership (generic plan)
     #[tokio::test]
     async fn service_plan_update_requires_ownership_generic() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
 
         let plan = ServicePlan {
             id: ServicePlanId::new(),
@@ -560,7 +560,7 @@ mod tests {
     /// SP-11: ServicePlan delete removes plan
     #[tokio::test]
     async fn service_plan_delete_removes_plan() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
 
         let plan = ServicePlan {
             id: ServicePlanId::new(),
@@ -593,7 +593,7 @@ mod tests {
     /// SP-12: ServicePlan delete no-op on reset_plan (returns empty service list)
     #[tokio::test]
     async fn service_plan_delete_noop_on_reset_plan() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
 
         let plan = ServicePlan {
             id: ServicePlanId::new(),
@@ -623,7 +623,7 @@ mod tests {
     /// SP-13: All threshold fields None means plan is still valid (time-only)
     #[tokio::test]
     async fn service_plan_all_thresholds_none_means_active() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
 
         let plan = ServicePlan {
             id: ServicePlanId::new(),
@@ -653,7 +653,7 @@ mod tests {
     /// SP-14: ServicePlan with single threshold only
     #[tokio::test]
     async fn service_plan_single_threshold_only() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
 
         let plan = ServicePlan {
             id: ServicePlanId::new(),
@@ -684,7 +684,7 @@ mod tests {
     /// SP-15: ServicePlan with multiple thresholds
     #[tokio::test]
     async fn service_plan_multiple_thresholds() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
 
         let plan = ServicePlan {
             id: ServicePlanId::new(),
@@ -716,7 +716,7 @@ mod tests {
     /// SP-16: ServicePlan for_part returns empty when no plans on part
     #[tokio::test]
     async fn serviceplan_for_part_returns_empty_when_none() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
 
         let plans = ServicePlan::for_part(part.id, &mut store).await?;

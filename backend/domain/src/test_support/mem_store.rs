@@ -20,6 +20,12 @@ impl MemStore {
 
         let mut store = Self::new();
 
+        let max_part_id: i32 = if !snap.parts.is_empty() {
+            snap.parts.iter().map(|p| p.id.into()).max().unwrap_or(0)
+        } else {
+            0
+        };
+
         for part in snap.parts {
             store.parts.insert(part.id, part);
         }
@@ -35,6 +41,10 @@ impl MemStore {
 
         for activity in snap.activities {
             store.activities.push(activity);
+        }
+
+        if max_part_id > 0 {
+            store.next_part_id = max_part_id + 1;
         }
 
         store
@@ -263,8 +273,9 @@ fn mk_activity(
 }
 
 /// Builds a prepopulated store and writes formatted snapshot to the data file.
-/// Run: `cargo test -p tb_domain build_snapshot_json -- --nocapture`
+/// Run: `cargo test -p tb_domain build_snapshot_json -- --nocapture --ignored`
 #[tokio::test]
+#[ignore = "manually regenerate snapshot: cargo test -p tb_domain build_snapshot_json -- --ignored"]
 async fn build_snapshot_json() {
     let store = build_store().await.unwrap();
 

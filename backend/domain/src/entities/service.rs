@@ -266,7 +266,7 @@ mod tests {
     /// S-02: Service create with valid data
     #[tokio::test]
     async fn service_create_with_valid_data() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -295,7 +295,7 @@ mod tests {
     /// S-03: Service create creates a usage record
     #[tokio::test]
     async fn service_create_usage_is_created() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -320,7 +320,7 @@ mod tests {
     /// S-04: Service create returns summary with service and usage
     #[tokio::test]
     async fn service_create_returns_summary_with_service_and_usage() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -345,7 +345,7 @@ mod tests {
     /// S-05: Service create usage for main part aggregates all activities from MIN_TIME
     #[tokio::test]
     async fn service_create_usage_main_part_aggregates_all_activities() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let bike = Part::create(
             "Road Bike".to_string(),
             "Trek".to_string(),
@@ -409,7 +409,7 @@ mod tests {
     #[tokio::test]
     async fn service_create_usage_sub_part_aggregates_activities_during_attachment() -> TbResult<()>
     {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let chain = Part::create(
             "Chain".to_string(),
             "Shimano".to_string(),
@@ -477,7 +477,7 @@ mod tests {
     /// S-07: Service create usage is zero with no activities
     #[tokio::test]
     async fn service_create_usage_zero_with_no_activities() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -506,7 +506,7 @@ mod tests {
     /// S-08: ServiceId get returns stored service
     #[tokio::test]
     async fn serviceid_get_returns_stored_service() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
         let svc_name = "Chain Replacement".to_string();
@@ -533,7 +533,7 @@ mod tests {
     /// S-09: ServiceId get returns NotFound for missing
     #[tokio::test]
     async fn serviceid_get_returns_not_found_for_missing() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let fake_id = ServiceId::new(); // Never stored
         let result = fake_id.get(&mut store).await;
         assert!(result.is_err());
@@ -547,7 +547,7 @@ mod tests {
     /// S-10: Services by part returns only matching services
     #[tokio::test]
     async fn services_by_part_returns_only_matching() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
 
         let chain = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let tire = Part::create(
@@ -610,7 +610,7 @@ mod tests {
     /// S-11: Service update recalculates usage
     #[tokio::test]
     async fn service_update_recalculates_usage() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let bike = Part::create(
             "Road Bike".to_string(),
             "Trek".to_string(),
@@ -652,7 +652,7 @@ mod tests {
     /// S-12: Service update preserves usage reference
     #[tokio::test]
     async fn service_update_preserves_usage_reference() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -683,7 +683,7 @@ mod tests {
     /// S-13: Service update requires ownership
     #[tokio::test]
     async fn service_update_requires_ownership() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -710,7 +710,7 @@ mod tests {
     /// S-14: Service delete removes service and usage
     #[tokio::test]
     async fn service_delete_removes_service_and_usage() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -747,7 +747,7 @@ mod tests {
     /// S-15: Service delete rewires predecessor chains (via redo, not direct successor links)
     #[tokio::test]
     async fn service_delete_rewires_predecessor_chains() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -806,7 +806,7 @@ mod tests {
     /// S-16: Service delete no rewire when no predecessors
     #[tokio::test]
     async fn service_delete_no_rewire_when_no_predecessors() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -830,7 +830,7 @@ mod tests {
     /// S-17: Service delete via ServiceId::delete checks ownership
     #[tokio::test]
     async fn service_delete_by_partid_checks_ownership() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -856,7 +856,7 @@ mod tests {
     /// S-18: redo with same time creates new entry with successor
     #[tokio::test]
     async fn redo_same_time_creates_new_entry_as_successor() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -885,7 +885,7 @@ mod tests {
     /// S-19: redo preserves successor chain correctly (both branches)
     #[tokio::test]
     async fn redo_preserves_successor_chain_correctly() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
 
         // Create S1 at earlier time
@@ -920,7 +920,7 @@ mod tests {
     /// S-20: redo preserves name and notes from original
     #[tokio::test]
     async fn redo_preserves_name_and_notes_from_original() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -952,7 +952,7 @@ mod tests {
     /// S-21: redo preserves plans from original
     #[tokio::test]
     async fn redo_preserves_plans_from_original() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -1001,7 +1001,7 @@ mod tests {
     /// S-22: redo recalculates usage for new service (time-based filtering)
     #[tokio::test]
     async fn redo_recalculates_usage_for_new_service() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let bike = Part::create(
             "Road Bike".to_string(),
             "Trek".to_string(),
@@ -1051,7 +1051,7 @@ mod tests {
     /// S-23: redo requires ownership
     #[tokio::test]
     async fn redo_requires_ownership() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -1077,7 +1077,7 @@ mod tests {
     /// S-24: redo returns summary with new service and updated old
     #[tokio::test]
     async fn redo_returns_summary_with_new_service_and_updated_old() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -1111,7 +1111,7 @@ mod tests {
     /// S-25: Service calculate_usage for main part finds activities by gear
     #[tokio::test]
     async fn service_calculate_usage_main_part_finds_activities_by_gear() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let bike = Part::create(
             "Road Bike".to_string(),
             "Trek".to_string(),
@@ -1151,7 +1151,7 @@ mod tests {
     #[tokio::test]
     async fn service_calculate_usage_sub_part_finds_activities_by_attachment_period() -> TbResult<()>
     {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let chain = Part::create(
             "Chain".to_string(),
             "Shimano".to_string(),
@@ -1186,7 +1186,7 @@ mod tests {
     /// S-27: Service calculate_usage aggregates multiple activities
     #[tokio::test]
     async fn service_calculate_usage_aggregates_multiple_activities() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let bike = Part::create(
             "Road Bike".to_string(),
             "Trek".to_string(),
@@ -1248,7 +1248,7 @@ mod tests {
     /// S-28: Service recalculate filters by attach time (services at or after attach_time)
     #[tokio::test]
     async fn service_recalculate_filters_by_attach_time() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = time::macros::datetime!(2024-06-15 10:00 UTC);
         Service::create(
@@ -1277,7 +1277,7 @@ mod tests {
     /// S-29: Service recalculate returns services at/after the given time
     #[tokio::test]
     async fn service_recalculate_after_detach_stale_services() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
 
         let t1 = time::macros::datetime!(2024-03-01 10:00 UTC);
@@ -1312,7 +1312,7 @@ mod tests {
     /// S-30: Service recalculate handles empty service list
     #[tokio::test]
     async fn service_recalculate_handles_empty_service_list() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = time::macros::datetime!(2024-03-01 10:00 UTC);
 
@@ -1326,7 +1326,7 @@ mod tests {
     /// S-31: Service recalculated on attachment create
     #[tokio::test]
     async fn service_recalculated_on_attachment_create() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let _bike = Part::create(
             "Road Bike".to_string(),
@@ -1363,7 +1363,7 @@ mod tests {
     /// S-32: Service recalculated on attachment delete (services after detach time)
     #[tokio::test]
     async fn service_recalculated_on_attachment_delete() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
 
         let t = time::macros::datetime!(2024-06-15 10:00 UTC);
@@ -1388,7 +1388,7 @@ mod tests {
     /// S-33: Service recalculate updates usage records
     #[tokio::test]
     async fn service_recalculate_updates_usage_vec_in_place() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -1411,7 +1411,7 @@ mod tests {
     /// S-34: attach_assembly creates parts summary
     #[tokio::test]
     async fn attach_assembly_updates_service_usage() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let bike = Part::create(
             "Road Bike".to_string(),
@@ -1455,7 +1455,7 @@ mod tests {
     /// S-35: Service create with empty name succeeds
     #[tokio::test]
     async fn service_create_with_empty_name() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -1477,7 +1477,7 @@ mod tests {
     /// S-36: Service create with very long name
     #[tokio::test]
     async fn service_create_with_very_long_name() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -1500,7 +1500,7 @@ mod tests {
     /// S-37: Service successor chain single element (no successor)
     #[tokio::test]
     async fn service_successor_chain_single_element() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -1522,7 +1522,7 @@ mod tests {
     /// S-38: Service successor chain two elements via redo
     #[tokio::test]
     async fn service_successor_chain_two_elements() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -1548,7 +1548,7 @@ mod tests {
     /// S-39: Service successor chain three elements via redo
     #[tokio::test]
     async fn service_successor_chain_three_elements() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -1601,7 +1601,7 @@ mod tests {
     /// S-40: Service delete middle of long chain severs predecessor links
     #[tokio::test]
     async fn service_delete_middle_of_long_chain_rewires_all() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
@@ -1684,7 +1684,7 @@ mod tests {
     /// S-41: Service delete preserves unrelated part's services
     #[tokio::test]
     async fn service_delete_preserves_unrelated_parts_services() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part1 = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let part2 = Part::create(
             "Chain 2".to_string(),
@@ -1738,7 +1738,7 @@ mod tests {
     /// S-42: Service delete removes service from store
     #[tokio::test]
     async fn service_delete_removes_from_store() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 

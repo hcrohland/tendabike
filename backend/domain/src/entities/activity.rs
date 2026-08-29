@@ -431,7 +431,7 @@ mod tests {
     /// ActivityId::read_optional returns None for non-existent activity
     #[tokio::test]
     async fn activityid_read_optional_returns_none_for_missing() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let result = ActivityId::new(999)
             .read_optional(&test_session(), &mut store)
             .await?;
@@ -442,7 +442,7 @@ mod tests {
     /// ActivityId::read_optional returns Some for existing activity
     #[tokio::test]
     async fn activityid_read_optional_returns_some_for_existing() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let act = sample_activity();
         store.activity_create(act).await?;
 
@@ -457,7 +457,7 @@ mod tests {
     /// ActivityId::read returns existing activity
     #[tokio::test]
     async fn activityid_read_returns_existing() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let act = sample_activity();
         store.activity_create(act).await?;
 
@@ -470,7 +470,7 @@ mod tests {
     /// ActivityId::read returns NotFound for non-existent activity
     #[tokio::test]
     async fn activityid_read_returns_not_found() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let result = ActivityId::new(999).read(&test_session(), &mut store).await;
         assert!(result.is_err());
         Ok(())
@@ -479,7 +479,7 @@ mod tests {
     /// ActivityId::read rejects cross-user access
     #[tokio::test]
     async fn activityid_read_rejects_cross_user() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let act = sample_activity();
         store.activity_create(act).await?;
 
@@ -529,13 +529,30 @@ mod tests {
     /// Activity::get_all returns all activities for a user
     #[tokio::test]
     async fn activity_get_all_returns_user_activities() -> TbResult<()> {
-        let mut store = MemStore::new();
-        let act1 = sample_activity();
+        let mut store = MemStore::prepopulated();
+        let sess = TestSession::new(UserId::from(99));
+
+        let act1 = Activity {
+            id: ActivityId::new(1),
+            user_id: sess.user_id(),
+            what: ActTypeId::from(1),
+            name: "Morning Ride".to_string(),
+            start: activity_start(),
+            duration: 3600,
+            time: Some(3500),
+            distance: Some(50000),
+            climb: Some(500),
+            descend: Some(300),
+            energy: Some(1000),
+            gear: None,
+            device_name: None,
+            external_id: None,
+        };
         store.activity_create(act1).await?;
 
         let act2 = Activity {
             id: ActivityId::new(2),
-            user_id: test_user(),
+            user_id: sess.user_id(),
             what: ActTypeId::from(3),
             name: "Evening Ride".to_string(),
             start: later_start(),
@@ -551,7 +568,7 @@ mod tests {
         };
         store.activity_create(act2).await?;
 
-        let acts = Activity::get_all(&test_user(), &mut store).await?;
+        let acts = Activity::get_all(&sess.user_id(), &mut store).await?;
         assert_eq!(acts.len(), 2);
         Ok(())
     }
@@ -559,8 +576,8 @@ mod tests {
     /// Activity::get_all returns empty for user with no activities
     #[tokio::test]
     async fn activity_get_all_empty_for_user() -> TbResult<()> {
-        let mut store = MemStore::new();
-        let acts = Activity::get_all(&test_user(), &mut store).await?;
+        let mut store = MemStore::prepopulated();
+        let acts = Activity::get_all(&UserId::from(99), &mut store).await?;
         assert!(acts.is_empty());
         Ok(())
     }
@@ -568,7 +585,7 @@ mod tests {
     /// Activity::categories returns unique gear types from activities
     #[tokio::test]
     async fn activity_categories_returns_unique_gear_types() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let act1 = sample_activity(); // what = ActTypeId(1) -> gear_type for Bike
         store.activity_create(act1).await?;
 
@@ -598,8 +615,9 @@ mod tests {
     /// Activity::categories returns empty for user with no activities
     #[tokio::test]
     async fn activity_categories_empty_for_no_activities() -> TbResult<()> {
-        let mut store = MemStore::new();
-        let categories = Activity::categories(&test_session(), &mut store).await?;
+        let mut store = MemStore::prepopulated();
+        let categories =
+            Activity::categories(&TestSession::new(UserId::from(99)), &mut store).await?;
         assert!(categories.is_empty());
         Ok(())
     }
@@ -607,7 +625,7 @@ mod tests {
     /// Activity::find finds activities by gear in time range
     #[tokio::test]
     async fn activity_find_by_gear_and_time() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = Part::create(
             "Road Bike".to_string(),
             "Trek".to_string(),
@@ -655,7 +673,7 @@ mod tests {
     /// Activity::find returns only activities within the specified time range
     #[tokio::test]
     async fn activity_find_empty_in_time_range() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = Part::create(
             "Road Bike".to_string(),
             "Trek".to_string(),
@@ -705,7 +723,7 @@ mod tests {
     /// Activity::upsert creates new activity when it doesn't exist
     #[tokio::test]
     async fn activity_upsert_creates_new() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let new_id = ActivityId::new(100);
         let act = Activity {
             id: new_id,
@@ -733,7 +751,7 @@ mod tests {
     /// Activity::upsert updates existing activity
     #[tokio::test]
     async fn activity_upsert_updates_existing() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let act = sample_activity();
         store.activity_create(act.clone()).await?;
 
@@ -752,7 +770,7 @@ mod tests {
     /// Activity::update updates and returns summary
     #[tokio::test]
     async fn activity_update_returns_summary() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let act = sample_activity();
         store.activity_create(act.clone()).await?;
 
@@ -769,7 +787,7 @@ mod tests {
     /// Activity::delete unregisters usage and returns summary
     #[tokio::test]
     async fn activity_delete_returns_summary() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let act = sample_activity();
         store.activity_create(act.clone()).await?;
 
@@ -785,7 +803,7 @@ mod tests {
     /// Activity::delete returns forbidden for non-owner session
     #[tokio::test]
     async fn activity_delete_rejects_non_owner() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let act = sample_activity();
         store.activity_create(act.clone()).await?;
 
@@ -842,7 +860,7 @@ mod tests {
     /// Activity registration skips when gear is None
     #[tokio::test]
     async fn activity_register_no_gear_does_not_update_parts() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let act = sample_activity(); // gear = None
 
         let summary = store.activity_create(act.clone()).await?;
@@ -855,7 +873,7 @@ mod tests {
     /// Activity registration updates gear usage when gear is set
     #[tokio::test]
     async fn activity_register_with_gear_updates_gear_usage() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = Part::create(
             "Road Bike".to_string(),
             "Trek".to_string(),
@@ -883,7 +901,7 @@ mod tests {
     /// Activity registration skips detached parts
     #[tokio::test]
     async fn activity_register_skips_detached_parts() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
 
         let bike = Part::create(
             "Road Bike".to_string(),
@@ -928,7 +946,7 @@ mod tests {
     /// Activity::find excludes activities without a gear
     #[tokio::test]
     async fn activity_find_excludes_activities_without_gear() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = Part::create(
             "Road Bike".to_string(),
             "Trek".to_string(),
@@ -976,7 +994,7 @@ mod tests {
     /// Activity::find returns multiple activities in range
     #[tokio::test]
     async fn activity_find_returns_multiple_in_range() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = Part::create(
             "Road Bike".to_string(),
             "Trek".to_string(),
@@ -1025,7 +1043,7 @@ mod tests {
     /// Activity::find returns empty for gear with no activities
     #[tokio::test]
     async fn activity_find_empty_for_gear_no_activities() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let part = Part::create(
             "Road Bike".to_string(),
             "Trek".to_string(),
@@ -1106,7 +1124,7 @@ mod tests {
     /// Activity::update on missing activity returns NotFound
     #[tokio::test]
     async fn activity_update_missing_activity_returns_not_found() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let fake_activity = Activity {
             id: ActivityId::new(999),
             user_id: test_user(),
@@ -1131,7 +1149,7 @@ mod tests {
     /// Activity::upsert preserves custom ID
     #[tokio::test]
     async fn activity_upsert_preserves_original_id() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let act_id = ActivityId::new(42); // Custom non-sequential ID
         let act = Activity {
             id: act_id,
@@ -1164,7 +1182,7 @@ mod tests {
     /// Activity with zero duration is still registered
     #[tokio::test]
     async fn activity_with_zero_duration_still_registered() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let mut act = sample_activity();
         act.duration = 0;
 
@@ -1180,7 +1198,7 @@ mod tests {
     /// Activity with only climb (no other metrics) produces valid usage
     #[tokio::test]
     async fn activity_with_only_climb_no_other_metrics() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let act = Activity {
             id: ActivityId::new(1),
             user_id: test_user(),
@@ -1222,7 +1240,7 @@ mod tests {
     /// rescan_all deletes all usages before re-registering
     #[tokio::test]
     async fn rescan_all_deletes_all_usages_first() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let act = sample_activity();
         store.activity_create(act).await?;
 
@@ -1293,7 +1311,7 @@ mod tests {
     /// csv2descend parses German date format and updates existing activities
     #[tokio::test]
     async fn csv2descend_parses_german_date_format() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
 
         // Pre-create 2 activities: activity_start() (1700000000 = 2023-11-14 22:13:20 UTC)
         // and activity_start() + 7200 (1700007200 = 2023-11-15 00:13:20 UTC)
@@ -1333,7 +1351,7 @@ mod tests {
     /// csv2descend parses English title field alias
     #[tokio::test]
     async fn csv2descend_parses_english_title_field() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
 
         // Pre-create activity at activity_start()
         let act = Activity {
@@ -1367,7 +1385,7 @@ mod tests {
     /// csv2descend parses German decimal format for descend values
     #[tokio::test]
     async fn csv2descend_skips_german_decimal_format() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
 
         let act = Activity {
             id: ActivityId::new(202),
@@ -1401,7 +1419,7 @@ mod tests {
     /// csv2descend returns good and bad lists for mixed valid/invalid records
     #[tokio::test]
     async fn csv2descend_returns_good_and_bad_lists() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
 
         // Create 2 activities at activity_start() and activity_start() + 3600
         for offset in [0i64, 3600] {
@@ -1440,7 +1458,7 @@ mod tests {
     /// csv2descend calls match_and_update for each valid record
     #[tokio::test]
     async fn csv2descend_calls_match_and_update_for_each_record() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
 
         // Pre-create 2 activities at activity_start() + offset
         for offset in [0i64, 7200] {
@@ -1632,7 +1650,7 @@ mod tests {
     /// set_default_part returns zero usage when no activities match
     #[tokio::test]
     async fn set_default_part_empty_returns_zero_usage() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
 
         // Create a bike but no activities at all
         let _bike = Part::create(
@@ -1710,7 +1728,7 @@ mod tests {
     /// Replace on same activity ID with changed gear updates affected parts
     #[tokio::test]
     async fn replace_changes_affected_parts() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
 
         // Create two gears
         let bike1 = Part::create(

@@ -203,7 +203,7 @@ mod tests {
     /// create_usage_returns creates and reads usage correctly
     #[tokio::test]
     async fn create_usage_returns() -> TbResult<()> {
-        let mut store = MemStore::new();
+        let mut store = MemStore::prepopulated();
         let store = &mut store;
         let usage = UsageId::new().read(store).await?;
         assert_eq!(usage.climb, 0);
