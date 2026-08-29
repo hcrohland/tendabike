@@ -1,16 +1,27 @@
-//! Test fixtures for attachment entity tests.
+//! Test fixtures for domain entity tests.
 //!
-//! Provides helper functions to create prepopulated MemStore scenarios
-//! for testing attachment operations.
+//! Provides shared helper functions and prepopulated MemStore scenarios
+//! for testing entity operations across all domains.
 
 use super::{AttachmentStore, MemStore, TestSession, part_type_ids};
 use crate::MAX_TIME;
+use crate::UserId;
 use crate::attach_assembly;
 use crate::{Attachment, OffsetDateTime, Part, PartId, TbResult, Usage, UsageId};
 use uuid::Uuid;
 
 // Re-export PartTypeId constants for tests (UPPERCASE per Rust conventions)
 use part_type_ids::*;
+
+/// Returns a test UserId (ID = 1).
+pub fn test_user() -> UserId {
+    UserId::from(1)
+}
+
+/// Returns a TestSession initialized with test_user().
+pub fn test_session() -> TestSession {
+    TestSession::new(test_user())
+}
 
 /// Create a basic part for testing.
 ///
@@ -261,9 +272,9 @@ pub async fn fixture_concurrent_parts(
 
 // ─── Internal helper functions ────────────────────────────────────────────────
 
-/// Returns a sample purchase date 365 days ago.
-fn sample_purchase_date() -> OffsetDateTime {
-    OffsetDateTime::now_utc() - time::Duration::days(365)
+/// Returns a sample purchase date (fixed for deterministic tests).
+pub fn sample_purchase_date() -> OffsetDateTime {
+    OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
 }
 
 /// Attach a part to the main bike frame using attach_assembly.

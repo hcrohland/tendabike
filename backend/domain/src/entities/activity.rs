@@ -387,16 +387,10 @@ async fn match_and_update(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{MemStore, TestSession};
+    use crate::test_support::{MemStore, TestSession, fixtures};
     use time::OffsetDateTime;
 
-    fn test_user() -> UserId {
-        UserId::from(1)
-    }
-
-    fn test_session() -> TestSession {
-        TestSession::new(test_user())
-    }
+    use fixtures::{test_session, test_user};
 
     fn activity_start() -> OffsetDateTime {
         OffsetDateTime::from_unix_timestamp(1700000000).unwrap()

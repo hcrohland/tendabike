@@ -226,20 +226,10 @@ mod tests {
     use super::*;
     use crate::test_support::{MemStore, TestSession, fixtures, part_type_ids};
 
-    fn test_user() -> UserId {
-        UserId::from(1)
-    }
-
-    fn test_session() -> TestSession {
-        TestSession::new(test_user())
-    }
+    use fixtures::{sample_purchase_date, test_session, test_user};
 
     fn sample_time() -> OffsetDateTime {
         time::macros::datetime!(2024-06-15 10:00 UTC)
-    }
-
-    fn sample_purchase_date() -> OffsetDateTime {
-        OffsetDateTime::now_utc() - time::Duration::days(365)
     }
 
     /// helper: create activity with gear set to bike_id (main part)

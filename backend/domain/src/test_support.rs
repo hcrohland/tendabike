@@ -18,6 +18,11 @@ mod mem_serviceplan;
 
 pub mod fixtures;
 
+mod mem_store;
+pub use mem_store::StoreSnapshot;
+
+mod prepopulated_data;
+
 // --- Test constants for use in unit tests ---
 
 /// PartTypeId constants for tests (UPPERCASE per Rust naming conventions).

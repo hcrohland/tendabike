@@ -291,20 +291,10 @@ impl Part {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{MemStore, TestSession};
+    use crate::test_support::{MemStore, TestSession, fixtures};
     use time::OffsetDateTime;
 
-    fn test_user() -> UserId {
-        UserId::from(1)
-    }
-
-    fn test_session() -> TestSession {
-        TestSession::new(test_user())
-    }
-
-    fn sample_purchase_date() -> OffsetDateTime {
-        OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
-    }
+    use fixtures::{sample_purchase_date, test_session, test_user};
 
     fn later_time() -> OffsetDateTime {
         OffsetDateTime::from_unix_timestamp(1700100000).unwrap()

@@ -618,20 +618,14 @@ pub async fn is_attached(
 mod tests {
     use super::*;
     use crate::SumHash;
-    use crate::test_support::{self, MemStore, TestSession, part_type_ids};
+    use crate::test_support::{self, MemStore, TestSession, fixtures, part_type_ids};
     use time::OffsetDateTime;
     use time::macros::datetime;
 
     // Re-export PartTypeId constants for tests (UPPERCASE per Rust conventions)
     use part_type_ids::*;
 
-    fn test_user() -> UserId {
-        UserId::from(1)
-    }
-
-    fn test_session() -> TestSession {
-        TestSession::new(test_user())
-    }
+    use fixtures::{sample_purchase_date, test_session};
 
     fn attachment_time() -> OffsetDateTime {
         datetime!(2024-01-01 00:00 UTC)
@@ -651,22 +645,6 @@ mod tests {
 
     fn chain_id() -> PartId {
         PartId::from(2)
-    }
-
-    fn _tire_id() -> PartId {
-        PartId::from(3)
-    }
-
-    fn _wheel_id() -> PartId {
-        PartId::from(4)
-    }
-
-    fn _cassette_id() -> PartId {
-        PartId::from(5)
-    }
-
-    fn sample_purchase_date() -> OffsetDateTime {
-        OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
     }
 
     // === Attachment::new() tests ===

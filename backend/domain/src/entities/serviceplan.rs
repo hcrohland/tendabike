@@ -129,17 +129,7 @@ mod tests {
     use super::*;
     use crate::test_support::{MemStore, TestSession, fixtures};
 
-    fn test_user() -> UserId {
-        UserId::from(1)
-    }
-
-    fn test_session() -> TestSession {
-        TestSession::new(test_user())
-    }
-
-    fn sample_purchase_date() -> OffsetDateTime {
-        OffsetDateTime::now_utc() - time::Duration::days(365)
-    }
+    use fixtures::{sample_purchase_date, test_session, test_user};
 
     // === Suite 6: ServicePlan — CRUD ===
 
