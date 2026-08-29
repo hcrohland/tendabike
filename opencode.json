@@ -22,7 +22,7 @@
         "Qwen3.6-35B-A3B-UD-MLX-4bit": {
           "name": "Qwen3.6-35B-A3B-UD-MLX-4bit",
           "limit": {
-            "context": 80000,
+            "context": 130000,
             "output": 32000
           }
         },
@@ -30,29 +30,6 @@
           "name": "Qwen3.6-35B-A3B-MLX-6bit",
           "limit": {
             "context": 130000,
-            "output": 32000
-          }
-        }
-      }
-    },
-    "pythia": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "Pythia",
-      "options": {
-        "baseURL": "http://pythia.fritz.box:8080/v1"
-      },
-      "models": {
-        "Qwen3.6-35B-A3B-UD-MLX-4bit": {
-          "name": "Qwen3.6-35B-A3B-UD-MLX-4bit",
-          "limit": {
-            "context": 80000,
-            "output": 32000
-          }
-        },
-        "Qwen3.6-35B-A3B-MLX-6bit": {
-          "name": "Qwen3.6-35B-A3B-MLX-6bit",
-          "limit": {
-            "context": 80000,
             "output": 32000
           }
         }
