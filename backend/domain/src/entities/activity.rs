@@ -840,6 +840,110 @@ mod tests {
         Ok(())
     }
 
+    /// Deleting an activity for the prepopulated bike (id 1) reverts the
+    /// accounting of the create: the summary contains the bike, every part
+    /// attached to it, and the usage of each of them back at its previous value.
+    #[tokio::test]
+    async fn activity_delete_reverts_bike_and_attached_part_usage() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let bike = PartId::from(1);
+        let act = Activity {
+            id: ActivityId::new(100),
+            user_id: test_user(),
+            what: ActTypeId::from(1),
+            name: "New Ride".to_string(),
+            start: activity_start(),
+            duration: 3600,
+            time: Some(1000),
+            distance: Some(10000),
+            climb: Some(100),
+            descend: None,
+            energy: Some(200),
+            gear: Some(bike),
+            device_name: None,
+            external_id: None,
+        };
+
+        // create the activity so its usage is accounted, then delete it
+        act.clone().upsert(&test_session(), &mut store).await?;
+        let summary = ActivityId::new(100)
+            .delete(&test_session(), &mut store)
+            .await?;
+
+        // the deleted activity is reported with its metrics zeroed
+        let mut expected_act = act;
+        expected_act.gear = None;
+        expected_act.duration = 0;
+        expected_act.time = None;
+        expected_act.distance = None;
+        expected_act.climb = None;
+        expected_act.descend = None;
+        expected_act.energy = None;
+        assert_eq!(summary.activities, vec![expected_act]);
+
+        // the bike and all attached parts are affected again
+        let part_ids: HashSet<PartId> = summary.parts.iter().map(|p| p.id).collect();
+        assert_eq!(
+            part_ids,
+            [1, 2, 3, 4, 16].into_iter().map(PartId::from).collect()
+        );
+        // last_used of the bike stays at the activity start
+        let bike_part = summary.parts.iter().find(|p| p.id == bike).unwrap();
+        assert_eq!(bike_part.last_used, round_time(activity_start()));
+
+        // the usage of the bike, all attached parts and all their attachments to the bike
+        let expected_ids: HashSet<UsageId> = [
+            "01a04c37-93cd-7872-9a0d-075caa3c6692", // usage of part 1 (Main Bike)
+            "01a04c37-93cd-7872-9a0d-076a33e8d963", // usage of part 2 (Front Wheel A)
+            "01a04c37-93cd-7872-9a0d-07793fb4b3ba", // usage of part 3 (Rear Wheel A)
+            "01a04c37-93cd-7872-9a0d-07857ca515c6", // usage of part 4 (Chain A)
+            "01a04c37-93cd-7872-9a0d-090f122b3304", // usage of part 16 (Spare Wheel)
+            "01a04c37-93cd-7872-9a0d-07b244c887aa", // attachment of part 2 to the bike
+            "01a04c37-93cd-7872-9a0d-07c19820333d", // attachment of part 3 to the bike
+            "01a04c37-93cd-7872-9a0d-07d06152f99c", // attachment of part 4 to the bike
+            "01a04c37-93cd-7872-9a0d-09284075fa42", // attachment of part 16 to the bike
+        ]
+        .iter()
+        .map(|id| UsageId::from(Uuid::parse_str(id).unwrap()))
+        .collect();
+        let usage_ids: HashSet<UsageId> = summary.usages.iter().map(|u| u.id).collect();
+        assert_eq!(usage_ids, expected_ids);
+
+        // every affected usage is back at its prepopulated baseline
+        // (9025-1000, 135000-10000, 1200-100, 1200-100, 1700-200, 4-1);
+        // descend is None in the activity, so it falls back to climb
+        let mut expected = Usage {
+            id: UsageId::default(),
+            time: 8025,
+            distance: 125000,
+            climb: 1100,
+            descend: 1100,
+            energy: 1500,
+            count: 3,
+        };
+        for u in &summary.usages {
+            expected.id = u.id;
+            assert_eq!(*u, expected, "unexpected usage for {}", u.id);
+        }
+
+        // the updates are persisted in the store
+        let bike_usage =
+            UsageId::from(Uuid::parse_str("01a04c37-93cd-7872-9a0d-075caa3c6692").unwrap());
+        let stored = bike_usage.read(&mut store).await?;
+        assert_eq!(stored.time, 8025);
+        assert_eq!(stored.distance, 125000);
+        assert_eq!(stored.count, 3);
+
+        // the activity is gone
+        assert_eq!(
+            ActivityId::new(100)
+                .read_optional(&test_session(), &mut store)
+                .await?,
+            None
+        );
+        Ok(())
+    }
+
     /// Activity::upsert updates existing activity
     #[tokio::test]
     async fn activity_upsert_updates_existing() -> TbResult<()> {
