@@ -389,6 +389,7 @@ mod tests {
     use super::*;
     use crate::test_support::{MemStore, TestSession, fixtures};
     use time::OffsetDateTime;
+    use uuid::Uuid;
 
     use fixtures::{test_session, test_user};
 
@@ -745,6 +746,97 @@ mod tests {
         let summary = act.upsert(&test_session(), &mut store).await?;
         assert_eq!(summary.activities.len(), 1);
         assert_eq!(summary.activities[0].name, "New Activity");
+        Ok(())
+    }
+
+    /// Creating a new activity for the prepopulated bike (id 1) accounts for the
+    /// bike and all attached parts: the summary contains the bike, every part
+    /// attached to it, and the updated usage of each of them.
+    #[tokio::test]
+    async fn activity_upsert_creates_new_accounts_bike_and_attached_parts() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let bike = PartId::from(1);
+        let act = Activity {
+            id: ActivityId::new(100),
+            user_id: test_user(),
+            what: ActTypeId::from(1),
+            name: "New Ride".to_string(),
+            start: activity_start(),
+            duration: 3600,
+            time: Some(1000),
+            distance: Some(10000),
+            climb: Some(100),
+            descend: None,
+            energy: Some(200),
+            gear: Some(bike),
+            device_name: None,
+            external_id: None,
+        };
+
+        let expected_act = act.clone();
+        let summary = act.upsert(&test_session(), &mut store).await?;
+
+        // the new activity is reported
+        assert_eq!(summary.activities, vec![expected_act]);
+
+        // the bike and all attached parts: front wheel, rear wheel, chain, spare wheel
+        let part_ids: HashSet<PartId> = summary.parts.iter().map(|p| p.id).collect();
+        assert_eq!(
+            part_ids,
+            [1, 2, 3, 4, 16].into_iter().map(PartId::from).collect()
+        );
+        // last_used of the bike is bumped to the activity start
+        let bike_part = summary.parts.iter().find(|p| p.id == bike).unwrap();
+        assert_eq!(bike_part.last_used, round_time(activity_start()));
+
+        // the usage of the bike, all attached parts and all their attachments to the bike
+        let expected_ids: HashSet<UsageId> = [
+            "01a04c37-93cd-7872-9a0d-075caa3c6692", // usage of part 1 (Main Bike)
+            "01a04c37-93cd-7872-9a0d-076a33e8d963", // usage of part 2 (Front Wheel A)
+            "01a04c37-93cd-7872-9a0d-07793fb4b3ba", // usage of part 3 (Rear Wheel A)
+            "01a04c37-93cd-7872-9a0d-07857ca515c6", // usage of part 4 (Chain A)
+            "01a04c37-93cd-7872-9a0d-090f122b3304", // usage of part 16 (Spare Wheel)
+            "01a04c37-93cd-7872-9a0d-07b244c887aa", // attachment of part 2 to the bike
+            "01a04c37-93cd-7872-9a0d-07c19820333d", // attachment of part 3 to the bike
+            "01a04c37-93cd-7872-9a0d-07d06152f99c", // attachment of part 4 to the bike
+            "01a04c37-93cd-7872-9a0d-09284075fa42", // attachment of part 16 to the bike
+        ]
+        .iter()
+        .map(|id| UsageId::from(Uuid::parse_str(id).unwrap()))
+        .collect();
+        let usage_ids: HashSet<UsageId> = summary.usages.iter().map(|u| u.id).collect();
+        assert_eq!(usage_ids, expected_ids);
+
+        // every affected usage is increased by the activity metrics
+        // (8025+1000, 125000+10000, 1100+100, 1100+100, 1500+200, 3+1);
+        // descend is None in the activity, so it falls back to climb
+        let mut expected = Usage {
+            id: UsageId::default(),
+            time: 9025,
+            distance: 135000,
+            climb: 1200,
+            descend: 1200,
+            energy: 1700,
+            count: 4,
+        };
+        for u in &summary.usages {
+            expected.id = u.id;
+            assert_eq!(*u, expected, "unexpected usage for {}", u.id);
+        }
+
+        // the updates are persisted in the store
+        let bike_usage =
+            UsageId::from(Uuid::parse_str("01a04c37-93cd-7872-9a0d-075caa3c6692").unwrap());
+        let stored = bike_usage.read(&mut store).await?;
+        assert_eq!(stored.time, 9025);
+        assert_eq!(stored.distance, 135000);
+        assert_eq!(stored.count, 4);
+
+        // the activity is stored with the bike as gear
+        let stored_act = ActivityId::new(100)
+            .read(&test_session(), &mut store)
+            .await?;
+        assert_eq!(stored_act.gear, Some(bike));
         Ok(())
     }
 
