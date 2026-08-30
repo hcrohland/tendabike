@@ -625,7 +625,9 @@ mod tests {
     // Re-export PartTypeId constants for tests (UPPERCASE per Rust conventions)
     use part_type_ids::*;
 
+    use crate::traits::UsageStore;
     use fixtures::{sample_purchase_date, test_session};
+    use uuid::Uuid;
 
     fn attachment_time() -> OffsetDateTime {
         datetime!(2024-01-01 00:00 UTC)
@@ -1623,6 +1625,102 @@ mod tests {
 
         // Summary should include detach info
         assert!(!summary.parts.is_empty() || !summary.attachments.is_empty());
+
+        Ok(())
+    }
+
+    /// detach_assembly() recalculates the usage of the detached part from the
+    /// activities within the new attachment window: the prepopulated recovery
+    /// spin (2023-05-19T22:13:20Z) starts after the detach time and is excluded,
+    /// while the earlier rides are still accounted.
+    #[tokio::test]
+    async fn detach_assembly_recalculates_usage_excluding_activity_after_detach() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let session = TestSession::new(UserId::from(1));
+        let wheel = PartId::from(2);
+
+        // the latest prepopulated activity and its 15-minute floor
+        let latest = datetime!(2023-05-19 22:13:20 UTC);
+        let detach_at = round_time(latest);
+        assert_eq!(detach_at, datetime!(2023-05-19 22:00:00 UTC));
+
+        let _summary = detach_assembly(&session, wheel, detach_at, false, &mut store).await?;
+
+        // the attachment is cut at the detach time and gone from then on
+        let att = store
+            .attachment_get_by_part_and_time(wheel, detach_at - time::Duration::hours(1))
+            .await?
+            .expect("the wheel is attached before the detach");
+        assert_eq!(att.attached, datetime!(2023-01-01 00:00 UTC));
+        assert_eq!(att.detached, detach_at);
+        assert!(
+            store
+                .attachment_get_by_part_and_time(wheel, latest)
+                .await?
+                .is_none(),
+            "no attachment of the wheel from the detach time on"
+        );
+
+        // the wheel usage is recalculated from the two earlier rides only
+        // (25+5200, 50000+40000, 400+600, 400+600, 500+500, 1+1);
+        // descend is None in the activities, so it falls back to climb
+        let wheel_usage =
+            UsageId::from(Uuid::parse_str("01a04c37-93cd-7872-9a0d-076a33e8d963").unwrap());
+        let stored = wheel_usage.read(&mut store).await?;
+        assert_eq!(
+            stored,
+            Usage {
+                id: wheel_usage,
+                time: 5225,
+                distance: 90000,
+                climb: 1000,
+                descend: 1000,
+                energy: 1000,
+                count: 2,
+            }
+        );
+
+        // the replacement attachment usage row is a separate row with its own
+        // id but carries the same recalculated values
+        let att_usage = att.usage.read(&mut store).await?;
+        let mut expected = stored;
+        expected.id = att_usage.id;
+        assert_eq!(att_usage, expected);
+
+        // the old attachment usage row is deleted
+        let old_usage =
+            UsageId::from(Uuid::parse_str("01a04c37-93cd-7872-9a0d-07b244c887aa").unwrap());
+        assert!(
+            UsageStore::get(&mut store, old_usage).await?.is_none(),
+            "the old attachment usage row is deleted"
+        );
+
+        // the other parts attached to the bike are untouched
+        for id in [
+            "01a04c37-93cd-7872-9a0d-075caa3c6692", // Main Bike
+            "01a04c37-93cd-7872-9a0d-07793fb4b3ba", // Rear Wheel A
+            "01a04c37-93cd-7872-9a0d-07857ca515c6", // Chain A
+            "01a04c37-93cd-7872-9a0d-090f122b3304", // Spare Wheel
+        ] {
+            let uid = UsageId::from(Uuid::parse_str(id).unwrap());
+            let stored = uid.read(&mut store).await?;
+            assert_eq!(
+                stored,
+                Usage {
+                    id: uid,
+                    time: 8025,
+                    distance: 125000,
+                    climb: 1100,
+                    descend: 1100,
+                    energy: 1500,
+                    count: 3,
+                }
+            );
+        }
+
+        // the wheel's last_used is unchanged (the attach time is earlier)
+        let wheel_part = wheel.read(&mut store).await?;
+        assert_eq!(wheel_part.last_used, datetime!(2023-11-14 22:00 UTC));
 
         Ok(())
     }
