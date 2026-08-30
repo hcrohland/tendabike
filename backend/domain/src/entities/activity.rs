@@ -1474,6 +1474,54 @@ mod tests {
         Ok(())
     }
 
+    /// rescan_all rebuilds part and service usage rows from the prepopulated activities
+    #[tokio::test]
+    async fn rescan_all_rebuilds_part_and_service_usage() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let session = TestSession::new(UserId::from(1));
+        let bike = PartId::from(1);
+
+        // service created after all snapshot activities → aggregates all three
+        let t = time::macros::datetime!(2023-06-01 10:00 UTC);
+        let Summary {
+            services, usages, ..
+        } = Service::create(
+            bike,
+            t,
+            "Service".to_string(),
+            "".to_string(),
+            None,
+            vec![],
+            &mut store,
+        )
+        .await?;
+        let svc = &services[0];
+        assert_eq!(usages[0].count, 3);
+
+        Activity::rescan_all(&mut store).await?;
+
+        // part usage rows were deleted and rebuilt from the snapshot activities
+        let part = bike.part(&session, &mut store).await?;
+        let part_usage = part.usage().read(&mut store).await?;
+        assert_eq!(part_usage.time, 8025);
+        assert_eq!(part_usage.distance, 125000);
+        assert_eq!(part_usage.climb, 1100);
+        assert_eq!(part_usage.descend, 1100);
+        assert_eq!(part_usage.energy, 1500);
+        assert_eq!(part_usage.count, 3);
+
+        // service usage rows were rebuilt through the register path as well
+        let svc_usage = svc.usage.read(&mut store).await?;
+        assert_eq!(svc_usage.id, svc.usage);
+        assert_eq!(svc_usage.time, 8025);
+        assert_eq!(svc_usage.distance, 125000);
+        assert_eq!(svc_usage.climb, 1100);
+        assert_eq!(svc_usage.descend, 1100);
+        assert_eq!(svc_usage.energy, 1500);
+        assert_eq!(svc_usage.count, 3);
+        Ok(())
+    }
+
     // === Suite 9: Activity — CSV Import (descend parsing) ===
 
     /// csv2descend parses German date format and updates existing activities
@@ -1840,6 +1888,63 @@ mod tests {
         Ok(())
     }
 
+    /// set_default_part assigns the gear and registers the newly assigned activities
+    #[tokio::test]
+    async fn set_default_part_accounts_usage_for_newly_assigned_activities() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let session = TestSession::new(UserId::from(1));
+        let bike = PartId::from(1);
+
+        let baseline = bike
+            .part(&session, &mut store)
+            .await?
+            .usage()
+            .read(&mut store)
+            .await?;
+        assert_eq!(baseline.time, 8025);
+        assert_eq!(baseline.count, 3);
+
+        // unregistered ride without gear, within the snapshot bike's attachment window
+        let act = Activity {
+            id: ActivityId::new(101),
+            user_id: test_user(),
+            what: ActTypeId::from(1),
+            name: "Unassigned Ride".to_string(),
+            start: time::macros::datetime!(2023-05-20 10:00 UTC),
+            duration: 3600,
+            time: Some(1000),
+            distance: Some(10000),
+            climb: Some(100),
+            descend: None,
+            energy: Some(200),
+            gear: None,
+            device_name: None,
+            external_id: None,
+        };
+        store.activity_create(act).await?;
+
+        Activity::set_default_part(bike, &session, &mut store).await?;
+
+        let updated = ActivityId::new(101).read(&session, &mut store).await?;
+        assert_eq!(updated.gear, Some(bike));
+
+        // bike usage row is incremented by the newly assigned activity:
+        // 8025+1000, 125000+10000, 1100+100, 1100+100 (descend None → climb), 1500+200, 3+1
+        let increased = bike
+            .part(&session, &mut store)
+            .await?
+            .usage()
+            .read(&mut store)
+            .await?;
+        assert_eq!(increased.time, 9025);
+        assert_eq!(increased.distance, 135000);
+        assert_eq!(increased.climb, 1200);
+        assert_eq!(increased.descend, 1200);
+        assert_eq!(increased.energy, 1700);
+        assert_eq!(increased.count, 4);
+        Ok(())
+    }
+
     /// set_default_part requires ownership
     #[tokio::test]
     async fn set_default_part_requires_ownership() -> TbResult<()> {
@@ -1968,6 +2073,87 @@ mod tests {
         let read_act = ActivityId::new(1).read(&test_session(), &mut store).await?;
         assert_eq!(read_act.gear, Some(bike2.id));
 
+        Ok(())
+    }
+
+    /// replace() moves usage between the old and new gear parts
+    #[tokio::test]
+    async fn replace_gear_change_moves_usage_between_bikes() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let session = TestSession::new(UserId::from(1));
+        let bike1 = PartId::from(1);
+
+        let bike2 = Part::create(
+            "Mountain Bike".to_string(),
+            "Specialized".to_string(),
+            "Stumpjumper".to_string(),
+            PartTypeId::from(1),
+            None,
+            sample_purchase_date(),
+            "Notes".to_string(),
+            &session,
+            &mut store,
+        )
+        .await?;
+
+        // registered ride on the snapshot bike
+        let old_act = Activity {
+            id: ActivityId::new(102),
+            user_id: test_user(),
+            what: ActTypeId::from(1),
+            name: "Ride".to_string(),
+            start: time::macros::datetime!(2023-05-20 10:00 UTC),
+            duration: 3600,
+            time: Some(1000),
+            distance: Some(10000),
+            climb: Some(100),
+            descend: None,
+            energy: Some(200),
+            gear: Some(bike1),
+            device_name: None,
+            external_id: None,
+        };
+        old_act.clone().upsert(&session, &mut store).await?;
+
+        let increased = bike1
+            .part(&session, &mut store)
+            .await?
+            .usage()
+            .read(&mut store)
+            .await?;
+        assert_eq!(increased.time, 9025);
+        assert_eq!(increased.count, 4);
+
+        // replace: same activity, gear moved to the new bike
+        let new_act = Activity {
+            name: "Ride (replaced)".to_string(),
+            gear: Some(bike2.id),
+            ..old_act
+        };
+        new_act.update(&session, &mut store).await?;
+
+        // old bike usage row is back to the snapshot totals
+        let reverted = bike1
+            .part(&session, &mut store)
+            .await?
+            .usage()
+            .read(&mut store)
+            .await?;
+        assert_eq!(reverted.time, 8025);
+        assert_eq!(reverted.distance, 125000);
+        assert_eq!(reverted.climb, 1100);
+        assert_eq!(reverted.descend, 1100);
+        assert_eq!(reverted.energy, 1500);
+        assert_eq!(reverted.count, 3);
+
+        // new bike usage row holds exactly the moved activity
+        let moved = bike2.usage().read(&mut store).await?;
+        assert_eq!(moved.time, 1000);
+        assert_eq!(moved.distance, 10000);
+        assert_eq!(moved.climb, 100);
+        assert_eq!(moved.descend, 100);
+        assert_eq!(moved.energy, 200);
+        assert_eq!(moved.count, 1);
         Ok(())
     }
 }

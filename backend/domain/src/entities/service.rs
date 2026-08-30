@@ -1972,4 +1972,59 @@ mod tests {
         assert_eq!(untouched.count, 3);
         Ok(())
     }
+
+    /// S-48: re-attaching a detached serviced part re-enters activities into
+    /// the part's windows, so its service usage is recalculated accordingly
+    #[tokio::test]
+    async fn reattach_served_part_recalculates_service_usage() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let session = TestSession::new(UserId::from(1));
+        let wheel = PartId::from(2);
+        let bike = PartId::from(1);
+
+        let t = time::macros::datetime!(2023-06-01 10:00 UTC);
+        let Summary {
+            services, usages, ..
+        } = Service::create(
+            wheel,
+            t,
+            "Service".to_string(),
+            "".to_string(),
+            None,
+            vec![],
+            &mut store,
+        )
+        .await?;
+        let svc = &services[0];
+        assert_eq!(usages[0].count, 3);
+
+        // round_time(Recovery Spin start 22:13:20) = 22:00 → spin (22:13:20) excluded
+        let detach_at = round_time(time::macros::datetime!(2023-05-19 22:13:20 UTC));
+        detach_assembly(&session, wheel, detach_at, false, &mut store).await?;
+        let after_detach = svc.usage.read(&mut store).await?;
+        assert_eq!(after_detach.count, 2);
+
+        // all snapshot activities ride gear 1 → re-attach to the Main Bike
+        let attach_at = time::macros::datetime!(2023-05-18 12:00 UTC);
+        attach_assembly(
+            &session,
+            wheel,
+            attach_at,
+            bike,
+            part_type_ids::BIKE,
+            false,
+            &mut store,
+        )
+        .await?;
+
+        // new window covers all three activities again
+        let after_attach = svc.usage.read(&mut store).await?;
+        assert_eq!(after_attach.time, 8025);
+        assert_eq!(after_attach.distance, 125000);
+        assert_eq!(after_attach.climb, 1100);
+        assert_eq!(after_attach.descend, 1100);
+        assert_eq!(after_attach.energy, 1500);
+        assert_eq!(after_attach.count, 3);
+        Ok(())
+    }
 }
