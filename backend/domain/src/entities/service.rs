@@ -1759,4 +1759,217 @@ mod tests {
         assert!(ServiceStore::get(&mut store, service_id).await.is_err());
         Ok(())
     }
+
+    // === Suite 9: Service — Usage Accounting (prepopulated snapshot) ===
+
+    /// S-43: Service::create on a main part aggregates all snapshot activities
+    #[tokio::test]
+    async fn service_create_on_main_part_aggregates_prepopulated_activities() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let bike = PartId::from(1);
+
+        // all three snapshot activities predate this service time
+        let t = time::macros::datetime!(2023-06-01 10:00 UTC);
+        let Summary { usages, .. } = Service::create(
+            bike,
+            t,
+            "Service".to_string(),
+            "".to_string(),
+            None,
+            vec![],
+            &mut store,
+        )
+        .await?;
+
+        assert_eq!(usages.len(), 1);
+        assert_eq!(usages[0].time, 8025);
+        assert_eq!(usages[0].distance, 125000);
+        assert_eq!(usages[0].climb, 1100);
+        // snapshot activities have null descend → falls back to climb
+        assert_eq!(usages[0].descend, 1100);
+        assert_eq!(usages[0].energy, 1500);
+        assert_eq!(usages[0].count, 3);
+
+        let stored = usages[0].id.read(&mut store).await?;
+        assert_eq!(stored, usages[0]);
+        Ok(())
+    }
+
+    /// S-44: Service::create on an attached subpart sums activities within its attachment window
+    #[tokio::test]
+    async fn service_create_on_subpart_aggregates_prepopulated_activities_during_attachment()
+    -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let chain = PartId::from(4);
+
+        // Chain A attached to bike 1 since 2023-01-01, never detached → all 3 activities count
+        let t = time::macros::datetime!(2023-06-01 10:00 UTC);
+        let Summary { usages, .. } = Service::create(
+            chain,
+            t,
+            "Service".to_string(),
+            "".to_string(),
+            None,
+            vec![],
+            &mut store,
+        )
+        .await?;
+
+        assert_eq!(usages.len(), 1);
+        assert_eq!(usages[0].time, 8025);
+        assert_eq!(usages[0].distance, 125000);
+        assert_eq!(usages[0].climb, 1100);
+        assert_eq!(usages[0].descend, 1100);
+        assert_eq!(usages[0].energy, 1500);
+        assert_eq!(usages[0].count, 3);
+        Ok(())
+    }
+
+    /// S-45: Service::create only counts activities before the service time
+    #[tokio::test]
+    async fn service_create_before_latest_activity_counts_only_earlier_ones() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let bike = PartId::from(1);
+
+        // between Hill Repeats (00:13) and Recovery Spin (22:13) → only the first two count
+        let t = time::macros::datetime!(2023-05-19 12:00 UTC);
+        let Summary { usages, .. } = Service::create(
+            bike,
+            t,
+            "Service".to_string(),
+            "".to_string(),
+            None,
+            vec![],
+            &mut store,
+        )
+        .await?;
+
+        assert_eq!(usages.len(), 1);
+        assert_eq!(usages[0].time, 5225);
+        assert_eq!(usages[0].distance, 90000);
+        assert_eq!(usages[0].climb, 1000);
+        assert_eq!(usages[0].descend, 1000);
+        assert_eq!(usages[0].energy, 1000);
+        assert_eq!(usages[0].count, 2);
+        Ok(())
+    }
+
+    /// S-46: detaching a serviced part recalculates and persists its service usage
+    #[tokio::test]
+    async fn detach_served_part_recalculates_service_usage() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let session = TestSession::new(UserId::from(1));
+        let wheel = PartId::from(2);
+
+        let t = time::macros::datetime!(2023-06-01 10:00 UTC);
+        let Summary {
+            services, usages, ..
+        } = Service::create(
+            wheel,
+            t,
+            "Service".to_string(),
+            "".to_string(),
+            None,
+            vec![],
+            &mut store,
+        )
+        .await?;
+        let svc = &services[0];
+        assert_eq!(usages[0].count, 3);
+
+        // round_time(Recovery Spin start 22:13:20) = 22:00 → spin (22:13:20) excluded
+        let detach_at = round_time(time::macros::datetime!(2023-05-19 22:13:20 UTC));
+        detach_assembly(&session, wheel, detach_at, false, &mut store).await?;
+
+        let recalculated = svc.usage.read(&mut store).await?;
+        assert_eq!(recalculated.id, svc.usage);
+        assert_eq!(recalculated.time, 5225);
+        assert_eq!(recalculated.distance, 90000);
+        assert_eq!(recalculated.climb, 1000);
+        assert_eq!(recalculated.descend, 1000);
+        assert_eq!(recalculated.energy, 1000);
+        assert_eq!(recalculated.count, 2);
+        Ok(())
+    }
+
+    /// S-47: adding an activity increments the usage of every service created
+    /// after the activity start; services created before it stay untouched
+    #[tokio::test]
+    async fn activity_upsert_increments_service_usage_after_start() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let session = TestSession::new(UserId::from(1));
+        let bike = PartId::from(1);
+
+        // service after the new activity start → gets incremented
+        let t_after = time::macros::datetime!(2023-06-10 10:00 UTC);
+        let Summary {
+            services, usages, ..
+        } = Service::create(
+            bike,
+            t_after,
+            "Service".to_string(),
+            "".to_string(),
+            None,
+            vec![],
+            &mut store,
+        )
+        .await?;
+        let svc_after = &services[0];
+        assert_eq!(usages[0].count, 3);
+
+        // service before the new activity start → stays untouched
+        let t_before = time::macros::datetime!(2023-06-01 10:00 UTC);
+        let Summary {
+            services, usages, ..
+        } = Service::create(
+            bike,
+            t_before,
+            "Service".to_string(),
+            "".to_string(),
+            None,
+            vec![],
+            &mut store,
+        )
+        .await?;
+        let svc_before = &services[0];
+        assert_eq!(usages[0].count, 3);
+
+        let act = Activity {
+            id: ActivityId::new(100),
+            user_id: test_user(),
+            what: ActTypeId::from(1),
+            name: "New Ride".to_string(),
+            start: time::macros::datetime!(2023-06-05 10:00 UTC),
+            duration: 3600,
+            time: Some(1000),
+            distance: Some(10000),
+            climb: Some(100),
+            descend: None,
+            energy: Some(200),
+            gear: Some(bike),
+            device_name: None,
+            external_id: None,
+        };
+        act.upsert(&session, &mut store).await?;
+
+        // service after the start is incremented: 8025+1000, 125000+10000,
+        // 1100+100, 1100+100 (descend None → climb), 1500+200, 3+1
+        let increased = svc_after.usage.read(&mut store).await?;
+        assert_eq!(increased.time, 9025);
+        assert_eq!(increased.distance, 135000);
+        assert_eq!(increased.climb, 1200);
+        assert_eq!(increased.descend, 1200);
+        assert_eq!(increased.energy, 1700);
+        assert_eq!(increased.count, 4);
+
+        // service before the start is untouched
+        let untouched = svc_before.usage.read(&mut store).await?;
+        assert_eq!(untouched.time, 8025);
+        assert_eq!(untouched.distance, 125000);
+        assert_eq!(untouched.climb, 1100);
+        assert_eq!(untouched.descend, 1100);
+        assert_eq!(untouched.energy, 1500);
+        assert_eq!(untouched.count, 3);
+        Ok(())
+    }
 }
