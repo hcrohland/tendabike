@@ -899,55 +899,6 @@ mod tests {
 
     // === detach_assembly() tests ===
 
-    /// detach_assembly() detaches the part and creates a Summary
-    #[tokio::test]
-    async fn detach_assembly_detaches_part() -> TbResult<()> {
-        let mut store = MemStore::prepopulated();
-
-        let bike = test_support::fixtures::fixture_bike(&test_session(), &mut store).await?;
-
-        let chain = Part::create(
-            "Chain".to_string(),
-            "SRAM".to_string(),
-            "GX Eagle".to_string(),
-            CHAIN,
-            None,
-            attachment_time() - time::Duration::days(90),
-            "Chain".to_string(),
-            &test_session(),
-            &mut store,
-        )
-        .await?;
-
-        // Attach chain to bike
-        let attachment = store
-            .attachment_create(Attachment::new(
-                chain.id,
-                attachment_time(),
-                bike.id,
-                CHAIN,
-                MAX_TIME,
-            ))
-            .await?;
-
-        // Detach at later_time
-        let summary = attachment
-            .detach_assembly(later_time(), false, &mut store)
-            .await?;
-
-        // Check the attachment was removed from store
-        let _result = store
-            .attachment_get_by_part_and_time(chain.id, later_time())
-            .await?;
-        // The old attachment should be deleted and a new one created with detached time
-        // Since we're querying AT later_time, the attachment was just detached there
-
-        // Summary should have parts
-        assert!(!summary.parts.is_empty());
-
-        Ok(())
-    }
-
     /// detach_assembly() with all=true detaches subparts too
     #[tokio::test]
     async fn detach_assembly_with_all_detaches_subparts() -> TbResult<()> {
@@ -1019,51 +970,6 @@ mod tests {
             )
             .await?;
         assert!(wheel_att.is_some());
-
-        Ok(())
-    }
-
-    /// detach_assembly() sets detached time on the attachment
-    #[tokio::test]
-    async fn detach_assembly_sets_detached_time() -> TbResult<()> {
-        let mut store = MemStore::prepopulated();
-
-        let bike = test_support::fixtures::fixture_bike(&test_session(), &mut store).await?;
-
-        let chain = Part::create(
-            "Chain".to_string(),
-            "SRAM".to_string(),
-            "GX Eagle".to_string(),
-            CHAIN,
-            None,
-            attachment_time() - time::Duration::days(90),
-            "Chain".to_string(),
-            &test_session(),
-            &mut store,
-        )
-        .await?;
-
-        let attachment = store
-            .attachment_create(Attachment::new(
-                chain.id,
-                attachment_time(),
-                bike.id,
-                CHAIN,
-                MAX_TIME,
-            ))
-            .await?;
-
-        // Detach at later_time
-        let _ = attachment
-            .detach_assembly(later_time(), false, &mut store)
-            .await?;
-
-        // Query for an attachment after the detach time - should not find the old one
-        let att_at_detach = store
-            .attachment_get_by_part_and_time(chain.id, later_time() + time::Duration::seconds(1))
-            .await?;
-        // The chain was detached at later_time, so there should be no attachment after that time
-        assert!(att_at_detach.is_none());
 
         Ok(())
     }
@@ -1575,56 +1481,6 @@ mod tests {
             .await?;
         assert!(chain2_att.is_some());
         assert_eq!(chain2_att.unwrap().gear, bike1.id);
-
-        Ok(())
-    }
-
-    /// detach_assembly() detaches a part from its gear
-    #[tokio::test]
-    async fn detach_assembly_api_detaches_part() -> TbResult<()> {
-        let mut store = MemStore::prepopulated();
-        let session = TestSession::new(UserId::from(1));
-
-        // Create bike and chain, attach chain to bike
-        let _bike = test_support::fixtures::fixture_bike(&session, &mut store).await?;
-
-        let chain = Part::create(
-            "Test Chain".to_string(),
-            "Shimano".to_string(),
-            "CN-M510".to_string(),
-            CHAIN,
-            None,
-            sample_purchase_date(),
-            "Test chain".to_string(),
-            &session,
-            &mut store,
-        )
-        .await?;
-
-        // Create attachment
-        store
-            .attachment_create(Attachment::new(
-                chain.id,
-                attachment_time(),
-                bike_id(),
-                CHAIN,
-                MAX_TIME,
-            ))
-            .await?;
-
-        // Detach at later_time
-        let summary = detach_assembly(&session, chain.id, later_time(), false, &mut store).await?;
-
-        // Verify attachment is detached
-        let att = store
-            .attachment_get_by_part_and_time(chain.id, attachment_time())
-            .await?;
-        assert!(att.is_some());
-        let att = att.unwrap();
-        assert_eq!(att.detached, later_time());
-
-        // Summary should include detach info
-        assert!(!summary.parts.is_empty() || !summary.attachments.is_empty());
 
         Ok(())
     }

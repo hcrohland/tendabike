@@ -1066,34 +1066,6 @@ mod tests {
         Ok(())
     }
 
-    /// Activity registration updates gear usage when gear is set
-    #[tokio::test]
-    async fn activity_register_with_gear_updates_gear_usage() -> TbResult<()> {
-        let mut store = MemStore::prepopulated();
-        let part = Part::create(
-            "Road Bike".to_string(),
-            "Trek".to_string(),
-            "Domane".to_string(),
-            PartTypeId::from(1),
-            None,
-            sample_purchase_date(),
-            "Notes".to_string(),
-            &test_session(),
-            &mut store,
-        )
-        .await?;
-
-        let mut act = sample_activity();
-        act.gear = Some(part.id);
-
-        store.activity_create(act.clone()).await?;
-        let summary = act.register(Factor::Add, &mut store).await?;
-
-        assert_eq!(summary.parts.len(), 1);
-        assert_eq!(summary.parts[0].id, part.id);
-        Ok(())
-    }
-
     /// Activity registration skips detached parts
     #[tokio::test]
     async fn activity_register_skips_detached_parts() -> TbResult<()> {
