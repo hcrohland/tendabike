@@ -1725,6 +1725,158 @@ mod tests {
         Ok(())
     }
 
+    /// attach_assembly() with all=true moves the whole sub-assembly: the
+    /// spare wheel is swapped into the main bike just before the second
+    /// activity, its tire moves along, and the bike's own wheel, rear wheel
+    /// and chain are shifted onto the spare wheel in between. Usages are
+    /// recalculated so that only the morning ride counts before the swap and
+    /// the two later rides count from the swap on.
+    #[tokio::test]
+    async fn attach_assembly_with_all_shifts_subparts_and_recalculates_usage() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let session = TestSession::new(UserId::from(1));
+        let bike = PartId::from(1);
+        let spare_wheel = PartId::from(16);
+        let spare_tire = PartId::from(17);
+
+        // the attach time is just before the second prepopulated activity
+        // (Hill Repeats, 2023-05-19T00:13:20Z)
+        let attach_at = round_time(datetime!(2023-05-19 00:13:20 UTC));
+        assert_eq!(attach_at, datetime!(2023-05-19 00:00:00 UTC));
+
+        let _summary = attach_assembly(
+            &session,
+            spare_wheel,
+            attach_at,
+            bike,
+            BIKE,
+            true,
+            &mut store,
+        )
+        .await?;
+
+        // the previous rows of the swapped parts are cut at the attach time;
+        // their usage is the morning ride only (25, 50000, 400, 400, 500, 1);
+        // descend is None in the activity, so it falls back to climb
+        let before = attach_at - time::Duration::hours(1);
+        for (part, hook) in [
+            (PartId::from(2), BIKE),
+            (PartId::from(3), BIKE),
+            (PartId::from(4), BIKE),
+            (spare_wheel, BIKE),
+        ] {
+            let old = store
+                .attachment_get_by_part_and_time(part, before)
+                .await?
+                .expect("the part is attached before the swap");
+            assert_eq!(old.attached, datetime!(2023-01-01 00:00 UTC));
+            assert_eq!(old.gear, bike);
+            assert_eq!(old.hook, hook);
+            assert_eq!(old.detached, attach_at);
+            let usage = old.usage.read(&mut store).await?;
+            let mut expected = Usage {
+                time: 25,
+                distance: 50000,
+                climb: 400,
+                descend: 400,
+                energy: 500,
+                count: 1,
+                ..Default::default()
+            };
+            expected.id = usage.id;
+            assert_eq!(usage, expected);
+        }
+
+        // from the swap on, all parts are reattached to the bike; their
+        // usage is the two later rides (5200+2800, 40000+35000, 600+100,
+        // 600+100, 500+500, 1+1)
+        for (part, hook) in [
+            (PartId::from(2), BIKE),
+            (PartId::from(3), BIKE),
+            (PartId::from(4), BIKE),
+            (spare_wheel, BIKE),
+            (spare_tire, TIRE),
+        ] {
+            let new = store
+                .attachment_get_by_part_and_time(part, attach_at)
+                .await?
+                .expect("the part is attached from the swap on");
+            assert_eq!(new.attached, attach_at);
+            assert_eq!(new.gear, bike);
+            assert_eq!(new.hook, hook);
+            assert_eq!(new.detached, MAX_TIME);
+            let usage = new.usage.read(&mut store).await?;
+            let mut expected = Usage {
+                time: 8000,
+                distance: 75000,
+                climb: 700,
+                descend: 700,
+                energy: 1000,
+                count: 2,
+                ..Default::default()
+            };
+            expected.id = usage.id;
+            assert_eq!(usage, expected);
+        }
+
+        // the tire was on the spare wheel until the swap, which had no
+        // activities, so its old usage is zero
+        let tire_old = store
+            .attachment_get_by_part_and_time(spare_tire, before)
+            .await?
+            .expect("the tire is attached to the spare wheel before the swap");
+        assert_eq!(tire_old.gear, spare_wheel);
+        assert_eq!(tire_old.hook, TIRE);
+        assert_eq!(tire_old.detached, attach_at);
+        assert_eq!(tire_old.usage.read(&mut store).await?.time, 0);
+
+        // the part-level usage of the swapped parts is unchanged: the two
+        // rows add up to all three rides (25+5200+2800, 50000+40000+35000,
+        // 400+600+100, 400+600+100, 500+500+500, 1+1+1)
+        for id in [
+            "01a04c37-93cd-7872-9a0d-076a33e8d963", // Front Wheel A
+            "01a04c37-93cd-7872-9a0d-07793fb4b3ba", // Rear Wheel A
+            "01a04c37-93cd-7872-9a0d-07857ca515c6", // Chain A
+            "01a04c37-93cd-7872-9a0d-090f122b3304", // Spare Wheel
+            "01a04c37-93cd-7872-9a0d-075caa3c6692", // Main Bike
+        ] {
+            let uid = UsageId::from(Uuid::parse_str(id).unwrap());
+            let stored = uid.read(&mut store).await?;
+            assert_eq!(
+                stored,
+                Usage {
+                    id: uid,
+                    time: 8025,
+                    distance: 125000,
+                    climb: 1100,
+                    descend: 1100,
+                    energy: 1500,
+                    count: 3,
+                }
+            );
+        }
+
+        // the tire had no usage row before; it joins the bike's usage with
+        // the two later rides
+        let tire_usage =
+            UsageId::from(Uuid::parse_str("01a04c37-93cd-7872-9a0d-091cd3840a27").unwrap());
+        let stored = tire_usage.read(&mut store).await?;
+        assert_eq!(
+            stored,
+            Usage {
+                id: tire_usage,
+                time: 8000,
+                distance: 75000,
+                climb: 700,
+                descend: 700,
+                energy: 1000,
+                count: 2,
+            }
+        );
+
+        Ok(())
+    }
+
     /// detach_assembly() returns error if part doesn't exist
     #[tokio::test]
     async fn detach_assembly_api_returns_error_if_not_attached() -> TbResult<()> {
