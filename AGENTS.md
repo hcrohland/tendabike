@@ -109,6 +109,12 @@ Strava OAuth: `/strava/*` (OAuth flow, webhook endpoints)
 | `STATIC_WWW` | `../../frontend/dist` | Frontend static files path |
 | `SQLX_OFFLINE` | (required) | Must be `true` for cargo build |
 
+## Commit Rules
+
+- **Always run `cargo fmt` and `npm run format` before committing** — the pre-commit hook enforces formatting, type checking, and linting. Never bypass it with `--no-verify` or `-n`.
+- **Never skip commit hooks** — the pre-commit hook runs `cargo fmt --check`, `cargo sqlx prepare --check`, `cargo clippy`, `cargo check`, and frontend checks (`npm run fmtcheck`, `npm run check:ci`, `npm run build`). Bypassing them risks committing unformatted, broken, or unbuildable code.
+- If formatting fails, run `cargo fmt` (backend) and `npm run format` (frontend), then re-stage.
+
 ## Important Notes
 
 - **No test framework** on either side - CI only runs type checking and format validation

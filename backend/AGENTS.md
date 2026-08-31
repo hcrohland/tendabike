@@ -8,8 +8,8 @@ This file provides guidance to agents when working with code in this repository.
 - `cargo run` - Run server (default: `127.0.0.1:8000`, static files from `../../frontend/dist`)
 - `cargo check` - Type checking across workspace
 - `SQLX_OFFLINE=true cargo build` - Required for compilation (queries cached in `.sqlx/`)
-
-**No test framework is configured** - `doctest = false` and `test = false` on domain/sqlx/strava crates.
+- `cargo test -p tb_domain` - Run domain unit tests (in-memory `MemStore` via `test_support`)
+- `cargo run -p tb_domain --bin build-snapshot --features test-support` - Regenerate `test_support/prepopulated_data.rs` from the deterministic `snapshot()`
 
 ## Architecture
 
@@ -20,6 +20,7 @@ This file provides guidance to agents when working with code in this repository.
 
 ## Code Conventions
 
+- **Module layout**: Never use `mod.rs` files. Use flat file modules — declare `mod foo;` and create `foo.rs` directly, NOT `foo/mod.rs`. For example, a test support module should be `test_support.rs` not `test_support/mod.rs`. See [`lib.rs`](src/domain/src/lib.rs:25) for pattern.
 - **ID types**: Newtype wrappers via `derive_more` - [`UserId`](src/domain/src/entities/user.rs:42), [`PartId`](src/domain/src/entities/part.rs:79), [`ActivityId`](src/domain/src/entities/activity.rs:43), etc.
 - **Error handling**: `TbResult<T>` = `Result<T, Error>` (domain errors in [`domain/src/error.rs`](src/domain/src/error.rs:29)); `ApiResult<T>` = `Result<Json<T>, AppError>` (HTTP mapping in [`axum/src/error.rs`](src/axum/src/error.rs:24))
 - **Transactions**: `let mut store = pool.begin().await?; ... store.commit().await?` - **commit is REQUIRED** after every begin()
@@ -45,3 +46,11 @@ This file provides guidance to agents when working with code in this repository.
 - SQLx queries return `Db*` structs (e.g., [`DbActivity`](src/sqlx/src/store/activity.rs:8)) with DB-native types (`i32`, `i64`)
 - Conversion via `impl From<DomainType> for DbType` and `impl TryFrom<DbType> for DomainType` in `sqlx/src/store/*.rs`
 - Helper functions in [`sqlx/src/lib.rs`](src/sqlx/src/lib.rs:14): `vec_into()`, `option_into()`, `into_domain()`
+
+## Test Data Rule: Do Not Modify Prepopulated Data Without Asking
+
+- **Never modify `domain/src/test_support/prepopulated_data.rs` or its generated JSON snapshot without explicit user approval.**
+- The snapshot (`SNAPSHOT_JSON`) contains a fixed set of parts, attachments, usages, and activities. Tests must adapt to this existing data — reuse available part IDs, owners, and types rather than creating new entries in the snapshot.
+- When a test needs isolation (e.g., creating parts without affecting other tests), create them explicitly in the test and/or use user IDs that do not overlap with prepopulated owners (e.g., `UserId::from(98)` has no parts; `UserId::from(99)` is unused).
+- The only acceptable reason to modify the snapshot is when there is an actual inconsistency between prepopulated_data.rs and the code that loads/generates it.
+- After approval, rebuild it with `cargo run -p tb_domain --bin build-snapshot --features test-support` (deterministic: all collections sorted by ID) — do not edit the generated file by hand.

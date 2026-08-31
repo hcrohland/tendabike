@@ -107,6 +107,11 @@ pub struct ActivityType {
 }
 
 impl PartTypeId {
+    /// Create a new PartTypeId from an i32 value.
+    pub const fn from_id(id: i32) -> Self {
+        Self(id)
+    }
+
     /// get the full type for a type_id
     pub(crate) fn get(self) -> TbResult<PartType> {
         PARTTYPES

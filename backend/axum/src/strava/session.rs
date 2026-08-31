@@ -39,7 +39,7 @@ impl RequestSession {
         session: TowerSession,
         store: &mut impl StravaStore,
     ) -> TbResult<()> {
-        trace!("got token {:?})", &token);
+        trace!("got token {:?})", token);
 
         let StravaAthleteInfo {
             id,

@@ -311,7 +311,7 @@ impl Event {
     async fn process_user(&self, store: &mut impl StravaStore) -> TbResult<()> {
         debug!(
             "processing event user {}: {:?}",
-            &self.object_id, &self.aspect_type,
+            self.object_id, self.aspect_type,
         );
 
         match &self.aspect_type {

@@ -2,7 +2,6 @@
 // README at: https://github.com/devcontainers/templates/tree/main/src/debian
 {
 	"name": "Debian",
-	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
 	"dockerComposeFile": "docker-compose.yml",
 	"service": "app",
 	"workspaceFolder": "/workspaces/tendabike",
@@ -19,6 +18,10 @@
 			"profile": "minimal",
 			"targets": "aarch64-unknown-linux-gnu",
 			"components": "rust-analyzer,rust-src,rustfmt,clippy"
+		},
+		"ghcr.io/devcontainers/features/python:1": {
+			"version": "latest",
+			"installJupyterlab": false
 		}
 	},
 	// Features to add to the dev container. More info: https://containers.dev/features.
@@ -27,13 +30,22 @@
 	"forwardPorts": [
 		5173
 	],
-	"postCreateCommand": "cargo install sqlx-cli --no-default-features --features rustls,postgres",
+	"postCreateCommand": {
+		"sqlx": "cargo install sqlx-cli --no-default-features --features rustls,postgres",
+		"rust-mcp-server": "cargo install rust-mcp-server",
+		"uv": "curl -LsSf https://astral.sh/uv/install.sh | sh"
+	},
 	// Configure tool-specific properties.
 	// "customizations": {},
 	"customizations": {
 		"vscode": {
 			"extensions": [
-				"eamodio.gitlens"
+				"eamodio.gitlens",
+				"fill-labs.dependi",
+				"inlang.vs-code-extension",
+				"rust-lang.rust-analyzer",
+				"svelte.svelte-vscode",
+				"esbenp.prettier-vscode"
 			]
 		}
 	}
