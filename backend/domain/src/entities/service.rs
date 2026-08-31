@@ -362,8 +362,7 @@ mod tests {
         let act1 = make_activity(1, bike.id, time::macros::datetime!(2024-01-01 10:00 UTC));
         store.activity_create(act1).await?;
 
-        let act2 = make_activity(2, bike.id, time::macros::datetime!(2024-05-01 10:00 UTC));
-        act2.duration; // reference to avoid unused warning via different act
+        let _act2 = make_activity(2, bike.id, time::macros::datetime!(2024-05-01 10:00 UTC));
         let act2 = Activity {
             id: ActivityId::new(2),
             user_id: test_user(),
@@ -1100,7 +1099,7 @@ mod tests {
             .redo(&test_session(), &mut store)
             .await?;
 
-        assert!(redo_list.len() >= 1);
+        assert!(!redo_list.is_empty());
         let updated = ServiceStore::get(&mut store, services[0].id).await?;
         assert!(updated.successor.is_some());
         Ok(())

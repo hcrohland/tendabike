@@ -19,7 +19,7 @@ mod mem_serviceplan;
 pub mod fixtures;
 
 mod mem_store;
-pub use mem_store::StoreSnapshot;
+pub use mem_store::{StoreSnapshot, build_workshop_store};
 
 mod prepopulated_data;
 
@@ -137,8 +137,8 @@ pub struct MemStore {
     next_part_id: i32,
 }
 
-impl MemStore {
-    pub fn new() -> Self {
+impl Default for MemStore {
+    fn default() -> Self {
         Self {
             parts: HashMap::new(),
             activities: Vec::new(),
@@ -149,6 +149,12 @@ impl MemStore {
             service_plans: HashMap::new(),
             next_part_id: 1,
         }
+    }
+}
+
+impl MemStore {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 

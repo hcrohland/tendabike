@@ -37,7 +37,7 @@ impl PartStore for MemStore {
         let id = PartId::from(self.next_part_id);
         self.next_part_id += 1;
         let part = Part {
-            id: id.clone(),
+            id,
             owner,
             what,
             name,
@@ -56,7 +56,7 @@ impl PartStore for MemStore {
     }
 
     async fn part_update(&mut self, part: Part) -> TbResult<Part> {
-        match self.parts.insert(part.id.clone(), part.clone()) {
+        match self.parts.insert(part.id, part.clone()) {
             Some(_) => Ok(part),
             None => Err(Error::NotFound(format!("Part {} not found", part.id))),
         }
@@ -84,7 +84,7 @@ impl PartStore for MemStore {
             .parts
             .values()
             .find(|p| p.source.as_deref() == Some(strava_id))
-            .map(|p| p.id.clone()))
+            .map(|p| p.id))
     }
 
     async fn parts_register_shop(
@@ -95,7 +95,7 @@ impl PartStore for MemStore {
         let mut result = Vec::new();
         for pid in part_ids {
             if let Some(part) = self.parts.get_mut(&pid) {
-                part.shop = Some(shop_id.clone());
+                part.shop = Some(shop_id);
                 result.push(part.clone());
             }
         }

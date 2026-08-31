@@ -40,7 +40,21 @@ use crate::*;
 ///
 /// Most operations for activities are done on the Id alone
 ///
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize, From, Into, Display)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    From,
+    Into,
+    Display,
+)]
 pub struct ActivityId(i64);
 
 /// The database's representation of an activity.
@@ -388,8 +402,8 @@ async fn match_and_update(
 mod tests {
     use super::*;
     use crate::test_support::{MemStore, TestSession, fixtures};
+    use crate::traits::AttachmentStore;
     use time::OffsetDateTime;
-    use uuid::Uuid;
 
     use fixtures::{test_session, test_user};
 
@@ -790,20 +804,23 @@ mod tests {
         assert_eq!(bike_part.last_used, round_time(activity_start()));
 
         // the usage of the bike, all attached parts and all their attachments to the bike
-        let expected_ids: HashSet<UsageId> = [
-            "01a04c37-93cd-7872-9a0d-075caa3c6692", // usage of part 1 (Main Bike)
-            "01a04c37-93cd-7872-9a0d-076a33e8d963", // usage of part 2 (Front Wheel A)
-            "01a04c37-93cd-7872-9a0d-07793fb4b3ba", // usage of part 3 (Rear Wheel A)
-            "01a04c37-93cd-7872-9a0d-07857ca515c6", // usage of part 4 (Chain A)
-            "01a04c37-93cd-7872-9a0d-090f122b3304", // usage of part 16 (Spare Wheel)
-            "01a04c37-93cd-7872-9a0d-07b244c887aa", // attachment of part 2 to the bike
-            "01a04c37-93cd-7872-9a0d-07c19820333d", // attachment of part 3 to the bike
-            "01a04c37-93cd-7872-9a0d-07d06152f99c", // attachment of part 4 to the bike
-            "01a04c37-93cd-7872-9a0d-09284075fa42", // attachment of part 16 to the bike
-        ]
-        .iter()
-        .map(|id| UsageId::from(Uuid::parse_str(id).unwrap()))
-        .collect();
+        let mut expected_ids: HashSet<UsageId> = HashSet::new();
+        for pid in [
+            bike,
+            PartId::from(2),
+            PartId::from(3),
+            PartId::from(4),
+            PartId::from(16),
+        ] {
+            expected_ids.insert(pid.read(&mut store).await?.usage);
+            if pid != bike {
+                let att = store
+                    .attachment_get_by_part_and_time(pid, activity_start())
+                    .await?
+                    .expect("the part is attached to the bike");
+                expected_ids.insert(att.usage);
+            }
+        }
         let usage_ids: HashSet<UsageId> = summary.usages.iter().map(|u| u.id).collect();
         assert_eq!(usage_ids, expected_ids);
 
@@ -825,8 +842,7 @@ mod tests {
         }
 
         // the updates are persisted in the store
-        let bike_usage =
-            UsageId::from(Uuid::parse_str("01a04c37-93cd-7872-9a0d-075caa3c6692").unwrap());
+        let bike_usage = bike.read(&mut store).await?.usage;
         let stored = bike_usage.read(&mut store).await?;
         assert_eq!(stored.time, 9025);
         assert_eq!(stored.distance, 135000);
@@ -892,20 +908,23 @@ mod tests {
         assert_eq!(bike_part.last_used, round_time(activity_start()));
 
         // the usage of the bike, all attached parts and all their attachments to the bike
-        let expected_ids: HashSet<UsageId> = [
-            "01a04c37-93cd-7872-9a0d-075caa3c6692", // usage of part 1 (Main Bike)
-            "01a04c37-93cd-7872-9a0d-076a33e8d963", // usage of part 2 (Front Wheel A)
-            "01a04c37-93cd-7872-9a0d-07793fb4b3ba", // usage of part 3 (Rear Wheel A)
-            "01a04c37-93cd-7872-9a0d-07857ca515c6", // usage of part 4 (Chain A)
-            "01a04c37-93cd-7872-9a0d-090f122b3304", // usage of part 16 (Spare Wheel)
-            "01a04c37-93cd-7872-9a0d-07b244c887aa", // attachment of part 2 to the bike
-            "01a04c37-93cd-7872-9a0d-07c19820333d", // attachment of part 3 to the bike
-            "01a04c37-93cd-7872-9a0d-07d06152f99c", // attachment of part 4 to the bike
-            "01a04c37-93cd-7872-9a0d-09284075fa42", // attachment of part 16 to the bike
-        ]
-        .iter()
-        .map(|id| UsageId::from(Uuid::parse_str(id).unwrap()))
-        .collect();
+        let mut expected_ids: HashSet<UsageId> = HashSet::new();
+        for pid in [
+            bike,
+            PartId::from(2),
+            PartId::from(3),
+            PartId::from(4),
+            PartId::from(16),
+        ] {
+            expected_ids.insert(pid.read(&mut store).await?.usage);
+            if pid != bike {
+                let att = store
+                    .attachment_get_by_part_and_time(pid, activity_start())
+                    .await?
+                    .expect("the part is attached to the bike");
+                expected_ids.insert(att.usage);
+            }
+        }
         let usage_ids: HashSet<UsageId> = summary.usages.iter().map(|u| u.id).collect();
         assert_eq!(usage_ids, expected_ids);
 
@@ -927,8 +946,7 @@ mod tests {
         }
 
         // the updates are persisted in the store
-        let bike_usage =
-            UsageId::from(Uuid::parse_str("01a04c37-93cd-7872-9a0d-075caa3c6692").unwrap());
+        let bike_usage = bike.read(&mut store).await?.usage;
         let stored = bike_usage.read(&mut store).await?;
         assert_eq!(stored.time, 8025);
         assert_eq!(stored.distance, 125000);

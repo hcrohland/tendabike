@@ -22,7 +22,7 @@ impl AttachmentStore for MemStore {
                     && a.gear == att.gear
                     && a.hook == att.hook
             })
-            .map(|(k, _)| k.clone())
+            .map(|(k, _)| *k)
             .collect();
         for key in entries {
             if let Some(a) = self.attachments.remove(&key) {

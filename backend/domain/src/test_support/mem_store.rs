@@ -3,6 +3,10 @@
 //! Provides a `MemStore::prepopulated()` that returns a store with meaningful
 //! test data: 2 bikes with wheels and tires, spares including one assembled
 //! wheel, plus sample activities for usage calculation testing.
+//!
+//! `build_workshop_store()` is the generator for the JSON snapshot; the
+//! `build-snapshot` bin (`cargo run -p tb_domain --bin build-snapshot
+//! --features test-support`) rebuilds `prepopulated_data.rs` from it.
 
 use super::MemStore;
 use super::fixtures::{sample_purchase_date, test_session};
@@ -63,18 +67,24 @@ pub struct StoreSnapshot {
 }
 
 impl MemStore {
-    /// Export store data as a serializable snapshot.
+    /// Export store data as a serializable snapshot, deterministically ordered.
     pub fn snapshot(&self) -> StoreSnapshot {
-        StoreSnapshot {
+        let mut snap = StoreSnapshot {
             parts: self.parts.values().cloned().collect(),
             attachments: self.attachments.values().cloned().collect(),
             usages: self.usages.values().cloned().collect(),
             activities: self.activities.clone(),
-        }
+        };
+        snap.parts.sort_by_key(|p| p.id);
+        snap.attachments.sort_by_key(|a| (a.part_id, a.attached));
+        snap.usages.sort_by_key(|u| u.id);
+        snap.activities.sort_by_key(|a| a.id);
+        snap
     }
 }
 
-async fn build_store() -> TbResult<MemStore> {
+/// Builds the canonical workshop store used as the source of `SNAPSHOT_JSON`.
+pub async fn build_workshop_store() -> TbResult<MemStore> {
     let mut store = MemStore::new();
     let s = test_session();
 
@@ -270,38 +280,4 @@ fn mk_activity(
         device_name: None,
         external_id: None,
     }
-}
-
-/// Builds a prepopulated store and writes formatted snapshot to the data file.
-/// Run: `cargo test -p tb_domain build_snapshot_json -- --nocapture --ignored`
-#[tokio::test]
-#[ignore = "manually regenerate snapshot: cargo test -p tb_domain build_snapshot_json -- --ignored"]
-async fn build_snapshot_json() {
-    let store = build_store().await.unwrap();
-
-    // Count active usages for verification
-    let active_count = store
-        .usages
-        .values()
-        .filter(|u| u.time > 0 || u.distance > 0)
-        .count();
-    eprintln!("Active usages: {}", active_count);
-
-    // Generate pretty-printed JSON
-    let json = serde_json::to_string_pretty(&store.snapshot()).unwrap();
-
-    // Write to prepopulated_data.rs as a raw string constant
-    let rs_content = format!(
-        "//! Prepopulated store data for tests.\n\
-         //! Generated from `build_snapshot_json` test.\n\
-         //! Regenerate by running: cargo test -p tb_domain build_snapshot_json -- --nocapture\n\
-         \n\
-         /// Formatted JSON snapshot of the prepopulated store.\n\
-         /// This is a pretty-printed JSON string that gets deserialized by MemStore::prepopulated().\n\
-         pub const SNAPSHOT_JSON: &str = r#\"{}\"#;\n",
-        json
-    );
-
-    std::fs::write("src/test_support/prepopulated_data.rs", &rs_content).unwrap();
-    eprintln!("→ Wrote prepopulated_data.rs");
 }

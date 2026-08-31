@@ -31,7 +31,20 @@ use uuid::Uuid;
 use crate::*;
 
 #[derive(
-    Clone, Copy, Debug, Display, From, Into, Hash, PartialEq, Eq, Serialize, Deserialize, Default,
+    Clone,
+    Copy,
+    Debug,
+    Display,
+    From,
+    Into,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Default,
 )]
 pub struct UsageId(Uuid);
 
@@ -215,10 +228,10 @@ mod tests {
             ..Default::default()
         };
         let usage3 = &usage + &usage2 + &usage2;
-        assert_eq!((&usage3).climb, 4);
-        assert_eq!((&usage3).count, 2);
-        assert_eq!((&usage3).descend, 6);
-        assert_eq!((&usage3).time, 0);
+        assert_eq!(usage3.climb, 4);
+        assert_eq!(usage3.count, 2);
+        assert_eq!(usage3.descend, 6);
+        assert_eq!(usage3.time, 0);
         let usage3 = usage3.update(store).await?;
         let usage4 = usage3.id.read(store).await?;
         assert_eq!(usage3, usage4);

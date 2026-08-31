@@ -76,7 +76,21 @@ pub struct Part {
     pub shop: Option<ShopId>,
 }
 
-#[derive(Clone, Copy, Debug, Display, From, Into, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Display,
+    From,
+    Into,
+    Hash,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+)]
 pub struct PartId(i32);
 
 impl PartId {

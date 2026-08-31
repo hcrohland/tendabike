@@ -181,7 +181,7 @@ pub async fn fixture_assembly(
         .values()
         .find(|a| a.part_id == main_part_id)
     {
-        Ok((main_part, vec![subpart1, subpart2], main_attachment.clone()))
+        Ok((main_part, vec![subpart1, subpart2], *main_attachment))
     } else {
         Ok((
             main_part,

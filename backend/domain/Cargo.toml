@@ -4,6 +4,14 @@ version = "0.9.0"
 authors = ["Christoph Rohland <tendabike@rohland.net>"]
 edition = { workspace = true }
 
+[features]
+test-support = ["dep:tokio"]
+
+[[bin]]
+name = "build-snapshot"
+path = "src/bin/build_snapshot.rs"
+required-features = ["test-support"]
+
 [dependencies]
 
 csv = "1.3"
@@ -32,6 +40,7 @@ uuid = { workspace = true, features = [
     "serde",
 ] }
 serde_json = { workspace = true }
+tokio = { workspace = true, optional = true, features = ["macros", "rt"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }

@@ -8,8 +8,8 @@ This file provides guidance to agents when working with code in this repository.
 - `cargo run` - Run server (default: `127.0.0.1:8000`, static files from `../../frontend/dist`)
 - `cargo check` - Type checking across workspace
 - `SQLX_OFFLINE=true cargo build` - Required for compilation (queries cached in `.sqlx/`)
-
-**No test framework is configured** - `doctest = false` and `test = false` on domain/sqlx/strava crates.
+- `cargo test -p tb_domain` - Run domain unit tests (in-memory `MemStore` via `test_support`)
+- `cargo run -p tb_domain --bin build-snapshot --features test-support` - Regenerate `test_support/prepopulated_data.rs` from the deterministic `snapshot()`
 
 ## Architecture
 
@@ -53,3 +53,4 @@ This file provides guidance to agents when working with code in this repository.
 - The snapshot (`SNAPSHOT_JSON`) contains a fixed set of parts, attachments, usages, and activities. Tests must adapt to this existing data — reuse available part IDs, owners, and types rather than creating new entries in the snapshot.
 - When a test needs isolation (e.g., creating parts without affecting other tests), create them explicitly in the test and/or use user IDs that do not overlap with prepopulated owners (e.g., `UserId::from(98)` has no parts; `UserId::from(99)` is unused).
 - The only acceptable reason to modify the snapshot is when there is an actual inconsistency between prepopulated_data.rs and the code that loads/generates it.
+- After approval, rebuild it with `cargo run -p tb_domain --bin build-snapshot --features test-support` (deterministic: all collections sorted by ID) — do not edit the generated file by hand.

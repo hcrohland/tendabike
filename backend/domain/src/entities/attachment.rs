@@ -627,7 +627,6 @@ mod tests {
 
     use crate::traits::UsageStore;
     use fixtures::{sample_purchase_date, test_session};
-    use uuid::Uuid;
 
     fn attachment_time() -> OffsetDateTime {
         datetime!(2024-01-01 00:00 UTC)
@@ -1500,6 +1499,14 @@ mod tests {
         let detach_at = round_time(latest);
         assert_eq!(detach_at, datetime!(2023-05-19 22:00:00 UTC));
 
+        // the attachment row and its usage before the detach (the row is
+        // replaced by a new one and the old usage row is deleted)
+        let old_att = store
+            .attachment_get_by_part_and_time(wheel, detach_at - time::Duration::hours(1))
+            .await?
+            .expect("the wheel is attached before the detach");
+        let old_usage = old_att.usage;
+
         let _summary = detach_assembly(&session, wheel, detach_at, false, &mut store).await?;
 
         // the attachment is cut at the detach time and gone from then on
@@ -1520,8 +1527,7 @@ mod tests {
         // the wheel usage is recalculated from the two earlier rides only
         // (25+5200, 50000+40000, 400+600, 400+600, 500+500, 1+1);
         // descend is None in the activities, so it falls back to climb
-        let wheel_usage =
-            UsageId::from(Uuid::parse_str("01a04c37-93cd-7872-9a0d-076a33e8d963").unwrap());
+        let wheel_usage = wheel.read(&mut store).await?.usage;
         let stored = wheel_usage.read(&mut store).await?;
         assert_eq!(
             stored,
@@ -1544,21 +1550,19 @@ mod tests {
         assert_eq!(att_usage, expected);
 
         // the old attachment usage row is deleted
-        let old_usage =
-            UsageId::from(Uuid::parse_str("01a04c37-93cd-7872-9a0d-07b244c887aa").unwrap());
         assert!(
             UsageStore::get(&mut store, old_usage).await?.is_none(),
             "the old attachment usage row is deleted"
         );
 
         // the other parts attached to the bike are untouched
-        for id in [
-            "01a04c37-93cd-7872-9a0d-075caa3c6692", // Main Bike
-            "01a04c37-93cd-7872-9a0d-07793fb4b3ba", // Rear Wheel A
-            "01a04c37-93cd-7872-9a0d-07857ca515c6", // Chain A
-            "01a04c37-93cd-7872-9a0d-090f122b3304", // Spare Wheel
+        for pid in [
+            PartId::from(1),  // Main Bike
+            PartId::from(3),  // Rear Wheel A
+            PartId::from(4),  // Chain A
+            PartId::from(16), // Spare Wheel
         ] {
-            let uid = UsageId::from(Uuid::parse_str(id).unwrap());
+            let uid = pid.read(&mut store).await?.usage;
             let stored = uid.read(&mut store).await?;
             assert_eq!(
                 stored,
@@ -1689,14 +1693,14 @@ mod tests {
         // the part-level usage of the swapped parts is unchanged: the two
         // rows add up to all three rides (25+5200+2800, 50000+40000+35000,
         // 400+600+100, 400+600+100, 500+500+500, 1+1+1)
-        for id in [
-            "01a04c37-93cd-7872-9a0d-076a33e8d963", // Front Wheel A
-            "01a04c37-93cd-7872-9a0d-07793fb4b3ba", // Rear Wheel A
-            "01a04c37-93cd-7872-9a0d-07857ca515c6", // Chain A
-            "01a04c37-93cd-7872-9a0d-090f122b3304", // Spare Wheel
-            "01a04c37-93cd-7872-9a0d-075caa3c6692", // Main Bike
+        for pid in [
+            PartId::from(2), // Front Wheel A
+            PartId::from(3), // Rear Wheel A
+            PartId::from(4), // Chain A
+            spare_wheel,     // Spare Wheel
+            bike,            // Main Bike
         ] {
-            let uid = UsageId::from(Uuid::parse_str(id).unwrap());
+            let uid = pid.read(&mut store).await?.usage;
             let stored = uid.read(&mut store).await?;
             assert_eq!(
                 stored,
@@ -1714,8 +1718,7 @@ mod tests {
 
         // the tire had no usage row before; it joins the bike's usage with
         // the two later rides
-        let tire_usage =
-            UsageId::from(Uuid::parse_str("01a04c37-93cd-7872-9a0d-091cd3840a27").unwrap());
+        let tire_usage = spare_tire.read(&mut store).await?.usage;
         let stored = tire_usage.read(&mut store).await?;
         assert_eq!(
             stored,
