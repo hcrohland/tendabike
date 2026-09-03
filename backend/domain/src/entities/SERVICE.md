@@ -370,7 +370,12 @@ import { services } from "./service";
 
 ## Tests
 
-No unit tests exist for the Service or ServicePlan entities in the backend test suite. The `#[cfg(test)]` modules in these files are empty — only the domain-level test support infrastructure (`MemStore`, `TestSession`, fixtures) supports service testing if added.
+Both entities have full `#[cfg(test)]` suites using the in-memory `MemStore`:
+
+- **`service.rs`** (test module starts at line 224): covers `Service::create`, `Service::update`, `Service::delete`, `Service::redo`, successor chain linking, usage calculation for main parts vs sub-parts, and recalculation on attachment changes.
+- **`serviceplan.rs`** (test module starts at line 127): covers `ServicePlan::create` (specific vs generic mode), `ServicePlan::update` (immutability of `part`/`what`/`hook`/`uid`), `ServicePlan::delete`, threshold field round-trips, and ownership enforcement via `checkuser()`.
+
+Run with: `SQLX_OFFLINE=true cargo test -p tb_domain`
 
 ---
 
