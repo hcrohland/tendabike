@@ -135,6 +135,20 @@ pub struct MemStore {
 
     /// Auto-increment counter for PartId
     next_part_id: i32,
+
+    /// Users keyed by UserId
+    users: HashMap<UserId, User>,
+
+    /// Shops keyed by ShopId
+    shops: HashMap<ShopId, Shop>,
+
+    /// Subscriptions keyed by SubscriptionId
+    subscriptions: HashMap<SubscriptionId, ShopSubscription>,
+
+    /// Auto-increment counters
+    next_user_id: i32,
+    next_shop_id: i32,
+    next_subscription_id: i32,
 }
 
 impl Default for MemStore {
@@ -148,6 +162,12 @@ impl Default for MemStore {
             services: HashMap::new(),
             service_plans: HashMap::new(),
             next_part_id: 1,
+            users: HashMap::new(),
+            shops: HashMap::new(),
+            subscriptions: HashMap::new(),
+            next_user_id: 1,
+            next_shop_id: 1,
+            next_subscription_id: 1,
         }
     }
 }

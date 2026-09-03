@@ -387,4 +387,83 @@ mod tests {
             .unwrap_err();
         assert!(matches!(err, Error::Forbidden(_)));
     }
+
+    // === Tier B: User CRUD (in-memory store) ===
+
+    use crate::test_support::MemStore;
+
+    #[tokio::test]
+    async fn user_create_and_read() {
+        let mut store = MemStore::new();
+        let uid = UserId::create("John", "Doe", &None, &mut store)
+            .await
+            .unwrap();
+        let user = uid.read(&mut store).await.unwrap();
+        assert_eq!(user.id, uid);
+        assert_eq!(user.firstname, "John");
+        assert_eq!(user.name, "Doe");
+        assert!(!user.is_admin);
+        assert_eq!(user.onboarding_status, OnboardingStatus::Pending);
+    }
+
+    #[tokio::test]
+    async fn user_get_public() {
+        let mut store = MemStore::new();
+        let uid = UserId::create("Jane", "Smith", &Some("avatar.png".into()), &mut store)
+            .await
+            .unwrap();
+        let pub_ = uid.get_public(&mut store).await.unwrap();
+        assert_eq!(pub_.id, uid);
+        assert_eq!(pub_.firstname, "Jane");
+        assert_eq!(pub_.name, "Smith");
+        assert_eq!(pub_.avatar, Some("avatar.png".into()));
+    }
+
+    #[tokio::test]
+    async fn user_update() {
+        let mut store = MemStore::new();
+        let uid = UserId::create("Alice", "Bob", &None, &mut store)
+            .await
+            .unwrap();
+        uid.update("Alice", "NewName", &Some("new.png".into()), &mut store)
+            .await
+            .unwrap();
+        let user = uid.read(&mut store).await.unwrap();
+        assert_eq!(user.firstname, "Alice");
+        assert_eq!(user.name, "NewName");
+        assert_eq!(user.avatar, Some("new.png".into()));
+    }
+
+    #[tokio::test]
+    async fn user_is_admin_false_by_default() {
+        let mut store = MemStore::new();
+        let uid = UserId::create("Bob", "Builder", &None, &mut store)
+            .await
+            .unwrap();
+        assert!(!uid.is_admin(&mut store).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn user_delete_removes_from_store() {
+        let mut store = MemStore::new();
+        let uid = UserId::create("Del", "User", &None, &mut store)
+            .await
+            .unwrap();
+        uid.delete(&mut store).await.unwrap();
+        assert!(uid.read(&mut store).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn user_update_onboarding_status() {
+        let mut store = MemStore::new();
+        let uid = UserId::create("Carol", "C", &None, &mut store)
+            .await
+            .unwrap();
+        store
+            .update_onboarding_status(&uid, OnboardingStatus::Completed)
+            .await
+            .unwrap();
+        let user = uid.read(&mut store).await.unwrap();
+        assert_eq!(user.onboarding_status, OnboardingStatus::Completed);
+    }
 }
