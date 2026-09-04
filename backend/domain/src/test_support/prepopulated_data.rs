@@ -5,6 +5,16 @@
 /// Formatted JSON snapshot of the prepopulated store.
 /// This is a pretty-printed JSON string that gets deserialized by MemStore::prepopulated().
 pub const SNAPSHOT_JSON: &str = r#"{
+  "users": [
+    {
+      "id": 1,
+      "name": "Bike",
+      "firstname": "Tenda",
+      "avatar": null,
+      "is_admin": false,
+      "onboarding_status": "pending"
+    }
+  ],
   "parts": [
     {
       "id": 1,
@@ -16,7 +26,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2022-11-14T22:00:00Z",
       "last_used": "2023-05-19T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-606bab738668",
+      "usage": "01a06db9-9eff-7010-8fa4-b72c1ca8aab1",
       "source": null,
       "notes": "Main bike frame",
       "shop": null
@@ -31,7 +41,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-05-18T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-607c102725ed",
+      "usage": "01a06db9-9eff-7010-8fa4-b73c5260782a",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -46,7 +56,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-05-18T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-608b4e9c7e23",
+      "usage": "01a06db9-9eff-7010-8fa4-b74734d538df",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -61,7 +71,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-05-18T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-6095bde6bf3a",
+      "usage": "01a06db9-9eff-7010-8fa4-b7507ca842c6",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -76,7 +86,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-60a3c9090b7d",
+      "usage": "01a06db9-9eff-7010-8fa4-b76127f2a50e",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -91,7 +101,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-60b235dc748d",
+      "usage": "01a06db9-9eff-7010-8fa4-b7764cf0cd19",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -106,7 +116,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2022-11-14T22:00:00Z",
       "last_used": "2022-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-6123e70ff07f",
+      "usage": "01a06db9-9eff-7010-8fa4-b7d89bacfc15",
       "source": null,
       "notes": "Road bike frame",
       "shop": null
@@ -121,7 +131,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-613a651478e1",
+      "usage": "01a06db9-9eff-7010-8fa4-b7e6ba3ae9d0",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -136,7 +146,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-614b47b2a947",
+      "usage": "01a06db9-9eff-7010-8fa4-b7fdc65c643d",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -151,7 +161,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-615f684ea140",
+      "usage": "01a06db9-9eff-7010-8fa4-b80bc800ee9d",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -166,7 +176,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-61661310f7b5",
+      "usage": "01a06db9-9eff-7010-8fa4-b8165ae597a9",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -181,7 +191,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-6176931f5c4a",
+      "usage": "01a06db9-9eff-7010-8fa4-b8283b792898",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -196,7 +206,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-61ea7ca7f1e1",
+      "usage": "01a06db9-9eff-7010-8fa4-b88fdcc9df84",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -211,7 +221,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-61f676551da1",
+      "usage": "01a06db9-9eff-7010-8fa4-b899eac629d3",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -226,7 +236,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-620a29ea9334",
+      "usage": "01a06db9-9eff-7010-8fa4-b8ab4c3b754e",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -241,7 +251,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-05-18T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-621da2b08a96",
+      "usage": "01a06db9-9eff-7010-8fa4-b8b261929c00",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -256,7 +266,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-622a6f6276a1",
+      "usage": "01a06db9-9eff-7010-8fa4-b8cc567d7a15",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -269,7 +279,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 1,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-60cb76ad32f7"
+      "usage": "01a06db9-9eff-7010-8fa4-b78aa9b8ccdc"
     },
     {
       "part_id": 3,
@@ -277,7 +287,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 1,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-60d90e7a7729"
+      "usage": "01a06db9-9eff-7010-8fa4-b7934c5ff27a"
     },
     {
       "part_id": 4,
@@ -285,7 +295,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 1,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-60e62611e7cc"
+      "usage": "01a06db9-9eff-7010-8fa4-b7ac3c6ce035"
     },
     {
       "part_id": 5,
@@ -293,15 +303,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 2,
       "hook": 3,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-60fdcf1b2aeb"
-    },
-    {
-      "part_id": 6,
-      "attached": "2023-01-01T00:00:00Z",
-      "gear": 2,
-      "hook": 3,
-      "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-610ce31f0598"
+      "usage": "01a06db9-9eff-7010-8fa4-b7b290957911"
     },
     {
       "part_id": 6,
@@ -309,7 +311,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 3,
       "hook": 3,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-611a336cbeae"
+      "usage": "01a06db9-9eff-7010-8fa4-b7cf4d5c3fb1"
     },
     {
       "part_id": 8,
@@ -317,7 +319,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 7,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-618c1349bd38"
+      "usage": "01a06db9-9eff-7010-8fa4-b83e12d08e22"
     },
     {
       "part_id": 9,
@@ -325,7 +327,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 7,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-6198ae241db9"
+      "usage": "01a06db9-9eff-7010-8fa4-b8478fc9a9b6"
     },
     {
       "part_id": 10,
@@ -333,7 +335,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 7,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-61a9a24fa2bd"
+      "usage": "01a06db9-9eff-7010-8fa4-b8579dd40219"
     },
     {
       "part_id": 11,
@@ -341,15 +343,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 8,
       "hook": 3,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-61bdbbb014dc"
-    },
-    {
-      "part_id": 12,
-      "attached": "2023-01-01T00:00:00Z",
-      "gear": 8,
-      "hook": 3,
-      "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-61c2a7b2bf0e"
+      "usage": "01a06db9-9eff-7010-8fa4-b86a9736ec4f"
     },
     {
       "part_id": 12,
@@ -357,7 +351,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 9,
       "hook": 3,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-61d3b1534cbe"
+      "usage": "01a06db9-9eff-7010-8fa4-b87348bbc861"
     },
     {
       "part_id": 16,
@@ -365,7 +359,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 1,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-623238160d16"
+      "usage": "01a06db9-9eff-7010-8fa4-b8d031a29efe"
     },
     {
       "part_id": 17,
@@ -373,12 +367,12 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 16,
       "hook": 3,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-62455fd84436"
+      "usage": "01a06db9-9eff-7010-8fa4-b8e4669dd125"
     }
   ],
   "usages": [
     {
-      "id": "01a056ae-368e-7f30-8fd0-606bab738668",
+      "id": "01a06db9-9eff-7010-8fa4-b72c1ca8aab1",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -387,7 +381,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a056ae-368e-7f30-8fd0-607c102725ed",
+      "id": "01a06db9-9eff-7010-8fa4-b73c5260782a",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -396,7 +390,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a056ae-368e-7f30-8fd0-608b4e9c7e23",
+      "id": "01a06db9-9eff-7010-8fa4-b74734d538df",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -405,7 +399,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a056ae-368e-7f30-8fd0-6095bde6bf3a",
+      "id": "01a06db9-9eff-7010-8fa4-b7507ca842c6",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -414,7 +408,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a056ae-368e-7f30-8fd0-60cb76ad32f7",
+      "id": "01a06db9-9eff-7010-8fa4-b78aa9b8ccdc",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -423,7 +417,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a056ae-368e-7f30-8fd0-60d90e7a7729",
+      "id": "01a06db9-9eff-7010-8fa4-b7934c5ff27a",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -432,7 +426,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a056ae-368e-7f30-8fd0-60e62611e7cc",
+      "id": "01a06db9-9eff-7010-8fa4-b7ac3c6ce035",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -441,7 +435,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a056ae-368e-7f30-8fd0-621da2b08a96",
+      "id": "01a06db9-9eff-7010-8fa4-b8b261929c00",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -450,7 +444,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a056ae-368e-7f30-8fd0-623238160d16",
+      "id": "01a06db9-9eff-7010-8fa4-b8d031a29efe",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,

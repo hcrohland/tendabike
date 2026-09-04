@@ -7,13 +7,19 @@
 //! `build_workshop_store()` is the generator for the JSON snapshot; the
 //! `build-snapshot` bin (`cargo run -p tb_domain --bin build-snapshot
 //! --features test-support`) rebuilds `prepopulated_data.rs` from it.
+//!
+//! Note: usage UUIDs are generated via `Uuid::now()` (v7, wall-clock) and are
+//! NOT deterministic across regenerations. The snapshot structure (parts,
+//! attachments, users, activities) is deterministic; only the UUID values
+//! differ between builds.
 
 use super::MemStore;
 use super::fixtures::{sample_purchase_date, test_session};
 use super::part_type_ids::{BIKE, CHAIN, FRONT_WHEEL, REAR_WHEEL, TIRE};
-use crate::traits::{ActivityStore, AttachmentStore};
+use crate::traits::{ActivityStore, AttachmentStore, UserStore};
 use crate::{
     ActTypeId, Activity, Attachment, OffsetDateTime, Part, PartId, PartTypeId, TbResult, Usage,
+    User,
 };
 
 impl MemStore {
@@ -29,15 +35,34 @@ impl MemStore {
         } else {
             0
         };
+        let max_user_id: i32 = if !snap.users.is_empty() {
+            snap.users.iter().map(|u| u.id.into()).max().unwrap_or(0)
+        } else {
+            0
+        };
+        let max_shop_id: i32 = if !snap.parts.iter().any(|p| p.shop.is_some()) {
+            0
+        } else {
+            snap.parts
+                .iter()
+                .filter_map(|p| p.shop.map(|s| s.into()))
+                .max()
+                .unwrap_or(0)
+        };
+
+        for user in snap.users {
+            store.users.insert(user.id, user);
+        }
 
         for part in snap.parts {
             store.parts.insert(part.id, part);
         }
 
-        for att in snap.attachments {
-            let key = (att.part_id, att.attached, 0);
-            store.attachments.insert(key, att);
+        for (i, att) in snap.attachments.iter().enumerate() {
+            let key = (att.part_id, att.attached, i as u64);
+            store.attachments.insert(key, *att);
         }
+        store.attachment_counter = snap.attachments.len() as u64;
 
         for usage in snap.usages {
             store.usages.insert(usage.id, usage);
@@ -47,9 +72,10 @@ impl MemStore {
             store.activities.push(activity);
         }
 
-        if max_part_id > 0 {
-            store.next_part_id = max_part_id + 1;
-        }
+        store.next_part_id = max_part_id + 1;
+        store.next_user_id = max_user_id + 1;
+        store.next_shop_id = max_shop_id + 1;
+        store.next_subscription_id = 1;
 
         store
     }
@@ -60,6 +86,7 @@ const ATTACH_TIME: OffsetDateTime = time::macros::datetime!(2023-01-01 00:00 UTC
 /// Serializable snapshot of store data for JSON persistence.
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct StoreSnapshot {
+    pub users: Vec<User>,
     pub parts: Vec<Part>,
     pub attachments: Vec<Attachment>,
     pub usages: Vec<Usage>,
@@ -70,11 +97,13 @@ impl MemStore {
     /// Export store data as a serializable snapshot, deterministically ordered.
     pub fn snapshot(&self) -> StoreSnapshot {
         let mut snap = StoreSnapshot {
+            users: self.users.values().cloned().collect(),
             parts: self.parts.values().cloned().collect(),
             attachments: self.attachments.values().cloned().collect(),
             usages: self.usages.values().cloned().collect(),
             activities: self.activities.clone(),
         };
+        snap.users.sort_by_key(|u| i32::from(u.id));
         snap.parts.sort_by_key(|p| p.id);
         snap.attachments.sort_by_key(|a| (a.part_id, a.attached));
         snap.usages.sort_by_key(|u| u.id);
@@ -87,6 +116,9 @@ impl MemStore {
 pub async fn build_workshop_store() -> TbResult<MemStore> {
     let mut store = MemStore::new();
     let s = test_session();
+
+    // Create user 1 (the customer who owns all workshop parts)
+    store.create("Tenda", "Bike", &None).await?;
 
     // ─── Bike A: Main Bike ────────────────────────────────────────────
     let bike_a = Part::create(
@@ -126,7 +158,6 @@ pub async fn build_workshop_store() -> TbResult<MemStore> {
     do_subpart(&mut store, rw_a.id, bike_a.id, BIKE).await?;
     do_subpart(&mut store, ch_a.id, bike_a.id, BIKE).await?;
     do_subpart(&mut store, t_a1.id, fw_a.id, TIRE).await?;
-    do_subpart(&mut store, t_a2.id, fw_a.id, TIRE).await?;
     do_subpart(&mut store, t_a2.id, rw_a.id, TIRE).await?;
 
     // ─── Bike B: Road Bike ────────────────────────────────────────────
@@ -160,7 +191,6 @@ pub async fn build_workshop_store() -> TbResult<MemStore> {
     do_subpart(&mut store, rw_b.id, bike_b.id, BIKE).await?;
     do_subpart(&mut store, ch_b.id, bike_b.id, BIKE).await?;
     do_subpart(&mut store, t_b1.id, fw_b.id, TIRE).await?;
-    do_subpart(&mut store, t_b2.id, fw_b.id, TIRE).await?;
     do_subpart(&mut store, t_b2.id, rw_b.id, TIRE).await?;
 
     // ─── Spares (4 loose + 1 assembled) ──────────────────────────────
