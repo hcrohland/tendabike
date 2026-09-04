@@ -22,9 +22,10 @@
 
   let type = $derived(part.type());
 
-  let computedHook = $derived(
-    hook ?? (type.hooks.length == 1 ? type.hooks[0] : undefined),
-  );
+  // svelte-ignore state_referenced_locally
+  if (hook === undefined && type.hooks.length === 1) {
+    hook = type.hooks[0];
+  }
 
   function prevdate(time: Date) {
     let last = filterValues(
@@ -32,7 +33,7 @@
       (a) =>
         (a.attached < time || a.detached < time) &&
         (a.part_id == part.id ||
-          (a.gear == gear && a.hook == computedHook && a.what == part.what)),
+          (a.gear == gear && a.hook == hook && a.what == part.what)),
     )
       .map((a) => (a.detached < time ? a.detached : a.attached))
       .sort((a, b) => (a < b ? 1 : -1))[0];
