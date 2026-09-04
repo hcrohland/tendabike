@@ -47,7 +47,80 @@ This file provides guidance to agents when working with code in this repository.
 - Conversion via `impl From<DomainType> for DbType` and `impl TryFrom<DbType> for DomainType` in `sqlx/src/store/*.rs`
 - Helper functions in [`sqlx/src/lib.rs`](src/sqlx/src/lib.rs:14): `vec_into()`, `option_into()`, `into_domain()`
 
-## Test Data Rule: Do Not Modify Prepopulated Data Without Asking
+## Domain Tests
+
+### Running Tests
+
+```bash
+SQLX_OFFLINE=true cargo test -p tb_domain
+```
+
+All 266 tests run in-memory (no database needed). Tests are organized by entity under `domain/src/entities/*/tests/`.
+
+### Test Tiers
+
+| Tier | Scope | Store | Example |
+|------|-------|-------|---------|
+| A | Pure logic (types, enums, ID wrappers) | None | `parttypeid_is_main_bike` |
+| B | Single-entity CRUD + validation | `MemStore::new()` | `user_create_and_read` |
+| C | Cross-entity integration (shop, subscriptions, registration) | `MemStore::prepopulated()` | `register_part_ok` |
+
+### Key Infrastructure
+
+- **`MemStore`** (`test_support.rs`) — in-memory store implementing all 8 subtraits + `Store`. Use `MemStore::new()` for isolated tests or `MemStore::prepopulated()` for realistic data.
+- **`TestSession`** (`test_support.rs`) — implements the `Session` trait.
+  - `TestSession::new(user_id)` — customer session
+  - `TestSession::with_shop(user_id, shop_id)` — shop-owner session
+  - `TestSession::with_admin(user_id, true)` — admin session
+- **`part_type_ids`** (`test_support.rs`) — constants: `BIKE=1`, `FRONT_WHEEL=2`, `TIRE=3`, `CHAIN=4`, `REAR_WHEEL=5`, etc.
+- **`fixtures`** (`test_support/fixtures.rs`) — helpers: `fixture_basic_part()`, `fixture_attached_part()`, `fixture_assembly()`, `fixture_bike()`, `sample_purchase_date()`
+
+### Prepopulated Snapshot
+
+`MemStore::prepopulated()` loads a fixed JSON snapshot containing:
+
+| Entity | Count | Details |
+|--------|-------|---------|
+| Users | 1 | User 1 ("Tenda"/"Bike") |
+| Parts | 17 | 2 bikes + subparts (wheels, tires, chains) + 5 spares |
+| Attachments | 12 | Assembly hierarchy: bike→wheel/tire/chain |
+| Usages | 9 | One per attached part |
+| Activities | 3 | On Bike A, for usage calculation tests |
+
+Part ID layout: Bike A=1, Front Wheel A=2, Rear Wheel A=3, Chain A=4, Tire Front A=5, Tire Rear A=6, Bike B=7, Front Wheel B=8, Rear Wheel B=9, Chain B=10, Tire Front B=11, Tire Rear B=12, Spares=13–17 (chain 1, chain 2, tire, wheel, wheel tire).
+
+**Important**: Part 1 (Bike A) registration cascades to parts [1, 2, 3, 4, 16] (bike + direct subparts).
+
+### Writing New Tests
+
+```rust
+use crate::test_support::{MemStore, TestSession, part_type_ids::*};
+
+#[tokio::test]
+async fn my_test() -> TbResult<()> {
+    let mut store = MemStore::prepopulated(); // or MemStore::new()
+    let session = TestSession::new(UserId::from(1));
+    // ...
+    Ok(())
+}
+```
+
+- Use `#[tokio::test]` for async tests
+- Return `TbResult<()>` — `?` propagates domain errors with context
+- For isolated tests: `MemStore::new()` + create entities explicitly
+- For integration tests: `MemStore::prepopulated()` + reference existing IDs
+
+### Snapshot Regeneration
+
+```bash
+SQLX_OFFLINE=true cargo run -p tb_domain --bin build-snapshot --features test-support
+```
+
+- Rebuilds `test_support/prepopulated_data.rs` from `build_workshop_store()` in `mem_store.rs`
+- Deterministic: all collections sorted by ID; **exception**: usage UUIDs use `Uuid::now()` (v7) and differ between runs
+- Do NOT edit the generated file by hand
+
+### Test Data Rule: Do Not Modify Prepopulated Data Without Asking
 
 - **Never modify `domain/src/test_support/prepopulated_data.rs` or its generated JSON snapshot without explicit user approval.**
 - The snapshot (`SNAPSHOT_JSON`) contains a fixed set of parts, attachments, usages, and activities. Tests must adapt to this existing data — reuse available part IDs, owners, and types rather than creating new entries in the snapshot.
