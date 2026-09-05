@@ -127,3 +127,53 @@ SQLX_OFFLINE=true cargo run -p tb_domain --bin build-snapshot --features test-su
 - When a test needs isolation (e.g., creating parts without affecting other tests), create them explicitly in the test and/or use user IDs that do not overlap with prepopulated owners (e.g., `UserId::from(98)` has no parts; `UserId::from(99)` is unused).
 - The only acceptable reason to modify the snapshot is when there is an actual inconsistency between prepopulated_data.rs and the code that loads/generates it.
 - After approval, rebuild it with `cargo run -p tb_domain --bin build-snapshot --features test-support` (deterministic: all collections sorted by ID) — do not edit the generated file by hand.
+
+## Strava Tests
+
+### Running Tests
+
+```bash
+SQLX_OFFLINE=true cargo test -p tb_strava
+```
+
+All 57 tests run in-memory (no database, no network). Tests are colocated in each module's `#[cfg(test)] mod tests`: `activity.rs`, `event.rs`, `gear.rs`, `user.rs`.
+
+### Key Infrastructure
+
+- **`TestStravaStore`** (`test_support.rs`) — implements `StravaStore`. Domain data delegates to the domain `MemStore` (accessible as `store.mem`, use qualified calls like `ActivityStore::get_all(&mut store.mem, &user)`); `strava_users: HashMap<UserId, StravaUser>` and `events: Vec<Event>` are plain in-memory collections with auto-assigned event IDs. `insert_user()`, `event_count()` helpers.
+- **`TestStravaSession`** (`test_support.rs`) — implements `StravaSession`:
+  - `queue(uri, json)` — script a JSON response body for an **exact** request URI (FIFO per URI)
+  - `queue_error(uri, error)` — script an error for an exact URI; unscripted URIs yield `Error::BadRequest`
+  - `requests: Vec<String>` — every requested URI, in order (assert on these to verify API calls)
+  - `deauthorizes: Vec<StravaId>` — records `deauthorize()` calls
+- **JSON helpers**: `activity_json(id, type, gear)` (fixed timestamp `2026-01-02T10:00:00Z` = `1767348000`, distance `25000.0`, elevation `300.0`), `gear_json(id, frame_type)` (`None` = shoes), `strava_user(tbid, stravaid, enabled)`.
+
+### Writing New Tests
+
+```rust
+use crate::test_support::{TestStravaSession, TestStravaStore};
+
+#[tokio::test]
+async fn my_test() -> TbResult<()> {
+    let mut store = TestStravaStore::new();
+    store.insert_user(strava_user(UserId::from(1), 42, true));
+    let mut session = TestStravaSession::new(UserId::from(1), 42.into());
+    session.queue("/gear/b1", &gear_json("b1", Some(0)));
+    // ...
+    Ok(())
+}
+```
+
+- Use `#[tokio::test]`, return `TbResult<()>`
+- Assert on `store.events` / `store.event_count()` for webhook event state; on `session.requests` for Strava API calls
+
+### Gotchas
+
+- `request_json(...).await.context("...")?` wraps errors via anyhow → the propagated variant is `Error::AnyFailure`, not the original (e.g. `BadRequest`)
+- `PartId.0` is private — compare via `i32::from(part_id)`
+- `User` fields are `name` (lastname) and `firstname`; `MemStore::create(firstname, lastname, ...)` maps the `lastname` arg → `user.name`
+- `refresh_token().map(|t| t.secret())` borrows a local — use `.map(|t| t.secret().to_string())` and compare against `Some("...".to_string())`
+- Test fn names must not shadow the module functions under test (e.g. don't name a test `user_deauthorize` or `get_all_stats`) — rename to describe the behavior instead
+- `42.into().method(...)` is ambiguous (i32 converts into many types) — use `StravaId::from(42)` for method calls
+- `strava_event_get_next_for_user` also matches events with `owner_id == StravaId::default()` (global stop events), mirroring the SQL query
+- The LSP/rust-analyzer may report stale errors in this crate (e.g. E0034 "multiple applicable items" for qualified trait paths, missing `Clone` on `ObjectType`) — trust `cargo test` / `cargo clippy` output over the LSP

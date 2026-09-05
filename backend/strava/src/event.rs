@@ -80,7 +80,7 @@ impl InEvent {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ObjectType {
     #[default]
     Activity,
@@ -116,7 +116,7 @@ impl From<ObjectType> for String {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
 pub enum AspectType {
     #[default]
     Create,
@@ -148,7 +148,7 @@ impl From<AspectType> for String {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Event {
     pub id: Option<i32>,
     pub object_type: ObjectType,
@@ -477,4 +477,370 @@ pub async fn sync_users(
         event::insert_sync(user.strava_id(), time, migrate, store).await?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::{TestStravaSession, TestStravaStore, activity_json, strava_user};
+
+    fn setup() -> (TestStravaStore, TestStravaSession) {
+        let mut store = TestStravaStore::new();
+        store.insert_user(strava_user(UserId::from(1), 42, true));
+        let session = TestStravaSession::new(UserId::from(1), 42.into());
+        (store, session)
+    }
+
+    fn in_event(
+        object_type: &str,
+        object_id: i64,
+        aspect_type: &str,
+        owner: i32,
+        updates: serde_json::Map<String, serde_json::Value>,
+    ) -> InEvent {
+        serde_json::from_value(serde_json::json!({
+            "object_type": object_type,
+            "object_id": object_id,
+            "aspect_type": aspect_type,
+            "updates": updates,
+            "owner_id": owner,
+            "subscription_id": 1,
+            "event_time": 100
+        }))
+        .unwrap()
+    }
+
+    fn activity_event() -> Event {
+        Event {
+            object_type: ObjectType::Activity,
+            object_id: 10,
+            aspect_type: AspectType::Create,
+            owner_id: 42.into(),
+            subscription_id: 1,
+            event_time: 100,
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn into_event_maps_fields() -> TbResult<()> {
+        let (mut store, _) = setup();
+        let event = in_event("activity", 10, "create", 42, serde_json::Map::new())
+            .into_event(&mut store)
+            .await?;
+        assert!(event.id.is_none());
+        assert_eq!(event.object_type, ObjectType::Activity);
+        assert_eq!(event.object_id, 10);
+        assert_eq!(event.aspect_type, AspectType::Create);
+        assert_eq!(event.owner_id, 42.into());
+        assert_eq!(event.subscription_id, 1);
+        assert_eq!(event.event_time, 100);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn into_event_rejects_unknown_owner() {
+        let (mut store, _) = setup();
+        let res = in_event("activity", 10, "create", 99, serde_json::Map::new())
+            .into_event(&mut store)
+            .await;
+        assert!(matches!(res, Err(Error::BadRequest(_))));
+    }
+
+    #[tokio::test]
+    async fn into_event_rejects_unknown_types() {
+        let (mut store, _) = setup();
+        let bad_object = in_event("flying", 10, "create", 42, serde_json::Map::new());
+        assert!(matches!(
+            bad_object.into_event(&mut store).await,
+            Err(Error::BadRequest(_))
+        ));
+        let bad_aspect = in_event("activity", 10, "explode", 42, serde_json::Map::new());
+        assert!(matches!(
+            bad_aspect.into_event(&mut store).await,
+            Err(Error::BadRequest(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn accept_stores_activity_event() -> TbResult<()> {
+        let (mut store, _) = setup();
+        in_event("activity", 10, "create", 42, serde_json::Map::new())
+            .accept(&mut store)
+            .await?;
+        assert_eq!(store.event_count(), 1);
+        assert_eq!(store.events[0].object_id, 10);
+        assert!(store.events[0].id.is_some());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn accept_athlete_deauth_disables_user() -> TbResult<()> {
+        let (mut store, _) = setup();
+        store
+            .stravaevent_store(Event {
+                owner_id: 42.into(),
+                object_type: ObjectType::Activity,
+                object_id: 10,
+                aspect_type: AspectType::Create,
+                ..Default::default()
+            })
+            .await?;
+        let mut updates = serde_json::Map::new();
+        updates.insert("authorized".into(), serde_json::json!("false"));
+        in_event("athlete", 42, "update", 42, updates)
+            .accept(&mut store)
+            .await?;
+        assert_eq!(store.event_count(), 0);
+        let user = store.stravauser_get_by_tbid(UserId::from(1)).await?;
+        assert!(user.disabled());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn insert_sync_stores_event() -> TbResult<()> {
+        let (mut store, _) = setup();
+        insert_sync(42.into(), 100, true, &mut store).await?;
+        assert_eq!(store.event_count(), 1);
+        assert_eq!(store.events[0].object_type, ObjectType::Sync);
+        assert_eq!(store.events[0].object_id, 1);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn insert_sync_rejects_future() {
+        let (mut store, _) = setup();
+        let res = insert_sync(42.into(), get_time() + 1000, false, &mut store).await;
+        assert!(matches!(res, Err(Error::BadRequest(_))));
+        assert_eq!(store.event_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn insert_stop_schedules_future() -> TbResult<()> {
+        let (mut store, _) = setup();
+        insert_stop(&mut store).await?;
+        assert_eq!(store.event_count(), 1);
+        assert_eq!(store.events[0].object_type, ObjectType::Stop);
+        assert!(store.events[0].object_id > get_time());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn get_event_returns_latest_and_drops_older() -> TbResult<()> {
+        let (mut store, session) = setup();
+        let mut first = activity_event();
+        first.aspect_type = AspectType::Update;
+        first.event_time = 50;
+        store.stravaevent_store(first).await?;
+        store.stravaevent_store(activity_event()).await?;
+        let event = get_event(&session, &mut store).await?.unwrap();
+        assert_eq!(event.aspect_type, AspectType::Create);
+        assert_eq!(store.event_count(), 1);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn get_event_ignores_other_owners() -> TbResult<()> {
+        let (mut store, session) = setup();
+        store
+            .stravaevent_store(Event {
+                owner_id: 43.into(),
+                ..activity_event()
+            })
+            .await?;
+        assert!(get_event(&session, &mut store).await?.is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn rate_limit_active_returns_none() -> TbResult<()> {
+        let (mut store, session) = setup();
+        let stop = Event {
+            object_type: ObjectType::Stop,
+            object_id: get_time() + 500,
+            ..Default::default()
+        };
+        store.stravaevent_store(stop).await?;
+        let event = store.events[0].clone();
+        let res = event.rate_limit(&session, &mut store).await?;
+        assert!(res.is_none());
+        assert_eq!(store.event_count(), 1);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn rate_limit_expired_removes_stop() -> TbResult<()> {
+        let (mut store, session) = setup();
+        let stop = Event {
+            object_type: ObjectType::Stop,
+            object_id: 100,
+            ..Default::default()
+        };
+        store.stravaevent_store(stop).await?;
+        let event = store.events[0].clone();
+        let res = event.rate_limit(&session, &mut store).await?;
+        assert!(res.is_none());
+        assert_eq!(store.event_count(), 0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn process_no_events() -> TbResult<()> {
+        let (mut store, mut session) = setup();
+        let summary = process(&mut session, &mut store).await?;
+        assert_eq!(summary, Summary::default());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn process_activity_create_imports() -> TbResult<()> {
+        let (mut store, mut session) = setup();
+        store.stravaevent_store(activity_event()).await?;
+        session.queue("/activities/10", &activity_json(10, "Ride", None));
+        let summary = process(&mut session, &mut store).await?;
+        assert_eq!(summary.activities.len(), 1);
+        assert_eq!(summary.activities[0].id, ActivityId::new(10));
+        assert_eq!(store.event_count(), 0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn process_activity_delete_missing_ignores() -> TbResult<()> {
+        let (mut store, mut session) = setup();
+        store
+            .stravaevent_store(Event {
+                aspect_type: AspectType::Delete,
+                ..activity_event()
+            })
+            .await?;
+        let summary = process(&mut session, &mut store).await?;
+        assert_eq!(summary, Summary::default());
+        assert_eq!(store.event_count(), 0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn process_try_again_inserts_stop() -> TbResult<()> {
+        let (mut store, mut session) = setup();
+        store.stravaevent_store(activity_event()).await?;
+        session.queue_error("/activities/10", Error::TryAgain("rate limit"));
+        let summary = process(&mut session, &mut store).await?;
+        assert_eq!(summary, Summary::default());
+        assert_eq!(store.event_count(), 2);
+        let stop = store
+            .events
+            .iter()
+            .find(|e| e.object_type == ObjectType::Stop)
+            .unwrap();
+        assert!(stop.object_id > get_time());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn process_sync_empty_list_removes_event() -> TbResult<()> {
+        let (mut store, mut session) = setup();
+        store
+            .stravaevent_store(Event {
+                object_type: ObjectType::Sync,
+                owner_id: 42.into(),
+                ..Default::default()
+            })
+            .await?;
+        session.queue("/activities?after=0&per_page=25", "[]");
+        let summary = process(&mut session, &mut store).await?;
+        assert_eq!(summary, Summary::default());
+        assert_eq!(store.event_count(), 0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn process_sync_imports_activities() -> TbResult<()> {
+        let (mut store, mut session) = setup();
+        store
+            .stravaevent_store(Event {
+                object_type: ObjectType::Sync,
+                owner_id: 42.into(),
+                ..Default::default()
+            })
+            .await?;
+        session.queue(
+            "/activities?after=0&per_page=25",
+            &format!("[{}]", activity_json(10, "Ride", None)),
+        );
+        session.queue("/activities/10", &activity_json(10, "Ride", None));
+        let summary = process(&mut session, &mut store).await?;
+        assert_eq!(summary.activities.len(), 1);
+        assert_eq!(store.event_count(), 1);
+        assert_eq!(store.events[0].event_time, 1767348000);
+        let acts = ActivityStore::get_all(&mut store.mem, &UserId::from(1)).await?;
+        assert_eq!(acts.len(), 1);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn process_sync_try_again_keeps_event_and_stops() -> TbResult<()> {
+        let (mut store, mut session) = setup();
+        store
+            .stravaevent_store(Event {
+                object_type: ObjectType::Sync,
+                owner_id: 42.into(),
+                ..Default::default()
+            })
+            .await?;
+        session.queue_error("/activities?after=0&per_page=25", Error::TryAgain("nope"));
+        let summary = process(&mut session, &mut store).await?;
+        assert_eq!(summary, Summary::default());
+        assert_eq!(store.event_count(), 2);
+        assert!(
+            store
+                .events
+                .iter()
+                .any(|e| e.object_type == ObjectType::Stop)
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn process_skips_athlete_event() -> TbResult<()> {
+        let (mut store, mut session) = setup();
+        store
+            .stravaevent_store(Event {
+                object_type: ObjectType::Athlete,
+                object_id: 42,
+                ..Default::default()
+            })
+            .await?;
+        let summary = process(&mut session, &mut store).await?;
+        assert_eq!(summary, Summary::default());
+        assert_eq!(store.event_count(), 0);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn sync_users_skips_disabled() -> TbResult<()> {
+        let mut store = TestStravaStore::new();
+        UserStore::create(&mut store.mem, "A", "User", &None).await?;
+        UserStore::create(&mut store.mem, "B", "User", &None).await?;
+        store.insert_user(strava_user(UserId::from(1), 42, true));
+        store.insert_user(strava_user(UserId::from(2), 43, false));
+        sync_users(None, 100, false, &mut store).await?;
+        assert_eq!(store.event_count(), 1);
+        assert_eq!(store.events[0].owner_id, 42.into());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn sync_users_single() -> TbResult<()> {
+        let (mut store, _) = setup();
+        sync_users(Some(UserId::from(1)), 100, false, &mut store).await?;
+        assert_eq!(store.event_count(), 1);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn sync_users_unknown_user() {
+        let (mut store, _) = setup();
+        let res = sync_users(Some(UserId::from(99)), 100, false, &mut store).await;
+        assert!(matches!(res, Err(Error::NotFound(_))));
+    }
 }
