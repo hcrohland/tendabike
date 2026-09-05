@@ -1557,10 +1557,9 @@ mod tests {
 
         // the other parts attached to the bike are untouched
         for pid in [
-            PartId::from(1),  // Main Bike
-            PartId::from(3),  // Rear Wheel A
-            PartId::from(4),  // Chain A
-            PartId::from(16), // Spare Wheel
+            PartId::from(1), // Main Bike
+            PartId::from(3), // Rear Wheel A
+            PartId::from(4), // Chain A
         ] {
             let uid = pid.read(&mut store).await?.usage;
             let stored = uid.read(&mut store).await?;
@@ -1585,17 +1584,18 @@ mod tests {
         Ok(())
     }
 
-    /// attach_assembly() with all=true moves the whole sub-assembly: the
-    /// spare wheel is swapped into the main bike just before the second
-    /// activity, its tire moves along, and the bike's own wheel, rear wheel
-    /// and chain are shifted onto the spare wheel in between. Usages are
-    /// recalculated so that only the morning ride counts before the swap and
-    /// the two later rides count from the swap on.
+    /// attach_assembly() with all=true mounts the loose spare wheel onto the
+    /// main bike just before the second activity. Its tire moves along onto
+    /// the bike, and the bike's own front wheel is cut off at the swap.
+    /// Usages are recalculated: the front wheel counts only the morning ride,
+    /// the spare wheel and its tire count the two later rides, while the bike,
+    /// rear wheel and chain are untouched.
     #[tokio::test]
     async fn attach_assembly_with_all_shifts_subparts_and_recalculates_usage() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
         let session = TestSession::new(UserId::from(1));
         let bike = PartId::from(1);
+        let front_wheel = PartId::from(2);
         let spare_wheel = PartId::from(16);
         let spare_tire = PartId::from(17);
 
@@ -1615,91 +1615,94 @@ mod tests {
         )
         .await?;
 
-        // the previous rows of the swapped parts are cut at the attach time;
-        // their usage is the morning ride only (25, 50000, 400, 400, 500, 1);
-        // descend is None in the activity, so it falls back to climb
         let before = attach_at - time::Duration::hours(1);
-        for (part, hook) in [
-            (PartId::from(2), BIKE),
-            (PartId::from(3), BIKE),
-            (PartId::from(4), BIKE),
-            (spare_wheel, BIKE),
-        ] {
-            let old = store
-                .attachment_get_by_part_and_time(part, before)
-                .await?
-                .expect("the part is attached before the swap");
-            assert_eq!(old.attached, datetime!(2023-01-01 00:00 UTC));
-            assert_eq!(old.gear, bike);
-            assert_eq!(old.hook, hook);
-            assert_eq!(old.detached, attach_at);
-            let usage = old.usage.read(&mut store).await?;
-            let mut expected = Usage {
-                time: 25,
-                distance: 50000,
-                climb: 400,
-                descend: 400,
-                energy: 500,
-                count: 1,
-                ..Default::default()
-            };
-            expected.id = usage.id;
-            assert_eq!(usage, expected);
-        }
 
-        // from the swap on, all parts are reattached to the bike; their
-        // usage is the two later rides (5200+2800, 40000+35000, 600+100,
-        // 600+100, 500+500, 1+1)
-        for (part, hook) in [
-            (PartId::from(2), BIKE),
-            (PartId::from(3), BIKE),
-            (PartId::from(4), BIKE),
-            (spare_wheel, BIKE),
-            (spare_tire, TIRE),
-        ] {
-            let new = store
-                .attachment_get_by_part_and_time(part, attach_at)
-                .await?
-                .expect("the part is attached from the swap on");
-            assert_eq!(new.attached, attach_at);
-            assert_eq!(new.gear, bike);
-            assert_eq!(new.hook, hook);
-            assert_eq!(new.detached, MAX_TIME);
-            let usage = new.usage.read(&mut store).await?;
-            let mut expected = Usage {
-                time: 8000,
-                distance: 75000,
-                climb: 700,
-                descend: 700,
-                energy: 1000,
-                count: 2,
-                ..Default::default()
-            };
-            expected.id = usage.id;
-            assert_eq!(usage, expected);
-        }
+        // the bike's front wheel is cut at the swap; before the swap it only
+        // counts the morning ride (25, 50000, 400, 400, 500, 1). Descend is
+        // None in the activity, so it falls back to climb.
+        let old_fw = store
+            .attachment_get_by_part_and_time(front_wheel, before)
+            .await?
+            .expect("the front wheel is attached before the swap");
+        assert_eq!(old_fw.attached, datetime!(2023-01-01 00:00 UTC));
+        assert_eq!(old_fw.gear, bike);
+        assert_eq!(old_fw.hook, BIKE);
+        assert_eq!(old_fw.detached, attach_at);
+        let fw_usage = old_fw.usage.read(&mut store).await?;
+        let mut expected = Usage {
+            time: 25,
+            distance: 50000,
+            climb: 400,
+            descend: 400,
+            energy: 500,
+            count: 1,
+            ..Default::default()
+        };
+        expected.id = fw_usage.id;
+        assert_eq!(fw_usage, expected);
 
-        // the tire was on the spare wheel until the swap, which had no
-        // activities, so its old usage is zero
+        // the spare wheel is mounted on the bike from the swap on; it counts
+        // the two later rides (5200+2800, 40000+35000, 600+100, 600+100,
+        // 500+500, 1+1)
+        let new_sw = store
+            .attachment_get_by_part_and_time(spare_wheel, attach_at)
+            .await?
+            .expect("the spare wheel is attached from the swap on");
+        assert_eq!(new_sw.attached, attach_at);
+        assert_eq!(new_sw.gear, bike);
+        assert_eq!(new_sw.hook, BIKE);
+        assert_eq!(new_sw.detached, MAX_TIME);
+        let sw_usage = new_sw.usage.read(&mut store).await?;
+        let mut expected = Usage {
+            time: 8000,
+            distance: 75000,
+            climb: 700,
+            descend: 700,
+            energy: 1000,
+            count: 2,
+            ..Default::default()
+        };
+        expected.id = sw_usage.id;
+        assert_eq!(sw_usage, expected);
+
+        // the spare tire moved onto the bike at the swap; its old row (on the
+        // spare wheel) is cut at the swap with zero usage since the wheel had
+        // no rides of its own
         let tire_old = store
             .attachment_get_by_part_and_time(spare_tire, before)
             .await?
             .expect("the tire is attached to the spare wheel before the swap");
         assert_eq!(tire_old.gear, spare_wheel);
-        assert_eq!(tire_old.hook, TIRE);
+        assert_eq!(tire_old.hook, FRONT_WHEEL);
         assert_eq!(tire_old.detached, attach_at);
         assert_eq!(tire_old.usage.read(&mut store).await?.time, 0);
 
-        // the part-level usage of the swapped parts is unchanged: the two
-        // rows add up to all three rides (25+5200+2800, 50000+40000+35000,
-        // 400+600+100, 400+600+100, 500+500+500, 1+1+1)
-        for pid in [
-            PartId::from(2), // Front Wheel A
-            PartId::from(3), // Rear Wheel A
-            PartId::from(4), // Chain A
-            spare_wheel,     // Spare Wheel
-            bike,            // Main Bike
-        ] {
+        // the tire's new row is on the bike from the swap on; it counts the
+        // two later rides
+        let tire_new = store
+            .attachment_get_by_part_and_time(spare_tire, attach_at)
+            .await?
+            .expect("the tire is attached to the bike from the swap on");
+        assert_eq!(tire_new.gear, bike);
+        assert_eq!(tire_new.hook, FRONT_WHEEL);
+        assert_eq!(tire_new.detached, MAX_TIME);
+        let tire_new_usage = tire_new.usage.read(&mut store).await?;
+        let mut expected = Usage {
+            time: 8000,
+            distance: 75000,
+            climb: 700,
+            descend: 700,
+            energy: 1000,
+            count: 2,
+            ..Default::default()
+        };
+        expected.id = tire_new_usage.id;
+        assert_eq!(tire_new_usage, expected);
+
+        // the bike, rear wheel and chain are untouched: all three rides
+        // (25+5200+2800, 50000+40000+35000, 400+600+100, 400+600+100,
+        // 500+500+500, 1+1+1)
+        for pid in [bike, PartId::from(3), PartId::from(4)] {
             let uid = pid.read(&mut store).await?.usage;
             let stored = uid.read(&mut store).await?;
             assert_eq!(
@@ -1716,22 +1719,39 @@ mod tests {
             );
         }
 
-        // the tire had no usage row before; it joins the bike's usage with
-        // the two later rides
-        let tire_usage = spare_tire.read(&mut store).await?.usage;
-        let stored = tire_usage.read(&mut store).await?;
+        // the front wheel's part-level usage is the morning ride only
+        let front_wheel_usage = front_wheel.read(&mut store).await?.usage;
+        let stored = front_wheel_usage.read(&mut store).await?;
         assert_eq!(
             stored,
             Usage {
-                id: tire_usage,
-                time: 8000,
-                distance: 75000,
-                climb: 700,
-                descend: 700,
-                energy: 1000,
-                count: 2,
+                id: front_wheel_usage,
+                time: 25,
+                distance: 50000,
+                climb: 400,
+                descend: 400,
+                energy: 500,
+                count: 1,
             }
         );
+
+        // the spare wheel and its tire: part-level usage is the two later rides
+        for pid in [spare_wheel, spare_tire] {
+            let uid = pid.read(&mut store).await?.usage;
+            let stored = uid.read(&mut store).await?;
+            assert_eq!(
+                stored,
+                Usage {
+                    id: uid,
+                    time: 8000,
+                    distance: 75000,
+                    climb: 700,
+                    descend: 700,
+                    energy: 1000,
+                    count: 2,
+                }
+            );
+        }
 
         Ok(())
     }

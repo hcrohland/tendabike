@@ -83,13 +83,13 @@ All 266 tests run in-memory (no database needed). Tests are organized by entity 
 |--------|-------|---------|
 | Users | 1 | User 1 ("Tenda"/"Bike") |
 | Parts | 17 | 2 bikes + subparts (wheels, tires, chains) + 5 spares |
-| Attachments | 12 | Assembly hierarchy: bike→wheel/tire/chain |
-| Usages | 9 | One per attached part |
+| Attachments | 11 | Assembly hierarchy: bike→wheel/tire/chain |
+| Usages | 7 | Accumulated usage aggregates, linked from parts and attachments (and services) |
 | Activities | 3 | On Bike A, for usage calculation tests |
 
 Part ID layout: Bike A=1, Front Wheel A=2, Rear Wheel A=3, Chain A=4, Tire Front A=5, Tire Rear A=6, Bike B=7, Front Wheel B=8, Rear Wheel B=9, Chain B=10, Tire Front B=11, Tire Rear B=12, Spares=13–17 (chain 1, chain 2, tire, wheel, wheel tire).
 
-**Important**: Part 1 (Bike A) registration cascades to parts [1, 2, 3, 4, 16] (bike + direct subparts).
+**Important**: Part 1 (Bike A) registration cascades to parts [1, 2, 3, 4] (bike + direct subparts).
 
 ### Writing New Tests
 

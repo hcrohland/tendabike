@@ -793,11 +793,11 @@ mod tests {
         // the new activity is reported
         assert_eq!(summary.activities, vec![expected_act]);
 
-        // the bike and all attached parts: front wheel, rear wheel, chain, spare wheel
+        // the bike and all attached parts: front wheel, rear wheel, chain
         let part_ids: HashSet<PartId> = summary.parts.iter().map(|p| p.id).collect();
         assert_eq!(
             part_ids,
-            [1, 2, 3, 4, 16].into_iter().map(PartId::from).collect()
+            [1, 2, 3, 4].into_iter().map(PartId::from).collect()
         );
         // last_used of the bike is bumped to the activity start
         let bike_part = summary.parts.iter().find(|p| p.id == bike).unwrap();
@@ -805,13 +805,7 @@ mod tests {
 
         // the usage of the bike, all attached parts and all their attachments to the bike
         let mut expected_ids: HashSet<UsageId> = HashSet::new();
-        for pid in [
-            bike,
-            PartId::from(2),
-            PartId::from(3),
-            PartId::from(4),
-            PartId::from(16),
-        ] {
+        for pid in [bike, PartId::from(2), PartId::from(3), PartId::from(4)] {
             expected_ids.insert(pid.read(&mut store).await?.usage);
             if pid != bike {
                 let att = store
@@ -901,7 +895,7 @@ mod tests {
         let part_ids: HashSet<PartId> = summary.parts.iter().map(|p| p.id).collect();
         assert_eq!(
             part_ids,
-            [1, 2, 3, 4, 16].into_iter().map(PartId::from).collect()
+            [1, 2, 3, 4].into_iter().map(PartId::from).collect()
         );
         // last_used of the bike stays at the activity start
         let bike_part = summary.parts.iter().find(|p| p.id == bike).unwrap();
@@ -909,13 +903,7 @@ mod tests {
 
         // the usage of the bike, all attached parts and all their attachments to the bike
         let mut expected_ids: HashSet<UsageId> = HashSet::new();
-        for pid in [
-            bike,
-            PartId::from(2),
-            PartId::from(3),
-            PartId::from(4),
-            PartId::from(16),
-        ] {
+        for pid in [bike, PartId::from(2), PartId::from(3), PartId::from(4)] {
             expected_ids.insert(pid.read(&mut store).await?.usage);
             if pid != bike {
                 let att = store

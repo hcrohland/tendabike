@@ -16,10 +16,10 @@
 use super::MemStore;
 use super::fixtures::{sample_purchase_date, test_session};
 use super::part_type_ids::{BIKE, CHAIN, FRONT_WHEEL, REAR_WHEEL, TIRE};
-use crate::traits::{ActivityStore, AttachmentStore, UserStore};
+use crate::traits::UserStore;
 use crate::{
-    ActTypeId, Activity, Attachment, OffsetDateTime, Part, PartId, PartTypeId, TbResult, Usage,
-    User,
+    ActTypeId, Activity, Attachment, OffsetDateTime, Part, PartId, PartTypeId, Session, TbResult,
+    Usage, User, attach_assembly,
 };
 
 impl MemStore {
@@ -134,7 +134,8 @@ pub async fn build_workshop_store() -> TbResult<MemStore> {
     )
     .await?;
 
-    let fw_a = mkpart(
+    let fw_a = mk_part(
+        &s,
         "Front Wheel A",
         "Zipp",
         "404 Firecrest",
@@ -142,7 +143,8 @@ pub async fn build_workshop_store() -> TbResult<MemStore> {
         &mut store,
     )
     .await?;
-    let rw_a = mkpart(
+    let rw_a = mk_part(
+        &s,
         "Rear Wheel A",
         "DT Swiss",
         "XR 1501",
@@ -150,15 +152,49 @@ pub async fn build_workshop_store() -> TbResult<MemStore> {
         &mut store,
     )
     .await?;
-    let ch_a = mkpart("Chain A", "Shimano", "CN-M510", CHAIN, &mut store).await?;
-    let t_a1 = mkpart("Tire Front A", "Continental", "GP5000", TIRE, &mut store).await?;
-    let t_a2 = mkpart("Tire Rear A", "Continental", "GP5000 ST", TIRE, &mut store).await?;
+    let ch_a = mk_part(&s, "Chain A", "Shimano", "CN-M510", CHAIN, &mut store).await?;
+    let t_a1 = mk_part(
+        &s,
+        "Tire Front A",
+        "Continental",
+        "GP5000",
+        TIRE,
+        &mut store,
+    )
+    .await?;
+    let t_a2 = mk_part(
+        &s,
+        "Tire Rear A",
+        "Continental",
+        "GP5000 ST",
+        TIRE,
+        &mut store,
+    )
+    .await?;
 
-    do_subpart(&mut store, fw_a.id, bike_a.id, BIKE).await?;
-    do_subpart(&mut store, rw_a.id, bike_a.id, BIKE).await?;
-    do_subpart(&mut store, ch_a.id, bike_a.id, BIKE).await?;
-    do_subpart(&mut store, t_a1.id, fw_a.id, TIRE).await?;
-    do_subpart(&mut store, t_a2.id, rw_a.id, TIRE).await?;
+    attach_assembly(&s, fw_a.id, ATTACH_TIME, bike_a.id, BIKE, false, &mut store).await?;
+    attach_assembly(&s, rw_a.id, ATTACH_TIME, bike_a.id, BIKE, false, &mut store).await?;
+    attach_assembly(&s, ch_a.id, ATTACH_TIME, bike_a.id, BIKE, false, &mut store).await?;
+    attach_assembly(
+        &s,
+        t_a1.id,
+        ATTACH_TIME,
+        fw_a.id,
+        FRONT_WHEEL,
+        false,
+        &mut store,
+    )
+    .await?;
+    attach_assembly(
+        &s,
+        t_a2.id,
+        ATTACH_TIME,
+        rw_a.id,
+        REAR_WHEEL,
+        false,
+        &mut store,
+    )
+    .await?;
 
     // ─── Bike B: Road Bike ────────────────────────────────────────────
     let bike_b = Part::create(
@@ -174,7 +210,8 @@ pub async fn build_workshop_store() -> TbResult<MemStore> {
     )
     .await?;
 
-    let fw_b = mkpart(
+    let fw_b = mk_part(
+        &s,
         "Front Wheel B",
         "Mavic",
         "Carbon WS",
@@ -182,24 +219,67 @@ pub async fn build_workshop_store() -> TbResult<MemStore> {
         &mut store,
     )
     .await?;
-    let rw_b = mkpart("Rear Wheel B", "Mavic", "Carbon WS", REAR_WHEEL, &mut store).await?;
-    let ch_b = mkpart("Chain B", "SRAM", "PC-XX1", CHAIN, &mut store).await?;
-    let t_b1 = mkpart("Tire Front B", "Schwalbe", "One", TIRE, &mut store).await?;
-    let t_b2 = mkpart("Tire Rear B", "Schwalbe", "One Plus", TIRE, &mut store).await?;
+    let rw_b = mk_part(
+        &s,
+        "Rear Wheel B",
+        "Mavic",
+        "Carbon WS",
+        REAR_WHEEL,
+        &mut store,
+    )
+    .await?;
+    let ch_b = mk_part(&s, "Chain B", "SRAM", "PC-XX1", CHAIN, &mut store).await?;
+    let t_b1 = mk_part(&s, "Tire Front B", "Schwalbe", "One", TIRE, &mut store).await?;
+    let t_b2 = mk_part(&s, "Tire Rear B", "Schwalbe", "One Plus", TIRE, &mut store).await?;
 
-    do_subpart(&mut store, fw_b.id, bike_b.id, BIKE).await?;
-    do_subpart(&mut store, rw_b.id, bike_b.id, BIKE).await?;
-    do_subpart(&mut store, ch_b.id, bike_b.id, BIKE).await?;
-    do_subpart(&mut store, t_b1.id, fw_b.id, TIRE).await?;
-    do_subpart(&mut store, t_b2.id, rw_b.id, TIRE).await?;
+    attach_assembly(&s, fw_b.id, ATTACH_TIME, bike_b.id, BIKE, false, &mut store).await?;
+    attach_assembly(&s, rw_b.id, ATTACH_TIME, bike_b.id, BIKE, false, &mut store).await?;
+    attach_assembly(&s, ch_b.id, ATTACH_TIME, bike_b.id, BIKE, false, &mut store).await?;
+    attach_assembly(
+        &s,
+        t_b1.id,
+        ATTACH_TIME,
+        fw_b.id,
+        FRONT_WHEEL,
+        false,
+        &mut store,
+    )
+    .await?;
+    attach_assembly(
+        &s,
+        t_b2.id,
+        ATTACH_TIME,
+        rw_b.id,
+        REAR_WHEEL,
+        false,
+        &mut store,
+    )
+    .await?;
 
-    // ─── Spares (4 loose + 1 assembled) ──────────────────────────────
-    let _sc1 = mkpart("Spare Chain 1", "Shimano", "HG-54", CHAIN, &mut store).await?;
-    let _sc2 = mkpart("Spare Chain 2", "SRAM", "PC-1031", CHAIN, &mut store).await?;
-    let _st = mkpart("Spare Tire", "Continental", "Supersonic", TIRE, &mut store).await?;
+    // ─── Spares (loose; the spare wheel is not mounted, just carries its tire) ───
+    let _sc1 = mk_part(&s, "Spare Chain 1", "Shimano", "HG-54", CHAIN, &mut store).await?;
+    let _sc2 = mk_part(&s, "Spare Chain 2", "SRAM", "PC-1031", CHAIN, &mut store).await?;
+    let _st = mk_part(
+        &s,
+        "Spare Tire",
+        "Continental",
+        "Supersonic",
+        TIRE,
+        &mut store,
+    )
+    .await?;
 
-    let sw = mkpart("Spare Wheel", "HED", "Stinger 3", FRONT_WHEEL, &mut store).await?;
-    let st2 = mkpart(
+    let sw = mk_part(
+        &s,
+        "Spare Wheel",
+        "HED",
+        "Stinger 3",
+        FRONT_WHEEL,
+        &mut store,
+    )
+    .await?;
+    let st2 = mk_part(
+        &s,
         "Spare Wheel Tire",
         "Continental",
         "GP5000",
@@ -207,44 +287,56 @@ pub async fn build_workshop_store() -> TbResult<MemStore> {
         &mut store,
     )
     .await?;
-    do_subpart(&mut store, sw.id, bike_a.id, BIKE).await?;
-    do_subpart(&mut store, st2.id, sw.id, TIRE).await?;
+    // the spare wheel is a loose spare (not mounted on a bike) but carries its tire
+    attach_assembly(
+        &s,
+        st2.id,
+        ATTACH_TIME,
+        sw.id,
+        FRONT_WHEEL,
+        false,
+        &mut store,
+    )
+    .await?;
 
     // ─── Activities on Bike A (for usage calculation) ─────────────────
     let base = sample_purchase_date() - time::Duration::days(180);
-    store
-        .activity_create(mk_activity(
-            "Morning Ride",
-            base,
-            3600,
-            Some(25),
-            Some(50_000),
-            Some(400),
-            bike_a.id,
-        ))
-        .await?;
-    store
-        .activity_create(mk_activity(
-            "Hill Repeats",
-            base + time::Duration::hours(2),
-            1800,
-            Some(5200),
-            Some(40_000),
-            Some(600),
-            bike_a.id,
-        ))
-        .await?;
-    store
-        .activity_create(mk_activity(
-            "Recovery Spin",
-            base + time::Duration::days(1),
-            2400,
-            Some(2800),
-            Some(35_000),
-            Some(100),
-            bike_a.id,
-        ))
-        .await?;
+    mk_activity(
+        crate::ActivityId::new(1),
+        "Morning Ride",
+        base,
+        3600,
+        Some(25),
+        Some(50_000),
+        Some(400),
+        bike_a.id,
+    )
+    .upsert(&s, &mut store)
+    .await?;
+    mk_activity(
+        crate::ActivityId::new(2),
+        "Hill Repeats",
+        base + time::Duration::hours(2),
+        1800,
+        Some(5200),
+        Some(40_000),
+        Some(600),
+        bike_a.id,
+    )
+    .upsert(&s, &mut store)
+    .await?;
+    mk_activity(
+        crate::ActivityId::new(3),
+        "Recovery Spin",
+        base + time::Duration::days(1),
+        2400,
+        Some(2800),
+        Some(35_000),
+        Some(100),
+        bike_a.id,
+    )
+    .upsert(&s, &mut store)
+    .await?;
 
     // Compute usage from activities — populates usages for Bike A + all attached subparts
     Activity::rescan_all(&mut store).await?;
@@ -252,14 +344,14 @@ pub async fn build_workshop_store() -> TbResult<MemStore> {
     Ok(store)
 }
 
-async fn mkpart(
+async fn mk_part(
+    session: &dyn Session,
     name: &str,
     vendor: &str,
     model: &str,
     typ: PartTypeId,
     store: &mut MemStore,
 ) -> TbResult<Part> {
-    let s = test_session();
     Part::create(
         name.into(),
         vendor.into(),
@@ -268,24 +360,15 @@ async fn mkpart(
         None,
         sample_purchase_date(),
         "Test part".into(),
-        &s,
+        session,
         store,
     )
     .await
 }
 
-async fn do_subpart(
-    store: &mut MemStore,
-    part_id: PartId,
-    gear_id: PartId,
-    hook: PartTypeId,
-) -> TbResult<()> {
-    let att = Attachment::new(part_id, ATTACH_TIME, gear_id, hook, crate::MAX_TIME);
-    store.attachment_create(att).await?;
-    Ok(())
-}
-
+#[allow(clippy::too_many_arguments)]
 fn mk_activity(
+    id: crate::ActivityId,
     name: &str,
     start: OffsetDateTime,
     duration: i32,
@@ -295,7 +378,7 @@ fn mk_activity(
     gear: PartId,
 ) -> Activity {
     Activity {
-        id: crate::ActivityId::new(1),
+        id,
         user_id: crate::UserId::from(1),
         what: ActTypeId::from(1),
         name: name.into(),

@@ -81,21 +81,23 @@ impl AttachmentStore for MemStore {
 
     async fn assembly_get_by_types_time_and_gear(
         &mut self,
-        _types: Vec<PartTypeId>,
+        types: Vec<PartTypeId>,
         gear: PartId,
         time: OffsetDateTime,
     ) -> TbResult<Vec<Attachment>> {
         Ok(self
             .attachments
             .values()
-            .filter(|a| a.gear == gear && a.attached <= time && a.detached > time)
+            .filter(|a| {
+                types.contains(&a.hook) && a.gear == gear && a.attached <= time && a.detached > time
+            })
             .cloned()
             .collect())
     }
 
     async fn attachment_find_part_of_type_at_hook_and_time(
         &mut self,
-        _what: PartTypeId,
+        what: PartTypeId,
         gear: PartId,
         hook: PartTypeId,
         time: OffsetDateTime,
@@ -103,7 +105,13 @@ impl AttachmentStore for MemStore {
         Ok(self
             .attachments
             .values()
-            .find(|a| a.gear == gear && a.hook == hook && a.attached <= time && a.detached > time)
+            .find(|a| {
+                a.gear == gear
+                    && a.hook == hook
+                    && a.attached <= time
+                    && a.detached > time
+                    && self.parts.get(&a.part_id).is_some_and(|p| p.what == what)
+            })
             .cloned())
     }
 
