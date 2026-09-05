@@ -5,6 +5,16 @@
 /// Formatted JSON snapshot of the prepopulated store.
 /// This is a pretty-printed JSON string that gets deserialized by MemStore::prepopulated().
 pub const SNAPSHOT_JSON: &str = r#"{
+  "users": [
+    {
+      "id": 1,
+      "name": "Bike",
+      "firstname": "Tenda",
+      "avatar": null,
+      "is_admin": false,
+      "onboarding_status": "pending"
+    }
+  ],
   "parts": [
     {
       "id": 1,
@@ -16,7 +26,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2022-11-14T22:00:00Z",
       "last_used": "2023-05-19T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-606bab738668",
+      "usage": "01a070da-05ff-7ec1-8bde-8a9c626e195e",
       "source": null,
       "notes": "Main bike frame",
       "shop": null
@@ -28,10 +38,10 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "name": "Front Wheel A",
       "vendor": "Zipp",
       "model": "404 Firecrest",
-      "purchase": "2023-05-18T22:00:00Z",
+      "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-607c102725ed",
+      "usage": "01a070da-05ff-7ec1-8bde-8aa54d975e12",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -43,10 +53,10 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "name": "Rear Wheel A",
       "vendor": "DT Swiss",
       "model": "XR 1501",
-      "purchase": "2023-05-18T22:00:00Z",
+      "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-608b4e9c7e23",
+      "usage": "01a070da-05ff-7ec1-8bde-8ab1a54630a3",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -58,10 +68,10 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "name": "Chain A",
       "vendor": "Shimano",
       "model": "CN-M510",
-      "purchase": "2023-05-18T22:00:00Z",
+      "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-6095bde6bf3a",
+      "usage": "01a070da-05ff-7ec1-8bde-8acaae959942",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -73,10 +83,10 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "name": "Tire Front A",
       "vendor": "Continental",
       "model": "GP5000",
-      "purchase": "2023-11-14T22:00:00Z",
+      "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-60a3c9090b7d",
+      "usage": "01a070da-05ff-7ec1-8bde-8ad61d14deff",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -88,10 +98,10 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "name": "Tire Rear A",
       "vendor": "Continental",
       "model": "GP5000 ST",
-      "purchase": "2023-11-14T22:00:00Z",
+      "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-60b235dc748d",
+      "usage": "01a070da-05ff-7ec1-8bde-8ae30ce75e5d",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -106,7 +116,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2022-11-14T22:00:00Z",
       "last_used": "2022-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-6123e70ff07f",
+      "usage": "01a070da-05ff-7ec1-8bde-8b919dddeb91",
       "source": null,
       "notes": "Road bike frame",
       "shop": null
@@ -118,10 +128,10 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "name": "Front Wheel B",
       "vendor": "Mavic",
       "model": "Carbon WS",
-      "purchase": "2023-11-14T22:00:00Z",
+      "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-613a651478e1",
+      "usage": "01a070da-05ff-7ec1-8bde-8ba2b1fa52b0",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -133,10 +143,10 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "name": "Rear Wheel B",
       "vendor": "Mavic",
       "model": "Carbon WS",
-      "purchase": "2023-11-14T22:00:00Z",
+      "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-614b47b2a947",
+      "usage": "01a070da-05ff-7ec1-8bde-8bb69bd93938",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -148,10 +158,10 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "name": "Chain B",
       "vendor": "SRAM",
       "model": "PC-XX1",
-      "purchase": "2023-11-14T22:00:00Z",
+      "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-615f684ea140",
+      "usage": "01a070da-05ff-7ec1-8bde-8bcea37a43c5",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -163,10 +173,10 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "name": "Tire Front B",
       "vendor": "Schwalbe",
       "model": "One",
-      "purchase": "2023-11-14T22:00:00Z",
+      "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-61661310f7b5",
+      "usage": "01a070da-05ff-7ec1-8bde-8bd5cf093676",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -178,10 +188,10 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "name": "Tire Rear B",
       "vendor": "Schwalbe",
       "model": "One Plus",
-      "purchase": "2023-11-14T22:00:00Z",
+      "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-6176931f5c4a",
+      "usage": "01a070da-05ff-7ec1-8bde-8be245015cdf",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -196,7 +206,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-61ea7ca7f1e1",
+      "usage": "01a070da-05ff-7ec1-8bde-8c910f37ce01",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -211,7 +221,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-61f676551da1",
+      "usage": "01a070da-05ff-7ec1-8bde-8ca74b83c50a",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -226,7 +236,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-620a29ea9334",
+      "usage": "01a070da-05ff-7ec1-8bde-8cb25a8f5343",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -238,10 +248,10 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "name": "Spare Wheel",
       "vendor": "HED",
       "model": "Stinger 3",
-      "purchase": "2023-05-18T22:00:00Z",
+      "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-621da2b08a96",
+      "usage": "01a070da-05ff-7ec1-8bde-8cc2f56e0d5c",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -253,10 +263,10 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "name": "Spare Wheel Tire",
       "vendor": "Continental",
       "model": "GP5000",
-      "purchase": "2023-11-14T22:00:00Z",
+      "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a056ae-368e-7f30-8fd0-622a6f6276a1",
+      "usage": "01a070da-05ff-7ec1-8bde-8cdba05089d7",
       "source": null,
       "notes": "Test part",
       "shop": null
@@ -269,7 +279,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 1,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-60cb76ad32f7"
+      "usage": "01a070da-05ff-7ec1-8bde-8b028ee5be93"
     },
     {
       "part_id": 3,
@@ -277,7 +287,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 1,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-60d90e7a7729"
+      "usage": "01a070da-05ff-7ec1-8bde-8b2bc9624777"
     },
     {
       "part_id": 4,
@@ -285,31 +295,23 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 1,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-60e62611e7cc"
+      "usage": "01a070da-05ff-7ec1-8bde-8b45129eca96"
     },
     {
       "part_id": 5,
       "attached": "2023-01-01T00:00:00Z",
       "gear": 2,
-      "hook": 3,
+      "hook": 2,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-60fdcf1b2aeb"
-    },
-    {
-      "part_id": 6,
-      "attached": "2023-01-01T00:00:00Z",
-      "gear": 2,
-      "hook": 3,
-      "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-610ce31f0598"
+      "usage": "01a070da-05ff-7ec1-8bde-8b6007cf605d"
     },
     {
       "part_id": 6,
       "attached": "2023-01-01T00:00:00Z",
       "gear": 3,
-      "hook": 3,
+      "hook": 5,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-611a336cbeae"
+      "usage": "01a070da-05ff-7ec1-8bde-8b84f56a9dc7"
     },
     {
       "part_id": 8,
@@ -317,7 +319,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 7,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-618c1349bd38"
+      "usage": "01a070da-05ff-7ec1-8bde-8c0cc1b20fc4"
     },
     {
       "part_id": 9,
@@ -325,7 +327,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 7,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-6198ae241db9"
+      "usage": "01a070da-05ff-7ec1-8bde-8c27aef25106"
     },
     {
       "part_id": 10,
@@ -333,52 +335,36 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 7,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-61a9a24fa2bd"
+      "usage": "01a070da-05ff-7ec1-8bde-8c409cc01f2d"
     },
     {
       "part_id": 11,
       "attached": "2023-01-01T00:00:00Z",
       "gear": 8,
-      "hook": 3,
+      "hook": 2,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-61bdbbb014dc"
-    },
-    {
-      "part_id": 12,
-      "attached": "2023-01-01T00:00:00Z",
-      "gear": 8,
-      "hook": 3,
-      "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-61c2a7b2bf0e"
+      "usage": "01a070da-05ff-7ec1-8bde-8c69ff1b7eea"
     },
     {
       "part_id": 12,
       "attached": "2023-01-01T00:00:00Z",
       "gear": 9,
-      "hook": 3,
+      "hook": 5,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-61d3b1534cbe"
-    },
-    {
-      "part_id": 16,
-      "attached": "2023-01-01T00:00:00Z",
-      "gear": 1,
-      "hook": 1,
-      "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-623238160d16"
+      "usage": "01a070da-05ff-7ec1-8bde-8c8738c66b69"
     },
     {
       "part_id": 17,
       "attached": "2023-01-01T00:00:00Z",
       "gear": 16,
-      "hook": 3,
+      "hook": 2,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a056ae-368e-7f30-8fd0-62455fd84436"
+      "usage": "01a070da-05ff-7ec1-8bde-8cf17744a3c0"
     }
   ],
   "usages": [
     {
-      "id": "01a056ae-368e-7f30-8fd0-606bab738668",
+      "id": "01a070da-05ff-7ec1-8bde-8a9c626e195e",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -387,7 +373,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a056ae-368e-7f30-8fd0-607c102725ed",
+      "id": "01a070da-05ff-7ec1-8bde-8aa54d975e12",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -396,7 +382,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a056ae-368e-7f30-8fd0-608b4e9c7e23",
+      "id": "01a070da-05ff-7ec1-8bde-8ab1a54630a3",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -405,7 +391,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a056ae-368e-7f30-8fd0-6095bde6bf3a",
+      "id": "01a070da-05ff-7ec1-8bde-8acaae959942",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -414,7 +400,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a056ae-368e-7f30-8fd0-60cb76ad32f7",
+      "id": "01a070da-05ff-7ec1-8bde-8b028ee5be93",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -423,7 +409,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a056ae-368e-7f30-8fd0-60d90e7a7729",
+      "id": "01a070da-05ff-7ec1-8bde-8b2bc9624777",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -432,25 +418,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a056ae-368e-7f30-8fd0-60e62611e7cc",
-      "time": 8025,
-      "distance": 125000,
-      "climb": 1100,
-      "descend": 1100,
-      "energy": 1500,
-      "count": 3
-    },
-    {
-      "id": "01a056ae-368e-7f30-8fd0-621da2b08a96",
-      "time": 8025,
-      "distance": 125000,
-      "climb": 1100,
-      "descend": 1100,
-      "energy": 1500,
-      "count": 3
-    },
-    {
-      "id": "01a056ae-368e-7f30-8fd0-623238160d16",
+      "id": "01a070da-05ff-7ec1-8bde-8b45129eca96",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -477,7 +445,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "external_id": null
     },
     {
-      "id": 1,
+      "id": 2,
       "user_id": 1,
       "what": 1,
       "name": "Hill Repeats",
@@ -493,7 +461,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "external_id": null
     },
     {
-      "id": 1,
+      "id": 3,
       "user_id": 1,
       "what": 1,
       "name": "Recovery Spin",
