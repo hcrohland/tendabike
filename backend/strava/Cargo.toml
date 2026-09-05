@@ -23,4 +23,5 @@ doctest = false
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }
-wiremock = "0.6"
+serde_json = { workspace = true }
+tb_domain = { workspace = true, features = ["test-support"] }

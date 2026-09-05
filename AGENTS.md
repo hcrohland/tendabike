@@ -121,7 +121,7 @@ Strava OAuth: `/strava/*` (OAuth flow, webhook endpoints)
 
 ## Important Notes
 
-- **No test framework** on either side - CI only runs type checking and format validation
+- **Tests**: Backend has in-memory unit suites — `SQLX_OFFLINE=true cargo test -p tb_domain` (266 tests) and `SQLX_OFFLINE=true cargo test -p tb_strava` (57 tests), see the "Domain Tests" / "Strava Tests" sections in [`backend/AGENTS.md`](backend/AGENTS.md); the frontend has no test framework. CI only runs type checking, format validation and backend tests
 - **Migrations**: Auto-run on backend startup via sqlx migrate; see [`backend/sqlx/migrations/`](backend/sqlx/migrations/)
 - **i18n**: Frontend uses `@inlang/paraglide-js`; messages in `frontend/messages/{de,de_CH,en}.json`
 - **License**: AGPL v3 - see [`LICENSE`](LICENSE)
