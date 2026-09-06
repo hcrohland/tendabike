@@ -103,6 +103,21 @@ impl RequestSession {
         })
     }
 
+    /// A session with plausible values for tests (valid access token for an hour).
+    #[cfg(test)]
+    pub(crate) fn new_dummy(is_admin: bool) -> Self {
+        Self {
+            id: UserId::from(1),
+            strava_id: StravaId::from(1),
+            is_admin,
+            access_token: AccessToken::new("test-access-token".to_owned()),
+            expires_at: Some(SystemTime::now() + std::time::Duration::from_secs(3600)),
+            refresh_token: Some(RefreshToken::new("test-refresh-token".to_owned())),
+            shop: None,
+            session: None,
+        }
+    }
+
     fn is_expired(&self) -> bool {
         match self.expires_at {
             Some(expires_at) => SystemTime::now() > expires_at,
@@ -315,5 +330,32 @@ where
         } else {
             Ok(AxumAdmin)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    fn dummy(expires_at: Option<SystemTime>) -> RequestSession {
+        let mut session = RequestSession::new_dummy(true);
+        session.expires_at = expires_at;
+        session
+    }
+
+    #[test]
+    fn expired_when_access_token_expired() {
+        assert!(dummy(Some(SystemTime::now() - Duration::from_secs(1))).is_expired());
+    }
+
+    #[test]
+    fn not_expired_when_access_token_valid() {
+        assert!(!dummy(Some(SystemTime::now() + Duration::from_secs(3600))).is_expired());
+    }
+
+    #[test]
+    fn not_expired_when_expiry_unknown() {
+        assert!(!dummy(None).is_expired());
     }
 }

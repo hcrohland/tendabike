@@ -7,7 +7,7 @@
 
 use anyhow::Context;
 use log::info;
-use sqlx::{PgPool, PgTransaction};
+use sqlx::{PgPool, PgTransaction, postgres::PgPoolOptions};
 use std::ops::{Deref, DerefMut};
 
 use tb_domain::TbResult;
@@ -68,5 +68,18 @@ impl DbPool {
 
     pub fn raw(&self) -> PgPool {
         self.0.clone()
+    }
+
+    /// Creates a pool that does not connect until a connection is requested.
+    /// No migrations are run. The short acquire timeout makes failed
+    /// connections error quickly instead of retrying until the 30 s default.
+    /// Intended for tests that must reach the database layer without a live database.
+    pub fn lazy(database_url: &str) -> Self {
+        Self(
+            PgPoolOptions::new()
+                .acquire_timeout(std::time::Duration::from_secs(1))
+                .connect_lazy(database_url)
+                .expect("valid database url"),
+        )
     }
 }
