@@ -211,3 +211,28 @@ All 40 tests run in-memory (no database; the one DB-boundary test attempts a ref
 - Auth-gated and admin-gated routes are asserted by status alone (401 `Please login` / 404) — anything past the extractors hits the memory pool and yields 500, so don't assert deeper behavior without a real database
 - `DbPool::lazy()` lives in the `tb_sqlx` crate but is only exercised by tests; `start()` still uses `DbPool::new()` (connect + migrate)
 - Do NOT add `pub` to `routes()` or the test helpers — the plan (and CI) relies on them staying crate-private
+
+## SQLX Tests
+
+### Running Tests
+
+```bash
+SQLX_OFFLINE=true cargo test -p tb_sqlx
+```
+
+All 37 tests are pure unit tests (no database, no network). Tests are colocated in each module's `#[cfg(test)] mod tests`: `lib.rs`, `tb_sqlx.rs`, `stravastore.rs`, and `store/{user,part,activity,attachment,service,serviceplan,shop,usage}.rs`.
+
+### Coverage
+
+- **Helpers** (`lib.rs`): `into_domain` maps `RowNotFound` → `Error::NotFound` and other sqlx errors → `Error::DatabaseFailure`; `vec_into` / `option_into` element mapping
+- **Pool** (`tb_sqlx.rs`): `DbPool::lazy` panics on an invalid URL and builds a lazy pool with a 1-second acquire timeout
+- **Entity mapping** (`store/*.rs`, `stravastore.rs`): domain → `Db*` field mapping (i32 IDs, UUIDs, JSON `updates`), `Db*` → domain roundtrips via `From` / `TryFrom`, and `#[should_panic]` tests documenting `unwrap()` behavior on unknown onboarding status, unknown object/aspect type, and invalid webhook `updates` JSON
+
+### Gotchas
+
+- All domain entities have **pub fields** — tests construct them with struct literals; no extra dev-deps are needed
+- `DbPool::lazy` (sqlx `connect_lazy`) requires a Tokio context — that one test is `#[tokio::test]` (tokio is already a dev-dependency)
+- `oauth2::RefreshToken` does not implement `PartialEq` — assert on `secret()` / `is_none()` instead
+- The workspace `uuid` dependency has no `v4` feature — tests use a fixed `Uuid::from_str(...)` value
+- Activity `utc_offset` is rounded with `((offset + 900) / 1800) * 1800` — truncation toward zero, so negative offsets shift toward zero; `UtcOffset` only accepts ±86400 s, so only offsets that round *past* that range fail
+- Tests document current behavior as-is (including the `unwrap()` panics on unknown enum strings) — fixing the underlying behavior is a follow-up

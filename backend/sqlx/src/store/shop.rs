@@ -369,3 +369,77 @@ impl<'c> tb_domain::ShopStore for SqlxConn<'c> {
         .map(|subscriptions| subscriptions.into_iter().map(Into::into).collect())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tb_domain::SubscriptionId;
+
+    fn date() -> OffsetDateTime {
+        OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
+    }
+
+    fn db_subscription(status: &str) -> DbSubscription {
+        DbSubscription {
+            id: 3,
+            shop_id: 8,
+            user_id: 2,
+            status: status.to_string(),
+            message: Some("hello".to_string()),
+            response_message: None,
+            created_at: date(),
+            updated_at: date(),
+        }
+    }
+
+    #[test]
+    fn shop_db_roundtrip_preserves_fields() {
+        let shop = Shop {
+            id: ShopId::from(8),
+            owner: UserId::from(1),
+            name: "Wheel Works".to_string(),
+            description: Some("Fixing wheels".to_string()),
+            auto_approve: true,
+            created_at: date(),
+        };
+        let db_shop = DbShop::from(shop.clone());
+        assert_eq!(db_shop.id, 8);
+        assert_eq!(db_shop.owner, 1);
+        assert!(db_shop.auto_approve);
+        assert_eq!(Shop::from(DbShop::from(shop.clone())), shop);
+    }
+
+    #[test]
+    fn subscription_db_to_domain_preserves_fields() {
+        let subscription = ShopSubscription {
+            id: SubscriptionId::from(3),
+            shop_id: ShopId::from(8),
+            user_id: UserId::from(2),
+            status: SubscriptionStatus::Active,
+            message: Some("hello".to_string()),
+            response_message: None,
+            created_at: date(),
+            updated_at: date(),
+        };
+        assert_eq!(
+            ShopSubscription::from(db_subscription("active")),
+            subscription
+        );
+    }
+
+    #[test]
+    fn subscription_status_unknown_string_maps_to_pending() {
+        let sub = ShopSubscription::from(db_subscription("garbage"));
+        assert_eq!(sub.status, SubscriptionStatus::Pending);
+        let sub = ShopSubscription::from(db_subscription("pending"));
+        assert_eq!(sub.status, SubscriptionStatus::Pending);
+    }
+
+    #[test]
+    fn subscription_status_display_matches_sql_literals() {
+        assert_eq!(SubscriptionStatus::Pending.to_string(), "pending");
+        assert_eq!(SubscriptionStatus::Active.to_string(), "active");
+        assert_eq!(SubscriptionStatus::Rejected.to_string(), "rejected");
+        assert_eq!(SubscriptionStatus::Cancelled.to_string(), "cancelled");
+    }
+}

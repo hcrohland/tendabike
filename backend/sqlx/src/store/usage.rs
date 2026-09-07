@@ -151,3 +151,37 @@ impl<'c> UsageStore for SqlxConn<'c> {
         Ok(result.rows_affected() as usize)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    fn usage() -> Usage {
+        Usage {
+            id: UsageId::from(Uuid::from_str("6ba7b810-9dad-11d1-80b4-00c04fd430c8").unwrap()),
+            time: 3600,
+            distance: 25000,
+            climb: 300,
+            descend: 300,
+            energy: 3000000,
+            count: 5,
+        }
+    }
+
+    #[test]
+    fn usage_into_db_maps_fields_from_ref() {
+        let usage = usage();
+        let db = DbUsage::from(&usage);
+        assert_eq!(db.id, Uuid::from(usage.id));
+        assert_eq!(db.time, 3600);
+        assert_eq!(db.distance, 25000);
+        assert_eq!(db.count, 5);
+    }
+
+    #[test]
+    fn usage_db_roundtrip_preserves_fields() {
+        let usage = usage();
+        assert_eq!(Usage::from(DbUsage::from(&usage)), usage);
+    }
+}

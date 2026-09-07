@@ -260,3 +260,68 @@ impl<'c> tb_domain::PartStore for SqlxConn<'c> {
         .map(vec_into)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    fn date() -> OffsetDateTime {
+        OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
+    }
+
+    fn uuid() -> Uuid {
+        Uuid::from_str("6ba7b810-9dad-11d1-80b4-00c04fd430c8").unwrap()
+    }
+
+    fn part(
+        shop: Option<ShopId>,
+        source: Option<String>,
+        disposed_at: Option<OffsetDateTime>,
+    ) -> Part {
+        Part {
+            id: PartId::from(3),
+            owner: UserId::from(1),
+            what: PartTypeId::from(2),
+            name: "Wheel".to_string(),
+            vendor: "Vendor".to_string(),
+            model: "Model X".to_string(),
+            purchase: date(),
+            last_used: date(),
+            disposed_at,
+            usage: UsageId::from(uuid()),
+            source,
+            notes: "notes".to_string(),
+            shop,
+        }
+    }
+
+    #[test]
+    fn part_db_roundtrip_preserves_all_fields() {
+        let part = part(
+            Some(ShopId::from(9)),
+            Some("strava-123".to_string()),
+            Some(date()),
+        );
+        let db = DbPart::from(part.clone());
+        assert_eq!(db.id, 3);
+        assert_eq!(db.owner, 1);
+        assert_eq!(db.what, 2);
+        assert_eq!(db.usage, Uuid::from(part.usage));
+        assert_eq!(db.shop, Some(9));
+        assert_eq!(db.source.as_deref(), Some("strava-123"));
+        assert_eq!(db.disposed_at, Some(date()));
+        let back = Part::from(db);
+        assert_eq!(back, part);
+    }
+
+    #[test]
+    fn part_db_roundtrip_preserves_none_options() {
+        let part = part(None, None, None);
+        let db = DbPart::from(part.clone());
+        assert_eq!(db.shop, None);
+        assert_eq!(db.source, None);
+        assert_eq!(db.disposed_at, None);
+        assert_eq!(Part::from(db), part);
+    }
+}
