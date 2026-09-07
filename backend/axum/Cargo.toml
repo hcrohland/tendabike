@@ -50,6 +50,18 @@ time = { workspace = true, features = [
 tokio = { workspace = true }
 hex = "0.4.3"
 
+[dev-dependencies]
+# "full" because the test code needs tokio's `macros`/`rt` features, which are
+# not guaranteed when building only tb_axum's own dependency graph
+tokio = { workspace = true, features = ["full"] }
+# `memory-store` is only used by the tests; declared here rather than in
+# [dependencies] so it is not enabled when tb_axum is consumed as a regular
+# dependency (workspace-root builds still unify it in, per cargo's
+# workspace-wide feature resolution, but the type is dead code there)
+tower-sessions = { version = "0.14", features = ["memory-store"] }
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+serde_json = { workspace = true }
+
 [lib]
-test = false
 doctest = false

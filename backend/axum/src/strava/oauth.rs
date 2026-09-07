@@ -239,3 +239,41 @@ pub(crate) async fn logout(session: Session) -> impl IntoResponse {
     }
     Redirect::to("/").into_response()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hmac_signature_matches_known_vector() {
+        assert_eq!(
+            hmac_signature(b"tendabike", "/+abc123"),
+            "jNqHCYY2M852nJCKpclLqF36vPQPrFtbECZMBvgKKlI="
+        );
+    }
+
+    #[test]
+    fn getpath_recovers_path_from_gentoken() {
+        let token = gentoken("/foo/bar".to_string());
+        assert_eq!(
+            getpath(token.secret().clone()).expect("valid state"),
+            "/foo/bar"
+        );
+    }
+
+    #[test]
+    fn getpath_rejects_corrupted_signature() {
+        let token = gentoken("/foo".to_string());
+        let mut state = token.secret().clone();
+        state.push('x');
+        assert!(matches!(getpath(state), Err(Error::BadRequest(_))));
+    }
+
+    #[test]
+    fn getpath_rejects_malformed_state() {
+        assert!(matches!(
+            getpath("no-colon-separator".to_string()),
+            Err(Error::BadRequest(_))
+        ));
+    }
+}

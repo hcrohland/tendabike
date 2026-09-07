@@ -59,3 +59,82 @@ impl IntoResponse for AppError {
         (code, msg).into_response()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::to_bytes;
+
+    async fn respond(err: AppError) -> (StatusCode, String) {
+        let res = err.into_response();
+        let status = res.status();
+        let body = to_bytes(res.into_body(), usize::MAX)
+            .await
+            .expect("collect body");
+        (status, std::str::from_utf8(&body).expect("utf8").to_owned())
+    }
+
+    #[tokio::test]
+    async fn not_auth_maps_to_unauthorized() {
+        let (status, body) = respond(Error::NotAuth("missing session".to_string()).into()).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(body, "User not authenticated: missing session");
+    }
+
+    #[tokio::test]
+    async fn forbidden_maps_to_forbidden() {
+        let (status, body) = respond(Error::Forbidden("not yours".to_string()).into()).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(body, "Forbidden request: not yours");
+    }
+
+    #[tokio::test]
+    async fn not_found_maps_to_not_found() {
+        let (status, body) = respond(Error::NotFound("part 42".to_string()).into()).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body, "Object not found: part 42");
+    }
+
+    #[tokio::test]
+    async fn bad_request_maps_to_bad_request() {
+        let (status, body) = respond(Error::BadRequest("malformed".to_string()).into()).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body, "Bad Request: malformed");
+    }
+
+    #[tokio::test]
+    async fn conflict_maps_to_conflict() {
+        let (status, body) = respond(Error::Conflict("in use".to_string()).into()).await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body, "Conflict: in use");
+    }
+
+    #[tokio::test]
+    async fn try_again_maps_to_too_many_requests() {
+        let (status, body) = respond(Error::TryAgain("rate limited").into()).await;
+        assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(body, "Try again: rate limited");
+    }
+
+    #[tokio::test]
+    async fn database_failure_maps_to_internal_server_error() {
+        let (status, body) =
+            respond(Error::DatabaseFailure(anyhow::anyhow!("db down")).into()).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(body, "db down");
+    }
+
+    #[tokio::test]
+    async fn any_failure_maps_to_internal_server_error() {
+        let (status, body) = respond(Error::AnyFailure(anyhow::anyhow!("boom")).into()).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(body, "boom");
+    }
+
+    #[tokio::test]
+    async fn any_error_maps_to_internal_server_error() {
+        let (status, body) = respond(AppError::AnyError(anyhow::anyhow!("any"))).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(body, "any");
+    }
+}

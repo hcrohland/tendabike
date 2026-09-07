@@ -215,3 +215,36 @@ pub(crate) async fn postpone_initial_sync(
     store.commit().await?;
     Ok(Json(updated_user))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn hub(mode: &str, challenge: &str, verify_token: &str) -> Hub {
+        Hub {
+            mode: mode.to_string(),
+            challenge: challenge.to_string(),
+            verify_token: verify_token.to_string(),
+        }
+    }
+
+    #[test]
+    fn validate_accepts_valid_subscription() {
+        let hub = hub("subscribe", "xyz", VERIFY_TOKEN)
+            .validate()
+            .expect("valid");
+        assert_eq!(hub.challenge, "xyz");
+    }
+
+    #[test]
+    fn validate_rejects_unknown_token() {
+        let hub = hub("subscribe", "xyz", "wrong_token");
+        assert!(matches!(hub.validate(), Err(Error::BadRequest(_))));
+    }
+
+    #[test]
+    fn validate_rejects_unknown_mode() {
+        let hub = hub("unsubscribe", "xyz", VERIFY_TOKEN);
+        assert!(matches!(hub.validate(), Err(Error::BadRequest(_))));
+    }
+}
