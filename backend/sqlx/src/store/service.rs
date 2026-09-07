@@ -172,3 +172,57 @@ impl<'c> tb_domain::ServiceStore for SqlxConn<'c> {
         Ok(result.rows_affected() as usize)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+    use tb_domain::{ServicePlanId, UsageId};
+
+    fn date() -> OffsetDateTime {
+        OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
+    }
+
+    fn uuid() -> Uuid {
+        Uuid::from_str("6ba7b810-9dad-11d1-80b4-00c04fd430c8").unwrap()
+    }
+
+    fn service() -> Service {
+        Service {
+            id: ServiceId::from(uuid()),
+            part_id: PartId::from(2),
+            time: date(),
+            redone: date(),
+            name: "Bleed brakes".to_string(),
+            notes: "all four".to_string(),
+            usage: UsageId::from(uuid()),
+            successor: Some(ServiceId::from(uuid())),
+            plans: vec![ServicePlanId::from(uuid())],
+        }
+    }
+
+    #[test]
+    fn service_into_db_maps_ids_and_plans() {
+        let service = service();
+        let db = DbService::from(service.clone());
+        assert_eq!(db.id, Uuid::from(service.id));
+        assert_eq!(db.part_id, 2);
+        assert_eq!(db.usage, Uuid::from(service.usage));
+        assert_eq!(db.successor, service.successor.map(Uuid::from));
+        assert_eq!(
+            db.plans,
+            service
+                .plans
+                .iter()
+                .copied()
+                .map(Uuid::from)
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn service_db_roundtrip_preserves_fields() {
+        let service = service();
+        assert_eq!(Service::from(DbService::from(service.clone())), service);
+    }
+}

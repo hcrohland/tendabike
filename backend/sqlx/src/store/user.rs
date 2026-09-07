@@ -147,3 +147,66 @@ impl<'c> tb_domain::UserStore for SqlxConn<'c> {
         .map(Into::into)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn onboarding_status_roundtrips_through_i32() {
+        for status in [
+            OnboardingStatus::Pending,
+            OnboardingStatus::InitialSyncPostponed,
+            OnboardingStatus::Completed,
+        ] {
+            assert_eq!(
+                OnboardingStatus::try_from(i32::from(status)).unwrap(),
+                status
+            );
+        }
+        assert!(matches!(
+            OnboardingStatus::try_from(1),
+            Err(tb_domain::Error::BadRequest(msg)) if msg == "Invalid onboarding status: 1"
+        ));
+    }
+
+    #[test]
+    fn user_db_roundtrip_preserves_fields() {
+        let user = User {
+            id: UserId::from(7),
+            name: "Bike".to_string(),
+            firstname: "Tenda".to_string(),
+            avatar: Some("pic.png".to_string()),
+            is_admin: false,
+            onboarding_status: OnboardingStatus::Completed,
+        };
+        let db = DbUser::from(user);
+        assert_eq!(db.id, 7);
+        assert_eq!(db.name, "Bike");
+        assert_eq!(db.firstname, "Tenda");
+        assert_eq!(db.avatar.as_deref(), Some("pic.png"));
+        assert!(!db.is_admin);
+        assert_eq!(db.onboarding_status, 99);
+        let back = User::from(db);
+        assert_eq!(back.id, UserId::from(7));
+        assert_eq!(back.name, "Bike");
+        assert_eq!(back.firstname, "Tenda");
+        assert_eq!(back.avatar.as_deref(), Some("pic.png"));
+        assert!(!back.is_admin);
+        assert_eq!(back.onboarding_status, OnboardingStatus::Completed);
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid onboarding status in database")]
+    fn user_from_db_panics_on_unknown_onboarding_status() {
+        let db = DbUser {
+            id: 1,
+            name: "Bike".to_string(),
+            firstname: "Tenda".to_string(),
+            avatar: None,
+            is_admin: false,
+            onboarding_status: 5,
+        };
+        let _ = User::from(db);
+    }
+}

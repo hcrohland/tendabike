@@ -303,3 +303,104 @@ impl<'c> tb_domain::ActivityStore for SqlxConn<'c> {
         Ok(result.rows_affected() as usize)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tb_domain::Error;
+
+    fn instant(offset_secs: i32) -> OffsetDateTime {
+        OffsetDateTime::from_unix_timestamp(1718430600)
+            .unwrap()
+            .to_offset(UtcOffset::from_whole_seconds(offset_secs).unwrap())
+    }
+
+    fn activity() -> Activity {
+        Activity {
+            id: ActivityId::from(42),
+            user_id: UserId::from(1),
+            what: ActTypeId::from(4),
+            name: "Morning Ride".to_string(),
+            start: instant(7200),
+            duration: 3600,
+            time: Some(3600),
+            distance: Some(25000),
+            climb: Some(300),
+            descend: Some(300),
+            energy: Some(3000000),
+            gear: Some(PartId::from(1)),
+            device_name: Some("Garmin".to_string()),
+            external_id: None,
+        }
+    }
+
+    fn db_activity(utc_offset: i32) -> DbActivity {
+        DbActivity {
+            user_id: 1,
+            what: 4,
+            name: "Morning Ride".to_string(),
+            start: instant(7200),
+            duration: 3600,
+            time: Some(3600),
+            distance: Some(25000),
+            climb: Some(300),
+            descend: Some(300),
+            energy: Some(3000000),
+            gear: Some(1),
+            utc_offset,
+            id: 42,
+            device_name: Some("Garmin".to_string()),
+            external_id: None,
+        }
+    }
+
+    #[test]
+    fn activity_into_db_derives_utc_offset() {
+        let db = DbActivity::from(activity());
+        assert_eq!(db.utc_offset, 7200);
+        assert_eq!(db.id, 42);
+        assert_eq!(db.user_id, 1);
+        assert_eq!(db.gear, Some(1));
+    }
+
+    #[test]
+    fn activity_db_roundtrip_preserves_fields() {
+        let activity = activity();
+        let db = DbActivity::from(activity.clone());
+        let back = Activity::try_from(db).unwrap();
+        assert_eq!(back, activity);
+        assert_eq!(back.start.offset().whole_seconds(), 7200);
+    }
+
+    #[test]
+    fn activity_db_roundtrip_rounds_offset_to_half_hours() {
+        // ((offset + 900) / 1800) * 1800 truncates toward zero, so negative offsets shift toward zero
+        for (stored, expected) in [(3601, 3600), (0, 0), (-3601, -1800), (-7200, -5400)] {
+            let back = Activity::try_from(db_activity(stored)).unwrap();
+            assert_eq!(back.start.offset().whole_seconds(), expected);
+        }
+    }
+
+    #[test]
+    fn activity_db_roundtrip_rejects_out_of_range_offset() {
+        for offset in [100000, -100000] {
+            let err = Activity::try_from(db_activity(offset)).unwrap_err();
+            assert!(
+                matches!(err, Error::AnyFailure(failure) if failure.to_string().contains("Utc Offset invalid"))
+            );
+        }
+    }
+
+    #[test]
+    fn vec_tryinto_maps_all_rows() {
+        let acts = vec_tryinto(Ok(vec![db_activity(7200), db_activity(0)])).unwrap();
+        assert_eq!(acts.len(), 2);
+        assert_eq!(acts[0].id, ActivityId::from(42));
+    }
+
+    #[test]
+    fn vec_tryinto_propagates_domain_errors() {
+        let err = vec_tryinto(Err(sqlx::Error::RowNotFound)).unwrap_err();
+        assert!(matches!(err, Error::NotFound(_)));
+    }
+}

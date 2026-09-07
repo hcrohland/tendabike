@@ -83,3 +83,23 @@ impl DbPool {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::DbPool;
+
+    #[test]
+    #[should_panic(expected = "valid database url")]
+    fn lazy_panics_on_invalid_url() {
+        DbPool::lazy("not a database url");
+    }
+
+    #[tokio::test]
+    async fn lazy_builds_pool_with_short_acquire_timeout() {
+        let pool = DbPool::lazy("postgres://user:pass@127.0.0.1:5432/tendabike");
+        assert_eq!(
+            pool.raw().options().get_acquire_timeout(),
+            std::time::Duration::from_secs(1)
+        );
+    }
+}

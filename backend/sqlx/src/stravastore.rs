@@ -313,3 +313,108 @@ impl<'c> tb_strava::StravaStore for SqlxConn<'c> {
         Ok(result.rows_affected() as usize)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn strava_user(token: Option<&str>) -> StravaUser {
+        StravaUser {
+            id: StravaId::from(42),
+            tendabike_id: UserId::from(1),
+            refresh_token: token.map(|t| RefreshToken::new(t.to_string())),
+        }
+    }
+
+    #[test]
+    fn strava_user_refresh_token_roundtrips() {
+        let user = strava_user(Some("secret-token"));
+        let db = DbStravaUser::from(user.clone());
+        assert_eq!(db.id, 42);
+        assert_eq!(db.tendabike_id, 1);
+        assert_eq!(db.refresh_token.as_deref(), Some("secret-token"));
+        let back = StravaUser::from(db);
+        assert_eq!(
+            back.refresh_token.map(|t| t.secret().to_string()),
+            Some("secret-token".to_string())
+        );
+    }
+
+    #[test]
+    fn strava_user_without_refresh_token_roundtrips() {
+        let user = strava_user(None);
+        let db = DbStravaUser::from(user);
+        assert_eq!(db.refresh_token, None);
+        assert!(StravaUser::from(db).refresh_token.is_none());
+    }
+
+    #[test]
+    fn db_strava_user_and_event_defaults() {
+        let user = DbStravaUser::default();
+        assert_eq!(user.id, 0);
+        assert_eq!(user.tendabike_id, 0);
+        assert_eq!(user.refresh_token, None);
+        let event = DbEvent::default();
+        assert_eq!(event.id, None);
+        assert_eq!(event.object_type, "");
+        assert_eq!(event.object_id, 0);
+        assert_eq!(event.aspect_type, "");
+        assert_eq!(event.updates, "");
+        assert_eq!(event.owner_id, 0);
+        assert_eq!(event.subscription_id, 0);
+        assert_eq!(event.event_time, 0);
+    }
+
+    #[test]
+    fn event_updates_roundtrip_through_json() {
+        let mut updates = HashMap::new();
+        updates.insert("title".to_string(), "Morning Ride".to_string());
+        updates.insert("private".to_string(), "false".to_string());
+        let event = Event {
+            id: Some(7),
+            object_type: tb_strava::event::ObjectType::try_from("activity".to_string()).unwrap(),
+            object_id: 99,
+            aspect_type: tb_strava::event::AspectType::try_from("update".to_string()).unwrap(),
+            updates,
+            owner_id: StravaId::from(42),
+            subscription_id: 5,
+            event_time: 1700000000,
+        };
+        let db = DbEvent::from(event.clone());
+        assert_eq!(db.object_type, "activity");
+        assert_eq!(db.aspect_type, "update");
+        assert_eq!(db.owner_id, 42);
+        assert_eq!(
+            serde_json::from_str::<HashMap<String, String>>(&db.updates).unwrap(),
+            event.updates
+        );
+        assert_eq!(Event::from(db).updates, event.updates);
+    }
+
+    fn db_event(object_type: &str, aspect_type: &str, updates: &str) -> DbEvent {
+        DbEvent {
+            object_type: object_type.to_string(),
+            aspect_type: aspect_type.to_string(),
+            updates: updates.to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Unknown object type nonsense")]
+    fn db_event_unknown_object_type_panics() {
+        let _ = Event::from(db_event("nonsense", "update", "{}"));
+    }
+
+    #[test]
+    #[should_panic(expected = "Unknown aspect type bogus")]
+    fn db_event_unknown_aspect_type_panics() {
+        let _ = Event::from(db_event("activity", "bogus", "{}"));
+    }
+
+    #[test]
+    #[should_panic(expected = "expected ident")]
+    fn db_event_invalid_updates_json_panics() {
+        let _ = Event::from(db_event("activity", "update", "not json"));
+    }
+}
