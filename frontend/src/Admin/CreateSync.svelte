@@ -10,12 +10,12 @@
   import Modal from "../Widgets/Modal.svelte";
   import * as m from "../../paraglide/messages";
 
-  export let refresh: () => void;
-  let user: User | undefined;
-  let date = new Date();
-  let open = false;
-  let userParam: string;
-  let checked = false;
+  let { refresh }: { refresh: () => void } = $props();
+  let user: User | undefined = $state(undefined);
+  let date = $state(new Date());
+  let open = $state(false);
+  let userParam = $state("");
+  let checked = $state(false);
 
   async function onaction() {
     await myfetch(

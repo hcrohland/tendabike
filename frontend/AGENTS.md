@@ -25,9 +25,8 @@ This file provides guidance to agents when working with code in this repository.
 
 ## Code Style
 
-- **Svelte 5 migration in progress**: New components should use runes mode (`$state`, `$derived`, `$effect`). Existing components may use legacy `export let` with `$:` reactive statements - do not rewrite unless touching the file
-- Use `<script lang="ts">` blocks; new components: runes mode (`$state` for reactive vars, `$derived` for computed, `$effect` for side effects)
-- Legacy components: `export let` for props, `$:` for derived values
+- **Svelte 5 runes mode**: All components use runes (`$state`, `$derived`, `$effect`, `$props`). Exception: [`Widgets/Actions.svelte`](src/Widgets/Actions.svelte) stays on legacy syntax (`export let`, `$:` reactive statements, `context="module"`) — do not rewrite it
+- Use `<script lang="ts">` blocks; runes mode: `$state` for reactive vars, `$derived` for computed, `$effect` for side effects, `$props()` for props
 - Components with two `<script>` blocks: `module` block for top-level awaits (e.g., `await getTypes()`), regular block for component logic
 - TypeScript strict: `noUnusedLocals`, `noUnusedParameters`, `checkJs` enabled
 - Prettier configured via `.prettierrc` with `prettier-plugin-svelte`; run `npm run format` before committing
@@ -40,28 +39,4 @@ This file provides guidance to agents when working with code in this repository.
 - `myfetch()` returns `null` for HTTP 204 (NO_CONTENT); callers must handle this
 - Store updates must use `updateMap()`/`setMap()`/`deleteItem()` from the entity's exported store variable (e.g., `parts.updateMap([data])`)
 - Paraglide messages imported via `import { m } from "../../paraglide/messages"` - translation keys follow pattern `m.action_name()`
-- `svelte-spa-router` params typed as `{ id: number }` style `export let params`
-
-You are able to use the Svelte MCP server, where you have access to comprehensive Svelte 5 and SvelteKit documentation. Here's how to use the available tools effectively:
-
-## Available Svelte MCP Tools:
-
-### 1. list-sections
-
-Use this FIRST to discover all available documentation sections. Returns a structured list with titles, use_cases, and paths.
-When asked about Svelte or SvelteKit topics, ALWAYS use this tool at the start of the chat to find relevant sections.
-
-### 2. get-documentation
-
-Retrieves full documentation content for specific sections. Accepts single or multiple sections.
-After calling the list-sections tool, you MUST analyze the returned documentation sections (especially the use_cases field) and then use the get-documentation tool to fetch ALL documentation sections that are relevant for the user's task.
-
-### 3. svelte-autofixer
-
-Analyzes Svelte code and returns issues and suggestions.
-You MUST use this tool whenever writing Svelte code before sending it to the user. Keep calling it until no issues or suggestions are returned.
-
-### 4. playground-link
-
-Generates a Svelte Playground link with the provided code.
-After completing the code, ask the user if they want a playground link. Only call this tool after user confirmation and NEVER if code was written to files in their project.
+- `svelte-spa-router` params typed as `{ id: number }` style, received via `$props()`
