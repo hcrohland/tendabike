@@ -10,16 +10,18 @@
   import Modal from "../Widgets/Modal.svelte";
   import { m } from "../../paraglide/messages";
 
-  let open = false;
-  let last: Attachment | undefined;
-  let part: Part;
-  let typeName: string;
-  let detach: boolean;
-  let dispose: boolean;
-  let mindate: Date;
-  let date: Date;
-  let all: boolean;
-  let hook: boolean;
+  let open = $state(false);
+  let last: Attachment | undefined = $state(undefined);
+  let part = $state(new Part({}));
+  let typeName = $state("");
+  let detach = $state(false);
+  let dispose = $state(false);
+  let mindate = $state(new Date());
+  let date = $state(new Date());
+  let all = $state(false);
+  let hook = $state(false);
+
+  let action = $derived(detach ? m.action_detach() : m.action_dispose());
 
   async function onaction() {
     try {
@@ -61,8 +63,6 @@
     date = new Date();
     open = true;
   };
-
-  $: action = detach ? m.action_detach() : m.action_dispose();
 </script>
 
 <Modal bind:open {onaction}>
