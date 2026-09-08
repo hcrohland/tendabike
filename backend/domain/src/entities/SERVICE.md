@@ -130,16 +130,56 @@ pub struct ServicePlan {
 }
 ```
 
-### Two Plan Modes
+### How Plans Are Scoped & Created
 
-| Mode | `part` field | Use case |
-|------|-------------|----------|
-| **Specific** | `Some(part_id)` | "Service this exact chain" — applied to one physical part instance |
-| **Generic** | `None` | "Service every chain" — applies to any part of the given type on a hook |
+A plan's scope is set by three fields — `part`, `what`, `hook`. Together they select which physical part(s) the plan applies to.
 
-When creating a plan:
-- `part = Some(id)` → `uid` is set to `None` (ownership enforced via part)
-- `part = None` → `uid` is set to the current user (generic plans belong to users)
+| Field | Value | Meaning |
+|-------|-------|---------|
+| `part` | `null` | **Generic** — a template applying to every gear in the category |
+| `part` | a part id | **Specific** — tied to one gear or one component |
+| `what` | a `PartTypeId` | The part type the plan concerns (the component type for generic plans; the part's own type for specific ones) |
+| `hook` | `null` | The gear/body itself, or a component-specific plan |
+| `hook` | a `PartTypeId` | The attachment point the plan applies to |
+
+#### Three scopes (in precedence order)
+
+The resolver `plans_for_attachee` (`frontend/src/lib/serviceplan.ts:208`) picks the *most specific* plan that covers a component:
+
+1. **Component-specific** — `part = <component_id>`, `hook = null`. "Service this exact tire."
+2. **Gear-specific** — `part = <gear_id>`, `what = <type>`, `hook = <hook>`. "Service this bike's front tire."
+3. **Generic** — `part = null`, `what = <type>`, `hook = <hook>`. "Service every bike's front tire."
+
+Scopes 1 and 2 **override** scope 3: if a component already has a specific plan, the generic plan no longer applies to it. The frontend de-duplicates the overall list on this rule — `ServicePlan.gears()` (`serviceplan.ts:180`) skips any gear whose component at the hook is covered by a gear-level *or* component-level specific plan.
+
+> **Body (whole-bike) case:** `hook = null`. A generic body plan is `part = null, what = <bike type>, hook = null` ("service every bike"); a specific one is `part = <bike_id>, hook = null`.
+
+#### Ownership
+
+- Specific plan (`part = Some(id)`) → `uid = None`; ownership is enforced through the part (`checkuser`).
+- Generic plan (`part = null`) → `uid = <current user>`; the user owns their templates.
+
+#### Creation flows
+
+All plans are created from the **New Plan** modal (`frontend/src/ServicePlan/NewPlan.svelte:16`), which behaves differently per page:
+
+| Entry point | `part` | `what` / `hook` | Scope |
+|-------------|--------|-----------------|-------|
+| Component page (a part that isn't a gear) | `= component.id` | `= component.what`, `hook = null` (locked) | Component-specific |
+| Gear page → pick subtype+hook, gear = **a bike** | `= bike.id` | subtype + hook | Gear-specific |
+| Gear page → pick subtype+hook, gear = **any** | `= null` | subtype + hook | Generic |
+| Gear page → pick **body**, gear = a bike | `= bike.id` | bike type, `hook = null` | Whole-bike (specific) |
+| Gear page → pick **body**, gear = **any** | `= null` | bike type, `hook = null` | Whole-bike (generic) |
+
+- On a **component page** the modal is locked (`no_gear = true`): only name + limits are editable; `part`/`what`/`hook` are fixed to that component.
+- On a **gear page** the modal shows a `TypeForm` (body, or a subtype+hook) and a `GearForm` (a specific bike, or **any** → `part = null`).
+
+Once created, `part`/`what`/`hook`/`uid` are **immutable** — `update()` refuses to change them (`serviceplan.rs:104-108`), so a plan's scope can only change by deleting and recreating it.
+
+#### Resolution (which plans show for a part)
+
+- **Single-gear view** (`PlanList` with a gear): `plans_for_part_and_subtypes` (`serviceplan.ts:276`) walks every subtype/hook of the gear and, via `plans_for_attachee`, returns specific plans where they exist and generic ones only as a fallback.
+- **Overall list** (`PlanList` without a gear): shows every plan in the category; each `PlanBlock` renders `plan.gears(...)` — the gears the plan currently applies to, with specific-covered components excluded (see the override note above).
 
 ### Threshold Logic
 
