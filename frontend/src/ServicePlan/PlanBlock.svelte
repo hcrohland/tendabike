@@ -1,6 +1,7 @@
 <script lang="ts">
   import PlanRow from "./PlanRow.svelte";
   import PlanName from "./PlanName.svelte";
+  import { attachments } from "../lib/attachment";
   import { parts } from "../lib/part";
   import { plans, ServicePlan } from "../lib/serviceplan";
   import * as m from "../../paraglide/messages";
@@ -14,7 +15,7 @@
 
   let { plan }: Props = $props();
 
-  let gears = $derived(plan.gears($parts, Object.values($plans)));
+  let gears = $derived(plan.gears($parts, Object.values($plans), $attachments));
 </script>
 
 <div

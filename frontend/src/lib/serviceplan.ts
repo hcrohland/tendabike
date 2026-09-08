@@ -174,21 +174,22 @@ export class ServicePlan extends Limits {
    * Determines the physical parts this service plan is associated with.
    * If linked to a specific part directly, it returns that one immediately.
    * For generic plans, it resolves to all active matching components
-   * that do not already have a dedicated maintenance plan assigned.
+   * that do not already have a dedicated maintenance plan assigned
+   * (matching either a gear-level or a component-level specific plan).
    */
-  gears(parts: Map<Part>, plans: ServicePlan[]) {
+  gears(parts: Map<Part>, plans: ServicePlan[], atts: Map<Attachment>) {
     if (this.part) return [parts[this.part]];
 
     let main = types[this.what].main;
-    return filterValues(
-      parts,
-      (p) =>
-        p.disposed_at == null &&
-        main == p.what &&
-        !Object.values(plans).some(
-          (r) => r.part == p.id && r.hook == this.hook && r.what == this.what,
-        ),
-    );
+    return filterValues(parts, (p) => {
+      if (p.disposed_at != null || main != p.what) return false;
+      let att = att_at_hook(p.id!, this.what, this.hook, atts);
+      return !Object.values(plans).some(
+        (r) =>
+          (r.part == p.id && r.hook == this.hook && r.what == this.what) ||
+          (att != null && r.part == att.part_id),
+      );
+    });
   }
 }
 
@@ -294,7 +295,7 @@ export function alerts_for_plans(
 ) {
   let res = { warn: 0, alert: 0 };
   plans.forEach((plan) => {
-    plan.gears(parts, plans).forEach((gear) => {
+    plan.gears(parts, plans, attachments).forEach((gear) => {
       let part = plan.getpart(parts, attachments, gear.id);
       if (part != null) {
         let serviceList = plan.services(part, services);
