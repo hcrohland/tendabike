@@ -18,6 +18,7 @@ This file provides guidance to agents when working with code in this repository.
 - `npm run dev` - Start frontend dev server (Vite proxy → backend on `:8000`)
 - `npm run build` - Production frontend build → `frontend/dist/`
 - `npm run check` - Type checking (paraglide compile + svelte-check)
+- `npm run test` - Run the frontend Vitest test suite
 - `npm run format` - Format with Prettier
 - `npm run fmtcheck` - Format check (used in CI)
 - `cargo run` - Start backend server (listens on `BIND_ADDR`, serves frontend static files)
@@ -121,7 +122,7 @@ Strava OAuth: `/strava/*` (OAuth flow, webhook endpoints)
 
 ## Important Notes
 
-- **Tests**: Backend has in-memory unit suites — `SQLX_OFFLINE=true cargo test` for `tb_domain` (266 tests), `tb_strava` (57), `tb_sqlx` (37), and `tb_axum` (40); see the "Domain Tests" / "Strava Tests" / "SQLX Tests" / "Axum Tests" sections in [`backend/AGENTS.md`](backend/AGENTS.md); the frontend has no test framework. CI only runs type checking, format validation and backend tests
+- **Tests**: Backend has in-memory unit suites — `SQLX_OFFLINE=true cargo test` for `tb_domain` (266 tests), `tb_strava` (57), `tb_sqlx` (37), and `tb_axum` (40); see the "Domain Tests" / "Strava Tests" / "SQLX Tests" / "Axum Tests" sections in [`backend/AGENTS.md`](backend/AGENTS.md); the frontend uses Vitest (jsdom) via `npm run test`. CI runs format validation, type checking, the frontend test suite and backend tests
 - **Migrations**: Auto-run on backend startup via sqlx migrate; see [`backend/sqlx/migrations/`](backend/sqlx/migrations/)
 - **i18n**: Frontend uses `@inlang/paraglide-js`; messages in `frontend/messages/{de,de_CH,en}.json`
 - **License**: AGPL v3 - see [`LICENSE`](LICENSE)

@@ -32,6 +32,8 @@ jobs:
         run: npx prettier --check .
       - name: Check
         run: npm run check:ci
+      - name: Test
+        run: npm run test
 
   rust:
     runs-on: ubuntu-latest

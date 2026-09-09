@@ -1,6 +1,6 @@
 import { paraglideVitePlugin } from "@inlang/paraglide-js";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 
 // https://vitejs.dev/config/
@@ -14,6 +14,17 @@ export default defineConfig({
     tailwindcss(),
     svelte(),
   ],
+
+  test: {
+    environment: "jsdom",
+    include: ["src/**/*.test.{ts,js}"],
+    setupFiles: ["./src/test/setup.ts"],
+    coverage: {
+      provider: "v8",
+      include: ["src/**"],
+      exclude: ["src/**/*.d.ts", "src/test/**"],
+    },
+  },
 
   build: {
     rolldownOptions: {
