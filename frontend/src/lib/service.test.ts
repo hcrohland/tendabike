@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { Service } from "./service";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { Service, services } from "./service";
 import { Part } from "./part";
-import { Usage } from "./usage";
+import { Usage, usages } from "./usage";
 import { fmtDate } from "./store";
 import { type Map } from "./mapable";
+import { get } from "svelte/store";
+import { resp } from "../test/helpers";
 
 function svc(overrides: Partial<any> = {}): Service {
   return new Service({
@@ -148,5 +150,91 @@ describe("Service.fmtTime", () => {
         " - " +
         fmtDate(new Date("2024-05-01T00:00:00Z")),
     );
+  });
+});
+
+describe("Service CRUD", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    services.setMap([]);
+    usages.setMap([]);
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  const summary = () => ({
+    parts: [],
+    attachments: [],
+    activities: [],
+    services: [
+      {
+        id: "S1",
+        part_id: 5,
+        time: "2023-01-01T00:00:00Z",
+        redone: "2023-01-01T00:00:00Z",
+        name: "Test",
+        notes: "",
+        usage: "u1",
+        successor: null,
+        plans: [],
+      },
+    ],
+    plans: [],
+    usages: [],
+    shops: [],
+    users: [],
+  });
+
+  it("Service.create POSTs and calls updateSummary", async () => {
+    const time = new Date("2024-01-01T00:00:00Z");
+    const sum = summary();
+    fetchMock.mockResolvedValueOnce(resp(sum));
+    await Service.create(5, time, "Annual", "good", ["P1"]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/service");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toMatchObject({
+      part_id: 5,
+      name: "Annual",
+      notes: "good",
+      plans: ["P1"],
+    });
+    expect(get(services)["S1"]).toBeDefined();
+  });
+
+  it("Service.update PUTs and calls updateSummary", async () => {
+    const s = svc({ id: "S1", name: "New Name" });
+    fetchMock.mockResolvedValueOnce(resp(summary()));
+    await s.update();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/service");
+    expect(options.method).toBe("PUT");
+  });
+
+  it("Service.delete removes the service and usage from the store", async () => {
+    services.updateMap([svc({ id: "S1", usage: "u1" })]);
+    usages.updateMap([usage("u1")]);
+    fetchMock.mockResolvedValueOnce(resp(summary()));
+    const s = svc({ id: "S1", usage: "u1" });
+    await s.delete();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/service/S1");
+    expect(options.method).toBe("DELETE");
+    expect(get(services)["S1"]).toBeUndefined();
+    expect(get(usages)["u1"]).toBeUndefined();
+  });
+
+  it("Service.repeat POSTs to /api/service/redo", async () => {
+    const s = svc({ id: "S1" });
+    fetchMock.mockResolvedValueOnce(resp(summary()));
+    await s.repeat();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/service/redo");
+    expect(options.method).toBe("POST");
   });
 });

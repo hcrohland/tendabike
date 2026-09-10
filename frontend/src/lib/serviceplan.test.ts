@@ -1,18 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
   Limits,
   ServicePlan,
   localizeLimitKey,
   next_due,
   plans_for_part,
+  plans,
   type limit_keys,
 } from "./serviceplan";
 import { Part } from "./part";
 import { Attachment } from "./attachment";
-import { Service } from "./service";
+import { Service, services } from "./service";
 import { Usage } from "./usage";
 import { maxDate } from "./store";
 import { type Map } from "./mapable";
+import { get } from "svelte/store";
+import { resp } from "../test/helpers";
 
 function plan(overrides: Partial<any> = {}): ServicePlan {
   return new ServicePlan({
@@ -341,7 +344,7 @@ describe("ServicePlan.partLink", () => {
   it("returns the part link", () => {
     const parts = { 5: part({ id: 5, name: "Wheel" }) } as Map<Part>;
     expect(plan({ part: 5 }).partLink(parts)).toBe(
-      `<a href="/#/part/5" style="text-decoration1:none" class="text-reset">Wheel</a>`,
+      `<a href="/#/part/5" style="text-decoration:none" class="text-reset">Wheel</a>`,
     );
   });
 });
@@ -433,5 +436,99 @@ describe("localizeLimitKey", () => {
 
   it("falls back to the key for an unknown key", () => {
     expect(localizeLimitKey("bogus" as limit_keys)).toBe("bogus");
+  });
+});
+
+describe("ServicePlan CRUD", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    plans.setMap([]);
+    services.setMap([]);
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  it("ServicePlan.create POSTs to /api/plan and updates the plans store", async () => {
+    const p = plan({
+      id: "00000000-0000-0000-0000-000000000000",
+      name: "Test Plan",
+      what: 10,
+      part: 5,
+      km: "100",
+    });
+    fetchMock.mockResolvedValueOnce(
+      resp({
+        id: "NEW1",
+        name: "Test Plan",
+        what: 10,
+        part: 5,
+        hook: null,
+        km: 100,
+        days: null,
+        hours: null,
+        climb: null,
+        descend: null,
+        rides: null,
+        kJ: null,
+      }),
+    );
+    await p.create();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/plan");
+    expect(options.method).toBe("POST");
+    expect(get(plans)["NEW1"]).toBeDefined();
+  });
+
+  it("ServicePlan.update PUTs to /api/plan and updates the plans store", async () => {
+    const p = plan({ id: "P1", name: "Updated", what: 10, part: 5 });
+    fetchMock.mockResolvedValueOnce(
+      resp({
+        id: "P1",
+        name: "Updated",
+        what: 10,
+        part: 5,
+        hook: null,
+        km: null,
+        days: null,
+        hours: null,
+        climb: null,
+        descend: null,
+        rides: null,
+        kJ: null,
+      }),
+    );
+    await p.update();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/plan");
+    expect(options.method).toBe("PUT");
+    expect(get(plans)["P1"].name).toBe("Updated");
+  });
+
+  it("ServicePlan.delete removes the plan and updates services", async () => {
+    plans.updateMap([plan({ id: "P1" })]);
+    services.updateMap([
+      new Service({
+        id: "S1",
+        part_id: 5,
+        time: "2023-01-01T00:00:00Z",
+        redone: "2023-01-01T00:00:00Z",
+        name: "Svc",
+        notes: "",
+        usage: "u1",
+        successor: null,
+        plans: [],
+      }),
+    ]);
+    fetchMock.mockResolvedValueOnce(resp([]));
+    await plan({ id: "P1" }).delete();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/plan/P1");
+    expect(options.method).toBe("DELETE");
+    expect(get(plans)["P1"]).toBeUndefined();
+    expect(get(services)["S1"]).toBeDefined();
   });
 });
