@@ -1,54 +1,53 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
 // README at: https://github.com/devcontainers/templates/tree/main/src/debian
 {
-	"name": "Debian",
-	"dockerComposeFile": "docker-compose.yml",
-	"service": "app",
-	"workspaceFolder": "/workspaces/tendabike",
-	"features": {
-		"ghcr.io/devcontainers/features/node:1": {
-			"nodeGypDependencies": true,
-			"installYarnUsingApt": true,
-			"version": "lts",
-			"pnpmVersion": "latest",
-			"nvmVersion": "latest"
-		},
-		"ghcr.io/devcontainers/features/rust:1": {
-			"version": "stable",
-			"profile": "minimal",
-			"targets": "aarch64-unknown-linux-gnu",
-			"components": "rust-analyzer,rust-src,rustfmt,clippy"
-		},
-		"ghcr.io/devcontainers/features/python:1": {
-			"version": "latest",
-			"installJupyterlab": false
-		}
-	},
-	// Features to add to the dev container. More info: https://containers.dev/features.
-	// "features": {},
-	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	"forwardPorts": [
-		5173
-	],
-	"postCreateCommand": {
-		"sqlx": "cargo install sqlx-cli --no-default-features --features rustls,postgres",
-		"rust-mcp-server": "cargo install rust-mcp-server",
-		"uv": "curl -LsSf https://astral.sh/uv/install.sh | sh"
-	},
-	// Configure tool-specific properties.
-	// "customizations": {},
-	"customizations": {
-		"vscode": {
-			"extensions": [
-				"eamodio.gitlens",
-				"fill-labs.dependi",
-				"inlang.vs-code-extension",
-				"rust-lang.rust-analyzer",
-				"svelte.svelte-vscode",
-				"esbenp.prettier-vscode"
-			]
-		}
-	}
-	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
-	// "remoteUser": "root"
+  "name": "Debian",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/tendabike",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "nodeGypDependencies": true,
+      "installYarnUsingApt": true,
+      "version": "lts",
+      "pnpmVersion": "latest",
+      "nvmVersion": "latest"
+    },
+    "ghcr.io/devcontainers/features/rust:1": {
+      "version": "stable",
+      "profile": "minimal",
+      "targets": "aarch64-unknown-linux-gnu",
+      "components": "rust-analyzer,rust-src,rustfmt,clippy"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "latest",
+      "installJupyterlab": false
+    }
+  },
+  // Features to add to the dev container. More info: https://containers.dev/features.
+  // "features": {},
+  // Use 'forwardPorts' to make a list of ports inside the container available locally.
+  "forwardPorts": [5173],
+  "postCreateCommand": {
+    "sqlx": "cargo install sqlx-cli --no-default-features --features rustls,postgres",
+    "rust-mcp-server": "cargo install rust-mcp-server",
+    "uv": "curl -LsSf https://astral.sh/uv/install.sh | sh",
+    "opencode": "curl -fsSL https://opencode.ai/install | bash"
+  },
+  // Configure tool-specific properties.
+  // "customizations": {},
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "eamodio.gitlens",
+        "fill-labs.dependi",
+        "inlang.vs-code-extension",
+        "rust-lang.rust-analyzer",
+        "svelte.svelte-vscode",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  }
+  // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+  // "remoteUser": "root"
 }
