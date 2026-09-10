@@ -15,6 +15,10 @@ export default defineConfig({
     svelte(),
   ],
 
+  resolve: {
+    conditions: ["browser"],
+  },
+
   test: {
     environment: "jsdom",
     include: ["src/**/*.test.{ts,js}"],
