@@ -39,7 +39,7 @@
             "reasoningEffort": "medium"
           },
           "limit": {
-            "context": 100000,
+            "context": 80000,
             "output": 32000
           }
         }
