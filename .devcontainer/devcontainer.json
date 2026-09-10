@@ -32,7 +32,8 @@
     "sqlx": "cargo install sqlx-cli --no-default-features --features rustls,postgres",
     "rust-mcp-server": "cargo install rust-mcp-server",
     "uv": "curl -LsSf https://astral.sh/uv/install.sh | sh",
-    "opencode": "curl -fsSL https://opencode.ai/install | bash"
+    "opencode": "curl -fsSL https://opencode.ai/install | bash",
+    "git": "git config --global --add safe.directory /workspaces/tendabike"
   },
   // Configure tool-specific properties.
   // "customizations": {},
