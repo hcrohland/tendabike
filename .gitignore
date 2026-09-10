@@ -33,3 +33,4 @@ node_modules
 .roo/*
 .devcontainer/home
 plans/
+.local/

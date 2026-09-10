@@ -5,17 +5,19 @@ services:
       - POSTGRES_PASSWORD=fDebD5pyKBMmdDi
     volumes:
       - postgres-data:/var/lib/postgresql
-    network_mode: host
     
   app:
     image: mcr.microsoft.com/devcontainers/base:trixie
     network_mode: service:database
+    init: true
     volumes:
       - ..:/workspaces/tendabike:cached
-      # - ./home:/home/vscode
+      - ../.local:/home/vscode/.local
       - rust-target:/workspaces/tendabike/target
       - node_modules:/workspaces/tendabike/node_modules
     command: sleep infinity
+    environment:
+      - TZ=Europe/Berlin
 
 volumes:
   postgres-data:
