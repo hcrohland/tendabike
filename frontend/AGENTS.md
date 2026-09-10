@@ -7,11 +7,12 @@ This file provides guidance to agents when working with code in this repository.
 - `npm run dev` - Start dev server (Vite with HMR)
 - `npm run build` - Production build
 - `npm run check` - Run paraglide compile + svelte-check for type checking
+- `npm run test` - Run the Vitest test suite (jsdom)
 - `npm run format` - Format all files with Prettier
 - `npm run fmtcheck` - Check formatting (used in CI)
 - `npm run preview` - Preview production build
 
-**No test framework is configured** - the CI workflow runs `npm run check` (type checking) and Prettier format check only.
+**Tests**: Vitest (jsdom) + `@testing-library/svelte`. Tests live in `src/**/*.test.ts`; run `npm run test` (coverage via `npm run test:coverage`). Config is in [`vite.config.ts`](vite.config.ts); [`src/test/setup.ts`](src/test/setup.ts) pins the Paraglide locale to `en` and resets mocks after each test. CI runs the format check, `npm run check:ci` (type checking) and `npm run test`.
 
 ## Architecture
 

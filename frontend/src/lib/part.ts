@@ -90,7 +90,7 @@ export class Part {
     const label = name ?? this.name ?? "-";
     if (!href) return label;
     return (
-      `<a href="/#${href}" style="text-decoration1:none" class="text-reset">` +
+      `<a href="/#${href}" style="text-decoration:none" class="text-reset">` +
       label +
       "</a>"
     );

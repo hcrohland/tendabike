@@ -11,16 +11,23 @@
     "check:ci": "npx paraglide-js compile --outdir ./paraglide && svelte-check --tsconfig ./tsconfig.json",
     "format": "prettier --write .",
     "fmtcheck": "prettier --check .",
+    "test": "npx paraglide-js compile --outdir ./paraglide && vitest run",
+    "test:coverage": "npx paraglide-js compile --outdir ./paraglide && vitest run --coverage",
     "machine-translate": "inlang machine translate --project project.inlang"
   },
   "devDependencies": {
+    "@inlang/cli": "^3.0.0",
+    "@inlang/paraglide-js": "^2.20.2",
     "@sveltejs/vite-plugin-svelte": "7",
     "@tailwindcss/forms": "^0.5.9",
     "@tailwindcss/vite": "^4.1.13",
+    "@testing-library/svelte": "^5.4.2",
     "@tsconfig/svelte": "^5",
+    "@vitest/coverage-v8": "^5.0.0",
     "flowbite": "4",
     "flowbite-svelte": "^1.20",
     "flowbite-svelte-icons": "^3.0.0",
+    "jsdom": "^30.0.1",
     "prettier-plugin-svelte": "4",
     "svelte": "5",
     "svelte-check": "4",
@@ -29,8 +36,7 @@
     "tslib": "2",
     "typescript": "6",
     "vite": "8",
-    "@inlang/paraglide-js": "^2.20.2",
-    "@inlang/cli": "^3.0.0"
+    "vitest": "^5.0.0"
   },
   "dependencies": {
     "@inlang/paraglide-js": "^2.20.2",
