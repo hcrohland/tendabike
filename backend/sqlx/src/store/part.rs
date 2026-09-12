@@ -19,7 +19,6 @@ struct DbPart {
     disposed_at: Option<OffsetDateTime>,
     usage: uuid::Uuid,
     source: Option<String>,
-    notes: String,
     shop: Option<i32>,
 }
 
@@ -37,7 +36,6 @@ impl From<DbPart> for Part {
             disposed_at,
             usage,
             source,
-            notes,
             shop,
         } = db;
         Self {
@@ -52,7 +50,6 @@ impl From<DbPart> for Part {
             disposed_at,
             usage: usage.into(),
             source,
-            notes,
             shop: shop.map(Into::into),
         }
     }
@@ -72,7 +69,6 @@ impl From<Part> for DbPart {
             disposed_at,
             usage,
             source,
-            notes,
             shop,
         } = value;
         Self {
@@ -87,7 +83,6 @@ impl From<Part> for DbPart {
             disposed_at,
             usage: usage.into(),
             source,
-            notes,
             shop: shop.map(Into::into),
         }
     }
@@ -123,7 +118,6 @@ impl<'c> tb_domain::PartStore for SqlxConn<'c> {
         in_model: String,
         in_purchase: OffsetDateTime,
         in_source: Option<String>,
-        in_notes: String,
         in_usage: UsageId,
         in_owner: UserId,
         in_shop: Option<ShopId>,
@@ -131,8 +125,8 @@ impl<'c> tb_domain::PartStore for SqlxConn<'c> {
         let in_shop: Option<i32> = in_shop.map(Into::into);
         sqlx::query_as!(
             DbPart,
-            "INSERT INTO parts (owner, what, name, vendor, model, purchase, last_used, usage, source, notes, shop)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            "INSERT INTO parts (owner, what, name, vendor, model, purchase, last_used, usage, source, shop)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
              RETURNING *",
             i32::from(in_owner),
             i32::from(in_what),
@@ -143,7 +137,6 @@ impl<'c> tb_domain::PartStore for SqlxConn<'c> {
             in_purchase, // last_used = purchase
             Uuid::from(in_usage),
             in_source,
-            in_notes,
             in_shop
         )
         .fetch_one(&mut **self.inner())
@@ -158,7 +151,7 @@ impl<'c> tb_domain::PartStore for SqlxConn<'c> {
             DbPart,
             "UPDATE parts
              SET owner = $2, what = $3, name = $4, vendor = $5, model = $6,
-                 purchase = $7, last_used = $8, disposed_at = $9, usage = $10, source = $11, notes = $12, shop = $13
+                 purchase = $7, last_used = $8, disposed_at = $9, usage = $10, source = $11, shop = $12
              WHERE id = $1
              RETURNING *",
             part.id,
@@ -172,7 +165,6 @@ impl<'c> tb_domain::PartStore for SqlxConn<'c> {
             part.disposed_at,
             part.usage,
             part.source,
-            part.notes,
             part.shop
         )
         .fetch_one(&mut **self.inner())
@@ -291,7 +283,6 @@ mod tests {
             disposed_at,
             usage: UsageId::from(uuid()),
             source,
-            notes: "notes".to_string(),
             shop,
         }
     }

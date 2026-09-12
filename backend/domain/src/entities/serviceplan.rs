@@ -283,7 +283,6 @@ mod tests {
             PartTypeId::from(2),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &test_session(),
             &mut store,
         )

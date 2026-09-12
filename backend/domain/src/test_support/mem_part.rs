@@ -29,7 +29,6 @@ impl PartStore for MemStore {
         model: String,
         purchase: OffsetDateTime,
         source: Option<String>,
-        notes: String,
         usage: UsageId,
         owner: UserId,
         shop: Option<ShopId>,
@@ -48,7 +47,6 @@ impl PartStore for MemStore {
             disposed_at: None,
             usage,
             source,
-            notes,
             shop,
         };
         self.parts.insert(id, part.clone());
@@ -120,5 +118,96 @@ impl PartStore for MemStore {
             .filter(|p| p.shop.as_ref() == Some(&shop_id))
             .cloned()
             .collect())
+    }
+}
+
+#[async_trait]
+impl PartNoteStore for MemStore {
+    async fn partnote_create_text(
+        &mut self,
+        part: PartId,
+        name: String,
+        created: OffsetDateTime,
+    ) -> TbResult<PartNote> {
+        let id = PartNoteId::from(self.next_note_id);
+        self.next_note_id += 1;
+        let note = PartNote {
+            id,
+            part,
+            kind: NoteKind::Text,
+            name,
+            mime: None,
+            size: None,
+            created,
+        };
+        self.part_notes.insert(id, note.clone());
+        Ok(note)
+    }
+
+    async fn partnote_create_file(
+        &mut self,
+        part: PartId,
+        name: String,
+        mime: String,
+        size: i64,
+        data: Vec<u8>,
+        created: OffsetDateTime,
+    ) -> TbResult<PartNote> {
+        let id = PartNoteId::from(self.next_note_id);
+        self.next_note_id += 1;
+        let note = PartNote {
+            id,
+            part,
+            kind: NoteKind::File,
+            name,
+            mime: Some(mime),
+            size: Some(size),
+            created,
+        };
+        self.note_files.insert(id, data);
+        self.part_notes.insert(id, note.clone());
+        Ok(note)
+    }
+
+    async fn partnote_all_by_part(&mut self, part: PartId) -> TbResult<Vec<PartNote>> {
+        Ok(self
+            .part_notes
+            .values()
+            .filter(|n| n.part == part)
+            .cloned()
+            .collect())
+    }
+
+    async fn partnote_get(&mut self, id: PartNoteId) -> TbResult<PartNote> {
+        self.part_notes
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| Error::NotFound(format!("PartNote {id} not found")))
+    }
+
+    async fn partnote_file(&mut self, id: PartNoteId) -> TbResult<Vec<u8>> {
+        self.note_files
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| Error::NotFound(format!("PartNote file {id} not found")))
+    }
+
+    async fn partnote_update_text(&mut self, id: PartNoteId, name: String) -> TbResult<PartNote> {
+        let note = self
+            .part_notes
+            .get_mut(&id)
+            .ok_or_else(|| Error::NotFound(format!("PartNote {id} not found")))?;
+        note.name = name;
+        Ok(note.clone())
+    }
+
+    async fn partnote_delete(&mut self, id: PartNoteId) -> TbResult<PartNoteId> {
+        match self.part_notes.remove(&id) {
+            Some(_) => {
+                self.note_files.remove(&id);
+                Ok(id)
+            }
+            None => Err(Error::NotFound(format!("PartNote {id} not found"))),
+        }
     }
 }

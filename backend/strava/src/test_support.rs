@@ -292,7 +292,6 @@ impl PartStore for TestStravaStore {
         model: String,
         purchase: OffsetDateTime,
         source: Option<String>,
-        notes: String,
         usage: UsageId,
         owner: UserId,
         shop: Option<ShopId>,
@@ -305,7 +304,6 @@ impl PartStore for TestStravaStore {
             model,
             purchase,
             source,
-            notes,
             usage,
             owner,
             shop,
@@ -336,6 +334,45 @@ impl PartStore for TestStravaStore {
     }
     async fn shop_get_parts(&mut self, shop_id: ShopId) -> TbResult<Vec<Part>> {
         PartStore::shop_get_parts(&mut self.mem, shop_id).await
+    }
+}
+
+#[async_trait::async_trait]
+impl PartNoteStore for TestStravaStore {
+    async fn partnote_create_text(
+        &mut self,
+        part: PartId,
+        name: String,
+        created: OffsetDateTime,
+    ) -> TbResult<PartNote> {
+        PartNoteStore::partnote_create_text(&mut self.mem, part, name, created).await
+    }
+    async fn partnote_create_file(
+        &mut self,
+        part: PartId,
+        name: String,
+        mime: String,
+        size: i64,
+        data: Vec<u8>,
+        created: OffsetDateTime,
+    ) -> TbResult<PartNote> {
+        PartNoteStore::partnote_create_file(&mut self.mem, part, name, mime, size, data, created)
+            .await
+    }
+    async fn partnote_all_by_part(&mut self, part: PartId) -> TbResult<Vec<PartNote>> {
+        PartNoteStore::partnote_all_by_part(&mut self.mem, part).await
+    }
+    async fn partnote_get(&mut self, id: PartNoteId) -> TbResult<PartNote> {
+        PartNoteStore::partnote_get(&mut self.mem, id).await
+    }
+    async fn partnote_file(&mut self, id: PartNoteId) -> TbResult<Vec<u8>> {
+        PartNoteStore::partnote_file(&mut self.mem, id).await
+    }
+    async fn partnote_update_text(&mut self, id: PartNoteId, name: String) -> TbResult<PartNote> {
+        PartNoteStore::partnote_update_text(&mut self.mem, id, name).await
+    }
+    async fn partnote_delete(&mut self, id: PartNoteId) -> TbResult<PartNoteId> {
+        PartNoteStore::partnote_delete(&mut self.mem, id).await
     }
 }
 

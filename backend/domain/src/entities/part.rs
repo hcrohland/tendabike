@@ -70,8 +70,6 @@ pub struct Part {
     /// the usage tracker
     pub usage: UsageId,
     pub source: Option<String>,
-    /// notes about the part
-    pub notes: String,
     /// Optional shop for delegated maintenance
     pub shop: Option<ShopId>,
 }
@@ -213,7 +211,6 @@ impl PartId {
         vendor: String,
         model: String,
         purchase: OffsetDateTime,
-        notes: String,
         user: &dyn Session,
         store: &mut impl Store,
     ) -> TbResult<Part> {
@@ -227,7 +224,6 @@ impl PartId {
             vendor,
             model,
             purchase,
-            notes,
             ..part
         };
         store.part_update(part).await
@@ -265,7 +261,6 @@ impl Part {
         what: PartTypeId,
         source: Option<String>,
         purchase: OffsetDateTime,
-        notes: String,
         user: &dyn Session,
         store: &mut impl PartStore,
     ) -> TbResult<Part> {
@@ -280,7 +275,6 @@ impl Part {
                 model,
                 purchase,
                 source,
-                notes,
                 UsageId::new(),
                 user.user_id(),
                 user.shop(),
@@ -424,7 +418,6 @@ mod tests {
             disposed_at: None,
             usage: test_usage,
             source: None,
-            notes: "Notes".to_string(),
             shop: None,
         };
 
@@ -444,7 +437,6 @@ mod tests {
             PartTypeId::from(4),
             None,
             purchase,
-            "Notes".to_string(),
             &sess,
             &mut store,
         )
@@ -468,7 +460,6 @@ mod tests {
             PartTypeId::from(4),
             Some("strava_67890".to_string()),
             sample_purchase_date(),
-            "Notes".to_string(),
             &sess,
             &mut store,
         )
@@ -490,7 +481,6 @@ mod tests {
             PartTypeId::from(1),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &sess,
             &mut store,
         )
@@ -502,7 +492,6 @@ mod tests {
             PartTypeId::from(4),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &sess,
             &mut store,
         )
@@ -534,7 +523,6 @@ mod tests {
             PartTypeId::from(1),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &sess,
             &mut store,
         )
@@ -546,7 +534,6 @@ mod tests {
             PartTypeId::from(4),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &sess,
             &mut store,
         )
@@ -581,7 +568,6 @@ mod tests {
             PartTypeId::from(1),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &sess,
             &mut store,
         )
@@ -593,7 +579,6 @@ mod tests {
             PartTypeId::from(2),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &sess,
             &mut store,
         )
@@ -617,7 +602,6 @@ mod tests {
                 "New Vendor".to_string(),
                 "New Model".to_string(),
                 sample_purchase_date(),
-                "New Notes".to_string(),
                 &sess,
                 &mut store,
             )
@@ -626,7 +610,6 @@ mod tests {
         assert_eq!(updated.name, "New Name");
         assert_eq!(updated.vendor, "New Vendor");
         assert_eq!(updated.model, "New Model");
-        assert_eq!(updated.notes, "New Notes");
         Ok(())
     }
 
@@ -641,7 +624,6 @@ mod tests {
                 "Vendor".to_string(),
                 "Model".to_string(),
                 sample_purchase_date(),
-                "Notes".to_string(),
                 &other_session,
                 &mut store,
             )

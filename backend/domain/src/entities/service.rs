@@ -353,7 +353,6 @@ mod tests {
             PartTypeId::from(1),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &test_session(),
             &mut store,
         )
@@ -416,7 +415,6 @@ mod tests {
             PartTypeId::from(4),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &test_session(),
             &mut store,
         )
@@ -429,7 +427,6 @@ mod tests {
             PartTypeId::from(1),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &test_session(),
             &mut store,
         )
@@ -556,7 +553,6 @@ mod tests {
             PartTypeId::from(3),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &test_session(),
             &mut store,
         )
@@ -617,7 +613,6 @@ mod tests {
             PartTypeId::from(1),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &test_session(),
             &mut store,
         )
@@ -1008,7 +1003,6 @@ mod tests {
             PartTypeId::from(1),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &test_session(),
             &mut store,
         )
@@ -1118,7 +1112,6 @@ mod tests {
             PartTypeId::from(1),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &test_session(),
             &mut store,
         )
@@ -1158,7 +1151,6 @@ mod tests {
             PartTypeId::from(4),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &test_session(),
             &mut store,
         )
@@ -1193,7 +1185,6 @@ mod tests {
             PartTypeId::from(1),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &test_session(),
             &mut store,
         )
@@ -1334,7 +1325,6 @@ mod tests {
             PartTypeId::from(1),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &test_session(),
             &mut store,
         )
@@ -1419,7 +1409,6 @@ mod tests {
             PartTypeId::from(1),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &test_session(),
             &mut store,
         )
@@ -1692,7 +1681,6 @@ mod tests {
             PartTypeId::from(4),
             None,
             sample_purchase_date(),
-            "Notes".to_string(),
             &test_session(),
             &mut store,
         )

@@ -39,9 +39,7 @@ export default defineConfig({
     target: "es2022",
   },
   server: {
-    hmr: {
-      host: "127.0.0.1",
-    },
+    host: "127.0.0.1",
     proxy: {
       "^/(api)|(strava)": {
         target: "http://localhost:8000",

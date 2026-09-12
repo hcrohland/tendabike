@@ -1,0 +1,14 @@
+{
+    "db_name": "PostgreSQL",
+    "query": "DELETE FROM part_notes WHERE id = $1",
+    "describe": {
+        "columns": [],
+        "parameters": {
+            "Left": [
+                "Int4"
+            ]
+        },
+        "nullable": []
+    },
+    "hash": "cae75ee155484a1509b01fb203f5d4ba30e0c230ee58029e00070fcc2c0f0218"
+}

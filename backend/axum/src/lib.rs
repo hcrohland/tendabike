@@ -280,6 +280,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn partnote_list_requires_auth() {
+        expect_unauth(Method::GET, "/api/part/1/notes").await;
+    }
+
+    #[tokio::test]
+    async fn partnote_create_requires_auth() {
+        expect_unauth(Method::POST, "/api/part/1/notes").await;
+    }
+
+    #[tokio::test]
+    async fn partnote_file_upload_requires_auth() {
+        expect_unauth(Method::POST, "/api/part/1/notes/file").await;
+    }
+
+    #[tokio::test]
+    async fn partnote_file_download_requires_auth() {
+        expect_unauth(Method::GET, "/api/part/notes/1/file").await;
+    }
+
+    #[tokio::test]
+    async fn partnote_update_requires_auth() {
+        expect_unauth(Method::PUT, "/api/part/notes/1").await;
+    }
+
+    #[tokio::test]
+    async fn partnote_delete_requires_auth() {
+        expect_unauth(Method::DELETE, "/api/part/notes/1").await;
+    }
+
+    #[tokio::test]
+    async fn partnote_reaches_db_layer() {
+        let (app, store) = setup().await;
+        let cookie = user_cookie(&store).await;
+        let (status, _headers, _body) =
+            run(app, Method::GET, "/api/part/1/notes", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
     async fn user_all_hidden_from_non_admin() {
         expect_hidden_from_non_admin(Method::GET, "/api/user/all").await;
     }

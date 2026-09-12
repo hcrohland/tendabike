@@ -1,0 +1,22 @@
+{
+    "db_name": "PostgreSQL",
+    "query": "SELECT data FROM part_notes WHERE id = $1",
+    "describe": {
+        "columns": [
+            {
+                "ordinal": 0,
+                "name": "data",
+                "type_info": "Bytea"
+            }
+        ],
+        "parameters": {
+            "Left": [
+                "Int4"
+            ]
+        },
+        "nullable": [
+            true
+        ]
+    },
+    "hash": "579189973a84b1bbbb509ca8930cd42a89bca87895995518be213f186cfff939"
+}

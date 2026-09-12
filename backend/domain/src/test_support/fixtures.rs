@@ -35,7 +35,6 @@ pub async fn fixture_basic_part(session: &TestSession, store: &mut MemStore) -> 
         CHAIN,
         None,
         sample_purchase_date(),
-        "Test part".to_string(),
         session,
         store,
     )
@@ -97,7 +96,6 @@ pub async fn fixture_assembly(
         FRONT_WHEEL,
         None,
         sample_purchase_date(),
-        "Main assembly part".to_string(),
         session,
         store,
     )
@@ -110,7 +108,6 @@ pub async fn fixture_assembly(
         TIRE,
         None,
         sample_purchase_date(),
-        "Subpart 1".to_string(),
         session,
         store,
     )
@@ -123,7 +120,6 @@ pub async fn fixture_assembly(
         TIRE,
         None,
         sample_purchase_date() - time::Duration::days(10),
-        "Subpart 2".to_string(),
         session,
         store,
     )
@@ -136,7 +132,6 @@ pub async fn fixture_assembly(
         BIKE,
         None,
         sample_purchase_date() - time::Duration::days(365),
-        "Main gear".to_string(),
         session,
         store,
     )
@@ -232,7 +227,6 @@ pub async fn fixture_concurrent_parts(
         FRONT_WHEEL,
         None,
         sample_purchase_date() - time::Duration::days(180),
-        "Test gear".to_string(),
         session,
         store,
     )
@@ -245,7 +239,6 @@ pub async fn fixture_concurrent_parts(
         TIRE,
         None,
         sample_purchase_date() - time::Duration::days(90),
-        "First tire".to_string(),
         session,
         store,
     )
@@ -258,7 +251,6 @@ pub async fn fixture_concurrent_parts(
         TIRE,
         None,
         sample_purchase_date() - time::Duration::days(30),
-        "Second tire".to_string(),
         session,
         store,
     )
@@ -346,7 +338,6 @@ pub async fn fixture_bike(session: &TestSession, store: &mut MemStore) -> TbResu
         BIKE,
         None,
         sample_purchase_date() - time::Duration::days(365),
-        "Main bike frame".to_string(),
         session,
         store,
     )

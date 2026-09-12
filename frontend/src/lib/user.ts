@@ -3,6 +3,7 @@ import { Service, services } from "./service";
 import { activities, Activity } from "./activity";
 import { Usage, usages } from "./usage";
 import { parts, type Part } from "./part";
+import { partNotes, type PartNote } from "./partnote";
 import { Attachment, attachments } from "./attachment";
 import { plans, type ServicePlan } from "./serviceplan";
 import { Shop, shops } from "./shop";
@@ -45,6 +46,7 @@ export type User = {
 
 type Summary = {
   parts: Part[];
+  part_notes: PartNote[];
   attachments: Attachment[];
   activities: Activity[];
   usages: Usage[];
@@ -57,6 +59,7 @@ type Summary = {
 export function setSummary(data: Summary) {
   usages.setMap(data.usages);
   parts.setMap(data.parts);
+  partNotes.setMap(data.part_notes);
   attachments.setMap(data.attachments);
   activities.setMap(data.activities);
   services.setMap(data.services);
@@ -71,6 +74,7 @@ export function updateSummary(data?: Summary) {
     return;
   }
   parts.updateMap(data.parts);
+  if (data.part_notes) partNotes.updateMap(data.part_notes);
   attachments.updateMap(data.attachments);
   activities.updateMap(data.activities);
   services.updateMap(data.services);

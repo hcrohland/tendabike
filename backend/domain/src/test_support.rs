@@ -133,8 +133,17 @@ pub struct MemStore {
     /// Service plans stored as Vec (need iteration for filter ops)
     service_plans: HashMap<ServicePlanId, ServicePlan>,
 
+    /// Part notes (metadata) keyed by PartNoteId
+    part_notes: HashMap<PartNoteId, PartNote>,
+
+    /// File bytes for file-kind notes, keyed by PartNoteId
+    note_files: HashMap<PartNoteId, Vec<u8>>,
+
     /// Auto-increment counter for PartId
     next_part_id: i32,
+
+    /// Auto-increment counter for PartNoteId
+    next_note_id: i32,
 
     /// Users keyed by UserId
     users: HashMap<UserId, User>,
@@ -161,7 +170,10 @@ impl Default for MemStore {
             usages: HashMap::new(),
             services: HashMap::new(),
             service_plans: HashMap::new(),
+            part_notes: HashMap::new(),
+            note_files: HashMap::new(),
             next_part_id: 1,
+            next_note_id: 1,
             users: HashMap::new(),
             shops: HashMap::new(),
             subscriptions: HashMap::new(),

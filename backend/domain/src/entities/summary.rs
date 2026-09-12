@@ -25,6 +25,7 @@ pub struct Summary {
     pub usages: Vec<Usage>,
     pub services: Vec<Service>,
     pub plans: Vec<ServicePlan>,
+    pub part_notes: Vec<PartNote>,
     pub shops: Vec<Shop>,
     pub users: Vec<UserPublic>,
 }
@@ -38,6 +39,7 @@ impl From<SumHash> for Summary {
             usages: value.uses.into_values().collect(),
             services: value.servs.into_values().collect(),
             plans: value.plans.into_values().collect(),
+            part_notes: value.notes.into_values().collect(),
             shops: value.shops.into_values().collect(),
             users: value.users.into_values().collect(),
         }
@@ -61,6 +63,7 @@ pub(crate) struct SumHash {
     uses: HashMap<UsageId, Usage>,
     servs: HashMap<ServiceId, Service>,
     plans: HashMap<ServicePlanId, ServicePlan>,
+    notes: HashMap<PartNoteId, PartNote>,
     shops: HashMap<ShopId, Shop>,
     users: HashMap<UserId, UserPublic>,
 }
@@ -92,6 +95,9 @@ impl AddAssign<Summary> for SumHash {
         }
         for x in rhs.plans {
             self.plans.insert(x.id, x);
+        }
+        for x in rhs.part_notes {
+            self.notes.insert(x.id, x);
         }
         for x in rhs.shops {
             self.shops.insert(x.id, x);
