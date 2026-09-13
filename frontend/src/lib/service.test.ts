@@ -165,6 +165,7 @@ describe("Service CRUD", () => {
 
   const summary = () => ({
     parts: [],
+    part_notes: [],
     attachments: [],
     activities: [],
     services: [

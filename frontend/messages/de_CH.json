@@ -29,7 +29,6 @@
   "gearcard_delete_confirm": "Wilsch du \"{name}\" wirklich lösche?",
   "gearcard_save": "Spichere",
   "gearcard_cancel": "Abbräche",
-  "gearcard_delete": "Lösche",
   "partcard_history": "Verlauf",
   "partcard_log_service": "Service iitrage",
   "partcard_replace_type": "{type} ersetze",

@@ -29,7 +29,6 @@
   "gearcard_delete_confirm": "Möchtest du \"{name}\" wirklich löschen?",
   "gearcard_save": "Speichern",
   "gearcard_cancel": "Abbrechen",
-  "gearcard_delete": "Löschen",
   "partcard_history": "Verlauf",
   "partcard_log_service": "Service eintragen",
   "partcard_replace_type": "{type} ersetzen",

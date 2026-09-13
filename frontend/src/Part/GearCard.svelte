@@ -118,7 +118,9 @@
       <div class="mt-4">
         <div class="flex items-center mb-2 my-2">
           <strong>{m.gearcard_notes()}:</strong>
-          <XsButton onclick={() => newNote!.start(part.id!)}>Add</XsButton>
+          <XsButton onclick={() => newNote!.start(part.id!)}
+            >{m.partcard_add()}</XsButton
+          >
         </div>
 
         {#each notes as note (note.id)}

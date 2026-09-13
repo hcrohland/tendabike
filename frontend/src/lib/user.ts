@@ -74,7 +74,7 @@ export function updateSummary(data?: Summary) {
     return;
   }
   parts.updateMap(data.parts);
-  if (data.part_notes) partNotes.updateMap(data.part_notes);
+  partNotes.updateMap(data.part_notes);
   attachments.updateMap(data.attachments);
   activities.updateMap(data.activities);
   services.updateMap(data.services);

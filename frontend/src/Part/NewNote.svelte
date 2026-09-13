@@ -105,7 +105,7 @@
   }
 </script>
 
-<Modal bind:open {onaction} valid={name.trim().length > 0}>
+<Modal bind:open {onaction}>
   {#snippet header()}
     {#if editingNote}
       {m.gearcard_change_note()}
@@ -193,7 +193,12 @@
       <Button color="alternative" onclick={() => (open = false)}>
         {m.action_cancel()}
       </Button>
-      <Button type="submit" value="commit" color="gray">
+      <Button
+        type="submit"
+        value="commit"
+        color="gray"
+        disabled={!removeFile && !(name.trim().length > 0 || file !== null)}
+      >
         {#if editingNote}
           {m.action_update()}
         {:else}

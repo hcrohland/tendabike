@@ -19,6 +19,7 @@ function shopData(overrides: Partial<any> = {}): any {
 function summary(overrides: Partial<any> = {}): any {
   return {
     parts: [],
+    part_notes: [],
     attachments: [],
     activities: [],
     usages: [],
