@@ -11,6 +11,7 @@ struct DbPartNote {
     kind: String,
     name: String,
     mime: Option<String>,
+    filename: Option<String>,
     size: Option<i64>,
     created: OffsetDateTime,
 }
@@ -23,6 +24,7 @@ impl From<DbPartNote> for PartNote {
             kind,
             name,
             mime,
+            filename,
             size,
             created,
         } = db;
@@ -35,6 +37,7 @@ impl From<DbPartNote> for PartNote {
             },
             name,
             mime,
+            filename,
             size,
             created,
         }
@@ -52,8 +55,8 @@ impl<'c> tb_domain::PartNoteStore for SqlxConn<'c> {
         sqlx::query_as!(
             DbPartNote,
             r#"INSERT INTO part_notes (part, kind, name, created)
-              VALUES ($1, 'text', $2, $3)
-              RETURNING id, part, kind, name, mime, size, created"#,
+               VALUES ($1, 'text', $2, $3)
+               RETURNING id, part, kind, name, mime, filename, size, created"#,
             i32::from(part),
             name,
             created
@@ -69,18 +72,20 @@ impl<'c> tb_domain::PartNoteStore for SqlxConn<'c> {
         part: PartId,
         name: String,
         mime: String,
+        filename: Option<String>,
         size: i64,
         data: Vec<u8>,
         created: OffsetDateTime,
     ) -> TbResult<PartNote> {
         sqlx::query_as!(
             DbPartNote,
-            r#"INSERT INTO part_notes (part, kind, name, mime, size, data, created)
-              VALUES ($1, 'file', $2, $3, $4, $5, $6)
-              RETURNING id, part, kind, name, mime, size, created"#,
+            r#"INSERT INTO part_notes (part, kind, name, mime, filename, size, data, created)
+               VALUES ($1, 'file', $2, $3, $4, $5, $6, $7)
+               RETURNING id, part, kind, name, mime, filename, size, created"#,
             i32::from(part),
             name,
             mime,
+            filename,
             size,
             data,
             created
@@ -94,7 +99,7 @@ impl<'c> tb_domain::PartNoteStore for SqlxConn<'c> {
     async fn partnote_all_by_part(&mut self, part: PartId) -> TbResult<Vec<PartNote>> {
         sqlx::query_as!(
             DbPartNote,
-            "SELECT id, part, kind, name, mime, size, created FROM part_notes WHERE part = $1 ORDER BY id",
+            "SELECT id, part, kind, name, mime, filename, size, created FROM part_notes WHERE part = $1 ORDER BY id",
             i32::from(part)
         )
         .fetch_all(&mut **self.inner())
@@ -106,7 +111,7 @@ impl<'c> tb_domain::PartNoteStore for SqlxConn<'c> {
     async fn partnote_get(&mut self, id: PartNoteId) -> TbResult<PartNote> {
         sqlx::query_as!(
             DbPartNote,
-            "SELECT id, part, kind, name, mime, size, created FROM part_notes WHERE id = $1",
+            "SELECT id, part, kind, name, mime, filename, size, created FROM part_notes WHERE id = $1",
             i32::from(id)
         )
         .fetch_one(&mut **self.inner())
@@ -127,9 +132,52 @@ impl<'c> tb_domain::PartNoteStore for SqlxConn<'c> {
     async fn partnote_update_text(&mut self, id: PartNoteId, name: String) -> TbResult<PartNote> {
         sqlx::query_as!(
             DbPartNote,
-            "UPDATE part_notes SET name = $2 WHERE id = $1 RETURNING id, part, kind, name, mime, size, created",
+            "UPDATE part_notes SET name = $2 WHERE id = $1 RETURNING id, part, kind, name, mime, filename, size, created",
             i32::from(id),
             name
+        )
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(Into::into)
+    }
+
+    async fn partnote_update_file(
+        &mut self,
+        id: PartNoteId,
+        name: String,
+        mime: String,
+        filename: Option<String>,
+        size: i64,
+        data: Vec<u8>,
+    ) -> TbResult<PartNote> {
+        sqlx::query_as!(
+            DbPartNote,
+            r#"UPDATE part_notes
+               SET kind = 'file', name = $2, mime = $3, filename = $4, size = $5, data = $6
+               WHERE id = $1
+               RETURNING id, part, kind, name, mime, filename, size, created"#,
+            i32::from(id),
+            name,
+            mime,
+            filename,
+            size,
+            data
+        )
+        .fetch_one(&mut **self.inner())
+        .await
+        .map_err(into_domain)
+        .map(Into::into)
+    }
+
+    async fn partnote_remove_file(&mut self, id: PartNoteId) -> TbResult<PartNote> {
+        sqlx::query_as!(
+            DbPartNote,
+            r#"UPDATE part_notes
+               SET kind = 'text', mime = NULL, filename = NULL, size = NULL, data = NULL
+               WHERE id = $1
+               RETURNING id, part, kind, name, mime, filename, size, created"#,
+            i32::from(id)
         )
         .fetch_one(&mut **self.inner())
         .await

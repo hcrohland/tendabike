@@ -59,6 +59,8 @@ pub struct PartNote {
     pub name: String,
     /// MIME type (files only)
     pub mime: Option<String>,
+    /// Original uploaded filename (files only)
+    pub filename: Option<String>,
     /// Byte length of the file (files only)
     pub size: Option<i64>,
     /// When the note was created

@@ -137,6 +137,7 @@ impl PartNoteStore for MemStore {
             kind: NoteKind::Text,
             name,
             mime: None,
+            filename: None,
             size: None,
             created,
         };
@@ -149,6 +150,7 @@ impl PartNoteStore for MemStore {
         part: PartId,
         name: String,
         mime: String,
+        filename: Option<String>,
         size: i64,
         data: Vec<u8>,
         created: OffsetDateTime,
@@ -161,6 +163,7 @@ impl PartNoteStore for MemStore {
             kind: NoteKind::File,
             name,
             mime: Some(mime),
+            filename,
             size: Some(size),
             created,
         };
@@ -198,6 +201,41 @@ impl PartNoteStore for MemStore {
             .get_mut(&id)
             .ok_or_else(|| Error::NotFound(format!("PartNote {id} not found")))?;
         note.name = name;
+        Ok(note.clone())
+    }
+
+    async fn partnote_update_file(
+        &mut self,
+        id: PartNoteId,
+        name: String,
+        mime: String,
+        filename: Option<String>,
+        size: i64,
+        data: Vec<u8>,
+    ) -> TbResult<PartNote> {
+        let note = self
+            .part_notes
+            .get_mut(&id)
+            .ok_or_else(|| Error::NotFound(format!("PartNote {id} not found")))?;
+        note.kind = NoteKind::File;
+        note.name = name;
+        note.mime = Some(mime);
+        note.filename = filename;
+        note.size = Some(size);
+        self.note_files.insert(id, data);
+        Ok(note.clone())
+    }
+
+    async fn partnote_remove_file(&mut self, id: PartNoteId) -> TbResult<PartNote> {
+        let note = self
+            .part_notes
+            .get_mut(&id)
+            .ok_or_else(|| Error::NotFound(format!("PartNote {id} not found")))?;
+        note.kind = NoteKind::Text;
+        note.mime = None;
+        note.filename = None;
+        note.size = None;
+        self.note_files.remove(&id);
         Ok(note.clone())
     }
 

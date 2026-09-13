@@ -1,20 +1,24 @@
 <script lang="ts">
-  import { Card, Textarea, Button, Badge } from "flowbite-svelte";
-  import { EditOutline } from "flowbite-svelte-icons";
+  import { Card, Badge } from "flowbite-svelte";
+  import { PaperClipOutline } from "flowbite-svelte-icons";
   import { link, push } from "svelte-spa-router";
   import { Part } from "../lib/part";
   import {
     PartNote,
     partNotes,
     notes_for_part,
-    createTextNote,
-    createFileNote,
+    fmtSize,
   } from "../lib/partnote";
   import { fmtDate } from "../lib/store";
   import { types } from "../lib/types";
   import { user, users } from "../lib/user";
   import UsageChips from "../Usage/UsageChips.svelte";
   import ServiceBadge from "../Widgets/ServiceBadge.svelte";
+  import Menu from "../Widgets/Menu.svelte";
+  import XsButton from "../Widgets/XsButton.svelte";
+  import { DropdownItem } from "flowbite-svelte";
+  import NewNote from "./NewNote.svelte";
+  import DeleteNote from "./DeleteNote.svelte";
   import * as m from "../../paraglide/messages";
 
   interface Props {
@@ -27,14 +31,10 @@
 
   let { part, summary = false, dues, gridclass, children }: Props = $props();
 
-  let addingNote = $state(false);
-  let newText = $state("");
-  let fileInput = $state<HTMLInputElement>();
-
-  let editingId = $state<number | null>(null);
-  let editValue = $state("");
-
   let notes = $derived(notes_for_part($partNotes, part.id!));
+
+  let newNote = $state<{ start: (partId: number, note?: PartNote) => void }>();
+  let deleteNote = $state<{ start: (note: PartNote) => void }>();
 
   function model(part: Part) {
     if (part.model == "" && part.vendor == "") {
@@ -51,39 +51,9 @@
     return "";
   }
 
-  async function addTextNote() {
-    if (!newText.trim()) return;
-    await createTextNote(part.id!, newText.trim());
-    newText = "";
-    addingNote = false;
-  }
-
-  async function onFileSelected() {
-    const file = fileInput?.files?.[0];
-    if (!file) return;
-    await createFileNote(part.id!, file);
-    if (fileInput) fileInput.value = "";
-  }
-
-  async function deleteNote(note: PartNote) {
-    await note.delete();
-  }
-
-  function startEdit(note: PartNote) {
-    editingId = note.id ?? null;
-    editValue = note.name;
-  }
-
-  async function saveEdit(note: PartNote) {
-    await note.updateText(editValue);
-    editingId = null;
-    editValue = "";
-  }
-
-  function fmtSize(bytes: number) {
-    if (bytes < 1024) return bytes + " B";
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  function fileTooltip(note: PartNote) {
+    const size = fmtSize(note.size ?? 0);
+    return note.filename ? `${note.filename} — ${size}` : size;
   }
 </script>
 
@@ -143,138 +113,53 @@
     <!-- Stat chips -->
     <UsageChips id={part.usage} ref={part.id} {gridclass} {dues} light />
 
-    <!-- Notes & attachments (detail view only) -->
+    <!-- Notes (detail view only) -->
     {#if !summary}
       <div class="mt-4">
-        <div class="flex items-center gap-2 mb-2">
+        <div class="flex items-center mb-2 my-2">
           <strong>{m.gearcard_notes()}:</strong>
+          <XsButton onclick={() => newNote!.start(part.id!)}>Add</XsButton>
         </div>
 
-        <!-- Existing notes -->
         {#each notes as note (note.id)}
-          <div class="flex items-start gap-2 mb-2">
-            {#if note.kind === "text"}
-              <div class="flex-1">
-                {#if editingId == note.id}
-                  <div class="flex flex-col gap-2">
-                    <Textarea bind:value={editValue} rows={2} class="w-full" />
-                    <div class="flex gap-2">
-                      <Button size="sm" onclick={() => saveEdit(note)}>
-                        {m.gearcard_save()}
-                      </Button>
-                      <Button
-                        size="sm"
-                        color="alternative"
-                        onclick={() => {
-                          editingId = null;
-                          editValue = "";
-                        }}
-                      >
-                        {m.gearcard_cancel()}
-                      </Button>
-                    </div>
-                  </div>
-                {:else}
-                  <p
-                    class="text-gray-700 dark:text-gray-300 whitespace-pre-wrap"
-                  >
-                    {note.name}
-                  </p>
-                {/if}
-              </div>
-              <div class="flex gap-1">
-                <EditOutline
-                  class="w-4 h-4 cursor-pointer text-gray-400 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                  onclick={() => startEdit(note)}
-                />
-                <button
-                  class="text-red-500 hover:text-red-700 dark:hover:text-red-300 text-xs"
-                  onclick={() => deleteNote(note)}
-                  title={m.gearcard_delete()}
-                >
-                  ✕
-                </button>
-              </div>
-            {:else}
-              <div class="flex-1">
-                {#if note.isImage()}
-                  <a href={note.fileUrl()} target="_blank">
-                    <img
-                      src={note.fileUrl()}
-                      alt={note.name}
-                      class="max-h-32 rounded"
-                    />
-                  </a>
-                {:else}
-                  <a
-                    href={note.fileUrl()}
-                    class="text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    {note.name}
-                  </a>
-                {/if}
-                <span class="text-xs text-gray-500 ml-2">
-                  {fmtSize(note.size ?? 0)}
-                </span>
-              </div>
-              <button
-                class="text-red-500 hover:text-red-700 dark:hover:text-red-300 text-xs"
-                onclick={() => deleteNote(note)}
-                title={m.gearcard_delete()}
+          <div
+            class="flex items-start gap-2 border border-gray-300 dark:border-gray-600 rounded px-3 py-2 mb-1"
+          >
+            <div
+              class="flex-1 min-w-0 text-gray-700 dark:text-gray-300 whitespace-pre-wrap"
+            >
+              {note.name}
+            </div>
+            {#if note.kind === "file"}
+              <span
+                class="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-sm shrink-0"
               >
-                ✕
-              </button>
+                <a
+                  href={note.fileUrl()}
+                  target="_blank"
+                  title={fileTooltip(note)}
+                  class="hover:text-gray-700 dark:hover:text-gray-300"
+                >
+                  <PaperClipOutline class="w-4 h-4" />
+                </a>
+              </span>
             {/if}
+            <Menu>
+              <DropdownItem onclick={() => newNote!.start(part.id!, note)}>
+                {m.gearcard_change_note()}
+              </DropdownItem>
+              <DropdownItem onclick={() => deleteNote!.start(note)}>
+                {m.gearcard_delete_note()}
+              </DropdownItem>
+            </Menu>
           </div>
         {/each}
-
-        <!-- Add text note -->
-        {#if addingNote}
-          <div class="mt-2">
-            <Textarea
-              bind:value={newText}
-              placeholder={m.gearcard_notes_placeholder()}
-              rows={2}
-              class="w-full mb-2"
-            />
-            <div class="flex gap-2">
-              <Button size="sm" onclick={addTextNote}>
-                {m.gearcard_add_note()}
-              </Button>
-              <Button
-                size="sm"
-                color="alternative"
-                onclick={() => (addingNote = false)}
-              >
-                {m.gearcard_cancel()}
-              </Button>
-            </div>
-          </div>
-        {:else}
-          <div class="flex gap-2 mt-2">
-            <Button
-              size="sm"
-              color="alternative"
-              onclick={() => (addingNote = true)}
-            >
-              {m.gearcard_add_note()}
-            </Button>
-            <input
-              type="file"
-              class="hidden"
-              bind:this={fileInput}
-              onchange={onFileSelected}
-            />
-            <Button
-              size="sm"
-              color="alternative"
-              onclick={() => fileInput?.click()}
-            >
-              {m.gearcard_upload_file()}
-            </Button>
-          </div>
-        {/if}
       </div>
     {/if}
   </div>
 </Card>
+
+{#if !summary}
+  <NewNote bind:this={newNote} />
+  <DeleteNote bind:this={deleteNote} />
+{/if}

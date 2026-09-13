@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, object_type as \"object_type!\", object_id, aspect_type as \"aspect_type!\", updates as \"updates!\", owner_id, subscription_id, event_time FROM strava_events\n             WHERE owner_id = ANY($1)\n             ORDER BY event_time ASC\n             LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "object_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "object_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "aspect_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "updates!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "owner_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "subscription_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "event_time",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4Array"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f300ea2f7234109c1a3177eb2129649270ebb5bf27909772aae9dc99faebadd9"
+}

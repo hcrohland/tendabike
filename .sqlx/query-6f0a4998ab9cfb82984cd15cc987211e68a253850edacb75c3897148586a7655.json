@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE part_notes\n               SET kind = 'file', name = $2, mime = $3, filename = $4, size = $5, data = $6\n               WHERE id = $1\n               RETURNING id, part, kind, name, mime, filename, size, created",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "part",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "mime",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "filename",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "size",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "created",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "6f0a4998ab9cfb82984cd15cc987211e68a253850edacb75c3897148586a7655"
+}

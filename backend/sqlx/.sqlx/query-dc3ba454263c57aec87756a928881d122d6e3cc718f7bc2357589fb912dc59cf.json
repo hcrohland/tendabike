@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM attachments\n             WHERE hook = ANY($1)\n               AND gear = $2\n               AND attached <= $3\n               AND detached > $3\n             ORDER BY hook\n             FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "part_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "attached",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "gear",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "hook",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "detached",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "usage",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4Array",
+        "Int4",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "dc3ba454263c57aec87756a928881d122d6e3cc718f7bc2357589fb912dc59cf"
+}

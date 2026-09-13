@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM attachments\n             WHERE gear = $1\n               AND attached <= $2\n               AND (detached IS NULL OR detached > $2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "part_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "attached",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "gear",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "hook",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "detached",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "usage",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f0a545ac10141535c0e1f08adcdb8850bf3ba8efba613aba1c823d69b99fd171"
+}

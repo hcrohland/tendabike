@@ -9,6 +9,7 @@ export class PartNote {
   kind: NoteKind;
   name: string;
   mime?: string;
+  filename?: string;
   size?: number;
   created: Date;
 
@@ -18,6 +19,7 @@ export class PartNote {
     this.kind = data.kind;
     this.name = data.name || "";
     this.mime = data.mime;
+    this.filename = data.filename;
     this.size = data.size;
     this.created = data.created ? new Date(data.created) : new Date();
   }
@@ -30,8 +32,30 @@ export class PartNote {
     return this.id ? `/api/part/notes/${this.id}/file` : undefined;
   }
 
-  async updateText(name: string) {
+  async updateName(name: string) {
     return await myfetch(`/api/part/notes/${this.id}`, "PUT", { name })
+      .then((data) => partNotes.updateMap([data]))
+      .catch(handleError);
+  }
+
+  async updateFile(name: string, file: File) {
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("file", file, file.name);
+    const res = await fetch(`/api/part/notes/${this.id}/file`, {
+      method: "PUT",
+      credentials: "include",
+      body: formData,
+    })
+      .then(checkStatus)
+      .catch(handleError);
+    if (!res) return res;
+    partNotes.updateMap([res]);
+    return res;
+  }
+
+  async removeFile() {
+    return await myfetch(`/api/part/notes/${this.id}/file`, "DELETE")
       .then((data) => partNotes.updateMap([data]))
       .catch(handleError);
   }
@@ -61,8 +85,15 @@ export async function createTextNote(part: number, name: string) {
     .catch(handleError);
 }
 
-export async function createFileNote(part: number, file: File) {
+export function fmtSize(bytes: number): string {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+export async function createFileNote(part: number, name: string, file: File) {
   const formData = new FormData();
+  formData.append("name", name);
   formData.append("file", file);
   const res = await fetch(`/api/part/${part}/notes/file`, {
     method: "POST",

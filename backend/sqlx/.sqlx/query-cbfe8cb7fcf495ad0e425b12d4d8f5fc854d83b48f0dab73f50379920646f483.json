@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM service_plans WHERE uid = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "part",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "what",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "hook",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "days",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "hours",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "km",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "climb",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "descend",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "rides",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "uid",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
+        "name": "energy",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "cbfe8cb7fcf495ad0e425b12d4d8f5fc854d83b48f0dab73f50379920646f483"
+}

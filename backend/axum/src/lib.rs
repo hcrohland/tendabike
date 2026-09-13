@@ -300,6 +300,16 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn partnote_file_update_requires_auth() {
+        expect_unauth(Method::PUT, "/api/part/notes/1/file").await;
+    }
+
+    #[tokio::test]
+    async fn partnote_file_remove_requires_auth() {
+        expect_unauth(Method::DELETE, "/api/part/notes/1/file").await;
+    }
+
+    #[tokio::test]
     async fn partnote_update_requires_auth() {
         expect_unauth(Method::PUT, "/api/part/notes/1").await;
     }

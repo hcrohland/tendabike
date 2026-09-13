@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO strava_events (object_type, object_id, aspect_type, updates, owner_id, subscription_id, event_time)\n             VALUES ($1, $2, $3, $4, $5, $6, $7)\n             RETURNING id, object_type as \"object_type!\", object_id, aspect_type as \"aspect_type!\", updates as \"updates!\", owner_id, subscription_id, event_time",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "object_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "object_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "aspect_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "updates!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "owner_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "subscription_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "event_time",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Text",
+        "Text",
+        "Int4",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a46a321bcdce60bc2d3952c37f616b7aac36c49de42f853dfd966afd4dbd8224"
+}

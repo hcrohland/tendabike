@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.* FROM attachments a\n             INNER JOIN parts p ON p.id = a.part_id AND p.what = $1\n             WHERE a.gear = $2\n               AND a.hook = $3\n               AND a.part_id <> $4\n               AND a.attached > $5\n             ORDER BY a.attached\n             FOR UPDATE\n             LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "part_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "attached",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "gear",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "hook",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "detached",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "usage",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "69b9fe871b8ed07fa2f042bc235ee22806d1547dad42423720cfc450119e4242"
+}

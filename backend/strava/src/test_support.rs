@@ -352,12 +352,22 @@ impl PartNoteStore for TestStravaStore {
         part: PartId,
         name: String,
         mime: String,
+        filename: Option<String>,
         size: i64,
         data: Vec<u8>,
         created: OffsetDateTime,
     ) -> TbResult<PartNote> {
-        PartNoteStore::partnote_create_file(&mut self.mem, part, name, mime, size, data, created)
-            .await
+        PartNoteStore::partnote_create_file(
+            &mut self.mem,
+            part,
+            name,
+            mime,
+            filename,
+            size,
+            data,
+            created,
+        )
+        .await
     }
     async fn partnote_all_by_part(&mut self, part: PartId) -> TbResult<Vec<PartNote>> {
         PartNoteStore::partnote_all_by_part(&mut self.mem, part).await
@@ -370,6 +380,21 @@ impl PartNoteStore for TestStravaStore {
     }
     async fn partnote_update_text(&mut self, id: PartNoteId, name: String) -> TbResult<PartNote> {
         PartNoteStore::partnote_update_text(&mut self.mem, id, name).await
+    }
+    async fn partnote_update_file(
+        &mut self,
+        id: PartNoteId,
+        name: String,
+        mime: String,
+        filename: Option<String>,
+        size: i64,
+        data: Vec<u8>,
+    ) -> TbResult<PartNote> {
+        PartNoteStore::partnote_update_file(&mut self.mem, id, name, mime, filename, size, data)
+            .await
+    }
+    async fn partnote_remove_file(&mut self, id: PartNoteId) -> TbResult<PartNote> {
+        PartNoteStore::partnote_remove_file(&mut self.mem, id).await
     }
     async fn partnote_delete(&mut self, id: PartNoteId) -> TbResult<PartNoteId> {
         PartNoteStore::partnote_delete(&mut self.mem, id).await
