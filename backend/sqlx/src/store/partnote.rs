@@ -193,3 +193,59 @@ impl<'c> tb_domain::PartNoteStore for SqlxConn<'c> {
         Ok(id)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn date() -> OffsetDateTime {
+        OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
+    }
+
+    fn db_note(kind: &str) -> DbPartNote {
+        DbPartNote {
+            id: 7,
+            part: 3,
+            kind: kind.to_string(),
+            name: "torn tire".to_string(),
+            mime: Some("image/png".to_string()),
+            filename: Some("tire.png".to_string()),
+            size: Some(1234),
+            created: date(),
+        }
+    }
+
+    #[test]
+    fn from_db_part_note_maps_file_kind() {
+        let note = PartNote::from(db_note("file"));
+        assert_eq!(note.id, PartNoteId::from(7));
+        assert_eq!(note.part, PartId::from(3));
+        assert_eq!(note.kind, NoteKind::File);
+        assert_eq!(note.name, "torn tire");
+        assert_eq!(note.mime, Some("image/png".to_string()));
+        assert_eq!(note.filename, Some("tire.png".to_string()));
+        assert_eq!(note.size, Some(1234));
+        assert_eq!(note.created, date());
+    }
+
+    #[test]
+    fn from_db_part_note_maps_text_kind() {
+        let db = DbPartNote {
+            mime: None,
+            filename: None,
+            size: None,
+            ..db_note("text")
+        };
+        let note = PartNote::from(db);
+        assert_eq!(note.kind, NoteKind::Text);
+        assert_eq!(note.mime, None);
+        assert_eq!(note.filename, None);
+        assert_eq!(note.size, None);
+    }
+
+    #[test]
+    fn from_db_part_note_unknown_kind_falls_back_to_text() {
+        let note = PartNote::from(db_note("garbage"));
+        assert_eq!(note.kind, NoteKind::Text);
+    }
+}

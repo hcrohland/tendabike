@@ -125,7 +125,7 @@ mod tests {
     use http::{Method, StatusCode};
     use tower_sessions::MemoryStore;
 
-    use crate::test_support::{admin_cookie, run, test_app, user_cookie};
+    use crate::test_support::{admin_cookie, run, run_json, test_app, user_cookie};
 
     async fn setup() -> (Router, MemoryStore) {
         let store = MemoryStore::default();
@@ -325,6 +325,30 @@ mod tests {
         let cookie = user_cookie(&store).await;
         let (status, _headers, _body) =
             run(app, Method::GET, "/api/part/1/notes", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn partnote_update_reaches_db_layer() {
+        let (app, store) = setup().await;
+        let cookie = user_cookie(&store).await;
+        let (status, _headers, _body) = run_json(
+            app,
+            Method::PUT,
+            "/api/part/notes/1",
+            Some(&cookie),
+            r#"{"name":"renamed"}"#,
+        )
+        .await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn partnote_delete_reaches_db_layer() {
+        let (app, store) = setup().await;
+        let cookie = user_cookie(&store).await;
+        let (status, _headers, _body) =
+            run(app, Method::DELETE, "/api/part/notes/1", Some(&cookie)).await;
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
     }
 

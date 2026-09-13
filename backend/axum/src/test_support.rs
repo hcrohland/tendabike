@@ -68,12 +68,38 @@ pub(crate) async fn run(
     uri: &str,
     cookie: Option<&str>,
 ) -> (StatusCode, HeaderMap, Vec<u8>) {
-    let mut req = Request::builder()
+    run_with_body(app, method, uri, cookie, None).await
+}
+
+/// Runs a single request with a JSON body against `app`.
+pub(crate) async fn run_json(
+    app: Router,
+    method: Method,
+    uri: &str,
+    cookie: Option<&str>,
+    body: &str,
+) -> (StatusCode, HeaderMap, Vec<u8>) {
+    run_with_body(app, method, uri, cookie, Some(body)).await
+}
+
+async fn run_with_body(
+    app: Router,
+    method: Method,
+    uri: &str,
+    cookie: Option<&str>,
+    json: Option<&str>,
+) -> (StatusCode, HeaderMap, Vec<u8>) {
+    let mut builder = Request::builder()
         .method(method)
         .uri(uri)
-        .header(header::HOST, "localhost")
-        .body(axum::body::Body::empty())
-        .expect("valid request");
+        .header(header::HOST, "localhost");
+    let body = if let Some(json) = json {
+        builder = builder.header(header::CONTENT_TYPE, "application/json");
+        axum::body::Body::from(json.as_bytes().to_vec())
+    } else {
+        axum::body::Body::empty()
+    };
+    let mut req = builder.body(body).expect("valid request");
     if let Some(cookie) = cookie {
         req.headers_mut()
             .insert(header::COOKIE, cookie.parse().expect("valid cookie"));
