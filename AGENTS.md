@@ -128,3 +128,17 @@ Strava OAuth: `/strava/*` (OAuth flow, webhook endpoints)
 - **License**: AGPL v3 - see [`LICENSE`](LICENSE)
 - **Session management**: `tower-sessions` with PostgreSQL store; 10-day inactivity expiry
 - **Frontend-backend coupling**: Frontend expects API at `/api/*` and `/strava/*`; backend serves both API and static files in production
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as local markdown files under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary, each label string equal to its role name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.

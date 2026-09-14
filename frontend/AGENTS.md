@@ -41,3 +41,4 @@ This file provides guidance to agents when working with code in this repository.
 - Store updates must use `updateMap()`/`setMap()`/`deleteItem()` from the entity's exported store variable (e.g., `parts.updateMap([data])`)
 - Paraglide messages imported via `import { m } from "../../paraglide/messages"` - translation keys follow pattern `m.action_name()`
 - `svelte-spa-router` params typed as `{ id: number }` style, received via `$props()`
+- `node_modules` are located at `/workspaces/tendabike/node_modules`
