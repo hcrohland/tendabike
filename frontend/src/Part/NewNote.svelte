@@ -30,6 +30,7 @@
     createFileNote,
     fmtSize,
   } from "../lib/partnote";
+  import type { Part } from "../lib/part";
   import { handleError } from "../lib/store";
   import Modal from "../Widgets/Modal.svelte";
   import * as m from "../../paraglide/messages";
@@ -54,8 +55,8 @@
     if (filePreview) URL.revokeObjectURL(filePreview);
   });
 
-  export function start(pid: number, note?: PartNote) {
-    partId = pid;
+  export function start(part: Part, note?: PartNote) {
+    partId = part.id!;
     if (note) {
       editingNote = note;
       name = note.name;

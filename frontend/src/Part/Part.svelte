@@ -9,6 +9,7 @@
   import GearCard from "./GearCard.svelte";
   import Subparts from "./Subparts.svelte";
   import PartHist from "./PartHist.svelte";
+  import NoteList from "./NoteList.svelte";
   import { actions } from "../Widgets/Actions.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
   import Menu from "../Widgets/Menu.svelte";
@@ -112,5 +113,16 @@
       {/if}
     {/snippet}
     <ServiceList {part} /><br />
+  </TabItem>
+  <TabItem key="notes">
+    {#snippet titleSlot()}
+      {m.part_tab_notes()}
+      {#if tab == "notes"}
+        <XsButton onclick={() => $actions.newNote(part)}>
+          {m.partcard_add()}
+        </XsButton>
+      {/if}
+    {/snippet}
+    <NoteList {part} /><br />
   </TabItem>
 </Tabs>

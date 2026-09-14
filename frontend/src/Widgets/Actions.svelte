@@ -3,6 +3,8 @@
 
   type ModalType = {
     newPart: (t: Type) => void;
+    newNote: (p: Part, note?: PartNote) => void;
+    deleteNote: (n: PartNote) => void;
     installPart: (p: Part) => void;
     changePart: (p: Part) => void;
     deletePart: (p: Part) => void;
@@ -30,6 +32,8 @@
 
 <script lang="ts">
   import DeletePlan from "../ServicePlan/DeletePlan.svelte";
+  import NewNote from "../Part/NewNote.svelte";
+  import DeleteNote from "../Part/DeleteNote.svelte";
   import UpdatePlan from "../ServicePlan/UpdatePlan.svelte";
   import ServiceActions from "../Service/ServiceActions.svelte";
   import NewPlan from "../ServicePlan/NewPlan.svelte";
@@ -42,6 +46,7 @@
   import type { Attachment } from "../lib/attachment";
   import type { ServicePlan } from "../lib/serviceplan";
   import type { Type } from "../lib/types";
+  import type { PartNote } from "../lib/partnote";
   import type { Service } from "../lib/service";
   import ChangePart from "../Part/ChangePart.svelte";
   import DeleteAttachment from "../Attachment/DeleteAttachment.svelte";
@@ -56,6 +61,8 @@
 
   $: actions.set({
     newPart: newPart?.start,
+    newNote: newNote?.start,
+    deleteNote: deleteNote?.start,
     installPart: installPart?.start,
     changePart: changePart?.start,
     deletePart: deletePart?.start,
@@ -79,6 +86,8 @@
   });
 
   let newPart: { start: (t: Type) => void };
+  let newNote: { start: (p: Part, note?: PartNote) => void };
+  let deleteNote: { start: (n: PartNote) => void };
   let installPart: { start: (p: Part) => void };
   let changePart: { start: (p: Part) => void };
   let deletePart: { start: (p: Part) => void };
@@ -103,6 +112,8 @@
 </script>
 
 <NewPart bind:this={newPart} />
+<NewNote bind:this={newNote} />
+<DeleteNote bind:this={deleteNote} />
 <ChangePart bind:this={changePart} />
 <DeletePart bind:this={deletePart} />
 <ServiceActions bind:this={serviceActions} />

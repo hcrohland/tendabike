@@ -1,24 +1,12 @@
 <script lang="ts">
   import { Card, Badge } from "flowbite-svelte";
-  import { PaperClipOutline } from "flowbite-svelte-icons";
   import { link, push } from "svelte-spa-router";
   import { Part } from "../lib/part";
-  import {
-    PartNote,
-    partNotes,
-    notes_for_part,
-    fmtSize,
-  } from "../lib/partnote";
   import { fmtDate } from "../lib/store";
   import { types } from "../lib/types";
   import { user, users } from "../lib/user";
   import UsageChips from "../Usage/UsageChips.svelte";
   import ServiceBadge from "../Widgets/ServiceBadge.svelte";
-  import Menu from "../Widgets/Menu.svelte";
-  import XsButton from "../Widgets/XsButton.svelte";
-  import { DropdownItem } from "flowbite-svelte";
-  import NewNote from "./NewNote.svelte";
-  import DeleteNote from "./DeleteNote.svelte";
   import * as m from "../../paraglide/messages";
 
   interface Props {
@@ -30,11 +18,6 @@
   }
 
   let { part, summary = false, dues, gridclass, children }: Props = $props();
-
-  let notes = $derived(notes_for_part($partNotes, part.id!));
-
-  let newNote = $state<{ start: (partId: number, note?: PartNote) => void }>();
-  let deleteNote = $state<{ start: (note: PartNote) => void }>();
 
   function model(part: Part) {
     if (part.model == "" && part.vendor == "") {
@@ -49,11 +32,6 @@
       return types[part.what].localizedName();
     }
     return "";
-  }
-
-  function fileTooltip(note: PartNote) {
-    const size = fmtSize(note.size ?? 0);
-    return note.filename ? `${note.filename} — ${size}` : size;
   }
 </script>
 
@@ -112,56 +90,5 @@
 
     <!-- Stat chips -->
     <UsageChips id={part.usage} ref={part.id} {gridclass} {dues} light />
-
-    <!-- Notes (detail view only) -->
-    {#if !summary}
-      <div class="mt-4">
-        <div class="flex items-center mb-2 my-2">
-          <strong>{m.gearcard_notes()}:</strong>
-          <XsButton onclick={() => newNote!.start(part.id!)}
-            >{m.partcard_add()}</XsButton
-          >
-        </div>
-
-        {#each notes as note (note.id)}
-          <div
-            class="flex items-start gap-2 border border-gray-300 dark:border-gray-600 rounded px-3 py-2 mb-1"
-          >
-            <div
-              class="flex-1 min-w-0 text-gray-700 dark:text-gray-300 whitespace-pre-wrap"
-            >
-              {note.name}
-            </div>
-            {#if note.hasFile()}
-              <span
-                class="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-sm shrink-0"
-              >
-                <a
-                  href={note.fileUrl()}
-                  target="_blank"
-                  title={fileTooltip(note)}
-                  class="hover:text-gray-700 dark:hover:text-gray-300"
-                >
-                  <PaperClipOutline class="w-4 h-4" />
-                </a>
-              </span>
-            {/if}
-            <Menu>
-              <DropdownItem onclick={() => newNote!.start(part.id!, note)}>
-                {m.gearcard_change_note()}
-              </DropdownItem>
-              <DropdownItem onclick={() => deleteNote!.start(note)}>
-                {m.gearcard_delete_note()}
-              </DropdownItem>
-            </Menu>
-          </div>
-        {/each}
-      </div>
-    {/if}
   </div>
 </Card>
-
-{#if !summary}
-  <NewNote bind:this={newNote} />
-  <DeleteNote bind:this={deleteNote} />
-{/if}
