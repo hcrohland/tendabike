@@ -32,20 +32,10 @@ use time::format_description::well_known::Rfc3339;
 
 use crate::*;
 
-/// The kind of a part note.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum NoteKind {
-    /// A free-text note. `name` holds the note body.
-    Text,
-    /// An uploaded file. `name` holds the filename.
-    File,
-}
-
 /// A note or file attached to a part.
 ///
-/// This struct is metadata only: for [`NoteKind::File`] entries the actual bytes are not stored
-/// here, they are retrieved via the store.
+/// This struct is metadata only: for file entries the actual bytes are not stored here, they are
+/// retrieved via the store. A note has a file attachment exactly when `mime` is set.
 #[serde_as]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PartNote {
@@ -53,8 +43,6 @@ pub struct PartNote {
     pub id: PartNoteId,
     /// The part this note belongs to
     pub part: PartId,
-    /// Whether this is a text note or a file
-    pub kind: NoteKind,
     /// Note body for text entries, filename for file entries
     pub name: String,
     /// MIME type (files only)
@@ -69,13 +57,16 @@ pub struct PartNote {
 }
 
 impl PartNote {
+    /// Returns `true` when this note has a file attachment.
+    pub fn has_file(&self) -> bool {
+        self.mime.is_some()
+    }
+
     /// Returns `true` when this note's mime type renders as an inline image.
-    pub fn is_image(&self) -> bool {
-        self.kind == NoteKind::File
-            && self
-                .mime
-                .as_deref()
-                .is_some_and(|m| m.starts_with("image/"))
+    pub fn has_image(&self) -> bool {
+        self.mime
+            .as_deref()
+            .is_some_and(|m| m.starts_with("image/"))
     }
 }
 
@@ -124,7 +115,7 @@ mod tests {
             .await?;
         assert_eq!(note.id, PartNoteId::from(1));
         assert_eq!(note.part, PartId::from(1));
-        assert_eq!(note.kind, NoteKind::Text);
+        assert!(!note.has_file());
         assert_eq!(note.name, "suspicious noise");
         assert_eq!(note.mime, None);
         assert_eq!(note.filename, None);
@@ -150,7 +141,7 @@ mod tests {
             )
             .await?;
         assert_eq!(note.id, PartNoteId::from(1));
-        assert_eq!(note.kind, NoteKind::File);
+        assert!(note.has_file());
         assert_eq!(note.mime, Some("image/png".to_string()));
         assert_eq!(note.filename, Some("photo.png".to_string()));
         assert_eq!(note.size, Some(1234));
@@ -206,7 +197,7 @@ mod tests {
             .partnote_update_text(note.id, "new".to_string())
             .await?;
         assert_eq!(updated.name, "new");
-        assert_eq!(updated.kind, NoteKind::Text);
+        assert!(!updated.has_file());
         Ok(())
     }
 
@@ -232,7 +223,7 @@ mod tests {
         let updated = store
             .partnote_update_file(note.id, name, mime, filename, size, data.clone())
             .await?;
-        assert_eq!(updated.kind, NoteKind::File);
+        assert!(updated.has_file());
         assert_eq!(updated.mime, Some("image/png".to_string()));
         assert_eq!(updated.size, Some(1234));
         assert_eq!(store.partnote_file(note.id).await?, data);
@@ -260,7 +251,7 @@ mod tests {
             .partnote_create_file(PartId::from(1), name, mime, filename, size, data, created())
             .await?;
         let updated = store.partnote_remove_file(note.id).await?;
-        assert_eq!(updated.kind, NoteKind::Text);
+        assert!(!updated.has_file());
         assert_eq!(updated.mime, None);
         assert_eq!(updated.filename, None);
         assert_eq!(updated.size, None);

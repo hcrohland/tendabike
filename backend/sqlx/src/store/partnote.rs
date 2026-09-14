@@ -2,13 +2,12 @@ use sqlx::FromRow;
 use time::OffsetDateTime;
 
 use crate::{SqlxConn, into_domain, vec_into};
-use tb_domain::{NoteKind, PartId, PartNote, PartNoteId, TbResult};
+use tb_domain::{PartId, PartNote, PartNoteId, TbResult};
 
 #[derive(Clone, Debug, PartialEq, FromRow)]
 struct DbPartNote {
     id: i32,
     part: i32,
-    kind: String,
     name: String,
     mime: Option<String>,
     filename: Option<String>,
@@ -21,7 +20,6 @@ impl From<DbPartNote> for PartNote {
         let DbPartNote {
             id,
             part,
-            kind,
             name,
             mime,
             filename,
@@ -31,10 +29,6 @@ impl From<DbPartNote> for PartNote {
         Self {
             id: id.into(),
             part: part.into(),
-            kind: match kind.as_str() {
-                "file" => NoteKind::File,
-                _ => NoteKind::Text,
-            },
             name,
             mime,
             filename,
@@ -54,9 +48,9 @@ impl<'c> tb_domain::PartNoteStore for SqlxConn<'c> {
     ) -> TbResult<PartNote> {
         sqlx::query_as!(
             DbPartNote,
-            r#"INSERT INTO part_notes (part, kind, name, created)
-               VALUES ($1, 'text', $2, $3)
-               RETURNING id, part, kind, name, mime, filename, size, created"#,
+            r#"INSERT INTO part_notes (part, name, created)
+                VALUES ($1, $2, $3)
+                RETURNING id, part, name, mime, filename, size, created"#,
             i32::from(part),
             name,
             created
@@ -79,9 +73,9 @@ impl<'c> tb_domain::PartNoteStore for SqlxConn<'c> {
     ) -> TbResult<PartNote> {
         sqlx::query_as!(
             DbPartNote,
-            r#"INSERT INTO part_notes (part, kind, name, mime, filename, size, data, created)
-               VALUES ($1, 'file', $2, $3, $4, $5, $6, $7)
-               RETURNING id, part, kind, name, mime, filename, size, created"#,
+            r#"INSERT INTO part_notes (part, name, mime, filename, size, data, created)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING id, part, name, mime, filename, size, created"#,
             i32::from(part),
             name,
             mime,
@@ -99,7 +93,7 @@ impl<'c> tb_domain::PartNoteStore for SqlxConn<'c> {
     async fn partnote_all_by_part(&mut self, part: PartId) -> TbResult<Vec<PartNote>> {
         sqlx::query_as!(
             DbPartNote,
-            "SELECT id, part, kind, name, mime, filename, size, created FROM part_notes WHERE part = $1 ORDER BY id",
+            "SELECT id, part, name, mime, filename, size, created FROM part_notes WHERE part = $1 ORDER BY id",
             i32::from(part)
         )
         .fetch_all(&mut **self.inner())
@@ -111,7 +105,7 @@ impl<'c> tb_domain::PartNoteStore for SqlxConn<'c> {
     async fn partnote_get(&mut self, id: PartNoteId) -> TbResult<PartNote> {
         sqlx::query_as!(
             DbPartNote,
-            "SELECT id, part, kind, name, mime, filename, size, created FROM part_notes WHERE id = $1",
+            "SELECT id, part, name, mime, filename, size, created FROM part_notes WHERE id = $1",
             i32::from(id)
         )
         .fetch_one(&mut **self.inner())
@@ -132,7 +126,7 @@ impl<'c> tb_domain::PartNoteStore for SqlxConn<'c> {
     async fn partnote_update_text(&mut self, id: PartNoteId, name: String) -> TbResult<PartNote> {
         sqlx::query_as!(
             DbPartNote,
-            "UPDATE part_notes SET name = $2 WHERE id = $1 RETURNING id, part, kind, name, mime, filename, size, created",
+            "UPDATE part_notes SET name = $2 WHERE id = $1 RETURNING id, part, name, mime, filename, size, created",
             i32::from(id),
             name
         )
@@ -154,9 +148,9 @@ impl<'c> tb_domain::PartNoteStore for SqlxConn<'c> {
         sqlx::query_as!(
             DbPartNote,
             r#"UPDATE part_notes
-               SET kind = 'file', name = $2, mime = $3, filename = $4, size = $5, data = $6
-               WHERE id = $1
-               RETURNING id, part, kind, name, mime, filename, size, created"#,
+                SET name = $2, mime = $3, filename = $4, size = $5, data = $6
+                WHERE id = $1
+                RETURNING id, part, name, mime, filename, size, created"#,
             i32::from(id),
             name,
             mime,
@@ -174,9 +168,9 @@ impl<'c> tb_domain::PartNoteStore for SqlxConn<'c> {
         sqlx::query_as!(
             DbPartNote,
             r#"UPDATE part_notes
-               SET kind = 'text', mime = NULL, filename = NULL, size = NULL, data = NULL
-               WHERE id = $1
-               RETURNING id, part, kind, name, mime, filename, size, created"#,
+                SET mime = NULL, filename = NULL, size = NULL, data = NULL
+                WHERE id = $1
+                RETURNING id, part, name, mime, filename, size, created"#,
             i32::from(id)
         )
         .fetch_one(&mut **self.inner())
@@ -202,11 +196,10 @@ mod tests {
         OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
     }
 
-    fn db_note(kind: &str) -> DbPartNote {
+    fn db_note() -> DbPartNote {
         DbPartNote {
             id: 7,
             part: 3,
-            kind: kind.to_string(),
             name: "torn tire".to_string(),
             mime: Some("image/png".to_string()),
             filename: Some("tire.png".to_string()),
@@ -216,11 +209,11 @@ mod tests {
     }
 
     #[test]
-    fn from_db_part_note_maps_file_kind() {
-        let note = PartNote::from(db_note("file"));
+    fn from_db_part_note_maps_file_note() {
+        let note = PartNote::from(db_note());
         assert_eq!(note.id, PartNoteId::from(7));
         assert_eq!(note.part, PartId::from(3));
-        assert_eq!(note.kind, NoteKind::File);
+        assert!(note.has_file());
         assert_eq!(note.name, "torn tire");
         assert_eq!(note.mime, Some("image/png".to_string()));
         assert_eq!(note.filename, Some("tire.png".to_string()));
@@ -229,23 +222,17 @@ mod tests {
     }
 
     #[test]
-    fn from_db_part_note_maps_text_kind() {
+    fn from_db_part_note_maps_text_note() {
         let db = DbPartNote {
             mime: None,
             filename: None,
             size: None,
-            ..db_note("text")
+            ..db_note()
         };
         let note = PartNote::from(db);
-        assert_eq!(note.kind, NoteKind::Text);
+        assert!(!note.has_file());
         assert_eq!(note.mime, None);
         assert_eq!(note.filename, None);
         assert_eq!(note.size, None);
-    }
-
-    #[test]
-    fn from_db_part_note_unknown_kind_falls_back_to_text() {
-        let note = PartNote::from(db_note("garbage"));
-        assert_eq!(note.kind, NoteKind::Text);
     }
 }

@@ -1,12 +1,9 @@
 import { type Map, filterValues, mapable } from "./mapable";
 import { checkStatus, handleError, myfetch } from "./store";
 
-export type NoteKind = "text" | "file";
-
 export class PartNote {
   id?: number;
   part: number;
-  kind: NoteKind;
   name: string;
   mime?: string;
   filename?: string;
@@ -16,7 +13,6 @@ export class PartNote {
   constructor(data: any) {
     this.id = data.id;
     this.part = data.part;
-    this.kind = data.kind;
     this.name = data.name || "";
     this.mime = data.mime;
     this.filename = data.filename;
@@ -24,8 +20,12 @@ export class PartNote {
     this.created = data.created ? new Date(data.created) : new Date();
   }
 
-  isImage() {
-    return this.kind === "file" && this.mime?.startsWith("image/");
+  hasFile() {
+    return this.mime != null;
+  }
+
+  hasImage() {
+    return this.mime?.startsWith("image/");
   }
 
   fileUrl() {

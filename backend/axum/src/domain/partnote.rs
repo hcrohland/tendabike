@@ -19,7 +19,7 @@ use axum::{
     routing::{delete, get, post, put},
 };
 use serde::Deserialize;
-use tb_domain::{Error, NoteKind, PartId, PartNote, PartNoteId, PartNoteStore, Store};
+use tb_domain::{Error, PartId, PartNote, PartNoteId, PartNoteStore, Store};
 
 use crate::{DbPool, RequestSession, appstate::AppState, error::ApiResult};
 
@@ -177,7 +177,7 @@ async fn get_note_file(
     let mut store = store.begin().await?;
     let note = store.partnote_get(id).await?;
     let _ = note.part.part(&user, &mut store).await?;
-    if note.kind != NoteKind::File {
+    if !note.has_file() {
         return Err(crate::error::AppError::TbError(Error::BadRequest(
             "note is not a file".to_string(),
         )));
@@ -248,7 +248,7 @@ async fn update_file_note(
     let mut store = store.begin().await?;
     let note = store.partnote_get(id).await?;
     let _ = note.part.part(&user, &mut store).await?;
-    if note.kind != NoteKind::File {
+    if !note.has_file() {
         return Err(crate::error::AppError::TbError(Error::BadRequest(
             "note is not a file".to_string(),
         )));
@@ -311,7 +311,7 @@ async fn remove_file_note(
     let mut store = store.begin().await?;
     let note = store.partnote_get(id).await?;
     let _ = note.part.part(&user, &mut store).await?;
-    if note.kind != NoteKind::File {
+    if !note.has_file() {
         return Err(crate::error::AppError::TbError(Error::BadRequest(
             "note is not a file".to_string(),
         )));

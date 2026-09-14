@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO part_notes (part, kind, name, created)\n               VALUES ($1, 'text', $2, $3)\n               RETURNING id, part, kind, name, mime, filename, size, created",
+  "query": "UPDATE part_notes\n                SET name = $2, mime = $3, filename = $4, size = $5, data = $6\n                WHERE id = $1\n                RETURNING id, part, name, mime, filename, size, created",
   "describe": {
     "columns": [
       {
@@ -15,31 +15,26 @@
       },
       {
         "ordinal": 2,
-        "name": "kind",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 3,
         "name": "name",
         "type_info": "Text"
       },
       {
-        "ordinal": 4,
+        "ordinal": 3,
         "name": "mime",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 4,
         "name": "filename",
         "type_info": "Text"
       },
       {
-        "ordinal": 6,
+        "ordinal": 5,
         "name": "size",
         "type_info": "Int8"
       },
       {
-        "ordinal": 7,
+        "ordinal": 6,
         "name": "created",
         "type_info": "Timestamptz"
       }
@@ -48,11 +43,13 @@
       "Left": [
         "Int4",
         "Text",
-        "Timestamptz"
+        "Text",
+        "Text",
+        "Int8",
+        "Bytea"
       ]
     },
     "nullable": [
-      false,
       false,
       false,
       false,
@@ -62,5 +59,5 @@
       false
     ]
   },
-  "hash": "028e02bb707abe067e07aa4fb0a915c2870c9426b4961b09287e4217d79a7d95"
+  "hash": "c73b61721e008edffd0a24b787279198ec56b794fdcbccee9cc471786d03b449"
 }

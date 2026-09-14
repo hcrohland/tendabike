@@ -132,7 +132,7 @@
             >
               {note.name}
             </div>
-            {#if note.kind === "file"}
+            {#if note.hasFile()}
               <span
                 class="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-sm shrink-0"
               >

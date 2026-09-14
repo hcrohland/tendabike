@@ -136,7 +136,7 @@ pub struct MemStore {
     /// Part notes (metadata) keyed by PartNoteId
     part_notes: HashMap<PartNoteId, PartNote>,
 
-    /// File bytes for file-kind notes, keyed by PartNoteId
+    /// File bytes for notes with a file attachment, keyed by PartNoteId
     note_files: HashMap<PartNoteId, Vec<u8>>,
 
     /// Auto-increment counter for PartId

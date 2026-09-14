@@ -134,7 +134,6 @@ impl PartNoteStore for MemStore {
         let note = PartNote {
             id,
             part,
-            kind: NoteKind::Text,
             name,
             mime: None,
             filename: None,
@@ -160,7 +159,6 @@ impl PartNoteStore for MemStore {
         let note = PartNote {
             id,
             part,
-            kind: NoteKind::File,
             name,
             mime: Some(mime),
             filename,
@@ -217,7 +215,6 @@ impl PartNoteStore for MemStore {
             .part_notes
             .get_mut(&id)
             .ok_or_else(|| Error::NotFound(format!("PartNote {id} not found")))?;
-        note.kind = NoteKind::File;
         note.name = name;
         note.mime = Some(mime);
         note.filename = filename;
@@ -231,7 +228,6 @@ impl PartNoteStore for MemStore {
             .part_notes
             .get_mut(&id)
             .ok_or_else(|| Error::NotFound(format!("PartNote {id} not found")))?;
-        note.kind = NoteKind::Text;
         note.mime = None;
         note.filename = None;
         note.size = None;

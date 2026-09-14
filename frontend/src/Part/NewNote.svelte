@@ -122,7 +122,7 @@
       <Textarea id="note-name" bind:value={name} rows={3} class="w-full" />
     </div>
 
-    {#if editingNote?.kind === "file"}
+    {#if editingNote?.hasFile()}
       <div
         class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded {removeFile
           ? 'opacity-50'
@@ -134,7 +134,7 @@
             alt={file?.name ?? ""}
             class="max-h-16 rounded"
           />
-        {:else if editingNote.isImage()}
+        {:else if editingNote.hasImage()}
           <img
             src={editingNote.fileUrl()}
             alt={editingNote.filename ?? editingNote.name}
