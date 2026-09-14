@@ -18,9 +18,7 @@
   let gears = $derived(plan.gears($parts, Object.values($plans), $attachments));
 </script>
 
-<div
-  class="rounded-lg border border-border-subtle bg-surface-2 0 p-0 md:m-2 md:p-2"
->
+<div class="rounded-lg border border-border-subtle bg-surface-2 p-1 sm:p-2">
   <!-- Template header -->
   <div class="flex items-center justify-between gap-1 md:gap-2 p-1">
     <span class="font-medium text-sm"><PlanName {plan} /></span>
