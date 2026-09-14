@@ -243,6 +243,7 @@ impl UserId {
         let mut usages = Vec::new();
         let mut attachments = Vec::new();
         let mut services = Vec::new();
+        let mut part_notes = Vec::new();
         let mut plans = ServicePlan::for_user(self, store).await?;
         for part in &parts {
             usages.push(part.usage().read(store).await?);
@@ -253,13 +254,15 @@ impl UserId {
             let mut splans = ServicePlan::for_part(part.id, store).await?;
             usages.append(&mut uses);
             services.append(&mut servs);
-            plans.append(&mut splans)
+            plans.append(&mut splans);
+            part_notes.append(&mut store.partnote_all_by_part(part.id).await?);
         }
         Ok(Summary {
             parts,
             usages,
             attachments,
             services,
+            part_notes,
             plans,
             ..Default::default()
         })

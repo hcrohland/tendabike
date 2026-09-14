@@ -9,6 +9,7 @@
   import GearCard from "./GearCard.svelte";
   import Subparts from "./Subparts.svelte";
   import PartHist from "./PartHist.svelte";
+  import NoteList from "./NoteList.svelte";
   import { actions } from "../Widgets/Actions.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
   import Menu from "../Widgets/Menu.svelte";
@@ -76,7 +77,7 @@
 <PartHist {id} />
 <Tabs bind:selected={tab} classes={{ content: "m-0 p-0 md:m-2 md:p-2" }}>
   {#if attachees.length > 0 || part.isGear()}
-    <TabItem key="parts" class="m-0 p-0">
+    <TabItem key="parts">
       {#snippet titleSlot()}
         {m.part_tab_attached_parts()}
         {#if tab == "parts"}
@@ -85,9 +86,7 @@
           </XsButton>
         {/if}
       {/snippet}
-      <div class="m-0">
-        <Subparts {part} {attachees} />
-      </div>
+      <Subparts {part} {attachees} />
     </TabItem>
   {/if}
   <TabItem key="plans">
@@ -100,7 +99,7 @@
         </XsButton>
       {/if}
     {/snippet}
-    <PlanList {part} /><br />
+    <PlanList {part} />
   </TabItem>
   <TabItem key="services">
     {#snippet titleSlot()}
@@ -111,6 +110,17 @@
         </XsButton>
       {/if}
     {/snippet}
-    <ServiceList {part} /><br />
+    <ServiceList {part} />
+  </TabItem>
+  <TabItem key="notes">
+    {#snippet titleSlot()}
+      {m.part_tab_notes()}
+      {#if tab == "notes"}
+        <XsButton onclick={() => $actions.newNote(part)}>
+          {m.partcard_add()}
+        </XsButton>
+      {/if}
+    {/snippet}
+    <NoteList {part} />
   </TabItem>
 </Tabs>

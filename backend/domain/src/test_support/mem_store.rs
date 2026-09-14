@@ -128,7 +128,6 @@ pub async fn build_workshop_store() -> TbResult<MemStore> {
         BIKE,
         None,
         sample_purchase_date() - time::Duration::days(365),
-        "Main bike frame".into(),
         &s,
         &mut store,
     )
@@ -204,7 +203,6 @@ pub async fn build_workshop_store() -> TbResult<MemStore> {
         BIKE,
         None,
         sample_purchase_date() - time::Duration::days(365),
-        "Road bike frame".into(),
         &s,
         &mut store,
     )
@@ -359,7 +357,6 @@ async fn mk_part(
         typ,
         None,
         sample_purchase_date(),
-        "Test part".into(),
         session,
         store,
     )

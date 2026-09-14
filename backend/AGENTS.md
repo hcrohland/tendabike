@@ -8,6 +8,7 @@ This file provides guidance to agents when working with code in this repository.
 - `cargo run` - Run server (default: `127.0.0.1:8000`, static files from `../../frontend/dist`)
 - `cargo check` - Type checking across workspace
 - `SQLX_OFFLINE=true cargo build` - Required for compilation (queries cached in `.sqlx/`)
+- `cargo sqlx prepare --workspace` - Regenerate `.sqlx/` offline query metadata
 - `cargo test -p tb_domain` - Run domain unit tests (in-memory `MemStore` via `test_support`)
 - `cargo run -p tb_domain --bin build-snapshot --features test-support` - Regenerate `test_support/prepopulated_data.rs` from the deterministic `snapshot()`
 
@@ -36,6 +37,7 @@ This file provides guidance to agents when working with code in this repository.
 - **Session expiry**: 10 days inactivity (`tower_sessions::Expiry::OnInactivity(time::Duration::days(10))`)
 - **tower-sessions**: Pinned to `0.14` - version `0.15` fails on deletion-task (see [`axum/Cargo.toml`](src/axum/Cargo.toml:30))
 - **SQLX_OFFLINE**: Must be `true` when building - queries are pre-compiled in `.sqlx/` directory
+- **cargo sqlx**: Run every `cargo sqlx` command from the project root with `--workspace` - inside a crate directory it only targets that crate and leaves the other crates' offline queries stale
 - **DB schema**: Uses `serial` for PKs, `uuid` for usages; migrations in [`sqlx/migrations/`](src/sqlx/migrations/)
 - **OnboardingStatus**: `repr(i32)` with magic values: 0=Pending, 2=Postponed, 99=Completed
 - **Global allocator**: `mimalloc` with `secure` feature for performance

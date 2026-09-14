@@ -60,11 +60,6 @@
       },
       {
         "ordinal": 11,
-        "name": "notes",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 12,
         "name": "shop",
         "type_info": "Int4"
       }
@@ -87,7 +82,6 @@
       true,
       false,
       true,
-      false,
       true
     ]
   },

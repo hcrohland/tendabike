@@ -31,10 +31,10 @@ function summaryData(overrides: Partial<any> = {}): any {
         last_used: "2024-01-01T00:00:00Z",
         disposed_at: null,
         usage: "u1",
-        notes: "",
         shop: null,
       },
     ],
+    part_notes: [],
     attachments: [],
     activities: [
       {

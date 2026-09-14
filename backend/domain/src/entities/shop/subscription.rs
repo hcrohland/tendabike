@@ -501,7 +501,6 @@ mod tests {
                 "Marlin".into(),
                 now,
                 None,
-                String::new(),
                 UsageId::new(),
                 subscriber,
                 Some(shop.id),

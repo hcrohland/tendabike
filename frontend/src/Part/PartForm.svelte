@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Input, Label, Textarea } from "flowbite-svelte";
+  import { Input, Label } from "flowbite-svelte";
   import { Type } from "../lib/types";
   import { Part } from "../lib/part";
   import DateTime from "../Widgets/DateTime.svelte";
@@ -58,14 +58,5 @@
       {m.partform_new_day({ type: type?.localizedName() ?? "" })}
     </Label>
     <DateTime bind:date={part.purchase} {maxdate} {mindate} required rounded />
-  </div>
-  <div class="md:col-span-2">
-    <Label class="mb-2">{m.gearcard_notes()}</Label>
-    <Textarea
-      class="w-full"
-      bind:value={part.notes}
-      placeholder={m.gearcard_notes_placeholder()}
-      rows={3}
-    />
   </div>
 </div>

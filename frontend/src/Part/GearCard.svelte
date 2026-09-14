@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { Card, Textarea, Button, Badge } from "flowbite-svelte";
-  import { EditOutline } from "flowbite-svelte-icons";
+  import { Card, Badge } from "flowbite-svelte";
   import { link, push } from "svelte-spa-router";
   import { Part } from "../lib/part";
-  import { fmtDate, handleError } from "../lib/store";
+  import { fmtDate } from "../lib/store";
   import { types } from "../lib/types";
   import { user, users } from "../lib/user";
   import UsageChips from "../Usage/UsageChips.svelte";
@@ -20,9 +19,6 @@
 
   let { part, summary = false, dues, gridclass, children }: Props = $props();
 
-  let editingNotes = $state(false);
-  let notesValue = $state("");
-
   function model(part: Part) {
     if (part.model == "" && part.vendor == "") {
       return m.gearcard_unknown_model();
@@ -36,26 +32,6 @@
       return types[part.what].localizedName();
     }
     return "";
-  }
-
-  function startEditNotes() {
-    notesValue = part.notes;
-    editingNotes = true;
-  }
-
-  function cancelEditNotes() {
-    editingNotes = false;
-    notesValue = "";
-  }
-
-  async function saveNotes() {
-    try {
-      const updatedPart = new Part({ ...part, notes: notesValue });
-      await updatedPart.update();
-      editingNotes = false;
-    } catch (e: any) {
-      handleError(e);
-    }
   }
 </script>
 
@@ -114,38 +90,5 @@
 
     <!-- Stat chips -->
     <UsageChips id={part.usage} ref={part.id} {gridclass} {dues} light />
-
-    <!-- Notes (detail view only) -->
-    {#if !summary}
-      <div class="mt-4">
-        <div class="flex items-center gap-2 mb-2">
-          <strong>{m.gearcard_notes()}:</strong>
-          {#if !editingNotes}
-            <EditOutline
-              class="w-4 h-4 cursor-pointer text-gray-400 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-              onclick={startEditNotes}
-            />
-          {/if}
-        </div>
-        {#if editingNotes}
-          <Textarea
-            bind:value={notesValue}
-            placeholder={m.gearcard_notes_placeholder()}
-            rows={3}
-            class="mb-2 w-full"
-          />
-          <div class="flex gap-2">
-            <Button size="sm" onclick={saveNotes}>{m.gearcard_save()}</Button>
-            <Button size="sm" color="alternative" onclick={cancelEditNotes}>
-              {m.gearcard_cancel()}
-            </Button>
-          </div>
-        {:else if part.notes}
-          <p class="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-            {part.notes}
-          </p>
-        {/if}
-      </div>
-    {/if}
   </div>
 </Card>

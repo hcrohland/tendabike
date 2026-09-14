@@ -4,6 +4,7 @@ use tb_domain::{Store, TbResult};
 mod activity;
 mod attachment;
 mod part;
+mod partnote;
 mod service;
 mod serviceplan;
 mod shop;

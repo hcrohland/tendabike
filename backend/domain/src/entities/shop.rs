@@ -380,7 +380,6 @@ mod tests {
             PartTypeId::from_id(1),
             None,
             OffsetDateTime::now_utc(),
-            "test".into(),
             &TestSession::new(owner),
             &mut store,
         )
@@ -653,7 +652,6 @@ mod tests {
             CHAIN,
             None,
             OffsetDateTime::now_utc(),
-            "shop part".into(),
             &session,
             &mut store,
         )
@@ -675,7 +673,6 @@ mod tests {
             CHAIN,
             None,
             OffsetDateTime::now_utc(),
-            "shop part".into(),
             &session,
             &mut store,
         )
@@ -721,7 +718,6 @@ mod tests {
             CHAIN,
             None,
             OffsetDateTime::now_utc(),
-            "shop part".into(),
             &shop_session,
             &mut store,
         )

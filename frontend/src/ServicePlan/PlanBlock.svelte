@@ -8,6 +8,7 @@
   import Menu from "../Widgets/Menu.svelte";
   import { DropdownItem } from "flowbite-svelte";
   import { actions } from "../Widgets/Actions.svelte";
+  import Card from "../Widgets/Card.svelte";
 
   interface Props {
     plan: ServicePlan;
@@ -18,9 +19,7 @@
   let gears = $derived(plan.gears($parts, Object.values($plans), $attachments));
 </script>
 
-<div
-  class="rounded-lg border border-border-subtle bg-surface-2 0 p-0 md:m-2 md:p-2"
->
+<Card>
   <!-- Template header -->
   <div class="flex items-center justify-between gap-1 md:gap-2 p-1">
     <span class="font-medium text-sm"><PlanName {plan} /></span>
@@ -44,4 +43,4 @@
   {:else}
     <p class="text-xs text-text-1">{m.planblock_no_bikes()}</p>
   {/if}
-</div>
+</Card>

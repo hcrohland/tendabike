@@ -15,7 +15,6 @@ function partData(overrides: Partial<any> = {}): any {
     last_used: "2024-01-01T00:00:00Z",
     disposed_at: null,
     usage: "u1",
-    notes: "",
     shop: null,
     ...overrides,
   };
@@ -24,6 +23,7 @@ function partData(overrides: Partial<any> = {}): any {
 function summary(overrides: Partial<any> = {}): any {
   return {
     parts: [],
+    part_notes: [],
     attachments: [],
     activities: [],
     usages: [],

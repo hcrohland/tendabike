@@ -737,7 +737,6 @@ mod tests {
             FRONT_WHEEL,
             None,
             attachment_time() - time::Duration::days(180),
-            "Wheel".to_string(),
             &test_session(),
             &mut store,
         )
@@ -795,7 +794,6 @@ mod tests {
             CHAIN,
             None,
             attachment_time() - time::Duration::days(90),
-            "Chain".to_string(),
             &test_session(),
             &mut store,
         )
@@ -841,7 +839,6 @@ mod tests {
             CHAIN,
             None,
             attachment_time() - time::Duration::days(90),
-            "Old chain".to_string(),
             &test_session(),
             &mut store,
         )
@@ -854,7 +851,6 @@ mod tests {
             CHAIN,
             None,
             later_time() - time::Duration::days(30),
-            "New chain".to_string(),
             &test_session(),
             &mut store,
         )
@@ -914,7 +910,6 @@ mod tests {
             FRONT_WHEEL,
             None,
             attachment_time() - time::Duration::days(180),
-            "Wheel".to_string(),
             &test_session(),
             &mut store,
         )
@@ -928,7 +923,6 @@ mod tests {
             CHAIN,
             None,
             attachment_time() - time::Duration::days(90),
-            "Chain".to_string(),
             &test_session(),
             &mut store,
         )
@@ -987,7 +981,6 @@ mod tests {
             BIKE,
             None,
             attachment_time() - time::Duration::days(365),
-            "Main bike".to_string(),
             &test_session(),
             &mut store,
         )
@@ -1000,7 +993,6 @@ mod tests {
             FRONT_WHEEL,
             None,
             attachment_time() - time::Duration::days(180),
-            "Wheel".to_string(),
             &test_session(),
             &mut store,
         )
@@ -1014,7 +1006,6 @@ mod tests {
             BIKE,
             None,
             attachment_time() - time::Duration::days(365),
-            "Second bike".to_string(),
             &test_session(),
             &mut store,
         )
@@ -1081,7 +1072,6 @@ mod tests {
             BIKE,
             None,
             attachment_time() - time::Duration::days(365),
-            "First bike".to_string(),
             &test_session(),
             &mut store,
         )
@@ -1094,7 +1084,6 @@ mod tests {
             BIKE,
             None,
             attachment_time() - time::Duration::days(180),
-            "Second bike".to_string(),
             &test_session(),
             &mut store,
         )
@@ -1107,7 +1096,6 @@ mod tests {
             CHAIN,
             None,
             attachment_time() - time::Duration::days(90),
-            "Chain".to_string(),
             &test_session(),
             &mut store,
         )
@@ -1159,7 +1147,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Main gear".to_string(),
             &session,
             &mut store,
         )
@@ -1172,7 +1159,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date(),
-            "Test chain".to_string(),
             &session,
             &mut store,
         )
@@ -1214,7 +1200,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Main gear".to_string(),
             &session,
             &mut store,
         )
@@ -1227,7 +1212,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date(),
-            "Test chain".to_string(),
             &session,
             &mut store,
         )
@@ -1270,7 +1254,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date(),
-            "Test chain".to_string(),
             &session,
             &mut store,
         )
@@ -1284,7 +1267,6 @@ mod tests {
             BOTTOM_BRACKET,
             None,
             sample_purchase_date(),
-            "Shoe gripper".to_string(),
             &session,
             &mut store,
         )
@@ -1327,7 +1309,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Main gear".to_string(),
             &session,
             &mut store,
         )
@@ -1340,7 +1321,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date(),
-            "Test chain".to_string(),
             &session,
             &mut store,
         )
@@ -1398,7 +1378,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "First bike".to_string(),
             &session,
             &mut store,
         )
@@ -1411,7 +1390,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(180),
-            "Second bike".to_string(),
             &session,
             &mut store,
         )
@@ -1425,7 +1403,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Old chain".to_string(),
             &session,
             &mut store,
         )
@@ -1438,7 +1415,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(10),
-            "New chain".to_string(),
             &session,
             &mut store,
         )
@@ -1770,7 +1746,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date(),
-            "Test chain".to_string(),
             &session,
             &mut store,
         )
@@ -1808,7 +1783,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date(),
-            "Test chain".to_string(),
             &owner_session,
             &mut store,
         )
@@ -1853,7 +1827,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date(),
-            "Test chain".to_string(),
             &session,
             &mut store,
         )
@@ -1883,7 +1856,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Main gear".to_string(),
             &session,
             &mut store,
         )
@@ -1896,7 +1868,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date(),
-            "Test chain".to_string(),
             &session,
             &mut store,
         )
@@ -1937,7 +1908,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Main gear".to_string(),
             &session,
             &mut store,
         )
@@ -1951,7 +1921,6 @@ mod tests {
             REAR_WHEEL,
             None,
             sample_purchase_date() - time::Duration::days(180),
-            "Rear wheel".to_string(),
             &session,
             &mut store,
         )
@@ -1965,7 +1934,6 @@ mod tests {
             CASSETTE,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Cassette".to_string(),
             &session,
             &mut store,
         )
@@ -2020,7 +1988,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date(),
-            "Test chain".to_string(),
             &session,
             &mut store,
         )
@@ -2056,7 +2023,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date(),
-            "Test chain".to_string(),
             &session,
             &mut store,
         )
@@ -2090,7 +2056,6 @@ mod tests {
             REAR_WHEEL,
             None,
             sample_purchase_date() - time::Duration::days(180),
-            "Rear wheel".to_string(),
             &session,
             &mut store,
         )
@@ -2104,7 +2069,6 @@ mod tests {
             CASSETTE,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Cassette".to_string(),
             &session,
             &mut store,
         )
@@ -2141,7 +2105,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date(),
-            "Test chain".to_string(),
             &session,
             &mut store,
         )
@@ -2178,7 +2141,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date(),
-            "Test chain".to_string(),
             &session,
             &mut store,
         )
@@ -2231,7 +2193,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -2244,7 +2205,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike".to_string(),
             &session,
             &mut store,
         )
@@ -2297,7 +2257,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -2310,7 +2269,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike".to_string(),
             &session,
             &mut store,
         )
@@ -2350,7 +2308,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike".to_string(),
             &session,
             &mut store,
         )
@@ -2364,7 +2321,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -2388,7 +2344,6 @@ mod tests {
             FRONT_WHEEL,
             None,
             sample_purchase_date() - time::Duration::days(60),
-            "Front tire".to_string(),
             &session,
             &mut store,
         )
@@ -2424,7 +2379,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike 1".to_string(),
             &session,
             &mut store,
         )
@@ -2437,7 +2391,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(300),
-            "Bike 2".to_string(),
             &session,
             &mut store,
         )
@@ -2451,7 +2404,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -2491,7 +2443,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -2504,7 +2455,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike".to_string(),
             &session,
             &mut store,
         )
@@ -2551,7 +2501,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -2564,7 +2513,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike".to_string(),
             &session,
             &mut store,
         )
@@ -2605,7 +2553,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -2618,7 +2565,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike".to_string(),
             &session,
             &mut store,
         )
@@ -2658,7 +2604,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -2671,7 +2616,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike".to_string(),
             &session,
             &mut store,
         )
@@ -2708,7 +2652,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -2721,7 +2664,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike".to_string(),
             &session,
             &mut store,
         )
@@ -2757,7 +2699,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -2770,7 +2711,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike".to_string(),
             &session,
             &mut store,
         )
@@ -2800,7 +2740,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike 1".to_string(),
             &session,
             &mut store,
         )
@@ -2813,7 +2752,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(300),
-            "Bike 2".to_string(),
             &session,
             &mut store,
         )
@@ -2827,7 +2765,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -2876,7 +2813,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -2889,7 +2825,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike".to_string(),
             &session,
             &mut store,
         )
@@ -2957,7 +2892,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -2970,7 +2904,6 @@ mod tests {
             DERAILLEUR,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Rear derailleur".to_string(),
             &session,
             &mut store,
         )
@@ -2983,7 +2916,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike".to_string(),
             &session,
             &mut store,
         )
@@ -3023,7 +2955,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -3036,7 +2967,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike".to_string(),
             &session,
             &mut store,
         )
@@ -3087,7 +3017,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -3130,7 +3059,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -3167,7 +3095,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -3180,7 +3107,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike".to_string(),
             &session,
             &mut store,
         )
@@ -3211,7 +3137,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike".to_string(),
             &session,
             &mut store,
         )
@@ -3225,7 +3150,6 @@ mod tests {
             CHAIN,
             Some(bike.id.to_string()), // bike is parent
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -3263,7 +3187,6 @@ mod tests {
             REAR_WHEEL,
             None,
             sample_purchase_date() - time::Duration::days(180),
-            "Rear wheel".to_string(),
             &session,
             &mut store,
         )
@@ -3277,7 +3200,6 @@ mod tests {
             CASSETTE,
             Some(wheel.id.to_string()), // Cassette is subpart of wheel
             sample_purchase_date() - time::Duration::days(30),
-            "Cassette".to_string(),
             &session,
             &mut store,
         )
@@ -3302,7 +3224,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike".to_string(),
             &session,
             &mut store,
         )
@@ -3338,7 +3259,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -3351,7 +3271,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike".to_string(),
             &session,
             &mut store,
         )
@@ -3399,7 +3318,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike".to_string(),
             &session,
             &mut store,
         )
@@ -3413,7 +3331,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -3436,7 +3353,6 @@ mod tests {
             CASSETTE,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Cassette".to_string(),
             &session,
             &mut store,
         )
@@ -3478,7 +3394,6 @@ mod tests {
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Chain".to_string(),
             &session,
             &mut store,
         )
@@ -3491,7 +3406,6 @@ mod tests {
             CASSETTE,
             None,
             sample_purchase_date() - time::Duration::days(30),
-            "Cassette".to_string(),
             &session,
             &mut store,
         )
@@ -3504,7 +3418,6 @@ mod tests {
             BIKE,
             None,
             sample_purchase_date() - time::Duration::days(365),
-            "Bike".to_string(),
             &session,
             &mut store,
         )

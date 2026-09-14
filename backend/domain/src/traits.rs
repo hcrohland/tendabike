@@ -13,6 +13,9 @@ pub use activity::*;
 mod attachment;
 pub use attachment::*;
 
+mod partnote;
+pub use partnote::*;
+
 mod usage;
 pub use usage::*;
 
@@ -33,6 +36,7 @@ pub trait Store:
     + ShopStore
     + ActivityStore
     + AttachmentStore
+    + PartNoteStore
     + UsageStore
     + ServiceStore
     + ServicePlanStore
