@@ -14,6 +14,7 @@
     service?: Service | undefined;
     successor?: Service | null;
     part: Part;
+    light?: boolean;
     dues?: Partial<Record<limit_keys, { due: number; plan: number }>>;
     children?: import("svelte").Snippet;
   }
@@ -22,6 +23,7 @@
     service = undefined,
     successor = null,
     part,
+    light = false,
     dues,
     children,
   }: Props = $props();
@@ -47,7 +49,7 @@
 
 {@render children?.()}
 
-<UsageChips {usage} light {dues} />
+<UsageChips {usage} {light} {dues} />
 
 <div class="flex items-start justify-between gap-2">
   <div class="min-w-0">

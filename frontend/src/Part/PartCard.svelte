@@ -1,5 +1,6 @@
 <script lang="ts">
   import { DropdownItem } from "flowbite-svelte";
+  import Card from "../Widgets/Card.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import UsageChips from "../Usage/UsageChips.svelte";
@@ -35,7 +36,6 @@
     light?: boolean;
   } = $props();
 
-  let background = $derived(light ? "bg-surface-1" : "bg-surface-2");
   let background2 = $derived(!light ? "bg-surface-1" : "bg-surface-2");
   let show_more = $state(false);
 
@@ -56,10 +56,7 @@
 {#if att}
   <!-- PartCard responsive spacing: mobile (default) uses compact padding, sm: breakpoint applies larger spacing -->
   <!-- Pattern: p-1→p-2, p-2→p-3, gap-1→gap-2, gap-2→gap-3 across all sections -->
-  <div
-    class={"relative rounded-lg border border-border-subtle p-1 sm:p-2 " +
-      background}
-  >
+  <Card {light} class="relative">
     <!-- Header row: type · name · menu -->
     <div class="flex items-center justify-between gap-1 sm:gap-2">
       <div class="flex items-center gap-1 sm:gap-2 p-1 sm:p-2 min-w-0">
@@ -166,5 +163,5 @@
         {/each}
       </div>
     {/if}
-  </div>
+  </Card>
 {/if}

@@ -68,13 +68,13 @@
     {#if plan.what == part.what}
       <!-- Service history -->
       <div class="flex flex-col gap-2 mt-3">
-        <ServiceRow {part} service={ActiveService} {dues} />
+        <ServiceRow {part} service={ActiveService} {dues} light />
         {#if show_more}
           {#each serviceList as service, i (service.id)}
             {@const successor = i > 0 ? serviceList[i - 1] : ActiveService}
-            <ServiceRow {part} {service} {successor} />
+            <ServiceRow {part} {service} {successor} light />
           {/each}
-          <ServiceRow {part} successor={serviceList.at(-1)} />
+          <ServiceRow {part} successor={serviceList.at(-1)} light />
         {/if}
       </div>
     {/if}

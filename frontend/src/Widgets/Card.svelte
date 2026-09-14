@@ -19,21 +19,23 @@
  -->
 
 <script lang="ts">
-  import { Part } from "../lib/part";
-  import { partNotes, notes_for_part } from "../lib/partnote";
-  import NoteCard from "./NoteCard.svelte";
+  let {
+    light = false,
+    class: extraClass = "",
+    children,
+  }: {
+    light?: boolean;
+    class?: string;
+    children: import("svelte").Snippet;
+  } = $props();
 
-  interface Props {
-    part: Part;
-  }
-
-  let { part }: Props = $props();
-
-  let notes = $derived(notes_for_part($partNotes, part.id!));
+  let background = $derived(light ? "bg-surface-1" : "bg-surface-2");
 </script>
 
-<div class="flex flex-col gap-3">
-  {#each notes as note (note.id)}
-    <NoteCard {part} {note} />
-  {/each}
+<div
+  class={"rounded-lg border border-border-subtle p-1 sm:p-2 " +
+    background +
+    (extraClass ? " " + extraClass : "")}
+>
+  {@render children()}
 </div>

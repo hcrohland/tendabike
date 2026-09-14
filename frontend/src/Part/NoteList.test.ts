@@ -31,10 +31,16 @@ describe("NoteList", () => {
     created: new Date("2026-01-02"),
   });
 
-  function openRowMenu(noteName: string) {
-    const row = screen.getByText(noteName).closest(".flex")!;
-    const trigger = row.querySelector("svg")!;
-    fireEvent.mouseDown(trigger);
+  async function openRowMenu(noteName: string) {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "performance"] });
+    try {
+      const row = screen.getByText(noteName).closest(".flex")!;
+      const trigger = row.querySelector("svg")!;
+      fireEvent.mouseDown(trigger);
+      await vi.advanceTimersByTimeAsync(300);
+    } finally {
+      vi.useRealTimers();
+    }
   }
 
   beforeEach(() => {
@@ -74,7 +80,7 @@ describe("NoteList", () => {
   it("opens the row menu with change and delete actions", async () => {
     partNotes.setMap([textNote]);
     render(NoteList, { part });
-    openRowMenu("Replace chain soon");
+    await openRowMenu("Replace chain soon");
     const change = await screen.findByText("Change note");
     const del = await screen.findByText("Delete note");
     expect(change).toBeTruthy();
@@ -84,7 +90,7 @@ describe("NoteList", () => {
   it("calls newNote with the part and note when change is chosen", async () => {
     partNotes.setMap([textNote]);
     render(NoteList, { part });
-    openRowMenu("Replace chain soon");
+    await openRowMenu("Replace chain soon");
     const change = await screen.findByText("Change note");
     fireEvent.click(change);
     await waitFor(() => {
@@ -96,7 +102,7 @@ describe("NoteList", () => {
   it("calls deleteNote with the note when delete is chosen", async () => {
     partNotes.setMap([textNote]);
     render(NoteList, { part });
-    openRowMenu("Replace chain soon");
+    await openRowMenu("Replace chain soon");
     const del = await screen.findByText("Delete note");
     fireEvent.click(del);
     await waitFor(() => {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { services, Service } from "../lib/service";
+  import Card from "../Widgets/Card.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import ServiceRow from "./ServiceRow.svelte";
   import { parts } from "../lib/part";
@@ -17,7 +18,7 @@
   let successor = $derived(service.get_successor($services));
 </script>
 
-<div class="rounded-lg border border-border-subtle bg-surface-1 p-2">
+<Card>
   <ServiceRow {part} {service} {successor}>
     <ShowMore bind:show_more title={m.partcard_history()} />
   </ServiceRow>
@@ -25,9 +26,9 @@
     <div class="rounded-lg border border-border-subtle bg-surface-1 p-2">
       <div class="flex flex-col gap-2 mt-2">
         {#each service.history(1, $services) as s (s.service?.id + "-" + s.successor?.id)}
-          <ServiceRow {part} {...s} />
+          <ServiceRow {part} {...s} light />
         {/each}
       </div>
     </div>
   {/if}
-</div>
+</Card>
