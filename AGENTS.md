@@ -2,23 +2,9 @@
 
 **TendaBike** - A bike maintenance tracker that syncs with Strava: users track parts, schedule services, and log cycling activities imported from Strava.
 
-## Pointers
-
-- Svelte 5 + TypeScript frontend: read [`frontend/AGENTS.md`](frontend/AGENTS.md) before editing anything under `frontend/` (commands, state pattern, myfetch, gotchas).
-- Rust workspace backend: read [`backend/AGENTS.md`](backend/AGENTS.md) before editing anything under `backend/` (commands, crates, layering, conventions, gotchas, test guides).
-- Backend tests: in-memory, no database needed — run `SQLX_OFFLINE=true cargo test`; suites documented in [`backend/AGENTS.md`](backend/AGENTS.md).
-
-## Commands (run from project root)
-
-- `npm run dev` - Frontend dev server; Vite proxies `/api` and `/strava` to the backend on `:8000`
-- `npm run check` - Frontend type checking (svelte-check; the CI variant `check:ci` also compiles paraglide first)
-- `docker build -t tendabike .` - Full image (Rust + Node multi-stage)
-
 ## Domain
 
-- Activities sync in from Strava; usage accumulates on parts; service plans schedule maintenance from usage (time/distance/effort); parts can be delegated to shops.
 - Each entity lives in both halves: `backend/domain/src/entities/<name>.rs` and `frontend/src/lib/<name>.ts`.
-- API routes: `/api/{user,types,shop,part,service,plan,activ}` and `/strava/*` (OAuth, webhook); part attachments nest under `/part`.
 
 ## Commit rules
 
