@@ -26,9 +26,14 @@ impl ServicePlanId {
         let plan = self.get(store).await?;
         plan.checkuser(user, store).await?;
 
-        let res = Service::reset_plan(self, store).await?;
+        let owner = match plan.part {
+            Some(part) => part.read(store).await?.owner,
+            None => plan.uid.unwrap_or(user.user_id()),
+        };
 
-        // delete service
+        let res = Service::reset_plan(self, owner, store).await?;
+
+        // delete service plan
         ServicePlanStore::delete(store, self).await?;
         Ok(res)
     }
@@ -589,17 +594,67 @@ mod tests {
         Ok(())
     }
 
-    /// SP-12: ServicePlan delete no-op on reset_plan (returns empty service list)
+    /// SP-12: deleting a plan unlinks it from the owner's services and returns them
     #[tokio::test]
-    async fn service_plan_delete_noop_on_reset_plan() -> TbResult<()> {
+    async fn service_plan_delete_unlinks_owner_services() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
+        let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
+
+        let plan = ServicePlan {
+            id: ServicePlanId::new(),
+            part: Some(part.id),
+            what: PartTypeId::from(1),
+            hook: None,
+            name: "Unlink Plan".to_string(),
+            days: Some(30),
+            hours: None,
+            km: None,
+            climb: None,
+            descend: None,
+            rides: None,
+            uid: None,
+            energy: None,
+        };
+        let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
+
+        let t = time::macros::datetime!(2024-06-15 10:00 UTC);
+        let Summary { services, .. } = Service::create(
+            part.id,
+            t,
+            "Service".to_string(),
+            "".to_string(),
+            None,
+            vec![created.id],
+            &mut store,
+        )
+        .await?;
+        assert_eq!(services[0].plans, vec![created.id]);
+
+        let res = created.id.delete(&test_session(), &mut store).await?;
+
+        // the response carries the updated service
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].id, services[0].id);
+        assert!(res[0].plans.is_empty());
+
+        // the stored service no longer references the plan
+        let stored = ServiceStore::get(&mut store, services[0].id).await?;
+        assert!(stored.plans.is_empty());
+        Ok(())
+    }
+
+    /// SP-12a: the unlink is scoped to the deleted plan's owner's services only
+    #[tokio::test]
+    async fn service_plan_delete_unlink_scoped_to_owner() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let other_session = TestSession::new(UserId::from(99));
 
         let plan = ServicePlan {
             id: ServicePlanId::new(),
             part: None,
             what: PartTypeId::from(1),
             hook: None,
-            name: "Reset Plan".to_string(),
+            name: "Generic Unlink".to_string(),
             days: Some(30),
             hours: None,
             km: None,
@@ -611,9 +666,116 @@ mod tests {
         };
         let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
 
-        let res = created.id.delete(&test_session(), &mut store).await?;
-        assert_eq!(res.len(), 0);
+        let t = time::macros::datetime!(2024-06-15 10:00 UTC);
 
+        let mine = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
+        let Summary {
+            services: my_services,
+            ..
+        } = Service::create(
+            mine.id,
+            t,
+            "Mine".to_string(),
+            "".to_string(),
+            None,
+            vec![created.id],
+            &mut store,
+        )
+        .await?;
+
+        let theirs = Part::create(
+            "Other Part".to_string(),
+            "Vendor".to_string(),
+            "Model".to_string(),
+            PartTypeId::from(1),
+            None,
+            sample_purchase_date(),
+            &other_session,
+            &mut store,
+        )
+        .await?;
+        let Summary {
+            services: their_services,
+            ..
+        } = Service::create(
+            theirs.id,
+            t,
+            "Theirs".to_string(),
+            "".to_string(),
+            None,
+            vec![created.id],
+            &mut store,
+        )
+        .await?;
+
+        let res = created.id.delete(&test_session(), &mut store).await?;
+
+        // only the owner's updated service is in the response
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].id, my_services[0].id);
+        assert!(res[0].plans.is_empty());
+
+        // the non-owner's service is untouched
+        let their_stored = ServiceStore::get(&mut store, their_services[0].id).await?;
+        assert_eq!(their_stored.plans, vec![created.id]);
+        Ok(())
+    }
+
+    /// SP-12b: a shop session deleting a specific-part plan unlinks the part owner's services
+    #[tokio::test]
+    async fn service_plan_delete_unlinks_part_owner_via_shop_session() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let shop = ShopId::create(
+            "Shop 99".to_string(),
+            None,
+            true,
+            UserId::from(99),
+            &mut store,
+        )
+        .await?;
+        let shop_session = TestSession::with_shop(UserId::from(99), shop.id);
+
+        let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
+
+        let plan = ServicePlan {
+            id: ServicePlanId::new(),
+            part: Some(part.id),
+            what: PartTypeId::from(1),
+            hook: None,
+            name: "Shop Delete".to_string(),
+            days: Some(30),
+            hours: None,
+            km: None,
+            climb: None,
+            descend: None,
+            rides: None,
+            uid: None,
+            energy: None,
+        };
+        let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
+
+        let t = time::macros::datetime!(2024-06-15 10:00 UTC);
+        let Summary { services, .. } = Service::create(
+            part.id,
+            t,
+            "Service".to_string(),
+            "".to_string(),
+            None,
+            vec![created.id],
+            &mut store,
+        )
+        .await?;
+
+        let res = created.id.delete(&shop_session, &mut store).await?;
+
+        // the part owner's updated service is in the response
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].id, services[0].id);
+        assert!(res[0].plans.is_empty());
+
+        // the stored service no longer references the plan
+        let stored = ServiceStore::get(&mut store, services[0].id).await?;
+        assert!(stored.plans.is_empty());
         Ok(())
     }
 

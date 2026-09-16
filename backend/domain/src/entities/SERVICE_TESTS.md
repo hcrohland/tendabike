@@ -94,7 +94,7 @@ fn activities_find_by_gear_and_time(&mut self, gear: PartId, begin: OffsetDateTi
 | S-33 | `service_recalculate_updates_usage_vec_in_place` | Multiple services recalculated in batch → all updated via single `Usage::update_vec()` call |
 | S-34 | `attach_assembly_updates_service_usage` | Full attach_assembly flow → returned Summary includes recalculated service usages |
 
-## Suite 6: ServicePlan — CRUD (12 tests)
+## Suite 6: ServicePlan — CRUD (15 tests)
 
 | ID | Test Name | What It Validates |
 |----|-----------|-------------------|
@@ -108,8 +108,10 @@ fn activities_find_by_gear_and_time(&mut self, gear: PartId, begin: OffsetDateTi
 | SP-08 | `service_plan_update_preserves_immutable_fields` | Update name but not `part`, `what`, `hook`, `uid` → immutable fields unchanged |
 | SP-09 | `service_plan_update_requires_ownership_specific` | Update specific plan → checks part ownership via `part.checkuser()` |
 | SP-10 | `service_plan_update_requires_ownership_generic` | Update generic plan → checks `uid == user.user_id()` |
-| SP-11 | `service_plan_delete_removes_plan` | Delete → not found on read, services returned (currently empty per `reset_plan()`) |
-| SP-12 | `service_plan_delete_noop_on_reset_plan` | Currently `reset_plan()` returns `Ok(vec![])` → delete returns empty service list |
+| SP-11 | `service_plan_delete_removes_plan` | Delete → not found on read; response carries updated services (empty when no service referenced the plan) |
+| SP-12 | `service_plan_delete_unlinks_owner_services` | Delete a plan that appears in the owner's service → plan removed from that service's plan list, response carries the updated service |
+| SP-12a | `service_plan_delete_unlink_scoped_to_owner` | Unlink is scoped to the plan owner's services; a non-owner's service referencing the same plan stays untouched and out of the response |
+| SP-12b | `service_plan_delete_unlinks_part_owner_via_shop_session` | A shop session deleting a specific-part plan unlinks the part owner's (not the shop's) services |
 
 ## Suite 7: ServicePlan — Threshold Data Model (4 tests)
 
