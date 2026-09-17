@@ -4,13 +4,13 @@ How the Tendabike client stays in sync with the backend. Read this when adding o
 
 ## The claim
 
-The domain layer (`backend/domain`) is the only thing that computes. Every mutation — user-triggered or Strava-triggered — computes its side effects inline, in one transaction, inside a user session, and returns the `Summary` of everything it touched. API routes and the Strava drain are only *triggers* that drive domain operations; the drain computes nothing of its own — it drives the same domain write operations a user would run. The client merges responses; it never recomputes.
+The domain layer (`backend/domain`) is the only thing that computes entity state. Every mutation — user-triggered or Strava-triggered — computes its side effects inline, in one transaction, inside a user session, and returns the `Summary` of everything it touched. API routes and the Strava drain are only _triggers_ that drive domain operations; the drain computes nothing of its own — it drives the same domain write operations a user would run. The client merges responses into entity state and may combine entity state to compute derivatives (groupings, counts, per-view projections); entity state itself always comes from the domain.
 
 ## The lanes, as triggers
 
 1. **Hydration** — `GET /api/user/summary[?shop=]` returns the user's full state; the client replaces every map (`setSummary` in `frontend/src/lib/user.ts`). The handler also runs `StravaUser::update_gear` in the same transaction, so a read can change state (see review 02 below).
 2. **Writes** — POST/PUT/DELETE on the `/api` routes. The axum handlers are thin: extract session and JSON, call the domain operation, return what it returned — an entity or a `Summary`.
-3. **Strava** — `POST /strava/callback` receives Strava events and *only queues them* in the database. `GET /strava/hooks` (session-scoped) drains the user's next queued event: `process()` in `backend/strava/src/event.rs` executes the corresponding domain write operations (import activity, run a sync fetch) and returns the `Summary` of what changed, or an empty `Summary` when idle. The client polls it every 60s in `frontend/src/Header.svelte` and drains in a loop while activities keep arriving. There is no push channel to the browser; the webhook never talks to it directly.
+3. **Strava** — `POST /strava/callback` receives Strava events and _only queues them_ in the database. `GET /strava/hooks` (session-scoped) drains the user's next queued event: `process()` in `backend/strava/src/event.rs` executes the corresponding domain write operations (import activity, run a sync fetch) and returns the `Summary` of what changed, or an empty `Summary` when idle. The client polls it every 60s in `frontend/src/Header.svelte` and drains in a loop while activities keep arriving. There is no push channel to the browser; the webhook never talks to it directly.
 
 ## The domain layer
 
@@ -35,7 +35,7 @@ The domain layer (`backend/domain`) is the only thing that computes. Every mutat
 2. **Presentation** — a thin axum handler in `backend/axum/src/domain/<module>.rs`: extract session and JSON, call the domain operation, return it. It computes nothing.
 3. **Client** — a fetch call in `frontend/src/lib/<name>.ts` that merges the response via `updateSummary` or `updateMap`.
 
-To add the *entity* itself, follow the implementation steps in [`new-entity.md`](new-entity.md).
+To add the _entity_ itself, follow the implementation steps in [`new-entity.md`](new-entity.md).
 
 ## To be reviewed
 
