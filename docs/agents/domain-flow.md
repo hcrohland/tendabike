@@ -41,9 +41,9 @@ To add the *entity* itself, follow the implementation steps in [`new-entity.md`]
 
 These asymmetries are filed for review; do not assume they are intended design:
 
-1. The drain loop in `Header.svelte` only continues while `activities` keep arriving — a change without activities waits for the next 60s tick. → [`.scratch/state-sync-review/issues/01-drain-loop-condition.md`](../../.scratch/state-sync-review/issues/01-drain-loop-condition.md)
-2. `GET /api/user/summary` piggybacks `update_gear` in the same transaction — every hydration can mutate state. → [`.scratch/state-sync-review/issues/02-summary-update-gear-piggyback.md`](../../.scratch/state-sync-review/issues/02-summary-update-gear-piggyback.md)
-3. The drain loop reads the raw `data["activities"]` array instead of going through the entity layer. → [`.scratch/state-sync-review/issues/03-hooks-raw-activity-access.md`](../../.scratch/state-sync-review/issues/03-hooks-raw-activity-access.md)
+1. The drain loop in `Header.svelte` only continues while `activities` keep arriving — a change without activities waits for the next 60s tick. → [issue #305](https://github.com/hcrohland/tendabike/issues/305)
+2. `GET /api/user/summary` piggybacks `update_gear` in the same transaction — every hydration can mutate state. → [issue #306](https://github.com/hcrohland/tendabike/issues/306)
+3. The drain loop reads the raw `data["activities"]` array instead of going through the entity layer. → [issue #307](https://github.com/hcrohland/tendabike/issues/307)
 
 ## Out of scope here
 
