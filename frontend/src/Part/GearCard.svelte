@@ -6,18 +6,16 @@
   import { types } from "../lib/types";
   import { user, users } from "../lib/user";
   import UsageChips from "../Usage/UsageChips.svelte";
-  import ServiceBadge from "../Widgets/ServiceBadge.svelte";
   import * as m from "../../paraglide/messages";
 
   interface Props {
     part: Part;
     summary?: boolean;
-    dues?: any;
     gridclass?: string;
     children?: import("svelte").Snippet;
   }
 
-  let { part, summary = false, dues, gridclass, children }: Props = $props();
+  let { part, summary = false, gridclass, children }: Props = $props();
 
   function model(part: Part) {
     if (part.model == "" && part.vendor == "") {
@@ -84,11 +82,10 @@
         {:else}
           {fmtDate(part.purchase)} – {fmtDate(part.disposed_at)}
         {/if}
-        <ServiceBadge service={dues?.days} />
       </span>
     </p>
 
     <!-- Stat chips -->
-    <UsageChips id={part.usage} ref={part.id} {gridclass} {dues} light />
+    <UsageChips id={part.usage} ref={part.id} {gridclass} light />
   </div>
 </Card>

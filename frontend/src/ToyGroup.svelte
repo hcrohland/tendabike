@@ -1,5 +1,4 @@
 <script lang="ts">
-  import MainCard from "./Part/MainCard.svelte";
   import { filterValues, by } from "./lib/mapable";
   import { category } from "./lib/types";
   import { parts } from "./lib/part";
@@ -7,6 +6,8 @@
   import ShowMore from "./Widgets/ShowMore.svelte";
   import { shop } from "./lib/shop";
   import * as m from "../paraglide/messages";
+  import GearCard from "./Part/GearCard.svelte";
+  import PlanBadge from "./ServicePlan/PlanBadge.svelte";
 
   let show_more: boolean = $state(false);
 
@@ -33,7 +34,9 @@
 {#if $category}
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
     {#each gears as part (part.id)}
-      <MainCard {part} />
+      <GearCard {part} summary gridclass="grid-cols-3">
+        <PlanBadge {part} />
+      </GearCard>
     {:else}
       {#if $category.activities($activities).length == 0}
         {m.toygroup_none_found({ category: $category.name })}
@@ -50,7 +53,9 @@
     {#if show_more}
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {#each bin as part (part.id)}
-          <MainCard {part} />
+          <GearCard {part} summary gridclass="grid-cols-3">
+            <PlanBadge {part} />
+          </GearCard>
         {/each}
       </div>
     {/if}
