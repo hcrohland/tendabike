@@ -22,7 +22,8 @@
     "ghcr.io/devcontainers/features/python:1": {
       "version": "latest",
       "installJupyterlab": false
-    }
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   // Features to add to the dev container. More info: https://containers.dev/features.
   // "features": {},
@@ -30,10 +31,9 @@
   "forwardPorts": [5173],
   "postCreateCommand": {
     "sqlx": "cargo install sqlx-cli --no-default-features --features rustls,postgres",
-    "rust-mcp-server": "cargo install rust-mcp-server",
     "uv": "curl -LsSf https://astral.sh/uv/install.sh | sh",
-    "opencode": "curl -fsSL https://opencode.ai/install | bash",
-    "git": "git config --global --add safe.directory /workspaces/tendabike"
+    "git": "git config --global --add safe.directory /workspaces/tendabike",
+    "pi": "curl -fsSL https://pi.dev/install.sh | sh"
   },
   // Configure tool-specific properties.
   // "customizations": {},
