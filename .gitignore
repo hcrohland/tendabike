@@ -34,3 +34,5 @@ node_modules
 .devcontainer/home
 plans/
 .local/
+.agents/
+.scratch/
