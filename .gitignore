@@ -30,8 +30,6 @@
 .cargo/*
 .claude/*
 node_modules
-.roo/*
-.devcontainer/home
 plans/
-.local/
 .agents/
+.pi/
