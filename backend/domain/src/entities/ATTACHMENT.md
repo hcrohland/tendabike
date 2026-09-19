@@ -14,12 +14,22 @@ The attachment entity models a **temporal, hierarchical relationship** between p
 |-------|------|-------------|
 | `part_id` | `PartId` | The sub-part being attached (e.g., a chain) |
 | `attached` | `OffsetDateTime` | When the part was installed |
-| `gear` | `PartId` | The parent gear it is attached to (e.g., the bike frame) |
-| `hook` | `PartTypeId` | The attachment point/hook on the gear (type ID of where it mounts) |
+| `gear` | `PartId` | The top-level part of the assembly the part is in (itself while loose) — see the flat row model below |
+| `hook` | `PartTypeId` | The type of the part it is mounted on directly (a tire's row carries the wheel type) |
 | `detached` | `OffsetDateTime` | When the part was removed — `MAX_TIME` (year 9100) means "still attached" |
 | `usage` | `UsageId` | UUID referencing a usage record that aggregates Strava activity metrics |
 
 **Composite primary key**: `(part_id, attached)` — the timeline is append-only via new rows.
+
+### The Flat Row Model
+
+Every attached part holds exactly one row, and the row is flat against the top of the assembly: `gear` is the top-level part (itself while the part is loose) and `hook` is the type of the part it is mounted on directly. The tree of mounts is not stored — it is derived from the rows.
+
+A tire on the front wheel of a bike is one row: `gear = bike.id`, `hook = front wheel type`. The tire is attached to the wheel (directly, by hook type) and thereby to the bike (indirectly, by gear). The client derives the tree the same way: `part_at_hook(gear, what, hook)` locates a part by its position within the flat row set of a top-level `gear`.
+
+The layout keeps the entity free of redundant data and makes activity registration a single query: activities record the gear, and every row of a gear's assembly has `attachment.gear == gear.id` — one query per row reaches all the gear's rides.
+
+When an assembly is attached or detached with `all`, its rows are re-rooted: `shift_subparts` rewrites the assembly's rows to the new top-level part. A loose wheel with a tire holds rows with `gear = wheel.id`; attach the wheel to a bike and both rows become `gear = bike.id`; detaching with `all` collapses them back onto the loose wheel.
 
 ### `AttachmentDetail` (`attachment.rs:61-74`)
 
