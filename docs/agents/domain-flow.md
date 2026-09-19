@@ -4,7 +4,7 @@ How the Tendabike client stays in sync with the backend. Read this when adding o
 
 ## The claim
 
-The domain layer (`backend/domain`) is the only thing that computes entity state. Every mutation — user-triggered or Strava-triggered — computes its side effects inline, in one transaction, inside a user session, and returns the `Summary` of everything it touched. API routes and the Strava drain are only _triggers_ that drive domain operations; the drain computes nothing of its own — it drives the same domain write operations a user would run. The client merges responses into entity state and may combine entity state to compute derivatives (groupings, counts, per-view projections); entity state itself always comes from the domain.
+The domain layer (`backend/domain`) is the only thing that computes entity state. Every mutation — user-triggered or Strava-triggered — computes its side effects inline, in one transaction, inside a user session, and returns the `Summary` of everything it touched. API routes and the Strava drain are only _triggers_ that drive domain operations; the drain computes nothing of its own — it drives the same domain write operations a user would run. The client merges responses into entity state and may combine entity state to compute derivatives (groupings, counts, per-view projections); entity state itself always comes from the domain. Plan due-ness is the representative derivative: the client computes it from the merged entity state (plans, services, usages, attachments) against the clock, and it changes with the passage of time, not only on mutation — so it is a client derivative, never a stored server value (ADR-0002).
 
 ## The lanes, as triggers
 
