@@ -174,11 +174,13 @@ pub async fn build_workshop_store() -> TbResult<MemStore> {
     attach_assembly(&s, fw_a.id, ATTACH_TIME, bike_a.id, BIKE, false, &mut store).await?;
     attach_assembly(&s, rw_a.id, ATTACH_TIME, bike_a.id, BIKE, false, &mut store).await?;
     attach_assembly(&s, ch_a.id, ATTACH_TIME, bike_a.id, BIKE, false, &mut store).await?;
+    // tires on mounted wheels carry the bike as gear (flat row model, ADR-0003):
+    // the hook records the wheel, the gear is the top-level part
     attach_assembly(
         &s,
         t_a1.id,
         ATTACH_TIME,
-        fw_a.id,
+        bike_a.id,
         FRONT_WHEEL,
         false,
         &mut store,
@@ -188,7 +190,7 @@ pub async fn build_workshop_store() -> TbResult<MemStore> {
         &s,
         t_a2.id,
         ATTACH_TIME,
-        rw_a.id,
+        bike_a.id,
         REAR_WHEEL,
         false,
         &mut store,
@@ -233,11 +235,12 @@ pub async fn build_workshop_store() -> TbResult<MemStore> {
     attach_assembly(&s, fw_b.id, ATTACH_TIME, bike_b.id, BIKE, false, &mut store).await?;
     attach_assembly(&s, rw_b.id, ATTACH_TIME, bike_b.id, BIKE, false, &mut store).await?;
     attach_assembly(&s, ch_b.id, ATTACH_TIME, bike_b.id, BIKE, false, &mut store).await?;
+    // same as Bike A: tires on mounted wheels carry the bike as gear
     attach_assembly(
         &s,
         t_b1.id,
         ATTACH_TIME,
-        fw_b.id,
+        bike_b.id,
         FRONT_WHEEL,
         false,
         &mut store,
@@ -247,7 +250,7 @@ pub async fn build_workshop_store() -> TbResult<MemStore> {
         &s,
         t_b2.id,
         ATTACH_TIME,
-        rw_b.id,
+        bike_b.id,
         REAR_WHEEL,
         false,
         &mut store,

@@ -25,13 +25,13 @@
 |--------|-------|---------|
 | Users | 1 | User 1 ("Tenda"/"Bike") |
 | Parts | 17 | 2 bikes + subparts (wheels, tires, chains) + 5 spares |
-| Attachments | 11 | Assembly hierarchy: bike→wheel/tire/chain |
-| Usages | 7 | Accumulated usage aggregates, linked from parts and attachments (and services) |
+| Attachments | 11 | Assembly hierarchy: bike→wheel/tire/chain. Tires on mounted wheels carry the bike as gear with the wheel as hook (flat row model); the spare wheel tire carries the loose wheel |
+| Usages | 11 | Accumulated usage aggregates for Bike A's set (bike + 5 attached parts, linked from parts and attachments) |
 | Activities | 3 | On Bike A, for usage calculation tests |
 
 Part ID layout: Bike A=1, Front Wheel A=2, Rear Wheel A=3, Chain A=4, Tire Front A=5, Tire Rear A=6, Bike B=7, Front Wheel B=8, Rear Wheel B=9, Chain B=10, Tire Front B=11, Tire Rear B=12, Spares=13–17 (chain 1, chain 2, tire, wheel, wheel tire).
 
-Part 1 (Bike A) registration cascades to parts [1, 2, 3, 4] (bike + direct subparts).
+Part 1 (Bike A) registration cascades to parts [1, 2, 3, 4, 5, 6] (bike + direct subparts, tires included).
 
 ### Ask before changing snapshot data
 
