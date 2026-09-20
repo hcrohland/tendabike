@@ -2,15 +2,19 @@
 
 **TendaBike** - A bike maintenance tracker that syncs with Strava: users track parts, schedule services, and log cycling activities imported from Strava.
 
+## Working rules
+
+- When in doubt about a change, ask the user before making it.
+
 ## Domain
 
 - Each entity lives in both halves: `backend/domain/src/entities/<name>.rs` and `frontend/src/lib/<name>.ts`.
 
 ## Commit rules
 
-- Run `cargo fmt` and `npm run format` from the project root before committing; the pre-commit hook enforces formatting, type checking, and linting.
-- Never bypass the hook with `--no-verify` or `-n`; make the checks pass instead.
-- The user reviews all changes before they are committed.
+- Flow, in order: finish the work → run `cargo fmt` and `npm run format` from the project root → show the user the changes → wait for explicit approval → commit.
+- Approval means the user explicitly says to commit ("commit it", "looks good" — not "thanks" or silence). Every commit needs it, even trivial ones.
+- The pre-commit hook enforces formatting, type checking, and linting; never bypass it with `--no-verify` or `-n` — make the checks pass instead.
 
 ## Agent skills
 
