@@ -31,6 +31,8 @@ The layout keeps the entity free of redundant data and makes activity registrati
 
 When an assembly is attached or detached with `all`, its rows are re-rooted: `shift_subparts` rewrites the assembly's rows to the new top-level part. A loose wheel with a tire holds rows with `gear = wheel.id`; attach the wheel to a bike and both rows become `gear = bike.id`; detaching with `all` collapses them back onto the loose wheel.
 
+The domain enforces the layout at write time: `attach_assembly` resolves the requested gear to its top-level part before writing, so the caller passes the part they physically mounted onto — attach a tire to a front wheel that is already on the bike and the row comes out `gear = bike.id` directly, no `all` needed. The type checks run against the passed gear first, so physically impossible mounts are still rejected.
+
 ### `AttachmentDetail` (`attachment.rs:61-74`)
 
 Extends `Attachment` with denormalized `name` and `what` (type ID) fields to simplify client serialization, especially for parts that were sold/disposed.

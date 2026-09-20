@@ -468,6 +468,20 @@ pub async fn attach_assembly(
                 .unwrap_or_else(|_| format!("unknown type {geartypeid}"))
         )));
     };
+
+    // Flat row model (ADR-0003): rows are stored against the assembly's
+    // top-level gear. The part the caller physically mounted onto may itself
+    // be mounted — walk up to the top-level part before writing. Validation
+    // above ran against the passed gear (the physical mount); the resolution
+    // only changes the stored gear, not what is accepted.
+    let mut gear = gear;
+    while let Some(row) = store.attachment_get_by_part_and_time(gear, time).await? {
+        if row.gear == gear {
+            // self row: the part is its own top-level while loose
+            break;
+        }
+        gear = row.gear;
+    }
     let mut hash = SumHash::default();
 
     // detach part if it is attached already
@@ -1183,6 +1197,151 @@ mod tests {
         assert!(att.is_some());
         let att = att.unwrap();
         assert_eq!(att.gear, bike.id);
+
+        Ok(())
+    }
+
+    /// The flat row model (ADR-0003): a part attached to a part that is itself
+    /// already mounted is stored against the top-level gear. A tire mounted
+    /// onto a front wheel that is already on the bike gets a row with the
+    /// bike as gear; the wheel is recorded in the hook.
+    #[tokio::test]
+    async fn attach_assembly_resolves_mounted_gear_to_top_level() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let session = TestSession::new(UserId::from(1));
+        let time = attachment_time();
+
+        let bike = Part::create(
+            "Main Bike".to_string(),
+            "TendaBike".to_string(),
+            "Standard".to_string(),
+            BIKE,
+            None,
+            sample_purchase_date() - time::Duration::days(365),
+            &session,
+            &mut store,
+        )
+        .await?;
+
+        let wheel = Part::create(
+            "Front Wheel".to_string(),
+            "Fulcrum".to_string(),
+            "Rapid 150".to_string(),
+            FRONT_WHEEL,
+            None,
+            sample_purchase_date(),
+            &session,
+            &mut store,
+        )
+        .await?;
+
+        let tire = Part::create(
+            "Front Tire".to_string(),
+            "Schwalbe".to_string(),
+            "One".to_string(),
+            TIRE,
+            None,
+            sample_purchase_date(),
+            &session,
+            &mut store,
+        )
+        .await?;
+
+        // mount the wheel on the bike first
+        let _summary =
+            attach_assembly(&session, wheel.id, time, bike.id, BIKE, false, &mut store).await?;
+
+        // attach the tire to the *wheel*; the domain resolves the top-level gear
+        let _summary = attach_assembly(
+            &session,
+            tire.id,
+            time,
+            wheel.id,
+            FRONT_WHEEL,
+            false,
+            &mut store,
+        )
+        .await?;
+
+        let att = store
+            .attachment_get_by_part_and_time(tire.id, time)
+            .await?
+            .expect("the tire is attached");
+        assert_eq!(att.gear, bike.id);
+        assert_eq!(att.hook, FRONT_WHEEL);
+
+        Ok(())
+    }
+
+    /// Resolution happens at entry, before the all branch: with all=true the
+    /// row is stored against the top-level gear exactly as with all=false.
+    /// A tire has no subparts in the current type taxonomy, so the all-shift
+    /// loop is empty here; the shifted path itself is covered by
+    /// attach_assembly_with_all_shifts_subparts_and_recalculates_usage.
+    #[tokio::test]
+    async fn attach_assembly_resolves_mounted_gear_to_top_level_with_all() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let session = TestSession::new(UserId::from(1));
+        let time = attachment_time();
+
+        let bike = Part::create(
+            "Main Bike".to_string(),
+            "TendaBike".to_string(),
+            "Standard".to_string(),
+            BIKE,
+            None,
+            sample_purchase_date() - time::Duration::days(365),
+            &session,
+            &mut store,
+        )
+        .await?;
+
+        let wheel = Part::create(
+            "Front Wheel".to_string(),
+            "Fulcrum".to_string(),
+            "Rapid 150".to_string(),
+            FRONT_WHEEL,
+            None,
+            sample_purchase_date(),
+            &session,
+            &mut store,
+        )
+        .await?;
+
+        let tire = Part::create(
+            "Front Tire".to_string(),
+            "Schwalbe".to_string(),
+            "One".to_string(),
+            TIRE,
+            None,
+            sample_purchase_date(),
+            &session,
+            &mut store,
+        )
+        .await?;
+
+        // mount the wheel on the bike first
+        let _summary =
+            attach_assembly(&session, wheel.id, time, bike.id, BIKE, true, &mut store).await?;
+
+        // attach the tire to the *wheel* with all=true
+        let _summary = attach_assembly(
+            &session,
+            tire.id,
+            time,
+            wheel.id,
+            FRONT_WHEEL,
+            true,
+            &mut store,
+        )
+        .await?;
+
+        let att = store
+            .attachment_get_by_part_and_time(tire.id, time)
+            .await?
+            .expect("the tire is attached");
+        assert_eq!(att.gear, bike.id);
+        assert_eq!(att.hook, FRONT_WHEEL);
 
         Ok(())
     }
