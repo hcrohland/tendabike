@@ -12,8 +12,7 @@
 
 ## Commit rules
 
-- Flow, in order: finish the work → run `cargo fmt` and `npm run format` from the project root → show the user the changes → wait for explicit approval → commit.
-- Approval means the user explicitly says to commit ("commit it", "looks good" — not "thanks" or silence). Every commit needs it, even trivial ones.
+- Flow, in order: finish the work → if on `main`, create a feature branch → run `cargo fmt` and `npm run format` from the project root → commit.
 - The pre-commit hook enforces formatting, type checking, and linting; never bypass it with `--no-verify` or `-n` — make the checks pass instead.
 
 ## Agent skills
