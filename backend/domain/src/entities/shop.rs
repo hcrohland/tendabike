@@ -468,8 +468,8 @@ mod tests {
             .register_part(PartId::from(1), &session, &mut store)
             .await
             .unwrap();
-        // Bike A + Front Wheel A + Rear Wheel A + Chain A = 4
-        assert_eq!(summary.parts.len(), 4);
+        // Bike A + Front Wheel A + Rear Wheel A + Chain A + both tires = 6
+        assert_eq!(summary.parts.len(), 6);
     }
 
     #[tokio::test]
@@ -579,7 +579,8 @@ mod tests {
             .unregister_part(PartId::from(1), &session, &mut store)
             .await
             .unwrap();
-        assert_eq!(summary.parts.len(), 4);
+        // Bike A + Front Wheel A + Rear Wheel A + Chain A + both tires = 6
+        assert_eq!(summary.parts.len(), 6);
         for part in &summary.parts {
             assert_eq!(part.shop, None, "part {} should have no shop", part.id);
         }
@@ -601,7 +602,8 @@ mod tests {
             .unregister_part(PartId::from(1), &shop_session, &mut store)
             .await
             .unwrap();
-        assert_eq!(summary.parts.len(), 4);
+        // Bike A + Front Wheel A + Rear Wheel A + Chain A + both tires = 6
+        assert_eq!(summary.parts.len(), 6);
         for part in &summary.parts {
             assert_eq!(part.shop, None, "part {} should have no shop", part.id);
         }
