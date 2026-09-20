@@ -94,7 +94,7 @@ fn activities_find_by_gear_and_time(&mut self, gear: PartId, begin: OffsetDateTi
 | S-33 | `service_recalculate_updates_usage_vec_in_place` | Multiple services recalculated in batch → all updated via single `Usage::update_vec()` call |
 | S-34 | `attach_assembly_updates_service_usage` | Full attach_assembly flow → returned Summary includes recalculated service usages |
 
-## Suite 6: ServicePlan — CRUD (15 tests)
+## Suite 6: ServicePlan — CRUD (14 tests)
 
 | ID | Test Name | What It Validates |
 |----|-----------|-------------------|

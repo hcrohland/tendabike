@@ -213,7 +213,7 @@ impl Service {
         Ok((services, usages))
     }
 
-    pub(crate) async fn reset_plan(
+    pub(crate) async fn unlink_plan(
         plan: ServicePlanId,
         owner: UserId,
         store: &mut (impl PartStore + ServiceStore),

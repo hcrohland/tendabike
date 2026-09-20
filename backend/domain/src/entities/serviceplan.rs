@@ -31,7 +31,7 @@ impl ServicePlanId {
             None => plan.uid.unwrap_or(user.user_id()),
         };
 
-        let res = Service::reset_plan(self, owner, store).await?;
+        let res = Service::unlink_plan(self, owner, store).await?;
 
         // delete service plan
         ServicePlanStore::delete(store, self).await?;
@@ -135,6 +135,44 @@ mod tests {
     use crate::test_support::{MemStore, TestSession, fixtures};
 
     use fixtures::{sample_purchase_date, test_session, test_user};
+
+    fn sample_plan(part: Option<PartId>, name: &str, uid: Option<UserId>) -> ServicePlan {
+        ServicePlan {
+            id: ServicePlanId::new(),
+            part,
+            what: PartTypeId::from(1),
+            hook: None,
+            name: name.to_string(),
+            days: Some(30),
+            hours: None,
+            km: None,
+            climb: None,
+            descend: None,
+            rides: None,
+            uid,
+            energy: None,
+        }
+    }
+
+    async fn seed_service_for_plan(
+        part: PartId,
+        name: &str,
+        plan: ServicePlanId,
+        store: &mut MemStore,
+    ) -> TbResult<Service> {
+        let t = time::macros::datetime!(2024-06-15 10:00 UTC);
+        let Summary { services, .. } = Service::create(
+            part,
+            t,
+            name.to_string(),
+            "".to_string(),
+            None,
+            vec![plan],
+            store,
+        )
+        .await?;
+        Ok(services.into_iter().next().unwrap())
+    }
 
     // === Suite 6: ServicePlan — CRUD ===
 
@@ -599,46 +637,25 @@ mod tests {
     async fn service_plan_delete_unlinks_owner_services() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
-
-        let plan = ServicePlan {
-            id: ServicePlanId::new(),
-            part: Some(part.id),
-            what: PartTypeId::from(1),
-            hook: None,
-            name: "Unlink Plan".to_string(),
-            days: Some(30),
-            hours: None,
-            km: None,
-            climb: None,
-            descend: None,
-            rides: None,
-            uid: None,
-            energy: None,
-        };
-        let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
-
-        let t = time::macros::datetime!(2024-06-15 10:00 UTC);
-        let Summary { services, .. } = Service::create(
-            part.id,
-            t,
-            "Service".to_string(),
-            "".to_string(),
-            None,
-            vec![created.id],
+        let created = ServicePlan::create(
+            sample_plan(Some(part.id), "Unlink Plan", None),
+            &test_session(),
             &mut store,
         )
         .await?;
-        assert_eq!(services[0].plans, vec![created.id]);
+
+        let service = seed_service_for_plan(part.id, "Service", created.id, &mut store).await?;
+        assert_eq!(service.plans, vec![created.id]);
 
         let res = created.id.delete(&test_session(), &mut store).await?;
 
         // the response carries the updated service
         assert_eq!(res.len(), 1);
-        assert_eq!(res[0].id, services[0].id);
+        assert_eq!(res[0].id, service.id);
         assert!(res[0].plans.is_empty());
 
         // the stored service no longer references the plan
-        let stored = ServiceStore::get(&mut store, services[0].id).await?;
+        let stored = ServiceStore::get(&mut store, service.id).await?;
         assert!(stored.plans.is_empty());
         Ok(())
     }
@@ -649,39 +666,15 @@ mod tests {
         let mut store = MemStore::prepopulated();
         let other_session = TestSession::new(UserId::from(99));
 
-        let plan = ServicePlan {
-            id: ServicePlanId::new(),
-            part: None,
-            what: PartTypeId::from(1),
-            hook: None,
-            name: "Generic Unlink".to_string(),
-            days: Some(30),
-            hours: None,
-            km: None,
-            climb: None,
-            descend: None,
-            rides: None,
-            uid: Some(test_user()),
-            energy: None,
-        };
-        let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
-
-        let t = time::macros::datetime!(2024-06-15 10:00 UTC);
-
-        let mine = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
-        let Summary {
-            services: my_services,
-            ..
-        } = Service::create(
-            mine.id,
-            t,
-            "Mine".to_string(),
-            "".to_string(),
-            None,
-            vec![created.id],
+        let created = ServicePlan::create(
+            sample_plan(None, "Generic Unlink", Some(test_user())),
+            &test_session(),
             &mut store,
         )
         .await?;
+
+        let mine = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
+        let my_service = seed_service_for_plan(mine.id, "Mine", created.id, &mut store).await?;
 
         let theirs = Part::create(
             "Other Part".to_string(),
@@ -694,29 +687,18 @@ mod tests {
             &mut store,
         )
         .await?;
-        let Summary {
-            services: their_services,
-            ..
-        } = Service::create(
-            theirs.id,
-            t,
-            "Theirs".to_string(),
-            "".to_string(),
-            None,
-            vec![created.id],
-            &mut store,
-        )
-        .await?;
+        let their_service =
+            seed_service_for_plan(theirs.id, "Theirs", created.id, &mut store).await?;
 
         let res = created.id.delete(&test_session(), &mut store).await?;
 
         // only the owner's updated service is in the response
         assert_eq!(res.len(), 1);
-        assert_eq!(res[0].id, my_services[0].id);
+        assert_eq!(res[0].id, my_service.id);
         assert!(res[0].plans.is_empty());
 
         // the non-owner's service is untouched
-        let their_stored = ServiceStore::get(&mut store, their_services[0].id).await?;
+        let their_stored = ServiceStore::get(&mut store, their_service.id).await?;
         assert_eq!(their_stored.plans, vec![created.id]);
         Ok(())
     }
@@ -736,45 +718,24 @@ mod tests {
         let shop_session = TestSession::with_shop(UserId::from(99), shop.id);
 
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
-
-        let plan = ServicePlan {
-            id: ServicePlanId::new(),
-            part: Some(part.id),
-            what: PartTypeId::from(1),
-            hook: None,
-            name: "Shop Delete".to_string(),
-            days: Some(30),
-            hours: None,
-            km: None,
-            climb: None,
-            descend: None,
-            rides: None,
-            uid: None,
-            energy: None,
-        };
-        let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
-
-        let t = time::macros::datetime!(2024-06-15 10:00 UTC);
-        let Summary { services, .. } = Service::create(
-            part.id,
-            t,
-            "Service".to_string(),
-            "".to_string(),
-            None,
-            vec![created.id],
+        let created = ServicePlan::create(
+            sample_plan(Some(part.id), "Shop Delete", None),
+            &test_session(),
             &mut store,
         )
         .await?;
+
+        let service = seed_service_for_plan(part.id, "Service", created.id, &mut store).await?;
 
         let res = created.id.delete(&shop_session, &mut store).await?;
 
         // the part owner's updated service is in the response
         assert_eq!(res.len(), 1);
-        assert_eq!(res[0].id, services[0].id);
+        assert_eq!(res[0].id, service.id);
         assert!(res[0].plans.is_empty());
 
         // the stored service no longer references the plan
-        let stored = ServiceStore::get(&mut store, services[0].id).await?;
+        let stored = ServiceStore::get(&mut store, service.id).await?;
         assert!(stored.plans.is_empty());
         Ok(())
     }
