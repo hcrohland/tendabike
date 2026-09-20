@@ -26,9 +26,8 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2022-11-14T22:00:00Z",
       "last_used": "2023-05-19T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a070da-05ff-7ec1-8bde-8a9c626e195e",
+      "usage": "01a0bb12-3570-7d83-b2b2-9308156a4379",
       "source": null,
-      "notes": "Main bike frame",
       "shop": null
     },
     {
@@ -41,9 +40,8 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a070da-05ff-7ec1-8bde-8aa54d975e12",
+      "usage": "01a0bb12-3570-7d83-b2b2-931309886fa1",
       "source": null,
-      "notes": "Test part",
       "shop": null
     },
     {
@@ -56,9 +54,8 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a070da-05ff-7ec1-8bde-8ab1a54630a3",
+      "usage": "01a0bb12-3570-7d83-b2b2-932b2c49c00a",
       "source": null,
-      "notes": "Test part",
       "shop": null
     },
     {
@@ -71,9 +68,8 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a070da-05ff-7ec1-8bde-8acaae959942",
+      "usage": "01a0bb12-3570-7d83-b2b2-93361f58866d",
       "source": null,
-      "notes": "Test part",
       "shop": null
     },
     {
@@ -86,9 +82,8 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a070da-05ff-7ec1-8bde-8ad61d14deff",
+      "usage": "01a0bb12-3570-7d83-b2b2-934ae2196cca",
       "source": null,
-      "notes": "Test part",
       "shop": null
     },
     {
@@ -101,9 +96,8 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a070da-05ff-7ec1-8bde-8ae30ce75e5d",
+      "usage": "01a0bb12-3570-7d83-b2b2-935365a98c46",
       "source": null,
-      "notes": "Test part",
       "shop": null
     },
     {
@@ -116,9 +110,8 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2022-11-14T22:00:00Z",
       "last_used": "2022-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a070da-05ff-7ec1-8bde-8b919dddeb91",
+      "usage": "01a0bb12-3571-7d42-8499-fee0fa984276",
       "source": null,
-      "notes": "Road bike frame",
       "shop": null
     },
     {
@@ -131,9 +124,8 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a070da-05ff-7ec1-8bde-8ba2b1fa52b0",
+      "usage": "01a0bb12-3571-7d42-8499-fef7a8a35436",
       "source": null,
-      "notes": "Test part",
       "shop": null
     },
     {
@@ -146,9 +138,8 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a070da-05ff-7ec1-8bde-8bb69bd93938",
+      "usage": "01a0bb12-3571-7d42-8499-ff0550db33b7",
       "source": null,
-      "notes": "Test part",
       "shop": null
     },
     {
@@ -161,9 +152,8 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a070da-05ff-7ec1-8bde-8bcea37a43c5",
+      "usage": "01a0bb12-3571-7d42-8499-ff1eb617d2d1",
       "source": null,
-      "notes": "Test part",
       "shop": null
     },
     {
@@ -176,9 +166,8 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a070da-05ff-7ec1-8bde-8bd5cf093676",
+      "usage": "01a0bb12-3571-7d42-8499-ff2d8828accf",
       "source": null,
-      "notes": "Test part",
       "shop": null
     },
     {
@@ -191,9 +180,8 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a070da-05ff-7ec1-8bde-8be245015cdf",
+      "usage": "01a0bb12-3571-7d42-8499-ff39cf4923c8",
       "source": null,
-      "notes": "Test part",
       "shop": null
     },
     {
@@ -206,9 +194,8 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a070da-05ff-7ec1-8bde-8c910f37ce01",
+      "usage": "01a0bb12-3571-7d42-8499-ffe8ff782328",
       "source": null,
-      "notes": "Test part",
       "shop": null
     },
     {
@@ -221,9 +208,8 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a070da-05ff-7ec1-8bde-8ca74b83c50a",
+      "usage": "01a0bb12-3571-7d42-8499-fff6116d6ab3",
       "source": null,
-      "notes": "Test part",
       "shop": null
     },
     {
@@ -236,9 +222,8 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a070da-05ff-7ec1-8bde-8cb25a8f5343",
+      "usage": "01a0bb12-3571-7d42-849a-000b1c5f6a63",
       "source": null,
-      "notes": "Test part",
       "shop": null
     },
     {
@@ -251,9 +236,8 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-11-14T22:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a070da-05ff-7ec1-8bde-8cc2f56e0d5c",
+      "usage": "01a0bb12-3571-7d42-849a-001513a91707",
       "source": null,
-      "notes": "Test part",
       "shop": null
     },
     {
@@ -266,9 +250,8 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "purchase": "2023-01-01T00:00:00Z",
       "last_used": "2023-11-14T22:00:00Z",
       "disposed_at": null,
-      "usage": "01a070da-05ff-7ec1-8bde-8cdba05089d7",
+      "usage": "01a0bb12-3571-7d42-849a-002c7fe2ef8e",
       "source": null,
-      "notes": "Test part",
       "shop": null
     }
   ],
@@ -279,7 +262,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 1,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a070da-05ff-7ec1-8bde-8b028ee5be93"
+      "usage": "01a0bb12-3570-7d83-b2b2-9372c8c30395"
     },
     {
       "part_id": 3,
@@ -287,7 +270,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 1,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a070da-05ff-7ec1-8bde-8b2bc9624777"
+      "usage": "01a0bb12-3570-7d83-b2b2-939fd1656828"
     },
     {
       "part_id": 4,
@@ -295,23 +278,23 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 1,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a070da-05ff-7ec1-8bde-8b45129eca96"
+      "usage": "01a0bb12-3570-7d83-b2b2-93b48e8c159d"
     },
     {
       "part_id": 5,
       "attached": "2023-01-01T00:00:00Z",
-      "gear": 2,
+      "gear": 1,
       "hook": 2,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a070da-05ff-7ec1-8bde-8b6007cf605d"
+      "usage": "01a0bb12-3571-7d42-8499-feb96957a6ea"
     },
     {
       "part_id": 6,
       "attached": "2023-01-01T00:00:00Z",
-      "gear": 3,
+      "gear": 1,
       "hook": 5,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a070da-05ff-7ec1-8bde-8b84f56a9dc7"
+      "usage": "01a0bb12-3571-7d42-8499-fed693a2d32e"
     },
     {
       "part_id": 8,
@@ -319,7 +302,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 7,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a070da-05ff-7ec1-8bde-8c0cc1b20fc4"
+      "usage": "01a0bb12-3571-7d42-8499-ff50396f698b"
     },
     {
       "part_id": 9,
@@ -327,7 +310,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 7,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a070da-05ff-7ec1-8bde-8c27aef25106"
+      "usage": "01a0bb12-3571-7d42-8499-ff7173f39984"
     },
     {
       "part_id": 10,
@@ -335,23 +318,23 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 7,
       "hook": 1,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a070da-05ff-7ec1-8bde-8c409cc01f2d"
+      "usage": "01a0bb12-3571-7d42-8499-ff9dadf1f7db"
     },
     {
       "part_id": 11,
       "attached": "2023-01-01T00:00:00Z",
-      "gear": 8,
+      "gear": 7,
       "hook": 2,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a070da-05ff-7ec1-8bde-8c69ff1b7eea"
+      "usage": "01a0bb12-3571-7d42-8499-ffb0567d38c6"
     },
     {
       "part_id": 12,
       "attached": "2023-01-01T00:00:00Z",
-      "gear": 9,
+      "gear": 7,
       "hook": 5,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a070da-05ff-7ec1-8bde-8c8738c66b69"
+      "usage": "01a0bb12-3571-7d42-8499-ffdc9695830e"
     },
     {
       "part_id": 17,
@@ -359,12 +342,12 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "gear": 16,
       "hook": 2,
       "detached": "9100-01-01T00:00:00Z",
-      "usage": "01a070da-05ff-7ec1-8bde-8cf17744a3c0"
+      "usage": "01a0bb12-3571-7d42-849a-004ab16c5751"
     }
   ],
   "usages": [
     {
-      "id": "01a070da-05ff-7ec1-8bde-8a9c626e195e",
+      "id": "01a0bb12-3570-7d83-b2b2-9308156a4379",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -373,7 +356,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a070da-05ff-7ec1-8bde-8aa54d975e12",
+      "id": "01a0bb12-3570-7d83-b2b2-931309886fa1",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -382,7 +365,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a070da-05ff-7ec1-8bde-8ab1a54630a3",
+      "id": "01a0bb12-3570-7d83-b2b2-932b2c49c00a",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -391,7 +374,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a070da-05ff-7ec1-8bde-8acaae959942",
+      "id": "01a0bb12-3570-7d83-b2b2-93361f58866d",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -400,7 +383,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a070da-05ff-7ec1-8bde-8b028ee5be93",
+      "id": "01a0bb12-3570-7d83-b2b2-934ae2196cca",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -409,7 +392,7 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a070da-05ff-7ec1-8bde-8b2bc9624777",
+      "id": "01a0bb12-3570-7d83-b2b2-935365a98c46",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,
@@ -418,7 +401,43 @@ pub const SNAPSHOT_JSON: &str = r#"{
       "count": 3
     },
     {
-      "id": "01a070da-05ff-7ec1-8bde-8b45129eca96",
+      "id": "01a0bb12-3570-7d83-b2b2-9372c8c30395",
+      "time": 8025,
+      "distance": 125000,
+      "climb": 1100,
+      "descend": 1100,
+      "energy": 1500,
+      "count": 3
+    },
+    {
+      "id": "01a0bb12-3570-7d83-b2b2-939fd1656828",
+      "time": 8025,
+      "distance": 125000,
+      "climb": 1100,
+      "descend": 1100,
+      "energy": 1500,
+      "count": 3
+    },
+    {
+      "id": "01a0bb12-3570-7d83-b2b2-93b48e8c159d",
+      "time": 8025,
+      "distance": 125000,
+      "climb": 1100,
+      "descend": 1100,
+      "energy": 1500,
+      "count": 3
+    },
+    {
+      "id": "01a0bb12-3571-7d42-8499-feb96957a6ea",
+      "time": 8025,
+      "distance": 125000,
+      "climb": 1100,
+      "descend": 1100,
+      "energy": 1500,
+      "count": 3
+    },
+    {
+      "id": "01a0bb12-3571-7d42-8499-fed693a2d32e",
       "time": 8025,
       "distance": 125000,
       "climb": 1100,

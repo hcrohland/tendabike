@@ -23,12 +23,6 @@
 //! A `Part` represents a single part of a bike, such as a wheel or a chain. Each part has a unique
 //! ID, an owner, a type, a name, and various other attributes that describe its usage and history.
 //!
-//! The `Assembly` type is a collection of parts that make up a complete bike. It is represented as
-//! a `HashMap` of `PartId` keys and `Part` values.
-//!
-//! This module also defines the `ATrait` trait, which provides a method for looking up a part by ID
-//! in an `Assembly`.
-//!
 //! Finally, this module defines the `NewPart` type, which is used to create new parts in the database.
 
 #![allow(clippy::too_many_arguments)]

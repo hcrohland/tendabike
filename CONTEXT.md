@@ -20,11 +20,14 @@ A type which cannot be attached to another type — a top type such as bike, ski
 _Avoid_: main (that is the name of the reference a type points at its category by)
 
 **gear**:
-A part whose type is a category — a bike, a ski. Other parts attach to gear.
+A part whose type is a category — a bike, a ski.
+
+**assembly**:
+A part and the parts attached to it at a time, including parts attached to those.
 
 **hook**:
 A mount position that a type can attach to, expressed as the type of the part it attaches onto (a tire hooks onto a wheel). The word is overloaded in the codebase with the Strava event-drain endpoint; in domain discussion it means the mount position.
 
 **attachment**:
-A part being mounted on another part at a hook, over a span of time.
+A part being mounted on another part at a hook, over a span of time. It is the part's place in the assembly: directly on the part it hooks onto, and thereby on the gear.
 _Avoid_: file

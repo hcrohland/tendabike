@@ -16,6 +16,14 @@ Attachment (physical timeline)  ──▶  Service (maintenance history)  ──
 
 ---
 
+## Due-ness ownership
+
+The due-ness **resolution** — remaining-threshold math, the 5% warn band and severity ladder, the specific-beats-generic plan ladder, covered-part exclusion, and next-due — is a **client-side derivative** owned by `frontend/src/lib/serviceplan.ts`. It is computed from the entity state the client already holds (plans, parts, services, usages, attachments) against the clock, so it re-evaluates when that state changes or as time passes — not when the server mutates. This is the domain-flow pattern (`docs/agents/domain-flow.md`): the domain computes entity state; the client combines it to compute derivatives. Due-ness is a derivative, so it lives where the clock and the merged state live — the client. Recorded in ADR-0002 (`docs/adr/0002-plan-due-ness-is-a-client-side-derivative.md`), which supersedes the backend-placement ADR-0001.
+
+**Backend boundary:** the backend provides CRUD for `Service` and `ServicePlan` plus the `reset_plan` unlink — deleting a plan removes its id from the owner's services so no service references a deleted plan. It does **not** compute or store due-ness: there is no due-ness module, no `plan_status` field on the `Summary`, and no time-parameterized endpoint.
+
+---
+
 ## Service Entity
 
 ### Data Model (`domain/src/entities/service.rs:55-75`)
@@ -193,7 +201,7 @@ static valid(l: any) {
 }
 ```
 
-A service plan can have multiple simultaneous thresholds. The frontend compares current accumulated usage (from the latest service + ongoing attachment) against these thresholds to determine if service is due.
+A service plan can have multiple simultaneous thresholds. This comparison is the **due-ness resolution** — a client-side derivative the frontend owns (see [Due-ness ownership](#due-ness-ownership)); it compares current accumulated usage (from the latest service + ongoing attachment) against these thresholds to determine if service is due.
 
 ### Immutables After Creation
 
