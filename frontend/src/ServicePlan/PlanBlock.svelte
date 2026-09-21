@@ -3,7 +3,7 @@
   import PlanName from "./PlanName.svelte";
   import { attachments } from "../lib/attachment";
   import { parts } from "../lib/part";
-  import { plans, ServicePlan } from "../lib/serviceplan";
+  import { plans, ServicePlan, gearsForPlan } from "../lib/serviceplan";
   import * as m from "../../paraglide/messages";
   import Menu from "../Widgets/Menu.svelte";
   import { DropdownItem } from "flowbite-svelte";
@@ -16,7 +16,7 @@
 
   let { plan }: Props = $props();
 
-  let gears = $derived(plan.gears($parts, Object.values($plans), $attachments));
+  let gears = $derived(gearsForPlan(plan, $parts, $attachments, $plans));
 </script>
 
 <Card>

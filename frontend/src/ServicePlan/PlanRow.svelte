@@ -3,7 +3,11 @@
   import { attachments } from "../lib/attachment";
   import { Part, parts } from "../lib/part";
   import { services } from "../lib/service";
-  import { next_due, ServicePlan } from "../lib/serviceplan";
+  import {
+    partForPlanGear,
+    duesForPlans,
+    ServicePlan,
+  } from "../lib/serviceplan";
   import { usages } from "../lib/usage";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import * as m from "../../paraglide/messages";
@@ -21,11 +25,13 @@
 
   let show_more = $state(false);
 
-  let part = $derived(plan.getpart($parts, $attachments, gear?.id)) as Part;
+  let part = $derived(
+    partForPlanGear(plan, gear?.id, $parts, $attachments),
+  ) as Part;
   let [ActiveService, ...serviceList] = $derived(
     plan.services(part, $services),
   );
-  let dues: any = $derived(next_due(part, [plan], $services, $usages));
+  let dues: any = $derived(duesForPlans(part, [plan], $services, $usages));
 </script>
 
 {#if part}

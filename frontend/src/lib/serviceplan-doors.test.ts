@@ -6,6 +6,7 @@ import {
   alertCounts,
   plansForPart,
   plansForAssembly,
+  planCmp,
   isTemplate,
   localizeLimitKey,
   ServicePlan,
@@ -423,26 +424,6 @@ describe("plansForPart", () => {
     const res = plansForPart(5, plans, atts, new Date("2029-01-01T00:00:00Z"));
     expect(res.map((p) => p.id)).toEqual(["P1"]);
   });
-
-  it("returns the plans sorted by type, then part, then id", () => {
-    const plans = planMap(
-      plan({ id: "P1", part: 5, what: 20, hook: null }),
-      plan({ id: "P2", part: 5, what: 10, hook: null }),
-      plan({ id: "P3", part: 5, what: 10, hook: null }),
-    );
-    const res = plansForPart(5, plans, {});
-    expect(res.map((p) => p.id)).toEqual(["P2", "P3", "P1"]);
-  });
-
-  it("returns the plans sorted by hook and part within a type", () => {
-    // Part 7 is attached at hook 1, what 10 on gear 100 (see att()).
-    const B = plan({ id: "B", part: 7, what: 10, hook: 1 });
-    const C = plan({ id: "C", part: 100, what: 10, hook: 1 });
-    const D = plan({ id: "D", part: 7, what: 10, hook: 30 });
-    const plans = planMap(C, D, B);
-    const res = plansForPart(7, plans, attMap(att()));
-    expect(res.map((p) => p.id)).toEqual(["B", "C", "D"]);
-  });
 });
 
 describe("plansForAssembly", () => {
@@ -470,33 +451,67 @@ describe("plansForAssembly", () => {
     expect(res.map((p) => p.id)).toEqual(["P2"]);
   });
 
-  it("sorts subtype-hook plans by hook even when the type lists hooks reversed", async () => {
+  it("walks subtype hooks in the type's listed order (unsorted)", async () => {
     await loadTypes([bikeType, { ...wheelAsmType, hooks: [31, 30] }]);
     const bike = part({ id: 100, what: 1 });
     const P1 = plan({ id: "P1", part: 100, what: 1, hook: null, km: "100" });
     const P4 = plan({ id: "P4", part: null, what: 10, hook: 31, km: "100" });
     const P3 = plan({ id: "P3", part: null, what: 10, hook: 30, km: "100" });
-    // Walk order is P1, P4 (hook 31 first), P3 (hook 30); the sorted result
-    // puts hook 30 before hook 31, which the old buggy comparator did not.
+    // The walk visits hooks in the type's listed order: the bike's own plan
+    // (P1), then hook 31 (P4), then hook 30 (P3). The door no longer sorts;
+    // ordering is the caller's job (see planCmp).
     const res = plansForAssembly(bike, planMap(P1, P4, P3), {});
-    expect(res.map((p) => p.id)).toEqual(["P1", "P3", "P4"]);
+    expect(res.map((p) => p.id)).toEqual(["P1", "P4", "P3"]);
+  });
+});
+
+describe("planCmp", () => {
+  it("orders by type, then hook, then part, then id; the hook branch compares hook", () => {
+    const P1 = plan({ id: "P1", part: 100, what: 1, hook: null });
+    const P4 = plan({ id: "P4", part: null, what: 10, hook: 31 });
+    const P3 = plan({ id: "P3", part: null, what: 10, hook: 30 });
+    // P3 (hook 30) sorts before P4 (hook 31) within the same type even though
+    // P4 is listed first; the old buggy comparator compared the type here.
+    expect([P1, P4, P3].sort(planCmp).map((p) => p.id)).toEqual([
+      "P1",
+      "P3",
+      "P4",
+    ]);
+  });
+
+  it("orders by type, then part, then id", () => {
+    const P1 = plan({ id: "P1", part: 5, what: 20, hook: null });
+    const P2 = plan({ id: "P2", part: 5, what: 10, hook: null });
+    const P3 = plan({ id: "P3", part: 5, what: 10, hook: null });
+    expect([P1, P2, P3].sort(planCmp).map((p) => p.id)).toEqual([
+      "P2",
+      "P3",
+      "P1",
+    ]);
+  });
+
+  it("orders by hook, then part within a type", () => {
+    const B = plan({ id: "B", part: 7, what: 10, hook: 1 });
+    const C = plan({ id: "C", part: 100, what: 10, hook: 1 });
+    const D = plan({ id: "D", part: 7, what: 10, hook: 30 });
+    expect([C, D, B].sort(planCmp).map((p) => p.id)).toEqual(["B", "C", "D"]);
   });
 });
 
 describe("isTemplate", () => {
-  it("returns the part of the plan when it exists", () => {
+  it("is false for a plan bound to a specific part", () => {
     const p = plan({ id: "P1", part: 5 });
-    expect(isTemplate(p, planMap(p))).toBe(5);
+    expect(isTemplate(p, planMap(p))).toBe(false);
   });
 
-  it("returns undefined when the plan is absent", () => {
+  it("is true when the plan is absent from the map", () => {
     const p = plan({ id: "P1", part: 5 });
-    expect(isTemplate(p, planMap())).toBeUndefined();
+    expect(isTemplate(p, planMap())).toBe(true);
   });
 
-  it("returns undefined for a plan without a part", () => {
+  it("is true for a plan without a part", () => {
     const p = plan({ id: "P1", part: null });
-    expect(isTemplate(p, planMap(p))).toBeUndefined();
+    expect(isTemplate(p, planMap(p))).toBe(true);
   });
 });
 

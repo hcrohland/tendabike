@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { plans, ServicePlan } from "../lib/serviceplan";
+  import { plans, ServicePlan, isTemplate } from "../lib/serviceplan";
   import { category, types } from "../lib/types";
   import { link } from "svelte-spa-router";
   import { attachments, part_at_hook } from "../lib/attachment";
@@ -34,10 +34,10 @@
     {:else}
       {types[plan.what].human_name(plan.hook)}
     {/if}
-    {#if plan.no_template($plans)}
-      {m.attachform_of()} {@html partlink}
-    {:else}
+    {#if isTemplate(plan, $plans)}
       {m.attachform_of()} {$category.localizedAnyDative()}
+    {:else}
+      {m.attachform_of()} {@html partlink}
     {/if}
   {:else}
     {@html partlink}

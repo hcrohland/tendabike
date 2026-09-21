@@ -180,7 +180,7 @@ function template_part(
 /** Sort order for plan lists: type, then hook, then part, then id; nulls
  * sort first via a -1 sentinel; ids compare as strings.
  */
-function plan_cmp(a: ServicePlan, b: ServicePlan): number {
+export function planCmp(a: ServicePlan, b: ServicePlan): number {
   if (a.what != b.what) return a.what < b.what ? -1 : 1;
   let ah = a.hook ?? -1;
   let bh = b.hook ?? -1;
@@ -349,8 +349,8 @@ function plans_for_attachee(plans: Map<ServicePlan>, att: Attachment) {
   ).map((p) => new ServicePlan({ ...p, part: att.part_id }));
 }
 
-/** Plans for a part at a given time or now, in store order (unsorted);
- * only the doors sort their results with plan_cmp.
+/** Plans for a part at a given time or now, in store order (unsorted); the
+ * caller sorts with planCmp.
  */
 function plans_for_part_at(
   part: number | undefined,
@@ -407,7 +407,7 @@ function plans_for_subtype(
 }
 
 /** Plans for a part and the parts it assembles through its type's subtype
- * hooks, in walk order (unsorted); only the doors sort with plan_cmp.
+ * hooks, in walk order (unsorted); the caller sorts with planCmp.
  */
 function plans_for_assembly(
   part: Part,
@@ -503,8 +503,8 @@ export function alertCounts(
 }
 
 /**
- * Plans for a part at a pinned time or now, sorted by type, hook, part,
- * and id.
+ * Plans for a part at a pinned time or now, in store order (unsorted); the
+ * caller sorts with planCmp.
  */
 export function plansForPart(
   part: number | undefined,
@@ -512,30 +512,30 @@ export function plansForPart(
   $attachments: Map<Attachment>,
   time: Date = new Date(),
 ): ServicePlan[] {
-  return plans_for_part_at(part, $plans, $attachments, time).sort(plan_cmp);
+  return plans_for_part_at(part, $plans, $attachments, time);
 }
 
 /**
  * Plans for a part and the parts it assembles through its type's subtype
- * hooks, sorted by type, hook, part, and id.
+ * hooks, in walk order (unsorted); the caller sorts with planCmp.
  */
 export function plansForAssembly(
   part: Part,
   $plans: Map<ServicePlan>,
   $attachments: Map<Attachment>,
 ): ServicePlan[] {
-  return plans_for_assembly(part, $plans, $attachments).sort(plan_cmp);
+  return plans_for_assembly(part, $plans, $attachments);
 }
 
 /**
- * The part a plan templates, looked up by id; undefined when the plan is
- * not (or no longer) in the map.
+ * Whether a plan is a template (not bound to a specific part): true for a
+ * generic plan, or when the plan is not (or no longer) in the map.
  */
 export function isTemplate(
   plan: ServicePlan,
   $plans: Map<ServicePlan>,
-): number | undefined {
-  return template_part(plan, $plans) ?? undefined;
+): boolean {
+  return typeof template_part(plan, $plans) !== "number";
 }
 
 /**
