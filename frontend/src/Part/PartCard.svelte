@@ -9,7 +9,7 @@
   import { parts } from "../lib/part";
   import { Type } from "../lib/types";
   import { usages } from "../lib/usage";
-  import { plans, plans_for_part, next_due } from "../lib/serviceplan";
+  import { plans, plansForPart, duesForPlans } from "../lib/serviceplan";
   import PartLink from "./PartLink.svelte";
   import { actions } from "../Widgets/Actions.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
@@ -43,9 +43,9 @@
     const list = attachments.map((a) => ({ att: a, part: $parts[a.part_id] }));
     const att = list[0]?.att;
     const part = list[0]?.part;
-    const dues = next_due(
+    const dues = duesForPlans(
       part,
-      plans_for_part($plans, $atts, part?.id),
+      plansForPart(part?.id, $plans, $atts),
       $services,
       $usages,
     );

@@ -213,11 +213,21 @@ impl Service {
         Ok((services, usages))
     }
 
-    pub(crate) async fn reset_plan(
-        _plan: ServicePlanId,
-        _store: &mut impl ServiceStore,
+    pub(crate) async fn unlink_plan(
+        plan: ServicePlanId,
+        owner: UserId,
+        store: &mut (impl PartStore + ServiceStore),
     ) -> TbResult<Vec<Service>> {
-        Ok(Vec::new())
+        let mut res = Vec::new();
+        for part in store.part_get_all_for_userid(&owner).await? {
+            for mut service in store.services_by_part(part.id).await? {
+                if service.plans.contains(&plan) {
+                    service.plans.retain(|p| *p != plan);
+                    res.push(store.update(service).await?);
+                }
+            }
+        }
+        Ok(res)
     }
 }
 

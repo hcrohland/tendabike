@@ -18,9 +18,9 @@ Attachment (physical timeline)  ──▶  Service (maintenance history)  ──
 
 ## Due-ness ownership
 
-The due-ness **resolution** — remaining-threshold math, the 5% warn band and severity ladder, the specific-beats-generic plan ladder, covered-part exclusion, and next-due — is a **client-side derivative** owned by `frontend/src/lib/serviceplan.ts`. It is computed from the entity state the client already holds (plans, parts, services, usages, attachments) against the clock, so it re-evaluates when that state changes or as time passes — not when the server mutates. This is the domain-flow pattern (`docs/agents/domain-flow.md`): the domain computes entity state; the client combines it to compute derivatives. Due-ness is a derivative, so it lives where the clock and the merged state live — the client. Recorded in ADR-0002 (`docs/adr/0002-plan-due-ness-is-a-client-side-derivative.md`), which supersedes the backend-placement ADR-0001.
+The due-ness **resolution** — remaining-threshold math, the 5% warn band and severity ladder, the specific-beats-generic plan ladder, covered-part exclusion, and next-due — is a **client-side derivative** owned by `frontend/src/lib/serviceplan.ts`. It is computed from the entity state the client already holds (plans, parts, services, usages, attachments) against the clock. Derivatives re-evaluate on store writes — hydration, the 60-second drain, write merges — not on clock passage; a midnight band flip waits for the next data change or re-hydration (accepted staleness policy, spec #323). This is the domain-flow pattern (`docs/agents/domain-flow.md`): the domain computes entity state; the client combines it to compute derivatives. Due-ness is a derivative, so it lives where the clock and the merged state live — the client. Recorded in ADR-0002 (`docs/adr/0002-plan-due-ness-is-a-client-side-derivative.md`), which supersedes the backend-placement ADR-0001.
 
-**Backend boundary:** the backend provides CRUD for `Service` and `ServicePlan` plus the `reset_plan` unlink — deleting a plan removes its id from the owner's services so no service references a deleted plan. It does **not** compute or store due-ness: there is no due-ness module, no `plan_status` field on the `Summary`, and no time-parameterized endpoint.
+**Backend boundary:** the backend provides CRUD for `Service` and `ServicePlan` plus the `unlink_plan` unlink (`Service::unlink_plan`, called from `ServicePlan::delete`; owner = the part's owner for a specific plan, the plan's `uid` for a generic one) — deleting a plan removes its id from the owner's services so no service references a deleted plan. It does **not** compute or store due-ness: there is no due-ness module, no `plan_status` field on the `Summary`, and no time-parameterized endpoint.
 
 ---
 
@@ -152,13 +152,13 @@ A plan's scope is set by three fields — `part`, `what`, `hook`. Together they 
 
 #### Three scopes (in precedence order)
 
-The resolver `plans_for_attachee` (`frontend/src/lib/serviceplan.ts:208`) picks the *most specific* plan that covers a component:
+The resolver `plans_for_attachee` (`frontend/src/lib/serviceplan.ts:242`, private interior, reached through the `plansForAssembly` / `plansForPart` doors) picks the *most specific* plan that covers a component:
 
 1. **Component-specific** — `part = <component_id>`, `hook = null`. "Service this exact tire."
 2. **Gear-specific** — `part = <gear_id>`, `what = <type>`, `hook = <hook>`. "Service this bike's front tire."
 3. **Generic** — `part = null`, `what = <type>`, `hook = <hook>`. "Service every bike's front tire."
 
-Scopes 1 and 2 **override** scope 3: if a component already has a specific plan, the generic plan no longer applies to it. The frontend de-duplicates the overall list on this rule — `ServicePlan.gears()` (`serviceplan.ts:180`) skips any gear whose component at the hook is covered by a gear-level *or* component-level specific plan.
+Scopes 1 and 2 **override** scope 3: if a component already has a specific plan, the generic plan no longer applies to it. The frontend de-duplicates the overall list on this rule — the covered-part exclusion in `gears_of_plan` (`serviceplan.ts:164`, private interior; door `gearsForPlan`) skips any gear whose component at the hook is covered by a gear-level *or* component-level specific plan.
 
 > **Body (whole-bike) case:** `hook = null`. A generic body plan is `part = null, what = <bike type>, hook = null` ("service every bike"); a specific one is `part = <bike_id>, hook = null`.
 
@@ -186,8 +186,8 @@ Once created, `part`/`what`/`hook`/`uid` are **immutable** — `update()` refuse
 
 #### Resolution (which plans show for a part)
 
-- **Single-gear view** (`PlanList` with a gear): `plans_for_part_and_subtypes` (`serviceplan.ts:276`) walks every subtype/hook of the gear and, via `plans_for_attachee`, returns specific plans where they exist and generic ones only as a fallback.
-- **Overall list** (`PlanList` without a gear): shows every plan in the category; each `PlanBlock` renders `plan.gears(...)` — the gears the plan currently applies to, with specific-covered components excluded (see the override note above).
+- **Single-gear view** (`PlanList` with a gear): the `plansForAssembly` door (`serviceplan.ts:410`) returns the part's own plans plus the plans of the parts it assembles through its type's subtype hooks, resolved through `plans_for_attachee` — specific plans where they exist, generic ones only as a fallback — unsorted; `PlanList` sorts with `planCmp`.
+- **Overall list** (`PlanList` without a gear): shows every plan in the category; each `PlanBlock` renders `gearsForPlan(plan, $parts, $attachments, $plans)` — the gears the plan currently applies to, with specific-covered components excluded (see the override note above).
 
 ### Threshold Logic
 
@@ -273,7 +273,7 @@ CREATE INDEX service_plans_uid_idx ON service_plans(uid) WHERE uid IS NOT NULL;
 |-------|--------|-------------|
 | `/api/plan/` | `POST` | Create a plan |
 | `/api/plan/{id}` | `PUT` | Update a plan |
-| `/api/plan/{id}/services` | `GET` | List services fulfilling this plan |
+| `/api/plan/{id}` | `DELETE` | Delete a plan; response is the owner's services with the plan id unlinked |
 
 ### Create Service Request (`NewService`, service.rs:43-50)
 
@@ -317,7 +317,7 @@ class Service {
 
 The `history()` method builds a tree of predecessor services for rendering in the UI, with depth-based indentation.
 
-### ServicePlan (`frontend/src/lib/serviceplan.ts:77-338`)
+### ServicePlan (`frontend/src/lib/serviceplan.ts:77`)
 
 ```typescript
 class ServicePlan extends Limits {
@@ -340,6 +340,21 @@ class Limits {
   set_from_object(a): void
 }
 ```
+
+The due-ness rule itself lives in the same module behind eight narrow doors (plus the exported `planCmp` comparator); doors take the store *values* their call site reads, so each call site stays reactive only to the stores it reads. The doors return the unsorted walk; sorting is the caller's job via `planCmp` (type → hook → part → id):
+
+| Door | Maps read | Answers |
+|------|-----------|---------|
+| `plansForPart` | plans, attachments | plans for one part at a pinned time or now (the one time-parameterized door) |
+| `plansForAssembly` | plans, attachments | the part's own plans plus its assembled subtypes, resolved |
+| `duesForPlans` | services, usages | per-limit remaining and the nearest next-due for a part |
+| `alertCounts` | parts, services, usages, attachments | warn/alert band counts over a set of plans |
+| `gearsForPlan` | parts, attachments, plans | the gears a plan applies to (covered parts excluded) |
+| `partForPlanGear` | parts, attachments | the component a plan's gear row points at |
+| `isTemplate` | plans | whether the plan is still an unbound (generic) template |
+| `localizeLimitKey` | — | localized label for a limit key |
+
+Everything else — the resolution ladder (`plans_for_this_part` / `plans_for_attachee` / `plans_at_hook` / `plans_for_subtype`), the `due_for` / `alert_for` folds, `part_for_plan`, `gears_of_plan` — is private module interior.
 
 ### Integration with Attachment and Part data
 
@@ -420,8 +435,8 @@ import { services } from "./service";
 
 Both entities have full `#[cfg(test)]` suites using the in-memory `MemStore`:
 
-- **`service.rs`** (test module starts at line 224): covers `Service::create`, `Service::update`, `Service::delete`, `Service::redo`, successor chain linking, usage calculation for main parts vs sub-parts, and recalculation on attachment changes.
-- **`serviceplan.rs`** (test module starts at line 127): covers `ServicePlan::create` (specific vs generic mode), `ServicePlan::update` (immutability of `part`/`what`/`hook`/`uid`), `ServicePlan::delete`, threshold field round-trips, and ownership enforcement via `checkuser()`.
+- **`service.rs`** (test module starts at line 235): covers `Service::create`, `Service::update`, `Service::delete`, `Service::redo`, successor chain linking, usage calculation for main parts vs sub-parts, and recalculation on attachment changes.
+- **`serviceplan.rs`** (test module starts at line 133): covers `ServicePlan::create` (specific vs generic mode), `ServicePlan::update` (immutability of `part`/`what`/`hook`/`uid`), `ServicePlan::delete` including the `unlink_plan` unlink — owner scoping and the shop-session part-owner case (SP-12 / SP-12a / SP-12b) — threshold field round-trips, and ownership enforcement via `checkuser()`.
 
 Run with: `SQLX_OFFLINE=true cargo test -p tb_domain`
 
@@ -438,7 +453,7 @@ Run with: `SQLX_OFFLINE=true cargo test -p tb_domain`
 | `sqlx/src/store/service.rs` | PostgreSQL persistence for services |
 | `sqlx/src/store/serviceplan.rs` | PostgreSQL persistence for service plans |
 | `axum/src/domain/service.rs` | REST API handlers (create, update, delete, redo) |
-| `axum/src/domain/serviceplan.rs` | REST API handlers (create, update, list services) |
+| `axum/src/domain/serviceplan.rs` | REST API handlers (create, update, delete + unlink) |
 | `frontend/src/lib/service.ts` | TypeScript Service class with CRUD and history traversal |
-| `frontend/src/lib/serviceplan.ts` | TypeScript ServicePlan + Limits classes, threshold helpers |
+| `frontend/src/lib/serviceplan.ts` | TypeScript ServicePlan + Limits classes, the due-ness rule (eight doors, `planCmp`), threshold helpers |
 | `sqlx/migrations/20250101000000_initial_schema.up.sql:119-165` | Database schema for services and service_plans tables |

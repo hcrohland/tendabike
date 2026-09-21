@@ -10,14 +10,14 @@ The attachment entity models a **temporal, hierarchical relationship** between p
 
 ### `Attachment` (`domain/src/entities/attachment.rs:39-55`)
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `part_id` | `PartId` | The sub-part being attached (e.g., a chain) |
-| `attached` | `OffsetDateTime` | When the part was installed |
-| `gear` | `PartId` | The top-level part of the assembly the part is in (itself while loose) — see the flat row model below |
-| `hook` | `PartTypeId` | The type of the part it is mounted on directly (a tire's row carries the wheel type) |
-| `detached` | `OffsetDateTime` | When the part was removed — `MAX_TIME` (year 9100) means "still attached" |
-| `usage` | `UsageId` | UUID referencing a usage record that aggregates Strava activity metrics |
+| Field      | Type             | Description                                                                                           |
+| ---------- | ---------------- | ----------------------------------------------------------------------------------------------------- |
+| `part_id`  | `PartId`         | The sub-part being attached (e.g., a chain)                                                           |
+| `attached` | `OffsetDateTime` | When the part was installed                                                                           |
+| `gear`     | `PartId`         | The top-level part of the assembly the part is in (itself while loose) — see the flat row model below |
+| `hook`     | `PartTypeId`     | The type of the part it is mounted on directly (a tire's row carries the wheel type)                  |
+| `detached` | `OffsetDateTime` | When the part was removed — `MAX_TIME` (year 9100) means "still attached"                             |
+| `usage`    | `UsageId`        | UUID referencing a usage record that aggregates Strava activity metrics                               |
 
 **Composite primary key**: `(part_id, attached)` — the timeline is append-only via new rows.
 
@@ -159,17 +159,17 @@ CREATE TABLE attachments (
 
 ### Key store methods (`sqlx/src/store/attachment.rs`)
 
-| Method | Description |
-|--------|-------------|
-| `attachment_create()` | Insert a new attachment row |
-| `delete()` | Delete by `(part_id, attached)` composite key |
-| `attachment_get_by_part_and_time()` | Find active attachment at a point in time (with `FOR UPDATE` lock) |
-| `attachment_get_by_gear_and_time()` | Find all parts attached to a gear at a given time |
-| `attachments_all_by_part()` | Full timeline history for a part |
-| `attachment_find_successor()` | Find the next attachment on the same hook (for overlap detection) |
-| `attachment_find_part_attached_already()` | Find immediately preceding attachment (for merging) |
-| `attachment_find_later_attachment_for_part()` | Find the next attachment of this part after a given time |
-| `assembly_get_by_types_time_and_gear()` | Find attachments matching multiple type IDs on a gear at a time |
+| Method                                        | Description                                                        |
+| --------------------------------------------- | ------------------------------------------------------------------ |
+| `attachment_create()`                         | Insert a new attachment row                                        |
+| `delete()`                                    | Delete by `(part_id, attached)` composite key                      |
+| `attachment_get_by_part_and_time()`           | Find active attachment at a point in time (with `FOR UPDATE` lock) |
+| `attachment_get_by_gear_and_time()`           | Find all parts attached to a gear at a given time                  |
+| `attachments_all_by_part()`                   | Full timeline history for a part                                   |
+| `attachment_find_successor()`                 | Find the next attachment on the same hook (for overlap detection)  |
+| `attachment_find_part_attached_already()`     | Find immediately preceding attachment (for merging)                |
+| `attachment_find_later_attachment_for_part()` | Find the next attachment of this part after a given time           |
+| `assembly_get_by_types_time_and_gear()`       | Find attachments matching multiple type IDs on a gear at a time    |
 
 ---
 
@@ -199,13 +199,13 @@ struct AttachEvent {
 
 ## Query Methods
 
-| Function | Description |
-|----------|-------------|
-| `subparts(part_id, time)` | Returns `PartId`s of all parts currently attached to this part at `time` |
-| `subattachments(part, gear, time)` | Returns `Attachment` records for subparts of a part on a given gear |
-| `for_part_with_usage(part_id)` | Returns all attachment timeline entries with denormalized details + usage records |
+| Function                               | Description                                                                               |
+| -------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `subparts(part_id, time)`              | Returns `PartId`s of all parts currently attached to this part at `time`                  |
+| `subattachments(part, gear, time)`     | Returns `Attachment` records for subparts of a part on a given gear                       |
+| `for_part_with_usage(part_id)`         | Returns all attachment timeline entries with denormalized details + usage records         |
 | `activities_by_part(part, begin, end)` | Returns all activities between the first attachment and last detachment in the time range |
-| `is_attached(part_id, time)` | Simple predicate checking if a part is attached at a point in time |
+| `is_attached(part_id, time)`           | Simple predicate checking if a part is attached at a point in time                        |
 
 ---
 
@@ -224,7 +224,7 @@ class Attachment {
   name: string;         // part name (denormalized)
   idx: string;          // unique key = "{part_id}/{attached_timestamp}"
   usage: string;        // UsageId UUID
-  
+
   isAttached(time?: Date): boolean    // is this part on the bike at time?
   isDetached(): boolean               // has been removed?
   isEmpty(): boolean                  // detached == attached (deleted)
@@ -234,12 +234,12 @@ class Attachment {
 
 ### Helper Functions
 
-| Function | Description |
-|----------|-------------|
-| `att_at_hook(gear, what, hook, atts)` | Find attachment for a part at a specific hook right now |
-| `part_at_hook(gear, what, hook, atts)` | Find part ID at a specific hook, or return the gear if none |
-| `attachment_for_part(part, atts, time)` | Return attachment for part at a given time, or undefined |
-| `attachees_for_gear(gear, atts)` | Return all parts currently attached to a gear |
+| Function                                | Description                                                 |
+| --------------------------------------- | ----------------------------------------------------------- |
+| `att_at_hook(gear, what, hook, atts)`   | Find attachment for a part at a specific hook right now     |
+| `part_at_hook(gear, what, hook, atts)`  | Find part ID at a specific hook, or return the gear if none |
+| `attachment_for_part(part, atts, time)` | Return attachment for part at a given time, or undefined    |
+| `attachees_for_gear(gear, atts)`        | Return all parts currently attached to a gear               |
 
 ---
 
@@ -261,15 +261,16 @@ class Attachment {
 
 Test coverage lives in `domain/src/entities/attachment.rs:617-3443` with ~15+ tests across:
 
-| Category | Tests | What they cover |
-|----------|-------|-----------------|
-| `new()` | 3 | Struct creation, default/explicit detached time |
-| `subparts()` | 3 | Empty list, children at time, exclusion of detached parts |
-| `for_part_with_usage()` | 3 | Empty results, single attachment with details, timeline entries |
-| `detach_assembly()` | 3 | Detach part, detach with all=true, set detached time |
-| `shift()` | 1+ | Moving parts between gears at different times |
+| Category                | Tests | What they cover                                                 |
+| ----------------------- | ----- | --------------------------------------------------------------- |
+| `new()`                 | 3     | Struct creation, default/explicit detached time                 |
+| `subparts()`            | 3     | Empty list, children at time, exclusion of detached parts       |
+| `for_part_with_usage()` | 3     | Empty results, single attachment with details, timeline entries |
+| `detach_assembly()`     | 3     | Detach part, detach with all=true, set detached time            |
+| `shift()`               | 1+    | Moving parts between gears at different times                   |
 
 **Test infrastructure**:
+
 - `MemStore` in-memory implementation of all store traits
 - `TestSession` with user/shop context
 - Fixtures: `fixture_basic_part()`, `fixture_assembly()`, `fixture_timeline()`, `fixture_concurrent_parts()`
@@ -279,15 +280,15 @@ Test coverage lives in `domain/src/entities/attachment.rs:617-3443` with ~15+ te
 
 ## Key Files
 
-| File | Role |
-|------|------|
-| `domain/src/entities/attachment.rs` | Core entity, operations, and unit tests |
-| `domain/src/traits/attachment.rs` | Store trait interface (10 methods) |
-| `domain/src/entities/types.rs` | PartType definitions with hooks |
-| `domain/src/entities/types/objects.rs` | Static part type registry (20 types) |
-| `domain/src/entities/summary.rs` | SumHash aggregation for multi-entity operations |
-| `domain/src/entities/service.rs` | Service recalculation triggered by attachments |
-| `sqlx/src/store/attachment.rs` | PostgreSQL storage implementation |
-| `sqlx/migrations/20250101000000_initial_schema.up.sql` | Database schema |
-| `axum/src/domain/attachment.rs` | REST API handlers |
-| `frontend/src/lib/attachment.ts` | TypeScript entity class and helpers |
+| File                                                   | Role                                            |
+| ------------------------------------------------------ | ----------------------------------------------- |
+| `domain/src/entities/attachment.rs`                    | Core entity, operations, and unit tests         |
+| `domain/src/traits/attachment.rs`                      | Store trait interface (10 methods)              |
+| `domain/src/entities/types.rs`                         | PartType definitions with hooks                 |
+| `domain/src/entities/types/objects.rs`                 | Static part type registry (20 types)            |
+| `domain/src/entities/summary.rs`                       | SumHash aggregation for multi-entity operations |
+| `domain/src/entities/service.rs`                       | Service recalculation triggered by attachments  |
+| `sqlx/src/store/attachment.rs`                         | PostgreSQL storage implementation               |
+| `sqlx/migrations/20250101000000_initial_schema.up.sql` | Database schema                                 |
+| `axum/src/domain/attachment.rs`                        | REST API handlers                               |
+| `frontend/src/lib/attachment.ts`                       | TypeScript entity class and helpers             |

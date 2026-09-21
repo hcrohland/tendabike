@@ -9,7 +9,7 @@
   } from "flowbite-svelte";
   import DateTime from "../Widgets/DateTime.svelte";
   import { Service } from "../lib/service";
-  import { plans as planstore, plans_for_part } from "../lib/serviceplan";
+  import { plans as planstore, plansForPart } from "../lib/serviceplan";
   import { attachments } from "../lib/attachment";
   import type { Snippet } from "svelte";
   import { parts } from "../lib/part";
@@ -39,7 +39,7 @@
   }
 
   export function start(s: Service) {
-    choices = plans_for_part($planstore, $attachments, s.part_id, s.time).map(
+    choices = plansForPart(s.part_id, $planstore, $attachments, s.time).map(
       (p) => ({
         value: p.id!,
         label: p.name,
