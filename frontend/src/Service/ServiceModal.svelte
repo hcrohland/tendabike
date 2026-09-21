@@ -9,7 +9,11 @@
   } from "flowbite-svelte";
   import DateTime from "../Widgets/DateTime.svelte";
   import { Service } from "../lib/service";
-  import { plans as planstore, plansForPart } from "../lib/serviceplan";
+  import {
+    plans as planstore,
+    plansForPart,
+    planCmp,
+  } from "../lib/serviceplan";
   import { attachments } from "../lib/attachment";
   import type { Snippet } from "svelte";
   import { parts } from "../lib/part";
@@ -29,9 +33,18 @@
   let open = $state(false);
   let service = $state(new Service({}));
   let part = $derived($parts[service.part_id]);
-  let choices: any = $state([]);
 
   let { name, notes, plans, time } = $derived(service);
+
+  let choices: any = $derived(
+    plansForPart(service.part_id, $planstore, $attachments, time)
+      .sort(planCmp)
+      .map((p) => ({
+        value: p.id!,
+        label: p.name,
+        checked: service.plans.some((q) => q == p.id),
+      })),
+  );
 
   function onaction() {
     Object.assign(service, { name, notes, plans, time });
@@ -39,13 +52,6 @@
   }
 
   export function start(s: Service) {
-    choices = plansForPart(s.part_id, $planstore, $attachments, s.time).map(
-      (p) => ({
-        value: p.id!,
-        label: p.name,
-        checked: s.plans.some((q) => q == p.id),
-      }),
-    );
     service = s;
     open = true;
   }
