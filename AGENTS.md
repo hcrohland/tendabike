@@ -12,8 +12,8 @@
 
 ## Commit rules
 
-- Flow, in order: finish the work → if on `main`, create a feature branch → run `cargo fmt` and `npm run format` from the project root → commit.
-- The pre-commit hook enforces formatting, type checking, and linting; never bypass it with `--no-verify` or `-n` — make the checks pass instead.
+- Flow, in order: finish the work → if on `main`, create a feature branch → format each changed component from the project root (`cargo fmt` for backend, `npm run format` for frontend) → commit.
+- Never bypass the pre-commit hook with `--no-verify` or `-n` — make the checks pass instead.
 
 ## Agent skills
 
