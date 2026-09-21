@@ -125,30 +125,6 @@ export class ServicePlan extends Limits {
       (s) => s.part_id == part?.id && s.plans.includes(this.id!),
     ).sort(by("time"));
   }
-
-  getpart(parts: Map<Part>, attaches: Map<Attachment>, gear?: number) {
-    return part_for_plan(this, parts, attaches, gear);
-  }
-
-  due(part: Part | null, service: Service | undefined, usages: Map<Usage>) {
-    return due_for(this, part, service, usages);
-  }
-
-  alert(part: Part, service: Service | undefined, usages: Map<Usage>) {
-    return alert_for(this, part, service, usages);
-  }
-
-  no_template(plans: Map<ServicePlan>) {
-    return template_part(this, plans);
-  }
-
-  partLink(parts: Map<Part>) {
-    return this.part ? parts[this.part].partLink() : "";
-  }
-
-  gears(parts: Map<Part>, plans: ServicePlan[], atts: Map<Attachment>) {
-    return gears_of_plan(this, parts, plans, atts);
-  }
 }
 
 /** Resolve the physical part for a plan's gear: the part attached at the
@@ -162,19 +138,6 @@ function part_for_plan(
 ): Part | null {
   let part = gear ? gear : plan.part;
   return part ? parts[part_at_hook(part, plan.what, plan.hook, atts)] : null;
-}
-
-/** The part of a template plan, looked up by id in the given map.
- * Warning: the plan might vanish from Map during deletion!
- */
-function template_part(
-  plan: ServicePlan,
-  plans: Map<ServicePlan>,
-): number | null | undefined {
-  // SAFETY: the ServicePlan constructor falls back to the zero UUID, so
-  // `plan.id` is never the empty string and the `&&` short-circuit cannot
-  // actually yield a string.
-  return (plan.id && plans[plan.id]?.part) as number | null | undefined;
 }
 
 /** Sort order for plan lists: type, then hook, then part, then id; nulls
@@ -264,57 +227,6 @@ function alert_for(
   return res;
 }
 
-/** Nearest remaining limit per key across the part's plan list; a limit
- * key is absent until some plan sets it.
- */
-function dues_fold(
-  part: Part | null,
-  plans: ServicePlan[],
-  services: Map<Service>,
-  usages: Map<Usage>,
-): Partial<Record<limit_keys, { due: number; plan: number }>> {
-  const result: Partial<Record<limit_keys, { due: number; plan: number }>> = {};
-  for (const plan of plans) {
-    const serviceList = plan.services(part, services);
-    const due = due_for(plan, part, serviceList.at(0), usages);
-    for (const key of Limits.keys) {
-      const p = plan[key] as number | null;
-      const d = due[key] as number | null;
-      if (p == null || d == null) continue;
-      if (result[key] == null || d < result[key]!.due) {
-        result[key] = { due: d, plan: p };
-      }
-    }
-  }
-  return result;
-}
-
-/**
- * Band counts over the plans' parts: how many sit in the warn band and
- * how many are overdue.
- */
-function alert_counts(
-  plans: ServicePlan[],
-  parts: Map<Part>,
-  services: Map<Service>,
-  usages: Map<Usage>,
-  atts: Map<Attachment>,
-): { warn: number; alert: number } {
-  let res = { warn: 0, alert: 0 };
-  plans.forEach((plan) => {
-    gears_of_plan(plan, parts, plans, atts).forEach((gear) => {
-      let part = part_for_plan(plan, parts, atts, gear.id);
-      if (part != null) {
-        let serviceList = plan.services(part, services);
-        let alert = alert_for(plan, part, serviceList.at(0), usages);
-        if (alert == "warn") res.warn++;
-        else if (alert == "alert") res.alert++;
-      }
-    });
-  });
-  return res;
-}
-
 /*** find plans for this part only */
 function plans_for_this_part(
   part_id: number | undefined,
@@ -364,15 +276,6 @@ function plans_for_part_at(
     : plans_for_this_part(part, plans);
 }
 
-export function plans_for_part(
-  plans: Map<ServicePlan>,
-  atts: Map<Attachment>,
-  part: number | undefined,
-  time: Date = new Date(),
-) {
-  return plans_for_part_at(part, plans, atts, time);
-}
-
 function plans_at_hook(
   atts: Map<Attachment>,
   plans: Map<ServicePlan>,
@@ -420,33 +323,6 @@ function plans_for_assembly(
       (list, type) => list.concat(plans_for_subtype(atts, plans, part, type)),
       plans_for_part_at(part.id, plans, atts),
     );
-}
-
-export function plans_for_part_and_subtypes(
-  atts: Map<Attachment>,
-  plans: Map<ServicePlan>,
-  part: Part,
-) {
-  return plans_for_assembly(part, plans, atts);
-}
-
-export function alerts_for_plans(
-  plans: ServicePlan[],
-  parts: Map<Part>,
-  services: Map<Service>,
-  usages: Map<Usage>,
-  attachments: Map<Attachment>,
-) {
-  return alert_counts(plans, parts, services, usages, attachments);
-}
-
-export function next_due(
-  part: Part | null,
-  plans: ServicePlan[],
-  serviceMap: Map<Service>,
-  usages: Map<Usage>,
-): Partial<Record<limit_keys, { due: number; plan: number }>> {
-  return dues_fold(part, plans, serviceMap, usages);
 }
 
 export function localizeLimitKey(key: limit_keys): string {
@@ -499,7 +375,19 @@ export function alertCounts(
   $usages: Map<Usage>,
   $attachments: Map<Attachment>,
 ): { warn: number; alert: number } {
-  return alert_counts(plans, $parts, $services, $usages, $attachments);
+  let res = { warn: 0, alert: 0 };
+  plans.forEach((plan) => {
+    gears_of_plan(plan, $parts, plans, $attachments).forEach((gear) => {
+      let part = part_for_plan(plan, $parts, $attachments, gear.id);
+      if (part != null) {
+        let serviceList = plan.services(part, $services);
+        let alert = alert_for(plan, part, serviceList.at(0), $usages);
+        if (alert == "warn") res.warn++;
+        else if (alert == "alert") res.alert++;
+      }
+    });
+  });
+  return res;
 }
 
 /**
@@ -535,7 +423,7 @@ export function isTemplate(
   plan: ServicePlan,
   $plans: Map<ServicePlan>,
 ): boolean {
-  return typeof template_part(plan, $plans) !== "number";
+  return typeof (plan.id && $plans[plan.id]?.part) !== "number";
 }
 
 /**
@@ -547,7 +435,20 @@ export function duesForPlans(
   $services: Map<Service>,
   $usages: Map<Usage>,
 ): Partial<Record<limit_keys, { due: number; plan: number }>> {
-  return dues_fold(part, plans, $services, $usages);
+  const result: Partial<Record<limit_keys, { due: number; plan: number }>> = {};
+  for (const plan of plans) {
+    const serviceList = plan.services(part, $services);
+    const due = due_for(plan, part, serviceList.at(0), $usages);
+    for (const key of Limits.keys) {
+      const p = plan[key] as number | null;
+      const d = due[key] as number | null;
+      if (p == null || d == null) continue;
+      if (result[key] == null || d < result[key]!.due) {
+        result[key] = { due: d, plan: p };
+      }
+    }
+  }
+  return result;
 }
 
 export const plans = mapable("id", (s) => new ServicePlan(s));
