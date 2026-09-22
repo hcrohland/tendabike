@@ -4,7 +4,7 @@
   import UsageChips from "../Usage/UsageChips.svelte";
   import PartLink from "./PartLink.svelte";
   import { parts } from "../lib/part";
-  import { attachments } from "../lib/attachment";
+  import { attachments, type Attachment } from "../lib/attachment";
   import { DropdownItem } from "flowbite-svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { actions } from "../Widgets/Actions.svelte";
@@ -22,7 +22,44 @@
   let atts = $derived(
     filterValues($attachments, (a) => a.part_id == id).sort(by("attached")),
   );
+
+  let [latest, ...history] = $derived(atts);
 </script>
+
+{#snippet attCard(att: Attachment, dim = false)}
+  <div
+    class={"rounded-lg border border-border-subtle bg-surface-2 p-3 " +
+      (dim ? "opacity-70" : "")}
+  >
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2 min-w-0">
+        {#if $parts[att.gear]}
+          <span class="font-medium text-sm">
+            <PartLink part={$parts[att.gear]} />
+          </span>
+          <span class="text-xs text-text-1 shrink-0">
+            {types[att.hook].localizedPrefix()}
+          </span>
+          <span class="text-xs text-text-1 shrink-0">
+            · {att.fmtTime()}
+          </span>
+        {:else}
+          <span class="text-sm text-text-1">{m.parthist_na()}</span>
+        {/if}
+      </div>
+      {#if $parts[att.gear]}
+        <div class="shrink-0">
+          <Menu>
+            <DropdownItem onclick={() => $actions.deleteAttachment(att)}>
+              {m.parthist_remove()}
+            </DropdownItem>
+          </Menu>
+        </div>
+      {/if}
+    </div>
+    <UsageChips id={att.usage} ref={att.idx} />
+  </div>
+{/snippet}
 
 {#if atts.length > 0}
   <div class="rounded-lg border border-border-subtle bg-surface-1 p-3 m-2">
@@ -30,44 +67,17 @@
       <div class="text-xs uppercase tracking-wide text-text-1">
         {m.parthist_attached_to()}
       </div>
-      <ShowMore bind:show_more title={m.partcard_history()} />
+      {#if history.length > 0}
+        <ShowMore bind:show_more title={m.partcard_history()} />
+      {/if}
     </div>
-    {#if show_more}
-      <div class="flex flex-col gap-2 mt-3">
-        {#each atts as att (att.attached)}
-          <div class="rounded-lg border border-border-subtle bg-surface-2 p-3">
-            <div class="flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2 min-w-0">
-                {#if $parts[att.gear]}
-                  <span class="font-medium text-sm">
-                    <PartLink part={$parts[att.gear]} />
-                  </span>
-                  <span class="text-xs text-text-1 shrink-0">
-                    {types[att.hook].localizedPrefix()}
-                  </span>
-                  <span class="text-xs text-text-1 shrink-0">
-                    · {att.fmtTime()}
-                  </span>
-                {:else}
-                  <span class="text-sm text-text-1">{m.parthist_na()}</span>
-                {/if}
-              </div>
-              {#if $parts[att.gear]}
-                <div class="shrink-0">
-                  <Menu>
-                    <DropdownItem
-                      onclick={() => $actions.deleteAttachment(att)}
-                    >
-                      {m.parthist_remove()}
-                    </DropdownItem>
-                  </Menu>
-                </div>
-              {/if}
-            </div>
-            <UsageChips id={att.usage} ref={att.idx} />
-          </div>
+    <div class="flex flex-col gap-2 mt-3">
+      {@render attCard(latest)}
+      {#if show_more}
+        {#each history as att (att.attached)}
+          {@render attCard(att, true)}
         {/each}
-      </div>
-    {/if}
+      {/if}
+    </div>
   </div>
 {/if}
