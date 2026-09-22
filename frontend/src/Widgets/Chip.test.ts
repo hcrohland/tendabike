@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/svelte";
 import { describe, expect, it } from "vitest";
+import { Due } from "../lib/serviceplan";
 import Chip from "./Chip.svelte";
 
 describe("Chip", () => {
@@ -42,11 +43,11 @@ describe("Chip", () => {
     expect(screen.getByText("V")).toBeTruthy();
   });
 
-  it("renders service badge when service prop is provided", () => {
+  it("renders a service badge when the due prop is provided", () => {
     render(Chip, {
       label: "L",
       value: "V",
-      service: { due: 50, plan: 100 },
+      due: new Due(50, 100, "ok"),
     });
     const badge = screen.getByText("50%");
     expect(badge).toBeTruthy();

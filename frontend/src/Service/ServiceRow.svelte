@@ -7,7 +7,7 @@
   import { fmtRange, get_days } from "../lib/store";
   import ServiceMenu from "./ServiceMenu.svelte";
   import ServiceBadge from "../Widgets/ServiceBadge.svelte";
-  import type { limit_keys } from "../lib/serviceplan";
+  import type { Due, limit_keys } from "../lib/serviceplan";
   import { m } from "../../paraglide/messages";
 
   interface Props {
@@ -15,7 +15,7 @@
     successor?: Service | null;
     part: Part;
     light?: boolean;
-    dues?: Partial<Record<limit_keys, { due: number; plan: number }>>;
+    due_list?: Partial<Record<limit_keys, Due>>;
     children?: import("svelte").Snippet;
   }
 
@@ -24,7 +24,7 @@
     successor = null,
     part,
     light = false,
-    dues,
+    due_list,
     children,
   }: Props = $props();
 
@@ -44,12 +44,12 @@
 <span class="text-xs text-text-1 mt-1">
   {days}
   {m.time_days()}
-  <ServiceBadge service={dues?.days} />
+  <ServiceBadge due={due_list?.days} />
 </span>
 
 {@render children?.()}
 
-<UsageChips {usage} {light} {dues} />
+<UsageChips {usage} {light} {due_list} />
 
 <div class="flex items-start justify-between gap-2">
   <div class="min-w-0">

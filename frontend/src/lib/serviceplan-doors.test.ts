@@ -219,20 +219,20 @@ describe("duesForPlans", () => {
       plans: ["P1"],
     });
     expect(duesForPlans(p, [pln], svcMap(service), usages)).toEqual({
-      rides: { due: 8, plan: 10 },
-      hours: { due: 1, plan: 5 },
-      km: { due: 61, plan: 100 },
-      climb: { due: 20, plan: 50 },
-      descend: { due: 5, plan: 20 },
-      kJ: { due: 100, plan: 1000 },
+      rides: { due: 8, plan: 10, severity: "ok" },
+      hours: { due: 1, plan: 5, severity: "ok" },
+      km: { due: 61, plan: 100, severity: "ok" },
+      climb: { due: 20, plan: 50, severity: "ok" },
+      descend: { due: 5, plan: 20, severity: "ok" },
+      kJ: { due: 100, plan: 1000, severity: "ok" },
     });
   });
 
   it("uses the full usage when there is no service", () => {
     const pln = plan({ what: 10, km: "100", rides: "10" });
     expect(duesForPlans(p, [pln], {}, usages)).toEqual({
-      rides: { due: 6, plan: 10 },
-      km: { due: 60, plan: 100 },
+      rides: { due: 6, plan: 10, severity: "ok" },
+      km: { due: 60, plan: 100, severity: "ok" },
     });
   });
 
@@ -240,8 +240,38 @@ describe("duesForPlans", () => {
     const a = plan({ id: "A", what: 10, km: "200" });
     const b = plan({ id: "B", what: 10, km: "100" });
     expect(duesForPlans(p, [a, b], {}, usages)).toEqual({
-      km: { due: 60, plan: 100 },
+      km: { due: 60, plan: 100, severity: "ok" },
     });
+  });
+
+  // The per-limit severity verdict: the thresholds the badge used to
+  // re-derive itself (issue #345), asserted through the door.
+  const kmOnly = (distance: number) =>
+    duesForPlans(
+      p,
+      [plan({ what: 10, km: "100" })],
+      {},
+      usageMap(usage("u_now", { distance })),
+    ).km!;
+
+  it("marks the verdict 'alert' when the remaining is negative", () => {
+    expect(kmOnly(110000)).toEqual({ due: -10, plan: 100, severity: "alert" });
+  });
+
+  it("marks the verdict 'warn' when the remaining is within 5% of the limit", () => {
+    expect(kmOnly(98000)).toEqual({ due: 2, plan: 100, severity: "warn" });
+  });
+
+  it("marks the verdict 'ok' exactly at the 5% edge", () => {
+    expect(kmOnly(95000)).toEqual({ due: 5, plan: 100, severity: "ok" });
+  });
+
+  it("marks zero remaining 'warn' (the badge's behaviour)", () => {
+    expect(kmOnly(100000)).toEqual({ due: 0, plan: 100, severity: "warn" });
+  });
+
+  it("marks the verdict 'ok' when the remaining is above the band", () => {
+    expect(kmOnly(50000)).toEqual({ due: 50, plan: 100, severity: "ok" });
   });
 
   it("returns an empty object when nothing is due", () => {
@@ -323,6 +353,19 @@ describe("alertCounts", () => {
         {},
       ),
     ).toEqual({ warn: 0, alert: 1 });
+  });
+
+  it("does not count a zero-remaining limit (the scan's zero guard)", () => {
+    const usages = usageMap(usage("u_now", { distance: 100000 }));
+    expect(
+      alertCounts(
+        [plan({ part: 5, what: 10, km: "100" })],
+        { 5: p },
+        {},
+        usages,
+        {},
+      ),
+    ).toEqual({ warn: 0, alert: 0 });
   });
 
   it("counts nothing when the service is not due soon", () => {

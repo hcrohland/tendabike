@@ -206,23 +206,38 @@ function due_for(
   return res;
 }
 
+/** Per-limit severity verdict. */
+type severity = "ok" | "warn" | "alert";
+
+/**
+ * Per-limit severity: "alert" when the remaining is negative, "warn"
+ * when it is within 5% of the limit, else "ok". The badge and chip
+ * render from this verdict; the cross-limit scan folds it below.
+ */
+function severity_for(due: number, plan: number): severity {
+  if (due < 0) return "alert";
+  if (due < plan * 0.05) return "warn";
+  return "ok";
+}
+
 /** Severity of a plan for its part: "alert" when any due value is
  * negative, else "warn" when any due value is within 5% of its limit.
- * The scan runs in the fixed key order with overdue beating the band.
+ * The scan runs in the fixed key order, skipping zero-remaining limits,
+ * with overdue beating the band.
  */
 function alert_for(
   plan: ServicePlan,
   part: Part,
   service: Service | undefined,
   usages: Map<Usage>,
-): string {
-  let res = "";
+): severity | "" {
+  let res: severity | "" = "";
   let due = due_for(plan, part, service, usages);
   for (const key of ServicePlan.keys) {
-    if (due[key]) {
-      if (due[key]! < 0) res = "alert";
-      if (res == "" && due[key]! < plan[key]! * 0.05) res = "warn";
-    }
+    if (!due[key]) continue;
+    let s = severity_for(due[key]!, plan[key]!);
+    if (s == "alert") res = "alert";
+    else if (s == "warn" && res == "") res = "warn";
   }
   return res;
 }
@@ -339,6 +354,24 @@ export function localizeLimitKey(key: limit_keys): string {
  */
 
 /**
+ * The plan module's per-limit due value: the remaining `due`, the limit
+ * `plan`, and the severity verdict the module computes for it (see
+ * severity_for). The badge and chip render from it; the part-card status
+ * module sequenced after this ticket exposes the same value. One-export
+ * extension of the locked #323 surface (issue #345).
+ */
+export class Due {
+  due: number;
+  plan: number;
+  severity: severity;
+  constructor(due: number, plan: number, severity: severity) {
+    this.due = due;
+    this.plan = plan;
+    this.severity = severity;
+  }
+}
+
+/**
  * Resolve the physical part for a plan's gear: the part attached at the
  * plan's hook on the gear, falling back to the gear part itself.
  */
@@ -427,15 +460,16 @@ export function isTemplate(
 }
 
 /**
- * Nearest remaining limit per key across the part's plan list.
+ * Nearest remaining limit per key across the part's plan list, as the
+ * module's per-limit NextDue value (remaining, limit, severity verdict).
  */
 export function duesForPlans(
   part: Part | null,
   plans: ServicePlan[],
   $services: Map<Service>,
   $usages: Map<Usage>,
-): Partial<Record<limit_keys, { due: number; plan: number }>> {
-  const result: Partial<Record<limit_keys, { due: number; plan: number }>> = {};
+): Partial<Record<limit_keys, Due>> {
+  const result: Partial<Record<limit_keys, Due>> = {};
   for (const plan of plans) {
     const serviceList = plan.services(part, $services);
     const due = due_for(plan, part, serviceList.at(0), $usages);
@@ -444,7 +478,7 @@ export function duesForPlans(
       const d = due[key] as number | null;
       if (p == null || d == null) continue;
       if (result[key] == null || d < result[key]!.due) {
-        result[key] = { due: d, plan: p };
+        result[key] = new Due(d, p, severity_for(d, p));
       }
     }
   }

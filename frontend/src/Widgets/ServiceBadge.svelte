@@ -1,25 +1,25 @@
 <script lang="ts">
   import { Badge, Tooltip } from "flowbite-svelte";
+  import type { Due } from "../lib/serviceplan";
 
-  let {
-    service,
-    pos,
-  }: { service?: { due: number; plan: number }; pos?: string } = $props();
+  // The badge renders only: verdict → colour, remaining/limit → used
+  // percentage. The severity rule lives in the plan module (issue #345).
+  const verdict_color = {
+    alert: "red",
+    warn: "yellow",
+    ok: "green",
+  } as const;
 
-  function get_color(plan: number, due: number): any {
-    if (due < 0) return "red";
-    if (due < plan * 0.05) return "yellow";
-    return "green";
-  }
+  let { due, pos }: { due?: Due; pos?: string } = $props();
 
-  let color = $derived(service ? get_color(service.plan, service.due) : null);
+  let color = $derived(due ? verdict_color[due.severity] : null);
 </script>
 
 {#if color}
   <span class={pos} data-testid="badge-pos">
     <Badge {color} class="p-1.5 py-0.5">
-      {Math.round(((service!.plan - service!.due) / service!.plan) * 100)}%
-      <Tooltip>{service!.plan - service!.due}/{service!.plan}</Tooltip>
+      {Math.round(((due!.plan - due!.due) / due!.plan) * 100)}%
+      <Tooltip>{due!.plan - due!.due}/{due!.plan}</Tooltip>
     </Badge>
   </span>
 {/if}
