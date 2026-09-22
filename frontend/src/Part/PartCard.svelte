@@ -39,17 +39,17 @@
   let background2 = $derived(!light ? "bg-surface-1" : "bg-surface-2");
   let show_more = $state(false);
 
-  let { list, att, part, dues } = $derived.by(() => {
+  let { list, att, part, due_list } = $derived.by(() => {
     const list = attachments.map((a) => ({ att: a, part: $parts[a.part_id] }));
     const att = list[0]?.att;
     const part = list[0]?.part;
-    const dues = duesForPlans(
+    const due_list = duesForPlans(
       part,
       plansForPart(part?.id, $plans, $atts),
       $services,
       $usages,
     );
-    return { list, att, part, dues };
+    return { list, att, part, due_list };
   });
 </script>
 
@@ -76,7 +76,7 @@
             {m.time_since()}
             {att.fmtTime()}
           </span>
-          <ServiceBadge service={dues?.days} />
+          <ServiceBadge due={due_list?.days} />
         {/if}
         {#if attachments.length > 1 || (part && $usages[part.usage].count != $usages[att.usage].count)}
           <ShowMore bind:show_more title={m.partcard_history()} />
@@ -106,7 +106,7 @@
 
     <!-- Current stats -->
     {#if att.isAttached()}
-      <UsageChips id={part.usage} ref={part.id} {light} {dues} />
+      <UsageChips id={part.usage} ref={part.id} {light} {due_list} />
     {/if}
 
     <!-- History cards -->

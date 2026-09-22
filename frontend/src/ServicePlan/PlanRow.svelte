@@ -31,7 +31,7 @@
   let [ActiveService, ...serviceList] = $derived(
     plan.services(part, $services),
   );
-  let dues: any = $derived(duesForPlans(part, [plan], $services, $usages));
+  let due_list = $derived(duesForPlans(part, [plan], $services, $usages));
 </script>
 
 {#if part}
@@ -74,7 +74,7 @@
     {#if plan.what == part.what}
       <!-- Service history -->
       <div class="flex flex-col gap-2 mt-3">
-        <ServiceRow {part} service={ActiveService} {dues} light />
+        <ServiceRow {part} service={ActiveService} {due_list} light />
         {#if show_more}
           {#each serviceList as service, i (service.id)}
             {@const successor = i > 0 ? serviceList[i - 1] : ActiveService}

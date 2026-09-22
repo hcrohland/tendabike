@@ -21,6 +21,7 @@
 <script lang="ts">
   import { link } from "svelte-spa-router";
   import { Spinner } from "flowbite-svelte";
+  import type { Due } from "../lib/serviceplan";
   import ServiceBadge from "./ServiceBadge.svelte";
 
   let {
@@ -28,7 +29,7 @@
     value,
     href = undefined,
     light = false,
-    service = undefined,
+    due = undefined,
     onclick = undefined,
     indicator = undefined,
     disabled = false,
@@ -37,7 +38,7 @@
     value: string;
     href?: string;
     light?: boolean;
-    service?: { due: number; plan: number };
+    due?: Due;
     onclick?: () => void;
     indicator?: string;
     disabled?: boolean;
@@ -49,7 +50,7 @@
 </script>
 
 {#snippet chipContent()}
-  <ServiceBadge {service} pos="absolute -top-3 -right-0" />
+  <ServiceBadge {due} pos="absolute -top-3 -right-0" />
   <span class="font-semibold text-sm"> {value} </span>
   <span class="font-normal text-xs uppercase tracking-wide text-text-1">
     {label}

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { m } from "../../paraglide/messages";
-  import type { limit_keys } from "../lib/serviceplan";
+  import type { Due, limit_keys } from "../lib/serviceplan";
   import { fmtNumber, fmtSeconds } from "../lib/store";
   import { Usage, usages } from "../lib/usage";
   import Chip from "../Widgets/Chip.svelte";
@@ -11,14 +11,14 @@
     ref,
     light = false,
     gridclass = "md:grid-cols-6 grid-cols-3",
-    dues,
+    due_list,
   }: {
     id?: string;
     usage?: Usage;
     ref?: string | number;
     light?: boolean;
     gridclass?: string;
-    dues?: Partial<Record<limit_keys, { due: number; plan: number }>>;
+    due_list?: Partial<Record<limit_keys, Due>>;
   } = $props();
 
   let currentUsage = $derived.by(() => {
@@ -36,38 +36,38 @@
     label={m.usage_rides()}
     href={ridesHref}
     {light}
-    service={dues?.rides}
+    due={due_list?.rides}
   />
   <Chip
     value={fmtSeconds(currentUsage.time)}
     label="h"
     {light}
-    service={dues?.hours}
+    due={due_list?.hours}
   />
   <Chip
     value={fmtNumber(Math.round((currentUsage.distance || 0) / 1000))}
     label="km"
     {light}
-    service={dues?.km}
+    due={due_list?.km}
   />
   <Chip
     value={fmtNumber(currentUsage.climb)}
     label="↑m"
     {light}
-    service={dues?.climb}
+    due={due_list?.climb}
   />
   <Chip
     value={fmtNumber(currentUsage.descend)}
     label="↓m"
     {light}
-    service={dues?.descend}
+    due={due_list?.descend}
   />
   {#if currentUsage.energy > 0}
     <Chip
       value={fmtNumber(currentUsage.energy)}
       label="kJ"
       {light}
-      service={dues?.kJ}
+      due={due_list?.kJ}
     />
   {/if}
 </div>
