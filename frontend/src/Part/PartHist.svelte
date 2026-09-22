@@ -26,11 +26,8 @@
   let [latest, ...history] = $derived(atts);
 </script>
 
-{#snippet attCard(att: Attachment, dim = false)}
-  <div
-    class={"rounded-lg border border-border-subtle bg-surface-2 p-3 " +
-      (dim ? "opacity-70" : "")}
-  >
+{#snippet attCard(att: Attachment)}
+  <div class="rounded-lg border border-border-subtle bg-surface-2 p-3">
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-2 min-w-0">
         {#if $parts[att.gear]}
@@ -75,7 +72,7 @@
       {@render attCard(latest)}
       {#if show_more}
         {#each history as att (att.attached)}
-          {@render attCard(att, true)}
+          {@render attCard(att)}
         {/each}
       {/if}
     </div>
