@@ -257,6 +257,6 @@ describe("ServicePlan CRUD", () => {
     expect(url).toBe("/api/plan/P1");
     expect(options.method).toBe("DELETE");
     expect(get(plans)["P1"]).toBeUndefined();
-    expect(get(services)["S1"]).toBeDefined();
+    expect(services["S1"]).toBeDefined();
   });
 });

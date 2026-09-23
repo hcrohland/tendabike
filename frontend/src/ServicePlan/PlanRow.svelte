@@ -28,10 +28,8 @@
   let part = $derived(
     partForPlanGear(plan, gear?.id, parts, $attachments),
   ) as Part;
-  let [ActiveService, ...serviceList] = $derived(
-    plan.services(part, $services),
-  );
-  let due_list = $derived(duesForPlans(part, [plan], $services, usages));
+  let [ActiveService, ...serviceList] = $derived(plan.services(part, services));
+  let due_list = $derived(duesForPlans(part, [plan], services, usages));
 </script>
 
 {#if part}

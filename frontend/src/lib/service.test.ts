@@ -4,7 +4,6 @@ import { Part } from "./part";
 import { Usage, usages } from "./usage";
 import { fmtDate } from "./store";
 import { type Map } from "./mapable";
-import { get } from "svelte/store";
 import { resp } from "../test/helpers";
 
 function svc(overrides: Partial<any> = {}): Service {
@@ -202,7 +201,7 @@ describe("Service CRUD", () => {
       notes: "good",
       plans: ["P1"],
     });
-    expect(get(services)["S1"]).toBeDefined();
+    expect(services["S1"]).toBeDefined();
   });
 
   it("Service.update PUTs and calls updateSummary", async () => {
@@ -225,7 +224,7 @@ describe("Service CRUD", () => {
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/service/S1");
     expect(options.method).toBe("DELETE");
-    expect(get(services)["S1"]).toBeUndefined();
+    expect(services["S1"]).toBeUndefined();
     expect(usages["u1"]).toBeUndefined();
   });
 

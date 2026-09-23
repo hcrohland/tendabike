@@ -46,7 +46,7 @@
     const due_list = duesForPlans(
       part,
       plansForPart(part?.id, $plans, $atts),
-      $services,
+      services,
       usages,
     );
     return { list, att, part, due_list };

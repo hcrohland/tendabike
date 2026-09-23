@@ -1,5 +1,6 @@
 import { fmtDate, get_days, handleError, myfetch } from "./store";
-import { filterValues, mapable, type Map } from "./mapable";
+import { type Map } from "./mapable";
+import { mapableState, stateValues } from "./mapable.svelte";
 import { Part } from "./part";
 import { usages, Usage } from "./usage";
 import { updateSummary } from "./user";
@@ -84,7 +85,7 @@ export class Service {
     depth: number,
     services: Map<Service>,
   ): { depth: number; service: Service | undefined; successor: Service }[] {
-    let preds = filterValues(services, (s) => s.successor == this.id);
+    let preds = stateValues(services).filter((s) => s.successor == this.id);
     if (preds.length > 0) {
       let res = new Array();
       preds.forEach((service, i) => {
@@ -138,4 +139,4 @@ export class Service {
   }
 }
 
-export const services = mapable("id", (s) => new Service(s));
+export const services = mapableState("id", (s) => new Service(s));

@@ -121,10 +121,9 @@ export class ServicePlan extends Limits {
   }
 
   services(part: Part | null, services: Map<Service>) {
-    return filterValues(
-      services,
-      (s) => s.part_id == part?.id && s.plans.includes(this.id!),
-    ).sort(by("time"));
+    return stateValues(services)
+      .filter((s) => s.part_id == part?.id && s.plans.includes(this.id!))
+      .sort(by("time"));
   }
 }
 
