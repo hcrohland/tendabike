@@ -15,7 +15,7 @@
     let title: string;
 
     if (params.part) {
-      const part = $parts[params.part];
+      const part = parts[params.part];
       title = m.act_heading_for({ name: part.name });
       if (part.isGear()) {
         acts = filterValues($activities, (a) => a.gear == part.id);
@@ -28,8 +28,8 @@
         if (start)
           title = m.act_heading_attached({
             name: part.name,
-            part: $parts[atts[0].gear]
-              ? $parts[atts[0].gear].name
+            part: parts[atts[0].gear]
+              ? parts[atts[0].gear].name
               : m.act_unknown_part(),
             date: atts[0].fmtTime(),
           });

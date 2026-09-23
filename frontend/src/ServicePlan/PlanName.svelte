@@ -12,7 +12,7 @@
 
   let { plan }: Props = $props();
 
-  let partlink = $derived(plan?.part ? $parts[plan.part].partLink() : "");
+  let partlink = $derived(plan?.part ? parts[plan.part].partLink() : "");
 </script>
 
 {#if plan}

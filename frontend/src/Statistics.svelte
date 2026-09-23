@@ -241,7 +241,7 @@
       (a) => gears.length == 0 || gears.some((g) => g.id == a.gear),
     ),
   );
-  let all_gears = $derived($category.parts($parts));
+  let all_gears = $derived($category.parts(parts));
   let gears: Part[] = $state([]);
   let cumm: any = $state(0);
   let comp: number | null = $state(null);

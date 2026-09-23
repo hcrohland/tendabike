@@ -36,7 +36,7 @@
   }
 
   export const start = (attl: Attachment) => {
-    oldpart = $parts[attl.part_id];
+    oldpart = parts[attl.part_id];
     hook = attl.hook;
     gear = attl.gear;
     mindate = attl.attached;
@@ -62,7 +62,7 @@
   {#snippet header()}
     {m.replacepart_header({
       type: type!.labelWithPosition(prefix),
-      gear: $parts[gear].name,
+      gear: parts[gear].name,
     })}
   {/snippet}
   <NewForm {type} bind:part {mindate} />

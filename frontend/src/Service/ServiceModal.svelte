@@ -32,7 +32,7 @@
 
   let open = $state(false);
   let service = $state(new Service({}));
-  let part = $derived($parts[service.part_id]);
+  let part = $derived(parts[service.part_id]);
 
   let { name, notes, plans, time } = $derived(service);
 

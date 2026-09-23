@@ -167,8 +167,7 @@ describe("refresh", () => {
     fetchMock.mockResolvedValue(resp(summaryData()));
     await refresh();
     expect(fetchMock.mock.calls[0][0]).toBe("/api/user/summary");
-    const map = get(parts);
-    expect(map[1]).toBeDefined();
+    expect(parts[1]).toBeDefined();
   });
 
   it("appends shop query parameter", async () => {
@@ -192,7 +191,7 @@ describe("setSummary", () => {
 
   it("calls setMap on all 8 stores", () => {
     setSummary(summaryData() as any);
-    expect(get(parts)[1]).toBeDefined();
+    expect(parts[1]).toBeDefined();
     expect(get(activities)[100]).toBeDefined();
     expect(usages["u1"]).toBeDefined();
     expect(get(services)["S1"]).toBeDefined();
@@ -228,7 +227,7 @@ describe("updateSummary", () => {
 
   it("calls updateMap on 7 stores (not users) when data is provided", () => {
     updateSummary(summaryData() as any);
-    expect(get(parts)[1]).toBeDefined();
+    expect(parts[1]).toBeDefined();
     expect(get(activities)[100]).toBeDefined();
     expect(usages["u1"]).toBeDefined();
     expect(get(services)["S1"]).toBeDefined();

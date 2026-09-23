@@ -23,7 +23,7 @@
 
   let { id }: Props = $props();
 
-  let part = $derived($parts[id]);
+  let part = $derived(parts[id]);
   let attachees = $derived(
     filterValues($attachments, (a) => a.gear == part.id),
   );

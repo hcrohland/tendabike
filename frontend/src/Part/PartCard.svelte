@@ -40,7 +40,7 @@
   let show_more = $state(false);
 
   let { list, att, part, due_list } = $derived.by(() => {
-    const list = attachments.map((a) => ({ att: a, part: $parts[a.part_id] }));
+    const list = attachments.map((a) => ({ att: a, part: parts[a.part_id] }));
     const att = list[0]?.att;
     const part = list[0]?.part;
     const due_list = duesForPlans(

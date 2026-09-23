@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/svelte";
+import { flushSync } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { activities, Activity } from "./lib/activity";
 import { parts, Part } from "./lib/part";
@@ -62,6 +63,23 @@ describe("ToyGroup", () => {
     render(ToyGroup);
     expect(screen.getByText("Front Tire")).toBeTruthy();
     expect(screen.queryByText("Brake")).toBeNull();
+  });
+
+  it("re-renders when the collection changes", () => {
+    const { unmount } = render(ToyGroup);
+    expect(screen.queryByText("Front Tire")).toBeNull();
+    parts.updateMap([
+      new Part({
+        id: 1,
+        owner: 1,
+        what: 1,
+        name: "Front Tire",
+        last_used: new Date("2024-01-01"),
+      }),
+    ]);
+    flushSync();
+    expect(screen.getByText("Front Tire")).toBeTruthy();
+    unmount();
   });
 
   it("shows 'none found' message when no parts and no activities", () => {

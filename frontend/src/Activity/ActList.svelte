@@ -167,7 +167,7 @@
         let key = String(act.gear || 0);
         if (types[key] === undefined) {
           if (act.gear) {
-            let part = $parts[act.gear];
+            let part = parts[act.gear];
             let name = part ? part.name : "-";
             types[key] = { name, value: act.gear, start: act.start };
           } else {

@@ -17,6 +17,7 @@
   import SubscriptionRow from "./SubscriptionRow.svelte";
   import { actions } from "../Widgets/Actions.svelte";
   import { allGear, Part, parts } from "../lib/part";
+  import { stateValues } from "../lib/mapable.svelte";
   import { category } from "../lib/types";
 
   interface Props {
@@ -84,7 +85,7 @@
     }
   }
 
-  let mygear = $derived(allGear($parts, $category));
+  let mygear = $derived(allGear(parts, $category));
 
   async function registerGear(part: Part, shopid: number, checked: boolean) {
     try {
@@ -207,7 +208,7 @@
                           color="alternative"
                           onclick={() =>
                             startConfirmation(subscription.id!, "unsubscribe")}
-                          disabled={Object.values($parts).some(
+                          disabled={stateValues(parts).some(
                             (p) => p.shop == subscription.shop_id,
                           )}
                         >

@@ -35,11 +35,11 @@
       (x) => x.part_id === partId && x.isAttached(time),
     ).pop();
     if (att == undefined) return;
-    return $parts[att.gear];
+    return parts[att.gear];
   }
 
   let subparts = $derived(
-    type.parts($parts).filter((p) => ($shop ? p.shop == $shop.id : true)),
+    type.parts(parts).filter((p) => ($shop ? p.shop == $shop.id : true)),
   );
   let subshow = $derived(
     subparts.filter(

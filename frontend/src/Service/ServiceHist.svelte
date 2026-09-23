@@ -14,7 +14,7 @@
 
   let show_more = $state(false);
 
-  let part = $derived($parts[service.part_id]);
+  let part = $derived(parts[service.part_id]);
   let successor = $derived(service.get_successor($services));
 </script>
 

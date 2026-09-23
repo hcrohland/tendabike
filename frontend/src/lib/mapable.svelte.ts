@@ -15,9 +15,33 @@ export type StateMapOps<V> = {
  *
  * The operations live on the record itself, so `Object.keys`/`Object.values`
  * over the collection also see them — do not iterate a state collection
- * with Object.values/filterValues.
+ * with Object.values/filterValues; use `stateValues` instead.
  */
 export type StateMap<V> = Map<V> & StateMapOps<V>;
+
+/** Keys of the write operations attached to a state collection. Any
+ * enumeration of the record (Object.keys/entries/values) also sees them;
+ * skip these keys when collecting the entity values. */
+export const stateMapOpKeys = new Set(["setMap", "updateMap", "deleteItem"]);
+
+/**
+ * The entity values of a collection, in record order: enumerates the
+ * record and skips the keys of the write operations attached by
+ * `mapableState`. This is the way to enumerate a state collection —
+ * `Object.values`/`filterValues` would treat the operations as entries.
+ * On a plain record without attached operations it is a plain `Object.values`.
+ * The state overload is listed first so the value type infers from the
+ * `StateMap` constituents, not from the operation properties.
+ */
+export function stateValues<V>(map: StateMap<V>): V[];
+export function stateValues<V>(map: Map<V>): V[];
+export function stateValues<V>(map: Map<V>): V[] {
+  // SAFETY: values under the operation keys are filtered out above; the
+  // remaining values are the record's entities.
+  return Object.entries(map)
+    .filter(([key]) => !stateMapOpKeys.has(key))
+    .map(([, value]) => value);
+}
 
 function getid<V>(v: V, field: keyof V): any {
   return v[field];
@@ -48,7 +72,7 @@ export function mapableState<V>(
   const ops: StateMapOps<V> = {
     setMap: (arr: V[]) => {
       for (const key of Object.keys(map)) {
-        if (!opKeys.has(key)) delete map[key];
+        if (!stateMapOpKeys.has(key)) delete map[key];
       }
       apply(arr);
     },
@@ -58,6 +82,5 @@ export function mapableState<V>(
     },
   };
 
-  const opKeys = new Set(Object.keys(ops));
   return Object.assign(map, ops);
 }

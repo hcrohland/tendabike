@@ -14,7 +14,7 @@
 
   export function start(p: ServicePlan) {
     if (p.part) {
-      let part = $parts[p.part];
+      let part = parts[p.part];
       if (part.isGear() && p.hook != null) {
         header = m.updateplan_header_hook_part({
           hook: types[p.what].human_name(p.hook),

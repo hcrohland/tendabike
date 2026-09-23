@@ -1,6 +1,7 @@
 import { writable, type Writable } from "svelte/store";
 import { Activity } from "./activity";
 import { by, filterValues, mapObject, type Map } from "./mapable";
+import { stateValues } from "./mapable.svelte";
 import { Part } from "./part";
 import { myfetch } from "./store";
 import * as m from "../../paraglide/messages";
@@ -42,7 +43,9 @@ export class Type {
   }
 
   parts(parts: Map<Part>) {
-    return filterValues(parts, (p) => p.what == this.id).sort(by("last_used"));
+    return stateValues(parts)
+      .filter((p) => p.what == this.id)
+      .sort(by("last_used"));
   }
 
   human_name(hook: number | null) {
@@ -56,6 +59,8 @@ export class Type {
    * if no translation key exists for this type id */
   localizedName(): string {
     const key = `type_${this.id}`;
+    // SAFETY: the paraglide module exposes one function per compiled
+    // message key; unknown keys are checked below and fall back.
     const fn = (m as unknown as Record<string, () => string>)[key];
     return typeof fn === "function" ? fn() : this.name;
   }
@@ -65,6 +70,8 @@ export class Type {
   localizedPrefix(): string {
     if (!this.prefix) return "";
     const key = `position_${this.prefix.toLowerCase()}`;
+    // SAFETY: the paraglide module exposes one function per compiled
+    // message key; unknown keys are checked below and fall back.
     const fn = (m as unknown as Record<string, () => string>)[key];
     return typeof fn === "function" ? fn() : this.prefix;
   }
@@ -81,6 +88,8 @@ export class Type {
     const name = this.localizedName();
     if (!prefix) return name;
     const key = `position_${prefix.toLowerCase()}`;
+    // SAFETY: the paraglide module exposes one function per compiled
+    // message key; unknown keys are checked below and fall back.
     const fn = (m as unknown as Record<string, () => string>)[key];
     const position = typeof fn === "function" ? fn() : prefix;
     return m.type_with_position({ position, name });
@@ -98,18 +107,24 @@ export class Type {
 
   localizedAnyNominative(): string {
     const key = `category_any_nom_${this.id}`;
+    // SAFETY: the paraglide module exposes one function per compiled
+    // message key; unknown keys are checked below and fall back.
     const fn = (m as unknown as Record<string, () => string>)[key];
     return typeof fn === "function" ? fn() : `any ${this.name}`;
   }
 
   localizedAnyDative(): string {
     const key = `category_any_dat_${this.id}`;
+    // SAFETY: the paraglide module exposes one function per compiled
+    // message key; unknown keys are checked below and fall back.
     const fn = (m as unknown as Record<string, () => string>)[key];
     return typeof fn === "function" ? fn() : `any ${this.name}`;
   }
 
   localizedOldAccusative(): string {
     const key = `type_old_acc_${this.id}`;
+    // SAFETY: the paraglide module exposes one function per compiled
+    // message key; unknown keys are checked below and fall back.
     const fn = (m as unknown as Record<string, () => string>)[key];
     return typeof fn === "function" ? fn() : `old ${this.name}`;
   }
@@ -142,6 +157,8 @@ export async function getTypes() {
 export function localizeGroupName(group: string | undefined): string {
   if (!group) return "";
   const key = `group_${group.toLowerCase().replace(/\s+/g, "_")}`;
+  // SAFETY: the paraglide module exposes one function per compiled
+  // message key; unknown keys are checked below and fall back.
   const fn = (m as unknown as Record<string, () => string>)[key];
   return typeof fn === "function" ? fn() : group;
 }

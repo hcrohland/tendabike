@@ -1,6 +1,6 @@
 <script lang="ts">
   import { parts } from "../lib/part";
-  import { filterValues } from "../lib/mapable";
+  import { stateValues } from "../lib/mapable.svelte";
   import { category, Type } from "../lib/types";
   import { Select } from "flowbite-svelte";
   import { m } from "../../paraglide/messages";
@@ -12,7 +12,7 @@
   }: { type: Type; part: number | undefined; none?: boolean } = $props();
 
   let gears = $derived(
-    filterValues($parts, (p) => type.main == p.what && !p.disposed_at),
+    stateValues(parts).filter((p) => type.main == p.what && !p.disposed_at),
   );
 </script>
 

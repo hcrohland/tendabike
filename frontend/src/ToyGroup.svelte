@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { filterValues, by } from "./lib/mapable";
+  import { by } from "./lib/mapable";
+  import { stateValues } from "./lib/mapable.svelte";
   import { category } from "./lib/types";
   import { parts } from "./lib/part";
   import { activities } from "./lib/activity";
@@ -12,22 +13,24 @@
   let show_more: boolean = $state(false);
 
   let gears = $derived(
-    filterValues(
-      $parts,
-      (p) =>
-        ($shop ? p.shop == $shop.id : true) &&
-        p.what == $category.id &&
-        !p.disposed_at,
-    ).sort(by("last_used")),
+    stateValues(parts)
+      .filter(
+        (p) =>
+          ($shop ? p.shop == $shop.id : true) &&
+          p.what == $category.id &&
+          !p.disposed_at,
+      )
+      .sort(by("last_used")),
   );
   let bin = $derived(
-    filterValues(
-      $parts,
-      (p) =>
-        ($shop ? p.shop == $shop.id : true) &&
-        p.what == $category.id &&
-        p.disposed_at != undefined,
-    ).sort(by("last_used")),
+    stateValues(parts)
+      .filter(
+        (p) =>
+          ($shop ? p.shop == $shop.id : true) &&
+          p.what == $category.id &&
+          p.disposed_at != undefined,
+      )
+      .sort(by("last_used")),
   );
 </script>
 

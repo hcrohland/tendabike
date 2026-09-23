@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { mapableState } from "./mapable.svelte";
+import { type Map } from "./mapable";
+import { mapableState, stateValues } from "./mapable.svelte";
 
 type Item = {
   id: number;
@@ -76,5 +77,33 @@ describe("mapableState", () => {
     map.setMap([{ id: 1, val: "a" }]);
     map.deleteItem(undefined);
     expect(map["1"]!.val).toBe("a");
+  });
+});
+
+// Enumeration of the state record: the attached write operations are
+// visible to Object.values, stateValues must skip them.
+describe("stateValues", () => {
+  it("returns the entity values of a state collection in record order", () => {
+    const map = mapableState<Item>("id");
+    map.setMap([
+      { id: 1, val: "a" },
+      { id: 2, val: "b" },
+    ]);
+    expect(stateValues(map)).toEqual([
+      { id: 1, val: "a" },
+      { id: 2, val: "b" },
+    ]);
+  });
+
+  it("skips the attached write operations that Object.values surfaces", () => {
+    const map = mapableState<Item>("id");
+    map.setMap([{ id: 1, val: "a" }]);
+    expect(Object.values(map).length).toBe(4);
+    expect(stateValues(map)).toEqual([{ id: 1, val: "a" }]);
+  });
+
+  it("is a plain Object.values on a record without attached operations", () => {
+    const plain: Map<Item> = { 1: { id: 1, val: "a" } };
+    expect(stateValues(plain)).toEqual(Object.values(plain));
   });
 });

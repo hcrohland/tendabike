@@ -30,9 +30,9 @@
   <div class="rounded-lg border border-border-subtle bg-surface-2 p-3">
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-2 min-w-0">
-        {#if $parts[att.gear]}
+        {#if parts[att.gear]}
           <span class="font-medium text-sm">
-            <PartLink part={$parts[att.gear]} />
+            <PartLink part={parts[att.gear]} />
           </span>
           <span class="text-xs text-text-1 shrink-0">
             {types[att.hook].localizedPrefix()}
@@ -44,7 +44,7 @@
           <span class="text-sm text-text-1">{m.parthist_na()}</span>
         {/if}
       </div>
-      {#if $parts[att.gear]}
+      {#if parts[att.gear]}
         <div class="shrink-0">
           <Menu>
             <DropdownItem onclick={() => $actions.deleteAttachment(att)}>

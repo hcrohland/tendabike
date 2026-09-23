@@ -32,7 +32,7 @@
 
   // Gear part derived from activity
   let gearPart = $derived(
-    activity.gear && $parts[activity.gear] ? $parts[activity.gear] : null,
+    activity.gear && parts[activity.gear] ? parts[activity.gear] : null,
   );
 </script>
 

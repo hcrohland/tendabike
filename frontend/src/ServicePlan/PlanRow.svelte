@@ -26,7 +26,7 @@
   let show_more = $state(false);
 
   let part = $derived(
-    partForPlanGear(plan, gear?.id, $parts, $attachments),
+    partForPlanGear(plan, gear?.id, parts, $attachments),
   ) as Part;
   let [ActiveService, ...serviceList] = $derived(
     plan.services(part, $services),

@@ -7,7 +7,7 @@
   let { params }: { params: { id: number } } = $props();
 </script>
 
-{#if $parts[params.id]}
+{#if parts[params.id]}
   <Part {...params} />
 {:else}
   <Alert color="red" class="text-center">

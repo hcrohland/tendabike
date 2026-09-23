@@ -5,6 +5,7 @@ import {
   type Attachment,
 } from "./attachment";
 import { by, filterValues, mapable, type Map } from "./mapable";
+import { stateValues } from "./mapable.svelte";
 import { Part } from "./part";
 import { Service, services } from "./service";
 import { get_days, handleError, myfetch } from "./store";
@@ -170,7 +171,7 @@ function gears_of_plan(
   if (plan.part) return [parts[plan.part]];
 
   let main = types[plan.what].main;
-  return filterValues(parts, (p) => {
+  return stateValues(parts).filter((p) => {
     if (p.disposed_at != null || main != p.what) return false;
     let att = att_at_hook(p.id!, plan.what, plan.hook, atts);
     return !plans.some(
