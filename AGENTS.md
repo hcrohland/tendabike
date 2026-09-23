@@ -5,6 +5,7 @@
 ## Working rules
 
 - When in doubt about a change, ask the user before making it.
+- Work in small increments. Read or act on ONE file, function, or unit at a time.
 
 ## Domain
 
