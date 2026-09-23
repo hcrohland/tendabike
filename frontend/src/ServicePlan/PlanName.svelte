@@ -25,7 +25,7 @@
           plan.part,
           plan.what,
           plan.hook,
-          $attachments,
+          attachments,
         )}"
         use:link
       >

@@ -6,7 +6,8 @@
   import Menu from "../Widgets/Menu.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
   import { Attachment, attachments } from "../lib/attachment";
-  import { filterValues, type Map } from "../lib/mapable";
+  import { type Map } from "../lib/mapable";
+  import { stateValues } from "../lib/mapable.svelte";
   import { parts } from "../lib/part";
   import { fmtDate } from "../lib/store";
   import { Type } from "../lib/types";
@@ -30,10 +31,9 @@
     partId: number | undefined,
     time: Date,
   ) {
-    let att = filterValues(
-      atts,
-      (x) => x.part_id === partId && x.isAttached(time),
-    ).pop();
+    let att = stateValues(atts)
+      .filter((x) => x.part_id === partId && x.isAttached(time))
+      .pop();
     if (att == undefined) return;
     return parts[att.gear];
   }
@@ -44,7 +44,7 @@
   let subshow = $derived(
     subparts.filter(
       (p) =>
-        show_more || (!p.disposed_at && !attachedTo($attachments, p.id, date)),
+        show_more || (!p.disposed_at && !attachedTo(attachments, p.id, date)),
     ),
   );
 </script>
@@ -71,7 +71,7 @@
       class={"rounded-lg border p-3 " +
         (part.disposed_at
           ? "bg-surface-2 opacity-70 border-border-strong"
-          : attachedTo($attachments, part.id, date)
+          : attachedTo(attachments, part.id, date)
             ? "bg-surface-2 border-gray-strong"
             : "bg-surface-1 border-border-subtle")}
     >
@@ -97,11 +97,11 @@
           <div class="shrink-0">
             <Menu>
               <DropdownItem onclick={() => $actions.attachPart(part)}>
-                {attachedTo($attachments, part.id, date)
+                {attachedTo(attachments, part.id, date)
                   ? m.action_move()
                   : m.action_attach()}
               </DropdownItem>
-              {#if part.attachments($attachments).length == 0}
+              {#if part.attachments(attachments).length == 0}
                 <DropdownItem onclick={() => $actions.deletePart(part)}>
                   {m.action_delete()}
                 </DropdownItem>
@@ -119,7 +119,7 @@
       <UsageChips
         id={part.usage}
         ref={part.id}
-        light={!part.disposed_at && !attachedTo($attachments, part.id, date)}
+        light={!part.disposed_at && !attachedTo(attachments, part.id, date)}
       />
 
       <!-- Attached to -->
@@ -128,7 +128,7 @@
           {#if part.disposed_at}
             {m.sparetype_disposed()} {fmtDate(part.disposed_at)}
           {:else}
-            {@const attachedPart = attachedTo($attachments, part.id, date)}
+            {@const attachedPart = attachedTo(attachments, part.id, date)}
             {#if attachedPart}
               {m.attached_to()}
               <span class="text-xs text-gray-500 dark:text-gray-200 ml-1">

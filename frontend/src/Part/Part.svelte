@@ -4,7 +4,7 @@
   import PlanBadge from "../ServicePlan/PlanBadge.svelte";
   import PlanList from "../ServicePlan/PlanList.svelte";
   import { attachments } from "../lib/attachment";
-  import { filterValues } from "../lib/mapable";
+  import { stateValues } from "../lib/mapable.svelte";
   import { parts } from "../lib/part";
   import GearCard from "./GearCard.svelte";
   import Subparts from "./Subparts.svelte";
@@ -25,9 +25,9 @@
 
   let part = $derived(parts[id]);
   let attachees = $derived(
-    filterValues($attachments, (a) => a.gear == part.id),
+    stateValues(attachments).filter((a) => a.gear == part.id),
   );
-  let last_attachment = $derived(part.attachments($attachments).at(0));
+  let last_attachment = $derived(part.attachments(attachments).at(0));
 
   let tab = $state("");
 </script>
@@ -58,7 +58,7 @@
           {m.part_change_details()}
         </DropdownItem>
       {/if}
-      {#if !part.isGear() && part.attachments($attachments).length == 0}
+      {#if !part.isGear() && part.attachments(attachments).length == 0}
         <DropdownItem
           onclick={() => {
             $actions.deletePart(part);

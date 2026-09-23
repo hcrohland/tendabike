@@ -1,4 +1,4 @@
-import { type Map, by, filterValues } from "./mapable";
+import { type Map, by } from "./mapable";
 import { mapableState, stateValues } from "./mapable.svelte";
 import { handleError, myfetch } from "./store";
 import { Attachment } from "./attachment";
@@ -77,7 +77,9 @@ export class Part {
   }
 
   attachments(atts: Map<Attachment>) {
-    return filterValues(atts, (a) => a.part_id == this.id).sort(by("attached"));
+    return stateValues(atts)
+      .filter((a) => a.part_id == this.id)
+      .sort(by("attached"));
   }
 
   isGear() {

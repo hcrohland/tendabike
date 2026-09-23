@@ -22,7 +22,7 @@
       } else {
         const start = Number(params.start);
         const atts = part
-          .attachments($attachments)
+          .attachments(attachments)
           .filter((a) => (start ? a.isAttached(start) : true));
         acts = atts.map((att) => att.activities(activities)).flat();
         if (start)

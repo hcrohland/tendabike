@@ -45,7 +45,7 @@
     const part = list[0]?.part;
     const due_list = duesForPlans(
       part,
-      plansForPart(part?.id, plans, $atts),
+      plansForPart(part?.id, plans, atts),
       services,
       usages,
     );

@@ -15,6 +15,7 @@ import { attachments } from "./attachment";
 import { plans } from "./serviceplan";
 import { shops } from "./shop";
 import { get } from "svelte/store";
+import { stateValues } from "./mapable.svelte";
 import { resp } from "../test/helpers";
 
 function summaryData(overrides: Partial<any> = {}): any {
@@ -198,7 +199,7 @@ describe("setSummary", () => {
     expect(plans["PL1"]).toBeDefined();
     expect(get(shops)[10]).toBeDefined();
     expect(get(users)[1]).toBeDefined();
-    expect(get(attachments)).toEqual({});
+    expect(stateValues(attachments)).toEqual([]);
   });
 });
 
@@ -233,7 +234,7 @@ describe("updateSummary", () => {
     expect(services["S1"]).toBeDefined();
     expect(plans["PL1"]).toBeDefined();
     expect(get(shops)[10]).toBeDefined();
-    expect(get(attachments)).toEqual({});
+    expect(stateValues(attachments)).toEqual([]);
     expect(get(users)).toEqual({});
   });
 });

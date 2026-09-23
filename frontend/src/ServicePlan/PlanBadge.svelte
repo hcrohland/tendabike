@@ -11,9 +11,9 @@
   }
 
   let { part }: Props = $props();
-  let planlist = $derived(plansForAssembly(part, plans, $attachments));
+  let planlist = $derived(plansForAssembly(part, plans, attachments));
   let alerts = $derived(
-    alertCounts(planlist, parts, services, usages, $attachments),
+    alertCounts(planlist, parts, services, usages, attachments),
   );
 </script>
 

@@ -14,7 +14,7 @@
   let { part: gear, children }: Props = $props();
   let planlist = $derived(
     (gear
-      ? plansForAssembly(gear, plans, $attachments)
+      ? plansForAssembly(gear, plans, attachments)
       : stateValues(plans).filter((p) => types[p.what].main == $category.main)
     ).sort(planCmp),
   );

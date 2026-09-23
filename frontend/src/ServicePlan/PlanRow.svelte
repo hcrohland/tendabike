@@ -26,7 +26,7 @@
   let show_more = $state(false);
 
   let part = $derived(
-    partForPlanGear(plan, gear?.id, parts, $attachments),
+    partForPlanGear(plan, gear?.id, parts, attachments),
   ) as Part;
   let [ActiveService, ...serviceList] = $derived(plan.services(part, services));
   let due_list = $derived(duesForPlans(part, [plan], services, usages));
@@ -54,7 +54,7 @@
             {m.planmenu_new_service()}
           </DropdownItem>
           {#if plan.part != part.id}
-            {@const att = part.attachments($attachments).at(0)}
+            {@const att = part.attachments(attachments).at(0)}
             {#if att}
               <DropdownItem onclick={() => $actions.replacePart(att)}>
                 {m.action_replace()}

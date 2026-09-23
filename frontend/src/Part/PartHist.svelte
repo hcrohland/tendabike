@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { filterValues, by } from "../lib/mapable";
+  import { by } from "../lib/mapable";
+  import { stateValues } from "../lib/mapable.svelte";
   import { types } from "../lib/types";
   import UsageChips from "../Usage/UsageChips.svelte";
   import PartLink from "./PartLink.svelte";
@@ -20,7 +21,9 @@
   let show_more = $state(false);
 
   let atts = $derived(
-    filterValues($attachments, (a) => a.part_id == id).sort(by("attached")),
+    stateValues(attachments)
+      .filter((a) => a.part_id == id)
+      .sort(by("attached")),
   );
 
   let [latest, ...history] = $derived(atts);
