@@ -37,7 +37,7 @@
   let { name, notes, plans, time } = $derived(service);
 
   let choices: any = $derived(
-    plansForPart(service.part_id, $planstore, $attachments, time)
+    plansForPart(service.part_id, planstore, $attachments, time)
       .sort(planCmp)
       .map((p) => ({
         value: p.id!,

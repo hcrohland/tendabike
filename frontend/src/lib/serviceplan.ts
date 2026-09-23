@@ -4,8 +4,8 @@ import {
   part_at_hook,
   type Attachment,
 } from "./attachment";
-import { by, filterValues, mapable, type Map } from "./mapable";
-import { stateValues } from "./mapable.svelte";
+import { by, type Map } from "./mapable";
+import { mapableState, stateValues } from "./mapable.svelte";
 import { Part } from "./part";
 import { Service, services } from "./service";
 import { get_days, handleError, myfetch } from "./store";
@@ -247,7 +247,7 @@ function plans_for_this_part(
   part_id: number | undefined,
   plans: Map<ServicePlan>,
 ) {
-  return filterValues(plans, (p) => p.part == part_id && p.hook == null);
+  return stateValues(plans).filter((p) => p.part == part_id && p.hook == null);
 }
 
 /** return plans for this part.
@@ -256,8 +256,7 @@ function plans_for_this_part(
  */
 function plans_for_attachee(plans: Map<ServicePlan>, att: Attachment) {
   // find plans for this part and generic plan for gear
-  let res = filterValues(
-    plans,
+  let res = stateValues(plans).filter(
     (p) =>
       p.part == att.part_id ||
       (p.part == att.gear && p.hook == att.hook && p.what == att.what),
@@ -265,15 +264,16 @@ function plans_for_attachee(plans: Map<ServicePlan>, att: Attachment) {
   if (res.length != 0) return res;
 
   // find generic plans for this type/hook
-  return filterValues(
-    plans,
-    (p) =>
-      p.part == null &&
-      p.hook == att.hook &&
-      p.what == att.what &&
-      // only if the is none already for this part already
-      !res.some((r) => r.hook == p.hook && r.what == p.what),
-  ).map((p) => new ServicePlan({ ...p, part: att.part_id }));
+  return stateValues(plans)
+    .filter(
+      (p) =>
+        p.part == null &&
+        p.hook == att.hook &&
+        p.what == att.what &&
+        // only if the is none already for this part already
+        !res.some((r) => r.hook == p.hook && r.what == p.what),
+    )
+    .map((p) => new ServicePlan({ ...p, part: att.part_id }));
 }
 
 /** Plans for a part at a given time or now, in store order (unsorted); the
@@ -301,16 +301,14 @@ function plans_at_hook(
   let att = att_at_hook(part.id!, type.id, hook, atts);
   if (att) return plans_for_attachee(plans, att);
 
-  let res = filterValues(
-    plans,
+  let res = stateValues(plans).filter(
     (p) => p.part == part.id && p.what == type.id && p.hook == hook,
   );
   if (res.length > 0) return res;
 
-  return filterValues(
-    plans,
-    (p) => p.part == null && p.what == type.id && p.hook == hook,
-  ).map((p) => new ServicePlan({ ...p, part: part.id }));
+  return stateValues(plans)
+    .filter((p) => p.part == null && p.what == type.id && p.hook == hook)
+    .map((p) => new ServicePlan({ ...p, part: part.id }));
 }
 
 function plans_for_subtype(
@@ -394,7 +392,7 @@ export function gearsForPlan(
   $attachments: Map<Attachment>,
   $plans: Map<ServicePlan>,
 ): Part[] {
-  return gears_of_plan(plan, $parts, Object.values($plans), $attachments);
+  return gears_of_plan(plan, $parts, stateValues($plans), $attachments);
 }
 
 /**
@@ -485,4 +483,4 @@ export function duesForPlans(
   return result;
 }
 
-export const plans = mapable("id", (s) => new ServicePlan(s));
+export const plans = mapableState("id", (s) => new ServicePlan(s));

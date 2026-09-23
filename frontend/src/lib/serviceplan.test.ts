@@ -9,7 +9,6 @@ import {
 import { Part } from "./part";
 import { Service, services } from "./service";
 import { type Map } from "./mapable";
-import { get } from "svelte/store";
 import { resp } from "../test/helpers";
 
 function plan(overrides: Partial<any> = {}): ServicePlan {
@@ -206,7 +205,7 @@ describe("ServicePlan CRUD", () => {
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/plan");
     expect(options.method).toBe("POST");
-    expect(get(plans)["NEW1"]).toBeDefined();
+    expect(plans["NEW1"]).toBeDefined();
   });
 
   it("ServicePlan.update PUTs to /api/plan and updates the plans store", async () => {
@@ -232,7 +231,7 @@ describe("ServicePlan CRUD", () => {
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/plan");
     expect(options.method).toBe("PUT");
-    expect(get(plans)["P1"].name).toBe("Updated");
+    expect(plans["P1"].name).toBe("Updated");
   });
 
   it("ServicePlan.delete removes the plan and updates services", async () => {
@@ -256,7 +255,7 @@ describe("ServicePlan CRUD", () => {
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/plan/P1");
     expect(options.method).toBe("DELETE");
-    expect(get(plans)["P1"]).toBeUndefined();
+    expect(plans["P1"]).toBeUndefined();
     expect(services["S1"]).toBeDefined();
   });
 });

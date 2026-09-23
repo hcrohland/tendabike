@@ -34,7 +34,7 @@
     {:else}
       {types[plan.what].human_name(plan.hook)}
     {/if}
-    {#if isTemplate(plan, $plans)}
+    {#if isTemplate(plan, plans)}
       {m.attachform_of()} {$category.localizedAnyDative()}
     {:else}
       {m.attachform_of()} {@html partlink}

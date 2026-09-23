@@ -16,7 +16,7 @@
 
   let { plan }: Props = $props();
 
-  let gears = $derived(gearsForPlan(plan, parts, $attachments, $plans));
+  let gears = $derived(gearsForPlan(plan, parts, $attachments, plans));
 </script>
 
 <Card>
