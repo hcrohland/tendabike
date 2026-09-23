@@ -1,5 +1,6 @@
 import type { Activity } from "./activity";
 import { filterValues, mapable, type Map } from "./mapable";
+import { stateValues } from "./mapable.svelte";
 import { fmtRange, maxDate } from "./store";
 
 export class Attachment {
@@ -45,8 +46,7 @@ export class Attachment {
   }
 
   activities(acts: Map<Activity>) {
-    return filterValues(
-      acts,
+    return stateValues(acts).filter(
       (a) => a.gear == this.gear && this.isAttached(a.start),
     );
   }

@@ -1,7 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { Activity, activities } from "./activity";
 import { Part } from "./part";
-import { get } from "svelte/store";
 import type { Map } from "./mapable";
 import { resp } from "../test/helpers";
 
@@ -88,9 +87,8 @@ describe("Activity.update", () => {
     const a = new Activity(actData({ id: 100 }));
     a.name = "New Name";
     await a.update();
-    const map = get(activities);
-    expect(map[100]).toBeInstanceOf(Activity);
-    expect(map[100].name).toBe("New Name");
+    expect(activities[100]).toBeInstanceOf(Activity);
+    expect(activities[100].name).toBe("New Name");
   });
 });
 

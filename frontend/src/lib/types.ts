@@ -37,9 +37,9 @@ export class Type {
   }
 
   activities(acts: Map<Activity>) {
-    return filterValues(acts, (a) =>
-      this.acts.some((t) => t.id == a.what),
-    ).sort(by("start"));
+    return stateValues(acts)
+      .filter((a) => this.acts.some((t) => t.id == a.what))
+      .sort(by("start"));
   }
 
   parts(parts: Map<Part>) {

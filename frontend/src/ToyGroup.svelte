@@ -41,7 +41,7 @@
         <PlanBadge {part} />
       </GearCard>
     {:else}
-      {#if $category.activities($activities).length == 0}
+      {#if $category.activities(activities).length == 0}
         {m.toygroup_none_found({ category: $category.name })}
       {:else}
         {m.toygroup_none_assigned({ category: $category.name })}

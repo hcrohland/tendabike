@@ -230,7 +230,7 @@
       ]);
   }
 
-  let all_acts = $derived($category.activities($activities));
+  let all_acts = $derived($category.activities(activities));
   let minyear = $derived(
     all_acts
       .reduce((min, a) => (min <= a.start ? min : a.start), new Date())

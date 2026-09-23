@@ -2,7 +2,7 @@
   import { category } from "../lib/types";
   import { Activity, activities } from "../lib/activity";
   import ActList from "./ActList.svelte";
-  import { filterValues } from "../lib/mapable";
+  import { stateValues } from "../lib/mapable.svelte";
   import { parts } from "../lib/part";
   import { attachments } from "../lib/attachment";
   import * as m from "../../paraglide/messages";
@@ -18,13 +18,13 @@
       const part = parts[params.part];
       title = m.act_heading_for({ name: part.name });
       if (part.isGear()) {
-        acts = filterValues($activities, (a) => a.gear == part.id);
+        acts = stateValues(activities).filter((a) => a.gear == part.id);
       } else {
         const start = Number(params.start);
         const atts = part
           .attachments($attachments)
           .filter((a) => (start ? a.isAttached(start) : true));
-        acts = atts.map((att) => att.activities($activities)).flat();
+        acts = atts.map((att) => att.activities(activities)).flat();
         if (start)
           title = m.act_heading_attached({
             name: part.name,
@@ -36,7 +36,7 @@
       }
     } else {
       title = m.act_heading_all();
-      acts = $category.activities($activities);
+      acts = $category.activities(activities);
     }
 
     return { acts, title };

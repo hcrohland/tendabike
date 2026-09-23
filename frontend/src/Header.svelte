@@ -17,6 +17,7 @@
   import { handleError, myfetch } from "./lib/store";
   import { refresh, updateSummary, user } from "./lib/user";
   import { activities } from "./lib/activity";
+  import { stateValues } from "./lib/mapable.svelte";
   import Sport from "./Widgets/Sport.svelte";
   import { category } from "./lib/types";
   import { querystring } from "svelte-spa-router";
@@ -112,7 +113,7 @@
   </NavBrand>
   {#if $user}
     <div class="flex items-center gap-4 md:order-2">
-      {#if ($user.onboarding_status === "pending" || $user.onboarding_status === "initial_sync_postponed") && Object.keys($activities).length === 0}
+      {#if ($user.onboarding_status === "pending" || $user.onboarding_status === "initial_sync_postponed") && stateValues(activities).length === 0}
         <button
           class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-4 py-2"
           onclick={triggerHistoricSync}

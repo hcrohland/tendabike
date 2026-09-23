@@ -192,7 +192,7 @@ describe("setSummary", () => {
   it("calls setMap on all 8 stores", () => {
     setSummary(summaryData() as any);
     expect(parts[1]).toBeDefined();
-    expect(get(activities)[100]).toBeDefined();
+    expect(activities[100]).toBeDefined();
     expect(usages["u1"]).toBeDefined();
     expect(get(services)["S1"]).toBeDefined();
     expect(get(plans)["PL1"]).toBeDefined();
@@ -228,7 +228,7 @@ describe("updateSummary", () => {
   it("calls updateMap on 7 stores (not users) when data is provided", () => {
     updateSummary(summaryData() as any);
     expect(parts[1]).toBeDefined();
-    expect(get(activities)[100]).toBeDefined();
+    expect(activities[100]).toBeDefined();
     expect(usages["u1"]).toBeDefined();
     expect(get(services)["S1"]).toBeDefined();
     expect(get(plans)["PL1"]).toBeDefined();

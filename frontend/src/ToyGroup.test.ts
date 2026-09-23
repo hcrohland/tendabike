@@ -107,6 +107,29 @@ describe("ToyGroup", () => {
     ).toBeTruthy();
   });
 
+  it("re-renders when the activities collection changes", () => {
+    const { unmount } = render(ToyGroup);
+    expect(
+      screen.getByText("We did not find any Tire on Strava (yet)."),
+    ).toBeTruthy();
+    activities.setMap([
+      new Activity({
+        id: 1,
+        user_id: 1,
+        what: 1,
+        name: "Ride",
+        start: new Date("2024-01-01"),
+      }),
+    ]);
+    flushSync();
+    expect(
+      screen.getByText(
+        "You have no Tire assigned to any activity on Strava. Please do so to get started.",
+      ),
+    ).toBeTruthy();
+    unmount();
+  });
+
   it("renders ShowMore section when disposed parts exist", async () => {
     parts.setMap([
       new Part({

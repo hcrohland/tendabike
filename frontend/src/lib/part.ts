@@ -103,7 +103,8 @@ export class Part {
   /// the time when the first activity or attachment for this part started
   firstEvent(acts: Map<Activity>, atts: Map<Attachment>) {
     return this.isGear()
-      ? filterValues(acts, (a) => a.gear == this.id)
+      ? stateValues(acts)
+          .filter((a) => a.gear == this.id)
           .sort(by("start"))
           .at(-1)?.start
       : this.attachments(atts).at(-1)?.attached;

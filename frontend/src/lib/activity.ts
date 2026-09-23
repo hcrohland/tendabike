@@ -1,4 +1,5 @@
-import { mapable, type Map } from "./mapable";
+import { type Map } from "./mapable";
+import { mapableState } from "./mapable.svelte";
 import { Part } from "./part";
 import { handleError, myfetch } from "./store";
 import { updateSummary } from "./user";
@@ -64,4 +65,4 @@ function number_or_undefined(e: any) {
   let res = parseInt(e);
   return Number.isNaN(res) ? undefined : res;
 }
-export const activities = mapable("id", (a) => new Activity(a));
+export const activities = mapableState("id", (a) => new Activity(a));
