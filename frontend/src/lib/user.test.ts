@@ -194,7 +194,7 @@ describe("setSummary", () => {
     setSummary(summaryData() as any);
     expect(get(parts)[1]).toBeDefined();
     expect(get(activities)[100]).toBeDefined();
-    expect(get(usages)["u1"]).toBeDefined();
+    expect(usages["u1"]).toBeDefined();
     expect(get(services)["S1"]).toBeDefined();
     expect(get(plans)["PL1"]).toBeDefined();
     expect(get(shops)[10]).toBeDefined();
@@ -230,7 +230,7 @@ describe("updateSummary", () => {
     updateSummary(summaryData() as any);
     expect(get(parts)[1]).toBeDefined();
     expect(get(activities)[100]).toBeDefined();
-    expect(get(usages)["u1"]).toBeDefined();
+    expect(usages["u1"]).toBeDefined();
     expect(get(services)["S1"]).toBeDefined();
     expect(get(plans)["PL1"]).toBeDefined();
     expect(get(shops)[10]).toBeDefined();
