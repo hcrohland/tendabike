@@ -3,6 +3,7 @@
 {
   "name": "Debian",
   "dockerComposeFile": "docker-compose.yml",
+  "shutdownAction": "none",
   "service": "app",
   "workspaceFolder": "/workspaces/tendabike",
   "features": {
