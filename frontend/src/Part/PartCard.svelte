@@ -47,7 +47,7 @@
       part,
       plansForPart(part?.id, $plans, $atts),
       $services,
-      $usages,
+      usages,
     );
     return { list, att, part, due_list };
   });
@@ -78,7 +78,7 @@
           </span>
           <ServiceBadge due={due_list?.days} />
         {/if}
-        {#if attachments.length > 1 || (part && $usages[part.usage].count != $usages[att.usage].count)}
+        {#if attachments.length > 1 || (part && usages[part.usage].count != usages[att.usage].count)}
           <ShowMore bind:show_more title={m.partcard_history()} />
         {/if}
       </div>

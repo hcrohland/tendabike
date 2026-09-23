@@ -1,9 +1,13 @@
 import { render, screen } from "@testing-library/svelte";
-import { describe, expect, it } from "vitest";
-import { Usage } from "../lib/usage";
+import { flushSync } from "svelte";
+import { beforeEach, describe, expect, it } from "vitest";
+import { Usage, usages } from "../lib/usage";
 import UsageChips from "./UsageChips.svelte";
 
 describe("UsageChips", () => {
+  beforeEach(() => {
+    usages.setMap([]);
+  });
   it("renders zero values when no usage is provided", () => {
     render(UsageChips, { id: undefined, ref: undefined });
     expect(screen.getAllByText("0").length).toBeGreaterThanOrEqual(3);
@@ -53,6 +57,27 @@ describe("UsageChips", () => {
     });
     render(UsageChips, { usage: withEnergy, ref: 1 });
     expect(screen.getByText("250")).toBeTruthy();
+  });
+
+  it("renders the collection entry for id and re-renders when the collection changes", () => {
+    const { unmount } = render(UsageChips, { id: "u1", ref: 1 });
+    expect(screen.getAllByText("0").length).toBeGreaterThanOrEqual(3);
+    usages.updateMap([
+      new Usage({
+        id: "u1",
+        count: 7,
+        climb: 11,
+        descend: 22,
+        distance: 12345,
+        time: 60,
+        duration: 60,
+        energy: 33,
+      }),
+    ]);
+    flushSync();
+    expect(screen.getByText("7")).toBeTruthy();
+    expect(screen.getByText("11")).toBeTruthy();
+    unmount();
   });
 
   it("renders link to activities when ref is provided", () => {

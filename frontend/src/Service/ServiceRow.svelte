@@ -29,8 +29,8 @@
   }: Props = $props();
 
   let usage = $derived(
-    $usages[successor ? successor.usage : part.usage].sub(
-      service ? $usages[service.usage] : new Usage(),
+    usages[successor ? successor.usage : part.usage].sub(
+      service ? usages[service.usage] : new Usage(),
     ),
   );
   let days = $derived(

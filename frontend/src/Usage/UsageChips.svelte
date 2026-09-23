@@ -23,7 +23,7 @@
 
   let currentUsage = $derived.by(() => {
     if (usage) return usage;
-    if (id && $usages[id]) return $usages[id];
+    if (id && usages[id]) return usages[id];
     return new Usage();
   });
 

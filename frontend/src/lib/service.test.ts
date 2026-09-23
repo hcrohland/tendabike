@@ -226,7 +226,7 @@ describe("Service CRUD", () => {
     expect(url).toBe("/api/service/S1");
     expect(options.method).toBe("DELETE");
     expect(get(services)["S1"]).toBeUndefined();
-    expect(get(usages)["u1"]).toBeUndefined();
+    expect(usages["u1"]).toBeUndefined();
   });
 
   it("Service.repeat POSTs to /api/service/redo", async () => {
