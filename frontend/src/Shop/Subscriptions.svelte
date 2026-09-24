@@ -15,7 +15,7 @@
   import ShopSearch from "./ShopSearch.svelte";
   import type { ShopSubscription } from "../lib/subscription";
   import SubscriptionRow from "./SubscriptionRow.svelte";
-  import { actions } from "../Widgets/Actions.svelte";
+  import { getActions } from "../Widgets/Actions.svelte";
   import { allGear, Part, parts } from "../lib/part";
   import { stateValues } from "../lib/mapable.svelte";
   import { getCategory } from "../lib/types";
@@ -79,7 +79,7 @@
     if (shopid) {
       myfetch(`/api/shop/` + shopid)
         .then((s) => new Shop(s))
-        .then((shop) => $actions.requestSubscription(shop))
+        .then((shop) => getActions()!.requestSubscription(shop))
         .catch(handleError);
       shopid = undefined;
     }

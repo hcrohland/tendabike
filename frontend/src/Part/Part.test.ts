@@ -6,7 +6,6 @@ import {
   within,
 } from "@testing-library/svelte";
 import { flushSync } from "svelte";
-import { get } from "svelte/store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Attachment, attachments } from "../lib/attachment";
 import { maxDate } from "../lib/store";
@@ -14,7 +13,7 @@ import { Part, parts } from "../lib/part";
 import { partNotes } from "../lib/partnote";
 import { getTypes } from "../lib/types";
 import { setUser } from "../lib/user";
-import { actions } from "../Widgets/Actions.svelte";
+import { getActions, setActions } from "../Widgets/Actions.svelte";
 import { resp } from "../test/helpers";
 import PartComponent from "./Part.svelte";
 
@@ -49,7 +48,7 @@ describe("Part", () => {
     });
     partNotes.setMap([]);
     attachments.setMap([]);
-    actions.set({ newNote: vi.fn() } as never);
+    setActions({ newNote: vi.fn() } as never);
   });
 
   function seedPart(what: number) {
@@ -122,7 +121,7 @@ describe("Part", () => {
     const add = await within(notesTab).findByRole("button", { name: "add" });
     fireEvent.click(add);
     await waitFor(() => {
-      const newNote = (get(actions) as { newNote: unknown }).newNote;
+      const newNote = (getActions() as { newNote: unknown }).newNote;
       expect(newNote).toHaveBeenCalledWith(expect.objectContaining({ id: 7 }));
     });
   });

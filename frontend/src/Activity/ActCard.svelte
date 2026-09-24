@@ -24,7 +24,7 @@
   import Chip from "../Widgets/Chip.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { DropdownItem } from "flowbite-svelte";
-  import { actions } from "../Widgets/Actions.svelte";
+  import { getActions } from "../Widgets/Actions.svelte";
   import { fmtNumber, fmtSeconds } from "../lib/store";
   import * as m from "../../paraglide/messages";
 
@@ -80,7 +80,7 @@
       </span>
       <!-- Edit Menu -->
       <Menu>
-        <DropdownItem onclick={() => $actions.changeActivity(activity)}>
+        <DropdownItem onclick={() => getActions()!.changeActivity(activity)}>
           {m.action_change()}
         </DropdownItem>
       </Menu>

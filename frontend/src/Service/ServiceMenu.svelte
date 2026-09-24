@@ -1,6 +1,6 @@
 <script lang="ts">
   import { DropdownItem } from "flowbite-svelte";
-  import { actions } from "../Widgets/Actions.svelte";
+  import { getActions } from "../Widgets/Actions.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { m } from "../../paraglide/messages";
 
@@ -8,13 +8,13 @@
 </script>
 
 <Menu>
-  <DropdownItem onclick={() => $actions.changeService(service)}>
+  <DropdownItem onclick={() => getActions()!.changeService(service)}>
     {m.servicemenu_change()}
   </DropdownItem>
-  <DropdownItem onclick={() => $actions.redoService(service)}>
+  <DropdownItem onclick={() => getActions()!.redoService(service)}>
     {m.servicemenu_repeat()}
   </DropdownItem>
-  <DropdownItem onclick={() => $actions.deleteService(service)}>
+  <DropdownItem onclick={() => getActions()!.deleteService(service)}>
     {m.servicemenu_delete()}
   </DropdownItem>
 </Menu>

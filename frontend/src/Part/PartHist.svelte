@@ -8,7 +8,7 @@
   import { attachments, type Attachment } from "../lib/attachment";
   import { DropdownItem } from "flowbite-svelte";
   import Menu from "../Widgets/Menu.svelte";
-  import { actions } from "../Widgets/Actions.svelte";
+  import { getActions } from "../Widgets/Actions.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import { m } from "../../paraglide/messages";
 
@@ -50,7 +50,7 @@
       {#if parts[att.gear]}
         <div class="shrink-0">
           <Menu>
-            <DropdownItem onclick={() => $actions.deleteAttachment(att)}>
+            <DropdownItem onclick={() => getActions()!.deleteAttachment(att)}>
               {m.parthist_remove()}
             </DropdownItem>
           </Menu>
