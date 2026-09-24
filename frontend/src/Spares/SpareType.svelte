@@ -12,7 +12,7 @@
   import { fmtDate } from "../lib/store";
   import { Type } from "../lib/types";
   import { actions } from "../Widgets/Actions.svelte";
-  import { shop } from "../lib/shop";
+  import { getShop } from "../lib/shop";
   import * as m from "../../paraglide/messages";
 
   interface Props {
@@ -39,7 +39,9 @@
   }
 
   let subparts = $derived(
-    type.parts(parts).filter((p) => ($shop ? p.shop == $shop.id : true)),
+    type
+      .parts(parts)
+      .filter((p) => (getShop() ? p.shop == getShop()!.id : true)),
   );
   let subshow = $derived(
     subparts.filter(

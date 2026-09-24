@@ -3,7 +3,7 @@
   import { ChevronDownOutline } from "flowbite-svelte-icons";
   import * as m from "../../paraglide/messages";
 
-  import { Shop, shops, shop } from "../lib/shop";
+  import { Shop, shops, getShop, setShop } from "../lib/shop";
   import { refresh, getUser } from "../lib/user";
   import { stateValues } from "../lib/mapable.svelte";
 
@@ -11,7 +11,7 @@
 
   // Enter shop mode: replaces stores with shop-specific data
   async function enterShop(myshop: Shop) {
-    shop.set(myshop);
+    setShop(myshop);
     if (myshop.owner == getUser()?.id) await refresh(myshop.id);
 
     // Navigate to main page
@@ -19,7 +19,7 @@
   }
 </script>
 
-{#if !$shop}
+{#if !getShop()}
   <DropdownDivider />
 
   {#if myshops.length == 1}

@@ -5,7 +5,7 @@
   import { parts } from "./lib/part";
   import { activities } from "./lib/activity";
   import ShowMore from "./Widgets/ShowMore.svelte";
-  import { shop } from "./lib/shop";
+  import { getShop } from "./lib/shop";
   import * as m from "../paraglide/messages";
   import GearCard from "./Part/GearCard.svelte";
   import PlanBadge from "./ServicePlan/PlanBadge.svelte";
@@ -16,7 +16,7 @@
     stateValues(parts)
       .filter(
         (p) =>
-          ($shop ? p.shop == $shop.id : true) &&
+          (getShop() ? p.shop == getShop()!.id : true) &&
           p.what == $category.id &&
           !p.disposed_at,
       )
@@ -26,7 +26,7 @@
     stateValues(parts)
       .filter(
         (p) =>
-          ($shop ? p.shop == $shop.id : true) &&
+          (getShop() ? p.shop == getShop()!.id : true) &&
           p.what == $category.id &&
           p.disposed_at != undefined,
       )

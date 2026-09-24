@@ -25,7 +25,7 @@
   import { ChevronDownOutline } from "flowbite-svelte-icons";
   import Garmin from "./Activity/Garmin.svelte";
   import ShopMenu from "./Shop/ShopMenu.svelte";
-  import { shop } from "./lib/shop";
+  import { getShop } from "./lib/shop";
   import * as m from "../paraglide/messages";
   import { getLocale, setLocale, locales } from "../paraglide/runtime";
 
@@ -70,7 +70,7 @@
       clearInterval(hook_timer);
       hook_timer = 0;
     }
-    hook_promise = refresh($shop?.id).then(poll);
+    hook_promise = refresh(getShop()?.id).then(poll);
   }
 
   async function triggerHistoricSync() {
@@ -207,7 +207,7 @@
       </NavLi>
       <NavLi href="/#/plans">{m.nav_services()}</NavLi>
       <NavLi href="/#/spares">{m.nav_parts()}</NavLi>
-      {#if !$shop}
+      {#if !getShop()}
         <NavLi href="/#/activities">{m.nav_activities()}</NavLi>
         <NavLi href="/#/stats">{m.nav_statistics()}</NavLi>
       {/if}

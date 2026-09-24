@@ -3,7 +3,7 @@ import { flushSync } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { activities, Activity } from "./lib/activity";
 import { parts, Part } from "./lib/part";
-import { shop } from "./lib/shop";
+import { Shop, setShop } from "./lib/shop";
 import { getTypes } from "./lib/types";
 import { setUser } from "./lib/user";
 import { resp } from "./test/helpers";
@@ -40,7 +40,7 @@ describe("ToyGroup", () => {
     });
     parts.setMap([]);
     activities.setMap([]);
-    shop.set(undefined);
+    setShop(undefined);
   });
 
   it("renders parts matching the category", () => {
@@ -63,6 +63,45 @@ describe("ToyGroup", () => {
     render(ToyGroup);
     expect(screen.getByText("Front Tire")).toBeTruthy();
     expect(screen.queryByText("Brake")).toBeNull();
+  });
+
+  it("re-renders when the current shop changes", () => {
+    parts.setMap([
+      new Part({
+        id: 1,
+        owner: 1,
+        what: 1,
+        name: "Shop Tire",
+        shop: 7,
+        last_used: new Date("2024-01-01"),
+      }),
+      new Part({
+        id: 2,
+        owner: 1,
+        what: 1,
+        name: "Home Tire",
+        last_used: new Date("2024-01-01"),
+      }),
+    ]);
+    const { unmount } = render(ToyGroup);
+    expect(screen.getByText("Shop Tire")).toBeTruthy();
+    expect(screen.getByText("Home Tire")).toBeTruthy();
+    setShop(
+      new Shop({
+        id: 7,
+        owner: 2,
+        name: "Velo Shop",
+        auto_approve: false,
+        created_at: "2023-01-01T00:00:00Z",
+      }),
+    );
+    flushSync();
+    expect(screen.getByText("Shop Tire")).toBeTruthy();
+    expect(screen.queryByText("Home Tire")).toBeNull();
+    setShop(undefined);
+    flushSync();
+    expect(screen.getByText("Home Tire")).toBeTruthy();
+    unmount();
   });
 
   it("re-renders when the collection changes", () => {
