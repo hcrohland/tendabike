@@ -85,5 +85,3 @@ export function updateSummary(data?: Summary) {
 
 export const user = writable<User | undefined>(undefined);
 export const users = mapable<UserPublic>("id");
-
-export const state = writable({ show_all_spares: false });
