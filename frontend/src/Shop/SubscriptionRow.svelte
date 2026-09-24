@@ -22,7 +22,7 @@
     subscription
       ? subscription.shop
         ? subscription.shop.name
-        : $shops[subscription.id!].name
+        : shops[subscription.id!].name
       : "",
   );
 

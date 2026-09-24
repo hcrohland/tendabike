@@ -5,8 +5,9 @@
 
   import { Shop, shops, shop } from "../lib/shop";
   import { refresh, user } from "../lib/user";
+  import { stateValues } from "../lib/mapable.svelte";
 
-  let myshops = $derived(Object.values($shops));
+  let myshops = $derived(stateValues(shops));
 
   // Enter shop mode: replaces stores with shop-specific data
   async function enterShop(myshop: Shop) {

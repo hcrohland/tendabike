@@ -1,6 +1,6 @@
 import { handleError, myfetch } from "./store";
 import { refresh, updateSummary } from "./user";
-import { mapable } from "./mapable";
+import { mapableState } from "./mapable.svelte";
 import { type Part } from "./part";
 import { writable } from "svelte/store";
 
@@ -90,4 +90,4 @@ export async function exitShop() {
   window.location.hash = "#/cat";
 }
 
-export const shops = mapable<Shop>("id", (data) => new Shop(data));
+export const shops = mapableState("id", (data) => new Shop(data));

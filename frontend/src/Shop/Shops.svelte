@@ -7,13 +7,15 @@
   import { Shop, shops } from "../lib/shop";
   import { actions } from "../Widgets/Actions.svelte";
   import { user, users } from "../lib/user";
-  import { filterValues } from "../lib/mapable";
+  import { stateValues } from "../lib/mapable.svelte";
   import ShopSubscriptions from "./ShopSubscriptions.svelte";
 
   let activeTab = $state<string>("my-subscriptions");
 
   // Get all user's shops from the store (owned + subscribed)
-  let myShops = $derived(filterValues($shops, (g) => g.owner === $user?.id));
+  let myShops = $derived(
+    stateValues(shops).filter((g) => g.owner === $user?.id),
+  );
 </script>
 
 <div class="space-y-6">
