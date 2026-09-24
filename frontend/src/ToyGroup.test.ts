@@ -5,7 +5,7 @@ import { activities, Activity } from "./lib/activity";
 import { parts, Part } from "./lib/part";
 import { shop } from "./lib/shop";
 import { getTypes } from "./lib/types";
-import { user } from "./lib/user";
+import { setUser } from "./lib/user";
 import { resp } from "./test/helpers";
 import ToyGroup from "./ToyGroup.svelte";
 
@@ -30,7 +30,7 @@ describe("ToyGroup", () => {
     vi.stubGlobal("fetch", fetchMock);
     await getTypes();
 
-    user.set({
+    setUser({
       id: 1,
       firstname: "Test",
       name: "Test User",

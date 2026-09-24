@@ -1,7 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { get } from "svelte/store";
 import { myfetch, checkStatus, handleError, message } from "./store";
-import { user } from "./user";
+import { getUser, setUser } from "./user";
 import { resp } from "../test/helpers";
 
 function resetMessage() {
@@ -97,7 +96,7 @@ describe("checkStatus", () => {
 
 describe("checkStatus 401", () => {
   it("clears user, sets message, and rejects when user was set", async () => {
-    user.set({
+    setUser({
       id: 1,
       firstname: "A",
       name: "B",
@@ -109,12 +108,12 @@ describe("checkStatus 401", () => {
     await expect(
       checkStatus(resp("Unauthorized", 401, false, "")),
     ).rejects.toBe("Unauthorized");
-    expect(get(user)).toBeUndefined();
+    expect(getUser()).toBeUndefined();
     expect(message.active).toBe(true);
   });
 
   it("resolves undefined and does not set message when user was undefined", async () => {
-    user.set(undefined);
+    setUser(undefined);
     resetMessage();
     const result = await checkStatus(resp("Unauthorized", 401, false, ""));
     expect(result).toBeUndefined();

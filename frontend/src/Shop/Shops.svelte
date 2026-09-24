@@ -6,7 +6,7 @@
   import Subscriptions from "./Subscriptions.svelte";
   import { Shop, shops } from "../lib/shop";
   import { actions } from "../Widgets/Actions.svelte";
-  import { user, users } from "../lib/user";
+  import { getUser, users } from "../lib/user";
   import { stateValues } from "../lib/mapable.svelte";
   import ShopSubscriptions from "./ShopSubscriptions.svelte";
 
@@ -14,7 +14,7 @@
 
   // Get all user's shops from the store (owned + subscribed)
   let myShops = $derived(
-    stateValues(shops).filter((g) => g.owner === $user?.id),
+    stateValues(shops).filter((g) => g.owner === getUser()?.id),
   );
 </script>
 

@@ -3,7 +3,7 @@ import { flushSync } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Part } from "../lib/part";
 import { getTypes } from "../lib/types";
-import { user, users } from "../lib/user";
+import { setUser, users } from "../lib/user";
 import { resp } from "../test/helpers";
 import GearCard from "./GearCard.svelte";
 
@@ -25,7 +25,7 @@ describe("GearCard", () => {
     vi.stubGlobal("fetch", fetchMock);
     await getTypes();
 
-    user.set({
+    setUser({
       id: 1,
       firstname: "Test",
       name: "Test User",
@@ -63,6 +63,25 @@ describe("GearCard", () => {
     ]);
     flushSync();
     expect(screen.getByText("Erin Brooks")).toBeTruthy();
+    expect(screen.queryByText("Max Mustermann")).toBeNull();
+    unmount();
+  });
+
+  it("re-renders the owner badge when the current user changes", () => {
+    users.setMap([
+      { id: 5, firstname: "Max", name: "Mustermann", avatar: undefined },
+    ]);
+    const { unmount } = render(GearCard, { part });
+    expect(screen.getByText("Max Mustermann")).toBeTruthy();
+    setUser({
+      id: 5,
+      firstname: "Max",
+      name: "Mustermann",
+      avatar: undefined,
+      is_admin: false,
+      onboarding_status: "completed",
+    });
+    flushSync();
     expect(screen.queryByText("Max Mustermann")).toBeNull();
     unmount();
   });

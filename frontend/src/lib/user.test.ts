@@ -4,7 +4,8 @@ import {
   refresh,
   setSummary,
   updateSummary,
-  user,
+  getUser,
+  setUser,
   users,
 } from "./user";
 import { parts } from "./part";
@@ -14,7 +15,6 @@ import { usages } from "./usage";
 import { attachments } from "./attachment";
 import { plans } from "./serviceplan";
 import { shops } from "./shop";
-import { get } from "svelte/store";
 import { stateValues } from "./mapable.svelte";
 import { resp } from "../test/helpers";
 
@@ -116,7 +116,7 @@ describe("initData", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    user.set(undefined);
+    setUser(undefined);
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
   });
@@ -136,7 +136,7 @@ describe("initData", () => {
     await initData();
     expect(fetchMock.mock.calls[0][0]).toBe("/api/user");
     expect(fetchMock.mock.calls[1][0]).toBe("/api/user/summary");
-    expect(get(user)).toEqual(userData);
+    expect(getUser()).toEqual(userData);
   });
 
   it("returns early without refresh when user is null", async () => {
@@ -144,7 +144,7 @@ describe("initData", () => {
     await initData();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe("/api/user");
-    expect(get(user)).toBeUndefined();
+    expect(getUser()).toBeUndefined();
   });
 });
 

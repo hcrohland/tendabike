@@ -13,7 +13,7 @@ import { maxDate } from "../lib/store";
 import { Part, parts } from "../lib/part";
 import { partNotes } from "../lib/partnote";
 import { getTypes } from "../lib/types";
-import { user } from "../lib/user";
+import { setUser } from "../lib/user";
 import { actions } from "../Widgets/Actions.svelte";
 import { resp } from "../test/helpers";
 import PartComponent from "./Part.svelte";
@@ -39,7 +39,7 @@ describe("Part", () => {
     vi.stubGlobal("fetch", fetchMock);
     await getTypes();
 
-    user.set({
+    setUser({
       id: 1,
       firstname: "Test",
       name: "Test User",

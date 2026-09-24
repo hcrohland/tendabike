@@ -1,7 +1,7 @@
 <script lang="ts">
   import { InputAddon, ButtonGroup } from "flowbite-svelte";
   import { Type } from "../lib/types";
-  import { user } from "../lib/user";
+  import { getUser } from "../lib/user";
   import NewForm from "../Part/PartForm.svelte";
   import TypeForm from "../Widgets/TypeForm.svelte";
   import { stateValues } from "../lib/mapable.svelte";
@@ -23,7 +23,7 @@
     gear = g;
     part = {
       ...new Part({
-        owner: $user && $user.id,
+        owner: getUser()?.id,
       }),
     };
     type = undefined;

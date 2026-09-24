@@ -4,7 +4,7 @@
   import * as m from "../../paraglide/messages";
 
   import { Shop, shops, shop } from "../lib/shop";
-  import { refresh, user } from "../lib/user";
+  import { refresh, getUser } from "../lib/user";
   import { stateValues } from "../lib/mapable.svelte";
 
   let myshops = $derived(stateValues(shops));
@@ -12,7 +12,7 @@
   // Enter shop mode: replaces stores with shop-specific data
   async function enterShop(myshop: Shop) {
     shop.set(myshop);
-    if (myshop.owner == $user?.id) await refresh(myshop.id);
+    if (myshop.owner == getUser()?.id) await refresh(myshop.id);
 
     // Navigate to main page
     window.location.hash = "#/cat";

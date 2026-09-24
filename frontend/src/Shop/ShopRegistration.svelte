@@ -7,7 +7,7 @@
   } from "flowbite-svelte";
   import * as m from "../../paraglide/messages";
   import { Shop, shop, shops } from "../lib/shop";
-  import { user } from "../lib/user";
+  import { getUser } from "../lib/user";
   import { stateValues } from "../lib/mapable.svelte";
   import type { Part } from "../lib/part";
   import type { Attachment } from "../lib/attachment";
@@ -50,7 +50,7 @@
     <DropdownItem onclick={unregisterFromShop}>
       {m.shop_unregister_from({ name: shops[part.shop]?.name ?? "" })}
     </DropdownItem>
-  {:else if !$shop && $user?.id === part.owner && userShops.length > 0}
+  {:else if !$shop && getUser()?.id === part.owner && userShops.length > 0}
     <DropdownDivider />
     <DropdownItem class="flex items-center gap-2">
       <Label>

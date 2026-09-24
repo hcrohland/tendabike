@@ -1,4 +1,3 @@
-import { writable } from "svelte/store";
 import { Service, services } from "./service";
 import { activities, Activity } from "./activity";
 import { Usage, usages } from "./usage";
@@ -9,11 +8,14 @@ import { plans, type ServicePlan } from "./serviceplan";
 import { Shop, shops } from "./shop";
 import { myfetch } from "./store";
 import { mapableState } from "./mapable.svelte";
+import { getUser, setUser } from "./user.svelte";
+
+export { getUser, setUser };
 
 export async function initData() {
   let u = await myfetch("/api/user");
   if (u) {
-    user.set(u);
+    setUser(u);
   } else {
     return;
   }
@@ -83,5 +85,4 @@ export function updateSummary(data?: Summary) {
   shops.updateMap(data.shops);
 }
 
-export const user = writable<User | undefined>(undefined);
 export const users = mapableState<UserPublic>("id");

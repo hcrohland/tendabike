@@ -6,7 +6,7 @@
   import { handleError, myfetch } from "../lib/store";
   import { Shop } from "../lib/shop";
   import { type ShopSubscription } from "../lib/subscription";
-  import { user, type UserPublic } from "../lib/user";
+  import { getUser, type UserPublic } from "../lib/user";
   import { type Map } from "../lib/mapable";
 
   interface Props {
@@ -37,7 +37,7 @@
         .map((g: any) => new Shop(g))
         .filter(
           (s: any) =>
-            s.owner != $user!.id &&
+            s.owner != getUser()!.id &&
             subscriptions.every((su) => su.shop_id != s.id),
         );
       results[1].map((u: UserPublic) => (users[u.id] = u));

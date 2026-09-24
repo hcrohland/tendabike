@@ -20,10 +20,10 @@
 <script lang="ts">
   import { Modal, P, Heading, Button } from "flowbite-svelte";
   import { myfetch, handleError } from "../lib/store";
-  import { user } from "../lib/user";
+  import { getUser, setUser } from "../lib/user";
   import { m } from "../../paraglide/messages";
 
-  let open = $state($user?.onboarding_status === "pending");
+  let open = $state(getUser()?.onboarding_status === "pending");
 
   let loading = $state(false);
 
@@ -31,7 +31,7 @@
     loading = true;
     try {
       const updatedUser = await myfetch("/strava/onboarding/sync", "POST");
-      $user = updatedUser;
+      setUser(updatedUser);
       open = false;
     } catch (e) {
       handleError(e as Error);
@@ -44,7 +44,7 @@
     loading = true;
     try {
       const updatedUser = await myfetch("/strava/onboarding/postpone", "POST");
-      user.set(updatedUser);
+      setUser(updatedUser);
       open = false;
     } catch (e) {
       handleError(e as Error);

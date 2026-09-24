@@ -6,7 +6,7 @@
   import ShopCard from "./ShopCard.svelte";
   import { type Shop } from "../lib/shop";
   import { actions } from "../Widgets/Actions.svelte";
-  import { user, users as global_users, type UserPublic } from "../lib/user";
+  import { getUser, users as global_users, type UserPublic } from "../lib/user";
   import ShopOwnerMenu from "./ShopOwnerMenu.svelte";
   import { type Map } from "../lib/mapable";
 
@@ -27,7 +27,7 @@
 
 <div class="grid gap-4 grid-cols-1">
   {#each shops as shop}
-    {@const isOwner = shop.owner === $user?.id}
+    {@const isOwner = shop.owner === getUser()?.id}
     <ShopCard {shop} {isOwner} {users} {sub}>
       {#if isOwner}
         <ShopOwnerMenu {shop} />

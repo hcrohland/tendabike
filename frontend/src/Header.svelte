@@ -15,7 +15,7 @@
     Select,
   } from "flowbite-svelte";
   import { handleError, myfetch } from "./lib/store";
-  import { refresh, updateSummary, user } from "./lib/user";
+  import { refresh, updateSummary, getUser, setUser } from "./lib/user";
   import { activities } from "./lib/activity";
   import { stateValues } from "./lib/mapable.svelte";
   import Sport from "./Widgets/Sport.svelte";
@@ -76,7 +76,7 @@
   async function triggerHistoricSync() {
     try {
       const updatedUser = await myfetch("/strava/onboarding/sync", "POST");
-      $user = updatedUser;
+      setUser(updatedUser);
       fullrefresh();
     } catch (e) {
       handleError(e as Error);
@@ -111,9 +111,9 @@
     />
     &nbsp; Tend a {$category.name}
   </NavBrand>
-  {#if $user}
+  {#if getUser()}
     <div class="flex items-center gap-4 md:order-2">
-      {#if ($user.onboarding_status === "pending" || $user.onboarding_status === "initial_sync_postponed") && stateValues(activities).length === 0}
+      {#if (getUser()?.onboarding_status === "pending" || getUser()?.onboarding_status === "initial_sync_postponed") && stateValues(activities).length === 0}
         <button
           class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-4 py-2"
           onclick={triggerHistoricSync}
@@ -126,7 +126,7 @@
         {#await hook_promise}
           <Spinner size="10" />
         {:then}
-          <Avatar src={$user.avatar} class="border-2" />
+          <Avatar src={getUser()?.avatar} class="border-2" />
         {:catch error}
           {handleError(error)}
         {/await}
@@ -134,8 +134,8 @@
 
       <Dropdown simple triggeredBy="#user">
         <DropdownHeader>
-          {$user.firstname}
-          {$user.name}
+          {getUser()?.firstname}
+          {getUser()?.name}
         </DropdownHeader>
         <DropdownDivider />
         <Sport />
@@ -151,7 +151,7 @@
             <DropdownItem onclick={() => (openGarmin = true)}>
               {m.header_csv()}
             </DropdownItem>
-            {#if $user.onboarding_status === "initial_sync_postponed"}
+            {#if getUser()?.onboarding_status === "initial_sync_postponed"}
               <DropdownDivider />
               <DropdownItem onclick={triggerHistoricSync}>
                 {m.header_import_historic()}
@@ -161,7 +161,7 @@
           <Garmin bind:open={openGarmin} />
         {/await}
         <ShopMenu />
-        {#if $user.is_admin}
+        {#if getUser()?.is_admin}
           <DropdownDivider />
           <DropdownItem href="/#/admin">{m.header_admin()}</DropdownItem>
         {/if}
