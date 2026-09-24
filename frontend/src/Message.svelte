@@ -3,16 +3,14 @@
   import { Modal } from "flowbite-svelte";
 
   function onclose() {
-    let m = $message;
-    m.active = false;
-    message.set(m);
+    message.active = false;
   }
 </script>
 
-<Modal open={$message.active} {onclose}>
+<Modal open={message.active} {onclose}>
   {#snippet header()}
-    {$message.status}
+    {message.status}
   {/snippet}
 
-  {@html $message.message}
+  {@html message.message}
 </Modal>
