@@ -29,7 +29,7 @@
 
   let { part }: Props = $props();
 
-  let notes = $derived(notes_for_part($partNotes, part.id!));
+  let notes = $derived(notes_for_part(partNotes, part.id!));
 </script>
 
 <div class="flex flex-col gap-3">

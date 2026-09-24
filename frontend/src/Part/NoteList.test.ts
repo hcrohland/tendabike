@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import { flushSync } from "svelte";
 import { get } from "svelte/store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Part } from "../lib/part";
@@ -68,6 +69,15 @@ describe("NoteList", () => {
     render(NoteList, { part });
     expect(screen.getByText("Replace chain soon")).toBeTruthy();
     expect(screen.getByText("Receipt")).toBeTruthy();
+  });
+
+  it("re-renders when the partNotes collection changes", () => {
+    const { unmount } = render(NoteList, { part });
+    expect(screen.queryByText("Replace chain soon")).toBeNull();
+    partNotes.updateMap([textNote]);
+    flushSync();
+    expect(screen.getByText("Replace chain soon")).toBeTruthy();
+    unmount();
   });
 
   it("links the file of a file note", () => {
