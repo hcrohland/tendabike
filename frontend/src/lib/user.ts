@@ -8,7 +8,7 @@ import { Attachment, attachments } from "./attachment";
 import { plans, type ServicePlan } from "./serviceplan";
 import { Shop, shops } from "./shop";
 import { myfetch } from "./store";
-import { mapable } from "./mapable";
+import { mapableState } from "./mapable.svelte";
 
 export async function initData() {
   let u = await myfetch("/api/user");
@@ -84,4 +84,4 @@ export function updateSummary(data?: Summary) {
 }
 
 export const user = writable<User | undefined>(undefined);
-export const users = mapable<UserPublic>("id");
+export const users = mapableState<UserPublic>("id");

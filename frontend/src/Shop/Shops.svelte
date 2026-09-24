@@ -40,7 +40,7 @@
           </div>
         {:else}
           <div>
-            <ShopList shops={myShops} users={$users}>
+            <ShopList shops={myShops} {users}>
               {#snippet sub(shop: Shop)}
                 <ShopSubscriptions shopId={shop.id!} />
               {/snippet}

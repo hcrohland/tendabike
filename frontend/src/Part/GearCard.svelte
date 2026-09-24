@@ -52,7 +52,7 @@
         {part.name}
       {/if}
     {:else}
-      {@const owner = $users[part.owner]}
+      {@const owner = users[part.owner]}
       {part.name}
       <Badge color="green" class="relative -top-3 -right-1">
         {owner.firstname + " " + owner.name}

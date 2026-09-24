@@ -9,8 +9,8 @@
 - **UI**: Tailwind CSS v4 + Flowbite / flowbite-svelte components.
 - **Routing**: `svelte-spa-router`; route definitions in [`src/App.svelte`](src/App.svelte).
 - **i18n**: `@inlang/paraglide-js` — edit source messages in `messages/{locale}.json`; `paraglide/` is compiled output.
-- **State**: custom `mapable()` pattern in [`src/lib/mapable.ts`](src/lib/mapable.ts) wrapping Svelte writable stores.
-- **Entity classes**: `src/lib/*.ts` — async methods that call `myfetch()` and update stores via `updateSummary()` in [`src/lib/user.ts`](src/lib/user.ts).
+- **State**: the Summary collections in `src/lib/*.ts` are Svelte 5 `$state` objects from `mapableState()` in [`src/lib/mapable.svelte.ts`](src/lib/mapable.svelte.ts) — records keyed by id with `setMap`/`updateMap`/`deleteItem` ops; enumerate them with `stateValues()`, never `Object.values` (the ops ride on the record).
+- **Entity classes**: `src/lib/*.ts` — async methods that call `myfetch()` and update collections via `updateSummary()` in [`src/lib/user.ts`](src/lib/user.ts).
 
 ## Code Style
 
@@ -19,6 +19,6 @@
 ## Key Gotchas
 
 - `myfetch()` returns `null` for HTTP 204 — callers must handle it.
-- Store updates must use `updateMap()` / `setMap()` / `deleteItem()` on the entity's exported store variable (e.g. `parts.updateMap([data])`).
+- Collection updates must use `updateMap()` / `setMap()` / `deleteItem()` on the entity's exported collection (e.g. `parts.updateMap([data])`).
 - Paraglide messages are imported from `paraglide/messages` (relative depth varies by component); translation keys follow the `m.action_name()` pattern.
 - `src/test/setup.ts` restores all mocks in `afterEach` — `vi.stubGlobal` stubs created in `beforeAll` are gone after the first test; create stubs in `beforeEach`.
