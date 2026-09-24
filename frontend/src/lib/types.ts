@@ -1,10 +1,12 @@
-import { writable, type Writable } from "svelte/store";
 import { Activity } from "./activity";
 import { by, filterValues, mapObject, type Map } from "./mapable";
 import { stateValues } from "./mapable.svelte";
 import { Part } from "./part";
 import { myfetch } from "./store";
+import { getCategory, setCategory } from "./types.svelte";
 import * as m from "../../paraglide/messages";
+
+export { getCategory, setCategory };
 
 export class Type {
   id: number;
@@ -151,7 +153,7 @@ export async function getTypes() {
     return acc;
   }, partTypes);
 
-  category = writable(types[1]);
+  setCategory(types[1]);
 }
 
 export function localizeGroupName(group: string | undefined): string {
@@ -162,5 +164,3 @@ export function localizeGroupName(group: string | undefined): string {
   const fn = (m as unknown as Record<string, () => string>)[key];
   return typeof fn === "function" ? fn() : group;
 }
-
-export let category: Writable<Type>;

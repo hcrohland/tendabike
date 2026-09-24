@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ServicePlan } from "../lib/serviceplan";
   import { parts } from "../lib/part";
-  import { category, types } from "../lib/types";
+  import { getCategory, types } from "../lib/types";
   import PlanModal from "./PlanModal.svelte";
   import { m } from "../../paraglide/messages";
 
@@ -26,7 +26,7 @@
     } else {
       header = m.updateplan_header_generic({
         hook: types[p.what].human_name(p.hook),
-        any: $category.localizedAnyDative(),
+        any: getCategory()!.localizedAnyDative(),
       });
     }
     modal.start(new ServicePlan(p));

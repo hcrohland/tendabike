@@ -18,7 +18,7 @@
   import { actions } from "../Widgets/Actions.svelte";
   import { allGear, Part, parts } from "../lib/part";
   import { stateValues } from "../lib/mapable.svelte";
-  import { category } from "../lib/types";
+  import { getCategory } from "../lib/types";
 
   interface Props {
     shopid?: number;
@@ -85,7 +85,7 @@
     }
   }
 
-  let mygear = $derived(allGear(parts, $category));
+  let mygear = $derived(allGear(parts, getCategory()!));
 
   async function registerGear(part: Part, shopid: number, checked: boolean) {
     try {
@@ -182,7 +182,9 @@
                     {:else if subscription.status === "active"}
                       <ButtonGroup>
                         <Button size="xs" color="alternative">
-                          {m.shop_register_gear({ category: $category.name })}
+                          {m.shop_register_gear({
+                            category: getCategory()!.name,
+                          })}
                         </Button>
 
                         <Dropdown simple>

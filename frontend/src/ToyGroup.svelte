@@ -1,7 +1,7 @@
 <script lang="ts">
   import { by } from "./lib/mapable";
   import { stateValues } from "./lib/mapable.svelte";
-  import { category } from "./lib/types";
+  import { getCategory } from "./lib/types";
   import { parts } from "./lib/part";
   import { activities } from "./lib/activity";
   import ShowMore from "./Widgets/ShowMore.svelte";
@@ -17,7 +17,7 @@
       .filter(
         (p) =>
           (getShop() ? p.shop == getShop()!.id : true) &&
-          p.what == $category.id &&
+          p.what == getCategory()!.id &&
           !p.disposed_at,
       )
       .sort(by("last_used")),
@@ -27,24 +27,24 @@
       .filter(
         (p) =>
           (getShop() ? p.shop == getShop()!.id : true) &&
-          p.what == $category.id &&
+          p.what == getCategory()!.id &&
           p.disposed_at != undefined,
       )
       .sort(by("last_used")),
   );
 </script>
 
-{#if $category}
+{#if getCategory()}
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
     {#each gears as part (part.id)}
       <GearCard {part} summary gridclass="grid-cols-3">
         <PlanBadge {part} />
       </GearCard>
     {:else}
-      {#if $category.activities(activities).length == 0}
-        {m.toygroup_none_found({ category: $category.name })}
+      {#if getCategory()!.activities(activities).length == 0}
+        {m.toygroup_none_found({ category: getCategory()!.name })}
       {:else}
-        {m.toygroup_none_assigned({ category: $category.name })}
+        {m.toygroup_none_assigned({ category: getCategory()!.name })}
       {/if}
     {/each}
   </div>

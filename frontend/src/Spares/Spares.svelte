@@ -1,12 +1,15 @@
 <script lang="ts">
   import { filterValues } from "../lib/mapable";
-  import { types, category } from "../lib/types";
+  import { types, getCategory } from "../lib/types";
   import SpareType from "./SpareType.svelte";
 
   let attachee = $state(0);
 
   let spareTypes = $derived(
-    filterValues(types, (t) => t.main == $category.id && t.id != $category.id),
+    filterValues(
+      types,
+      (t) => t.main == getCategory()!.id && t.id != getCategory()!.id,
+    ),
   );
 
   function update(show: boolean) {

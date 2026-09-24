@@ -1,7 +1,7 @@
 <script lang="ts">
   import { parts } from "../lib/part";
   import { stateValues } from "../lib/mapable.svelte";
-  import { category, Type } from "../lib/types";
+  import { getCategory, Type } from "../lib/types";
   import { Select } from "flowbite-svelte";
   import { m } from "../../paraglide/messages";
 
@@ -20,7 +20,7 @@
   required
   bind:value={part}
   placeholder={m.selectpart_placeholder({
-    category: $category.localizedName(),
+    category: getCategory()!.localizedName(),
   })}
   classes={{ select: "rounded-l-none" }}
 >

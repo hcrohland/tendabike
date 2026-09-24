@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { category } from "../lib/types";
+  import { getCategory } from "../lib/types";
   import { Activity, activities } from "../lib/activity";
   import ActList from "./ActList.svelte";
   import { stateValues } from "../lib/mapable.svelte";
@@ -36,7 +36,7 @@
       }
     } else {
       title = m.act_heading_all();
-      acts = $category.activities(activities);
+      acts = getCategory()!.activities(activities);
     }
 
     return { acts, title };

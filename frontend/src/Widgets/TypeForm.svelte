@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Select } from "flowbite-svelte";
-  import { Type, category } from "../lib/types";
+  import { Type, getCategory } from "../lib/types";
   import { m } from "../../paraglide/messages";
 
   interface Result {
@@ -26,9 +26,11 @@
   {...rest}
 >
   {#if with_body}
-    <option value={{ type: $category, hook: null }}>{m.typeform_body()}</option>
+    <option value={{ type: getCategory()!, hook: null }}
+      >{m.typeform_body()}</option
+    >
   {/if}
-  {#each $category.subtypes() as type}
+  {#each getCategory()!.subtypes() as type}
     {#each type.hooks as hook}
       <option value={{ type, hook }}>
         {type.human_name(hook)}

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { activities, Activity } from "./lib/activity";
 import { parts, Part } from "./lib/part";
 import { Shop, setShop } from "./lib/shop";
-import { getTypes } from "./lib/types";
+import { getTypes, setCategory, types } from "./lib/types";
 import { setUser } from "./lib/user";
 import { resp } from "./test/helpers";
 import ToyGroup from "./ToyGroup.svelte";
@@ -101,6 +101,37 @@ describe("ToyGroup", () => {
     setShop(undefined);
     flushSync();
     expect(screen.getByText("Home Tire")).toBeTruthy();
+    unmount();
+  });
+
+  it("re-renders when the category changes", () => {
+    parts.setMap([
+      new Part({
+        id: 1,
+        owner: 1,
+        what: 1,
+        name: "Tire Part",
+        last_used: new Date("2024-01-01"),
+      }),
+      new Part({
+        id: 2,
+        owner: 1,
+        what: 2,
+        name: "Brake Part",
+        last_used: new Date("2024-01-01"),
+      }),
+    ]);
+    const { unmount } = render(ToyGroup);
+    expect(screen.getByText("Tire Part")).toBeTruthy();
+    expect(screen.queryByText("Brake Part")).toBeNull();
+    setCategory(types[2]);
+    flushSync();
+    expect(screen.queryByText("Tire Part")).toBeNull();
+    expect(screen.getByText("Brake Part")).toBeTruthy();
+    setCategory(types[1]);
+    flushSync();
+    expect(screen.getByText("Tire Part")).toBeTruthy();
+    expect(screen.queryByText("Brake Part")).toBeNull();
     unmount();
   });
 

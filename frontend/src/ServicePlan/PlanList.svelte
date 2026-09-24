@@ -3,7 +3,7 @@
   import { stateValues } from "../lib/mapable.svelte";
   import type { Part } from "../lib/part";
   import { plans, plansForAssembly, planCmp } from "../lib/serviceplan";
-  import { category, types } from "../lib/types";
+  import { getCategory, types } from "../lib/types";
   import PlanBlock from "./PlanBlock.svelte";
 
   interface Props {
@@ -15,7 +15,9 @@
   let planlist = $derived(
     (gear
       ? plansForAssembly(gear, plans, attachments)
-      : stateValues(plans).filter((p) => types[p.what].main == $category.main)
+      : stateValues(plans).filter(
+          (p) => types[p.what].main == getCategory()!.main,
+        )
     ).sort(planCmp),
   );
 </script>

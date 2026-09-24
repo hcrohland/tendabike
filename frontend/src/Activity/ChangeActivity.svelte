@@ -2,7 +2,7 @@
   import { ButtonGroup, InputAddon } from "flowbite-svelte";
   import Modal from "../Widgets/Modal.svelte";
   import { Activity } from "../lib/activity";
-  import { category } from "../lib/types";
+  import { getCategory } from "../lib/types";
   import SelectPart from "../Widgets/SelectPart.svelte";
   import ChangeField from "./ChangeField.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
@@ -32,9 +32,9 @@
     <!-- <form on:submit|preventDefault={submit}> -->
     <div>
       <ButtonGroup>
-        <InputAddon>{$category.name}</InputAddon>
+        <InputAddon>{getCategory()!.name}</InputAddon>
         <SelectPart
-          type={$category}
+          type={getCategory()!}
           bind:part={activity.gear}
           none={!activity.gear}
         />

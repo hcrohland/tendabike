@@ -1,6 +1,6 @@
 <script lang="ts">
   import { plans, ServicePlan, isTemplate } from "../lib/serviceplan";
-  import { category, types } from "../lib/types";
+  import { getCategory, types } from "../lib/types";
   import { link } from "svelte-spa-router";
   import { attachments, part_at_hook } from "../lib/attachment";
   import { parts } from "../lib/part";
@@ -35,7 +35,7 @@
       {types[plan.what].human_name(plan.hook)}
     {/if}
     {#if isTemplate(plan, plans)}
-      {m.attachform_of()} {$category.localizedAnyDative()}
+      {m.attachform_of()} {getCategory()!.localizedAnyDative()}
     {:else}
       {m.attachform_of()} {@html partlink}
     {/if}

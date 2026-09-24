@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Select } from "flowbite-svelte";
-  import { category } from "../lib/types";
+  import { getCategory } from "../lib/types";
   import { allGear, parts } from "../lib/part";
 
   interface Props {
@@ -13,8 +13,8 @@
 </script>
 
 <Select bind:value={gear} classes={{ select: "rounded-l-none h-full" }}>
-  <option value={null}>{$category.localizedAnyDative()}</option>
-  {#each save ? [parts[save]] : allGear(parts, $category) as part}
+  <option value={null}>{getCategory()!.localizedAnyDative()}</option>
+  {#each save ? [parts[save]] : allGear(parts, getCategory()!) as part}
     <option value={part.id}>
       {part.name}
     </option>

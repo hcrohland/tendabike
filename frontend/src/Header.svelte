@@ -19,7 +19,7 @@
   import { activities } from "./lib/activity";
   import { stateValues } from "./lib/mapable.svelte";
   import Sport from "./Widgets/Sport.svelte";
-  import { category } from "./lib/types";
+  import { getCategory } from "./lib/types";
   import { querystring } from "svelte-spa-router";
   import { location } from "svelte-spa-router";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
@@ -109,7 +109,7 @@
       title="TendaBike"
       class="rounded-circle h-11"
     />
-    &nbsp; Tend a {$category.name}
+    &nbsp; Tend a {getCategory()!.name}
   </NavBrand>
   {#if getUser()}
     <div class="flex items-center gap-4 md:order-2">
@@ -203,7 +203,7 @@
       }}
     >
       <NavLi class="justify-start" href="/#/cat">
-        {$category.localizedName()}s
+        {getCategory()!.localizedName()}s
       </NavLi>
       <NavLi href="/#/plans">{m.nav_services()}</NavLi>
       <NavLi href="/#/spares">{m.nav_parts()}</NavLi>
