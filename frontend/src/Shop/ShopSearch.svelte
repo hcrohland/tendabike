@@ -7,7 +7,7 @@
   import { Shop } from "../lib/shop";
   import { type ShopSubscription } from "../lib/subscription";
   import { getUser, type UserPublic } from "../lib/user";
-  import { type Map } from "../lib/mapable";
+  import { type Map } from "../lib/mapable.svelte";
 
   interface Props {
     subscriptions: ShopSubscription[];

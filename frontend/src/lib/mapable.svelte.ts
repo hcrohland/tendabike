@@ -1,5 +1,3 @@
-import type { Map } from "./mapable";
-
 /** Write operations of a state-object collection. */
 export type StateMapOps<V> = {
   setMap: (arr: V[]) => void;
@@ -9,9 +7,9 @@ export type StateMapOps<V> = {
 
 /**
  * A Svelte 5 state-object collection: a `$state` record of entities by id,
- * with the same write operations as the store-based `mapable()`. Reads of
- * the record (in any depth of plain functions) register dependencies at the
- * enclosing reactive call site; writes through the operations are in-place.
+ * with the write operations attached to the record. Reads of the record (in
+ * any depth of plain functions) register dependencies at the enclosing
+ * reactive call site; writes through the operations are in-place.
  *
  * The operations live on the record itself, so `Object.keys`/`Object.values`
  * over the collection also see them — do not iterate a state collection
@@ -48,9 +46,9 @@ function getid<V>(v: V, field: keyof V): any {
 }
 
 /**
- * State-object twin of `mapable()` in mapable.ts: produces a `$state`
- * record instead of a svelte/store writable. `setMap` replaces the whole
- * record, `updateMap` merges into it, `deleteItem` removes one entry.
+ * The collection factory: a `$state` record of entities by id with the
+ * write operations attached. `setMap` replaces the whole record,
+ * `updateMap` merges into it, `deleteItem` removes one entry.
  */
 export function mapableState<V>(
   field: keyof V,
@@ -83,4 +81,20 @@ export function mapableState<V>(
   };
 
   return Object.assign(map, ops);
+}
+
+/**
+ * Pure helpers for plain entity maps. The collection factory is
+ * `mapableState` (mapable.svelte.ts); this module holds no stores and
+ * imports nothing from svelte/store.
+ */
+
+export type Map<V> = { [key: string]: V };
+
+export function filterValues<T>(map: Map<T>, fn: (t: T) => boolean) {
+  return Object.values(map).filter(fn);
+}
+
+export function by<T>(field: keyof T, asc = false) {
+  return (a: T, b: T) => (a[field] < b[field] ? 1 : -1) * (asc ? -1 : 1);
 }

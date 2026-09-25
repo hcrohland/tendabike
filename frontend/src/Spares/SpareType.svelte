@@ -6,8 +6,7 @@
   import Menu from "../Widgets/Menu.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
   import { Attachment, attachments } from "../lib/attachment";
-  import { type Map } from "../lib/mapable";
-  import { stateValues } from "../lib/mapable.svelte";
+  import { type Map, stateValues } from "../lib/mapable.svelte";
   import { parts } from "../lib/part";
   import { fmtDate } from "../lib/store";
   import { Type } from "../lib/types";

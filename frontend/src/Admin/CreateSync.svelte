@@ -5,8 +5,7 @@
   import DateTime from "../Widgets/DateTime.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
   import Switch from "../Widgets/Switch.svelte";
-  import { by } from "../lib/mapable";
-  import { stateValues } from "../lib/mapable.svelte";
+  import { by, stateValues } from "../lib/mapable.svelte";
   import { activities } from "../lib/activity";
   import Modal from "../Widgets/Modal.svelte";
   import * as m from "../../paraglide/messages";

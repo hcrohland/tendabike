@@ -28,7 +28,3 @@ Pick by what the value is:
 - **Read idiom** — `get(x)` no longer applies to a state object; assert on the direct read: `x["id"]`, `x.prop`, or `getX()`.
 - **Component reactivity** — one per ticket: mount the reader component with a known initial state, mutate the shared state from the plain test context, `flushSync()`, assert the DOM changed (the #346 A1 pattern; e.g. "re-renders the owner badge when the current user changes" in `Part/GearCard.test.ts`).
 - **Verification bar per ticket** — full `npm run test`, `npm run check:ci`, `npm run build` all green; one store per ticket; the change reverts cleanly as one commit.
-
-## Legacy twins
-
-`mapable.ts` keeps the store-based `mapable()` factory beside `mapable.svelte.ts` until the migration's contract step retires it. New code uses the state objects only.

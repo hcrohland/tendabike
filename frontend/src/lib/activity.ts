@@ -1,5 +1,4 @@
-import { type Map } from "./mapable";
-import { mapableState } from "./mapable.svelte";
+import { type Map, mapableState } from "./mapable.svelte";
 import { Part } from "./part";
 import { handleError, myfetch } from "./store";
 import { updateSummary } from "./user";

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { filterValues } from "../lib/mapable";
+  import { filterValues } from "../lib/mapable.svelte";
   import { types, getCategory } from "../lib/types";
   import SpareType from "./SpareType.svelte";
 

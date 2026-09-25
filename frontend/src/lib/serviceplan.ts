@@ -4,8 +4,7 @@ import {
   part_at_hook,
   type Attachment,
 } from "./attachment";
-import { by, type Map } from "./mapable";
-import { mapableState, stateValues } from "./mapable.svelte";
+import { by, type Map, mapableState, stateValues } from "./mapable.svelte";
 import { Part } from "./part";
 import { Service, services } from "./service";
 import { get_days, handleError, myfetch } from "./store";

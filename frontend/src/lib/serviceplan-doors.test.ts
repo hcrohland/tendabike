@@ -18,7 +18,7 @@ import { Service } from "./service";
 import { Usage } from "./usage";
 import { getTypes } from "./types";
 import { maxDate } from "./store";
-import { type Map } from "./mapable";
+import { type Map } from "./mapable.svelte";
 import { resp } from "../test/helpers";
 
 const wheelType = {

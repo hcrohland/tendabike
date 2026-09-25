@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { Activity, activities } from "./activity";
 import { Part } from "./part";
-import type { Map } from "./mapable";
+import type { Map } from "./mapable.svelte";
 import { resp } from "../test/helpers";
 
 function actData(overrides: Partial<any> = {}): any {

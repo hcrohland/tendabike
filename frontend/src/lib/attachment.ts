@@ -1,6 +1,5 @@
 import type { Activity } from "./activity";
-import { type Map } from "./mapable";
-import { mapableState, stateValues } from "./mapable.svelte";
+import { type Map, mapableState, stateValues } from "./mapable.svelte";
 import { fmtRange, maxDate } from "./store";
 
 export class Attachment {

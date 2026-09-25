@@ -8,7 +8,7 @@ import {
 } from "./attachment";
 import { Activity } from "./activity";
 import { maxDate } from "./store";
-import { type Map } from "./mapable";
+import { type Map } from "./mapable.svelte";
 
 function att(overrides: Partial<any> = {}): Attachment {
   return new Attachment({

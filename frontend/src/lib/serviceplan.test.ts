@@ -8,7 +8,7 @@ import {
 } from "./serviceplan";
 import { Part } from "./part";
 import { Service, services } from "./service";
-import { type Map } from "./mapable";
+import { type Map } from "./mapable.svelte";
 import { resp } from "../test/helpers";
 
 function plan(overrides: Partial<any> = {}): ServicePlan {

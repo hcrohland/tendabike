@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { by } from "../lib/mapable";
-  import { stateValues } from "../lib/mapable.svelte";
+  import { by, stateValues } from "../lib/mapable.svelte";
   import { Part } from "../lib/part";
   import ServiceHist from "./ServiceHist.svelte";
   import { services } from "../lib/service";

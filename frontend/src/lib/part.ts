@@ -1,5 +1,4 @@
-import { type Map, by } from "./mapable";
-import { mapableState, stateValues } from "./mapable.svelte";
+import { type Map, by, mapableState, stateValues } from "./mapable.svelte";
 import { handleError, myfetch } from "./store";
 import { Attachment } from "./attachment";
 import { Type, types } from "./types";

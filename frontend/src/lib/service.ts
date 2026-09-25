@@ -1,6 +1,5 @@
 import { fmtDate, get_days, handleError, myfetch } from "./store";
-import { type Map } from "./mapable";
-import { mapableState, stateValues } from "./mapable.svelte";
+import { type Map, mapableState, stateValues } from "./mapable.svelte";
 import { Part } from "./part";
 import { usages, Usage } from "./usage";
 import { updateSummary } from "./user";

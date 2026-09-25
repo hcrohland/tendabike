@@ -1,14 +1,13 @@
 <script lang="ts">
-  import { by } from "./lib/mapable";
-  import { stateValues } from "./lib/mapable.svelte";
+  import { by, stateValues } from "./lib/mapable.svelte";
   import { getCategory } from "./lib/types";
   import { parts } from "./lib/part";
-  import { activities } from "./lib/activity";
   import ShowMore from "./Widgets/ShowMore.svelte";
   import { getShop } from "./lib/shop";
   import * as m from "../paraglide/messages";
   import GearCard from "./Part/GearCard.svelte";
   import PlanBadge from "./ServicePlan/PlanBadge.svelte";
+  import { activities } from "./lib/activity";
 
   let show_more: boolean = $state(false);
 

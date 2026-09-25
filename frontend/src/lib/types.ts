@@ -1,6 +1,5 @@
 import { Activity } from "./activity";
-import { by, filterValues, mapObject, type Map } from "./mapable";
-import { stateValues } from "./mapable.svelte";
+import { by, filterValues, type Map, stateValues } from "./mapable.svelte";
 import { Part } from "./part";
 import { myfetch } from "./store";
 import { getCategory, setCategory } from "./types.svelte";
@@ -143,7 +142,12 @@ export let types: Map<Type>;
 export async function getTypes() {
   const [partTypes, activityTypes] = await Promise.all([
     myfetch("/api/types/part").then((types) =>
-      types.map((t: any) => new Type(t)).reduce(mapObject("id"), {}),
+      types
+        .map((t: any) => new Type(t))
+        .reduce((map: Map<Type>, t: Type) => {
+          map[t.id] = t;
+          return map;
+        }, {}),
     ),
     myfetch("/api/types/activity"),
   ]);

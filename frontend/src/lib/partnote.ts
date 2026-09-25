@@ -1,5 +1,4 @@
-import { type Map } from "./mapable";
-import { mapableState, stateValues } from "./mapable.svelte";
+import { type Map, mapableState, stateValues } from "./mapable.svelte";
 import { checkStatus, handleError, myfetch } from "./store";
 
 export class PartNote {

@@ -8,7 +8,7 @@
   import { getActions } from "../Widgets/Actions.svelte";
   import { getUser, users as global_users, type UserPublic } from "../lib/user";
   import ShopOwnerMenu from "./ShopOwnerMenu.svelte";
-  import { type Map } from "../lib/mapable";
+  import { type Map } from "../lib/mapable.svelte";
 
   interface Props {
     shops: Shop[];

@@ -10,7 +10,7 @@
   } from "flowbite-svelte";
   import { types, Type, localizeGroupName } from "../lib/types";
   import { Attachment } from "../lib/attachment";
-  import { type Map, filterValues } from "../lib/mapable";
+  import { type Map, filterValues } from "../lib/mapable.svelte";
   import Switch from "../Widgets/Switch.svelte";
   import { Part } from "../lib/part";
   import { m } from "../../paraglide/messages";

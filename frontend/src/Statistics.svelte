@@ -10,7 +10,7 @@
   } from "flowbite-svelte";
   import Plotly from "./Widgets/Plotly.svelte";
   import Switch from "./Widgets/Switch.svelte";
-  import { by } from "./lib/mapable";
+  import { by } from "./lib/mapable.svelte";
   import { Activity, activities } from "./lib/activity";
   import { Usage } from "./lib/usage";
   import { parts, Part } from "./lib/part";

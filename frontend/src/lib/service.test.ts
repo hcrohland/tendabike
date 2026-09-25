@@ -3,7 +3,7 @@ import { Service, services } from "./service";
 import { Part } from "./part";
 import { Usage, usages } from "./usage";
 import { fmtDate } from "./store";
-import { type Map } from "./mapable";
+import { type Map } from "./mapable.svelte";
 import { resp } from "../test/helpers";
 
 function svc(overrides: Partial<any> = {}): Service {
