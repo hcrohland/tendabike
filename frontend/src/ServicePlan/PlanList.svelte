@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { attachments } from "../lib/attachment";
   import { stateValues } from "../lib/mapable.svelte";
   import type { Part } from "../lib/part";
   import { plans, plansForAssembly, planCmp } from "../lib/serviceplan";
@@ -14,7 +13,7 @@
   let { part: gear, children }: Props = $props();
   let planlist = $derived(
     (gear
-      ? plansForAssembly(gear, plans, attachments)
+      ? plansForAssembly(gear)
       : stateValues(plans).filter(
           (p) => types[p.what].main == getCategory()!.main,
         )

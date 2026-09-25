@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Indicator } from "flowbite-svelte";
-  import { plans, plansForAssembly, alertCounts } from "../lib/serviceplan";
+  import { plansForAssembly, alertCounts } from "../lib/serviceplan";
   import { Part, parts } from "../lib/part";
   import { services } from "../lib/service";
   import { usages } from "../lib/usage";
@@ -11,7 +11,7 @@
   }
 
   let { part }: Props = $props();
-  let planlist = $derived(plansForAssembly(part, plans, attachments));
+  let planlist = $derived(plansForAssembly(part));
   let alerts = $derived(
     alertCounts(planlist, parts, services, usages, attachments),
   );

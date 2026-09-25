@@ -5,11 +5,10 @@
   import ShowMore from "../Widgets/ShowMore.svelte";
   import UsageChips from "../Usage/UsageChips.svelte";
   import type { Attachment } from "../lib/attachment";
-  import { attachments as atts } from "../lib/attachment";
   import { parts } from "../lib/part";
   import { Type } from "../lib/types";
   import { usages } from "../lib/usage";
-  import { plans, plansForPart, duesForPlans } from "../lib/serviceplan";
+  import { plansForPart, duesForPlans } from "../lib/serviceplan";
   import PartLink from "./PartLink.svelte";
   import { getActions } from "../Widgets/Actions.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
@@ -45,7 +44,7 @@
     const part = list[0]?.part;
     const due_list = duesForPlans(
       part,
-      plansForPart(part?.id, plans, atts),
+      plansForPart(part?.id),
       services,
       usages,
     );

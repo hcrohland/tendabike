@@ -9,8 +9,7 @@
   } from "flowbite-svelte";
   import DateTime from "../Widgets/DateTime.svelte";
   import { Service } from "../lib/service";
-  import { plans as planMap, plansForPart, planCmp } from "../lib/serviceplan";
-  import { attachments } from "../lib/attachment";
+  import { plansForPart, planCmp } from "../lib/serviceplan";
   import type { Snippet } from "svelte";
   import { parts } from "../lib/part";
   import Buttons from "../Widgets/Buttons.svelte";
@@ -33,7 +32,7 @@
   let { name, notes, plans, time } = $derived(service);
 
   let choices: any = $derived(
-    plansForPart(service.part_id, planMap, attachments, time)
+    plansForPart(service.part_id, time)
       .sort(planCmp)
       .map((p) => ({
         value: p.id!,

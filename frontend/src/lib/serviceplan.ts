@@ -240,10 +240,7 @@ function alert_for(
 }
 
 /*** find plans for this part only */
-function plans_for_this_part(
-  part_id: number | undefined,
-  plans: Map<ServicePlan>,
-) {
+function plans_for_this_part(part_id: number | undefined) {
   return stateValues(plans).filter((p) => p.part == part_id && p.hook == null);
 }
 
@@ -251,7 +248,7 @@ function plans_for_this_part(
  *
  * If there is a specific plan for this part, the generic plans do not apply
  */
-function plans_for_attachee(plans: Map<ServicePlan>, att: Attachment) {
+function plans_for_attachee(att: Attachment) {
   // find plans for this part and generic plan for gear
   let res = stateValues(plans).filter(
     (p) =>
@@ -278,25 +275,15 @@ function plans_for_attachee(plans: Map<ServicePlan>, att: Attachment) {
  */
 function plans_for_part_at(
   part: number | undefined,
-  plans: Map<ServicePlan>,
-  atts: Map<Attachment>,
   time: Date = new Date(),
 ): ServicePlan[] {
-  let att = attachment_for_part(part, atts, time);
-  return att
-    ? plans_for_attachee(plans, att)
-    : plans_for_this_part(part, plans);
+  let att = attachment_for_part(part, attachments, time);
+  return att ? plans_for_attachee(att) : plans_for_this_part(part);
 }
 
-function plans_at_hook(
-  atts: Map<Attachment>,
-  plans: Map<ServicePlan>,
-  part: Part,
-  type: Type,
-  hook: number,
-) {
-  let att = att_at_hook(part.id!, type.id, hook, atts);
-  if (att) return plans_for_attachee(plans, att);
+function plans_at_hook(part: Part, type: Type, hook: number) {
+  let att = att_at_hook(part.id!, type.id, hook, attachments);
+  if (att) return plans_for_attachee(att);
 
   let res = stateValues(plans).filter(
     (p) => p.part == part.id && p.what == type.id && p.hook == hook,
@@ -308,30 +295,21 @@ function plans_at_hook(
     .map((p) => new ServicePlan({ ...p, part: part.id }));
 }
 
-function plans_for_subtype(
-  atts: Map<Attachment>,
-  plans: Map<ServicePlan>,
-  part: Part,
-  type: Type,
-) {
+function plans_for_subtype(part: Part, type: Type) {
   return type.hooks.reduce((res, hook) => {
-    return res.concat(plans_at_hook(atts, plans, part, type, hook));
+    return res.concat(plans_at_hook(part, type, hook));
   }, [] as ServicePlan[]);
 }
 
 /** Plans for a part and the parts it assembles through its type's subtype
  * hooks, in walk order (unsorted); the caller sorts with planCmp.
  */
-function plans_for_assembly(
-  part: Part,
-  plans: Map<ServicePlan>,
-  atts: Map<Attachment>,
-): ServicePlan[] {
+function plans_for_assembly(part: Part): ServicePlan[] {
   return types[part.what]
     .subtypes()
     .reduce(
-      (list, type) => list.concat(plans_for_subtype(atts, plans, part, type)),
-      plans_for_part_at(part.id, plans, atts),
+      (list, type) => list.concat(plans_for_subtype(part, type)),
+      plans_for_part_at(part.id),
     );
 }
 
@@ -420,23 +398,17 @@ export function alertCounts(
  */
 export function plansForPart(
   part: number | undefined,
-  plans: Map<ServicePlan>,
-  attachments: Map<Attachment>,
   time: Date = new Date(),
 ): ServicePlan[] {
-  return plans_for_part_at(part, plans, attachments, time);
+  return plans_for_part_at(part, time);
 }
 
 /**
  * Plans for a part and the parts it assembles through its type's subtype
  * hooks, in walk order (unsorted); the caller sorts with planCmp.
  */
-export function plansForAssembly(
-  part: Part,
-  plans: Map<ServicePlan>,
-  attachments: Map<Attachment>,
-): ServicePlan[] {
-  return plans_for_assembly(part, plans, attachments);
+export function plansForAssembly(part: Part): ServicePlan[] {
+  return plans_for_assembly(part);
 }
 
 /**

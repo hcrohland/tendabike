@@ -4,6 +4,7 @@ import {
   duesForPlans,
   gearsForPlan,
   alertCounts,
+  plans,
   plansForPart,
   plansForAssembly,
   planCmp,
@@ -416,23 +417,31 @@ describe("alertCounts", () => {
 });
 
 describe("plansForPart", () => {
+  // The walk helpers read the module state objects in their bodies (issue
+  // #373); seed the world and reset it between tests.
+  beforeEach(() => {
+    plans.setMap([]);
+    attachments.setMap([]);
+  });
+
   it("returns the part's own plans when it is not attached", () => {
-    const plans = planMap(
+    plans.setMap([
       plan({ id: "P1", part: 5, hook: null }),
       plan({ id: "P2", part: 5, hook: 1 }),
       plan({ id: "P3", part: 99, hook: null }),
-    );
-    const res = plansForPart(5, plans, {});
+    ]);
+    const res = plansForPart(5);
     expect(res.map((p) => p.id)).toEqual(["P1"]);
   });
 
   it("returns specific and gear-level plans for an attached part", () => {
-    const plans = planMap(
+    plans.setMap([
       plan({ id: "P1", part: 7, hook: null }),
       plan({ id: "P2", part: 100, hook: 1, what: 10 }),
       plan({ id: "P3", part: 99, hook: 1, what: 10 }),
-    );
-    const res = plansForPart(7, plans, attMap(att()));
+    ]);
+    attachments.setMap([att()]);
+    const res = plansForPart(7);
     expect(res.map((p) => p.id)).toEqual(["P1", "P2"]);
   });
 
@@ -444,13 +453,14 @@ describe("plansForPart", () => {
       what: 10,
       km: "100",
     });
-    const plans = planMap(
+    plans.setMap([
       generic,
       plan({ id: "P2", part: null, hook: 2, what: 10 }),
       plan({ id: "P3", part: null, hook: 1, what: 20 }),
       plan({ id: "P4", part: 99, hook: 1, what: 10 }),
-    );
-    const res = plansForPart(7, plans, attMap(att()));
+    ]);
+    attachments.setMap([att()]);
+    const res = plansForPart(7);
     expect(res).toHaveLength(1);
     expect(res[0].part).toBe(7);
     expect(res[0].what).toBe(10);
@@ -459,30 +469,38 @@ describe("plansForPart", () => {
   });
 
   it("treats a not-yet-attached part as unattached at the given time", () => {
-    const plans = planMap(plan({ id: "P1", part: 5, hook: null }));
-    const atts = attMap(
+    plans.setMap([plan({ id: "P1", part: 5, hook: null })]);
+    attachments.setMap([
       att({
         part_id: 5,
         attached: "2030-01-01T00:00:00Z",
         detached: maxDate.getTime(),
       }),
-    );
-    const res = plansForPart(5, plans, atts, new Date("2029-01-01T00:00:00Z"));
+    ]);
+    const res = plansForPart(5, new Date("2029-01-01T00:00:00Z"));
     expect(res.map((p) => p.id)).toEqual(["P1"]);
   });
 });
 
 describe("plansForAssembly", () => {
+  // The walk helpers read the module state objects in their bodies (issue
+  // #373); seed the world and reset it between tests.
+  beforeEach(() => {
+    plans.setMap([]);
+    attachments.setMap([]);
+  });
+
   it("returns the gear's own plans plus the plans of attached parts", async () => {
     await loadTypes([bikeType, wheelAsmType]);
     const bike = part({ id: 100, what: 1 });
-    const atts = attMap(att({ part_id: 5, gear: 100, hook: 30, what: 10 }));
+    attachments.setMap([att({ part_id: 5, gear: 100, hook: 30, what: 10 })]);
     const P1 = plan({ id: "P1", part: 100, what: 1, hook: null, km: "100" });
     const P2 = plan({ id: "P2", part: 5, what: 10, hook: null, km: "100" });
     const P3 = plan({ id: "P3", part: 100, what: 10, hook: 30, km: "100" });
     const P4 = plan({ id: "P4", part: null, what: 10, hook: 30, km: "100" });
     const P5 = plan({ id: "P5", part: null, what: 10, hook: 31, km: "100" });
-    const res = plansForAssembly(bike, planMap(P1, P2, P3, P4, P5), atts);
+    plans.setMap([P1, P2, P3, P4, P5]);
+    const res = plansForAssembly(bike);
     // P2 (specific) and P3 (gear-level) beat the generic P4 at hook 30;
     // P5 (generic at hook 31) is mapped onto the bike.
     expect(res.map((p) => p.id)).toEqual(["P1", "P2", "P3", "P5"]);
@@ -491,9 +509,10 @@ describe("plansForAssembly", () => {
   it("degenerates to the part's own plans for a component part", async () => {
     await loadTypes([bikeType, wheelAsmType]);
     const wheel = part({ id: 5, what: 10 });
-    const atts = attMap(att({ part_id: 5, gear: 100, hook: 30, what: 10 }));
+    attachments.setMap([att({ part_id: 5, gear: 100, hook: 30, what: 10 })]);
     const P2 = plan({ id: "P2", part: 5, what: 10, hook: null, km: "100" });
-    const res = plansForAssembly(wheel, planMap(P2), atts);
+    plans.setMap([P2]);
+    const res = plansForAssembly(wheel);
     expect(res.map((p) => p.id)).toEqual(["P2"]);
   });
 
@@ -506,7 +525,8 @@ describe("plansForAssembly", () => {
     // The walk visits hooks in the type's listed order: the bike's own plan
     // (P1), then hook 31 (P4), then hook 30 (P3). The door no longer sorts;
     // ordering is the caller's job (see planCmp).
-    const res = plansForAssembly(bike, planMap(P1, P4, P3), {});
+    plans.setMap([P1, P4, P3]);
+    const res = plansForAssembly(bike);
     expect(res.map((p) => p.id)).toEqual(["P1", "P4", "P3"]);
   });
 });
