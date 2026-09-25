@@ -275,8 +275,8 @@ function plans_for_attachee(plans: Map<ServicePlan>, att: Attachment) {
     .map((p) => new ServicePlan({ ...p, part: att.part_id }));
 }
 
-/** Plans for a part at a given time or now, in store order (unsorted); the
- * caller sorts with planCmp.
+/** Plans for a part at a given time or now, in record order (unsorted);
+ * the caller sorts with planCmp.
  */
 function plans_for_part_at(
   part: number | undefined,
@@ -346,8 +346,9 @@ export function localizeLimitKey(key: limit_keys): string {
 
 /*
  * Doors: the narrow public surface of the plan rule (issue #323).
- * Entity values first, world maps after, time last; `$`-prefixed parameters
- * take the store *value*, read by the caller inside its own derived.
+ * Entity values first, world maps after, time last. The world maps are the
+ * state objects, read directly; dependencies register at the enclosing
+ * reactive call site.
  */
 
 /**
@@ -375,10 +376,10 @@ export class Due {
 export function partForPlanGear(
   plan: ServicePlan,
   gear: number | undefined,
-  $parts: Map<Part>,
-  $attachments: Map<Attachment>,
+  parts: Map<Part>,
+  attachments: Map<Attachment>,
 ): Part | null {
-  return part_for_plan(plan, $parts, $attachments, gear);
+  return part_for_plan(plan, parts, attachments, gear);
 }
 
 /**
@@ -387,11 +388,11 @@ export function partForPlanGear(
  */
 export function gearsForPlan(
   plan: ServicePlan,
-  $parts: Map<Part>,
-  $attachments: Map<Attachment>,
-  $plans: Map<ServicePlan>,
+  parts: Map<Part>,
+  attachments: Map<Attachment>,
+  plans: Map<ServicePlan>,
 ): Part[] {
-  return gears_of_plan(plan, $parts, stateValues($plans), $attachments);
+  return gears_of_plan(plan, parts, stateValues(plans), attachments);
 }
 
 /**
@@ -400,18 +401,18 @@ export function gearsForPlan(
  */
 export function alertCounts(
   plans: ServicePlan[],
-  $parts: Map<Part>,
-  $services: Map<Service>,
-  $usages: Map<Usage>,
-  $attachments: Map<Attachment>,
+  parts: Map<Part>,
+  services: Map<Service>,
+  usages: Map<Usage>,
+  attachments: Map<Attachment>,
 ): { warn: number; alert: number } {
   let res = { warn: 0, alert: 0 };
   plans.forEach((plan) => {
-    gears_of_plan(plan, $parts, plans, $attachments).forEach((gear) => {
-      let part = part_for_plan(plan, $parts, $attachments, gear.id);
+    gears_of_plan(plan, parts, plans, attachments).forEach((gear) => {
+      let part = part_for_plan(plan, parts, attachments, gear.id);
       if (part != null) {
-        let serviceList = plan.services(part, $services);
-        let alert = alert_for(plan, part, serviceList.at(0), $usages);
+        let serviceList = plan.services(part, services);
+        let alert = alert_for(plan, part, serviceList.at(0), usages);
         if (alert == "warn") res.warn++;
         else if (alert == "alert") res.alert++;
       }
@@ -421,16 +422,16 @@ export function alertCounts(
 }
 
 /**
- * Plans for a part at a pinned time or now, in store order (unsorted); the
- * caller sorts with planCmp.
+ * Plans for a part at a pinned time or now, in record order (unsorted);
+ * the caller sorts with planCmp.
  */
 export function plansForPart(
   part: number | undefined,
-  $plans: Map<ServicePlan>,
-  $attachments: Map<Attachment>,
+  plans: Map<ServicePlan>,
+  attachments: Map<Attachment>,
   time: Date = new Date(),
 ): ServicePlan[] {
-  return plans_for_part_at(part, $plans, $attachments, time);
+  return plans_for_part_at(part, plans, attachments, time);
 }
 
 /**
@@ -439,10 +440,10 @@ export function plansForPart(
  */
 export function plansForAssembly(
   part: Part,
-  $plans: Map<ServicePlan>,
-  $attachments: Map<Attachment>,
+  plans: Map<ServicePlan>,
+  attachments: Map<Attachment>,
 ): ServicePlan[] {
-  return plans_for_assembly(part, $plans, $attachments);
+  return plans_for_assembly(part, plans, attachments);
 }
 
 /**
@@ -451,9 +452,9 @@ export function plansForAssembly(
  */
 export function isTemplate(
   plan: ServicePlan,
-  $plans: Map<ServicePlan>,
+  plans: Map<ServicePlan>,
 ): boolean {
-  return typeof (plan.id && $plans[plan.id]?.part) !== "number";
+  return typeof (plan.id && plans[plan.id]?.part) !== "number";
 }
 
 /**
@@ -463,13 +464,13 @@ export function isTemplate(
 export function duesForPlans(
   part: Part | null,
   plans: ServicePlan[],
-  $services: Map<Service>,
-  $usages: Map<Usage>,
+  services: Map<Service>,
+  usages: Map<Usage>,
 ): Partial<Record<limit_keys, Due>> {
   const result: Partial<Record<limit_keys, Due>> = {};
   for (const plan of plans) {
-    const serviceList = plan.services(part, $services);
-    const due = due_for(plan, part, serviceList.at(0), $usages);
+    const serviceList = plan.services(part, services);
+    const due = due_for(plan, part, serviceList.at(0), usages);
     for (const key of Limits.keys) {
       const p = plan[key] as number | null;
       const d = due[key] as number | null;
