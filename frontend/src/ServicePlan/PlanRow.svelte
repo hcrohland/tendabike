@@ -1,7 +1,7 @@
 <script lang="ts">
   import ServiceRow from "../Service/ServiceRow.svelte";
   import { attachments } from "../lib/attachment";
-  import { Part, parts } from "../lib/part";
+  import { Part } from "../lib/part";
   import { services } from "../lib/service";
   import {
     partForPlanGear,
@@ -25,9 +25,7 @@
 
   let show_more = $state(false);
 
-  let part = $derived(
-    partForPlanGear(plan, gear?.id, parts, attachments),
-  ) as Part;
+  let part = $derived(partForPlanGear(plan, gear?.id)) as Part;
   let [ActiveService, ...serviceList] = $derived(plan.services(part, services));
   let due_list = $derived(duesForPlans(part, [plan], services, usages));
 </script>

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   partForPlanGear,
   duesForPlans,
@@ -12,8 +12,8 @@ import {
   ServicePlan,
   type limit_keys,
 } from "./serviceplan";
-import { Part } from "./part";
-import { Attachment } from "./attachment";
+import { Part, parts } from "./part";
+import { Attachment, attachments } from "./attachment";
 import { Service } from "./service";
 import { Usage } from "./usage";
 import { getTypes } from "./types";
@@ -143,42 +143,35 @@ function usageMap(...us: Usage[]): Map<Usage> {
 describe("partForPlanGear", () => {
   const part7 = part({ id: 7 });
   const part100 = part({ id: 100 });
-  const parts = { 7: part7, 100: part100 } as Map<Part>;
 
+  beforeEach(() => {
+    parts.setMap([]);
+    attachments.setMap([]);
+  });
+
+  // The collection's prep function rebuilds the part, so the door returns
+  // a value-equal part, not the seeded instance.
   it("resolves the attached part at the hook", () => {
-    const res = partForPlanGear(
-      plan({ part: 100, what: 10, hook: 1 }),
-      undefined,
-      parts,
-      attMap(att()),
-    );
-    expect(res).toBe(part7);
+    parts.setMap([part7, part100]);
+    attachments.setMap([att()]);
+    const res = partForPlanGear(plan({ part: 100, what: 10, hook: 1 }));
+    expect(res).toEqual(part7);
   });
 
   it("falls back to the gear part when nothing is attached", () => {
-    const res = partForPlanGear(
-      plan({ part: 100, what: 10, hook: 1 }),
-      undefined,
-      parts,
-      {},
-    );
-    expect(res).toBe(part100);
+    parts.setMap([part7, part100]);
+    const res = partForPlanGear(plan({ part: 100, what: 10, hook: 1 }));
+    expect(res).toEqual(part100);
   });
 
   it("prefers the explicit gear over the plan's part", () => {
-    const res = partForPlanGear(
-      plan({ part: 100, what: 10, hook: 1 }),
-      7,
-      parts,
-      {},
-    );
-    expect(res).toBe(part7);
+    parts.setMap([part7, part100]);
+    const res = partForPlanGear(plan({ part: 100, what: 10, hook: 1 }), 7);
+    expect(res).toEqual(part7);
   });
 
   it("returns null when there is no part", () => {
-    expect(
-      partForPlanGear(plan({ part: null }), undefined, parts, {}),
-    ).toBeNull();
+    expect(partForPlanGear(plan({ part: null }))).toBeNull();
   });
 });
 
@@ -329,6 +322,13 @@ describe("gearsForPlan", () => {
 describe("alertCounts", () => {
   const p = part({ id: 5, what: 10, usage: "u_now" });
 
+  // Seed the module state objects with the same world the arguments model:
+  // part_for_plan reads them in its body (issue #371).
+  beforeEach(() => {
+    parts.setMap([p]);
+    attachments.setMap([]);
+  });
+
   it("counts 'warn' when the due value is close to zero", () => {
     const usages = usageMap(usage("u_now", { distance: 97000 }));
     expect(
@@ -402,7 +402,10 @@ describe("alertCounts", () => {
       usage("u5", { distance: 97000 }),
       usage("u7", { distance: 97000 }),
     );
-    const atts = attMap(att({ part_id: 7, gear: 5, hook: 30, what: 10 }));
+    const a = att({ part_id: 7, gear: 5, hook: 30, what: 10 });
+    const atts = attMap(a);
+    parts.setMap([p5, p7]);
+    attachments.setMap([a]);
     const G = plan({ id: "G", part: null, hook: 30, what: 10, km: "100" });
     const P7 = plan({ id: "P7", part: 7, hook: null, what: 10, km: "10" });
     expect(alertCounts([G, P7], { 5: p5, 7: p7 }, {}, usages, atts)).toEqual({

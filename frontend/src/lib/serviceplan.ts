@@ -1,11 +1,12 @@
 import {
   att_at_hook,
   attachment_for_part,
+  attachments,
   part_at_hook,
   type Attachment,
 } from "./attachment";
 import { by, type Map, mapableState, stateValues } from "./mapable.svelte";
-import { Part } from "./part";
+import { Part, parts } from "./part";
 import { Service, services } from "./service";
 import { get_days, handleError, myfetch } from "./store";
 import { Type, types } from "./types";
@@ -129,14 +130,11 @@ export class ServicePlan extends Limits {
 /** Resolve the physical part for a plan's gear: the part attached at the
  * plan's hook on the gear, falling back to the gear part itself.
  */
-function part_for_plan(
-  plan: ServicePlan,
-  parts: Map<Part>,
-  atts: Map<Attachment>,
-  gear?: number,
-): Part | null {
+function part_for_plan(plan: ServicePlan, gear?: number): Part | null {
   let part = gear ? gear : plan.part;
-  return part ? parts[part_at_hook(part, plan.what, plan.hook, atts)] : null;
+  return part
+    ? parts[part_at_hook(part, plan.what, plan.hook, attachments)]
+    : null;
 }
 
 /** Sort order for plan lists: type, then hook, then part, then id; nulls
@@ -346,9 +344,9 @@ export function localizeLimitKey(key: limit_keys): string {
 
 /*
  * Doors: the narrow public surface of the plan rule (issue #323).
- * Entity values first, world maps after, time last. The world maps are the
- * state objects, read directly; dependencies register at the enclosing
- * reactive call site.
+ * Signatures carry only entity values and time; the rule reads the module's
+ * state objects in the function bodies. Dependencies register at the
+ * enclosing reactive call site.
  */
 
 /**
@@ -373,13 +371,8 @@ export class Due {
  * Resolve the physical part for a plan's gear: the part attached at the
  * plan's hook on the gear, falling back to the gear part itself.
  */
-export function partForPlanGear(
-  plan: ServicePlan,
-  gear: number | undefined,
-  parts: Map<Part>,
-  attachments: Map<Attachment>,
-): Part | null {
-  return part_for_plan(plan, parts, attachments, gear);
+export function partForPlanGear(plan: ServicePlan, gear?: number): Part | null {
+  return part_for_plan(plan, gear);
 }
 
 /**
@@ -409,7 +402,7 @@ export function alertCounts(
   let res = { warn: 0, alert: 0 };
   plans.forEach((plan) => {
     gears_of_plan(plan, parts, plans, attachments).forEach((gear) => {
-      let part = part_for_plan(plan, parts, attachments, gear.id);
+      let part = part_for_plan(plan, gear.id);
       if (part != null) {
         let serviceList = plan.services(part, services);
         let alert = alert_for(plan, part, serviceList.at(0), usages);
