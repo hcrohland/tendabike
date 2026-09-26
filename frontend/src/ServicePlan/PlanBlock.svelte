@@ -1,9 +1,7 @@
 <script lang="ts">
   import PlanRow from "./PlanRow.svelte";
   import PlanName from "./PlanName.svelte";
-  import { attachments } from "../lib/attachment";
-  import { parts } from "../lib/part";
-  import { plans, ServicePlan, gearsForPlan } from "../lib/serviceplan";
+  import { ServicePlan, gearsForPlan } from "../lib/serviceplan";
   import * as m from "../../paraglide/messages";
   import Menu from "../Widgets/Menu.svelte";
   import { DropdownItem } from "flowbite-svelte";
@@ -16,7 +14,7 @@
 
   let { plan }: Props = $props();
 
-  let gears = $derived(gearsForPlan(plan, parts, attachments, plans));
+  let gears = $derived(gearsForPlan(plan));
 </script>
 
 <Card>

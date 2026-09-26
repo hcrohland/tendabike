@@ -158,19 +158,15 @@ export function planCmp(a: ServicePlan, b: ServicePlan): number {
  * that do not already have a dedicated maintenance plan assigned
  * (matching either a gear-level or a component-level specific plan).
  */
-function gears_of_plan(
-  plan: ServicePlan,
-  parts: Map<Part>,
-  plans: ServicePlan[],
-  atts: Map<Attachment>,
-): Part[] {
+function gears_of_plan(plan: ServicePlan): Part[] {
   if (plan.part) return [parts[plan.part]];
 
   let main = types[plan.what].main;
+  let all = stateValues(plans);
   return stateValues(parts).filter((p) => {
     if (p.disposed_at != null || main != p.what) return false;
-    let att = att_at_hook(p.id!, plan.what, plan.hook, atts);
-    return !plans.some(
+    let att = att_at_hook(p.id!, plan.what, plan.hook, attachments);
+    return !all.some(
       (r) =>
         (r.part == p.id && r.hook == plan.hook && r.what == plan.what) ||
         (att != null && r.part == att.part_id),
@@ -357,13 +353,8 @@ export function partForPlanGear(plan: ServicePlan, gear?: number): Part | null {
  * The physical parts a service plan is associated with: its specific part,
  * or the active, uncovered parts of the type for a generic plan.
  */
-export function gearsForPlan(
-  plan: ServicePlan,
-  parts: Map<Part>,
-  attachments: Map<Attachment>,
-  plans: Map<ServicePlan>,
-): Part[] {
-  return gears_of_plan(plan, parts, stateValues(plans), attachments);
+export function gearsForPlan(plan: ServicePlan): Part[] {
+  return gears_of_plan(plan);
 }
 
 /**
@@ -372,14 +363,16 @@ export function gearsForPlan(
  */
 export function alertCounts(
   plans: ServicePlan[],
-  parts: Map<Part>,
+  // World maps kept in the signature until the dues ticket narrows the door
+  // (issue #374); the body no longer reads them.
+  _parts: Map<Part>,
   services: Map<Service>,
   usages: Map<Usage>,
-  attachments: Map<Attachment>,
+  _attachments: Map<Attachment>,
 ): { warn: number; alert: number } {
   let res = { warn: 0, alert: 0 };
   plans.forEach((plan) => {
-    gears_of_plan(plan, parts, plans, attachments).forEach((gear) => {
+    gears_of_plan(plan).forEach((gear) => {
       let part = part_for_plan(plan, gear.id);
       if (part != null) {
         let serviceList = plan.services(part, services);

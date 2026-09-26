@@ -88,10 +88,6 @@ function attMap(...as: Attachment[]): Map<Attachment> {
   return Object.fromEntries(as.map((a) => [a.idx, a])) as Map<Attachment>;
 }
 
-function planMap(...ps: ServicePlan[]): Map<ServicePlan> {
-  return Object.fromEntries(ps.map((p) => [p.id!, p])) as Map<ServicePlan>;
-}
-
 /** Populate the live `types` binding by stubbing fetch and calling
  * getTypes() (the module binding is not assignable from a test file).
  */
@@ -285,10 +281,20 @@ describe("duesForPlans", () => {
 });
 
 describe("gearsForPlan", () => {
+  // The door and its helper read the module state objects in their bodies
+  // (issue #372); seed the world and reset it between tests.
+  beforeEach(() => {
+    parts.setMap([]);
+    attachments.setMap([]);
+    plans.setMap([]);
+  });
+
   it("resolves a specific plan to its own part", () => {
     const p5 = part({ id: 5 });
     const pln = plan({ id: "P1", part: 5, what: 10, hook: null });
-    expect(gearsForPlan(pln, { 5: p5 }, {}, planMap(pln))).toEqual([p5]);
+    parts.setMap([p5]);
+    plans.setMap([pln]);
+    expect(gearsForPlan(pln)).toEqual([p5]);
   });
 
   it("resolves a generic plan to all active parts of the type", async () => {
@@ -296,7 +302,16 @@ describe("gearsForPlan", () => {
     const p5 = part({ id: 5, what: 10 });
     const p7 = part({ id: 7, what: 10 });
     const G = plan({ id: "G", part: null, hook: 30, what: 10, km: "100" });
-    expect(gearsForPlan(G, { 5: p5, 7: p7 }, {}, planMap(G))).toEqual([p5, p7]);
+    parts.setMap([p5, p7]);
+    plans.setMap([G]);
+    // The door returns record order (the state proxy enumerates a
+    // deleted-and-re-added key at its first-creation slot); the set of gears
+    // is the contract, so compare the ids sorted.
+    expect(
+      gearsForPlan(G)
+        .map((p) => p.id!)
+        .sort((a, b) => a - b),
+    ).toEqual([5, 7]);
   });
 
   it("excludes disposed parts", async () => {
@@ -304,19 +319,22 @@ describe("gearsForPlan", () => {
     const p5 = part({ id: 5, what: 10, disposed_at: "2024-01-01T00:00:00Z" });
     const p7 = part({ id: 7, what: 10 });
     const G = plan({ id: "G", part: null, hook: 30, what: 10, km: "100" });
-    expect(gearsForPlan(G, { 5: p5, 7: p7 }, {}, planMap(G))).toEqual([p7]);
+    parts.setMap([p5, p7]);
+    plans.setMap([G]);
+    expect(gearsForPlan(G)).toEqual([p7]);
   });
 
   it("excludes parts covered by a dedicated plan", async () => {
     await loadTypes([wheelType]);
     const p5 = part({ id: 5, what: 10, usage: "u5" });
     const p7 = part({ id: 7, what: 10, usage: "u7" });
-    const atts = attMap(att({ part_id: 7, gear: 5, hook: 30, what: 10 }));
+    const a = att({ part_id: 7, gear: 5, hook: 30, what: 10 });
     const G = plan({ id: "G", part: null, hook: 30, what: 10, km: "100" });
     const P7 = plan({ id: "P7", part: 7, hook: null, what: 10, km: "10" });
-    expect(gearsForPlan(G, { 5: p5, 7: p7 }, atts, planMap(G, P7))).toEqual([
-      p7,
-    ]);
+    parts.setMap([p5, p7]);
+    attachments.setMap([a]);
+    plans.setMap([G, P7]);
+    expect(gearsForPlan(G)).toEqual([p7]);
   });
 });
 
@@ -324,10 +342,12 @@ describe("alertCounts", () => {
   const p = part({ id: 5, what: 10, usage: "u_now" });
 
   // Seed the module state objects with the same world the arguments model:
-  // part_for_plan reads them in its body (issue #371).
+  // part_for_plan and gears_of_plan read them in their bodies (issues
+  // #371/#372).
   beforeEach(() => {
     parts.setMap([p]);
     attachments.setMap([]);
+    plans.setMap([]);
   });
 
   it("counts 'warn' when the due value is close to zero", () => {
@@ -405,10 +425,11 @@ describe("alertCounts", () => {
     );
     const a = att({ part_id: 7, gear: 5, hook: 30, what: 10 });
     const atts = attMap(a);
-    parts.setMap([p5, p7]);
-    attachments.setMap([a]);
     const G = plan({ id: "G", part: null, hook: 30, what: 10, km: "100" });
     const P7 = plan({ id: "P7", part: 7, hook: null, what: 10, km: "10" });
+    parts.setMap([p5, p7]);
+    attachments.setMap([a]);
+    plans.setMap([G, P7]);
     expect(alertCounts([G, P7], { 5: p5, 7: p7 }, {}, usages, atts)).toEqual({
       warn: 1,
       alert: 1,
