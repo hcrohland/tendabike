@@ -1,9 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
-import { get } from "svelte/store";
+import { flushSync } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Part } from "../lib/part";
 import { partNotes, PartNote } from "../lib/partnote";
-import { actions } from "../Widgets/Actions.svelte";
+import { getActions, setActions } from "../Widgets/Actions.svelte";
 import NoteList from "./NoteList.svelte";
 
 describe("NoteList", () => {
@@ -46,7 +46,7 @@ describe("NoteList", () => {
   beforeEach(() => {
     const newNote = vi.fn();
     const deleteNote = vi.fn();
-    actions.set({ newNote, deleteNote } as never);
+    setActions({ newNote, deleteNote } as never);
     partNotes.setMap([]);
   });
 
@@ -68,6 +68,15 @@ describe("NoteList", () => {
     render(NoteList, { part });
     expect(screen.getByText("Replace chain soon")).toBeTruthy();
     expect(screen.getByText("Receipt")).toBeTruthy();
+  });
+
+  it("re-renders when the partNotes collection changes", () => {
+    const { unmount } = render(NoteList, { part });
+    expect(screen.queryByText("Replace chain soon")).toBeNull();
+    partNotes.updateMap([textNote]);
+    flushSync();
+    expect(screen.getByText("Replace chain soon")).toBeTruthy();
+    unmount();
   });
 
   it("links the file of a file note", () => {
@@ -94,7 +103,7 @@ describe("NoteList", () => {
     const change = await screen.findByText("Change note");
     fireEvent.click(change);
     await waitFor(() => {
-      const newNote = (get(actions) as { newNote: unknown }).newNote;
+      const newNote = (getActions() as { newNote: unknown }).newNote;
       expect(newNote).toHaveBeenCalledWith(part, textNote);
     });
   });
@@ -106,8 +115,29 @@ describe("NoteList", () => {
     const del = await screen.findByText("Delete note");
     fireEvent.click(del);
     await waitFor(() => {
-      const deleteNote = (get(actions) as { deleteNote: unknown }).deleteNote;
+      const deleteNote = (getActions() as { deleteNote: unknown }).deleteNote;
       expect(deleteNote).toHaveBeenCalledWith(textNote);
     });
+  });
+
+  it("calls the replaced handler when the actions state is replaced", async () => {
+    partNotes.setMap([textNote]);
+    const { unmount } = render(NoteList, { part });
+    await openRowMenu("Replace chain soon");
+    const initial = (getActions() as { newNote: unknown }).newNote;
+    fireEvent.click(await screen.findByText("Change note"));
+    await waitFor(() => expect(initial).toHaveBeenCalledWith(part, textNote));
+
+    const replacement = vi.fn();
+    setActions({ newNote: replacement, deleteNote: vi.fn() } as never);
+    flushSync();
+    // the item click does not close the menu, so the same row button now
+    // resolves its handler from the replaced shared state
+    fireEvent.click(await screen.findByText("Change note"));
+    await waitFor(() =>
+      expect(replacement).toHaveBeenCalledWith(part, textNote),
+    );
+    expect(initial).toHaveBeenCalledTimes(1);
+    unmount();
   });
 });

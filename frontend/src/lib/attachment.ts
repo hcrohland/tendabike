@@ -1,5 +1,5 @@
 import type { Activity } from "./activity";
-import { filterValues, mapable, type Map } from "./mapable";
+import { type Map, mapableState, stateValues } from "./mapable.svelte";
 import { fmtRange, maxDate } from "./store";
 
 export class Attachment {
@@ -45,8 +45,7 @@ export class Attachment {
   }
 
   activities(acts: Map<Activity>) {
-    return filterValues(
-      acts,
+    return stateValues(acts).filter(
       (a) => a.gear == this.gear && this.isAttached(a.start),
     );
   }
@@ -59,14 +58,15 @@ export function att_at_hook(
   hook: number | null,
   atts: Map<Attachment>,
 ) {
-  return filterValues(
-    atts,
-    (att) =>
-      att.gear == gear &&
-      att.what == what &&
-      att.hook == hook &&
-      att.isAttached(),
-  ).pop();
+  return stateValues(atts)
+    .filter(
+      (att) =>
+        att.gear == gear &&
+        att.what == what &&
+        att.hook == hook &&
+        att.isAttached(),
+    )
+    .pop();
 }
 
 /// find part id for part at a specific hook right now
@@ -89,10 +89,12 @@ export function attachment_for_part(
   atts: Map<Attachment>,
   time: Date,
 ) {
-  return filterValues(
-    atts,
-    (att) => att.part_id == part && att.attached <= time && att.detached > time,
-  ).pop();
+  return stateValues(atts)
+    .filter(
+      (att) =>
+        att.part_id == part && att.attached <= time && att.detached > time,
+    )
+    .pop();
 }
 
 export function attachees_for_gear(
@@ -100,13 +102,12 @@ export function attachees_for_gear(
   atts: Map<Attachment>,
   time = new Date(),
 ) {
-  return filterValues(
-    atts,
+  return stateValues(atts).filter(
     (att) => att.gear == gear && att.attached <= time && att.detached > time,
   );
 }
 
-export const attachments = mapable(
+export const attachments = mapableState(
   "idx",
   (a) => new Attachment(a),
   (a) => a.isEmpty(),

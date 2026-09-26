@@ -5,15 +5,17 @@
   import ShopList from "./ShopList.svelte";
   import Subscriptions from "./Subscriptions.svelte";
   import { Shop, shops } from "../lib/shop";
-  import { actions } from "../Widgets/Actions.svelte";
-  import { user, users } from "../lib/user";
-  import { filterValues } from "../lib/mapable";
+  import { getActions } from "../Widgets/Actions.svelte";
+  import { getUser, users } from "../lib/user";
+  import { stateValues } from "../lib/mapable.svelte";
   import ShopSubscriptions from "./ShopSubscriptions.svelte";
 
   let activeTab = $state<string>("my-subscriptions");
 
   // Get all user's shops from the store (owned + subscribed)
-  let myShops = $derived(filterValues($shops, (g) => g.owner === $user?.id));
+  let myShops = $derived(
+    stateValues(shops).filter((g) => g.owner === getUser()?.id),
+  );
 </script>
 
 <div class="space-y-6">
@@ -32,20 +34,20 @@
               {m.shop_none_owned()}
             </p>
 
-            <Button onclick={() => $actions.createShop()}>
+            <Button onclick={() => getActions()!.createShop()}>
               {m.shop_create_first()}
             </Button>
           </div>
         {:else}
           <div>
-            <ShopList shops={myShops} users={$users}>
+            <ShopList shops={myShops} {users}>
               {#snippet sub(shop: Shop)}
                 <ShopSubscriptions shopId={shop.id!} />
               {/snippet}
             </ShopList>
           </div>
 
-          <Button onclick={() => $actions.createShop()}>
+          <Button onclick={() => getActions()!.createShop()}>
             {m.shop_create()}
           </Button>
         {/if}

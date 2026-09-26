@@ -15,16 +15,17 @@
     Select,
   } from "flowbite-svelte";
   import { handleError, myfetch } from "./lib/store";
-  import { refresh, updateSummary, user } from "./lib/user";
+  import { refresh, updateSummary, getUser, setUser } from "./lib/user";
   import { activities } from "./lib/activity";
+  import { stateValues } from "./lib/mapable.svelte";
   import Sport from "./Widgets/Sport.svelte";
-  import { category } from "./lib/types";
+  import { getCategory } from "./lib/types";
   import { querystring } from "svelte-spa-router";
   import { location } from "svelte-spa-router";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
   import Garmin from "./Activity/Garmin.svelte";
   import ShopMenu from "./Shop/ShopMenu.svelte";
-  import { shop } from "./lib/shop";
+  import { getShop } from "./lib/shop";
   import * as m from "../paraglide/messages";
   import { getLocale, setLocale, locales } from "../paraglide/runtime";
 
@@ -69,13 +70,13 @@
       clearInterval(hook_timer);
       hook_timer = 0;
     }
-    hook_promise = refresh($shop?.id).then(poll);
+    hook_promise = refresh(getShop()?.id).then(poll);
   }
 
   async function triggerHistoricSync() {
     try {
       const updatedUser = await myfetch("/strava/onboarding/sync", "POST");
-      $user = updatedUser;
+      setUser(updatedUser);
       fullrefresh();
     } catch (e) {
       handleError(e as Error);
@@ -108,11 +109,11 @@
       title="TendaBike"
       class="rounded-circle h-11"
     />
-    &nbsp; Tend a {$category.name}
+    &nbsp; Tend a {getCategory()!.name}
   </NavBrand>
-  {#if $user}
+  {#if getUser()}
     <div class="flex items-center gap-4 md:order-2">
-      {#if ($user.onboarding_status === "pending" || $user.onboarding_status === "initial_sync_postponed") && Object.keys($activities).length === 0}
+      {#if (getUser()?.onboarding_status === "pending" || getUser()?.onboarding_status === "initial_sync_postponed") && stateValues(activities).length === 0}
         <button
           class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-4 py-2"
           onclick={triggerHistoricSync}
@@ -125,7 +126,7 @@
         {#await hook_promise}
           <Spinner size="10" />
         {:then}
-          <Avatar src={$user.avatar} class="border-2" />
+          <Avatar src={getUser()?.avatar} class="border-2" />
         {:catch error}
           {handleError(error)}
         {/await}
@@ -133,8 +134,8 @@
 
       <Dropdown simple triggeredBy="#user">
         <DropdownHeader>
-          {$user.firstname}
-          {$user.name}
+          {getUser()?.firstname}
+          {getUser()?.name}
         </DropdownHeader>
         <DropdownDivider />
         <Sport />
@@ -150,7 +151,7 @@
             <DropdownItem onclick={() => (openGarmin = true)}>
               {m.header_csv()}
             </DropdownItem>
-            {#if $user.onboarding_status === "initial_sync_postponed"}
+            {#if getUser()?.onboarding_status === "initial_sync_postponed"}
               <DropdownDivider />
               <DropdownItem onclick={triggerHistoricSync}>
                 {m.header_import_historic()}
@@ -160,7 +161,7 @@
           <Garmin bind:open={openGarmin} />
         {/await}
         <ShopMenu />
-        {#if $user.is_admin}
+        {#if getUser()?.is_admin}
           <DropdownDivider />
           <DropdownItem href="/#/admin">{m.header_admin()}</DropdownItem>
         {/if}
@@ -202,11 +203,11 @@
       }}
     >
       <NavLi class="justify-start" href="/#/cat">
-        {$category.localizedName()}s
+        {getCategory()!.localizedName()}s
       </NavLi>
       <NavLi href="/#/plans">{m.nav_services()}</NavLi>
       <NavLi href="/#/spares">{m.nav_parts()}</NavLi>
-      {#if !$shop}
+      {#if !getShop()}
         <NavLi href="/#/activities">{m.nav_activities()}</NavLi>
         <NavLi href="/#/stats">{m.nav_statistics()}</NavLi>
       {/if}

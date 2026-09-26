@@ -1,8 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { get } from "svelte/store";
 import { myfetch, checkStatus, handleError, message } from "./store";
-import { user } from "./user";
+import { getUser, setUser } from "./user";
 import { resp } from "../test/helpers";
+
+function resetMessage() {
+  message.active = false;
+  message.message = "No message";
+  message.status = "";
+}
 
 describe("myfetch", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -78,10 +83,10 @@ describe("checkStatus", () => {
   });
 
   it("sets the message store on error", async () => {
-    message.set({ active: false, message: "No message", status: "" });
+    resetMessage();
     const text = "Something failed";
     await checkStatus(resp(text, 500, false, "Bad Gateway"))!.catch(() => {});
-    expect(get(message)).toEqual({
+    expect(message).toEqual({
       active: true,
       status: "Bad Gateway",
       message: text,
@@ -91,7 +96,7 @@ describe("checkStatus", () => {
 
 describe("checkStatus 401", () => {
   it("clears user, sets message, and rejects when user was set", async () => {
-    user.set({
+    setUser({
       id: 1,
       firstname: "A",
       name: "B",
@@ -99,37 +104,37 @@ describe("checkStatus 401", () => {
       is_admin: false,
       onboarding_status: "pending",
     });
-    message.set({ active: false, message: "No message", status: "" });
+    resetMessage();
     await expect(
       checkStatus(resp("Unauthorized", 401, false, "")),
     ).rejects.toBe("Unauthorized");
-    expect(get(user)).toBeUndefined();
-    expect(get(message).active).toBe(true);
+    expect(getUser()).toBeUndefined();
+    expect(message.active).toBe(true);
   });
 
   it("resolves undefined and does not set message when user was undefined", async () => {
-    user.set(undefined);
-    message.set({ active: false, message: "No message", status: "" });
+    setUser(undefined);
+    resetMessage();
     const result = await checkStatus(resp("Unauthorized", 401, false, ""));
     expect(result).toBeUndefined();
-    expect(get(message).active).toBe(false);
+    expect(message.active).toBe(false);
   });
 });
 
 describe("handleError", () => {
   it("activates the message store", () => {
-    message.set({ active: false, message: "No message", status: "" });
+    resetMessage();
     handleError(new Error("boom"));
-    const m = get(message);
-    expect(m.active).toBe(true);
-    expect(m.message).toBe("boom");
+    expect(message.active).toBe(true);
+    expect(message.message).toBe("boom");
   });
 
   it("does not overwrite an already active message", () => {
-    message.set({ active: true, message: "first", status: "" });
+    resetMessage();
+    message.active = true;
+    message.message = "first";
     handleError(new Error("second"));
-    const m = get(message);
-    expect(m.active).toBe(true);
-    expect(m.message).toBe("first");
+    expect(message.active).toBe(true);
+    expect(message.message).toBe("first");
   });
 });

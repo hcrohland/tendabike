@@ -12,7 +12,7 @@
 
   import { myfetch, handleError } from "../lib/store";
   import { Dropdown, DropdownItem, Spinner } from "flowbite-svelte";
-  import { category, types } from "../lib/types";
+  import { setCategory, types } from "../lib/types";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
   import { m } from "../../paraglide/messages";
 </script>
@@ -28,7 +28,7 @@
     </DropdownItem>
   {:then}
     {#each categories.sort() as cat}
-      <DropdownItem onclick={() => category.set(types[cat])}>
+      <DropdownItem onclick={() => setCategory(types[cat])}>
         {types[cat].localizedName()}
       </DropdownItem>
     {/each}

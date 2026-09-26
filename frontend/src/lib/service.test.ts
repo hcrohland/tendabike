@@ -3,9 +3,8 @@ import { Service, services } from "./service";
 import { Part } from "./part";
 import { Usage, usages } from "./usage";
 import { fmtDate } from "./store";
-import { type Map } from "./mapable";
-import { get } from "svelte/store";
-import { resp } from "../test/helpers";
+import { type Map } from "./mapable.svelte";
+import { resp, usage } from "../test/helpers";
 
 function svc(overrides: Partial<any> = {}): Service {
   return new Service({
@@ -36,20 +35,6 @@ function part(overrides: Partial<any> = {}): Part {
     last_used: "2023-01-01T00:00:00Z",
     usage: "u1",
     ...overrides,
-  });
-}
-
-function usage(id: string, o: Partial<any> = {}): Usage {
-  return new Usage({
-    id,
-    count: 0,
-    climb: 0,
-    descend: 0,
-    distance: 0,
-    time: 0,
-    duration: 0,
-    energy: 0,
-    ...o,
   });
 }
 
@@ -202,7 +187,7 @@ describe("Service CRUD", () => {
       notes: "good",
       plans: ["P1"],
     });
-    expect(get(services)["S1"]).toBeDefined();
+    expect(services["S1"]).toBeDefined();
   });
 
   it("Service.update PUTs and calls updateSummary", async () => {
@@ -225,7 +210,7 @@ describe("Service CRUD", () => {
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/service/S1");
     expect(options.method).toBe("DELETE");
-    expect(get(services)["S1"]).toBeUndefined();
+    expect(services["S1"]).toBeUndefined();
     expect(usages["u1"]).toBeUndefined();
   });
 

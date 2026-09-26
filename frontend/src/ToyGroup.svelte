@@ -1,47 +1,49 @@
 <script lang="ts">
-  import { filterValues, by } from "./lib/mapable";
-  import { category } from "./lib/types";
+  import { by, stateValues } from "./lib/mapable.svelte";
+  import { getCategory } from "./lib/types";
   import { parts } from "./lib/part";
-  import { activities } from "./lib/activity";
   import ShowMore from "./Widgets/ShowMore.svelte";
-  import { shop } from "./lib/shop";
+  import { getShop } from "./lib/shop";
   import * as m from "../paraglide/messages";
   import GearCard from "./Part/GearCard.svelte";
   import PlanBadge from "./ServicePlan/PlanBadge.svelte";
+  import { activities } from "./lib/activity";
 
   let show_more: boolean = $state(false);
 
   let gears = $derived(
-    filterValues(
-      $parts,
-      (p) =>
-        ($shop ? p.shop == $shop.id : true) &&
-        p.what == $category.id &&
-        !p.disposed_at,
-    ).sort(by("last_used")),
+    stateValues(parts)
+      .filter(
+        (p) =>
+          (getShop() ? p.shop == getShop()!.id : true) &&
+          p.what == getCategory()!.id &&
+          !p.disposed_at,
+      )
+      .sort(by("last_used")),
   );
   let bin = $derived(
-    filterValues(
-      $parts,
-      (p) =>
-        ($shop ? p.shop == $shop.id : true) &&
-        p.what == $category.id &&
-        p.disposed_at != undefined,
-    ).sort(by("last_used")),
+    stateValues(parts)
+      .filter(
+        (p) =>
+          (getShop() ? p.shop == getShop()!.id : true) &&
+          p.what == getCategory()!.id &&
+          p.disposed_at != undefined,
+      )
+      .sort(by("last_used")),
   );
 </script>
 
-{#if $category}
+{#if getCategory()}
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
     {#each gears as part (part.id)}
       <GearCard {part} summary gridclass="grid-cols-3">
         <PlanBadge {part} />
       </GearCard>
     {:else}
-      {#if $category.activities($activities).length == 0}
-        {m.toygroup_none_found({ category: $category.name })}
+      {#if getCategory()!.activities(activities).length == 0}
+        {m.toygroup_none_found({ category: getCategory()!.name })}
       {:else}
-        {m.toygroup_none_assigned({ category: $category.name })}
+        {m.toygroup_none_assigned({ category: getCategory()!.name })}
       {/if}
     {/each}
   </div>

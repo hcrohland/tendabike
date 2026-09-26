@@ -6,12 +6,12 @@
   import Menu from "../Widgets/Menu.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
   import { Attachment, attachments } from "../lib/attachment";
-  import { filterValues, type Map } from "../lib/mapable";
+  import { type Map, stateValues } from "../lib/mapable.svelte";
   import { parts } from "../lib/part";
   import { fmtDate } from "../lib/store";
   import { Type } from "../lib/types";
-  import { actions } from "../Widgets/Actions.svelte";
-  import { shop } from "../lib/shop";
+  import { getActions } from "../Widgets/Actions.svelte";
+  import { getShop } from "../lib/shop";
   import * as m from "../../paraglide/messages";
 
   interface Props {
@@ -30,21 +30,22 @@
     partId: number | undefined,
     time: Date,
   ) {
-    let att = filterValues(
-      atts,
-      (x) => x.part_id === partId && x.isAttached(time),
-    ).pop();
+    let att = stateValues(atts)
+      .filter((x) => x.part_id === partId && x.isAttached(time))
+      .pop();
     if (att == undefined) return;
-    return $parts[att.gear];
+    return parts[att.gear];
   }
 
   let subparts = $derived(
-    type.parts($parts).filter((p) => ($shop ? p.shop == $shop.id : true)),
+    type
+      .parts(parts)
+      .filter((p) => (getShop() ? p.shop == getShop()!.id : true)),
   );
   let subshow = $derived(
     subparts.filter(
       (p) =>
-        show_more || (!p.disposed_at && !attachedTo($attachments, p.id, date)),
+        show_more || (!p.disposed_at && !attachedTo(attachments, p.id, date)),
     ),
   );
 </script>
@@ -62,7 +63,9 @@
         {type.localizedName()}
       </span>
     </div>
-    <XsButton onclick={() => $actions.newPart(type)}>{m.action_new()}</XsButton>
+    <XsButton onclick={() => getActions()!.newPart(type)}
+      >{m.action_new()}</XsButton
+    >
   </div>
 
   <!-- Part cards -->
@@ -71,7 +74,7 @@
       class={"rounded-lg border p-3 " +
         (part.disposed_at
           ? "bg-surface-2 opacity-70 border-border-strong"
-          : attachedTo($attachments, part.id, date)
+          : attachedTo(attachments, part.id, date)
             ? "bg-surface-2 border-gray-strong"
             : "bg-surface-1 border-border-subtle")}
     >
@@ -96,17 +99,17 @@
         {#if !part.disposed_at}
           <div class="shrink-0">
             <Menu>
-              <DropdownItem onclick={() => $actions.attachPart(part)}>
-                {attachedTo($attachments, part.id, date)
+              <DropdownItem onclick={() => getActions()!.attachPart(part)}>
+                {attachedTo(attachments, part.id, date)
                   ? m.action_move()
                   : m.action_attach()}
               </DropdownItem>
-              {#if part.attachments($attachments).length == 0}
-                <DropdownItem onclick={() => $actions.deletePart(part)}>
+              {#if part.attachments(attachments).length == 0}
+                <DropdownItem onclick={() => getActions()!.deletePart(part)}>
                   {m.action_delete()}
                 </DropdownItem>
               {:else}
-                <DropdownItem onclick={() => $actions.disposePart(part)}>
+                <DropdownItem onclick={() => getActions()!.disposePart(part)}>
                   {m.action_dispose()}
                 </DropdownItem>
               {/if}
@@ -119,7 +122,7 @@
       <UsageChips
         id={part.usage}
         ref={part.id}
-        light={!part.disposed_at && !attachedTo($attachments, part.id, date)}
+        light={!part.disposed_at && !attachedTo(attachments, part.id, date)}
       />
 
       <!-- Attached to -->
@@ -128,7 +131,7 @@
           {#if part.disposed_at}
             {m.sparetype_disposed()} {fmtDate(part.disposed_at)}
           {:else}
-            {@const attachedPart = attachedTo($attachments, part.id, date)}
+            {@const attachedPart = attachedTo(attachments, part.id, date)}
             {#if attachedPart}
               {m.attached_to()}
               <span class="text-xs text-gray-500 dark:text-gray-200 ml-1">

@@ -5,7 +5,7 @@
   import DateTime from "../Widgets/DateTime.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
   import Switch from "../Widgets/Switch.svelte";
-  import { by, filterValues } from "../lib/mapable";
+  import { by, stateValues } from "../lib/mapable.svelte";
   import { activities } from "../lib/activity";
   import Modal from "../Widgets/Modal.svelte";
   import * as m from "../../paraglide/messages";
@@ -40,10 +40,9 @@
   };
 
   function prevdate(date: Date) {
-    let prev = filterValues(
-      $activities,
-      (a) => a.user_id == user?.id && a.start < date,
-    ).sort(by("start"))[0];
+    let prev = stateValues(activities)
+      .filter((a) => a.user_id == user?.id && a.start < date)
+      .sort(by("start"))[0];
     return prev ? prev.start : date;
   }
 </script>

@@ -27,7 +27,7 @@ The domain layer (`backend/domain`) is the only thing that computes entity state
 
 ## The client merge (pattern)
 
-`frontend/src/lib/part.ts` is the reference implementation: an entity class, a `mapable` store, and fetch calls that merge the response into it — `parts.updateMap([data])` for a bare entity, `updateSummary(data)` for a `Summary` (`frontend/src/lib/user.ts`). `mapable` (`frontend/src/lib/mapable.ts`) maps entities by id: `setMap` replaces the whole map, `updateMap` merges, `deleteItem` removes.
+`frontend/src/lib/part.ts` is the reference implementation: an entity class, a `mapableState` collection, and fetch calls that merge the response into it — `parts.updateMap([data])` for a bare entity, `updateSummary(data)` for a `Summary` (`frontend/src/lib/user.ts`). `mapableState` (`frontend/src/lib/mapable.svelte.ts`) is the collection factory: a `$state` record of entities by id with the write operations attached — `setMap` replaces the whole record, `updateMap` merges, `deleteItem` removes. Because the operations are keys of the record, a state collection must not be enumerated with `Object.values`/`filterValues`; use `stateValues`, which skips the operation keys. The full state-object mechanics live in [state-object.md](state-object.md).
 
 ## Recipe: add a new mutating operation
 

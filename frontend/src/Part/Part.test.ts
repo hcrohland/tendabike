@@ -5,13 +5,15 @@ import {
   waitFor,
   within,
 } from "@testing-library/svelte";
-import { get } from "svelte/store";
+import { flushSync } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Attachment, attachments } from "../lib/attachment";
+import { maxDate } from "../lib/store";
 import { Part, parts } from "../lib/part";
 import { partNotes } from "../lib/partnote";
 import { getTypes } from "../lib/types";
-import { user } from "../lib/user";
-import { actions } from "../Widgets/Actions.svelte";
+import { setUser } from "../lib/user";
+import { getActions, setActions } from "../Widgets/Actions.svelte";
 import { resp } from "../test/helpers";
 import PartComponent from "./Part.svelte";
 
@@ -36,7 +38,7 @@ describe("Part", () => {
     vi.stubGlobal("fetch", fetchMock);
     await getTypes();
 
-    user.set({
+    setUser({
       id: 1,
       firstname: "Test",
       name: "Test User",
@@ -45,7 +47,8 @@ describe("Part", () => {
       onboarding_status: "completed",
     });
     partNotes.setMap([]);
-    actions.set({ newNote: vi.fn() } as never);
+    attachments.setMap([]);
+    setActions({ newNote: vi.fn() } as never);
   });
 
   function seedPart(what: number) {
@@ -87,6 +90,29 @@ describe("Part", () => {
     expect(tabs[2].textContent).toContain("Notes");
   });
 
+  it("re-renders when the attachments collection changes", () => {
+    seedPart(2);
+    const { unmount } = render(PartComponent, { id: 7 });
+    expect(screen.getAllByRole("tab")).toHaveLength(3);
+    attachments.updateMap([
+      new Attachment({
+        part_id: 9,
+        attached: "2023-01-01T00:00:00Z",
+        gear: 7,
+        hook: 1,
+        detached: maxDate,
+        what: 2,
+        name: "Chain",
+        usage: "u1",
+      }),
+    ]);
+    flushSync();
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs.length).toBe(4);
+    expect(tabs[0].textContent).toContain("Attached Parts");
+    unmount();
+  });
+
   it("calls newNote with the part when the add button is clicked", async () => {
     seedPart(1);
     render(PartComponent, { id: 7 });
@@ -95,7 +121,7 @@ describe("Part", () => {
     const add = await within(notesTab).findByRole("button", { name: "add" });
     fireEvent.click(add);
     await waitFor(() => {
-      const newNote = (get(actions) as { newNote: unknown }).newNote;
+      const newNote = (getActions() as { newNote: unknown }).newNote;
       expect(newNote).toHaveBeenCalledWith(expect.objectContaining({ id: 7 }));
     });
   });

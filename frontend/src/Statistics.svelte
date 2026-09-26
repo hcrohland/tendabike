@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { category } from "./lib/types";
+  import { getCategory } from "./lib/types";
   import {
     ButtonGroup,
     InputAddon,
@@ -10,7 +10,7 @@
   } from "flowbite-svelte";
   import Plotly from "./Widgets/Plotly.svelte";
   import Switch from "./Widgets/Switch.svelte";
-  import { by } from "./lib/mapable";
+  import { by } from "./lib/mapable.svelte";
   import { Activity, activities } from "./lib/activity";
   import { Usage } from "./lib/usage";
   import { parts, Part } from "./lib/part";
@@ -230,7 +230,7 @@
       ]);
   }
 
-  let all_acts = $derived($category.activities($activities));
+  let all_acts = $derived(getCategory()!.activities(activities));
   let minyear = $derived(
     all_acts
       .reduce((min, a) => (min <= a.start ? min : a.start), new Date())
@@ -241,7 +241,7 @@
       (a) => gears.length == 0 || gears.some((g) => g.id == a.gear),
     ),
   );
-  let all_gears = $derived($category.parts($parts));
+  let all_gears = $derived(getCategory()!.parts(parts));
   let gears: Part[] = $state([]);
   let cumm: any = $state(0);
   let comp: number | null = $state(null);

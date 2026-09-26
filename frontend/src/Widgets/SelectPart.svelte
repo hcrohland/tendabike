@@ -1,7 +1,7 @@
 <script lang="ts">
   import { parts } from "../lib/part";
-  import { filterValues } from "../lib/mapable";
-  import { category, Type } from "../lib/types";
+  import { stateValues } from "../lib/mapable.svelte";
+  import { getCategory, Type } from "../lib/types";
   import { Select } from "flowbite-svelte";
   import { m } from "../../paraglide/messages";
 
@@ -12,7 +12,7 @@
   }: { type: Type; part: number | undefined; none?: boolean } = $props();
 
   let gears = $derived(
-    filterValues($parts, (p) => type.main == p.what && !p.disposed_at),
+    stateValues(parts).filter((p) => type.main == p.what && !p.disposed_at),
   );
 </script>
 
@@ -20,7 +20,7 @@
   required
   bind:value={part}
   placeholder={m.selectpart_placeholder({
-    category: $category.localizedName(),
+    category: getCategory()!.localizedName(),
   })}
   classes={{ select: "rounded-l-none" }}
 >

@@ -5,7 +5,7 @@
 
   import type { Shop } from "../lib/shop";
   import { type UserPublic } from "../lib/user";
-  import { type Map } from "../lib/mapable";
+  import { type Map } from "../lib/mapable.svelte";
 
   interface Props {
     shop: Shop;

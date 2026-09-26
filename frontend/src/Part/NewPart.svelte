@@ -4,7 +4,7 @@
   import Buttons from "../Widgets/Buttons.svelte";
   import { Type } from "../lib/types";
   import { Part } from "../lib/part";
-  import { user } from "../lib/user";
+  import { getUser } from "../lib/user";
   import { m } from "../../paraglide/messages";
 
   let type = $state<Type>();
@@ -18,7 +18,7 @@
 
   export function start(t: Type) {
     type = t;
-    part = { ...new Part({ owner: $user?.id, what: t.id }) };
+    part = { ...new Part({ owner: getUser()?.id, what: t.id }) };
     open = true;
   }
 </script>

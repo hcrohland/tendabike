@@ -4,13 +4,13 @@
   import PlanBadge from "../ServicePlan/PlanBadge.svelte";
   import PlanList from "../ServicePlan/PlanList.svelte";
   import { attachments } from "../lib/attachment";
-  import { filterValues } from "../lib/mapable";
+  import { stateValues } from "../lib/mapable.svelte";
   import { parts } from "../lib/part";
   import GearCard from "./GearCard.svelte";
   import Subparts from "./Subparts.svelte";
   import PartHist from "./PartHist.svelte";
   import NoteList from "./NoteList.svelte";
-  import { actions } from "../Widgets/Actions.svelte";
+  import { getActions } from "../Widgets/Actions.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { pop } from "svelte-spa-router";
@@ -23,11 +23,11 @@
 
   let { id }: Props = $props();
 
-  let part = $derived($parts[id]);
+  let part = $derived(parts[id]);
   let attachees = $derived(
-    filterValues($attachments, (a) => a.gear == part.id),
+    stateValues(attachments).filter((a) => a.gear == part.id),
   );
-  let last_attachment = $derived(part.attachments($attachments).at(0));
+  let last_attachment = $derived(part.attachments(attachments).at(0));
 
   let tab = $state("");
 </script>
@@ -36,17 +36,17 @@
   <div class="float-end h6 mb-0">
     <Menu>
       {#if part.disposed_at}
-        <DropdownItem onclick={() => $actions.recoverPart(part)}>
+        <DropdownItem onclick={() => getActions()!.recoverPart(part)}>
           {m.part_recover_gear()}
         </DropdownItem>
       {:else}
         {#if !part.isGear()}
-          <DropdownItem onclick={() => $actions.attachPart(part)}>
+          <DropdownItem onclick={() => getActions()!.attachPart(part)}>
             {m.action_attach()}
           </DropdownItem>
         {/if}
         <DropdownItem
-          onclick={() => $actions.disposePart(part, last_attachment)}
+          onclick={() => getActions()!.disposePart(part, last_attachment)}
         >
           {#if last_attachment?.isAttached()}
             {m.action_detach()}
@@ -54,14 +54,14 @@
             {m.action_dispose()}
           {/if}
         </DropdownItem>
-        <DropdownItem onclick={() => $actions.changePart(part)}>
+        <DropdownItem onclick={() => getActions()!.changePart(part)}>
           {m.part_change_details()}
         </DropdownItem>
       {/if}
-      {#if !part.isGear() && part.attachments($attachments).length == 0}
+      {#if !part.isGear() && part.attachments(attachments).length == 0}
         <DropdownItem
           onclick={() => {
-            $actions.deletePart(part);
+            getActions()!.deletePart(part);
             pop();
           }}
         >
@@ -81,7 +81,7 @@
       {#snippet titleSlot()}
         {m.part_tab_attached_parts()}
         {#if tab == "parts"}
-          <XsButton onclick={() => $actions.installPart(part)}>
+          <XsButton onclick={() => getActions()!.installPart(part)}>
             {m.partcard_add()}
           </XsButton>
         {/if}
@@ -94,7 +94,7 @@
       {m.part_tab_service_plans()}
       <PlanBadge {part} />
       {#if tab == "plans"}
-        <XsButton onclick={() => $actions.newPlan(part)}>
+        <XsButton onclick={() => getActions()!.newPlan(part)}>
           {m.partcard_add()}
         </XsButton>
       {/if}
@@ -105,7 +105,7 @@
     {#snippet titleSlot()}
       {m.part_tab_service_logs()}
       {#if tab == "services"}
-        <XsButton onclick={() => $actions.newService(part)}>
+        <XsButton onclick={() => getActions()!.newService(part)}>
           {m.partcard_add()}
         </XsButton>
       {/if}
@@ -116,7 +116,7 @@
     {#snippet titleSlot()}
       {m.part_tab_notes()}
       {#if tab == "notes"}
-        <XsButton onclick={() => $actions.newNote(part)}>
+        <XsButton onclick={() => getActions()!.newNote(part)}>
           {m.partcard_add()}
         </XsButton>
       {/if}

@@ -1,15 +1,16 @@
 import {
   att_at_hook,
   attachment_for_part,
+  attachments,
   part_at_hook,
   type Attachment,
 } from "./attachment";
-import { by, filterValues, mapable, type Map } from "./mapable";
-import { Part } from "./part";
+import { by, mapableState, stateValues } from "./mapable.svelte";
+import { Part, parts } from "./part";
 import { Service, services } from "./service";
 import { get_days, handleError, myfetch } from "./store";
 import { Type, types } from "./types";
-import type { Usage } from "./usage";
+import { usages } from "./usage";
 import { m } from "../../paraglide/messages";
 
 export type limit_keys =
@@ -119,25 +120,11 @@ export class ServicePlan extends Limits {
     return Limits.valid(this) && this.name.length > 0 && this.what != undefined;
   }
 
-  services(part: Part | null, services: Map<Service>) {
-    return filterValues(
-      services,
-      (s) => s.part_id == part?.id && s.plans.includes(this.id!),
-    ).sort(by("time"));
+  services(part: Part | null): Service[] {
+    return stateValues(services)
+      .filter((s) => s.part_id == part?.id && s.plans.includes(this.id!))
+      .sort(by("time"));
   }
-}
-
-/** Resolve the physical part for a plan's gear: the part attached at the
- * plan's hook on the gear, falling back to the gear part itself.
- */
-function part_for_plan(
-  plan: ServicePlan,
-  parts: Map<Part>,
-  atts: Map<Attachment>,
-  gear?: number,
-): Part | null {
-  let part = gear ? gear : plan.part;
-  return part ? parts[part_at_hook(part, plan.what, plan.hook, atts)] : null;
 }
 
 /** Sort order for plan lists: type, then hook, then part, then id; nulls
@@ -154,33 +141,6 @@ export function planCmp(a: ServicePlan, b: ServicePlan): number {
   return a.id! < b.id! ? -1 : a.id! > b.id! ? 1 : 0;
 }
 
-/**
- * Determines the physical parts a service plan is associated with.
- * If linked to a specific part directly, it returns that one immediately.
- * For generic plans, it resolves to all active matching components
- * that do not already have a dedicated maintenance plan assigned
- * (matching either a gear-level or a component-level specific plan).
- */
-function gears_of_plan(
-  plan: ServicePlan,
-  parts: Map<Part>,
-  plans: ServicePlan[],
-  atts: Map<Attachment>,
-): Part[] {
-  if (plan.part) return [parts[plan.part]];
-
-  let main = types[plan.what].main;
-  return filterValues(parts, (p) => {
-    if (p.disposed_at != null || main != p.what) return false;
-    let att = att_at_hook(p.id!, plan.what, plan.hook, atts);
-    return !plans.some(
-      (r) =>
-        (r.part == p.id && r.hook == plan.hook && r.what == plan.what) ||
-        (att != null && r.part == att.part_id),
-    );
-  });
-}
-
 /** Remaining limits after the part's usage since its latest service.
  * A limit of zero or unset means the key is inactive; hours and km use
  * floor semantics; the usage delta is taken from the latest service.
@@ -189,7 +149,6 @@ function due_for(
   plan: ServicePlan,
   part: Part | null,
   service: Service | undefined,
-  usages: Map<Usage>,
 ): Limits {
   let res = new Limits({});
   if (part == null || part.what != plan.what) return res;
@@ -229,10 +188,9 @@ function alert_for(
   plan: ServicePlan,
   part: Part,
   service: Service | undefined,
-  usages: Map<Usage>,
 ): severity | "" {
   let res: severity | "" = "";
-  let due = due_for(plan, part, service, usages);
+  let due = due_for(plan, part, service);
   for (const key of ServicePlan.keys) {
     if (!due[key]) continue;
     let s = severity_for(due[key]!, plan[key]!);
@@ -243,21 +201,17 @@ function alert_for(
 }
 
 /*** find plans for this part only */
-function plans_for_this_part(
-  part_id: number | undefined,
-  plans: Map<ServicePlan>,
-) {
-  return filterValues(plans, (p) => p.part == part_id && p.hook == null);
+function plans_for_this_part(part_id: number | undefined) {
+  return stateValues(plans).filter((p) => p.part == part_id && p.hook == null);
 }
 
 /** return plans for this part.
  *
  * If there is a specific plan for this part, the generic plans do not apply
  */
-function plans_for_attachee(plans: Map<ServicePlan>, att: Attachment) {
+function plans_for_attachee(att: Attachment) {
   // find plans for this part and generic plan for gear
-  let res = filterValues(
-    plans,
+  let res = stateValues(plans).filter(
     (p) =>
       p.part == att.part_id ||
       (p.part == att.gear && p.hook == att.hook && p.what == att.what),
@@ -265,79 +219,36 @@ function plans_for_attachee(plans: Map<ServicePlan>, att: Attachment) {
   if (res.length != 0) return res;
 
   // find generic plans for this type/hook
-  return filterValues(
-    plans,
-    (p) =>
-      p.part == null &&
-      p.hook == att.hook &&
-      p.what == att.what &&
-      // only if the is none already for this part already
-      !res.some((r) => r.hook == p.hook && r.what == p.what),
-  ).map((p) => new ServicePlan({ ...p, part: att.part_id }));
+  return stateValues(plans)
+    .filter(
+      (p) =>
+        p.part == null &&
+        p.hook == att.hook &&
+        p.what == att.what &&
+        // only if the is none already for this part already
+        !res.some((r) => r.hook == p.hook && r.what == p.what),
+    )
+    .map((p) => new ServicePlan({ ...p, part: att.part_id }));
 }
 
-/** Plans for a part at a given time or now, in store order (unsorted); the
- * caller sorts with planCmp.
- */
-function plans_for_part_at(
-  part: number | undefined,
-  plans: Map<ServicePlan>,
-  atts: Map<Attachment>,
-  time: Date = new Date(),
-): ServicePlan[] {
-  let att = attachment_for_part(part, atts, time);
-  return att
-    ? plans_for_attachee(plans, att)
-    : plans_for_this_part(part, plans);
-}
+function plans_at_hook(part: Part, type: Type, hook: number) {
+  let att = att_at_hook(part.id!, type.id, hook, attachments);
+  if (att) return plans_for_attachee(att);
 
-function plans_at_hook(
-  atts: Map<Attachment>,
-  plans: Map<ServicePlan>,
-  part: Part,
-  type: Type,
-  hook: number,
-) {
-  let att = att_at_hook(part.id!, type.id, hook, atts);
-  if (att) return plans_for_attachee(plans, att);
-
-  let res = filterValues(
-    plans,
+  let res = stateValues(plans).filter(
     (p) => p.part == part.id && p.what == type.id && p.hook == hook,
   );
   if (res.length > 0) return res;
 
-  return filterValues(
-    plans,
-    (p) => p.part == null && p.what == type.id && p.hook == hook,
-  ).map((p) => new ServicePlan({ ...p, part: part.id }));
+  return stateValues(plans)
+    .filter((p) => p.part == null && p.what == type.id && p.hook == hook)
+    .map((p) => new ServicePlan({ ...p, part: part.id }));
 }
 
-function plans_for_subtype(
-  atts: Map<Attachment>,
-  plans: Map<ServicePlan>,
-  part: Part,
-  type: Type,
-) {
+function plans_for_subtype(part: Part, type: Type) {
   return type.hooks.reduce((res, hook) => {
-    return res.concat(plans_at_hook(atts, plans, part, type, hook));
+    return res.concat(plans_at_hook(part, type, hook));
   }, [] as ServicePlan[]);
-}
-
-/** Plans for a part and the parts it assembles through its type's subtype
- * hooks, in walk order (unsorted); the caller sorts with planCmp.
- */
-function plans_for_assembly(
-  part: Part,
-  plans: Map<ServicePlan>,
-  atts: Map<Attachment>,
-): ServicePlan[] {
-  return types[part.what]
-    .subtypes()
-    .reduce(
-      (list, type) => list.concat(plans_for_subtype(atts, plans, part, type)),
-      plans_for_part_at(part.id, plans, atts),
-    );
 }
 
 export function localizeLimitKey(key: limit_keys): string {
@@ -349,8 +260,9 @@ export function localizeLimitKey(key: limit_keys): string {
 
 /*
  * Doors: the narrow public surface of the plan rule (issue #323).
- * Entity values first, world maps after, time last; `$`-prefixed parameters
- * take the store *value*, read by the caller inside its own derived.
+ * Signatures carry only entity values and time; the rule reads the module's
+ * state objects in the function bodies. Dependencies register at the
+ * enclosing reactive call site.
  */
 
 /**
@@ -375,46 +287,48 @@ export class Due {
  * Resolve the physical part for a plan's gear: the part attached at the
  * plan's hook on the gear, falling back to the gear part itself.
  */
-export function partForPlanGear(
-  plan: ServicePlan,
-  gear: number | undefined,
-  $parts: Map<Part>,
-  $attachments: Map<Attachment>,
-): Part | null {
-  return part_for_plan(plan, $parts, $attachments, gear);
+export function partForPlanGear(plan: ServicePlan, gear?: number): Part | null {
+  let part = gear ? gear : plan.part;
+  return part
+    ? parts[part_at_hook(part, plan.what, plan.hook, attachments)]
+    : null;
 }
 
 /**
  * The physical parts a service plan is associated with: its specific part,
  * or the active, uncovered parts of the type for a generic plan.
  */
-export function gearsForPlan(
-  plan: ServicePlan,
-  $parts: Map<Part>,
-  $attachments: Map<Attachment>,
-  $plans: Map<ServicePlan>,
-): Part[] {
-  return gears_of_plan(plan, $parts, Object.values($plans), $attachments);
+export function gearsForPlan(plan: ServicePlan): Part[] {
+  if (plan.part) return [parts[plan.part]];
+
+  let main = types[plan.what].main;
+  let all = stateValues(plans);
+  return stateValues(parts).filter((p) => {
+    if (p.disposed_at != null || main != p.what) return false;
+    let att = att_at_hook(p.id!, plan.what, plan.hook, attachments);
+    return !all.some(
+      (r) =>
+        (r.part == p.id && r.hook == plan.hook && r.what == plan.what) ||
+        (att != null && r.part == att.part_id),
+    );
+  });
 }
 
 /**
  * Band counts over the plans' parts: how many sit in the warn band and
  * how many are overdue.
  */
-export function alertCounts(
-  plans: ServicePlan[],
-  $parts: Map<Part>,
-  $services: Map<Service>,
-  $usages: Map<Usage>,
-  $attachments: Map<Attachment>,
-): { warn: number; alert: number } {
+export function alertCounts(plans: ServicePlan[]): {
+  warn: number;
+  alert: number;
+} {
   let res = { warn: 0, alert: 0 };
   plans.forEach((plan) => {
-    gears_of_plan(plan, $parts, plans, $attachments).forEach((gear) => {
-      let part = part_for_plan(plan, $parts, $attachments, gear.id);
+    gearsForPlan(plan).forEach((gear) => {
+      let part = partForPlanGear(plan, gear.id);
       if (part != null) {
-        let serviceList = plan.services(part, $services);
-        let alert = alert_for(plan, part, serviceList.at(0), $usages);
+        let serviceList = plan.services(part);
+        let alert = alert_for(plan, part, serviceList.at(0));
         if (alert == "warn") res.warn++;
         else if (alert == "alert") res.alert++;
       }
@@ -424,39 +338,36 @@ export function alertCounts(
 }
 
 /**
- * Plans for a part at a pinned time or now, in store order (unsorted); the
- * caller sorts with planCmp.
+ * Plans for a part at a pinned time or now, in record order (unsorted);
+ * the caller sorts with planCmp.
  */
 export function plansForPart(
   part: number | undefined,
-  $plans: Map<ServicePlan>,
-  $attachments: Map<Attachment>,
   time: Date = new Date(),
 ): ServicePlan[] {
-  return plans_for_part_at(part, $plans, $attachments, time);
+  let att = attachment_for_part(part, attachments, time);
+  return att ? plans_for_attachee(att) : plans_for_this_part(part);
 }
 
 /**
  * Plans for a part and the parts it assembles through its type's subtype
  * hooks, in walk order (unsorted); the caller sorts with planCmp.
  */
-export function plansForAssembly(
-  part: Part,
-  $plans: Map<ServicePlan>,
-  $attachments: Map<Attachment>,
-): ServicePlan[] {
-  return plans_for_assembly(part, $plans, $attachments);
+export function plansForAssembly(part: Part): ServicePlan[] {
+  return types[part.what]
+    .subtypes()
+    .reduce(
+      (list, type) => list.concat(plans_for_subtype(part, type)),
+      plansForPart(part.id),
+    );
 }
 
 /**
  * Whether a plan is a template (not bound to a specific part): true for a
  * generic plan, or when the plan is not (or no longer) in the map.
  */
-export function isTemplate(
-  plan: ServicePlan,
-  $plans: Map<ServicePlan>,
-): boolean {
-  return typeof (plan.id && $plans[plan.id]?.part) !== "number";
+export function isTemplate(plan: ServicePlan): boolean {
+  return typeof (plan.id && plans[plan.id]?.part) !== "number";
 }
 
 /**
@@ -466,13 +377,11 @@ export function isTemplate(
 export function duesForPlans(
   part: Part | null,
   plans: ServicePlan[],
-  $services: Map<Service>,
-  $usages: Map<Usage>,
 ): Partial<Record<limit_keys, Due>> {
   const result: Partial<Record<limit_keys, Due>> = {};
   for (const plan of plans) {
-    const serviceList = plan.services(part, $services);
-    const due = due_for(plan, part, serviceList.at(0), $usages);
+    const serviceList = plan.services(part);
+    const due = due_for(plan, part, serviceList.at(0));
     for (const key of Limits.keys) {
       const p = plan[key] as number | null;
       const d = due[key] as number | null;
@@ -485,4 +394,4 @@ export function duesForPlans(
   return result;
 }
 
-export const plans = mapable("id", (s) => new ServicePlan(s));
+export const plans = mapableState("id", (s) => new ServicePlan(s));

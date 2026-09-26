@@ -1,4 +1,4 @@
-import { type Map, by, filterValues, mapable } from "./mapable";
+import { type Map, by, mapableState, stateValues } from "./mapable.svelte";
 import { handleError, myfetch } from "./store";
 import { Attachment } from "./attachment";
 import { Type, types } from "./types";
@@ -76,7 +76,9 @@ export class Part {
   }
 
   attachments(atts: Map<Attachment>) {
-    return filterValues(atts, (a) => a.part_id == this.id).sort(by("attached"));
+    return stateValues(atts)
+      .filter((a) => a.part_id == this.id)
+      .sort(by("attached"));
   }
 
   isGear() {
@@ -102,7 +104,8 @@ export class Part {
   /// the time when the first activity or attachment for this part started
   firstEvent(acts: Map<Activity>, atts: Map<Attachment>) {
     return this.isGear()
-      ? filterValues(acts, (a) => a.gear == this.id)
+      ? stateValues(acts)
+          .filter((a) => a.gear == this.id)
           .sort(by("start"))
           .at(-1)?.start
       : this.attachments(atts).at(-1)?.attached;
@@ -110,10 +113,12 @@ export class Part {
 }
 
 export function allGear(parts: Map<Part>, category: Type) {
-  return filterValues(parts, (p) => p.what == category.id && !p.disposed_at);
+  return stateValues(parts).filter(
+    (part) => part.what == category.id && !part.disposed_at,
+  );
 }
 
-export const parts = mapable("id", (p) => new Part(p));
+export const parts = mapableState("id", (p) => new Part(p));
 
 class AttEvent {
   part_id: number;
@@ -130,7 +135,7 @@ class AttEvent {
   ) {
     if (part == undefined) {
       console.error("part not defined: ", part);
-      throw "part not defined";
+      throw new Error("part not defined");
     }
     this.part_id = part;
     this.time = time;

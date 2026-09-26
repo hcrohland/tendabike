@@ -1,6 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { Part, parts } from "./part";
-import { get } from "svelte/store";
 import { resp } from "../test/helpers";
 
 function partData(overrides: Partial<any> = {}): any {
@@ -63,9 +62,8 @@ describe("Part CRUD", () => {
       fetchMock.mockResolvedValue(resp(created));
       const p = new Part(partData({ id: undefined }));
       await p.create();
-      const map = get(parts);
-      expect(map[42]).toBeInstanceOf(Part);
-      expect(map[42].name).toBe("Wheel");
+      expect(parts[42]).toBeInstanceOf(Part);
+      expect(parts[42].name).toBe("Wheel");
     });
   });
 
@@ -87,8 +85,7 @@ describe("Part CRUD", () => {
       const p = new Part(partData({ id: 5, name: "Old" }));
       p.name = "Changed";
       await p.update();
-      const map = get(parts);
-      expect(map[5].name).toBe("Changed");
+      expect(parts[5].name).toBe("Changed");
     });
   });
 
@@ -101,8 +98,7 @@ describe("Part CRUD", () => {
       const [url, option] = fetchMock.mock.calls[0];
       expect(url).toBe("/api/part/5");
       expect(option.method).toBe("DELETE");
-      const map = get(parts);
-      expect(map[5]).toBeUndefined();
+      expect(parts[5]).toBeUndefined();
     });
   });
 
@@ -128,8 +124,7 @@ describe("Part CRUD", () => {
       fetchMock.mockResolvedValue(resp(sum));
       const p = new Part(partData({ id: 5 }));
       await p.attach(new Date(), true, 1, 2);
-      const map = get(parts);
-      expect(map[5]).toBeInstanceOf(Part);
+      expect(parts[5]).toBeInstanceOf(Part);
     });
   });
 

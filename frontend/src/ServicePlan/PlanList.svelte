@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { attachments } from "../lib/attachment";
-  import { filterValues } from "../lib/mapable";
+  import { stateValues } from "../lib/mapable.svelte";
   import type { Part } from "../lib/part";
   import { plans, plansForAssembly, planCmp } from "../lib/serviceplan";
-  import { category, types } from "../lib/types";
+  import { getCategory, types } from "../lib/types";
   import PlanBlock from "./PlanBlock.svelte";
 
   interface Props {
@@ -14,8 +13,10 @@
   let { part: gear, children }: Props = $props();
   let planlist = $derived(
     (gear
-      ? plansForAssembly(gear, $plans, $attachments)
-      : filterValues($plans, (p) => types[p.what].main == $category.main)
+      ? plansForAssembly(gear)
+      : stateValues(plans).filter(
+          (p) => types[p.what].main == getCategory()!.main,
+        )
     ).sort(planCmp),
   );
 </script>

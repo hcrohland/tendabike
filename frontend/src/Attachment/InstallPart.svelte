@@ -1,10 +1,10 @@
 <script lang="ts">
   import { InputAddon, ButtonGroup } from "flowbite-svelte";
   import { Type } from "../lib/types";
-  import { user } from "../lib/user";
+  import { getUser } from "../lib/user";
   import NewForm from "../Part/PartForm.svelte";
   import TypeForm from "../Widgets/TypeForm.svelte";
-  import { filterValues } from "../lib/mapable";
+  import { stateValues } from "../lib/mapable.svelte";
   import { Part } from "../lib/part";
   import { attachments } from "../lib/attachment";
   import Buttons from "../Widgets/Buttons.svelte";
@@ -23,7 +23,7 @@
     gear = g;
     part = {
       ...new Part({
-        owner: $user && $user.id,
+        owner: getUser()?.id,
       }),
     };
     type = undefined;
@@ -42,8 +42,7 @@
 
   function guessDate(g: Part, t: Type, hook: number | undefined) {
     if (!t) return new Date();
-    let last = filterValues(
-      $attachments,
+    let last = stateValues(attachments).filter(
       (a) => a.gear == g.id && a.what == t.id && a.hook == hook,
     );
     if (last.length) {

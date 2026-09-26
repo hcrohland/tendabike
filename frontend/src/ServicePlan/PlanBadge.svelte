@@ -1,20 +1,15 @@
 <script lang="ts">
   import { Indicator } from "flowbite-svelte";
-  import { plans, plansForAssembly, alertCounts } from "../lib/serviceplan";
-  import { Part, parts } from "../lib/part";
-  import { services } from "../lib/service";
-  import { usages } from "../lib/usage";
-  import { attachments } from "../lib/attachment";
+  import { plansForAssembly, alertCounts } from "../lib/serviceplan";
+  import { Part } from "../lib/part";
 
   interface Props {
     part: Part;
   }
 
   let { part }: Props = $props();
-  let planlist = $derived(plansForAssembly(part, $plans, $attachments));
-  let alerts = $derived(
-    alertCounts(planlist, $parts, $services, usages, $attachments),
-  );
+  let planlist = $derived(plansForAssembly(part));
+  let alerts = $derived(alertCounts(planlist));
 </script>
 
 <span class="relative -top-2 -right-1">

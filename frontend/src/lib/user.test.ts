@@ -4,7 +4,8 @@ import {
   refresh,
   setSummary,
   updateSummary,
-  user,
+  getUser,
+  setUser,
   users,
 } from "./user";
 import { parts } from "./part";
@@ -14,7 +15,7 @@ import { usages } from "./usage";
 import { attachments } from "./attachment";
 import { plans } from "./serviceplan";
 import { shops } from "./shop";
-import { get } from "svelte/store";
+import { stateValues } from "./mapable.svelte";
 import { resp } from "../test/helpers";
 
 function summaryData(overrides: Partial<any> = {}): any {
@@ -115,7 +116,7 @@ describe("initData", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    user.set(undefined);
+    setUser(undefined);
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
   });
@@ -135,7 +136,7 @@ describe("initData", () => {
     await initData();
     expect(fetchMock.mock.calls[0][0]).toBe("/api/user");
     expect(fetchMock.mock.calls[1][0]).toBe("/api/user/summary");
-    expect(get(user)).toEqual(userData);
+    expect(getUser()).toEqual(userData);
   });
 
   it("returns early without refresh when user is null", async () => {
@@ -143,7 +144,7 @@ describe("initData", () => {
     await initData();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe("/api/user");
-    expect(get(user)).toBeUndefined();
+    expect(getUser()).toBeUndefined();
   });
 });
 
@@ -167,8 +168,7 @@ describe("refresh", () => {
     fetchMock.mockResolvedValue(resp(summaryData()));
     await refresh();
     expect(fetchMock.mock.calls[0][0]).toBe("/api/user/summary");
-    const map = get(parts);
-    expect(map[1]).toBeDefined();
+    expect(parts[1]).toBeDefined();
   });
 
   it("appends shop query parameter", async () => {
@@ -192,14 +192,14 @@ describe("setSummary", () => {
 
   it("calls setMap on all 8 stores", () => {
     setSummary(summaryData() as any);
-    expect(get(parts)[1]).toBeDefined();
-    expect(get(activities)[100]).toBeDefined();
+    expect(parts[1]).toBeDefined();
+    expect(activities[100]).toBeDefined();
     expect(usages["u1"]).toBeDefined();
-    expect(get(services)["S1"]).toBeDefined();
-    expect(get(plans)["PL1"]).toBeDefined();
-    expect(get(shops)[10]).toBeDefined();
-    expect(get(users)[1]).toBeDefined();
-    expect(get(attachments)).toEqual({});
+    expect(services["S1"]).toBeDefined();
+    expect(plans["PL1"]).toBeDefined();
+    expect(shops[10]).toBeDefined();
+    expect(users[1]).toBeDefined();
+    expect(stateValues(attachments)).toEqual([]);
   });
 });
 
@@ -228,13 +228,13 @@ describe("updateSummary", () => {
 
   it("calls updateMap on 7 stores (not users) when data is provided", () => {
     updateSummary(summaryData() as any);
-    expect(get(parts)[1]).toBeDefined();
-    expect(get(activities)[100]).toBeDefined();
+    expect(parts[1]).toBeDefined();
+    expect(activities[100]).toBeDefined();
     expect(usages["u1"]).toBeDefined();
-    expect(get(services)["S1"]).toBeDefined();
-    expect(get(plans)["PL1"]).toBeDefined();
-    expect(get(shops)[10]).toBeDefined();
-    expect(get(attachments)).toEqual({});
-    expect(get(users)).toEqual({});
+    expect(services["S1"]).toBeDefined();
+    expect(plans["PL1"]).toBeDefined();
+    expect(shops[10]).toBeDefined();
+    expect(stateValues(attachments)).toEqual([]);
+    expect(stateValues(users)).toEqual([]);
   });
 });

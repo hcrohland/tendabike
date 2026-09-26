@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Attachment } from "../lib/attachment";
-  import { user } from "../lib/user";
+  import { getUser } from "../lib/user";
   import { types, Type } from "../lib/types";
   import { parts, Part } from "../lib/part";
   import NewForm from "../Part/PartForm.svelte";
@@ -36,7 +36,7 @@
   }
 
   export const start = (attl: Attachment) => {
-    oldpart = $parts[attl.part_id];
+    oldpart = parts[attl.part_id];
     hook = attl.hook;
     gear = attl.gear;
     mindate = attl.attached;
@@ -45,7 +45,7 @@
     single = !type.is_hook();
     part = {
       ...new Part({
-        owner: $user && $user.id,
+        owner: getUser()?.id,
         what: oldpart.what,
         name: oldpart.name,
         vendor: oldpart.vendor,
@@ -62,7 +62,7 @@
   {#snippet header()}
     {m.replacepart_header({
       type: type!.labelWithPosition(prefix),
-      gear: $parts[gear].name,
+      gear: parts[gear].name,
     })}
   {/snippet}
   <NewForm {type} bind:part {mindate} />

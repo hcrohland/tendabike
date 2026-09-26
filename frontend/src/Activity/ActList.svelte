@@ -24,7 +24,7 @@
   import TotalsCard from "./TotalsCard.svelte";
   import { Alert } from "flowbite-svelte";
   import { DAY } from "../lib/store";
-  import { by } from "../lib/mapable";
+  import { by } from "../lib/mapable.svelte";
   import { parts } from "../lib/part";
   import * as m from "../../paraglide/messages";
 
@@ -167,7 +167,7 @@
         let key = String(act.gear || 0);
         if (types[key] === undefined) {
           if (act.gear) {
-            let part = $parts[act.gear];
+            let part = parts[act.gear];
             let name = part ? part.name : "-";
             types[key] = { name, value: act.gear, start: act.start };
           } else {

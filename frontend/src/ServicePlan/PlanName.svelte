@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { plans, ServicePlan, isTemplate } from "../lib/serviceplan";
-  import { category, types } from "../lib/types";
+  import { ServicePlan, isTemplate } from "../lib/serviceplan";
+  import { getCategory, types } from "../lib/types";
   import { link } from "svelte-spa-router";
   import { attachments, part_at_hook } from "../lib/attachment";
   import { parts } from "../lib/part";
@@ -12,7 +12,7 @@
 
   let { plan }: Props = $props();
 
-  let partlink = $derived(plan?.part ? $parts[plan.part].partLink() : "");
+  let partlink = $derived(plan?.part ? parts[plan.part].partLink() : "");
 </script>
 
 {#if plan}
@@ -25,7 +25,7 @@
           plan.part,
           plan.what,
           plan.hook,
-          $attachments,
+          attachments,
         )}"
         use:link
       >
@@ -34,8 +34,8 @@
     {:else}
       {types[plan.what].human_name(plan.hook)}
     {/if}
-    {#if isTemplate(plan, $plans)}
-      {m.attachform_of()} {$category.localizedAnyDative()}
+    {#if isTemplate(plan)}
+      {m.attachform_of()} {getCategory()!.localizedAnyDative()}
     {:else}
       {m.attachform_of()} {@html partlink}
     {/if}

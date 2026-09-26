@@ -6,8 +6,9 @@
     Select,
   } from "flowbite-svelte";
   import * as m from "../../paraglide/messages";
-  import { Shop, shop, shops } from "../lib/shop";
-  import { user } from "../lib/user";
+  import { Shop, getShop, shops } from "../lib/shop";
+  import { getUser } from "../lib/user";
+  import { stateValues } from "../lib/mapable.svelte";
   import type { Part } from "../lib/part";
   import type { Attachment } from "../lib/attachment";
 
@@ -23,7 +24,7 @@
   );
 
   // Fetch user's shops (only owned shops, not in shop mode)
-  let userShops = $derived($shop ? [] : Object.values($shops));
+  let userShops = $derived(getShop() ? [] : stateValues(shops));
 
   async function unregisterFromShop() {
     try {
@@ -47,9 +48,9 @@
   {#if part.shop && !disabled}
     <DropdownDivider />
     <DropdownItem onclick={unregisterFromShop}>
-      {m.shop_unregister_from({ name: $shops[part.shop]?.name ?? "" })}
+      {m.shop_unregister_from({ name: shops[part.shop]?.name ?? "" })}
     </DropdownItem>
-  {:else if !$shop && $user?.id === part.owner && userShops.length > 0}
+  {:else if !getShop() && getUser()?.id === part.owner && userShops.length > 0}
     <DropdownDivider />
     <DropdownItem class="flex items-center gap-2">
       <Label>

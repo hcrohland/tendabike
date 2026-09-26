@@ -1,36 +1,9 @@
 <script context="module" lang="ts">
-  import { writable } from "svelte/store";
-
-  type ModalType = {
-    newPart: (t: Type) => void;
-    newNote: (p: Part, note?: PartNote) => void;
-    deleteNote: (n: PartNote) => void;
-    installPart: (p: Part) => void;
-    changePart: (p: Part) => void;
-    deletePart: (p: Part) => void;
-    disposePart: (p: Part, a?: Attachment) => void;
-    recoverPart: (p: Part) => void;
-    replacePart: (p: Attachment) => void;
-    attachPart: (p: Part) => void;
-    newService: (part: Part, plan?: ServicePlan) => void;
-    newPlan: (p: Part) => void;
-    changeService: (s: Service) => void;
-    redoService: (s: Service) => void;
-    deleteService: (s: Service) => void;
-    updatePlan: (p: ServicePlan) => void;
-    deletePlan: (p: ServicePlan) => void;
-    deleteAttachment: (a: Attachment) => void;
-    changeActivity: (a: Activity) => void;
-    createShop: () => void;
-    editShop: (g: Shop) => void;
-    deleteShop: (g: Shop) => void;
-    requestSubscription: (g: Shop) => void;
-  };
-
-  export let actions = writable<ModalType>();
+  export { getActions, setActions } from "../lib/actions.svelte";
 </script>
 
 <script lang="ts">
+  import { setActions } from "../lib/actions.svelte";
   import DeletePlan from "../ServicePlan/DeletePlan.svelte";
   import NewNote from "../Part/NewNote.svelte";
   import DeleteNote from "../Part/DeleteNote.svelte";
@@ -59,7 +32,7 @@
   import SubscriptionRequestModal from "../Shop/SubscriptionRequestModal.svelte";
   import type { Shop } from "../lib/shop";
 
-  $: actions.set({
+  $: setActions({
     newPart: newPart?.start,
     newNote: newNote?.start,
     deleteNote: deleteNote?.start,

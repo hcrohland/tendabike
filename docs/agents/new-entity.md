@@ -12,7 +12,7 @@ The implementation steps for a new entity, end to end. *Why* the pieces are wire
    *Test*: the new store methods.
 4. **Presentation** — the axum router module in `backend/axum/src/domain/<name>.rs` plus the route in `domain.rs`.
    *Test*: the new route.
-5. **Frontend class** — the class plus its `mapable` store in `frontend/src/lib/<name>.ts` (copy the shape of `part.ts`).
+5. **Frontend class** — the class plus its `mapableState` collection in `frontend/src/lib/<name>.ts` (copy the shape of `part.ts`).
    *Test*: the class and its mapping from the backend JSON.
 6. **Summary wiring** — entries in `setSummary`/`updateSummary` in `frontend/src/lib/user.ts`.
    *Test*: the new entity hydrates and merges through `setSummary`/`updateSummary`.

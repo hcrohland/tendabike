@@ -18,7 +18,7 @@
 
   export const start = (a: Attachment) => {
     attachment = a;
-    part = $parts[a.part_id];
+    part = parts[a.part_id];
     open = true;
   };
 </script>
@@ -28,7 +28,7 @@
     {m.deleteattachment_header({
       type: types[part.what].localizedName(),
       name: part.name,
-      gear: $parts[attachment.gear].name,
+      gear: parts[attachment.gear].name,
       date: fmtDate(attachment.attached),
     })}
   {/snippet}

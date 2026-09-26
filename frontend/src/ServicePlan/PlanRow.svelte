@@ -1,19 +1,17 @@
 <script lang="ts">
   import ServiceRow from "../Service/ServiceRow.svelte";
   import { attachments } from "../lib/attachment";
-  import { Part, parts } from "../lib/part";
-  import { services } from "../lib/service";
+  import { Part } from "../lib/part";
   import {
     partForPlanGear,
     duesForPlans,
     ServicePlan,
   } from "../lib/serviceplan";
-  import { usages } from "../lib/usage";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import * as m from "../../paraglide/messages";
   import Menu from "../Widgets/Menu.svelte";
   import { DropdownItem } from "flowbite-svelte";
-  import { actions } from "../Widgets/Actions.svelte";
+  import { getActions } from "../Widgets/Actions.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
 
   interface Props {
@@ -25,13 +23,9 @@
 
   let show_more = $state(false);
 
-  let part = $derived(
-    partForPlanGear(plan, gear?.id, $parts, $attachments),
-  ) as Part;
-  let [ActiveService, ...serviceList] = $derived(
-    plan.services(part, $services),
-  );
-  let due_list = $derived(duesForPlans(part, [plan], $services, usages));
+  let part = $derived(partForPlanGear(plan, gear?.id)) as Part;
+  let [ActiveService, ...serviceList] = $derived(plan.services(part));
+  let due_list = $derived(duesForPlans(part, [plan]));
 </script>
 
 {#if part}
@@ -52,20 +46,20 @@
       </div>
       {#if plan.what == part.what}
         <Menu>
-          <DropdownItem onclick={() => $actions.newService(part, plan)}>
+          <DropdownItem onclick={() => getActions()!.newService(part, plan)}>
             {m.planmenu_new_service()}
           </DropdownItem>
           {#if plan.part != part.id}
-            {@const att = part.attachments($attachments).at(0)}
+            {@const att = part.attachments(attachments).at(0)}
             {#if att}
-              <DropdownItem onclick={() => $actions.replacePart(att)}>
+              <DropdownItem onclick={() => getActions()!.replacePart(att)}>
                 {m.action_replace()}
               </DropdownItem>
             {/if}
           {/if}
         </Menu>
       {:else}
-        <XsButton onclick={() => $actions.installPart(part)}>
+        <XsButton onclick={() => getActions()!.installPart(part)}>
           {m.action_new()}
         </XsButton>
       {/if}

@@ -4,7 +4,7 @@
   import { Part } from "../lib/part";
   import { fmtDate } from "../lib/store";
   import { types } from "../lib/types";
-  import { user, users } from "../lib/user";
+  import { getUser, users } from "../lib/user";
   import UsageChips from "../Usage/UsageChips.svelte";
   import * as m from "../../paraglide/messages";
 
@@ -43,7 +43,7 @@
         : "")}
     onclick={() => summary && push("/part/" + part.id)}
   >
-    {#if part.owner == $user!.id}
+    {#if part.owner == getUser()!.id}
       {#if summary}
         <a href="/part/{part.id}" use:link class="text-decoration-none">
           {part.name}
@@ -52,7 +52,7 @@
         {part.name}
       {/if}
     {:else}
-      {@const owner = $users[part.owner]}
+      {@const owner = users[part.owner]}
       {part.name}
       <Badge color="green" class="relative -top-3 -right-1">
         {owner.firstname + " " + owner.name}

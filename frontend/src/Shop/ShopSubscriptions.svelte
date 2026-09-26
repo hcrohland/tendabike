@@ -78,7 +78,7 @@
 </script>
 
 <div class="space-y-6">
-  {#if !($shops[shopId].auto_approve && subscriptions.length === 0)}
+  {#if !(shops[shopId].auto_approve && subscriptions.length === 0)}
     <div>
       <div class="mb-4 flex items-center justify-between">
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white">

@@ -1,6 +1,9 @@
-import { get, writable } from "svelte/store";
+import { get } from "svelte/store";
 import { location } from "svelte-spa-router";
-import { user } from "./user";
+import { getUser, setUser } from "./user";
+import { message } from "./message.svelte";
+
+export { message };
 
 export const DAY = 24 * 60 * 60 * 1000;
 export const maxDate = new Date("2999-12-31");
@@ -66,24 +69,23 @@ export function checkStatus(response: Response) {
 
   if (response.status === 401) {
     window.location.href = "/#/about?path=/#" + get(location);
-    if (get(user) == undefined) return;
-    user.set(undefined);
+    if (getUser() == undefined) return;
+    setUser(undefined);
   }
 
   return response.text().then((text) => {
-    message.set({ active: true, status: response.statusText, message: text });
+    message.active = true;
+    message.status = response.statusText;
+    message.message = text;
     return Promise.reject(text);
   });
 }
 
 export function handleError(e: Error) {
-  message.update((m) => {
-    if (m.active == false) {
-      m.message = e.message;
-      m.active = true;
-    }
-    return m;
-  });
+  if (message.active == false) {
+    message.message = e.message;
+    message.active = true;
+  }
 }
 
 export const icons = new Map([
@@ -92,9 +94,3 @@ export const icons = new Map([
   [302, "flaticon-snow"],
   [303, "flaticon-ski"],
 ]);
-
-export const message = writable({
-  active: false,
-  message: "No message",
-  status: "",
-});

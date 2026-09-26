@@ -2,7 +2,7 @@
   import { ButtonGroup, InputAddon, Select } from "flowbite-svelte";
   import DateTime from "../Widgets/DateTime.svelte";
   import { types } from "../lib/types";
-  import { filterValues } from "../lib/mapable";
+  import { stateValues } from "../lib/mapable.svelte";
   import { Part } from "../lib/part";
   import { attachments } from "../lib/attachment";
   import SelectPart from "../Widgets/SelectPart.svelte";
@@ -28,13 +28,13 @@
   }
 
   function prevdate(time: Date) {
-    let last = filterValues(
-      $attachments,
-      (a) =>
-        (a.attached < time || a.detached < time) &&
-        (a.part_id == part.id ||
-          (a.gear == gear && a.hook == hook && a.what == part.what)),
-    )
+    let last = stateValues(attachments)
+      .filter(
+        (a) =>
+          (a.attached < time || a.detached < time) &&
+          (a.part_id == part.id ||
+            (a.gear == gear && a.hook == hook && a.what == part.what)),
+      )
       .map((a) => (a.detached < time ? a.detached : a.attached))
       .sort((a, b) => (a < b ? 1 : -1))[0];
     return last || part.purchase;

@@ -1,7 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { Shop, shops } from "./shop";
 import { Part } from "./part";
-import { get } from "svelte/store";
 import { resp } from "../test/helpers";
 
 function shopData(overrides: Partial<any> = {}): any {
@@ -82,9 +81,8 @@ describe("Shop CRUD", () => {
       fetchMock.mockResolvedValue(resp(created));
       const s = new Shop(shopData({ id: undefined }));
       await s.create();
-      const map = get(shops);
-      expect(map[10]).toBeInstanceOf(Shop);
-      expect(map[10].name).toBe("Velo Shop");
+      expect(shops[10]).toBeInstanceOf(Shop);
+      expect(shops[10].name).toBe("Velo Shop");
     });
   });
 
@@ -112,8 +110,7 @@ describe("Shop CRUD", () => {
       const s = new Shop(shopData({ id: 10, name: "Old" }));
       s.name = "Changed";
       await s.update();
-      const map = get(shops);
-      expect(map[10].name).toBe("Changed");
+      expect(shops[10].name).toBe("Changed");
     });
   });
 
@@ -126,8 +123,7 @@ describe("Shop CRUD", () => {
       const [url, option] = fetchMock.mock.calls[0];
       expect(url).toBe("/api/shop/10");
       expect(option.method).toBe("DELETE");
-      const map = get(shops);
-      expect(map[10]).toBeUndefined();
+      expect(shops[10]).toBeUndefined();
     });
   });
 

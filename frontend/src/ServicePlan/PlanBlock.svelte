@@ -1,13 +1,11 @@
 <script lang="ts">
   import PlanRow from "./PlanRow.svelte";
   import PlanName from "./PlanName.svelte";
-  import { attachments } from "../lib/attachment";
-  import { parts } from "../lib/part";
-  import { plans, ServicePlan, gearsForPlan } from "../lib/serviceplan";
+  import { ServicePlan, gearsForPlan } from "../lib/serviceplan";
   import * as m from "../../paraglide/messages";
   import Menu from "../Widgets/Menu.svelte";
   import { DropdownItem } from "flowbite-svelte";
-  import { actions } from "../Widgets/Actions.svelte";
+  import { getActions } from "../Widgets/Actions.svelte";
   import Card from "../Widgets/Card.svelte";
 
   interface Props {
@@ -16,7 +14,7 @@
 
   let { plan }: Props = $props();
 
-  let gears = $derived(gearsForPlan(plan, $parts, $attachments, $plans));
+  let gears = $derived(gearsForPlan(plan));
 </script>
 
 <Card>
@@ -24,10 +22,10 @@
   <div class="flex items-center justify-between gap-1 md:gap-2 p-1">
     <span class="font-medium text-sm"><PlanName {plan} /></span>
     <Menu>
-      <DropdownItem onclick={() => $actions.updatePlan(plan)}>
+      <DropdownItem onclick={() => getActions()!.updatePlan(plan)}>
         {m.planmenu_change()}
       </DropdownItem>
-      <DropdownItem onclick={() => $actions.deletePlan(plan)}>
+      <DropdownItem onclick={() => getActions()!.deletePlan(plan)}>
         {m.planmenu_delete()}
       </DropdownItem>
     </Menu>

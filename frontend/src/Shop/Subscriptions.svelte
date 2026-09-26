@@ -15,9 +15,10 @@
   import ShopSearch from "./ShopSearch.svelte";
   import type { ShopSubscription } from "../lib/subscription";
   import SubscriptionRow from "./SubscriptionRow.svelte";
-  import { actions } from "../Widgets/Actions.svelte";
+  import { getActions } from "../Widgets/Actions.svelte";
   import { allGear, Part, parts } from "../lib/part";
-  import { category } from "../lib/types";
+  import { stateValues } from "../lib/mapable.svelte";
+  import { getCategory } from "../lib/types";
 
   interface Props {
     shopid?: number;
@@ -78,13 +79,13 @@
     if (shopid) {
       myfetch(`/api/shop/` + shopid)
         .then((s) => new Shop(s))
-        .then((shop) => $actions.requestSubscription(shop))
+        .then((shop) => getActions()!.requestSubscription(shop))
         .catch(handleError);
       shopid = undefined;
     }
   }
 
-  let mygear = $derived(allGear($parts, $category));
+  let mygear = $derived(allGear(parts, getCategory()!));
 
   async function registerGear(part: Part, shopid: number, checked: boolean) {
     try {
@@ -181,7 +182,9 @@
                     {:else if subscription.status === "active"}
                       <ButtonGroup>
                         <Button size="xs" color="alternative">
-                          {m.shop_register_gear({ category: $category.name })}
+                          {m.shop_register_gear({
+                            category: getCategory()!.name,
+                          })}
                         </Button>
 
                         <Dropdown simple>
@@ -207,7 +210,7 @@
                           color="alternative"
                           onclick={() =>
                             startConfirmation(subscription.id!, "unsubscribe")}
-                          disabled={Object.values($parts).some(
+                          disabled={stateValues(parts).some(
                             (p) => p.shop == subscription.shop_id,
                           )}
                         >

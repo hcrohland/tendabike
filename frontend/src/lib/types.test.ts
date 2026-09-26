@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { getTypes, types, Type, category } from "./types";
+import { getTypes, types, Type, getCategory } from "./types";
 import { Activity } from "./activity";
 import { Part } from "./part";
-import { get } from "svelte/store";
-import type { Map } from "./mapable";
+import type { Map } from "./mapable.svelte";
 import { resp } from "../test/helpers";
 
 function partTypes(): any[] {
@@ -79,11 +78,11 @@ describe("getTypes", () => {
     expect(t[10].acts[0].id).toBe(302);
   });
 
-  it("sets the category store to type 1", async () => {
+  it("sets the category to type 1", async () => {
     await loadTypes();
-    const cat = get(category);
-    expect(cat.id).toBe(1);
-    expect(cat.name).toBe("Bike");
+    const cat = getCategory();
+    expect(cat?.id).toBe(1);
+    expect(cat?.name).toBe("Bike");
   });
 });
 

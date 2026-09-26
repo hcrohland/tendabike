@@ -28,7 +28,7 @@
   export const start = (p: Part) => {
     part = { ...p };
     type = p.type();
-    maxdate = p.firstEvent($activities, $attachments);
+    maxdate = p.firstEvent(activities, attachments);
     open = true;
   };
 </script>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { filterValues, by } from "../lib/mapable";
+  import { by, stateValues } from "../lib/mapable.svelte";
   import { Part } from "../lib/part";
   import ServiceHist from "./ServiceHist.svelte";
   import { services } from "../lib/service";
@@ -11,10 +11,9 @@
   let { part }: Props = $props();
 
   let servs = $derived(
-    filterValues(
-      $services,
-      (s) => s.part_id == part.id && s.successor == undefined,
-    ).sort(by("time")),
+    stateValues(services)
+      .filter((s) => s.part_id == part.id && s.successor == undefined)
+      .sort(by("time")),
   );
 </script>
 

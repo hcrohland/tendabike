@@ -1,8 +1,10 @@
 import { handleError, myfetch } from "./store";
 import { refresh, updateSummary } from "./user";
-import { mapable } from "./mapable";
+import { mapableState } from "./mapable.svelte";
 import { type Part } from "./part";
-import { writable } from "svelte/store";
+import { getShop, setShop } from "./shop.svelte";
+
+export { getShop, setShop };
 
 export class Shop {
   id?: number;
@@ -78,16 +80,13 @@ export class Shop {
   }
 }
 
-// Shop mode state
-export const shop = writable<Shop | undefined>(undefined);
-
 // Exit shop mode: refresh data from backend
 export async function exitShop() {
-  shop.set(undefined);
+  setShop(undefined);
   await refresh();
 
   // Navigate to main page
   window.location.hash = "#/cat";
 }
 
-export const shops = mapable<Shop>("id", (data) => new Shop(data));
+export const shops = mapableState("id", (data) => new Shop(data));

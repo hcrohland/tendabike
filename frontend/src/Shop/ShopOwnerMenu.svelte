@@ -8,18 +8,18 @@
   } from "flowbite-svelte";
   import { CheckOutline, ClipboardCleanSolid } from "flowbite-svelte-icons";
   import * as m from "../../paraglide/messages";
-  import { actions } from "../Widgets/Actions.svelte";
+  import { getActions } from "../Widgets/Actions.svelte";
   import Menu from "../Widgets/Menu.svelte";
 
   let { shop } = $props();
 </script>
 
 <Menu>
-  <DropdownItem onclick={() => $actions.editShop(shop)}>
+  <DropdownItem onclick={() => getActions()!.editShop(shop)}>
     {m.shop_edit()}
   </DropdownItem>
 
-  <DropdownItem onclick={() => $actions.deleteShop(shop)}>
+  <DropdownItem onclick={() => getActions()!.deleteShop(shop)}>
     {m.shop_delete()}
   </DropdownItem>
 
