@@ -82,7 +82,7 @@ impl Service {
         notes: String,
         successor: Option<ServiceId>,
         plans: Vec<ServicePlanId>,
-        store: &mut impl Store,
+        store: &mut (impl PartStore + ActivityStore + AttachmentStore + UsageStore + ServiceStore),
     ) -> TbResult<Summary> {
         let service = Service {
             id: ServiceId::new(),
@@ -104,7 +104,10 @@ impl Service {
         })
     }
 
-    async fn calculate_usage(&self, store: &mut impl Store) -> TbResult<Usage> {
+    async fn calculate_usage(
+        &self,
+        store: &mut (impl PartStore + ActivityStore + AttachmentStore),
+    ) -> TbResult<Usage> {
         Ok(if self.part_id.is_main(store).await? {
             Activity::find(self.part_id, MIN_TIME, self.time, store).await?
         } else {
@@ -151,7 +154,10 @@ impl Service {
         }
     }
 
-    async fn update_unchecked(self, store: &mut impl Store) -> TbResult<Summary> {
+    async fn update_unchecked(
+        self,
+        store: &mut (impl PartStore + ActivityStore + AttachmentStore + UsageStore + ServiceStore),
+    ) -> TbResult<Summary> {
         let usages = vec![self.calculate_usage(store).await?.update(store).await?];
         let services = vec![ServiceStore::update(store, self).await?];
         Ok(Summary {
@@ -185,7 +191,7 @@ impl Service {
     pub(crate) async fn recalculate(
         part: PartId,
         attach: OffsetDateTime,
-        store: &mut impl Store,
+        store: &mut (impl PartStore + ActivityStore + AttachmentStore + ServiceStore),
     ) -> TbResult<Vec<Usage>> {
         let mut res = Vec::new();
         let services = store
@@ -202,7 +208,7 @@ impl Service {
     /// return all attachments with details for the parts in 'partlist'
     pub(crate) async fn for_part_with_usage(
         part: PartId,
-        store: &mut impl Store,
+        store: &mut (impl ServiceStore + UsageStore),
     ) -> TbResult<(Vec<Service>, Vec<Usage>)> {
         let services = store.services_by_part(part).await?;
 
