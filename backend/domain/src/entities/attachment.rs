@@ -26,7 +26,7 @@
 
 use serde_derive::{Deserialize, Serialize};
 
-use crate::traits::{AttachmentStore, Store};
+use crate::traits::{AttachmentStore, PartStore, ServiceStore, Store, UsageStore};
 
 use crate::*;
 use time::OffsetDateTime;
@@ -110,6 +110,7 @@ impl Attachment {
     ///
     /// updates hash with the changes
     /// returns the time the new attachment ends
+    /// Crosses Part, Activity, Service, and Usage through the detach/attach_one cascade.
     async fn shift(
         &self,
         time: OffsetDateTime,
@@ -126,6 +127,8 @@ impl Attachment {
     ///
     /// * deletes the attachment for detached < attached
     /// * Does not check for collisions
+    ///
+    /// Crosses Part, Activity, Service, and Usage through create and delete.
     async fn detach(mut self, time: OffsetDateTime, store: &mut impl Store) -> TbResult<Summary> {
         trace!("detaching {} at {}", self.part_id, time);
 
@@ -145,6 +148,8 @@ impl Attachment {
     //
     /// - recalculates the usage counters in the attached assembly
     /// - returns all affected parts
+    ///
+    /// Crosses Activity, Part, Service, and Usage; kept on full `Store` until those callees narrow.
     pub(crate) async fn create(mut self, store: &mut impl Store) -> TbResult<Summary> {
         trace!("create {self:?}");
 
@@ -180,6 +185,8 @@ impl Attachment {
     ///
     /// - recalculates the usage counters in the attached assembly
     /// - returns all affected parts
+    ///
+    /// Crosses Part, Service, and Usage; kept on full `Store` until those callees narrow.
     async fn delete(self, store: &mut impl Store) -> TbResult<Summary> {
         trace!("delete {self:?}");
 
@@ -242,7 +249,7 @@ impl Attachment {
     /// return all attachments with details for the parts in 'partlist'
     pub(crate) async fn for_part_with_usage(
         part: PartId,
-        store: &mut impl Store,
+        store: &mut (impl AttachmentStore + PartStore + UsageStore),
     ) -> TbResult<(Vec<AttachmentDetail>, Vec<Usage>)> {
         let atts = store.attachments_all_by_part(part).await?;
 
@@ -259,7 +266,7 @@ impl Attachment {
         gear: Option<PartId>,
         start: OffsetDateTime,
         usage: Usage,
-        store: &mut impl Store,
+        store: &mut (impl AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<Summary> {
         let gear = match gear {
             None => return Ok(Summary::default()),
@@ -295,6 +302,7 @@ impl Attachment {
         })
     }
 
+    /// Crosses Part, Activity, Service, and Usage through the shift/detach cascade.
     async fn detach_assembly(
         self,
         time: OffsetDateTime,
@@ -318,6 +326,7 @@ impl Attachment {
 /// This is used when the part is detached with all subparts
 ///
 ///  # Updates the hash of the changes
+/// Crosses Part, Activity, Service, and Usage through the shift cascade.
 async fn shift_subparts(
     from: PartId,
     to: PartId,
@@ -337,7 +346,7 @@ async fn subattachments(
     part: PartId,
     gear: PartId,
     time: OffsetDateTime,
-    store: &mut impl Store,
+    store: &mut (impl AttachmentStore + PartStore),
 ) -> TbResult<Vec<Attachment>> {
     let types = part.read(store).await?.what.subtypes();
     store
@@ -348,7 +357,7 @@ async fn subattachments(
 pub(crate) async fn subparts(
     part: PartId,
     time: OffsetDateTime,
-    store: &mut impl Store,
+    store: &mut (impl AttachmentStore + PartStore),
 ) -> TbResult<Vec<PartId>> {
     Ok(subattachments(part, part, time, store)
         .await?
@@ -366,6 +375,7 @@ pub(crate) async fn subparts(
 /// If the part is attached already to the same hook, the attachments are merged
 ///
 /// returns all affected entities and the time the attachment ends or an error
+/// Crosses Part, Activity, Service, and Usage through create, detach, and the part session callees.
 async fn attach_one(
     part_id: PartId,
     time: OffsetDateTime,
@@ -436,6 +446,7 @@ async fn attach_one(
     Ok(det)
 }
 
+/// Crosses Part, Activity, Service, and Usage through the assembly cascade.
 pub async fn attach_assembly(
     user: &dyn Session,
     part: PartId,
@@ -527,6 +538,7 @@ pub async fn attach_assembly(
     Ok(hash.into())
 }
 
+/// Crosses Part, Activity, Service, and Usage through the detach cascade.
 pub async fn detach_assembly(
     user: &dyn Session,
     part_id: PartId,
@@ -544,6 +556,7 @@ pub async fn detach_assembly(
     attachment.detach_assembly(time, all, store).await
 }
 
+/// Crosses Part, Activity, Service, and Usage through the dispose/detach cascade.
 pub async fn dispose_assembly(
     user: &dyn Session,
     part_id: PartId,
@@ -574,6 +587,7 @@ pub async fn dispose_assembly(
     Ok(res.into())
 }
 
+/// Crosses Part, Activity, Service, and Usage through the detach cascade.
 async fn dispose_subparts(
     part: PartId,
     time: OffsetDateTime,
@@ -594,6 +608,7 @@ async fn dispose_subparts(
     Ok(res.into())
 }
 
+/// Crosses Part and Attachment; kept on full `Store` until the Part session/restore callees narrow.
 pub async fn recover_assembly(
     user: &dyn Session,
     part: PartId,
@@ -617,7 +632,7 @@ pub async fn recover_assembly(
 pub async fn is_attached(
     part: PartId,
     time: OffsetDateTime,
-    store: &mut impl Store,
+    store: &mut impl AttachmentStore,
 ) -> TbResult<bool> {
     Ok(store
         .attachment_get_by_part_and_time(part, time)
