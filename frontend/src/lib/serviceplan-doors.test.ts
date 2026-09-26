@@ -565,19 +565,25 @@ describe("planCmp", () => {
 });
 
 describe("isTemplate", () => {
+  beforeEach(() => {
+    plans.setMap([]);
+  });
+
   it("is false for a plan bound to a specific part", () => {
     const p = plan({ id: "P1", part: 5 });
-    expect(isTemplate(p, planMap(p))).toBe(false);
+    plans.setMap([p]);
+    expect(isTemplate(p)).toBe(false);
   });
 
   it("is true when the plan is absent from the map", () => {
     const p = plan({ id: "P1", part: 5 });
-    expect(isTemplate(p, planMap())).toBe(true);
+    expect(isTemplate(p)).toBe(true);
   });
 
   it("is true for a plan without a part", () => {
     const p = plan({ id: "P1", part: null });
-    expect(isTemplate(p, planMap(p))).toBe(true);
+    plans.setMap([p]);
+    expect(isTemplate(p)).toBe(true);
   });
 });
 

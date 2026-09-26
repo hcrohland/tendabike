@@ -415,10 +415,7 @@ export function plansForAssembly(part: Part): ServicePlan[] {
  * Whether a plan is a template (not bound to a specific part): true for a
  * generic plan, or when the plan is not (or no longer) in the map.
  */
-export function isTemplate(
-  plan: ServicePlan,
-  plans: Map<ServicePlan>,
-): boolean {
+export function isTemplate(plan: ServicePlan): boolean {
   return typeof (plan.id && plans[plan.id]?.part) !== "number";
 }
 
