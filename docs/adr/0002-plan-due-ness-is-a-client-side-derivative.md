@@ -25,6 +25,6 @@ The backend keeps **CRUD for `Service` and `ServicePlan` plus the `unlink_plan` 
 
 ## Consequences
 
-- `frontend/src/lib/serviceplan.ts` remains the home of the rule; its public surface narrows to the eight doors, the exported `planCmp`, and the `ServicePlan`/`Limits` shapes, `limit_keys`, the `plans` state object, and CRUD (spec #323 is the execution record; the `unlink_plan` unlink landed as its backend half).
+- `frontend/src/lib/serviceplan.ts` remains the home of the rule; its public surface narrows to the eight doors, the exported `planCmp`, the `Due` value object, `localizeLimitKey`, and the `ServicePlan`/`Limits` shapes, `limit_keys`, the `plans` state object, and CRUD (spec #323 is the execution record; the `unlink_plan` unlink landed as its backend half).
 - Derivatives re-evaluate on state writes, not on clock passage; a midnight band flip waits for the next data change or re-hydration. Accepted and recorded.
 - ADR-0001 (on `misc`) is withdrawn with this ADR; its salvageable piece is the `unlink_plan` unlink.

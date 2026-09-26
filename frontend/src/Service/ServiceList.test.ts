@@ -3,7 +3,8 @@ import { flushSync } from "svelte";
 import { beforeEach, describe, expect, it } from "vitest";
 import { parts, Part } from "../lib/part";
 import { services, Service } from "../lib/service";
-import { usages, Usage } from "../lib/usage";
+import { usages } from "../lib/usage";
+import { usage } from "../test/helpers";
 import ServiceList from "./ServiceList.svelte";
 
 describe("ServiceList", () => {
@@ -25,11 +26,8 @@ describe("ServiceList", () => {
     });
     parts.setMap([part]);
     usages.setMap([
-      new Usage({
-        id: "u1",
+      usage("u1", {
         count: 1,
-        climb: 0,
-        descend: 0,
         distance: 1000,
         time: 3600,
         duration: 3600,

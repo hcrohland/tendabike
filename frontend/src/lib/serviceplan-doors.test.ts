@@ -16,10 +16,10 @@ import {
 import { Part, parts } from "./part";
 import { Attachment, attachments } from "./attachment";
 import { Service, services } from "./service";
-import { Usage, usages } from "./usage";
+import { usages } from "./usage";
 import { getTypes } from "./types";
 import { maxDate } from "./store";
-import { resp } from "../test/helpers";
+import { resp, usage } from "../test/helpers";
 
 const wheelType = {
   id: 10,
@@ -43,7 +43,8 @@ const wheelAsmType = { ...wheelType, main: 1 };
 
 // Door test suite for the new public surface of serviceplan.ts (issue #327).
 // Fixture helpers are copied from serviceplan.test.ts on purpose: importing
-// that file would re-run its describes.
+// that file would re-run its describes. The one exception is `usage`, shared
+// from test/helpers (a non-test module, safe to import).
 
 function plan(overrides: Partial<any> = {}): ServicePlan {
   return new ServicePlan({
@@ -107,20 +108,6 @@ function svc(overrides: Partial<any> = {}): Service {
     successor: null,
     plans: [],
     ...overrides,
-  });
-}
-
-function usage(id: string, o: Partial<any> = {}): Usage {
-  return new Usage({
-    id,
-    count: 0,
-    climb: 0,
-    descend: 0,
-    distance: 0,
-    time: 0,
-    duration: 0,
-    energy: 0,
-    ...o,
   });
 }
 

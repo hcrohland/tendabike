@@ -4,7 +4,7 @@ import { Part } from "./part";
 import { Usage, usages } from "./usage";
 import { fmtDate } from "./store";
 import { type Map } from "./mapable.svelte";
-import { resp } from "../test/helpers";
+import { resp, usage } from "../test/helpers";
 
 function svc(overrides: Partial<any> = {}): Service {
   return new Service({
@@ -35,20 +35,6 @@ function part(overrides: Partial<any> = {}): Part {
     last_used: "2023-01-01T00:00:00Z",
     usage: "u1",
     ...overrides,
-  });
-}
-
-function usage(id: string, o: Partial<any> = {}): Usage {
-  return new Usage({
-    id,
-    count: 0,
-    climb: 0,
-    descend: 0,
-    distance: 0,
-    time: 0,
-    duration: 0,
-    energy: 0,
-    ...o,
   });
 }
 

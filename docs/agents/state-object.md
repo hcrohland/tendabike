@@ -20,7 +20,7 @@ Pick by what the value is:
   - state object: `$x` → `x`.
   - accessor shape: `$user` → `getUser()`, `$user?.id` → `getUser()?.id`, `$user!.id` → `getUser()!.id`.
   - writes: `$user = v` / `user.set(v)` / `user.update(f)` → `setUser(v)`; property mutation for shape 2.
-- **Reactivity** — a state read inside a plain function registers dependencies at the enclosing reactive call site (the "door" shape, verified in #322/#346). Shape 2 tracks property mutation at any depth through its stable proxy. Shape 3 tracks the _replacement_ only (the replaced value is a plain object) — exactly what wholesale-replacement writes need.
+- **Reactivity** — a state read inside a plain function registers dependencies at the enclosing reactive call site (the "door" shape, verified in #322/#346). Shape 2 tracks property mutation at any depth through its stable proxy. Shape 3 does the same: a re-assigned value is state-proxied like the initial one (not a plain object), so the replacement and any property mutation of it are both tracked; the current shape-3 stores only write wholesale replacement, so the replacement leg is all the app exercises.
 - **Enumerate collections with `stateValues(c)`.** The write operations attach to the record, so `Object.keys`/`Object.values`/`filterValues` see them; value-iteration over a state collection surfaces the operations as entries.
 
 ## Tests

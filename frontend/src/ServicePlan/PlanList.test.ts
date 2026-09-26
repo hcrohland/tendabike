@@ -5,8 +5,8 @@ import { attachments } from "../lib/attachment";
 import { parts, Part } from "../lib/part";
 import { plans, ServicePlan } from "../lib/serviceplan";
 import { getTypes } from "../lib/types";
-import { Usage, usages } from "../lib/usage";
-import { resp } from "../test/helpers";
+import { usages } from "../lib/usage";
+import { resp, usage } from "../test/helpers";
 import PlanList from "./PlanList.svelte";
 
 describe("PlanList", () => {
@@ -50,11 +50,8 @@ describe("PlanList", () => {
       }),
     ]);
     usages.setMap([
-      new Usage({
-        id: "u1",
+      usage("u1", {
         count: 1,
-        climb: 0,
-        descend: 0,
         distance: 1000,
         time: 3600,
         duration: 3600,
