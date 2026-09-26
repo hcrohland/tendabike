@@ -141,6 +141,8 @@ impl ActivityId {
     ///
     /// returns all affected parts  
     /// checks authorization  
+    ///
+    /// Crosses: activity, attachment, part, service, usage
     pub async fn delete(self, session: &dyn Session, store: &mut impl Store) -> TbResult<Summary> {
         info!("Deleting {self:?}");
         let mut res = self
@@ -165,6 +167,8 @@ impl Activity {
     ///
     /// returns the activity and all affected parts  
     /// checks authorization  
+    ///
+    /// Crosses: activity, attachment, part, service, usage
     pub async fn upsert(self, user: &dyn Session, store: &mut impl Store) -> TbResult<Summary> {
         if let Some(old_activity) = self.id.read_optional(user, store).await? {
             old_activity.replace(self, store).await
@@ -190,10 +194,13 @@ impl Activity {
     ///
     /// returns all affected parts  
     /// checks authorization  
+    ///
+    /// Crosses: activity, attachment, part, service, usage
     pub async fn update(self, user: &dyn Session, store: &mut impl Store) -> TbResult<Summary> {
         self.id.read(user, store).await?.replace(self, store).await
     }
 
+    /// Crosses: activity, attachment, part, service, usage
     async fn replace(self, new: Activity, store: &mut impl Store) -> TbResult<Summary> {
         info!("Updating {self:?}");
         let mut res = self.register(Factor::Sub, store).await?;
@@ -240,6 +247,8 @@ impl Activity {
     /// If the factor is `Factor::Subtract`, the activity is unregistered and the usage is subtracted from the parts and attachments.
     ///
     /// Returns a summary of the affected parts, attachments, and activities.
+    ///
+    /// Crosses: attachment, part, service, usage (via `Attachment::register_activity`)
     async fn register(self, factor: Factor, store: &mut impl Store) -> TbResult<Summary> {
         trace!(
             "{} {:?}",
@@ -273,7 +282,7 @@ impl Activity {
 
     pub async fn categories(
         user: &dyn Session,
-        store: &mut impl Store,
+        store: &mut impl ActivityStore,
     ) -> TbResult<HashSet<PartTypeId>> {
         let act_types = store
             .get_all(&user.user_id())
@@ -291,6 +300,7 @@ impl Activity {
         Ok(p_types)
     }
 
+    /// Crosses: activity, attachment, part, service, usage
     pub async fn csv2descend(
         data: impl std::io::Read,
         user: &dyn Session,
@@ -354,6 +364,7 @@ impl Activity {
         Ok((summary.into(), good, bad))
     }
 
+    /// Crosses: activity, attachment, part, service, usage, shop
     pub async fn set_default_part(
         gear_id: PartId,
         user: &dyn Session,
@@ -371,6 +382,7 @@ impl Activity {
         Ok(hash.into())
     }
 
+    /// Crosses: activity, attachment, part, service, usage
     pub async fn rescan_all(store: &mut impl Store) -> TbResult<()> {
         warn!("rescanning all activities!");
         Usage::delete_all(store).await?;
@@ -383,6 +395,7 @@ impl Activity {
     }
 }
 
+/// Crosses: activity, attachment, part, service, usage
 async fn match_and_update(
     store: &mut impl Store,
     user: &dyn Session,
