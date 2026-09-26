@@ -8,7 +8,6 @@ import {
 } from "./serviceplan";
 import { Part } from "./part";
 import { Service, services } from "./service";
-import { type Map } from "./mapable.svelte";
 import { resp } from "../test/helpers";
 
 function plan(overrides: Partial<any> = {}): ServicePlan {
@@ -48,10 +47,6 @@ function svc(overrides: Partial<any> = {}): Service {
     plans: [],
     ...overrides,
   });
-}
-
-function svcMap(...ss: Service[]): Map<Service> {
-  return Object.fromEntries(ss.map((s) => [s.id!, s])) as Map<Service>;
 }
 
 describe("Limits", () => {
@@ -134,25 +129,45 @@ describe("ServicePlan.valid", () => {
 });
 
 describe("ServicePlan.services", () => {
-  const map = svcMap(
-    svc({ id: "S1", part_id: 5, plans: ["P1"], time: "2023-01-01T00:00:00Z" }),
-    svc({ id: "S2", part_id: 5, plans: ["P1"], time: "2024-01-01T00:00:00Z" }),
-    svc({
-      id: "S3",
-      part_id: 5,
-      plans: ["OTHER"],
-      time: "2023-06-01T00:00:00Z",
-    }),
-    svc({ id: "S4", part_id: 99, plans: ["P1"], time: "2023-06-01T00:00:00Z" }),
-  );
+  // The method reads the module's services state object in its body (issue
+  // #374); seed the world and reset it between tests.
+  beforeEach(() => {
+    services.setMap([]);
+  });
 
   it("returns only services for this part and plan, newest first", () => {
-    const res = plan({ id: "P1" }).services(part({ id: 5 }), map);
+    services.setMap([
+      svc({
+        id: "S1",
+        part_id: 5,
+        plans: ["P1"],
+        time: "2023-01-01T00:00:00Z",
+      }),
+      svc({
+        id: "S2",
+        part_id: 5,
+        plans: ["P1"],
+        time: "2024-01-01T00:00:00Z",
+      }),
+      svc({
+        id: "S3",
+        part_id: 5,
+        plans: ["OTHER"],
+        time: "2023-06-01T00:00:00Z",
+      }),
+      svc({
+        id: "S4",
+        part_id: 99,
+        plans: ["P1"],
+        time: "2023-06-01T00:00:00Z",
+      }),
+    ]);
+    const res = plan({ id: "P1" }).services(part({ id: 5 }));
     expect(res.map((s) => s.id)).toEqual(["S2", "S1"]);
   });
 
   it("returns an empty list when the part is null", () => {
-    expect(plan({ id: "P1" }).services(null, map)).toEqual([]);
+    expect(plan({ id: "P1" }).services(null)).toEqual([]);
   });
 });
 

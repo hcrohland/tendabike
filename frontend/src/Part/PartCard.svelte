@@ -12,7 +12,6 @@
   import PartLink from "./PartLink.svelte";
   import { getActions } from "../Widgets/Actions.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
-  import { services } from "../lib/service";
   import ServiceBadge from "../Widgets/ServiceBadge.svelte";
   import PartCard from "./PartCard.svelte";
   import * as m from "../../paraglide/messages";
@@ -42,12 +41,7 @@
     const list = attachments.map((a) => ({ att: a, part: parts[a.part_id] }));
     const att = list[0]?.att;
     const part = list[0]?.part;
-    const due_list = duesForPlans(
-      part,
-      plansForPart(part?.id),
-      services,
-      usages,
-    );
+    const due_list = duesForPlans(part, plansForPart(part?.id));
     return { list, att, part, due_list };
   });
 </script>

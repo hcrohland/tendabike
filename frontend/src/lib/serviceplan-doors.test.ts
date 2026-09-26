@@ -15,11 +15,10 @@ import {
 } from "./serviceplan";
 import { Part, parts } from "./part";
 import { Attachment, attachments } from "./attachment";
-import { Service } from "./service";
-import { Usage } from "./usage";
+import { Service, services } from "./service";
+import { Usage, usages } from "./usage";
 import { getTypes } from "./types";
 import { maxDate } from "./store";
-import { type Map } from "./mapable.svelte";
 import { resp } from "../test/helpers";
 
 const wheelType = {
@@ -84,10 +83,6 @@ function att(overrides: Partial<any> = {}): Attachment {
   });
 }
 
-function attMap(...as: Attachment[]): Map<Attachment> {
-  return Object.fromEntries(as.map((a) => [a.idx, a])) as Map<Attachment>;
-}
-
 /** Populate the live `types` binding by stubbing fetch and calling
  * getTypes() (the module binding is not assignable from a test file).
  */
@@ -115,10 +110,6 @@ function svc(overrides: Partial<any> = {}): Service {
   });
 }
 
-function svcMap(...ss: Service[]): Map<Service> {
-  return Object.fromEntries(ss.map((s) => [s.id!, s])) as Map<Service>;
-}
-
 function usage(id: string, o: Partial<any> = {}): Usage {
   return new Usage({
     id,
@@ -131,10 +122,6 @@ function usage(id: string, o: Partial<any> = {}): Usage {
     energy: 0,
     ...o,
   });
-}
-
-function usageMap(...us: Usage[]): Map<Usage> {
-  return Object.fromEntries(us.map((u) => [u.id, u])) as Map<Usage>;
 }
 
 describe("partForPlanGear", () => {
@@ -190,7 +177,13 @@ describe("duesForPlans", () => {
     time: 18000,
     energy: 1000,
   });
-  const usages = usageMap(u_prev, u_now);
+
+  // The door, due_for and plan.services read the module state objects in
+  // their bodies (issue #374); seed the world and reset it between tests.
+  beforeEach(() => {
+    services.setMap([]);
+    usages.setMap([]);
+  });
 
   it("subtracts usage since the last service", () => {
     const pln = plan({
@@ -208,7 +201,9 @@ describe("duesForPlans", () => {
       time: "2024-01-01T00:00:00Z",
       plans: ["P1"],
     });
-    expect(duesForPlans(p, [pln], svcMap(service), usages)).toEqual({
+    services.setMap([service]);
+    usages.setMap([u_prev, u_now]);
+    expect(duesForPlans(p, [pln])).toEqual({
       rides: { due: 8, plan: 10, severity: "ok" },
       hours: { due: 1, plan: 5, severity: "ok" },
       km: { due: 61, plan: 100, severity: "ok" },
@@ -220,7 +215,8 @@ describe("duesForPlans", () => {
 
   it("uses the full usage when there is no service", () => {
     const pln = plan({ what: 10, km: "100", rides: "10" });
-    expect(duesForPlans(p, [pln], {}, usages)).toEqual({
+    usages.setMap([u_prev, u_now]);
+    expect(duesForPlans(p, [pln])).toEqual({
       rides: { due: 6, plan: 10, severity: "ok" },
       km: { due: 60, plan: 100, severity: "ok" },
     });
@@ -229,20 +225,18 @@ describe("duesForPlans", () => {
   it("tracks the plan with the smallest due per limit", () => {
     const a = plan({ id: "A", what: 10, km: "200" });
     const b = plan({ id: "B", what: 10, km: "100" });
-    expect(duesForPlans(p, [a, b], {}, usages)).toEqual({
+    usages.setMap([u_prev, u_now]);
+    expect(duesForPlans(p, [a, b])).toEqual({
       km: { due: 60, plan: 100, severity: "ok" },
     });
   });
 
   // The per-limit severity verdict: the thresholds the badge used to
   // re-derive itself (issue #345), asserted through the door.
-  const kmOnly = (distance: number) =>
-    duesForPlans(
-      p,
-      [plan({ what: 10, km: "100" })],
-      {},
-      usageMap(usage("u_now", { distance })),
-    ).km!;
+  const kmOnly = (distance: number) => {
+    usages.setMap([usage("u_now", { distance })]);
+    return duesForPlans(p, [plan({ what: 10, km: "100" })]).km!;
+  };
 
   it("marks the verdict 'alert' when the remaining is negative", () => {
     expect(kmOnly(110000)).toEqual({ due: -10, plan: 100, severity: "alert" });
@@ -266,17 +260,18 @@ describe("duesForPlans", () => {
 
   it("returns an empty object when nothing is due", () => {
     const a = plan({ what: 99, km: "100" });
-    expect(duesForPlans(p, [a], {}, usages)).toEqual({});
+    usages.setMap([u_prev, u_now]);
+    expect(duesForPlans(p, [a])).toEqual({});
   });
 
   it("returns an empty object when the part type differs", () => {
-    expect(
-      duesForPlans(part({ what: 99 }), [plan({ km: "100" })], {}, usages),
-    ).toEqual({});
+    usages.setMap([u_prev, u_now]);
+    expect(duesForPlans(part({ what: 99 }), [plan({ km: "100" })])).toEqual({});
   });
 
   it("returns an empty object for a null part", () => {
-    expect(duesForPlans(null, [plan({ km: "100" })], {}, usages)).toEqual({});
+    usages.setMap([u_prev, u_now]);
+    expect(duesForPlans(null, [plan({ km: "100" })])).toEqual({});
   });
 });
 
@@ -342,98 +337,71 @@ describe("alertCounts", () => {
   const p = part({ id: 5, what: 10, usage: "u_now" });
 
   // Seed the module state objects with the same world the arguments model:
-  // part_for_plan and gears_of_plan read them in their bodies (issues
-  // #371/#372).
+  // part_for_plan, gears_of_plan, plan.services and alert_for read them in
+  // their bodies (issues #371/#372/#374).
   beforeEach(() => {
     parts.setMap([p]);
     attachments.setMap([]);
     plans.setMap([]);
+    services.setMap([]);
+    usages.setMap([]);
   });
 
   it("counts 'warn' when the due value is close to zero", () => {
-    const usages = usageMap(usage("u_now", { distance: 97000 }));
-    expect(
-      alertCounts(
-        [plan({ part: 5, what: 10, km: "100" })],
-        { 5: p },
-        {},
-        usages,
-        {},
-      ),
-    ).toEqual({ warn: 1, alert: 0 });
+    usages.setMap([usage("u_now", { distance: 97000 })]);
+    expect(alertCounts([plan({ part: 5, what: 10, km: "100" })])).toEqual({
+      warn: 1,
+      alert: 0,
+    });
   });
 
   it("counts 'alert' when the due value is negative", () => {
-    const usages = usageMap(usage("u_now", { distance: 110000 }));
-    expect(
-      alertCounts(
-        [plan({ part: 5, what: 10, km: "100" })],
-        { 5: p },
-        {},
-        usages,
-        {},
-      ),
-    ).toEqual({ warn: 0, alert: 1 });
+    usages.setMap([usage("u_now", { distance: 110000 })]);
+    expect(alertCounts([plan({ part: 5, what: 10, km: "100" })])).toEqual({
+      warn: 0,
+      alert: 1,
+    });
   });
 
   it("does not count a zero-remaining limit (the scan's zero guard)", () => {
-    const usages = usageMap(usage("u_now", { distance: 100000 }));
-    expect(
-      alertCounts(
-        [plan({ part: 5, what: 10, km: "100" })],
-        { 5: p },
-        {},
-        usages,
-        {},
-      ),
-    ).toEqual({ warn: 0, alert: 0 });
+    usages.setMap([usage("u_now", { distance: 100000 })]);
+    expect(alertCounts([plan({ part: 5, what: 10, km: "100" })])).toEqual({
+      warn: 0,
+      alert: 0,
+    });
   });
 
   it("counts nothing when the service is not due soon", () => {
-    const usages = usageMap(usage("u_now", { distance: 50000 }));
-    expect(
-      alertCounts(
-        [plan({ part: 5, what: 10, km: "100" })],
-        { 5: p },
-        {},
-        usages,
-        {},
-      ),
-    ).toEqual({ warn: 0, alert: 0 });
+    usages.setMap([usage("u_now", { distance: 50000 })]);
+    expect(alertCounts([plan({ part: 5, what: 10, km: "100" })])).toEqual({
+      warn: 0,
+      alert: 0,
+    });
   });
 
   it("counts nothing when the part does not match", () => {
-    const usages = usageMap(usage("u_now", { distance: 97000 }));
-    expect(
-      alertCounts(
-        [plan({ part: 5, what: 99, km: "100" })],
-        { 5: p },
-        {},
-        usages,
-        {},
-      ),
-    ).toEqual({ warn: 0, alert: 0 });
+    usages.setMap([usage("u_now", { distance: 97000 })]);
+    expect(alertCounts([plan({ part: 5, what: 99, km: "100" })])).toEqual({
+      warn: 0,
+      alert: 0,
+    });
   });
 
   it("does not count parts covered by a dedicated plan", async () => {
     await loadTypes([wheelType]);
     const p5 = part({ id: 5, what: 10, usage: "u5" });
     const p7 = part({ id: 7, what: 10, usage: "u7" });
-    const usages = usageMap(
+    usages.setMap([
       usage("u5", { distance: 97000 }),
       usage("u7", { distance: 97000 }),
-    );
+    ]);
     const a = att({ part_id: 7, gear: 5, hook: 30, what: 10 });
-    const atts = attMap(a);
     const G = plan({ id: "G", part: null, hook: 30, what: 10, km: "100" });
     const P7 = plan({ id: "P7", part: 7, hook: null, what: 10, km: "10" });
     parts.setMap([p5, p7]);
     attachments.setMap([a]);
     plans.setMap([G, P7]);
-    expect(alertCounts([G, P7], { 5: p5, 7: p7 }, {}, usages, atts)).toEqual({
-      warn: 1,
-      alert: 1,
-    });
+    expect(alertCounts([G, P7])).toEqual({ warn: 1, alert: 1 });
   });
 });
 

@@ -2,13 +2,11 @@
   import ServiceRow from "../Service/ServiceRow.svelte";
   import { attachments } from "../lib/attachment";
   import { Part } from "../lib/part";
-  import { services } from "../lib/service";
   import {
     partForPlanGear,
     duesForPlans,
     ServicePlan,
   } from "../lib/serviceplan";
-  import { usages } from "../lib/usage";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import * as m from "../../paraglide/messages";
   import Menu from "../Widgets/Menu.svelte";
@@ -26,8 +24,8 @@
   let show_more = $state(false);
 
   let part = $derived(partForPlanGear(plan, gear?.id)) as Part;
-  let [ActiveService, ...serviceList] = $derived(plan.services(part, services));
-  let due_list = $derived(duesForPlans(part, [plan], services, usages));
+  let [ActiveService, ...serviceList] = $derived(plan.services(part));
+  let due_list = $derived(duesForPlans(part, [plan]));
 </script>
 
 {#if part}

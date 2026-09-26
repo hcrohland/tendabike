@@ -5,12 +5,12 @@ import {
   part_at_hook,
   type Attachment,
 } from "./attachment";
-import { by, type Map, mapableState, stateValues } from "./mapable.svelte";
+import { by, mapableState, stateValues } from "./mapable.svelte";
 import { Part, parts } from "./part";
 import { Service, services } from "./service";
 import { get_days, handleError, myfetch } from "./store";
 import { Type, types } from "./types";
-import type { Usage } from "./usage";
+import { usages } from "./usage";
 import { m } from "../../paraglide/messages";
 
 export type limit_keys =
@@ -120,7 +120,7 @@ export class ServicePlan extends Limits {
     return Limits.valid(this) && this.name.length > 0 && this.what != undefined;
   }
 
-  services(part: Part | null, services: Map<Service>) {
+  services(part: Part | null): Service[] {
     return stateValues(services)
       .filter((s) => s.part_id == part?.id && s.plans.includes(this.id!))
       .sort(by("time"));
@@ -182,7 +182,6 @@ function due_for(
   plan: ServicePlan,
   part: Part | null,
   service: Service | undefined,
-  usages: Map<Usage>,
 ): Limits {
   let res = new Limits({});
   if (part == null || part.what != plan.what) return res;
@@ -222,10 +221,9 @@ function alert_for(
   plan: ServicePlan,
   part: Part,
   service: Service | undefined,
-  usages: Map<Usage>,
 ): severity | "" {
   let res: severity | "" = "";
-  let due = due_for(plan, part, service, usages);
+  let due = due_for(plan, part, service);
   for (const key of ServicePlan.keys) {
     if (!due[key]) continue;
     let s = severity_for(due[key]!, plan[key]!);
@@ -361,22 +359,17 @@ export function gearsForPlan(plan: ServicePlan): Part[] {
  * Band counts over the plans' parts: how many sit in the warn band and
  * how many are overdue.
  */
-export function alertCounts(
-  plans: ServicePlan[],
-  // World maps kept in the signature until the dues ticket narrows the door
-  // (issue #374); the body no longer reads them.
-  _parts: Map<Part>,
-  services: Map<Service>,
-  usages: Map<Usage>,
-  _attachments: Map<Attachment>,
-): { warn: number; alert: number } {
+export function alertCounts(plans: ServicePlan[]): {
+  warn: number;
+  alert: number;
+} {
   let res = { warn: 0, alert: 0 };
   plans.forEach((plan) => {
     gears_of_plan(plan).forEach((gear) => {
       let part = part_for_plan(plan, gear.id);
       if (part != null) {
-        let serviceList = plan.services(part, services);
-        let alert = alert_for(plan, part, serviceList.at(0), usages);
+        let serviceList = plan.services(part);
+        let alert = alert_for(plan, part, serviceList.at(0));
         if (alert == "warn") res.warn++;
         else if (alert == "alert") res.alert++;
       }
@@ -419,13 +412,11 @@ export function isTemplate(plan: ServicePlan): boolean {
 export function duesForPlans(
   part: Part | null,
   plans: ServicePlan[],
-  services: Map<Service>,
-  usages: Map<Usage>,
 ): Partial<Record<limit_keys, Due>> {
   const result: Partial<Record<limit_keys, Due>> = {};
   for (const plan of plans) {
-    const serviceList = plan.services(part, services);
-    const due = due_for(plan, part, serviceList.at(0), usages);
+    const serviceList = plan.services(part);
+    const due = due_for(plan, part, serviceList.at(0));
     for (const key of Limits.keys) {
       const p = plan[key] as number | null;
       const d = due[key] as number | null;
