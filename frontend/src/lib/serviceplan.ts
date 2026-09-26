@@ -127,16 +127,6 @@ export class ServicePlan extends Limits {
   }
 }
 
-/** Resolve the physical part for a plan's gear: the part attached at the
- * plan's hook on the gear, falling back to the gear part itself.
- */
-function part_for_plan(plan: ServicePlan, gear?: number): Part | null {
-  let part = gear ? gear : plan.part;
-  return part
-    ? parts[part_at_hook(part, plan.what, plan.hook, attachments)]
-    : null;
-}
-
 /** Sort order for plan lists: type, then hook, then part, then id; nulls
  * sort first via a -1 sentinel; ids compare as strings.
  */
@@ -149,29 +139,6 @@ export function planCmp(a: ServicePlan, b: ServicePlan): number {
   let bp = b.part ?? -1;
   if (ap != bp) return ap < bp ? -1 : 1;
   return a.id! < b.id! ? -1 : a.id! > b.id! ? 1 : 0;
-}
-
-/**
- * Determines the physical parts a service plan is associated with.
- * If linked to a specific part directly, it returns that one immediately.
- * For generic plans, it resolves to all active matching components
- * that do not already have a dedicated maintenance plan assigned
- * (matching either a gear-level or a component-level specific plan).
- */
-function gears_of_plan(plan: ServicePlan): Part[] {
-  if (plan.part) return [parts[plan.part]];
-
-  let main = types[plan.what].main;
-  let all = stateValues(plans);
-  return stateValues(parts).filter((p) => {
-    if (p.disposed_at != null || main != p.what) return false;
-    let att = att_at_hook(p.id!, plan.what, plan.hook, attachments);
-    return !all.some(
-      (r) =>
-        (r.part == p.id && r.hook == plan.hook && r.what == plan.what) ||
-        (att != null && r.part == att.part_id),
-    );
-  });
 }
 
 /** Remaining limits after the part's usage since its latest service.
@@ -264,17 +231,6 @@ function plans_for_attachee(att: Attachment) {
     .map((p) => new ServicePlan({ ...p, part: att.part_id }));
 }
 
-/** Plans for a part at a given time or now, in record order (unsorted);
- * the caller sorts with planCmp.
- */
-function plans_for_part_at(
-  part: number | undefined,
-  time: Date = new Date(),
-): ServicePlan[] {
-  let att = attachment_for_part(part, attachments, time);
-  return att ? plans_for_attachee(att) : plans_for_this_part(part);
-}
-
 function plans_at_hook(part: Part, type: Type, hook: number) {
   let att = att_at_hook(part.id!, type.id, hook, attachments);
   if (att) return plans_for_attachee(att);
@@ -293,18 +249,6 @@ function plans_for_subtype(part: Part, type: Type) {
   return type.hooks.reduce((res, hook) => {
     return res.concat(plans_at_hook(part, type, hook));
   }, [] as ServicePlan[]);
-}
-
-/** Plans for a part and the parts it assembles through its type's subtype
- * hooks, in walk order (unsorted); the caller sorts with planCmp.
- */
-function plans_for_assembly(part: Part): ServicePlan[] {
-  return types[part.what]
-    .subtypes()
-    .reduce(
-      (list, type) => list.concat(plans_for_subtype(part, type)),
-      plans_for_part_at(part.id),
-    );
 }
 
 export function localizeLimitKey(key: limit_keys): string {
@@ -344,7 +288,10 @@ export class Due {
  * plan's hook on the gear, falling back to the gear part itself.
  */
 export function partForPlanGear(plan: ServicePlan, gear?: number): Part | null {
-  return part_for_plan(plan, gear);
+  let part = gear ? gear : plan.part;
+  return part
+    ? parts[part_at_hook(part, plan.what, plan.hook, attachments)]
+    : null;
 }
 
 /**
@@ -352,7 +299,19 @@ export function partForPlanGear(plan: ServicePlan, gear?: number): Part | null {
  * or the active, uncovered parts of the type for a generic plan.
  */
 export function gearsForPlan(plan: ServicePlan): Part[] {
-  return gears_of_plan(plan);
+  if (plan.part) return [parts[plan.part]];
+
+  let main = types[plan.what].main;
+  let all = stateValues(plans);
+  return stateValues(parts).filter((p) => {
+    if (p.disposed_at != null || main != p.what) return false;
+    let att = att_at_hook(p.id!, plan.what, plan.hook, attachments);
+    return !all.some(
+      (r) =>
+        (r.part == p.id && r.hook == plan.hook && r.what == plan.what) ||
+        (att != null && r.part == att.part_id),
+    );
+  });
 }
 
 /**
@@ -365,8 +324,8 @@ export function alertCounts(plans: ServicePlan[]): {
 } {
   let res = { warn: 0, alert: 0 };
   plans.forEach((plan) => {
-    gears_of_plan(plan).forEach((gear) => {
-      let part = part_for_plan(plan, gear.id);
+    gearsForPlan(plan).forEach((gear) => {
+      let part = partForPlanGear(plan, gear.id);
       if (part != null) {
         let serviceList = plan.services(part);
         let alert = alert_for(plan, part, serviceList.at(0));
@@ -386,7 +345,8 @@ export function plansForPart(
   part: number | undefined,
   time: Date = new Date(),
 ): ServicePlan[] {
-  return plans_for_part_at(part, time);
+  let att = attachment_for_part(part, attachments, time);
+  return att ? plans_for_attachee(att) : plans_for_this_part(part);
 }
 
 /**
@@ -394,7 +354,12 @@ export function plansForPart(
  * hooks, in walk order (unsorted); the caller sorts with planCmp.
  */
 export function plansForAssembly(part: Part): ServicePlan[] {
-  return plans_for_assembly(part);
+  return types[part.what]
+    .subtypes()
+    .reduce(
+      (list, type) => list.concat(plans_for_subtype(part, type)),
+      plansForPart(part.id),
+    );
 }
 
 /**

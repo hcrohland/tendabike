@@ -337,7 +337,7 @@ describe("alertCounts", () => {
   const p = part({ id: 5, what: 10, usage: "u_now" });
 
   // Seed the module state objects with the same world the arguments model:
-  // part_for_plan, gears_of_plan, plan.services and alert_for read them in
+  // partForPlanGear, gearsForPlan, plan.services and alert_for read them in
   // their bodies (issues #371/#372/#374).
   beforeEach(() => {
     parts.setMap([p]);
