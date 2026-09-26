@@ -5,11 +5,18 @@
 //! - `GET /{part}/notes` — list all notes for a part
 //! - `POST /{part}/notes` — create a text note
 //! - `POST /{part}/notes/file` — upload a file note (multipart)
-//! - `GET /notes/{id}/file` — download file content
-//! - `PUT /notes/{id}/file` — update a file note's attachment (multipart)
-//! - `DELETE /notes/{id}/file` — remove a file note's attachment (converts to text)
+//! - `GET /notes/{id}/file` — download file content (404 for a text note)
+//! - `PUT /notes/{id}/file` — update a file note's attachment; also converts a text note
+//!   into a file note (multipart)
+//! - `DELETE /notes/{id}/file` — remove a file note's attachment, converting it to a text
+//!   note (404 for a text note)
 //! - `PUT /notes/{id}` — update a text note
 //! - `DELETE /notes/{id}` — delete a note
+//!
+//! The handlers are transport-only: each extracts the path and session, parses the multipart
+//! body where present, and drives the domain operation between `begin()` and `commit()`.
+//! Permission checks, validation, and state fallbacks live in the domain layer
+//! (`tb_domain::{PartId, PartNote, PartNoteId}`).
 
 use axum::{
     Json, Router,
@@ -19,9 +26,14 @@ use axum::{
     routing::{delete, get, post, put},
 };
 use serde::Deserialize;
-use tb_domain::{Error, PartId, PartNote, PartNoteId, PartNoteStore, Store};
+use tb_domain::{Error, PartId, PartNote, PartNoteId, Store};
+use time::OffsetDateTime;
 
-use crate::{DbPool, RequestSession, appstate::AppState, error::ApiResult};
+use crate::{
+    DbPool, RequestSession,
+    appstate::AppState,
+    error::{ApiResult, AppError},
+};
 
 /// Body for creating a text note.
 #[derive(Clone, Debug, Deserialize)]
@@ -56,8 +68,7 @@ async fn list_notes(
     State(store): State<DbPool>,
 ) -> ApiResult<Vec<PartNote>> {
     let mut store = store.begin().await?;
-    let _ = part.part(&user, &mut store).await?;
-    let notes = store.partnote_all_by_part(part).await?;
+    let notes = part.notes(&user, &mut store).await?;
     store.commit().await?;
     Ok(Json(notes))
 }
@@ -67,64 +78,30 @@ async fn create_text_note(
     user: RequestSession,
     State(store): State<DbPool>,
     Json(NewTextNote { name }): Json<NewTextNote>,
-) -> Result<(StatusCode, Json<PartNote>), crate::error::AppError> {
-    if name.trim().is_empty() {
-        return Err(crate::error::AppError::TbError(Error::BadRequest(
-            "note name must not be empty".to_string(),
-        )));
-    }
+) -> Result<(StatusCode, Json<PartNote>), AppError> {
     let mut store = store.begin().await?;
-    let _ = part.part(&user, &mut store).await?;
-    let note = store
-        .partnote_create_text(part, name, time::OffsetDateTime::now_utc())
+    let note = part
+        .note_create_text(&user, name, OffsetDateTime::now_utc(), &mut store)
         .await?;
     store.commit().await?;
     Ok((StatusCode::CREATED, Json(note)))
 }
 
-fn rfc5987_encode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for &byte in s.as_bytes() {
-        if byte.is_ascii_alphanumeric()
-            || matches!(
-                byte,
-                b'!' | b'$' | b'&' | b'\'' | b'*' | b'+' | b'-' | b'.' | b'_' | b'~'
-            )
-        {
-            out.push(byte as char);
-        } else {
-            out.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    out
+/// A parsed multipart note body: the free-text name (if present and non-blank), the mime
+/// type, the uploaded filename (if present), and the file bytes.
+struct ParsedNoteFile {
+    name: Option<String>,
+    mime: String,
+    filename: Option<String>,
+    data: Vec<u8>,
 }
 
-fn is_inline_image(mime: &str) -> bool {
-    let media = mime
-        .split(';')
-        .next()
-        .unwrap_or("")
-        .trim()
-        .to_ascii_lowercase();
-    matches!(
-        media.as_str(),
-        "image/png" | "image/jpeg" | "image/webp" | "image/gif"
-    )
+fn mp_err(e: impl std::fmt::Display) -> AppError {
+    AppError::TbError(Error::BadRequest(e.to_string()))
 }
 
-fn mp_err(e: impl std::fmt::Display) -> crate::error::AppError {
-    crate::error::AppError::TbError(Error::BadRequest(e.to_string()))
-}
-
-async fn create_file_note(
-    Path(part): Path<PartId>,
-    user: RequestSession,
-    State(store): State<DbPool>,
-    mut multipart: Multipart,
-) -> Result<(StatusCode, Json<PartNote>), crate::error::AppError> {
-    let mut store = store.begin().await?;
-    let _ = part.part(&user, &mut store).await?;
-
+/// Parses the multipart body: a required file field plus an optional `name` field.
+async fn parse_note_file(mut multipart: Multipart) -> Result<ParsedNoteFile, AppError> {
     let mut note_name: Option<String> = None;
     let mut file_name: Option<String> = None;
     let mut file_content_type: Option<String> = None;
@@ -149,20 +126,34 @@ async fn create_file_note(
     }
 
     let data = file_data.ok_or_else(|| mp_err("no file field in multipart body"))?;
-    let size = data.len() as i64;
-    let filename = file_name.unwrap_or_else(|| "file".to_string());
-    let name = note_name.unwrap_or_else(|| filename.clone());
-    let content_type = file_content_type.unwrap_or_else(|| "application/octet-stream".to_string());
+    Ok(ParsedNoteFile {
+        name: note_name,
+        mime: file_content_type.unwrap_or_else(|| "application/octet-stream".to_string()),
+        filename: file_name,
+        data,
+    })
+}
 
-    let note = store
-        .partnote_create_file(
-            part,
+async fn create_file_note(
+    Path(part): Path<PartId>,
+    user: RequestSession,
+    State(store): State<DbPool>,
+    multipart: Multipart,
+) -> Result<(StatusCode, Json<PartNote>), AppError> {
+    let parsed = parse_note_file(multipart).await?;
+    let filename = parsed.filename.unwrap_or_else(|| "file".to_string());
+    let name = parsed.name.unwrap_or_else(|| filename.clone());
+    let mut store = store.begin().await?;
+    let note = part
+        .note_create_file(
+            &user,
             name,
-            content_type,
+            parsed.mime,
             Some(filename),
-            size,
-            data,
-            time::OffsetDateTime::now_utc(),
+            parsed.data.len() as i64,
+            parsed.data,
+            OffsetDateTime::now_utc(),
+            &mut store,
         )
         .await?;
     store.commit().await?;
@@ -173,16 +164,10 @@ async fn get_note_file(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
     State(store): State<DbPool>,
-) -> Result<Response, crate::error::AppError> {
+) -> Result<Response, AppError> {
     let mut store = store.begin().await?;
-    let note = store.partnote_get(id).await?;
-    let _ = note.part.part(&user, &mut store).await?;
-    if !note.has_file() {
-        return Err(crate::error::AppError::TbError(Error::BadRequest(
-            "note is not a file".to_string(),
-        )));
-    }
-    let data = store.partnote_file(id).await?;
+    let note = id.note(&user, &mut store).await?;
+    let data = note.file(&mut store).await?;
     store.commit().await?;
 
     let mime = note
@@ -226,68 +211,33 @@ async fn update_text_note(
     State(store): State<DbPool>,
     Json(UpdateTextNote { name }): Json<UpdateTextNote>,
 ) -> ApiResult<PartNote> {
-    if name.trim().is_empty() {
-        return Err(crate::error::AppError::TbError(Error::BadRequest(
-            "note name must not be empty".to_string(),
-        )));
-    }
     let mut store = store.begin().await?;
-    let note = store.partnote_get(id).await?;
-    let _ = note.part.part(&user, &mut store).await?;
-    let res = store.partnote_update_text(id, name).await?;
+    let note = id.update_text(&user, name, &mut store).await?;
     store.commit().await?;
-    Ok(Json(res))
+    Ok(Json(note))
 }
 
 async fn update_file_note(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
     State(store): State<DbPool>,
-    mut multipart: Multipart,
-) -> Result<Json<PartNote>, crate::error::AppError> {
+    multipart: Multipart,
+) -> ApiResult<PartNote> {
+    let parsed = parse_note_file(multipart).await?;
     let mut store = store.begin().await?;
-    let note = store.partnote_get(id).await?;
-    let _ = note.part.part(&user, &mut store).await?;
-    if !note.has_file() {
-        return Err(crate::error::AppError::TbError(Error::BadRequest(
-            "note is not a file".to_string(),
-        )));
-    }
-
-    let mut note_name: Option<String> = None;
-    let mut file_name: Option<String> = None;
-    let mut file_content_type: Option<String> = None;
-    let mut file_data: Option<Vec<u8>> = None;
-
-    while let Some(field) = multipart.next_field().await.map_err(mp_err)? {
-        let field_name = field.name().unwrap_or("").to_string();
-        if field_name == "name" {
-            let value = field.text().await.map_err(mp_err)?;
-            if !value.trim().is_empty() {
-                note_name = Some(value);
-            }
-        } else if field.file_name().is_some() {
-            file_name = field.file_name().map(|s| s.to_string());
-            file_content_type = field
-                .headers()
-                .get(CONTENT_TYPE)
-                .and_then(|v| v.to_str().ok())
-                .map(|s| s.to_string());
-            file_data = Some(field.bytes().await.map_err(mp_err)?.to_vec());
-        }
-    }
-
-    let data = file_data.ok_or_else(|| mp_err("no file field in multipart body"))?;
-    let size = data.len() as i64;
-    let filename = file_name.unwrap_or_else(|| note.filename.unwrap_or_else(|| "file".to_string()));
-    let name = note_name.unwrap_or_else(|| filename.clone());
-    let content_type = file_content_type.unwrap_or_else(|| "application/octet-stream".to_string());
-
-    let res = store
-        .partnote_update_file(id, name, content_type, Some(filename), size, data)
+    let note = id
+        .update_file(
+            &user,
+            parsed.name,
+            parsed.mime,
+            parsed.filename,
+            parsed.data.len() as i64,
+            parsed.data,
+            &mut store,
+        )
         .await?;
     store.commit().await?;
-    Ok(Json(res))
+    Ok(Json(note))
 }
 
 async fn delete_note(
@@ -296,9 +246,7 @@ async fn delete_note(
     State(store): State<DbPool>,
 ) -> ApiResult<PartNoteId> {
     let mut store = store.begin().await?;
-    let note = store.partnote_get(id).await?;
-    let _ = note.part.part(&user, &mut store).await?;
-    let res = store.partnote_delete(id).await?;
+    let res = id.delete(&user, &mut store).await?;
     store.commit().await?;
     Ok(Json(res))
 }
@@ -309,16 +257,39 @@ async fn remove_file_note(
     State(store): State<DbPool>,
 ) -> ApiResult<PartNote> {
     let mut store = store.begin().await?;
-    let note = store.partnote_get(id).await?;
-    let _ = note.part.part(&user, &mut store).await?;
-    if !note.has_file() {
-        return Err(crate::error::AppError::TbError(Error::BadRequest(
-            "note is not a file".to_string(),
-        )));
-    }
-    let res = store.partnote_remove_file(id).await?;
+    let note = id.remove_file(&user, &mut store).await?;
     store.commit().await?;
-    Ok(Json(res))
+    Ok(Json(note))
+}
+
+fn rfc5987_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for &byte in s.as_bytes() {
+        if byte.is_ascii_alphanumeric()
+            || matches!(
+                byte,
+                b'!' | b'$' | b'&' | b'\'' | b'*' | b'+' | b'-' | b'.' | b'_' | b'~'
+            )
+        {
+            out.push(byte as char);
+        } else {
+            out.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    out
+}
+
+fn is_inline_image(mime: &str) -> bool {
+    let media = mime
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    matches!(
+        media.as_str(),
+        "image/png" | "image/jpeg" | "image/webp" | "image/gif"
+    )
 }
 
 #[cfg(test)]
