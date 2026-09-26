@@ -36,6 +36,9 @@ pub trait PartNoteStore {
     async fn partnote_get(&mut self, id: PartNoteId) -> TbResult<PartNote>;
 
     /// Retrieves the stored bytes of a file note.
+    ///
+    /// Returns `NotFound` when the note has no file data (a text note, or a file note whose
+    /// data is missing).
     async fn partnote_file(&mut self, id: PartNoteId) -> TbResult<Vec<u8>>;
 
     /// Updates the body of a text note.

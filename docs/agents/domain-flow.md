@@ -18,6 +18,7 @@ The domain layer (`backend/domain`) is the only thing that computes entity state
 - **Side effects compose.** `Summary` implements `Add` (via `SumHash`, `backend/domain/src/entities/summary.rs`). Replacing an activity is `register(Sub) + register(Add)`.
 - **One transaction.** Each operation takes a single store; the mutation, its side effects, and the returned `Summary` are one unit.
 - **The side-effecting operations** live on the entities: `attach_assembly`, `detach_assembly`, `dispose_assembly`, `recover_assembly` (`entities/attachment.rs`), `Activity::upsert/update/delete`, `Shop::register_part`, and the like. Every one of them returns the `Summary` of everything it touched.
+- **The bare-entity operations** touch exactly one entity and return it. The partnote operations (`entities/partnote.rs`) are the reference: `PartId::notes/note_create_text/note_create_file` and `PartNoteId::note/update_text/update_file/remove_file/delete` each return the bare `PartNote`, and `PartNote::file` fetches the file bytes on demand — file bytes are never part of any `Summary`.
 
 ## The write contract
 
@@ -47,7 +48,6 @@ These asymmetries are filed for review; do not assume they are intended design:
 
 ## Out of scope here
 
-- File upload/download endpoints: `backend/axum/src/domain/partnote.rs`
 - The Strava oauth flow: `backend/axum/src/strava/oauth.rs`
 - The HTTP session mechanism: `backend/axum/src/strava/session.rs`
 - The full route table: `backend/axum/src/domain.rs` plus each module's `router()`

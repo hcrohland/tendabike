@@ -2,7 +2,7 @@ use sqlx::FromRow;
 use time::OffsetDateTime;
 
 use crate::{SqlxConn, into_domain, vec_into};
-use tb_domain::{PartId, PartNote, PartNoteId, TbResult};
+use tb_domain::{Error, PartId, PartNote, PartNoteId, TbResult};
 
 #[derive(Clone, Debug, PartialEq, FromRow)]
 struct DbPartNote {
@@ -120,7 +120,7 @@ impl<'c> tb_domain::PartNoteStore for SqlxConn<'c> {
                 .fetch_one(&mut **self.inner())
                 .await
                 .map_err(into_domain)?;
-        Ok(data.unwrap_or_default())
+        data.ok_or_else(|| Error::NotFound(format!("part note {id} has no file")))
     }
 
     async fn partnote_update_text(&mut self, id: PartNoteId, name: String) -> TbResult<PartNote> {
