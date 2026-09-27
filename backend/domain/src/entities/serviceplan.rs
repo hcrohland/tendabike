@@ -18,6 +18,7 @@ impl ServicePlanId {
         store.get(self).await
     }
 
+    /// Crosses Part (owner lookup), Service (unlink from the owner's services), and Shop (owner check).
     pub async fn delete(
         self,
         user: &dyn Session,
@@ -73,6 +74,7 @@ pub struct ServicePlan {
 }
 
 impl ServicePlan {
+    /// Crosses Part and Shop: part-bound plans defer ownership to `Part::checkuser` (part owner or that shop).
     async fn checkuser(&self, user: &dyn Session, store: &mut impl Store) -> TbResult<()> {
         if let Some(part) = self.part {
             part.checkuser(user, store).await?;
@@ -99,6 +101,7 @@ impl ServicePlan {
         store.create(self).await
     }
 
+    /// Crosses Part and Shop via the owner check (part-bound plans defer to `Part::checkuser`).
     pub async fn update(
         mut self,
         user: &dyn Session,
