@@ -56,6 +56,20 @@ function partData(overrides: Partial<any> = {}): any {
   };
 }
 
+// Test-only helpers, moved out of the Activity class (issue #386); they stay
+// pure over their local maps.
+function gearLink(act: Activity, parts: Map<Part>) {
+  if (act.gear && parts[act.gear]) {
+    return parts[act.gear].partLink();
+  } else {
+    return "-";
+  }
+}
+
+function gearName(act: Activity, parts: Map<Part>) {
+  return act.gear && parts[act.gear] ? parts[act.gear].name : "-";
+}
+
 describe("Activity.update", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -97,19 +111,19 @@ describe("Activity.gearLink", () => {
     const a = new Activity(actData({ gear: 5 }));
     const part5 = new Part(partData({ id: 5, name: "Bike A" }));
     const partsMap = { 5: part5 } as Map<Part>;
-    expect(a.gearLink(partsMap)).toBe(
+    expect(gearLink(a, partsMap)).toBe(
       `<a href="/#/part/5" style="text-decoration:none" class="text-reset">Bike A</a>`,
     );
   });
 
   it("returns '-' when there is no gear", () => {
     const a = new Activity(actData({ gear: null }));
-    expect(a.gearLink({})).toBe("-");
+    expect(gearLink(a, {})).toBe("-");
   });
 
   it("returns '-' when the gear part is not in the map", () => {
     const a = new Activity(actData({ gear: 99 }));
-    expect(a.gearLink({})).toBe("-");
+    expect(gearLink(a, {})).toBe("-");
   });
 });
 
@@ -118,16 +132,16 @@ describe("Activity.gearName", () => {
     const a = new Activity(actData({ gear: 5 }));
     const part5 = new Part(partData({ id: 5, name: "Bike A" }));
     const partsMap = { 5: part5 } as Map<Part>;
-    expect(a.gearName(partsMap)).toBe("Bike A");
+    expect(gearName(a, partsMap)).toBe("Bike A");
   });
 
   it("returns '-' when there is no gear", () => {
     const a = new Activity(actData({ gear: null }));
-    expect(a.gearName({})).toBe("-");
+    expect(gearName(a, {})).toBe("-");
   });
 
   it("returns '-' when the gear part is not in the map", () => {
     const a = new Activity(actData({ gear: 99 }));
-    expect(a.gearName({})).toBe("-");
+    expect(gearName(a, {})).toBe("-");
   });
 });
