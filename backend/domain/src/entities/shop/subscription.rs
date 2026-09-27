@@ -196,7 +196,7 @@ impl SubscriptionId {
     pub async fn cancel(
         self,
         user: UserId,
-        store: &mut (impl ShopStore + PartStore),
+        store: &mut (impl PartStore + ShopStore),
     ) -> TbResult<()> {
         let subscription = store.subscription_get(self).await?;
 

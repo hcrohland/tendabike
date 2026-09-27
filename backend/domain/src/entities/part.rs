@@ -94,7 +94,7 @@ impl PartId {
         PartId(id).checkuser(user, store).await
     }
 
-    /// Crosses: part, shop, attachment, service, serviceplan.
+    /// Crosses: attachment, part, service, serviceplan, shop, usage.
     pub async fn delete(self, user: &dyn Session, store: &mut impl Store) -> TbResult<PartId> {
         self.checkuser(user, store).await?;
 

@@ -22,7 +22,7 @@ impl ServiceId {
     pub async fn delete(
         self,
         user: &dyn Session,
-        store: &mut (impl ServiceStore + PartStore + ShopStore + UsageStore),
+        store: &mut (impl PartStore + ServiceStore + ShopStore + UsageStore),
     ) -> TbResult<Summary> {
         let service = self.get(store).await?;
         service.part_id.checkuser(user, store).await?;
@@ -86,7 +86,7 @@ impl Service {
         notes: String,
         successor: Option<ServiceId>,
         plans: Vec<ServicePlanId>,
-        store: &mut (impl PartStore + ActivityStore + AttachmentStore + UsageStore + ServiceStore),
+        store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<Summary> {
         let service = Service {
             id: ServiceId::new(),
@@ -110,7 +110,7 @@ impl Service {
 
     async fn calculate_usage(
         &self,
-        store: &mut (impl PartStore + ActivityStore + AttachmentStore),
+        store: &mut (impl ActivityStore + AttachmentStore + PartStore),
     ) -> TbResult<Usage> {
         Ok(if self.part_id.is_main(store).await? {
             Activity::find(self.part_id, MIN_TIME, self.time, store).await?
@@ -125,7 +125,7 @@ impl Service {
         self,
         user: &dyn Session,
         store: &mut (
-                 impl PartStore + ActivityStore + AttachmentStore + UsageStore + ServiceStore + ShopStore
+                 impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
              ),
     ) -> TbResult<Summary> {
         let Service {
@@ -166,7 +166,7 @@ impl Service {
 
     async fn update_unchecked(
         self,
-        store: &mut (impl PartStore + ActivityStore + AttachmentStore + UsageStore + ServiceStore),
+        store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<Summary> {
         let usages = vec![self.calculate_usage(store).await?.update(store).await?];
         let services = vec![ServiceStore::update(store, self).await?];
@@ -181,7 +181,7 @@ impl Service {
         mut self,
         user: &dyn Session,
         store: &mut (
-                 impl PartStore + ActivityStore + AttachmentStore + UsageStore + ServiceStore + ShopStore
+                 impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
              ),
     ) -> TbResult<Summary> {
         self.part_id.checkuser(user, store).await?;
@@ -207,7 +207,7 @@ impl Service {
     pub(crate) async fn recalculate(
         part: PartId,
         attach: OffsetDateTime,
-        store: &mut (impl PartStore + ActivityStore + AttachmentStore + ServiceStore),
+        store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore),
     ) -> TbResult<Vec<Usage>> {
         let mut res = Vec::new();
         let services = store

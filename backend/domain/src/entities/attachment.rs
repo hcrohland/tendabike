@@ -115,7 +115,7 @@ impl Attachment {
         time: OffsetDateTime,
         gear: PartId,
         hash: &mut SumHash,
-        store: &mut (impl PartStore + ActivityStore + AttachmentStore + UsageStore + ServiceStore),
+        store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<OffsetDateTime> {
         debug!("-- moving {} to {}", self.part_id, gear);
         *hash += self.detach(time, store).await?;
@@ -129,7 +129,7 @@ impl Attachment {
     async fn detach(
         mut self,
         time: OffsetDateTime,
-        store: &mut (impl PartStore + ActivityStore + AttachmentStore + UsageStore + ServiceStore),
+        store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<Summary> {
         trace!("detaching {} at {}", self.part_id, time);
 
@@ -151,7 +151,7 @@ impl Attachment {
     /// - returns all affected parts
     pub(crate) async fn create(
         mut self,
-        store: &mut (impl PartStore + ActivityStore + AttachmentStore + UsageStore + ServiceStore),
+        store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<Summary> {
         trace!("create {self:?}");
 
@@ -189,7 +189,7 @@ impl Attachment {
     /// - returns all affected parts
     async fn delete(
         self,
-        store: &mut (impl PartStore + ActivityStore + AttachmentStore + UsageStore + ServiceStore),
+        store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<Summary> {
         trace!("delete {self:?}");
 
@@ -236,7 +236,7 @@ impl Attachment {
         part: PartId,
         begin: OffsetDateTime,
         end: OffsetDateTime,
-        store: &mut (impl AttachmentStore + ActivityStore),
+        store: &mut (impl ActivityStore + AttachmentStore),
     ) -> TbResult<Vec<Activity>> {
         use std::cmp::{max, min};
         let attachments = store.attachments_all_by_part(part).await?;
@@ -309,7 +309,7 @@ impl Attachment {
         self,
         time: OffsetDateTime,
         all: bool,
-        store: &mut (impl PartStore + ActivityStore + AttachmentStore + UsageStore + ServiceStore),
+        store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<Summary> {
         debug!("-- detaching {} at {}", self.part_id, time);
 
@@ -333,7 +333,7 @@ async fn shift_subparts(
     to: PartId,
     time: OffsetDateTime,
     hash: &mut SumHash,
-    store: &mut (impl PartStore + ActivityStore + AttachmentStore + UsageStore + ServiceStore),
+    store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
 ) -> TbResult<()> {
     let sub_attachments = subattachments(to, from, time, store).await?;
     for attachment in sub_attachments {
@@ -382,7 +382,7 @@ async fn attach_one(
     gear: PartId,
     hook: PartTypeId,
     hash: &mut SumHash,
-    store: &mut (impl PartStore + ActivityStore + AttachmentStore + UsageStore + ServiceStore),
+    store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
 ) -> TbResult<OffsetDateTime> {
     // when does the current attachment end
     let mut end = MAX_TIME;
@@ -454,7 +454,7 @@ pub async fn attach_assembly(
     hook: PartTypeId,
     all: bool,
     store: &mut (
-             impl PartStore + ActivityStore + AttachmentStore + UsageStore + ServiceStore + ShopStore
+             impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
          ),
 ) -> Result<Summary, Error> {
     let time = round_time(time);
@@ -545,7 +545,7 @@ pub async fn detach_assembly(
     time: OffsetDateTime,
     all: bool,
     store: &mut (
-             impl PartStore + ActivityStore + AttachmentStore + UsageStore + ServiceStore + ShopStore
+             impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
          ),
 ) -> Result<Summary, Error> {
     let time = round_time(time);
@@ -564,7 +564,7 @@ pub async fn dispose_assembly(
     time: OffsetDateTime,
     all: bool,
     store: &mut (
-             impl PartStore + ActivityStore + AttachmentStore + UsageStore + ServiceStore + ShopStore
+             impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
          ),
 ) -> Result<Summary, Error> {
     let time = round_time(time);
@@ -594,7 +594,7 @@ async fn dispose_subparts(
     part: PartId,
     time: OffsetDateTime,
     all: bool,
-    store: &mut (impl PartStore + ActivityStore + AttachmentStore + UsageStore + ServiceStore),
+    store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
 ) -> TbResult<Summary> {
     let sub_attachments = subattachments(part, part, time, store).await?;
     let mut res = SumHash::default();
@@ -614,7 +614,7 @@ pub async fn recover_assembly(
     user: &dyn Session,
     part: PartId,
     all: bool,
-    store: &mut (impl PartStore + ShopStore + AttachmentStore),
+    store: &mut (impl AttachmentStore + PartStore + ShopStore),
 ) -> Result<Summary, Error> {
     let mut res = SumHash::default();
     if let Some(time) = part.part(user, store).await?.disposed_at {

@@ -135,7 +135,7 @@ impl ShopId {
     pub async fn delete(
         self,
         user: UserId,
-        store: &mut (impl ShopStore + PartStore),
+        store: &mut (impl PartStore + ShopStore),
     ) -> TbResult<ShopId> {
         self.check_owner(user, store).await?;
 
@@ -157,7 +157,7 @@ impl ShopId {
         self,
         part_id: PartId,
         session: &dyn Session,
-        store: &mut (impl ShopStore + PartStore + AttachmentStore),
+        store: &mut (impl AttachmentStore + PartStore + ShopStore),
     ) -> TbResult<Summary> {
         ShopSubscription::check(self, session.user_id(), store).await?;
         let parts = parts_for_register(part_id, session, store).await?;
@@ -186,7 +186,7 @@ impl ShopId {
         self,
         part_id: PartId,
         session: &dyn Session,
-        store: &mut (impl PartStore + ShopStore + AttachmentStore),
+        store: &mut (impl AttachmentStore + PartStore + ShopStore),
     ) -> TbResult<Summary> {
         let parts = parts_for_register(part_id, session, store).await?;
 
@@ -203,7 +203,7 @@ impl ShopId {
     pub async fn get_parts(
         self,
         user: UserId,
-        store: &mut (impl ShopStore + PartStore),
+        store: &mut (impl PartStore + ShopStore),
     ) -> TbResult<Vec<Part>> {
         // Check if user is shop owner OR has active subscription
         self.check_owner(user, store).await?;
@@ -221,7 +221,7 @@ impl ShopId {
 async fn parts_for_register(
     part_id: PartId,
     session: &dyn Session,
-    store: &mut (impl PartStore + ShopStore + AttachmentStore),
+    store: &mut (impl AttachmentStore + PartStore + ShopStore),
 ) -> TbResult<Vec<PartId>> {
     part_id.checkuser(session, store).await?;
     let time = OffsetDateTime::now_utc();
