@@ -197,6 +197,8 @@ impl UserId {
     }
 
     /// get all parts, attachments and activities for the user
+    ///
+    /// Crosses activities, shops, users, parts, attachments, services, serviceplans, usages and partnotes, so it keeps the full `Store`.
     pub async fn get_summary(
         &self,
         shop: Option<ShopId>,
@@ -268,6 +270,7 @@ impl UserId {
         })
     }
 
+    /// Deletes the user plus their activities, parts, attachments, services, serviceplans and usages (via the full summary read), so it keeps the full `Store`.
     pub async fn delete(&self, store: &mut impl Store) -> TbResult<()> {
         let Summary {
             activities,
