@@ -1,7 +1,6 @@
 import {
   att_at_hook,
   attachment_for_part,
-  attachments,
   part_at_hook,
   type Attachment,
 } from "./attachment";
@@ -232,7 +231,7 @@ function plans_for_attachee(att: Attachment) {
 }
 
 function plans_at_hook(part: Part, type: Type, hook: number) {
-  let att = att_at_hook(part.id!, type.id, hook, attachments);
+  let att = att_at_hook(part.id!, type.id, hook);
   if (att) return plans_for_attachee(att);
 
   let res = stateValues(plans).filter(
@@ -289,9 +288,7 @@ export class Due {
  */
 export function partForPlanGear(plan: ServicePlan, gear?: number): Part | null {
   let part = gear ? gear : plan.part;
-  return part
-    ? parts[part_at_hook(part, plan.what, plan.hook, attachments)]
-    : null;
+  return part ? parts[part_at_hook(part, plan.what, plan.hook)] : null;
 }
 
 /**
@@ -305,7 +302,7 @@ export function gearsForPlan(plan: ServicePlan): Part[] {
   let all = stateValues(plans);
   return stateValues(parts).filter((p) => {
     if (p.disposed_at != null || main != p.what) return false;
-    let att = att_at_hook(p.id!, plan.what, plan.hook, attachments);
+    let att = att_at_hook(p.id!, plan.what, plan.hook);
     return !all.some(
       (r) =>
         (r.part == p.id && r.hook == plan.hook && r.what == plan.what) ||
@@ -345,7 +342,7 @@ export function plansForPart(
   part: number | undefined,
   time: Date = new Date(),
 ): ServicePlan[] {
-  let att = attachment_for_part(part, attachments, time);
+  let att = attachment_for_part(part, time);
   return att ? plans_for_attachee(att) : plans_for_this_part(part);
 }
 

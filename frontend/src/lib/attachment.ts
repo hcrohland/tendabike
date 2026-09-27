@@ -1,5 +1,5 @@
-import type { Activity } from "./activity";
-import { type Map, mapableState, stateValues } from "./mapable.svelte";
+import { Activity, activities } from "./activity";
+import { mapableState, stateValues } from "./mapable.svelte";
 import { fmtRange, maxDate } from "./store";
 
 export class Attachment {
@@ -44,21 +44,16 @@ export class Attachment {
     return this.attached.getTime() >= this.detached.getTime();
   }
 
-  activities(acts: Map<Activity>) {
-    return stateValues(acts).filter(
+  activities(): Activity[] {
+    return stateValues(activities).filter(
       (a) => a.gear == this.gear && this.isAttached(a.start),
     );
   }
 }
 
 /// find attachment for part at a specific hook right now
-export function att_at_hook(
-  gear: number,
-  what: number,
-  hook: number | null,
-  atts: Map<Attachment>,
-) {
-  return stateValues(atts)
+export function att_at_hook(gear: number, what: number, hook: number | null) {
+  return stateValues(attachments)
     .filter(
       (att) =>
         att.gear == gear &&
@@ -75,36 +70,21 @@ export function part_at_hook(
   gear: number,
   what: number,
   hook: number | null,
-  atts: Map<Attachment>,
-) {
-  let att = att_at_hook(gear, what, hook, atts);
+): number {
+  let att = att_at_hook(gear, what, hook);
   return att ? att.part_id : gear;
 }
 
 /***
   return the attachment for part at time or undefined if it is not attached
 */
-export function attachment_for_part(
-  part: number | undefined,
-  atts: Map<Attachment>,
-  time: Date,
-) {
-  return stateValues(atts)
+export function attachment_for_part(part: number | undefined, time: Date) {
+  return stateValues(attachments)
     .filter(
       (att) =>
         att.part_id == part && att.attached <= time && att.detached > time,
     )
     .pop();
-}
-
-export function attachees_for_gear(
-  gear: number | undefined,
-  atts: Map<Attachment>,
-  time = new Date(),
-) {
-  return stateValues(atts).filter(
-    (att) => att.gear == gear && att.attached <= time && att.detached > time,
-  );
 }
 
 export const attachments = mapableState(

@@ -1,14 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import {
   Attachment,
+  attachments,
   att_at_hook,
   attachment_for_part,
-  attachees_for_gear,
   part_at_hook,
 } from "./attachment";
-import { Activity } from "./activity";
+import { Activity, activities } from "./activity";
 import { maxDate } from "./store";
-import { type Map } from "./mapable.svelte";
+import { stateValues, type Map } from "./mapable.svelte";
 
 function att(overrides: Partial<any> = {}): Attachment {
   return new Attachment({
@@ -26,6 +26,18 @@ function att(overrides: Partial<any> = {}): Attachment {
 
 function attMap(...atts: Attachment[]): Map<Attachment> {
   return Object.fromEntries(atts.map((a) => [a.idx, a])) as Map<Attachment>;
+}
+
+// Test-only helper, moved out of attachment.ts (issue #387); it stays
+// pure over its local map.
+function attacheesForGear(
+  gear: number | undefined,
+  atts: Map<Attachment>,
+  time = new Date(),
+) {
+  return stateValues(atts).filter(
+    (att) => att.gear == gear && att.attached <= time && att.detached > time,
+  );
 }
 
 describe("Attachment.idx", () => {
@@ -127,22 +139,34 @@ describe("Attachment.fmtTime", () => {
 });
 
 describe("Attachment.activities", () => {
+  // The door reads the module state object in its body (#387); seed the
+  // world and reset it between tests.
+  beforeEach(() => {
+    activities.setMap([]);
+  });
+
   it("returns gear-matching activities within the attachment window", () => {
     const a = att({
       attached: "2020-01-01T00:00:00Z",
       detached: "2022-12-31T00:00:00Z",
       gear: 100,
     });
-    const acts: Map<Activity> = {
-      "1": new Activity({ id: 1, gear: 100, start: "2021-06-01T00:00:00Z" }),
-      "2": new Activity({ id: 2, gear: 100, start: "2023-06-01T00:00:00Z" }),
-      "3": new Activity({ id: 3, gear: 999, start: "2021-06-01T00:00:00Z" }),
-    };
-    expect(a.activities(acts).map((x) => x.id)).toEqual([1]);
+    activities.setMap([
+      new Activity({ id: 1, gear: 100, start: "2021-06-01T00:00:00Z" }),
+      new Activity({ id: 2, gear: 100, start: "2023-06-01T00:00:00Z" }),
+      new Activity({ id: 3, gear: 999, start: "2021-06-01T00:00:00Z" }),
+    ]);
+    expect(a.activities().map((x) => x.id)).toEqual([1]);
   });
 });
 
 describe("att_at_hook", () => {
+  // The door reads the module state object in its body (#387); seed the
+  // world and reset it between tests.
+  beforeEach(() => {
+    attachments.setMap([]);
+  });
+
   it("returns the currently-attached attachment at a hook", () => {
     const current = att({ part_id: 1, attached: "2023-01-01T00:00:00Z" });
     const old = att({
@@ -150,7 +174,10 @@ describe("att_at_hook", () => {
       attached: "2020-01-01T00:00:00Z",
       detached: "2022-12-31T00:00:00Z",
     });
-    expect(att_at_hook(100, 10, 1, attMap(current, old))).toBe(current);
+    attachments.setMap([current, old]);
+    // The collection's prep function rebuilds the attachment, so the door
+    // returns a value-equal attachment, not the seeded instance.
+    expect(att_at_hook(100, 10, 1)).toEqual(current);
   });
 
   it("returns undefined when nothing is currently attached", () => {
@@ -159,61 +186,74 @@ describe("att_at_hook", () => {
       attached: "2020-01-01T00:00:00Z",
       detached: "2022-12-31T00:00:00Z",
     });
-    expect(att_at_hook(100, 10, 1, attMap(old))).toBeUndefined();
+    attachments.setMap([old]);
+    expect(att_at_hook(100, 10, 1)).toBeUndefined();
   });
 });
 
 describe("part_at_hook", () => {
+  // The door reads the module state object in its body (#387); seed the
+  // world and reset it between tests.
+  beforeEach(() => {
+    attachments.setMap([]);
+  });
+
   it("returns the part id of the attached attachment", () => {
     const current = att({ part_id: 7, attached: "2023-01-01T00:00:00Z" });
-    expect(part_at_hook(100, 10, 1, attMap(current))).toBe(7);
+    attachments.setMap([current]);
+    expect(part_at_hook(100, 10, 1)).toBe(7);
   });
 
   it("falls back to the gear when nothing matches", () => {
     const current = att({ part_id: 7, attached: "2023-01-01T00:00:00Z" });
-    expect(part_at_hook(100, 99, 1, attMap(current))).toBe(100);
+    attachments.setMap([current]);
+    expect(part_at_hook(100, 99, 1)).toBe(100);
   });
 });
 
 describe("attachment_for_part", () => {
+  // The door reads the module state object in its body (#387); seed the
+  // world and reset it between tests.
   const a = att({
     part_id: 1,
     attached: "2020-01-01T00:00:00Z",
     detached: "2022-12-31T00:00:00Z",
   });
 
+  beforeEach(() => {
+    attachments.setMap([a]);
+  });
+
   it("finds the attachment of a part at a time", () => {
-    expect(
-      attachment_for_part(1, attMap(a), new Date("2021-06-01T00:00:00Z")),
-    ).toBe(a);
+    // The collection's prep function rebuilds the attachment, so the door
+    // returns a value-equal attachment, not the seeded instance.
+    expect(attachment_for_part(1, new Date("2021-06-01T00:00:00Z"))).toEqual(a);
   });
 
   it("returns undefined if the part was not attached at that time", () => {
     expect(
-      attachment_for_part(1, attMap(a), new Date("2019-01-01T00:00:00Z")),
+      attachment_for_part(1, new Date("2019-01-01T00:00:00Z")),
     ).toBeUndefined();
   });
 
   it("matches only the requested part", () => {
     expect(
-      attachment_for_part(999, attMap(a), new Date("2021-06-01T00:00:00Z")),
+      attachment_for_part(999, new Date("2021-06-01T00:00:00Z")),
     ).toBeUndefined();
   });
 
   it("finds the attachment at the exact attached boundary (inclusive)", () => {
-    expect(
-      attachment_for_part(1, attMap(a), new Date("2020-01-01T00:00:00Z")),
-    ).toBe(a);
+    expect(attachment_for_part(1, new Date("2020-01-01T00:00:00Z"))).toEqual(a);
   });
 
   it("does not find the attachment at the exact detached boundary (exclusive)", () => {
     expect(
-      attachment_for_part(1, attMap(a), new Date("2022-12-31T00:00:00Z")),
+      attachment_for_part(1, new Date("2022-12-31T00:00:00Z")),
     ).toBeUndefined();
   });
 });
 
-describe("attachees_for_gear", () => {
+describe("attacheesForGear", () => {
   it("returns all attachments of a gear at a time", () => {
     const a = att({
       part_id: 1,
@@ -222,7 +262,7 @@ describe("attachees_for_gear", () => {
       gear: 100,
     });
     const b = att({ part_id: 2, attached: "2021-06-01T00:00:00Z", gear: 100 });
-    const res = attachees_for_gear(
+    const res = attacheesForGear(
       100,
       attMap(a, b),
       new Date("2021-09-01T00:00:00Z"),
@@ -238,7 +278,7 @@ describe("attachees_for_gear", () => {
       gear: 100,
     });
     expect(
-      attachees_for_gear(100, attMap(a), new Date("2023-06-01T00:00:00Z")),
+      attacheesForGear(100, attMap(a), new Date("2023-06-01T00:00:00Z")),
     ).toEqual([]);
   });
 
@@ -250,7 +290,7 @@ describe("attachees_for_gear", () => {
       gear: 100,
     });
     expect(
-      attachees_for_gear(100, attMap(a), new Date("2020-01-01T00:00:00Z")),
+      attacheesForGear(100, attMap(a), new Date("2020-01-01T00:00:00Z")),
     ).toEqual([a]);
   });
 
@@ -262,7 +302,7 @@ describe("attachees_for_gear", () => {
       gear: 100,
     });
     expect(
-      attachees_for_gear(100, attMap(a), new Date("2022-12-31T00:00:00Z")),
+      attacheesForGear(100, attMap(a), new Date("2022-12-31T00:00:00Z")),
     ).toEqual([]);
   });
 });

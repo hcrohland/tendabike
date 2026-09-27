@@ -2,7 +2,7 @@
   import { ServicePlan, isTemplate } from "../lib/serviceplan";
   import { getCategory, types } from "../lib/types";
   import { link } from "svelte-spa-router";
-  import { attachments, part_at_hook } from "../lib/attachment";
+  import { part_at_hook } from "../lib/attachment";
   import { parts } from "../lib/part";
   import { m } from "../../paraglide/messages";
 
@@ -20,15 +20,7 @@
   {m.planname_for()}
   {#if plan.hook}
     {#if plan.part}
-      <a
-        href="/part/{part_at_hook(
-          plan.part,
-          plan.what,
-          plan.hook,
-          attachments,
-        )}"
-        use:link
-      >
+      <a href="/part/{part_at_hook(plan.part, plan.what, plan.hook)}" use:link>
         {types[plan.what].human_name(plan.hook)}
       </a>
     {:else}

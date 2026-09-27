@@ -23,7 +23,7 @@
         const atts = part
           .attachments()
           .filter((a) => (start ? a.isAttached(start) : true));
-        acts = atts.map((att) => att.activities(activities)).flat();
+        acts = atts.map((att) => att.activities()).flat();
         if (start)
           title = m.act_heading_attached({
             name: part.name,
