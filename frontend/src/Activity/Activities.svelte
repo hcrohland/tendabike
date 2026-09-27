@@ -35,7 +35,7 @@
       }
     } else {
       title = m.act_heading_all();
-      acts = getCategory()!.activities(activities);
+      acts = getCategory()!.activities();
     }
 
     return { acts, title };

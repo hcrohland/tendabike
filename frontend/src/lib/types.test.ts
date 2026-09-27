@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTypes, types, Type, getCategory } from "./types";
-import { Activity } from "./activity";
-import { Part } from "./part";
+import { Activity, activities } from "./activity";
+import { Part, parts } from "./part";
 import type { Map } from "./mapable.svelte";
 import { resp } from "../test/helpers";
 
@@ -87,43 +87,55 @@ describe("getTypes", () => {
 });
 
 describe("Type.activities", () => {
+  // The door reads the module state object in its body (#383); seed the
+  // world and reset it between tests.
+  beforeEach(() => {
+    activities.setMap([]);
+  });
+
   it("returns activities matching the type's acts, sorted by start desc", async () => {
     await loadTypes();
     const t = types as Map<Type>;
-    const acts = {
-      1: new Activity({
+    activities.setMap([
+      new Activity({
         id: 1,
         what: 301,
         start: "2024-01-01T00:00:00Z",
         gear: null,
         name: "A",
       }),
-      2: new Activity({
+      new Activity({
         id: 2,
         what: 301,
         start: "2024-06-01T00:00:00Z",
         gear: null,
         name: "B",
       }),
-      3: new Activity({
+      new Activity({
         id: 3,
         what: 302,
         start: "2024-03-01T00:00:00Z",
         gear: null,
         name: "C",
       }),
-    } as Map<Activity>;
-    const res = t[1].activities(acts);
+    ]);
+    const res = t[1].activities();
     expect(res.map((a) => a.id)).toEqual([2, 1]);
   });
 });
 
 describe("Type.parts", () => {
+  // The door reads the module state object in its body (#383); seed the
+  // world and reset it between tests.
+  beforeEach(() => {
+    parts.setMap([]);
+  });
+
   it("returns parts with matching what, sorted by last_used desc", async () => {
     await loadTypes();
     const t = types as Map<Type>;
-    const parts = {
-      1: new Part({
+    parts.setMap([
+      new Part({
         id: 1,
         what: 10,
         last_used: "2024-01-01T00:00:00Z",
@@ -132,7 +144,7 @@ describe("Type.parts", () => {
         purchase: "2023-01-01T00:00:00Z",
         usage: "u1",
       }),
-      2: new Part({
+      new Part({
         id: 2,
         what: 10,
         last_used: "2024-06-01T00:00:00Z",
@@ -141,7 +153,7 @@ describe("Type.parts", () => {
         purchase: "2023-01-01T00:00:00Z",
         usage: "u1",
       }),
-      3: new Part({
+      new Part({
         id: 3,
         what: 20,
         last_used: "2024-03-01T00:00:00Z",
@@ -150,8 +162,8 @@ describe("Type.parts", () => {
         purchase: "2023-01-01T00:00:00Z",
         usage: "u1",
       }),
-    } as Map<Part>;
-    const res = t[10].parts(parts);
+    ]);
+    const res = t[10].parts();
     expect(res.map((p) => p.id)).toEqual([2, 1]);
   });
 });

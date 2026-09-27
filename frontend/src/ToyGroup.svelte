@@ -7,7 +7,6 @@
   import * as m from "../paraglide/messages";
   import GearCard from "./Part/GearCard.svelte";
   import PlanBadge from "./ServicePlan/PlanBadge.svelte";
-  import { activities } from "./lib/activity";
 
   let show_more: boolean = $state(false);
 
@@ -40,7 +39,7 @@
         <PlanBadge {part} />
       </GearCard>
     {:else}
-      {#if getCategory()!.activities(activities).length == 0}
+      {#if getCategory()!.activities().length == 0}
         {m.toygroup_none_found({ category: getCategory()!.name })}
       {:else}
         {m.toygroup_none_assigned({ category: getCategory()!.name })}

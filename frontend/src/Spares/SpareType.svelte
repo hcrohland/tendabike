@@ -38,9 +38,7 @@
   }
 
   let subparts = $derived(
-    type
-      .parts(parts)
-      .filter((p) => (getShop() ? p.shop == getShop()!.id : true)),
+    type.parts().filter((p) => (getShop() ? p.shop == getShop()!.id : true)),
   );
   let subshow = $derived(
     subparts.filter(
