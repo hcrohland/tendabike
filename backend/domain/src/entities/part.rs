@@ -86,10 +86,12 @@ pub struct Part {
 pub struct PartId(i32);
 
 impl PartId {
+    /// Crosses Part and Shop through the checkuser ownership check; kept on full `Store` until those callees narrow.
     pub async fn get(id: i32, user: &dyn Session, store: &mut impl Store) -> TbResult<PartId> {
         PartId(id).checkuser(user, store).await
     }
 
+    /// Crosses Part, Shop, Attachment, Service, and ServicePlan; kept on full `Store` until the Shop, Attachment, and Service callees narrow.
     pub async fn delete(self, user: &dyn Session, store: &mut impl Store) -> TbResult<PartId> {
         self.checkuser(user, store).await?;
 
@@ -114,6 +116,8 @@ impl PartId {
     }
 
     /// get the part with id part
+    ///
+    /// Crosses Part and Shop through the ownership check; kept on full `Store` until the Shop callee narrows.
     pub async fn part(self, session: &dyn Session, store: &mut impl Store) -> TbResult<Part> {
         let part = self.read(store).await?;
 
@@ -148,6 +152,8 @@ impl PartId {
 
     /// check if the given user is the owner or an authorized shop owner.
     /// Returns Forbidden if not.
+    ///
+    /// Crosses Part and Shop through the part ownership check; kept on full `Store` until the Part/Shop session callees narrow.
     pub async fn checkuser(
         self,
         session: &dyn Session,
@@ -178,7 +184,7 @@ impl PartId {
     pub(crate) async fn dispose(
         &self,
         time: OffsetDateTime,
-        store: &mut impl Store,
+        store: &mut impl PartStore,
     ) -> Result<Part, Error> {
         debug!("-- disposing part {self} at {time}");
         let mut part = self.read(store).await?;
@@ -192,13 +198,14 @@ impl PartId {
         store.part_update(part).await
     }
 
-    pub(crate) async fn restore(&self, store: &mut impl Store) -> TbResult<Part> {
+    pub(crate) async fn restore(&self, store: &mut impl PartStore) -> TbResult<Part> {
         debug!("-- restoring part {self}");
         let mut part = self.read(store).await?;
         part.disposed_at = None;
         store.part_update(part).await
     }
 
+    /// Crosses Part and Shop through the part session check; kept on full `Store` until the Part/Shop session callees narrow.
     pub async fn change(
         self,
         name: String,
@@ -226,7 +233,7 @@ impl PartId {
     pub(crate) async fn set_owner_and_shop(
         &self,
         gear: PartId,
-        store: &mut impl Store,
+        store: &mut impl PartStore,
     ) -> TbResult<Part> {
         let mut part = self.read(store).await?;
         let gear = gear.read(store).await?;
@@ -240,7 +247,7 @@ impl PartId {
 }
 
 impl Part {
-    pub(crate) async fn get_all(pid: &UserId, store: &mut impl Store) -> TbResult<Vec<Part>> {
+    pub(crate) async fn get_all(pid: &UserId, store: &mut impl PartStore) -> TbResult<Vec<Part>> {
         store.part_get_all_for_userid(pid).await
     }
 
@@ -278,7 +285,7 @@ impl Part {
 
     pub async fn categories(
         user: &dyn Session,
-        store: &mut impl Store,
+        store: &mut impl PartStore,
     ) -> TbResult<HashSet<PartTypeId>> {
         let parts = store.part_get_all_for_userid(&user.user_id()).await?;
         let mut res = HashSet::new();
