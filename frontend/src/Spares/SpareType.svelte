@@ -104,7 +104,7 @@
                   ? m.action_move()
                   : m.action_attach()}
               </DropdownItem>
-              {#if part.attachments(attachments).length == 0}
+              {#if part.attachments().length == 0}
                 <DropdownItem onclick={() => getActions()!.deletePart(part)}>
                   {m.action_delete()}
                 </DropdownItem>

@@ -85,7 +85,7 @@
     }
   }
 
-  let mygear = $derived(allGear(parts, getCategory()!));
+  let mygear = $derived(allGear(getCategory()!));
 
   async function registerGear(part: Part, shopid: number, checked: boolean) {
     try {

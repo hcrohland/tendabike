@@ -14,7 +14,7 @@
 
 <Select bind:value={gear} classes={{ select: "rounded-l-none h-full" }}>
   <option value={null}>{getCategory()!.localizedAnyDative()}</option>
-  {#each save ? [parts[save]] : allGear(parts, getCategory()!) as part}
+  {#each save ? [parts[save]] : allGear(getCategory()!) as part}
     <option value={part.id}>
       {part.name}
     </option>

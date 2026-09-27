@@ -1,11 +1,9 @@
 <script lang="ts">
   import { handleError } from "../lib/store";
   import { Type, types } from "../lib/types";
-  import { attachments } from "../lib/attachment";
   import NewForm from "./PartForm.svelte";
   import { Part } from "../lib/part";
   import Buttons from "../Widgets/Buttons.svelte";
-  import { activities } from "../lib/activity";
   import Modal from "../Widgets/Modal.svelte";
   import { m } from "../../paraglide/messages";
 
@@ -28,7 +26,7 @@
   export const start = (p: Part) => {
     part = { ...p };
     type = p.type();
-    maxdate = p.firstEvent(activities, attachments);
+    maxdate = p.firstEvent();
     open = true;
   };
 </script>
