@@ -153,12 +153,11 @@ impl ShopId {
     /// Can be done by shop owner or any user with an active subscription
     /// Automatically registers all currently attached parts (cascading registration)
     /// Returns a Summary with the registered part and its attachments
-    /// Crosses shop, part, and attachment (parts_for_register is still `impl Store` until #344).
     pub async fn register_part(
         self,
         part_id: PartId,
         session: &dyn Session,
-        store: &mut impl Store,
+        store: &mut (impl ShopStore + PartStore + AttachmentStore),
     ) -> TbResult<Summary> {
         ShopSubscription::check(self, session.user_id(), store).await?;
         let parts = parts_for_register(part_id, session, store).await?;
@@ -183,12 +182,11 @@ impl ShopId {
     /// Unregister a part (bike) from this shop
     /// Can be done by shop owner OR part owner
     /// Returns an empty Summary (for consistency with other endpoints)
-    /// Crosses part and attachment (parts_for_register is still `impl Store` until #344).
     pub async fn unregister_part(
         self,
         part_id: PartId,
         session: &dyn Session,
-        store: &mut impl Store,
+        store: &mut (impl PartStore + ShopStore + AttachmentStore),
     ) -> TbResult<Summary> {
         let parts = parts_for_register(part_id, session, store).await?;
 
@@ -220,11 +218,10 @@ impl ShopId {
     }
 }
 
-/// Crosses part (checkuser) and attachment (is_attached, subparts) — still `impl Store` until those batches land (#344 re-narrows).
 async fn parts_for_register(
     part_id: PartId,
     session: &dyn Session,
-    store: &mut impl Store,
+    store: &mut (impl PartStore + ShopStore + AttachmentStore),
 ) -> TbResult<Vec<PartId>> {
     part_id.checkuser(session, store).await?;
     let time = OffsetDateTime::now_utc();

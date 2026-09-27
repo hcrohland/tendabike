@@ -86,12 +86,15 @@ pub struct Part {
 pub struct PartId(i32);
 
 impl PartId {
-    /// Crosses Part and Shop through the checkuser ownership check; kept on full `Store` until those callees narrow.
-    pub async fn get(id: i32, user: &dyn Session, store: &mut impl Store) -> TbResult<PartId> {
+    pub async fn get(
+        id: i32,
+        user: &dyn Session,
+        store: &mut (impl PartStore + ShopStore),
+    ) -> TbResult<PartId> {
         PartId(id).checkuser(user, store).await
     }
 
-    /// Crosses Part, Shop, Attachment, Service, and ServicePlan; kept on full `Store` until the Shop, Attachment, and Service callees narrow.
+    /// Crosses: part, shop, attachment, service, serviceplan.
     pub async fn delete(self, user: &dyn Session, store: &mut impl Store) -> TbResult<PartId> {
         self.checkuser(user, store).await?;
 
@@ -116,9 +119,11 @@ impl PartId {
     }
 
     /// get the part with id part
-    ///
-    /// Crosses Part and Shop through the ownership check; kept on full `Store` until the Shop callee narrows.
-    pub async fn part(self, session: &dyn Session, store: &mut impl Store) -> TbResult<Part> {
+    pub async fn part(
+        self,
+        session: &dyn Session,
+        store: &mut (impl PartStore + ShopStore),
+    ) -> TbResult<Part> {
         let part = self.read(store).await?;
 
         let user = session.user_id();
@@ -152,12 +157,10 @@ impl PartId {
 
     /// check if the given user is the owner or an authorized shop owner.
     /// Returns Forbidden if not.
-    ///
-    /// Crosses Part and Shop through the part ownership check; kept on full `Store` until the Part/Shop session callees narrow.
     pub async fn checkuser(
         self,
         session: &dyn Session,
-        store: &mut impl Store,
+        store: &mut (impl PartStore + ShopStore),
     ) -> TbResult<PartId> {
         self.part(session, store).await.map(|p| p.id)
     }
@@ -205,7 +208,6 @@ impl PartId {
         store.part_update(part).await
     }
 
-    /// Crosses Part and Shop through the part session check; kept on full `Store` until the Part/Shop session callees narrow.
     pub async fn change(
         self,
         name: String,
@@ -213,7 +215,7 @@ impl PartId {
         model: String,
         purchase: OffsetDateTime,
         user: &dyn Session,
-        store: &mut impl Store,
+        store: &mut (impl PartStore + ShopStore),
     ) -> TbResult<Part> {
         info!("Change {self:?}");
 

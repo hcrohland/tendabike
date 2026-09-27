@@ -18,11 +18,10 @@ impl ServicePlanId {
         store.get(self).await
     }
 
-    /// Crosses Part (owner lookup), Service (unlink from the owner's services), and Shop (owner check).
     pub async fn delete(
         self,
         user: &dyn Session,
-        store: &mut impl Store,
+        store: &mut (impl ServicePlanStore + PartStore + ServiceStore + ShopStore),
     ) -> TbResult<Vec<Service>> {
         let plan = self.get(store).await?;
         plan.checkuser(user, store).await?;
@@ -74,8 +73,11 @@ pub struct ServicePlan {
 }
 
 impl ServicePlan {
-    /// Crosses Part and Shop: part-bound plans defer ownership to `Part::checkuser` (part owner or that shop).
-    async fn checkuser(&self, user: &dyn Session, store: &mut impl Store) -> TbResult<()> {
+    async fn checkuser(
+        &self,
+        user: &dyn Session,
+        store: &mut (impl PartStore + ShopStore),
+    ) -> TbResult<()> {
         if let Some(part) = self.part {
             part.checkuser(user, store).await?;
         } else if self.uid != Some(user.user_id()) {
@@ -101,11 +103,10 @@ impl ServicePlan {
         store.create(self).await
     }
 
-    /// Crosses Part and Shop via the owner check (part-bound plans defer to `Part::checkuser`).
     pub async fn update(
         mut self,
         user: &dyn Session,
-        store: &mut impl Store,
+        store: &mut (impl ServicePlanStore + PartStore + ShopStore),
     ) -> TbResult<ServicePlan> {
         let plan = self.id.get(store).await?;
         plan.checkuser(user, store).await?;
