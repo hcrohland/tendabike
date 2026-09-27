@@ -1,4 +1,4 @@
-use crate::{Error, Shop, Store, TbResult, UserId};
+use crate::{Error, PartStore, Shop, ShopStore, TbResult, UserId};
 
 use derive_more::{Display, From, Into};
 use serde::{Deserialize, Serialize};
@@ -71,7 +71,7 @@ impl SubscriptionId {
         shop_id: ShopId,
         message: Option<String>,
         user: UserId,
-        store: &mut impl Store,
+        store: &mut impl ShopStore,
     ) -> TbResult<ShopSubscription> {
         // Verify the shop exists (don't check ownership - users can subscribe to any shop)
         let shop = store.shop_get(shop_id).await?;
@@ -108,18 +108,30 @@ impl SubscriptionId {
     }
 
     /// Get a subscription by ID
-    pub async fn get(id: i32, user: UserId, store: &mut impl Store) -> TbResult<SubscriptionId> {
+    pub async fn get(
+        id: i32,
+        user: UserId,
+        store: &mut impl ShopStore,
+    ) -> TbResult<SubscriptionId> {
         SubscriptionId(id).checkuser(user, store).await
     }
 
     /// Read a subscription from the database
-    pub async fn read(self, user: UserId, store: &mut impl Store) -> TbResult<ShopSubscription> {
+    pub async fn read(
+        self,
+        user: UserId,
+        store: &mut impl ShopStore,
+    ) -> TbResult<ShopSubscription> {
         self.checkuser(user, store).await?;
         store.subscription_get(self).await
     }
 
     /// Check if the user has access to this subscription (either subscriber or shop owner)
-    pub async fn checkuser(self, user: UserId, store: &mut impl Store) -> TbResult<SubscriptionId> {
+    pub async fn checkuser(
+        self,
+        user: UserId,
+        store: &mut impl ShopStore,
+    ) -> TbResult<SubscriptionId> {
         let subscription = store.subscription_get(self).await?;
 
         // Allow access if user is the subscriber
@@ -139,7 +151,7 @@ impl SubscriptionId {
         self,
         response_message: Option<String>,
         user: UserId,
-        store: &mut impl Store,
+        store: &mut impl ShopStore,
     ) -> TbResult<ShopSubscription> {
         let subscription = store.subscription_get(self).await?;
 
@@ -162,7 +174,7 @@ impl SubscriptionId {
         self,
         response_message: Option<String>,
         user: UserId,
-        store: &mut impl Store,
+        store: &mut impl ShopStore,
     ) -> TbResult<ShopSubscription> {
         let subscription = store.subscription_get(self).await?;
 
@@ -181,7 +193,11 @@ impl SubscriptionId {
 
     /// Cancel a subscription (subscriber only)
     /// Allows deletion of pending, active, and rejected subscriptions
-    pub async fn cancel(self, user: UserId, store: &mut impl Store) -> TbResult<()> {
+    pub async fn cancel(
+        self,
+        user: UserId,
+        store: &mut (impl PartStore + ShopStore),
+    ) -> TbResult<()> {
         let subscription = store.subscription_get(self).await?;
 
         // Verify user is the subscriber
@@ -217,7 +233,7 @@ impl ShopSubscription {
     pub async fn get_pending_for_shop(
         shop_id: ShopId,
         user: UserId,
-        store: &mut impl Store,
+        store: &mut impl ShopStore,
     ) -> TbResult<Vec<ShopSubscriptionWithDetails>> {
         let shop = shop_id.check_owner(user, store).await?;
         Ok(store
@@ -231,7 +247,7 @@ impl ShopSubscription {
 
     pub async fn get_for_shop(
         shop_id: ShopId,
-        store: &mut impl Store,
+        store: &mut impl ShopStore,
     ) -> TbResult<Vec<ShopSubscription>> {
         store.subscriptions_for_shop(shop_id).await
     }
@@ -239,7 +255,7 @@ impl ShopSubscription {
     /// Get all subscriptions made by a user
     pub async fn get_for_user(
         user: UserId,
-        store: &mut impl Store,
+        store: &mut impl ShopStore,
     ) -> TbResult<Vec<ShopSubscription>> {
         store.subscriptions_for_user(user).await
     }
@@ -247,7 +263,7 @@ impl ShopSubscription {
     /// Convert a list of subscriptions to subscriptions with shop details
     pub async fn with_shop_details(
         subscriptions: Vec<ShopSubscription>,
-        store: &mut impl Store,
+        store: &mut impl ShopStore,
     ) -> TbResult<Vec<ShopSubscriptionWithDetails>> {
         let mut result = Vec::new();
         for subscription in subscriptions {
@@ -257,7 +273,11 @@ impl ShopSubscription {
         Ok(result)
     }
 
-    pub(super) async fn check(shop: ShopId, user: UserId, store: &mut impl Store) -> TbResult<()> {
+    pub(super) async fn check(
+        shop: ShopId,
+        user: UserId,
+        store: &mut impl ShopStore,
+    ) -> TbResult<()> {
         let subs = store.subscriptions_for_user(user).await?;
         match subs.into_iter().find(|s| s.shop_id == shop) {
             Some(s) if s.status == SubscriptionStatus::Active => Ok(()),

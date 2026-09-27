@@ -86,10 +86,15 @@ pub struct Part {
 pub struct PartId(i32);
 
 impl PartId {
-    pub async fn get(id: i32, user: &dyn Session, store: &mut impl Store) -> TbResult<PartId> {
+    pub async fn get(
+        id: i32,
+        user: &dyn Session,
+        store: &mut (impl PartStore + ShopStore),
+    ) -> TbResult<PartId> {
         PartId(id).checkuser(user, store).await
     }
 
+    /// Crosses: attachment, part, service, serviceplan, shop, usage.
     pub async fn delete(self, user: &dyn Session, store: &mut impl Store) -> TbResult<PartId> {
         self.checkuser(user, store).await?;
 
@@ -114,7 +119,11 @@ impl PartId {
     }
 
     /// get the part with id part
-    pub async fn part(self, session: &dyn Session, store: &mut impl Store) -> TbResult<Part> {
+    pub async fn part(
+        self,
+        session: &dyn Session,
+        store: &mut (impl PartStore + ShopStore),
+    ) -> TbResult<Part> {
         let part = self.read(store).await?;
 
         let user = session.user_id();
@@ -151,7 +160,7 @@ impl PartId {
     pub async fn checkuser(
         self,
         session: &dyn Session,
-        store: &mut impl Store,
+        store: &mut (impl PartStore + ShopStore),
     ) -> TbResult<PartId> {
         self.part(session, store).await.map(|p| p.id)
     }
@@ -178,7 +187,7 @@ impl PartId {
     pub(crate) async fn dispose(
         &self,
         time: OffsetDateTime,
-        store: &mut impl Store,
+        store: &mut impl PartStore,
     ) -> Result<Part, Error> {
         debug!("-- disposing part {self} at {time}");
         let mut part = self.read(store).await?;
@@ -192,7 +201,7 @@ impl PartId {
         store.part_update(part).await
     }
 
-    pub(crate) async fn restore(&self, store: &mut impl Store) -> TbResult<Part> {
+    pub(crate) async fn restore(&self, store: &mut impl PartStore) -> TbResult<Part> {
         debug!("-- restoring part {self}");
         let mut part = self.read(store).await?;
         part.disposed_at = None;
@@ -206,7 +215,7 @@ impl PartId {
         model: String,
         purchase: OffsetDateTime,
         user: &dyn Session,
-        store: &mut impl Store,
+        store: &mut (impl PartStore + ShopStore),
     ) -> TbResult<Part> {
         info!("Change {self:?}");
 
@@ -226,7 +235,7 @@ impl PartId {
     pub(crate) async fn set_owner_and_shop(
         &self,
         gear: PartId,
-        store: &mut impl Store,
+        store: &mut impl PartStore,
     ) -> TbResult<Part> {
         let mut part = self.read(store).await?;
         let gear = gear.read(store).await?;
@@ -240,7 +249,7 @@ impl PartId {
 }
 
 impl Part {
-    pub(crate) async fn get_all(pid: &UserId, store: &mut impl Store) -> TbResult<Vec<Part>> {
+    pub(crate) async fn get_all(pid: &UserId, store: &mut impl PartStore) -> TbResult<Vec<Part>> {
         store.part_get_all_for_userid(pid).await
     }
 
@@ -278,7 +287,7 @@ impl Part {
 
     pub async fn categories(
         user: &dyn Session,
-        store: &mut impl Store,
+        store: &mut impl PartStore,
     ) -> TbResult<HashSet<PartTypeId>> {
         let parts = store.part_get_all_for_userid(&user.user_id()).await?;
         let mut res = HashSet::new();

@@ -150,7 +150,10 @@ impl UserId {
         })
     }
 
-    pub async fn get_stat(&self, store: &mut impl Store) -> TbResult<Stat> {
+    pub async fn get_stat(
+        &self,
+        store: &mut (impl ActivityStore + PartStore + UserStore),
+    ) -> TbResult<Stat> {
         let user = self.read(store).await.context("User record")?;
         let parts = Part::get_all(self, store)
             .await
@@ -197,6 +200,8 @@ impl UserId {
     }
 
     /// get all parts, attachments and activities for the user
+    ///
+    /// Crosses: activity, attachment, part, partnote, service, serviceplan, shop, usage, user.
     pub async fn get_summary(
         &self,
         shop: Option<ShopId>,
@@ -238,7 +243,14 @@ impl UserId {
     async fn get_part_summary(
         &self,
         parts: Vec<Part>,
-        store: &mut impl Store,
+        store: &mut (
+                 impl AttachmentStore
+                 + PartNoteStore
+                 + PartStore
+                 + ServicePlanStore
+                 + ServiceStore
+                 + UsageStore
+             ),
     ) -> TbResult<Summary> {
         let mut usages = Vec::new();
         let mut attachments = Vec::new();
@@ -268,6 +280,9 @@ impl UserId {
         })
     }
 
+    /// Deletes the user plus their activities, parts, attachments, services, serviceplans and usages
+    ///
+    /// Crosses: activity, attachment, part, partnote, service, serviceplan, shop, usage, user.
     pub async fn delete(&self, store: &mut impl Store) -> TbResult<()> {
         let Summary {
             activities,

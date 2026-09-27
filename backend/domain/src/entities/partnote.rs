@@ -89,7 +89,7 @@ impl PartId {
     pub async fn notes(
         self,
         user: &dyn Session,
-        store: &mut impl Store,
+        store: &mut (impl PartNoteStore + PartStore + ShopStore),
     ) -> TbResult<Vec<PartNote>> {
         self.checkuser(user, store).await?;
         store.partnote_all_by_part(self).await
@@ -103,7 +103,7 @@ impl PartId {
         user: &dyn Session,
         name: String,
         created: OffsetDateTime,
-        store: &mut impl Store,
+        store: &mut (impl PartNoteStore + PartStore + ShopStore),
     ) -> TbResult<PartNote> {
         if name.trim().is_empty() {
             return Err(Error::BadRequest("note name must not be empty".to_string()));
@@ -123,7 +123,7 @@ impl PartId {
         size: i64,
         data: Vec<u8>,
         created: OffsetDateTime,
-        store: &mut impl Store,
+        store: &mut (impl PartNoteStore + PartStore + ShopStore),
     ) -> TbResult<PartNote> {
         self.checkuser(user, store).await?;
         store
@@ -134,7 +134,11 @@ impl PartId {
 
 impl PartNoteId {
     /// Retrieves this note, after checking access to its part.
-    pub async fn note(self, user: &dyn Session, store: &mut impl Store) -> TbResult<PartNote> {
+    pub async fn note(
+        self,
+        user: &dyn Session,
+        store: &mut (impl PartNoteStore + PartStore + ShopStore),
+    ) -> TbResult<PartNote> {
         let note = store.partnote_get(self).await?;
         note.part.checkuser(user, store).await?;
         Ok(note)
@@ -147,7 +151,7 @@ impl PartNoteId {
         self,
         user: &dyn Session,
         name: String,
-        store: &mut impl Store,
+        store: &mut (impl PartNoteStore + PartStore + ShopStore),
     ) -> TbResult<PartNote> {
         if name.trim().is_empty() {
             return Err(Error::BadRequest("note name must not be empty".to_string()));
@@ -170,7 +174,7 @@ impl PartNoteId {
         filename: Option<String>,
         size: i64,
         data: Vec<u8>,
-        store: &mut impl Store,
+        store: &mut (impl PartNoteStore + PartStore + ShopStore),
     ) -> TbResult<PartNote> {
         let note = self.note(user, store).await?;
         let filename = filename
@@ -191,7 +195,7 @@ impl PartNoteId {
     pub async fn remove_file(
         self,
         user: &dyn Session,
-        store: &mut impl Store,
+        store: &mut (impl PartNoteStore + PartStore + ShopStore),
     ) -> TbResult<PartNote> {
         let note = self.note(user, store).await?;
         if !note.has_file() {
@@ -201,7 +205,11 @@ impl PartNoteId {
     }
 
     /// Deletes this note after checking access to its part.
-    pub async fn delete(self, user: &dyn Session, store: &mut impl Store) -> TbResult<PartNoteId> {
+    pub async fn delete(
+        self,
+        user: &dyn Session,
+        store: &mut (impl PartNoteStore + PartStore + ShopStore),
+    ) -> TbResult<PartNoteId> {
         self.note(user, store).await?;
         store.partnote_delete(self).await
     }

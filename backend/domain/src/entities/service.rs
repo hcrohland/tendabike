@@ -19,7 +19,11 @@ impl ServiceId {
         ServiceStore::get(store, self).await
     }
 
-    pub async fn delete(self, user: &dyn Session, store: &mut impl Store) -> TbResult<Summary> {
+    pub async fn delete(
+        self,
+        user: &dyn Session,
+        store: &mut (impl PartStore + ServiceStore + ShopStore + UsageStore),
+    ) -> TbResult<Summary> {
         let service = self.get(store).await?;
         service.part_id.checkuser(user, store).await?;
 
@@ -82,7 +86,7 @@ impl Service {
         notes: String,
         successor: Option<ServiceId>,
         plans: Vec<ServicePlanId>,
-        store: &mut impl Store,
+        store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<Summary> {
         let service = Service {
             id: ServiceId::new(),
@@ -104,7 +108,10 @@ impl Service {
         })
     }
 
-    async fn calculate_usage(&self, store: &mut impl Store) -> TbResult<Usage> {
+    async fn calculate_usage(
+        &self,
+        store: &mut (impl ActivityStore + AttachmentStore + PartStore),
+    ) -> TbResult<Usage> {
         Ok(if self.part_id.is_main(store).await? {
             Activity::find(self.part_id, MIN_TIME, self.time, store).await?
         } else {
@@ -114,7 +121,13 @@ impl Service {
         .fold(Usage::new(self.usage), |usage, act| usage + &act.usage()))
     }
 
-    pub async fn redo(self, user: &dyn Session, store: &mut impl Store) -> TbResult<Summary> {
+    pub async fn redo(
+        self,
+        user: &dyn Session,
+        store: &mut (
+                 impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
+             ),
+    ) -> TbResult<Summary> {
         let Service {
             id,
             notes,
@@ -151,7 +164,10 @@ impl Service {
         }
     }
 
-    async fn update_unchecked(self, store: &mut impl Store) -> TbResult<Summary> {
+    async fn update_unchecked(
+        self,
+        store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
+    ) -> TbResult<Summary> {
         let usages = vec![self.calculate_usage(store).await?.update(store).await?];
         let services = vec![ServiceStore::update(store, self).await?];
         Ok(Summary {
@@ -161,7 +177,13 @@ impl Service {
         })
     }
 
-    pub async fn update(mut self, user: &dyn Session, store: &mut impl Store) -> TbResult<Summary> {
+    pub async fn update(
+        mut self,
+        user: &dyn Session,
+        store: &mut (
+                 impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
+             ),
+    ) -> TbResult<Summary> {
         self.part_id.checkuser(user, store).await?;
         let service = self.id.get(store).await?;
         self.usage = service.usage;
@@ -185,7 +207,7 @@ impl Service {
     pub(crate) async fn recalculate(
         part: PartId,
         attach: OffsetDateTime,
-        store: &mut impl Store,
+        store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore),
     ) -> TbResult<Vec<Usage>> {
         let mut res = Vec::new();
         let services = store
@@ -202,7 +224,7 @@ impl Service {
     /// return all attachments with details for the parts in 'partlist'
     pub(crate) async fn for_part_with_usage(
         part: PartId,
-        store: &mut impl Store,
+        store: &mut (impl ServiceStore + UsageStore),
     ) -> TbResult<(Vec<Service>, Vec<Usage>)> {
         let services = store.services_by_part(part).await?;
 
