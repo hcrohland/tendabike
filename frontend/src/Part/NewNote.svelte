@@ -16,6 +16,50 @@
 	You should have received a copy of the GNU Affero General Public License
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
+<script module lang="ts">
+  import { PartNote, fmtSize } from "../lib/partnote";
+  import type { Part } from "../lib/part";
+
+  const modal = $state<{
+    open: boolean;
+    partId: number;
+    name: string;
+    file: File | null;
+    filePreview: string | null;
+    removeFile: boolean;
+    editingNote: PartNote | null;
+  }>({
+    open: false,
+    partId: 0,
+    name: "",
+    file: null,
+    filePreview: null,
+    removeFile: false,
+    editingNote: null,
+  });
+
+  function setFile(f: File | null) {
+    if (modal.filePreview) URL.revokeObjectURL(modal.filePreview);
+    modal.file = f;
+    modal.filePreview = f ? URL.createObjectURL(f) : null;
+    if (f) modal.removeFile = false;
+  }
+
+  export function start(part: Part, note?: PartNote) {
+    modal.partId = part.id!;
+    if (note) {
+      modal.editingNote = note;
+      modal.name = note.name;
+    } else {
+      modal.editingNote = null;
+      modal.name = "";
+    }
+    setFile(null);
+    modal.removeFile = false;
+    modal.open = true;
+  }
+</script>
+
 <script lang="ts">
   import { Button, Textarea } from "flowbite-svelte";
   import {
@@ -24,77 +68,42 @@
     TrashBinOutline,
   } from "flowbite-svelte-icons";
   import { onDestroy } from "svelte";
-  import {
-    PartNote,
-    createTextNote,
-    createFileNote,
-    fmtSize,
-  } from "../lib/partnote";
-  import type { Part } from "../lib/part";
+  import { createTextNote, createFileNote } from "../lib/partnote";
   import { handleError } from "../lib/store";
   import Modal from "../Widgets/Modal.svelte";
   import * as m from "../../paraglide/messages";
 
-  let open = $state(false);
-  let partId = $state(0);
-  let name = $state("");
-  let file = $state<File | null>(null);
-  let filePreview = $state<string | null>(null);
-  let removeFile = $state(false);
-  let editingNote: PartNote | null = $state(null);
   let fileInput = $state<HTMLInputElement | null>(null);
 
-  function setFile(f: File | null) {
-    if (filePreview) URL.revokeObjectURL(filePreview);
-    file = f;
-    filePreview = f ? URL.createObjectURL(f) : null;
-    if (f) removeFile = false;
-  }
-
   onDestroy(() => {
-    if (filePreview) URL.revokeObjectURL(filePreview);
+    if (modal.filePreview) URL.revokeObjectURL(modal.filePreview);
   });
 
-  export function start(part: Part, note?: PartNote) {
-    partId = part.id!;
-    if (note) {
-      editingNote = note;
-      name = note.name;
-      setFile(null);
-    } else {
-      editingNote = null;
-      name = "";
-      setFile(null);
-    }
-    removeFile = false;
-    open = true;
-  }
-
   function pickFile() {
-    removeFile = false;
+    modal.removeFile = false;
     fileInput?.click();
   }
 
   function onRemoveFile() {
-    removeFile = true;
+    modal.removeFile = true;
     setFile(null);
   }
 
   async function onaction() {
     try {
-      if (editingNote) {
-        if (removeFile) {
-          await editingNote.removeFile();
-        } else if (file) {
-          await editingNote.updateFile(name.trim(), file);
+      if (modal.editingNote) {
+        if (modal.removeFile) {
+          await modal.editingNote.removeFile();
+        } else if (modal.file) {
+          await modal.editingNote.updateFile(modal.name.trim(), modal.file);
         } else {
-          await editingNote.updateName(name.trim());
+          await modal.editingNote.updateName(modal.name.trim());
         }
       } else {
-        if (file) {
-          await createFileNote(partId, name.trim(), file);
+        if (modal.file) {
+          await createFileNote(modal.partId, modal.name.trim(), modal.file);
         } else {
-          await createTextNote(partId, name.trim());
+          await createTextNote(modal.partId, modal.name.trim());
         }
       }
     } catch (e: any) {
@@ -102,13 +111,13 @@
       return;
     }
     setFile(null);
-    open = false;
+    modal.open = false;
   }
 </script>
 
-<Modal bind:open {onaction}>
+<Modal bind:open={modal.open} {onaction}>
   {#snippet header()}
-    {#if editingNote}
+    {#if modal.editingNote}
       {m.gearcard_change_note()}
     {:else}
       {m.gearcard_new_note()}
@@ -120,34 +129,41 @@
       <label class="block text-sm font-medium mb-1" for="note-name">
         {m.gearcard_note_name()}
       </label>
-      <Textarea id="note-name" bind:value={name} rows={3} class="w-full" />
+      <Textarea
+        id="note-name"
+        bind:value={modal.name}
+        rows={3}
+        class="w-full"
+      />
     </div>
 
-    {#if editingNote?.hasFile()}
+    {#if modal.editingNote?.hasFile()}
       <div
-        class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded {removeFile
+        class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded {modal.removeFile
           ? 'opacity-50'
           : ''}"
       >
-        {#if filePreview && file?.type.startsWith("image/")}
+        {#if modal.filePreview && modal.file?.type.startsWith("image/")}
           <img
-            src={filePreview}
-            alt={file?.name ?? ""}
+            src={modal.filePreview}
+            alt={modal.file?.name ?? ""}
             class="max-h-16 rounded"
           />
-        {:else if editingNote.hasImage()}
+        {:else if modal.editingNote.hasImage()}
           <img
-            src={editingNote.fileUrl()}
-            alt={editingNote.filename ?? editingNote.name}
+            src={modal.editingNote.fileUrl()}
+            alt={modal.editingNote.filename ?? modal.editingNote.name}
             class="max-h-16 rounded"
           />
         {:else}
           <PaperClipOutline class="w-5 h-5 text-gray-500" />
         {/if}
         <div class="text-sm text-gray-600 dark:text-gray-400 flex-1">
-          {file ? file.name : editingNote.filename}
+          {modal.file ? modal.file.name : modal.editingNote.filename}
           <span class="ml-2 text-gray-400">
-            {fmtSize(file ? file.size : (editingNote.size ?? 0))}
+            {fmtSize(
+              modal.file ? modal.file.size : (modal.editingNote.size ?? 0),
+            )}
           </span>
         </div>
         <button
@@ -191,16 +207,17 @@
 
   {#snippet footer()}
     <div class="flex justify-end w-full gap-2">
-      <Button color="alternative" onclick={() => (open = false)}>
+      <Button color="alternative" onclick={() => (modal.open = false)}>
         {m.action_cancel()}
       </Button>
       <Button
         type="submit"
         value="commit"
         color="gray"
-        disabled={!removeFile && !(name.trim().length > 0 || file !== null)}
+        disabled={!modal.removeFile &&
+          !(modal.name.trim().length > 0 || modal.file !== null)}
       >
-        {#if editingNote}
+        {#if modal.editingNote}
           {m.action_update()}
         {:else}
           {m.action_create()}

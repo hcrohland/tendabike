@@ -16,31 +16,39 @@
 	You should have received a copy of the GNU Affero General Public License
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
-<script lang="ts">
+<script module lang="ts">
   import { PartNote } from "../lib/partnote";
+
+  const modal = $state<{
+    open: boolean;
+    note: PartNote;
+  }>({
+    open: false,
+    note: new PartNote({}),
+  });
+
+  export function start(n: PartNote) {
+    modal.note = n;
+    modal.open = true;
+  }
+</script>
+
+<script lang="ts">
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";
   import * as m from "../../paraglide/messages";
 
-  let note = $state(new PartNote({}));
-  let open = $state(false);
-
-  export function start(n: PartNote) {
-    note = n;
-    open = true;
-  }
-
   async function onaction() {
-    await note.delete();
-    open = false;
+    await modal.note.delete();
+    modal.open = false;
   }
 </script>
 
-<Modal bind:open {onaction}>
+<Modal bind:open={modal.open} {onaction}>
   {#snippet header()}
-    {m.gearcard_delete_confirm({ name: note.name })}
+    {m.gearcard_delete_confirm({ name: modal.note.name })}
   {/snippet}
   {#snippet footer()}
-    <Buttons bind:open label={m.action_delete()} />
+    <Buttons bind:open={modal.open} label={m.action_delete()} />
   {/snippet}
 </Modal>

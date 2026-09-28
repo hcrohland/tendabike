@@ -1,38 +1,47 @@
-<script lang="ts">
+<script module lang="ts">
   import { Attachment } from "../lib/attachment";
   import { Part, parts } from "../lib/part";
+
+  const modal = $state<{
+    open: boolean;
+    attachment: Attachment;
+    part: Part;
+  }>({
+    open: false,
+    attachment: new Attachment({}),
+    part: new Part({}),
+  });
+
+  export const start = (a: Attachment) => {
+    modal.attachment = a;
+    modal.part = parts[a.part_id];
+    modal.open = true;
+  };
+</script>
+
+<script lang="ts">
   import { fmtDate } from "../lib/store";
   import { types } from "../lib/types";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";
   import { m } from "../../paraglide/messages";
 
-  let attachment = $state(new Attachment({}));
-  let part = $state(new Part({}));
-  let open = $state(false);
-
   async function onaction() {
-    await part.detach(attachment.attached, true);
-    open = false;
+    await modal.part.detach(modal.attachment.attached, true);
+    modal.open = false;
   }
-
-  export const start = (a: Attachment) => {
-    attachment = a;
-    part = parts[a.part_id];
-    open = true;
-  };
 </script>
 
-<Modal bind:open {onaction}>
+<Modal bind:open={modal.open} {onaction}>
   {#snippet header()}
     {m.deleteattachment_header({
-      type: types[part.what].localizedName(),
-      name: part.name,
-      gear: parts[attachment.gear].name,
-      date: fmtDate(attachment.attached),
+      type: types[modal.part.what].localizedName(),
+      name: modal.part.name,
+      gear: parts[modal.attachment.gear].name,
+      date: fmtDate(modal.attachment.attached),
     })}
   {/snippet}
   {#snippet footer()}
-    <Buttons bind:open label={m.action_confirm()} />
+    <Buttons bind:open={modal.open} label={m.action_confirm()} />
   {/snippet}
 </Modal>

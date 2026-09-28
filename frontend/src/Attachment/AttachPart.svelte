@@ -1,45 +1,61 @@
+<script module lang="ts">
+  import { Part } from "../lib/part";
+
+  const modal = $state<{
+    open: boolean;
+    part: Part | undefined;
+    time: Date;
+    gear: number | undefined;
+    hook: number | undefined;
+  }>({
+    open: false,
+    part: undefined,
+    time: new Date(),
+    gear: undefined,
+    hook: undefined,
+  });
+
+  export const start = (p: Part) => {
+    modal.part = p;
+    modal.time = new Date();
+    modal.gear = undefined;
+    modal.hook = undefined;
+    modal.open = true;
+  };
+</script>
+
 <script lang="ts">
   import { types } from "../lib/types";
   import AttachForm from "./AttachForm.svelte";
-  import { Part } from "../lib/part";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";
   import { m } from "../../paraglide/messages";
 
-  let part: Part | undefined = $state();
-  let open = $state(false);
-  let time = $state<Date>(new Date());
-  let gear = $state<number>();
-  let hook = $state<number>();
-
   async function onaction() {
-    await part!.attach(time!, true, gear!, hook!);
-    open = false;
+    await modal.part!.attach(modal.time!, true, modal.gear!, modal.hook!);
+    modal.open = false;
   }
-
-  export const start = (p: Part) => {
-    part = p;
-    time = new Date();
-    gear = undefined;
-    hook = undefined;
-    open = true;
-  };
 </script>
 
-{#if part}
-  <Modal bind:open {onaction}>
+{#if modal.part}
+  <Modal bind:open={modal.open} {onaction}>
     {#snippet header()}
       {m.attachpart_header({
-        type: types[part!.what].localizedName(),
-        name: part!.name,
-        vendor: part!.vendor,
-        model: part!.model,
+        type: types[modal.part!.what].localizedName(),
+        name: modal.part!.name,
+        vendor: modal.part!.vendor,
+        model: modal.part!.model,
       })}
     {/snippet}
-    <AttachForm bind:time bind:gear bind:hook {part} />
+    <AttachForm
+      bind:time={modal.time}
+      bind:gear={modal.gear}
+      bind:hook={modal.hook}
+      part={modal.part}
+    />
 
     {#snippet footer()}
-      <Buttons bind:open label={m.action_attach()} />
+      <Buttons bind:open={modal.open} label={m.action_attach()} />
     {/snippet}
   </Modal>
 {/if}

@@ -1,34 +1,43 @@
+<script module lang="ts">
+  import { Type } from "../lib/types";
+  import { Part } from "../lib/part";
+  import { getUser } from "../lib/user";
+
+  const modal = $state<{
+    open: boolean;
+    type: Type | undefined;
+    part: any;
+  }>({
+    open: false,
+    type: undefined,
+    part: undefined,
+  });
+
+  export function start(t: Type) {
+    modal.type = t;
+    modal.part = { ...new Part({ owner: getUser()?.id, what: t.id }) };
+    modal.open = true;
+  }
+</script>
+
 <script lang="ts">
   import Modal from "../Widgets/Modal.svelte";
   import NewForm from "./PartForm.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
-  import { Type } from "../lib/types";
-  import { Part } from "../lib/part";
-  import { getUser } from "../lib/user";
   import { m } from "../../paraglide/messages";
 
-  let type = $state<Type>();
-  let part = $state<any>();
-  let open = $state(false);
-
   async function onaction() {
-    await new Part(part).create();
-    open = false;
-  }
-
-  export function start(t: Type) {
-    type = t;
-    part = { ...new Part({ owner: getUser()?.id, what: t.id }) };
-    open = true;
+    await new Part(modal.part).create();
+    modal.open = false;
   }
 </script>
 
-<Modal bind:open {onaction}>
+<Modal bind:open={modal.open} {onaction}>
   {#snippet header()}
-    {m.newpart_header({ type: type!.localizedName() })}
+    {m.newpart_header({ type: modal.type!.localizedName() })}
   {/snippet}
-  <NewForm {type} bind:part />
+  <NewForm type={modal.type} bind:part={modal.part} />
   {#snippet footer()}
-    <Buttons bind:open label={m.action_create()} />
+    <Buttons bind:open={modal.open} label={m.action_create()} />
   {/snippet}
 </Modal>
