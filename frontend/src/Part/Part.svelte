@@ -27,7 +27,7 @@
   let attachees = $derived(
     stateValues(attachments).filter((a) => a.gear == part.id),
   );
-  let last_attachment = $derived(part.attachments(attachments).at(0));
+  let last_attachment = $derived(part.attachments().at(0));
 
   let tab = $state("");
 </script>
@@ -58,7 +58,7 @@
           {m.part_change_details()}
         </DropdownItem>
       {/if}
-      {#if !part.isGear() && part.attachments(attachments).length == 0}
+      {#if !part.isGear() && part.attachments().length == 0}
         <DropdownItem
           onclick={() => {
             getActions()!.deletePart(part);

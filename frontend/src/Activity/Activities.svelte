@@ -4,7 +4,6 @@
   import ActList from "./ActList.svelte";
   import { stateValues } from "../lib/mapable.svelte";
   import { parts } from "../lib/part";
-  import { attachments } from "../lib/attachment";
   import * as m from "../../paraglide/messages";
 
   let { params }: { params: { part: number; start?: number } } = $props();
@@ -22,9 +21,9 @@
       } else {
         const start = Number(params.start);
         const atts = part
-          .attachments(attachments)
+          .attachments()
           .filter((a) => (start ? a.isAttached(start) : true));
-        acts = atts.map((att) => att.activities(activities)).flat();
+        acts = atts.map((att) => att.activities()).flat();
         if (start)
           title = m.act_heading_attached({
             name: part.name,
@@ -36,7 +35,7 @@
       }
     } else {
       title = m.act_heading_all();
-      acts = getCategory()!.activities(activities);
+      acts = getCategory()!.activities();
     }
 
     return { acts, title };

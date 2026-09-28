@@ -20,7 +20,7 @@
 
 <script lang="ts">
   import { Part } from "../lib/part";
-  import { partNotes, notes_for_part } from "../lib/partnote";
+  import { notes_for_part } from "../lib/partnote";
   import NoteCard from "./NoteCard.svelte";
 
   interface Props {
@@ -29,7 +29,7 @@
 
   let { part }: Props = $props();
 
-  let notes = $derived(notes_for_part(partNotes, part.id!));
+  let notes = $derived(notes_for_part(part.id!));
 </script>
 
 <div class="flex flex-col gap-3">

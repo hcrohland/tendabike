@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { Service, services } from "./service";
 import { Part } from "./part";
 import { Usage, usages } from "./usage";
-import { fmtDate } from "./store";
+import { fmtDate, get_days } from "./store";
 import { type Map } from "./mapable.svelte";
 import { resp, usage } from "../test/helpers";
 
@@ -42,35 +42,88 @@ function usageMap(...us: Usage[]): Map<Usage> {
   return Object.fromEntries(us.map((u) => [u.id, u])) as Map<Usage>;
 }
 
+// Test-only helpers, moved out of the Service class (issue #385); they stay
+// pure over their local maps.
+function getRow(
+  svc: Service,
+  depth: number,
+  part: Part,
+  usages: Map<Usage>,
+  successor: Service | null,
+) {
+  let next;
+  let time: Date;
+  if (!successor) {
+    next = part.usage;
+    time = new Date();
+  } else {
+    next = successor.usage;
+    time = successor.time;
+  }
+  // svc.usage is undefined for the period without a service
+  // this period starts at time part.purchase and has an empty usage
+  if (!svc.usage) svc.time = part.purchase;
+  let usage = svc.usage ? usages[next].sub(usages[svc.usage]) : usages[next];
+
+  // How many days passed
+  let days = get_days(svc.time, time);
+  return { depth, service: svc, days, usage };
+}
+
+function fmtTime(svc: Service, s: Map<Service>) {
+  let res = fmtDate(svc.time);
+  // get_successor() takes no argument after the conversion (it reads the
+  // module state), so the lookup is inlined to keep this helper pure over
+  // its local map.
+  let successor = svc.successor ? s[svc.successor] : null;
+  if (successor) res = res + " - " + fmtDate(successor.time);
+  return res;
+}
+
+// The doors read the module state in their bodies (issue #385); seed the
+// world and reset it between tests.
+function reset() {
+  services.setMap([]);
+}
+
 describe("Service.get_successor", () => {
+  beforeEach(reset);
+
   it("returns null when there is no successor", () => {
-    expect(svc({ successor: null }).get_successor({})).toBeNull();
+    expect(svc({ successor: null }).get_successor()).toBeNull();
   });
 
   it("returns the successor service when it is present", () => {
     const s1 = svc({ id: "S1", successor: "S2" });
     const s2 = svc({ id: "S2" });
-    expect(s1.get_successor(svcMap(s1, s2))).toBe(s2);
+    services.setMap([s1, s2]);
+    // The collection's prep function rebuilds the service, so the door
+    // returns a value-equal service, not the seeded instance.
+    expect(s1.get_successor()).toEqual(s2);
   });
 
   it("returns null when the successor is missing from the map", () => {
-    expect(svc({ successor: "MISSING" }).get_successor({})).toBeNull();
+    expect(svc({ successor: "MISSING" }).get_successor()).toBeNull();
   });
 });
 
 describe("Service.history", () => {
+  beforeEach(reset);
+
   it("walks back through predecessors to the oldest service", () => {
     const s2 = svc({ id: "S2", successor: null });
     const s1 = svc({ id: "S1", successor: "S2" });
     const s0 = svc({ id: "S0", successor: "S1" });
-    const hist = s2.history(0, svcMap(s0, s1, s2));
+    services.setMap([s0, s1, s2]);
+    const hist = s2.history(0);
     expect(hist.map((h) => h.service?.id ?? null)).toEqual(["S1", "S0", null]);
     expect(hist.map((h) => h.successor.id)).toEqual(["S2", "S1", "S0"]);
   });
 
   it("returns a single placeholder entry when there is no predecessor", () => {
     const s = svc({ id: "S5", successor: null });
-    const hist = s.history(3, svcMap(s));
+    services.setMap([s]);
+    const hist = s.history(3);
     expect(hist.length).toBe(1);
     expect(hist[0].depth).toBe(2);
     expect(hist[0].service).toBeUndefined();
@@ -94,7 +147,7 @@ describe("Service.get_row", () => {
       time: "2023-01-01T00:00:00Z",
     });
 
-    const row = service.get_row(1, p, usageMap(u_prev, u_now), successor);
+    const row = getRow(service, 1, p, usageMap(u_prev, u_now), successor);
 
     expect(row.service).toBe(service);
     expect(row.depth).toBe(1);
@@ -113,7 +166,7 @@ describe("Service.get_row", () => {
       time: "2020-01-01T00:00:00Z",
     });
 
-    const row = service.get_row(0, p, usageMap(u_now), null);
+    const row = getRow(service, 0, p, usageMap(u_now), null);
 
     expect(row.usage).toBe(u_now);
     expect(service.time).toBe(p.purchase);
@@ -124,13 +177,13 @@ describe("Service.get_row", () => {
 describe("Service.fmtTime", () => {
   it("shows a single date without a successor", () => {
     const s = svc({ time: "2023-05-01T00:00:00Z" });
-    expect(s.fmtTime({})).toBe(fmtDate(new Date("2023-05-01T00:00:00Z")));
+    expect(fmtTime(s, {})).toBe(fmtDate(new Date("2023-05-01T00:00:00Z")));
   });
 
   it("shows a date range when there is a successor", () => {
     const s1 = svc({ id: "S1", time: "2023-05-01T00:00:00Z", successor: "S2" });
     const s2 = svc({ id: "S2", time: "2024-05-01T00:00:00Z" });
-    expect(s1.fmtTime(svcMap(s1, s2))).toBe(
+    expect(fmtTime(s1, svcMap(s1, s2))).toBe(
       fmtDate(new Date("2023-05-01T00:00:00Z")) +
         " - " +
         fmtDate(new Date("2024-05-01T00:00:00Z")),

@@ -38,9 +38,7 @@
   }
 
   let subparts = $derived(
-    type
-      .parts(parts)
-      .filter((p) => (getShop() ? p.shop == getShop()!.id : true)),
+    type.parts().filter((p) => (getShop() ? p.shop == getShop()!.id : true)),
   );
   let subshow = $derived(
     subparts.filter(
@@ -104,7 +102,7 @@
                   ? m.action_move()
                   : m.action_attach()}
               </DropdownItem>
-              {#if part.attachments(attachments).length == 0}
+              {#if part.attachments().length == 0}
                 <DropdownItem onclick={() => getActions()!.deletePart(part)}>
                   {m.action_delete()}
                 </DropdownItem>

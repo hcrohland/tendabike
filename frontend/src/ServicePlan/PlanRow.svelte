@@ -1,6 +1,5 @@
 <script lang="ts">
   import ServiceRow from "../Service/ServiceRow.svelte";
-  import { attachments } from "../lib/attachment";
   import { Part } from "../lib/part";
   import {
     partForPlanGear,
@@ -50,7 +49,7 @@
             {m.planmenu_new_service()}
           </DropdownItem>
           {#if plan.part != part.id}
-            {@const att = part.attachments(attachments).at(0)}
+            {@const att = part.attachments().at(0)}
             {#if att}
               <DropdownItem onclick={() => getActions()!.replacePart(att)}>
                 {m.action_replace()}

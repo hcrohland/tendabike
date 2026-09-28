@@ -1,6 +1,6 @@
-import { Activity } from "./activity";
+import { Activity, activities as allActivities } from "./activity";
 import { by, filterValues, type Map, stateValues } from "./mapable.svelte";
-import { Part } from "./part";
+import { Part, parts as allParts } from "./part";
 import { myfetch } from "./store";
 import { getCategory, setCategory } from "./types.svelte";
 import * as m from "../../paraglide/messages";
@@ -37,14 +37,14 @@ export class Type {
     this.acts = [];
   }
 
-  activities(acts: Map<Activity>) {
-    return stateValues(acts)
+  activities(): Activity[] {
+    return stateValues(allActivities)
       .filter((a) => this.acts.some((t) => t.id == a.what))
       .sort(by("start"));
   }
 
-  parts(parts: Map<Part>) {
-    return stateValues(parts)
+  parts(): Part[] {
+    return stateValues(allParts)
       .filter((p) => p.what == this.id)
       .sort(by("last_used"));
   }

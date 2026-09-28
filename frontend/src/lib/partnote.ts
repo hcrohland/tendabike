@@ -1,4 +1,4 @@
-import { type Map, mapableState, stateValues } from "./mapable.svelte";
+import { mapableState, stateValues } from "./mapable.svelte";
 import { checkStatus, handleError, myfetch } from "./store";
 
 export class PartNote {
@@ -69,11 +69,8 @@ export class PartNote {
 
 export const partNotes = mapableState("id", (p) => new PartNote(p));
 
-export function notes_for_part(
-  notes: Map<PartNote>,
-  partId: number,
-): PartNote[] {
-  return stateValues(notes).filter((n) => n.part == partId);
+export function notes_for_part(partId: number): PartNote[] {
+  return stateValues(partNotes).filter((n) => n.part == partId);
 }
 
 export async function createTextNote(part: number, name: string) {

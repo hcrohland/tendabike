@@ -1,7 +1,6 @@
-import { fmtDate, get_days, handleError, myfetch } from "./store";
-import { type Map, mapableState, stateValues } from "./mapable.svelte";
-import { Part } from "./part";
-import { usages, Usage } from "./usage";
+import { handleError, myfetch } from "./store";
+import { mapableState, stateValues } from "./mapable.svelte";
+import { usages } from "./usage";
 import { updateSummary } from "./user";
 
 export class Service {
@@ -68,22 +67,23 @@ export class Service {
       .catch(handleError);
   }
 
-  get_successor(s: Map<Service>) {
+  get_successor(): Service | null {
     if (!this.successor) return null;
 
     // this might happen when the lists get updated
-    if (!s[this.successor]) {
+    if (!services[this.successor]) {
       // console.error("Successor of ", this, "does not exist");
       return null;
     }
 
-    return s[this.successor];
+    return services[this.successor];
   }
 
-  history(
-    depth: number,
-    services: Map<Service>,
-  ): { depth: number; service: Service | undefined; successor: Service }[] {
+  history(depth: number): {
+    depth: number;
+    service: Service | undefined;
+    successor: Service;
+  }[] {
     let preds = stateValues(services).filter((s) => s.successor == this.id);
     if (preds.length > 0) {
       let res = new Array();
@@ -91,7 +91,7 @@ export class Service {
         // the early ones have the higher depth!
         let d = depth + preds.length - (i + 1);
         res.push({ depth: d, service, successor: this });
-        res = res.concat(service.history(d, services));
+        res = res.concat(service.history(d));
       });
       return res;
     } else {
@@ -101,40 +101,6 @@ export class Service {
         successor: this,
       });
     }
-  }
-
-  get_row(
-    depth: number,
-    part: Part,
-    usages: Map<Usage>,
-    successor: Service | null,
-  ) {
-    let next;
-    let time: Date;
-    if (!successor) {
-      next = part.usage;
-      time = new Date();
-    } else {
-      next = successor.usage;
-      time = successor.time;
-    }
-    // this.usage is undefined for the period without a service
-    // this period starts at time part.purchase and has an empty usage
-    if (!this.usage) this.time = part.purchase;
-    let usage = this.usage
-      ? usages[next].sub(usages[this.usage])
-      : usages[next];
-
-    // How many days passed
-    let days = get_days(this.time, time);
-    return { depth, service: this, days, usage };
-  }
-
-  fmtTime(s: Map<Service>) {
-    let res = fmtDate(this.time);
-    let successor = this.get_successor(s);
-    if (successor) res = res + " - " + fmtDate(successor.time);
-    return res;
   }
 }
 

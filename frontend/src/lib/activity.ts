@@ -1,5 +1,4 @@
-import { type Map, mapableState } from "./mapable.svelte";
-import { Part } from "./part";
+import { mapableState } from "./mapable.svelte";
 import { handleError, myfetch } from "./store";
 import { updateSummary } from "./user";
 
@@ -45,18 +44,6 @@ export class Activity {
     return await myfetch("/api/activ/" + a.id, "PUT", a)
       .then((data) => updateSummary(data))
       .catch(handleError);
-  }
-
-  gearLink(parts: Map<Part>) {
-    if (this.gear && parts[this.gear]) {
-      return parts[this.gear].partLink();
-    } else {
-      return "-";
-    }
-  }
-
-  gearName(parts: Map<Part>) {
-    return this.gear && parts[this.gear] ? parts[this.gear].name : "-";
   }
 }
 

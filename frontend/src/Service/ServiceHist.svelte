@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { services, Service } from "../lib/service";
+  import { Service } from "../lib/service";
   import Card from "../Widgets/Card.svelte";
   import ShowMore from "../Widgets/ShowMore.svelte";
   import ServiceRow from "./ServiceRow.svelte";
@@ -15,7 +15,7 @@
   let show_more = $state(false);
 
   let part = $derived(parts[service.part_id]);
-  let successor = $derived(service.get_successor(services));
+  let successor = $derived(service.get_successor());
 </script>
 
 <Card>
@@ -25,7 +25,7 @@
   {#if show_more}
     <div class="rounded-lg border border-border-subtle bg-surface-1 p-2">
       <div class="flex flex-col gap-2 mt-2">
-        {#each service.history(1, services) as s (s.service?.id + "-" + s.successor?.id)}
+        {#each service.history(1) as s (s.service?.id + "-" + s.successor?.id)}
           <ServiceRow {part} {...s} light />
         {/each}
       </div>
