@@ -7,10 +7,9 @@
 
   interface Props {
     part?: Part | undefined;
-    children?: import("svelte").Snippet;
   }
 
-  let { part: gear, children }: Props = $props();
+  let { part: gear }: Props = $props();
   let planlist = $derived(
     (gear
       ? plansForAssembly(gear)
@@ -22,11 +21,6 @@
 </script>
 
 <div class="flex flex-col gap-3">
-  {#if children}
-    <div class="flex justify-end">
-      {@render children?.()}
-    </div>
-  {/if}
   {#each planlist as plan (plan.id)}
     <PlanBlock {plan} />
   {/each}
