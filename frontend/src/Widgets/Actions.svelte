@@ -9,9 +9,16 @@
   } from "../ServicePlan/DeletePlan.svelte";
   import NewNote, { start as newNote } from "../Part/NewNote.svelte";
   import DeleteNote, { start as deleteNote } from "../Part/DeleteNote.svelte";
-  import UpdatePlan from "../ServicePlan/UpdatePlan.svelte";
-  import ServiceActions from "../Service/ServiceActions.svelte";
-  import NewPlan from "../ServicePlan/NewPlan.svelte";
+  import UpdatePlan, {
+    start as updatePlan,
+  } from "../ServicePlan/UpdatePlan.svelte";
+  import ServiceActions, {
+    create as newService,
+    repeat as redoService,
+    change as changeService,
+    del as deleteService,
+  } from "../Service/ServiceActions.svelte";
+  import NewPlan, { start as newPlan } from "../ServicePlan/NewPlan.svelte";
   import NewPart, { start as newPart } from "../Part/NewPart.svelte";
   import RecoverPart, {
     start as recoverPart,
@@ -22,11 +29,9 @@
   import InstallPart, {
     start as installPart,
   } from "../Attachment/InstallPart.svelte";
-  import type { Part } from "../lib/part";
   import ReplacePart, {
     start as replacePart,
   } from "../Attachment/ReplacePart.svelte";
-  import type { ServicePlan } from "../lib/serviceplan";
   import ChangePart, { start as changePart } from "../Part/ChangePart.svelte";
   import DeleteAttachment, {
     start as deleteAttachment,
@@ -43,7 +48,6 @@
   import SubscriptionRequestModal, {
     start as requestSubscription,
   } from "../Shop/SubscriptionRequestModal.svelte";
-  import type { Service } from "../lib/service";
 
   $: setActions({
     newPart,
@@ -56,12 +60,12 @@
     recoverPart,
     attachPart,
     replacePart,
-    newService: serviceActions?.create,
-    redoService: serviceActions?.repeat,
-    changeService: serviceActions?.change,
-    deleteService: serviceActions?.del,
-    newPlan: newPlan?.start,
-    updatePlan: updatePlan?.start,
+    newService,
+    redoService,
+    changeService,
+    deleteService,
+    newPlan,
+    updatePlan,
     deletePlan,
     deleteAttachment,
     changeActivity,
@@ -70,15 +74,6 @@
     deleteShop,
     requestSubscription,
   });
-
-  let serviceActions: {
-    create: (part: Part, plan?: ServicePlan) => void;
-    repeat: (s: Service) => void;
-    del: (s: Service) => void;
-    change: (s: Service) => void;
-  };
-  let newPlan: { start: (p: Part) => void };
-  let updatePlan: { start: (p: ServicePlan) => void };
 </script>
 
 <NewPart />
@@ -86,9 +81,9 @@
 <DeleteNote />
 <ChangePart />
 <DeletePart />
-<ServiceActions bind:this={serviceActions} />
-<NewPlan bind:this={newPlan} />
-<UpdatePlan bind:this={updatePlan} />
+<ServiceActions />
+<NewPlan />
+<UpdatePlan />
 <DeletePlan />
 <RecoverPart />
 <DisposePart />

@@ -1,9 +1,45 @@
+<script module lang="ts">
+  import { ServicePlan } from "../lib/serviceplan";
+  import type { Type } from "../lib/types";
+
+  const modal = $state<{
+    open: boolean;
+    id: string | undefined;
+    part: number | null;
+    name: string;
+    limits: any;
+    what: number | null;
+    hook: number | null;
+  }>({
+    open: false,
+    id: undefined,
+    part: null,
+    name: "",
+    limits: {},
+    what: null,
+    hook: null,
+  });
+
+  const sethook = (type: Type, h: number | undefined) => {
+    modal.what = type.id;
+    modal.hook = h as number | null;
+  };
+
+  export function start(p: ServicePlan) {
+    modal.id = p.id;
+    modal.part = p.part;
+    modal.name = p.name;
+    modal.what = p.what;
+    modal.hook = p.hook;
+    modal.limits = p.to_object();
+    modal.open = true;
+  }
+</script>
+
 <script lang="ts">
   import { ButtonGroup, Input, InputAddon } from "flowbite-svelte";
-  import { ServicePlan } from "../lib/serviceplan";
   import TypeForm from "../Widgets/TypeForm.svelte";
   import GearForm from "../Widgets/GearForm.svelte";
-  import type { Type } from "../lib/types";
   import type { Snippet } from "svelte";
   import PlanLimits from "./PlanLimits.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
@@ -18,45 +54,21 @@
 
   let { safePlan, no_gear, children }: Props = $props();
 
-  let open = $state(false);
-  let part = $state(null as number | null);
-  let name = $state("");
-  let limits = $state({});
-
-  let what: number | null;
-  let hook: number | null;
-  let id: string | undefined;
-
-  const sethook = (type: Type, h: number | undefined) => {
-    what = type.id;
-    hook = h as number | null;
-  };
-
   function onaction() {
     let newplan = new ServicePlan({
-      ...limits,
-      id,
-      part,
-      what,
-      name,
-      hook,
+      ...modal.limits,
+      id: modal.id,
+      part: modal.part,
+      what: modal.what,
+      name: modal.name,
+      hook: modal.hook,
     });
     safePlan(newplan);
-    open = false;
-  }
-
-  export function start(p: ServicePlan) {
-    id = p.id;
-    part = p.part;
-    name = p.name;
-    what = p.what;
-    hook = p.hook;
-    limits = p.to_object();
-    open = true;
+    modal.open = false;
   }
 </script>
 
-<Modal size="xs" bind:open {onaction}>
+<Modal size="xs" bind:open={modal.open} {onaction}>
   {#snippet header()}
     {@render children?.()}
   {/snippet}
@@ -68,18 +80,18 @@
         classes={{ select: "rounded-r-none h-full" }}
       />
       <InputAddon>{m.attachform_of()}</InputAddon>
-      <GearForm bind:gear={part} />
+      <GearForm bind:gear={modal.part} />
     </ButtonGroup>
   {/if}
   <Input
     type="text"
-    bind:value={name}
+    bind:value={modal.name}
     autofocus
     required
     placeholder={m.partform_name()}
   />
-  <PlanLimits bind:select={limits} />
+  <PlanLimits bind:select={modal.limits} />
   {#snippet footer()}
-    <Buttons bind:open label={m.gearcard_save()} />
+    <Buttons bind:open={modal.open} label={m.gearcard_save()} />
   {/snippet}
 </Modal>

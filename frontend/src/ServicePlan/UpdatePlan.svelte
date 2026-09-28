@@ -1,38 +1,45 @@
-<script lang="ts">
+<script module lang="ts">
   import { ServicePlan } from "../lib/serviceplan";
   import { parts } from "../lib/part";
   import { getCategory, types } from "../lib/types";
-  import PlanModal from "./PlanModal.svelte";
+  import { start as startPlan } from "./PlanModal.svelte";
   import { m } from "../../paraglide/messages";
 
-  let header: string = $state("");
-  let modal: { start: (p: ServicePlan) => void };
-
-  async function safePlan(newplan: ServicePlan) {
-    await newplan.update();
-  }
+  const config = $state<{
+    header: string;
+  }>({
+    header: "",
+  });
 
   export function start(p: ServicePlan) {
     if (p.part) {
       let part = parts[p.part];
       if (part.isGear() && p.hook != null) {
-        header = m.updateplan_header_hook_part({
+        config.header = m.updateplan_header_hook_part({
           hook: types[p.what].human_name(p.hook),
           name: part.name,
         });
       } else {
-        header = m.updateplan_header_part({ name: part.name });
+        config.header = m.updateplan_header_part({ name: part.name });
       }
     } else {
-      header = m.updateplan_header_generic({
+      config.header = m.updateplan_header_generic({
         hook: types[p.what].human_name(p.hook),
         any: getCategory()!.localizedAnyDative(),
       });
     }
-    modal.start(new ServicePlan(p));
+    startPlan(new ServicePlan(p));
   }
 </script>
 
-<PlanModal bind:this={modal} {safePlan} no_gear>
-  {header}
+<script lang="ts">
+  import PlanModal from "./PlanModal.svelte";
+
+  async function safePlan(newplan: ServicePlan) {
+    await newplan.update();
+  }
+</script>
+
+<PlanModal {safePlan} no_gear>
+  {config.header}
 </PlanModal>
