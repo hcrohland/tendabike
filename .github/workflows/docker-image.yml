@@ -41,4 +41,8 @@ jobs:
         file: Dockerfile
         tags: ghcr.io/hcrohland/tendabike:${{ env.TAG }}
         context: .
+        # Shared, unscoped GHA cache: every branch warms the same
+        # content-addressed cache, so post-merge main builds hit warm.
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
       
