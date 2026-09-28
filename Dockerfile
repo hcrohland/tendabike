@@ -57,7 +57,7 @@ FROM node:slim AS build-frontend
 WORKDIR /build
 
 COPY package.json package-lock.json /build/
-COPY frontend/package.json frontend/package-lock.json /build/frontend/
+COPY frontend/package.json /build/frontend/
 RUN npm update rollup
 
 COPY frontend/ /build/frontend
