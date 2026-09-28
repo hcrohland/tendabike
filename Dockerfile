@@ -1,38 +1,26 @@
 FROM rust:alpine AS build-engine
 # We only pay the installation cost once, 
 # it will be cached from the second build onwards
-# To ensure a reproducible build consider pinning 
-# the cargo-chef version with `--version X.X.X`
-
 RUN apk add  musl-dev
 
 WORKDIR /app
 # install nighlty toolchain
 RUN rustup set profile minimal
-# install dependencies
-# RUN cargo install cargo-chef
-# FROM base AS planner
-# # do not copy frontend!
-
-# COPY Cargo.toml Cargo.lock ./
-# COPY backend backend/
-
-# RUN cargo chef prepare --recipe-path recipe.json
-
-# FROM base AS cacher
-# COPY --from=planner /app/recipe.json recipe.json
-# RUN cargo chef cook --release --recipe-path recipe.json
-
-
-# FROM cacher AS build-engine
-
 
 ENV SQLX_OFFLINE=true
 COPY Cargo.toml Cargo.lock ./
 COPY .sqlx .sqlx/
 COPY backend backend/
 
-RUN cargo build --release
+# Cache mounts keep cargo's registry/git checkouts and compiled artifacts
+# warm across builds; the CI workflow persists them via the GHA cache
+# (cache-to: type=gha,mode=max in .github/workflows/docker-image.yml).
+# Mount contents never land in the image, so the binary is copied out of
+# the target mount before it unmounts.
+RUN --mount=type=cache,id=rust-cargo-home,target=/usr/local/cargo \
+    --mount=type=cache,id=rust-target,target=/app/target \
+    cargo build --release \
+    && cp /app/target/release/tendabike /app/tendabike-bin
 
 FROM node:slim AS build-frontend
 
@@ -51,7 +39,7 @@ USER 999:999
 WORKDIR /tendabike
 ENV STATIC_WWW="/tendabike/dist"
 
-COPY --from=build-engine /app/target/release/tendabike ./
+COPY --from=build-engine /app/tendabike-bin ./
 COPY --from=build-frontend /build/frontend/dist dist
 
 ENTRYPOINT [ "./tendabike" ]
