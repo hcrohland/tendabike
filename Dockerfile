@@ -1,28 +1,55 @@
-FROM rust:alpine AS build-engine
-# We only pay the installation cost once, 
-# it will be cached from the second build onwards
+# Shared rust base: C linker deps + slim rustup profile. Both cargo
+# stages inherit from it so these layers are built once and cached
+# identically.
+FROM rust:alpine AS rust-base
 RUN apk add  musl-dev
+RUN rustup set profile minimal
+
+# Dependency stage: compiles the full dependency graph from the
+# workspace manifests alone. Its cache key is a function of the
+# manifests, Cargo.lock and the rust base image, so it stays warm
+# across source-only commits. The compiled /app/target is a regular
+# layer (not a cache mount), which is what lets the remote cache in
+# .github/workflows/docker-image.yml (cache-from/cache-to type=gha)
+# share it across runners. Workspace members are stubbed below so no
+# real source feeds this stage; a lockfile change is the only thing
+# that forces a full rebuild here.
+FROM rust-base AS build-deps
 
 WORKDIR /app
-# install nighlty toolchain
-RUN rustup set profile minimal
+COPY Cargo.toml Cargo.lock ./
+COPY backend/app/Cargo.toml backend/app/
+COPY backend/domain/Cargo.toml backend/domain/
+COPY backend/axum/Cargo.toml backend/axum/
+COPY backend/strava/Cargo.toml backend/strava/
+COPY backend/sqlx/Cargo.toml backend/sqlx/
+RUN mkdir -p backend/app/src \
+             backend/domain/src/bin \
+             backend/axum/src \
+             backend/strava/src \
+             backend/sqlx/src \
+    && printf 'fn main() {}\n' > backend/app/src/main.rs \
+    && printf 'fn main() {}\n' > backend/domain/src/bin/build_snapshot.rs \
+    && for f in backend/domain/src/lib.rs \
+                backend/axum/src/lib.rs \
+                backend/strava/src/lib.rs \
+                backend/sqlx/src/lib.rs; do \
+        echo '// stub' > $f; \
+    done
+RUN cargo build --release
+
+# Build stage: starts from the pre-compiled target directory, so cargo
+# recompiles only the five real workspace crates.
+FROM rust-base AS build-engine
+
+WORKDIR /app
+COPY --from=build-deps /app/target ./target
 
 ENV SQLX_OFFLINE=true
 COPY Cargo.toml Cargo.lock ./
 COPY .sqlx .sqlx/
 COPY backend backend/
-
-# Cache mounts keep cargo's registry/git checkouts and compiled artifacts
-# warm across builds; the CI workflow persists them via the GHA cache
-# (cache-to: type=gha,mode=max in .github/workflows/docker-image.yml).
-# Mount only the registry/git subtrees, never all of CARGO_HOME: the rust
-# image's cargo/rustc shims live in $CARGO_HOME/bin and would be shadowed.
-# Mount contents never land in the image, so the binary is copied out of
-# the target mount before it unmounts.
-RUN --mount=type=cache,id=rust-registry,target=/usr/local/cargo/registry \
-    --mount=type=cache,id=rust-git,target=/usr/local/cargo/git \
-    --mount=type=cache,id=rust-target,target=/app/target \
-    cargo build --release \
+RUN cargo build --release \
     && cp /app/target/release/tendabike /app/tendabike-bin
 
 FROM node:slim AS build-frontend
