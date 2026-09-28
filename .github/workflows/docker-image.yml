@@ -41,8 +41,13 @@ jobs:
         file: Dockerfile
         tags: ghcr.io/hcrohland/tendabike:${{ env.TAG }}
         context: .
-        # Shared, unscoped GHA cache: every branch warms the same
-        # content-addressed cache, so post-merge main builds hit warm.
-        cache-from: type=gha
+        # GHA remote cache. Buildkit namespaces the index key by the
+        # run's ref (the runner token's access scope is hashed into it),
+        # so this cache is per-branch, not repo-wide: a branch shares
+        # its layers (base, build-deps target, frontend) across runners
+        # and re-runs, while a new branch starts cold once. mode=max
+        # persists the intermediate build-deps layer that makes new
+        # commits build incrementally.
+        cache-from: type=gha,mode=max
         cache-to: type=gha,mode=max
       
