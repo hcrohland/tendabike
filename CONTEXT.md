@@ -4,10 +4,10 @@ A bike maintenance tracker that syncs with Strava: users track parts, schedule s
 
 ## Language
 
-### State
+### Sync
 
 **Summary**:
-The payload an operation or sync endpoint returns, carrying the entities it produced or touched. In a full read it carries the user's entire state; in responses to mutations or event draining it carries only the changed entities.
+The payload an operation or sync endpoint returns, carrying the entities it produced or touched. In a full read it carries all of the user's entities; in responses to mutations or event draining it carries only the changed entities.
 _Avoid_: snapshot, diff (each names only one of the two readings)
 
 ### Bike model
