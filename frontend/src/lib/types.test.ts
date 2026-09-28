@@ -86,12 +86,15 @@ describe("getTypes", () => {
   });
 });
 
+// The doors read the module state objects in their bodies (#383); seed the
+// world and reset it between tests.
+function reset() {
+  activities.setMap([]);
+  parts.setMap([]);
+}
+
 describe("Type.activities", () => {
-  // The door reads the module state object in its body (#383); seed the
-  // world and reset it between tests.
-  beforeEach(() => {
-    activities.setMap([]);
-  });
+  beforeEach(reset);
 
   it("returns activities matching the type's acts, sorted by start desc", async () => {
     await loadTypes();
@@ -125,11 +128,7 @@ describe("Type.activities", () => {
 });
 
 describe("Type.parts", () => {
-  // The door reads the module state object in its body (#383); seed the
-  // world and reset it between tests.
-  beforeEach(() => {
-    parts.setMap([]);
-  });
+  beforeEach(reset);
 
   it("returns parts with matching what, sorted by last_used desc", async () => {
     await loadTypes();

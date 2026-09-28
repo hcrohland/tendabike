@@ -1,4 +1,4 @@
-import { Activity, activities } from "./activity";
+import { Activity, activities as allActivities } from "./activity";
 import { mapableState, stateValues } from "./mapable.svelte";
 import { fmtRange, maxDate } from "./store";
 
@@ -45,7 +45,7 @@ export class Attachment {
   }
 
   activities(): Activity[] {
-    return stateValues(activities).filter(
+    return stateValues(allActivities).filter(
       (a) => a.gear == this.gear && this.isAttached(a.start),
     );
   }

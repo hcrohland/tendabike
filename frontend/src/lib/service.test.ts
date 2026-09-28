@@ -80,12 +80,14 @@ function fmtTime(svc: Service, s: Map<Service>) {
   return res;
 }
 
+// The doors read the module state in their bodies (issue #385); seed the
+// world and reset it between tests.
+function reset() {
+  services.setMap([]);
+}
+
 describe("Service.get_successor", () => {
-  // The door reads the module state in its body (issue #385); seed the
-  // world and reset it between tests.
-  beforeEach(() => {
-    services.setMap([]);
-  });
+  beforeEach(reset);
 
   it("returns null when there is no successor", () => {
     expect(svc({ successor: null }).get_successor()).toBeNull();
@@ -106,11 +108,7 @@ describe("Service.get_successor", () => {
 });
 
 describe("Service.history", () => {
-  // The door reads the module state in its body (issue #385); seed the
-  // world and reset it between tests.
-  beforeEach(() => {
-    services.setMap([]);
-  });
+  beforeEach(reset);
 
   it("walks back through predecessors to the oldest service", () => {
     const s2 = svc({ id: "S2", successor: null });

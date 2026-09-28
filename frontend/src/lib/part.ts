@@ -1,8 +1,8 @@
 import { by, mapableState, stateValues } from "./mapable.svelte";
 import { handleError, myfetch } from "./store";
-import { attachments, type Attachment } from "./attachment";
+import { attachments as allAttachments, type Attachment } from "./attachment";
 import { Type, types } from "./types";
-import { activities } from "./activity";
+import { activities as allActivities } from "./activity";
 import { updateSummary } from "./user";
 
 export class Part {
@@ -76,7 +76,7 @@ export class Part {
   }
 
   attachments(): Attachment[] {
-    return stateValues(attachments)
+    return stateValues(allAttachments)
       .filter((a) => a.part_id == this.id)
       .sort(by("attached"));
   }
@@ -101,10 +101,10 @@ export class Part {
     return this.id ? `/part/${this.id}` : undefined;
   }
 
-  /// the time when the first activity or attachment for this part started
+  /// the time of the earliest event (activity or attachment) for this part
   firstEvent(): Date | undefined {
     return this.isGear()
-      ? stateValues(activities)
+      ? stateValues(allActivities)
           .filter((a) => a.gear == this.id)
           .sort(by("start"))
           .at(-1)?.start

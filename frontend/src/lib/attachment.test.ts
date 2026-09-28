@@ -138,12 +138,15 @@ describe("Attachment.fmtTime", () => {
   });
 });
 
+// The doors read the module state objects in their bodies (#387); seed the
+// world and reset it between tests.
+function reset() {
+  activities.setMap([]);
+  attachments.setMap([]);
+}
+
 describe("Attachment.activities", () => {
-  // The door reads the module state object in its body (#387); seed the
-  // world and reset it between tests.
-  beforeEach(() => {
-    activities.setMap([]);
-  });
+  beforeEach(reset);
 
   it("returns gear-matching activities within the attachment window", () => {
     const a = att({
@@ -161,11 +164,7 @@ describe("Attachment.activities", () => {
 });
 
 describe("att_at_hook", () => {
-  // The door reads the module state object in its body (#387); seed the
-  // world and reset it between tests.
-  beforeEach(() => {
-    attachments.setMap([]);
-  });
+  beforeEach(reset);
 
   it("returns the currently-attached attachment at a hook", () => {
     const current = att({ part_id: 1, attached: "2023-01-01T00:00:00Z" });
@@ -192,11 +191,7 @@ describe("att_at_hook", () => {
 });
 
 describe("part_at_hook", () => {
-  // The door reads the module state object in its body (#387); seed the
-  // world and reset it between tests.
-  beforeEach(() => {
-    attachments.setMap([]);
-  });
+  beforeEach(reset);
 
   it("returns the part id of the attached attachment", () => {
     const current = att({ part_id: 7, attached: "2023-01-01T00:00:00Z" });
@@ -221,6 +216,7 @@ describe("attachment_for_part", () => {
   });
 
   beforeEach(() => {
+    reset();
     attachments.setMap([a]);
   });
 
