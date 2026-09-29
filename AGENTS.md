@@ -4,7 +4,7 @@
 
 ## Working rules
 
-- When in doubt about anything, ask the user before acting.
+- When more than one option is defensible, ask the user before choosing — even when you're confident in your pick.
 - Work in small increments. Read or act on ONE file, function, or unit at a time.
 
 ## Domain
