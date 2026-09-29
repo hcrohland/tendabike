@@ -2,6 +2,8 @@
 
 ## Commands (run from project root)
 
+The frontend is a workspace of the root `package.json`; its dependencies and `package-lock.json` live at the root, not in `frontend/`.
+
 - `npm run check` - Frontend type checking (svelte-check; the CI variant `check:ci` also compiles paraglide first)
 
 ## Architecture
@@ -11,7 +13,7 @@
 - **Routing**: `svelte-spa-router`; route definitions in [`src/App.svelte`](src/App.svelte).
 - **i18n**: `@inlang/paraglide-js` — edit source messages in `messages/{locale}.json`; `paraglide/` is compiled output.
 - **State**: the Summary collections in `src/lib/*.ts` are Svelte 5 `$state` objects from `mapableState()` in [`src/lib/mapable.svelte.ts`](src/lib/mapable.svelte.ts) — records keyed by id with `setMap`/`updateMap`/`deleteItem` ops; enumerate them with `stateValues()`, never `Object.values` (the ops ride on the record).
-- **State objects**: when converting a `svelte/store` to Svelte 5 state or touching a `.svelte.ts` state module, read [`../docs/agents/state-object.md`](../docs/agents/state-object.md) first.
+- **State objects**: when adding or touching a `.svelte.ts` state module or its readers, read [`../docs/agents/state-object.md`](../docs/agents/state-object.md) first.
 - **Door convention**: lib-layer functions read the module's state objects in their bodies; signatures carry only entity values and time — see the door rule in [`../docs/agents/state-object.md`](../docs/agents/state-object.md).
 - **Entity classes**: `src/lib/*.ts` — async methods that call `myfetch()` and update collections via `updateSummary()` in [`src/lib/user.ts`](src/lib/user.ts).
 
