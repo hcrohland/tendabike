@@ -16,7 +16,7 @@
 
 ## Code Style
 
-- **Runes mode**: `<script lang="ts">` blocks with runes (`$state`, `$derived`, `$effect`, `$props()`). Exception: [`src/Widgets/Actions.svelte`](src/Widgets/Actions.svelte) is legacy syntax (`export let`, `$:` statements, `context="module"`) — leave it as-is.
+- **Runes mode**: `<script lang="ts">` blocks with runes (`$state`, `$derived`, `$effect`, `$props()`); module scope via the `<script module>` attribute (never the deprecated `context="module"` form).
 
 ## Key Gotchas
 

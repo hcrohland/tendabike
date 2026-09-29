@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Part } from "../lib/part";
-import DeletePart from "./DeletePart.svelte";
+import DeletePart, { deletePart } from "./DeletePart.svelte";
 
 describe("DeletePart", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -22,8 +22,8 @@ describe("DeletePart", () => {
     expect(screen.queryByText(/Do you really want to delete/)).toBeNull();
   });
 
-  it("opens when start() is called", async () => {
-    const { component } = render(DeletePart);
+  it("opens when deletePart() is called", async () => {
+    render(DeletePart);
     const part = new Part({
       id: 5,
       owner: 1,
@@ -31,7 +31,7 @@ describe("DeletePart", () => {
       name: "My Wheel",
       last_used: new Date(),
     });
-    component.start(part);
+    deletePart(part);
     await waitFor(() => {
       expect(
         screen.getByText(/Do you really want to delete Part "My Wheel"/),
@@ -40,7 +40,7 @@ describe("DeletePart", () => {
   });
 
   it("sends DELETE request when submit button is clicked", async () => {
-    const { component } = render(DeletePart);
+    render(DeletePart);
     const part = new Part({
       id: 5,
       owner: 1,
@@ -48,7 +48,7 @@ describe("DeletePart", () => {
       name: "My Wheel",
       last_used: new Date(),
     });
-    component.start(part);
+    deletePart(part);
 
     const submitBtn = await screen.findByRole("button", { name: "Delete" });
     fireEvent.click(submitBtn);

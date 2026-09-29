@@ -10,7 +10,7 @@
   import Subparts from "./Subparts.svelte";
   import PartHist from "./PartHist.svelte";
   import NoteList from "./NoteList.svelte";
-  import { getActions } from "../Widgets/Actions.svelte";
+  import { actions } from "../Widgets/Actions.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { pop } from "svelte-spa-router";
@@ -36,17 +36,17 @@
   <div class="float-end h6 mb-0">
     <Menu>
       {#if part.disposed_at}
-        <DropdownItem onclick={() => getActions()!.recoverPart(part)}>
+        <DropdownItem onclick={() => actions.recoverPart(part)}>
           {m.part_recover_gear()}
         </DropdownItem>
       {:else}
         {#if !part.isGear()}
-          <DropdownItem onclick={() => getActions()!.attachPart(part)}>
+          <DropdownItem onclick={() => actions.attachPart(part)}>
             {m.action_attach()}
           </DropdownItem>
         {/if}
         <DropdownItem
-          onclick={() => getActions()!.disposePart(part, last_attachment)}
+          onclick={() => actions.disposePart(part, last_attachment)}
         >
           {#if last_attachment?.isAttached()}
             {m.action_detach()}
@@ -54,14 +54,14 @@
             {m.action_dispose()}
           {/if}
         </DropdownItem>
-        <DropdownItem onclick={() => getActions()!.changePart(part)}>
+        <DropdownItem onclick={() => actions.changePart(part)}>
           {m.part_change_details()}
         </DropdownItem>
       {/if}
       {#if !part.isGear() && part.attachments().length == 0}
         <DropdownItem
           onclick={() => {
-            getActions()!.deletePart(part);
+            actions.deletePart(part);
             pop();
           }}
         >
@@ -81,7 +81,7 @@
       {#snippet titleSlot()}
         {m.part_tab_attached_parts()}
         {#if tab == "parts"}
-          <XsButton onclick={() => getActions()!.installPart(part)}>
+          <XsButton onclick={() => actions.installPart(part)}>
             {m.partcard_add()}
           </XsButton>
         {/if}
@@ -94,7 +94,7 @@
       {m.part_tab_service_plans()}
       <PlanBadge {part} />
       {#if tab == "plans"}
-        <XsButton onclick={() => getActions()!.newPlan(part)}>
+        <XsButton onclick={() => actions.newPlan(part)}>
           {m.partcard_add()}
         </XsButton>
       {/if}
@@ -105,7 +105,7 @@
     {#snippet titleSlot()}
       {m.part_tab_service_logs()}
       {#if tab == "services"}
-        <XsButton onclick={() => getActions()!.newService(part)}>
+        <XsButton onclick={() => actions.newService(part)}>
           {m.partcard_add()}
         </XsButton>
       {/if}
@@ -116,7 +116,7 @@
     {#snippet titleSlot()}
       {m.part_tab_notes()}
       {#if tab == "notes"}
-        <XsButton onclick={() => getActions()!.newNote(part)}>
+        <XsButton onclick={() => actions.newNote(part)}>
           {m.partcard_add()}
         </XsButton>
       {/if}

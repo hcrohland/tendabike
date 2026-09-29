@@ -1,93 +1,109 @@
+<script module lang="ts">
+  import { Attachment } from "../lib/attachment";
+  import { Part } from "../lib/part";
+
+  const modal = $state<{
+    open: boolean;
+    last: Attachment | undefined;
+    part: Part;
+    typeName: string;
+    detach: boolean;
+    dispose: boolean;
+    mindate: Date;
+    date: Date;
+    all: boolean;
+    hook: boolean;
+  }>({
+    open: false,
+    last: undefined,
+    part: new Part({}),
+    typeName: "",
+    detach: false,
+    dispose: false,
+    mindate: new Date(),
+    date: new Date(),
+    all: false,
+    hook: false,
+  });
+
+  export const disposePart = (p: Part, last_attachment?: Attachment) => {
+    modal.part = p;
+    let type = modal.part.type();
+    modal.typeName = type.localizedName();
+    modal.hook = type.is_hook();
+    modal.last = last_attachment;
+
+    if (last_attachment) {
+      if (last_attachment.isDetached()) {
+        modal.detach = false;
+        modal.dispose = true;
+        modal.mindate = last_attachment.detached;
+      } else {
+        modal.detach = true;
+        modal.dispose = false;
+        modal.mindate = last_attachment.attached;
+      }
+    } else {
+      modal.mindate = modal.part.purchase;
+      modal.detach = false;
+      modal.dispose = true;
+    }
+    modal.all = true;
+    modal.date = new Date();
+    modal.open = true;
+  };
+</script>
+
 <script lang="ts">
   import { ButtonGroup, InputAddon } from "flowbite-svelte";
   import { handleError } from "../lib/store";
-  import { Attachment } from "../lib/attachment";
   import Dispose from "../Widgets/Dispose.svelte";
   import DateTime from "../Widgets/DateTime.svelte";
-  import { Part } from "../lib/part";
   import Buttons from "../Widgets/Buttons.svelte";
   import Switch from "../Widgets/Switch.svelte";
   import Modal from "../Widgets/Modal.svelte";
   import { m } from "../../paraglide/messages";
 
-  let open = $state(false);
-  let last: Attachment | undefined = $state(undefined);
-  let part = $state(new Part({}));
-  let typeName = $state("");
-  let detach = $state(false);
-  let dispose = $state(false);
-  let mindate = $state(new Date());
-  let date = $state(new Date());
-  let all = $state(false);
-  let hook = $state(false);
-
-  let action = $derived(detach ? m.action_detach() : m.action_dispose());
+  let action = $derived(modal.detach ? m.action_detach() : m.action_dispose());
 
   async function onaction() {
     try {
-      if (detach) {
-        await part.detach(date, all);
+      if (modal.detach) {
+        await modal.part.detach(modal.date, modal.all);
       }
-      if (dispose) {
-        await part.dispose(date, all);
+      if (modal.dispose) {
+        await modal.part.dispose(modal.date, modal.all);
       }
     } catch (e: any) {
       handleError(e);
     }
-    open = false;
+    modal.open = false;
   }
-
-  export const start = (p: Part, last_attachment?: Attachment) => {
-    part = p;
-    let type = part.type();
-    typeName = type.localizedName();
-    hook = type.is_hook();
-    last = last_attachment;
-
-    if (last) {
-      if (last.isDetached()) {
-        detach = false;
-        dispose = true;
-        mindate = last.detached;
-      } else {
-        detach = true;
-        dispose = false;
-        mindate = last.attached;
-      }
-    } else {
-      mindate = part.purchase;
-      detach = false;
-      dispose = true;
-    }
-    all = true;
-    date = new Date();
-    open = true;
-  };
 </script>
 
-<Modal bind:open {onaction}>
+<Modal bind:open={modal.open} {onaction}>
   {#snippet header()}
-    {m.dispose_question({ name: typeName + " " + part.name })}
+    {m.dispose_question({ name: modal.typeName + " " + modal.part.name })}
   {/snippet}
   <div>
     <ButtonGroup>
       <InputAddon>{m.attachform_at()}</InputAddon>
-      <DateTime bind:date {mindate} />
+      <DateTime bind:date={modal.date} mindate={modal.mindate} />
     </ButtonGroup>
   </div>
-  {#if hook}
-    <Switch bind:checked={all}>
+  {#if modal.hook}
+    <Switch bind:checked={modal.all}>
       {m.disposepart_all({ action })}
     </Switch>
   {/if}
-  {#if detach}
+  {#if modal.detach}
     <Dispose
-      bind:dispose
-      name={m.disposepart_when_detached({ type: typeName })}
+      bind:dispose={modal.dispose}
+      name={m.disposepart_when_detached({ type: modal.typeName })}
     />
   {/if}
 
   {#snippet footer()}
-    <Buttons bind:open label={action} />
+    <Buttons bind:open={modal.open} label={action} />
   {/snippet}
 </Modal>

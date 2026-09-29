@@ -26,7 +26,7 @@
   import Header from "./Header.svelte";
   import Message from "./Message.svelte";
   import Gear from "./Part/Gear.svelte";
-  import Plans from "./ServicePlan/Plans.svelte";
+  import PlanList from "./ServicePlan/PlanList.svelte";
   import Spares from "./Spares/Spares.svelte";
   import ToyGroup from "./ToyGroup.svelte";
   import Shops from "./Shop/Shops.svelte";
@@ -39,7 +39,7 @@
     "/": ToyGroup,
     "/cat/": ToyGroup,
     "/part/:id": Gear,
-    "/plans/": Plans,
+    "/plans/": PlanList,
     "/spares/": Spares,
     "/shops": Shops,
     "/register/:shopid": Register,

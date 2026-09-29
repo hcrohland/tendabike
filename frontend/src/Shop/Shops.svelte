@@ -5,7 +5,7 @@
   import ShopList from "./ShopList.svelte";
   import Subscriptions from "./Subscriptions.svelte";
   import { Shop, shops } from "../lib/shop";
-  import { getActions } from "../Widgets/Actions.svelte";
+  import { actions } from "../Widgets/Actions.svelte";
   import { getUser, users } from "../lib/user";
   import { stateValues } from "../lib/mapable.svelte";
   import ShopSubscriptions from "./ShopSubscriptions.svelte";
@@ -34,7 +34,7 @@
               {m.shop_none_owned()}
             </p>
 
-            <Button onclick={() => getActions()!.createShop()}>
+            <Button onclick={() => actions.createShop()}>
               {m.shop_create_first()}
             </Button>
           </div>
@@ -47,7 +47,7 @@
             </ShopList>
           </div>
 
-          <Button onclick={() => getActions()!.createShop()}>
+          <Button onclick={() => actions.createShop()}>
             {m.shop_create()}
           </Button>
         {/if}

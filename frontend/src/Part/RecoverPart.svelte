@@ -1,38 +1,46 @@
+<script module lang="ts">
+  import { Part } from "../lib/part";
+
+  const modal = $state<{
+    open: boolean;
+    part: Part;
+  }>({
+    open: false,
+    part: new Part({}),
+  });
+
+  export const recoverPart = (p: Part) => {
+    modal.part = p;
+    modal.open = true;
+  };
+</script>
+
 <script lang="ts">
   import { fmtDate } from "../lib/store";
-  import { Part } from "../lib/part";
   import { types } from "../lib/types";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";
   import { m } from "../../paraglide/messages";
 
-  let part = $state(new Part({}));
-  let open = $state(false);
-
   async function onaction() {
-    await part.recover(true);
-    open = false;
+    await modal.part.recover(true);
+    modal.open = false;
   }
-
-  export const start = (p: Part) => {
-    part = p;
-    open = true;
-  };
 </script>
 
-<Modal bind:open {onaction}>
+<Modal bind:open={modal.open} {onaction}>
   {#snippet header()}
     {m.recoverpart_header({
-      type: types[part.what].localizedName(),
-      name: part.name,
-      vendor: part.vendor,
-      model: part.model,
+      type: types[modal.part.what].localizedName(),
+      name: modal.part.name,
+      vendor: modal.part.vendor,
+      model: modal.part.model,
     })}
   {/snippet}
 
-  {m.recoverpart_binned_on({ date: fmtDate(part.disposed_at) })}
+  {m.recoverpart_binned_on({ date: fmtDate(modal.part.disposed_at) })}
 
   {#snippet footer()}
-    <Buttons bind:open label={m.action_recover()} />
+    <Buttons bind:open={modal.open} label={m.action_recover()} />
   {/snippet}
 </Modal>

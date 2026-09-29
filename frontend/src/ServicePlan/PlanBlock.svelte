@@ -5,7 +5,7 @@
   import * as m from "../../paraglide/messages";
   import Menu from "../Widgets/Menu.svelte";
   import { DropdownItem } from "flowbite-svelte";
-  import { getActions } from "../Widgets/Actions.svelte";
+  import { actions } from "../Widgets/Actions.svelte";
   import Card from "../Widgets/Card.svelte";
 
   interface Props {
@@ -22,10 +22,10 @@
   <div class="flex items-center justify-between gap-1 md:gap-2 p-1">
     <span class="font-medium text-sm"><PlanName {plan} /></span>
     <Menu>
-      <DropdownItem onclick={() => getActions()!.updatePlan(plan)}>
+      <DropdownItem onclick={() => actions.updatePlan(plan)}>
         {m.planmenu_change()}
       </DropdownItem>
-      <DropdownItem onclick={() => getActions()!.deletePlan(plan)}>
+      <DropdownItem onclick={() => actions.deletePlan(plan)}>
         {m.planmenu_delete()}
       </DropdownItem>
     </Menu>

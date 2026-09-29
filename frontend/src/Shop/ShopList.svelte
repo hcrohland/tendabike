@@ -5,7 +5,7 @@
 
   import ShopCard from "./ShopCard.svelte";
   import { type Shop } from "../lib/shop";
-  import { getActions } from "../Widgets/Actions.svelte";
+  import { actions } from "../Widgets/Actions.svelte";
   import { getUser, users as global_users, type UserPublic } from "../lib/user";
   import ShopOwnerMenu from "./ShopOwnerMenu.svelte";
   import { type Map } from "../lib/mapable.svelte";
@@ -21,7 +21,7 @@
   function request(shop: Shop) {
     // add the owner to the global stores
     global_users.updateMap([users[shop.owner]]);
-    getActions()!.requestSubscription(shop);
+    actions.requestSubscription(shop);
   }
 </script>
 
