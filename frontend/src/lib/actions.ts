@@ -7,7 +7,12 @@ import type { ServicePlan } from "./serviceplan";
 import type { Activity } from "./activity";
 import type { Shop } from "./shop";
 
-type ModalType = {
+/**
+ * The modal action registry: the type of the const registry exported by
+ * Widgets/Actions.svelte. One entry per modal-opening operation; readers
+ * call the registry directly.
+ */
+export type ModalType = {
   newPart: (t: Type) => void;
   newNote: (p: Part, note?: PartNote) => void;
   deleteNote: (n: PartNote) => void;
@@ -32,24 +37,3 @@ type ModalType = {
   deleteShop: (g: Shop) => void;
   requestSubscription: (g: Shop) => void;
 };
-
-/**
- * The modal action registry, as a Svelte 5 state object (the store-to-state
- * migration of the former svelte/store writable in Widgets/Actions.svelte).
- * The value is nullable (unset until Actions.svelte mounts its modals) and
- * replaced wholesale, which a `.svelte.ts` module may not export directly
- * (Svelte's `state_invalid_export` rule), so the state lives in the module
- * and is read via `getActions` and replaced via `setActions`. Reads register
- * dependencies at the enclosing reactive call site; readers use
- * `getActions()!` where they formerly used `$actions`.
- */
-let actions = $state<ModalType | undefined>(undefined);
-
-export function getActions(): ModalType | undefined {
-  return actions;
-}
-
-/** Replace the modal actions; `undefined` clears them. */
-export function setActions(value: ModalType | undefined) {
-  actions = value;
-}

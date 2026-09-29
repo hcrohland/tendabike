@@ -10,7 +10,7 @@
   import * as m from "../../paraglide/messages";
   import Menu from "../Widgets/Menu.svelte";
   import { DropdownItem } from "flowbite-svelte";
-  import { getActions } from "../Widgets/Actions.svelte";
+  import { actions } from "../Widgets/Actions.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
 
   interface Props {
@@ -45,20 +45,20 @@
       </div>
       {#if plan.what == part.what}
         <Menu>
-          <DropdownItem onclick={() => getActions()!.newService(part, plan)}>
+          <DropdownItem onclick={() => actions.newService(part, plan)}>
             {m.planmenu_new_service()}
           </DropdownItem>
           {#if plan.part != part.id}
             {@const att = part.attachments().at(0)}
             {#if att}
-              <DropdownItem onclick={() => getActions()!.replacePart(att)}>
+              <DropdownItem onclick={() => actions.replacePart(att)}>
                 {m.action_replace()}
               </DropdownItem>
             {/if}
           {/if}
         </Menu>
       {:else}
-        <XsButton onclick={() => getActions()!.installPart(part)}>
+        <XsButton onclick={() => actions.installPart(part)}>
           {m.action_new()}
         </XsButton>
       {/if}

@@ -10,7 +10,7 @@
   import { usages } from "../lib/usage";
   import { plansForPart, duesForPlans } from "../lib/serviceplan";
   import PartLink from "./PartLink.svelte";
-  import { getActions } from "../Widgets/Actions.svelte";
+  import { actions } from "../Widgets/Actions.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
   import ServiceBadge from "../Widgets/ServiceBadge.svelte";
   import PartCard from "./PartCard.svelte";
@@ -79,18 +79,18 @@
         <!-- Menu area: compact on mobile -->
         {#if att.isAttached() && part}
           <Menu>
-            <DropdownItem onclick={() => getActions()!.newService(part)}>
+            <DropdownItem onclick={() => actions.newService(part)}>
               {m.partcard_log_service()}
             </DropdownItem>
-            <DropdownItem onclick={() => getActions()!.attachPart(part)}>
+            <DropdownItem onclick={() => actions.attachPart(part)}>
               {m.action_move()}
             </DropdownItem>
-            <DropdownItem onclick={() => getActions()!.replacePart(att)}>
+            <DropdownItem onclick={() => actions.replacePart(att)}>
               {m.partcard_replace_type({ type: type.localizedName() })}
             </DropdownItem>
           </Menu>
         {:else}
-          <XsButton onclick={() => getActions()!.replacePart(att)}>
+          <XsButton onclick={() => actions.replacePart(att)}>
             {m.partcard_add()}
           </XsButton>
         {/if}
@@ -128,13 +128,13 @@
               {#if p && p.disposed_at == undefined}
                 <div class="shrink-0">
                   <Menu>
-                    <DropdownItem onclick={() => getActions()!.newService(p)}>
+                    <DropdownItem onclick={() => actions.newService(p)}>
                       {m.partcard_log_service()}
                     </DropdownItem>
-                    <DropdownItem onclick={() => getActions()!.attachPart(p)}>
+                    <DropdownItem onclick={() => actions.attachPart(p)}>
                       {m.action_attach()}
                     </DropdownItem>
-                    <DropdownItem onclick={() => getActions()!.replacePart(a)}>
+                    <DropdownItem onclick={() => actions.replacePart(a)}>
                       {m.partcard_duplicate_part()}
                     </DropdownItem>
                   </Menu>

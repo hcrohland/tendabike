@@ -1,9 +1,5 @@
-<script context="module" lang="ts">
-  export { getActions, setActions } from "../lib/actions.svelte";
-</script>
-
-<script lang="ts">
-  import { setActions } from "../lib/actions.svelte";
+<script module lang="ts">
+  import type { ModalType } from "../lib/actions";
   import DeletePlan, {
     start as deletePlan,
   } from "../ServicePlan/DeletePlan.svelte";
@@ -49,7 +45,17 @@
     start as requestSubscription,
   } from "../Shop/SubscriptionRequestModal.svelte";
 
-  $: setActions({
+  /**
+   * The modal action registry, as a const: it never changes after startup
+   * and nothing reads it reactively, so it holds no reactive machinery.
+   * History: it was a svelte/store writable, converted to a Svelte 5 state
+   * object by the store-to-state migration (nullable until this widget
+   * mounted, replaced wholesale once at mount, read via `getActions` from
+   * the dedicated lib/actions.svelte state module, called through
+   * `getActions()!` at every reader), and is now a plain const referencing
+   * each modal's module-scoped start operation directly.
+   */
+  export const actions: ModalType = {
     newPart,
     newNote,
     deleteNote,
@@ -73,7 +79,7 @@
     editShop: shopModal,
     deleteShop,
     requestSubscription,
-  });
+  };
 </script>
 
 <NewPart />

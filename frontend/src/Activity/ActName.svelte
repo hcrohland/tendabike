@@ -2,7 +2,7 @@
   import { DropdownItem } from "flowbite-svelte";
   import { Activity } from "../lib/activity";
   import Menu from "../Widgets/Menu.svelte";
-  import { getActions } from "../Widgets/Actions.svelte";
+  import { actions } from "../Widgets/Actions.svelte";
   import * as m from "../../paraglide/messages";
 
   let { row }: { row: Activity } = $props();
@@ -19,7 +19,7 @@
     />
   </a>
   <Menu>
-    <DropdownItem onclick={() => getActions()!.changeActivity(row)}>
+    <DropdownItem onclick={() => actions.changeActivity(row)}>
       {m.action_change()}
     </DropdownItem>
   </Menu>
