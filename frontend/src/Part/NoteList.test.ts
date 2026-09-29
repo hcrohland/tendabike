@@ -3,15 +3,12 @@ import { flushSync } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Part } from "../lib/part";
 import { partNotes, PartNote } from "../lib/partnote";
-import { actions } from "../Widgets/Actions.svelte";
+import { newNote } from "./NewNote.svelte";
+import { deleteNote } from "./DeleteNote.svelte";
 import NoteList from "./NoteList.svelte";
 
-vi.mock("../Widgets/Actions.svelte", () => ({
-  actions: {
-    newNote: vi.fn(),
-    deleteNote: vi.fn(),
-  },
-}));
+vi.mock("./NewNote.svelte", () => ({ newNote: vi.fn() }));
+vi.mock("./DeleteNote.svelte", () => ({ deleteNote: vi.fn() }));
 
 describe("NoteList", () => {
   const part = new Part({
@@ -108,7 +105,7 @@ describe("NoteList", () => {
     const change = await screen.findByText("Change note");
     fireEvent.click(change);
     await waitFor(() => {
-      expect(actions.newNote).toHaveBeenCalledWith(part, textNote);
+      expect(newNote).toHaveBeenCalledWith(part, textNote);
     });
   });
 
@@ -119,7 +116,7 @@ describe("NoteList", () => {
     const del = await screen.findByText("Delete note");
     fireEvent.click(del);
     await waitFor(() => {
-      expect(actions.deleteNote).toHaveBeenCalledWith(textNote);
+      expect(deleteNote).toHaveBeenCalledWith(textNote);
     });
   });
 });

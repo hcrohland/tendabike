@@ -13,15 +13,11 @@ import { Part, parts } from "../lib/part";
 import { partNotes } from "../lib/partnote";
 import { getTypes } from "../lib/types";
 import { setUser } from "../lib/user";
-import { actions } from "../Widgets/Actions.svelte";
+import { newNote } from "./NewNote.svelte";
 import { resp } from "../test/helpers";
 import PartComponent from "./Part.svelte";
 
-vi.mock("../Widgets/Actions.svelte", () => ({
-  actions: {
-    newNote: vi.fn(),
-  },
-}));
+vi.mock("./NewNote.svelte", () => ({ newNote: vi.fn() }));
 
 describe("Part", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -127,9 +123,7 @@ describe("Part", () => {
     const add = await within(notesTab).findByRole("button", { name: "add" });
     fireEvent.click(add);
     await waitFor(() => {
-      expect(actions.newNote).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 7 }),
-      );
+      expect(newNote).toHaveBeenCalledWith(expect.objectContaining({ id: 7 }));
     });
   });
 });
