@@ -2,6 +2,8 @@
 
 ## Commands (run from project root)
 
+The frontend is a workspace of the root `package.json`; its dependencies and `package-lock.json` live at the root, not in `frontend/`.
+
 - `npm run check` - Frontend type checking (svelte-check; the CI variant `check:ci` also compiles paraglide first)
 
 ## Architecture
