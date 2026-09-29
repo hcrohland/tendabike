@@ -4,7 +4,7 @@
 
 ## Working rules
 
-- When in doubt about a change, ask the user before making it.
+- When more than one option is defensible, ask the user before choosing — even when you're confident in your pick.
 - Work in small increments. Read or act on ONE file, function, or unit at a time.
 
 ## Domain
@@ -13,12 +13,12 @@
 
 ## Commit rules
 
-- Flow, in order: finish the work → if on `main`, create a feature branch → format each changed component from the project root (`cargo fmt` for backend, `npm run format` for frontend) → commit.
+- Flow, in order: finish the work → if on `main`, create a feature branch → commit.
 - Never bypass the pre-commit hook with `--no-verify` or `-n` — make the checks pass instead.
 
 ## Agent skills
 
-- Issue tracker: issues and specs live in GitHub Issues on `hcrohland/tendabike`; use the `gh` CLI, with one `feature:<slug>` label per feature. See [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
+- Issue tracker: when working with issues or specs, read [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
 - Triage labels: five-role vocabulary, each label string equal to its role name; see [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md).
 - Domain docs: single-context `CONTEXT.md` and `docs/adr/` at the repo root; see [`docs/agents/domain.md`](docs/agents/domain.md).
 - Domain flow: when adding or modifying a mutating operation — a domain operation, an endpoint that serves it, or its client merge — read [`docs/agents/domain-flow.md`](docs/agents/domain-flow.md) first; the domain layer computes everything and responses cover the whole `Summary`.
