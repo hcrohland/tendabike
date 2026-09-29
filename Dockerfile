@@ -49,9 +49,15 @@ ENV SQLX_OFFLINE=true
 COPY Cargo.toml Cargo.lock ./
 COPY .sqlx .sqlx/
 COPY backend backend/
-COPY backend/app/src/main.rs backend/app/src/
-COPY backend/domain/src/bin/build_snapshot.rs backend/domain/src/bin/
-RUN cargo build --release \
+# The copied target directory carries cargo's fingerprints from the stub
+# build: each unit's invoked.timestamp is the stub build time, which is
+# always newer than the build-context mtimes that COPY preserves (the git
+# checkout). Cargo's mtime check would then call every workspace source
+# unchanged and ship the stub binary as-is. Touching the sources past
+# those fingerprints forces the five workspace crates to recompile; the
+# registry dependencies are untouched and stay cached.
+RUN find backend -type f -name '*.rs' -exec touch {} + \
+    && cargo build --release \
     && cp /app/target/release/tendabike /app/tendabike
 
 FROM node:slim AS build-frontend

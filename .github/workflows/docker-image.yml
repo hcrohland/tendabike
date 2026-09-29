@@ -50,4 +50,28 @@ jobs:
         # commits build incrementally.
         cache-from: type=gha,mode=max
         cache-to: type=gha,mode=max
+    - 
+      name: Verify the image carries the real binary
+      # The stubbed main (fn main() {}) exits 0 silently, while the real
+      # binary fails fast without a reachable database. A 0 exit here
+      # means the stub from the build-deps stage was shipped.
+      run: |
+        set -uo pipefail
+        set +e
+        docker run --rm "$TAG" > run.log 2>&1
+        status=$?
+        set -e
+        echo "--- container output (exit $status) ---" > run.log
+        cat run.log
+        case "$status" in
+          0)
+            echo "::error::entrypoint exited 0: the stub binary was shipped, not the real one"
+            exit 1
+            ;;
+          125|126|127)
+            echo "::error::docker could not run the image (exit $status)"
+            exit 1
+            ;;
+        esac
+        echo "Binary failed as expected without a database; real binary confirmed."
       
