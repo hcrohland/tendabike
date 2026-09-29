@@ -50,7 +50,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY .sqlx .sqlx/
 COPY backend backend/
 RUN cargo build --release \
-    && cp /app/target/release/tendabike /app/tendabike-bin
+    && cp /app/target/release/tendabike /app/tendabike
 
 FROM node:slim AS build-frontend
 
@@ -69,7 +69,7 @@ USER 999:999
 WORKDIR /tendabike
 ENV STATIC_WWW="/tendabike/dist"
 
-COPY --from=build-engine /app/tendabike-bin ./
+COPY --from=build-engine /app/tendabike ./
 COPY --from=build-frontend /build/frontend/dist dist
 
 ENTRYPOINT [ "./tendabike" ]
