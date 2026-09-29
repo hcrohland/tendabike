@@ -2,14 +2,15 @@
 
 How the Tendabike client holds shared state: Svelte 5 state objects in `.svelte.ts` modules. Read this when adding or touching a `.svelte.ts` state module or its readers.
 
-## The four shapes
+## The three shapes
 
 Pick by what the value is:
 
 1. **Collection keyed by id** — the `mapableState` factory (`frontend/src/lib/mapable.svelte.ts`): a `$state` record of entities by id with `setMap`/`updateMap`/`deleteItem` attached. Reference: `part.ts`.
 2. **Object, always defined** — `export const x = $state({...})` in `x.svelte.ts`; writes are property mutation. Reference: `message.svelte.ts`; `store.ts` re-exports the state.
 3. **Object, nullable or replaced wholesale** — a module-private `let x = $state(...)` in `x.svelte.ts`, exposed through `getX()`/`setX()`; the entity module re-exports the accessors. Reference: `user.svelte.ts`; `user.ts` re-exports the accessors.
-4. **Reference collection, loaded once** — a plain module-level `Map` in `x.ts`, written only by the loader and never again. Not reactive, because nothing can change it mid-session (ADR-0004). Reference: `types.ts`.
+
+**Not a state object: `types` is a plain `Map` carrying configuration** — the type vocabulary, fetched once at startup by `getTypes()` and never mutated in-session. It is deliberately non-reactive and belongs to none of the three shapes (ADR-0004).
 
 **Why shape 3 is accessors, not an exported state.** Svelte refuses to compile a `.svelte.ts` module that exports state it reassigns (`state_invalid_export`), and it equally forbids exporting a `$derived` (`derived_invalid_export`). A nullable value must be reassigned to cross `undefined` — a property mutation cannot conjure an object out of `undefined` — and a stable holder object is always truthy, which breaks `{#if x}` gates. The value therefore stays module-private, and the sanctioned fix (Svelte's own error message) is a function returning it.
 
