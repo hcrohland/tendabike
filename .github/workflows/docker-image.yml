@@ -54,11 +54,15 @@ jobs:
       name: Verify the image carries the real binary
       # The stubbed main (fn main() {}) exits 0 silently, while the real
       # binary fails fast without a reachable database. A 0 exit here
-      # means the stub from the build-deps stage was shipped.
+      # means the stub from the build-deps stage was shipped. TAG above is
+      # a display string the build action splits into two --tag values;
+      # docker run needs the single reference that was actually pushed.
+      env:
+        IMAGE: ${{ github.event_name == 'pull_request' && format('ghcr.io/hcrohland/tendabike:PR_{0}', github.event.pull_request.number) || 'ghcr.io/hcrohland/tendabike:latest' }}
       run: |
         set -uo pipefail
         set +e
-        docker run --rm "$TAG" > run.log 2>&1
+        docker run --rm "$IMAGE" > run.log 2>&1
         status=$?
         set -e
         echo "--- container output (exit $status) ---" > run.log
