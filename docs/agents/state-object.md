@@ -10,6 +10,8 @@ Pick by what the value is:
 2. **Object, always defined** — `export const x = $state({...})` in `x.svelte.ts`; writes are property mutation. Reference: `message.svelte.ts`; `store.ts` re-exports the state.
 3. **Object, nullable or replaced wholesale** — a module-private `let x = $state(...)` in `x.svelte.ts`, exposed through `getX()`/`setX()`; the entity module re-exports the accessors. Reference: `user.svelte.ts`; `user.ts` re-exports the accessors.
 
+**Not a state object: `types` is a plain `Map` carrying configuration** — the type vocabulary, fetched once at startup by `getTypes()` and never mutated in-session. It is deliberately non-reactive and belongs to none of the three shapes (ADR-0004).
+
 **Why shape 3 is accessors, not an exported state.** Svelte refuses to compile a `.svelte.ts` module that exports state it reassigns (`state_invalid_export`), and it equally forbids exporting a `$derived` (`derived_invalid_export`). A nullable value must be reassigned to cross `undefined` — a property mutation cannot conjure an object out of `undefined` — and a stable holder object is always truthy, which breaks `{#if x}` gates. The value therefore stays module-private, and the sanctioned fix (Svelte's own error message) is a function returning it.
 
 ## Mechanics
