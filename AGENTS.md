@@ -13,7 +13,7 @@
 
 ## Commit rules
 
-- Flow, in order: finish the work → if on `main`, create a feature branch → format each changed component from the project root (`cargo fmt` for backend, `npm run format` for frontend) → commit.
+- Flow, in order: finish the work → if on `main`, create a feature branch → commit.
 - Never bypass the pre-commit hook with `--no-verify` or `-n` — make the checks pass instead.
 
 ## Agent skills
