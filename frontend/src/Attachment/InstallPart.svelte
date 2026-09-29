@@ -43,7 +43,7 @@
     modal.part.purchase = guessDate(modal.gear, t, h);
   };
 
-  export const start = (g: Part) => {
+  export const installPart = (g: Part) => {
     modal.gear = g;
     modal.part = {
       ...new Part({

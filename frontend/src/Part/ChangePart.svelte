@@ -16,7 +16,7 @@
     type: types?.[0],
   });
 
-  export const start = (p: Part) => {
+  export const changePart = (p: Part) => {
     modal.part = { ...p };
     modal.type = p.type();
     modal.maxdate = p.firstEvent();

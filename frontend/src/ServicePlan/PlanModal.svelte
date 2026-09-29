@@ -1,6 +1,8 @@
 <script module lang="ts">
   import { ServicePlan } from "../lib/serviceplan";
-  import type { Type } from "../lib/types";
+  import { parts, type Part } from "../lib/part";
+  import { getCategory, types, type Type } from "../lib/types";
+  import { m } from "../../paraglide/messages";
 
   const modal = $state<{
     open: boolean;
@@ -10,6 +12,9 @@
     limits: any;
     what: number | null;
     hook: number | null;
+    header: string;
+    no_gear: boolean;
+    safePlan: (p: ServicePlan) => void;
   }>({
     open: false,
     id: undefined,
@@ -18,6 +23,9 @@
     limits: {},
     what: null,
     hook: null,
+    header: "",
+    no_gear: false,
+    safePlan: () => {},
   });
 
   const sethook = (type: Type, h: number | undefined) => {
@@ -25,14 +33,71 @@
     modal.hook = h as number | null;
   };
 
-  export function start(p: ServicePlan) {
+  /**
+   * The two ways into the plan modal. Each computes its mode — draft plan,
+   * header, whether the gear section shows, and which operation saves —
+   * then opens the one shared dialog, re-targeted for it.
+   */
+  export function newPlan(p: Part) {
+    let no_gear = !p.isGear();
+    let plan = no_gear
+      ? new ServicePlan({ part: p.id, what: p.what, hook: null })
+      : new ServicePlan({ part: p.id });
+    open(plan, {
+      header: m.newplan_header_part({ name: no_gear ? p.name : "" }),
+      no_gear,
+      safePlan: saveNew,
+    });
+  }
+
+  export function updatePlan(p: ServicePlan) {
+    let header: string;
+    if (p.part) {
+      let part = parts[p.part];
+      if (part.isGear() && p.hook != null) {
+        header = m.updateplan_header_hook_part({
+          hook: types[p.what].human_name(p.hook),
+          name: part.name,
+        });
+      } else {
+        header = m.updateplan_header_part({ name: part.name });
+      }
+    } else {
+      header = m.updateplan_header_generic({
+        hook: types[p.what].human_name(p.hook),
+        any: getCategory()!.localizedAnyDative(),
+      });
+    }
+    open(new ServicePlan(p), { header, no_gear: true, safePlan: saveUpdate });
+  }
+
+  /** Open the shared dialog for the given plan and mode. */
+  function open(
+    p: ServicePlan,
+    config: {
+      header: string;
+      no_gear: boolean;
+      safePlan: (p: ServicePlan) => void;
+    },
+  ) {
     modal.id = p.id;
     modal.part = p.part;
     modal.name = p.name;
     modal.what = p.what;
     modal.hook = p.hook;
     modal.limits = p.to_object();
+    modal.header = config.header;
+    modal.no_gear = config.no_gear;
+    modal.safePlan = config.safePlan;
     modal.open = true;
+  }
+
+  async function saveNew(p: ServicePlan) {
+    await p.create();
+  }
+
+  async function saveUpdate(p: ServicePlan) {
+    await p.update();
   }
 </script>
 
@@ -40,19 +105,9 @@
   import { ButtonGroup, Input, InputAddon } from "flowbite-svelte";
   import TypeForm from "../Widgets/TypeForm.svelte";
   import GearForm from "../Widgets/GearForm.svelte";
-  import type { Snippet } from "svelte";
   import PlanLimits from "./PlanLimits.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";
-  import { m } from "../../paraglide/messages";
-
-  interface Props {
-    safePlan: (p: ServicePlan) => void;
-    no_gear: boolean;
-    children?: Snippet;
-  }
-
-  let { safePlan, no_gear, children }: Props = $props();
 
   function onaction() {
     let newplan = new ServicePlan({
@@ -63,16 +118,16 @@
       name: modal.name,
       hook: modal.hook,
     });
-    safePlan(newplan);
+    modal.safePlan(newplan);
     modal.open = false;
   }
 </script>
 
 <Modal size="xs" bind:open={modal.open} {onaction}>
   {#snippet header()}
-    {@render children?.()}
+    {modal.header}
   {/snippet}
-  {#if !no_gear}
+  {#if !modal.no_gear}
     <ButtonGroup>
       <TypeForm
         with_body

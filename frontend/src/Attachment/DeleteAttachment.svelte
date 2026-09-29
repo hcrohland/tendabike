@@ -12,7 +12,7 @@
     part: new Part({}),
   });
 
-  export const start = (a: Attachment) => {
+  export const deleteAttachment = (a: Attachment) => {
     modal.attachment = a;
     modal.part = parts[a.part_id];
     modal.open = true;

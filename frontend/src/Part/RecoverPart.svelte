@@ -9,7 +9,7 @@
     part: new Part({}),
   });
 
-  export const start = (p: Part) => {
+  export const recoverPart = (p: Part) => {
     modal.part = p;
     modal.open = true;
   };

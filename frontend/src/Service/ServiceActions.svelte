@@ -32,13 +32,13 @@
     title: "",
   });
 
-  export function change(s: Service) {
+  export function changeService(s: Service) {
     config.saveService = saveUpdate;
     config.title = m.action_change();
     startService(s);
   }
 
-  export function create(part: Part, plan?: ServicePlan) {
+  export function newService(part: Part, plan?: ServicePlan) {
     config.saveService = saveNew;
     config.title = m.servicemodal_new();
     startService(
@@ -46,13 +46,13 @@
     );
   }
 
-  export function repeat(s: Service) {
+  export function redoService(s: Service) {
     config.saveService = saveRepeat;
     config.title = m.action_repeat();
     startService(s);
   }
 
-  export function del(s: Service) {
+  export function deleteService(s: Service) {
     startDeleteService(s);
   }
 </script>

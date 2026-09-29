@@ -13,7 +13,7 @@
     part: undefined,
   });
 
-  export function start(t: Type) {
+  export function newPart(t: Type) {
     modal.type = t;
     modal.part = { ...new Part({ owner: getUser()?.id, what: t.id }) };
     modal.open = true;

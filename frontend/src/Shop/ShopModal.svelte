@@ -17,7 +17,15 @@
     editing: false,
   });
 
-  export function start(g?: Shop) {
+  export function createShop() {
+    open();
+  }
+
+  export function editShop(g: Shop) {
+    open(g);
+  }
+
+  function open(g?: Shop) {
     if (g) {
       modal.shop = g;
       modal.name = g.name;

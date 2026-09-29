@@ -27,7 +27,7 @@
     note: new PartNote({}),
   });
 
-  export function start(n: PartNote) {
+  export function deleteNote(n: PartNote) {
     modal.note = n;
     modal.open = true;
   }

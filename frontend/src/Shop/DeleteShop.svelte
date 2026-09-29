@@ -9,7 +9,7 @@
     shop: undefined,
   });
 
-  export function start(g: Shop) {
+  export function deleteShop(g: Shop) {
     modal.shop = g;
     modal.open = true;
   }

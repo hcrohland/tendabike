@@ -11,7 +11,7 @@
     message: "",
   });
 
-  export function start(g: Shop) {
+  export function requestSubscription(g: Shop) {
     modal.shop = g;
     modal.message = "";
     modal.open = true;

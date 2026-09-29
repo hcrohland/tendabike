@@ -15,7 +15,7 @@
     hook: undefined,
   });
 
-  export const start = (p: Part) => {
+  export const attachPart = (p: Part) => {
     modal.part = p;
     modal.time = new Date();
     modal.gear = undefined;

@@ -45,7 +45,7 @@
     if (f) modal.removeFile = false;
   }
 
-  export function start(part: Part, note?: PartNote) {
+  export function newNote(part: Part, note?: PartNote) {
     modal.partId = part.id!;
     if (note) {
       modal.editingNote = note;

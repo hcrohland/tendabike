@@ -28,7 +28,7 @@
     single: false,
   });
 
-  export const start = (attl: Attachment) => {
+  export const replacePart = (attl: Attachment) => {
     modal.oldpart = parts[attl.part_id];
     modal.hook = attl.hook;
     modal.gear = attl.gear;

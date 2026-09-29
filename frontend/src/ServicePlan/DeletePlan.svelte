@@ -9,7 +9,7 @@
     plan: new ServicePlan({}),
   });
 
-  export const start = (p: ServicePlan) => {
+  export const deletePlan = (p: ServicePlan) => {
     modal.plan = p;
     modal.open = true;
   };

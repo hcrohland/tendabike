@@ -9,7 +9,7 @@
     activity: undefined,
   });
 
-  export const start = (a: Activity) => {
+  export const changeActivity = (a: Activity) => {
     modal.open = true;
     modal.activity = { ...a };
   };

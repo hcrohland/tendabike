@@ -26,7 +26,7 @@
     hook: false,
   });
 
-  export const start = (p: Part, last_attachment?: Attachment) => {
+  export const disposePart = (p: Part, last_attachment?: Attachment) => {
     modal.part = p;
     let type = modal.part.type();
     modal.typeName = type.localizedName();
