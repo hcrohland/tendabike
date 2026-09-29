@@ -49,6 +49,8 @@ ENV SQLX_OFFLINE=true
 COPY Cargo.toml Cargo.lock ./
 COPY .sqlx .sqlx/
 COPY backend backend/
+COPY backend/app/src/main.rs backend/app/src/
+COPY backend/domain/src/bin/build_snapshot.rs backend/domain/src/bin/
 RUN cargo build --release \
     && cp /app/target/release/tendabike /app/tendabike
 
