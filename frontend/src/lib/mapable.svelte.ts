@@ -84,9 +84,8 @@ export function mapableState<V>(
 }
 
 /**
- * Pure helpers for plain entity maps. The collection factory is
- * `mapableState` (mapable.svelte.ts); this module holds no stores and
- * imports nothing from svelte/store.
+ * Pure helpers for plain entity maps: no reactivity, no awareness of the
+ * operations attached to a state collection.
  */
 
 export type Map<V> = { [key: string]: V };
