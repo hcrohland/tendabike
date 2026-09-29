@@ -10,7 +10,10 @@
   import { parts } from "../lib/part";
   import { fmtDate } from "../lib/store";
   import { Type } from "../lib/types";
-  import { actions } from "../Widgets/Actions.svelte";
+  import { newPart } from "../Part/NewPart.svelte";
+  import { attachPart } from "../Attachment/AttachPart.svelte";
+  import { deletePart } from "../Part/DeletePart.svelte";
+  import { disposePart } from "../Part/DisposePart.svelte";
   import { getShop } from "../lib/shop";
   import * as m from "../../paraglide/messages";
 
@@ -61,7 +64,7 @@
         {type.localizedName()}
       </span>
     </div>
-    <XsButton onclick={() => actions.newPart(type)}>{m.action_new()}</XsButton>
+    <XsButton onclick={() => newPart(type)}>{m.action_new()}</XsButton>
   </div>
 
   <!-- Part cards -->
@@ -95,17 +98,17 @@
         {#if !part.disposed_at}
           <div class="shrink-0">
             <Menu>
-              <DropdownItem onclick={() => actions.attachPart(part)}>
+              <DropdownItem onclick={() => attachPart(part)}>
                 {attachedTo(attachments, part.id, date)
                   ? m.action_move()
                   : m.action_attach()}
               </DropdownItem>
               {#if part.attachments().length == 0}
-                <DropdownItem onclick={() => actions.deletePart(part)}>
+                <DropdownItem onclick={() => deletePart(part)}>
                   {m.action_delete()}
                 </DropdownItem>
               {:else}
-                <DropdownItem onclick={() => actions.disposePart(part)}>
+                <DropdownItem onclick={() => disposePart(part)}>
                   {m.action_dispose()}
                 </DropdownItem>
               {/if}

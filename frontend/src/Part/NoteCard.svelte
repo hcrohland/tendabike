@@ -25,7 +25,8 @@
   import { PartNote, fmtSize } from "../lib/partnote";
   import Card from "../Widgets/Card.svelte";
   import Menu from "../Widgets/Menu.svelte";
-  import { actions } from "../Widgets/Actions.svelte";
+  import { newNote } from "./NewNote.svelte";
+  import { deleteNote } from "./DeleteNote.svelte";
   import * as m from "../../paraglide/messages";
 
   interface Props {
@@ -63,10 +64,10 @@
       </span>
     {/if}
     <Menu>
-      <DropdownItem onclick={() => actions.newNote(part, note)}>
+      <DropdownItem onclick={() => newNote(part, note)}>
         {m.gearcard_change_note()}
       </DropdownItem>
-      <DropdownItem onclick={() => actions.deleteNote(note)}>
+      <DropdownItem onclick={() => deleteNote(note)}>
         {m.gearcard_delete_note()}
       </DropdownItem>
     </Menu>

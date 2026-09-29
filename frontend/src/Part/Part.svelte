@@ -10,7 +10,15 @@
   import Subparts from "./Subparts.svelte";
   import PartHist from "./PartHist.svelte";
   import NoteList from "./NoteList.svelte";
-  import { actions } from "../Widgets/Actions.svelte";
+  import { recoverPart } from "./RecoverPart.svelte";
+  import { attachPart } from "../Attachment/AttachPart.svelte";
+  import { disposePart } from "./DisposePart.svelte";
+  import { changePart } from "./ChangePart.svelte";
+  import { deletePart } from "./DeletePart.svelte";
+  import { installPart } from "../Attachment/InstallPart.svelte";
+  import { newPlan } from "../ServicePlan/PlanModal.svelte";
+  import { newService } from "../Service/ServiceActions.svelte";
+  import { newNote } from "./NewNote.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { pop } from "svelte-spa-router";
@@ -36,32 +44,30 @@
   <div class="float-end h6 mb-0">
     <Menu>
       {#if part.disposed_at}
-        <DropdownItem onclick={() => actions.recoverPart(part)}>
+        <DropdownItem onclick={() => recoverPart(part)}>
           {m.part_recover_gear()}
         </DropdownItem>
       {:else}
         {#if !part.isGear()}
-          <DropdownItem onclick={() => actions.attachPart(part)}>
+          <DropdownItem onclick={() => attachPart(part)}>
             {m.action_attach()}
           </DropdownItem>
         {/if}
-        <DropdownItem
-          onclick={() => actions.disposePart(part, last_attachment)}
-        >
+        <DropdownItem onclick={() => disposePart(part, last_attachment)}>
           {#if last_attachment?.isAttached()}
             {m.action_detach()}
           {:else}
             {m.action_dispose()}
           {/if}
         </DropdownItem>
-        <DropdownItem onclick={() => actions.changePart(part)}>
+        <DropdownItem onclick={() => changePart(part)}>
           {m.part_change_details()}
         </DropdownItem>
       {/if}
       {#if !part.isGear() && part.attachments().length == 0}
         <DropdownItem
           onclick={() => {
-            actions.deletePart(part);
+            deletePart(part);
             pop();
           }}
         >
@@ -81,7 +87,7 @@
       {#snippet titleSlot()}
         {m.part_tab_attached_parts()}
         {#if tab == "parts"}
-          <XsButton onclick={() => actions.installPart(part)}>
+          <XsButton onclick={() => installPart(part)}>
             {m.partcard_add()}
           </XsButton>
         {/if}
@@ -94,7 +100,7 @@
       {m.part_tab_service_plans()}
       <PlanBadge {part} />
       {#if tab == "plans"}
-        <XsButton onclick={() => actions.newPlan(part)}>
+        <XsButton onclick={() => newPlan(part)}>
           {m.partcard_add()}
         </XsButton>
       {/if}
@@ -105,7 +111,7 @@
     {#snippet titleSlot()}
       {m.part_tab_service_logs()}
       {#if tab == "services"}
-        <XsButton onclick={() => actions.newService(part)}>
+        <XsButton onclick={() => newService(part)}>
           {m.partcard_add()}
         </XsButton>
       {/if}
@@ -116,7 +122,7 @@
     {#snippet titleSlot()}
       {m.part_tab_notes()}
       {#if tab == "notes"}
-        <XsButton onclick={() => actions.newNote(part)}>
+        <XsButton onclick={() => newNote(part)}>
           {m.partcard_add()}
         </XsButton>
       {/if}
