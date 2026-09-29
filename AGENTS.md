@@ -4,7 +4,7 @@
 
 ## Working rules
 
-- When in doubt about a change, ask the user before making it.
+- When in doubt about anything, ask the user before acting.
 - Work in small increments. Read or act on ONE file, function, or unit at a time.
 
 ## Domain
