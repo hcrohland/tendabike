@@ -42,3 +42,33 @@ jobs:
         run: cargo fmt --check
       - name: Test
         run: cargo test --release
+
+  # Store seam integration suite (issue #406) against a real Postgres.
+  # Informational for now: the two store adapters still diverge on some
+  # rules (see backend/sqlx/tests/store_seam.rs), so a red seam does not
+  # block the PR until the seams are unified (#405).
+  postgres-seam:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tendabike
+          POSTGRES_PASSWORD: tendabike
+          POSTGRES_DB: tendabike
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tendabike"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://tendabike:tendabike@localhost:5432/tendabike
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test -p tb_sqlx --test store_seam

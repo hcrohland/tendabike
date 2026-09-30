@@ -10,6 +10,7 @@ use log::info;
 use sqlx::{PgPool, PgTransaction, postgres::PgPoolOptions};
 use std::ops::{Deref, DerefMut};
 
+use crate::into_domain;
 use tb_domain::TbResult;
 
 pub struct SqlxConn<'conn>(PgTransaction<'conn>);
@@ -32,11 +33,18 @@ impl<'c> SqlxConn<'c> {
     pub(crate) fn inner(&mut self) -> &mut PgTransaction<'c> {
         &mut self.0
     }
-}
 
-impl<'c> SqlxConn<'c> {
     pub(crate) fn into_inner(self) -> PgTransaction<'c> {
         self.0
+    }
+
+    /// Roll back the transaction and return the connection to the pool.
+    pub async fn rollback(self) -> TbResult<()> {
+        self.into_inner()
+            .rollback()
+            .await
+            .map_err(into_domain)
+            .map(|_| ())
     }
 }
 
@@ -57,7 +65,13 @@ impl DbPool {
         Ok(pool)
     }
 
-    pub async fn begin(&self) -> TbResult<SqlxConn<'_>> {
+    /// Begin a transaction on a pooled connection.
+    ///
+    /// The returned connection is `'static`: it owns its pool handle through
+    /// the transaction, so it stays valid after the pool itself is dropped
+    /// (the pool is kept alive by the connection's own reference until the
+    /// transaction commits or rolls back).
+    pub async fn begin(&self) -> TbResult<SqlxConn<'static>> {
         let conn = self
             .0
             .begin()

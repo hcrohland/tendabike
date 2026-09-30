@@ -29,7 +29,10 @@ mod traits;
 use time::OffsetDateTime;
 pub use traits::*;
 
-const MAX_TIME: OffsetDateTime = time::macros::datetime!(9100-01-01 0:00 UTC);
+/// The sentinel "still attached"/"never" time used across attachment and
+/// service logic. Public so the store-seam integration suite (tb_sqlx)
+/// asserts the same sentinel the in-memory suite does.
+pub const MAX_TIME: OffsetDateTime = time::macros::datetime!(9100-01-01 0:00 UTC);
 const MIN_TIME: OffsetDateTime = time::macros::datetime!(0000-01-01 0:00 UTC);
 
 /// round time down to the quarter of an hour
