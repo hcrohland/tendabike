@@ -20,6 +20,14 @@ The domain layer (`backend/domain`) is the only thing that computes entity state
 - **The side-effecting operations** live on the entities: `attach_assembly`, `detach_assembly`, `dispose_assembly`, `recover_assembly` (`entities/attachment.rs`), `Activity::upsert/update/delete`, `Shop::register_part`, and the like. Every one of them returns the `Summary` of everything it touched.
 - **The bare-entity operations** touch exactly one entity and return it. The partnote operations (`entities/partnote.rs`) are the reference: `PartId::notes/note_create_text/note_create_file` and `PartNoteId::note/update_text/update_file/remove_file/delete` each return the bare `PartNote`, and `PartNote::file` fetches the file bytes on demand — file bytes are never part of any `Summary`.
 
+## The store seam
+
+The domain layer is storage-agnostic: every operation goes through the store traits in `backend/domain/src/traits/`, and two adapters implement them — the in-memory store (`MemStore`, `backend/domain/src/test_support/`) and the Postgres store (`SqlxConn`, `backend/sqlx/src/store/`).
+
+The contract: a domain operation must pass on **both** adapters, and where they disagree the **Postgres behavior is the source of truth** — the database is what production runs, so the in-memory store follows it, never the other way around. Where a rule was unified, the trait docs name it (the attachment path rules in #407, the activity path rules in #408, the in-memory store's transactionality and 30-minute offset rounding in #409).
+
+The contract is enforced in CI: the `postgres-seam` job in `.github/workflows/test.yml` is a required gate. It runs the seam integration suite (`backend/sqlx/tests/store_seam.rs`) against a real Postgres service — the standard prepopulated fixture, a representative set of domain operations through `SqlxConn`, and the same domain-level assertions the in-memory suite makes. The plain `rust` job runs the in-memory suite against `MemStore`. In environments without a `DATABASE_URL` (the `rust` job, and a local machine without a database) the seam suite skips itself, so the gate bites only where a database is available.
+
 ## The write contract
 
 - An operation that returns a **bare entity** touches only that entity.
@@ -35,6 +43,7 @@ The domain layer (`backend/domain`) is the only thing that computes entity state
 1. **Domain** — write the operation as a method on the entity in `backend/domain/src/entities/`. Compute side effects inline in one transaction (through `register`/`Factor` when usage is involved). Return the `Summary` of everything touched, or the bare entity if nothing else is affected. Done when the response covers every entity the operation touched — and nothing it didn't.
 2. **Presentation** — a thin axum handler in `backend/axum/src/domain/<module>.rs`: extract session and JSON, call the domain operation, return it. It computes nothing.
 3. **Client** — a fetch call in `frontend/src/lib/<name>.ts` that merges the response via `updateSummary` or `updateMap`.
+4. **Both stores** — verify the operation on both adapters (the store-seam contract above): run the in-memory suite (`tb_domain`) and the seam suite (`cargo test -p tb_sqlx --test store_seam` with a `DATABASE_URL`) against it, and where the operation is a new path, add it to the seam suite's representative set. Done when both suites pass on the one rule — and where they disagree, fix the in-memory store to the Postgres behavior, the source of truth.
 
 To add the _entity_ itself, follow the implementation steps in [`new-entity.md`](new-entity.md).
 

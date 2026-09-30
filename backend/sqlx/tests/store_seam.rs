@@ -40,10 +40,16 @@
 //! database) and the existing in-memory suites stay green.
 //!
 //! The CI job that runs this suite against a real Postgres service is the
-//! informational (non-blocking) `postgres-seam` job in
-//! `.github/workflows/test.yml`.
+//! required `postgres-seam` job in `.github/workflows/test.yml` (issue
+//! #411): the store adapters are unified on the database's rules (#407-
+//! #410), so a red seam blocks the PR. `database_is_reachable` fails the
+//! job loudly when the database cannot be reached, instead of letting every
+//! test silently skip itself. The seam contract — one rule per operation,
+//! verified on both store adapters — is recorded in
+//! `docs/agents/domain-flow.md`.
 
 use std::collections::HashSet;
+use std::time::Duration;
 
 use tb_domain::test_support::{MemStore, StoreSnapshot, TestSession, part_type_ids};
 use tb_domain::{
@@ -314,6 +320,42 @@ async fn create_part(
     )
     .await
     .expect("creating a part works")
+}
+
+// ---------------------------------------------------------------------------
+// Availability
+// ---------------------------------------------------------------------------
+
+/// The `postgres-seam` CI job sets `DATABASE_URL` unconditionally, so
+/// whenever this test runs the database must actually be reachable: it
+/// fails the required job loudly instead of letting every other test
+/// silently skip itself against an unreachable Postgres (a pool failure is
+/// a skip for them, and the job would pass with nothing verified). The
+/// bound makes a blackholed endpoint fail in seconds instead of burning
+/// the pool's 30-second acquire timeout per test.
+///
+/// With no `DATABASE_URL` — the DB-less `rust` job and local machines
+/// without a database — it skips itself like the rest of the suite.
+#[tokio::test]
+async fn database_is_reachable() {
+    let Some(url) = database_url() else {
+        return;
+    };
+    let pool = match tokio::time::timeout(Duration::from_secs(10), tb_sqlx::DbPool::new(&url)).await
+    {
+        Ok(Ok(pool)) => pool,
+        Ok(Err(e)) => panic!(
+            "DATABASE_URL is set ({url}) but the database is unreachable or its \
+             migrations failed: {e} — the postgres-seam job must fail loudly, not \
+             silently skip"
+        ),
+        Err(_) => panic!(
+            "DATABASE_URL is set ({url}) but the database did not become reachable \
+             within 10s — is the Postgres service running? the postgres-seam job \
+             must fail loudly, not silently skip"
+        ),
+    };
+    drop(pool);
 }
 
 // ---------------------------------------------------------------------------

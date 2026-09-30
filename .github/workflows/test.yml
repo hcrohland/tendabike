@@ -44,12 +44,12 @@ jobs:
         run: cargo test --release
 
   # Store seam integration suite (issue #406) against a real Postgres.
-  # Informational for now: the two store adapters still diverge on some
-  # rules (see backend/sqlx/tests/store_seam.rs), so a red seam does not
-  # block the PR until the seams are unified (#405).
+  # Required gate: the two store adapters are unified on the database's
+  # rules (#407-#410), so a red seam blocks the PR (issue #411). The suite
+  # skips itself when no DATABASE_URL is configured, which only happens
+  # outside this job — it always sets one below.
   postgres-seam:
     runs-on: ubuntu-latest
-    continue-on-error: true
     services:
       postgres:
         image: postgres:16
