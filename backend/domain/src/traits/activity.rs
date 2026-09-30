@@ -30,13 +30,24 @@ pub trait ActivityStore {
 
     /// Updates an existing activity.
     ///
+    /// The data fields are replaced with the values of `act`: user, type,
+    /// name, start, duration, time, distance, climb, descend, energy, and
+    /// gear. The row keeps the three fields that are lost when the
+    /// frontend round-trips an activity: the stored `utc_offset` (the new
+    /// start is expressed in the stored offset), `device_name`, and
+    /// `external_id` — both stores apply this one rule.
+    ///
     /// # Arguments
     ///
-    /// * `act` - A reference to a `Activity` struct containing the updated details of the activity.
+    /// * `act` - The activity with the updated details.
     ///
     /// # Returns
     ///
-    /// Returns a `Result` containing the updated `Activity` or an error if the operation fails.
+    /// Returns the stored row after the update.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::NotFound`] if no activity with this id exists.
     async fn activity_update(&mut self, act: Activity) -> TbResult<Activity>;
 
     /// Deletes an activity by its ID.
@@ -74,11 +85,15 @@ pub trait ActivityStore {
 
     /// Retrieves all activities for a given part ID and time range.
     ///
+    /// An activity matches when `begin <= start < end` (start is the
+    /// activity's start instant): `begin` is included, `end` is excluded —
+    /// both stores apply this one rule.
+    ///
     /// # Arguments
     ///
     /// * `part` - The ID of the part to retrieve activities for.
-    /// * `begin` - The start of the time range to retrieve activities for.
-    /// * `end` - The end of the time range to retrieve activities for.
+    /// * `begin` - The start of the time range (inclusive).
+    /// * `end` - The end of the time range (exclusive).
     ///
     /// # Returns
     ///
@@ -90,12 +105,23 @@ pub trait ActivityStore {
         end: OffsetDateTime,
     ) -> TbResult<Vec<Activity>>;
 
-    /// Retrieves an activity for a given user ID and start time.
+    /// Retrieves the user's activity that started in the minute of `rstart`.
+    ///
+    /// The match is by the minute, not the instant: the activity's start —
+    /// in its stored offset, i.e. the user's local wall clock — floored to
+    /// the minute must equal `rstart`'s minute (the database truncates the
+    /// stored start to its local minute, adds the stored offset, and
+    /// compares it to the truncated query time; both stores apply this one
+    /// rule). `rstart` is the query time as an instant, e.g. the CSV
+    /// import's local wall clock parsed as UTC. Zero matches returns
+    /// [`Error::NotFound`]; if several activities of the user share the
+    /// minute, the first one is returned — the tie-break for same-minute
+    /// duplicates is not settled yet.
     ///
     /// # Arguments
     ///
     /// * `uid` - The ID of the user to retrieve the activity for.
-    /// * `rstart` - The start time of the activity to retrieve.
+    /// * `rstart` - The start time to match the activity's local minute against.
     ///
     /// # Returns
     ///

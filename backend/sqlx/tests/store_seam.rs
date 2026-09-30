@@ -24,14 +24,10 @@
 //!
 //! The attachment path rules — successor, adjacent-merge trigger, delete
 //! identity — were unified on the Postgres rule (the source of truth) in
-//! #407, so those tests run on both stores. Every remaining operation path
-//! known to diverge between the two store adapters (parent issue #405) —
-//! the activity path (issue #408) — is present but marked to skip with
-//! [`skip_divergence`] and a one-line comment naming the concrete
-//! difference. The skipped test bodies document the *current in-memory*
-//! behavior; when the adapters are unified on the Postgres rule, update the
-//! assertions to the unified rule, remove the skip, and the test verifies
-//! the fix against a real database.
+//! #407, and the activity path rules — update field preservation,
+//! time-range boundary, and the user+time minute match — in #408, so every
+//! test in this suite asserts the one rule per operation that both stores
+//! apply.
 //!
 //! The suite is deterministic: all tests run serialized against one database;
 //! a one-time seed loads the fixture, and every test opens a transaction
@@ -247,23 +243,6 @@ async fn reset_sequences(tx: &mut tb_sqlx::SqlxConn<'_>) -> tb_domain::TbResult<
     .execute(&mut ***tx)
     .await
     .map_err(db_err)?;
-    Ok(())
-}
-
-/// Mark a known store-seam divergence (issue #405) as skipped: print the
-/// concrete difference and return `Ok` so the suite stays green while the
-/// difference remains a tracked backlog. The `reference` closure documents
-/// the in-memory store's assertions for this path; it is constructed but
-/// deliberately not invoked, because the suite runs against the Postgres
-/// store, whose result differs. When the adapters are unified on the
-/// Postgres rule (issue #405), replace the skip with the updated
-/// assertions and let them run.
-fn skip_divergence<Fut>(what: &str, reference: impl FnOnce() -> Fut) -> tb_domain::TbResult<()>
-where
-    Fut: std::future::Future<Output = tb_domain::TbResult<()>>,
-{
-    eprintln!("store-seam: skipped — known divergence: {what}");
-    let _ = reference;
     Ok(())
 }
 
@@ -1169,21 +1148,21 @@ async fn activity_update_returns_summary() -> tb_domain::TbResult<()> {
     Ok(())
 }
 
-/// Activity update preserves the fields the client cannot supply — SKIPPED:
-/// the in-memory store replaces the whole entity (losing the device name and
-/// external id), while the Postgres update deliberately preserves them
-/// (#408 rule 1).
+/// Activity update replaces the data fields but keeps the stored row's
+/// `utc_offset`, `device_name`, and `external_id` — the fields a frontend
+/// round-trip can lose; one rule on both stores (#408 rule 1).
 #[tokio::test]
 async fn activity_update_preserves_fields() -> tb_domain::TbResult<()> {
     let Some(Seam { _lock, mut store }) = seam().await else {
         return Ok(());
     };
+    // A ride stored at 22:13:20+01:00, with device metadata.
     let act = Activity {
         id: ActivityId::new(100),
         user_id: UserId::from(1),
         what: ActTypeId::from(1),
         name: "Morning Ride".to_string(),
-        start: activity_start(),
+        start: activity_start().to_offset(time::UtcOffset::from_whole_seconds(3600).unwrap()),
         duration: 3600,
         time: Some(3500),
         distance: Some(50000),
@@ -1194,36 +1173,40 @@ async fn activity_update_preserves_fields() -> tb_domain::TbResult<()> {
         device_name: Some("Garmin Edge".to_string()),
         external_id: Some("garmin_12345".to_string()),
     };
-    store.activity_create(act).await?;
+    store.activity_create(act.clone()).await?;
 
-    // A client that lost the device data updates the name only.
+    // A client that lost the device data updates the name only, with the
+    // start in a UTC representation.
     let lossy = Activity {
-        id: ActivityId::new(100),
-        user_id: UserId::from(1),
-        what: ActTypeId::from(1),
         name: "Modified Ride".to_string(),
-        start: activity_start(),
-        duration: 3600,
-        time: Some(3500),
-        distance: Some(50000),
-        climb: Some(500),
-        descend: Some(300),
-        energy: Some(1000),
-        gear: None,
+        start: activity_start().to_offset(time::UtcOffset::UTC),
         device_name: None,
         external_id: None,
+        ..act.clone()
     };
-    skip_divergence(
-        "activity update: in-memory replaces the whole entity (loses \
-         device_name/external_id/utc_offset); Postgres preserves them (#408 rule 1)",
-        || async {
-            let summary = lossy.update(&test_session(), &mut store).await?;
-            // In-memory behavior: the lost fields stay lost.
-            assert!(summary.activities[0].device_name.is_none());
-            assert!(summary.activities[0].external_id.is_none());
-            Ok(())
-        },
-    )?;
+    let updated = store.activity_update(lossy).await?;
+
+    // The rule: the data fields are replaced …
+    assert_eq!(updated.name, "Modified Ride");
+    assert_eq!(
+        updated.start.unix_timestamp(),
+        activity_start().unix_timestamp()
+    );
+    // … and the stored row keeps its offset, device name, and external id.
+    assert_eq!(updated.start.offset().whole_seconds(), 3600);
+    assert_eq!(updated.device_name.as_deref(), Some("Garmin Edge"));
+    assert_eq!(updated.external_id.as_deref(), Some("garmin_12345"));
+
+    // An update of a missing activity is a NotFound on both stores.
+    let ghost = Activity {
+        id: ActivityId::new(999),
+        ..act
+    };
+    let err = store.activity_update(ghost).await;
+    assert!(
+        matches!(err, Err(tb_domain::Error::NotFound(_))),
+        "updating a missing activity must be NotFound, got {err:?}"
+    );
 
     store.rollback().await?;
     Ok(())
@@ -1233,9 +1216,8 @@ async fn activity_update_preserves_fields() -> tb_domain::TbResult<()> {
 // Activity: lookups
 // ---------------------------------------------------------------------------
 
-/// Listing activities in a time range — SKIPPED: the in-memory store
-/// includes the end of the range (`start <= end`), while the Postgres query
-/// excludes it (`start < end`) (#408 rule 2).
+/// Listing activities in a time range: `begin` is included, `end` is
+/// excluded — one rule on both stores (#408 rule 2).
 #[tokio::test]
 async fn activity_find_range_boundary() -> tb_domain::TbResult<()> {
     let Some(Seam { _lock, mut store }) = seam().await else {
@@ -1261,29 +1243,39 @@ async fn activity_find_range_boundary() -> tb_domain::TbResult<()> {
     };
     store.activity_create(act).await?;
 
-    skip_divergence(
-        "activity time-range listing: in-memory includes the range end; \
-         Postgres excludes it (#408 rule 2)",
-        || async {
-            // Search a window that ends exactly at the activity's start.
-            let begin = start - time::Duration::minutes(30);
-            let found = store
-                .activities_find_by_gear_and_time(bike.id, begin, start)
-                .await?;
-            // In-memory behavior: the activity at the boundary is included.
-            assert_eq!(found.len(), 1);
-            Ok(())
-        },
-    )?;
+    // A window that ends exactly at the activity's start: the boundary ride
+    // is outside the range, because end is exclusive.
+    let begin = start - time::Duration::minutes(30);
+    let found = store
+        .activities_find_by_gear_and_time(bike.id, begin, start)
+        .await?;
+    assert!(
+        found.is_empty(),
+        "a ride exactly at the range end must be excluded, got {found:?}"
+    );
+
+    // A window that begins exactly at the activity's start: begin is
+    // inclusive.
+    let found = store
+        .activities_find_by_gear_and_time(bike.id, start, start + time::Duration::minutes(30))
+        .await?;
+    assert_eq!(
+        found.len(),
+        1,
+        "a ride exactly at the range begin must be included"
+    );
+    assert_eq!(found[0].id, ActivityId::new(100));
 
     store.rollback().await?;
     Ok(())
 }
 
-/// The import lookup by user and time — SKIPPED: the in-memory store matches
-/// the exact instant, while the Postgres query matches by minute and expects
-/// exactly one row (#408 rule 3; the same-minute duplicate case is an open
-/// maintainer question).
+/// The import lookup by user and time matches by the minute, not the
+/// instant: the activity's local wall-clock minute (its start in the stored
+/// offset) must equal the query's UTC wall-clock minute; one rule on both
+/// stores (#408 rule 3). The same-minute duplicate case — two activities
+/// whose local minutes coincide — is an open maintainer question, so this
+/// test only covers the single-match and no-match cases.
 #[tokio::test]
 async fn activity_get_by_user_and_time() -> tb_domain::TbResult<()> {
     let Some(Seam { _lock, mut store }) = seam().await else {
@@ -1306,23 +1298,48 @@ async fn activity_get_by_user_and_time() -> tb_domain::TbResult<()> {
         device_name: None,
         external_id: None,
     };
-    store.activity_create(act).await?;
+    store.activity_create(act.clone()).await?;
 
-    skip_divergence(
-        "user+time lookup: in-memory matches the exact instant; Postgres \
-         matches by minute and expects exactly one row (#408 rule 3)",
-        || async {
-            // A different instant of the same minute: the in-memory exact
-            // match finds nothing.
-            let query = start + time::Duration::seconds(15);
-            let found = store.get_by_user_and_time(UserId::from(1), query).await;
-            assert!(
-                matches!(&found, Err(tb_domain::Error::NotFound(_))),
-                "in-memory: an exact-instant match is required, got {found:?}"
-            );
-            Ok(())
-        },
-    )?;
+    // A different instant of the same minute: the minute match finds the
+    // activity (a zero-offset ride's local minute is its UTC minute).
+    let query = start + time::Duration::seconds(15);
+    let found = store.get_by_user_and_time(UserId::from(1), query).await?;
+    assert_eq!(found.id, ActivityId::new(100));
+
+    // A different minute: no match.
+    let other_minute = start + time::Duration::minutes(2);
+    let err = store
+        .get_by_user_and_time(UserId::from(1), other_minute)
+        .await;
+    assert!(
+        matches!(err, Err(tb_domain::Error::NotFound(_))),
+        "a different minute must not match, got {err:?}"
+    );
+
+    // A ride with a +02:00 offset matches only queries whose UTC wall clock
+    // equals the ride's local minute (10:53), not its UTC minute (08:53).
+    let local_start = OffsetDateTime::from_unix_timestamp(1706777630) // 08:53:50 UTC
+        .unwrap()
+        .to_offset(time::UtcOffset::from_whole_seconds(7200).unwrap());
+    let act2 = Activity {
+        id: ActivityId::new(101),
+        start: local_start,
+        ..act
+    };
+    store.activity_create(act2.clone()).await?;
+
+    let query = OffsetDateTime::from_unix_timestamp(1706777630 + 7200 - 20).unwrap(); // 10:53:30 UTC — the ride's local minute
+    let found = store.get_by_user_and_time(UserId::from(1), query).await?;
+    assert_eq!(found.id, ActivityId::new(101));
+
+    let next_minute = query + time::Duration::seconds(60); // 10:54:30 UTC
+    let err = store
+        .get_by_user_and_time(UserId::from(1), next_minute)
+        .await;
+    assert!(
+        matches!(err, Err(tb_domain::Error::NotFound(_))),
+        "a different minute must not match, got {err:?}"
+    );
 
     store.rollback().await?;
     Ok(())

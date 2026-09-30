@@ -708,6 +708,56 @@ mod tests {
         Ok(())
     }
 
+    /// activities_find_by_gear_and_time includes begin and excludes end —
+    /// one rule on both stores (Postgres: start >= begin AND start < end;
+    /// the in-memory store used to include end).
+    #[tokio::test]
+    async fn activity_find_range_includes_begin_excludes_end() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let part = Part::create(
+            "Road Bike".to_string(),
+            "Trek".to_string(),
+            "Domane".to_string(),
+            PartTypeId::from(1),
+            None,
+            sample_purchase_date(),
+            &test_session(),
+            &mut store,
+        )
+        .await?;
+
+        let start = activity_start();
+        let act = Activity {
+            id: ActivityId::new(1),
+            user_id: test_user(),
+            what: ActTypeId::from(1),
+            name: "Boundary Ride".to_string(),
+            start,
+            duration: 3600,
+            time: Some(3500),
+            distance: Some(50000),
+            climb: Some(500),
+            descend: Some(300),
+            energy: Some(1000),
+            gear: Some(part.id),
+            device_name: None,
+            external_id: None,
+        };
+        store.activity_create(act).await?;
+
+        // A window that ends exactly at the start: the ride is excluded.
+        let acts =
+            Activity::find(part.id, start - time::Duration::hours(1), start, &mut store).await?;
+        assert!(acts.is_empty(), "end is exclusive");
+
+        // A window that begins exactly at the start: the ride is included.
+        let acts =
+            Activity::find(part.id, start, start + time::Duration::hours(1), &mut store).await?;
+        assert_eq!(acts.len(), 1, "begin is inclusive");
+        assert_eq!(acts[0].id, ActivityId::new(1));
+        Ok(())
+    }
+
     /// Activity::find returns only activities within the specified time range
     #[tokio::test]
     async fn activity_find_empty_in_time_range() -> TbResult<()> {
@@ -1019,6 +1069,63 @@ mod tests {
 
         let summary = modified.update(&test_session(), &mut store).await?;
         assert_eq!(summary.activities.len(), 1);
+        Ok(())
+    }
+
+    /// activity_update keeps the stored row's utc_offset, device_name and
+    /// external_id — one rule on both stores: Postgres never rewrites those
+    /// columns; the in-memory store used to replace the whole entity and
+    /// wiped them.
+    #[tokio::test]
+    async fn activity_update_preserves_utc_offset_device_name_and_external_id() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+
+        // A stored ride that started at 22:13:20+01:00 local, with device
+        // metadata.
+        let stored = Activity {
+            id: ActivityId::new(7),
+            user_id: test_user(),
+            what: ActTypeId::from(1),
+            name: "Original Ride".to_string(),
+            start: activity_start().to_offset(time::UtcOffset::from_whole_seconds(3600).unwrap()),
+            duration: 3600,
+            time: Some(3500),
+            distance: Some(50000),
+            climb: Some(500),
+            descend: Some(300),
+            energy: Some(1000),
+            gear: None,
+            device_name: Some("Garmin Edge".to_string()),
+            external_id: Some("garmin_12345".to_string()),
+        };
+        store.activity_create(stored.clone()).await?;
+
+        // An update with a different start (in a UTC representation) and no
+        // device metadata: a whole-entity replacement would wipe the
+        // preserved fields.
+        let updated = Activity {
+            name: "Updated Ride".to_string(),
+            start: (activity_start() + time::Duration::seconds(37)).to_offset(time::UtcOffset::UTC),
+            device_name: None,
+            external_id: None,
+            ..stored.clone()
+        };
+
+        let row = store.activity_update(updated).await?;
+
+        // The updated fields took the new values …
+        assert_eq!(row.name, "Updated Ride");
+        assert_eq!(
+            row.start.unix_timestamp(),
+            activity_start().unix_timestamp() + 37
+        );
+        // … and the preserved fields survived the update.
+        assert_eq!(
+            row.start.offset().whole_seconds(),
+            3600, // the stored row keeps its +01:00 offset
+        );
+        assert_eq!(row.device_name.as_deref(), Some("Garmin Edge"));
+        assert_eq!(row.external_id.as_deref(), Some("garmin_12345"));
         Ok(())
     }
 
@@ -1744,6 +1851,67 @@ mod tests {
             Activity::csv2descend(csv_data.as_bytes(), &test_session(), &mut store).await?;
 
         assert_eq!(result.1.len(), 2); // Both records parsed and updated
+        Ok(())
+    }
+
+    /// get_by_user_and_time matches by the activity's local minute: the
+    /// stored row's local wall-clock minute (in its stored offset) must equal
+    /// the query's UTC wall-clock minute — one rule on both stores (Postgres
+    /// truncates both to the minute; the in-memory store used the exact
+    /// instant). The CSV import passes the user's local wall clock parsed as
+    /// UTC, so a ride stored at 22:13:20+01:00 is matched by the query
+    /// 22:13:50 UTC.
+    #[tokio::test]
+    async fn get_by_user_and_time_matches_by_local_minute() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+
+        // A ride stored at 22:13:20+01:00 local (= 21:13:20 UTC).
+        let local_start = (activity_start() - time::Duration::hours(1))
+            .to_offset(time::UtcOffset::from_whole_seconds(3600).unwrap());
+        let stored = Activity {
+            id: ActivityId::new(500),
+            user_id: test_user(),
+            what: ActTypeId::from(1),
+            name: "Ride".to_string(),
+            start: local_start,
+            duration: 3600,
+            time: Some(3500),
+            distance: Some(50000),
+            climb: None,
+            descend: None,
+            energy: Some(1000),
+            gear: None,
+            device_name: None,
+            external_id: None,
+        };
+        store.activity_create(stored.clone()).await?;
+
+        // Same local minute (22:13), a different instant: matches.
+        let q_same_minute = activity_start() + time::Duration::seconds(30); // 22:13:50 UTC
+        let found = store
+            .get_by_user_and_time(test_user(), q_same_minute)
+            .await?;
+        assert_eq!(found.id, stored.id);
+
+        // A different minute: no match.
+        let q_other_minute = activity_start() + time::Duration::seconds(90); // 22:14:50 UTC
+        let result = store
+            .get_by_user_and_time(test_user(), q_other_minute)
+            .await;
+        assert!(matches!(result, Err(Error::NotFound(_))));
+
+        // Another user's ride in the same minute never matches this user's
+        // lookup.
+        let other = Activity {
+            id: ActivityId::new(501),
+            user_id: UserId::from(99),
+            ..stored.clone()
+        };
+        store.activity_create(other).await?;
+        let found = store
+            .get_by_user_and_time(test_user(), q_same_minute)
+            .await?;
+        assert_eq!(found.id, stored.id);
         Ok(())
     }
 

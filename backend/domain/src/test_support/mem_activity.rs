@@ -13,11 +13,30 @@ impl ActivityStore for MemStore {
         Ok(self.activities.iter().find(|a| a.id == aid).cloned())
     }
 
-    async fn activity_update(&mut self, act: Activity) -> TbResult<Activity> {
-        if let Some(pos) = self.activities.iter().position(|a| a.id == act.id) {
-            self.activities[pos] = act.clone();
-        }
-        Ok(act)
+    async fn activity_update(&mut self, new: Activity) -> TbResult<Activity> {
+        // One rule on both stores: the data fields are replaced, but the row
+        // keeps its utc_offset (the new start is expressed in the stored
+        // offset), device_name, and external_id; a missing row is NotFound.
+        let pos = self
+            .activities
+            .iter()
+            .position(|a| a.id == new.id)
+            .ok_or(crate::Error::NotFound("activity not found".to_string()))?;
+        let act = &mut self.activities[pos];
+        let offset = act.start.offset();
+        act.user_id = new.user_id;
+        act.what = new.what;
+        act.name = new.name;
+        act.start = new.start.to_offset(offset);
+        act.duration = new.duration;
+        act.time = new.time;
+        act.distance = new.distance;
+        act.climb = new.climb;
+        act.descend = new.descend;
+        act.energy = new.energy;
+        act.gear = new.gear;
+        // device_name and external_id are preserved.
+        Ok(act.clone())
     }
 
     async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize> {
@@ -51,7 +70,8 @@ impl ActivityStore for MemStore {
         Ok(self
             .activities
             .iter()
-            .filter(|a| a.gear == Some(part) && a.start >= begin && a.start <= end)
+            // One rule on both stores: begin is included, end is excluded.
+            .filter(|a| a.gear == Some(part) && a.start >= begin && a.start < end)
             .cloned()
             .collect())
     }
@@ -61,9 +81,20 @@ impl ActivityStore for MemStore {
         uid: UserId,
         rstart: OffsetDateTime,
     ) -> TbResult<Activity> {
+        // One rule on both stores: the activity's local wall-clock minute
+        // (its start in the stored offset, floored to the minute) must equal
+        // the query's UTC wall-clock minute. Zero matches → NotFound; if
+        // several activities share the minute, the first is returned (the
+        // same as Postgres' fetch_one).
+        let query_minute = minute_floor(rstart.unix_timestamp());
         self.activities
             .iter()
-            .find(|a| a.user_id == uid && a.start == rstart)
+            .find(|a| {
+                a.user_id == uid
+                    && minute_floor(a.start.unix_timestamp())
+                        + a.start.offset().whole_seconds() as i64
+                        == query_minute
+            })
             .cloned()
             .ok_or(crate::Error::NotFound("activity not found".to_string()))
     }
@@ -87,4 +118,11 @@ impl ActivityStore for MemStore {
     async fn activity_get_really_all(&mut self) -> TbResult<Vec<Activity>> {
         Ok(self.activities.clone())
     }
+}
+
+/// A unix timestamp floored to the 60-second minute boundary. Floor (not
+/// truncate-toward-zero) so pre-1970 instants behave like the database's
+/// `date_trunc('minute', …)` on timestamptz.
+fn minute_floor(unix: i64) -> i64 {
+    unix - unix.rem_euclid(60)
 }
