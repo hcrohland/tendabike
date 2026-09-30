@@ -12,27 +12,30 @@ impl AttachmentStore for MemStore {
     }
 
     async fn delete(&mut self, att: Attachment) -> TbResult<Attachment> {
-        // Find and remove by part_id, attached time, gear, and hook
-        let entries: Vec<_> = self
+        // The row is addressed by part + attach time — the database's key
+        // (one rule on both stores); the other fields are not part of the
+        // identity.
+        let keys: Vec<_> = self
             .attachments
             .iter()
-            .filter(|((pid, attached, _), a)| {
-                *pid == att.part_id
-                    && *attached == att.attached
-                    && a.gear == att.gear
-                    && a.hook == att.hook
-            })
+            .filter(|((pid, attached, _), _)| *pid == att.part_id && *attached == att.attached)
             .map(|(k, _)| *k)
             .collect();
-        for key in entries {
-            if let Some(a) = self.attachments.remove(&key) {
-                return Ok(a);
+        let mut deleted = None;
+        for key in keys {
+            if let Some(a) = self.attachments.remove(&key)
+                && deleted.is_none()
+            {
+                deleted = Some(a);
             }
         }
-        Err(crate::Error::NotFound(format!(
-            "Attachment {} at {:?} not found",
-            att.part_id, att.attached
-        )))
+        match deleted {
+            Some(a) => Ok(a),
+            None => Err(crate::Error::NotFound(format!(
+                "Attachment {} at {:?} not found",
+                att.part_id, att.attached
+            ))),
+        }
     }
 
     async fn attachments_delete_by_parts(&mut self, parts: &[crate::Part]) -> TbResult<usize> {
@@ -119,16 +122,26 @@ impl AttachmentStore for MemStore {
         &mut self,
         part_id: PartId,
         gear: PartId,
-        _hook: PartTypeId,
+        hook: PartTypeId,
         time: OffsetDateTime,
-        _what: PartTypeId,
+        what: PartTypeId,
     ) -> TbResult<Option<Attachment>> {
-        Ok(self
+        // The successor: another part, of the same type, at the same hook,
+        // attached later — the part's own later rows never count (one rule
+        // on both stores).
+        let successor = self
             .attachments
             .values()
-            .filter(|a| a.part_id == part_id && a.gear == gear && a.attached > time)
-            .min_by_key(|a| a.attached)
-            .cloned())
+            .filter(|a| {
+                a.part_id != part_id
+                    && a.gear == gear
+                    && a.hook == hook
+                    && a.attached > time
+                    && self.parts.get(&a.part_id).is_some_and(|p| p.what == what)
+            })
+            .min_by_key(|a| a.attached);
+
+        Ok(successor.cloned())
     }
 
     async fn attachment_find_later_attachment_for_part(
@@ -151,15 +164,13 @@ impl AttachmentStore for MemStore {
         hook: PartTypeId,
         time: OffsetDateTime,
     ) -> TbResult<Option<Attachment>> {
+        // The adjacent-merge trigger: the row of this part at this gear and
+        // hook that ended exactly at `time` (one rule on both stores).
         Ok(self
             .attachments
             .values()
             .find(|a| {
-                a.part_id == part_id
-                    && a.gear == gear
-                    && a.hook == hook
-                    && a.attached <= time
-                    && a.detached > time
+                a.part_id == part_id && a.gear == gear && a.hook == hook && a.detached == time
             })
             .cloned())
     }

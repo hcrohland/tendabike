@@ -88,6 +88,8 @@ The main public function for installing a part. It:
    - Copies ownership/shop context from gear to the new part via `set_owner_and_shop()`
 5. If `all=true`, **reattaches all subparts** that were detached with the main part
 
+> **State space**: the database allows two parts of the same type at the same hook to overlap in time (e.g. two tires on one wheel) — nothing in the schema or the store prevents it. The attach operation never produces such a state: it replaces the part already occupying the hook at the attach time (step 3), and cuts the new attachment off at the successor's start when another part of the same type takes the hook later.
+
 ### `detach_assembly()` (`attachment.rs:516-531`)
 
 Removes a part from its gear at a given time. With `all=true`, also detaches all subparts recursively via `shift_subparts()`.

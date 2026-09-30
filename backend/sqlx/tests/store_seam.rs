@@ -22,13 +22,14 @@
 //! update, delete, and lookup; and the user summary read — asserting the same
 //! domain-level results the in-memory suite asserts.
 //!
-//! Every operation path known to diverge between the two store adapters
-//! (parent issue #405) is present but marked to skip with
-//! [`skip_divergence`] and a one-line comment naming the concrete difference.
-//! Those differences are the tracked backlog for unifying the seam (issue
-//! #407 for the attachment path, #408 for the activity path). The skipped
-//! test bodies document the *current in-memory* behavior; when the adapters
-//! are unified on the Postgres rule (the source of truth), update the
+//! The attachment path rules — successor, adjacent-merge trigger, delete
+//! identity — were unified on the Postgres rule (the source of truth) in
+//! #407, so those tests run on both stores. Every remaining operation path
+//! known to diverge between the two store adapters (parent issue #405) —
+//! the activity path (issue #408) — is present but marked to skip with
+//! [`skip_divergence`] and a one-line comment naming the concrete
+//! difference. The skipped test bodies document the *current in-memory*
+//! behavior; when the adapters are unified on the Postgres rule, update the
 //! assertions to the unified rule, remove the skip, and the test verifies
 //! the fix against a real database.
 //!
@@ -641,13 +642,11 @@ async fn attach_detaches_predecessor() -> tb_domain::TbResult<()> {
 }
 
 // ---------------------------------------------------------------------------
-// Attachment: merge and delete divergences (issue #407)
+// Attachment: merge and delete (rules unified in #407)
 // ---------------------------------------------------------------------------
 
-/// Re-attaching a part at the time its row ended must continue the same
-/// row — SKIPPED: the in-memory store never merges adjacent rows (it
-/// re-creates, leaving two), while the Postgres join merges them into one
-/// (#407 rule 2).
+/// Re-attaching a part at the time its row ended continues the same row —
+/// the adjacent-merge (unified rule #407, one rule on both stores).
 #[tokio::test]
 async fn attach_merge_adjacent_with_previous() -> tb_domain::TbResult<()> {
     let Some(Seam { _lock, mut store }) = seam().await else {
@@ -679,66 +678,52 @@ async fn attach_merge_adjacent_with_previous() -> tb_domain::TbResult<()> {
     )
     .await?;
 
-    skip_divergence(
-        "attachment merge: in-memory never merges adjacent rows (2 rows); \
-         Postgres joins them into one (#407 rule 2)",
-        || async {
-            let atts = store.attachments_all_by_part(chain.id).await?;
-            // In-memory reference: adjacent rows are never merged.
-            assert_eq!(atts.len(), 2, "in-memory: adjacent rows are never merged");
-            assert_eq!(atts[0].detached, later_time());
-            Ok(())
-        },
-    )?;
+    // The adjacent rows become one: the previous row was continued, not
+    // duplicated.
+    let atts = store.attachments_all_by_part(chain.id).await?;
+    assert_eq!(atts.len(), 1, "adjacent rows merge into one");
+    assert_eq!(atts[0].attached, attachment_time());
+    assert_eq!(atts[0].detached, MAX_TIME);
 
     store.rollback().await?;
     Ok(())
 }
 
-/// An attachment delete addresses its row by part + attach time (the
-/// database key) — SKIPPED: the in-memory store tolerates duplicate
-/// `(part_id, attached)` rows the database primary key rejects and deletes
-/// the first four-field hit, so this setup only exists on the in-memory
-/// store (#407 rule 3).
+/// An attachment delete addresses its row by part + attach time — the
+/// database's key — so a stale gear field in the argument does not change
+/// which row is deleted (unified rule #407).
 #[tokio::test]
 async fn attachment_delete_identity() -> tb_domain::TbResult<()> {
     let Some(Seam { _lock, mut store }) = seam().await else {
         return Ok(());
     };
-    skip_divergence(
-        "attachment delete identity: in-memory matches four fields and keeps \
-         the duplicate (part_id, attached) rows the DB primary key rejects \
-         (#407 rule 3)",
-        || async {
-            let bike1 = create_part("Bike 1", "TendaBike", "Standard", BIKE, &mut store).await;
-            let bike2 = create_part("Bike 2", "TendaBike", "Pro", BIKE, &mut store).await;
-            let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
+    let bike1 = create_part("Bike 1", "TendaBike", "Standard", BIKE, &mut store).await;
+    let bike2 = create_part("Bike 2", "TendaBike", "Pro", BIKE, &mut store).await;
+    let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
 
-            // Two rows for the same part at the same time, on different
-            // hooks — only possible on the in-memory store.
-            let a1 = att(chain.id, attachment_time(), bike1.id, BIKE, MAX_TIME);
-            let a2 = att(chain.id, attachment_time(), bike2.id, BIKE, MAX_TIME);
-            AttachmentStore::attachment_create(&mut store, a1).await?;
-            AttachmentStore::attachment_create(&mut store, a2).await?;
+    let t1 = attachment_time();
+    let a1 = att(chain.id, t1, bike1.id, BIKE, MAX_TIME);
+    AttachmentStore::attachment_create(&mut store, a1).await?;
 
-            // The in-memory delete removes the first four-field hit only.
-            let deleted = AttachmentStore::delete(&mut store, a1).await?;
-            assert_eq!(deleted.gear, bike1.id);
-            let atts = store.attachments_all_by_part(chain.id).await?;
-            assert_eq!(atts.len(), 1);
-            assert_eq!(atts[0].gear, bike2.id);
-            Ok(())
-        },
-    )?;
+    // A stale gear field in the argument — the row is still addressed by
+    // part + attach time and is deleted.
+    let stale = Attachment {
+        gear: bike2.id,
+        ..a1
+    };
+    let deleted = AttachmentStore::delete(&mut store, stale).await?;
+    assert_eq!(deleted.gear, bike1.id);
+
+    let atts = store.attachments_all_by_part(chain.id).await?;
+    assert!(atts.is_empty(), "the row was deleted");
 
     store.rollback().await?;
     Ok(())
 }
 
-/// Finding the successor of an attachment — SKIPPED: the in-memory store
-/// answers "a later row of the *same* part" (ignoring hook and type), while
-/// the Postgres query answers "another part of the same type at the same
-/// hook, attached later" (#407 rule 1).
+/// Finding the successor of an attachment: another part, of the same type,
+/// at the same hook, attached later — the part's own later rows never count
+/// (unified rule #407).
 #[tokio::test]
 async fn attachment_find_successor() -> tb_domain::TbResult<()> {
     let Some(Seam { _lock, mut store }) = seam().await else {
@@ -746,7 +731,10 @@ async fn attachment_find_successor() -> tb_domain::TbResult<()> {
     };
     let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
     let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
+    let chain2 = create_part("Chain 2", "KMC", "X10", CHAIN, &mut store).await;
 
+    // chain: t1..t2 and its own later row t2..MAX (never its successor);
+    // chain2 takes the same hook at t2.
     store
         .attachment_create(att(
             chain.id,
@@ -759,29 +747,24 @@ async fn attachment_find_successor() -> tb_domain::TbResult<()> {
     store
         .attachment_create(att(chain.id, later_time(), bike.id, CHAIN, MAX_TIME))
         .await?;
+    store
+        .attachment_create(att(chain2.id, later_time(), bike.id, CHAIN, MAX_TIME))
+        .await?;
 
-    skip_divergence(
-        "attachment successor: in-memory = same part, later row; Postgres = \
-         different part, same type, same hook, later (#407 rule 1)",
-        || async {
-            // The in-memory rule: the later row of the same part.
-            let successor = store
-                .attachment_find_successor(chain.id, bike.id, CHAIN, attachment_time(), CHAIN)
-                .await?
-                .expect("in-memory: the same part's later row");
-            assert_eq!(successor.attached, later_time());
-            Ok(())
-        },
-    )?;
+    let successor = store
+        .attachment_find_successor(chain.id, bike.id, CHAIN, attachment_time(), CHAIN)
+        .await?
+        .expect("the other chain's later row is the successor");
+    assert_eq!(successor.part_id, chain2.id);
+    assert_eq!(successor.attached, later_time());
 
     store.rollback().await?;
     Ok(())
 }
 
-/// Finding the attachment already attached to a part — SKIPPED: the
-/// in-memory store matches the covering interval (`attached <= t &&
-/// detached > t`), while the Postgres query matches the row ending exactly
-/// at `t` (`detached = t`) — the adjacent-merge trigger (#407 rule 2).
+/// Finding the attachment already attached to a part: the row of this part
+/// at this gear and hook that ended exactly at the query time — the
+/// adjacent-merge trigger (unified rule #407).
 #[tokio::test]
 async fn attachment_find_part_attached_already() -> tb_domain::TbResult<()> {
     let Some(Seam { _lock, mut store }) = seam().await else {
@@ -801,19 +784,18 @@ async fn attachment_find_part_attached_already() -> tb_domain::TbResult<()> {
         ))
         .await?;
 
-    skip_divergence(
-        "find_part_attached_already: in-memory = covering interval; \
-         Postgres = row ending exactly at the time (#407 rule 2)",
-        || async {
-            // The in-memory rule finds the row while it is active.
-            let found = store
-                .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, attachment_time())
-                .await?
-                .expect("in-memory: the row covers the time");
-            assert_eq!(found.attached, attachment_time());
-            Ok(())
-        },
-    )?;
+    // The row covers t1 but does not end there — not the merge trigger.
+    let found = store
+        .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, attachment_time())
+        .await?;
+    assert!(found.is_none());
+
+    // The row ends exactly at t2 — the adjacent-merge trigger.
+    let found = store
+        .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, later_time())
+        .await?
+        .expect("the row ending exactly at the time is the merge trigger");
+    assert_eq!(found.attached, attachment_time());
 
     store.rollback().await?;
     Ok(())

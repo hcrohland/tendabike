@@ -9,6 +9,9 @@ pub trait AttachmentStore {
     async fn attachment_create(&mut self, att: Attachment) -> TbResult<Attachment>;
 
     /// Delete an attachment.
+    ///
+    /// The row is addressed by part + attach time — the database's key;
+    /// the other fields of the argument are not part of the identity.
     async fn delete(&mut self, att: Attachment) -> TbResult<Attachment>;
 
     /// Deletes an array of attachments
@@ -57,6 +60,9 @@ pub trait AttachmentStore {
     ) -> TbResult<Option<Attachment>>;
 
     /// Find the attachment that succeeds a given part.
+    ///
+    /// The successor: another part, of the same type, at the same hook,
+    /// attached later — the part's own later rows never count.
     async fn attachment_find_successor(
         &mut self,
         part_id: PartId,
@@ -74,6 +80,9 @@ pub trait AttachmentStore {
     ) -> TbResult<Option<Attachment>>;
 
     /// Find the attachment that is already attached to a given part just before a given time.
+    ///
+    /// The adjacent-merge trigger: the row of this part at this gear and
+    /// hook whose detach time is exactly the given time.
     async fn attachment_find_part_attached_already(
         &mut self,
         part_id: PartId,
