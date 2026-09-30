@@ -39,6 +39,7 @@ impl IntoResponse for AppError {
                 Error::BadRequest(_) => StatusCode::BAD_REQUEST,
                 Error::Conflict(_) => StatusCode::CONFLICT,
                 Error::TryAgain(_) => StatusCode::TOO_MANY_REQUESTS,
+                Error::Ambiguous(_) => StatusCode::CONFLICT,
                 Error::DatabaseFailure(_) => StatusCode::INTERNAL_SERVER_ERROR,
                 Error::AnyFailure(_) => StatusCode::INTERNAL_SERVER_ERROR,
             },
@@ -107,6 +108,14 @@ mod tests {
         let (status, body) = respond(Error::Conflict("in use".to_string()).into()).await;
         assert_eq!(status, StatusCode::CONFLICT);
         assert_eq!(body, "Conflict: in use");
+    }
+
+    #[tokio::test]
+    async fn ambiguous_maps_to_conflict() {
+        let (status, body) =
+            respond(Error::Ambiguous("two rides in the minute".to_string()).into()).await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body, "Ambiguous match: two rides in the minute");
     }
 
     #[tokio::test]

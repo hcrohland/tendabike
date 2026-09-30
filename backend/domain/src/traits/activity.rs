@@ -113,10 +113,14 @@ pub trait ActivityStore {
     /// stored start to its local minute, adds the stored offset, and
     /// compares it to the truncated query time; both stores apply this one
     /// rule). `rstart` is the query time as an instant, e.g. the CSV
-    /// import's local wall clock parsed as UTC. Zero matches returns
-    /// [`Error::NotFound`]; if several activities of the user share the
-    /// minute, the first one is returned — the tie-break for same-minute
-    /// duplicates is not settled yet.
+    /// import's local wall clock parsed as UTC.
+    ///
+    /// The match must be unambiguous (maintainer-confirmed, issue #408):
+    /// zero matches returns [`Error::NotFound`], exactly one match returns
+    /// that activity, and two or more activities of the user in the same
+    /// minute returns [`Error::Ambiguous`] — a conflicting import row must
+    /// fail loudly (the CSV path puts it in the bad list), never silently
+    /// update one of the rides.
     ///
     /// # Arguments
     ///
@@ -125,7 +129,9 @@ pub trait ActivityStore {
     ///
     /// # Returns
     ///
-    /// Returns a `Result` containing the retrieved `Activity` or an error if the operation fails.
+    /// Returns the matched `Activity`; [`Error::NotFound`] if none of the
+    /// user's activities falls in the minute, [`Error::Ambiguous`] if more
+    /// than one does.
     async fn get_by_user_and_time(
         &mut self,
         uid: UserId,

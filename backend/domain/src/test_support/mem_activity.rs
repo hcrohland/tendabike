@@ -81,22 +81,30 @@ impl ActivityStore for MemStore {
         uid: UserId,
         rstart: OffsetDateTime,
     ) -> TbResult<Activity> {
-        // One rule on both stores: the activity's local wall-clock minute
-        // (its start in the stored offset, floored to the minute) must equal
-        // the query's UTC wall-clock minute. Zero matches → NotFound; if
-        // several activities share the minute, the first is returned (the
-        // same as Postgres' fetch_one).
+        // One rule on both stores (maintainer-confirmed, issue #408): the
+        // activity's local wall-clock minute (its start in the stored offset,
+        // floored to the minute) must equal the query's UTC wall-clock
+        // minute. Zero matches → NotFound; exactly one → that activity;
+        // two or more → Ambiguous, never a silent first-match.
         let query_minute = minute_floor(rstart.unix_timestamp());
-        self.activities
+        let mut matched: Vec<Activity> = self
+            .activities
             .iter()
-            .find(|a| {
+            .filter(|a| {
                 a.user_id == uid
                     && minute_floor(a.start.unix_timestamp())
                         + a.start.offset().whole_seconds() as i64
                         == query_minute
             })
             .cloned()
-            .ok_or(crate::Error::NotFound("activity not found".to_string()))
+            .collect();
+        match matched.len() {
+            0 => Err(crate::Error::NotFound("activity not found".to_string())),
+            1 => Ok(matched.pop().expect("exactly one match")),
+            n => Err(crate::Error::Ambiguous(format!(
+                "user {uid} has {n} activities in the minute of {rstart}"
+            ))),
+        }
     }
 
     async fn activity_set_gear_if_null(

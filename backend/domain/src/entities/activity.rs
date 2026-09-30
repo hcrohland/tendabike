@@ -1915,6 +1915,53 @@ mod tests {
         Ok(())
     }
 
+    /// get_by_user_and_time returns the maintainer-confirmed error (issue
+    /// #408) when two of the user's activities fall in the same local minute
+    /// — a conflicting import row must fail loudly, not silently update one
+    /// of the two rides.
+    #[tokio::test]
+    async fn get_by_user_and_time_same_minute_duplicate_is_ambiguous() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+
+        // Two rides of the user in the 22:13 local minute (21:13:20Z and
+        // 21:13:45Z, both stored with the +01:00 offset).
+        let first_start = (activity_start() - time::Duration::hours(1))
+            .to_offset(time::UtcOffset::from_whole_seconds(3600).unwrap());
+        let first = Activity {
+            id: ActivityId::new(500),
+            user_id: test_user(),
+            what: ActTypeId::from(1),
+            name: "First Ride".to_string(),
+            start: first_start,
+            duration: 3600,
+            time: Some(3500),
+            distance: Some(50000),
+            climb: None,
+            descend: None,
+            energy: Some(1000),
+            gear: None,
+            device_name: None,
+            external_id: None,
+        };
+        let second = Activity {
+            id: ActivityId::new(501),
+            name: "Second Ride".to_string(),
+            start: first_start + time::Duration::seconds(25),
+            ..first.clone()
+        };
+        store.activity_create(first).await?;
+        store.activity_create(second).await?;
+
+        // A query in that minute (22:13:50 UTC): two matches → the error.
+        let q = activity_start() + time::Duration::seconds(30);
+        let result = store.get_by_user_and_time(test_user(), q).await;
+        assert!(
+            matches!(result, Err(Error::Ambiguous(_))),
+            "two same-minute rides must return Error::Ambiguous, got {result:?}"
+        );
+        Ok(())
+    }
+
     // === Suite 7: Activity — set_default_part ===
 
     /// set_default_part assigns gear to activities with matching type and no gear

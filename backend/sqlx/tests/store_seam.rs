@@ -1273,9 +1273,9 @@ async fn activity_find_range_boundary() -> tb_domain::TbResult<()> {
 /// The import lookup by user and time matches by the minute, not the
 /// instant: the activity's local wall-clock minute (its start in the stored
 /// offset) must equal the query's UTC wall-clock minute; one rule on both
-/// stores (#408 rule 3). The same-minute duplicate case — two activities
-/// whose local minutes coincide — is an open maintainer question, so this
-/// test only covers the single-match and no-match cases.
+/// stores (#408 rule 3). Zero matches is NotFound, exactly one returns the
+/// activity, and the maintainer-confirmed duplicate rule applies: two or
+/// more activities in the same minute is an Error::Ambiguous.
 #[tokio::test]
 async fn activity_get_by_user_and_time() -> tb_domain::TbResult<()> {
     let Some(Seam { _lock, mut store }) = seam().await else {
@@ -1339,6 +1339,23 @@ async fn activity_get_by_user_and_time() -> tb_domain::TbResult<()> {
     assert!(
         matches!(err, Err(tb_domain::Error::NotFound(_))),
         "a different minute must not match, got {err:?}"
+    );
+
+    // The confirmed duplicate rule: a second ride in the first ride's minute
+    // makes the lookup ambiguous — an error, not a silent first-match, so a
+    // conflicting CSV row lands in the bad list.
+    let dup = Activity {
+        id: ActivityId::new(102),
+        start: start + time::Duration::seconds(15), // 12:00:45 — the first ride's minute
+        ..act2.clone()
+    };
+    store.activity_create(dup).await?;
+    let err = store
+        .get_by_user_and_time(UserId::from(1), start + time::Duration::seconds(20))
+        .await;
+    assert!(
+        matches!(err, Err(tb_domain::Error::Ambiguous(_))),
+        "two same-minute rides must return Error::Ambiguous, got {err:?}"
     );
 
     store.rollback().await?;
