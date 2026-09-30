@@ -12,8 +12,9 @@ impl ShopStore for MemStore {
         auto_approve: bool,
         owner: UserId,
     ) -> TbResult<Shop> {
-        let id = ShopId::from(self.next_shop_id);
-        self.next_shop_id += 1;
+        let d = self.state_mut();
+        let id = ShopId::from(d.next_shop_id);
+        d.next_shop_id += 1;
         let now = time::OffsetDateTime::now_utc();
         let shop = Shop {
             id,
@@ -23,12 +24,13 @@ impl ShopStore for MemStore {
             auto_approve,
             created_at: now,
         };
-        self.shops.insert(id, shop.clone());
+        d.shops.insert(id, shop.clone());
         Ok(shop)
     }
 
     async fn shop_get(&mut self, id: ShopId) -> TbResult<Shop> {
-        self.shops
+        let d = self.state();
+        d.shops
             .get(&id)
             .cloned()
             .ok_or_else(|| Error::NotFound(format!("Shop {} not found", id)))
@@ -41,7 +43,8 @@ impl ShopStore for MemStore {
         description: Option<String>,
         auto_approve: bool,
     ) -> TbResult<Shop> {
-        match self.shops.get_mut(&id) {
+        let d = self.state_mut();
+        match d.shops.get_mut(&id) {
             Some(shop) => {
                 shop.name = name;
                 shop.description = description;
@@ -53,7 +56,8 @@ impl ShopStore for MemStore {
     }
 
     async fn shop_delete(&mut self, id: ShopId) -> TbResult<usize> {
-        if self.shops.remove(&id).is_some() {
+        let d = self.state_mut();
+        if d.shops.remove(&id).is_some() {
             Ok(1)
         } else {
             Ok(0)
@@ -61,12 +65,13 @@ impl ShopStore for MemStore {
     }
 
     async fn shops_get_all_for_user(&mut self, user_id: UserId) -> TbResult<Vec<Shop>> {
-        let mut result: Vec<Shop> = self
+        let d = self.state();
+        let mut result: Vec<Shop> = d
             .shops
             .values()
             .filter(|s| {
                 s.owner == user_id
-                    || self.subscriptions.values().any(|sub| {
+                    || d.subscriptions.values().any(|sub| {
                         sub.shop_id == s.id
                             && sub.user_id == user_id
                             && sub.status == SubscriptionStatus::Active
@@ -81,8 +86,9 @@ impl ShopStore for MemStore {
     // Simplified vs SQL: matches shop name only (SQL also matches owner
     // firstname/lastname/combinations and applies LIMIT 50).
     async fn shops_search(&mut self, query: &str) -> TbResult<Vec<Shop>> {
+        let d = self.state();
         let q = query.to_lowercase();
-        let mut result: Vec<Shop> = self
+        let mut result: Vec<Shop> = d
             .shops
             .values()
             .filter(|s| s.name.to_lowercase().contains(&q))
@@ -98,8 +104,9 @@ impl ShopStore for MemStore {
         user_id: UserId,
         message: Option<String>,
     ) -> TbResult<ShopSubscription> {
-        let id = SubscriptionId::from(self.next_subscription_id);
-        self.next_subscription_id += 1;
+        let d = self.state_mut();
+        let id = SubscriptionId::from(d.next_subscription_id);
+        d.next_subscription_id += 1;
         let now = time::OffsetDateTime::now_utc();
         let sub = ShopSubscription {
             id,
@@ -111,12 +118,13 @@ impl ShopStore for MemStore {
             created_at: now,
             updated_at: now,
         };
-        self.subscriptions.insert(id, sub.clone());
+        d.subscriptions.insert(id, sub.clone());
         Ok(sub)
     }
 
     async fn subscription_get(&mut self, id: SubscriptionId) -> TbResult<ShopSubscription> {
-        self.subscriptions
+        let d = self.state();
+        d.subscriptions
             .get(&id)
             .cloned()
             .ok_or_else(|| Error::NotFound(format!("Subscription {} not found", id)))
@@ -127,8 +135,8 @@ impl ShopStore for MemStore {
         shop_id: ShopId,
         user_id: UserId,
     ) -> TbResult<Option<ShopSubscription>> {
-        Ok(self
-            .subscriptions
+        let d = self.state();
+        Ok(d.subscriptions
             .values()
             .find(|s| {
                 s.shop_id == shop_id
@@ -143,8 +151,8 @@ impl ShopStore for MemStore {
         shop_id: ShopId,
         user_id: UserId,
     ) -> TbResult<Option<ShopSubscription>> {
-        Ok(self
-            .subscriptions
+        let d = self.state();
+        Ok(d.subscriptions
             .values()
             .find(|s| {
                 s.shop_id == shop_id
@@ -159,7 +167,8 @@ impl ShopStore for MemStore {
         id: SubscriptionId,
         status: SubscriptionStatus,
     ) -> TbResult<ShopSubscription> {
-        match self.subscriptions.get_mut(&id) {
+        let d = self.state_mut();
+        match d.subscriptions.get_mut(&id) {
             Some(sub) => {
                 sub.status = status;
                 sub.updated_at = time::OffsetDateTime::now_utc();
@@ -175,7 +184,8 @@ impl ShopStore for MemStore {
         status: SubscriptionStatus,
         response_message: Option<String>,
     ) -> TbResult<ShopSubscription> {
-        match self.subscriptions.get_mut(&id) {
+        let d = self.state_mut();
+        match d.subscriptions.get_mut(&id) {
             Some(sub) => {
                 sub.status = status;
                 sub.response_message = response_message;
@@ -187,12 +197,14 @@ impl ShopStore for MemStore {
     }
 
     async fn subscription_delete(&mut self, id: SubscriptionId) -> TbResult<()> {
-        self.subscriptions.remove(&id);
+        let d = self.state_mut();
+        d.subscriptions.remove(&id);
         Ok(())
     }
 
     async fn subscriptions_for_shop(&mut self, shop_id: ShopId) -> TbResult<Vec<ShopSubscription>> {
-        let mut result: Vec<ShopSubscription> = self
+        let d = self.state();
+        let mut result: Vec<ShopSubscription> = d
             .subscriptions
             .values()
             .filter(|s| s.shop_id == shop_id)
@@ -203,7 +215,8 @@ impl ShopStore for MemStore {
     }
 
     async fn subscriptions_for_user(&mut self, user_id: UserId) -> TbResult<Vec<ShopSubscription>> {
-        let mut result: Vec<ShopSubscription> = self
+        let d = self.state();
+        let mut result: Vec<ShopSubscription> = d
             .subscriptions
             .values()
             .filter(|s| s.user_id == user_id)

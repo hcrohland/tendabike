@@ -86,7 +86,7 @@ impl OnboardingStatus {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct User {
     pub id: UserId,
     pub name: String,

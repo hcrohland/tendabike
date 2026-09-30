@@ -13,6 +13,20 @@
 ## Key infrastructure
 
 - **`MemStore`** (`domain/src/test_support.rs`) — in-memory store implementing all 8 subtraits + `Store`. Use `MemStore::new()` for isolated tests, `MemStore::prepopulated()` for realistic data.
+
+### Transactional semantics (issue #409)
+
+A `MemStore` is a **transaction** on an in-memory database, mirroring the production `SqlxConn` (an open Postgres transaction):
+
+- Every write lands in this transaction's working copy; reads see the working copy when it exists, otherwise the committed state. Single-transaction tests behave exactly like the old eager store.
+- `store.commit()` (the `Store` trait) merges the working copy into the database; the store is consumed, like `SqlxConn::commit`.
+- Dropping the store without committing, or `store.rollback().await?`, discards all uncommitted writes (the store stays usable, back at the committed state). `SqlxConn::rollback` consumes the store instead — a deliberate ergonomic difference.
+- `store.begin()` opens a **sibling transaction** on the same database. Siblings see only committed state: uncommitted writes of the other transaction are invisible until it commits, and vanish when it is dropped or rolled back. This is the only way to observe commit/abort.
+- Siblings with their own pending writes read their own snapshot (repeatable-read style); they do not see the other transaction's commits until they roll back or a fresh `begin()` is used. Good enough for tests — Postgres is READ COMMITTED.
+
+`store.state()` / `store.state_mut()` expose the `StoreData` working copy (all tables + id counters) for fixtures and assertions; `store.snapshot()` returns the ordered `StoreSnapshot`.
+
+**Fault injection** — `store.fail_next(Fault::X)` makes the next call of kind `X` fail with `Error::DatabaseFailure`, like a real database failure, so tests can drive a multi-write domain operation to fail mid-transaction and then `rollback()` (see `failed_attach_rolls_back_to_committed_state` in `mem_store.rs` for the pattern). Current kinds: `Fault::AttachmentCreate`, `Fault::UsageUpdate`.
 - **`TestSession`** (`domain/src/test_support.rs`) — implements the `Session` trait: `new(user_id)` (customer), `with_shop(user_id, shop_id)` (shop owner), `with_admin(user_id, true)` (admin).
 - **`part_type_ids`** (`domain/src/test_support.rs`) — constants: `BIKE=1`, `FRONT_WHEEL=2`, `TIRE=3`, `CHAIN=4`, `REAR_WHEEL=5`, etc.
 - **`fixtures`** (`domain/src/test_support/fixtures.rs`) — helpers: `fixture_basic_part()`, `fixture_attached_part()`, `fixture_assembly()`, `fixture_bike()`, `sample_purchase_date()`.
@@ -57,6 +71,9 @@ async fn my_test() -> TbResult<()> {
 - `#[tokio::test]` for async; return `TbResult<()>` so `?` propagates domain errors with context.
 - Isolated tests: `MemStore::new()` + create entities explicitly. Integration tests: `MemStore::prepopulated()` + reference existing IDs.
 - `MemStore::create(firstname, lastname, ...)` maps the `lastname` arg to `user.name` (remember: `User.name` is the lastname).
+- Store behavior tests (keying, normalization, commit/abort) live in the `mem_*.rs` files, not the entity test modules; domain tests stay domain-focused.
+- The in-memory attachment key is the database's `(part_id, attached_time)` primary key: a duplicate insert fails with `Error::DatabaseFailure`, mirroring the production store.
+- Activities come back with their offset rounded to the nearest 30 minutes (the production read rule, documented on `Activity`); assert on the instant (`unix_timestamp()`), not the offset label, unless the rounding itself is what you test.
 
 ## Snapshot regeneration
 

@@ -172,6 +172,7 @@ pub async fn fixture_assembly(
     // Find and return the main part's attachment
     let main_part_id = main_part.id;
     if let Some(main_attachment) = store
+        .state()
         .attachments
         .values()
         .find(|a| a.part_id == main_part_id)
@@ -306,6 +307,7 @@ async fn attach_test_part_at(
     if let Some(part_obj) = summary.parts.first() {
         // Re-query to get the attachment
         let all_attachments: Vec<Attachment> = store
+            .state()
             .attachments
             .values()
             .filter(|a| a.part_id == part_obj.id)
@@ -318,7 +320,8 @@ async fn attach_test_part_at(
     }
 
     // Fallback: return any attachment for the part
-    let first_att = store.attachments.values().find(|a| a.part_id == part.id);
+    let state = store.state();
+    let first_att = state.attachments.values().find(|a| a.part_id == part.id);
 
     match first_att {
         Some(att) => Ok(*att),

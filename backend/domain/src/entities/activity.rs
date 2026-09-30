@@ -58,6 +58,17 @@ use crate::*;
 pub struct ActivityId(i64);
 
 /// The database's representation of an activity.
+///
+/// **Utc-offset normalization.** The database keeps `start` as a `timestamptz`
+/// (a single instant) and the display offset in a separate `utc_offset`
+/// column. On every read the store rounds that stored offset to the nearest
+/// 30 minutes — `((offset + 900) / 1800) * 1800`, truncation toward zero for
+/// negative offsets — and re-expresses the instant in the rounded offset. The
+/// instant never moves; only the offset label does. A start of `+5:45` is
+/// returned as `+6:00`, `-5:45` as `-5:30`, and offsets already on a
+/// 30-minute boundary come back unchanged. Every store adapter applies the
+/// same rule, so domain code can rely on returned activities carrying a
+/// 30-minute-granularity offset.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Activity {
     /// The primary key

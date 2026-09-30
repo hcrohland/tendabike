@@ -1,28 +1,53 @@
 use super::*;
 use crate::{ActTypeId, Activity, ActivityId, PartId, TbResult, UserId};
-use time::OffsetDateTime;
+use time::{OffsetDateTime, UtcOffset};
+
+/// The production store keeps the start instant in a `timestamptz` and the
+/// offset in a separate column; on every read it rounds the stored offset
+/// to the nearest 30 minutes (truncation toward zero) and re-expresses the
+/// instant in that offset — the instant never moves, only the label does.
+/// This in-memory mirror applies the same rule to every activity it
+/// returns (issue #409). See also the note on [`Activity`].
+fn normalize_offset(a: &Activity) -> TbResult<Activity> {
+    let rounded = ((a.start.offset().whole_seconds() + 900) / 1800) * 1800;
+    let offset = UtcOffset::from_whole_seconds(rounded)
+        .map_err(|e| anyhow::anyhow!("Utc Offset invalid: {e}"))
+        .map_err(crate::Error::from)?;
+    let mut a = a.clone();
+    a.start = a.start.to_offset(offset);
+    Ok(a)
+}
 
 #[async_trait::async_trait]
 impl ActivityStore for MemStore {
     async fn activity_create(&mut self, act: Activity) -> TbResult<Activity> {
-        self.activities.push(act.clone());
-        Ok(act)
+        let d = self.state_mut();
+        // The row keeps the instant (and the raw offset label); the value
+        // returned is what a database read would return: rounded offset.
+        d.activities.push(act.clone());
+        normalize_offset(&act)
     }
 
     async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Option<Activity>> {
-        Ok(self.activities.iter().find(|a| a.id == aid).cloned())
+        let d = self.state();
+        d.activities
+            .iter()
+            .find(|a| a.id == aid)
+            .map(normalize_offset)
+            .transpose()
     }
 
     async fn activity_update(&mut self, new: Activity) -> TbResult<Activity> {
+        let d = self.state_mut();
         // One rule on both stores: the data fields are replaced, but the row
         // keeps its utc_offset (the new start is expressed in the stored
         // offset), device_name, and external_id; a missing row is NotFound.
-        let pos = self
+        let pos = d
             .activities
             .iter()
             .position(|a| a.id == new.id)
             .ok_or(crate::Error::NotFound("activity not found".to_string()))?;
-        let act = &mut self.activities[pos];
+        let act = &mut d.activities[pos];
         let offset = act.start.offset();
         act.user_id = new.user_id;
         act.what = new.what;
@@ -36,29 +61,31 @@ impl ActivityStore for MemStore {
         act.energy = new.energy;
         act.gear = new.gear;
         // device_name and external_id are preserved.
-        Ok(act.clone())
+        normalize_offset(act)
     }
 
     async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize> {
-        let len_before = self.activities.len();
-        self.activities.retain(|a| a.id != aid);
-        Ok(len_before - self.activities.len())
+        let d = self.state_mut();
+        let len_before = d.activities.len();
+        d.activities.retain(|a| a.id != aid);
+        Ok(len_before - d.activities.len())
     }
 
     async fn activities_delete(&mut self, activities: &[Activity]) -> TbResult<usize> {
+        let d = self.state_mut();
         let ids: Vec<ActivityId> = activities.iter().map(|a| a.id).collect();
-        let len_before = self.activities.len();
-        self.activities.retain(|a| !ids.contains(&a.id));
-        Ok(len_before - self.activities.len())
+        let len_before = d.activities.len();
+        d.activities.retain(|a| !ids.contains(&a.id));
+        Ok(len_before - d.activities.len())
     }
 
     async fn get_all(&mut self, uid: &UserId) -> TbResult<Vec<Activity>> {
-        Ok(self
-            .activities
-            .iter()
-            .filter(|a| &a.user_id == uid)
-            .cloned()
-            .collect())
+        let d = self.state();
+        let mut result = Vec::new();
+        for a in d.activities.iter().filter(|a| &a.user_id == uid) {
+            result.push(normalize_offset(a)?);
+        }
+        Ok(result)
     }
 
     async fn activities_find_by_gear_and_time(
@@ -67,13 +94,15 @@ impl ActivityStore for MemStore {
         begin: OffsetDateTime,
         end: OffsetDateTime,
     ) -> TbResult<Vec<Activity>> {
-        Ok(self
-            .activities
-            .iter()
+        let d = self.state();
+        let mut result = Vec::new();
+        for a in &d.activities {
             // One rule on both stores: begin is included, end is excluded.
-            .filter(|a| a.gear == Some(part) && a.start >= begin && a.start < end)
-            .cloned()
-            .collect())
+            if a.gear == Some(part) && a.start >= begin && a.start < end {
+                result.push(normalize_offset(a)?);
+            }
+        }
+        Ok(result)
     }
 
     async fn get_by_user_and_time(
@@ -81,13 +110,14 @@ impl ActivityStore for MemStore {
         uid: UserId,
         rstart: OffsetDateTime,
     ) -> TbResult<Activity> {
+        let d = self.state();
         // One rule on both stores (maintainer-confirmed, issue #408): the
         // activity's local wall-clock minute (its start in the stored offset,
         // floored to the minute) must equal the query's UTC wall-clock
         // minute. Zero matches → NotFound; exactly one → that activity;
         // two or more → Ambiguous, never a silent first-match.
         let query_minute = minute_floor(rstart.unix_timestamp());
-        let mut matched: Vec<Activity> = self
+        let matched: Vec<Activity> = d
             .activities
             .iter()
             .filter(|a| {
@@ -100,7 +130,7 @@ impl ActivityStore for MemStore {
             .collect();
         match matched.len() {
             0 => Err(crate::Error::NotFound("activity not found".to_string())),
-            1 => Ok(matched.pop().expect("exactly one match")),
+            1 => normalize_offset(&matched[0]),
             n => Err(crate::Error::Ambiguous(format!(
                 "user {uid} has {n} activities in the minute of {rstart}"
             ))),
@@ -113,18 +143,28 @@ impl ActivityStore for MemStore {
         types: Vec<ActTypeId>,
         partid: &PartId,
     ) -> TbResult<Vec<Activity>> {
+        let d = self.state_mut();
         let mut updated = Vec::new();
-        for act in self.activities.iter_mut() {
+        for act in d.activities.iter_mut() {
             if act.user_id == user && act.gear.is_none() && types.contains(&act.what) {
                 act.gear = Some(*partid);
                 updated.push(act.clone());
             }
         }
-        Ok(updated)
+        let mut result = Vec::new();
+        for a in updated {
+            result.push(normalize_offset(&a)?);
+        }
+        Ok(result)
     }
 
     async fn activity_get_really_all(&mut self) -> TbResult<Vec<Activity>> {
-        Ok(self.activities.clone())
+        let d = self.state();
+        let mut result = Vec::new();
+        for a in &d.activities {
+            result.push(normalize_offset(a)?);
+        }
+        Ok(result)
     }
 }
 
@@ -133,4 +173,88 @@ impl ActivityStore for MemStore {
 /// `date_trunc('minute', …)` on timestamptz.
 fn minute_floor(unix: i64) -> i64 {
     unix - unix.rem_euclid(60)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{ActTypeId, Activity, ActivityId, UserId};
+    use time::{OffsetDateTime, UtcOffset};
+
+    fn activity_at(offset_secs: i32) -> Activity {
+        Activity {
+            id: ActivityId::new(1),
+            user_id: UserId::from(1),
+            what: ActTypeId::from(1),
+            name: "Ride".to_string(),
+            start: OffsetDateTime::from_unix_timestamp(1718430600)
+                .unwrap()
+                .to_offset(UtcOffset::from_whole_seconds(offset_secs).unwrap()),
+            duration: 3600,
+            time: None,
+            distance: None,
+            climb: None,
+            descend: None,
+            energy: None,
+            gear: None,
+            device_name: None,
+            external_id: None,
+        }
+    }
+
+    /// The production store keeps the start instant in a `timestamptz` and
+    /// the offset in 30-minute buckets: every activity it returns has its
+    /// offset rounded to the nearest 30 minutes. The in-memory store must
+    /// apply the same rule (issue #409): a +5:45 offset comes back as
+    /// +6:00, the instant unchanged.
+    #[tokio::test]
+    async fn activity_offsets_normalized_to_30_minutes() -> TbResult<()> {
+        let mut store = MemStore::new();
+
+        let created = store.activity_create(activity_at(20_700)).await?;
+        assert_eq!(
+            created.start.offset().whole_seconds(),
+            21_600,
+            "+5:45 must round to +6:00"
+        );
+        assert_eq!(
+            created.start.unix_timestamp(),
+            1718430600,
+            "the instant must not move"
+        );
+
+        let read = store
+            .activity_read_by_id(created.id)
+            .await?
+            .expect("created activity readable");
+        assert_eq!(read.start.offset().whole_seconds(), 21_600);
+        Ok(())
+    }
+
+    /// Negative offsets round toward zero the same way the database does:
+    /// -5:45 becomes -5:30 (issue #409).
+    #[tokio::test]
+    async fn activity_negative_offsets_round_toward_zero() -> TbResult<()> {
+        let mut store = MemStore::new();
+
+        let created = store.activity_create(activity_at(-20_700)).await?;
+        assert_eq!(
+            created.start.offset().whole_seconds(),
+            -19_800,
+            "-5:45 must round to -5:30"
+        );
+        assert_eq!(created.start.unix_timestamp(), 1718430600);
+        Ok(())
+    }
+
+    /// Offsets already on a 30-minute boundary are left untouched (issue
+    /// #409).
+    #[tokio::test]
+    async fn activity_offsets_on_boundary_unchanged() -> TbResult<()> {
+        let mut store = MemStore::new();
+
+        let created = store.activity_create(activity_at(3_600)).await?; // +1:00
+        assert_eq!(created.start.offset().whole_seconds(), 3_600);
+        Ok(())
+    }
 }
