@@ -103,6 +103,14 @@ async fn pool() -> Option<tb_sqlx::DbPool> {
     tb_sqlx::DbPool::new(&url).await.ok()
 }
 
+/// The suite's local mapping of `sqlx::Error` to the domain `Error`:
+/// everything becomes `Error::DatabaseFailure`. The crate's `into_domain`
+/// (`src/lib.rs`) also maps `RowNotFound` to `Error::NotFound`, but it is
+/// crate-private and unreachable from this integration test — a separate
+/// crate that can only build errors from the public `tb_domain::Error`
+/// variants — and the raw statements this maps (`COUNT`, `TRUNCATE`,
+/// `INSERT`, `setval` in `seed` / `load_fixture`) fail only for
+/// database-failure reasons, so the narrower mapping suffices.
 fn db_err(err: sqlx::Error) -> tb_domain::Error {
     tb_domain::Error::DatabaseFailure(err.into())
 }

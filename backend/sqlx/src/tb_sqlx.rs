@@ -39,6 +39,19 @@ impl<'c> SqlxConn<'c> {
     }
 
     /// Roll back the transaction and return the connection to the pool.
+    ///
+    /// Consumes the `SqlxConn`; the in-memory twin `MemStore::rollback`
+    /// keeps the store usable — a deliberate ergonomic difference (see
+    /// `backend/docs/tests/domain.md`, "Transactional semantics (issue
+    /// #409)").
+    ///
+    /// `pub` because `SqlxConn` is a public type: the store-seam integration
+    /// suite (`tests/store_seam.rs`) is a separate crate that can only reach
+    /// the public API. Nothing in the workspace calls it yet — production
+    /// code commits, and the seam suite rolls back implicitly by dropping
+    /// the `SqlxConn` (a dropped `PgTransaction` rolls back) — but it stays
+    /// `pub` as the explicit teardown for a transaction an external caller
+    /// does not commit.
     pub async fn rollback(self) -> TbResult<()> {
         self.into_inner()
             .rollback()
