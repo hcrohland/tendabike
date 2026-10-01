@@ -47,7 +47,7 @@
 //!
 //! The suite is ignored by default: every test carries
 //! `#[ignore]`, so a plain `cargo test --workspace` run (no database)
-//! reports the 25 tests ignored with that reason and executes none of them,
+//! reports the 25 tests ignored and executes none of them,
 //! and the existing in-memory suites stay green. It runs with
 //! `cargo test -- --include-ignored` (the `--` matters: `--include-ignored`
 //! is a libtest flag, not a cargo flag), and it fails loudly whenever it

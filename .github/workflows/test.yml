@@ -68,7 +68,7 @@ jobs:
       - name: Format check
         run: cargo fmt --check
       # -- --include-ignored runs the ignored store-seam suite (issue
-      # #417); the other test binaries have no ignored tests, so this
+      #417); the other test binaries have no ignored tests, so this
       # changes nothing for the in-memory suites.
       - name: Test
         run: cargo test --release -- --include-ignored
