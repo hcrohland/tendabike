@@ -10,17 +10,18 @@
 
 ## The store-seam integration suite (`tests/store_seam.rs`)
 
-The one non-in-memory suite (issue #406). It loads the standard prepopulated fixture — the same snapshot the `tb_domain` in-memory suite runs against — into a real Postgres database, drives a representative set of domain operations through `SqlxConn` (attachment attach, merge, and delete; activity upsert, update, delete, and lookup; the user summary read), and asserts the same domain-level results the in-memory suite asserts. The contract — one rule per operation, verified on both store adapters, with the Postgres behavior as the source of truth — is recorded in [`docs/agents/domain-flow.md`](../../../docs/agents/domain-flow.md) ("The store seam").
+The one non-in-memory suite (issue #406). It loads the standard prepopulated fixture — the same snapshot the `tb_domain` in-memory suite runs against — into a real Postgres scratch database it manages itself, drives a representative set of domain operations through `SqlxConn` (attachment attach, merge, and delete; activity upsert, update, delete, and lookup; the user summary read), and asserts the same domain-level results the in-memory suite asserts. The contract — one rule per operation, verified on both store adapters, with the Postgres behavior as the source of truth — is recorded in [`docs/agents/domain-flow.md`](../../../docs/agents/domain-flow.md) ("The store seam").
 
-- **Self-skip.** With no `DATABASE_URL` configured (the plain `rust` CI job, and a local machine without a database) every test skips itself, so `SQLX_OFFLINE=true cargo test --workspace` stays green without a database.
-- **Fail-fast.** `database_is_reachable` does not skip when `DATABASE_URL` is set: it fails loudly when the database is unreachable or does not come up within 10s — the required `postgres-seam` job sets the variable unconditionally, so it cannot pass with every test silently skipped against a dead Postgres.
-- **CI.** The required `postgres-seam` job in `.github/workflows/test.yml` (issue #411) runs the suite against a `postgres:16` service with `SQLX_OFFLINE=true`: the service database is fresh and gets its schema from the pool's migrations at runtime, so compile-time query checks must use the committed `.sqlx` offline cache. A red seam blocks the PR.
-- **Determinism.** All tests run serialized against one database: a one-time seed truncates and loads the fixture (committed once), then each test opens its own transaction with the sequences reset just past the fixture ids and rolls back, so every test starts from exactly the prepopulated state.
+- **Self-skip.** With no `SCRATCH_DATABASE_URL` configured (the plain `rust` CI job, and a local machine without a scratch database) every test skips itself, so `SQLX_OFFLINE=true cargo test --workspace` stays green without a database.
+- **Fail-fast.** `database_is_reachable` does not skip when `SCRATCH_DATABASE_URL` is set: it fails loudly when the scratch database cannot be prepared within 10s — the required `postgres-seam` job sets the variable unconditionally, so it cannot pass with every test silently skipped against a dead Postgres.
+- **Scratch lifecycle.** On first use the suite force-drops any database a previous run left behind, creates a fresh one, runs the migrations through the same `DbPool::new` the app uses, and seeds the fixture; it drops nothing at the end of a run, so every run — including a rerun after a failure — starts from the same clean slate. The URL names the scratch database, and its user needs createdb rights on that server.
+- **CI.** The required `postgres-seam` job in `.github/workflows/test.yml` (issue #411) runs the suite against a `postgres:16` service with `SQLX_OFFLINE=true`: the suite creates the scratch database at runtime and it gets its schema from the pool's migrations, so compile-time query checks must use the committed `.sqlx` offline cache. A red seam blocks the PR.
+- **Determinism.** All tests run serialized against one freshly created scratch database: a one-time seed loads the fixture into it (committed once; the database is empty by construction, so no truncate is needed), then each test opens its own transaction with the sequences reset just past the fixture ids and rolls back, so every test starts from exactly the prepopulated state.
 
-Run it locally from the repo root (the repo root `.env` supplies `DATABASE_URL`; without it the suite skips itself):
+The suite never reads `DATABASE_URL` — that variable points at the developer's working database, and the old `DATABASE_URL`-based design seeded it in place, destroying real data on a local run. Run it locally from the repo root with a disposable database (`backend/sqlx/.env` may supply `SCRATCH_DATABASE_URL` too; without it the suite skips itself):
 
 ```bash
-DATABASE_URL=… cargo test -p tb_sqlx --test store_seam
+SCRATCH_DATABASE_URL=postgres://user@localhost/tendabike_test cargo test -p tb_sqlx --test store_seam
 ```
 
 ## Gotchas

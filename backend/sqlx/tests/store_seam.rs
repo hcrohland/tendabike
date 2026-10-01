@@ -29,28 +29,38 @@
 //! test in this suite asserts the one rule per operation that both stores
 //! apply.
 //!
-//! The suite is deterministic: all tests run serialized against one database;
-//! a one-time seed loads the fixture, and every test opens a transaction
-//! with the sequences reset just past the fixture ids and rolls back, so
-//! each test starts from exactly the prepopulated state.
+//! The suite is deterministic: all tests run serialized against one freshly
+//! created scratch database; a one-time seed loads the fixture into it, and
+//! every test opens a transaction with the sequences reset just past the
+//! fixture ids and rolls back, so each test starts from exactly the
+//! prepopulated state.
 //!
-//! The suite requires a disposable database reachable at `DATABASE_URL`
-//! (falling back to `.env`). When no `DATABASE_URL` is configured, every
-//! test skips itself, so the plain `cargo test --workspace` job (no
-//! database) and the existing in-memory suites stay green.
+//! The suite manages its scratch database at `SCRATCH_DATABASE_URL` (falling
+//! back to `.env`): on first use it force-drops any database left behind by
+//! a previous run, creates a fresh one via `MigrateDatabase`, runs the
+//! migrations, and seeds the fixture; nothing is dropped at the end of the
+//! run, so the next run starts from the same clean slate. The URL's user
+//! must hold createdb rights on that server. When no `SCRATCH_DATABASE_URL`
+//! is configured, every test skips itself, so the plain
+//! `cargo test --workspace` job (no database) and the existing in-memory
+//! suites stay green. The suite must never read `DATABASE_URL`, which points
+//! at the developer's working database: the original `DATABASE_URL`-based
+//! design seeded that database in place, and a local run destroyed real
+//! data.
 //!
 //! The CI job that runs this suite against a real Postgres service is the
 //! required `postgres-seam` job in `.github/workflows/test.yml` (issue
 //! #411): the store adapters are unified on the database's rules (#407-
 //! #410), so a red seam blocks the PR. `database_is_reachable` fails the
-//! job loudly when the database cannot be reached, instead of letting every
-//! test silently skip itself. The seam contract — one rule per operation,
-//! verified on both store adapters — is recorded in
+//! job loudly when the scratch database cannot be prepared, instead of
+//! letting every test silently skip itself. The seam contract — one rule
+//! per operation, verified on both store adapters — is recorded in
 //! `docs/agents/domain-flow.md`.
 
 use std::collections::HashSet;
 use std::time::Duration;
 
+use sqlx::migrate::MigrateDatabase;
 use tb_domain::test_support::{MemStore, StoreSnapshot, TestSession, part_type_ids};
 use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, Attachment, AttachmentStore, MAX_TIME, Part,
@@ -64,11 +74,25 @@ use uuid::Uuid;
 use part_type_ids::{BIKE, CHAIN, FRONT_WHEEL, TIRE};
 
 // ---------------------------------------------------------------------------
-// Plumbing: shared pool, serialization, one-time fixture seed
+// Plumbing: scratch-database lifecycle, serialization, one-time fixture seed
 // ---------------------------------------------------------------------------
 
 static LOCK: Mutex<()> = Mutex::const_new(());
-static SEEDED: OnceCell<FixtureMarks> = OnceCell::const_new();
+static SETUP: OnceCell<Setup> = OnceCell::const_new();
+
+/// The bound for each scratch-database create/drop step: long enough for a
+/// slow disk, short enough that a blackholed endpoint fails in seconds.
+const SETUP_STEP_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// The run's one-time scratch-database setup, shared by every test.
+enum Setup {
+    /// The fixture loaded and the sequences set; the high-water marks for
+    /// the per-test sequence reset.
+    Ready(FixtureMarks),
+    /// The scratch database could not be prepared; the error is what
+    /// `database_is_reachable` reports.
+    Failed(String),
+}
 
 /// The fixture's id high-water marks, derived from the loaded snapshot so
 /// the database's sequences continue where the fixture left off — the same
@@ -83,14 +107,20 @@ struct FixtureMarks {
     users: i32,
 }
 
-/// The database url from the environment or `.env`, if any.
-fn database_url() -> Option<String> {
+/// The scratch database url from the environment or `.env`, if any. The URL
+/// names the scratch database itself (see `setup`); the user it connects as
+/// must hold createdb rights on that server.
+///
+/// This is the only database variable the suite reads. Tests must never read
+/// `DATABASE_URL`: it points at the developer's working database, and a
+/// suite that creates, truncates, or drops against it destroys real data.
+fn scratch_url() -> Option<String> {
     let _ = dotenvy::dotenv();
-    std::env::var("DATABASE_URL").ok()
+    std::env::var("SCRATCH_DATABASE_URL").ok()
 }
 
-/// A fresh pool for this test's runtime, or `None` when no `DATABASE_URL` is
-/// configured (the test then skips itself).
+/// A fresh pool for this test's runtime, or `None` when the pool cannot be
+/// built (the test then skips itself).
 ///
 /// Each `#[tokio::test]` runs on its own runtime, so a pool must never outlive
 /// the runtime that created it: the pool's background tasks (connection
@@ -98,9 +128,53 @@ fn database_url() -> Option<String> {
 /// leaves the pool's slot accounting in a state where the next runtime's
 /// `acquire` waits the full acquire timeout. Every test therefore opens its
 /// own pool and drops it with the test.
-async fn pool() -> Option<tb_sqlx::DbPool> {
-    let url = database_url()?;
-    tb_sqlx::DbPool::new(&url).await.ok()
+async fn pool(url: &str) -> Option<tb_sqlx::DbPool> {
+    tb_sqlx::DbPool::new(url).await.ok()
+}
+
+/// Bound one scratch-database step so a blackholed endpoint fails in seconds
+/// instead of hanging the run.
+async fn bounded<T>(
+    fut: impl std::future::Future<Output = Result<T, sqlx::Error>>,
+) -> Result<T, String> {
+    match tokio::time::timeout(SETUP_STEP_TIMEOUT, fut).await {
+        Ok(Ok(value)) => Ok(value),
+        Ok(Err(err)) => Err(err.to_string()),
+        Err(_) => Err(format!("timed out after {SETUP_STEP_TIMEOUT:?}")),
+    }
+}
+
+/// Prepare the scratch database once per run: force-drop any database left
+/// behind by a previous run (nothing is dropped at the end of a run), create
+/// a fresh one via `MigrateDatabase`, run the migrations through the same
+/// `DbPool::new` the app uses, and load the standard fixture.
+///
+/// Every step targets only the database named in `url` (the create/drop pair
+/// from the server's maintenance database, the pool and the seed from the
+/// scratch database itself): the suite never reaches any other database on
+/// the machine.
+async fn setup(url: &str) -> Setup {
+    let exists = match bounded(sqlx::Postgres::database_exists(url)).await {
+        Ok(exists) => exists,
+        Err(err) => return Setup::Failed(format!("could not check the scratch database: {err}")),
+    };
+    if exists {
+        if let Err(err) = bounded(sqlx::Postgres::force_drop_database(url)).await {
+            return Setup::Failed(format!(
+                "could not drop the leftover scratch database: {err}"
+            ));
+        }
+    }
+    if let Err(err) = bounded(sqlx::Postgres::create_database(url)).await {
+        return Setup::Failed(format!("could not create the scratch database: {err}"));
+    }
+    match tb_sqlx::DbPool::new(url).await {
+        Ok(pool) => match seed(&pool).await {
+            Ok(marks) => Setup::Ready(marks),
+            Err(err) => Setup::Failed(format!("could not seed the scratch database: {err}")),
+        },
+        Err(err) => Setup::Failed(format!("could not connect to the scratch database: {err}")),
+    }
 }
 
 /// The suite's local mapping of `sqlx::Error` to the domain `Error`:
@@ -108,8 +182,8 @@ async fn pool() -> Option<tb_sqlx::DbPool> {
 /// (`src/lib.rs`) also maps `RowNotFound` to `Error::NotFound`, but it is
 /// crate-private and unreachable from this integration test — a separate
 /// crate that can only build errors from the public `tb_domain::Error`
-/// variants — and the raw statements this maps (`COUNT`, `TRUNCATE`,
-/// `INSERT`, `setval` in `seed` / `load_fixture`) fail only for
+/// variants — and the raw statements this maps (`INSERT` in
+/// `load_fixture`, `setval` in `seed` / `reset_sequences`) fail only for
 /// database-failure reasons, so the narrower mapping suffices.
 fn db_err(err: sqlx::Error) -> tb_domain::Error {
     tb_domain::Error::DatabaseFailure(err.into())
@@ -126,20 +200,28 @@ struct Seam {
 }
 
 /// Open a fresh fixture transaction for a test, or `None` when this machine
-/// has no `DATABASE_URL` (the test then skips itself).
+/// has no `SCRATCH_DATABASE_URL` (the test then skips itself).
+///
+/// The lock first: the one-time scratch-database setup and the pool
+/// connection (and its no-op migration run) are taken while the lock is
+/// held, so tests never contend for the database.
 ///
 /// The pool is local to this test: it is dropped when the `Seam` is built,
 /// together with the test's runtime — the transaction keeps the pool alive
 /// internally through its own `Arc` handle until it is rolled back.
 async fn seam() -> Option<Seam> {
-    // The lock first: the pool connection (and its no-op migration run) is
-    // taken while the lock is held, so tests never contend for the database.
     let lock = LOCK.lock().await;
-    let pool = pool().await?;
-    let marks = SEEDED
-        .get_or_try_init(|| async { seed(&pool).await })
-        .await
-        .ok()?;
+    let Some(url) = scratch_url() else {
+        eprintln!("store-seam: SCRATCH_DATABASE_URL is not set — skipping");
+        return None;
+    };
+    // The one-time setup runs inside the lock. A failure is recorded in the
+    // cell for `database_is_reachable` to report loudly; the other tests
+    // skip, so exactly one red is visible in the job.
+    let Setup::Ready(marks) = SETUP.get_or_init(|| setup(&url)).await else {
+        return None;
+    };
+    let pool = pool(&url).await?;
     let mut store = pool.begin().await.ok()?;
     reset_sequences(&mut store, marks).await.ok()?;
     Some(Seam { store, _lock: lock })
@@ -148,7 +230,7 @@ async fn seam() -> Option<Seam> {
 
 /// Run a test body against a fresh fixture transaction: opens the seam
 /// (skipping with `Ok(())` when `seam()` yields `None`, because this machine
-/// has no `DATABASE_URL`), hands the store to the body by value, and returns
+/// has no `SCRATCH_DATABASE_URL`), hands the store to the body by value, and returns
 /// the body's result. The body never commits, so the transaction is rolled
 /// back when the body's future drops; the `Seam`'s lock stays held until
 /// that drop, so the suite still runs serialized.
@@ -162,48 +244,16 @@ where
     f(store).await
 }
 
-/// Row for the pre-truncate state report.
-#[derive(sqlx::FromRow)]
-struct PreTruncate {
-    users: i64,
-    parts: i64,
-}
-
-/// Truncate every table and load the standard prepopulated fixture (the same
-/// snapshot the in-memory suite uses), then point the sequences just past
-/// the fixture ids, returning the fixture's high-water marks for the per-test
-/// sequence reset. The fixture is committed once; every test afterwards
-/// works in its own transaction and rolls back.
+/// Load the standard prepopulated fixture (the same snapshot the in-memory
+/// suite uses) into the scratch database — freshly created by `setup`, so it
+/// is empty by construction and needs no truncate — then point the sequences
+/// just past the fixture ids, returning the fixture's high-water marks for
+/// the per-test sequence reset. The fixture is committed once; every test
+/// afterwards works in its own transaction and rolls back.
 async fn seed(pool: &tb_sqlx::DbPool) -> tb_domain::TbResult<FixtureMarks> {
     let mut tx = pool.begin().await?;
 
     let snap = MemStore::prepopulated().snapshot();
-
-    // Report the pre-truncate state so a run against a database that holds
-    // more than the standard fixture is visible in the logs.
-    let pre = sqlx::query_as::<_, PreTruncate>(
-        "SELECT (SELECT count(*) FROM users) AS users, (SELECT count(*) FROM parts) AS parts",
-    )
-    .fetch_one(&mut **tx)
-    .await
-    .map_err(db_err)?;
-    eprintln!(
-        "store-seam: seeding; pre-truncate state users={} parts={} \
-        (expected {} users, {} parts)",
-        pre.users,
-        pre.parts,
-        snap.users.len(),
-        snap.parts.len()
-    );
-
-    sqlx::query(
-        "TRUNCATE users, parts, usages, attachments, activities, services,
-                 service_plans, shops, shop_subscriptions, part_notes
-         RESTART IDENTITY CASCADE",
-    )
-    .execute(&mut **tx)
-    .await
-    .map_err(db_err)?;
 
     load_fixture(&mut tx, &snap).await?;
 
@@ -414,36 +464,44 @@ async fn create_part(
 // Availability
 // ---------------------------------------------------------------------------
 
-/// The `postgres-seam` CI job sets `DATABASE_URL` unconditionally, so
-/// whenever this test runs the database must actually be reachable: it
-/// fails the required job loudly instead of letting every other test
-/// silently skip itself against an unreachable Postgres (a pool failure is
-/// a skip for them, and the job would pass with nothing verified). The
-/// bound makes a blackholed endpoint fail in seconds instead of burning
-/// the pool's 30-second acquire timeout per test.
+/// The `postgres-seam` CI job sets `SCRATCH_DATABASE_URL` unconditionally,
+/// so whenever this test runs the scratch database must actually be
+/// preparable (dropped if a previous run left it behind, created, migrated,
+/// and seeded): it fails the required job loudly instead of letting every
+/// other test silently skip itself against an unreachable Postgres (a setup
+/// failure is a skip for them, and the job would pass with nothing
+/// verified). The bound makes a blackholed endpoint fail in seconds instead
+/// of burning the pool's 30-second acquire timeout per test.
 ///
-/// With no `DATABASE_URL` — the DB-less `rust` job and local machines
-/// without a database — it skips itself like the rest of the suite.
+/// With no `SCRATCH_DATABASE_URL` — the DB-less `rust` job and local
+/// machines without a scratch database — it skips itself like the rest of
+/// the suite.
 #[tokio::test]
 async fn database_is_reachable() {
-    let Some(url) = database_url() else {
+    let Some(url) = scratch_url() else {
         return;
     };
-    let pool = match tokio::time::timeout(Duration::from_secs(10), tb_sqlx::DbPool::new(&url)).await
-    {
-        Ok(Ok(pool)) => pool,
-        Ok(Err(e)) => panic!(
-            "DATABASE_URL is set ({url}) but the database is unreachable or its \
-             migrations failed: {e} — the postgres-seam job must fail loudly, not \
+    // Under the lock, like the other tests: the one-time setup runs exactly
+    // once per run, and this test is where its failure is reported. The
+    // guard's only use of the lock is to hold it for the setup, hence the
+    // underscore.
+    let _lock = LOCK.lock().await;
+    let outcome =
+        tokio::time::timeout(Duration::from_secs(10), SETUP.get_or_init(|| setup(&url))).await;
+    match outcome {
+        Ok(Setup::Ready(_)) => {}
+        Ok(Setup::Failed(err)) => panic!(
+            "SCRATCH_DATABASE_URL is set ({url}) but the scratch database could \
+             not be prepared: {err} — the postgres-seam job must fail loudly, not \
              silently skip"
         ),
         Err(_) => panic!(
-            "DATABASE_URL is set ({url}) but the database did not become reachable \
-             within 10s — is the Postgres service running? the postgres-seam job \
-             must fail loudly, not silently skip"
+            "SCRATCH_DATABASE_URL is set ({url}) but the scratch database did \
+             not become ready within 10s — is the Postgres service running? the \
+             postgres-seam job must fail loudly, not silently skip"
         ),
-    };
-    drop(pool);
+    }
+    // `_lock` is dropped here, with this test's runtime.
 }
 
 // ---------------------------------------------------------------------------

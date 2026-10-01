@@ -46,8 +46,8 @@ jobs:
   # Store seam integration suite (issue #406) against a real Postgres.
   # Required gate: the two store adapters are unified on the database's
   # rules (#407-#410), so a red seam blocks the PR (issue #411). The suite
-  # skips itself when no DATABASE_URL is configured, which only happens
-  # outside this job — it always sets one below.
+  # skips itself when no SCRATCH_DATABASE_URL is configured, which only
+  # happens outside this job — it always sets one below.
   postgres-seam:
     runs-on: ubuntu-latest
     services:
@@ -56,7 +56,6 @@ jobs:
         env:
           POSTGRES_USER: tendabike
           POSTGRES_PASSWORD: tendabike
-          POSTGRES_DB: tendabike
         ports:
           - 5432:5432
         options: >-
@@ -65,10 +64,14 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgres://tendabike:tendabike@localhost:5432/tendabike
-      # Compile against the committed .sqlx offline cache: the service
-      # database is fresh and only gets its schema when the pool runs the
-      # migrations at runtime, so a live compile-time query check would fail.
+      # The suite force-drops any database left behind by a previous run,
+      # then creates and seeds this scratch database itself; the service
+      # needs no POSTGRES_DB.
+      SCRATCH_DATABASE_URL: postgres://tendabike:tendabike@localhost:5432/tendabike_test
+      # Compile against the committed .sqlx offline cache: the scratch
+      # database is created by the suite at runtime and only gets its
+      # schema when the pool runs the migrations, so a live compile-time
+      # query check would fail.
       SQLX_OFFLINE: "true"
     steps:
       - uses: actions/checkout@v6
