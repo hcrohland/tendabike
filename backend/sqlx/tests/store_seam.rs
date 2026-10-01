@@ -40,10 +40,12 @@
 //! a previous run, creates a fresh one via `MigrateDatabase`, runs the
 //! migrations, and seeds the fixture; nothing is dropped at the end of the
 //! run, so the next run starts from the same clean slate. The URL's user
-//! must hold createdb rights on that server. The suite must never read
-//! `DATABASE_URL`, which points at the developer's working database: the
-//! original `DATABASE_URL`-based design seeded that database in place, and a
-//! local run destroyed real data.
+//! must hold createdb rights on that server. The suite never connects to
+//! `DATABASE_URL` or `DB_URL`, which point at the developer's working
+//! database: the original `DATABASE_URL`-based design seeded that database
+//! in place, and a local run destroyed real data. It reads the two variables
+//! only to refuse a collision — a scratch URL that equals either fails the
+//! run instead of dropping real data.
 //!
 //! The suite is ignored by default: every test carries
 //! `#[ignore]`, so a plain `cargo test --workspace` run (no database)
@@ -133,12 +135,38 @@ struct FixtureMarks {
 /// names the scratch database itself (see `setup`); the user it connects as
 /// must hold createdb rights on that server.
 ///
-/// This is the only database variable the suite reads. Tests must never read
-/// `DATABASE_URL`: it points at the developer's working database, and a
-/// suite that creates, truncates, or drops against it destroys real data.
+/// This is the only database variable the suite *uses*. It also reads
+/// `DATABASE_URL` and `DB_URL` only to refuse a collision: if the scratch
+/// URL equals either, it panics — both point at the developer's working
+/// database, and this suite force-drops and re-seeds whatever database it is
+/// pointed at. Neither variable is ever used as a connection target.
 fn scratch_url() -> Option<String> {
     let _ = dotenvy::dotenv();
-    std::env::var("SCRATCH_DATABASE_URL").ok()
+    let Ok(url) = std::env::var("SCRATCH_DATABASE_URL") else {
+        return None;
+    };
+    // Refuse a scratch URL that is one of the working databases: a run
+    // against it would force-drop and re-seed real data. Exact string
+    // equality on the raw values; an empty value counts as absent, so there
+    // is nothing to collide with.
+    let mut collisions = vec![];
+    for var in ["DATABASE_URL", "DB_URL"] {
+        if let Ok(other) = std::env::var(var) {
+            if !other.is_empty() && other == url {
+                collisions.push(var);
+            }
+        }
+    }
+    if !collisions.is_empty() {
+        panic!(
+            "SCRATCH_DATABASE_URL matches {} ({url}) — the seam suite \
+             force-drops and re-seeds its scratch database; refusing to run \
+             it against the working database. Set SCRATCH_DATABASE_URL to a \
+             disposable database.",
+            collisions.join(" and ")
+        );
+    }
+    Some(url)
 }
 
 /// A fresh pool for this test's runtime, or the error string when the pool
