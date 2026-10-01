@@ -46,8 +46,7 @@
 //! local run destroyed real data.
 //!
 //! The suite is ignored by default: every test carries
-//! `#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres
-//! database)"]`, so a plain `cargo test --workspace` run (no database)
+//! `#[ignore]`, so a plain `cargo test --workspace` run (no database)
 //! reports the 25 tests ignored with that reason and executes none of them,
 //! and the existing in-memory suites stay green. It runs with
 //! `cargo test -- --include-ignored` (the `--` matters: `--include-ignored`
@@ -520,7 +519,7 @@ async fn create_part(
 /// database — it fails with the no-URL message like the other tests; the
 /// `#[ignore]` attribute keeps it out of plain runs.
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn database_is_reachable() {
     let Some(url) = scratch_url() else {
         panic!("{NO_SCRATCH_URL}");
@@ -559,7 +558,7 @@ fn fixture() -> StoreSnapshot {
 
 /// The prepopulated fixture loads back from the database unchanged.
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn fixture_roundtrip() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let snap = fixture();
@@ -633,7 +632,7 @@ async fn fixture_roundtrip() -> tb_domain::TbResult<()> {
 
 /// The user summary read returns the full fixture content.
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn user_summary_read() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let summary = UserId::from(1).get_summary(None, &mut store).await?;
@@ -695,7 +694,7 @@ async fn user_summary_read() -> tb_domain::TbResult<()> {
 /// still-attached row and bumps the part's last_used (mirrors
 /// `attach_assembly_attaches_part_to_gear`).
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn attach_new_part_to_empty_hook() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let session = test_session();
@@ -735,7 +734,7 @@ async fn attach_new_part_to_empty_hook() -> tb_domain::TbResult<()> {
 /// itself on the bike is stored against the top-level gear (mirrors
 /// `attach_assembly_resolves_mounted_gear_to_top_level`).
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn attach_resolves_mounted_gear_to_top_level() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let session = test_session();
@@ -782,7 +781,7 @@ async fn attach_resolves_mounted_gear_to_top_level() -> tb_domain::TbResult<()> 
 /// the row: exactly one still-attached row remains (mirrors
 /// `attach_assembly_auto_detaches_and_reattaches_same_part`).
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn attach_reattach_at_own_time() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let session = test_session();
@@ -817,7 +816,7 @@ async fn attach_reattach_at_own_time() -> tb_domain::TbResult<()> {
 /// Attaching a part detaches the different part already occupying the hook
 /// (mirrors `attach_assembly_detaches_predecessor_on_gear`).
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn attach_detaches_predecessor() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let session = test_session();
@@ -871,7 +870,7 @@ async fn attach_detaches_predecessor() -> tb_domain::TbResult<()> {
 /// Re-attaching a part at the time its row ended continues the same row —
 /// the adjacent-merge (unified rule #407, one rule on both stores).
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn attach_merge_adjacent_with_previous() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let session = test_session();
@@ -916,7 +915,7 @@ async fn attach_merge_adjacent_with_previous() -> tb_domain::TbResult<()> {
 /// database's key — so a stale gear field in the argument does not change
 /// which row is deleted (unified rule #407).
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn attachment_delete_identity() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let bike1 = create_part("Bike 1", "TendaBike", "Standard", BIKE, &mut store).await;
@@ -948,7 +947,7 @@ async fn attachment_delete_identity() -> tb_domain::TbResult<()> {
 /// at the same hook, attached later — the part's own later rows never count
 /// (unified rule #407).
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn attachment_find_successor() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
@@ -989,7 +988,7 @@ async fn attachment_find_successor() -> tb_domain::TbResult<()> {
 /// at this gear and hook that ended exactly at the query time — the
 /// adjacent-merge trigger (unified rule #407).
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn attachment_find_part_attached_already() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
@@ -1027,7 +1026,7 @@ async fn attachment_find_part_attached_already() -> tb_domain::TbResult<()> {
 /// `find_part_attached_already` for a part that was never attached is
 /// `None` on both stores (no divergence).
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn find_attached_already_never_attached() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
@@ -1051,7 +1050,7 @@ async fn find_attached_already_never_attached() -> tb_domain::TbResult<()> {
 /// re-derives its usage from the activities inside the new window (mirrors
 /// `detach_assembly_recalculates_usage_excluding_activity_after_detach`).
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn detach_recuts_and_recalculates_usage() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let session = test_session();
@@ -1154,7 +1153,7 @@ async fn detach_recuts_and_recalculates_usage() -> tb_domain::TbResult<()> {
 /// Detaching a part that is not attached is a not-found error (mirrors
 /// `detach_assembly_api_returns_error_if_not_attached`).
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn detach_not_attached_is_not_found() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let session = test_session();
@@ -1175,7 +1174,7 @@ async fn detach_not_attached_is_not_found() -> tb_domain::TbResult<()> {
 /// Disposing a loose part sets its disposed timestamp (mirrors
 /// `dispose_assembly_disposes_part`).
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn dispose_part() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let session = test_session();
@@ -1202,7 +1201,7 @@ async fn dispose_part() -> tb_domain::TbResult<()> {
 /// The in-memory twin is `activity_create_rejects_duplicate_id` in
 /// `mem_activity.rs`.
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn activity_create_rejects_duplicate_id() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let ride = ride(100, "Ride", activity_start(), None);
@@ -1238,7 +1237,7 @@ async fn activity_create_rejects_duplicate_id() -> tb_domain::TbResult<()> {
 /// and every part attached to it (mirrors
 /// `activity_upsert_creates_new_accounts_bike_and_attached_parts`).
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn activity_upsert_creates_and_accounts() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let bike = PartId::from(1);
@@ -1303,7 +1302,7 @@ async fn activity_upsert_creates_and_accounts() -> tb_domain::TbResult<()> {
 /// activity reported zeroed (mirrors
 /// `activity_delete_reverts_bike_and_attached_part_usage`).
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn activity_delete_reverts_usage() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let bike = PartId::from(1);
@@ -1382,7 +1381,7 @@ async fn activity_delete_reverts_usage() -> tb_domain::TbResult<()> {
 /// taken, and both stores reject a duplicate id — the database's primary
 /// key, mirrored in the in-memory store (issue #405).
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn activity_update_returns_summary() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let act = Activity {
@@ -1409,7 +1408,7 @@ async fn activity_update_returns_summary() -> tb_domain::TbResult<()> {
 /// `utc_offset`, `device_name`, and `external_id` — the fields a frontend
 /// round-trip can lose; one rule on both stores (#408 rule 1).
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn activity_update_preserves_fields() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         // A ride stored at 22:13:20+01:00, with device metadata.
@@ -1470,7 +1469,7 @@ async fn activity_update_preserves_fields() -> tb_domain::TbResult<()> {
 /// Listing activities in a time range: `begin` is included, `end` is
 /// excluded — one rule on both stores (#408 rule 2).
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn activity_find_range_boundary() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let bike = create_part("Road Bike", "Trek", "Domane", BIKE, &mut store).await;
@@ -1513,7 +1512,7 @@ async fn activity_find_range_boundary() -> tb_domain::TbResult<()> {
 /// activity, and the maintainer-confirmed duplicate rule applies: two or
 /// more activities in the same minute is an Error::Ambiguous.
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn activity_get_by_user_and_time() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let start = datetime!(2024-02-01 12:00:30 UTC);
@@ -1587,7 +1586,7 @@ async fn activity_get_by_user_and_time() -> tb_domain::TbResult<()> {
 /// unique gear types (mirrors the in-memory `activity_get_all` /
 /// `activity_categories` tests).
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn activity_get_all_and_categories() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let acts = store.get_all(&UserId::from(1)).await?;
@@ -1616,7 +1615,7 @@ async fn activity_get_all_and_categories() -> tb_domain::TbResult<()> {
 /// #405). The later ride is created first; the listing must not follow
 /// creation order.
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn activity_get_all_orders_by_start() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let bike = PartId::from(1);
@@ -1664,7 +1663,7 @@ async fn activity_get_all_orders_by_start() -> tb_domain::TbResult<()> {
 /// no-op, so the rule is only visible with an off-boundary offset: a
 /// +00:20 start comes back as +00:30.
 #[tokio::test]
-#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
+#[ignore]
 async fn activity_read_rounds_offset_to_30_minutes() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         // The sample start expressed with a +00:20 offset — off-boundary.
