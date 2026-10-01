@@ -600,18 +600,9 @@ mod tests {
         let act1 = Activity {
             id: ActivityId::new(101),
             user_id: sess.user_id(),
-            what: ActTypeId::from(1),
-            name: "Morning Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act1).await?;
 
@@ -627,9 +618,9 @@ mod tests {
             climb: Some(200),
             descend: Some(100),
             energy: None,
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act2).await?;
 
@@ -659,7 +650,6 @@ mod tests {
 
         let act2 = Activity {
             id: ActivityId::new(102),
-            user_id: test_user(),
             what: ActTypeId::from(1), // same type
             name: "Another Ride".to_string(),
             start: later_start(),
@@ -669,9 +659,9 @@ mod tests {
             climb: Some(200),
             descend: Some(100),
             energy: None,
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act2).await?;
 
@@ -708,19 +698,10 @@ mod tests {
 
         let act1 = Activity {
             id: ActivityId::new(100),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
-            name: "Morning Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
             gear: Some(part.id),
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act1).await?;
 
@@ -758,19 +739,12 @@ mod tests {
         let start = activity_start();
         let act = Activity {
             id: ActivityId::new(100),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "Boundary Ride".to_string(),
             start,
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
             gear: Some(part.id),
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act).await?;
 
@@ -806,19 +780,10 @@ mod tests {
         // Create an activity starting 1 hour after the search window end
         let outside_activity = Activity {
             id: ActivityId::new(100),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "Later Ride".to_string(),
             start: OffsetDateTime::from_unix_timestamp(1000002000).unwrap(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
-            device_name: Some("Garmin Edge".to_string()),
             external_id: Some("garmin_outside".to_string()),
+            ..sample_activity()
         };
         store.activity_create(outside_activity).await?;
 
@@ -843,19 +808,10 @@ mod tests {
         let new_id = ActivityId::new(100);
         let act = Activity {
             id: new_id,
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "New Activity".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
 
         let summary = act.upsert(&test_session(), &mut store).await?;
@@ -873,11 +829,7 @@ mod tests {
         let bike = PartId::from(1);
         let act = Activity {
             id: ActivityId::new(100),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "New Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
             time: Some(1000),
             distance: Some(10000),
             climb: Some(100),
@@ -886,6 +838,7 @@ mod tests {
             gear: Some(bike),
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
 
         let expected_act = act.clone();
@@ -967,11 +920,7 @@ mod tests {
         let bike = PartId::from(1);
         let act = Activity {
             id: ActivityId::new(100),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "New Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
             time: Some(1000),
             distance: Some(10000),
             climb: Some(100),
@@ -980,6 +929,7 @@ mod tests {
             gear: Some(bike),
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
 
         // create the activity so its usage is accounted, then delete it
@@ -1123,19 +1073,9 @@ mod tests {
         // metadata.
         let stored = Activity {
             id: ActivityId::new(7),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "Original Ride".to_string(),
             start: activity_start().to_offset(time::UtcOffset::from_whole_seconds(3600).unwrap()),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
-            device_name: Some("Garmin Edge".to_string()),
-            external_id: Some("garmin_12345".to_string()),
+            ..sample_activity()
         };
         store.activity_create(stored.clone()).await?;
 
@@ -1284,19 +1224,11 @@ mod tests {
 
         let act = Activity {
             id: ActivityId::new(100),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
-            name: "Morning Ride".to_string(),
             start: activity_start(), // T=1700000000
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
             gear: Some(bike.id),
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
 
         store.activity_create(act.clone()).await?;
@@ -1328,19 +1260,10 @@ mod tests {
         // Activity with no gear should not be found
         let no_gear_act = Activity {
             id: ActivityId::new(100),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "No Gear Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(no_gear_act).await?;
 
@@ -1375,11 +1298,8 @@ mod tests {
         for i in 1i32..=3 {
             let act = Activity {
                 id: ActivityId::new(100 + i as i64),
-                user_id: test_user(),
-                what: ActTypeId::from(1),
                 name: format!("Ride {}", i),
                 start: activity_start() + time::Duration::seconds(i as i64 * 3600),
-                duration: 3600,
                 time: Some(3500 * i),
                 distance: Some(50000 * i),
                 climb: Some(500 * i),
@@ -1388,6 +1308,7 @@ mod tests {
                 gear: Some(part.id),
                 device_name: None,
                 external_id: None,
+                ..sample_activity()
             };
             store.activity_create(act).await?;
         }
@@ -1440,27 +1361,17 @@ mod tests {
         let mut store = MemStore::new();
 
         let act1 = Activity {
-            id: ActivityId::new(1),
             user_id: UserId::from(1),
-            what: ActTypeId::from(1),
             name: "User 1 Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act1).await?;
 
         let act2 = Activity {
             id: ActivityId::new(2),
             user_id: UserId::from(2),
-            what: ActTypeId::from(1),
             name: "User 2 Ride".to_string(),
             start: later_start(),
             duration: 1800,
@@ -1469,9 +1380,9 @@ mod tests {
             climb: Some(200),
             descend: Some(100),
             energy: None,
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act2).await?;
 
@@ -1490,19 +1401,10 @@ mod tests {
         let mut store = MemStore::prepopulated();
         let fake_activity = Activity {
             id: ActivityId::new(999),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "Ghost Activity".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         let result = fake_activity.update(&test_session(), &mut store).await;
         assert!(result.is_err());
@@ -1516,19 +1418,10 @@ mod tests {
         let act_id = ActivityId::new(42); // Custom non-sequential ID
         let act = Activity {
             id: act_id,
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "Custom ID Activity".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
 
         let summary = act.upsert(&test_session(), &mut store).await?;
@@ -1567,19 +1460,15 @@ mod tests {
         let mut store = MemStore::prepopulated();
         let act = Activity {
             id: ActivityId::new(100),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "Climb Only".to_string(),
-            start: activity_start(),
-            duration: 3600,
             time: None,
             distance: None,
             climb: Some(1000),
             descend: None, // should default to climb
             energy: None,
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
 
         let usage = act.usage();
@@ -1615,20 +1504,9 @@ mod tests {
 
         // First register to create some usage records
         let act2 = Activity {
-            id: ActivityId::new(1),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
-            name: "Morning Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         let _ = act2.register(Factor::Add, &mut store).await?;
 
@@ -1648,19 +1526,16 @@ mod tests {
         for i in 1i32..=3 {
             let act = Activity {
                 id: ActivityId::new(i as i64),
-                user_id: test_user(),
-                what: ActTypeId::from(1),
                 name: format!("Ride {}", i),
                 start: activity_start() + time::Duration::seconds(i as i64 * 3600),
-                duration: 3600,
                 time: Some(3500 * i),
                 distance: Some(50000 * i),
                 climb: Some(500 * i),
                 descend: Some(300 * i),
                 energy: Some(1000 * i),
-                gear: None,
                 device_name: None,
                 external_id: None,
+                ..sample_activity()
             };
             store.activity_create(act).await?;
         }
@@ -1736,19 +1611,13 @@ mod tests {
             let ts = activity_start().unix_timestamp() + offset;
             let act = Activity {
                 id: ActivityId::new(100 + offset),
-                user_id: test_user(),
-                what: ActTypeId::from(1),
                 name: "Ride".to_string(),
                 start: OffsetDateTime::from_unix_timestamp(ts).unwrap(),
-                duration: 3600,
-                time: Some(3500),
-                distance: Some(50000),
                 climb: None,
                 descend: None,
-                energy: Some(1000),
-                gear: None,
                 device_name: None,
                 external_id: None,
+                ..sample_activity()
             };
             store.activity_create(act).await?;
         }
@@ -1773,19 +1642,12 @@ mod tests {
         // Pre-create activity at activity_start()
         let act = Activity {
             id: ActivityId::new(201),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "English Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
             climb: None,
             descend: None,
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act).await?;
 
@@ -1806,19 +1668,12 @@ mod tests {
 
         let act = Activity {
             id: ActivityId::new(202),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
             climb: None,
             descend: None,
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act).await?;
 
@@ -1843,19 +1698,13 @@ mod tests {
             let ts = activity_start().unix_timestamp() + offset;
             let act = Activity {
                 id: ActivityId::new(300 + offset),
-                user_id: test_user(),
-                what: ActTypeId::from(1),
                 name: "Ride".to_string(),
                 start: OffsetDateTime::from_unix_timestamp(ts).unwrap(),
-                duration: 3600,
-                time: Some(3500),
-                distance: Some(50000),
                 climb: None,
                 descend: None,
-                energy: Some(1000),
-                gear: None,
                 device_name: None,
                 external_id: None,
+                ..sample_activity()
             };
             store.activity_create(act).await?;
         }
@@ -1882,19 +1731,13 @@ mod tests {
             let ts = activity_start().unix_timestamp() + offset;
             let act = Activity {
                 id: ActivityId::new(400 + offset),
-                user_id: test_user(),
-                what: ActTypeId::from(1),
                 name: "Ride".to_string(),
                 start: OffsetDateTime::from_unix_timestamp(ts).unwrap(),
-                duration: 3600,
-                time: Some(3500),
-                distance: Some(50000),
                 climb: None,
                 descend: None,
-                energy: Some(1000),
-                gear: None,
                 device_name: None,
                 external_id: None,
+                ..sample_activity()
             };
             store.activity_create(act).await?;
         }
@@ -1926,19 +1769,13 @@ mod tests {
             .to_offset(time::UtcOffset::from_whole_seconds(3600).unwrap());
         let stored = Activity {
             id: ActivityId::new(500),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "Ride".to_string(),
             start: local_start,
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
             climb: None,
             descend: None,
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(stored.clone()).await?;
 
@@ -1985,19 +1822,13 @@ mod tests {
             .to_offset(time::UtcOffset::from_whole_seconds(3600).unwrap());
         let first = Activity {
             id: ActivityId::new(500),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "First Ride".to_string(),
             start: first_start,
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
             climb: None,
             descend: None,
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         let second = Activity {
             id: ActivityId::new(501),
@@ -2040,20 +1871,10 @@ mod tests {
 
         // Create an activity without gear (Ride type)
         let act = Activity {
-            id: ActivityId::new(1),
-            user_id: test_user(),
             what: ActTypeId::from(1), // Riding type
-            name: "Morning Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act).await?;
 
@@ -2085,20 +1906,11 @@ mod tests {
 
         // Create a running activity (type 3) - should NOT match bike's act_types
         let run_act = Activity {
-            id: ActivityId::new(1),
-            user_id: test_user(),
             what: ActTypeId::from(3), // Running type
             name: "Morning Run".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(run_act).await?;
 
@@ -2142,20 +1954,10 @@ mod tests {
 
         // Create activity with existing gear
         let act = Activity {
-            id: ActivityId::new(1),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
-            name: "Morning Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
             gear: Some(bike1.id), // Already assigned
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act).await?;
 
@@ -2211,19 +2013,16 @@ mod tests {
         // unregistered ride without gear, within the snapshot bike's attachment window
         let act = Activity {
             id: ActivityId::new(101),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "Unassigned Ride".to_string(),
             start: time::macros::datetime!(2023-05-20 10:00 UTC),
-            duration: 3600,
             time: Some(1000),
             distance: Some(10000),
             climb: Some(100),
             descend: None,
             energy: Some(200),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act).await?;
 
@@ -2268,20 +2067,10 @@ mod tests {
 
         // Create an activity for user 2
         let act = Activity {
-            id: ActivityId::new(1),
             user_id: UserId::from(2),
-            what: ActTypeId::from(1),
-            name: "Morning Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act).await?;
 
@@ -2334,38 +2123,22 @@ mod tests {
         // Create initial activity on bike1
         let old_act = Activity {
             id: ActivityId::new(100),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "Road Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
             gear: Some(bike1.id),
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(old_act).await?;
 
         // Create new activity with same ID but different gear
         let new_act = Activity {
             id: ActivityId::new(100),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "MTB Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
             gear: Some(bike2.id), // Different gear!
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
 
         new_act.update(&test_session(), &mut store).await?;
@@ -2401,11 +2174,8 @@ mod tests {
         // registered ride on the snapshot bike
         let old_act = Activity {
             id: ActivityId::new(102),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "Ride".to_string(),
             start: time::macros::datetime!(2023-05-20 10:00 UTC),
-            duration: 3600,
             time: Some(1000),
             distance: Some(10000),
             climb: Some(100),
@@ -2414,6 +2184,7 @@ mod tests {
             gear: Some(bike1),
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         old_act.clone().upsert(&session, &mut store).await?;
 

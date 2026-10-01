@@ -96,10 +96,10 @@ fn db_err(err: sqlx::Error) -> tb_domain::Error {
 
 /// A test handle: one transaction on the shared test database. The lock is
 /// held for the whole test so all tests in this suite run serialized; the
-/// transaction is rolled back explicitly at the end of every test.
+/// transaction is rolled back when the store is dropped.
 struct Seam {
     /// Declared first so it is dropped last: the lock stays held while the
-    /// test's transaction is rolled back at the end of the test.
+    /// test's transaction is rolled back on drop.
     _lock: MutexGuard<'static, ()>,
     store: tb_sqlx::SqlxConn<'static>,
 }
@@ -123,6 +123,22 @@ async fn seam() -> Option<Seam> {
     reset_sequences(&mut store).await.ok()?;
     Some(Seam { store, _lock: lock })
     // `pool` is dropped here, with this test's runtime.
+}
+
+/// Run a test body against a fresh fixture transaction: opens the seam
+/// (skipping with `Ok(())` when `seam()` yields `None`, because this machine
+/// has no `DATABASE_URL`), hands the store to the body by value, and returns
+/// the body's result. The body never commits, so the transaction is rolled
+/// back when the body's future drops; the `Seam`'s lock stays held until
+/// that drop, so the suite still runs serialized.
+async fn with_seam<R>(f: impl FnOnce(tb_sqlx::SqlxConn<'static>) -> R) -> tb_domain::TbResult<()>
+where
+    R: std::future::Future<Output = tb_domain::TbResult<()>>,
+{
+    let Some(Seam { _lock, store }) = seam().await else {
+        return Ok(());
+    };
+    f(store).await
 }
 
 /// Row for the pre-truncate state report.
@@ -300,6 +316,28 @@ fn att(
     }
 }
 
+/// A test ride with the in-memory suite's sample metrics (one hour, 3500s,
+/// 50km, 500m up, 300m down, 1000W), parameterized only by the fields the
+/// call sites vary: the id, the name, the start instant, and the gear.
+fn ride(id: i64, name: &str, start: OffsetDateTime, gear: Option<PartId>) -> Activity {
+    Activity {
+        id: ActivityId::new(id),
+        user_id: UserId::from(1),
+        what: ActTypeId::from(1),
+        name: name.to_string(),
+        start,
+        duration: 3600,
+        time: Some(3500),
+        distance: Some(50000),
+        climb: Some(500),
+        descend: Some(300),
+        energy: Some(1000),
+        gear,
+        device_name: None,
+        external_id: None,
+    }
+}
+
 /// Create a part like the in-memory tests do.
 async fn create_part(
     name: &str,
@@ -371,71 +409,70 @@ fn fixture() -> StoreSnapshot {
 /// The prepopulated fixture loads back from the database unchanged.
 #[tokio::test]
 async fn fixture_roundtrip() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let snap = fixture();
+    with_seam(|mut store| async move {
+        let snap = fixture();
 
-    // users
-    let user = UserStore::get(&mut store, UserId::from(1)).await?;
-    assert_eq!(user.name, snap.users[0].name);
-    assert_eq!(user.firstname, snap.users[0].firstname);
-    assert_eq!(user.is_admin, snap.users[0].is_admin);
-    assert_eq!(user.avatar, snap.users[0].avatar);
-    assert_eq!(user.onboarding_status, snap.users[0].onboarding_status);
+        // users
+        let user = UserStore::get(&mut store, UserId::from(1)).await?;
+        assert_eq!(user.name, snap.users[0].name);
+        assert_eq!(user.firstname, snap.users[0].firstname);
+        assert_eq!(user.is_admin, snap.users[0].is_admin);
+        assert_eq!(user.avatar, snap.users[0].avatar);
+        assert_eq!(user.onboarding_status, snap.users[0].onboarding_status);
 
-    // parts
-    for part in &snap.parts {
-        let stored = store.partid_get_part(part.id).await?;
-        assert_eq!(&stored, part, "part {} roundtrip differs", part.id);
-    }
+        // parts
+        for part in &snap.parts {
+            let stored = store.partid_get_part(part.id).await?;
+            assert_eq!(&stored, part, "part {} roundtrip differs", part.id);
+        }
 
-    // attachments
-    let mut counted = 0;
-    for part in &snap.parts {
-        let stored = store.attachments_all_by_part(part.id).await?;
-        let expected = snap
-            .attachments
-            .iter()
-            .filter(|a| a.part_id == part.id)
-            .collect::<Vec<_>>();
-        assert_eq!(
-            stored.len(),
-            expected.len(),
-            "part {} attachment count",
-            part.id
-        );
-        for expected in &expected {
-            assert!(
-                stored.iter().any(|a| a == *expected),
-                "part {} is missing one of its attachments",
+        // attachments
+        let mut counted = 0;
+        for part in &snap.parts {
+            let stored = store.attachments_all_by_part(part.id).await?;
+            let expected = snap
+                .attachments
+                .iter()
+                .filter(|a| a.part_id == part.id)
+                .collect::<Vec<_>>();
+            assert_eq!(
+                stored.len(),
+                expected.len(),
+                "part {} attachment count",
                 part.id
             );
+            for expected in &expected {
+                assert!(
+                    stored.iter().any(|a| a == *expected),
+                    "part {} is missing one of its attachments",
+                    part.id
+                );
+            }
+            counted += stored.len();
         }
-        counted += stored.len();
-    }
-    assert_eq!(counted, snap.attachments.len());
+        assert_eq!(counted, snap.attachments.len());
 
-    // usages
-    for usage in &snap.usages {
-        let stored = UsageStore::get(&mut store, usage.id).await?;
-        assert_eq!(stored.as_ref(), Some(usage), "usage {} differs", usage.id);
-    }
+        // usages
+        for usage in &snap.usages {
+            let stored = UsageStore::get(&mut store, usage.id).await?;
+            assert_eq!(stored.as_ref(), Some(usage), "usage {} differs", usage.id);
+        }
 
-    // activities
-    let acts = store.get_all(&UserId::from(1)).await?;
-    assert_eq!(acts.len(), snap.activities.len());
-    for expected in &snap.activities {
-        assert!(
-            acts.iter().any(|a| a == expected),
-            "activity {} ({}) missing",
-            expected.id,
-            expected.name
-        );
-    }
+        // activities
+        let acts = store.get_all(&UserId::from(1)).await?;
+        assert_eq!(acts.len(), snap.activities.len());
+        for expected in &snap.activities {
+            assert!(
+                acts.iter().any(|a| a == expected),
+                "activity {} ({}) missing",
+                expected.id,
+                expected.name
+            );
+        }
 
-    store.rollback().await?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 // ---------------------------------------------------------------------------
@@ -445,44 +482,43 @@ async fn fixture_roundtrip() -> tb_domain::TbResult<()> {
 /// The user summary read returns the full fixture content.
 #[tokio::test]
 async fn user_summary_read() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let summary = UserId::from(1).get_summary(None, &mut store).await?;
+    with_seam(|mut store| async move {
+        let summary = UserId::from(1).get_summary(None, &mut store).await?;
 
-    // The fixture content: counts only (the stores order vectors differently).
-    assert_eq!(summary.parts.len(), 17);
-    assert_eq!(summary.activities.len(), 3);
-    assert_eq!(summary.attachments.len(), 11);
-    // 17 part usages + 11 attachment usages (missing usage rows read as
-    // zeros, identically on both stores).
-    assert_eq!(summary.usages.len(), 28);
-    assert!(summary.shops.is_empty());
-    assert!(summary.users.is_empty());
-    assert!(summary.services.is_empty());
-    assert!(summary.plans.is_empty());
-    assert!(summary.part_notes.is_empty());
+        // The fixture content: counts only (the stores order vectors differently).
+        assert_eq!(summary.parts.len(), 17);
+        assert_eq!(summary.activities.len(), 3);
+        assert_eq!(summary.attachments.len(), 11);
+        // 17 part usages + 11 attachment usages (missing usage rows read as
+        // zeros, identically on both stores).
+        assert_eq!(summary.usages.len(), 28);
+        assert!(summary.shops.is_empty());
+        assert!(summary.users.is_empty());
+        assert!(summary.services.is_empty());
+        assert!(summary.plans.is_empty());
+        assert!(summary.part_notes.is_empty());
 
-    // Field lookups: the "Chain A" part, its attachment, and its usage.
-    let chain = summary
-        .parts
-        .iter()
-        .find(|p| p.id == PartId::from(4))
-        .unwrap();
-    assert_eq!(chain.name, "Chain A");
-    let att = summary
-        .attachments
-        .iter()
-        .find(|a| a.a.part_id == PartId::from(4))
-        .unwrap();
-    assert_eq!(att.a.hook, BIKE);
-    assert_eq!(att.a.detached, MAX_TIME);
-    let usage = summary.usages.iter().find(|u| u.id == chain.usage).unwrap();
-    assert_eq!(usage.time, 8025);
-    assert_eq!(usage.count, 3);
+        // Field lookups: the "Chain A" part, its attachment, and its usage.
+        let chain = summary
+            .parts
+            .iter()
+            .find(|p| p.id == PartId::from(4))
+            .unwrap();
+        assert_eq!(chain.name, "Chain A");
+        let att = summary
+            .attachments
+            .iter()
+            .find(|a| a.a.part_id == PartId::from(4))
+            .unwrap();
+        assert_eq!(att.a.hook, BIKE);
+        assert_eq!(att.a.detached, MAX_TIME);
+        let usage = summary.usages.iter().find(|u| u.id == chain.usage).unwrap();
+        assert_eq!(usage.time, 8025);
+        assert_eq!(usage.count, 3);
 
-    store.rollback().await?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 // ---------------------------------------------------------------------------
@@ -494,102 +530,12 @@ async fn user_summary_read() -> tb_domain::TbResult<()> {
 /// `attach_assembly_attaches_part_to_gear`).
 #[tokio::test]
 async fn attach_new_part_to_empty_hook() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let session = test_session();
+    with_seam(|mut store| async move {
+        let session = test_session();
 
-    let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
-    let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
+        let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
+        let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
 
-    let summary = attach_assembly(
-        &session,
-        chain.id,
-        attachment_time(),
-        bike.id,
-        BIKE,
-        false,
-        &mut store,
-    )
-    .await?;
-    assert!(!summary.parts.is_empty());
-
-    let att = store
-        .attachment_get_by_part_and_time(chain.id, attachment_time())
-        .await?
-        .expect("the chain is attached");
-    assert_eq!(att.gear, bike.id);
-    assert_eq!(att.detached, MAX_TIME);
-
-    // The part's last_used is bumped to the attach time.
-    let chain = store.partid_get_part(chain.id).await?;
-    assert_eq!(chain.last_used, attachment_time());
-
-    store.rollback().await?;
-    Ok(())
-}
-
-/// The flat row model (ADR-0003): a tire mounted onto a front wheel that is
-/// itself on the bike is stored against the top-level gear (mirrors
-/// `attach_assembly_resolves_mounted_gear_to_top_level`).
-#[tokio::test]
-async fn attach_resolves_mounted_gear_to_top_level() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let session = test_session();
-    let time = attachment_time();
-
-    let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
-    let wheel = create_part(
-        "Front Wheel",
-        "Fulcrum",
-        "Rapid 150",
-        FRONT_WHEEL,
-        &mut store,
-    )
-    .await;
-    let tire = create_part("Front Tire", "Schwalbe", "One", TIRE, &mut store).await;
-
-    // mount the wheel on the bike first
-    let _ = attach_assembly(&session, wheel.id, time, bike.id, BIKE, false, &mut store).await?;
-    // attach the tire to the *wheel*; the domain resolves the top-level gear
-    let _ = attach_assembly(
-        &session,
-        tire.id,
-        time,
-        wheel.id,
-        FRONT_WHEEL,
-        false,
-        &mut store,
-    )
-    .await?;
-
-    let att = store
-        .attachment_get_by_part_and_time(tire.id, time)
-        .await?
-        .expect("the tire is attached");
-    assert_eq!(att.gear, bike.id);
-    assert_eq!(att.hook, FRONT_WHEEL);
-
-    store.rollback().await?;
-    Ok(())
-}
-
-/// Re-attaching a part at the time its row started deletes and re-creates
-/// the row: exactly one still-attached row remains (mirrors
-/// `attach_assembly_auto_detaches_and_reattaches_same_part`).
-#[tokio::test]
-async fn attach_reattach_at_own_time() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let session = test_session();
-
-    let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
-    let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
-
-    for _ in 0..3 {
         let summary = attach_assembly(
             &session,
             chain.id,
@@ -601,65 +547,151 @@ async fn attach_reattach_at_own_time() -> tb_domain::TbResult<()> {
         )
         .await?;
         assert!(!summary.parts.is_empty());
-    }
 
-    let atts = store.attachments_all_by_part(chain.id).await?;
-    assert_eq!(atts.len(), 1, "re-attaching replaces the row");
-    assert_eq!(atts[0].gear, bike.id);
-    assert_eq!(atts[0].detached, MAX_TIME);
+        let att = store
+            .attachment_get_by_part_and_time(chain.id, attachment_time())
+            .await?
+            .expect("the chain is attached");
+        assert_eq!(att.gear, bike.id);
+        assert_eq!(att.detached, MAX_TIME);
 
-    store.rollback().await?;
-    Ok(())
+        // The part's last_used is bumped to the attach time.
+        let chain = store.partid_get_part(chain.id).await?;
+        assert_eq!(chain.last_used, attachment_time());
+
+        Ok(())
+    })
+    .await
+}
+
+/// The flat row model (ADR-0003): a tire mounted onto a front wheel that is
+/// itself on the bike is stored against the top-level gear (mirrors
+/// `attach_assembly_resolves_mounted_gear_to_top_level`).
+#[tokio::test]
+async fn attach_resolves_mounted_gear_to_top_level() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let session = test_session();
+        let time = attachment_time();
+
+        let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
+        let wheel = create_part(
+            "Front Wheel",
+            "Fulcrum",
+            "Rapid 150",
+            FRONT_WHEEL,
+            &mut store,
+        )
+        .await;
+        let tire = create_part("Front Tire", "Schwalbe", "One", TIRE, &mut store).await;
+
+        // mount the wheel on the bike first
+        let _ = attach_assembly(&session, wheel.id, time, bike.id, BIKE, false, &mut store).await?;
+        // attach the tire to the *wheel*; the domain resolves the top-level gear
+        let _ = attach_assembly(
+            &session,
+            tire.id,
+            time,
+            wheel.id,
+            FRONT_WHEEL,
+            false,
+            &mut store,
+        )
+        .await?;
+
+        let att = store
+            .attachment_get_by_part_and_time(tire.id, time)
+            .await?
+            .expect("the tire is attached");
+        assert_eq!(att.gear, bike.id);
+        assert_eq!(att.hook, FRONT_WHEEL);
+
+        Ok(())
+    })
+    .await
+}
+
+/// Re-attaching a part at the time its row started deletes and re-creates
+/// the row: exactly one still-attached row remains (mirrors
+/// `attach_assembly_auto_detaches_and_reattaches_same_part`).
+#[tokio::test]
+async fn attach_reattach_at_own_time() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let session = test_session();
+
+        let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
+        let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
+
+        for _ in 0..3 {
+            let summary = attach_assembly(
+                &session,
+                chain.id,
+                attachment_time(),
+                bike.id,
+                BIKE,
+                false,
+                &mut store,
+            )
+            .await?;
+            assert!(!summary.parts.is_empty());
+        }
+
+        let atts = store.attachments_all_by_part(chain.id).await?;
+        assert_eq!(atts.len(), 1, "re-attaching replaces the row");
+        assert_eq!(atts[0].gear, bike.id);
+        assert_eq!(atts[0].detached, MAX_TIME);
+
+        Ok(())
+    })
+    .await
 }
 
 /// Attaching a part detaches the different part already occupying the hook
 /// (mirrors `attach_assembly_detaches_predecessor_on_gear`).
 #[tokio::test]
 async fn attach_detaches_predecessor() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let session = test_session();
+    with_seam(|mut store| async move {
+        let session = test_session();
 
-    let bike1 = create_part("Bike 1", "TendaBike", "Standard", BIKE, &mut store).await;
-    let _bike2 = create_part("Bike 2", "TendaBike", "Pro", BIKE, &mut store).await;
-    let chain1 = create_part("Chain 1", "Shimano", "CN-M510", CHAIN, &mut store).await;
-    let chain2 = create_part("Chain 2", "KMC", "X10", CHAIN, &mut store).await;
+        let bike1 = create_part("Bike 1", "TendaBike", "Standard", BIKE, &mut store).await;
+        let _bike2 = create_part("Bike 2", "TendaBike", "Pro", BIKE, &mut store).await;
+        let chain1 = create_part("Chain 1", "Shimano", "CN-M510", CHAIN, &mut store).await;
+        let chain2 = create_part("Chain 2", "KMC", "X10", CHAIN, &mut store).await;
 
-    // Attach chain1 to bike1 at attachment_time (raw row, like the in-memory test).
-    store
-        .attachment_create(att(chain1.id, attachment_time(), bike1.id, BIKE, MAX_TIME))
+        // Attach chain1 to bike1 at attachment_time (raw row, like the in-memory test).
+        store
+            .attachment_create(att(chain1.id, attachment_time(), bike1.id, BIKE, MAX_TIME))
+            .await?;
+
+        // Attach chain2 to bike1 at later_time (should detach chain1 from bike1)
+        let _ = attach_assembly(
+            &session,
+            chain2.id,
+            later_time(),
+            bike1.id,
+            BIKE,
+            false,
+            &mut store,
+        )
         .await?;
 
-    // Attach chain2 to bike1 at later_time (should detach chain1 from bike1)
-    let _ = attach_assembly(
-        &session,
-        chain2.id,
-        later_time(),
-        bike1.id,
-        BIKE,
-        false,
-        &mut store,
-    )
-    .await?;
+        // chain1 is cut off on bike1 at later_time
+        let chain1_atts = store.attachments_all_by_part(chain1.id).await?;
+        let chain1_att = chain1_atts
+            .iter()
+            .find(|a| a.gear == bike1.id)
+            .expect("chain1 was attached to bike1");
+        assert_eq!(chain1_att.detached, later_time());
 
-    // chain1 is cut off on bike1 at later_time
-    let chain1_atts = store.attachments_all_by_part(chain1.id).await?;
-    let chain1_att = chain1_atts
-        .iter()
-        .find(|a| a.gear == bike1.id)
-        .expect("chain1 was attached to bike1");
-    assert_eq!(chain1_att.detached, later_time());
+        // chain2 is attached to bike1 at later_time
+        let chain2_att = store
+            .attachment_get_by_part_and_time(chain2.id, later_time())
+            .await?
+            .expect("chain2 is attached at later_time");
+        assert_eq!(chain2_att.gear, bike1.id);
 
-    // chain2 is attached to bike1 at later_time
-    let chain2_att = store
-        .attachment_get_by_part_and_time(chain2.id, later_time())
-        .await?
-        .expect("chain2 is attached at later_time");
-    assert_eq!(chain2_att.gear, bike1.id);
-
-    store.rollback().await?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 // ---------------------------------------------------------------------------
@@ -670,44 +702,43 @@ async fn attach_detaches_predecessor() -> tb_domain::TbResult<()> {
 /// the adjacent-merge (unified rule #407, one rule on both stores).
 #[tokio::test]
 async fn attach_merge_adjacent_with_previous() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let session = test_session();
-    let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
-    let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
+    with_seam(|mut store| async move {
+        let session = test_session();
+        let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
+        let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
 
-    // First attachment t1..t2, then re-attach exactly at t2 (works on both
-    // stores; the resulting rows differ).
-    store
-        .attachment_create(att(
+        // First attachment t1..t2, then re-attach exactly at t2 (works on both
+        // stores; the resulting rows differ).
+        store
+            .attachment_create(att(
+                chain.id,
+                attachment_time(),
+                bike.id,
+                BIKE,
+                later_time(),
+            ))
+            .await?;
+        let _ = attach_assembly(
+            &session,
             chain.id,
-            attachment_time(),
+            later_time(),
             bike.id,
             BIKE,
-            later_time(),
-        ))
+            false,
+            &mut store,
+        )
         .await?;
-    let _ = attach_assembly(
-        &session,
-        chain.id,
-        later_time(),
-        bike.id,
-        BIKE,
-        false,
-        &mut store,
-    )
-    .await?;
 
-    // The adjacent rows become one: the previous row was continued, not
-    // duplicated.
-    let atts = store.attachments_all_by_part(chain.id).await?;
-    assert_eq!(atts.len(), 1, "adjacent rows merge into one");
-    assert_eq!(atts[0].attached, attachment_time());
-    assert_eq!(atts[0].detached, MAX_TIME);
+        // The adjacent rows become one: the previous row was continued, not
+        // duplicated.
+        let atts = store.attachments_all_by_part(chain.id).await?;
+        assert_eq!(atts.len(), 1, "adjacent rows merge into one");
+        assert_eq!(atts[0].attached, attachment_time());
+        assert_eq!(atts[0].detached, MAX_TIME);
 
-    store.rollback().await?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 /// An attachment delete addresses its row by part + attach time — the
@@ -715,31 +746,30 @@ async fn attach_merge_adjacent_with_previous() -> tb_domain::TbResult<()> {
 /// which row is deleted (unified rule #407).
 #[tokio::test]
 async fn attachment_delete_identity() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let bike1 = create_part("Bike 1", "TendaBike", "Standard", BIKE, &mut store).await;
-    let bike2 = create_part("Bike 2", "TendaBike", "Pro", BIKE, &mut store).await;
-    let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
+    with_seam(|mut store| async move {
+        let bike1 = create_part("Bike 1", "TendaBike", "Standard", BIKE, &mut store).await;
+        let bike2 = create_part("Bike 2", "TendaBike", "Pro", BIKE, &mut store).await;
+        let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
 
-    let t1 = attachment_time();
-    let a1 = att(chain.id, t1, bike1.id, BIKE, MAX_TIME);
-    AttachmentStore::attachment_create(&mut store, a1).await?;
+        let t1 = attachment_time();
+        let a1 = att(chain.id, t1, bike1.id, BIKE, MAX_TIME);
+        AttachmentStore::attachment_create(&mut store, a1).await?;
 
-    // A stale gear field in the argument — the row is still addressed by
-    // part + attach time and is deleted.
-    let stale = Attachment {
-        gear: bike2.id,
-        ..a1
-    };
-    let deleted = AttachmentStore::delete(&mut store, stale).await?;
-    assert_eq!(deleted.gear, bike1.id);
+        // A stale gear field in the argument — the row is still addressed by
+        // part + attach time and is deleted.
+        let stale = Attachment {
+            gear: bike2.id,
+            ..a1
+        };
+        let deleted = AttachmentStore::delete(&mut store, stale).await?;
+        assert_eq!(deleted.gear, bike1.id);
 
-    let atts = store.attachments_all_by_part(chain.id).await?;
-    assert!(atts.is_empty(), "the row was deleted");
+        let atts = store.attachments_all_by_part(chain.id).await?;
+        assert!(atts.is_empty(), "the row was deleted");
 
-    store.rollback().await?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 /// Finding the successor of an attachment: another part, of the same type,
@@ -747,40 +777,39 @@ async fn attachment_delete_identity() -> tb_domain::TbResult<()> {
 /// (unified rule #407).
 #[tokio::test]
 async fn attachment_find_successor() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
-    let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
-    let chain2 = create_part("Chain 2", "KMC", "X10", CHAIN, &mut store).await;
+    with_seam(|mut store| async move {
+        let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
+        let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
+        let chain2 = create_part("Chain 2", "KMC", "X10", CHAIN, &mut store).await;
 
-    // chain: t1..t2 and its own later row t2..MAX (never its successor);
-    // chain2 takes the same hook at t2.
-    store
-        .attachment_create(att(
-            chain.id,
-            attachment_time(),
-            bike.id,
-            CHAIN,
-            later_time(),
-        ))
-        .await?;
-    store
-        .attachment_create(att(chain.id, later_time(), bike.id, CHAIN, MAX_TIME))
-        .await?;
-    store
-        .attachment_create(att(chain2.id, later_time(), bike.id, CHAIN, MAX_TIME))
-        .await?;
+        // chain: t1..t2 and its own later row t2..MAX (never its successor);
+        // chain2 takes the same hook at t2.
+        store
+            .attachment_create(att(
+                chain.id,
+                attachment_time(),
+                bike.id,
+                CHAIN,
+                later_time(),
+            ))
+            .await?;
+        store
+            .attachment_create(att(chain.id, later_time(), bike.id, CHAIN, MAX_TIME))
+            .await?;
+        store
+            .attachment_create(att(chain2.id, later_time(), bike.id, CHAIN, MAX_TIME))
+            .await?;
 
-    let successor = store
-        .attachment_find_successor(chain.id, bike.id, CHAIN, attachment_time(), CHAIN)
-        .await?
-        .expect("the other chain's later row is the successor");
-    assert_eq!(successor.part_id, chain2.id);
-    assert_eq!(successor.attached, later_time());
+        let successor = store
+            .attachment_find_successor(chain.id, bike.id, CHAIN, attachment_time(), CHAIN)
+            .await?
+            .expect("the other chain's later row is the successor");
+        assert_eq!(successor.part_id, chain2.id);
+        assert_eq!(successor.attached, later_time());
 
-    store.rollback().await?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 /// Finding the attachment already attached to a part: the row of this part
@@ -788,57 +817,55 @@ async fn attachment_find_successor() -> tb_domain::TbResult<()> {
 /// adjacent-merge trigger (unified rule #407).
 #[tokio::test]
 async fn attachment_find_part_attached_already() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
-    let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
+    with_seam(|mut store| async move {
+        let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
+        let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
 
-    // Row t1..t2.
-    store
-        .attachment_create(att(
-            chain.id,
-            attachment_time(),
-            bike.id,
-            CHAIN,
-            later_time(),
-        ))
-        .await?;
+        // Row t1..t2.
+        store
+            .attachment_create(att(
+                chain.id,
+                attachment_time(),
+                bike.id,
+                CHAIN,
+                later_time(),
+            ))
+            .await?;
 
-    // The row covers t1 but does not end there — not the merge trigger.
-    let found = store
-        .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, attachment_time())
-        .await?;
-    assert!(found.is_none());
+        // The row covers t1 but does not end there — not the merge trigger.
+        let found = store
+            .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, attachment_time())
+            .await?;
+        assert!(found.is_none());
 
-    // The row ends exactly at t2 — the adjacent-merge trigger.
-    let found = store
-        .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, later_time())
-        .await?
-        .expect("the row ending exactly at the time is the merge trigger");
-    assert_eq!(found.attached, attachment_time());
+        // The row ends exactly at t2 — the adjacent-merge trigger.
+        let found = store
+            .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, later_time())
+            .await?
+            .expect("the row ending exactly at the time is the merge trigger");
+        assert_eq!(found.attached, attachment_time());
 
-    store.rollback().await?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 /// `find_part_attached_already` for a part that was never attached is
 /// `None` on both stores (no divergence).
 #[tokio::test]
 async fn find_attached_already_never_attached() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
-    let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
+    with_seam(|mut store| async move {
+        let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
+        let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
 
-    let found = store
-        .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, attachment_time())
-        .await?;
-    assert!(found.is_none());
+        let found = store
+            .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, attachment_time())
+            .await?;
+        assert!(found.is_none());
 
-    store.rollback().await?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 // ---------------------------------------------------------------------------
@@ -850,143 +877,141 @@ async fn find_attached_already_never_attached() -> tb_domain::TbResult<()> {
 /// `detach_assembly_recalculates_usage_excluding_activity_after_detach`).
 #[tokio::test]
 async fn detach_recuts_and_recalculates_usage() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let session = test_session();
-    let wheel = PartId::from(2);
+    with_seam(|mut store| async move {
+        let session = test_session();
+        let wheel = PartId::from(2);
 
-    // The latest prepopulated activity and its 15-minute floor.
-    let latest = datetime!(2023-05-19 22:13:20 UTC);
-    let detach_at = round_time(latest);
-    assert_eq!(detach_at, datetime!(2023-05-19 22:00:00 UTC));
+        // The latest prepopulated activity and its 15-minute floor.
+        let latest = datetime!(2023-05-19 22:13:20 UTC);
+        let detach_at = round_time(latest);
+        assert_eq!(detach_at, datetime!(2023-05-19 22:00:00 UTC));
 
-    // The attachment row and its usage before the detach (the row is
-    // replaced by a new one and the old usage row is deleted).
-    let old_usage = store
-        .attachment_get_by_part_and_time(wheel, detach_at - time::Duration::hours(1))
-        .await?
-        .expect("the wheel is attached before the detach")
-        .usage;
-
-    let _ = detach_assembly(&session, wheel, detach_at, false, &mut store).await?;
-
-    // The attachment is cut at the detach time and gone from then on.
-    let att = store
-        .attachment_get_by_part_and_time(wheel, detach_at - time::Duration::hours(1))
-        .await?
-        .expect("the wheel is attached before the detach");
-    assert_eq!(att.attached, datetime!(2023-01-01 00:00 UTC));
-    assert_eq!(att.detached, detach_at);
-    assert!(
-        store
-            .attachment_get_by_part_and_time(wheel, latest)
+        // The attachment row and its usage before the detach (the row is
+        // replaced by a new one and the old usage row is deleted).
+        let old_usage = store
+            .attachment_get_by_part_and_time(wheel, detach_at - time::Duration::hours(1))
             .await?
-            .is_none(),
-        "no attachment of the wheel from the detach time on"
-    );
+            .expect("the wheel is attached before the detach")
+            .usage;
 
-    // The wheel usage is recalculated from the two earlier rides only
-    // (25+5200, 50000+40000, 400+600, 400+600, 500+500, 1+1);
-    // descend is None in the activities, so it falls back to climb.
-    let wheel_usage = store.partid_get_part(wheel).await?.usage;
-    let stored = UsageStore::get(&mut store, wheel_usage)
-        .await?
-        .expect("the wheel usage row exists");
-    assert_eq!(
-        stored,
-        Usage {
-            id: wheel_usage,
-            time: 5225,
-            distance: 90000,
-            climb: 1000,
-            descend: 1000,
-            energy: 1000,
-            count: 2,
-        }
-    );
+        let _ = detach_assembly(&session, wheel, detach_at, false, &mut store).await?;
 
-    // The replacement attachment usage row is a separate row with its own
-    // id but carries the same recalculated values.
-    let att_usage = UsageStore::get(&mut store, att.usage)
-        .await?
-        .expect("the replacement attachment usage exists");
-    let mut expected = stored;
-    expected.id = att_usage.id;
-    assert_eq!(att_usage, expected);
-
-    // The old attachment usage row is deleted.
-    assert!(
-        UsageStore::get(&mut store, old_usage).await?.is_none(),
-        "the old attachment usage row is deleted"
-    );
-
-    // The other parts attached to the bike are untouched.
-    for pid in [PartId::from(1), PartId::from(3), PartId::from(4)] {
-        let uid = store.partid_get_part(pid).await?.usage;
-        let stored = UsageStore::get(&mut store, uid)
+        // The attachment is cut at the detach time and gone from then on.
+        let att = store
+            .attachment_get_by_part_and_time(wheel, detach_at - time::Duration::hours(1))
             .await?
-            .expect("the part usage row exists");
+            .expect("the wheel is attached before the detach");
+        assert_eq!(att.attached, datetime!(2023-01-01 00:00 UTC));
+        assert_eq!(att.detached, detach_at);
+        assert!(
+            store
+                .attachment_get_by_part_and_time(wheel, latest)
+                .await?
+                .is_none(),
+            "no attachment of the wheel from the detach time on"
+        );
+
+        // The wheel usage is recalculated from the two earlier rides only
+        // (25+5200, 50000+40000, 400+600, 400+600, 500+500, 1+1);
+        // descend is None in the activities, so it falls back to climb.
+        let wheel_usage = store.partid_get_part(wheel).await?.usage;
+        let stored = UsageStore::get(&mut store, wheel_usage)
+            .await?
+            .expect("the wheel usage row exists");
         assert_eq!(
             stored,
             Usage {
-                id: uid,
-                time: 8025,
-                distance: 125000,
-                climb: 1100,
-                descend: 1100,
-                energy: 1500,
-                count: 3,
+                id: wheel_usage,
+                time: 5225,
+                distance: 90000,
+                climb: 1000,
+                descend: 1000,
+                energy: 1000,
+                count: 2,
             }
         );
-    }
 
-    // The wheel's last_used is unchanged (the attach time is earlier).
-    let wheel_part = store.partid_get_part(wheel).await?;
-    assert_eq!(wheel_part.last_used, datetime!(2023-11-14 22:00 UTC));
+        // The replacement attachment usage row is a separate row with its own
+        // id but carries the same recalculated values.
+        let att_usage = UsageStore::get(&mut store, att.usage)
+            .await?
+            .expect("the replacement attachment usage exists");
+        let mut expected = stored;
+        expected.id = att_usage.id;
+        assert_eq!(att_usage, expected);
 
-    store.rollback().await?;
-    Ok(())
+        // The old attachment usage row is deleted.
+        assert!(
+            UsageStore::get(&mut store, old_usage).await?.is_none(),
+            "the old attachment usage row is deleted"
+        );
+
+        // The other parts attached to the bike are untouched.
+        for pid in [PartId::from(1), PartId::from(3), PartId::from(4)] {
+            let uid = store.partid_get_part(pid).await?.usage;
+            let stored = UsageStore::get(&mut store, uid)
+                .await?
+                .expect("the part usage row exists");
+            assert_eq!(
+                stored,
+                Usage {
+                    id: uid,
+                    time: 8025,
+                    distance: 125000,
+                    climb: 1100,
+                    descend: 1100,
+                    energy: 1500,
+                    count: 3,
+                }
+            );
+        }
+
+        // The wheel's last_used is unchanged (the attach time is earlier).
+        let wheel_part = store.partid_get_part(wheel).await?;
+        assert_eq!(wheel_part.last_used, datetime!(2023-11-14 22:00 UTC));
+
+        Ok(())
+    })
+    .await
 }
 
 /// Detaching a part that is not attached is a not-found error (mirrors
 /// `detach_assembly_api_returns_error_if_not_attached`).
 #[tokio::test]
 async fn detach_not_attached_is_not_found() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let session = test_session();
-    let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
+    with_seam(|mut store| async move {
+        let session = test_session();
+        let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
 
-    let result = detach_assembly(&session, chain.id, attachment_time(), false, &mut store).await;
-    assert!(
-        matches!(&result, Err(tb_domain::Error::NotFound(_))),
-        "detaching a never-attached part must fail, got {result:?}"
-    );
+        let result =
+            detach_assembly(&session, chain.id, attachment_time(), false, &mut store).await;
+        assert!(
+            matches!(&result, Err(tb_domain::Error::NotFound(_))),
+            "detaching a never-attached part must fail, got {result:?}"
+        );
 
-    store.rollback().await?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 /// Disposing a loose part sets its disposed timestamp (mirrors
 /// `dispose_assembly_disposes_part`).
 #[tokio::test]
 async fn dispose_part() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let session = test_session();
-    let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
+    with_seam(|mut store| async move {
+        let session = test_session();
+        let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
 
-    // Dispose at later_time (no current attachment).
-    let _ = dispose_assembly(&session, chain.id, later_time(), false, &mut store).await?;
+        // Dispose at later_time (no current attachment).
+        let _ = dispose_assembly(&session, chain.id, later_time(), false, &mut store).await?;
 
-    let part = store.partid_get_part(chain.id).await?;
-    assert_eq!(part.disposed_at, Some(later_time()));
+        let part = store.partid_get_part(chain.id).await?;
+        assert_eq!(part.disposed_at, Some(later_time()));
 
-    store.rollback().await?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 // ---------------------------------------------------------------------------
@@ -1000,50 +1025,34 @@ async fn dispose_part() -> tb_domain::TbResult<()> {
 /// `mem_activity.rs`.
 #[tokio::test]
 async fn activity_create_rejects_duplicate_id() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let ride = Activity {
-        id: ActivityId::new(100),
-        user_id: UserId::from(1),
-        what: ActTypeId::from(1),
-        name: "Ride".to_string(),
-        start: activity_start(),
-        duration: 3600,
-        time: Some(3500),
-        distance: Some(50000),
-        climb: Some(500),
-        descend: Some(300),
-        energy: Some(1000),
-        gear: None,
-        device_name: None,
-        external_id: None,
-    };
-    store.activity_create(ride.clone()).await?;
+    with_seam(|mut store| async move {
+        let ride = ride(100, "Ride", activity_start(), None);
+        store.activity_create(ride.clone()).await?;
 
-    // The first ride is stored, and a different id still succeeds.
-    let stored = store
-        .activity_read_by_id(ActivityId::new(100))
-        .await?
-        .expect("the first ride is stored");
-    assert_eq!(stored.id, ActivityId::new(100));
-    let mut other = ride.clone();
-    other.id = ActivityId::new(101);
-    store.activity_create(other).await?;
+        // The first ride is stored, and a different id still succeeds.
+        let stored = store
+            .activity_read_by_id(ActivityId::new(100))
+            .await?
+            .expect("the first ride is stored");
+        assert_eq!(stored.id, ActivityId::new(100));
+        let mut other = ride.clone();
+        other.id = ActivityId::new(101);
+        store.activity_create(other).await?;
 
-    // The duplicate create comes last: a failed statement aborts the
-    // Postgres transaction, so nothing may follow it inside this test.
-    let err = store
-        .activity_create(ride.clone())
-        .await
-        .expect_err("a duplicate activity id must fail");
-    assert!(
-        matches!(err, tb_domain::Error::DatabaseFailure(_)),
-        "a duplicate activity id must be a DatabaseFailure, got {err:?}"
-    );
+        // The duplicate create comes last: a failed statement aborts the
+        // Postgres transaction, so nothing may follow it inside this test.
+        let err = store
+            .activity_create(ride.clone())
+            .await
+            .expect_err("a duplicate activity id must fail");
+        assert!(
+            matches!(err, tb_domain::Error::DatabaseFailure(_)),
+            "a duplicate activity id must be a DatabaseFailure, got {err:?}"
+        );
 
-    store.rollback().await?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 /// Creating a new activity for the prepopulated bike accounts for the bike
@@ -1051,72 +1060,63 @@ async fn activity_create_rejects_duplicate_id() -> tb_domain::TbResult<()> {
 /// `activity_upsert_creates_new_accounts_bike_and_attached_parts`).
 #[tokio::test]
 async fn activity_upsert_creates_and_accounts() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let bike = PartId::from(1);
-    let act = Activity {
-        id: ActivityId::new(100),
-        user_id: UserId::from(1),
-        what: ActTypeId::from(1),
-        name: "New Ride".to_string(),
-        start: activity_start(),
-        duration: 3600,
-        time: Some(1000),
-        distance: Some(10000),
-        climb: Some(100),
-        descend: None,
-        energy: Some(200),
-        gear: Some(bike),
-        device_name: None,
-        external_id: None,
-    };
+    with_seam(|mut store| async move {
+        let bike = PartId::from(1);
+        let act = Activity {
+            time: Some(1000),
+            distance: Some(10000),
+            climb: Some(100),
+            descend: None,
+            energy: Some(200),
+            ..ride(100, "New Ride", activity_start(), Some(bike))
+        };
 
-    let summary = act.clone().upsert(&test_session(), &mut store).await?;
+        let summary = act.clone().upsert(&test_session(), &mut store).await?;
 
-    // The new activity is reported with the bike as gear.
-    assert_eq!(summary.activities, vec![act]);
+        // The new activity is reported with the bike as gear.
+        assert_eq!(summary.activities, vec![act]);
 
-    // The bike and all attached parts: front wheel, rear wheel, chain, tires.
-    let part_ids: HashSet<PartId> = summary.parts.iter().map(|p| p.id).collect();
-    assert_eq!(
-        part_ids,
-        [1, 2, 3, 4, 5, 6].into_iter().map(PartId::from).collect()
-    );
-    // The bike's last_used is bumped to the activity start.
-    let bike_part = summary.parts.iter().find(|p| p.id == bike).unwrap();
-    assert_eq!(bike_part.last_used, round_time(activity_start()));
+        // The bike and all attached parts: front wheel, rear wheel, chain, tires.
+        let part_ids: HashSet<PartId> = summary.parts.iter().map(|p| p.id).collect();
+        assert_eq!(
+            part_ids,
+            [1, 2, 3, 4, 5, 6].into_iter().map(PartId::from).collect()
+        );
+        // The bike's last_used is bumped to the activity start.
+        let bike_part = summary.parts.iter().find(|p| p.id == bike).unwrap();
+        assert_eq!(bike_part.last_used, round_time(activity_start()));
 
-    // Every affected usage (6 part usages + 5 attachment usages) is
-    // increased by the activity metrics (8025+1000, 125000+10000, 1100+100,
-    // 1100+100, 1500+200, 3+1); descend is None in the activity, so it
-    // falls back to climb.
-    assert_eq!(summary.usages.len(), 11);
-    let mut expected = Usage {
-        id: UsageId::default(),
-        time: 9025,
-        distance: 135000,
-        climb: 1200,
-        descend: 1200,
-        energy: 1700,
-        count: 4,
-    };
-    for u in &summary.usages {
-        expected.id = u.id;
-        assert_eq!(*u, expected, "unexpected usage for {}", u.id);
-    }
+        // Every affected usage (6 part usages + 5 attachment usages) is
+        // increased by the activity metrics (8025+1000, 125000+10000, 1100+100,
+        // 1100+100, 1500+200, 3+1); descend is None in the activity, so it
+        // falls back to climb.
+        assert_eq!(summary.usages.len(), 11);
+        let mut expected = Usage {
+            id: UsageId::default(),
+            time: 9025,
+            distance: 135000,
+            climb: 1200,
+            descend: 1200,
+            energy: 1700,
+            count: 4,
+        };
+        for u in &summary.usages {
+            expected.id = u.id;
+            assert_eq!(*u, expected, "unexpected usage for {}", u.id);
+        }
 
-    // The updates are persisted in the store.
-    let bike_usage = store.partid_get_part(bike).await?.usage;
-    let stored = UsageStore::get(&mut store, bike_usage)
-        .await?
-        .expect("the bike usage row exists");
-    assert_eq!(stored.time, 9025);
-    assert_eq!(stored.distance, 135000);
-    assert_eq!(stored.count, 4);
+        // The updates are persisted in the store.
+        let bike_usage = store.partid_get_part(bike).await?.usage;
+        let stored = UsageStore::get(&mut store, bike_usage)
+            .await?
+            .expect("the bike usage row exists");
+        assert_eq!(stored.time, 9025);
+        assert_eq!(stored.distance, 135000);
+        assert_eq!(stored.count, 4);
 
-    store.rollback().await?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 /// Deleting an activity reverts the create: usage back at baseline and the
@@ -1124,84 +1124,75 @@ async fn activity_upsert_creates_and_accounts() -> tb_domain::TbResult<()> {
 /// `activity_delete_reverts_bike_and_attached_part_usage`).
 #[tokio::test]
 async fn activity_delete_reverts_usage() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let bike = PartId::from(1);
-    let act = Activity {
-        id: ActivityId::new(100),
-        user_id: UserId::from(1),
-        what: ActTypeId::from(1),
-        name: "New Ride".to_string(),
-        start: activity_start(),
-        duration: 3600,
-        time: Some(1000),
-        distance: Some(10000),
-        climb: Some(100),
-        descend: None,
-        energy: Some(200),
-        gear: Some(bike),
-        device_name: None,
-        external_id: None,
-    };
+    with_seam(|mut store| async move {
+        let bike = PartId::from(1);
+        let act = Activity {
+            time: Some(1000),
+            distance: Some(10000),
+            climb: Some(100),
+            descend: None,
+            energy: Some(200),
+            ..ride(100, "New Ride", activity_start(), Some(bike))
+        };
 
-    // Create the activity so its usage is accounted, then delete it.
-    act.clone().upsert(&test_session(), &mut store).await?;
-    let summary = ActivityId::new(100)
-        .delete(&test_session(), &mut store)
-        .await?;
+        // Create the activity so its usage is accounted, then delete it.
+        act.clone().upsert(&test_session(), &mut store).await?;
+        let summary = ActivityId::new(100)
+            .delete(&test_session(), &mut store)
+            .await?;
 
-    // The deleted activity is reported with its metrics zeroed.
-    let mut expected = act;
-    expected.gear = None;
-    expected.duration = 0;
-    expected.time = None;
-    expected.distance = None;
-    expected.climb = None;
-    expected.descend = None;
-    expected.energy = None;
-    assert_eq!(summary.activities, vec![expected]);
+        // The deleted activity is reported with its metrics zeroed.
+        let mut expected = act;
+        expected.gear = None;
+        expected.duration = 0;
+        expected.time = None;
+        expected.distance = None;
+        expected.climb = None;
+        expected.descend = None;
+        expected.energy = None;
+        assert_eq!(summary.activities, vec![expected]);
 
-    // The bike and all attached parts are affected again.
-    let part_ids: HashSet<PartId> = summary.parts.iter().map(|p| p.id).collect();
-    assert_eq!(
-        part_ids,
-        [1, 2, 3, 4, 5, 6].into_iter().map(PartId::from).collect()
-    );
+        // The bike and all attached parts are affected again.
+        let part_ids: HashSet<PartId> = summary.parts.iter().map(|p| p.id).collect();
+        assert_eq!(
+            part_ids,
+            [1, 2, 3, 4, 5, 6].into_iter().map(PartId::from).collect()
+        );
 
-    // Every affected usage is back at the prepopulated baseline.
-    let mut expected = Usage {
-        id: UsageId::default(),
-        time: 8025,
-        distance: 125000,
-        climb: 1100,
-        descend: 1100,
-        energy: 1500,
-        count: 3,
-    };
-    for u in &summary.usages {
-        expected.id = u.id;
-        assert_eq!(*u, expected, "unexpected usage for {}", u.id);
-    }
+        // Every affected usage is back at the prepopulated baseline.
+        let mut expected = Usage {
+            id: UsageId::default(),
+            time: 8025,
+            distance: 125000,
+            climb: 1100,
+            descend: 1100,
+            energy: 1500,
+            count: 3,
+        };
+        for u in &summary.usages {
+            expected.id = u.id;
+            assert_eq!(*u, expected, "unexpected usage for {}", u.id);
+        }
 
-    // The updates are persisted in the store.
-    let bike_usage = store.partid_get_part(bike).await?.usage;
-    let stored = UsageStore::get(&mut store, bike_usage)
-        .await?
-        .expect("the bike usage row exists");
-    assert_eq!(stored.time, 8025);
-    assert_eq!(stored.count, 3);
-
-    // The activity is gone.
-    assert!(
-        store
-            .activity_read_by_id(ActivityId::new(100))
+        // The updates are persisted in the store.
+        let bike_usage = store.partid_get_part(bike).await?.usage;
+        let stored = UsageStore::get(&mut store, bike_usage)
             .await?
-            .is_none()
-    );
+            .expect("the bike usage row exists");
+        assert_eq!(stored.time, 8025);
+        assert_eq!(stored.count, 3);
 
-    store.rollback().await?;
-    Ok(())
+        // The activity is gone.
+        assert!(
+            store
+                .activity_read_by_id(ActivityId::new(100))
+                .await?
+                .is_none()
+        );
+
+        Ok(())
+    })
+    .await
 }
 
 /// Updating an activity returns a summary containing it (mirrors
@@ -1211,37 +1202,25 @@ async fn activity_delete_reverts_usage() -> tb_domain::TbResult<()> {
 /// key, mirrored in the in-memory store (issue #405).
 #[tokio::test]
 async fn activity_update_returns_summary() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let act = Activity {
-        id: ActivityId::new(100),
-        user_id: UserId::from(1),
-        what: ActTypeId::from(1),
-        name: "Morning Ride".to_string(),
-        start: activity_start(),
-        duration: 3600,
-        time: Some(3500),
-        distance: Some(50000),
-        climb: Some(500),
-        descend: Some(300),
-        energy: Some(1000),
-        gear: None,
-        device_name: Some("Garmin Edge".to_string()),
-        external_id: Some("garmin_12345".to_string()),
-    };
-    store.activity_create(act.clone()).await?;
+    with_seam(|mut store| async move {
+        let act = Activity {
+            device_name: Some("Garmin Edge".to_string()),
+            external_id: Some("garmin_12345".to_string()),
+            ..ride(100, "Morning Ride", activity_start(), None)
+        };
+        store.activity_create(act.clone()).await?;
 
-    let modified = Activity {
-        name: "Modified Ride".to_string(),
-        ..act
-    };
-    let summary = modified.update(&test_session(), &mut store).await?;
-    assert_eq!(summary.activities.len(), 1);
-    assert_eq!(summary.activities[0].name, "Modified Ride");
+        let modified = Activity {
+            name: "Modified Ride".to_string(),
+            ..act
+        };
+        let summary = modified.update(&test_session(), &mut store).await?;
+        assert_eq!(summary.activities.len(), 1);
+        assert_eq!(summary.activities[0].name, "Modified Ride");
 
-    store.rollback().await?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 /// Activity update replaces the data fields but keeps the stored row's
@@ -1249,63 +1228,56 @@ async fn activity_update_returns_summary() -> tb_domain::TbResult<()> {
 /// round-trip can lose; one rule on both stores (#408 rule 1).
 #[tokio::test]
 async fn activity_update_preserves_fields() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    // A ride stored at 22:13:20+01:00, with device metadata.
-    let act = Activity {
-        id: ActivityId::new(100),
-        user_id: UserId::from(1),
-        what: ActTypeId::from(1),
-        name: "Morning Ride".to_string(),
-        start: activity_start().to_offset(time::UtcOffset::from_whole_seconds(3600).unwrap()),
-        duration: 3600,
-        time: Some(3500),
-        distance: Some(50000),
-        climb: Some(500),
-        descend: Some(300),
-        energy: Some(1000),
-        gear: None,
-        device_name: Some("Garmin Edge".to_string()),
-        external_id: Some("garmin_12345".to_string()),
-    };
-    store.activity_create(act.clone()).await?;
+    with_seam(|mut store| async move {
+        // A ride stored at 22:13:20+01:00, with device metadata.
+        let act = Activity {
+            device_name: Some("Garmin Edge".to_string()),
+            external_id: Some("garmin_12345".to_string()),
+            ..ride(
+                100,
+                "Morning Ride",
+                activity_start().to_offset(time::UtcOffset::from_whole_seconds(3600).unwrap()),
+                None,
+            )
+        };
+        store.activity_create(act.clone()).await?;
 
-    // A client that lost the device data updates the name only, with the
-    // start in a UTC representation.
-    let lossy = Activity {
-        name: "Modified Ride".to_string(),
-        start: activity_start().to_offset(time::UtcOffset::UTC),
-        device_name: None,
-        external_id: None,
-        ..act.clone()
-    };
-    let updated = store.activity_update(lossy).await?;
+        // A client that lost the device data updates the name only, with the
+        // start in a UTC representation.
+        let lossy = Activity {
+            name: "Modified Ride".to_string(),
+            start: activity_start().to_offset(time::UtcOffset::UTC),
+            device_name: None,
+            external_id: None,
+            ..act.clone()
+        };
+        let updated = store.activity_update(lossy).await?;
 
-    // The rule: the data fields are replaced …
-    assert_eq!(updated.name, "Modified Ride");
-    assert_eq!(
-        updated.start.unix_timestamp(),
-        activity_start().unix_timestamp()
-    );
-    // … and the stored row keeps its offset, device name, and external id.
-    assert_eq!(updated.start.offset().whole_seconds(), 3600);
-    assert_eq!(updated.device_name.as_deref(), Some("Garmin Edge"));
-    assert_eq!(updated.external_id.as_deref(), Some("garmin_12345"));
+        // The rule: the data fields are replaced …
+        assert_eq!(updated.name, "Modified Ride");
+        assert_eq!(
+            updated.start.unix_timestamp(),
+            activity_start().unix_timestamp()
+        );
+        // … and the stored row keeps its offset, device name, and external id.
+        assert_eq!(updated.start.offset().whole_seconds(), 3600);
+        assert_eq!(updated.device_name.as_deref(), Some("Garmin Edge"));
+        assert_eq!(updated.external_id.as_deref(), Some("garmin_12345"));
 
-    // An update of a missing activity is a NotFound on both stores.
-    let ghost = Activity {
-        id: ActivityId::new(999),
-        ..act
-    };
-    let err = store.activity_update(ghost).await;
-    assert!(
-        matches!(err, Err(tb_domain::Error::NotFound(_))),
-        "updating a missing activity must be NotFound, got {err:?}"
-    );
+        // An update of a missing activity is a NotFound on both stores.
+        let ghost = Activity {
+            id: ActivityId::new(999),
+            ..act
+        };
+        let err = store.activity_update(ghost).await;
+        assert!(
+            matches!(err, Err(tb_domain::Error::NotFound(_))),
+            "updating a missing activity must be NotFound, got {err:?}"
+        );
 
-    store.rollback().await?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 // ---------------------------------------------------------------------------
@@ -1316,54 +1288,38 @@ async fn activity_update_preserves_fields() -> tb_domain::TbResult<()> {
 /// excluded — one rule on both stores (#408 rule 2).
 #[tokio::test]
 async fn activity_find_range_boundary() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let bike = create_part("Road Bike", "Trek", "Domane", BIKE, &mut store).await;
-    let start = datetime!(2024-02-01 12:00 UTC);
-    let act = Activity {
-        id: ActivityId::new(100),
-        user_id: UserId::from(1),
-        what: ActTypeId::from(1),
-        name: "Boundary Ride".to_string(),
-        start,
-        duration: 3600,
-        time: Some(3500),
-        distance: Some(50000),
-        climb: Some(500),
-        descend: Some(300),
-        energy: Some(1000),
-        gear: Some(bike.id),
-        device_name: None,
-        external_id: None,
-    };
-    store.activity_create(act).await?;
+    with_seam(|mut store| async move {
+        let bike = create_part("Road Bike", "Trek", "Domane", BIKE, &mut store).await;
+        let start = datetime!(2024-02-01 12:00 UTC);
+        let act = ride(100, "Boundary Ride", start, Some(bike.id));
+        store.activity_create(act).await?;
 
-    // A window that ends exactly at the activity's start: the boundary ride
-    // is outside the range, because end is exclusive.
-    let begin = start - time::Duration::minutes(30);
-    let found = store
-        .activities_find_by_gear_and_time(bike.id, begin, start)
-        .await?;
-    assert!(
-        found.is_empty(),
-        "a ride exactly at the range end must be excluded, got {found:?}"
-    );
+        // A window that ends exactly at the activity's start: the boundary ride
+        // is outside the range, because end is exclusive.
+        let begin = start - time::Duration::minutes(30);
+        let found = store
+            .activities_find_by_gear_and_time(bike.id, begin, start)
+            .await?;
+        assert!(
+            found.is_empty(),
+            "a ride exactly at the range end must be excluded, got {found:?}"
+        );
 
-    // A window that begins exactly at the activity's start: begin is
-    // inclusive.
-    let found = store
-        .activities_find_by_gear_and_time(bike.id, start, start + time::Duration::minutes(30))
-        .await?;
-    assert_eq!(
-        found.len(),
-        1,
-        "a ride exactly at the range begin must be included"
-    );
-    assert_eq!(found[0].id, ActivityId::new(100));
+        // A window that begins exactly at the activity's start: begin is
+        // inclusive.
+        let found = store
+            .activities_find_by_gear_and_time(bike.id, start, start + time::Duration::minutes(30))
+            .await?;
+        assert_eq!(
+            found.len(),
+            1,
+            "a ride exactly at the range begin must be included"
+        );
+        assert_eq!(found[0].id, ActivityId::new(100));
 
-    store.rollback().await?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 /// The import lookup by user and time matches by the minute, not the
@@ -1374,88 +1330,72 @@ async fn activity_find_range_boundary() -> tb_domain::TbResult<()> {
 /// more activities in the same minute is an Error::Ambiguous.
 #[tokio::test]
 async fn activity_get_by_user_and_time() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let start = datetime!(2024-02-01 12:00:30 UTC);
-    let act = Activity {
-        id: ActivityId::new(100),
-        user_id: UserId::from(1),
-        what: ActTypeId::from(1),
-        name: "Minute Ride".to_string(),
-        start,
-        duration: 3600,
-        time: Some(3500),
-        distance: Some(50000),
-        climb: Some(500),
-        descend: Some(300),
-        energy: Some(1000),
-        gear: None,
-        device_name: None,
-        external_id: None,
-    };
-    store.activity_create(act.clone()).await?;
+    with_seam(|mut store| async move {
+        let start = datetime!(2024-02-01 12:00:30 UTC);
+        let act = ride(100, "Minute Ride", start, None);
+        store.activity_create(act.clone()).await?;
 
-    // A different instant of the same minute: the minute match finds the
-    // activity (a zero-offset ride's local minute is its UTC minute).
-    let query = start + time::Duration::seconds(15);
-    let found = store.get_by_user_and_time(UserId::from(1), query).await?;
-    assert_eq!(found.id, ActivityId::new(100));
+        // A different instant of the same minute: the minute match finds the
+        // activity (a zero-offset ride's local minute is its UTC minute).
+        let query = start + time::Duration::seconds(15);
+        let found = store.get_by_user_and_time(UserId::from(1), query).await?;
+        assert_eq!(found.id, ActivityId::new(100));
 
-    // A different minute: no match.
-    let other_minute = start + time::Duration::minutes(2);
-    let err = store
-        .get_by_user_and_time(UserId::from(1), other_minute)
-        .await;
-    assert!(
-        matches!(err, Err(tb_domain::Error::NotFound(_))),
-        "a different minute must not match, got {err:?}"
-    );
+        // A different minute: no match.
+        let other_minute = start + time::Duration::minutes(2);
+        let err = store
+            .get_by_user_and_time(UserId::from(1), other_minute)
+            .await;
+        assert!(
+            matches!(err, Err(tb_domain::Error::NotFound(_))),
+            "a different minute must not match, got {err:?}"
+        );
 
-    // A ride with a +02:00 offset matches only queries whose UTC wall clock
-    // equals the ride's local minute (10:53), not its UTC minute (08:53).
-    let local_start = OffsetDateTime::from_unix_timestamp(1706777630) // 08:53:50 UTC
-        .unwrap()
-        .to_offset(time::UtcOffset::from_whole_seconds(7200).unwrap());
-    let act2 = Activity {
-        id: ActivityId::new(101),
-        start: local_start,
-        ..act
-    };
-    store.activity_create(act2.clone()).await?;
+        // A ride with a +02:00 offset matches only queries whose UTC wall clock
+        // equals the ride's local minute (10:53), not its UTC minute (08:53).
+        let local_start = OffsetDateTime::from_unix_timestamp(1706777630) // 08:53:50 UTC
+            .unwrap()
+            .to_offset(time::UtcOffset::from_whole_seconds(7200).unwrap());
+        let act2 = Activity {
+            id: ActivityId::new(101),
+            start: local_start,
+            ..act
+        };
+        store.activity_create(act2.clone()).await?;
 
-    let query = OffsetDateTime::from_unix_timestamp(1706777630 + 7200 - 20).unwrap(); // 10:53:30 UTC — the ride's local minute
-    let found = store.get_by_user_and_time(UserId::from(1), query).await?;
-    assert_eq!(found.id, ActivityId::new(101));
+        let query = OffsetDateTime::from_unix_timestamp(1706777630 + 7200 - 20).unwrap(); // 10:53:30 UTC — the ride's local minute
+        let found = store.get_by_user_and_time(UserId::from(1), query).await?;
+        assert_eq!(found.id, ActivityId::new(101));
 
-    let next_minute = query + time::Duration::seconds(60); // 10:54:30 UTC
-    let err = store
-        .get_by_user_and_time(UserId::from(1), next_minute)
-        .await;
-    assert!(
-        matches!(err, Err(tb_domain::Error::NotFound(_))),
-        "a different minute must not match, got {err:?}"
-    );
+        let next_minute = query + time::Duration::seconds(60); // 10:54:30 UTC
+        let err = store
+            .get_by_user_and_time(UserId::from(1), next_minute)
+            .await;
+        assert!(
+            matches!(err, Err(tb_domain::Error::NotFound(_))),
+            "a different minute must not match, got {err:?}"
+        );
 
-    // The confirmed duplicate rule: a second ride in the first ride's minute
-    // makes the lookup ambiguous — an error, not a silent first-match, so a
-    // conflicting CSV row lands in the bad list.
-    let dup = Activity {
-        id: ActivityId::new(102),
-        start: start + time::Duration::seconds(15), // 12:00:45 — the first ride's minute
-        ..act2.clone()
-    };
-    store.activity_create(dup).await?;
-    let err = store
-        .get_by_user_and_time(UserId::from(1), start + time::Duration::seconds(20))
-        .await;
-    assert!(
-        matches!(err, Err(tb_domain::Error::Ambiguous(_))),
-        "two same-minute rides must return Error::Ambiguous, got {err:?}"
-    );
+        // The confirmed duplicate rule: a second ride in the first ride's minute
+        // makes the lookup ambiguous — an error, not a silent first-match, so a
+        // conflicting CSV row lands in the bad list.
+        let dup = Activity {
+            id: ActivityId::new(102),
+            start: start + time::Duration::seconds(15), // 12:00:45 — the first ride's minute
+            ..act2.clone()
+        };
+        store.activity_create(dup).await?;
+        let err = store
+            .get_by_user_and_time(UserId::from(1), start + time::Duration::seconds(20))
+            .await;
+        assert!(
+            matches!(err, Err(tb_domain::Error::Ambiguous(_))),
+            "two same-minute rides must return Error::Ambiguous, got {err:?}"
+        );
 
-    store.rollback().await?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 /// `get_all` returns the user's activities and `categories` derives the
@@ -1463,27 +1403,26 @@ async fn activity_get_by_user_and_time() -> tb_domain::TbResult<()> {
 /// `activity_categories` tests).
 #[tokio::test]
 async fn activity_get_all_and_categories() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let acts = store.get_all(&UserId::from(1)).await?;
-    assert_eq!(acts.len(), 3);
-    let names: HashSet<&str> = acts.iter().map(|a| a.name.as_str()).collect();
-    assert_eq!(
-        names,
-        ["Morning Ride", "Hill Repeats", "Recovery Spin"]
-            .into_iter()
-            .collect()
-    );
+    with_seam(|mut store| async move {
+        let acts = store.get_all(&UserId::from(1)).await?;
+        assert_eq!(acts.len(), 3);
+        let names: HashSet<&str> = acts.iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["Morning Ride", "Hill Repeats", "Recovery Spin"]
+                .into_iter()
+                .collect()
+        );
 
-    let categories = Activity::categories(&test_session(), &mut store).await?;
-    assert_eq!(categories, HashSet::from([BIKE]));
+        let categories = Activity::categories(&test_session(), &mut store).await?;
+        assert_eq!(categories, HashSet::from([BIKE]));
 
-    // A user without activities gets nothing.
-    assert!(store.get_all(&UserId::from(99)).await?.is_empty());
+        // A user without activities gets nothing.
+        assert!(store.get_all(&UserId::from(99)).await?.is_empty());
 
-    store.rollback().await?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
 
 /// `get_all` returns the user's activities in ascending start instant —
@@ -1492,65 +1431,39 @@ async fn activity_get_all_and_categories() -> tb_domain::TbResult<()> {
 /// creation order.
 #[tokio::test]
 async fn activity_get_all_orders_by_start() -> tb_domain::TbResult<()> {
-    let Some(Seam { _lock, mut store }) = seam().await else {
-        return Ok(());
-    };
-    let bike = PartId::from(1);
+    with_seam(|mut store| async move {
+        let bike = PartId::from(1);
 
-    // The later ride is created first.
-    let later = Activity {
-        id: ActivityId::new(100),
-        user_id: UserId::from(1),
-        what: ActTypeId::from(1),
-        name: "Later Ride".to_string(),
-        start: activity_start() + time::Duration::hours(1),
-        duration: 3600,
-        time: Some(3500),
-        distance: Some(50000),
-        climb: Some(500),
-        descend: Some(300),
-        energy: Some(1000),
-        gear: Some(bike),
-        device_name: None,
-        external_id: None,
-    };
-    store.activity_create(later).await?;
+        // The later ride is created first.
+        let later = ride(
+            100,
+            "Later Ride",
+            activity_start() + time::Duration::hours(1),
+            Some(bike),
+        );
+        store.activity_create(later).await?;
 
-    // The earlier ride is created second.
-    let earlier = Activity {
-        id: ActivityId::new(101),
-        user_id: UserId::from(1),
-        what: ActTypeId::from(1),
-        name: "Earlier Ride".to_string(),
-        start: activity_start(),
-        duration: 3600,
-        time: Some(3500),
-        distance: Some(50000),
-        climb: Some(500),
-        descend: Some(300),
-        energy: Some(1000),
-        gear: Some(bike),
-        device_name: None,
-        external_id: None,
-    };
-    store.activity_create(earlier).await?;
+        // The earlier ride is created second.
+        let earlier = ride(101, "Earlier Ride", activity_start(), Some(bike));
+        store.activity_create(earlier).await?;
 
-    // The three fixture rides (May 2023) precede the two created rides
-    // (November 2023), and the created rides come back in start order,
-    // not creation order.
-    let acts = store.get_all(&UserId::from(1)).await?;
-    let names: Vec<&str> = acts.iter().map(|a| a.name.as_str()).collect();
-    assert_eq!(
-        names,
-        vec![
-            "Morning Ride",
-            "Hill Repeats",
-            "Recovery Spin",
-            "Earlier Ride",
-            "Later Ride"
-        ]
-    );
+        // The three fixture rides (May 2023) precede the two created rides
+        // (November 2023), and the created rides come back in start order,
+        // not creation order.
+        let acts = store.get_all(&UserId::from(1)).await?;
+        let names: Vec<&str> = acts.iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec![
+                "Morning Ride",
+                "Hill Repeats",
+                "Recovery Spin",
+                "Earlier Ride",
+                "Later Ride"
+            ]
+        );
 
-    store.rollback().await?;
-    Ok(())
+        Ok(())
+    })
+    .await
 }
