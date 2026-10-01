@@ -85,6 +85,11 @@ impl ActivityStore for MemStore {
         for a in d.activities.iter().filter(|a| &a.user_id == uid) {
             result.push(normalize_offset(a)?);
         }
+        // One rule on both stores (issue #405): the database's ORDER BY
+        // start — ascending start instant. The instant never moves under
+        // offset normalization, and the stable sort keeps creation order
+        // for equal instants (any order is acceptable for ties).
+        result.sort_by_key(|a| a.start.unix_timestamp());
         Ok(result)
     }
 
@@ -255,6 +260,35 @@ mod tests {
 
         let created = store.activity_create(activity_at(3_600)).await?; // +1:00
         assert_eq!(created.start.offset().whole_seconds(), 3_600);
+        Ok(())
+    }
+
+    /// `get_all` returns the user's activities in ascending start instant —
+    /// the database's `ORDER BY start` is the one rule on both stores
+    /// (issue #405). The later ride is created first; the listing must not
+    /// follow creation order.
+    #[tokio::test]
+    async fn activity_get_all_orders_by_start() -> TbResult<()> {
+        let mut store = MemStore::new();
+
+        // The later ride is created first.
+        let mut later = activity_at(0);
+        later.id = ActivityId::new(2);
+        later.name = "Later Ride".to_string();
+        store.activity_create(later).await?;
+
+        // The earlier ride is created second.
+        let mut earlier = activity_at(0);
+        earlier.id = ActivityId::new(1);
+        earlier.name = "Earlier Ride".to_string();
+        earlier.start = earlier.start - time::Duration::hours(1);
+        store.activity_create(earlier).await?;
+
+        let acts = store.get_all(&UserId::from(1)).await?;
+        let names: Vec<&str> = acts.iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(names, vec!["Earlier Ride", "Later Ride"]);
+        let ids: Vec<ActivityId> = acts.iter().map(|a| a.id).collect();
+        assert_eq!(ids, vec![ActivityId::new(1), ActivityId::new(2)]);
         Ok(())
     }
 }

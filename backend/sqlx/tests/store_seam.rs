@@ -1431,3 +1431,72 @@ async fn activity_get_all_and_categories() -> tb_domain::TbResult<()> {
     store.rollback().await?;
     Ok(())
 }
+
+/// `get_all` returns the user's activities in ascending start instant —
+/// the database's `ORDER BY start` is the one rule on both stores (issue
+/// #405). The later ride is created first; the listing must not follow
+/// creation order.
+#[tokio::test]
+async fn activity_get_all_orders_by_start() -> tb_domain::TbResult<()> {
+    let Some(Seam { _lock, mut store }) = seam().await else {
+        return Ok(());
+    };
+    let bike = PartId::from(1);
+
+    // The later ride is created first.
+    let later = Activity {
+        id: ActivityId::new(100),
+        user_id: UserId::from(1),
+        what: ActTypeId::from(1),
+        name: "Later Ride".to_string(),
+        start: activity_start() + time::Duration::hours(1),
+        duration: 3600,
+        time: Some(3500),
+        distance: Some(50000),
+        climb: Some(500),
+        descend: Some(300),
+        energy: Some(1000),
+        gear: Some(bike),
+        device_name: None,
+        external_id: None,
+    };
+    store.activity_create(later).await?;
+
+    // The earlier ride is created second.
+    let earlier = Activity {
+        id: ActivityId::new(101),
+        user_id: UserId::from(1),
+        what: ActTypeId::from(1),
+        name: "Earlier Ride".to_string(),
+        start: activity_start(),
+        duration: 3600,
+        time: Some(3500),
+        distance: Some(50000),
+        climb: Some(500),
+        descend: Some(300),
+        energy: Some(1000),
+        gear: Some(bike),
+        device_name: None,
+        external_id: None,
+    };
+    store.activity_create(earlier).await?;
+
+    // The three fixture rides (May 2023) precede the two created rides
+    // (November 2023), and the created rides come back in start order,
+    // not creation order.
+    let acts = store.get_all(&UserId::from(1)).await?;
+    let names: Vec<&str> = acts.iter().map(|a| a.name.as_str()).collect();
+    assert_eq!(
+        names,
+        vec![
+            "Morning Ride",
+            "Hill Repeats",
+            "Recovery Spin",
+            "Earlier Ride",
+            "Later Ride"
+        ]
+    );
+
+    store.rollback().await?;
+    Ok(())
+}

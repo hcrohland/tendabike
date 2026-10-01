@@ -74,6 +74,10 @@ pub trait ActivityStore {
 
     /// Retrieves all activities for a given user ID.
     ///
+    /// Activities come back in ascending start instant (the database's
+    /// `ORDER BY start`): two activities with the same start instant may
+    /// come back in any order — both stores apply this one rule.
+    ///
     /// # Arguments
     ///
     /// * `uid` - The ID of the user to retrieve activities for.
