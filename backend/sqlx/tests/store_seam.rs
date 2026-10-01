@@ -993,6 +993,59 @@ async fn dispose_part() -> tb_domain::TbResult<()> {
 // Activity: upsert, update, delete
 // ---------------------------------------------------------------------------
 
+/// The activity id is a primary key on both stores (issue #405): the
+/// INSERT hits the key on a duplicate id and maps to
+/// `Error::DatabaseFailure` — the in-memory store applies the same rule.
+/// The in-memory twin is `activity_create_rejects_duplicate_id` in
+/// `mem_activity.rs`.
+#[tokio::test]
+async fn activity_create_rejects_duplicate_id() -> tb_domain::TbResult<()> {
+    let Some(Seam { _lock, mut store }) = seam().await else {
+        return Ok(());
+    };
+    let ride = Activity {
+        id: ActivityId::new(100),
+        user_id: UserId::from(1),
+        what: ActTypeId::from(1),
+        name: "Ride".to_string(),
+        start: activity_start(),
+        duration: 3600,
+        time: Some(3500),
+        distance: Some(50000),
+        climb: Some(500),
+        descend: Some(300),
+        energy: Some(1000),
+        gear: None,
+        device_name: None,
+        external_id: None,
+    };
+    store.activity_create(ride.clone()).await?;
+
+    // The first ride is stored, and a different id still succeeds.
+    let stored = store
+        .activity_read_by_id(ActivityId::new(100))
+        .await?
+        .expect("the first ride is stored");
+    assert_eq!(stored.id, ActivityId::new(100));
+    let mut other = ride.clone();
+    other.id = ActivityId::new(101);
+    store.activity_create(other).await?;
+
+    // The duplicate create comes last: a failed statement aborts the
+    // Postgres transaction, so nothing may follow it inside this test.
+    let err = store
+        .activity_create(ride.clone())
+        .await
+        .expect_err("a duplicate activity id must fail");
+    assert!(
+        matches!(err, tb_domain::Error::DatabaseFailure(_)),
+        "a duplicate activity id must be a DatabaseFailure, got {err:?}"
+    );
+
+    store.rollback().await?;
+    Ok(())
+}
+
 /// Creating a new activity for the prepopulated bike accounts for the bike
 /// and every part attached to it (mirrors
 /// `activity_upsert_creates_new_accounts_bike_and_attached_parts`).
@@ -1152,9 +1205,10 @@ async fn activity_delete_reverts_usage() -> tb_domain::TbResult<()> {
 }
 
 /// Updating an activity returns a summary containing it (mirrors
-/// `activity_update_returns_summary`). The in-memory suite updates an
-/// activity whose id collides with the fixture's; the database primary key
-/// forbids that, so the seam uses a fresh id — same domain-level assertion.
+/// `activity_update_returns_summary`). The ride is created under a fresh id
+/// on both stores for the same reason: the fixture's activity id is already
+/// taken, and both stores reject a duplicate id — the database's primary
+/// key, mirrored in the in-memory store (issue #405).
 #[tokio::test]
 async fn activity_update_returns_summary() -> tb_domain::TbResult<()> {
     let Some(Seam { _lock, mut store }) = seam().await else {

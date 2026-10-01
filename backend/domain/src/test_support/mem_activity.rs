@@ -22,6 +22,16 @@ fn normalize_offset(a: &Activity) -> TbResult<Activity> {
 impl ActivityStore for MemStore {
     async fn activity_create(&mut self, act: Activity) -> TbResult<Activity> {
         let d = self.state_mut();
+        // One rule on both stores (issue #405): the activity id is a
+        // primary key — the database's INSERT hits the key on a duplicate,
+        // and this in-memory mirror rejects the same insert instead of
+        // silently accepting the duplicate row.
+        if d.activities.iter().any(|a| a.id == act.id) {
+            return Err(crate::Error::DatabaseFailure(anyhow::anyhow!(
+                "activity {} already exists",
+                act.id
+            )));
+        }
         // The row keeps the instant (and the raw offset label); the value
         // returned is what a database read would return: rounded offset.
         d.activities.push(act.clone());
@@ -183,7 +193,7 @@ fn minute_floor(unix: i64) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ActTypeId, Activity, ActivityId, UserId};
+    use crate::{ActTypeId, Activity, ActivityId, Error, UserId};
     use time::{OffsetDateTime, UtcOffset};
 
     fn activity_at(offset_secs: i32) -> Activity {
@@ -289,6 +299,42 @@ mod tests {
         assert_eq!(names, vec!["Earlier Ride", "Later Ride"]);
         let ids: Vec<ActivityId> = acts.iter().map(|a| a.id).collect();
         assert_eq!(ids, vec![ActivityId::new(1), ActivityId::new(2)]);
+        Ok(())
+    }
+
+    /// The activity id is a primary key on both stores (issue #405): the
+    /// database's INSERT hits the key and fails, and the in-memory store
+    /// must apply the same rule instead of accepting the duplicate
+    /// silently. The failure is the variant a Postgres primary-key
+    /// violation maps to: `Error::DatabaseFailure`.
+    #[tokio::test]
+    async fn activity_create_rejects_duplicate_id() -> TbResult<()> {
+        let mut store = MemStore::new();
+
+        let first = activity_at(0);
+        store.activity_create(first.clone()).await?;
+
+        // A second activity with the same id must fail …
+        let err = store
+            .activity_create(activity_at(0))
+            .await
+            .expect_err("a duplicate activity id must fail");
+        assert!(
+            matches!(err, Error::DatabaseFailure(_)),
+            "a duplicate activity id must be a DatabaseFailure, got {err:?}"
+        );
+
+        // … and the first activity is still there. …
+        let stored = store
+            .activity_read_by_id(first.id)
+            .await?
+            .expect("the original activity is stored");
+        assert_eq!(stored.id, first.id);
+
+        // … while a different id still succeeds.
+        let mut other = activity_at(0);
+        other.id = ActivityId::new(2);
+        store.activity_create(other).await?;
         Ok(())
     }
 }

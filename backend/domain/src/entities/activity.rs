@@ -493,10 +493,15 @@ mod tests {
     #[tokio::test]
     async fn activityid_read_optional_returns_some_for_existing() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act = sample_activity();
+        // A fresh id: the fixture already holds id 1, and a duplicate id is
+        // a primary-key violation both stores reject (issue #405).
+        let act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        };
         store.activity_create(act).await?;
 
-        let result = ActivityId::new(1)
+        let result = ActivityId::new(100)
             .read_optional(&test_session(), &mut store)
             .await?;
         assert!(result.is_some());
@@ -508,10 +513,17 @@ mod tests {
     #[tokio::test]
     async fn activityid_read_returns_existing() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act = sample_activity();
+        // A fresh id: the fixture already holds id 1, and a duplicate id is
+        // a primary-key violation both stores reject (issue #405).
+        let act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        };
         store.activity_create(act).await?;
 
-        let result = ActivityId::new(1).read(&test_session(), &mut store).await?;
+        let result = ActivityId::new(100)
+            .read(&test_session(), &mut store)
+            .await?;
         assert_eq!(result.name, "Morning Ride");
         assert_eq!(result.user_id, test_user());
         Ok(())
@@ -530,12 +542,15 @@ mod tests {
     #[tokio::test]
     async fn activityid_read_rejects_cross_user() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act = sample_activity();
+        let act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        };
         store.activity_create(act).await?;
 
         // User 2 tries to access user 1's activity
         let other_session = TestSession::new(UserId::from(2));
-        let result = ActivityId::new(1).read(&other_session, &mut store).await;
+        let result = ActivityId::new(100).read(&other_session, &mut store).await;
         assert!(result.is_err());
         Ok(())
     }
@@ -583,7 +598,7 @@ mod tests {
         let sess = TestSession::new(UserId::from(99));
 
         let act1 = Activity {
-            id: ActivityId::new(1),
+            id: ActivityId::new(101),
             user_id: sess.user_id(),
             what: ActTypeId::from(1),
             name: "Morning Ride".to_string(),
@@ -601,7 +616,7 @@ mod tests {
         store.activity_create(act1).await?;
 
         let act2 = Activity {
-            id: ActivityId::new(2),
+            id: ActivityId::new(102),
             user_id: sess.user_id(),
             what: ActTypeId::from(3),
             name: "Evening Ride".to_string(),
@@ -636,11 +651,14 @@ mod tests {
     #[tokio::test]
     async fn activity_categories_returns_unique_gear_types() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act1 = sample_activity(); // what = ActTypeId(1) -> gear_type for Bike
+        let act1 = Activity {
+            id: ActivityId::new(101),
+            ..sample_activity()
+        }; // what = ActTypeId(1) -> gear_type for Bike
         store.activity_create(act1).await?;
 
         let act2 = Activity {
-            id: ActivityId::new(2),
+            id: ActivityId::new(102),
             user_id: test_user(),
             what: ActTypeId::from(1), // same type
             name: "Another Ride".to_string(),
@@ -689,7 +707,7 @@ mod tests {
         .await?;
 
         let act1 = Activity {
-            id: ActivityId::new(1),
+            id: ActivityId::new(100),
             user_id: test_user(),
             what: ActTypeId::from(1),
             name: "Morning Ride".to_string(),
@@ -715,7 +733,7 @@ mod tests {
         .await?;
 
         assert_eq!(acts.len(), 1);
-        assert_eq!(acts[0].id, ActivityId::new(1));
+        assert_eq!(acts[0].id, ActivityId::new(100));
         Ok(())
     }
 
@@ -739,7 +757,7 @@ mod tests {
 
         let start = activity_start();
         let act = Activity {
-            id: ActivityId::new(1),
+            id: ActivityId::new(100),
             user_id: test_user(),
             what: ActTypeId::from(1),
             name: "Boundary Ride".to_string(),
@@ -765,7 +783,7 @@ mod tests {
         let acts =
             Activity::find(part.id, start, start + time::Duration::hours(1), &mut store).await?;
         assert_eq!(acts.len(), 1, "begin is inclusive");
-        assert_eq!(acts[0].id, ActivityId::new(1));
+        assert_eq!(acts[0].id, ActivityId::new(100));
         Ok(())
     }
 
@@ -787,7 +805,7 @@ mod tests {
 
         // Create an activity starting 1 hour after the search window end
         let outside_activity = Activity {
-            id: ActivityId::new(1),
+            id: ActivityId::new(100),
             user_id: test_user(),
             what: ActTypeId::from(1),
             name: "Later Ride".to_string(),
@@ -1047,11 +1065,16 @@ mod tests {
         Ok(())
     }
 
-    /// Activity::upsert updates existing activity
+    /// Activity::upsert updates existing activity. The activity is created
+    /// under a fresh id: the fixture already holds id 1, and a duplicate id
+    /// is a primary-key violation both stores reject (issue #405).
     #[tokio::test]
     async fn activity_upsert_updates_existing() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act = sample_activity();
+        let act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        };
         store.activity_create(act.clone()).await?;
 
         // Modify the activity
@@ -1066,11 +1089,16 @@ mod tests {
         Ok(())
     }
 
-    /// Activity::update updates and returns summary
+    /// Activity::update updates and returns summary. The activity is created
+    /// under a fresh id: the fixture already holds id 1, and a duplicate id
+    /// is a primary-key violation both stores reject (issue #405).
     #[tokio::test]
     async fn activity_update_returns_summary() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act = sample_activity();
+        let act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        };
         store.activity_create(act.clone()).await?;
 
         let modified = Activity {
@@ -1144,10 +1172,13 @@ mod tests {
     #[tokio::test]
     async fn activity_delete_returns_summary() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act = sample_activity();
+        let act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        };
         store.activity_create(act.clone()).await?;
 
-        let summary = ActivityId::new(1)
+        let summary = ActivityId::new(100)
             .delete(&test_session(), &mut store)
             .await?;
         assert_eq!(summary.activities.len(), 1);
@@ -1160,12 +1191,17 @@ mod tests {
     #[tokio::test]
     async fn activity_delete_rejects_non_owner() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act = sample_activity();
+        let act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        };
         store.activity_create(act.clone()).await?;
 
         // Create a different user's session
         let other_session = TestSession::new(UserId::from(99));
-        let result = ActivityId::new(1).delete(&other_session, &mut store).await;
+        let result = ActivityId::new(100)
+            .delete(&other_session, &mut store)
+            .await;
         assert!(matches!(result, Err(Error::Forbidden(_))));
         Ok(())
     }
@@ -1217,7 +1253,10 @@ mod tests {
     #[tokio::test]
     async fn activity_register_no_gear_does_not_update_parts() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act = sample_activity(); // gear = None
+        let act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        }; // gear = None
 
         let summary = store.activity_create(act.clone()).await?;
         let summary = summary.register(Factor::Add, &mut store).await?;
@@ -1244,7 +1283,7 @@ mod tests {
         .await?;
 
         let act = Activity {
-            id: ActivityId::new(1),
+            id: ActivityId::new(100),
             user_id: test_user(),
             what: ActTypeId::from(1),
             name: "Morning Ride".to_string(),
@@ -1288,7 +1327,7 @@ mod tests {
 
         // Activity with no gear should not be found
         let no_gear_act = Activity {
-            id: ActivityId::new(1),
+            id: ActivityId::new(100),
             user_id: test_user(),
             what: ActTypeId::from(1),
             name: "No Gear Ride".to_string(),
@@ -1335,7 +1374,7 @@ mod tests {
 
         for i in 1i32..=3 {
             let act = Activity {
-                id: ActivityId::new(i as i64),
+                id: ActivityId::new(100 + i as i64),
                 user_id: test_user(),
                 what: ActTypeId::from(1),
                 name: format!("Ride {}", i),
@@ -1507,7 +1546,10 @@ mod tests {
     #[tokio::test]
     async fn activity_with_zero_duration_still_registered() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let mut act = sample_activity();
+        let mut act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        };
         act.duration = 0;
 
         store.activity_create(act.clone()).await?;
@@ -1524,7 +1566,7 @@ mod tests {
     async fn activity_with_only_climb_no_other_metrics() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
         let act = Activity {
-            id: ActivityId::new(1),
+            id: ActivityId::new(100),
             user_id: test_user(),
             what: ActTypeId::from(1),
             name: "Climb Only".to_string(),
@@ -1549,7 +1591,7 @@ mod tests {
         assert_eq!(usage.count, 1);
 
         store.activity_create(act).await?;
-        let summary = ActivityId::new(1)
+        let summary = ActivityId::new(100)
             .read(&test_session(), &mut store)
             .await?
             .register(Factor::Add, &mut store)
@@ -1565,7 +1607,10 @@ mod tests {
     #[tokio::test]
     async fn rescan_all_deletes_all_usages_first() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act = sample_activity();
+        let act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        };
         store.activity_create(act).await?;
 
         // First register to create some usage records
@@ -2288,7 +2333,7 @@ mod tests {
 
         // Create initial activity on bike1
         let old_act = Activity {
-            id: ActivityId::new(1),
+            id: ActivityId::new(100),
             user_id: test_user(),
             what: ActTypeId::from(1),
             name: "Road Ride".to_string(),
@@ -2307,7 +2352,7 @@ mod tests {
 
         // Create new activity with same ID but different gear
         let new_act = Activity {
-            id: ActivityId::new(1),
+            id: ActivityId::new(100),
             user_id: test_user(),
             what: ActTypeId::from(1),
             name: "MTB Ride".to_string(),
@@ -2326,7 +2371,9 @@ mod tests {
         new_act.update(&test_session(), &mut store).await?;
 
         // The activity should now reference bike2
-        let read_act = ActivityId::new(1).read(&test_session(), &mut store).await?;
+        let read_act = ActivityId::new(100)
+            .read(&test_session(), &mut store)
+            .await?;
         assert_eq!(read_act.gear, Some(bike2.id));
 
         Ok(())

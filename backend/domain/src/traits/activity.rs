@@ -8,13 +8,19 @@ use crate::{ActTypeId, Activity, ActivityId, PartId, TbResult, UserId};
 pub trait ActivityStore {
     /// Creates a new activity.
     ///
+    /// The activity id is a primary key: an id the store already holds
+    /// fails the create with [`crate::Error::DatabaseFailure`] — the
+    /// database's INSERT hits the key, and the in-memory store applies the
+    /// same one rule (issue #405).
+    ///
     /// # Arguments
     ///
     /// * `act` - A reference to a `Activity` struct containing the details of the new activity.
     ///
     /// # Returns
     ///
-    /// Returns a `Result` containing the newly created `Activity` or an error if the operation fails.
+    /// Returns a `Result` containing the newly created `Activity`, or an error if the
+    /// operation fails (a duplicate id is a `DatabaseFailure`).
     async fn activity_create(&mut self, act: Activity) -> TbResult<Activity>;
 
     /// Retrieves an activity by its ID.
