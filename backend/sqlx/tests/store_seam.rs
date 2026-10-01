@@ -40,21 +40,32 @@
 //! a previous run, creates a fresh one via `MigrateDatabase`, runs the
 //! migrations, and seeds the fixture; nothing is dropped at the end of the
 //! run, so the next run starts from the same clean slate. The URL's user
-//! must hold createdb rights on that server. When no `SCRATCH_DATABASE_URL`
-//! is configured, every test skips itself, so the plain
-//! `cargo test --workspace` job (no database) and the existing in-memory
-//! suites stay green. The suite must never read `DATABASE_URL`, which points
-//! at the developer's working database: the original `DATABASE_URL`-based
-//! design seeded that database in place, and a local run destroyed real
-//! data.
+//! must hold createdb rights on that server. The suite must never read
+//! `DATABASE_URL`, which points at the developer's working database: the
+//! original `DATABASE_URL`-based design seeded that database in place, and a
+//! local run destroyed real data.
+//!
+//! The suite is ignored by default: every test carries
+//! `#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres
+//! database)"]`, so a plain `cargo test --workspace` run (no database)
+//! reports the 25 tests ignored with that reason and executes none of them,
+//! and the existing in-memory suites stay green. It runs with
+//! `cargo test -- --include-ignored` (the `--` matters: `--include-ignored`
+//! is a libtest flag, not a cargo flag), and it fails loudly whenever it
+//! cannot run: without `SCRATCH_DATABASE_URL`, every test fails with the
+//! no-URL message, and a scratch database that cannot be prepared fails
+//! every test with the one root-cause string. A test that verified nothing
+//! never passes.
 //!
 //! The CI job that runs this suite against a real Postgres service is the
-//! required `postgres-seam` job in `.github/workflows/test.yml` (issue
-//! #411): the store adapters are unified on the database's rules (#407-
-//! #410), so a red seam blocks the PR. `database_is_reachable` fails the
-//! job loudly when the scratch database cannot be prepared, instead of
-//! letting every test silently skip itself. The seam contract — one rule
-//! per operation, verified on both store adapters — is recorded in
+//! required `rust` job in `.github/workflows/test.yml` (issue #411): it
+//! carries a `postgres:18` service, sets `SCRATCH_DATABASE_URL` to a scratch
+//! database, and runs `cargo test --release -- --include-ignored`, so the
+//! suite is part of the one required gate — the store adapters are unified
+//! on the database's rules (#407-#410), and a red seam blocks the PR.
+//! `database_is_reachable` is the named canary: it fails the job loudly when
+//! the scratch database cannot be prepared. The seam contract — one rule per
+//! operation, verified on both store adapters — is recorded in
 //! `docs/agents/domain-flow.md`.
 
 use std::collections::HashSet;
@@ -88,13 +99,21 @@ static SETUP: OnceCell<Setup> = OnceCell::const_new();
 /// slow disk, short enough that a blackholed endpoint fails in seconds.
 const SETUP_STEP_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// The one failure message shared by every test when the suite was explicitly
+/// run (`-- --include-ignored`) but no scratch database is configured: the
+/// run has nothing to verify against, so the tests fail loudly instead of
+/// passing without verifying anything.
+const NO_SCRATCH_URL: &str = "SCRATCH_DATABASE_URL is not set — the seam suite \
+was explicitly run (-- --include-ignored) but has no scratch database to run \
+against; set it to a disposable database URL and re-run";
+
 /// The run's one-time scratch-database setup, shared by every test.
 enum Setup {
     /// The fixture loaded and the sequences set; the high-water marks for
     /// the per-test sequence reset.
     Ready(FixtureMarks),
-    /// The scratch database could not be prepared; the error is what
-    /// `database_is_reachable` reports.
+    /// The scratch database could not be prepared; the error is what every
+    /// test fails with, and what `database_is_reachable` reports.
     Failed(String),
 }
 
@@ -123,8 +142,8 @@ fn scratch_url() -> Option<String> {
     std::env::var("SCRATCH_DATABASE_URL").ok()
 }
 
-/// A fresh pool for this test's runtime, or `None` when the pool cannot be
-/// built (the test then skips itself).
+/// A fresh pool for this test's runtime, or the error string when the pool
+/// cannot be built (the test then fails loudly with it).
 ///
 /// Each `#[tokio::test]` runs on its own runtime, so a pool must never outlive
 /// the runtime that created it: the pool's background tasks (connection
@@ -132,8 +151,10 @@ fn scratch_url() -> Option<String> {
 /// leaves the pool's slot accounting in a state where the next runtime's
 /// `acquire` waits the full acquire timeout. Every test therefore opens its
 /// own pool and drops it with the test.
-async fn pool(url: &str) -> Option<tb_sqlx::DbPool> {
-    tb_sqlx::DbPool::new(url).await.ok()
+async fn pool(url: &str) -> Result<tb_sqlx::DbPool, String> {
+    tb_sqlx::DbPool::new(url)
+        .await
+        .map_err(|err| err.to_string())
 }
 
 /// Bound one scratch-database step so a blackholed endpoint fails in seconds
@@ -162,12 +183,10 @@ async fn setup(url: &str) -> Setup {
         Ok(exists) => exists,
         Err(err) => return Setup::Failed(format!("could not check the scratch database: {err}")),
     };
-    if exists {
-        if let Err(err) = bounded(sqlx::Postgres::force_drop_database(url)).await {
-            return Setup::Failed(format!(
-                "could not drop the leftover scratch database: {err}"
-            ));
-        }
+    if exists && let Err(err) = bounded(sqlx::Postgres::force_drop_database(url)).await {
+        return Setup::Failed(format!(
+            "could not drop the leftover scratch database: {err}"
+        ));
     }
     if let Err(err) = bounded(sqlx::Postgres::create_database(url)).await {
         return Setup::Failed(format!("could not create the scratch database: {err}"));
@@ -205,8 +224,8 @@ struct Seam {
     _lock: MutexGuard<'static, ()>,
 }
 
-/// Open a fresh fixture transaction for a test, or `None` when this machine
-/// has no `SCRATCH_DATABASE_URL` (the test then skips itself).
+/// Open a fresh fixture transaction for a test, or the root-cause string of
+/// why the seam cannot be opened (the test then fails loudly with it).
 ///
 /// The lock first: the one-time scratch-database setup and the pool
 /// connection (and its no-op migration run) are taken while the lock is
@@ -215,29 +234,55 @@ struct Seam {
 /// The pool is local to this test: it is dropped when the `Seam` is built,
 /// together with the test's runtime — the transaction keeps the pool alive
 /// internally through its own `Arc` handle until it is rolled back.
-async fn seam() -> Option<Seam> {
+async fn seam() -> Result<Seam, String> {
     let lock = LOCK.lock().await;
     let Some(url) = scratch_url() else {
-        eprintln!("store-seam: SCRATCH_DATABASE_URL is not set — skipping");
-        return None;
+        return Err(NO_SCRATCH_URL.to_string());
     };
     // The one-time setup runs inside the lock. A failure is recorded in the
-    // cell for `database_is_reachable` to report loudly; the other tests
-    // skip, so exactly one red is visible in the job.
-    let Setup::Ready(marks) = SETUP.get_or_init(|| setup(&url)).await else {
-        return None;
+    // cell for `database_is_reachable` to report; every test that finds it
+    // failed fails loudly with the one root-cause string, so a broken
+    // scratch database turns the whole suite red instead of passing with
+    // nothing verified.
+    let marks = match SETUP.get_or_init(|| setup(&url)).await {
+        Setup::Ready(marks) => marks,
+        Setup::Failed(err) => {
+            return Err(format!("the scratch database could not be prepared: {err}"));
+        }
     };
-    let pool = pool(&url).await?;
-    let mut store = pool.begin().await.ok()?;
-    reset_sequences(&mut store, marks).await.ok()?;
-    Some(Seam { store, _lock: lock })
+    let pool = match pool(&url).await {
+        Ok(pool) => pool,
+        Err(err) => {
+            return Err(format!(
+                "the scratch database could not be prepared: could not connect \
+                 to the scratch database: {err}"
+            ));
+        }
+    };
+    let mut store = match pool.begin().await {
+        Ok(store) => store,
+        Err(err) => {
+            return Err(format!(
+                "the scratch database could not be prepared: could not begin a \
+                 test transaction: {err}"
+            ));
+        }
+    };
+    if let Err(err) = reset_sequences(&mut store, marks).await {
+        return Err(format!(
+            "the scratch database could not be prepared: could not reset the \
+             sequences: {err}"
+        ));
+    }
+    Ok(Seam { store, _lock: lock })
     // `pool` is dropped here, with this test's runtime.
 }
 
 /// Run a test body against a fresh fixture transaction: opens the seam
-/// (skipping with `Ok(())` when `seam()` yields `None`, because this machine
-/// has no `SCRATCH_DATABASE_URL`), hands the store to the body by value, and returns
-/// the body's result. The body never commits, so the transaction is rolled
+/// (failing the test loudly with the root-cause string when it cannot — this
+/// machine has no `SCRATCH_DATABASE_URL`, or the scratch database could not
+/// be prepared), hands the store to the body by value, and returns the
+/// body's result. The body never commits, so the transaction is rolled
 /// back when the body's future drops; the `Seam`'s lock stays held until
 /// that drop, so the suite still runs serialized — the destructure binds
 /// `_lock` before `store`, and locals drop in reverse binding order, so the
@@ -246,8 +291,9 @@ async fn with_seam<R>(f: impl FnOnce(tb_sqlx::SqlxConn<'static>) -> R) -> tb_dom
 where
     R: std::future::Future<Output = tb_domain::TbResult<()>>,
 {
-    let Some(Seam { _lock, store }) = seam().await else {
-        return Ok(());
+    let Seam { _lock, store } = match seam().await {
+        Ok(seam) => seam,
+        Err(err) => panic!("{err}"),
     };
     f(store).await
 }
@@ -463,22 +509,21 @@ async fn create_part(
 // Availability
 // ---------------------------------------------------------------------------
 
-/// The `postgres-seam` CI job sets `SCRATCH_DATABASE_URL` unconditionally,
-/// so whenever this test runs the scratch database must actually be
-/// preparable (dropped if a previous run left it behind, created, migrated,
-/// and seeded): it fails the required job loudly instead of letting every
-/// other test silently skip itself against an unreachable Postgres (a setup
-/// failure is a skip for them, and the job would pass with nothing
-/// verified). The bound makes a blackholed endpoint fail in seconds instead
-/// of burning the pool's 30-second acquire timeout per test.
+/// The named canary. The `rust` CI job sets `SCRATCH_DATABASE_URL`
+/// unconditionally, so whenever this test runs the scratch database must
+/// actually be preparable (dropped if a previous run left it behind, created,
+/// migrated, and seeded): the failure is reported here with the suite's
+/// unified root-cause string. The bound makes a blackholed endpoint fail in
+/// seconds instead of burning the pool's 30-second acquire timeout per test.
 ///
-/// With no `SCRATCH_DATABASE_URL` — the DB-less `rust` job and local
-/// machines without a scratch database — it skips itself like the rest of
-/// the suite.
+/// With no `SCRATCH_DATABASE_URL` — a local machine without a scratch
+/// database — it fails with the no-URL message like the other tests; the
+/// `#[ignore]` attribute keeps it out of plain runs.
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn database_is_reachable() {
     let Some(url) = scratch_url() else {
-        return;
+        panic!("{NO_SCRATCH_URL}");
     };
     // Under the lock, like the other tests: the one-time setup runs exactly
     // once per run, and this test is where its failure is reported. The
@@ -491,13 +536,12 @@ async fn database_is_reachable() {
         Ok(Setup::Ready(_)) => {}
         Ok(Setup::Failed(err)) => panic!(
             "SCRATCH_DATABASE_URL is set ({url}) but the scratch database could \
-             not be prepared: {err} — the postgres-seam job must fail loudly, not \
-             silently skip"
+             not be prepared: {err}"
         ),
         Err(_) => panic!(
-            "SCRATCH_DATABASE_URL is set ({url}) but the scratch database did \
-             not become ready within 10s — is the Postgres service running? the \
-             postgres-seam job must fail loudly, not silently skip"
+            "SCRATCH_DATABASE_URL is set ({url}) but the scratch database could \
+             not be prepared: it did not become ready within 10s — is the \
+             Postgres service running?"
         ),
     }
     // `_lock` is dropped here, with this test's runtime.
@@ -515,6 +559,7 @@ fn fixture() -> StoreSnapshot {
 
 /// The prepopulated fixture loads back from the database unchanged.
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn fixture_roundtrip() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let snap = fixture();
@@ -588,6 +633,7 @@ async fn fixture_roundtrip() -> tb_domain::TbResult<()> {
 
 /// The user summary read returns the full fixture content.
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn user_summary_read() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let summary = UserId::from(1).get_summary(None, &mut store).await?;
@@ -649,6 +695,7 @@ async fn user_summary_read() -> tb_domain::TbResult<()> {
 /// still-attached row and bumps the part's last_used (mirrors
 /// `attach_assembly_attaches_part_to_gear`).
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn attach_new_part_to_empty_hook() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let session = test_session();
@@ -688,6 +735,7 @@ async fn attach_new_part_to_empty_hook() -> tb_domain::TbResult<()> {
 /// itself on the bike is stored against the top-level gear (mirrors
 /// `attach_assembly_resolves_mounted_gear_to_top_level`).
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn attach_resolves_mounted_gear_to_top_level() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let session = test_session();
@@ -734,6 +782,7 @@ async fn attach_resolves_mounted_gear_to_top_level() -> tb_domain::TbResult<()> 
 /// the row: exactly one still-attached row remains (mirrors
 /// `attach_assembly_auto_detaches_and_reattaches_same_part`).
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn attach_reattach_at_own_time() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let session = test_session();
@@ -768,6 +817,7 @@ async fn attach_reattach_at_own_time() -> tb_domain::TbResult<()> {
 /// Attaching a part detaches the different part already occupying the hook
 /// (mirrors `attach_assembly_detaches_predecessor_on_gear`).
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn attach_detaches_predecessor() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let session = test_session();
@@ -821,6 +871,7 @@ async fn attach_detaches_predecessor() -> tb_domain::TbResult<()> {
 /// Re-attaching a part at the time its row ended continues the same row —
 /// the adjacent-merge (unified rule #407, one rule on both stores).
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn attach_merge_adjacent_with_previous() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let session = test_session();
@@ -865,6 +916,7 @@ async fn attach_merge_adjacent_with_previous() -> tb_domain::TbResult<()> {
 /// database's key — so a stale gear field in the argument does not change
 /// which row is deleted (unified rule #407).
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn attachment_delete_identity() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let bike1 = create_part("Bike 1", "TendaBike", "Standard", BIKE, &mut store).await;
@@ -896,6 +948,7 @@ async fn attachment_delete_identity() -> tb_domain::TbResult<()> {
 /// at the same hook, attached later — the part's own later rows never count
 /// (unified rule #407).
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn attachment_find_successor() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
@@ -936,6 +989,7 @@ async fn attachment_find_successor() -> tb_domain::TbResult<()> {
 /// at this gear and hook that ended exactly at the query time — the
 /// adjacent-merge trigger (unified rule #407).
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn attachment_find_part_attached_already() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
@@ -973,6 +1027,7 @@ async fn attachment_find_part_attached_already() -> tb_domain::TbResult<()> {
 /// `find_part_attached_already` for a part that was never attached is
 /// `None` on both stores (no divergence).
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn find_attached_already_never_attached() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
@@ -996,6 +1051,7 @@ async fn find_attached_already_never_attached() -> tb_domain::TbResult<()> {
 /// re-derives its usage from the activities inside the new window (mirrors
 /// `detach_assembly_recalculates_usage_excluding_activity_after_detach`).
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn detach_recuts_and_recalculates_usage() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let session = test_session();
@@ -1098,6 +1154,7 @@ async fn detach_recuts_and_recalculates_usage() -> tb_domain::TbResult<()> {
 /// Detaching a part that is not attached is a not-found error (mirrors
 /// `detach_assembly_api_returns_error_if_not_attached`).
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn detach_not_attached_is_not_found() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let session = test_session();
@@ -1118,6 +1175,7 @@ async fn detach_not_attached_is_not_found() -> tb_domain::TbResult<()> {
 /// Disposing a loose part sets its disposed timestamp (mirrors
 /// `dispose_assembly_disposes_part`).
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn dispose_part() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let session = test_session();
@@ -1144,6 +1202,7 @@ async fn dispose_part() -> tb_domain::TbResult<()> {
 /// The in-memory twin is `activity_create_rejects_duplicate_id` in
 /// `mem_activity.rs`.
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn activity_create_rejects_duplicate_id() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let ride = ride(100, "Ride", activity_start(), None);
@@ -1179,6 +1238,7 @@ async fn activity_create_rejects_duplicate_id() -> tb_domain::TbResult<()> {
 /// and every part attached to it (mirrors
 /// `activity_upsert_creates_new_accounts_bike_and_attached_parts`).
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn activity_upsert_creates_and_accounts() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let bike = PartId::from(1);
@@ -1243,6 +1303,7 @@ async fn activity_upsert_creates_and_accounts() -> tb_domain::TbResult<()> {
 /// activity reported zeroed (mirrors
 /// `activity_delete_reverts_bike_and_attached_part_usage`).
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn activity_delete_reverts_usage() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let bike = PartId::from(1);
@@ -1321,6 +1382,7 @@ async fn activity_delete_reverts_usage() -> tb_domain::TbResult<()> {
 /// taken, and both stores reject a duplicate id — the database's primary
 /// key, mirrored in the in-memory store (issue #405).
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn activity_update_returns_summary() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let act = Activity {
@@ -1347,6 +1409,7 @@ async fn activity_update_returns_summary() -> tb_domain::TbResult<()> {
 /// `utc_offset`, `device_name`, and `external_id` — the fields a frontend
 /// round-trip can lose; one rule on both stores (#408 rule 1).
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn activity_update_preserves_fields() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         // A ride stored at 22:13:20+01:00, with device metadata.
@@ -1407,6 +1470,7 @@ async fn activity_update_preserves_fields() -> tb_domain::TbResult<()> {
 /// Listing activities in a time range: `begin` is included, `end` is
 /// excluded — one rule on both stores (#408 rule 2).
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn activity_find_range_boundary() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let bike = create_part("Road Bike", "Trek", "Domane", BIKE, &mut store).await;
@@ -1449,6 +1513,7 @@ async fn activity_find_range_boundary() -> tb_domain::TbResult<()> {
 /// activity, and the maintainer-confirmed duplicate rule applies: two or
 /// more activities in the same minute is an Error::Ambiguous.
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn activity_get_by_user_and_time() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let start = datetime!(2024-02-01 12:00:30 UTC);
@@ -1522,6 +1587,7 @@ async fn activity_get_by_user_and_time() -> tb_domain::TbResult<()> {
 /// unique gear types (mirrors the in-memory `activity_get_all` /
 /// `activity_categories` tests).
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn activity_get_all_and_categories() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let acts = store.get_all(&UserId::from(1)).await?;
@@ -1550,6 +1616,7 @@ async fn activity_get_all_and_categories() -> tb_domain::TbResult<()> {
 /// #405). The later ride is created first; the listing must not follow
 /// creation order.
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn activity_get_all_orders_by_start() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let bike = PartId::from(1);
@@ -1597,6 +1664,7 @@ async fn activity_get_all_orders_by_start() -> tb_domain::TbResult<()> {
 /// no-op, so the rule is only visible with an off-boundary offset: a
 /// +00:20 start comes back as +00:30.
 #[tokio::test]
+#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]
 async fn activity_read_rounds_offset_to_30_minutes() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         // The sample start expressed with a +00:20 offset — off-boundary.
