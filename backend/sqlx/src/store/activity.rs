@@ -97,7 +97,8 @@ impl TryFrom<DbActivity> for Activity {
             device_name,
             external_id,
         } = v;
-        let utc_offset = ((utc_offset + 900) / 1800) * 1800; //round it to 1800s
+        // The one 30-minute offset rounding rule both adapters apply.
+        let utc_offset = tb_domain::round_offset(utc_offset);
         let offset = UtcOffset::from_whole_seconds(utc_offset).context("Utc Offset invalid")?;
         let start = start.to_offset(offset);
 

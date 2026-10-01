@@ -61,7 +61,10 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use sqlx::migrate::MigrateDatabase;
-use tb_domain::test_support::{MemStore, StoreSnapshot, TestSession, part_type_ids};
+use tb_domain::test_support::{
+    MemStore, StoreSnapshot, part_type_ids,
+    fixtures::{sample_purchase_date, test_session},
+};
 use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, Attachment, AttachmentStore, MAX_TIME, Part,
     PartId, PartStore, PartTypeId, Store, Usage, UsageId, UsageStore, UserId, UserStore,
@@ -375,15 +378,6 @@ async fn reset_sequences(
 // ---------------------------------------------------------------------------
 // Sample data helpers, mirroring the in-memory suite's helpers
 // ---------------------------------------------------------------------------
-
-fn test_session() -> TestSession {
-    TestSession::new(UserId::from(1))
-}
-
-/// The in-memory suite's part purchase date (2023-11-14T22:13:20Z).
-fn sample_purchase_date() -> OffsetDateTime {
-    OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
-}
 
 /// The in-memory suite's first attachment time (2024-01-01).
 fn attachment_time() -> OffsetDateTime {

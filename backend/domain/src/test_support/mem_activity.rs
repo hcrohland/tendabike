@@ -1,5 +1,5 @@
 use super::*;
-use crate::{ActTypeId, Activity, ActivityId, PartId, TbResult, UserId};
+use crate::{ActTypeId, Activity, ActivityId, PartId, TbResult, UserId, round_offset};
 use time::{OffsetDateTime, UtcOffset};
 
 /// The production store keeps the start instant in a `timestamptz` and the
@@ -9,7 +9,7 @@ use time::{OffsetDateTime, UtcOffset};
 /// This in-memory mirror applies the same rule to every activity it
 /// returns (issue #409). See also the note on [`Activity`].
 fn normalize_offset(a: &Activity) -> TbResult<Activity> {
-    let rounded = ((a.start.offset().whole_seconds() + 900) / 1800) * 1800;
+    let rounded = round_offset(a.start.offset().whole_seconds());
     let offset = UtcOffset::from_whole_seconds(rounded)
         .map_err(|e| anyhow::anyhow!("Utc Offset invalid: {e}"))
         .map_err(crate::Error::from)?;
