@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { Shop, shops } from "./shop";
 import { Part } from "./part";
-import { resp } from "../test/helpers";
+import { resp, summary } from "../test/helpers";
 
 function shopData(overrides: Partial<any> = {}): any {
   return {
@@ -11,21 +11,6 @@ function shopData(overrides: Partial<any> = {}): any {
     description: "Local shop",
     auto_approve: true,
     created_at: "2023-01-01T00:00:00Z",
-    ...overrides,
-  };
-}
-
-function summary(overrides: Partial<any> = {}): any {
-  return {
-    parts: [],
-    part_notes: [],
-    attachments: [],
-    activities: [],
-    usages: [],
-    services: [],
-    plans: [],
-    shops: [],
-    users: [],
     ...overrides,
   };
 }

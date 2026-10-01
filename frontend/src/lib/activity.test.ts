@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { Activity, activities } from "./activity";
 import { Part } from "./part";
 import type { Map } from "./mapable.svelte";
-import { resp } from "../test/helpers";
+import { resp, summary } from "../test/helpers";
 
 function actData(overrides: Partial<any> = {}): any {
   return {
@@ -19,21 +19,6 @@ function actData(overrides: Partial<any> = {}): any {
     duration: 3600,
     energy: 2000,
     device_name: "Garmin",
-    ...overrides,
-  };
-}
-
-function summary(overrides: Partial<any> = {}): any {
-  return {
-    parts: [],
-    part_notes: [],
-    attachments: [],
-    activities: [],
-    usages: [],
-    services: [],
-    plans: [],
-    shops: [],
-    users: [],
     ...overrides,
   };
 }
