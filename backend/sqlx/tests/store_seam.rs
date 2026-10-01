@@ -62,8 +62,9 @@ use std::time::Duration;
 
 use sqlx::migrate::MigrateDatabase;
 use tb_domain::test_support::{
-    MemStore, StoreSnapshot, part_type_ids,
+    MemStore, StoreSnapshot,
     fixtures::{sample_purchase_date, test_session},
+    part_type_ids,
 };
 use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, Attachment, AttachmentStore, MAX_TIME, Part,
@@ -591,14 +592,21 @@ async fn user_summary_read() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let summary = UserId::from(1).get_summary(None, &mut store).await?;
 
-        // The fixture content: counts only. The stores still order the
-        // fixture vectors differently: parts (the database's
-        // `ORDER BY last_used` vs the in-memory store's hash order),
-        // attachments (sorted by attach time in memory, unordered in the
-        // database), and usages (built per part, following the part
-        // order). Only activities come back in one unified order on both
-        // stores (ascending start, #405).
+        // The fixture content. Parts come back in one unified order on
+        // both stores — ascending `last_used` (#405); the fixture has many
+        // parts that share a `last_used`, so within a tie the stores may
+        // differ, and the assertion below checks the rule, not the exact
+        // vector. Usages are built per part, so they follow the part
+        // order. Activities come back ascending by start (#408). Only
+        // attachments are still unordered in the database (a known
+        // divergence).
         assert_eq!(summary.parts.len(), 17);
+        for (earlier, later) in summary.parts.iter().zip(summary.parts.iter().skip(1)) {
+            assert!(
+                earlier.last_used <= later.last_used,
+                "parts not sorted by last_used"
+            );
+        }
         assert_eq!(summary.activities.len(), 3);
         assert_eq!(summary.attachments.len(), 11);
         // 17 part usages + 11 attachment usages (missing usage rows read as

@@ -15,11 +15,17 @@ impl PartStore for MemStore {
 
     async fn part_get_all_for_userid(&mut self, uid: &UserId) -> TbResult<Vec<Part>> {
         let d = self.state();
-        Ok(d.parts
+        // One rule on both stores (issue #405): the database lists a user's
+        // parts `ORDER BY last_used`, so this in-memory mirror applies the
+        // same sort; ties have no defined order.
+        let mut parts: Vec<Part> = d
+            .parts
             .values()
             .filter(|p| &p.owner == uid)
             .cloned()
-            .collect())
+            .collect();
+        parts.sort_by_key(|p| p.last_used);
+        Ok(parts)
     }
 
     async fn part_create(

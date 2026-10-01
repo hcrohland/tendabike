@@ -498,9 +498,18 @@ mod tests {
         let mut store = MemStore::prepopulated();
         let summary = UserId::from(1).get_summary(None, &mut store).await?;
 
-        // The fixture content: counts only (vector order is not one rule
-        // across the two stores — see the seam's `user_summary_read`).
+        // The fixture content. Parts come back in one unified order on
+        // both stores — ascending `last_used` (#405); the fixture has many
+        // parts that share a `last_used`, so within a tie the stores may
+        // differ, and the assertion below checks the rule, not the exact
+        // vector. See the seam's `user_summary_read`.
         assert_eq!(summary.parts.len(), 17);
+        for (earlier, later) in summary.parts.iter().zip(summary.parts.iter().skip(1)) {
+            assert!(
+                earlier.last_used <= later.last_used,
+                "parts not sorted by last_used"
+            );
+        }
         assert_eq!(summary.activities.len(), 3);
         assert_eq!(summary.attachments.len(), 11);
         // 17 part usages + 11 attachment usages (missing usage rows read
