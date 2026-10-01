@@ -446,6 +446,16 @@ async fn attach_one(
     Ok(det)
 }
 
+/// Attach a part to a gear at a hook at the given time, and (with `all`)
+/// reattach its subparts.
+///
+/// State space: the database allows two parts of the same type at the same
+/// hook to overlap in time (e.g. two tires on one wheel) — nothing in the
+/// schema or the store prevents it. The attach operation itself never
+/// produces such a state: it first detaches the part already occupying the
+/// hook at the attach time, so the new attachment replaces it, and it cuts
+/// the new attachment off at the successor's start when another part of the
+/// same type takes the hook later.
 pub async fn attach_assembly(
     user: &dyn Session,
     part: PartId,
@@ -2354,17 +2364,31 @@ mod tests {
 
     // === Phase 5: Timeline Query Tests (HIGH PRIORITY) ===
 
-    /// attachment_find_successor() returns the next attachment for same part on same gear
+    /// attachment_find_successor() returns the next attachment of another
+    /// part of the same type at the same hook, attached later — the part's
+    /// own later rows never count as its successor.
     #[tokio::test]
     async fn find_successor_returns_next_attachment() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
         let session = TestSession::new(UserId::from(1));
 
-        // Create chain and bike
+        // Create two chains and a bike
         let chain = Part::create(
             "Chain".to_string(),
             "Shimano".to_string(),
             "CN-M510".to_string(),
+            CHAIN,
+            None,
+            sample_purchase_date() - time::Duration::days(30),
+            &session,
+            &mut store,
+        )
+        .await?;
+
+        let chain2 = Part::create(
+            "Chain 2".to_string(),
+            "SRAM".to_string(),
+            "PC-XX1".to_string(),
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
@@ -2385,7 +2409,7 @@ mod tests {
         )
         .await?;
 
-        // Create first attachment at t1
+        // chain: t1..t2, chain2: t2..MAX — both on the bike at the chain hook
         let _att1 = store
             .attachment_create(Attachment::new(
                 chain.id,
@@ -2396,10 +2420,9 @@ mod tests {
             ))
             .await?;
 
-        // Create second attachment at t2
         let _att2 = store
             .attachment_create(Attachment::new(
-                chain.id,
+                chain2.id,
                 later_time(), // t2 = 2024-06-01
                 bike.id,
                 CHAIN,
@@ -2407,14 +2430,15 @@ mod tests {
             ))
             .await?;
 
-        // Find successor at t1 - should return the t2 attachment
+        // Find successor of the chain at t1 - the other chain's row:
+        // another part, same type, same hook, attached later.
         let successor = store
             .attachment_find_successor(chain.id, bike.id, CHAIN, attachment_time(), CHAIN)
             .await?;
 
-        assert!(successor.is_some());
-        let s = successor.unwrap();
-        assert_eq!(s.attached, later_time()); // Should be the t2 attachment
+        let s = successor.expect("the other chain's later row is the successor");
+        assert_eq!(s.part_id, chain2.id);
+        assert_eq!(s.attached, later_time()); // Should be the other part's t2 row
 
         Ok(())
     }
@@ -2604,17 +2628,42 @@ mod tests {
         Ok(())
     }
 
-    /// attachment_find_successor() finds the earliest future attachment (not any future one)
+    /// attachment_find_successor() finds the earliest later attachment of
+    /// another part of the same type at the same hook (not any later one)
     #[tokio::test]
     async fn find_successor_returns_earliest_future_attachment() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
         let session = TestSession::new(UserId::from(1));
 
-        // Create chain
+        // Create three chains and a bike
         let chain = Part::create(
             "Chain".to_string(),
             "Shimano".to_string(),
             "CN-M510".to_string(),
+            CHAIN,
+            None,
+            sample_purchase_date() - time::Duration::days(30),
+            &session,
+            &mut store,
+        )
+        .await?;
+
+        let chain2 = Part::create(
+            "Chain 2".to_string(),
+            "SRAM".to_string(),
+            "PC-XX1".to_string(),
+            CHAIN,
+            None,
+            sample_purchase_date() - time::Duration::days(30),
+            &session,
+            &mut store,
+        )
+        .await?;
+
+        let chain3 = Part::create(
+            "Chain 3".to_string(),
+            "KMC".to_string(),
+            "X10".to_string(),
             CHAIN,
             None,
             sample_purchase_date() - time::Duration::days(30),
@@ -2635,7 +2684,8 @@ mod tests {
         )
         .await?;
 
-        // Create three attachments in sequence
+        // Create three attachments of the chain in sequence — its own rows
+        // never count as its successor.
         let t1 = attachment_time(); // 2024-01-01
         let t2 = later_time(); // 2024-06-01
         let t3 = very_late_time(); // 2025-01-01
@@ -2652,13 +2702,24 @@ mod tests {
             .attachment_create(Attachment::new(chain.id, t3, bike.id, CHAIN, MAX_TIME))
             .await?;
 
-        // Find successor at t1 should return t2 attachment (not t3)
+        // The other chains take the hook after t1 — the chain's own rows do
+        // not compete for its successor.
+        let _att4 = store
+            .attachment_create(Attachment::new(chain2.id, t2, bike.id, CHAIN, MAX_TIME))
+            .await?;
+
+        store
+            .attachment_create(Attachment::new(chain3.id, t3, bike.id, CHAIN, MAX_TIME))
+            .await?;
+
+        // Find successor at t1 should return the earliest other part's row (t2)
         let successor = store
             .attachment_find_successor(chain.id, bike.id, CHAIN, t1, CHAIN)
             .await?;
 
-        assert!(successor.is_some());
-        assert_eq!(successor.unwrap().attached, t2);
+        let s = successor.expect("the earliest other part's row is the successor");
+        assert_eq!(s.part_id, chain2.id);
+        assert_eq!(s.attached, t2);
 
         Ok(())
     }
@@ -2766,9 +2827,11 @@ mod tests {
         Ok(())
     }
 
-    /// attachment_find_part_attached_already() returns active attachment when part is attached
+    /// attachment_find_part_attached_already() returns the row of this part
+    /// at this gear and hook that ended exactly at the query time — the
+    /// adjacent-merge trigger. A row that only covers the time does not count.
     #[tokio::test]
-    async fn find_part_attached_already_returns_active() -> TbResult<()> {
+    async fn find_part_attached_already_returns_adjacent_predecessor() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
         let session = TestSession::new(UserId::from(1));
 
@@ -2803,20 +2866,26 @@ mod tests {
             .attachment_create(Attachment::new(chain.id, t1, bike.id, CHAIN, t2))
             .await?;
 
-        // Check at midpoint between t1 and t2 - should find active attachment
+        // The row covers t1 but does not end there — not the merge trigger.
         let result = store
-            .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, attachment_time())
+            .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, t1)
             .await?;
+        assert!(result.is_none());
 
+        // The row ends exactly at t2 — the merge trigger.
+        let result = store
+            .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, t2)
+            .await?;
         assert!(result.is_some());
         assert_eq!(result.unwrap().attached, t1);
 
         Ok(())
     }
 
-    /// attachment_find_part_attached_already() returns None when part is not attached
+    /// attachment_find_part_attached_already() returns None when the row did
+    /// not end at the query time — neither a covering row nor a past row.
     #[tokio::test]
-    async fn find_part_attached_already_returns_none_when_detached() -> TbResult<()> {
+    async fn find_part_attached_already_returns_none_when_not_ended() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
         let session = TestSession::new(UserId::from(1));
 
@@ -2851,12 +2920,87 @@ mod tests {
             .attachment_create(Attachment::new(chain.id, t1, bike.id, CHAIN, t2))
             .await?;
 
-        // Check at t2 or later - should return None since part is detached
+        // The row covers t1 but does not end there.
         let result = store
-            .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, later_time())
+            .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, t1)
+            .await?;
+        assert!(result.is_none());
+
+        // Past the row's end, the time no longer matches either.
+        let result = store
+            .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, very_late_time())
+            .await?;
+        assert!(result.is_none());
+
+        Ok(())
+    }
+
+    /// delete() addresses its row by part + attach time — the database's
+    /// key — so stale gear or hook fields in the argument do not change which
+    /// row is deleted.
+    #[tokio::test]
+    async fn delete_addresses_row_by_part_and_attach_time() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let session = TestSession::new(UserId::from(1));
+
+        let chain = Part::create(
+            "Chain".to_string(),
+            "Shimano".to_string(),
+            "CN-M510".to_string(),
+            CHAIN,
+            None,
+            sample_purchase_date() - time::Duration::days(30),
+            &session,
+            &mut store,
+        )
+        .await?;
+
+        let bike1 = Part::create(
+            "Bike 1".to_string(),
+            "TendaBike".to_string(),
+            "Standard".to_string(),
+            BIKE,
+            None,
+            sample_purchase_date() - time::Duration::days(365),
+            &session,
+            &mut store,
+        )
+        .await?;
+
+        let bike2 = Part::create(
+            "Bike 2".to_string(),
+            "TendaBike".to_string(),
+            "Custom".to_string(),
+            BIKE,
+            None,
+            sample_purchase_date() - time::Duration::days(365),
+            &session,
+            &mut store,
+        )
+        .await?;
+
+        let t1 = attachment_time();
+
+        store
+            .attachment_create(Attachment::new(chain.id, t1, bike1.id, BIKE, MAX_TIME))
             .await?;
 
-        assert!(result.is_none());
+        // A stale gear field in the argument — the row is still addressed by
+        // part + attach time and is deleted.
+        let stale = Attachment {
+            gear: bike2.id,
+            ..store
+                .attachment_get_by_part_and_time(chain.id, t1)
+                .await?
+                .unwrap()
+        };
+        let deleted = AttachmentStore::delete(&mut store, stale).await?;
+        assert_eq!(deleted.gear, bike1.id);
+        assert!(store.attachments_all_by_part(chain.id).await?.is_empty());
+
+        // And deleting a row that does not exist is a not-found.
+        let result = AttachmentStore::delete(&mut store, stale).await;
+        assert!(matches!(result, Err(Error::NotFound(_))));
 
         Ok(())
     }
@@ -2957,14 +3101,14 @@ mod tests {
 
         // Searching for chain attached to bike2 should return None
         let result = store
-            .attachment_find_part_attached_already(chain.id, bike2.id, CHAIN, attachment_time())
+            .attachment_find_part_attached_already(chain.id, bike2.id, CHAIN, MAX_TIME)
             .await?;
 
         assert!(result.is_none());
 
-        // Searching for chain attached to bike1 should find it
+        // Searching for the row at its end on bike1 should find it
         let result = store
-            .attachment_find_part_attached_already(chain.id, bike1.id, CHAIN, attachment_time())
+            .attachment_find_part_attached_already(chain.id, bike1.id, CHAIN, MAX_TIME)
             .await?;
 
         assert!(result.is_some());
@@ -3017,9 +3161,9 @@ mod tests {
         )
         .await?;
 
-        // Verify chain is attached at t1
+        // Verify chain is attached at t1 (the covering lookup)
         let attached_at_t1 = store
-            .attachment_find_part_attached_already(chain.id, bike.id, BIKE, attachment_time())
+            .attachment_get_by_part_and_time(chain.id, attachment_time())
             .await?;
         assert!(attached_at_t1.is_some());
 
@@ -3108,11 +3252,74 @@ mod tests {
         )
         .await?;
 
-        // Chain should be attached
+        // Chain should be attached (the covering lookup)
         let result = store
-            .attachment_find_part_attached_already(chain.id, bike.id, BIKE, attachment_time())
+            .attachment_get_by_part_and_time(chain.id, attachment_time())
             .await?;
         assert!(result.is_some());
+
+        Ok(())
+    }
+
+    /// Re-attaching a part exactly where its previous attachment on the same
+    /// hook ended continues that row — the adjacent-merge: one row, not two.
+    #[tokio::test]
+    async fn attach_assembly_merges_adjacent_rows() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let session = TestSession::new(UserId::from(1));
+
+        let chain = Part::create(
+            "Chain".to_string(),
+            "Shimano".to_string(),
+            "CN-M510".to_string(),
+            CHAIN,
+            None,
+            sample_purchase_date() - time::Duration::days(30),
+            &session,
+            &mut store,
+        )
+        .await?;
+
+        let bike = Part::create(
+            "Bike".to_string(),
+            "TendaBike".to_string(),
+            "Standard".to_string(),
+            BIKE,
+            None,
+            sample_purchase_date() - time::Duration::days(365),
+            &session,
+            &mut store,
+        )
+        .await?;
+
+        // A raw row t1..t2, then re-attach exactly at t2, where the row ended.
+        store
+            .attachment_create(Attachment::new(
+                chain.id,
+                attachment_time(),
+                bike.id,
+                BIKE,
+                later_time(),
+            ))
+            .await?;
+        let _summary = attach_assembly(
+            &session,
+            chain.id,
+            later_time(),
+            bike.id,
+            BIKE,
+            false,
+            &mut store,
+        )
+        .await?;
+
+        // The adjacent rows become one: the previous row was continued, not
+        // duplicated. (The merge trigger is the row ending exactly at the
+        // attach time — `attachment_find_part_attached_already`.)
+        let attachments = store.attachments_all_by_part(chain.id).await?;
+        assert_eq!(attachments.len(), 1, "adjacent rows merge into one");
+        assert_eq!(attachments[0].attached, attachment_time());
+        assert_eq!(attachments[0].detached, MAX_TIME);
 
         Ok(())
     }

@@ -29,7 +29,20 @@ mod traits;
 use time::OffsetDateTime;
 pub use traits::*;
 
-const MAX_TIME: OffsetDateTime = time::macros::datetime!(9100-01-01 0:00 UTC);
+/// The sentinel "still attached"/"never redone" time (year 9100): an
+/// attachment with `detached == MAX_TIME` is still attached, and a service
+/// with `redone == MAX_TIME` is still valid — the open-ended bound of a span
+/// that never closed (see `entities/ATTACHMENT.md` and `entities/SERVICE.md`).
+///
+/// `pub` because it is domain vocabulary that production code (attachment
+/// and service logic) and tests assert against — including the external
+/// store-seam integration suite (`tb_sqlx`'s `tests/store_seam.rs`), a
+/// separate crate that can only import public items. `MIN_TIME` has no such
+/// external consumers and stays private.
+pub const MAX_TIME: OffsetDateTime = time::macros::datetime!(9100-01-01 0:00 UTC);
+/// The opposite bound (year 0): the "from the very beginning" end of a span,
+/// as in a service's usage window `[MIN_TIME, service.time]` (`entities/SERVICE.md`).
+/// Used only inside this crate, so it stays private.
 const MIN_TIME: OffsetDateTime = time::macros::datetime!(0000-01-01 0:00 UTC);
 
 /// round time down to the quarter of an hour

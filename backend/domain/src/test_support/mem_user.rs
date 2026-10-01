@@ -4,7 +4,8 @@ use crate::{Error, OnboardingStatus, TbResult, User, UserId};
 #[async_trait::async_trait]
 impl UserStore for MemStore {
     async fn get(&mut self, uid: UserId) -> TbResult<User> {
-        self.users
+        let d = self.state();
+        d.users
             .get(&uid)
             .cloned()
             .ok_or_else(|| Error::NotFound(format!("User {} not found", uid)))
@@ -16,8 +17,9 @@ impl UserStore for MemStore {
         lastname: &str,
         avatar: &Option<String>,
     ) -> TbResult<User> {
-        let id = UserId::from(self.next_user_id);
-        self.next_user_id += 1;
+        let d = self.state_mut();
+        let id = UserId::from(d.next_user_id);
+        d.next_user_id += 1;
         let user = User {
             id,
             firstname: firstname.into(),
@@ -26,7 +28,7 @@ impl UserStore for MemStore {
             is_admin: false,
             onboarding_status: OnboardingStatus::Pending,
         };
-        self.users.insert(id, user.clone());
+        d.users.insert(id, user.clone());
         Ok(user)
     }
 
@@ -37,7 +39,8 @@ impl UserStore for MemStore {
         lastname: &str,
         avatar: &Option<String>,
     ) -> TbResult<User> {
-        match self.users.get_mut(uid) {
+        let d = self.state_mut();
+        match d.users.get_mut(uid) {
             Some(user) => {
                 user.firstname = firstname.into();
                 user.name = lastname.into();
@@ -49,7 +52,8 @@ impl UserStore for MemStore {
     }
 
     async fn user_delete(&mut self, user: &UserId) -> TbResult<usize> {
-        if self.users.remove(user).is_some() {
+        let d = self.state_mut();
+        if d.users.remove(user).is_some() {
             Ok(1)
         } else {
             Ok(0)
@@ -61,7 +65,8 @@ impl UserStore for MemStore {
         uid: &UserId,
         status: OnboardingStatus,
     ) -> TbResult<User> {
-        match self.users.get_mut(uid) {
+        let d = self.state_mut();
+        match d.users.get_mut(uid) {
             Some(user) => {
                 user.onboarding_status = status;
                 Ok(user.clone())

@@ -31,8 +31,35 @@ jobs:
       - name: Test
         run: npm run test
 
+  # One required gate for everything Rust: the in-memory suites plus the
+  # store-seam integration suite (issue #406) against this job's Postgres
+  # service (issue #417). The two store adapters are unified on the
+  # database's rules (#407-#410), so a red seam blocks the PR (issue #411).
   rust:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: tendabike
+          POSTGRES_PASSWORD: tendabike
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tendabike"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # The suite force-drops any database left behind by a previous run,
+      # then creates and seeds this scratch database itself; the service
+      # needs no POSTGRES_DB.
+      SCRATCH_DATABASE_URL: postgres://tendabike:tendabike@localhost:5432/tendabike_test
+      # Compile against the committed .sqlx offline cache: the scratch
+      # database is created by the suite at runtime and only gets its
+      # schema when the pool runs the migrations, so a live compile-time
+      # query check would fail.
+      SQLX_OFFLINE: "true"
 
     steps:
       - uses: actions/checkout@v6
@@ -40,5 +67,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Format check
         run: cargo fmt --check
+      # -- --include-ignored runs the ignored store-seam suite (issue
+      #417); the other test binaries have no ignored tests, so this
+      # changes nothing for the in-memory suites.
       - name: Test
-        run: cargo test --release
+        run: cargo test --release -- --include-ignored

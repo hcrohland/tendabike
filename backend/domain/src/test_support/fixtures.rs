@@ -2,13 +2,22 @@
 //!
 //! Provides shared helper functions and prepopulated MemStore scenarios
 //! for testing entity operations across all domains.
+//!
+//! Built through the store's documented interface (issue #410): fixture
+//! data is written with domain operations and store trait methods, and read
+//! back through store trait methods — never through the store's private
+//! state. All fixture times are fixed values, so two builds of the same
+//! scenario produce identical data (see the determinism test at the bottom).
+//!
+//! One direct-write exception: `fixture_assembly` writes two overlapping
+//! tire rows through `attachment_create`, a state the attach operation
+//! never produces (see its comment).
 
 use super::{AttachmentStore, MemStore, TestSession, part_type_ids};
 use crate::MAX_TIME;
 use crate::UserId;
 use crate::attach_assembly;
-use crate::{Attachment, OffsetDateTime, Part, PartId, TbResult, Usage, UsageId};
-use uuid::Uuid;
+use crate::{Attachment, OffsetDateTime, Part, PartId, TbResult};
 
 // Re-export PartTypeId constants for tests (UPPERCASE per Rust conventions)
 use part_type_ids::*;
@@ -43,8 +52,8 @@ pub async fn fixture_basic_part(session: &TestSession, store: &mut MemStore) -> 
 
 /// Create a part and attach it to a gear.
 ///
-/// Creates a basic part, then attaches it to the main bike frame (gear)
-/// at the given time using the attach_assembly function.
+/// Creates a basic part, then a new main bike, and attaches the part to it
+/// at the sample attach time.
 pub async fn fixture_attached_part(
     session: &TestSession,
     store: &mut MemStore,
@@ -80,10 +89,11 @@ pub async fn fixture_attached_part_at(
 
 /// Create an assembly with a main part and subparts attached.
 ///
-/// Creates a front wheel (main_part) with tires (subparts) attached at the same time.
-/// Uses BIKE → FRONT_WHEEL → TIRE hierarchy since subparts() relies on type hooks.
-/// The main_part is attached to gear, and subparts are directly inserted into the store
-/// to avoid attach_assembly's replacement logic for same-type attachments.
+/// Creates a front wheel (main_part) with two tires attached at the same
+/// time. Uses BIKE → FRONT_WHEEL → TIRE hierarchy since subparts() relies on
+/// type hooks. The main_part is attached with the attach operation; the tire
+/// rows are written directly, because two tires on one wheel overlap in time
+/// — a state attach never produces (see below).
 pub async fn fixture_assembly(
     session: &TestSession,
     store: &mut MemStore,
@@ -154,9 +164,13 @@ pub async fn fixture_assembly(
     )
     .await?;
 
-    // Insert subpart attachments directly into the store to bypass attach_assembly's
-    // replacement logic. When attaching two TIREs (same type, same hook) via attach_assembly,
-    // the second would replace the first. Direct insertion ensures both coexist.
+    // The tire rows are written directly through the store interface — the
+    // documented exception in this module (issue #410). Two tires on one
+    // wheel at the same hook overlap in time; the attach operation never
+    // produces such a state, it replaces the part already occupying the
+    // hook (the state-space decision recorded on `attach_assembly`, issue
+    // #407 — the database allows the overlap, attach does not create it).
+    // Writing both rows keeps them coexisting.
     let front_wheel_id = main_part.id;
     let hook = TIRE
         .get()
@@ -169,21 +183,22 @@ pub async fn fixture_assembly(
         store.attachment_create(att).await?;
     }
 
-    // Find and return the main part's attachment
+    // Read the main part's attachment back through the store's interface
+    // rather than its internals (issue #410). attach_assembly always writes
+    // one row for the part it attaches, so the lookup must succeed.
     let main_part_id = main_part.id;
-    if let Some(main_attachment) = store
-        .attachments
-        .values()
-        .find(|a| a.part_id == main_part_id)
-    {
-        Ok((main_part, vec![subpart1, subpart2], *main_attachment))
-    } else {
-        Ok((
-            main_part,
-            vec![subpart1, subpart2],
-            Attachment::new(main_part_id, attach_time, gear.id, main_hook, MAX_TIME),
-        ))
-    }
+    let main_attachment = store
+        .attachments_all_by_part(main_part_id)
+        .await?
+        .into_iter()
+        .min_by_key(|a| a.attached)
+        .ok_or_else(|| {
+            crate::Error::NotFound(format!(
+                "no attachment row for part {main_part_id} after attach_assembly"
+            ))
+        })?;
+
+    Ok((main_part, vec![subpart1, subpart2], main_attachment))
 }
 
 /// Create a timeline of sequential attachments for the same part/gear/hook.
@@ -269,7 +284,7 @@ pub fn sample_purchase_date() -> OffsetDateTime {
     OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
 }
 
-/// Attach a part to the main bike frame using attach_assembly.
+/// Create a new main bike and attach a part to it at the sample attach time.
 async fn attach_test_part(
     session: &TestSession,
     store: &mut MemStore,
@@ -287,9 +302,6 @@ async fn attach_test_part_at(
     gear_id: PartId,
     time: OffsetDateTime,
 ) -> TbResult<Attachment> {
-    let usage = Usage::new(UsageId::from(Uuid::from_u128(1)));
-    let _ = Usage::update_vec(&[usage], store).await?;
-
     let hook = part
         .what
         .get()
@@ -302,31 +314,24 @@ async fn attach_test_part_at(
     )
     .await?;
 
-    // Extract attachment from summary - use the first affected part's attachment
+    // Read the attachment back through the store's interface rather than its
+    // internals (issue #410): the part's rows, earliest first.
     if let Some(part_obj) = summary.parts.first() {
-        // Re-query to get the attachment
-        let all_attachments: Vec<Attachment> = store
-            .attachments
-            .values()
-            .filter(|a| a.part_id == part_obj.id)
-            .cloned()
-            .collect();
-
-        if let Some(att) = all_attachments.into_iter().min_by_key(|a| a.attached) {
+        let atts = store.attachments_all_by_part(part_obj.id).await?;
+        if let Some(att) = atts.into_iter().min_by_key(|a| a.attached) {
             return Ok(att);
         }
     }
 
-    // Fallback: return any attachment for the part
-    let first_att = store.attachments.values().find(|a| a.part_id == part.id);
-
-    match first_att {
-        Some(att) => Ok(*att),
-        None => Err(crate::Error::NotFound(format!(
-            "Could not find attachment for part {}",
-            part.id
-        ))),
-    }
+    // Fallback: any attachment row for the part
+    store
+        .attachments_all_by_part(part.id)
+        .await?
+        .into_iter()
+        .min_by_key(|a| a.attached)
+        .ok_or_else(|| {
+            crate::Error::NotFound(format!("Could not find attachment for part {}", part.id))
+        })
 }
 
 /// Create the main bike frame/gear part.
@@ -344,7 +349,72 @@ pub async fn fixture_bike(session: &TestSession, store: &mut MemStore) -> TbResu
     .await
 }
 
-/// Returns a sample attach time (30 days ago).
+/// Returns a sample attach time (30 days after the sample purchase date).
+///
+/// Fixed, like every other fixture time (issue #410): the suite has no wall
+/// clock, so the time is an offset from the fixed sample purchase date, not
+/// from the current date.
 fn sample_attach_time() -> OffsetDateTime {
-    OffsetDateTime::now_utc() - time::Duration::days(30)
+    sample_purchase_date() + time::Duration::days(30)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::UsageId;
+    use crate::test_support::StoreSnapshot;
+
+    /// The prepopulated fixture is built with fixed times only (issue #410):
+    /// two independent builds of the same scenario must yield identical data.
+    ///
+    /// Usage UUIDs are the one non-deterministic byte: the domain operations
+    /// mint them via `Uuid::now_v7()` on every run (the same model the
+    /// snapshot documents — "the structure is deterministic; only the UUID
+    /// values differ between builds"). The comparison canonicalizes them to
+    /// nil; every other field — times, ids, relationships, values — must
+    /// match exactly.
+    #[tokio::test]
+    async fn prepopulated_fixture_is_deterministic_across_builds() -> TbResult<()> {
+        async fn build() -> TbResult<StoreSnapshot> {
+            let mut store = MemStore::prepopulated();
+            let s = test_session();
+
+            // every fixture function of this module, in one scenario
+            let _ = fixture_assembly(&s, &mut store, sample_attach_time()).await?;
+            let _ = fixture_attached_part(&s, &mut store).await?;
+            let _ = fixture_concurrent_parts(&s, &mut store).await?;
+            let bike = fixture_bike(&s, &mut store).await?;
+            let part = fixture_basic_part(&s, &mut store).await?;
+            let _ = fixture_attached_part_to_gear(&s, &mut store, part, bike.id).await?;
+
+            Ok(store.snapshot())
+        }
+
+        let a = canonicalize_usage_uuids(build().await?);
+        let b = canonicalize_usage_uuids(build().await?);
+
+        assert_eq!(a, b);
+        Ok(())
+    }
+
+    /// Strips the run-dependent usage UUIDs from a snapshot so two builds of
+    /// the same scenario can be compared byte for byte (see
+    /// `prepopulated_fixture_is_deterministic_across_builds`). Usage rows are
+    /// compared as a value-sorted multiset once their ids are nilled.
+    fn canonicalize_usage_uuids(mut snap: StoreSnapshot) -> StoreSnapshot {
+        for p in &mut snap.parts {
+            p.usage = UsageId::default();
+        }
+        for a in &mut snap.attachments {
+            a.usage = UsageId::default();
+        }
+        for u in &mut snap.usages {
+            u.id = UsageId::default();
+        }
+        snap.usages.sort_by(|x, y| {
+            (x.time, x.distance, x.climb, x.descend, x.energy, x.count)
+                .cmp(&(y.time, y.distance, y.climb, y.descend, y.energy, y.count))
+        });
+        snap
+    }
 }

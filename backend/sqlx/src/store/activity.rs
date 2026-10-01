@@ -1,7 +1,7 @@
 use crate::{SqlxConn, into_domain, vec_into};
 use anyhow::Context;
 use sqlx::FromRow;
-use tb_domain::{ActTypeId, Activity, ActivityId, PartId, TbResult, UserId};
+use tb_domain::{ActTypeId, Activity, ActivityId, Error, PartId, TbResult, UserId};
 use time::{OffsetDateTime, UtcOffset};
 
 #[derive(Debug, Clone, FromRow, PartialEq)]
@@ -97,7 +97,8 @@ impl TryFrom<DbActivity> for Activity {
             device_name,
             external_id,
         } = v;
-        let utc_offset = ((utc_offset + 900) / 1800) * 1800; //round it to 1800s
+        // The one 30-minute offset rounding rule both adapters apply.
+        let utc_offset = tb_domain::round_offset(utc_offset);
         let offset = UtcOffset::from_whole_seconds(utc_offset).context("Utc Offset invalid")?;
         let start = start.to_offset(offset);
 
@@ -241,12 +242,21 @@ impl<'c> tb_domain::ActivityStore for SqlxConn<'c> {
         )
     }
 
+    /// The CSV import match: which of the user's activities started in the
+    /// given minute? The production rule matches by the minute, not the
+    /// exact instant: an activity's local wall-clock minute (its start in
+    /// the stored `utc_offset`, floored to the minute) must equal the query
+    /// instant's UTC wall-clock minute. The match must be unambiguous
+    /// (maintainer-confirmed, issue #408): zero rows is
+    /// [`tb_domain::Error::NotFound`], exactly one is returned, and two or
+    /// more is [`tb_domain::Error::Ambiguous`], so a conflicting import row
+    /// fails loudly instead of updating one of the rides at random.
     async fn get_by_user_and_time(
         &mut self,
         uid: UserId,
         rstart: OffsetDateTime,
     ) -> TbResult<Activity> {
-        sqlx::query_as!(
+        let mut rows = sqlx::query_as!(
             DbActivity,
             "SELECT * FROM activities
              WHERE user_id = $1
@@ -255,10 +265,16 @@ impl<'c> tb_domain::ActivityStore for SqlxConn<'c> {
             i32::from(uid),
             rstart
         )
-        .fetch_one(&mut **self.inner())
+        .fetch_all(&mut **self.inner())
         .await
-        .map_err(into_domain)?
-        .try_into()
+        .map_err(into_domain)?;
+        match rows.len() {
+            0 => Err(into_domain(sqlx::Error::RowNotFound)),
+            1 => rows.pop().expect("exactly one match").try_into(),
+            n => Err(Error::Ambiguous(format!(
+                "user {uid} has {n} activities in the minute of {rstart}"
+            ))),
+        }
     }
 
     async fn activity_set_gear_if_null(

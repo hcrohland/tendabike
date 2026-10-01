@@ -390,12 +390,12 @@ mod tests {
         )
         .await?;
 
-        let act1 = make_activity(1, bike.id, time::macros::datetime!(2024-01-01 10:00 UTC));
+        let act1 = make_activity(101, bike.id, time::macros::datetime!(2024-01-01 10:00 UTC));
         store.activity_create(act1).await?;
 
-        let _act2 = make_activity(2, bike.id, time::macros::datetime!(2024-05-01 10:00 UTC));
+        let _act2 = make_activity(102, bike.id, time::macros::datetime!(2024-05-01 10:00 UTC));
         let act2 = Activity {
-            id: ActivityId::new(2),
+            id: ActivityId::new(102),
             user_id: test_user(),
             what: ActTypeId::from(1),
             name: "Ride 2".to_string(),
@@ -650,7 +650,7 @@ mod tests {
         )
         .await?;
 
-        let act1 = make_activity(1, bike.id, time::macros::datetime!(2024-01-01 10:00 UTC));
+        let act1 = make_activity(101, bike.id, time::macros::datetime!(2024-01-01 10:00 UTC));
         store.activity_create(act1).await?;
 
         let t = time::macros::datetime!(2024-06-15 10:00 UTC);
@@ -1041,7 +1041,7 @@ mod tests {
         .await?;
 
         // Activity before service time
-        let act = make_activity(1, bike.id, time::macros::datetime!(2024-01-01 10:00 UTC));
+        let act = make_activity(101, bike.id, time::macros::datetime!(2024-01-01 10:00 UTC));
         store.activity_create(act).await?;
 
         let t1 = time::macros::datetime!(2024-06-15 10:00 UTC);
@@ -1149,7 +1149,7 @@ mod tests {
         )
         .await?;
 
-        let act = make_activity(1, bike.id, time::macros::datetime!(2024-01-01 10:00 UTC));
+        let act = make_activity(101, bike.id, time::macros::datetime!(2024-01-01 10:00 UTC));
         store.activity_create(act).await?;
 
         let t = time::macros::datetime!(2024-06-15 10:00 UTC);
@@ -1229,7 +1229,7 @@ mod tests {
         ];
         for (i, d) in dates.iter().enumerate() {
             let act = Activity {
-                id: ActivityId::new((i + 1) as i64),
+                id: ActivityId::new((101 + i) as i64),
                 user_id: test_user(),
                 what: ActTypeId::from(1),
                 name: format!("Ride {}", i),

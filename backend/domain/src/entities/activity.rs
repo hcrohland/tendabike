@@ -57,7 +57,29 @@ use crate::*;
 )]
 pub struct ActivityId(i64);
 
+/// Round a UTC offset, in whole seconds, to the nearest 30 minutes.
+///
+/// Integer division truncates toward zero, so negative offsets round toward
+/// zero as well: `+5:45` becomes `+6:00`, `-5:45` becomes `-5:30`, and
+/// offsets already on a 30-minute boundary come back unchanged. This is the
+/// one rule both store adapters apply on every read, so domain code can
+/// rely on returned activities carrying a 30-minute-granularity offset.
+pub fn round_offset(whole_seconds: i32) -> i32 {
+    (whole_seconds + 900) / 1800 * 1800
+}
+
 /// The database's representation of an activity.
+///
+/// **Utc-offset normalization.** The database keeps `start` as a `timestamptz`
+/// (a single instant) and the display offset in a separate `utc_offset`
+/// column. On every read the store rounds that stored offset to the nearest
+/// 30 minutes — [`round_offset`], truncation toward zero for negative
+/// offsets — and re-expresses the instant in the rounded offset. The instant
+/// never moves; only the offset label does. A start of `+5:45` is returned
+/// as `+6:00`, `-5:45` as `-5:30`, and offsets already on a 30-minute
+/// boundary come back unchanged. Every store adapter applies the same rule,
+/// so domain code can rely on returned activities carrying a
+/// 30-minute-granularity offset.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Activity {
     /// The primary key
@@ -482,10 +504,15 @@ mod tests {
     #[tokio::test]
     async fn activityid_read_optional_returns_some_for_existing() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act = sample_activity();
+        // A fresh id: the fixture already holds id 1, and a duplicate id is
+        // a primary-key violation both stores reject (issue #405).
+        let act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        };
         store.activity_create(act).await?;
 
-        let result = ActivityId::new(1)
+        let result = ActivityId::new(100)
             .read_optional(&test_session(), &mut store)
             .await?;
         assert!(result.is_some());
@@ -497,10 +524,17 @@ mod tests {
     #[tokio::test]
     async fn activityid_read_returns_existing() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act = sample_activity();
+        // A fresh id: the fixture already holds id 1, and a duplicate id is
+        // a primary-key violation both stores reject (issue #405).
+        let act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        };
         store.activity_create(act).await?;
 
-        let result = ActivityId::new(1).read(&test_session(), &mut store).await?;
+        let result = ActivityId::new(100)
+            .read(&test_session(), &mut store)
+            .await?;
         assert_eq!(result.name, "Morning Ride");
         assert_eq!(result.user_id, test_user());
         Ok(())
@@ -519,12 +553,15 @@ mod tests {
     #[tokio::test]
     async fn activityid_read_rejects_cross_user() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act = sample_activity();
+        let act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        };
         store.activity_create(act).await?;
 
         // User 2 tries to access user 1's activity
         let other_session = TestSession::new(UserId::from(2));
-        let result = ActivityId::new(1).read(&other_session, &mut store).await;
+        let result = ActivityId::new(100).read(&other_session, &mut store).await;
         assert!(result.is_err());
         Ok(())
     }
@@ -572,25 +609,16 @@ mod tests {
         let sess = TestSession::new(UserId::from(99));
 
         let act1 = Activity {
-            id: ActivityId::new(1),
+            id: ActivityId::new(101),
             user_id: sess.user_id(),
-            what: ActTypeId::from(1),
-            name: "Morning Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act1).await?;
 
         let act2 = Activity {
-            id: ActivityId::new(2),
+            id: ActivityId::new(102),
             user_id: sess.user_id(),
             what: ActTypeId::from(3),
             name: "Evening Ride".to_string(),
@@ -601,9 +629,9 @@ mod tests {
             climb: Some(200),
             descend: Some(100),
             energy: None,
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act2).await?;
 
@@ -625,12 +653,14 @@ mod tests {
     #[tokio::test]
     async fn activity_categories_returns_unique_gear_types() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act1 = sample_activity(); // what = ActTypeId(1) -> gear_type for Bike
+        let act1 = Activity {
+            id: ActivityId::new(101),
+            ..sample_activity()
+        }; // what = ActTypeId(1) -> gear_type for Bike
         store.activity_create(act1).await?;
 
         let act2 = Activity {
-            id: ActivityId::new(2),
-            user_id: test_user(),
+            id: ActivityId::new(102),
             what: ActTypeId::from(1), // same type
             name: "Another Ride".to_string(),
             start: later_start(),
@@ -640,9 +670,9 @@ mod tests {
             climb: Some(200),
             descend: Some(100),
             energy: None,
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act2).await?;
 
@@ -678,20 +708,11 @@ mod tests {
         .await?;
 
         let act1 = Activity {
-            id: ActivityId::new(1),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
-            name: "Morning Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
+            id: ActivityId::new(100),
             gear: Some(part.id),
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act1).await?;
 
@@ -704,7 +725,50 @@ mod tests {
         .await?;
 
         assert_eq!(acts.len(), 1);
-        assert_eq!(acts[0].id, ActivityId::new(1));
+        assert_eq!(acts[0].id, ActivityId::new(100));
+        Ok(())
+    }
+
+    /// activities_find_by_gear_and_time includes begin and excludes end —
+    /// one rule on both stores (Postgres: start >= begin AND start < end;
+    /// the in-memory store used to include end).
+    #[tokio::test]
+    async fn activity_find_range_includes_begin_excludes_end() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let part = Part::create(
+            "Road Bike".to_string(),
+            "Trek".to_string(),
+            "Domane".to_string(),
+            PartTypeId::from(1),
+            None,
+            sample_purchase_date(),
+            &test_session(),
+            &mut store,
+        )
+        .await?;
+
+        let start = activity_start();
+        let act = Activity {
+            id: ActivityId::new(100),
+            name: "Boundary Ride".to_string(),
+            start,
+            gear: Some(part.id),
+            device_name: None,
+            external_id: None,
+            ..sample_activity()
+        };
+        store.activity_create(act).await?;
+
+        // A window that ends exactly at the start: the ride is excluded.
+        let acts =
+            Activity::find(part.id, start - time::Duration::hours(1), start, &mut store).await?;
+        assert!(acts.is_empty(), "end is exclusive");
+
+        // A window that begins exactly at the start: the ride is included.
+        let acts =
+            Activity::find(part.id, start, start + time::Duration::hours(1), &mut store).await?;
+        assert_eq!(acts.len(), 1, "begin is inclusive");
+        assert_eq!(acts[0].id, ActivityId::new(100));
         Ok(())
     }
 
@@ -726,20 +790,11 @@ mod tests {
 
         // Create an activity starting 1 hour after the search window end
         let outside_activity = Activity {
-            id: ActivityId::new(1),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
+            id: ActivityId::new(100),
             name: "Later Ride".to_string(),
             start: OffsetDateTime::from_unix_timestamp(1000002000).unwrap(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
-            device_name: Some("Garmin Edge".to_string()),
             external_id: Some("garmin_outside".to_string()),
+            ..sample_activity()
         };
         store.activity_create(outside_activity).await?;
 
@@ -764,19 +819,10 @@ mod tests {
         let new_id = ActivityId::new(100);
         let act = Activity {
             id: new_id,
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "New Activity".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
 
         let summary = act.upsert(&test_session(), &mut store).await?;
@@ -794,11 +840,7 @@ mod tests {
         let bike = PartId::from(1);
         let act = Activity {
             id: ActivityId::new(100),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "New Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
             time: Some(1000),
             distance: Some(10000),
             climb: Some(100),
@@ -807,6 +849,7 @@ mod tests {
             gear: Some(bike),
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
 
         let expected_act = act.clone();
@@ -888,11 +931,7 @@ mod tests {
         let bike = PartId::from(1);
         let act = Activity {
             id: ActivityId::new(100),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "New Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
             time: Some(1000),
             distance: Some(10000),
             climb: Some(100),
@@ -901,6 +940,7 @@ mod tests {
             gear: Some(bike),
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
 
         // create the activity so its usage is accounted, then delete it
@@ -986,11 +1026,16 @@ mod tests {
         Ok(())
     }
 
-    /// Activity::upsert updates existing activity
+    /// Activity::upsert updates existing activity. The activity is created
+    /// under a fresh id: the fixture already holds id 1, and a duplicate id
+    /// is a primary-key violation both stores reject (issue #405).
     #[tokio::test]
     async fn activity_upsert_updates_existing() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act = sample_activity();
+        let act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        };
         store.activity_create(act.clone()).await?;
 
         // Modify the activity
@@ -1005,11 +1050,16 @@ mod tests {
         Ok(())
     }
 
-    /// Activity::update updates and returns summary
+    /// Activity::update updates and returns summary. The activity is created
+    /// under a fresh id: the fixture already holds id 1, and a duplicate id
+    /// is a primary-key violation both stores reject (issue #405).
     #[tokio::test]
     async fn activity_update_returns_summary() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act = sample_activity();
+        let act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        };
         store.activity_create(act.clone()).await?;
 
         let modified = Activity {
@@ -1022,14 +1072,64 @@ mod tests {
         Ok(())
     }
 
+    /// activity_update keeps the stored row's utc_offset, device_name and
+    /// external_id — one rule on both stores: Postgres never rewrites those
+    /// columns; the in-memory store used to replace the whole entity and
+    /// wiped them.
+    #[tokio::test]
+    async fn activity_update_preserves_utc_offset_device_name_and_external_id() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+
+        // A stored ride that started at 22:13:20+01:00 local, with device
+        // metadata.
+        let stored = Activity {
+            id: ActivityId::new(7),
+            name: "Original Ride".to_string(),
+            start: activity_start().to_offset(time::UtcOffset::from_whole_seconds(3600).unwrap()),
+            ..sample_activity()
+        };
+        store.activity_create(stored.clone()).await?;
+
+        // An update with a different start (in a UTC representation) and no
+        // device metadata: a whole-entity replacement would wipe the
+        // preserved fields.
+        let updated = Activity {
+            name: "Updated Ride".to_string(),
+            start: (activity_start() + time::Duration::seconds(37)).to_offset(time::UtcOffset::UTC),
+            device_name: None,
+            external_id: None,
+            ..stored.clone()
+        };
+
+        let row = store.activity_update(updated).await?;
+
+        // The updated fields took the new values …
+        assert_eq!(row.name, "Updated Ride");
+        assert_eq!(
+            row.start.unix_timestamp(),
+            activity_start().unix_timestamp() + 37
+        );
+        // … and the preserved fields survived the update.
+        assert_eq!(
+            row.start.offset().whole_seconds(),
+            3600, // the stored row keeps its +01:00 offset
+        );
+        assert_eq!(row.device_name.as_deref(), Some("Garmin Edge"));
+        assert_eq!(row.external_id.as_deref(), Some("garmin_12345"));
+        Ok(())
+    }
+
     /// Activity::delete unregisters usage and returns summary
     #[tokio::test]
     async fn activity_delete_returns_summary() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act = sample_activity();
+        let act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        };
         store.activity_create(act.clone()).await?;
 
-        let summary = ActivityId::new(1)
+        let summary = ActivityId::new(100)
             .delete(&test_session(), &mut store)
             .await?;
         assert_eq!(summary.activities.len(), 1);
@@ -1042,12 +1142,17 @@ mod tests {
     #[tokio::test]
     async fn activity_delete_rejects_non_owner() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act = sample_activity();
+        let act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        };
         store.activity_create(act.clone()).await?;
 
         // Create a different user's session
         let other_session = TestSession::new(UserId::from(99));
-        let result = ActivityId::new(1).delete(&other_session, &mut store).await;
+        let result = ActivityId::new(100)
+            .delete(&other_session, &mut store)
+            .await;
         assert!(matches!(result, Err(Error::Forbidden(_))));
         Ok(())
     }
@@ -1099,7 +1204,10 @@ mod tests {
     #[tokio::test]
     async fn activity_register_no_gear_does_not_update_parts() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act = sample_activity(); // gear = None
+        let act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        }; // gear = None
 
         let summary = store.activity_create(act.clone()).await?;
         let summary = summary.register(Factor::Add, &mut store).await?;
@@ -1126,20 +1234,12 @@ mod tests {
         .await?;
 
         let act = Activity {
-            id: ActivityId::new(1),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
-            name: "Morning Ride".to_string(),
+            id: ActivityId::new(100),
             start: activity_start(), // T=1700000000
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
             gear: Some(bike.id),
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
 
         store.activity_create(act.clone()).await?;
@@ -1170,20 +1270,11 @@ mod tests {
 
         // Activity with no gear should not be found
         let no_gear_act = Activity {
-            id: ActivityId::new(1),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
+            id: ActivityId::new(100),
             name: "No Gear Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(no_gear_act).await?;
 
@@ -1217,12 +1308,9 @@ mod tests {
 
         for i in 1i32..=3 {
             let act = Activity {
-                id: ActivityId::new(i as i64),
-                user_id: test_user(),
-                what: ActTypeId::from(1),
+                id: ActivityId::new(100 + i as i64),
                 name: format!("Ride {}", i),
                 start: activity_start() + time::Duration::seconds(i as i64 * 3600),
-                duration: 3600,
                 time: Some(3500 * i),
                 distance: Some(50000 * i),
                 climb: Some(500 * i),
@@ -1231,6 +1319,7 @@ mod tests {
                 gear: Some(part.id),
                 device_name: None,
                 external_id: None,
+                ..sample_activity()
             };
             store.activity_create(act).await?;
         }
@@ -1283,27 +1372,17 @@ mod tests {
         let mut store = MemStore::new();
 
         let act1 = Activity {
-            id: ActivityId::new(1),
             user_id: UserId::from(1),
-            what: ActTypeId::from(1),
             name: "User 1 Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act1).await?;
 
         let act2 = Activity {
             id: ActivityId::new(2),
             user_id: UserId::from(2),
-            what: ActTypeId::from(1),
             name: "User 2 Ride".to_string(),
             start: later_start(),
             duration: 1800,
@@ -1312,9 +1391,9 @@ mod tests {
             climb: Some(200),
             descend: Some(100),
             energy: None,
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act2).await?;
 
@@ -1333,19 +1412,10 @@ mod tests {
         let mut store = MemStore::prepopulated();
         let fake_activity = Activity {
             id: ActivityId::new(999),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "Ghost Activity".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         let result = fake_activity.update(&test_session(), &mut store).await;
         assert!(result.is_err());
@@ -1359,19 +1429,10 @@ mod tests {
         let act_id = ActivityId::new(42); // Custom non-sequential ID
         let act = Activity {
             id: act_id,
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "Custom ID Activity".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
 
         let summary = act.upsert(&test_session(), &mut store).await?;
@@ -1389,7 +1450,10 @@ mod tests {
     #[tokio::test]
     async fn activity_with_zero_duration_still_registered() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let mut act = sample_activity();
+        let mut act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        };
         act.duration = 0;
 
         store.activity_create(act.clone()).await?;
@@ -1406,20 +1470,16 @@ mod tests {
     async fn activity_with_only_climb_no_other_metrics() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
         let act = Activity {
-            id: ActivityId::new(1),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
+            id: ActivityId::new(100),
             name: "Climb Only".to_string(),
-            start: activity_start(),
-            duration: 3600,
             time: None,
             distance: None,
             climb: Some(1000),
             descend: None, // should default to climb
             energy: None,
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
 
         let usage = act.usage();
@@ -1431,7 +1491,7 @@ mod tests {
         assert_eq!(usage.count, 1);
 
         store.activity_create(act).await?;
-        let summary = ActivityId::new(1)
+        let summary = ActivityId::new(100)
             .read(&test_session(), &mut store)
             .await?
             .register(Factor::Add, &mut store)
@@ -1447,25 +1507,17 @@ mod tests {
     #[tokio::test]
     async fn rescan_all_deletes_all_usages_first() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
-        let act = sample_activity();
+        let act = Activity {
+            id: ActivityId::new(100),
+            ..sample_activity()
+        };
         store.activity_create(act).await?;
 
         // First register to create some usage records
         let act2 = Activity {
-            id: ActivityId::new(1),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
-            name: "Morning Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         let _ = act2.register(Factor::Add, &mut store).await?;
 
@@ -1485,19 +1537,16 @@ mod tests {
         for i in 1i32..=3 {
             let act = Activity {
                 id: ActivityId::new(i as i64),
-                user_id: test_user(),
-                what: ActTypeId::from(1),
                 name: format!("Ride {}", i),
                 start: activity_start() + time::Duration::seconds(i as i64 * 3600),
-                duration: 3600,
                 time: Some(3500 * i),
                 distance: Some(50000 * i),
                 climb: Some(500 * i),
                 descend: Some(300 * i),
                 energy: Some(1000 * i),
-                gear: None,
                 device_name: None,
                 external_id: None,
+                ..sample_activity()
             };
             store.activity_create(act).await?;
         }
@@ -1573,19 +1622,13 @@ mod tests {
             let ts = activity_start().unix_timestamp() + offset;
             let act = Activity {
                 id: ActivityId::new(100 + offset),
-                user_id: test_user(),
-                what: ActTypeId::from(1),
                 name: "Ride".to_string(),
                 start: OffsetDateTime::from_unix_timestamp(ts).unwrap(),
-                duration: 3600,
-                time: Some(3500),
-                distance: Some(50000),
                 climb: None,
                 descend: None,
-                energy: Some(1000),
-                gear: None,
                 device_name: None,
                 external_id: None,
+                ..sample_activity()
             };
             store.activity_create(act).await?;
         }
@@ -1610,19 +1653,12 @@ mod tests {
         // Pre-create activity at activity_start()
         let act = Activity {
             id: ActivityId::new(201),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "English Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
             climb: None,
             descend: None,
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act).await?;
 
@@ -1643,19 +1679,12 @@ mod tests {
 
         let act = Activity {
             id: ActivityId::new(202),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
             climb: None,
             descend: None,
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act).await?;
 
@@ -1680,19 +1709,13 @@ mod tests {
             let ts = activity_start().unix_timestamp() + offset;
             let act = Activity {
                 id: ActivityId::new(300 + offset),
-                user_id: test_user(),
-                what: ActTypeId::from(1),
                 name: "Ride".to_string(),
                 start: OffsetDateTime::from_unix_timestamp(ts).unwrap(),
-                duration: 3600,
-                time: Some(3500),
-                distance: Some(50000),
                 climb: None,
                 descend: None,
-                energy: Some(1000),
-                gear: None,
                 device_name: None,
                 external_id: None,
+                ..sample_activity()
             };
             store.activity_create(act).await?;
         }
@@ -1719,19 +1742,13 @@ mod tests {
             let ts = activity_start().unix_timestamp() + offset;
             let act = Activity {
                 id: ActivityId::new(400 + offset),
-                user_id: test_user(),
-                what: ActTypeId::from(1),
                 name: "Ride".to_string(),
                 start: OffsetDateTime::from_unix_timestamp(ts).unwrap(),
-                duration: 3600,
-                time: Some(3500),
-                distance: Some(50000),
                 climb: None,
                 descend: None,
-                energy: Some(1000),
-                gear: None,
                 device_name: None,
                 external_id: None,
+                ..sample_activity()
             };
             store.activity_create(act).await?;
         }
@@ -1744,6 +1761,102 @@ mod tests {
             Activity::csv2descend(csv_data.as_bytes(), &test_session(), &mut store).await?;
 
         assert_eq!(result.1.len(), 2); // Both records parsed and updated
+        Ok(())
+    }
+
+    /// get_by_user_and_time matches by the activity's local minute: the
+    /// stored row's local wall-clock minute (in its stored offset) must equal
+    /// the query's UTC wall-clock minute — one rule on both stores (Postgres
+    /// truncates both to the minute; the in-memory store used the exact
+    /// instant). The CSV import passes the user's local wall clock parsed as
+    /// UTC, so a ride stored at 22:13:20+01:00 is matched by the query
+    /// 22:13:50 UTC.
+    #[tokio::test]
+    async fn get_by_user_and_time_matches_by_local_minute() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+
+        // A ride stored at 22:13:20+01:00 local (= 21:13:20 UTC).
+        let local_start = (activity_start() - time::Duration::hours(1))
+            .to_offset(time::UtcOffset::from_whole_seconds(3600).unwrap());
+        let stored = Activity {
+            id: ActivityId::new(500),
+            name: "Ride".to_string(),
+            start: local_start,
+            climb: None,
+            descend: None,
+            device_name: None,
+            external_id: None,
+            ..sample_activity()
+        };
+        store.activity_create(stored.clone()).await?;
+
+        // Same local minute (22:13), a different instant: matches.
+        let q_same_minute = activity_start() + time::Duration::seconds(30); // 22:13:50 UTC
+        let found = store
+            .get_by_user_and_time(test_user(), q_same_minute)
+            .await?;
+        assert_eq!(found.id, stored.id);
+
+        // A different minute: no match.
+        let q_other_minute = activity_start() + time::Duration::seconds(90); // 22:14:50 UTC
+        let result = store
+            .get_by_user_and_time(test_user(), q_other_minute)
+            .await;
+        assert!(matches!(result, Err(Error::NotFound(_))));
+
+        // Another user's ride in the same minute never matches this user's
+        // lookup.
+        let other = Activity {
+            id: ActivityId::new(501),
+            user_id: UserId::from(99),
+            ..stored.clone()
+        };
+        store.activity_create(other).await?;
+        let found = store
+            .get_by_user_and_time(test_user(), q_same_minute)
+            .await?;
+        assert_eq!(found.id, stored.id);
+        Ok(())
+    }
+
+    /// get_by_user_and_time returns the maintainer-confirmed error (issue
+    /// #408) when two of the user's activities fall in the same local minute
+    /// — a conflicting import row must fail loudly, not silently update one
+    /// of the two rides.
+    #[tokio::test]
+    async fn get_by_user_and_time_same_minute_duplicate_is_ambiguous() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+
+        // Two rides of the user in the 22:13 local minute (21:13:20Z and
+        // 21:13:45Z, both stored with the +01:00 offset).
+        let first_start = (activity_start() - time::Duration::hours(1))
+            .to_offset(time::UtcOffset::from_whole_seconds(3600).unwrap());
+        let first = Activity {
+            id: ActivityId::new(500),
+            name: "First Ride".to_string(),
+            start: first_start,
+            climb: None,
+            descend: None,
+            device_name: None,
+            external_id: None,
+            ..sample_activity()
+        };
+        let second = Activity {
+            id: ActivityId::new(501),
+            name: "Second Ride".to_string(),
+            start: first_start + time::Duration::seconds(25),
+            ..first.clone()
+        };
+        store.activity_create(first).await?;
+        store.activity_create(second).await?;
+
+        // A query in that minute (22:13:50 UTC): two matches → the error.
+        let q = activity_start() + time::Duration::seconds(30);
+        let result = store.get_by_user_and_time(test_user(), q).await;
+        assert!(
+            matches!(result, Err(Error::Ambiguous(_))),
+            "two same-minute rides must return Error::Ambiguous, got {result:?}"
+        );
         Ok(())
     }
 
@@ -1769,20 +1882,10 @@ mod tests {
 
         // Create an activity without gear (Ride type)
         let act = Activity {
-            id: ActivityId::new(1),
-            user_id: test_user(),
             what: ActTypeId::from(1), // Riding type
-            name: "Morning Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act).await?;
 
@@ -1814,20 +1917,11 @@ mod tests {
 
         // Create a running activity (type 3) - should NOT match bike's act_types
         let run_act = Activity {
-            id: ActivityId::new(1),
-            user_id: test_user(),
             what: ActTypeId::from(3), // Running type
             name: "Morning Run".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(run_act).await?;
 
@@ -1871,20 +1965,10 @@ mod tests {
 
         // Create activity with existing gear
         let act = Activity {
-            id: ActivityId::new(1),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
-            name: "Morning Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
             gear: Some(bike1.id), // Already assigned
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act).await?;
 
@@ -1940,19 +2024,16 @@ mod tests {
         // unregistered ride without gear, within the snapshot bike's attachment window
         let act = Activity {
             id: ActivityId::new(101),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "Unassigned Ride".to_string(),
             start: time::macros::datetime!(2023-05-20 10:00 UTC),
-            duration: 3600,
             time: Some(1000),
             distance: Some(10000),
             climb: Some(100),
             descend: None,
             energy: Some(200),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act).await?;
 
@@ -1997,20 +2078,10 @@ mod tests {
 
         // Create an activity for user 2
         let act = Activity {
-            id: ActivityId::new(1),
             user_id: UserId::from(2),
-            what: ActTypeId::from(1),
-            name: "Morning Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
-            gear: None,
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(act).await?;
 
@@ -2062,45 +2133,31 @@ mod tests {
 
         // Create initial activity on bike1
         let old_act = Activity {
-            id: ActivityId::new(1),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
+            id: ActivityId::new(100),
             name: "Road Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
             gear: Some(bike1.id),
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         store.activity_create(old_act).await?;
 
         // Create new activity with same ID but different gear
         let new_act = Activity {
-            id: ActivityId::new(1),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
+            id: ActivityId::new(100),
             name: "MTB Ride".to_string(),
-            start: activity_start(),
-            duration: 3600,
-            time: Some(3500),
-            distance: Some(50000),
-            climb: Some(500),
-            descend: Some(300),
-            energy: Some(1000),
             gear: Some(bike2.id), // Different gear!
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
 
         new_act.update(&test_session(), &mut store).await?;
 
         // The activity should now reference bike2
-        let read_act = ActivityId::new(1).read(&test_session(), &mut store).await?;
+        let read_act = ActivityId::new(100)
+            .read(&test_session(), &mut store)
+            .await?;
         assert_eq!(read_act.gear, Some(bike2.id));
 
         Ok(())
@@ -2128,11 +2185,8 @@ mod tests {
         // registered ride on the snapshot bike
         let old_act = Activity {
             id: ActivityId::new(102),
-            user_id: test_user(),
-            what: ActTypeId::from(1),
             name: "Ride".to_string(),
             start: time::macros::datetime!(2023-05-20 10:00 UTC),
-            duration: 3600,
             time: Some(1000),
             distance: Some(10000),
             climb: Some(100),
@@ -2141,6 +2195,7 @@ mod tests {
             gear: Some(bike1),
             device_name: None,
             external_id: None,
+            ..sample_activity()
         };
         old_act.clone().upsert(&session, &mut store).await?;
 

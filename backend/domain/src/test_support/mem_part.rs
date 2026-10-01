@@ -6,19 +6,26 @@ use time::OffsetDateTime;
 #[async_trait]
 impl PartStore for MemStore {
     async fn partid_get_part(&mut self, pid: PartId) -> TbResult<Part> {
-        self.parts
+        let d = self.state();
+        d.parts
             .get(&pid)
             .cloned()
             .ok_or_else(|| Error::NotFound(format!("Part {} not found", pid)))
     }
 
     async fn part_get_all_for_userid(&mut self, uid: &UserId) -> TbResult<Vec<Part>> {
-        Ok(self
+        let d = self.state();
+        // One rule on both stores (issue #405): the database lists a user's
+        // parts `ORDER BY last_used`, so this in-memory mirror applies the
+        // same sort; ties have no defined order.
+        let mut parts: Vec<Part> = d
             .parts
             .values()
             .filter(|p| &p.owner == uid)
             .cloned()
-            .collect())
+            .collect();
+        parts.sort_by_key(|p| p.last_used);
+        Ok(parts)
     }
 
     async fn part_create(
@@ -33,8 +40,9 @@ impl PartStore for MemStore {
         owner: UserId,
         shop: Option<ShopId>,
     ) -> TbResult<Part> {
-        let id = PartId::from(self.next_part_id);
-        self.next_part_id += 1;
+        let d = self.state_mut();
+        let id = PartId::from(d.next_part_id);
+        d.next_part_id += 1;
         let part = Part {
             id,
             owner,
@@ -49,28 +57,31 @@ impl PartStore for MemStore {
             source,
             shop,
         };
-        self.parts.insert(id, part.clone());
+        d.parts.insert(id, part.clone());
         Ok(part)
     }
 
     async fn part_update(&mut self, part: Part) -> TbResult<Part> {
-        match self.parts.insert(part.id, part.clone()) {
+        let d = self.state_mut();
+        match d.parts.insert(part.id, part.clone()) {
             Some(_) => Ok(part),
             None => Err(Error::NotFound(format!("Part {} not found", part.id))),
         }
     }
 
     async fn part_delete(&mut self, part: PartId) -> TbResult<PartId> {
-        match self.parts.remove(&part) {
+        let d = self.state_mut();
+        match d.parts.remove(&part) {
             Some(_) => Ok(part),
             None => Err(Error::NotFound(format!("Part {} not found", part))),
         }
     }
 
     async fn parts_delete(&mut self, parts: &[Part]) -> TbResult<usize> {
+        let d = self.state_mut();
         let mut count = 0;
         for part in parts {
-            if self.parts.remove(&part.id).is_some() {
+            if d.parts.remove(&part.id).is_some() {
                 count += 1;
             }
         }
@@ -78,8 +89,8 @@ impl PartStore for MemStore {
     }
 
     async fn partid_get_by_source(&mut self, strava_id: &str) -> TbResult<Option<PartId>> {
-        Ok(self
-            .parts
+        let d = self.state();
+        Ok(d.parts
             .values()
             .find(|p| p.source.as_deref() == Some(strava_id))
             .map(|p| p.id))
@@ -90,9 +101,10 @@ impl PartStore for MemStore {
         shop_id: ShopId,
         part_ids: Vec<PartId>,
     ) -> TbResult<Vec<Part>> {
+        let d = self.state_mut();
         let mut result = Vec::new();
         for pid in part_ids {
-            if let Some(part) = self.parts.get_mut(&pid) {
+            if let Some(part) = d.parts.get_mut(&pid) {
                 part.shop = Some(shop_id);
                 result.push(part.clone());
             }
@@ -101,9 +113,10 @@ impl PartStore for MemStore {
     }
 
     async fn parts_unregister_shop(&mut self, part_ids: Vec<PartId>) -> TbResult<Vec<Part>> {
+        let d = self.state_mut();
         let mut result = Vec::new();
         for pid in part_ids {
-            if let Some(part) = self.parts.get_mut(&pid) {
+            if let Some(part) = d.parts.get_mut(&pid) {
                 part.shop = None;
                 result.push(part.clone());
             }
@@ -112,8 +125,8 @@ impl PartStore for MemStore {
     }
 
     async fn shop_get_parts(&mut self, shop_id: ShopId) -> TbResult<Vec<Part>> {
-        Ok(self
-            .parts
+        let d = self.state();
+        Ok(d.parts
             .values()
             .filter(|p| p.shop.as_ref() == Some(&shop_id))
             .cloned()
@@ -129,8 +142,9 @@ impl PartNoteStore for MemStore {
         name: String,
         created: OffsetDateTime,
     ) -> TbResult<PartNote> {
-        let id = PartNoteId::from(self.next_note_id);
-        self.next_note_id += 1;
+        let d = self.state_mut();
+        let id = PartNoteId::from(d.next_note_id);
+        d.next_note_id += 1;
         let note = PartNote {
             id,
             part,
@@ -140,7 +154,7 @@ impl PartNoteStore for MemStore {
             size: None,
             created,
         };
-        self.part_notes.insert(id, note.clone());
+        d.part_notes.insert(id, note.clone());
         Ok(note)
     }
 
@@ -154,8 +168,9 @@ impl PartNoteStore for MemStore {
         data: Vec<u8>,
         created: OffsetDateTime,
     ) -> TbResult<PartNote> {
-        let id = PartNoteId::from(self.next_note_id);
-        self.next_note_id += 1;
+        let d = self.state_mut();
+        let id = PartNoteId::from(d.next_note_id);
+        d.next_note_id += 1;
         let note = PartNote {
             id,
             part,
@@ -165,14 +180,14 @@ impl PartNoteStore for MemStore {
             size: Some(size),
             created,
         };
-        self.note_files.insert(id, data);
-        self.part_notes.insert(id, note.clone());
+        d.note_files.insert(id, data);
+        d.part_notes.insert(id, note.clone());
         Ok(note)
     }
 
     async fn partnote_all_by_part(&mut self, part: PartId) -> TbResult<Vec<PartNote>> {
-        Ok(self
-            .part_notes
+        let d = self.state();
+        Ok(d.part_notes
             .values()
             .filter(|n| n.part == part)
             .cloned()
@@ -180,21 +195,24 @@ impl PartNoteStore for MemStore {
     }
 
     async fn partnote_get(&mut self, id: PartNoteId) -> TbResult<PartNote> {
-        self.part_notes
+        let d = self.state();
+        d.part_notes
             .get(&id)
             .cloned()
             .ok_or_else(|| Error::NotFound(format!("PartNote {id} not found")))
     }
 
     async fn partnote_file(&mut self, id: PartNoteId) -> TbResult<Vec<u8>> {
-        self.note_files
+        let d = self.state();
+        d.note_files
             .get(&id)
             .cloned()
             .ok_or_else(|| Error::NotFound(format!("PartNote file {id} not found")))
     }
 
     async fn partnote_update_text(&mut self, id: PartNoteId, name: String) -> TbResult<PartNote> {
-        let note = self
+        let d = self.state_mut();
+        let note = d
             .part_notes
             .get_mut(&id)
             .ok_or_else(|| Error::NotFound(format!("PartNote {id} not found")))?;
@@ -211,7 +229,8 @@ impl PartNoteStore for MemStore {
         size: i64,
         data: Vec<u8>,
     ) -> TbResult<PartNote> {
-        let note = self
+        let d = self.state_mut();
+        let note = d
             .part_notes
             .get_mut(&id)
             .ok_or_else(|| Error::NotFound(format!("PartNote {id} not found")))?;
@@ -219,26 +238,28 @@ impl PartNoteStore for MemStore {
         note.mime = Some(mime);
         note.filename = filename;
         note.size = Some(size);
-        self.note_files.insert(id, data);
+        d.note_files.insert(id, data);
         Ok(note.clone())
     }
 
     async fn partnote_remove_file(&mut self, id: PartNoteId) -> TbResult<PartNote> {
-        let note = self
+        let d = self.state_mut();
+        let note = d
             .part_notes
             .get_mut(&id)
             .ok_or_else(|| Error::NotFound(format!("PartNote {id} not found")))?;
         note.mime = None;
         note.filename = None;
         note.size = None;
-        self.note_files.remove(&id);
+        d.note_files.remove(&id);
         Ok(note.clone())
     }
 
     async fn partnote_delete(&mut self, id: PartNoteId) -> TbResult<PartNoteId> {
-        match self.part_notes.remove(&id) {
+        let d = self.state_mut();
+        match d.part_notes.remove(&id) {
             Some(_) => {
-                self.note_files.remove(&id);
+                d.note_files.remove(&id);
                 Ok(id)
             }
             None => Err(Error::NotFound(format!("PartNote {id} not found"))),
