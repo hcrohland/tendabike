@@ -68,7 +68,20 @@ use part_type_ids::{BIKE, CHAIN, FRONT_WHEEL, TIRE};
 // ---------------------------------------------------------------------------
 
 static LOCK: Mutex<()> = Mutex::const_new(());
-static SEEDED: OnceCell<()> = OnceCell::const_new();
+static SEEDED: OnceCell<FixtureMarks> = OnceCell::const_new();
+
+/// The fixture's id high-water marks, derived from the loaded snapshot so
+/// the database's sequences continue where the fixture left off — the same
+/// values the in-memory store derives for its next-id counters.
+#[derive(Clone, Copy, Debug)]
+struct FixtureMarks {
+    /// The highest part id in the fixture; the next id handed out is one
+    /// higher.
+    parts: i32,
+    /// The highest user id in the fixture; the next id handed out is one
+    /// higher.
+    users: i32,
+}
 
 /// The database url from the environment or `.env`, if any.
 fn database_url() -> Option<String> {
@@ -115,12 +128,12 @@ async fn seam() -> Option<Seam> {
     // taken while the lock is held, so tests never contend for the database.
     let lock = LOCK.lock().await;
     let pool = pool().await?;
-    SEEDED
+    let marks = SEEDED
         .get_or_try_init(|| async { seed(&pool).await })
         .await
         .ok()?;
     let mut store = pool.begin().await.ok()?;
-    reset_sequences(&mut store).await.ok()?;
+    reset_sequences(&mut store, marks).await.ok()?;
     Some(Seam { store, _lock: lock })
     // `pool` is dropped here, with this test's runtime.
 }
@@ -150,10 +163,13 @@ struct PreTruncate {
 
 /// Truncate every table and load the standard prepopulated fixture (the same
 /// snapshot the in-memory suite uses), then point the sequences just past
-/// the fixture ids. The fixture is committed once; every test afterwards
+/// the fixture ids, returning the fixture's high-water marks for the per-test
+/// sequence reset. The fixture is committed once; every test afterwards
 /// works in its own transaction and rolls back.
-async fn seed(pool: &tb_sqlx::DbPool) -> tb_domain::TbResult<()> {
+async fn seed(pool: &tb_sqlx::DbPool) -> tb_domain::TbResult<FixtureMarks> {
     let mut tx = pool.begin().await?;
+
+    let snap = MemStore::prepopulated().snapshot();
 
     // Report the pre-truncate state so a run against a database that holds
     // more than the standard fixture is visible in the logs.
@@ -165,8 +181,11 @@ async fn seed(pool: &tb_sqlx::DbPool) -> tb_domain::TbResult<()> {
     .map_err(db_err)?;
     eprintln!(
         "store-seam: seeding; pre-truncate state users={} parts={} \
-        (expected 1 user, 17 parts)",
-        pre.users, pre.parts
+        (expected {} users, {} parts)",
+        pre.users,
+        pre.parts,
+        snap.users.len(),
+        snap.parts.len()
     );
 
     sqlx::query(
@@ -178,20 +197,37 @@ async fn seed(pool: &tb_sqlx::DbPool) -> tb_domain::TbResult<()> {
     .await
     .map_err(db_err)?;
 
-    let snap = MemStore::prepopulated().snapshot();
     load_fixture(&mut tx, &snap).await?;
 
-    // The fixture uses explicit ids 1..=17 (parts) and 1 (user); the
-    // sequences must continue just past them.
-    sqlx::query(
-        "SELECT setval(pg_get_serial_sequence('parts', 'id'), 17),
-                setval(pg_get_serial_sequence('users', 'id'), 1)",
-    )
-    .execute(&mut **tx)
-    .await
-    .map_err(db_err)?;
+    // The fixture rows use explicit ids; the sequences must continue just
+    // past the fixture's highest ids.
+    let marks = FixtureMarks {
+        parts: snap
+            .parts
+            .iter()
+            .map(|p| i32::from(p.id))
+            .max()
+            .unwrap_or(0),
+        users: snap
+            .users
+            .iter()
+            .map(|u| i32::from(u.id))
+            .max()
+            .unwrap_or(0),
+    };
+    sqlx::query("SELECT setval(pg_get_serial_sequence('parts', 'id'), $1)")
+        .bind(marks.parts)
+        .execute(&mut **tx)
+        .await
+        .map_err(db_err)?;
+    sqlx::query("SELECT setval(pg_get_serial_sequence('users', 'id'), $1)")
+        .bind(marks.users)
+        .execute(&mut **tx)
+        .await
+        .map_err(db_err)?;
 
-    tx.commit().await
+    tx.commit().await?;
+    Ok(marks)
 }
 
 /// Load the snapshot into the database: users and parts through raw inserts
@@ -253,18 +289,24 @@ async fn load_fixture(
     Ok(())
 }
 
-/// Point the sequences just past the fixture ids inside the test
+/// Point the sequences just past the fixture's highest ids inside the test
 /// transaction, so freshly created parts/users get the same ids the
-/// in-memory store hands out (18 for parts, 2 for users). Sequence changes
-/// are non-transactional, so each test resets them on entry.
-async fn reset_sequences(tx: &mut tb_sqlx::SqlxConn<'_>) -> tb_domain::TbResult<()> {
-    sqlx::query(
-        "SELECT setval(pg_get_serial_sequence('parts', 'id'), 17),
-                setval(pg_get_serial_sequence('users', 'id'), 1)",
-    )
-    .execute(&mut ***tx)
-    .await
-    .map_err(db_err)?;
+/// in-memory store hands out (max fixture id + 1). Sequence changes are
+/// non-transactional, so each test resets them on entry.
+async fn reset_sequences(
+    tx: &mut tb_sqlx::SqlxConn<'_>,
+    marks: &FixtureMarks,
+) -> tb_domain::TbResult<()> {
+    sqlx::query("SELECT setval(pg_get_serial_sequence('parts', 'id'), $1)")
+        .bind(marks.parts)
+        .execute(&mut ***tx)
+        .await
+        .map_err(db_err)?;
+    sqlx::query("SELECT setval(pg_get_serial_sequence('users', 'id'), $1)")
+        .bind(marks.users)
+        .execute(&mut ***tx)
+        .await
+        .map_err(db_err)?;
     Ok(())
 }
 
