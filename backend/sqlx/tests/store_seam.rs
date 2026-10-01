@@ -527,7 +527,13 @@ async fn user_summary_read() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let summary = UserId::from(1).get_summary(None, &mut store).await?;
 
-        // The fixture content: counts only (the stores order vectors differently).
+        // The fixture content: counts only. The stores still order the
+        // fixture vectors differently: parts (the database's
+        // `ORDER BY last_used` vs the in-memory store's hash order),
+        // attachments (sorted by attach time in memory, unordered in the
+        // database), and usages (built per part, following the part
+        // order). Only activities come back in one unified order on both
+        // stores (ascending start, #405).
         assert_eq!(summary.parts.len(), 17);
         assert_eq!(summary.activities.len(), 3);
         assert_eq!(summary.attachments.len(), 11);
@@ -1504,6 +1510,41 @@ async fn activity_get_all_orders_by_start() -> tb_domain::TbResult<()> {
                 "Later Ride"
             ]
         );
+
+        Ok(())
+    })
+    .await
+}
+
+/// A production read re-expresses the stored start in the stored offset
+/// rounded to the nearest 30 minutes — the instant never moves, only the
+/// label does (the one rule documented on `Activity`, issue #409; the
+/// in-memory twin is `activity_offsets_normalized_to_30_minutes` in
+/// `mem_activity.rs`). Every other ride in this suite sits exactly on a
+/// 30-minute boundary (UTC, +01:00, +02:00), where the rounding is a
+/// no-op, so the rule is only visible with an off-boundary offset: a
+/// +00:20 start comes back as +00:30.
+#[tokio::test]
+async fn activity_read_rounds_offset_to_30_minutes() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        // The sample start expressed with a +00:20 offset — off-boundary.
+        let start = activity_start().to_offset(time::UtcOffset::from_whole_seconds(1200).unwrap());
+        let ride = ride(100, "Offset Ride", start, None);
+        store.activity_create(ride).await?;
+
+        let read = store
+            .activity_read_by_id(ActivityId::new(100))
+            .await?
+            .expect("the ride is stored");
+
+        // The rule: the offset is rounded to the nearest 30 minutes …
+        assert_eq!(
+            read.start.offset().whole_seconds(),
+            1800,
+            "a +00:20 offset must round to +00:30"
+        );
+        // … and the instant never moves.
+        assert_eq!(read.start.unix_timestamp(), start.unix_timestamp());
 
         Ok(())
     })

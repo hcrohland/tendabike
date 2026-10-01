@@ -484,4 +484,52 @@ mod tests {
         let user = uid.read(&mut store).await.unwrap();
         assert_eq!(user.onboarding_status, OnboardingStatus::Completed);
     }
+
+    // === Tier C: User summary (prepopulated fixture) ===
+
+    use crate::test_support::part_type_ids::BIKE;
+
+    /// The user summary read returns the full prepopulated fixture content
+    /// — the in-memory twin of the store-seam suite's `user_summary_read`
+    /// (which asserts the same thing over the same fixture loaded into
+    /// real Postgres).
+    #[tokio::test]
+    async fn user_summary_read() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let summary = UserId::from(1).get_summary(None, &mut store).await?;
+
+        // The fixture content: counts only (vector order is not one rule
+        // across the two stores — see the seam's `user_summary_read`).
+        assert_eq!(summary.parts.len(), 17);
+        assert_eq!(summary.activities.len(), 3);
+        assert_eq!(summary.attachments.len(), 11);
+        // 17 part usages + 11 attachment usages (missing usage rows read
+        // as zeros, identically on both stores).
+        assert_eq!(summary.usages.len(), 28);
+        assert!(summary.shops.is_empty());
+        assert!(summary.users.is_empty());
+        assert!(summary.services.is_empty());
+        assert!(summary.plans.is_empty());
+        assert!(summary.part_notes.is_empty());
+
+        // Field lookups: the "Chain A" part, its attachment, and its usage.
+        let chain = summary
+            .parts
+            .iter()
+            .find(|p| p.id == PartId::from(4))
+            .unwrap();
+        assert_eq!(chain.name, "Chain A");
+        let att = summary
+            .attachments
+            .iter()
+            .find(|a| a.a.part_id == PartId::from(4))
+            .unwrap();
+        assert_eq!(att.a.hook, BIKE);
+        assert_eq!(att.a.detached, MAX_TIME);
+        let usage = summary.usages.iter().find(|u| u.id == chain.usage).unwrap();
+        assert_eq!(usage.time, 8025);
+        assert_eq!(usage.count, 3);
+
+        Ok(())
+    }
 }
