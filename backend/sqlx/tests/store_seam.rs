@@ -193,10 +193,12 @@ fn db_err(err: sqlx::Error) -> tb_domain::Error {
 /// held for the whole test so all tests in this suite run serialized; the
 /// transaction is rolled back when the store is dropped.
 struct Seam {
-    /// Declared first so it is dropped last: the lock stays held while the
+    /// Declared first so it is dropped first: the transaction rolls back
+    /// while the lock below is still held.
+    store: tb_sqlx::SqlxConn<'static>,
+    /// Declared last so it is dropped last: the lock stays held while the
     /// test's transaction is rolled back on drop.
     _lock: MutexGuard<'static, ()>,
-    store: tb_sqlx::SqlxConn<'static>,
 }
 
 /// Open a fresh fixture transaction for a test, or `None` when this machine
@@ -233,7 +235,9 @@ async fn seam() -> Option<Seam> {
 /// has no `SCRATCH_DATABASE_URL`), hands the store to the body by value, and returns
 /// the body's result. The body never commits, so the transaction is rolled
 /// back when the body's future drops; the `Seam`'s lock stays held until
-/// that drop, so the suite still runs serialized.
+/// that drop, so the suite still runs serialized — the destructure binds
+/// `_lock` before `store`, and locals drop in reverse binding order, so the
+/// lock outlives the store's rollback.
 async fn with_seam<R>(f: impl FnOnce(tb_sqlx::SqlxConn<'static>) -> R) -> tb_domain::TbResult<()>
 where
     R: std::future::Future<Output = tb_domain::TbResult<()>>,
