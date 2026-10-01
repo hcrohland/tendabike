@@ -27,7 +27,7 @@
 
 ## Tests
 
-All suites are in-memory (no database, no network) except `tb_sqlx`'s store-seam integration suite (`tests/store_seam.rs`), which needs a reachable `SCRATCH_DATABASE_URL` (a disposable scratch database — the suite must never read `DATABASE_URL`, which points at the developer's working database), skips itself when none is configured, and runs against a real Postgres service in the required `postgres-seam` CI job. `SQLX_OFFLINE=true cargo test -p tb_<crate>`.
+All suites are in-memory (no database, no network) except `tb_sqlx`'s store-seam integration suite (`tests/store_seam.rs`): it is ignored by default (`#[ignore = "requires SCRATCH_DATABASE_URL (a scratch Postgres database)"]`) and runs with `cargo test -p tb_sqlx --test store_seam -- --include-ignored` against a reachable `SCRATCH_DATABASE_URL` (a disposable scratch database — the suite must never read `DATABASE_URL`, which points at the developer's working database), fails loudly whenever it cannot run, and runs against a real Postgres service in the required `rust` CI job. `SQLX_OFFLINE=true cargo test -p tb_<crate>`.
 Before writing or changing tests for a crate, read its guide:
 
 - `tb_domain` → [`docs/tests/domain.md`](docs/tests/domain.md) — `MemStore`, fixtures, the prepopulated snapshot and its data rules

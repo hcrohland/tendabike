@@ -31,28 +31,15 @@ jobs:
       - name: Test
         run: npm run test
 
+  # One required gate for everything Rust: the in-memory suites plus the
+  # store-seam integration suite (issue #406) against this job's Postgres
+  # service (issue #417). The two store adapters are unified on the
+  # database's rules (#407-#410), so a red seam blocks the PR (issue #411).
   rust:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Format check
-        run: cargo fmt --check
-      - name: Test
-        run: cargo test --release
-
-  # Store seam integration suite (issue #406) against a real Postgres.
-  # Required gate: the two store adapters are unified on the database's
-  # rules (#407-#410), so a red seam blocks the PR (issue #411). The suite
-  # skips itself when no SCRATCH_DATABASE_URL is configured, which only
-  # happens outside this job — it always sets one below.
-  postgres-seam:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        image: postgres:18
         env:
           POSTGRES_USER: tendabike
           POSTGRES_PASSWORD: tendabike
@@ -73,9 +60,15 @@ jobs:
       # schema when the pool runs the migrations, so a live compile-time
       # query check would fail.
       SQLX_OFFLINE: "true"
+
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Format check
+        run: cargo fmt --check
+      # -- --include-ignored runs the ignored store-seam suite (issue
+      # #417); the other test binaries have no ignored tests, so this
+      # changes nothing for the in-memory suites.
       - name: Test
-        run: cargo test -p tb_sqlx --test store_seam
+        run: cargo test --release -- --include-ignored
