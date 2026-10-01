@@ -4,7 +4,7 @@ import { Part } from "./part";
 import { Usage, usages } from "./usage";
 import { fmtDate, get_days } from "./store";
 import { type Map } from "./mapable.svelte";
-import { resp, usage } from "../test/helpers";
+import { resp, summary, usage } from "../test/helpers";
 
 function svc(overrides: Partial<any> = {}): Service {
   return new Service({
@@ -201,33 +201,26 @@ describe("Service CRUD", () => {
     vi.stubGlobal("fetch", fetchMock);
   });
 
-  const summary = () => ({
-    parts: [],
-    part_notes: [],
-    attachments: [],
-    activities: [],
-    services: [
-      {
-        id: "S1",
-        part_id: 5,
-        time: "2023-01-01T00:00:00Z",
-        redone: "2023-01-01T00:00:00Z",
-        name: "Test",
-        notes: "",
-        usage: "u1",
-        successor: null,
-        plans: [],
-      },
-    ],
-    plans: [],
-    usages: [],
-    shops: [],
-    users: [],
-  });
+  const summaryWithService = () =>
+    summary({
+      services: [
+        {
+          id: "S1",
+          part_id: 5,
+          time: "2023-01-01T00:00:00Z",
+          redone: "2023-01-01T00:00:00Z",
+          name: "Test",
+          notes: "",
+          usage: "u1",
+          successor: null,
+          plans: [],
+        },
+      ],
+    });
 
   it("Service.create POSTs and calls updateSummary", async () => {
     const time = new Date("2024-01-01T00:00:00Z");
-    const sum = summary();
+    const sum = summaryWithService();
     fetchMock.mockResolvedValueOnce(resp(sum));
     await Service.create(5, time, "Annual", "good", ["P1"]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -245,7 +238,7 @@ describe("Service CRUD", () => {
 
   it("Service.update PUTs and calls updateSummary", async () => {
     const s = svc({ id: "S1", name: "New Name" });
-    fetchMock.mockResolvedValueOnce(resp(summary()));
+    fetchMock.mockResolvedValueOnce(resp(summaryWithService()));
     await s.update();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, options] = fetchMock.mock.calls[0];
@@ -256,7 +249,7 @@ describe("Service CRUD", () => {
   it("Service.delete removes the service and usage from the store", async () => {
     services.updateMap([svc({ id: "S1", usage: "u1" })]);
     usages.updateMap([usage("u1")]);
-    fetchMock.mockResolvedValueOnce(resp(summary()));
+    fetchMock.mockResolvedValueOnce(resp(summaryWithService()));
     const s = svc({ id: "S1", usage: "u1" });
     await s.delete();
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -269,7 +262,7 @@ describe("Service CRUD", () => {
 
   it("Service.repeat POSTs to /api/service/redo", async () => {
     const s = svc({ id: "S1" });
-    fetchMock.mockResolvedValueOnce(resp(summary()));
+    fetchMock.mockResolvedValueOnce(resp(summaryWithService()));
     await s.repeat();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, options] = fetchMock.mock.calls[0];

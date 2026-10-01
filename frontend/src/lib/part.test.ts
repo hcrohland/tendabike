@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { Part, parts } from "./part";
-import { resp } from "../test/helpers";
+import { resp, summary } from "../test/helpers";
 
 function partData(overrides: Partial<any> = {}): any {
   return {
@@ -15,21 +15,6 @@ function partData(overrides: Partial<any> = {}): any {
     disposed_at: null,
     usage: "u1",
     shop: null,
-    ...overrides,
-  };
-}
-
-function summary(overrides: Partial<any> = {}): any {
-  return {
-    parts: [],
-    part_notes: [],
-    attachments: [],
-    activities: [],
-    usages: [],
-    services: [],
-    plans: [],
-    shops: [],
-    users: [],
     ...overrides,
   };
 }

@@ -7,7 +7,7 @@ import { Attachment, attachments } from "./attachment";
 import { plans, type ServicePlan } from "./serviceplan";
 import { Shop, shops } from "./shop";
 import { myfetch } from "./store";
-import { mapableState } from "./mapable.svelte";
+import { mapableState, type StateMap } from "./mapable.svelte";
 import { getUser, setUser } from "./user.svelte";
 
 export { getUser, setUser };
@@ -58,31 +58,74 @@ type Summary = {
   users: UserPublic[];
 };
 
-export function setSummary(data: Summary) {
-  usages.setMap(data.usages);
-  parts.setMap(data.parts);
-  partNotes.setMap(data.part_notes);
-  attachments.setMap(data.attachments);
-  activities.setMap(data.activities);
-  services.setMap(data.services);
-  plans.setMap(data.plans);
-  shops.setMap(data.shops);
-  users.setMap(data.users);
+export const users = mapableState<UserPublic>("id");
+
+/// One registry row: a Summary field paired with the state collection it
+/// feeds.
+type SummaryRow<K extends keyof Summary> = {
+  key: K;
+  collection: StateMap<Summary[K][number]>;
+};
+
+/// Any one row of the registry.
+type AnySummaryRow = { [K in keyof Summary]: SummaryRow<K> }[keyof Summary];
+
+/**
+ * The sync registry (issue #412): one row per Summary field, pairing the
+ * payload field with the state collection it feeds. Both merge lanes fold
+ * over it, so the table is the single answer to "which collections does a
+ * Summary feed?" The row type pins each key to its own collection, so a
+ * field removed from Summary, or a collection drifting from its field, is
+ * a compile error here. The table is module-private by design: the two
+ * merge functions are the interface.
+ *
+ * The rows are built on each call, not captured at module load: this module
+ * and the entity modules import each other (entity methods call back into
+ * `updateSummary`), so an array literal evaluated here would read a
+ * collection binding while that module is still mid-import — undefined for
+ * whichever of them the import graph placed behind this one.
+ */
+function summaryRows(): AnySummaryRow[] {
+  return [
+    { key: "usages", collection: usages },
+    { key: "parts", collection: parts },
+    { key: "part_notes", collection: partNotes },
+    { key: "attachments", collection: attachments },
+    { key: "activities", collection: activities },
+    { key: "services", collection: services },
+    { key: "plans", collection: plans },
+    { key: "shops", collection: shops },
+    { key: "users", collection: users },
+  ];
 }
 
+/**
+ * The merge ops of a summary collection, over the union of all Summary
+ * field types. The nine field types are heterogeneous, so no single strict
+ * parameter can name them all; method syntax keeps the parameters
+ * bivariant, letting each row's own collection satisfy the fold below.
+ */
+type SummaryFieldOps = {
+  setMap(arr: Summary[keyof Summary]): void;
+  updateMap(arr: Summary[keyof Summary]): void;
+};
+
+/// Hydration lane: replaces every collection the Summary feeds.
+export function setSummary(data: Summary) {
+  for (const row of summaryRows()) {
+    (row.collection as SummaryFieldOps).setMap(data[row.key]);
+  }
+}
+
+/// Update lane: merges every collection the Summary feeds — an upsert by id
+/// that never removes rows, so a partial Summary can never empty a
+/// collection. An absent payload falls back to a full refresh.
 export function updateSummary(data?: Summary) {
   if (!data) {
     refresh();
     return;
   }
-  parts.updateMap(data.parts);
-  partNotes.updateMap(data.part_notes);
-  attachments.updateMap(data.attachments);
-  activities.updateMap(data.activities);
-  services.updateMap(data.services);
-  plans.updateMap(data.plans);
-  usages.updateMap(data.usages);
-  shops.updateMap(data.shops);
+  for (const row of summaryRows()) {
+    (row.collection as SummaryFieldOps).updateMap(data[row.key]);
+  }
 }
-
-export const users = mapableState<UserPublic>("id");

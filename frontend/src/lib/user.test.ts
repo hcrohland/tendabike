@@ -9,107 +9,42 @@ import {
   users,
 } from "./user";
 import { parts } from "./part";
+import { partNotes, PartNote } from "./partnote";
+import { attachments, Attachment } from "./attachment";
 import { activities } from "./activity";
 import { services } from "./service";
 import { usages } from "./usage";
-import { attachments } from "./attachment";
 import { plans } from "./serviceplan";
 import { shops } from "./shop";
 import { stateValues } from "./mapable.svelte";
-import { resp } from "../test/helpers";
+import { resp, summary, summaryContent } from "../test/helpers";
 
-function summaryData(overrides: Partial<any> = {}): any {
-  return {
-    parts: [
-      {
-        id: 1,
-        owner: 1,
-        what: 10,
-        name: "P1",
-        vendor: "",
-        model: "",
-        purchase: "2023-01-01T00:00:00Z",
-        last_used: "2024-01-01T00:00:00Z",
-        disposed_at: null,
-        usage: "u1",
-        shop: null,
-      },
-    ],
-    part_notes: [],
-    attachments: [],
-    activities: [
-      {
-        id: 100,
-        user_id: 1,
-        what: 301,
-        name: "Ride",
-        start: "2024-05-01T08:00:00Z",
-        gear: null,
-        climb: 0,
-        descend: 0,
-        distance: 1000,
-        time: 3600,
-        duration: 3600,
-        energy: 100,
-        device_name: "",
-      },
-    ],
-    usages: [
-      {
-        id: "u1",
-        count: 1,
-        climb: 0,
-        descend: 0,
-        distance: 1000,
-        time: 3600,
-        duration: 3600,
-        energy: 100,
-      },
-    ],
-    services: [
-      {
-        id: "S1",
-        part_id: 1,
-        time: "2023-01-01T00:00:00Z",
-        redone: "2023-01-01T00:00:00Z",
-        name: "Svc",
-        notes: "",
-        usage: "u1",
-        successor: null,
-        plans: [],
-      },
-    ],
-    plans: [
-      {
-        id: "PL1",
-        part: 1,
-        what: 10,
-        hook: null,
-        name: "Plan",
-        days: null,
-        hours: null,
-        km: "100",
-        climb: null,
-        descend: null,
-        rides: null,
-        kJ: null,
-      },
-    ],
-    shops: [
-      {
-        id: 10,
-        owner: 1,
-        name: "Shop",
-        description: "",
-        auto_approve: true,
-        created_at: "2023-01-01T00:00:00Z",
-      },
-    ],
-    users: [
-      { id: 1, firstname: "Max", name: "Max Mustermann", avatar: undefined },
-    ],
-    ...overrides,
-  };
+const eva = { id: 2, firstname: "Eva", name: "Eva Example", avatar: undefined };
+
+/// Seed all nine collections with one row each: the content Summary for the
+/// seven collections it populates, plus direct rows for the two it leaves
+/// empty.
+function seedContent() {
+  setSummary(summaryContent());
+  partNotes.setMap([
+    new PartNote({
+      id: 7,
+      part: 1,
+      name: "Note",
+      created: "2024-01-01T00:00:00Z",
+    }),
+  ]);
+  attachments.setMap([
+    new Attachment({
+      part_id: 1,
+      attached: "2024-01-01T00:00:00Z",
+      detached: "2099-01-01T00:00:00Z",
+      gear: 5,
+      hook: 2,
+      what: 10,
+      name: "Tire",
+    }),
+  ]);
 }
 
 describe("initData", () => {
@@ -132,7 +67,7 @@ describe("initData", () => {
     };
     fetchMock
       .mockResolvedValueOnce(resp(userData))
-      .mockResolvedValueOnce(resp(summaryData()));
+      .mockResolvedValueOnce(resp(summaryContent()));
     await initData();
     expect(fetchMock.mock.calls[0][0]).toBe("/api/user");
     expect(fetchMock.mock.calls[1][0]).toBe("/api/user/summary");
@@ -165,14 +100,14 @@ describe("refresh", () => {
   });
 
   it("GETs /api/user/summary and calls setSummary", async () => {
-    fetchMock.mockResolvedValue(resp(summaryData()));
+    fetchMock.mockResolvedValue(resp(summaryContent()));
     await refresh();
     expect(fetchMock.mock.calls[0][0]).toBe("/api/user/summary");
     expect(parts[1]).toBeDefined();
   });
 
   it("appends shop query parameter", async () => {
-    fetchMock.mockResolvedValue(resp(summaryData()));
+    fetchMock.mockResolvedValue(resp(summaryContent()));
     await refresh(42);
     expect(fetchMock.mock.calls[0][0]).toBe("/api/user/summary?shop=42");
   });
@@ -181,25 +116,42 @@ describe("refresh", () => {
 describe("setSummary", () => {
   beforeEach(() => {
     parts.setMap([]);
+    partNotes.setMap([]);
+    attachments.setMap([]);
     activities.setMap([]);
     usages.setMap([]);
     services.setMap([]);
     plans.setMap([]);
     shops.setMap([]);
     users.setMap([]);
-    attachments.setMap([]);
   });
 
-  it("calls setMap on all 8 stores", () => {
-    setSummary(summaryData() as any);
+  it("replaces all nine collections with the payload", () => {
+    setSummary(summaryContent());
     expect(parts[1]).toBeDefined();
+    expect(stateValues(partNotes)).toEqual([]);
+    expect(stateValues(attachments)).toEqual([]);
     expect(activities[100]).toBeDefined();
     expect(usages["u1"]).toBeDefined();
     expect(services["S1"]).toBeDefined();
     expect(plans["PL1"]).toBeDefined();
     expect(shops[10]).toBeDefined();
     expect(users[1]).toBeDefined();
+  });
+
+  it("the payload wins where it carries rows, and collections it leaves empty are emptied", () => {
+    seedContent();
+    setSummary(summary({ users: [eva] }));
+    expect(users[2]).toBeDefined();
+    expect(users[1]).toBeUndefined();
+    expect(stateValues(parts)).toEqual([]);
+    expect(stateValues(partNotes)).toEqual([]);
     expect(stateValues(attachments)).toEqual([]);
+    expect(stateValues(activities)).toEqual([]);
+    expect(stateValues(usages)).toEqual([]);
+    expect(stateValues(services)).toEqual([]);
+    expect(stateValues(plans)).toEqual([]);
+    expect(stateValues(shops)).toEqual([]);
   });
 });
 
@@ -208,33 +160,68 @@ describe("updateSummary", () => {
 
   beforeEach(() => {
     parts.setMap([]);
+    partNotes.setMap([]);
+    attachments.setMap([]);
     activities.setMap([]);
     usages.setMap([]);
     services.setMap([]);
     plans.setMap([]);
     shops.setMap([]);
     users.setMap([]);
-    attachments.setMap([]);
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
   });
 
   it("calls refresh() when data is undefined", () => {
-    fetchMock.mockResolvedValue(resp(summaryData()));
+    fetchMock.mockResolvedValue(resp(summaryContent()));
     updateSummary();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe("/api/user/summary");
   });
 
-  it("calls updateMap on 7 stores (not users) when data is provided", () => {
-    updateSummary(summaryData() as any);
+  it("merges all nine collections, including users", () => {
+    updateSummary(summaryContent());
     expect(parts[1]).toBeDefined();
+    expect(stateValues(partNotes)).toEqual([]);
+    expect(stateValues(attachments)).toEqual([]);
     expect(activities[100]).toBeDefined();
     expect(usages["u1"]).toBeDefined();
     expect(services["S1"]).toBeDefined();
     expect(plans["PL1"]).toBeDefined();
     expect(shops[10]).toBeDefined();
-    expect(stateValues(attachments)).toEqual([]);
-    expect(stateValues(users)).toEqual([]);
+    expect(users[1]).toBeDefined();
+  });
+
+  it("upserts user rows by id", () => {
+    users.setMap([
+      { id: 1, firstname: "Old", name: "Old Name", avatar: undefined },
+      eva,
+    ]);
+    updateSummary(summaryContent());
+    expect(stateValues(users)).toHaveLength(2);
+    expect(users[1].name).toBe("Max Mustermann");
+    expect(users[2].name).toBe("Eva Example");
+  });
+
+  it("keeps pre-existing rows the payload does not carry", () => {
+    seedContent();
+    updateSummary(summary({ users: [eva] }));
+    expect(users[1].name).toBe("Max Mustermann");
+    expect(users[2]).toBeDefined();
+    expect(stateValues(parts)).toHaveLength(1);
+  });
+
+  it("an empty payload removes nothing", () => {
+    seedContent();
+    updateSummary(summary());
+    expect(stateValues(parts)).toHaveLength(1);
+    expect(stateValues(partNotes)).toHaveLength(1);
+    expect(stateValues(attachments)).toHaveLength(1);
+    expect(stateValues(activities)).toHaveLength(1);
+    expect(stateValues(usages)).toHaveLength(1);
+    expect(stateValues(services)).toHaveLength(1);
+    expect(stateValues(plans)).toHaveLength(1);
+    expect(stateValues(shops)).toHaveLength(1);
+    expect(stateValues(users)).toHaveLength(1);
   });
 });
