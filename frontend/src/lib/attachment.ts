@@ -102,6 +102,47 @@ export function mounted_on(
   return parts[att.gear];
 }
 
+/***
+  the latest attach or detach boundary strictly before `t`, over the part's
+  rows (if a part is given) and the slot's rows (gear + hook + part type);
+  undefined when there is no earlier boundary
+*/
+export function prev_attach_time(
+  t: Date,
+  part: number | undefined,
+  gear: number | undefined,
+  hook: number | undefined,
+  what: number | undefined,
+): Date | undefined {
+  let last: Date | undefined;
+  for (const a of stateValues(attachments)) {
+    if (
+      a.part_id == part ||
+      (a.gear == gear && a.hook == hook && a.what == what)
+    ) {
+      if (a.attached < t && (!last || a.attached > last)) last = a.attached;
+      if (a.detached < t && (!last || a.detached > last)) last = a.detached;
+    }
+  }
+  return last;
+}
+
+/***
+  the default attach date for a part installed at the slot: now if the slot
+  has an attachment row, else the gear's purchase date
+*/
+export function default_attach_date(
+  gear: number,
+  hook: number | undefined,
+  what: number | undefined,
+): Date {
+  const hasRow = stateValues(attachments).some(
+    (a) => a.gear == gear && a.hook == hook && a.what == what,
+  );
+  if (hasRow) return new Date();
+  return parts[gear]?.purchase ?? new Date();
+}
+
 export const attachments = mapableState(
   "idx",
   (a) => new Attachment(a),

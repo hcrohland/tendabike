@@ -16,7 +16,9 @@
     date?: any;
     mindate?: Date;
     maxdate?: Date;
-    prevdate?: (t: Date) => Date; // only usable w/o mindate
+    // the history-walk step; shown in place of the min-jump button,
+    // disabled while it has no earlier boundary
+    prevdate?: (t: Date) => Date | undefined;
     required?: boolean;
     rounded?: boolean;
   };
@@ -78,12 +80,16 @@
     {...options}
   />
 
-  {#if mindate}
-    <Button onclick={preventDefault(() => (date = min()))}>
+  {#if prevdate}
+    {@const next = prevdate(date)}
+    <Button
+      disabled={!next}
+      onclick={preventDefault(() => (date = next ?? date))}
+    >
       <AngleLeftOutline class="shrink-0 h-5 w-5" />
     </Button>
-  {:else if prevdate}
-    <Button onclick={preventDefault(() => (date = prevdate(date)))}>
+  {:else if mindate}
+    <Button onclick={preventDefault(() => (date = min()))}>
       <AngleLeftOutline class="shrink-0 h-5 w-5" />
     </Button>
   {/if}

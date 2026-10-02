@@ -10,6 +10,7 @@
     part: Part;
     maxdate?: Date | undefined;
     mindate?: Date | undefined;
+    prevdate?: ((t: Date) => Date | undefined) | undefined;
   }
 
   let {
@@ -17,6 +18,7 @@
     part = $bindable(),
     maxdate = undefined,
     mindate = undefined,
+    prevdate = undefined,
   }: Props = $props();
 </script>
 
@@ -57,6 +59,13 @@
     <Label class="mb-2">
       {m.partform_new_day({ type: type?.localizedName() ?? "" })}
     </Label>
-    <DateTime bind:date={part.purchase} {maxdate} {mindate} required rounded />
+    <DateTime
+      bind:date={part.purchase}
+      {maxdate}
+      {mindate}
+      {prevdate}
+      required
+      rounded
+    />
   </div>
 </div>
