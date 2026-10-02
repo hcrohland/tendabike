@@ -4,17 +4,16 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql
     env_file: .env
-    
+
   app:
     image: mcr.microsoft.com/devcontainers/base:trixie
     network_mode: service:database
     init: true
     volumes:
       - ..:/workspaces/tendabike:cached
-      - ../.local:/home/vscode/.local2
-      - tb_container_home:/home/vscode
       - rust-target:/workspaces/tendabike/target
       - node_modules:/workspaces/tendabike/node_modules
+      - agentcontainer_workspaces:/workspaces/agent
     command: sleep infinity
     environment:
       - TZ=Europe/Berlin
@@ -24,3 +23,5 @@ volumes:
   rust-target:
   node_modules:
   tb_container_home:
+  agentcontainer_workspaces:
+    external: true
