@@ -4,8 +4,10 @@ import {
   attachments,
   att_at_hook,
   attachment_for_part,
+  mounted_on,
   part_at_hook,
 } from "./attachment";
+import { Part, parts } from "./part";
 import { Activity, activities } from "./activity";
 import { maxDate } from "./store";
 import { stateValues, type Map } from "./mapable.svelte";
@@ -245,6 +247,74 @@ describe("attachment_for_part", () => {
   it("does not find the attachment at the exact detached boundary (exclusive)", () => {
     expect(
       attachment_for_part(1, new Date("2022-12-31T00:00:00Z")),
+    ).toBeUndefined();
+  });
+});
+
+describe("mounted_on", () => {
+  const gear = new Part({
+    id: 100,
+    owner: 1,
+    what: 1,
+    name: "Bike",
+    purchase: "2023-01-01T00:00:00Z",
+    last_used: "2023-01-01T00:00:00Z",
+    usage: "u1",
+  });
+  const a = att({
+    part_id: 1,
+    attached: "2020-01-01T00:00:00Z",
+    detached: "2022-12-31T00:00:00Z",
+    gear: 100,
+  });
+
+  beforeEach(() => {
+    reset();
+    parts.setMap([]);
+  });
+
+  it("returns the gear the part is attached to at a time", () => {
+    parts.setMap([gear]);
+    attachments.setMap([a]);
+    // The collection's prep function rebuilds the part, so the door returns
+    // a value-equal part, not the seeded instance.
+    expect(mounted_on(1, new Date("2021-06-01T00:00:00Z"))).toEqual(gear);
+  });
+
+  it("returns the gear at the exact attached boundary (inclusive)", () => {
+    parts.setMap([gear]);
+    attachments.setMap([a]);
+    expect(mounted_on(1, new Date("2020-01-01T00:00:00Z"))).toEqual(gear);
+  });
+
+  it("returns undefined at the exact detached boundary (exclusive)", () => {
+    parts.setMap([gear]);
+    attachments.setMap([a]);
+    expect(mounted_on(1, new Date("2022-12-31T00:00:00Z"))).toBeUndefined();
+  });
+
+  it("returns undefined if the part was not attached at that time", () => {
+    parts.setMap([gear]);
+    attachments.setMap([a]);
+    expect(mounted_on(1, new Date("2019-01-01T00:00:00Z"))).toBeUndefined();
+  });
+
+  it("matches only the requested part", () => {
+    parts.setMap([gear]);
+    attachments.setMap([a]);
+    expect(mounted_on(999, new Date("2021-06-01T00:00:00Z"))).toBeUndefined();
+  });
+
+  it("returns undefined when the gear is missing from the parts collection", () => {
+    attachments.setMap([a]);
+    expect(mounted_on(1, new Date("2021-06-01T00:00:00Z"))).toBeUndefined();
+  });
+
+  it("returns undefined for an undefined part id", () => {
+    parts.setMap([gear]);
+    attachments.setMap([a]);
+    expect(
+      mounted_on(undefined, new Date("2021-06-01T00:00:00Z")),
     ).toBeUndefined();
   });
 });

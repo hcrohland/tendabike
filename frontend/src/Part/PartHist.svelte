@@ -1,10 +1,9 @@
 <script lang="ts">
-  import { by, stateValues } from "../lib/mapable.svelte";
   import { types } from "../lib/types";
   import UsageChips from "../Usage/UsageChips.svelte";
   import PartLink from "./PartLink.svelte";
   import { parts } from "../lib/part";
-  import { attachments, type Attachment } from "../lib/attachment";
+  import { type Attachment } from "../lib/attachment";
   import { DropdownItem } from "flowbite-svelte";
   import Menu from "../Widgets/Menu.svelte";
   import { deleteAttachment } from "../Attachment/DeleteAttachment.svelte";
@@ -19,11 +18,7 @@
 
   let show_more = $state(false);
 
-  let atts = $derived(
-    stateValues(attachments)
-      .filter((a) => a.part_id == id)
-      .sort(by("attached")),
-  );
+  let atts = $derived(parts[id]?.attachments() ?? []);
 
   let [latest, ...history] = $derived(atts);
 </script>

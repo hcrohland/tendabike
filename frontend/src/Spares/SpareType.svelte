@@ -5,9 +5,7 @@
   import { DropdownItem } from "flowbite-svelte";
   import Menu from "../Widgets/Menu.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
-  import { Attachment, attachments } from "../lib/attachment";
-  import { type Map, stateValues } from "../lib/mapable.svelte";
-  import { parts } from "../lib/part";
+  import { mounted_on } from "../lib/attachment";
   import { fmtDate } from "../lib/store";
   import { Type } from "../lib/types";
   import { newPart } from "../Part/NewPart.svelte";
@@ -28,16 +26,8 @@
 
   let show_more: boolean = $state(false);
 
-  function attachedTo(
-    atts: Map<Attachment>,
-    partId: number | undefined,
-    time: Date,
-  ) {
-    let att = stateValues(atts)
-      .filter((x) => x.part_id === partId && x.isAttached(time))
-      .pop();
-    if (att == undefined) return;
-    return parts[att.gear];
+  function attachedTo(partId: number | undefined, time: Date) {
+    return mounted_on(partId, time);
   }
 
   let subparts = $derived(
@@ -45,8 +35,7 @@
   );
   let subshow = $derived(
     subparts.filter(
-      (p) =>
-        show_more || (!p.disposed_at && !attachedTo(attachments, p.id, date)),
+      (p) => show_more || (!p.disposed_at && !attachedTo(p.id, date)),
     ),
   );
 </script>
@@ -73,7 +62,7 @@
       class={"rounded-lg border p-3 " +
         (part.disposed_at
           ? "bg-surface-2 opacity-70 border-border-strong"
-          : attachedTo(attachments, part.id, date)
+          : attachedTo(part.id, date)
             ? "bg-surface-2 border-gray-strong"
             : "bg-surface-1 border-border-subtle")}
     >
@@ -99,7 +88,7 @@
           <div class="shrink-0">
             <Menu>
               <DropdownItem onclick={() => attachPart(part)}>
-                {attachedTo(attachments, part.id, date)
+                {attachedTo(part.id, date)
                   ? m.action_move()
                   : m.action_attach()}
               </DropdownItem>
@@ -121,7 +110,7 @@
       <UsageChips
         id={part.usage}
         ref={part.id}
-        light={!part.disposed_at && !attachedTo(attachments, part.id, date)}
+        light={!part.disposed_at && !attachedTo(part.id, date)}
       />
 
       <!-- Attached to -->
@@ -130,7 +119,7 @@
           {#if part.disposed_at}
             {m.sparetype_disposed()} {fmtDate(part.disposed_at)}
           {:else}
-            {@const attachedPart = attachedTo(attachments, part.id, date)}
+            {@const attachedPart = attachedTo(part.id, date)}
             {#if attachedPart}
               {m.attached_to()}
               <span class="text-xs text-gray-500 dark:text-gray-200 ml-1">
