@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import {
   Attachment,
   attachments,
@@ -6,6 +6,8 @@ import {
   attachment_for_part,
   mounted_on,
   part_at_hook,
+  prev_attach_time,
+  default_attach_date,
 } from "./attachment";
 import { Part, parts } from "./part";
 import { Activity, activities } from "./activity";
@@ -316,6 +318,160 @@ describe("mounted_on", () => {
     expect(
       mounted_on(undefined, new Date("2021-06-01T00:00:00Z")),
     ).toBeUndefined();
+  });
+});
+
+describe("prev_attach_time", () => {
+  beforeEach(reset);
+
+  it("returns the latest attach boundary strictly before t", () => {
+    attachments.setMap([
+      att({ attached: "2023-01-01T00:00:00Z" }), // still attached
+    ]);
+    expect(
+      prev_attach_time(new Date("2023-06-01T00:00:00Z"), undefined, 100, 1, 10),
+    ).toEqual(new Date("2023-01-01T00:00:00Z"));
+  });
+
+  it("returns the detach boundary of a row that ended before t", () => {
+    attachments.setMap([
+      att({
+        attached: "2023-01-01T00:00:00Z",
+        detached: "2023-03-01T00:00:00Z",
+      }),
+    ]);
+    expect(
+      prev_attach_time(new Date("2023-06-01T00:00:00Z"), undefined, 100, 1, 10),
+    ).toEqual(new Date("2023-03-01T00:00:00Z"));
+  });
+
+  it("ignores a boundary exactly at t (strictly before)", () => {
+    attachments.setMap([
+      att({
+        attached: "2023-01-01T00:00:00Z",
+        detached: "2023-06-01T00:00:00Z",
+      }),
+    ]);
+    expect(
+      prev_attach_time(new Date("2023-06-01T00:00:00Z"), undefined, 100, 1, 10),
+    ).toEqual(new Date("2023-01-01T00:00:00Z"));
+  });
+
+  it("returns nothing when no boundary is before t", () => {
+    attachments.setMap([att({ attached: "2023-06-01T00:00:00Z" })]);
+    expect(
+      prev_attach_time(new Date("2023-06-01T00:00:00Z"), undefined, 100, 1, 10),
+    ).toBeUndefined();
+  });
+
+  it("steps through the slot's rows when no part is given", () => {
+    attachments.setMap([
+      att({
+        part_id: 5,
+        attached: "2023-01-01T00:00:00Z",
+        detached: "2023-03-01T00:00:00Z",
+      }),
+      att({ part_id: 7, attached: "2023-04-01T00:00:00Z" }),
+    ]);
+    expect(
+      prev_attach_time(new Date("2023-06-01T00:00:00Z"), undefined, 100, 1, 10),
+    ).toEqual(new Date("2023-04-01T00:00:00Z"));
+  });
+
+  it("takes the latest boundary over both the part's and the slot's rows", () => {
+    attachments.setMap([
+      att({ part_id: 5, attached: "2023-02-01T00:00:00Z", hook: 2 }),
+      att({ part_id: 7, attached: "2023-04-01T00:00:00Z" }),
+    ]);
+    expect(
+      prev_attach_time(new Date("2023-06-01T00:00:00Z"), 5, 100, 1, 10),
+    ).toEqual(new Date("2023-04-01T00:00:00Z"));
+  });
+
+  it("steps the part's rows even where they lie outside the slot", () => {
+    attachments.setMap([
+      att({ part_id: 5, attached: "2023-05-01T00:00:00Z", hook: 2 }),
+      att({ part_id: 7, attached: "2023-04-01T00:00:00Z" }),
+    ]);
+    expect(
+      prev_attach_time(new Date("2023-06-01T00:00:00Z"), 5, 100, 1, 10),
+    ).toEqual(new Date("2023-05-01T00:00:00Z"));
+  });
+
+  it("matches the slot by gear, hook and part type", () => {
+    attachments.setMap([
+      att({ part_id: 5, attached: "2023-02-01T00:00:00Z", gear: 999 }),
+      att({ part_id: 6, attached: "2023-03-01T00:00:00Z", hook: 2 }),
+      att({ part_id: 7, attached: "2023-04-01T00:00:00Z", what: 99 }),
+    ]);
+    expect(
+      prev_attach_time(new Date("2023-06-01T00:00:00Z"), undefined, 100, 1, 10),
+    ).toBeUndefined();
+  });
+
+  it("returns nothing for an empty collection", () => {
+    expect(
+      prev_attach_time(new Date("2023-06-01T00:00:00Z"), undefined, 100, 1, 10),
+    ).toBeUndefined();
+  });
+});
+
+describe("default_attach_date", () => {
+  const gear: any = {
+    id: 100,
+    owner: 1,
+    what: 1,
+    name: "Bike",
+    purchase: "2023-01-01T00:00:00Z",
+    last_used: "2023-01-01T00:00:00Z",
+    usage: "u1",
+  };
+
+  beforeEach(() => {
+    reset();
+    parts.setMap([gear]);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2023-06-01T12:00:00Z"));
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it("returns now when the slot has an attachment row", () => {
+    attachments.setMap([att({ attached: "2023-02-01T00:00:00Z" })]);
+    expect(default_attach_date(100, 1, 10)).toEqual(
+      new Date("2023-06-01T12:00:00Z"),
+    );
+  });
+
+  it("returns the gear's purchase date when the slot has no row", () => {
+    expect(default_attach_date(100, 1, 10)).toEqual(
+      new Date("2023-01-01T00:00:00Z"),
+    );
+  });
+
+  it("does not count rows of a different hook, gear or type", () => {
+    attachments.setMap([
+      att({ hook: 2 }),
+      att({ gear: 999 }),
+      att({ what: 99 }),
+    ]);
+    expect(default_attach_date(100, 1, 10)).toEqual(
+      new Date("2023-01-01T00:00:00Z"),
+    );
+  });
+
+  it("returns the gear's purchase date while the part type is unknown", () => {
+    attachments.setMap([att()]);
+    expect(default_attach_date(100, undefined, undefined)).toEqual(
+      new Date("2023-01-01T00:00:00Z"),
+    );
+  });
+
+  it("returns now when the gear is missing from the parts collection", () => {
+    parts.setMap([]);
+    expect(default_attach_date(100, 1, 10)).toEqual(
+      new Date("2023-06-01T12:00:00Z"),
+    );
   });
 });
 

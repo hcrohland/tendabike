@@ -1,9 +1,8 @@
 <script module lang="ts">
   import { Type } from "../lib/types";
   import { getUser } from "../lib/user";
-  import { stateValues } from "../lib/mapable.svelte";
   import { Part } from "../lib/part";
-  import { attachments } from "../lib/attachment";
+  import { default_attach_date, prev_attach_time } from "../lib/attachment";
 
   const modal = $state<{
     open: boolean;
@@ -21,18 +20,24 @@
     single: true,
   });
 
-  function guessDate(g: Part, t: Type, hook: number | undefined) {
-    if (!t) return new Date();
-    let last = stateValues(attachments).filter(
-      (a) => a.gear == g.id && a.what == t.id && a.hook == hook,
+  // one date serves both roles for a part being created (purchase ≡ attach)
+  function setDate() {
+    modal.part.purchase = default_attach_date(
+      modal.gear.id!,
+      modal.hook,
+      modal.type?.id,
     );
-    if (last.length) {
-      // It is a replacement
-      return new Date();
-    } else {
-      // It is the first part of that type
-      return g.purchase;
-    }
+  }
+
+  // walk the slot's attachment history; there is no part yet
+  function prevdate(t: Date) {
+    return prev_attach_time(
+      t,
+      undefined,
+      modal.gear.id!,
+      modal.hook,
+      modal.type?.id,
+    );
   }
 
   const setType = (t: Type, h: number | undefined) => {
@@ -40,7 +45,7 @@
     modal.part.hook = h;
     modal.type = t;
     modal.hook = h;
-    modal.part.purchase = guessDate(modal.gear, t, h);
+    setDate();
   };
 
   export const installPart = (g: Part) => {
@@ -51,6 +56,7 @@
       }),
     };
     modal.type = undefined;
+    setDate();
     modal.open = true;
   };
 </script>
@@ -96,6 +102,7 @@
     type={modal.type}
     bind:part={modal.part}
     mindate={modal.gear.purchase}
+    {prevdate}
   />
   {#if modal.type?.is_hook()}
     <Switch bind:checked={modal.single}>{m.installpart_keep_attached()}</Switch>
