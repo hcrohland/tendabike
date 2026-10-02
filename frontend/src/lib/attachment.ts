@@ -1,4 +1,5 @@
 import { Activity, activities as allActivities } from "./activity";
+import { parts, type Part } from "./part";
 import { mapableState, stateValues } from "./mapable.svelte";
 import { fmtRange, maxDate } from "./store";
 
@@ -85,6 +86,20 @@ export function attachment_for_part(part: number | undefined, time: Date) {
         att.part_id == part && att.attached <= time && att.detached > time,
     )
     .pop();
+}
+
+/***
+  return the part this part is attached to at time — the top-level gear of the
+  assembly via `attachment_for_part` and the `gear` lookup — or undefined if it
+  is not attached
+*/
+export function mounted_on(
+  part: number | undefined,
+  time: Date,
+): Part | undefined {
+  const att = attachment_for_part(part, time);
+  if (!att) return;
+  return parts[att.gear];
 }
 
 export const attachments = mapableState(
