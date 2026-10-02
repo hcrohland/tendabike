@@ -26,16 +26,12 @@
 
   let show_more: boolean = $state(false);
 
-  function attachedTo(partId: number | undefined, time: Date) {
-    return mounted_on(partId, time);
-  }
-
   let subparts = $derived(
     type.parts().filter((p) => (getShop() ? p.shop == getShop()!.id : true)),
   );
   let subshow = $derived(
     subparts.filter(
-      (p) => show_more || (!p.disposed_at && !attachedTo(p.id, date)),
+      (p) => show_more || (!p.disposed_at && !mounted_on(p.id, date)),
     ),
   );
 </script>
@@ -62,7 +58,7 @@
       class={"rounded-lg border p-3 " +
         (part.disposed_at
           ? "bg-surface-2 opacity-70 border-border-strong"
-          : attachedTo(part.id, date)
+          : mounted_on(part.id, date)
             ? "bg-surface-2 border-gray-strong"
             : "bg-surface-1 border-border-subtle")}
     >
@@ -88,7 +84,7 @@
           <div class="shrink-0">
             <Menu>
               <DropdownItem onclick={() => attachPart(part)}>
-                {attachedTo(part.id, date)
+                {mounted_on(part.id, date)
                   ? m.action_move()
                   : m.action_attach()}
               </DropdownItem>
@@ -110,7 +106,7 @@
       <UsageChips
         id={part.usage}
         ref={part.id}
-        light={!part.disposed_at && !attachedTo(part.id, date)}
+        light={!part.disposed_at && !mounted_on(part.id, date)}
       />
 
       <!-- Attached to -->
@@ -119,7 +115,7 @@
           {#if part.disposed_at}
             {m.sparetype_disposed()} {fmtDate(part.disposed_at)}
           {:else}
-            {@const attachedPart = attachedTo(part.id, date)}
+            {@const attachedPart = mounted_on(part.id, date)}
             {#if attachedPart}
               {m.attached_to()}
               <span class="text-xs text-gray-500 dark:text-gray-200 ml-1">
