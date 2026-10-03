@@ -25,7 +25,7 @@ fi
 
 cargo fmt --check
 npm run fmtcheck
-cargo sqlx prepare --check --workspace
+SQLX_OFFLINE=true cargo sqlx prepare --check --workspace
 cargo clippy -- -D warnings
 cargo check
 npm run check:ci
