@@ -84,6 +84,7 @@ function fmtTime(svc: Service, s: Map<Service>) {
 // world and reset it between tests.
 function reset() {
   services.setMap([]);
+  usages.setMap([]);
 }
 
 describe("Service.get_successor", () => {
@@ -128,6 +129,46 @@ describe("Service.history", () => {
     expect(hist[0].depth).toBe(2);
     expect(hist[0].service).toBeUndefined();
     expect(hist[0].successor).toBe(s);
+  });
+});
+
+describe("Service.period", () => {
+  beforeEach(reset);
+
+  it("computes the usage delta and days between two services", () => {
+    const p = part({ id: 5, usage: "u_now" });
+    const u_prev = usage("u_prev", { count: 2, distance: 1000 });
+    const u_now = usage("u_now", { count: 4, distance: 40000 });
+    const service = svc({
+      id: "S1",
+      usage: "u_prev",
+      time: "2023-01-01T00:00:00Z",
+    });
+    const successor = svc({
+      id: "S2",
+      usage: "u_now",
+      time: "2024-01-01T00:00:00Z",
+    });
+    services.setMap([service, successor]);
+    usages.setMap([u_prev, u_now]);
+
+    const { usage: delta, days } = Service.period(service, p, successor);
+
+    expect(delta.count).toBe(2);
+    expect(delta.distance).toBe(39000);
+    expect(days).toBe(365);
+  });
+
+  it("uses the full usage and purchase time without a service", () => {
+    const p = part({ id: 5, usage: "u_now", purchase: "2023-01-01T00:00:00Z" });
+    const u_now = usage("u_now", { count: 4, distance: 40000 });
+    usages.setMap([u_now]);
+
+    const { usage: full, days } = Service.period(null, p, null);
+
+    expect(full.count).toBe(4);
+    expect(full.distance).toBe(40000);
+    expect(typeof days).toBe("number");
   });
 });
 

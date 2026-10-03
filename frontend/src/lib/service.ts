@@ -1,7 +1,8 @@
-import { handleError, myfetch } from "./store";
+import { get_days, handleError, myfetch } from "./store";
 import { mapableState, stateValues } from "./mapable.svelte";
-import { usages } from "./usage";
+import { usages, Usage } from "./usage";
 import { updateSummary } from "./user";
+import type { Part } from "./part";
 
 export class Service {
   id?: string;
@@ -101,6 +102,26 @@ export class Service {
         successor: this,
       });
     }
+  }
+
+  /**
+   * The usage window between a service and its successor: the usage
+   * accumulated in the window and the days that passed. Without a service
+   * the window starts at the part's purchase with an empty usage; without a
+   * successor it ends now with the part's current usage. Reads the module's
+   * usages state object in the body; dependencies register at the enclosing
+   * reactive call site. Pure: mutates nothing.
+   */
+  static period(
+    service: Service | null | undefined,
+    part: Part,
+    successor: Service | null | undefined,
+  ): { usage: Usage; days: number } {
+    let start = service ? service.time : part.purchase;
+    let startUsage = service ? usages[service.usage] : new Usage();
+    let end = successor ? successor.time : new Date();
+    let endUsage = successor ? usages[successor.usage] : usages[part.usage];
+    return { usage: endUsage.sub(startUsage), days: get_days(start, end) };
   }
 }
 
