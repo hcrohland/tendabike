@@ -194,6 +194,10 @@ impl Event {
         store.strava_event_set_time(self.id, self.event_time).await
     }
 
+    // `#[async_recursion]` stamps `#[must_use]` on its generated boxed-future
+    // wrapper, and clippy 1.99's `double_must_use` then flags that against the
+    // already-must-use `Result` output. The attribute is macro-generated, so it
+    // cannot be removed or given a message — allow the lint on the item instead.
     #[allow(clippy::double_must_use)]
     #[async_recursion]
     async fn rate_limit(
