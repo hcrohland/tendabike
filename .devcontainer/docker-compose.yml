@@ -11,16 +11,18 @@ services:
     init: true
     volumes:
       - ..:/workspaces/tendabike:cached
-      - ../.local:/home/vscode/.local2
       - tb_container_home:/home/vscode
       - rust-target:/workspaces/tendabike/target
       - node_modules:/workspaces/tendabike/node_modules
+      - agentcontainer_workspaces:/workspaces/agent
     command: sleep infinity
     environment:
-      - TZ=Europe/Berlin
+      - TZ=${TZ:-Europe/Berlin}
 
 volumes:
   postgres-data:
   rust-target:
   node_modules:
   tb_container_home:
+  agentcontainer_workspaces:
+    name: agentcontainer_workspaces
