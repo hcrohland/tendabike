@@ -23,6 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     sudo \
     tmux \
+    vim \
+    less \
     ripgrep\
     && rm -rf /var/lib/apt/lists/*
 
