@@ -94,8 +94,18 @@ impl PartId {
         PartId(id).checkuser(user, store).await
     }
 
-    /// Crosses: attachment, part, service, serviceplan, shop, usage.
-    pub async fn delete(self, user: &dyn Session, store: &mut impl Store) -> TbResult<PartId> {
+    pub async fn delete(
+        self,
+        user: &dyn Session,
+        store: &mut (
+                 impl AttachmentStore
+                 + PartStore
+                 + ServiceStore
+                 + ServicePlanStore
+                 + ShopStore
+                 + UsageStore
+             ),
+    ) -> TbResult<PartId> {
         self.checkuser(user, store).await?;
 
         let (attachments, _) = Attachment::for_part_with_usage(self, store).await?;
