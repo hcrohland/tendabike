@@ -1,0 +1,34 @@
+#!/bin/sh
+
+set -eu
+
+# Redirect output to stderr.
+exec 1>&2
+
+protected_branch='main'
+current_branch=$(git symbolic-ref --short HEAD)
+
+if [ "$current_branch" = "$protected_branch" ]; then
+    echo "Direct commits to '$protected_branch' are not allowed. Create a feature branch instead."
+    exit 1
+fi
+
+consoleregexp='^[^-].*(console\.log|@debug|\$inspect)'
+filenamewithconsole='^[^-].*(console\.log|@debug|\$inspect))|^\+\+\+'
+# CHECK
+if test $(git diff --cached * | egrep $consoleregexp | wc -l) != 0
+then 
+  echo do not commit console.log:
+  exec git diff --cached * | egrep -ne $filenamewithconsole #| egrep -B 1 $consoleregexp
+  exit 1; # THE USER DONT WANT TO CONTINUE SO ROLLBACK
+fi
+
+cargo fmt --check
+npm run fmtcheck
+cargo sqlx prepare --check --workspace
+cargo clippy -- -D warnings
+cargo check
+npm run check:ci
+cargo test
+npm run test
+

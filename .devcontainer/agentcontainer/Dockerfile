@@ -18,6 +18,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ripgrep \
     && rm -rf /var/lib/apt/lists/*
 
+RUN cat >> /etc/bash.bashrc <<'EOF'
+
+# Start a per-container ssh-agent on first interactive shell, reuse it after
+case $- in *i*)
+  export SSH_AUTH_SOCK=/tmp/ssh-agent-$(id -un).sock
+  ssh-add -l >/dev/null 2>&1
+  if [ $? -eq 2 ]; then
+    rm -f "$SSH_AUTH_SOCK"
+    ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null
+  fi
+;; esac
+EOF
+
 # Node 24 LTS (+ npm) from NodeSource
 RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
@@ -35,6 +48,8 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
     --component rust-src \
     && rustup -V
 
+RUN cargo install sqlx-cli
+
 # Pi coding agent (https://pi.dev); --ignore-scripts is the documented
 # install form. Global install puts `pi` on PATH for every user; per-user
 # state lives in ~/.pi.
@@ -44,9 +59,9 @@ RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent
 # ~/.config/gh (created on first `gh auth login`).
 RUN mkdir -p /etc/apt/keyrings \
     && curl -fsSLo /etc/apt/keyrings/githubcli.gpg \
-       https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+    https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli.gpg] https://cli.github.com/packages stable main" \
-       > /etc/apt/sources.list.d/github-cli.list \
+    > /etc/apt/sources.list.d/github-cli.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
