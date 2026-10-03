@@ -82,4 +82,6 @@ RUN groupmod -n pythia vscode \
 USER pythia
 WORKDIR /workspaces
 
+RUN git config --global core.hooksPath .githooks
+
 CMD ["bash"]
