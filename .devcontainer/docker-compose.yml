@@ -17,7 +17,7 @@ services:
       - agentcontainer_workspaces:/workspaces/agent
     command: sleep infinity
     environment:
-      - TZ=Europe/Berlin
+      - TZ=${TZ:-Europe/Berlin}
 
 volumes:
   postgres-data:
