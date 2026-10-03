@@ -48,7 +48,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
     --component rust-src \
     && rustup -V
 
-RUN cargo install sqlx-cli
+RUN cargo install sqlx-cli --no-default-features --features postgres,rustls
 
 # Pi coding agent (https://pi.dev); --ignore-scripts is the documented
 # install form. Global install puts `pi` on PATH for every user; per-user
