@@ -7,9 +7,8 @@ import {
 import { by, mapableState, stateValues } from "./mapable.svelte";
 import { Part, parts } from "./part";
 import { Service, services } from "./service";
-import { get_days, handleError, myfetch } from "./store";
+import { handleError, myfetch } from "./store";
 import { Type, types } from "./types";
-import { usages } from "./usage";
 import { m } from "../../paraglide/messages";
 
 export type limit_keys =
@@ -151,10 +150,8 @@ function due_for(
 ): Limits {
   let res = new Limits({});
   if (part == null || part.what != plan.what) return res;
-  let time = service ? service.time : part.purchase;
-  let usage = usages[part.usage];
-  if (service) usage = usage.sub(usages[service.usage]);
-  if (plan.days) res.days = plan.days - get_days(time);
+  let { usage, days } = Service.period(service, part, null);
+  if (plan.days) res.days = plan.days - days;
   if (plan.hours) res.hours = plan.hours - Math.floor(usage.time / 3600);
   if (plan.km) res.km = plan.km - Math.floor(usage.distance / 1000);
   if (plan.climb) res.climb = plan.climb - usage.climb;

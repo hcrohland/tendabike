@@ -1,10 +1,8 @@
 <script lang="ts">
   import UsageChips from "../Usage/UsageChips.svelte";
   import { Service } from "../lib/service";
-  import { usages } from "../lib/usage";
   import { Part } from "../lib/part";
-  import { Usage } from "../lib/usage";
-  import { fmtRange, get_days } from "../lib/store";
+  import { fmtRange } from "../lib/store";
   import ServiceMenu from "./ServiceMenu.svelte";
   import ServiceBadge from "../Widgets/ServiceBadge.svelte";
   import type { Due, limit_keys } from "../lib/serviceplan";
@@ -28,28 +26,18 @@
     children,
   }: Props = $props();
 
-  let usage = $derived(
-    usages[successor ? successor.usage : part.usage].sub(
-      service ? usages[service.usage] : new Usage(),
-    ),
-  );
-  let days = $derived(
-    get_days(
-      service ? service.time : part.purchase,
-      successor ? successor.time : new Date(),
-    ),
-  );
+  let window = $derived(Service.period(service, part, successor));
 </script>
 
 <span class="text-xs text-text-1 mt-1">
-  {days}
+  {window.days}
   {m.time_days()}
   <ServiceBadge due={due_list?.days} />
 </span>
 
 {@render children?.()}
 
-<UsageChips {usage} {light} {due_list} />
+<UsageChips usage={window.usage} {light} {due_list} />
 
 <div class="flex items-start justify-between gap-2">
   <div class="min-w-0">
