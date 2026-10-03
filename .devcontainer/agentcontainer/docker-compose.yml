@@ -1,0 +1,29 @@
+services:
+  database:
+    image: postgres:18-alpine
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    environment:
+      - POSTGRES_USER=tendabike
+      - POSTGRES_PASSWORD=localonly
+    network_mode: service:app
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    init: true
+    ports:
+      - "5173:5173"
+    volumes:
+      - home:/home/pythia
+      - agentcontainer_workspaces:/workspaces
+    command: sleep infinity
+    environment:
+      - TZ=${TZ:-Europe/Berlin}
+
+volumes:
+  postgres-data:
+  home:
+  agentcontainer_workspaces:
+    external: true
