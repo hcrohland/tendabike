@@ -6,6 +6,7 @@ services:
     environment:
       - POSTGRES_USER=tendabike
       - POSTGRES_PASSWORD=localonly
+      - POSTGRES_DB=tendabike
     network_mode: service:app
 
   app:
@@ -21,6 +22,8 @@ services:
     command: sleep infinity
     environment:
       - TZ=${TZ:-Europe/Berlin}
+      - DATABASE_URL=postgres://tendabike@localhost/tendabike
+      - SSH_AUTH_SOCK=/tmp/ssh-agent-pythia.sock
 
 volumes:
   postgres-data:
