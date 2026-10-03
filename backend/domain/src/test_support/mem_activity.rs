@@ -291,7 +291,7 @@ mod tests {
         let mut earlier = activity_at(0);
         earlier.id = ActivityId::new(1);
         earlier.name = "Earlier Ride".to_string();
-        earlier.start = earlier.start - time::Duration::hours(1);
+        earlier.start -= time::Duration::hours(1);
         store.activity_create(earlier).await?;
 
         let acts = store.get_all(&UserId::from(1)).await?;

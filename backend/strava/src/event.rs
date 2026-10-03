@@ -194,6 +194,7 @@ impl Event {
         store.strava_event_set_time(self.id, self.event_time).await
     }
 
+    #[allow(clippy::double_must_use)]
     #[async_recursion]
     async fn rate_limit(
         self,
