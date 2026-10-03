@@ -14,7 +14,7 @@ if [ "$current_branch" = "$protected_branch" ]; then
 fi
 
 consoleregexp='^[^-].*(console\.log|@debug|\$inspect)'
-filenamewithconsole='^[^-].*(console\.log|@debug|\$inspect))|^\+\+\+'
+filenamewithconsole='^[^-].*(console\.log|@debug|\$inspect)|^\+\+\+'
 # CHECK
 if test $(git diff --cached * | egrep $consoleregexp | wc -l) != 0
 then 
