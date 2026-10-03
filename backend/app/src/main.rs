@@ -11,8 +11,9 @@ static GLOBAL: MiMalloc = MiMalloc;
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
 
-    let database_url =
-        std::env::var("DB_URL").unwrap_or("postgres://localhost/tendabike".to_string());
+    let database_url = std::env::var("DB_URL")
+        .or_else(|_| std::env::var("DATABASE_URL"))
+        .unwrap_or_else(|_| "postgres://localhost/tendabike".to_string());
 
     let path = std::env::var("STATIC_WWW").unwrap_or_else(|_| {
         concat!(env!("CARGO_MANIFEST_DIR"), "/../../frontend/dist").to_string()
