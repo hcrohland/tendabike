@@ -151,10 +151,11 @@ fn scratch_url() -> Option<String> {
     // is nothing to collide with.
     let mut collisions = vec![];
     for var in ["DATABASE_URL", "DB_URL"] {
-        if let Ok(other) = std::env::var(var) {
-            if !other.is_empty() && other == url {
-                collisions.push(var);
-            }
+        if let Ok(other) = std::env::var(var)
+            && !other.is_empty()
+            && other == url
+        {
+            collisions.push(var);
         }
     }
     if !collisions.is_empty() {
