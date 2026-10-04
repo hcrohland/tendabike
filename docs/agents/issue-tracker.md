@@ -12,7 +12,8 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Close**: `gh issue close <number> --comment "..."`
-- **Close from a PR**: one `Closes #N` line per issue in the commit messages — the PR collects them from the commits on merge; a single `Closes` closes only its first issue.
+- **Close from a PR**: the PR collects `Closes` lines from its commits on merge; a single `Closes` closes only its first issue.
+- **Merge**: `gh pr merge <number> --squash` — PRs are squash-merged, and the squashed commit takes the PR title, so write the PR title as the commit title you want on `main`.
 
 Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
 
