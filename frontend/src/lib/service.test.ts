@@ -1,8 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { Service, services } from "./service";
 import { Part } from "./part";
-import { Usage, usages } from "./usage";
-import { fmtDate, get_days } from "./store";
+import { usages } from "./usage";
+import { fmtDate } from "./store";
 import { type Map } from "./mapable.svelte";
 import { resp, summary, usage } from "../test/helpers";
 
@@ -38,38 +38,8 @@ function part(overrides: Partial<any> = {}): Part {
   });
 }
 
-function usageMap(...us: Usage[]): Map<Usage> {
-  return Object.fromEntries(us.map((u) => [u.id, u])) as Map<Usage>;
-}
-
-// Test-only helpers, moved out of the Service class (issue #385); they stay
-// pure over their local maps.
-function getRow(
-  svc: Service,
-  depth: number,
-  part: Part,
-  usages: Map<Usage>,
-  successor: Service | null,
-) {
-  let next;
-  let time: Date;
-  if (!successor) {
-    next = part.usage;
-    time = new Date();
-  } else {
-    next = successor.usage;
-    time = successor.time;
-  }
-  // svc.usage is undefined for the period without a service
-  // this period starts at time part.purchase and has an empty usage
-  if (!svc.usage) svc.time = part.purchase;
-  let usage = svc.usage ? usages[next].sub(usages[svc.usage]) : usages[next];
-
-  // How many days passed
-  let days = get_days(svc.time, time);
-  return { depth, service: svc, days, usage };
-}
-
+// Test-only helper, moved out of the Service class (issue #385); it stays
+// pure over its local map.
 function fmtTime(svc: Service, s: Map<Service>) {
   let res = fmtDate(svc.time);
   // get_successor() takes no argument after the conversion (it reads the
@@ -84,6 +54,7 @@ function fmtTime(svc: Service, s: Map<Service>) {
 // world and reset it between tests.
 function reset() {
   services.setMap([]);
+  usages.setMap([]);
 }
 
 describe("Service.get_successor", () => {
@@ -131,46 +102,43 @@ describe("Service.history", () => {
   });
 });
 
-describe("Service.get_row", () => {
+describe("Service.period", () => {
+  beforeEach(reset);
+
   it("computes the usage delta and days between two services", () => {
     const p = part({ id: 5, usage: "u_now" });
     const u_prev = usage("u_prev", { count: 2, distance: 1000 });
     const u_now = usage("u_now", { count: 4, distance: 40000 });
-    const successor = svc({
-      id: "S2",
-      usage: "u_now",
-      time: "2024-01-01T00:00:00Z",
-    });
     const service = svc({
       id: "S1",
       usage: "u_prev",
       time: "2023-01-01T00:00:00Z",
     });
+    const successor = svc({
+      id: "S2",
+      usage: "u_now",
+      time: "2024-01-01T00:00:00Z",
+    });
+    services.setMap([service, successor]);
+    usages.setMap([u_prev, u_now]);
 
-    const row = getRow(service, 1, p, usageMap(u_prev, u_now), successor);
+    const { usage: delta, days } = Service.period(service, p, successor);
 
-    expect(row.service).toBe(service);
-    expect(row.depth).toBe(1);
-    expect(row.usage).toBeInstanceOf(Usage);
-    expect(row.usage.count).toBe(2);
-    expect(row.usage.distance).toBe(39000);
-    expect(row.days).toBe(365);
+    expect(delta.count).toBe(2);
+    expect(delta.distance).toBe(39000);
+    expect(days).toBe(365);
   });
 
-  it("uses the full usage and pins time to purchase without a successor", () => {
+  it("uses the full usage and purchase time without a service", () => {
     const p = part({ id: 5, usage: "u_now", purchase: "2023-01-01T00:00:00Z" });
     const u_now = usage("u_now", { count: 4, distance: 40000 });
-    const service = svc({
-      id: "S9",
-      usage: undefined,
-      time: "2020-01-01T00:00:00Z",
-    });
+    usages.setMap([u_now]);
 
-    const row = getRow(service, 0, p, usageMap(u_now), null);
+    const { usage: full, days } = Service.period(null, p, null);
 
-    expect(row.usage).toBe(u_now);
-    expect(service.time).toBe(p.purchase);
-    expect(typeof row.days).toBe("number");
+    expect(full.count).toBe(4);
+    expect(full.distance).toBe(40000);
+    expect(typeof days).toBe("number");
   });
 });
 
