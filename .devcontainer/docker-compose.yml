@@ -14,7 +14,7 @@ services:
       - tb_container_home:/home/vscode
       - rust-target:/workspaces/tendabike/target
       - node_modules:/workspaces/tendabike/node_modules
-      - agentcontainer_workspaces:/workspaces/agent
+      - agentcontainer_workspaces:/workspaces/agent:ro
     command: sleep infinity
     environment:
       - TZ=${TZ:-Europe/Berlin}
