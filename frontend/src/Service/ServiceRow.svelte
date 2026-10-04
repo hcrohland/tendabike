@@ -26,18 +26,18 @@
     children,
   }: Props = $props();
 
-  let window = $derived(Service.period(service, part, successor));
+  let { days, usage } = $derived(Service.period(service, part, successor));
 </script>
 
 <span class="text-xs text-text-1 mt-1">
-  {window.days}
+  {days}
   {m.time_days()}
   <ServiceBadge due={due_list?.days} />
 </span>
 
 {@render children?.()}
 
-<UsageChips usage={window.usage} {light} {due_list} />
+<UsageChips {usage} {light} {due_list} />
 
 <div class="flex items-start justify-between gap-2">
   <div class="min-w-0">
