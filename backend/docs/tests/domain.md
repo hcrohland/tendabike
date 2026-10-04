@@ -12,14 +12,14 @@
 
 ## Key infrastructure
 
-- **`MemStore`** (`domain/src/test_support.rs`) — in-memory store implementing all 8 subtraits + `Store`. Use `MemStore::new()` for isolated tests, `MemStore::prepopulated()` for realistic data.
+- **`MemStore`** (`domain/src/test_support.rs`) — in-memory store implementing all nine sub-traits + `Store`. Use `MemStore::new()` for isolated tests, `MemStore::prepopulated()` for realistic data.
 
 ### Transactional semantics (issue #409)
 
 A `MemStore` is a **transaction** on an in-memory database, mirroring the production `SqlxConn` (an open Postgres transaction):
 
 - Every write lands in this transaction's working copy; reads see the working copy when it exists, otherwise the committed state. Single-transaction tests behave exactly like the old eager store.
-- `store.commit()` (the `Store` trait) merges the working copy into the database; the store is consumed, like `SqlxConn::commit`.
+- `store.commit()` (an inherent method on `MemStore`) merges the working copy into the database; the store is consumed, like `SqlxConn::commit`.
 - Dropping the store without committing, or `store.rollback().await?`, discards all uncommitted writes (the store stays usable, back at the committed state). `SqlxConn::rollback` consumes the store instead — a deliberate ergonomic difference.
 - `store.begin()` opens a **sibling transaction** on the same database. Siblings see only committed state: uncommitted writes of the other transaction are invisible until it commits, and vanish when it is dropped or rolled back. This is the only way to observe commit/abort.
 - Siblings with their own pending writes read their own snapshot (repeatable-read style); they do not see the other transaction's commits until they roll back or a fresh `begin()` is used. Good enough for tests — Postgres is READ COMMITTED.

@@ -12,7 +12,7 @@ use serde::Deserialize;
 use time::OffsetDateTime;
 
 use crate::{DbPool, RequestSession, appstate::AppState, error::ApiResult};
-use tb_domain::{PartId, PartTypeId, Store, Summary};
+use tb_domain::{PartId, PartTypeId, Summary};
 
 /// Description of an Attach or Detach request
 

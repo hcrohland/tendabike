@@ -15,7 +15,7 @@ use axum::{
 };
 
 use crate::{AxumAdmin, DbPool, RequestSession, appstate::AppState, error::ApiResult};
-use tb_domain::{Activity, ActivityId, PartId, Store, Summary};
+use tb_domain::{Activity, ActivityId, PartId, Summary};
 
 async fn def_part_api(
     user: RequestSession,

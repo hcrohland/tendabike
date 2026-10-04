@@ -1,5 +1,5 @@
-use crate::{SqlxConn, into_domain};
-use tb_domain::{Store, TbResult};
+use crate::SqlxConn;
+use tb_domain::Store;
 
 mod activity;
 mod attachment;
@@ -11,13 +11,4 @@ mod shop;
 mod usage;
 mod user;
 
-#[async_trait::async_trait]
-impl<'c> Store for SqlxConn<'c> {
-    async fn commit(self) -> TbResult<()> {
-        self.into_inner()
-            .commit()
-            .await
-            .map_err(into_domain)
-            .map(|_| ())
-    }
-}
+impl<'c> Store for SqlxConn<'c> {}

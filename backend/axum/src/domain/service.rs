@@ -30,7 +30,7 @@ use serde_derive::Deserialize;
 use time::OffsetDateTime;
 
 use crate::{ApiResult, DbPool, RequestSession, appstate::AppState, error::AppError};
-use tb_domain::{PartId, Service, ServiceId, ServicePlanId, Store, Summary};
+use tb_domain::{PartId, Service, ServiceId, ServicePlanId, Summary};
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()

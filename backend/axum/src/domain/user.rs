@@ -14,7 +14,7 @@ use axum::{
 use serde::Serialize;
 
 use crate::{ApiResult, AxumAdmin, DbPool, RequestSession, appstate::AppState};
-use tb_domain::{Session, ShopId, Store, Summary};
+use tb_domain::{Session, ShopId, Summary};
 use tb_strava::StravaUser;
 
 pub(super) fn router() -> Router<AppState> {

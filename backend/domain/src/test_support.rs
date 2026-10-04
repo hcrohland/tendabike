@@ -205,13 +205,13 @@ pub enum Fault {
     UsageUpdate,
 }
 
-/// In-memory store implementing all 8 subtraits + Store.
+/// In-memory store implementing all nine sub-traits + Store.
 ///
 /// A `MemStore` is a transaction on an in-memory database, mirroring the
 /// production `SqlxConn` (an open Postgres transaction): every write lands
 /// in this transaction's working copy only, and reads see the working copy
 /// when it exists, otherwise the committed state.
-/// [`commit`](Store::commit) merges the working copy into the database;
+/// [`commit`](MemStore::commit) merges the working copy into the database;
 /// dropping the store without commit, or calling [`MemStore::rollback`],
 /// discards it. [`MemStore::begin`] opens a sibling transaction on the same
 /// database, so commit/abort are observable (issue #409).
@@ -270,6 +270,22 @@ impl MemStore {
         Ok(())
     }
 
+    /// Commit this transaction: merge the working copy into the database,
+    /// where sibling transactions can see it (the in-memory mirror of
+    /// `COMMIT`; issue #409). Consumes the store, like `SqlxConn::commit`.
+    pub async fn commit(self) -> TbResult<()> {
+        let Self {
+            base,
+            buffer,
+            fault: _,
+        } = self;
+        let mut committed = base.write().expect("in-memory store base poisoned");
+        if let Some(buffer) = buffer {
+            *committed = buffer;
+        }
+        Ok(())
+    }
+
     /// Arm a test-only fault: the next call of the given kind fails with
     /// [`Error::DatabaseFailure`]. See [`Fault`].
     pub fn fail_next(&mut self, fault: Fault) {
@@ -320,21 +336,4 @@ impl MemStore {
     }
 }
 
-#[async_trait::async_trait]
-impl Store for MemStore {
-    async fn commit(self) -> TbResult<()> {
-        // Merge this transaction's working copy into the database (the
-        // in-memory mirror of `COMMIT`): uncommitted writes land here,
-        // where sibling transactions can see them (issue #409).
-        let Self {
-            base,
-            buffer,
-            fault: _,
-        } = self;
-        let mut committed = base.write().expect("in-memory store base poisoned");
-        if let Some(buffer) = buffer {
-            *committed = buffer;
-        }
-        Ok(())
-    }
-}
+impl Store for MemStore {}

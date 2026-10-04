@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 use std::{env, sync::LazyLock};
 
 use crate::error::AppError;
-use tb_domain::{Error, Store, TbResult};
+use tb_domain::{Error, TbResult};
 use tb_strava::StravaId;
 
 pub(super) static STRAVACLIENT: LazyLock<StravaClient> = LazyLock::new(strava_oauth_client);
