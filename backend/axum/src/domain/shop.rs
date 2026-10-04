@@ -29,8 +29,8 @@ use crate::{
     error::{ApiResult, AppError},
 };
 use tb_domain::{
-    Part, Session, Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails, Store,
-    SubscriptionId, UserPublic,
+    Part, Session, Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails, SubscriptionId,
+    UserPublic,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

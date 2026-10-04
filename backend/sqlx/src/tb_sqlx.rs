@@ -59,6 +59,20 @@ impl<'c> SqlxConn<'c> {
             .map_err(into_domain)
             .map(|_| ())
     }
+
+    /// Commit the transaction and return the connection to the pool.
+    ///
+    /// Consumes the `SqlxConn`, like the in-memory twin `MemStore::commit`.
+    /// This is the production path the web layer drives after every
+    /// `begin()`; the domain never commits (the `Store` marker carries no
+    /// transaction lifecycle).
+    pub async fn commit(self) -> TbResult<()> {
+        self.into_inner()
+            .commit()
+            .await
+            .map_err(into_domain)
+            .map(|_| ())
+    }
 }
 
 #[derive(Clone)]

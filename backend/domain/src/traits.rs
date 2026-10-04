@@ -27,8 +27,10 @@ pub use serviceplan::*;
 
 use crate::{ShopId, TbResult, UserId};
 
-#[async_trait::async_trait]
-/// A trait that represents a store for various tb_domain models.
+/// A marker trait naming a complete store: one that implements all nine
+/// sub-traits. It carries no methods — the transaction lifecycle
+/// (`begin`/`commit`/`rollback`) is inherent on the concrete store types and
+/// is driven only by the web layer and the tests, never by the domain.
 pub trait Store:
     Send
     + PartStore
@@ -41,7 +43,6 @@ pub trait Store:
     + ServiceStore
     + ServicePlanStore
 {
-    async fn commit(self) -> TbResult<()>;
 }
 
 /// A trait that represents a session.

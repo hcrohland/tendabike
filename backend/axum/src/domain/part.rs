@@ -35,7 +35,7 @@ use crate::{
     error::{ApiResult, AppError},
 };
 use serde_with::serde_as;
-use tb_domain::{Part, PartId, PartTypeId, Store};
+use tb_domain::{Part, PartId, PartTypeId};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 #[serde_as]

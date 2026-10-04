@@ -80,8 +80,8 @@ use tb_domain::test_support::{
 };
 use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, Attachment, AttachmentStore, MAX_TIME, Part,
-    PartId, PartStore, PartTypeId, Store, Usage, UsageId, UsageStore, UserId, UserStore,
-    attach_assembly, detach_assembly, dispose_assembly, round_time,
+    PartId, PartStore, PartTypeId, Usage, UsageId, UsageStore, UserId, UserStore, attach_assembly,
+    detach_assembly, dispose_assembly, round_time,
 };
 use time::{OffsetDateTime, macros::datetime};
 use tokio::sync::{Mutex, MutexGuard, OnceCell};

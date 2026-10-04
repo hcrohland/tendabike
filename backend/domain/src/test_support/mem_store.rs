@@ -404,7 +404,7 @@ mod tests {
     use crate::test_support::Fault;
     use crate::test_support::fixtures::{fixture_bike, test_session};
     use crate::test_support::part_type_ids::FRONT_WHEEL;
-    use crate::traits::{Store, UserStore};
+    use crate::traits::UserStore;
     use crate::{Attachment, Error, Part, UserId};
     use time::Duration;
 
