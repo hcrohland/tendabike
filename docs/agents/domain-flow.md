@@ -24,6 +24,8 @@ The domain layer (`backend/domain`) is the only thing that computes entity state
 
 The domain layer is storage-agnostic: every operation goes through the store traits in `backend/domain/src/traits/`, and two adapters implement them — the in-memory store (`MemStore`, `backend/domain/src/test_support/`) and the Postgres store (`SqlxConn`, `backend/sqlx/src/store/`).
 
+The `Store` trait is a marker naming a complete store (all nine sub-traits); it carries no methods. The transaction lifecycle — `begin`, `commit`, `rollback` — is inherent on the concrete adapters and is driven only by the web layer and the tests, never by the domain.
+
 The contract: a domain operation must pass on **both** adapters, and where they disagree the **Postgres behavior is the source of truth** — the database is what production runs, so the in-memory store follows it, never the other way around. Where a rule was unified, the trait docs name it (the attachment path rules in #407, the activity path rules in #408, the in-memory store's transactionality and 30-minute offset rounding in #409).
 
 The contract is enforced in CI: the required `rust` job in `.github/workflows/test.yml` is the gate. It runs the in-memory suite against `MemStore` and the seam integration suite (`backend/sqlx/tests/store_seam.rs`) against a real Postgres service — the standard prepopulated fixture, a representative set of domain operations through `SqlxConn`, and the same domain-level assertions the in-memory suite makes — so a red seam blocks the PR in the one required gate.

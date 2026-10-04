@@ -8,7 +8,7 @@ use axum::{
     extract::{Path, State},
     response::Redirect,
 };
-use tb_domain::{Store, UserId};
+use tb_domain::UserId;
 
 use crate::{ApiResult, AxumAdmin, DbPool, RequestSession, error::AppError};
 

@@ -26,7 +26,7 @@ use axum::{
     routing::{delete, get, post, put},
 };
 use serde::Deserialize;
-use tb_domain::{Error, PartId, PartNote, PartNoteId, Store};
+use tb_domain::{Error, PartId, PartNote, PartNoteId};
 use time::OffsetDateTime;
 
 use crate::{

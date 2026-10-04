@@ -29,7 +29,7 @@ use http::StatusCode;
 use log::trace;
 
 use crate::{ApiResult, DbPool, RequestSession, appstate::AppState, error::AppError};
-use tb_domain::{Service, ServicePlan, ServicePlanId, Store};
+use tb_domain::{Service, ServicePlan, ServicePlanId};
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()

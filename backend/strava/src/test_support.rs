@@ -42,6 +42,12 @@ impl TestStravaStore {
     pub fn event_count(&self) -> usize {
         self.events.len()
     }
+
+    /// Commit the wrapped domain transaction. Consumes the store, like the
+    /// domain `MemStore::commit` and the production `SqlxConn::commit`.
+    pub async fn commit(self) -> TbResult<()> {
+        self.mem.commit().await
+    }
 }
 
 #[async_trait::async_trait]
@@ -150,12 +156,7 @@ impl StravaStore for TestStravaStore {
     }
 }
 
-#[async_trait::async_trait]
-impl Store for TestStravaStore {
-    async fn commit(self) -> TbResult<()> {
-        self.mem.commit().await
-    }
-}
+impl Store for TestStravaStore {}
 
 /// Scripted [`StravaSession`] for tests.
 ///
@@ -721,5 +722,30 @@ impl ServicePlanStore for TestStravaStore {
     }
     async fn by_user(&mut self, uid: UserId) -> TbResult<Vec<ServicePlan>> {
         ServicePlanStore::by_user(&mut self.mem, uid).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TestStravaStore;
+    use tb_domain::{TbResult, UserId, UserStore};
+
+    /// `TestStravaStore::commit` delegates to the wrapped domain `MemStore`:
+    /// a write made before the commit is invisible to a sibling transaction
+    /// until it commits, and visible afterwards (the in-memory commit
+    /// semantics, issue #409, exercised through the Strava double).
+    #[tokio::test]
+    async fn commit_delegates_to_the_wrapped_mem_store() -> TbResult<()> {
+        let mut store = TestStravaStore::new();
+        let mut sibling = store.mem.begin();
+
+        store.mem.create("Ada", "Lovelace", &None).await?;
+        assert!(sibling.get(UserId::from(1)).await.is_err());
+
+        store.commit().await?;
+
+        let user = sibling.get(UserId::from(1)).await?;
+        assert_eq!(user.firstname, "Ada");
+        Ok(())
     }
 }
