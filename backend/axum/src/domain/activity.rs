@@ -15,13 +15,13 @@ use axum::{
 };
 
 use crate::{AxumAdmin, DbPool, RequestSession, appstate::AppState, error::ApiResult};
-use tb_domain::{Activity, ActivityId, PartId, Summary};
+use tb_domain::{Activity, ActivityId, PartId, SummaryVec};
 
 async fn def_part_api(
     user: RequestSession,
     State(store): State<DbPool>,
     Json(gear_id): Json<PartId>,
-) -> ApiResult<Summary> {
+) -> ApiResult<SummaryVec> {
     let mut store = store.begin().await?;
     let res = Activity::set_default_part(gear_id, &user, &mut store).await?;
     store.commit().await?;
@@ -54,7 +54,7 @@ async fn act_put(
     user: RequestSession,
     State(store): State<DbPool>,
     Json(activity): Json<Activity>,
-) -> ApiResult<Summary> {
+) -> ApiResult<SummaryVec> {
     if ActivityId::from(id) != activity.id {
         Err(tb_domain::Error::BadRequest(
             "ActivityId does not match activity".to_string(),
@@ -71,7 +71,7 @@ async fn act_delete(
     Path(id): Path<i64>,
     user: RequestSession,
     State(store): State<DbPool>,
-) -> ApiResult<Summary> {
+) -> ApiResult<SummaryVec> {
     let mut store = store.begin().await?;
     let res = ActivityId::new(id)
         .delete(&user, &mut store)
@@ -85,7 +85,7 @@ async fn descend(
     user: RequestSession,
     State(store): State<DbPool>,
     data: String,
-) -> ApiResult<(Summary, Vec<String>, Vec<String>)> {
+) -> ApiResult<(SummaryVec, Vec<String>, Vec<String>)> {
     let mut store = store.begin().await?;
     let res = Activity::csv2descend(data.as_bytes(), &user, &mut store).await?;
     store.commit().await?;

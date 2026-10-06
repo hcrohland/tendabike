@@ -152,20 +152,20 @@ impl ShopId {
     /// Register a part (bike) to this shop
     /// Can be done by shop owner or any user with an active subscription
     /// Automatically registers all currently attached parts (cascading registration)
-    /// Returns a Summary with the registered part and its attachments
+    /// Returns a SummaryVec with the registered part and its attachments
     pub async fn register_part(
         self,
         part_id: PartId,
         session: &dyn Session,
         store: &mut (impl AttachmentStore + PartStore + ShopStore),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         ShopSubscription::check(self, session.user_id(), store).await?;
         let parts = parts_for_register(part_id, session, store).await?;
 
         // Register the parts to the shop
         let parts = store.parts_register_shop(self, parts).await?;
 
-        Ok(Summary {
+        Ok(SummaryVec {
             parts,
             ..Default::default()
         })
@@ -181,18 +181,18 @@ impl ShopId {
 
     /// Unregister a part (bike) from this shop
     /// Can be done by shop owner OR part owner
-    /// Returns an empty Summary (for consistency with other endpoints)
+    /// Returns an empty SummaryVec (for consistency with other endpoints)
     pub async fn unregister_part(
         self,
         part_id: PartId,
         session: &dyn Session,
         store: &mut (impl AttachmentStore + PartStore + ShopStore),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         let parts = parts_for_register(part_id, session, store).await?;
 
         let parts = store.parts_unregister_shop(parts).await?;
 
-        Ok(Summary {
+        Ok(SummaryVec {
             parts,
             ..Default::default()
         })

@@ -114,7 +114,7 @@ impl Attachment {
         &self,
         time: OffsetDateTime,
         gear: PartId,
-        hash: &mut SumHash,
+        hash: &mut Summary,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<OffsetDateTime> {
         debug!("-- moving {} to {}", self.part_id, gear);
@@ -130,7 +130,7 @@ impl Attachment {
         mut self,
         time: OffsetDateTime,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         trace!("detaching {} at {}", self.part_id, time);
 
         // delete the old attachment
@@ -152,7 +152,7 @@ impl Attachment {
     pub(crate) async fn create(
         mut self,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         trace!("create {self:?}");
 
         // create the Usage for the attachement
@@ -175,7 +175,7 @@ impl Attachment {
         Usage::update_vec(&usages, store).await?;
 
         // return all affected objects
-        Ok(Summary {
+        Ok(SummaryVec {
             parts: vec![part],
             attachments: vec![attachment],
             usages,
@@ -190,7 +190,7 @@ impl Attachment {
     async fn delete(
         self,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         trace!("delete {self:?}");
 
         // delete the attachment on the db
@@ -210,7 +210,7 @@ impl Attachment {
         let mut att = att;
         att.detached = att.attached;
         att.usage = UsageId::new();
-        Ok(Summary {
+        Ok(SummaryVec {
             attachments: vec![att.add_details("", 0.into())],
             usages,
             ..Default::default()
@@ -270,9 +270,9 @@ impl Attachment {
         start: OffsetDateTime,
         usage: Usage,
         store: &mut (impl AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         let gear = match gear {
-            None => return Ok(Summary::default()),
+            None => return Ok(SummaryVec::default()),
             Some(x) => x,
         };
 
@@ -298,7 +298,7 @@ impl Attachment {
         let usages = Usage::get_vec(&usages, store).await? + &usage;
         // store all updated usages
         Usage::update_vec(&usages, store).await?;
-        Ok(Summary {
+        Ok(SummaryVec {
             usages,
             parts,
             ..Default::default()
@@ -310,10 +310,10 @@ impl Attachment {
         time: OffsetDateTime,
         all: bool,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         debug!("-- detaching {} at {}", self.part_id, time);
 
-        let mut hash = SumHash::default();
+        let mut hash = Summary::default();
         if all {
             shift_subparts(self.gear, self.part_id, time, &mut hash, store).await?;
         }
@@ -332,7 +332,7 @@ async fn shift_subparts(
     from: PartId,
     to: PartId,
     time: OffsetDateTime,
-    hash: &mut SumHash,
+    hash: &mut Summary,
     store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
 ) -> TbResult<()> {
     let sub_attachments = subattachments(to, from, time, store).await?;
@@ -381,7 +381,7 @@ async fn attach_one(
     time: OffsetDateTime,
     gear: PartId,
     hook: PartTypeId,
-    hash: &mut SumHash,
+    hash: &mut Summary,
     store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
 ) -> TbResult<OffsetDateTime> {
     // when does the current attachment end
@@ -466,7 +466,7 @@ pub async fn attach_assembly(
     store: &mut (
              impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
          ),
-) -> Result<Summary, Error> {
+) -> Result<SummaryVec, Error> {
     let time = round_time(time);
     // check user
     let part = part.part(user, store).await?;
@@ -504,7 +504,7 @@ pub async fn attach_assembly(
         }
         gear = row.gear;
     }
-    let mut hash = SumHash::default();
+    let mut hash = Summary::default();
 
     // detach part if it is attached already
     if let Some(attachment) = store.attachment_get_by_part_and_time(part.id, time).await? {
@@ -557,7 +557,7 @@ pub async fn detach_assembly(
     store: &mut (
              impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
          ),
-) -> Result<Summary, Error> {
+) -> Result<SummaryVec, Error> {
     let time = round_time(time);
     part_id.checkuser(user, store).await?;
 
@@ -576,7 +576,7 @@ pub async fn dispose_assembly(
     store: &mut (
              impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
          ),
-) -> Result<Summary, Error> {
+) -> Result<SummaryVec, Error> {
     let time = round_time(time);
 
     part_id.checkuser(user, store).await?;
@@ -593,7 +593,7 @@ pub async fn dispose_assembly(
         )));
     }
 
-    let mut res = SumHash::default();
+    let mut res = Summary::default();
     res += part_id.dispose(time, store).await?;
     res += dispose_subparts(part_id, time, all, store).await?;
 
@@ -605,9 +605,9 @@ async fn dispose_subparts(
     time: OffsetDateTime,
     all: bool,
     store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-) -> TbResult<Summary> {
+) -> TbResult<SummaryVec> {
     let sub_attachments = subattachments(part, part, time, store).await?;
-    let mut res = SumHash::default();
+    let mut res = Summary::default();
     for attachment in sub_attachments {
         let attachments = store.attachments_all_by_part(attachment.part_id).await?;
         if !all || attachments.iter().any(|a| a.attached > time) {
@@ -625,8 +625,8 @@ pub async fn recover_assembly(
     part: PartId,
     all: bool,
     store: &mut (impl AttachmentStore + PartStore + ShopStore),
-) -> Result<Summary, Error> {
-    let mut res = SumHash::default();
+) -> Result<SummaryVec, Error> {
+    let mut res = Summary::default();
     if let Some(time) = part.part(user, store).await?.disposed_at {
         res += part.restore(store).await?;
         if all {
@@ -657,7 +657,7 @@ pub async fn is_attached(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::SumHash;
+    use crate::Summary;
     use crate::test_support::{self, MemStore, TestSession, fixtures, part_type_ids};
     use time::OffsetDateTime;
     use time::macros::datetime;
@@ -1070,7 +1070,7 @@ mod tests {
 
         assert_eq!(att.gear, bike.id);
 
-        let mut hash = SumHash::default();
+        let mut hash = Summary::default();
         let end_time = att
             .shift(later_time(), bike2.id, &mut hash, &mut store)
             .await?;
@@ -1156,7 +1156,7 @@ mod tests {
             .await?
             .unwrap();
 
-        let mut hash = SumHash::default();
+        let mut hash = Summary::default();
         let end_time = att
             .shift(later_time(), bike2.id, &mut hash, &mut store)
             .await?;
@@ -3505,7 +3505,7 @@ mod tests {
         Ok(())
     }
 
-    /// Summary contains all affected parts after attach_assembly with subparts
+    /// SummaryVec contains all affected parts after attach_assembly with subparts
     #[tokio::test]
     async fn attach_assembly_returns_summary_with_all_parts() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
@@ -3549,7 +3549,7 @@ mod tests {
         )
         .await?;
 
-        // Summary should include both bike and chain
+        // SummaryVec should include both bike and chain
         assert!(!summary.parts.is_empty());
 
         Ok(())

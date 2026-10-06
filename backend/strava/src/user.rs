@@ -173,7 +173,7 @@ impl StravaUser {
     pub async fn process(
         user: &mut impl StravaSession,
         store: &mut impl StravaStore,
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         event::process(user, store).await
     }
 }

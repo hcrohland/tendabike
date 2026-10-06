@@ -182,7 +182,7 @@ async fn register_part(
     session: RequestSession,
     State(pool): State<DbPool>,
     Json(RegisterPartRequest { part_id }): Json<RegisterPartRequest>,
-) -> ApiResult<tb_domain::Summary> {
+) -> ApiResult<tb_domain::SummaryVec> {
     let mut store = pool.begin().await?;
     let shop_id: ShopId = shop_id.into();
     let summary = shop_id
@@ -196,7 +196,7 @@ async fn unregister_part(
     Path((shop_id, part_id)): Path<(i32, i32)>,
     session: RequestSession,
     State(pool): State<DbPool>,
-) -> ApiResult<tb_domain::Summary> {
+) -> ApiResult<tb_domain::SummaryVec> {
     let mut store = pool.begin().await?;
     let shop_id: ShopId = shop_id.into();
     let summary = shop_id

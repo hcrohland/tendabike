@@ -25,8 +25,8 @@
 //! file bytes are fetched on demand through the store's `partnote_file` method.
 //!
 //! All operations return bare entities: a note operation touches only the note, so the write
-//! contract requires no `Summary`. File bytes are fetched on demand via [`PartNote::file`],
-//! never as part of any `Summary`.
+//! contract requires no `SummaryVec`. File bytes are fetched on demand via [`PartNote::file`],
+//! never as part of any `SummaryVec`.
 
 use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};

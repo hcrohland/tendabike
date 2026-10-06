@@ -165,7 +165,7 @@ mod tests {
         store: &mut MemStore,
     ) -> TbResult<Service> {
         let t = time::macros::datetime!(2024-06-15 10:00 UTC);
-        let Summary { services, .. } = Service::create(
+        let SummaryVec { services, .. } = Service::create(
             part,
             t,
             name.to_string(),

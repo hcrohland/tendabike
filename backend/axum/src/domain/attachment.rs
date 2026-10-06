@@ -12,7 +12,7 @@ use serde::Deserialize;
 use time::OffsetDateTime;
 
 use crate::{DbPool, RequestSession, appstate::AppState, error::ApiResult};
-use tb_domain::{PartId, PartTypeId, Summary};
+use tb_domain::{PartId, PartTypeId, SummaryVec};
 
 /// Description of an Attach or Detach request
 
@@ -36,7 +36,7 @@ async fn attach_rt(
     user: RequestSession,
     State(store): State<DbPool>,
     Json(event): Json<Event>,
-) -> ApiResult<Summary> {
+) -> ApiResult<SummaryVec> {
     let mut store = store.begin().await?;
     debug!("attach {event:?}");
 
@@ -60,7 +60,7 @@ async fn detach_rt(
     user: RequestSession,
     State(store): State<DbPool>,
     Json(event): Json<Event>,
-) -> ApiResult<Summary> {
+) -> ApiResult<SummaryVec> {
     let mut store = store.begin().await?;
     debug!("detach {event:?}");
     let Event {
@@ -85,7 +85,7 @@ async fn dispose_rt(
     user: RequestSession,
     State(store): State<DbPool>,
     Json(event): Json<Dispose>,
-) -> ApiResult<Summary> {
+) -> ApiResult<SummaryVec> {
     let mut store = store.begin().await?;
     debug!("{event:?}");
     let Dispose {
@@ -104,7 +104,7 @@ async fn recover_rt(
     user: RequestSession,
     State(store): State<DbPool>,
     Json(event): Json<Dispose>,
-) -> ApiResult<Summary> {
+) -> ApiResult<SummaryVec> {
     let mut store = store.begin().await?;
     debug!("Recover {event:?}");
     let Dispose {

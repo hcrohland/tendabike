@@ -206,7 +206,7 @@ impl UserId {
         &self,
         shop: Option<ShopId>,
         store: &mut impl Store,
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         use crate::*;
         let activities = Activity::get_all(self, store).await?;
         let shops = Shop::get_all_for_user(self, store).await?;
@@ -218,7 +218,7 @@ impl UserId {
             };
             self.get_part_summary(parts, store).await?
         };
-        Ok(Summary {
+        Ok(SummaryVec {
             activities,
             shops,
             users,
@@ -235,7 +235,7 @@ impl UserId {
     ///
     /// # Returns
     ///
-    /// A `Summary` with all entities related to parts`
+    /// A `SummaryVec` with all entities related to parts`
     ///
     /// # Errors
     ///
@@ -251,7 +251,7 @@ impl UserId {
                  + ServiceStore
                  + UsageStore
              ),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         let mut usages = Vec::new();
         let mut attachments = Vec::new();
         let mut services = Vec::new();
@@ -269,7 +269,7 @@ impl UserId {
             plans.append(&mut splans);
             part_notes.append(&mut store.partnote_all_by_part(part.id).await?);
         }
-        Ok(Summary {
+        Ok(SummaryVec {
             parts,
             usages,
             attachments,
@@ -284,7 +284,7 @@ impl UserId {
     ///
     /// Crosses: activity, attachment, part, partnote, service, serviceplan, shop, usage, user.
     pub async fn delete(&self, store: &mut impl Store) -> TbResult<()> {
-        let Summary {
+        let SummaryVec {
             activities,
             parts,
             usages,

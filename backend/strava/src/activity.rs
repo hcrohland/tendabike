@@ -166,12 +166,12 @@ impl StravaActivity {
     ///
     /// # Returns
     ///
-    /// A Result containing a Summary if the sending was successful, or an error if it failed.
+    /// A Result containing a SummaryVec if the sending was successful, or an error if it failed.
     pub(crate) async fn send_to_tb(
         self,
         user: &mut impl StravaSession,
         store: &mut impl StravaStore,
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         let activity = self.into_activity(user, store).await?;
 
         activity.upsert(user, store).await
@@ -191,7 +191,7 @@ pub async fn upsert_activity(
     id: i64,
     user: &mut impl StravaSession,
     store: &mut impl StravaStore,
-) -> TbResult<Summary> {
+) -> TbResult<SummaryVec> {
     let act: StravaActivity = user
         .request_json(&format!("/activities/{id}"), store)
         .await?;
@@ -202,7 +202,7 @@ pub(crate) async fn delete_activity(
     act: i64,
     user: &impl StravaSession,
     store: &mut impl StravaStore,
-) -> TbResult<Summary> {
+) -> TbResult<SummaryVec> {
     ActivityId::new(act).delete(user, store).await
 }
 

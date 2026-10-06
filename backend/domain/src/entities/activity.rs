@@ -167,7 +167,7 @@ impl ActivityId {
         self,
         session: &dyn Session,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         info!("Deleting {self:?}");
         let mut res = self
             .read(session, store)
@@ -195,7 +195,7 @@ impl Activity {
         self,
         user: &dyn Session,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         if let Some(old_activity) = self.id.read_optional(user, store).await? {
             old_activity.replace(self, store).await
         } else {
@@ -224,7 +224,7 @@ impl Activity {
         self,
         user: &dyn Session,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         self.id.read(user, store).await?.replace(self, store).await
     }
 
@@ -232,7 +232,7 @@ impl Activity {
         self,
         new: Activity,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         info!("Updating {self:?}");
         let mut res = self.register(Factor::Sub, store).await?;
 
@@ -282,7 +282,7 @@ impl Activity {
         self,
         factor: Factor,
         store: &mut (impl AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         trace!(
             "{} {:?}",
             if factor == Factor::Add {
@@ -300,7 +300,7 @@ impl Activity {
 
         let res = Attachment::register_activity(self.gear, self.start, usage, store).await?;
         let activities = vec![self];
-        Ok(Summary { activities, ..res })
+        Ok(SummaryVec { activities, ..res })
     }
 
     /// Get all activities for a given user.
@@ -337,7 +337,7 @@ impl Activity {
         data: impl std::io::Read,
         user: &dyn Session,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<(Summary, Vec<String>, Vec<String>)> {
+    ) -> TbResult<(SummaryVec, Vec<String>, Vec<String>)> {
         #[derive(Debug, Deserialize)]
         struct Result {
             #[serde(rename = "Datum")]
@@ -356,7 +356,7 @@ impl Activity {
             format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
         let mut good = Vec::new();
         let mut bad = Vec::new();
-        let mut summary = SumHash::default();
+        let mut summary = Summary::default();
         let mut rdr = csv::Reader::from_reader(data);
 
         for result in rdr.deserialize() {
@@ -402,13 +402,13 @@ impl Activity {
         store: &mut (
                  impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
              ),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         let part = gear_id.part(user, store).await?;
         let types = part.what.act_types();
         let acts = store
             .activity_set_gear_if_null(user.user_id(), types, &gear_id)
             .await?;
-        let mut hash = SumHash::default();
+        let mut hash = Summary::default();
         for act in acts {
             hash += act.register(Factor::Add, store).await?;
         }
@@ -435,7 +435,7 @@ async fn match_and_update(
     rstart: OffsetDateTime,
     rclimb: Option<i32>,
     rdescend: i32,
-) -> TbResult<Summary> {
+) -> TbResult<SummaryVec> {
     let mut act = store.get_by_user_and_time(user.user_id(), rstart).await?;
     if let Some(rclimb) = rclimb {
         act.climb = Some(rclimb);
@@ -1570,7 +1570,7 @@ mod tests {
 
         // service created after all snapshot activities → aggregates all three
         let t = time::macros::datetime!(2023-06-01 10:00 UTC);
-        let Summary {
+        let SummaryVec {
             services, usages, ..
         } = Service::create(
             bike,

@@ -221,7 +221,7 @@ impl Event {
         self,
         user: &mut impl StravaSession,
         store: &mut impl StravaStore,
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         let summary = self.process_hook(user, store).await;
         let summary = match summary {
             Ok(x) => Ok(x),
@@ -245,7 +245,7 @@ impl Event {
     ///
     /// # Returns
     ///
-    /// Returns a `Result` containing a `Summary` struct that summarizes the action performed.
+    /// Returns a `Result` containing a `SummaryVec` struct that summarizes the action performed.
     ///
     /// # Examples
     ///
@@ -254,7 +254,7 @@ impl Event {
         &self,
         user: &mut impl StravaSession,
         store: &mut impl StravaStore,
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         let res = match self.aspect_type {
             AspectType::Create | AspectType::Update => {
                 activity::upsert_activity(self.object_id, user, store).await?
@@ -263,7 +263,7 @@ impl Event {
                 match activity::delete_activity(self.object_id, user, store).await {
                     Err(Error::NotFound(_)) => {
                         warn!("Activity {} did not exist (yet)", self.object_id);
-                        Summary::default()
+                        SummaryVec::default()
                     }
                     res => res?,
                 }
@@ -277,10 +277,10 @@ impl Event {
         mut self,
         user: &mut impl StravaSession,
         store: &mut impl StravaStore,
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         // let mut len = batch;
         let mut start = self.event_time;
-        let mut summary = Summary::default();
+        let mut summary = SummaryVec::default();
 
         // while len == batch
         {
@@ -305,7 +305,7 @@ impl Event {
         self,
         user: &mut impl StravaSession,
         store: &mut impl StravaStore,
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         let summary = self.sync(user, store).await;
         if let Err(err) = summary {
             return check_try_again(err, store).await;
@@ -416,13 +416,16 @@ async fn get_event(
     Ok(res)
 }
 
-async fn check_try_again(err: tb_domain::Error, store: &mut impl StravaStore) -> TbResult<Summary> {
+async fn check_try_again(
+    err: tb_domain::Error,
+    store: &mut impl StravaStore,
+) -> TbResult<SummaryVec> {
     // Keep events for temporary failure - delete others
     match err {
         Error::TryAgain(_) => {
             warn!("Stopping hooks for 15 minutes {err:?}");
             insert_stop(store).await?;
-            Ok(Summary::default())
+            Ok(SummaryVec::default())
         }
         _ => Err(err),
     }
@@ -444,10 +447,10 @@ async fn next_activities(
 pub async fn process(
     user: &mut impl StravaSession,
     store: &mut impl StravaStore,
-) -> TbResult<Summary> {
+) -> TbResult<SummaryVec> {
     let event = get_event(user, store).await?;
     if event.is_none() {
-        return Ok(Summary::default());
+        return Ok(SummaryVec::default());
     };
     let event = event.unwrap();
     info!("Processing {event}");
@@ -458,7 +461,7 @@ pub async fn process(
         _ => {
             warn!("skipping {event}");
             event.delete(store).await?;
-            Ok(Summary::default())
+            Ok(SummaryVec::default())
         }
     }
 }
@@ -693,7 +696,7 @@ mod tests {
     async fn process_no_events() -> TbResult<()> {
         let (mut store, mut session) = setup();
         let summary = process(&mut session, &mut store).await?;
-        assert_eq!(summary, Summary::default());
+        assert_eq!(summary, SummaryVec::default());
         Ok(())
     }
 
@@ -719,7 +722,7 @@ mod tests {
             })
             .await?;
         let summary = process(&mut session, &mut store).await?;
-        assert_eq!(summary, Summary::default());
+        assert_eq!(summary, SummaryVec::default());
         assert_eq!(store.event_count(), 0);
         Ok(())
     }
@@ -730,7 +733,7 @@ mod tests {
         store.stravaevent_store(activity_event()).await?;
         session.queue_error("/activities/10", Error::TryAgain("rate limit"));
         let summary = process(&mut session, &mut store).await?;
-        assert_eq!(summary, Summary::default());
+        assert_eq!(summary, SummaryVec::default());
         assert_eq!(store.event_count(), 2);
         let stop = store
             .events
@@ -753,7 +756,7 @@ mod tests {
             .await?;
         session.queue("/activities?after=0&per_page=25", "[]");
         let summary = process(&mut session, &mut store).await?;
-        assert_eq!(summary, Summary::default());
+        assert_eq!(summary, SummaryVec::default());
         assert_eq!(store.event_count(), 0);
         Ok(())
     }
@@ -794,7 +797,7 @@ mod tests {
             .await?;
         session.queue_error("/activities?after=0&per_page=25", Error::TryAgain("nope"));
         let summary = process(&mut session, &mut store).await?;
-        assert_eq!(summary, Summary::default());
+        assert_eq!(summary, SummaryVec::default());
         assert_eq!(store.event_count(), 2);
         assert!(
             store
@@ -816,7 +819,7 @@ mod tests {
             })
             .await?;
         let summary = process(&mut session, &mut store).await?;
-        assert_eq!(summary, Summary::default());
+        assert_eq!(summary, SummaryVec::default());
         assert_eq!(store.event_count(), 0);
         Ok(())
     }

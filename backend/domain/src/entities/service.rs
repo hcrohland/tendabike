@@ -23,7 +23,7 @@ impl ServiceId {
         self,
         user: &dyn Session,
         store: &mut (impl PartStore + ServiceStore + ShopStore + UsageStore),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         let service = self.get(store).await?;
         service.part_id.checkuser(user, store).await?;
 
@@ -44,7 +44,7 @@ impl ServiceId {
         // delete service
         service.usage.delete(store).await?;
         ServiceStore::delete(store, self).await?;
-        Ok(Summary {
+        Ok(SummaryVec {
             services: res,
             ..Default::default()
         })
@@ -87,7 +87,7 @@ impl Service {
         successor: Option<ServiceId>,
         plans: Vec<ServicePlanId>,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         let service = Service {
             id: ServiceId::new(),
             part_id,
@@ -101,7 +101,7 @@ impl Service {
         };
         let usage = service.calculate_usage(store).await?.update(store).await?;
         let service = ServiceStore::create(store, service).await?;
-        Ok(Summary {
+        Ok(SummaryVec {
             services: vec![service],
             usages: vec![usage],
             ..Default::default()
@@ -127,7 +127,7 @@ impl Service {
         store: &mut (
                  impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
              ),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         let Service {
             id,
             notes,
@@ -167,10 +167,10 @@ impl Service {
     async fn update_unchecked(
         self,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         let usages = vec![self.calculate_usage(store).await?.update(store).await?];
         let services = vec![ServiceStore::update(store, self).await?];
-        Ok(Summary {
+        Ok(SummaryVec {
             usages,
             services,
             ..Default::default()
@@ -183,7 +183,7 @@ impl Service {
         store: &mut (
                  impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
              ),
-    ) -> TbResult<Summary> {
+    ) -> TbResult<SummaryVec> {
         self.part_id.checkuser(user, store).await?;
         let service = self.id.get(store).await?;
         self.usage = service.usage;
@@ -302,7 +302,7 @@ mod tests {
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
-        let Summary { services, .. } = Service::create(
+        let SummaryVec { services, .. } = Service::create(
             part.id,
             t,
             "Chain Replacement".to_string(),
@@ -331,7 +331,7 @@ mod tests {
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
-        let Summary { usages, .. } = Service::create(
+        let SummaryVec { usages, .. } = Service::create(
             part.id,
             t,
             "Service".to_string(),
@@ -356,7 +356,7 @@ mod tests {
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
-        let Summary {
+        let SummaryVec {
             services, usages, ..
         } = Service::create(
             part.id,
@@ -413,7 +413,7 @@ mod tests {
         store.activity_create(act2).await?;
 
         let t = time::macros::datetime!(2024-06-15 10:00 UTC);
-        let Summary { usages, .. } = Service::create(
+        let SummaryVec { usages, .. } = Service::create(
             bike.id,
             t,
             "Service".to_string(),
@@ -484,7 +484,7 @@ mod tests {
         .await?;
 
         let t = time::macros::datetime!(2024-06-15 10:00 UTC);
-        let Summary { usages, .. } = Service::create(
+        let SummaryVec { usages, .. } = Service::create(
             chain.id,
             t,
             "Chain Service".to_string(),
@@ -509,7 +509,7 @@ mod tests {
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
-        let Summary { usages, .. } = Service::create(
+        let SummaryVec { usages, .. } = Service::create(
             part.id,
             t,
             "Service".to_string(),
@@ -539,7 +539,7 @@ mod tests {
         let t = sample_time();
         let svc_name = "Chain Replacement".to_string();
 
-        let Summary { services, .. } = Service::create(
+        let SummaryVec { services, .. } = Service::create(
             part.id,
             t,
             svc_name.clone(),
@@ -654,7 +654,7 @@ mod tests {
         store.activity_create(act1).await?;
 
         let t = time::macros::datetime!(2024-06-15 10:00 UTC);
-        let Summary { services, .. } = Service::create(
+        let SummaryVec { services, .. } = Service::create(
             bike.id,
             t,
             "Service".to_string(),
@@ -667,7 +667,7 @@ mod tests {
 
         let mut svc = services[0].clone();
         svc.notes = "Updated notes".to_string();
-        let Summary { usages, .. } = svc.update(&test_session(), &mut store).await?;
+        let SummaryVec { usages, .. } = svc.update(&test_session(), &mut store).await?;
 
         assert_eq!(usages.len(), 1);
         // Usage should reflect activities before service time (act1 is at Jan, service at Jun)
@@ -682,7 +682,7 @@ mod tests {
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
-        let Summary { services, .. } = Service::create(
+        let SummaryVec { services, .. } = Service::create(
             part.id,
             t,
             "Service".to_string(),
@@ -698,7 +698,7 @@ mod tests {
         // Update the service
         let mut svc = services[0].clone();
         svc.notes = "Updated".to_string();
-        let Summary { .. } = svc.update(&test_session(), &mut store).await?;
+        let SummaryVec { .. } = svc.update(&test_session(), &mut store).await?;
 
         // Usage reference is preserved in the updated service
         let svc = ServiceStore::get(&mut store, services[0].id).await?;
@@ -713,7 +713,7 @@ mod tests {
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
-        let Summary { services, .. } = Service::create(
+        let SummaryVec { services, .. } = Service::create(
             part.id,
             t,
             "Service".to_string(),
@@ -740,7 +740,7 @@ mod tests {
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
-        let Summary {
+        let SummaryVec {
             services, usages, ..
         } = Service::create(
             part.id,
@@ -763,7 +763,7 @@ mod tests {
         assert!(ServiceStore::get(&mut store, service.id).await.is_err());
 
         // Verify usage is deleted (read should return the persisted usage since mem store
-        // doesn't actually delete usages, but it was part of the Summary)
+        // doesn't actually delete usages, but it was part of the SummaryVec)
         let after = usage_id.read(&mut store).await;
         // The usage was updated during Service::create and persists in MemStore.usages
         assert!(after.is_ok());
@@ -778,7 +778,7 @@ mod tests {
         let t = sample_time();
 
         // Create S1
-        let Summary { services: s1, .. } = Service::create(
+        let SummaryVec { services: s1, .. } = Service::create(
             part.id,
             t,
             "Service 1".to_string(),
@@ -791,7 +791,7 @@ mod tests {
         let s1_id = s1[0].id;
 
         // Redo S1 → S2 (s2_new is the new redo service, updated_s1 has successor set)
-        let Summary {
+        let SummaryVec {
             services: s2_services,
             ..
         } = s1[0].clone().redo(&test_session(), &mut store).await?;
@@ -804,7 +804,7 @@ mod tests {
 
         // Redo S2 → S3
         let s2_clone = ServiceStore::get(&mut store, s2_id).await?;
-        let Summary {
+        let SummaryVec {
             services: s3_services,
             ..
         } = s2_clone.clone().redo(&test_session(), &mut store).await?;
@@ -836,7 +836,7 @@ mod tests {
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
-        let Summary { services, .. } = Service::create(
+        let SummaryVec { services, .. } = Service::create(
             part.id,
             t,
             "Service".to_string(),
@@ -860,7 +860,7 @@ mod tests {
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
-        let Summary { services, .. } = Service::create(
+        let SummaryVec { services, .. } = Service::create(
             part.id,
             t,
             "Service".to_string(),
@@ -886,7 +886,7 @@ mod tests {
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
-        let Summary { services: s1, .. } = Service::create(
+        let SummaryVec { services: s1, .. } = Service::create(
             part.id,
             t,
             "Service".to_string(),
@@ -897,7 +897,8 @@ mod tests {
         )
         .await?;
 
-        let Summary { services: s2, .. } = s1[0].clone().redo(&test_session(), &mut store).await?;
+        let SummaryVec { services: s2, .. } =
+            s1[0].clone().redo(&test_session(), &mut store).await?;
 
         // The redo creates a new service with successor = None (since time is same, else branch)
         // The original S1 gets successor = Some(new service id)
@@ -916,7 +917,7 @@ mod tests {
 
         // Create S1 at earlier time
         let t1 = time::macros::datetime!(2024-01-01 10:00 UTC);
-        let Summary { services: s1, .. } = Service::create(
+        let SummaryVec { services: s1, .. } = Service::create(
             part.id,
             t1,
             "Service".to_string(),
@@ -931,7 +932,7 @@ mod tests {
         let t_later = time::macros::datetime!(2024-05-01 10:00 UTC);
         let mut s1_cloned = s1[0].clone();
         s1_cloned.time = t_later; // Clone with later time to trigger the "later" branch
-        let Summary { services: s2, .. } = s1_cloned.redo(&test_session(), &mut store).await?;
+        let SummaryVec { services: s2, .. } = s1_cloned.redo(&test_session(), &mut store).await?;
 
         // S2 should have successor = None (find the new redo service)
         let s2_id = s2.iter().find(|s| s.successor.is_none()).unwrap().id;
@@ -950,7 +951,7 @@ mod tests {
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
-        let Summary { services, .. } = Service::create(
+        let SummaryVec { services, .. } = Service::create(
             part.id,
             t,
             "Chain Clean".to_string(),
@@ -961,7 +962,7 @@ mod tests {
         )
         .await?;
 
-        let Summary {
+        let SummaryVec {
             services: redo_list,
             ..
         } = services[0]
@@ -1000,7 +1001,7 @@ mod tests {
         };
         ServicePlanStore::create(&mut store, plan.clone()).await?;
 
-        let Summary { services, .. } = Service::create(
+        let SummaryVec { services, .. } = Service::create(
             part.id,
             t,
             "Service".to_string(),
@@ -1011,7 +1012,7 @@ mod tests {
         )
         .await?;
 
-        let Summary {
+        let SummaryVec {
             services: redo_list,
             ..
         } = services[0]
@@ -1045,7 +1046,7 @@ mod tests {
         store.activity_create(act).await?;
 
         let t1 = time::macros::datetime!(2024-06-15 10:00 UTC);
-        let Summary {
+        let SummaryVec {
             services, usages, ..
         } = Service::create(
             bike.id,
@@ -1062,7 +1063,7 @@ mod tests {
         assert_eq!(original_usage, 3500); // 1 activity before t1
 
         // Redo creates new service at same time → usage should be the same
-        let Summary {
+        let SummaryVec {
             usages: redo_usages,
             ..
         } = services[0]
@@ -1080,7 +1081,7 @@ mod tests {
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
-        let Summary { services, .. } = Service::create(
+        let SummaryVec { services, .. } = Service::create(
             part.id,
             t,
             "Service".to_string(),
@@ -1106,7 +1107,7 @@ mod tests {
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
-        let Summary { services, .. } = Service::create(
+        let SummaryVec { services, .. } = Service::create(
             part.id,
             t,
             "Service".to_string(),
@@ -1117,7 +1118,7 @@ mod tests {
         )
         .await?;
 
-        let Summary {
+        let SummaryVec {
             services: redo_list,
             ..
         } = services[0]
@@ -1479,7 +1480,7 @@ mod tests {
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
-        let Summary { services, .. } = Service::create(
+        let SummaryVec { services, .. } = Service::create(
             part.id,
             t,
             "".to_string(),
@@ -1502,7 +1503,7 @@ mod tests {
         let t = sample_time();
 
         let long_name = "A".repeat(10000);
-        let Summary { services, .. } = Service::create(
+        let SummaryVec { services, .. } = Service::create(
             part.id,
             t,
             long_name.clone(),
@@ -1524,7 +1525,7 @@ mod tests {
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
-        let Summary { services, .. } = Service::create(
+        let SummaryVec { services, .. } = Service::create(
             part.id,
             t,
             "Service".to_string(),
@@ -1546,7 +1547,7 @@ mod tests {
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
-        let Summary { services: s1, .. } = Service::create(
+        let SummaryVec { services: s1, .. } = Service::create(
             part.id,
             t,
             "Service".to_string(),
@@ -1557,7 +1558,8 @@ mod tests {
         )
         .await?;
 
-        let Summary { services: s2, .. } = s1[0].clone().redo(&test_session(), &mut store).await?;
+        let SummaryVec { services: s2, .. } =
+            s1[0].clone().redo(&test_session(), &mut store).await?;
         let s2_id = s2.iter().find(|s| s.successor.is_none()).unwrap().id;
 
         let updated_s1 = ServiceStore::get(&mut store, s1[0].id).await?;
@@ -1573,7 +1575,7 @@ mod tests {
         let t = sample_time();
 
         // S1 → redo → S2 → redo → S3
-        let Summary { services: s1, .. } = Service::create(
+        let SummaryVec { services: s1, .. } = Service::create(
             part.id,
             t,
             "S1".to_string(),
@@ -1584,7 +1586,7 @@ mod tests {
         )
         .await?;
 
-        let Summary {
+        let SummaryVec {
             services: s2_services,
             ..
         } = s1[0].clone().redo(&test_session(), &mut store).await?;
@@ -1595,7 +1597,7 @@ mod tests {
             .id;
 
         let s2_clone = ServiceStore::get(&mut store, s2_id).await?;
-        let Summary {
+        let SummaryVec {
             services: s3_services,
             ..
         } = s2_clone.clone().redo(&test_session(), &mut store).await?;
@@ -1626,7 +1628,7 @@ mod tests {
         let t = sample_time();
 
         // Build chain via redo: S1 → S2 → S3 → S4 → S5
-        let Summary { services: s1, .. } = Service::create(
+        let SummaryVec { services: s1, .. } = Service::create(
             part.id,
             t,
             "S1".to_string(),
@@ -1637,7 +1639,7 @@ mod tests {
         )
         .await?;
 
-        let Summary {
+        let SummaryVec {
             services: s2_services,
             ..
         } = s1[0].clone().redo(&test_session(), &mut store).await?;
@@ -1648,7 +1650,7 @@ mod tests {
             .id;
 
         let s2_clone = ServiceStore::get(&mut store, s2_id).await?;
-        let Summary {
+        let SummaryVec {
             services: s3_services,
             ..
         } = s2_clone.clone().redo(&test_session(), &mut store).await?;
@@ -1659,7 +1661,7 @@ mod tests {
             .id;
 
         let s3_clone = ServiceStore::get(&mut store, s3_id).await?;
-        let Summary {
+        let SummaryVec {
             services: s4_services,
             ..
         } = s3_clone.clone().redo(&test_session(), &mut store).await?;
@@ -1670,7 +1672,7 @@ mod tests {
             .id;
 
         let s4_clone = ServiceStore::get(&mut store, s4_id).await?;
-        let Summary {
+        let SummaryVec {
             services: s5_services,
             ..
         } = s4_clone.clone().redo(&test_session(), &mut store).await?;
@@ -1761,7 +1763,7 @@ mod tests {
         let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
         let t = sample_time();
 
-        let Summary { services, .. } = Service::create(
+        let SummaryVec { services, .. } = Service::create(
             part.id,
             t,
             "Service".to_string(),
@@ -1789,7 +1791,7 @@ mod tests {
 
         // all three snapshot activities predate this service time
         let t = time::macros::datetime!(2023-06-01 10:00 UTC);
-        let Summary { usages, .. } = Service::create(
+        let SummaryVec { usages, .. } = Service::create(
             bike,
             t,
             "Service".to_string(),
@@ -1823,7 +1825,7 @@ mod tests {
 
         // Chain A attached to bike 1 since 2023-01-01, never detached → all 3 activities count
         let t = time::macros::datetime!(2023-06-01 10:00 UTC);
-        let Summary { usages, .. } = Service::create(
+        let SummaryVec { usages, .. } = Service::create(
             chain,
             t,
             "Service".to_string(),
@@ -1852,7 +1854,7 @@ mod tests {
 
         // between Hill Repeats (00:13) and Recovery Spin (22:13) → only the first two count
         let t = time::macros::datetime!(2023-05-19 12:00 UTC);
-        let Summary { usages, .. } = Service::create(
+        let SummaryVec { usages, .. } = Service::create(
             bike,
             t,
             "Service".to_string(),
@@ -1881,7 +1883,7 @@ mod tests {
         let wheel = PartId::from(2);
 
         let t = time::macros::datetime!(2023-06-01 10:00 UTC);
-        let Summary {
+        let SummaryVec {
             services, usages, ..
         } = Service::create(
             wheel,
@@ -1921,7 +1923,7 @@ mod tests {
 
         // service after the new activity start → gets incremented
         let t_after = time::macros::datetime!(2023-06-10 10:00 UTC);
-        let Summary {
+        let SummaryVec {
             services, usages, ..
         } = Service::create(
             bike,
@@ -1938,7 +1940,7 @@ mod tests {
 
         // service before the new activity start → stays untouched
         let t_before = time::macros::datetime!(2023-06-01 10:00 UTC);
-        let Summary {
+        let SummaryVec {
             services, usages, ..
         } = Service::create(
             bike,
@@ -2002,7 +2004,7 @@ mod tests {
         let bike = PartId::from(1);
 
         let t = time::macros::datetime!(2023-06-01 10:00 UTC);
-        let Summary {
+        let SummaryVec {
             services, usages, ..
         } = Service::create(
             wheel,
