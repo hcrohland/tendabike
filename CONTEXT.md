@@ -7,8 +7,11 @@ A bike maintenance tracker that syncs with Strava: users track parts, schedule s
 ### Sync
 
 **Summary**:
-The payload an operation or sync endpoint returns, carrying the entities it produced or touched. In a full read it carries all of the user's entities; in responses to mutations or event draining it carries only the changed entities.
+The payload an operation or sync endpoint returns, carrying the entities it produced or touched, keyed by id. In a full read it carries all of the user's entities; in responses to mutations or event draining it carries only the changed entities. A deleted entity appears as a tombstone.
 _Avoid_: snapshot, diff (each names only one of the two readings)
+
+**tombstone**:
+A null entry in a Summary for an entity that no longer exists: the id tells the client which row to remove; the entry carries no entity data.
 
 ### Bike model
 
