@@ -30,7 +30,10 @@ use crate::{ShopId, TbResult, UserId};
 /// A marker trait naming a complete store: one that implements all nine
 /// sub-traits. It carries no methods — the transaction lifecycle
 /// (`begin`/`commit`/`rollback`) is inherent on the concrete store types and
-/// is driven only by the web layer and the tests, never by the domain.
+/// is driven only by the web layer, the `tb_exec` executor loop, and the
+/// tests, never by the domain. The executor loop names that same lifecycle
+/// through the `Txn` and `TxnSource` traits in `tb_exec` (ADR-0005,
+/// executable spec #446 §4.1).
 pub trait Store:
     Send
     + PartStore
