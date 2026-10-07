@@ -206,7 +206,7 @@ impl UserId {
         &self,
         shop: Option<ShopId>,
         store: &mut impl Store,
-    ) -> TbResult<SummaryVec> {
+    ) -> TbResult<Summary> {
         use crate::*;
         let activities = Activity::get_all(self, store).await?;
         let shops = Shop::get_all_for_user(self, store).await?;
@@ -216,12 +216,14 @@ impl UserId {
                 None => Part::get_all(self, store).await?,
                 Some(shop) => shop.get_parts(*self, store).await?,
             };
-            self.get_part_summary(parts, store).await?
+            // Temporary bridge to the map form: get_part_summary still returns the Vec form
+            // (issue #472 flips the service + user internals).
+            Summary::from(self.get_part_summary(parts, store).await?)
         };
-        Ok(SummaryVec {
-            activities,
-            shops,
-            users,
+        Ok(Summary {
+            activities: activities.into_iter().map(|a| (a.id, Some(a))).collect(),
+            shops: shops.into_iter().map(|s| (s.id, Some(s))).collect(),
+            users: users.into_iter().map(|u| (u.id, Some(u))).collect(),
             ..summary
         })
     }
@@ -284,14 +286,12 @@ impl UserId {
     ///
     /// Crosses: activity, attachment, part, partnote, service, serviceplan, shop, usage, user.
     pub async fn delete(&self, store: &mut impl Store) -> TbResult<()> {
-        let SummaryVec {
-            activities,
-            parts,
-            usages,
-            services,
-            plans,
-            ..
-        } = self.get_summary(None, store).await?;
+        let summary = self.get_summary(None, store).await?;
+        let services: Vec<_> = summary.services.into_values().flatten().collect();
+        let plans: Vec<_> = summary.plans.into_values().flatten().collect();
+        let parts: Vec<_> = summary.parts.into_values().flatten().collect();
+        let activities: Vec<_> = summary.activities.into_values().flatten().collect();
+        let usages: Vec<_> = summary.usages.into_values().flatten().collect();
         let n = store.services_delete(&services).await?;
         debug!("deleted {n} services");
         let n = store.serviceplans_delete(&plans).await?;
@@ -499,12 +499,14 @@ mod tests {
         let summary = UserId::from(1).get_summary(None, &mut store).await?;
 
         // The fixture content. Parts come back in one unified order on
-        // both stores — ascending `last_used` (#405); the fixture has many
-        // parts that share a `last_used`, so within a tie the stores may
-        // differ, and the assertion below checks the rule, not the exact
-        // vector. See the seam's `user_summary_read`.
+        // both stores — ascending `last_used` (#405) — but the summary map
+        // is unordered, so the assertion below sorts the part values by
+        // `last_used` and checks the rule on the sorted sequence. See the
+        // seam's `user_summary_read`.
         assert_eq!(summary.parts.len(), 17);
-        for (earlier, later) in summary.parts.iter().zip(summary.parts.iter().skip(1)) {
+        let mut parts: Vec<_> = summary.parts.values().flatten().collect();
+        parts.sort_by_key(|p| p.last_used);
+        for (earlier, later) in parts.iter().zip(parts.iter().skip(1)) {
             assert!(
                 earlier.last_used <= later.last_used,
                 "parts not sorted by last_used"
@@ -524,18 +526,25 @@ mod tests {
         // Field lookups: the "Chain A" part, its attachment, and its usage.
         let chain = summary
             .parts
-            .iter()
+            .values()
+            .flatten()
             .find(|p| p.id == PartId::from(4))
             .unwrap();
         assert_eq!(chain.name, "Chain A");
         let att = summary
             .attachments
-            .iter()
+            .values()
+            .flatten()
             .find(|a| a.a.part_id == PartId::from(4))
             .unwrap();
         assert_eq!(att.a.hook, BIKE);
         assert_eq!(att.a.detached, MAX_TIME);
-        let usage = summary.usages.iter().find(|u| u.id == chain.usage).unwrap();
+        let usage = summary
+            .usages
+            .values()
+            .flatten()
+            .find(|u| u.id == chain.usage)
+            .unwrap();
         assert_eq!(usage.time, 8025);
         assert_eq!(usage.count, 3);
 

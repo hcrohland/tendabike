@@ -667,15 +667,13 @@ async fn user_summary_read() -> tb_domain::TbResult<()> {
         let summary = UserId::from(1).get_summary(None, &mut store).await?;
 
         // The fixture content. Parts come back in one unified order on
-        // both stores — ascending `last_used` (#405); the fixture has many
-        // parts that share a `last_used`, so within a tie the stores may
-        // differ, and the assertion below checks the rule, not the exact
-        // vector. Usages are built per part, so they follow the part
-        // order. Activities come back ascending by start (#408). Only
-        // attachments are still unordered in the database (a known
-        // divergence).
+        // both stores — ascending `last_used` (#405) — but the summary map
+        // is unordered, so the assertion below sorts the part values by
+        // `last_used` and checks the rule on the sorted sequence.
         assert_eq!(summary.parts.len(), 17);
-        for (earlier, later) in summary.parts.iter().zip(summary.parts.iter().skip(1)) {
+        let mut parts: Vec<_> = summary.parts.values().flatten().collect();
+        parts.sort_by_key(|p| p.last_used);
+        for (earlier, later) in parts.iter().zip(parts.iter().skip(1)) {
             assert!(
                 earlier.last_used <= later.last_used,
                 "parts not sorted by last_used"
@@ -695,18 +693,25 @@ async fn user_summary_read() -> tb_domain::TbResult<()> {
         // Field lookups: the "Chain A" part, its attachment, and its usage.
         let chain = summary
             .parts
-            .iter()
+            .values()
+            .flatten()
             .find(|p| p.id == PartId::from(4))
             .unwrap();
         assert_eq!(chain.name, "Chain A");
         let att = summary
             .attachments
-            .iter()
+            .values()
+            .flatten()
             .find(|a| a.a.part_id == PartId::from(4))
             .unwrap();
         assert_eq!(att.a.hook, BIKE);
         assert_eq!(att.a.detached, MAX_TIME);
-        let usage = summary.usages.iter().find(|u| u.id == chain.usage).unwrap();
+        let usage = summary
+            .usages
+            .values()
+            .flatten()
+            .find(|u| u.id == chain.usage)
+            .unwrap();
         assert_eq!(usage.time, 8025);
         assert_eq!(usage.count, 3);
 

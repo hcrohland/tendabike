@@ -14,7 +14,7 @@ use axum::{
 use serde::Serialize;
 
 use crate::{ApiResult, AxumAdmin, DbPool, RequestSession, appstate::AppState};
-use tb_domain::{Session, ShopId, Summary, SummaryVec};
+use tb_domain::{Session, ShopId, Summary};
 use tb_strava::StravaUser;
 
 pub(super) fn router() -> Router<AppState> {
@@ -46,7 +46,7 @@ async fn summary(
         .user_id()
         .get_summary(session.shop(), &mut store)
         .await
-        .map(|s| Json(Summary::from(s)))?;
+        .map(Json)?;
     store.commit().await?;
     Ok(res)
 }
@@ -66,26 +66,17 @@ pub struct Export {
 async fn export(user: RequestSession, State(pool): State<DbPool>) -> ApiResult<Export> {
     let mut store = pool.begin().await?;
     let user_id = user.user_id();
-    let SummaryVec {
-        activities,
-        parts,
-        attachments,
-        usages,
-        services,
-        plans,
-        shops,
-        ..
-    } = user_id.get_summary(None, &mut store).await?;
+    let summary = user_id.get_summary(None, &mut store).await?;
     let user = user_id.read(&mut store).await?;
     Ok(Json(Export {
         user,
-        activities,
-        parts,
-        attachments,
-        usages,
-        services,
-        plans,
-        shops,
+        activities: summary.activities.into_values().flatten().collect(),
+        parts: summary.parts.into_values().flatten().collect(),
+        attachments: summary.attachments.into_values().flatten().collect(),
+        usages: summary.usages.into_values().flatten().collect(),
+        services: summary.services.into_values().flatten().collect(),
+        plans: summary.plans.into_values().flatten().collect(),
+        shops: summary.shops.into_values().flatten().collect(),
     }))
 }
 
