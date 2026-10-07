@@ -69,7 +69,7 @@
 //! operation, verified on both store adapters — is recorded in
 //! `docs/agents/domain-flow.md`.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use sqlx::migrate::MigrateDatabase;
@@ -1282,16 +1282,21 @@ async fn activity_upsert_creates_and_accounts() -> tb_domain::TbResult<()> {
         let summary = act.clone().upsert(&test_session(), &mut store).await?;
 
         // The new activity is reported with the bike as gear.
-        assert_eq!(summary.activities, vec![act]);
+        assert_eq!(summary.activities, HashMap::from([(act.id, Some(act))]));
 
         // The bike and all attached parts: front wheel, rear wheel, chain, tires.
-        let part_ids: HashSet<PartId> = summary.parts.iter().map(|p| p.id).collect();
+        let part_ids: HashSet<PartId> = summary.parts.values().flatten().map(|p| p.id).collect();
         assert_eq!(
             part_ids,
             [1, 2, 3, 4, 5, 6].into_iter().map(PartId::from).collect()
         );
         // The bike's last_used is bumped to the activity start.
-        let bike_part = summary.parts.iter().find(|p| p.id == bike).unwrap();
+        let bike_part = summary
+            .parts
+            .values()
+            .flatten()
+            .find(|p| p.id == bike)
+            .unwrap();
         assert_eq!(bike_part.last_used, round_time(activity_start()));
 
         // Every affected usage (6 part usages + 5 attachment usages) is
@@ -1308,9 +1313,9 @@ async fn activity_upsert_creates_and_accounts() -> tb_domain::TbResult<()> {
             energy: 1700,
             count: 4,
         };
-        for u in &summary.usages {
-            expected.id = u.id;
-            assert_eq!(*u, expected, "unexpected usage for {}", u.id);
+        for (id, u) in &summary.usages {
+            expected.id = *id;
+            assert_eq!(u.as_ref().unwrap(), &expected, "unexpected usage for {id}");
         }
 
         // The updates are persisted in the store.
@@ -1359,10 +1364,13 @@ async fn activity_delete_reverts_usage() -> tb_domain::TbResult<()> {
         expected.climb = None;
         expected.descend = None;
         expected.energy = None;
-        assert_eq!(summary.activities, vec![expected]);
+        assert_eq!(
+            summary.activities,
+            HashMap::from([(expected.id, Some(expected))])
+        );
 
         // The bike and all attached parts are affected again.
-        let part_ids: HashSet<PartId> = summary.parts.iter().map(|p| p.id).collect();
+        let part_ids: HashSet<PartId> = summary.parts.values().flatten().map(|p| p.id).collect();
         assert_eq!(
             part_ids,
             [1, 2, 3, 4, 5, 6].into_iter().map(PartId::from).collect()
@@ -1378,9 +1386,9 @@ async fn activity_delete_reverts_usage() -> tb_domain::TbResult<()> {
             energy: 1500,
             count: 3,
         };
-        for u in &summary.usages {
-            expected.id = u.id;
-            assert_eq!(*u, expected, "unexpected usage for {}", u.id);
+        for (id, u) in &summary.usages {
+            expected.id = *id;
+            assert_eq!(u.as_ref().unwrap(), &expected, "unexpected usage for {id}");
         }
 
         // The updates are persisted in the store.
@@ -1426,7 +1434,13 @@ async fn activity_update_returns_summary() -> tb_domain::TbResult<()> {
         };
         let summary = modified.update(&test_session(), &mut store).await?;
         assert_eq!(summary.activities.len(), 1);
-        assert_eq!(summary.activities[0].name, "Modified Ride");
+        assert_eq!(
+            summary.activities[&ActivityId::new(100)]
+                .as_ref()
+                .unwrap()
+                .name,
+            "Modified Ride"
+        );
 
         Ok(())
     })

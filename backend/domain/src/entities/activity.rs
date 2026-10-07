@@ -167,7 +167,7 @@ impl ActivityId {
         self,
         session: &dyn Session,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<SummaryVec> {
+    ) -> TbResult<Summary> {
         info!("Deleting {self:?}");
         let mut res = self
             .read(session, store)
@@ -175,14 +175,20 @@ impl ActivityId {
             .register(Factor::Sub, store)
             .await?;
         store.activity_delete(self).await?;
-        res.activities[0].gear = None;
-        res.activities[0].duration = 0;
-        res.activities[0].time = None;
-        res.activities[0].distance = None;
-        res.activities[0].climb = None;
-        res.activities[0].descend = None;
-        res.activities[0].energy = None;
-        Ok(res)
+        // The deleted activity is reported with its metrics zeroed, so the
+        // client zeroes its local copy — the Vec-era ghost, adapted to map
+        // access (issue #465).
+        let mut ghost = res.activities.pop().expect("register reports the activity");
+        ghost.gear = None;
+        ghost.duration = 0;
+        ghost.time = None;
+        ghost.distance = None;
+        ghost.climb = None;
+        ghost.descend = None;
+        ghost.energy = None;
+        let mut summary: Summary = res.into();
+        summary.activities.insert(self, Some(ghost));
+        Ok(summary)
     }
 }
 
@@ -195,9 +201,11 @@ impl Activity {
         self,
         user: &dyn Session,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<SummaryVec> {
+    ) -> TbResult<Summary> {
         if let Some(old_activity) = self.id.read_optional(user, store).await? {
-            old_activity.replace(self, store).await
+            // Temporary bridge to the map form: `replace` still returns the
+            // `Vec` form (issue #470 flips the activity internals).
+            old_activity.replace(self, store).await.map(Summary::from)
         } else {
             user.check_owner(
                 self.user_id,
@@ -211,7 +219,9 @@ impl Activity {
             info!("Creating {:?}", self);
             let new = store.activity_create(self).await?;
             // let res = new.check_geartype(res, store)?;
-            new.register(Factor::Add, store).await
+            // Temporary bridge to the map form: `register` still returns the
+            // `Vec` form (issue #470 flips the activity internals).
+            new.register(Factor::Add, store).await.map(Summary::from)
         }
     }
 
@@ -224,8 +234,15 @@ impl Activity {
         self,
         user: &dyn Session,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<SummaryVec> {
-        self.id.read(user, store).await?.replace(self, store).await
+    ) -> TbResult<Summary> {
+        // Temporary bridge to the map form: `replace` still returns the
+        // `Vec` form (issue #470 flips the activity internals).
+        self.id
+            .read(user, store)
+            .await?
+            .replace(self, store)
+            .await
+            .map(Summary::from)
     }
 
     async fn replace(
@@ -337,7 +354,7 @@ impl Activity {
         data: impl std::io::Read,
         user: &dyn Session,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<(SummaryVec, Vec<String>, Vec<String>)> {
+    ) -> TbResult<(Summary, Vec<String>, Vec<String>)> {
         #[derive(Debug, Deserialize)]
         struct Result {
             #[serde(rename = "Datum")]
@@ -393,7 +410,7 @@ impl Activity {
                 }
             }
         }
-        Ok((summary.into(), good, bad))
+        Ok((summary, good, bad))
     }
 
     pub async fn set_default_part(
@@ -402,7 +419,7 @@ impl Activity {
         store: &mut (
                  impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
              ),
-    ) -> TbResult<SummaryVec> {
+    ) -> TbResult<Summary> {
         let part = gear_id.part(user, store).await?;
         let types = part.what.act_types();
         let acts = store
@@ -412,7 +429,7 @@ impl Activity {
         for act in acts {
             hash += act.register(Factor::Add, store).await?;
         }
-        Ok(hash.into())
+        Ok(hash)
     }
 
     pub async fn rescan_all(
@@ -441,7 +458,9 @@ async fn match_and_update(
         act.climb = Some(rclimb);
     }
     act.descend = Some(rdescend);
-    act.update(user, store).await
+    // Temporary bridge to the `Vec` form: `update` returns the map `Summary`
+    // (issue #465); issue #470 flips this helper to the map.
+    act.update(user, store).await.map(SummaryVec::from)
 }
 
 #[cfg(test)]
@@ -449,6 +468,7 @@ mod tests {
     use super::*;
     use crate::test_support::{MemStore, TestSession, fixtures};
     use crate::traits::AttachmentStore;
+    use std::collections::HashMap;
     use time::OffsetDateTime;
 
     use fixtures::{test_session, test_user};
@@ -827,7 +847,10 @@ mod tests {
 
         let summary = act.upsert(&test_session(), &mut store).await?;
         assert_eq!(summary.activities.len(), 1);
-        assert_eq!(summary.activities[0].name, "New Activity");
+        assert_eq!(
+            summary.activities[&new_id].as_ref().unwrap().name,
+            "New Activity"
+        );
         Ok(())
     }
 
@@ -856,16 +879,24 @@ mod tests {
         let summary = act.upsert(&test_session(), &mut store).await?;
 
         // the new activity is reported
-        assert_eq!(summary.activities, vec![expected_act]);
+        assert_eq!(
+            summary.activities,
+            HashMap::from([(expected_act.id, Some(expected_act))])
+        );
 
         // the bike and all attached parts: front wheel, rear wheel, chain, tires
-        let part_ids: HashSet<PartId> = summary.parts.iter().map(|p| p.id).collect();
+        let part_ids: HashSet<PartId> = summary.parts.values().flatten().map(|p| p.id).collect();
         assert_eq!(
             part_ids,
             [1, 2, 3, 4, 5, 6].into_iter().map(PartId::from).collect()
         );
         // last_used of the bike is bumped to the activity start
-        let bike_part = summary.parts.iter().find(|p| p.id == bike).unwrap();
+        let bike_part = summary
+            .parts
+            .values()
+            .flatten()
+            .find(|p| p.id == bike)
+            .unwrap();
         assert_eq!(bike_part.last_used, round_time(activity_start()));
 
         // the usage of the bike, all attached parts and all their attachments to the bike
@@ -887,7 +918,7 @@ mod tests {
                 expected_ids.insert(att.usage);
             }
         }
-        let usage_ids: HashSet<UsageId> = summary.usages.iter().map(|u| u.id).collect();
+        let usage_ids: HashSet<UsageId> = summary.usages.values().flatten().map(|u| u.id).collect();
         assert_eq!(usage_ids, expected_ids);
 
         // every affected usage is increased by the activity metrics
@@ -902,9 +933,9 @@ mod tests {
             energy: 1700,
             count: 4,
         };
-        for u in &summary.usages {
-            expected.id = u.id;
-            assert_eq!(*u, expected, "unexpected usage for {}", u.id);
+        for (id, u) in &summary.usages {
+            expected.id = *id;
+            assert_eq!(u.as_ref().unwrap(), &expected, "unexpected usage for {id}");
         }
 
         // the updates are persisted in the store
@@ -958,16 +989,24 @@ mod tests {
         expected_act.climb = None;
         expected_act.descend = None;
         expected_act.energy = None;
-        assert_eq!(summary.activities, vec![expected_act]);
+        assert_eq!(
+            summary.activities,
+            HashMap::from([(expected_act.id, Some(expected_act))])
+        );
 
         // the bike and all attached parts are affected again
-        let part_ids: HashSet<PartId> = summary.parts.iter().map(|p| p.id).collect();
+        let part_ids: HashSet<PartId> = summary.parts.values().flatten().map(|p| p.id).collect();
         assert_eq!(
             part_ids,
             [1, 2, 3, 4, 5, 6].into_iter().map(PartId::from).collect()
         );
         // last_used of the bike stays at the activity start
-        let bike_part = summary.parts.iter().find(|p| p.id == bike).unwrap();
+        let bike_part = summary
+            .parts
+            .values()
+            .flatten()
+            .find(|p| p.id == bike)
+            .unwrap();
         assert_eq!(bike_part.last_used, round_time(activity_start()));
 
         // the usage of the bike, all attached parts and all their attachments to the bike
@@ -989,7 +1028,7 @@ mod tests {
                 expected_ids.insert(att.usage);
             }
         }
-        let usage_ids: HashSet<UsageId> = summary.usages.iter().map(|u| u.id).collect();
+        let usage_ids: HashSet<UsageId> = summary.usages.values().flatten().map(|u| u.id).collect();
         assert_eq!(usage_ids, expected_ids);
 
         // every affected usage is back at its prepopulated baseline
@@ -1004,9 +1043,9 @@ mod tests {
             energy: 1500,
             count: 3,
         };
-        for u in &summary.usages {
-            expected.id = u.id;
-            assert_eq!(*u, expected, "unexpected usage for {}", u.id);
+        for (id, u) in &summary.usages {
+            expected.id = *id;
+            assert_eq!(u.as_ref().unwrap(), &expected, "unexpected usage for {id}");
         }
 
         // the updates are persisted in the store
@@ -1046,7 +1085,10 @@ mod tests {
 
         let summary = modified.upsert(&test_session(), &mut store).await?;
         assert_eq!(summary.activities.len(), 1);
-        assert_eq!(summary.activities[0].name, "Updated Activity");
+        assert_eq!(
+            summary.activities[&act.id].as_ref().unwrap().name,
+            "Updated Activity"
+        );
         Ok(())
     }
 
@@ -1134,7 +1176,13 @@ mod tests {
             .await?;
         assert_eq!(summary.activities.len(), 1);
         // After delete, gear should be None and duration/time zeroed
-        assert_eq!(summary.activities[0].gear, None);
+        assert_eq!(
+            summary.activities[&ActivityId::new(100)]
+                .as_ref()
+                .unwrap()
+                .gear,
+            None
+        );
         Ok(())
     }
 
@@ -1436,7 +1484,7 @@ mod tests {
         };
 
         let summary = act.upsert(&test_session(), &mut store).await?;
-        assert_eq!(summary.activities[0].id, act_id);
+        assert_eq!(summary.activities[&act_id].as_ref().unwrap().id, act_id);
 
         // Verify it was stored and can be read back
         let read_act = ActivityId::new(42)

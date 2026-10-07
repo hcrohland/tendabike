@@ -25,7 +25,7 @@ async fn def_part_api(
     let mut store = store.begin().await?;
     let res = Activity::set_default_part(gear_id, &user, &mut store)
         .await
-        .map(|s| Json(Summary::from(s)))?;
+        .map(Json)?;
     store.commit().await?;
     Ok(res)
 }
@@ -63,10 +63,7 @@ async fn act_put(
         ))?
     }
     let mut store = store.begin().await?;
-    let res = activity
-        .update(&user, &mut store)
-        .await
-        .map(|s| Json(Summary::from(s)))?;
+    let res = activity.update(&user, &mut store).await.map(Json)?;
     store.commit().await?;
     Ok(res)
 }
@@ -81,7 +78,7 @@ async fn act_delete(
     let res = ActivityId::new(id)
         .delete(&user, &mut store)
         .await
-        .map(|s| Json(Summary::from(s)))?;
+        .map(Json)?;
     store.commit().await?;
     Ok(res)
 }
@@ -94,7 +91,7 @@ async fn descend(
     let mut store = store.begin().await?;
     let (summary, a, b) = Activity::csv2descend(data.as_bytes(), &user, &mut store).await?;
     store.commit().await?;
-    Ok(Json((Summary::from(summary), a, b)))
+    Ok(Json((summary, a, b)))
 }
 
 pub(crate) fn router() -> Router<AppState> {

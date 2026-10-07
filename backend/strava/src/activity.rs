@@ -174,7 +174,9 @@ impl StravaActivity {
     ) -> TbResult<SummaryVec> {
         let activity = self.into_activity(user, store).await?;
 
-        activity.upsert(user, store).await
+        // Temporary bridge: the domain op returns the map `Summary` (issue
+        // #465); the Strava path keeps the `Vec` form until issue #473.
+        activity.upsert(user, store).await.map(SummaryVec::from)
     }
 }
 
@@ -203,7 +205,12 @@ pub(crate) async fn delete_activity(
     user: &impl StravaSession,
     store: &mut impl StravaStore,
 ) -> TbResult<SummaryVec> {
-    ActivityId::new(act).delete(user, store).await
+    // Temporary bridge: the domain op returns the map `Summary` (issue
+    // #465); the Strava path keeps the `Vec` form until issue #473.
+    ActivityId::new(act)
+        .delete(user, store)
+        .await
+        .map(SummaryVec::from)
 }
 
 #[cfg(test)]
