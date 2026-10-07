@@ -48,8 +48,9 @@ export type User = {
 
 /// The wire shape of a Summary: a uniform object per collection, with
 /// stringified id keys and `null` for tombstones (an entity that no longer
-/// exists). Note the attachment keys are the domain idx, which is a different
-/// format from the client's `Attachment.idx` — see `updateSummary`.
+/// exists). The attachment keys are the client's `Attachment.idx`
+/// (`part_id + "/" + attached ms`) — the backend's `idx()` produces the same
+/// format.
 type Summary = {
   parts: Record<string, Part | null>;
   part_notes: Record<string, PartNote | null>;
@@ -131,14 +132,13 @@ export function setSummary(data: Summary) {
 /// `null` value (tombstone) deletes the row it names, any other value is
 /// upserted. An absent payload falls back to a full refresh.
 ///
-/// Attachment keying: the wire key is the domain idx (`part_id` + RFC3339
-/// timestamp), a different format from the client's `Attachment.idx`
-/// (`part_id + "/" + attached ms`, which the deep-link scheme depends on). A
-/// live attachment is therefore upserted under the client idx re-derived
-/// from the value, and a `null` attachment names a key the client map can
-/// never hold, so its `deleteItem` is a harmless no-op. Attachment deletion
-/// arrives as a live but empty value (`attached >= detached`), which the
-/// collection's delete predicate removes — the detach flow works unchanged.
+/// Attachment keying: the wire key is the client's `Attachment.idx`
+/// (`part_id + "/" + attached ms`, which the deep-link scheme depends on), so
+/// a `null` attachment names the client row its `deleteItem` removes. The
+/// backend's `AttachmentDetail::idx` produces the same format. Attachment
+/// deletion may also arrive as a live but empty value
+/// (`attached >= detached`), which the collection's delete predicate removes
+/// — the detach flow works unchanged.
 export function updateSummary(data?: Summary) {
   if (!data) {
     refresh();

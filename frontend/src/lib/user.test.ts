@@ -232,13 +232,14 @@ describe("updateSummary", () => {
     expect(stateValues(parts)).toHaveLength(0);
   });
 
-  it("a live attachment is upserted under the frontend idx, not the wire key", () => {
-    // The wire key is the domain idx (part_id + RFC3339 timestamp); the client
-    // keys attachments by part_id + "/" + attached ms, re-derived from the value.
+  it("a live attachment is upserted under the wire key, which is the frontend idx", () => {
+    // The wire key is the frontend idx (part_id + "/" + attached ms), the same
+    // key the client map uses for the row.
+    const key = "1/" + new Date("2024-01-01T00:00:00Z").getTime();
     updateSummary(
       summary({
         attachments: {
-          "12024-01-01T00:00:00+00:00": {
+          [key]: {
             part_id: 1,
             attached: "2024-01-01T00:00:00Z",
             detached: "2099-01-01T00:00:00Z",
@@ -250,17 +251,14 @@ describe("updateSummary", () => {
         },
       }),
     );
-    const key = "1/" + new Date("2024-01-01T00:00:00Z").getTime();
     expect(attachments[key]).toBeInstanceOf(Attachment);
-    expect(attachments["12024-01-01T00:00:00+00:00"]).toBeUndefined();
   });
 
-  it("a null attachment is a no-op: the domain idx never names a client row", () => {
+  it("a null attachment (tombstone) deletes the row it names", () => {
     seedContent();
-    updateSummary(
-      summary({ attachments: { "12024-01-01T00:00:00+00:00": null } }),
-    );
-    expect(stateValues(attachments)).toHaveLength(1);
+    const key = "1/" + new Date("2024-01-01T00:00:00Z").getTime();
+    updateSummary(summary({ attachments: { [key]: null } }));
+    expect(stateValues(attachments)).toHaveLength(0);
   });
 
   it("an empty attachment (the detach flow) removes the row", () => {

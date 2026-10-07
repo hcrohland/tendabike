@@ -68,8 +68,15 @@ pub struct AttachmentDetail {
 
 impl AttachmentDetail {
     /// create a unique index for the attachment
+    ///
+    /// `part_id + "/" + attached` in epoch milliseconds — the same key format as the
+    /// client's `Attachment.idx`, so the wire key names the client's map row directly.
     pub fn idx(&self) -> String {
-        format!("{}{}", self.a.part_id, self.a.attached)
+        format!(
+            "{}/{}",
+            self.a.part_id,
+            self.a.attached.unix_timestamp_nanos() / 1_000_000
+        )
     }
 }
 
