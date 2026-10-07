@@ -166,17 +166,14 @@ impl StravaActivity {
     ///
     /// # Returns
     ///
-    /// A Result containing a SummaryVec if the sending was successful, or an error if it failed.
+    /// A Result containing a `Summary` map if the sending was successful, or an error if it failed.
     pub(crate) async fn send_to_tb(
         self,
         user: &mut impl StravaSession,
         store: &mut impl StravaStore,
-    ) -> TbResult<SummaryVec> {
+    ) -> TbResult<Summary> {
         let activity = self.into_activity(user, store).await?;
-
-        // Temporary bridge: the domain op returns the map `Summary` (issue
-        // #465); the Strava path keeps the `Vec` form until issue #473.
-        activity.upsert(user, store).await.map(SummaryVec::from)
+        activity.upsert(user, store).await
     }
 }
 
@@ -193,7 +190,7 @@ pub async fn upsert_activity(
     id: i64,
     user: &mut impl StravaSession,
     store: &mut impl StravaStore,
-) -> TbResult<SummaryVec> {
+) -> TbResult<Summary> {
     let act: StravaActivity = user
         .request_json(&format!("/activities/{id}"), store)
         .await?;
@@ -204,13 +201,8 @@ pub(crate) async fn delete_activity(
     act: i64,
     user: &impl StravaSession,
     store: &mut impl StravaStore,
-) -> TbResult<SummaryVec> {
-    // Temporary bridge: the domain op returns the map `Summary` (issue
-    // #465); the Strava path keeps the `Vec` form until issue #473.
-    ActivityId::new(act)
-        .delete(user, store)
-        .await
-        .map(SummaryVec::from)
+) -> TbResult<Summary> {
+    ActivityId::new(act).delete(user, store).await
 }
 
 #[cfg(test)]
@@ -316,7 +308,7 @@ mod tests {
         session.queue("/activities/10", &activity_json(10, "Ride", None));
         let summary = upsert_activity(10, &mut session, &mut store).await?;
         assert_eq!(summary.activities.len(), 1);
-        assert_eq!(summary.activities[0].id, ActivityId::new(10));
+        assert_eq!(summary.activities.keys().next(), Some(&ActivityId::new(10)));
         let acts = ActivityStore::get_all(&mut store.mem, &UserId::from(1)).await?;
         assert_eq!(acts.len(), 1);
         Ok(())

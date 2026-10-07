@@ -97,7 +97,7 @@ pub(crate) async fn hooks(
     let mut store = store.begin().await?;
     let res = process(&mut user, &mut store).await;
     store.commit().await?;
-    Ok(Json(res?.into()))
+    Ok(Json(res?))
 }
 
 pub(crate) async fn create_event(
@@ -151,7 +151,7 @@ pub(super) async fn sync(
         err => err,
     })?;
     store.commit().await?;
-    Ok(Json(res.into()))
+    Ok(Json(res))
 }
 
 #[derive(Deserialize)]
