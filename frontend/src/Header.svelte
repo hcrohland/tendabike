@@ -55,7 +55,7 @@
         data = await myfetch("/strava/hooks");
         if (!data) break;
         updateSummary(data);
-      } while (data["activities"].length > 0);
+      } while (Object.keys(data["activities"]).length > 0);
       hook_timer = setTimeout(() => {
         hook_promise = poll();
       }, 60000);

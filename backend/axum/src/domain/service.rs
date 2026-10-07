@@ -30,7 +30,7 @@ use serde_derive::Deserialize;
 use time::OffsetDateTime;
 
 use crate::{ApiResult, DbPool, RequestSession, appstate::AppState, error::AppError};
-use tb_domain::{PartId, Service, ServiceId, ServicePlanId, SummaryVec};
+use tb_domain::{PartId, Service, ServiceId, ServicePlanId, Summary};
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
@@ -58,21 +58,24 @@ async fn create(
         notes,
         plans,
     }): Json<NewService>,
-) -> Result<(StatusCode, Json<SummaryVec>), AppError> {
+) -> Result<(StatusCode, Json<Summary>), AppError> {
     let mut store = store.begin().await?;
     part_id.checkuser(&user, &mut store).await?;
     let summary = Service::create(part_id, time, name, notes, None, plans, &mut store).await?;
     store.commit().await?;
-    Ok((StatusCode::CREATED, Json(summary)))
+    Ok((StatusCode::CREATED, Json(summary.into())))
 }
 
 async fn update(
     user: RequestSession,
     State(store): State<DbPool>,
     Json(service): Json<Service>,
-) -> ApiResult<SummaryVec> {
+) -> ApiResult<Summary> {
     let mut store = store.begin().await?;
-    let res = service.update(&user, &mut store).await.map(Json)?;
+    let res = service
+        .update(&user, &mut store)
+        .await
+        .map(|s| Json(Summary::from(s)))?;
     store.commit().await?;
     Ok(res)
 }
@@ -81,9 +84,12 @@ async fn delete_service(
     user: RequestSession,
     State(pool): State<DbPool>,
     Path(id): Path<ServiceId>,
-) -> ApiResult<SummaryVec> {
+) -> ApiResult<Summary> {
     let mut store = pool.begin().await?;
-    let res = id.delete(&user, &mut store).await.map(Json)?;
+    let res = id
+        .delete(&user, &mut store)
+        .await
+        .map(|s| Json(Summary::from(s)))?;
     store.commit().await?;
     Ok(res)
 }
@@ -92,9 +98,12 @@ async fn redo(
     user: RequestSession,
     State(store): State<DbPool>,
     Json(service): Json<Service>,
-) -> ApiResult<SummaryVec> {
+) -> ApiResult<Summary> {
     let mut store = store.begin().await?;
-    let res = service.redo(&user, &mut store).await.map(Json)?;
+    let res = service
+        .redo(&user, &mut store)
+        .await
+        .map(|s| Json(Summary::from(s)))?;
     store.commit().await?;
     Ok(res)
 }

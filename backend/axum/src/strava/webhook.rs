@@ -57,7 +57,7 @@ use log::{info, trace};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::{ApiResult, AxumAdmin, DbPool, RequestSession};
-use tb_domain::{Error, OnboardingStatus, SummaryVec, TbResult, UserStore};
+use tb_domain::{Error, OnboardingStatus, Summary, TbResult, UserStore};
 use tb_strava::StravaSession;
 use tb_strava::event::{InEvent, process};
 
@@ -93,11 +93,11 @@ const VERIFY_TOKEN: &str = "tendabike_strava";
 pub(crate) async fn hooks(
     mut user: RequestSession,
     State(store): State<DbPool>,
-) -> ApiResult<SummaryVec> {
+) -> ApiResult<Summary> {
     let mut store = store.begin().await?;
     let res = process(&mut user, &mut store).await;
     store.commit().await?;
-    Ok(Json(res?))
+    Ok(Json(res?.into()))
 }
 
 pub(crate) async fn create_event(
@@ -143,7 +143,7 @@ pub(super) async fn sync(
     Path(tbid): Path<i32>,
     admin: AxumAdmin,
     State(store): State<DbPool>,
-) -> ApiResult<SummaryVec> {
+) -> ApiResult<Summary> {
     let mut store = store.begin().await?;
     let mut user = RequestSession::create_from_id(admin, tbid.into(), &mut store).await?;
     let res = process(&mut user, &mut store).await.map_err(|e| match e {
@@ -151,7 +151,7 @@ pub(super) async fn sync(
         err => err,
     })?;
     store.commit().await?;
-    Ok(Json(res))
+    Ok(Json(res.into()))
 }
 
 #[derive(Deserialize)]

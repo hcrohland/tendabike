@@ -14,7 +14,7 @@ use axum::{
 use serde::Serialize;
 
 use crate::{ApiResult, AxumAdmin, DbPool, RequestSession, appstate::AppState};
-use tb_domain::{Session, ShopId, SummaryVec};
+use tb_domain::{Session, ShopId, Summary, SummaryVec};
 use tb_strava::StravaUser;
 
 pub(super) fn router() -> Router<AppState> {
@@ -38,7 +38,7 @@ async fn summary(
     mut session: RequestSession,
     State(pool): State<DbPool>,
     Query(ShopQuery { shop }): Query<ShopQuery>,
-) -> ApiResult<SummaryVec> {
+) -> ApiResult<Summary> {
     let mut store = pool.begin().await?;
     session.set_shop(shop)?;
     StravaUser::update_gear(&mut session, &mut store).await?;
@@ -46,7 +46,7 @@ async fn summary(
         .user_id()
         .get_summary(session.shop(), &mut store)
         .await
-        .map(Json)?;
+        .map(|s| Json(Summary::from(s)))?;
     store.commit().await?;
     Ok(res)
 }

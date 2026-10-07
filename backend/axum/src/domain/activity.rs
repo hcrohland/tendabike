@@ -15,17 +15,19 @@ use axum::{
 };
 
 use crate::{AxumAdmin, DbPool, RequestSession, appstate::AppState, error::ApiResult};
-use tb_domain::{Activity, ActivityId, PartId, SummaryVec};
+use tb_domain::{Activity, ActivityId, PartId, Summary};
 
 async fn def_part_api(
     user: RequestSession,
     State(store): State<DbPool>,
     Json(gear_id): Json<PartId>,
-) -> ApiResult<SummaryVec> {
+) -> ApiResult<Summary> {
     let mut store = store.begin().await?;
-    let res = Activity::set_default_part(gear_id, &user, &mut store).await?;
+    let res = Activity::set_default_part(gear_id, &user, &mut store)
+        .await
+        .map(|s| Json(Summary::from(s)))?;
     store.commit().await?;
-    Ok(Json(res))
+    Ok(res)
 }
 
 async fn rescan(_u: AxumAdmin, State(store): State<DbPool>) -> ApiResult<()> {
@@ -54,14 +56,17 @@ async fn act_put(
     user: RequestSession,
     State(store): State<DbPool>,
     Json(activity): Json<Activity>,
-) -> ApiResult<SummaryVec> {
+) -> ApiResult<Summary> {
     if ActivityId::from(id) != activity.id {
         Err(tb_domain::Error::BadRequest(
             "ActivityId does not match activity".to_string(),
         ))?
     }
     let mut store = store.begin().await?;
-    let res = activity.update(&user, &mut store).await.map(Json)?;
+    let res = activity
+        .update(&user, &mut store)
+        .await
+        .map(|s| Json(Summary::from(s)))?;
     store.commit().await?;
     Ok(res)
 }
@@ -71,12 +76,12 @@ async fn act_delete(
     Path(id): Path<i64>,
     user: RequestSession,
     State(store): State<DbPool>,
-) -> ApiResult<SummaryVec> {
+) -> ApiResult<Summary> {
     let mut store = store.begin().await?;
     let res = ActivityId::new(id)
         .delete(&user, &mut store)
         .await
-        .map(Json)?;
+        .map(|s| Json(Summary::from(s)))?;
     store.commit().await?;
     Ok(res)
 }
@@ -85,11 +90,11 @@ async fn descend(
     user: RequestSession,
     State(store): State<DbPool>,
     data: String,
-) -> ApiResult<(SummaryVec, Vec<String>, Vec<String>)> {
+) -> ApiResult<(Summary, Vec<String>, Vec<String>)> {
     let mut store = store.begin().await?;
-    let res = Activity::csv2descend(data.as_bytes(), &user, &mut store).await?;
+    let (summary, a, b) = Activity::csv2descend(data.as_bytes(), &user, &mut store).await?;
     store.commit().await?;
-    Ok(Json(res))
+    Ok(Json((Summary::from(summary), a, b)))
 }
 
 pub(crate) fn router() -> Router<AppState> {

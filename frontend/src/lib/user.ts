@@ -46,16 +46,20 @@ export type User = {
   onboarding_status: OnboardingStatus;
 };
 
+/// The wire shape of a Summary: a uniform object per collection, with
+/// stringified id keys and `null` for tombstones (an entity that no longer
+/// exists). Note the attachment keys are the domain idx, which is a different
+/// format from the client's `Attachment.idx` — see `updateSummary`.
 type Summary = {
-  parts: Part[];
-  part_notes: PartNote[];
-  attachments: Attachment[];
-  activities: Activity[];
-  usages: Usage[];
-  services: Service[];
-  plans: ServicePlan[];
-  shops: Shop[];
-  users: UserPublic[];
+  parts: Record<string, Part | null>;
+  part_notes: Record<string, PartNote | null>;
+  attachments: Record<string, Attachment | null>;
+  activities: Record<string, Activity | null>;
+  usages: Record<string, Usage | null>;
+  services: Record<string, Service | null>;
+  plans: Record<string, ServicePlan | null>;
+  shops: Record<string, Shop | null>;
+  users: Record<string, UserPublic | null>;
 };
 
 export const users = mapableState<UserPublic>("id");
@@ -64,7 +68,7 @@ export const users = mapableState<UserPublic>("id");
 /// feeds.
 type SummaryRow<K extends keyof Summary> = {
   key: K;
-  collection: StateMap<Summary[K][number]>;
+  collection: StateMap<NonNullable<Summary[K][string]>>;
 };
 
 /// Any one row of the registry.
@@ -101,31 +105,54 @@ function summaryRows(): AnySummaryRow[] {
 
 /**
  * The merge ops of a summary collection, over the union of all Summary
- * field types. The nine field types are heterogeneous, so no single strict
- * parameter can name them all; method syntax keeps the parameters
- * bivariant, letting each row's own collection satisfy the fold below.
+ * field value types. The nine value types are heterogeneous, so no single
+ * strict parameter can name them all; the union keeps each row's own
+ * collection satisfying the fold below.
  */
 type SummaryFieldOps = {
-  setMap(arr: Summary[keyof Summary]): void;
-  updateMap(arr: Summary[keyof Summary]): void;
+  setMap(arr: Summary[keyof Summary][string][]): void;
+  updateMap(arr: Summary[keyof Summary][string][]): void;
+  deleteItem(id: string | number | undefined): void;
 };
 
-/// Hydration lane: replaces every collection the Summary feeds.
+/// Hydration lane: replaces every collection the Summary feeds, unwrapping
+/// the object values (tombstones carry no entity, so they are dropped —
+/// `setMap` replaces the whole record anyway).
 export function setSummary(data: Summary) {
   for (const row of summaryRows()) {
-    (row.collection as SummaryFieldOps).setMap(data[row.key]);
+    const values = Object.values(data[row.key] as Record<string, any>).filter(
+      (v) => v !== null,
+    );
+    (row.collection as SummaryFieldOps).setMap(values);
   }
 }
 
-/// Update lane: merges every collection the Summary feeds — an upsert by id
-/// that never removes rows, so a partial Summary can never empty a
-/// collection. An absent payload falls back to a full refresh.
+/// Update lane: merges every collection the Summary feeds, per id — a
+/// `null` value (tombstone) deletes the row it names, any other value is
+/// upserted. An absent payload falls back to a full refresh.
+///
+/// Attachment keying: the wire key is the domain idx (`part_id` + RFC3339
+/// timestamp), a different format from the client's `Attachment.idx`
+/// (`part_id + "/" + attached ms`, which the deep-link scheme depends on). A
+/// live attachment is therefore upserted under the client idx re-derived
+/// from the value, and a `null` attachment names a key the client map can
+/// never hold, so its `deleteItem` is a harmless no-op. Attachment deletion
+/// arrives as a live but empty value (`attached >= detached`), which the
+/// collection's delete predicate removes — the detach flow works unchanged.
 export function updateSummary(data?: Summary) {
   if (!data) {
     refresh();
     return;
   }
   for (const row of summaryRows()) {
-    (row.collection as SummaryFieldOps).updateMap(data[row.key]);
+    const ops = row.collection as SummaryFieldOps;
+    const upserts: any[] = [];
+    for (const [id, value] of Object.entries(
+      data[row.key] as Record<string, any>,
+    )) {
+      if (value === null) ops.deleteItem(id);
+      else upserts.push(value);
+    }
+    if (upserts.length > 0) ops.updateMap(upserts);
   }
 }

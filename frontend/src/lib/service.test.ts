@@ -171,8 +171,8 @@ describe("Service CRUD", () => {
 
   const summaryWithService = () =>
     summary({
-      services: [
-        {
+      services: {
+        S1: {
           id: "S1",
           part_id: 5,
           time: "2023-01-01T00:00:00Z",
@@ -183,7 +183,7 @@ describe("Service CRUD", () => {
           successor: null,
           plans: [],
         },
-      ],
+      },
     });
 
   it("Service.create POSTs and calls updateSummary", async () => {

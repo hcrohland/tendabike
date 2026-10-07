@@ -12,7 +12,7 @@ use serde::Deserialize;
 use time::OffsetDateTime;
 
 use crate::{DbPool, RequestSession, appstate::AppState, error::ApiResult};
-use tb_domain::{PartId, PartTypeId, SummaryVec};
+use tb_domain::{PartId, PartTypeId, Summary};
 
 /// Description of an Attach or Detach request
 
@@ -36,7 +36,7 @@ async fn attach_rt(
     user: RequestSession,
     State(store): State<DbPool>,
     Json(event): Json<Event>,
-) -> ApiResult<SummaryVec> {
+) -> ApiResult<Summary> {
     let mut store = store.begin().await?;
     debug!("attach {event:?}");
 
@@ -50,7 +50,7 @@ async fn attach_rt(
 
     let res = tb_domain::attach_assembly(&user, part_id, time, gear, hook, all, &mut store)
         .await
-        .map(Json)?;
+        .map(|s| Json(Summary::from(s)))?;
     store.commit().await?;
     Ok(res)
 }
@@ -60,7 +60,7 @@ async fn detach_rt(
     user: RequestSession,
     State(store): State<DbPool>,
     Json(event): Json<Event>,
-) -> ApiResult<SummaryVec> {
+) -> ApiResult<Summary> {
     let mut store = store.begin().await?;
     debug!("detach {event:?}");
     let Event {
@@ -68,7 +68,7 @@ async fn detach_rt(
     } = event;
     let res = tb_domain::detach_assembly(&user, part_id, time, all, &mut store)
         .await
-        .map(Json)?;
+        .map(|s| Json(Summary::from(s)))?;
     store.commit().await?;
     Ok(res)
 }
@@ -85,7 +85,7 @@ async fn dispose_rt(
     user: RequestSession,
     State(store): State<DbPool>,
     Json(event): Json<Dispose>,
-) -> ApiResult<SummaryVec> {
+) -> ApiResult<Summary> {
     let mut store = store.begin().await?;
     debug!("{event:?}");
     let Dispose {
@@ -95,7 +95,7 @@ async fn dispose_rt(
     } = event;
     let res = tb_domain::dispose_assembly(&user, part, time, all, &mut store)
         .await
-        .map(Json)?;
+        .map(|s| Json(Summary::from(s)))?;
     store.commit().await?;
     Ok(res)
 }
@@ -104,7 +104,7 @@ async fn recover_rt(
     user: RequestSession,
     State(store): State<DbPool>,
     Json(event): Json<Dispose>,
-) -> ApiResult<SummaryVec> {
+) -> ApiResult<Summary> {
     let mut store = store.begin().await?;
     debug!("Recover {event:?}");
     let Dispose {
@@ -112,7 +112,7 @@ async fn recover_rt(
     } = event;
     let res = tb_domain::recover_assembly(&user, part, all, &mut store)
         .await
-        .map(Json)?;
+        .map(|s| Json(Summary::from(s)))?;
     store.commit().await?;
     Ok(res)
 }

@@ -141,7 +141,7 @@ describe("setSummary", () => {
 
   it("the payload wins where it carries rows, and collections it leaves empty are emptied", () => {
     seedContent();
-    setSummary(summary({ users: [eva] }));
+    setSummary(summary({ users: { "2": eva } }));
     expect(users[2]).toBeDefined();
     expect(users[1]).toBeUndefined();
     expect(stateValues(parts)).toEqual([]);
@@ -205,7 +205,7 @@ describe("updateSummary", () => {
 
   it("keeps pre-existing rows the payload does not carry", () => {
     seedContent();
-    updateSummary(summary({ users: [eva] }));
+    updateSummary(summary({ users: { "2": eva } }));
     expect(users[1].name).toBe("Max Mustermann");
     expect(users[2]).toBeDefined();
     expect(stateValues(parts)).toHaveLength(1);
@@ -223,5 +223,63 @@ describe("updateSummary", () => {
     expect(stateValues(plans)).toHaveLength(1);
     expect(stateValues(shops)).toHaveLength(1);
     expect(stateValues(users)).toHaveLength(1);
+  });
+
+  it("a tombstone (null) deletes the row it names", () => {
+    seedContent();
+    updateSummary(summary({ parts: { "1": null } }));
+    expect(parts[1]).toBeUndefined();
+    expect(stateValues(parts)).toHaveLength(0);
+  });
+
+  it("a live attachment is upserted under the frontend idx, not the wire key", () => {
+    // The wire key is the domain idx (part_id + RFC3339 timestamp); the client
+    // keys attachments by part_id + "/" + attached ms, re-derived from the value.
+    updateSummary(
+      summary({
+        attachments: {
+          "12024-01-01T00:00:00+00:00": {
+            part_id: 1,
+            attached: "2024-01-01T00:00:00Z",
+            detached: "2099-01-01T00:00:00Z",
+            gear: 5,
+            hook: 2,
+            what: 10,
+            name: "Tire",
+          },
+        },
+      }),
+    );
+    const key = "1/" + new Date("2024-01-01T00:00:00Z").getTime();
+    expect(attachments[key]).toBeInstanceOf(Attachment);
+    expect(attachments["12024-01-01T00:00:00+00:00"]).toBeUndefined();
+  });
+
+  it("a null attachment is a no-op: the domain idx never names a client row", () => {
+    seedContent();
+    updateSummary(
+      summary({ attachments: { "12024-01-01T00:00:00+00:00": null } }),
+    );
+    expect(stateValues(attachments)).toHaveLength(1);
+  });
+
+  it("an empty attachment (the detach flow) removes the row", () => {
+    seedContent();
+    updateSummary(
+      summary({
+        attachments: {
+          ["1/" + new Date("2024-01-01T00:00:00Z").getTime()]: {
+            part_id: 1,
+            attached: "2024-01-01T00:00:00Z",
+            detached: "2024-01-01T00:00:00Z",
+            gear: 5,
+            hook: 2,
+            what: 10,
+            name: "Tire",
+          },
+        },
+      }),
+    );
+    expect(stateValues(attachments)).toHaveLength(0);
   });
 });

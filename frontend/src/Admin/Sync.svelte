@@ -18,8 +18,8 @@
     do {
       data = await myfetch("/strava/sync/" + id).catch(handleError);
       if (!data) break;
-      count += data["activities"].length;
-    } while (data["activities"].length > 0);
+      count += Object.keys(data["activities"]).length;
+    } while (Object.keys(data["activities"]).length > 0);
     count = 0;
     refresh();
   }
