@@ -189,7 +189,7 @@ async fn register_part(
         .register_part(part_id.into(), &session, &mut store)
         .await?;
     store.commit().await?;
-    Ok(Json(summary.into()))
+    Ok(Json(summary))
 }
 
 async fn unregister_part(
@@ -203,7 +203,7 @@ async fn unregister_part(
         .unregister_part(part_id.into(), &session, &mut store)
         .await?;
     store.commit().await?;
-    Ok(Json(summary.into()))
+    Ok(Json(summary))
 }
 
 // Search shops

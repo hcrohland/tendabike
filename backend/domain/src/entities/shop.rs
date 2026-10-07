@@ -152,21 +152,21 @@ impl ShopId {
     /// Register a part (bike) to this shop
     /// Can be done by shop owner or any user with an active subscription
     /// Automatically registers all currently attached parts (cascading registration)
-    /// Returns a SummaryVec with the registered part and its attachments
+    /// Returns a Summary with the registered part and its attachments
     pub async fn register_part(
         self,
         part_id: PartId,
         session: &dyn Session,
         store: &mut (impl AttachmentStore + PartStore + ShopStore),
-    ) -> TbResult<SummaryVec> {
+    ) -> TbResult<Summary> {
         ShopSubscription::check(self, session.user_id(), store).await?;
         let parts = parts_for_register(part_id, session, store).await?;
 
         // Register the parts to the shop
         let parts = store.parts_register_shop(self, parts).await?;
 
-        Ok(SummaryVec {
-            parts,
+        Ok(Summary {
+            parts: parts.into_iter().map(|p| (p.id, Some(p))).collect(),
             ..Default::default()
         })
     }
@@ -181,19 +181,19 @@ impl ShopId {
 
     /// Unregister a part (bike) from this shop
     /// Can be done by shop owner OR part owner
-    /// Returns an empty SummaryVec (for consistency with other endpoints)
+    /// Returns an empty Summary (for consistency with other endpoints)
     pub async fn unregister_part(
         self,
         part_id: PartId,
         session: &dyn Session,
         store: &mut (impl AttachmentStore + PartStore + ShopStore),
-    ) -> TbResult<SummaryVec> {
+    ) -> TbResult<Summary> {
         let parts = parts_for_register(part_id, session, store).await?;
 
         let parts = store.parts_unregister_shop(parts).await?;
 
-        Ok(SummaryVec {
-            parts,
+        Ok(Summary {
+            parts: parts.into_iter().map(|p| (p.id, Some(p))).collect(),
             ..Default::default()
         })
     }
@@ -506,7 +506,7 @@ mod tests {
             .await
             .unwrap();
         let shop_id = shop.id;
-        for part in &summary.parts {
+        for part in summary.parts.values().flatten() {
             assert_eq!(
                 part.shop,
                 Some(shop_id),
@@ -605,7 +605,7 @@ mod tests {
             .unwrap();
         // Bike A + Front Wheel A + Rear Wheel A + Chain A + both tires = 6
         assert_eq!(summary.parts.len(), 6);
-        for part in &summary.parts {
+        for part in summary.parts.values().flatten() {
             assert_eq!(part.shop, None, "part {} should have no shop", part.id);
         }
     }
@@ -628,7 +628,7 @@ mod tests {
             .unwrap();
         // Bike A + Front Wheel A + Rear Wheel A + Chain A + both tires = 6
         assert_eq!(summary.parts.len(), 6);
-        for part in &summary.parts {
+        for part in summary.parts.values().flatten() {
             assert_eq!(part.shop, None, "part {} should have no shop", part.id);
         }
     }
