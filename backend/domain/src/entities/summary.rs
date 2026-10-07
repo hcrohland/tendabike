@@ -196,6 +196,71 @@ impl_summary_entity_ops!(Summary, part_notes, PartNote, id);
 impl_summary_entity_ops!(Summary, shops, Shop, id);
 impl_summary_entity_ops!(Summary, users, UserPublic, id);
 
+// --- Live-entity accessors ---
+//
+// Written explicitly (no `macro_rules!`): the `get_` prefix cannot be spliced from the field
+// name in `macro_rules!` (no stable `concat_idents!`), and the body is a single line, so a
+// macro would add indirection without saving duplication.
+
+impl Summary {
+    /// All live [`Activity`] in this summary, as an owned `Vec` (cloned; order
+    /// unspecified; borrowing, tombstones dropped).
+    pub fn get_activities(&self) -> Vec<Activity> {
+        self.activities.values().filter_map(|v| v.clone()).collect()
+    }
+
+    /// All live [`Part`] in this summary, as an owned `Vec` (cloned; order unspecified;
+    /// borrowing, tombstones dropped).
+    pub fn get_parts(&self) -> Vec<Part> {
+        self.parts.values().filter_map(|v| v.clone()).collect()
+    }
+
+    /// All live [`AttachmentDetail`] in this summary, as an owned `Vec` (cloned;
+    /// order unspecified; borrowing, tombstones dropped).
+    pub fn get_attachments(&self) -> Vec<AttachmentDetail> {
+        self.attachments
+            .values()
+            .filter_map(|v| v.clone())
+            .collect()
+    }
+
+    /// All live [`Usage`] in this summary, as an owned `Vec` (cloned; order unspecified;
+    /// borrowing, tombstones dropped).
+    pub fn get_usages(&self) -> Vec<Usage> {
+        self.usages.values().filter_map(|v| v.clone()).collect()
+    }
+
+    /// All live [`Service`] in this summary, as an owned `Vec` (cloned; order unspecified;
+    /// borrowing, tombstones dropped).
+    pub fn get_services(&self) -> Vec<Service> {
+        self.services.values().filter_map(|v| v.clone()).collect()
+    }
+
+    /// All live [`ServicePlan`] in this summary, as an owned `Vec` (cloned; order unspecified;
+    /// borrowing, tombstones dropped).
+    pub fn get_plans(&self) -> Vec<ServicePlan> {
+        self.plans.values().filter_map(|v| v.clone()).collect()
+    }
+
+    /// All live [`PartNote`] in this summary, as an owned `Vec` (cloned; order unspecified;
+    /// borrowing, tombstones dropped).
+    pub fn get_part_notes(&self) -> Vec<PartNote> {
+        self.part_notes.values().filter_map(|v| v.clone()).collect()
+    }
+
+    /// All live [`Shop`] in this summary, as an owned `Vec` (cloned; order unspecified;
+    /// borrowing, tombstones dropped).
+    pub fn get_shops(&self) -> Vec<Shop> {
+        self.shops.values().filter_map(|v| v.clone()).collect()
+    }
+
+    /// All live [`UserPublic`] in this summary, as an owned `Vec` (cloned; order unspecified;
+    /// borrowing, tombstones dropped).
+    pub fn get_users(&self) -> Vec<UserPublic> {
+        self.users.values().filter_map(|v| v.clone()).collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -409,5 +474,38 @@ mod tests {
         s += detail(1);
         assert_eq!(s.attachments.len(), 1);
         assert!(s.attachments[&key].is_some());
+    }
+
+    // --- Live-entity accessors ---
+
+    #[test]
+    fn get_accessors_return_live_only_and_borrow() {
+        let live = UsageId::new();
+        let gone = UsageId::new();
+        let mut s = Summary::default();
+        s.usages.insert(live, Some(usage(live, 1)));
+        s.usages.insert(gone, None); // tombstone
+
+        let live_key = detail(1).idx();
+        let gone_key = detail(2).idx();
+        s.attachments.insert(live_key.clone(), Some(detail(1)));
+        s.attachments.insert(gone_key.clone(), None); // tombstone
+
+        // Each accessor returns only the live entities, cloned into an owned `Vec`.
+        let u = s.get_usages();
+        assert_eq!(u.len(), 1);
+        assert_eq!(u[0].id, live);
+        assert_eq!(u[0].count, 1);
+        let a = s.get_attachments();
+        assert_eq!(a.len(), 1);
+        assert_eq!(a[0].idx(), live_key);
+
+        // Borrowing, not consuming: each map still holds both entries, incl. the tombstone.
+        assert_eq!(s.usages.len(), 2);
+        assert_eq!(s.usages[&live].as_ref().unwrap().count, 1);
+        assert_eq!(s.usages[&gone], None);
+        assert_eq!(s.attachments.len(), 2);
+        assert!(s.attachments[&live_key].is_some());
+        assert_eq!(s.attachments[&gone_key], None);
     }
 }
