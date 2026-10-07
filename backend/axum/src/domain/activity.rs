@@ -23,9 +23,11 @@ async fn def_part_api(
     Json(gear_id): Json<PartId>,
 ) -> ApiResult<Summary> {
     let mut store = store.begin().await?;
-    let res = Activity::set_default_part(gear_id, &user, &mut store).await?;
+    let res = Activity::set_default_part(gear_id, &user, &mut store)
+        .await
+        .map(Json)?;
     store.commit().await?;
-    Ok(Json(res))
+    Ok(res)
 }
 
 async fn rescan(_u: AxumAdmin, State(store): State<DbPool>) -> ApiResult<()> {
@@ -87,9 +89,9 @@ async fn descend(
     data: String,
 ) -> ApiResult<(Summary, Vec<String>, Vec<String>)> {
     let mut store = store.begin().await?;
-    let res = Activity::csv2descend(data.as_bytes(), &user, &mut store).await?;
+    let (summary, a, b) = Activity::csv2descend(data.as_bytes(), &user, &mut store).await?;
     store.commit().await?;
-    Ok(Json(res))
+    Ok(Json((summary, a, b)))
 }
 
 pub(crate) fn router() -> Router<AppState> {

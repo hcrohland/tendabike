@@ -165,7 +165,7 @@ mod tests {
         store: &mut MemStore,
     ) -> TbResult<Service> {
         let t = time::macros::datetime!(2024-06-15 10:00 UTC);
-        let Summary { services, .. } = Service::create(
+        let summary = Service::create(
             part,
             t,
             name.to_string(),
@@ -175,7 +175,7 @@ mod tests {
             store,
         )
         .await?;
-        Ok(services.into_iter().next().unwrap())
+        Ok(summary.services.values().flatten().next().unwrap().clone())
     }
 
     // === Suite 6: ServicePlan — CRUD ===

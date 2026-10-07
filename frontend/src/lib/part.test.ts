@@ -105,7 +105,7 @@ describe("Part CRUD", () => {
 
     it("calls updateSummary with the response", async () => {
       const data = partData({ id: 5 });
-      const sum = summary({ parts: [data] });
+      const sum = summary({ parts: { "5": data } });
       fetchMock.mockResolvedValue(resp(sum));
       const p = new Part(partData({ id: 5 }));
       await p.attach(new Date(), true, 1, 2);

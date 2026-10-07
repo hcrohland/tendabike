@@ -245,7 +245,7 @@ impl Event {
     ///
     /// # Returns
     ///
-    /// Returns a `Result` containing a `Summary` struct that summarizes the action performed.
+    /// Returns a `Result` containing a `Summary` map that summarizes the action performed.
     ///
     /// # Examples
     ///
@@ -293,7 +293,7 @@ impl Event {
                     start = std::cmp::max(start, a.start_date.unix_timestamp());
                     let ps = a.send_to_tb(user, store).await?;
                     self.setdate(start, store).await?;
-                    summary = summary + ps;
+                    summary += ps;
                 }
             }
         }
@@ -704,7 +704,7 @@ mod tests {
         session.queue("/activities/10", &activity_json(10, "Ride", None));
         let summary = process(&mut session, &mut store).await?;
         assert_eq!(summary.activities.len(), 1);
-        assert_eq!(summary.activities[0].id, ActivityId::new(10));
+        assert_eq!(summary.activities.keys().next(), Some(&ActivityId::new(10)));
         assert_eq!(store.event_count(), 0);
         Ok(())
     }

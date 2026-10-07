@@ -316,7 +316,7 @@ async fn attach_test_part_at(
 
     // Read the attachment back through the store's interface rather than its
     // internals (issue #410): the part's rows, earliest first.
-    if let Some(part_obj) = summary.parts.first() {
+    if let Some(part_obj) = summary.parts.values().flatten().next() {
         let atts = store.attachments_all_by_part(part_obj.id).await?;
         if let Some(att) = atts.into_iter().min_by_key(|a| a.attached) {
             return Ok(att);

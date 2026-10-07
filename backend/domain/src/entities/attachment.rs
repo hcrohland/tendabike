@@ -68,8 +68,15 @@ pub struct AttachmentDetail {
 
 impl AttachmentDetail {
     /// create a unique index for the attachment
+    ///
+    /// `part_id + "/" + attached` in epoch milliseconds — the same key format as the
+    /// client's `Attachment.idx`, so the wire key names the client's map row directly.
     pub fn idx(&self) -> String {
-        format!("{}{}", self.a.part_id, self.a.attached)
+        format!(
+            "{}/{}",
+            self.a.part_id,
+            self.a.attached.unix_timestamp_nanos() / 1_000_000
+        )
     }
 }
 
@@ -108,18 +115,18 @@ impl Attachment {
 
     /// Move a single part to a new gear 'target' at a certain time
     ///
-    /// updates hash with the changes
+    /// updates the summary with the changes
     /// returns the time the new attachment ends
     async fn shift(
         &self,
         time: OffsetDateTime,
         gear: PartId,
-        hash: &mut SumHash,
+        summary: &mut Summary,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<OffsetDateTime> {
         debug!("-- moving {} to {}", self.part_id, gear);
-        *hash += self.detach(time, store).await?;
-        attach_one(self.part_id, time, gear, self.hook, hash, store).await
+        *summary += self.detach(time, store).await?;
+        attach_one(self.part_id, time, gear, self.hook, summary, store).await
     }
 
     /// change detached time for attachment
@@ -176,9 +183,9 @@ impl Attachment {
 
         // return all affected objects
         Ok(Summary {
-            parts: vec![part],
-            attachments: vec![attachment],
-            usages,
+            parts: [(part.id, Some(part))].into_iter().collect(),
+            attachments: [(attachment.idx(), Some(attachment))].into_iter().collect(),
+            usages: usages.into_iter().map(|u| (u.id, Some(u))).collect(),
             ..Default::default()
         })
     }
@@ -210,9 +217,10 @@ impl Attachment {
         let mut att = att;
         att.detached = att.attached;
         att.usage = UsageId::new();
+        let detail = att.add_details("", 0.into());
         Ok(Summary {
-            attachments: vec![att.add_details("", 0.into())],
-            usages,
+            attachments: [(detail.idx(), Some(detail))].into_iter().collect(),
+            usages: usages.into_iter().map(|u| (u.id, Some(u))).collect(),
             ..Default::default()
         })
     }
@@ -299,8 +307,8 @@ impl Attachment {
         // store all updated usages
         Usage::update_vec(&usages, store).await?;
         Ok(Summary {
-            usages,
-            parts,
+            usages: usages.into_iter().map(|u| (u.id, Some(u))).collect(),
+            parts: parts.into_iter().map(|p| (p.id, Some(p))).collect(),
             ..Default::default()
         })
     }
@@ -313,13 +321,13 @@ impl Attachment {
     ) -> TbResult<Summary> {
         debug!("-- detaching {} at {}", self.part_id, time);
 
-        let mut hash = SumHash::default();
+        let mut summary = Summary::default();
         if all {
-            shift_subparts(self.gear, self.part_id, time, &mut hash, store).await?;
+            shift_subparts(self.gear, self.part_id, time, &mut summary, store).await?;
         }
         // detach the part
-        hash += self.detach(time, store).await?;
-        Ok(hash.into())
+        summary += self.detach(time, store).await?;
+        Ok(summary)
     }
 }
 
@@ -327,17 +335,17 @@ impl Attachment {
 ///
 /// This is used when the part is detached with all subparts
 ///
-///  # Updates the hash of the changes
+///  # Updates the summary of the changes
 async fn shift_subparts(
     from: PartId,
     to: PartId,
     time: OffsetDateTime,
-    hash: &mut SumHash,
+    summary: &mut Summary,
     store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
 ) -> TbResult<()> {
     let sub_attachments = subattachments(to, from, time, store).await?;
     for attachment in sub_attachments {
-        attachment.shift(time, to, hash, store).await?;
+        attachment.shift(time, to, summary, store).await?;
     }
     Ok(())
 }
@@ -381,7 +389,7 @@ async fn attach_one(
     time: OffsetDateTime,
     gear: PartId,
     hook: PartTypeId,
-    hash: &mut SumHash,
+    summary: &mut Summary,
     store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
 ) -> TbResult<OffsetDateTime> {
     // when does the current attachment end
@@ -414,7 +422,7 @@ async fn attach_one(
             // the previous one is the real next so we keep 'det'!
             // 'next' will be replaced by 'self' but 'end' is taken from 'next'
             end = next.detached;
-            *hash += next.delete(store).await?;
+            *summary += next.delete(store).await?;
         } else {
             trace!(
                 "changing gear/hook from {}/{} to {}/{}",
@@ -434,10 +442,10 @@ async fn attach_one(
     {
         Some(prev) => {
             trace!("adjacent starting {}", prev.attached);
-            *hash += prev.detach(end, store).await?
+            *summary += prev.detach(end, store).await?
         }
         _ => {
-            *hash += Attachment::new(part_id, time, gear, hook, end)
+            *summary += Attachment::new(part_id, time, gear, hook, end)
                 .create(store)
                 .await?;
         }
@@ -504,12 +512,12 @@ pub async fn attach_assembly(
         }
         gear = row.gear;
     }
-    let mut hash = SumHash::default();
+    let mut summary = Summary::default();
 
     // detach part if it is attached already
     if let Some(attachment) = store.attachment_get_by_part_and_time(part.id, time).await? {
         debug!("detaching self assembly");
-        hash += attachment.detach_assembly(time, all, store).await?;
+        summary += attachment.detach_assembly(time, all, store).await?;
     }
 
     // if there is a part attached to the gear at the hook, detach it
@@ -518,16 +526,16 @@ pub async fn attach_assembly(
         .await?;
     if let Some(attachment) = attachment {
         debug!("detaching predecessor assembly {}", attachment.part_id);
-        hash += attachment.detach_assembly(time, all, store).await?;
+        summary += attachment.detach_assembly(time, all, store).await?;
     }
 
     // reattach the assembly
     debug!("- attaching assembly {} to {}", part.id, gear);
-    let end = attach_one(part.id, time, gear, hook, &mut hash, store).await?;
+    let end = attach_one(part.id, time, gear, hook, &mut summary, store).await?;
     if all {
         let subparts = subattachments(part.id, part.id, time, store).await?;
         for attachment in subparts {
-            let detached = attachment.shift(time, gear, &mut hash, store).await?;
+            let detached = attachment.shift(time, gear, &mut summary, store).await?;
             if detached == end && end < attachment.detached {
                 trace!(
                     "reattaching {} to {} at {}",
@@ -539,14 +547,14 @@ pub async fn attach_assembly(
                     end,
                     part.id,
                     attachment.hook,
-                    &mut hash,
+                    &mut summary,
                     store,
                 )
                 .await?;
             }
         }
     }
-    Ok(hash.into())
+    Ok(summary)
 }
 
 pub async fn detach_assembly(
@@ -593,11 +601,11 @@ pub async fn dispose_assembly(
         )));
     }
 
-    let mut res = SumHash::default();
+    let mut res = Summary::default();
     res += part_id.dispose(time, store).await?;
     res += dispose_subparts(part_id, time, all, store).await?;
 
-    Ok(res.into())
+    Ok(res)
 }
 
 async fn dispose_subparts(
@@ -607,7 +615,7 @@ async fn dispose_subparts(
     store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
 ) -> TbResult<Summary> {
     let sub_attachments = subattachments(part, part, time, store).await?;
-    let mut res = SumHash::default();
+    let mut res = Summary::default();
     for attachment in sub_attachments {
         let attachments = store.attachments_all_by_part(attachment.part_id).await?;
         if !all || attachments.iter().any(|a| a.attached > time) {
@@ -617,7 +625,7 @@ async fn dispose_subparts(
             res += attachment.part_id.dispose(time, store).await?
         }
     }
-    Ok(res.into())
+    Ok(res)
 }
 
 pub async fn recover_assembly(
@@ -626,7 +634,7 @@ pub async fn recover_assembly(
     all: bool,
     store: &mut (impl AttachmentStore + PartStore + ShopStore),
 ) -> Result<Summary, Error> {
-    let mut res = SumHash::default();
+    let mut res = Summary::default();
     if let Some(time) = part.part(user, store).await?.disposed_at {
         res += part.restore(store).await?;
         if all {
@@ -634,7 +642,7 @@ pub async fn recover_assembly(
                 res += attachment.part_id.restore(store).await?;
             }
         }
-        Ok(res.into())
+        Ok(res)
     } else {
         Err(Error::BadRequest(format!("Part {part} is not disposed")))
     }
@@ -657,7 +665,7 @@ pub async fn is_attached(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::SumHash;
+    use crate::Summary;
     use crate::test_support::{self, MemStore, TestSession, fixtures, part_type_ids};
     use time::OffsetDateTime;
     use time::macros::datetime;
@@ -1070,9 +1078,9 @@ mod tests {
 
         assert_eq!(att.gear, bike.id);
 
-        let mut hash = SumHash::default();
+        let mut summary = Summary::default();
         let end_time = att
-            .shift(later_time(), bike2.id, &mut hash, &mut store)
+            .shift(later_time(), bike2.id, &mut summary, &mut store)
             .await?;
 
         // After shift, the wheel should be attached to bike2, not bike
@@ -1156,9 +1164,9 @@ mod tests {
             .await?
             .unwrap();
 
-        let mut hash = SumHash::default();
+        let mut summary = Summary::default();
         let end_time = att
-            .shift(later_time(), bike2.id, &mut hash, &mut store)
+            .shift(later_time(), bike2.id, &mut summary, &mut store)
             .await?;
 
         // Should return a time in the future (MAX_TIME if nothing ends it)

@@ -69,7 +69,7 @@
 //! operation, verified on both store adapters — is recorded in
 //! `docs/agents/domain-flow.md`.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use sqlx::migrate::MigrateDatabase;
@@ -667,15 +667,13 @@ async fn user_summary_read() -> tb_domain::TbResult<()> {
         let summary = UserId::from(1).get_summary(None, &mut store).await?;
 
         // The fixture content. Parts come back in one unified order on
-        // both stores — ascending `last_used` (#405); the fixture has many
-        // parts that share a `last_used`, so within a tie the stores may
-        // differ, and the assertion below checks the rule, not the exact
-        // vector. Usages are built per part, so they follow the part
-        // order. Activities come back ascending by start (#408). Only
-        // attachments are still unordered in the database (a known
-        // divergence).
+        // both stores — ascending `last_used` (#405) — but the summary map
+        // is unordered, so the assertion below sorts the part values by
+        // `last_used` and checks the rule on the sorted sequence.
         assert_eq!(summary.parts.len(), 17);
-        for (earlier, later) in summary.parts.iter().zip(summary.parts.iter().skip(1)) {
+        let mut parts: Vec<_> = summary.parts.values().flatten().collect();
+        parts.sort_by_key(|p| p.last_used);
+        for (earlier, later) in parts.iter().zip(parts.iter().skip(1)) {
             assert!(
                 earlier.last_used <= later.last_used,
                 "parts not sorted by last_used"
@@ -695,18 +693,25 @@ async fn user_summary_read() -> tb_domain::TbResult<()> {
         // Field lookups: the "Chain A" part, its attachment, and its usage.
         let chain = summary
             .parts
-            .iter()
+            .values()
+            .flatten()
             .find(|p| p.id == PartId::from(4))
             .unwrap();
         assert_eq!(chain.name, "Chain A");
         let att = summary
             .attachments
-            .iter()
+            .values()
+            .flatten()
             .find(|a| a.a.part_id == PartId::from(4))
             .unwrap();
         assert_eq!(att.a.hook, BIKE);
         assert_eq!(att.a.detached, MAX_TIME);
-        let usage = summary.usages.iter().find(|u| u.id == chain.usage).unwrap();
+        let usage = summary
+            .usages
+            .values()
+            .flatten()
+            .find(|u| u.id == chain.usage)
+            .unwrap();
         assert_eq!(usage.time, 8025);
         assert_eq!(usage.count, 3);
 
@@ -1282,16 +1287,21 @@ async fn activity_upsert_creates_and_accounts() -> tb_domain::TbResult<()> {
         let summary = act.clone().upsert(&test_session(), &mut store).await?;
 
         // The new activity is reported with the bike as gear.
-        assert_eq!(summary.activities, vec![act]);
+        assert_eq!(summary.activities, HashMap::from([(act.id, Some(act))]));
 
         // The bike and all attached parts: front wheel, rear wheel, chain, tires.
-        let part_ids: HashSet<PartId> = summary.parts.iter().map(|p| p.id).collect();
+        let part_ids: HashSet<PartId> = summary.parts.values().flatten().map(|p| p.id).collect();
         assert_eq!(
             part_ids,
             [1, 2, 3, 4, 5, 6].into_iter().map(PartId::from).collect()
         );
         // The bike's last_used is bumped to the activity start.
-        let bike_part = summary.parts.iter().find(|p| p.id == bike).unwrap();
+        let bike_part = summary
+            .parts
+            .values()
+            .flatten()
+            .find(|p| p.id == bike)
+            .unwrap();
         assert_eq!(bike_part.last_used, round_time(activity_start()));
 
         // Every affected usage (6 part usages + 5 attachment usages) is
@@ -1308,9 +1318,9 @@ async fn activity_upsert_creates_and_accounts() -> tb_domain::TbResult<()> {
             energy: 1700,
             count: 4,
         };
-        for u in &summary.usages {
-            expected.id = u.id;
-            assert_eq!(*u, expected, "unexpected usage for {}", u.id);
+        for (id, u) in &summary.usages {
+            expected.id = *id;
+            assert_eq!(u.as_ref().unwrap(), &expected, "unexpected usage for {id}");
         }
 
         // The updates are persisted in the store.
@@ -1359,10 +1369,13 @@ async fn activity_delete_reverts_usage() -> tb_domain::TbResult<()> {
         expected.climb = None;
         expected.descend = None;
         expected.energy = None;
-        assert_eq!(summary.activities, vec![expected]);
+        assert_eq!(
+            summary.activities,
+            HashMap::from([(expected.id, Some(expected))])
+        );
 
         // The bike and all attached parts are affected again.
-        let part_ids: HashSet<PartId> = summary.parts.iter().map(|p| p.id).collect();
+        let part_ids: HashSet<PartId> = summary.parts.values().flatten().map(|p| p.id).collect();
         assert_eq!(
             part_ids,
             [1, 2, 3, 4, 5, 6].into_iter().map(PartId::from).collect()
@@ -1378,9 +1391,9 @@ async fn activity_delete_reverts_usage() -> tb_domain::TbResult<()> {
             energy: 1500,
             count: 3,
         };
-        for u in &summary.usages {
-            expected.id = u.id;
-            assert_eq!(*u, expected, "unexpected usage for {}", u.id);
+        for (id, u) in &summary.usages {
+            expected.id = *id;
+            assert_eq!(u.as_ref().unwrap(), &expected, "unexpected usage for {id}");
         }
 
         // The updates are persisted in the store.
@@ -1426,7 +1439,13 @@ async fn activity_update_returns_summary() -> tb_domain::TbResult<()> {
         };
         let summary = modified.update(&test_session(), &mut store).await?;
         assert_eq!(summary.activities.len(), 1);
-        assert_eq!(summary.activities[0].name, "Modified Ride");
+        assert_eq!(
+            summary.activities[&ActivityId::new(100)]
+                .as_ref()
+                .unwrap()
+                .name,
+            "Modified Ride"
+        );
 
         Ok(())
     })

@@ -15,7 +15,7 @@ The domain layer (`backend/domain`) is the only thing that computes entity state
 ## The domain layer
 
 - **`register` is the primitive.** `Activity::register(Factor::Add | Sub)` (`backend/domain/src/entities/activity.rs`) calls `Attachment::register_activity`, which walks the gear's attachments active at the activity's time, updates the `Usage` rows and the parts' `last_used` timestamps, and returns the `Summary` of the affected parts and usages.
-- **Side effects compose.** `Summary` implements `Add` (via `SumHash`, `backend/domain/src/entities/summary.rs`). Replacing an activity is `register(Sub) + register(Add)`.
+- **Side effects compose.** `Summary` implements `Add`/`AddAssign` (per-id, last-wins; `backend/domain/src/entities/summary.rs`). Replacing an activity is `register(Sub) + register(Add)`.
 - **One transaction.** Each operation takes a single store; the mutation, its side effects, and the returned `Summary` are one unit.
 - **The side-effecting operations** live on the entities: `attach_assembly`, `detach_assembly`, `dispose_assembly`, `recover_assembly` (`entities/attachment.rs`), `Activity::upsert/update/delete`, `Shop::register_part`, and the like. Every one of them returns the `Summary` of everything it touched.
 - **The bare-entity operations** touch exactly one entity and return it. The partnote operations (`entities/partnote.rs`) are the reference: `PartId::notes/note_create_text/note_create_file` and `PartNoteId::note/update_text/update_file/remove_file/delete` each return the bare `PartNote`, and `PartNote::file` fetches the file bytes on demand — file bytes are never part of any `Summary`.

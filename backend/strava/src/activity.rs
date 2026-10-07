@@ -166,14 +166,13 @@ impl StravaActivity {
     ///
     /// # Returns
     ///
-    /// A Result containing a Summary if the sending was successful, or an error if it failed.
+    /// A Result containing a `Summary` map if the sending was successful, or an error if it failed.
     pub(crate) async fn send_to_tb(
         self,
         user: &mut impl StravaSession,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
         let activity = self.into_activity(user, store).await?;
-
         activity.upsert(user, store).await
     }
 }
@@ -309,7 +308,7 @@ mod tests {
         session.queue("/activities/10", &activity_json(10, "Ride", None));
         let summary = upsert_activity(10, &mut session, &mut store).await?;
         assert_eq!(summary.activities.len(), 1);
-        assert_eq!(summary.activities[0].id, ActivityId::new(10));
+        assert_eq!(summary.activities.keys().next(), Some(&ActivityId::new(10)));
         let acts = ActivityStore::get_all(&mut store.mem, &UserId::from(1)).await?;
         assert_eq!(acts.len(), 1);
         Ok(())

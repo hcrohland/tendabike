@@ -36,8 +36,14 @@
 use anyhow::Context;
 use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::*;
+
+/// Flatten an id-keyed `Summary` map to a `Vec` of live entities, dropping tombstones.
+fn live_values<K, V>(m: HashMap<K, Option<V>>) -> Vec<V> {
+    m.into_values().flatten().collect()
+}
 
 #[derive(
     Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize, From, Into, Display,
@@ -219,9 +225,9 @@ impl UserId {
             self.get_part_summary(parts, store).await?
         };
         Ok(Summary {
-            activities,
-            shops,
-            users,
+            activities: activities.into_iter().map(|a| (a.id, Some(a))).collect(),
+            shops: shops.into_iter().map(|s| (s.id, Some(s))).collect(),
+            users: users.into_iter().map(|u| (u.id, Some(u))).collect(),
             ..summary
         })
     }
@@ -235,7 +241,7 @@ impl UserId {
     ///
     /// # Returns
     ///
-    /// A `Summary` with all entities related to parts`
+    /// A `Summary` with all entities related to parts
     ///
     /// # Errors
     ///
@@ -270,12 +276,15 @@ impl UserId {
             part_notes.append(&mut store.partnote_all_by_part(part.id).await?);
         }
         Ok(Summary {
-            parts,
-            usages,
-            attachments,
-            services,
-            part_notes,
-            plans,
+            parts: parts.into_iter().map(|p| (p.id, Some(p))).collect(),
+            usages: usages.into_iter().map(|u| (u.id, Some(u))).collect(),
+            attachments: attachments
+                .into_iter()
+                .map(|a| (a.idx(), Some(a)))
+                .collect(),
+            services: services.into_iter().map(|s| (s.id, Some(s))).collect(),
+            part_notes: part_notes.into_iter().map(|n| (n.id, Some(n))).collect(),
+            plans: plans.into_iter().map(|p| (p.id, Some(p))).collect(),
             ..Default::default()
         })
     }
@@ -284,14 +293,12 @@ impl UserId {
     ///
     /// Crosses: activity, attachment, part, partnote, service, serviceplan, shop, usage, user.
     pub async fn delete(&self, store: &mut impl Store) -> TbResult<()> {
-        let Summary {
-            activities,
-            parts,
-            usages,
-            services,
-            plans,
-            ..
-        } = self.get_summary(None, store).await?;
+        let summary = self.get_summary(None, store).await?;
+        let services = live_values(summary.services);
+        let plans = live_values(summary.plans);
+        let parts = live_values(summary.parts);
+        let activities = live_values(summary.activities);
+        let usages = live_values(summary.usages);
         let n = store.services_delete(&services).await?;
         debug!("deleted {n} services");
         let n = store.serviceplans_delete(&plans).await?;
@@ -499,12 +506,14 @@ mod tests {
         let summary = UserId::from(1).get_summary(None, &mut store).await?;
 
         // The fixture content. Parts come back in one unified order on
-        // both stores — ascending `last_used` (#405); the fixture has many
-        // parts that share a `last_used`, so within a tie the stores may
-        // differ, and the assertion below checks the rule, not the exact
-        // vector. See the seam's `user_summary_read`.
+        // both stores — ascending `last_used` (#405) — but the summary map
+        // is unordered, so the assertion below sorts the part values by
+        // `last_used` and checks the rule on the sorted sequence. See the
+        // seam's `user_summary_read`.
         assert_eq!(summary.parts.len(), 17);
-        for (earlier, later) in summary.parts.iter().zip(summary.parts.iter().skip(1)) {
+        let mut parts: Vec<_> = summary.parts.values().flatten().collect();
+        parts.sort_by_key(|p| p.last_used);
+        for (earlier, later) in parts.iter().zip(parts.iter().skip(1)) {
             assert!(
                 earlier.last_used <= later.last_used,
                 "parts not sorted by last_used"
@@ -524,18 +533,25 @@ mod tests {
         // Field lookups: the "Chain A" part, its attachment, and its usage.
         let chain = summary
             .parts
-            .iter()
+            .values()
+            .flatten()
             .find(|p| p.id == PartId::from(4))
             .unwrap();
         assert_eq!(chain.name, "Chain A");
         let att = summary
             .attachments
-            .iter()
+            .values()
+            .flatten()
             .find(|a| a.a.part_id == PartId::from(4))
             .unwrap();
         assert_eq!(att.a.hook, BIKE);
         assert_eq!(att.a.detached, MAX_TIME);
-        let usage = summary.usages.iter().find(|u| u.id == chain.usage).unwrap();
+        let usage = summary
+            .usages
+            .values()
+            .flatten()
+            .find(|u| u.id == chain.usage)
+            .unwrap();
         assert_eq!(usage.time, 8025);
         assert_eq!(usage.count, 3);
 

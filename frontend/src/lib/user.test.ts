@@ -141,7 +141,7 @@ describe("setSummary", () => {
 
   it("the payload wins where it carries rows, and collections it leaves empty are emptied", () => {
     seedContent();
-    setSummary(summary({ users: [eva] }));
+    setSummary(summary({ users: { "2": eva } }));
     expect(users[2]).toBeDefined();
     expect(users[1]).toBeUndefined();
     expect(stateValues(parts)).toEqual([]);
@@ -205,7 +205,7 @@ describe("updateSummary", () => {
 
   it("keeps pre-existing rows the payload does not carry", () => {
     seedContent();
-    updateSummary(summary({ users: [eva] }));
+    updateSummary(summary({ users: { "2": eva } }));
     expect(users[1].name).toBe("Max Mustermann");
     expect(users[2]).toBeDefined();
     expect(stateValues(parts)).toHaveLength(1);
@@ -223,5 +223,61 @@ describe("updateSummary", () => {
     expect(stateValues(plans)).toHaveLength(1);
     expect(stateValues(shops)).toHaveLength(1);
     expect(stateValues(users)).toHaveLength(1);
+  });
+
+  it("a tombstone (null) deletes the row it names", () => {
+    seedContent();
+    updateSummary(summary({ parts: { "1": null } }));
+    expect(parts[1]).toBeUndefined();
+    expect(stateValues(parts)).toHaveLength(0);
+  });
+
+  it("a live attachment is upserted under the wire key, which is the frontend idx", () => {
+    // The wire key is the frontend idx (part_id + "/" + attached ms), the same
+    // key the client map uses for the row.
+    const key = "1/" + new Date("2024-01-01T00:00:00Z").getTime();
+    updateSummary(
+      summary({
+        attachments: {
+          [key]: {
+            part_id: 1,
+            attached: "2024-01-01T00:00:00Z",
+            detached: "2099-01-01T00:00:00Z",
+            gear: 5,
+            hook: 2,
+            what: 10,
+            name: "Tire",
+          },
+        },
+      }),
+    );
+    expect(attachments[key]).toBeInstanceOf(Attachment);
+  });
+
+  it("a null attachment (tombstone) deletes the row it names", () => {
+    seedContent();
+    const key = "1/" + new Date("2024-01-01T00:00:00Z").getTime();
+    updateSummary(summary({ attachments: { [key]: null } }));
+    expect(stateValues(attachments)).toHaveLength(0);
+  });
+
+  it("an empty attachment (the detach flow) removes the row", () => {
+    seedContent();
+    updateSummary(
+      summary({
+        attachments: {
+          ["1/" + new Date("2024-01-01T00:00:00Z").getTime()]: {
+            part_id: 1,
+            attached: "2024-01-01T00:00:00Z",
+            detached: "2024-01-01T00:00:00Z",
+            gear: 5,
+            hook: 2,
+            what: 10,
+            name: "Tire",
+          },
+        },
+      }),
+    );
+    expect(stateValues(attachments)).toHaveLength(0);
   });
 });

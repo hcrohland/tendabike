@@ -24,19 +24,20 @@ export function usage(id: string, o: Partial<any> = {}): Usage {
   });
 }
 
-/// The all-empty Summary fixture: every one of the nine collections empty,
-/// accepting per-field overrides.
+/// The all-empty Summary fixture: every one of the nine collections an empty
+/// object, accepting per-field overrides. The wire shape is a uniform object
+/// with stringified id keys and `null` for tombstones.
 export function summary(overrides: Partial<any> = {}): any {
   return {
-    parts: [],
-    part_notes: [],
-    attachments: [],
-    activities: [],
-    usages: [],
-    services: [],
-    plans: [],
-    shops: [],
-    users: [],
+    parts: {},
+    part_notes: {},
+    attachments: {},
+    activities: {},
+    usages: {},
+    services: {},
+    plans: {},
+    shops: {},
+    users: {},
     ...overrides,
   };
 }
@@ -44,8 +45,8 @@ export function summary(overrides: Partial<any> = {}): any {
 /// The suite's content-rich Summary: one entry per populated collection.
 export function summaryContent(): any {
   return summary({
-    parts: [
-      {
+    parts: {
+      "1": {
         id: 1,
         owner: 1,
         what: 10,
@@ -58,11 +59,11 @@ export function summaryContent(): any {
         usage: "u1",
         shop: null,
       },
-    ],
-    part_notes: [],
-    attachments: [],
-    activities: [
-      {
+    },
+    part_notes: {},
+    attachments: {},
+    activities: {
+      "100": {
         id: 100,
         user_id: 1,
         what: 301,
@@ -77,9 +78,9 @@ export function summaryContent(): any {
         energy: 100,
         device_name: "",
       },
-    ],
-    usages: [
-      {
+    },
+    usages: {
+      u1: {
         id: "u1",
         count: 1,
         climb: 0,
@@ -89,9 +90,9 @@ export function summaryContent(): any {
         duration: 3600,
         energy: 100,
       },
-    ],
-    services: [
-      {
+    },
+    services: {
+      S1: {
         id: "S1",
         part_id: 1,
         time: "2023-01-01T00:00:00Z",
@@ -102,9 +103,9 @@ export function summaryContent(): any {
         successor: null,
         plans: [],
       },
-    ],
-    plans: [
-      {
+    },
+    plans: {
+      PL1: {
         id: "PL1",
         part: 1,
         what: 10,
@@ -118,9 +119,9 @@ export function summaryContent(): any {
         rides: null,
         kJ: null,
       },
-    ],
-    shops: [
-      {
+    },
+    shops: {
+      "10": {
         id: 10,
         owner: 1,
         name: "Shop",
@@ -128,9 +129,14 @@ export function summaryContent(): any {
         auto_approve: true,
         created_at: "2023-01-01T00:00:00Z",
       },
-    ],
-    users: [
-      { id: 1, firstname: "Max", name: "Max Mustermann", avatar: undefined },
-    ],
+    },
+    users: {
+      "1": {
+        id: 1,
+        firstname: "Max",
+        name: "Max Mustermann",
+        avatar: undefined,
+      },
+    },
   });
 }

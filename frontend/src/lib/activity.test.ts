@@ -66,7 +66,7 @@ describe("Activity.update", () => {
 
   it("PUTs a copy of the activity to /api/activ/{id}", async () => {
     const updated = actData({ id: 100, name: "Updated Ride" });
-    const sum = summary({ activities: [updated] });
+    const sum = summary({ activities: { "100": updated } });
     fetchMock.mockResolvedValue(resp(sum));
     const a = new Activity(actData({ id: 100 }));
     a.name = "Updated Ride";
@@ -81,7 +81,7 @@ describe("Activity.update", () => {
 
   it("updates the activities map via updateSummary", async () => {
     const updated = actData({ id: 100, name: "New Name" });
-    const sum = summary({ activities: [updated] });
+    const sum = summary({ activities: { "100": updated } });
     fetchMock.mockResolvedValue(resp(sum));
     const a = new Activity(actData({ id: 100 }));
     a.name = "New Name";
