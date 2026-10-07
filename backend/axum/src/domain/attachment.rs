@@ -50,7 +50,7 @@ async fn attach_rt(
 
     let res = tb_domain::attach_assembly(&user, part_id, time, gear, hook, all, &mut store)
         .await
-        .map(|s| Json(Summary::from(s)))?;
+        .map(Json)?;
     store.commit().await?;
     Ok(res)
 }
@@ -68,7 +68,7 @@ async fn detach_rt(
     } = event;
     let res = tb_domain::detach_assembly(&user, part_id, time, all, &mut store)
         .await
-        .map(|s| Json(Summary::from(s)))?;
+        .map(Json)?;
     store.commit().await?;
     Ok(res)
 }
@@ -95,7 +95,7 @@ async fn dispose_rt(
     } = event;
     let res = tb_domain::dispose_assembly(&user, part, time, all, &mut store)
         .await
-        .map(|s| Json(Summary::from(s)))?;
+        .map(Json)?;
     store.commit().await?;
     Ok(res)
 }
@@ -112,7 +112,7 @@ async fn recover_rt(
     } = event;
     let res = tb_domain::recover_assembly(&user, part, all, &mut store)
         .await
-        .map(|s| Json(Summary::from(s)))?;
+        .map(Json)?;
     store.commit().await?;
     Ok(res)
 }

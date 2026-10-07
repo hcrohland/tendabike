@@ -473,7 +473,7 @@ pub async fn attach_assembly(
     store: &mut (
              impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
          ),
-) -> Result<SummaryVec, Error> {
+) -> Result<Summary, Error> {
     let time = round_time(time);
     // check user
     let part = part.part(user, store).await?;
@@ -553,7 +553,7 @@ pub async fn attach_assembly(
             }
         }
     }
-    Ok(hash.into())
+    Ok(hash)
 }
 
 pub async fn detach_assembly(
@@ -564,7 +564,7 @@ pub async fn detach_assembly(
     store: &mut (
              impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
          ),
-) -> Result<SummaryVec, Error> {
+) -> Result<Summary, Error> {
     let time = round_time(time);
     part_id.checkuser(user, store).await?;
 
@@ -572,7 +572,12 @@ pub async fn detach_assembly(
         .attachment_get_by_part_and_time(part_id, time)
         .await?
         .ok_or(Error::NotFound("part not attached".into()))?;
-    attachment.detach_assembly(time, all, store).await
+    // Temporary bridge to the map form: the `Attachment::detach_assembly`
+    // helper still returns the `Vec` form (issue #471 flips it).
+    attachment
+        .detach_assembly(time, all, store)
+        .await
+        .map(Summary::from)
 }
 
 pub async fn dispose_assembly(
@@ -583,7 +588,7 @@ pub async fn dispose_assembly(
     store: &mut (
              impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
          ),
-) -> Result<SummaryVec, Error> {
+) -> Result<Summary, Error> {
     let time = round_time(time);
 
     part_id.checkuser(user, store).await?;
@@ -604,7 +609,7 @@ pub async fn dispose_assembly(
     res += part_id.dispose(time, store).await?;
     res += dispose_subparts(part_id, time, all, store).await?;
 
-    Ok(res.into())
+    Ok(res)
 }
 
 async fn dispose_subparts(
@@ -632,7 +637,7 @@ pub async fn recover_assembly(
     part: PartId,
     all: bool,
     store: &mut (impl AttachmentStore + PartStore + ShopStore),
-) -> Result<SummaryVec, Error> {
+) -> Result<Summary, Error> {
     let mut res = Summary::default();
     if let Some(time) = part.part(user, store).await?.disposed_at {
         res += part.restore(store).await?;
@@ -641,7 +646,7 @@ pub async fn recover_assembly(
                 res += attachment.part_id.restore(store).await?;
             }
         }
-        Ok(res.into())
+        Ok(res)
     } else {
         Err(Error::BadRequest(format!("Part {part} is not disposed")))
     }
@@ -3512,7 +3517,7 @@ mod tests {
         Ok(())
     }
 
-    /// SummaryVec contains all affected parts after attach_assembly with subparts
+    /// Summary contains all affected parts after attach_assembly with subparts
     #[tokio::test]
     async fn attach_assembly_returns_summary_with_all_parts() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
@@ -3556,7 +3561,7 @@ mod tests {
         )
         .await?;
 
-        // SummaryVec should include both bike and chain
+        // Summary should include both bike and chain
         assert!(!summary.parts.is_empty());
 
         Ok(())
