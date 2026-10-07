@@ -178,7 +178,11 @@ impl ActivityId {
         // The deleted activity is reported with its metrics zeroed, so the
         // client zeroes its local copy — the Vec-era ghost, adapted to map
         // access (issue #465).
-        let mut ghost = res.activities.pop().expect("register reports the activity");
+        let mut ghost = res
+            .activities
+            .remove(&self)
+            .flatten()
+            .expect("register reports the activity");
         ghost.gear = None;
         ghost.duration = 0;
         ghost.time = None;
@@ -186,7 +190,7 @@ impl ActivityId {
         ghost.climb = None;
         ghost.descend = None;
         ghost.energy = None;
-        let mut summary: Summary = res.into();
+        let mut summary = res;
         summary.activities.insert(self, Some(ghost));
         Ok(summary)
     }
@@ -203,9 +207,7 @@ impl Activity {
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<Summary> {
         if let Some(old_activity) = self.id.read_optional(user, store).await? {
-            // Temporary bridge to the map form: `replace` still returns the
-            // `Vec` form (issue #470 flips the activity internals).
-            old_activity.replace(self, store).await.map(Summary::from)
+            old_activity.replace(self, store).await
         } else {
             user.check_owner(
                 self.user_id,
@@ -219,9 +221,7 @@ impl Activity {
             info!("Creating {:?}", self);
             let new = store.activity_create(self).await?;
             // let res = new.check_geartype(res, store)?;
-            // Temporary bridge to the map form: `register` still returns the
-            // `Vec` form (issue #470 flips the activity internals).
-            new.register(Factor::Add, store).await.map(Summary::from)
+            new.register(Factor::Add, store).await
         }
     }
 
@@ -235,27 +235,20 @@ impl Activity {
         user: &dyn Session,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<Summary> {
-        // Temporary bridge to the map form: `replace` still returns the
-        // `Vec` form (issue #470 flips the activity internals).
-        self.id
-            .read(user, store)
-            .await?
-            .replace(self, store)
-            .await
-            .map(Summary::from)
+        self.id.read(user, store).await?.replace(self, store).await
     }
 
     async fn replace(
         self,
         new: Activity,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<SummaryVec> {
+    ) -> TbResult<Summary> {
         info!("Updating {self:?}");
         let mut res = self.register(Factor::Sub, store).await?;
 
         let act = store.activity_update(new).await?;
 
-        res = res + act.register(Factor::Add, store).await?;
+        res += act.register(Factor::Add, store).await?;
         Ok(res)
     }
 
@@ -299,7 +292,7 @@ impl Activity {
         self,
         factor: Factor,
         store: &mut (impl AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<SummaryVec> {
+    ) -> TbResult<Summary> {
         trace!(
             "{} {:?}",
             if factor == Factor::Add {
@@ -315,13 +308,11 @@ impl Activity {
             Factor::Sub => -self.usage(),
         };
 
-        // Temporary bridge to the Vec form: register still returns the Vec form
-        // (issue #470 flips the activity internals).
-        let res = Attachment::register_activity(self.gear, self.start, usage, store)
-            .await
-            .map(SummaryVec::from)?;
-        let activities = vec![self];
-        Ok(SummaryVec { activities, ..res })
+        let res = Attachment::register_activity(self.gear, self.start, usage, store).await?;
+        Ok(Summary {
+            activities: std::collections::HashMap::from([(self.id, Some(self))]),
+            ..res
+        })
     }
 
     /// Get all activities for a given user.
@@ -456,15 +447,13 @@ async fn match_and_update(
     rstart: OffsetDateTime,
     rclimb: Option<i32>,
     rdescend: i32,
-) -> TbResult<SummaryVec> {
+) -> TbResult<Summary> {
     let mut act = store.get_by_user_and_time(user.user_id(), rstart).await?;
     if let Some(rclimb) = rclimb {
         act.climb = Some(rclimb);
     }
     act.descend = Some(rdescend);
-    // Temporary bridge to the `Vec` form: `update` returns the map `Summary`
-    // (issue #465); issue #470 flips this helper to the map.
-    act.update(user, store).await.map(SummaryVec::from)
+    act.update(user, store).await
 }
 
 #[cfg(test)]
@@ -1298,7 +1287,7 @@ mod tests {
         let summary = act.register(Factor::Add, &mut store).await?;
 
         // Only the gear (bike) should be in parts, not the detached chain
-        assert!(summary.parts.iter().all(|p| p.id == bike.id));
+        assert!(summary.parts.values().flatten().all(|p| p.id == bike.id));
         Ok(())
     }
 
