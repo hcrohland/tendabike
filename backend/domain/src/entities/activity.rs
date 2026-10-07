@@ -315,7 +315,11 @@ impl Activity {
             Factor::Sub => -self.usage(),
         };
 
-        let res = Attachment::register_activity(self.gear, self.start, usage, store).await?;
+        // Temporary bridge to the Vec form: register still returns the Vec form
+        // (issue #470 flips the activity internals).
+        let res = Attachment::register_activity(self.gear, self.start, usage, store)
+            .await
+            .map(SummaryVec::from)?;
         let activities = vec![self];
         Ok(SummaryVec { activities, ..res })
     }

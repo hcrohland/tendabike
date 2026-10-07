@@ -137,7 +137,7 @@ impl Attachment {
         mut self,
         time: OffsetDateTime,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<SummaryVec> {
+    ) -> TbResult<Summary> {
         trace!("detaching {} at {}", self.part_id, time);
 
         // delete the old attachment
@@ -159,7 +159,7 @@ impl Attachment {
     pub(crate) async fn create(
         mut self,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<SummaryVec> {
+    ) -> TbResult<Summary> {
         trace!("create {self:?}");
 
         // create the Usage for the attachement
@@ -182,10 +182,10 @@ impl Attachment {
         Usage::update_vec(&usages, store).await?;
 
         // return all affected objects
-        Ok(SummaryVec {
-            parts: vec![part],
-            attachments: vec![attachment],
-            usages,
+        Ok(Summary {
+            parts: [(part.id, Some(part))].into_iter().collect(),
+            attachments: [(attachment.idx(), Some(attachment))].into_iter().collect(),
+            usages: usages.into_iter().map(|u| (u.id, Some(u))).collect(),
             ..Default::default()
         })
     }
@@ -197,7 +197,7 @@ impl Attachment {
     async fn delete(
         self,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<SummaryVec> {
+    ) -> TbResult<Summary> {
         trace!("delete {self:?}");
 
         // delete the attachment on the db
@@ -217,9 +217,10 @@ impl Attachment {
         let mut att = att;
         att.detached = att.attached;
         att.usage = UsageId::new();
-        Ok(SummaryVec {
-            attachments: vec![att.add_details("", 0.into())],
-            usages,
+        let detail = att.add_details("", 0.into());
+        Ok(Summary {
+            attachments: [(detail.idx(), Some(detail))].into_iter().collect(),
+            usages: usages.into_iter().map(|u| (u.id, Some(u))).collect(),
             ..Default::default()
         })
     }
@@ -277,9 +278,9 @@ impl Attachment {
         start: OffsetDateTime,
         usage: Usage,
         store: &mut (impl AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<SummaryVec> {
+    ) -> TbResult<Summary> {
         let gear = match gear {
-            None => return Ok(SummaryVec::default()),
+            None => return Ok(Summary::default()),
             Some(x) => x,
         };
 
@@ -305,9 +306,9 @@ impl Attachment {
         let usages = Usage::get_vec(&usages, store).await? + &usage;
         // store all updated usages
         Usage::update_vec(&usages, store).await?;
-        Ok(SummaryVec {
-            usages,
-            parts,
+        Ok(Summary {
+            usages: usages.into_iter().map(|u| (u.id, Some(u))).collect(),
+            parts: parts.into_iter().map(|p| (p.id, Some(p))).collect(),
             ..Default::default()
         })
     }
@@ -317,7 +318,7 @@ impl Attachment {
         time: OffsetDateTime,
         all: bool,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<SummaryVec> {
+    ) -> TbResult<Summary> {
         debug!("-- detaching {} at {}", self.part_id, time);
 
         let mut hash = Summary::default();
@@ -326,7 +327,7 @@ impl Attachment {
         }
         // detach the part
         hash += self.detach(time, store).await?;
-        Ok(hash.into())
+        Ok(hash)
     }
 }
 
@@ -572,12 +573,7 @@ pub async fn detach_assembly(
         .attachment_get_by_part_and_time(part_id, time)
         .await?
         .ok_or(Error::NotFound("part not attached".into()))?;
-    // Temporary bridge to the map form: the `Attachment::detach_assembly`
-    // helper still returns the `Vec` form (issue #471 flips it).
-    attachment
-        .detach_assembly(time, all, store)
-        .await
-        .map(Summary::from)
+    attachment.detach_assembly(time, all, store).await
 }
 
 pub async fn dispose_assembly(
@@ -617,7 +613,7 @@ async fn dispose_subparts(
     time: OffsetDateTime,
     all: bool,
     store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-) -> TbResult<SummaryVec> {
+) -> TbResult<Summary> {
     let sub_attachments = subattachments(part, part, time, store).await?;
     let mut res = Summary::default();
     for attachment in sub_attachments {
@@ -629,7 +625,7 @@ async fn dispose_subparts(
             res += attachment.part_id.dispose(time, store).await?
         }
     }
-    Ok(res.into())
+    Ok(res)
 }
 
 pub async fn recover_assembly(
