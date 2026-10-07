@@ -1618,9 +1618,7 @@ mod tests {
 
         // service created after all snapshot activities → aggregates all three
         let t = time::macros::datetime!(2023-06-01 10:00 UTC);
-        let SummaryVec {
-            services, usages, ..
-        } = Service::create(
+        let summary = Service::create(
             bike,
             t,
             "Service".to_string(),
@@ -1630,8 +1628,9 @@ mod tests {
             &mut store,
         )
         .await?;
-        let svc = &services[0];
-        assert_eq!(usages[0].count, 3);
+        let svc = summary.services.values().flatten().next().unwrap();
+        let u = summary.usages.values().flatten().next().unwrap();
+        assert_eq!(u.count, 3);
 
         Activity::rescan_all(&mut store).await?;
 

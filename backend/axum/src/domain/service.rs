@@ -63,7 +63,7 @@ async fn create(
     part_id.checkuser(&user, &mut store).await?;
     let summary = Service::create(part_id, time, name, notes, None, plans, &mut store).await?;
     store.commit().await?;
-    Ok((StatusCode::CREATED, Json(summary.into())))
+    Ok((StatusCode::CREATED, Json(summary)))
 }
 
 async fn update(
@@ -72,10 +72,7 @@ async fn update(
     Json(service): Json<Service>,
 ) -> ApiResult<Summary> {
     let mut store = store.begin().await?;
-    let res = service
-        .update(&user, &mut store)
-        .await
-        .map(|s| Json(Summary::from(s)))?;
+    let res = service.update(&user, &mut store).await.map(Json)?;
     store.commit().await?;
     Ok(res)
 }
@@ -86,10 +83,7 @@ async fn delete_service(
     Path(id): Path<ServiceId>,
 ) -> ApiResult<Summary> {
     let mut store = pool.begin().await?;
-    let res = id
-        .delete(&user, &mut store)
-        .await
-        .map(|s| Json(Summary::from(s)))?;
+    let res = id.delete(&user, &mut store).await.map(Json)?;
     store.commit().await?;
     Ok(res)
 }
@@ -100,10 +94,7 @@ async fn redo(
     Json(service): Json<Service>,
 ) -> ApiResult<Summary> {
     let mut store = store.begin().await?;
-    let res = service
-        .redo(&user, &mut store)
-        .await
-        .map(|s| Json(Summary::from(s)))?;
+    let res = service.redo(&user, &mut store).await.map(Json)?;
     store.commit().await?;
     Ok(res)
 }
