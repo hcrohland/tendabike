@@ -1,0 +1,18 @@
+[package]
+name = "tb_exec"
+version = "0.9.0"
+edition = { workspace = true }
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tb_domain = { workspace = true }
+tb_strava = { workspace = true }
+async-trait = { workspace = true }
+
+[lib]
+doctest = false
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+time = { workspace = true }
