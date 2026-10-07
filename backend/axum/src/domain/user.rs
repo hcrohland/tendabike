@@ -12,10 +12,16 @@ use axum::{
     routing::get,
 };
 use serde::Serialize;
+use std::collections::HashMap;
 
 use crate::{ApiResult, AxumAdmin, DbPool, RequestSession, appstate::AppState};
 use tb_domain::{Session, ShopId, Summary};
 use tb_strava::StravaUser;
+
+/// Flatten an id-keyed `Summary` map to a `Vec` of live entities, dropping tombstones.
+fn live_values<K, V>(m: HashMap<K, Option<V>>) -> Vec<V> {
+    m.into_values().flatten().collect()
+}
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
@@ -70,13 +76,13 @@ async fn export(user: RequestSession, State(pool): State<DbPool>) -> ApiResult<E
     let user = user_id.read(&mut store).await?;
     Ok(Json(Export {
         user,
-        activities: summary.activities.into_values().flatten().collect(),
-        parts: summary.parts.into_values().flatten().collect(),
-        attachments: summary.attachments.into_values().flatten().collect(),
-        usages: summary.usages.into_values().flatten().collect(),
-        services: summary.services.into_values().flatten().collect(),
-        plans: summary.plans.into_values().flatten().collect(),
-        shops: summary.shops.into_values().flatten().collect(),
+        activities: live_values(summary.activities),
+        parts: live_values(summary.parts),
+        attachments: live_values(summary.attachments),
+        usages: live_values(summary.usages),
+        services: live_values(summary.services),
+        plans: live_values(summary.plans),
+        shops: live_values(summary.shops),
     }))
 }
 

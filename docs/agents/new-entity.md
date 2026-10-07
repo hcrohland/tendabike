@@ -6,7 +6,7 @@ The implementation steps for a new entity, end to end. *Why* the pieces are wire
 
 1. **Domain entity** — `backend/domain/src/entities/<name>.rs` with its mutating operations (recipe in [`domain-flow.md`](domain-flow.md)), plus the `Store` trait methods in `backend/domain/src/traits/`.
    *Test*: the new entity and its operations.
-2. **`Summary` field** — add the entity to `Summary` and `SumHash` (`backend/domain/src/entities/summary.rs`) so it flows through every response.
+2. **`Summary` field** — add the entity to `Summary` (`backend/domain/src/entities/summary.rs`) so it flows through every response.
    *Test*: the new entity appears in the `Summary` returned by its operations.
 3. **Persistence** — the sqlx implementation of the store methods in `backend/sqlx/src/store/<name>.rs`, with the SQL migration in `backend/sqlx/migrations/` as part of this step.
    *Test*: the new store methods.

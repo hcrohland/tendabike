@@ -36,8 +36,14 @@
 use anyhow::Context;
 use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::*;
+
+/// Flatten an id-keyed `Summary` map to a `Vec` of live entities, dropping tombstones.
+fn live_values<K, V>(m: HashMap<K, Option<V>>) -> Vec<V> {
+    m.into_values().flatten().collect()
+}
 
 #[derive(
     Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize, From, Into, Display,
@@ -288,11 +294,11 @@ impl UserId {
     /// Crosses: activity, attachment, part, partnote, service, serviceplan, shop, usage, user.
     pub async fn delete(&self, store: &mut impl Store) -> TbResult<()> {
         let summary = self.get_summary(None, store).await?;
-        let services: Vec<_> = summary.services.into_values().flatten().collect();
-        let plans: Vec<_> = summary.plans.into_values().flatten().collect();
-        let parts: Vec<_> = summary.parts.into_values().flatten().collect();
-        let activities: Vec<_> = summary.activities.into_values().flatten().collect();
-        let usages: Vec<_> = summary.usages.into_values().flatten().collect();
+        let services = live_values(summary.services);
+        let plans = live_values(summary.plans);
+        let parts = live_values(summary.parts);
+        let activities = live_values(summary.activities);
+        let usages = live_values(summary.usages);
         let n = store.services_delete(&services).await?;
         debug!("deleted {n} services");
         let n = store.serviceplans_delete(&plans).await?;

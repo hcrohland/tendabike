@@ -115,18 +115,18 @@ impl Attachment {
 
     /// Move a single part to a new gear 'target' at a certain time
     ///
-    /// updates hash with the changes
+    /// updates the summary with the changes
     /// returns the time the new attachment ends
     async fn shift(
         &self,
         time: OffsetDateTime,
         gear: PartId,
-        hash: &mut Summary,
+        summary: &mut Summary,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<OffsetDateTime> {
         debug!("-- moving {} to {}", self.part_id, gear);
-        *hash += self.detach(time, store).await?;
-        attach_one(self.part_id, time, gear, self.hook, hash, store).await
+        *summary += self.detach(time, store).await?;
+        attach_one(self.part_id, time, gear, self.hook, summary, store).await
     }
 
     /// change detached time for attachment
@@ -321,13 +321,13 @@ impl Attachment {
     ) -> TbResult<Summary> {
         debug!("-- detaching {} at {}", self.part_id, time);
 
-        let mut hash = Summary::default();
+        let mut summary = Summary::default();
         if all {
-            shift_subparts(self.gear, self.part_id, time, &mut hash, store).await?;
+            shift_subparts(self.gear, self.part_id, time, &mut summary, store).await?;
         }
         // detach the part
-        hash += self.detach(time, store).await?;
-        Ok(hash)
+        summary += self.detach(time, store).await?;
+        Ok(summary)
     }
 }
 
@@ -335,17 +335,17 @@ impl Attachment {
 ///
 /// This is used when the part is detached with all subparts
 ///
-///  # Updates the hash of the changes
+///  # Updates the summary of the changes
 async fn shift_subparts(
     from: PartId,
     to: PartId,
     time: OffsetDateTime,
-    hash: &mut Summary,
+    summary: &mut Summary,
     store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
 ) -> TbResult<()> {
     let sub_attachments = subattachments(to, from, time, store).await?;
     for attachment in sub_attachments {
-        attachment.shift(time, to, hash, store).await?;
+        attachment.shift(time, to, summary, store).await?;
     }
     Ok(())
 }
@@ -389,7 +389,7 @@ async fn attach_one(
     time: OffsetDateTime,
     gear: PartId,
     hook: PartTypeId,
-    hash: &mut Summary,
+    summary: &mut Summary,
     store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
 ) -> TbResult<OffsetDateTime> {
     // when does the current attachment end
@@ -422,7 +422,7 @@ async fn attach_one(
             // the previous one is the real next so we keep 'det'!
             // 'next' will be replaced by 'self' but 'end' is taken from 'next'
             end = next.detached;
-            *hash += next.delete(store).await?;
+            *summary += next.delete(store).await?;
         } else {
             trace!(
                 "changing gear/hook from {}/{} to {}/{}",
@@ -442,10 +442,10 @@ async fn attach_one(
     {
         Some(prev) => {
             trace!("adjacent starting {}", prev.attached);
-            *hash += prev.detach(end, store).await?
+            *summary += prev.detach(end, store).await?
         }
         _ => {
-            *hash += Attachment::new(part_id, time, gear, hook, end)
+            *summary += Attachment::new(part_id, time, gear, hook, end)
                 .create(store)
                 .await?;
         }
@@ -512,12 +512,12 @@ pub async fn attach_assembly(
         }
         gear = row.gear;
     }
-    let mut hash = Summary::default();
+    let mut summary = Summary::default();
 
     // detach part if it is attached already
     if let Some(attachment) = store.attachment_get_by_part_and_time(part.id, time).await? {
         debug!("detaching self assembly");
-        hash += attachment.detach_assembly(time, all, store).await?;
+        summary += attachment.detach_assembly(time, all, store).await?;
     }
 
     // if there is a part attached to the gear at the hook, detach it
@@ -526,16 +526,16 @@ pub async fn attach_assembly(
         .await?;
     if let Some(attachment) = attachment {
         debug!("detaching predecessor assembly {}", attachment.part_id);
-        hash += attachment.detach_assembly(time, all, store).await?;
+        summary += attachment.detach_assembly(time, all, store).await?;
     }
 
     // reattach the assembly
     debug!("- attaching assembly {} to {}", part.id, gear);
-    let end = attach_one(part.id, time, gear, hook, &mut hash, store).await?;
+    let end = attach_one(part.id, time, gear, hook, &mut summary, store).await?;
     if all {
         let subparts = subattachments(part.id, part.id, time, store).await?;
         for attachment in subparts {
-            let detached = attachment.shift(time, gear, &mut hash, store).await?;
+            let detached = attachment.shift(time, gear, &mut summary, store).await?;
             if detached == end && end < attachment.detached {
                 trace!(
                     "reattaching {} to {} at {}",
@@ -547,14 +547,14 @@ pub async fn attach_assembly(
                     end,
                     part.id,
                     attachment.hook,
-                    &mut hash,
+                    &mut summary,
                     store,
                 )
                 .await?;
             }
         }
     }
-    Ok(hash)
+    Ok(summary)
 }
 
 pub async fn detach_assembly(
@@ -1078,9 +1078,9 @@ mod tests {
 
         assert_eq!(att.gear, bike.id);
 
-        let mut hash = Summary::default();
+        let mut summary = Summary::default();
         let end_time = att
-            .shift(later_time(), bike2.id, &mut hash, &mut store)
+            .shift(later_time(), bike2.id, &mut summary, &mut store)
             .await?;
 
         // After shift, the wheel should be attached to bike2, not bike
@@ -1164,9 +1164,9 @@ mod tests {
             .await?
             .unwrap();
 
-        let mut hash = Summary::default();
+        let mut summary = Summary::default();
         let end_time = att
-            .shift(later_time(), bike2.id, &mut hash, &mut store)
+            .shift(later_time(), bike2.id, &mut summary, &mut store)
             .await?;
 
         // Should return a time in the future (MAX_TIME if nothing ends it)

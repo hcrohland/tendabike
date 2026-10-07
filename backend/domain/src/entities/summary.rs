@@ -3,7 +3,7 @@
 //! `Summary` is the only summary form: nine id-keyed maps, one per entity kind, each
 //! `HashMap<Id, Option<E>>`. A `Some(entity)` value is a live entity; a `None` value is a
 //! **tombstone** marking the entity as deleted. It is the single payload type the wire carries
-//! (ADR-0005 §2). A custom `Serialize` impl renders it as a uniform JSON object with
+//! (ADR-0005, executable spec #446 §2). A custom `Serialize` impl renders it as a uniform JSON object with
 //! stringified id keys and `null` for tombstones.
 
 use serde::Serialize;
@@ -18,7 +18,7 @@ use crate::*;
 
 /// The id-keyed map summary: nine maps, one per entity kind, keyed by the entity's id. A
 /// `Some(entity)` value is a live entity; a `None` value is a tombstone marking the entity as
-/// deleted. It is the single payload type the wire carries (ADR-0005 §2).
+/// deleted. It is the single payload type the wire carries (ADR-0005, executable spec #446 §2).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Summary {
     pub activities: HashMap<ActivityId, Option<Activity>>,

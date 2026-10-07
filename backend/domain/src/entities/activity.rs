@@ -420,11 +420,11 @@ impl Activity {
         let acts = store
             .activity_set_gear_if_null(user.user_id(), types, &gear_id)
             .await?;
-        let mut hash = Summary::default();
+        let mut summary = Summary::default();
         for act in acts {
-            hash += act.register(Factor::Add, store).await?;
+            summary += act.register(Factor::Add, store).await?;
         }
-        Ok(hash)
+        Ok(summary)
     }
 
     pub async fn rescan_all(
