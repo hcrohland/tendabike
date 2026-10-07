@@ -216,9 +216,7 @@ impl UserId {
                 None => Part::get_all(self, store).await?,
                 Some(shop) => shop.get_parts(*self, store).await?,
             };
-            // Temporary bridge to the map form: get_part_summary still returns the Vec form
-            // (issue #472 flips the service + user internals).
-            Summary::from(self.get_part_summary(parts, store).await?)
+            self.get_part_summary(parts, store).await?
         };
         Ok(Summary {
             activities: activities.into_iter().map(|a| (a.id, Some(a))).collect(),
@@ -237,7 +235,7 @@ impl UserId {
     ///
     /// # Returns
     ///
-    /// A `SummaryVec` with all entities related to parts`
+    /// A `Summary` with all entities related to parts
     ///
     /// # Errors
     ///
@@ -253,7 +251,7 @@ impl UserId {
                  + ServiceStore
                  + UsageStore
              ),
-    ) -> TbResult<SummaryVec> {
+    ) -> TbResult<Summary> {
         let mut usages = Vec::new();
         let mut attachments = Vec::new();
         let mut services = Vec::new();
@@ -271,13 +269,16 @@ impl UserId {
             plans.append(&mut splans);
             part_notes.append(&mut store.partnote_all_by_part(part.id).await?);
         }
-        Ok(SummaryVec {
-            parts,
-            usages,
-            attachments,
-            services,
-            part_notes,
-            plans,
+        Ok(Summary {
+            parts: parts.into_iter().map(|p| (p.id, Some(p))).collect(),
+            usages: usages.into_iter().map(|u| (u.id, Some(u))).collect(),
+            attachments: attachments
+                .into_iter()
+                .map(|a| (a.idx(), Some(a)))
+                .collect(),
+            services: services.into_iter().map(|s| (s.id, Some(s))).collect(),
+            part_notes: part_notes.into_iter().map(|n| (n.id, Some(n))).collect(),
+            plans: plans.into_iter().map(|p| (p.id, Some(p))).collect(),
             ..Default::default()
         })
     }

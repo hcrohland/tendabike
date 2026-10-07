@@ -163,8 +163,6 @@ impl Service {
                 .copied()
                 .expect("create reports the new service");
             old.successor = Some(new_id);
-            // Temporary bridge to the map form: `update_unchecked` still returns the
-            // `Vec` form (issue #472 flips the service internals).
             res += old.update_unchecked(store).await?;
             Ok(res)
         }
@@ -173,12 +171,12 @@ impl Service {
     async fn update_unchecked(
         self,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<SummaryVec> {
+    ) -> TbResult<Summary> {
         let usages = vec![self.calculate_usage(store).await?.update(store).await?];
         let services = vec![ServiceStore::update(store, self).await?];
-        Ok(SummaryVec {
-            usages,
-            services,
+        Ok(Summary {
+            usages: usages.into_iter().map(|u| (u.id, Some(u))).collect(),
+            services: services.into_iter().map(|s| (s.id, Some(s))).collect(),
             ..Default::default()
         })
     }
@@ -193,9 +191,7 @@ impl Service {
         self.part_id.checkuser(user, store).await?;
         let service = self.id.get(store).await?;
         self.usage = service.usage;
-        // Temporary bridge to the map form: `update_unchecked` still returns the
-        // `Vec` form (issue #472 flips the service internals).
-        self.update_unchecked(store).await.map(Summary::from)
+        self.update_unchecked(store).await
     }
 
     pub(crate) async fn get_usageids(
