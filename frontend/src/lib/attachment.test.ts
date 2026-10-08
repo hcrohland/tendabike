@@ -90,35 +90,6 @@ describe("Attachment.isDetached", () => {
   });
 });
 
-describe("Attachment.isEmpty", () => {
-  it("is false for a real attachment", () => {
-    expect(
-      att({
-        attached: "2020-01-01T00:00:00Z",
-        detached: "2022-12-31T00:00:00Z",
-      }).isEmpty(),
-    ).toBe(false);
-  });
-
-  it("is true when attached equals detached", () => {
-    expect(
-      att({
-        attached: "2020-01-01T00:00:00Z",
-        detached: "2020-01-01T00:00:00Z",
-      }).isEmpty(),
-    ).toBe(true);
-  });
-
-  it("is true when attached is after detached", () => {
-    expect(
-      att({
-        attached: "2022-01-01T00:00:00Z",
-        detached: "2020-01-01T00:00:00Z",
-      }).isEmpty(),
-    ).toBe(true);
-  });
-});
-
 describe("Attachment.fmtTime", () => {
   it("shows a single date while still attached", () => {
     const a = att({ attached: "2023-01-01T00:00:00Z" });

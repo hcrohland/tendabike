@@ -198,9 +198,8 @@ impl_summary_entity_ops!(Summary, users, UserPublic, id);
 
 // --- Live-entity accessors ---
 //
-// Written explicitly (no `macro_rules!`): the `get_` prefix cannot be spliced from the field
-// name in `macro_rules!` (no stable `concat_idents!`), and the body is a single line, so a
-// macro would add indirection without saving duplication.
+// Written explicitly (no `macro_rules!`): the body is one line per accessor, and a macro
+// would only take the getter name as a token, adding indirection without saving duplication.
 
 impl Summary {
     /// All live [`Activity`] in this summary, as an owned `Vec` (cloned; order

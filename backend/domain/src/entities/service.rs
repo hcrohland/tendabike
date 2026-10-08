@@ -46,7 +46,7 @@ impl ServiceId {
         // client's merge drops its row (issue #462)
         service.usage.delete(store).await?;
         ServiceStore::delete(store, self).await?;
-        summary.services.insert(self, None);
+        summary -= service;
         Ok(summary)
     }
 }
