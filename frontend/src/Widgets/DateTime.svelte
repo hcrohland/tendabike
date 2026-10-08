@@ -47,6 +47,10 @@
     format: "d. M yyyy - h:ii",
     startDate: min(),
     endDate: max(),
+    // the picker must format with the same locale the bind:value accessor
+    // parses with, or month names fail the round-trip across the locale
+    // boundary (issue #483: German client, English default)
+    i18n: pickerLocale,
     displayFormat: "d. M yyyy - h:ii",
     displayFormatType: "standard",
     todayBtn: false,
