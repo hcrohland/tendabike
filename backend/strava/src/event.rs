@@ -148,7 +148,7 @@ impl From<AspectType> for String {
     }
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Event {
     pub id: Option<i32>,
     pub object_type: ObjectType,
@@ -385,7 +385,26 @@ pub async fn insert_stop(store: &mut impl StravaStore) -> TbResult<()> {
     store.stravaevent_store(e).await
 }
 
-async fn get_event(
+/// Read the next queued Strava event for the user, with the queue's two
+/// read-side rules applied (ADR-0005, executable spec #446 §4.3):
+///
+/// - a `Stop` (the global rate-limit backoff) is checked against its expiry:
+///   still limited → `None` (the event stays queued); expired → deleted and
+///   the read recurses for the next event;
+/// - only the latest event per object is interesting: older events for the
+///   same object are deleted and the latest is returned.
+///
+/// The read runs inside the caller's transaction (the deletions above commit
+/// or roll back with it). `pub` because the per-user executor loop (the
+/// `tb_exec` crate) owns the "read next Strava event" step; reading the queue
+/// stays a Strava-side concern, so the function stays here rather than being
+/// inlined in the loop.
+///
+/// # Returns
+///
+/// The event to process, or `None` when the queue holds nothing interesting
+/// for this user (empty, or only an unexpired `Stop`).
+pub async fn get_event(
     user: &impl StravaSession,
     store: &mut impl StravaStore,
 ) -> TbResult<Option<Event>> {

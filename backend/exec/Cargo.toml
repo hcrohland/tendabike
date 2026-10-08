@@ -9,6 +9,9 @@ edition = { workspace = true }
 tb_domain = { workspace = true }
 tb_strava = { workspace = true }
 async-trait = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time"] }
 
 [lib]
 doctest = false

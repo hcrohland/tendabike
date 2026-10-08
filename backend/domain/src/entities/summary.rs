@@ -259,6 +259,22 @@ impl Summary {
     pub fn get_users(&self) -> Vec<UserPublic> {
         self.users.values().filter_map(|v| v.clone()).collect()
     }
+
+    /// Whether nothing was touched: all nine maps are empty. A tombstone
+    /// counts as touched (a delete is something to deliver). The executor
+    /// uses this to decide the push: an empty `Summary` pushes no stream
+    /// frame (ADR-0005, executable spec #446 §4.5).
+    pub fn is_empty(&self) -> bool {
+        self.activities.is_empty()
+            && self.parts.is_empty()
+            && self.attachments.is_empty()
+            && self.usages.is_empty()
+            && self.services.is_empty()
+            && self.plans.is_empty()
+            && self.part_notes.is_empty()
+            && self.shops.is_empty()
+            && self.users.is_empty()
+    }
 }
 
 #[cfg(test)]
@@ -292,6 +308,19 @@ mod tests {
         obj.insert("name".to_string(), json!(""));
         obj.insert("what".to_string(), json!(0));
         serde_json::from_value::<AttachmentDetail>(v).unwrap()
+    }
+
+    #[test]
+    fn is_empty_only_when_no_kind_touched() {
+        assert!(Summary::default().is_empty());
+        // A tombstone is touched content: a delete delivers something.
+        let mut s = Summary::default();
+        s.usages.insert(UsageId::new(), None);
+        assert!(!s.is_empty());
+        let mut s = Summary::default();
+        s.usages
+            .insert(UsageId::new(), Some(usage(UsageId::new(), 1)));
+        assert!(!s.is_empty());
     }
 
     #[test]
