@@ -175,24 +175,10 @@ impl ActivityId {
             .register(Factor::Sub, store)
             .await?;
         store.activity_delete(self).await?;
-        // The deleted activity is reported with its metrics zeroed, so the
-        // client zeroes its local copy — the Vec-era ghost, adapted to map
-        // access (issue #465).
-        let mut ghost = res
-            .activities
-            .remove(&self)
-            .flatten()
-            .expect("register reports the activity");
-        ghost.gear = None;
-        ghost.duration = 0;
-        ghost.time = None;
-        ghost.distance = None;
-        ghost.climb = None;
-        ghost.descend = None;
-        ghost.energy = None;
-        let mut summary = res;
-        summary.activities.insert(self, Some(ghost));
-        Ok(summary)
+        // The deleted activity is reported as a None tombstone, so the
+        // client's merge drops its row (issue #462).
+        res.activities.insert(self, None);
+        Ok(res)
     }
 }
 
@@ -973,19 +959,8 @@ mod tests {
             .delete(&test_session(), &mut store)
             .await?;
 
-        // the deleted activity is reported with its metrics zeroed
-        let mut expected_act = act;
-        expected_act.gear = None;
-        expected_act.duration = 0;
-        expected_act.time = None;
-        expected_act.distance = None;
-        expected_act.climb = None;
-        expected_act.descend = None;
-        expected_act.energy = None;
-        assert_eq!(
-            summary.activities,
-            HashMap::from([(expected_act.id, Some(expected_act))])
-        );
+        // the deleted activity is reported as a None tombstone
+        assert_eq!(summary.activities, HashMap::from([(act.id, None)]));
 
         // the bike and all attached parts are affected again
         let part_ids: HashSet<PartId> = summary.parts.values().flatten().map(|p| p.id).collect();
@@ -1167,15 +1142,9 @@ mod tests {
         let summary = ActivityId::new(100)
             .delete(&test_session(), &mut store)
             .await?;
+        // After delete, the activity is a None tombstone
         assert_eq!(summary.activities.len(), 1);
-        // After delete, gear should be None and duration/time zeroed
-        assert_eq!(
-            summary.activities[&ActivityId::new(100)]
-                .as_ref()
-                .unwrap()
-                .gear,
-            None
-        );
+        assert_eq!(summary.activities[&ActivityId::new(100)], None);
         Ok(())
     }
 
