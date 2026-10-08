@@ -12,6 +12,7 @@ use std::ops::{Deref, DerefMut};
 
 use crate::into_domain;
 use tb_domain::TbResult;
+use tb_exec::{Txn, TxnSource};
 
 pub struct SqlxConn<'conn>(PgTransaction<'conn>);
 
@@ -45,13 +46,13 @@ impl<'c> SqlxConn<'c> {
     /// `backend/docs/tests/domain.md`, "Transactional semantics (issue
     /// #409)").
     ///
-    /// `pub` because `SqlxConn` is a public type: the store-seam integration
-    /// suite (`tests/store_seam.rs`) is a separate crate that can only reach
-    /// the public API. Nothing in the workspace calls it yet — production
-    /// code commits, and the seam suite rolls back implicitly by dropping
-    /// the `SqlxConn` (a dropped `PgTransaction` rolls back) — but it stays
-    /// `pub` as the explicit teardown for a transaction an external caller
-    /// does not commit.
+    /// `pub` because `SqlxConn` is a public type: the per-user executor loop
+    /// (`tb_exec`) calls it when a message fails inside its transaction
+    /// (spec #446 §4.3: `commit` on success, `rollback` on failure), and the
+    /// store-seam integration suite (`tests/store_seam.rs`) calls it — or
+    /// rolls back implicitly by dropping the `SqlxConn` (a dropped
+    /// `PgTransaction` rolls back) — so a transaction an external caller does
+    /// not commit is torn down explicitly.
     pub async fn rollback(self) -> TbResult<()> {
         self.into_inner()
             .rollback()
@@ -72,6 +73,27 @@ impl<'c> SqlxConn<'c> {
             .await
             .map_err(into_domain)
             .map(|_| ())
+    }
+}
+
+/// The transaction lifecycle named for the per-user executor loop
+/// (`tb_exec`, spec #446 §5): every `SqlxConn` is a transaction, and the
+/// loop is the caller the `Txn` seam exists for — it `commit`s after a
+/// successful message and `rollback`s after a failed one.
+///
+/// Both methods delegate to the inherent `commit`/`rollback` (which stay:
+/// the web layer and the seam suite keep calling them on the concrete type;
+/// the traits exist so the loop can be generic over the source).
+#[async_trait::async_trait]
+impl<'c> Txn for SqlxConn<'c> {
+    async fn commit(self) -> TbResult<()> {
+        // The inherent method (same name, same receiver) wins method
+        // resolution over this trait method; that is the delegation.
+        self.commit().await
+    }
+
+    async fn rollback(self) -> TbResult<()> {
+        self.rollback().await
     }
 }
 
@@ -122,6 +144,24 @@ impl DbPool {
                 .connect_lazy(database_url)
                 .expect("valid database url"),
         )
+    }
+}
+
+/// The transaction source for the per-user executor loop (`tb_exec`, spec
+/// #446 §5). `DbPool` is `Clone` + `Send` + `Sync`, so the loop takes a
+/// clone by value and keeps its own handle — no `Arc` is needed.
+///
+/// The impl delegates to the inherent `begin` (which the web layer and the
+/// seam suite keep calling on the concrete type); the trait exists so the
+/// loop can be generic over the source and never name the pool.
+#[async_trait::async_trait]
+impl TxnSource for DbPool {
+    type Conn = SqlxConn<'static>;
+
+    async fn begin(&self) -> TbResult<SqlxConn<'static>> {
+        // The inherent method (same name, same receiver) wins method
+        // resolution over this trait method; that is the delegation.
+        self.begin().await
     }
 }
 

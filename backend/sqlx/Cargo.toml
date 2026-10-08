@@ -19,6 +19,7 @@ anyhow = { workspace = true }
 time = { workspace = true }
 serde_json = { workspace = true }
 tb_strava = { workspace = true }
+tb_exec = { workspace = true }
 tb_domain = { workspace = true }
 uuid = { workspace = true }
 oauth2 = { workspace = true }
@@ -31,3 +32,4 @@ tb_domain = { workspace = true, features = ["test-support"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 sqlx = { version = "0.8", features = ["postgres", "runtime-tokio", "time", "uuid", "macros", "chrono"] }
 dotenvy = "0.15"
+serde = { workspace = true }
