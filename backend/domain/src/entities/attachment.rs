@@ -2037,7 +2037,7 @@ mod tests {
 
     /// dispose_assembly() disposes a part that is still attached
     #[tokio::test]
-    async fn dispose_assembly_error_if_attached_after_time() -> TbResult<()> {
+    async fn dispose_assembly_disposes_attached_part() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
         let session = TestSession::new(UserId::from(1));
 
@@ -2117,22 +2117,24 @@ mod tests {
         )
         .await?;
 
-        // Create an active attachment (attached at attachment_time, not yet detached)
-        store
-            .attachment_create(Attachment::new(
-                chain.id,
-                attachment_time(),
-                bike.id,
-                CHAIN,
-                MAX_TIME,
-            ))
-            .await?;
+        // Attach the chain at attachment_time through the domain op (active:
+        // not yet detached; round_time is a no-op on this 15-minute boundary).
+        let _ = attach_assembly(
+            &session,
+            chain.id,
+            attachment_time(),
+            bike.id,
+            BIKE,
+            false,
+            &mut store,
+        )
+        .await?;
 
         // Detaching at the attach time is a pure delete: the deleted
         // attachment is reported as a None tombstone under its idx key.
         let summary =
             detach_assembly(&session, chain.id, attachment_time(), false, &mut store).await?;
-        let key = Attachment::new(chain.id, attachment_time(), bike.id, CHAIN, MAX_TIME)
+        let key = Attachment::new(chain.id, attachment_time(), bike.id, BIKE, MAX_TIME)
             .add_details("", 0.into())
             .idx();
         assert_eq!(summary.attachments.len(), 1);
