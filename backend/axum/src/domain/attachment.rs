@@ -11,8 +11,9 @@ use log::debug;
 use serde::Deserialize;
 use time::OffsetDateTime;
 
-use crate::{DbPool, RequestSession, appstate::AppState, error::ApiResult};
+use crate::{RequestSession, appstate::AppState, error::ApiResult};
 use tb_domain::{PartId, PartTypeId, Summary};
+use tb_exec::{Txn, TxnSource};
 
 /// Description of an Attach or Detach request
 
@@ -32,12 +33,15 @@ pub struct Event {
 }
 
 /// route for attach API
-async fn attach_rt(
+async fn attach_rt<S>(
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(event): Json<Event>,
-) -> ApiResult<Summary> {
-    let mut store = store.begin().await?;
+) -> ApiResult<Summary>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     debug!("attach {event:?}");
 
     let Event {
@@ -56,12 +60,15 @@ async fn attach_rt(
 }
 
 /// route for detach API
-async fn detach_rt(
+async fn detach_rt<S>(
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(event): Json<Event>,
-) -> ApiResult<Summary> {
-    let mut store = store.begin().await?;
+) -> ApiResult<Summary>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     debug!("detach {event:?}");
     let Event {
         part_id, time, all, ..
@@ -81,12 +88,15 @@ pub struct Dispose {
     all: bool,
 }
 
-async fn dispose_rt(
+async fn dispose_rt<S>(
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(event): Json<Dispose>,
-) -> ApiResult<Summary> {
-    let mut store = store.begin().await?;
+) -> ApiResult<Summary>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     debug!("{event:?}");
     let Dispose {
         part_id: part,
@@ -100,12 +110,15 @@ async fn dispose_rt(
     Ok(res)
 }
 
-async fn recover_rt(
+async fn recover_rt<S>(
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(event): Json<Dispose>,
-) -> ApiResult<Summary> {
-    let mut store = store.begin().await?;
+) -> ApiResult<Summary>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     debug!("Recover {event:?}");
     let Dispose {
         part_id: part, all, ..
@@ -117,7 +130,7 @@ async fn recover_rt(
     Ok(res)
 }
 
-pub(crate) fn router() -> Router<AppState> {
+pub(crate) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
     Router::new()
         .route("/attach", post(attach_rt))
         .route("/detach", post(detach_rt))

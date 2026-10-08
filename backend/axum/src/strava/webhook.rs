@@ -56,9 +56,11 @@ use axum::{
 use log::{info, trace};
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{ApiResult, AxumAdmin, DbPool, RequestSession};
+use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState};
 use tb_domain::{Error, OnboardingStatus, Summary, TbResult, UserStore};
+use tb_exec::{Txn, TxnSource};
 use tb_strava::StravaSession;
+use tb_strava::StravaStore;
 use tb_strava::event::{InEvent, process};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -90,22 +92,30 @@ impl Hub {
 
 const VERIFY_TOKEN: &str = "tendabike_strava";
 
-pub(crate) async fn hooks(
+pub(crate) async fn hooks<S>(
     mut user: RequestSession,
-    State(store): State<DbPool>,
-) -> ApiResult<Summary> {
-    let mut store = store.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<Summary>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
+{
+    let mut store = state.source.begin().await?;
     let res = process(&mut user, &mut store).await;
     store.commit().await?;
     Ok(Json(res?))
 }
 
-pub(crate) async fn create_event(
-    State(store): State<DbPool>,
+pub(crate) async fn create_event<S>(
+    State(state): State<AppState<S>>,
     Json(event): axum::extract::Json<InEvent>,
-) -> ApiResult<()> {
+) -> ApiResult<()>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
+{
     trace!("Received {event:#?}");
-    let mut store = store.begin().await?;
+    let mut store = state.source.begin().await?;
     event.accept(&mut store).await?;
     store.commit().await?;
     Ok(Json(()))
@@ -124,12 +134,16 @@ pub(super) struct SyncQuery {
     migrate: bool,
 }
 
-pub(super) async fn sync_api(
+pub(super) async fn sync_api<S>(
     _u: AxumAdmin,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     Query(query): Query<SyncQuery>,
-) -> ApiResult<()> {
-    let mut store = store.begin().await?;
+) -> ApiResult<()>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
+{
+    let mut store = state.source.begin().await?;
     let user_id: Option<tb_domain::UserId> = query.user_id.map(|u| u.into());
     let res = tb_strava::event::sync_users(user_id, query.time, query.migrate, &mut store)
         .await
@@ -139,12 +153,16 @@ pub(super) async fn sync_api(
     Ok(res)
 }
 
-pub(super) async fn sync(
+pub(super) async fn sync<S>(
     Path(tbid): Path<i32>,
     admin: AxumAdmin,
-    State(store): State<DbPool>,
-) -> ApiResult<Summary> {
-    let mut store = store.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<Summary>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
+{
+    let mut store = state.source.begin().await?;
     let mut user = RequestSession::create_from_id(admin, tbid.into(), &mut store).await?;
     let res = process(&mut user, &mut store).await.map_err(|e| match e {
         Error::NotAuth(_) => Error::AnyFailure(anyhow::anyhow!("User not authenticated at Strava")),
@@ -164,12 +182,16 @@ pub(super) struct InitialSyncQuery {
 /// This endpoint allows users to trigger their first activity sync after registration.
 /// It can only be called once - if the user has already completed initial sync, it returns an error.
 /// Returns the updated user object.
-pub(crate) async fn trigger_initial_sync(
+pub(crate) async fn trigger_initial_sync<S>(
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     Query(query): Query<InitialSyncQuery>,
-) -> ApiResult<tb_domain::User> {
-    let mut store = store.begin().await?;
+) -> ApiResult<tb_domain::User>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
+{
+    let mut store = state.source.begin().await?;
 
     // Check if user has already completed initial sync
     let user_data = user.tb_id().read(&mut store).await?;
@@ -193,11 +215,14 @@ pub(crate) async fn trigger_initial_sync(
 /// This endpoint allows users to postpone the initial activity sync.
 /// It can only be called if the user is still in pending status.
 /// Returns the updated user object.
-pub(crate) async fn postpone_initial_sync(
+pub(crate) async fn postpone_initial_sync<S>(
     user: RequestSession,
-    State(store): State<DbPool>,
-) -> ApiResult<tb_domain::User> {
-    let mut store = store.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<tb_domain::User>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
 
     // Check if user is still pending
     let user_data = user.tb_id().read(&mut store).await?;

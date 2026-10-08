@@ -13,3 +13,6 @@ mimalloc = { version = "0.1", features = ["secure"] }
 anyhow = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tb_axum = { workspace = true }
+tb_sqlx = { workspace = true }
+tower-sessions-sqlx-store = { version = "0.15", features = ["postgres"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

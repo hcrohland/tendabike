@@ -28,44 +28,54 @@ use axum::{
 use http::StatusCode;
 use log::trace;
 
-use crate::{ApiResult, DbPool, RequestSession, appstate::AppState, error::AppError};
+use crate::{ApiResult, RequestSession, appstate::AppState, error::AppError};
 use tb_domain::{Service, ServicePlan, ServicePlanId};
+use tb_exec::{Txn, TxnSource};
 
-pub(super) fn router() -> Router<AppState> {
+pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
     Router::new()
         .route("/", post(create).put(update))
         .route("/{id}", delete(delete_plan))
 }
 
-async fn create(
+async fn create<S>(
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(plan): Json<ServicePlan>,
-) -> Result<(StatusCode, Json<ServicePlan>), AppError> {
+) -> Result<(StatusCode, Json<ServicePlan>), AppError>
+where
+    S: TxnSource + Clone + 'static,
+{
     trace!("ServicePlan::create");
-    let mut store = store.begin().await?;
+    let mut store = state.source.begin().await?;
     let summary = plan.create(&user, &mut store).await?;
     store.commit().await?;
     Ok((StatusCode::CREATED, Json(summary)))
 }
 
-async fn update(
+async fn update<S>(
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(plan): Json<ServicePlan>,
-) -> ApiResult<ServicePlan> {
-    let mut store = store.begin().await?;
+) -> ApiResult<ServicePlan>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let res = plan.update(&user, &mut store).await.map(Json)?;
     store.commit().await?;
     Ok(res)
 }
 
-async fn delete_plan(
+async fn delete_plan<S>(
     user: RequestSession,
-    State(pool): State<DbPool>,
+    State(state): State<AppState<S>>,
     Path(id): Path<ServicePlanId>,
-) -> ApiResult<Vec<Service>> {
-    let mut store = pool.begin().await?;
+) -> ApiResult<Vec<Service>>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let res = id.delete(&user, &mut store).await.map(Json)?;
     store.commit().await?;
     Ok(res)

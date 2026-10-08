@@ -27,10 +27,11 @@ use axum::{
 };
 use serde::Deserialize;
 use tb_domain::{Error, PartId, PartNote, PartNoteId};
+use tb_exec::{Txn, TxnSource};
 use time::OffsetDateTime;
 
 use crate::{
-    DbPool, RequestSession,
+    RequestSession,
     appstate::AppState,
     error::{ApiResult, AppError},
 };
@@ -47,7 +48,7 @@ pub struct UpdateTextNote {
     pub name: String,
 }
 
-pub(super) fn router() -> Router<AppState> {
+pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
     Router::new()
         .route("/{part}/notes", get(list_notes).post(create_text_note))
         .route("/{part}/notes/file", post(create_file_note))
@@ -62,24 +63,30 @@ pub(super) fn router() -> Router<AppState> {
         .layer(DefaultBodyLimit::max(10 * 1024 * 1024))
 }
 
-async fn list_notes(
+async fn list_notes<S>(
     Path(part): Path<PartId>,
     user: RequestSession,
-    State(store): State<DbPool>,
-) -> ApiResult<Vec<PartNote>> {
-    let mut store = store.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<Vec<PartNote>>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let notes = part.notes(&user, &mut store).await?;
     store.commit().await?;
     Ok(Json(notes))
 }
 
-async fn create_text_note(
+async fn create_text_note<S>(
     Path(part): Path<PartId>,
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(NewTextNote { name }): Json<NewTextNote>,
-) -> Result<(StatusCode, Json<PartNote>), AppError> {
-    let mut store = store.begin().await?;
+) -> Result<(StatusCode, Json<PartNote>), AppError>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let note = part
         .note_create_text(&user, name, OffsetDateTime::now_utc(), &mut store)
         .await?;
@@ -134,16 +141,19 @@ async fn parse_note_file(mut multipart: Multipart) -> Result<ParsedNoteFile, App
     })
 }
 
-async fn create_file_note(
+async fn create_file_note<S>(
     Path(part): Path<PartId>,
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     multipart: Multipart,
-) -> Result<(StatusCode, Json<PartNote>), AppError> {
+) -> Result<(StatusCode, Json<PartNote>), AppError>
+where
+    S: TxnSource + Clone + 'static,
+{
     let parsed = parse_note_file(multipart).await?;
     let filename = parsed.filename.unwrap_or_else(|| "file".to_string());
     let name = parsed.name.unwrap_or_else(|| filename.clone());
-    let mut store = store.begin().await?;
+    let mut store = state.source.begin().await?;
     let note = part
         .note_create_file(
             &user,
@@ -160,12 +170,15 @@ async fn create_file_note(
     Ok((StatusCode::CREATED, Json(note)))
 }
 
-async fn get_note_file(
+async fn get_note_file<S>(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
-    State(store): State<DbPool>,
-) -> Result<Response, AppError> {
-    let mut store = store.begin().await?;
+    State(state): State<AppState<S>>,
+) -> Result<Response, AppError>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let note = id.note(&user, &mut store).await?;
     let data = note.file(&mut store).await?;
     store.commit().await?;
@@ -205,26 +218,32 @@ async fn get_note_file(
     Ok((headers, data).into_response())
 }
 
-async fn update_text_note(
+async fn update_text_note<S>(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(UpdateTextNote { name }): Json<UpdateTextNote>,
-) -> ApiResult<PartNote> {
-    let mut store = store.begin().await?;
+) -> ApiResult<PartNote>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let note = id.update_text(&user, name, &mut store).await?;
     store.commit().await?;
     Ok(Json(note))
 }
 
-async fn update_file_note(
+async fn update_file_note<S>(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     multipart: Multipart,
-) -> ApiResult<PartNote> {
+) -> ApiResult<PartNote>
+where
+    S: TxnSource + Clone + 'static,
+{
     let parsed = parse_note_file(multipart).await?;
-    let mut store = store.begin().await?;
+    let mut store = state.source.begin().await?;
     let note = id
         .update_file(
             &user,
@@ -240,23 +259,29 @@ async fn update_file_note(
     Ok(Json(note))
 }
 
-async fn delete_note(
+async fn delete_note<S>(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
-    State(store): State<DbPool>,
-) -> ApiResult<PartNoteId> {
-    let mut store = store.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<PartNoteId>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let res = id.delete(&user, &mut store).await?;
     store.commit().await?;
     Ok(Json(res))
 }
 
-async fn remove_file_note(
+async fn remove_file_note<S>(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
-    State(store): State<DbPool>,
-) -> ApiResult<PartNote> {
-    let mut store = store.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<PartNote>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let note = id.remove_file(&user, &mut store).await?;
     store.commit().await?;
     Ok(Json(note))

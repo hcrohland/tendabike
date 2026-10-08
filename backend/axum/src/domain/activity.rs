@@ -14,15 +14,19 @@ use axum::{
     routing::{delete, get, post},
 };
 
-use crate::{AxumAdmin, DbPool, RequestSession, appstate::AppState, error::ApiResult};
+use crate::{AxumAdmin, RequestSession, appstate::AppState, error::ApiResult};
 use tb_domain::{Activity, ActivityId, PartId, Summary};
+use tb_exec::{Txn, TxnSource};
 
-async fn def_part_api(
+async fn def_part_api<S>(
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(gear_id): Json<PartId>,
-) -> ApiResult<Summary> {
-    let mut store = store.begin().await?;
+) -> ApiResult<Summary>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let res = Activity::set_default_part(gear_id, &user, &mut store)
         .await
         .map(Json)?;
@@ -30,20 +34,26 @@ async fn def_part_api(
     Ok(res)
 }
 
-async fn rescan(_u: AxumAdmin, State(store): State<DbPool>) -> ApiResult<()> {
-    let mut store = store.begin().await?;
+async fn rescan<S>(_u: AxumAdmin, State(state): State<AppState<S>>) -> ApiResult<()>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     Activity::rescan_all(&mut store).await?;
     store.commit().await?;
     Ok(Json(()))
 }
 
 /// web interface to read an activity
-async fn act_get(
+async fn act_get<S>(
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     Path(id): Path<i64>,
-) -> ApiResult<Activity> {
-    let mut store = store.begin().await?;
+) -> ApiResult<Activity>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     Ok(ActivityId::new(id)
         .read(&user, &mut store)
         .await
@@ -51,30 +61,36 @@ async fn act_get(
 }
 
 /// web interface to change an activity
-async fn act_put(
+async fn act_put<S>(
     Path(id): Path<i64>,
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(activity): Json<Activity>,
-) -> ApiResult<Summary> {
+) -> ApiResult<Summary>
+where
+    S: TxnSource + Clone + 'static,
+{
     if ActivityId::from(id) != activity.id {
         Err(tb_domain::Error::BadRequest(
             "ActivityId does not match activity".to_string(),
         ))?
     }
-    let mut store = store.begin().await?;
+    let mut store = state.source.begin().await?;
     let res = activity.update(&user, &mut store).await.map(Json)?;
     store.commit().await?;
     Ok(res)
 }
 
 /// web interface to delete an activity
-async fn act_delete(
+async fn act_delete<S>(
     Path(id): Path<i64>,
     user: RequestSession,
-    State(store): State<DbPool>,
-) -> ApiResult<Summary> {
-    let mut store = store.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<Summary>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let res = ActivityId::new(id)
         .delete(&user, &mut store)
         .await
@@ -83,18 +99,21 @@ async fn act_delete(
     Ok(res)
 }
 
-async fn descend(
+async fn descend<S>(
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     data: String,
-) -> ApiResult<(Summary, Vec<String>, Vec<String>)> {
-    let mut store = store.begin().await?;
+) -> ApiResult<(Summary, Vec<String>, Vec<String>)>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let (summary, a, b) = Activity::csv2descend(data.as_bytes(), &user, &mut store).await?;
     store.commit().await?;
     Ok(Json((summary, a, b)))
 }
 
-pub(crate) fn router() -> Router<AppState> {
+pub(crate) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
     Router::new()
         .route("/descend", post(descend))
         .route("/{id}", delete(act_delete).get(act_get).put(act_put))

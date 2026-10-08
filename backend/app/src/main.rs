@@ -3,6 +3,8 @@
 use std::{net::SocketAddr, path::Path};
 
 use mimalloc::MiMalloc;
+use tower_sessions_sqlx_store::PostgresStore;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -27,5 +29,18 @@ async fn main() -> anyhow::Result<()> {
         .parse::<SocketAddr>()
         .unwrap_or_else(|_| panic!("BIND_ADDR '{addr}' could not be parsed"));
 
-    Ok(tb_axum::start(&database_url, path, addr).await?)
+    // The logging subscriber moved here from `tb_axum::start` with the web
+    // layer becoming storage-agnostic: the composition root owns process setup.
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "debug".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    let pool = tb_sqlx::DbPool::new(&database_url).await?;
+    let session_store = PostgresStore::new(pool.raw());
+
+    Ok(tb_axum::start(pool, session_store, path, addr).await?)
 }
