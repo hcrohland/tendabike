@@ -42,9 +42,11 @@ impl ServiceId {
             summary.services.insert(s.id, Some(s));
         }
 
-        // delete service
+        // delete service: it is reported as a None tombstone, so the
+        // client's merge drops its row (issue #462)
         service.usage.delete(store).await?;
         ServiceStore::delete(store, self).await?;
+        summary.services.insert(self, None);
         Ok(summary)
     }
 }
@@ -263,6 +265,7 @@ mod tests {
     use crate::test_support::{MemStore, TestSession, fixtures, part_type_ids};
 
     use fixtures::{sample_purchase_date, test_session, test_user};
+    use std::collections::HashMap;
 
     fn sample_time() -> OffsetDateTime {
         time::macros::datetime!(2024-06-15 10:00 UTC)
@@ -772,6 +775,31 @@ mod tests {
         let after = usage_id.read(&mut store).await;
         // The usage was updated during Service::create and persists in MemStore.usages
         assert!(after.is_ok());
+        Ok(())
+    }
+
+    /// S-14b: Service delete tombstones the deleted service: the summary
+    /// carries a None entry for it, so the client's merge drops its row.
+    #[tokio::test]
+    async fn service_delete_reports_tombstone() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
+        let t = sample_time();
+
+        let summary = Service::create(
+            part.id,
+            t,
+            "Service".to_string(),
+            "".to_string(),
+            None,
+            vec![],
+            &mut store,
+        )
+        .await?;
+        let svc = summary.services.values().flatten().next().unwrap().clone();
+
+        let summary = svc.id.delete(&test_session(), &mut store).await?;
+        assert_eq!(summary.services, HashMap::from([(svc.id, None)]));
         Ok(())
     }
 

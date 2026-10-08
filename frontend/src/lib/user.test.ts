@@ -232,6 +232,20 @@ describe("updateSummary", () => {
     expect(stateValues(parts)).toHaveLength(0);
   });
 
+  it("a null activity (tombstone) deletes the row it names", () => {
+    setSummary(summaryContent());
+    updateSummary(summary({ activities: { "100": null } }));
+    expect(activities[100]).toBeUndefined();
+    expect(stateValues(activities)).toHaveLength(0);
+  });
+
+  it("a null service (tombstone) deletes the row it names", () => {
+    setSummary(summaryContent());
+    updateSummary(summary({ services: { S1: null } }));
+    expect(services["S1"]).toBeUndefined();
+    expect(stateValues(services)).toHaveLength(0);
+  });
+
   it("a live attachment is upserted under the wire key, which is the frontend idx", () => {
     // The wire key is the frontend idx (part_id + "/" + attached ms), the same
     // key the client map uses for the row.

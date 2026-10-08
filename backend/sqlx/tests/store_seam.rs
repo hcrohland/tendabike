@@ -1338,7 +1338,7 @@ async fn activity_upsert_creates_and_accounts() -> tb_domain::TbResult<()> {
 }
 
 /// Deleting an activity reverts the create: usage back at baseline and the
-/// activity reported zeroed (mirrors
+/// activity reported as a None tombstone (mirrors
 /// `activity_delete_reverts_bike_and_attached_part_usage`).
 #[tokio::test]
 #[ignore]
@@ -1360,19 +1360,8 @@ async fn activity_delete_reverts_usage() -> tb_domain::TbResult<()> {
             .delete(&test_session(), &mut store)
             .await?;
 
-        // The deleted activity is reported with its metrics zeroed.
-        let mut expected = act;
-        expected.gear = None;
-        expected.duration = 0;
-        expected.time = None;
-        expected.distance = None;
-        expected.climb = None;
-        expected.descend = None;
-        expected.energy = None;
-        assert_eq!(
-            summary.activities,
-            HashMap::from([(expected.id, Some(expected))])
-        );
+        // The deleted activity is reported as a None tombstone.
+        assert_eq!(summary.activities, HashMap::from([(act.id, None)]));
 
         // The bike and all attached parts are affected again.
         let part_ids: HashSet<PartId> = summary.parts.values().flatten().map(|p| p.id).collect();
