@@ -54,7 +54,7 @@ No new infrastructure needed for activity tests — all store methods are in pla
 | A-12 | `activity_upsert_updates_existing` | Same ID as existing → calls `replace()` which unregisters old + registers new |
 | A-13 | `activity_update_returns_summary` | Update activity → Summary contains 1 updated activity entry |
 | A-14 | `activity_delete_unregisters_usage` | Delete activity → all part usages are decremented (negative Usage values) |
-| A-15 | `activity_delete_returns_zeroed_activity` | After delete, activity in Summary has `gear=None`, `time/duration=0`, all metrics `None` |
+| A-15 | `activity_delete_returns_summary` | After delete, the activity is reported as a `None` tombstone under its id in the Summary |
 
 ---
 
@@ -174,7 +174,7 @@ No new infrastructure needed for activity tests — all store methods are in pla
 | A-62 | `activity_delete_missing_activity_returns_not_found` | Delete non-existent activity → Error::NotFound |
 | A-63 | `activity_update_missing_activity_returns_not_found` | Update non-existent activity → Error::NotFound |
 | A-64 | `activity_upsert_preserves_original_id` | Insert activity with custom ID → stored with same ID, not auto-generated |
-| A-65 | `activity_delete_preserves_activity_record` | After delete, the Activity row still exists (with zeroed fields) but usage is cleaned up |
+| A-65 | `activity_delete_reverts_bike_and_attached_part_usage` | After delete, every affected usage row (bike, attached parts, attachments) is back at the prepopulated baseline and the activity is a `None` tombstone (seam: `activity_delete_reverts_usage`) |
 | A-66 | `activity_with_zero_duration_still_registered` | Activity with duration=0 but all metrics present → usage still propagated correctly |
 | A-67 | `activity_with_only_climb_no_other_metrics` | Only climb is Some → Usage defaults other Option fields to 0, descend=climb |
 

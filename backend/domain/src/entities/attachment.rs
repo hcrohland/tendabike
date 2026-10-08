@@ -213,16 +213,15 @@ impl Attachment {
         // store all usages
         Usage::update_vec(&usages, store).await?;
 
-        // mark attachment as deleted for client!
-        let mut att = att;
-        att.detached = att.attached;
-        att.usage = UsageId::new();
+        // the deleted attachment is reported as a None tombstone under its
+        // idx key, so the client's merge drops its row (issue #462)
         let detail = att.add_details("", 0.into());
-        Ok(Summary {
-            attachments: [(detail.idx(), Some(detail))].into_iter().collect(),
+        let mut summary = Summary {
             usages: usages.into_iter().map(|u| (u.id, Some(u))).collect(),
             ..Default::default()
-        })
+        };
+        summary -= detail;
+        Ok(summary)
     }
 
     /// add redundant details for client simplicity
@@ -2036,9 +2035,9 @@ mod tests {
         Ok(())
     }
 
-    /// dispose_assembly() returns error if part is currently attached
+    /// dispose_assembly() disposes a part that is still attached
     #[tokio::test]
-    async fn dispose_assembly_error_if_attached_after_time() -> TbResult<()> {
+    async fn dispose_assembly_disposes_attached_part() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
         let session = TestSession::new(UserId::from(1));
 
@@ -2066,23 +2065,82 @@ mod tests {
         )
         .await?;
 
-        // Create an active attachment (attached at attachment_time, not yet detached)
-        store
-            .attachment_create(Attachment::new(
-                chain.id,
-                attachment_time(),
-                bike.id,
-                CHAIN,
-                MAX_TIME,
-            ))
-            .await?;
+        // Attach the chain at attachment_time through the domain op (active:
+        // not yet detached; round_time is a no-op on this 15-minute boundary).
+        let _ = attach_assembly(
+            &session,
+            chain.id,
+            attachment_time(),
+            bike.id,
+            BIKE,
+            false,
+            &mut store,
+        )
+        .await?;
 
-        // Dispose while attached - should detach and dispose successfully
+        // Dispose while still attached — dispose_assembly never detaches, it only
+        // rejects attachments detached after the given time; this one succeeds.
         let result =
             dispose_assembly(&session, chain.id, attachment_time(), false, &mut store).await;
 
-        // Should succeed (detaches first, then disposes)
         assert!(result.is_ok());
+
+        Ok(())
+    }
+
+    /// Detaching a part at the time its row started is a pure delete: the
+    /// deleted attachment is reported as a None tombstone under its idx key.
+    #[tokio::test]
+    async fn detach_at_attach_time_reports_tombstone() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let session = TestSession::new(UserId::from(1));
+
+        let bike = Part::create(
+            "Main Bike".to_string(),
+            "TendaBike".to_string(),
+            "Standard".to_string(),
+            BIKE,
+            None,
+            sample_purchase_date() - time::Duration::days(365),
+            &session,
+            &mut store,
+        )
+        .await?;
+
+        let chain = Part::create(
+            "Test Chain".to_string(),
+            "Shimano".to_string(),
+            "CN-M510".to_string(),
+            CHAIN,
+            None,
+            sample_purchase_date(),
+            &session,
+            &mut store,
+        )
+        .await?;
+
+        // Attach the chain at attachment_time through the domain op (active:
+        // not yet detached; round_time is a no-op on this 15-minute boundary).
+        let _ = attach_assembly(
+            &session,
+            chain.id,
+            attachment_time(),
+            bike.id,
+            BIKE,
+            false,
+            &mut store,
+        )
+        .await?;
+
+        // Detaching at the attach time is a pure delete: the deleted
+        // attachment is reported as a None tombstone under its idx key.
+        let summary =
+            detach_assembly(&session, chain.id, attachment_time(), false, &mut store).await?;
+        let key = Attachment::new(chain.id, attachment_time(), bike.id, BIKE, MAX_TIME)
+            .add_details("", 0.into())
+            .idx();
+        assert_eq!(summary.attachments.len(), 1);
+        assert_eq!(summary.attachments[&key], None);
 
         Ok(())
     }

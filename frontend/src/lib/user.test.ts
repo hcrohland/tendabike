@@ -232,6 +232,20 @@ describe("updateSummary", () => {
     expect(stateValues(parts)).toHaveLength(0);
   });
 
+  it("a null activity (tombstone) deletes the row it names", () => {
+    seedContent();
+    updateSummary(summary({ activities: { "100": null } }));
+    expect(activities[100]).toBeUndefined();
+    expect(stateValues(activities)).toHaveLength(0);
+  });
+
+  it("a null service (tombstone) deletes the row it names", () => {
+    seedContent();
+    updateSummary(summary({ services: { S1: null } }));
+    expect(services["S1"]).toBeUndefined();
+    expect(stateValues(services)).toHaveLength(0);
+  });
+
   it("a live attachment is upserted under the wire key, which is the frontend idx", () => {
     // The wire key is the frontend idx (part_id + "/" + attached ms), the same
     // key the client map uses for the row.
@@ -261,12 +275,13 @@ describe("updateSummary", () => {
     expect(stateValues(attachments)).toHaveLength(0);
   });
 
-  it("an empty attachment (the detach flow) removes the row", () => {
+  it("an empty attachment is upserted, not deleted", () => {
     seedContent();
+    const key = "1/" + new Date("2024-01-01T00:00:00Z").getTime();
     updateSummary(
       summary({
         attachments: {
-          ["1/" + new Date("2024-01-01T00:00:00Z").getTime()]: {
+          [key]: {
             part_id: 1,
             attached: "2024-01-01T00:00:00Z",
             detached: "2024-01-01T00:00:00Z",
@@ -278,6 +293,9 @@ describe("updateSummary", () => {
         },
       }),
     );
-    expect(stateValues(attachments)).toHaveLength(0);
+    expect(stateValues(attachments)).toHaveLength(1);
+    expect(attachments[key]!.attached.getTime()).toBe(
+      attachments[key]!.detached.getTime(),
+    );
   });
 });

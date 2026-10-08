@@ -135,10 +135,8 @@ export function setSummary(data: Summary) {
 /// Attachment keying: the wire key is the client's `Attachment.idx`
 /// (`part_id + "/" + attached ms`, which the deep-link scheme depends on), so
 /// a `null` attachment names the client row its `deleteItem` removes. The
-/// backend's `AttachmentDetail::idx` produces the same format. Attachment
-/// deletion may also arrive as a live but empty value
-/// (`attached >= detached`), which the collection's delete predicate removes
-/// — the detach flow works unchanged.
+/// backend's `AttachmentDetail::idx` produces the same format; any live
+/// attachment, an empty window included, is upserted under it.
 export function updateSummary(data?: Summary) {
   if (!data) {
     refresh();

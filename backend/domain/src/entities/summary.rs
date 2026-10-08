@@ -11,7 +11,7 @@ use serde::ser::{SerializeMap, SerializeStruct, Serializer};
 use std::{
     collections::HashMap,
     fmt::Display,
-    ops::{Add, AddAssign},
+    ops::{Add, AddAssign, SubAssign},
 };
 
 use crate::*;
@@ -124,18 +124,148 @@ impl Add for Summary {
     }
 }
 
-/// Accumulate a single part into the map (upserted as `Some`).
-impl AddAssign<Part> for Summary {
-    fn add_assign(&mut self, rhs: Part) {
-        self.parts.insert(rhs.id, Some(rhs));
+/// Per-kind merge operators: `+=` upserts the entity into its own field as `Some`
+/// (per-id last-wins, same rule as the `Summary` merge) and `-=` (single only) inserts a
+/// `None` tombstone — the deletion representation (ADR-0005, executable spec #446 §2;
+/// "tombstone" in `CONTEXT.md`). Two arms: one keys on the public `id` field, one on
+/// `idx()` for `AttachmentDetail` (whose wire key is the `idx` string).
+macro_rules! impl_summary_entity_ops {
+    ($summary:ty, $field:ident, $entity:ty, $idfield:ident) => {
+        // Upsert a single entity into its field as `Some` (per-id last-wins).
+        impl AddAssign<$entity> for $summary {
+            fn add_assign(&mut self, rhs: $entity) {
+                self.$field.insert(rhs.$idfield, Some(rhs));
+            }
+        }
+
+        // Upsert each element of a vector into its field as `Some` (per-id last-wins).
+        impl AddAssign<Vec<$entity>> for $summary {
+            fn add_assign(&mut self, rhs: Vec<$entity>) {
+                for e in rhs {
+                    self.$field.insert(e.$idfield, Some(e));
+                }
+            }
+        }
+
+        // Record a single entity as deleted: insert a `None` tombstone for its id.
+        impl SubAssign<$entity> for $summary {
+            fn sub_assign(&mut self, rhs: $entity) {
+                self.$field.insert(rhs.$idfield, None);
+            }
+        }
+    };
+    ($summary:ty, $field:ident, $entity:ty) => {
+        // Upsert a single entity into its field as `Some`, keyed by its `idx` wire key
+        // (per-id last-wins).
+        impl AddAssign<$entity> for $summary {
+            fn add_assign(&mut self, rhs: $entity) {
+                self.$field.insert(rhs.idx(), Some(rhs));
+            }
+        }
+
+        // Upsert each element of a vector into its field as `Some`, keyed by its `idx`
+        // wire key (per-id last-wins).
+        impl AddAssign<Vec<$entity>> for $summary {
+            fn add_assign(&mut self, rhs: Vec<$entity>) {
+                for e in rhs {
+                    self.$field.insert(e.idx(), Some(e));
+                }
+            }
+        }
+
+        // Record a single entity as deleted: insert a `None` tombstone for its `idx`
+        // wire key.
+        impl SubAssign<$entity> for $summary {
+            fn sub_assign(&mut self, rhs: $entity) {
+                self.$field.insert(rhs.idx(), None);
+            }
+        }
+    };
+}
+
+// Nine-line table, one row per kind; each row generates the three impls above
+// (`AddAssign<E>`, `AddAssign<Vec<E>>`, `SubAssign<E>`). `AttachmentDetail` is the
+// only `idx()`-keyed kind; the other eight key on their public `id` field.
+impl_summary_entity_ops!(Summary, activities, Activity, id);
+impl_summary_entity_ops!(Summary, parts, Part, id);
+impl_summary_entity_ops!(Summary, attachments, AttachmentDetail);
+impl_summary_entity_ops!(Summary, usages, Usage, id);
+impl_summary_entity_ops!(Summary, services, Service, id);
+impl_summary_entity_ops!(Summary, plans, ServicePlan, id);
+impl_summary_entity_ops!(Summary, part_notes, PartNote, id);
+impl_summary_entity_ops!(Summary, shops, Shop, id);
+impl_summary_entity_ops!(Summary, users, UserPublic, id);
+
+// --- Live-entity accessors ---
+//
+// Written explicitly (no `macro_rules!`): the body is one line per accessor, and a macro
+// would only take the getter name as a token, adding indirection without saving duplication.
+
+impl Summary {
+    /// All live [`Activity`] in this summary, as an owned `Vec` (cloned; order
+    /// unspecified; borrowing, tombstones dropped).
+    pub fn get_activities(&self) -> Vec<Activity> {
+        self.activities.values().filter_map(|v| v.clone()).collect()
+    }
+
+    /// All live [`Part`] in this summary, as an owned `Vec` (cloned; order unspecified;
+    /// borrowing, tombstones dropped).
+    pub fn get_parts(&self) -> Vec<Part> {
+        self.parts.values().filter_map(|v| v.clone()).collect()
+    }
+
+    /// All live [`AttachmentDetail`] in this summary, as an owned `Vec` (cloned;
+    /// order unspecified; borrowing, tombstones dropped).
+    pub fn get_attachments(&self) -> Vec<AttachmentDetail> {
+        self.attachments
+            .values()
+            .filter_map(|v| v.clone())
+            .collect()
+    }
+
+    /// All live [`Usage`] in this summary, as an owned `Vec` (cloned; order unspecified;
+    /// borrowing, tombstones dropped).
+    pub fn get_usages(&self) -> Vec<Usage> {
+        self.usages.values().filter_map(|v| v.clone()).collect()
+    }
+
+    /// All live [`Service`] in this summary, as an owned `Vec` (cloned; order unspecified;
+    /// borrowing, tombstones dropped).
+    pub fn get_services(&self) -> Vec<Service> {
+        self.services.values().filter_map(|v| v.clone()).collect()
+    }
+
+    /// All live [`ServicePlan`] in this summary, as an owned `Vec` (cloned; order unspecified;
+    /// borrowing, tombstones dropped).
+    pub fn get_plans(&self) -> Vec<ServicePlan> {
+        self.plans.values().filter_map(|v| v.clone()).collect()
+    }
+
+    /// All live [`PartNote`] in this summary, as an owned `Vec` (cloned; order unspecified;
+    /// borrowing, tombstones dropped).
+    pub fn get_part_notes(&self) -> Vec<PartNote> {
+        self.part_notes.values().filter_map(|v| v.clone()).collect()
+    }
+
+    /// All live [`Shop`] in this summary, as an owned `Vec` (cloned; order unspecified;
+    /// borrowing, tombstones dropped).
+    pub fn get_shops(&self) -> Vec<Shop> {
+        self.shops.values().filter_map(|v| v.clone()).collect()
+    }
+
+    /// All live [`UserPublic`] in this summary, as an owned `Vec` (cloned; order unspecified;
+    /// borrowing, tombstones dropped).
+    pub fn get_users(&self) -> Vec<UserPublic> {
+        self.users.values().filter_map(|v| v.clone()).collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Usage, UsageId};
+    use crate::{Attachment, AttachmentDetail, MAX_TIME, PartId, PartTypeId, Usage, UsageId};
     use serde_json::json;
+    use time::macros::datetime;
 
     fn usage(id: UsageId, count: i32) -> Usage {
         Usage {
@@ -144,6 +274,23 @@ mod tests {
             time: count,
             ..Default::default()
         }
+    }
+
+    /// Build an `AttachmentDetail` keyed by a distinct `idx` (part id `part`)
+    /// through the public deserializing interface (`name`/`what` are private).
+    fn detail(part: i32) -> AttachmentDetail {
+        let att = Attachment::new(
+            PartId::from(part),
+            datetime!(2024-01-01 12:00 UTC),
+            PartId::from(part + 1_000),
+            PartTypeId::from_id(1),
+            MAX_TIME,
+        );
+        let mut v = serde_json::to_value(att).unwrap();
+        let obj = v.as_object_mut().unwrap();
+        obj.insert("name".to_string(), json!(""));
+        obj.insert("what".to_string(), json!(0));
+        serde_json::from_value::<AttachmentDetail>(v).unwrap()
     }
 
     #[test]
@@ -200,5 +347,164 @@ mod tests {
         assert_eq!(value["usages"][uid.to_string()]["count"], json!(1));
         // Empty collections serialize as empty objects, not arrays.
         assert_eq!(value["activities"], json!({}));
+    }
+
+    // --- `+=` / `-=` for a single entity and entity vectors (id-keyed kind) ---
+
+    #[test]
+    fn add_assign_single_upserts_last_wins() {
+        let id = UsageId::new();
+        let mut s = Summary::default();
+        s.usages.insert(id, Some(usage(id, 1))); // a pre-existing live entry
+        s += usage(id, 2);
+        // The upsert overwrote the pre-existing entry (per-id last-wins).
+        assert_eq!(s.usages[&id].as_ref().unwrap().count, 2);
+
+        let id2 = UsageId::new();
+        s += usage(id2, 5);
+        // And it creates the entry for a new id.
+        assert_eq!(s.usages[&id2].as_ref().unwrap().count, 5);
+        assert_eq!(s.usages.len(), 2);
+    }
+
+    #[test]
+    fn add_assign_vec_upserts_each() {
+        let id1 = UsageId::new();
+        let id2 = UsageId::new();
+        let mut s = Summary::default();
+        s += vec![usage(id1, 1), usage(id2, 2)];
+        assert_eq!(s.usages[&id1].as_ref().unwrap().count, 1);
+        assert_eq!(s.usages[&id2].as_ref().unwrap().count, 2);
+        assert_eq!(s.usages.len(), 2);
+    }
+
+    #[test]
+    fn sub_assign_inserts_tombstone() {
+        let id = UsageId::new();
+        let mut s = Summary::default();
+        s -= usage(id, 1);
+        // The id is present, but only as a `None` tombstone (no entity data).
+        assert_eq!(s.usages.len(), 1);
+        assert_eq!(s.usages[&id], None);
+    }
+
+    #[test]
+    fn upsert_then_delete_leaves_tombstone() {
+        let id = UsageId::new();
+        let mut s = Summary::default();
+        s += usage(id, 1);
+        s -= usage(id, 1);
+        assert_eq!(s.usages.len(), 1);
+        assert_eq!(s.usages[&id], None);
+    }
+
+    #[test]
+    fn delete_then_upsert_leaves_live() {
+        let id = UsageId::new();
+        let mut s = Summary::default();
+        s -= usage(id, 1);
+        s += usage(id, 2);
+        assert_eq!(s.usages.len(), 1);
+        assert_eq!(s.usages[&id].as_ref().unwrap().count, 2);
+    }
+
+    // --- `+=` / `-=` for a single entity and entity vectors (idx-keyed kind) ---
+
+    #[test]
+    fn detail_add_assign_single_upserts_last_wins() {
+        let d = detail(1);
+        let key = d.idx();
+        let mut s = Summary::default();
+        s.attachments.insert(key.clone(), Some(detail(1)));
+        s += d;
+        // Upserted under its `idx` wire key, overwriting the pre-existing entry.
+        assert_eq!(
+            s.attachments[&key].as_ref().unwrap().a.part_id,
+            PartId::from(1)
+        );
+
+        let d2 = detail(2);
+        let key2 = d2.idx();
+        s += d2;
+        assert_eq!(s.attachments.len(), 2);
+        assert!(s.attachments.contains_key(&key2));
+    }
+
+    #[test]
+    fn detail_add_assign_vec_upserts_each() {
+        let d1 = detail(1);
+        let d2 = detail(2);
+        let key1 = d1.idx();
+        let key2 = d2.idx();
+        let mut s = Summary::default();
+        s += vec![d1, d2];
+        assert_eq!(s.attachments.len(), 2);
+        assert!(s.attachments.contains_key(&key1));
+        assert!(s.attachments.contains_key(&key2));
+    }
+
+    #[test]
+    fn detail_sub_assign_inserts_tombstone() {
+        let d = detail(1);
+        let key = d.idx();
+        let mut s = Summary::default();
+        s -= d;
+        assert_eq!(s.attachments.len(), 1);
+        assert_eq!(s.attachments[&key], None);
+    }
+
+    #[test]
+    fn detail_upsert_then_delete_leaves_tombstone() {
+        let d = detail(1);
+        let key = d.idx();
+        let mut s = Summary::default();
+        s += d.clone();
+        s -= d;
+        assert_eq!(s.attachments.len(), 1);
+        assert_eq!(s.attachments[&key], None);
+    }
+
+    #[test]
+    fn detail_delete_then_upsert_leaves_live() {
+        let d = detail(1);
+        let key = d.idx();
+        let mut s = Summary::default();
+        s -= d;
+        s += detail(1);
+        assert_eq!(s.attachments.len(), 1);
+        assert!(s.attachments[&key].is_some());
+    }
+
+    // --- Live-entity accessors ---
+
+    #[test]
+    fn get_accessors_return_live_only_and_borrow() {
+        let live = UsageId::new();
+        let gone = UsageId::new();
+        let mut s = Summary::default();
+        s.usages.insert(live, Some(usage(live, 1)));
+        s.usages.insert(gone, None); // tombstone
+
+        let live_key = detail(1).idx();
+        let gone_key = detail(2).idx();
+        s.attachments.insert(live_key.clone(), Some(detail(1)));
+        s.attachments.insert(gone_key.clone(), None); // tombstone
+
+        // Each accessor returns only the live entities, cloned into an owned `Vec`.
+        let u = s.get_usages();
+        assert_eq!(u.len(), 1);
+        assert_eq!(u[0].id, live);
+        assert_eq!(u[0].count, 1);
+        let a = s.get_attachments();
+        assert_eq!(a.len(), 1);
+        assert_eq!(a[0].idx(), live_key);
+
+        // Borrowing, not consuming: each map still holds both entries, incl. the tombstone.
+        assert_eq!(s.usages.len(), 2);
+        assert_eq!(s.usages[&live].as_ref().unwrap().count, 1);
+        assert_eq!(s.usages[&gone], None);
+        assert_eq!(s.attachments.len(), 2);
+        assert!(s.attachments[&live_key].is_some());
+        assert_eq!(s.attachments[&gone_key], None);
     }
 }

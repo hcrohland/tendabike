@@ -53,7 +53,6 @@ function getid<V>(v: V, field: keyof V): any {
 export function mapableState<V>(
   field: keyof V,
   prepfn?: (v: any) => V,
-  delfn?: (v: V) => boolean,
 ): StateMap<V> {
   let prepfn1 = prepfn || ((v) => v);
   const map: Map<V> = $state({});
@@ -62,8 +61,7 @@ export function mapableState<V>(
     for (const raw of arr) {
       const v = prepfn1(raw);
       const id = String(getid(v, field));
-      if (delfn && delfn(v)) delete map[id];
-      else map[id] = v;
+      map[id] = v;
     }
   };
 
