@@ -6,6 +6,7 @@
 
 - When more than one option is defensible, ask the user before choosing — even when you're confident in your pick.
 - Work in small increments. Read or act on ONE file, function, or unit at a time.
+- Formatting is done by external formatters, never by hand: write the code, then run cargo fmt (Rust) or npm run format from the project root.
 
 ## Domain
 
