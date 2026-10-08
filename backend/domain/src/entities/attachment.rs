@@ -2065,22 +2065,24 @@ mod tests {
         )
         .await?;
 
-        // Create an active attachment (attached at attachment_time, not yet detached)
-        store
-            .attachment_create(Attachment::new(
-                chain.id,
-                attachment_time(),
-                bike.id,
-                CHAIN,
-                MAX_TIME,
-            ))
-            .await?;
+        // Attach the chain at attachment_time through the domain op (active:
+        // not yet detached; round_time is a no-op on this 15-minute boundary).
+        let _ = attach_assembly(
+            &session,
+            chain.id,
+            attachment_time(),
+            bike.id,
+            BIKE,
+            false,
+            &mut store,
+        )
+        .await?;
 
-        // Dispose while attached - should detach and dispose successfully
+        // Dispose while still attached — dispose_assembly never detaches, it only
+        // rejects attachments detached after the given time; this one succeeds.
         let result =
             dispose_assembly(&session, chain.id, attachment_time(), false, &mut store).await;
 
-        // Should succeed (detaches first, then disposes)
         assert!(result.is_ok());
 
         Ok(())

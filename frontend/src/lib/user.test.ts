@@ -233,14 +233,14 @@ describe("updateSummary", () => {
   });
 
   it("a null activity (tombstone) deletes the row it names", () => {
-    setSummary(summaryContent());
+    seedContent();
     updateSummary(summary({ activities: { "100": null } }));
     expect(activities[100]).toBeUndefined();
     expect(stateValues(activities)).toHaveLength(0);
   });
 
   it("a null service (tombstone) deletes the row it names", () => {
-    setSummary(summaryContent());
+    seedContent();
     updateSummary(summary({ services: { S1: null } }));
     expect(services["S1"]).toBeUndefined();
     expect(stateValues(services)).toHaveLength(0);
