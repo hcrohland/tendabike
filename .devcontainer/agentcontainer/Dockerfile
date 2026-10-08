@@ -80,6 +80,8 @@ RUN groupmod -n pythia vscode \
     && chmod -R a+rwX /usr/local/cargo /usr/local/rustup
 
 USER pythia
+LABEL devcontainer.metadata='[{"remoteUser":"pythia"}]'
+
 WORKDIR /workspaces
 
 RUN git config --global core.hooksPath .githooks
