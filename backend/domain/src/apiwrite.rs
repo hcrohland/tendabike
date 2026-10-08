@@ -43,8 +43,10 @@
 //!
 //! - operations that already return a `Summary` pass it through;
 //! - bare-entity operations are wrapped into a one-entry `Summary` (`+=`);
-//! - deletes report their entity as a `None` tombstone, so the stream merge
-//!   drops it;
+//! - deletes report their entity as a `None` tombstone: after the cutover,
+//!   every non-create mutation returns 204 and the stream frame is the sole
+//!   delivery of the change (spec #446 §6.2), so a deleted entity must reach
+//!   the client as a tombstone — the stream merge drops it;
 //! - a `ShopSubscription` and a `User` are not kinds of the `Summary`, so
 //!   subscription writes and onboarding writes report an empty `Summary` —
 //!   the stream carries nothing for them, and the HTTP response is their
@@ -53,6 +55,22 @@
 use time::OffsetDateTime;
 
 use crate::*;
+
+/// The parsed multipart file of a file-note upload — the raw fields as the
+/// handler's parser extracts them, before any fallback. Fallbacks for
+/// blank/missing `name` and `filename` are applied by the consumer: [`exec`]
+/// for the create route, the domain op itself for the update route.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NoteFile {
+    /// The note's display name; blank or missing.
+    pub name: Option<String>,
+    /// The file's MIME type.
+    pub mime: String,
+    /// The uploaded file's name; blank or missing.
+    pub filename: Option<String>,
+    /// The file's bytes.
+    pub data: Vec<u8>,
+}
 
 /// One mutating API route, as the per-user executor receives it.
 ///
@@ -121,27 +139,15 @@ pub enum ApiWrite {
     // --- partnote (`/api/part`) ---
     /// `POST /api/part/{part}/notes`
     PartNoteCreateText { part: PartId, name: String },
-    /// `POST /api/part/{part}/notes/file` — the parsed multipart fields;
+    /// `POST /api/part/{part}/notes/file` — the parsed multipart file;
     /// blank/missing `name` and `filename` fall back in [`exec`], like the
     /// handler's parser does.
-    PartNoteCreateFile {
-        part: PartId,
-        name: Option<String>,
-        mime: String,
-        filename: Option<String>,
-        data: Vec<u8>,
-    },
+    PartNoteCreateFile { part: PartId, file: NoteFile },
     /// `PUT /api/part/notes/{id}`
     PartNoteUpdateText { id: PartNoteId, name: String },
-    /// `PUT /api/part/notes/{id}/file` — the parsed multipart fields; the
+    /// `PUT /api/part/notes/{id}/file` — the parsed multipart file; the
     /// domain op applies its own fallbacks to the stored note.
-    PartNoteUpdateFile {
-        id: PartNoteId,
-        name: Option<String>,
-        mime: String,
-        filename: Option<String>,
-        data: Vec<u8>,
-    },
+    PartNoteUpdateFile { id: PartNoteId, file: NoteFile },
     /// `DELETE /api/part/notes/{id}/file`
     PartNoteRemoveFile { id: PartNoteId },
     /// `DELETE /api/part/notes/{id}`
@@ -304,9 +310,7 @@ pub async fn exec(
             // parameterize: a part created through the API has none.
             let part =
                 Part::create(name, vendor, model, what, None, purchase, session, store).await?;
-            let mut summary = Summary::default();
-            summary += part;
-            Ok(summary)
+            Ok(one_part(part))
         }
         ApiWrite::PartChange {
             id,
@@ -318,9 +322,7 @@ pub async fn exec(
             let part = id
                 .change(name, vendor, model, purchase, session, store)
                 .await?;
-            let mut summary = Summary::default();
-            summary += part;
-            Ok(summary)
+            Ok(one_part(part))
         }
         ApiWrite::PartDelete { id } => {
             // The op returns the id; the part itself is reported as a
@@ -337,70 +339,48 @@ pub async fn exec(
             let note = part
                 .note_create_text(session, name, OffsetDateTime::now_utc(), store)
                 .await?;
-            let mut summary = Summary::default();
-            summary += note;
-            Ok(summary)
+            Ok(one_part_note(note))
         }
-        ApiWrite::PartNoteCreateFile {
-            part,
-            name,
-            mime,
-            filename,
-            data,
-        } => {
+        ApiWrite::PartNoteCreateFile { part, file } => {
             // The handler's multipart parsing applies these fallbacks before
             // the domain op; they live here, so the handler only parses.
-            let filename = filename.unwrap_or_else(|| "file".to_string());
-            let name = name.unwrap_or_else(|| filename.clone());
+            let filename = file.filename.unwrap_or_else(|| "file".to_string());
+            let name = file.name.unwrap_or_else(|| filename.clone());
             let note = part
                 .note_create_file(
                     session,
                     name,
-                    mime,
+                    file.mime,
                     Some(filename),
-                    data.len() as i64,
-                    data,
+                    file.data.len() as i64,
+                    file.data,
                     OffsetDateTime::now_utc(),
                     store,
                 )
                 .await?;
-            let mut summary = Summary::default();
-            summary += note;
-            Ok(summary)
+            Ok(one_part_note(note))
         }
         ApiWrite::PartNoteUpdateText { id, name } => {
             let note = id.update_text(session, name, store).await?;
-            let mut summary = Summary::default();
-            summary += note;
-            Ok(summary)
+            Ok(one_part_note(note))
         }
-        ApiWrite::PartNoteUpdateFile {
-            id,
-            name,
-            mime,
-            filename,
-            data,
-        } => {
+        ApiWrite::PartNoteUpdateFile { id, file } => {
             let note = id
                 .update_file(
                     session,
-                    name,
-                    mime,
-                    filename,
-                    data.len() as i64,
-                    data,
+                    file.name,
+                    file.mime,
+                    file.filename,
+                    file.data.len() as i64,
+                    file.data,
                     store,
                 )
                 .await?;
-            let mut summary = Summary::default();
-            summary += note;
-            Ok(summary)
+            Ok(one_part_note(note))
         }
         ApiWrite::PartNoteRemoveFile { id } => {
             let note = id.remove_file(session, store).await?;
-            let mut summary = Summary::default();
-            summary += note;
-            Ok(summary)
+            Ok(one_part_note(note))
         }
         ApiWrite::PartNoteDelete { id } => {
             // The op returns the id; report the note as a tombstone.
@@ -432,15 +412,11 @@ pub async fn exec(
         // --- serviceplan ---
         ApiWrite::ServicePlanCreate { plan } => {
             let plan = plan.create(session, store).await?;
-            let mut summary = Summary::default();
-            summary += plan;
-            Ok(summary)
+            Ok(one_service_plan(plan))
         }
         ApiWrite::ServicePlanUpdate { plan } => {
             let plan = plan.update(session, store).await?;
-            let mut summary = Summary::default();
-            summary += plan;
-            Ok(summary)
+            Ok(one_service_plan(plan))
         }
         ApiWrite::ServicePlanDelete { id } => {
             // The op reports the services it unlinked; the plan itself is
@@ -460,9 +436,7 @@ pub async fn exec(
         } => {
             let shop =
                 ShopId::create(name, description, auto_approve, session.user_id(), store).await?;
-            let mut summary = Summary::default();
-            summary += shop;
-            Ok(summary)
+            Ok(one_shop(shop))
         }
         ApiWrite::ShopUpdate {
             id,
@@ -474,9 +448,7 @@ pub async fn exec(
             let shop = id
                 .update(name, description, auto_approve, session.user_id(), store)
                 .await?;
-            let mut summary = Summary::default();
-            summary += shop;
-            Ok(summary)
+            Ok(one_shop(shop))
         }
         ApiWrite::ShopDelete { id } => {
             let id = ShopId::get(id.into(), session.user_id(), store).await?;
@@ -548,6 +520,25 @@ pub async fn exec(
         }
     }
 }
+
+/// A one-entry [`Summary`] upserting a single entity — the body of the three-line
+/// shape (`Summary::default()` + `+=` + `Ok`) that every bare-entity arm repeats.
+/// One helper per entity kind rather than one generic: the `Summary` `+=` impls
+/// are individual, not sealed behind a common bound a generic could name.
+macro_rules! one_entry_summary {
+    ($name:ident, $entity:ty) => {
+        fn $name(entity: $entity) -> Summary {
+            let mut summary = Summary::default();
+            summary += entity;
+            summary
+        }
+    };
+}
+
+one_entry_summary!(one_part, Part);
+one_entry_summary!(one_part_note, PartNote);
+one_entry_summary!(one_service_plan, ServicePlan);
+one_entry_summary!(one_shop, Shop);
 
 #[cfg(test)]
 mod tests {
