@@ -41,10 +41,6 @@ export class Attachment {
     return this.detached < maxDate;
   }
 
-  isEmpty() {
-    return this.attached.getTime() >= this.detached.getTime();
-  }
-
   activities(): Activity[] {
     return stateValues(allActivities).filter(
       (a) => a.gear == this.gear && this.isAttached(a.start),
@@ -143,8 +139,4 @@ export function default_attach_date(
   return parts[gear]?.purchase ?? new Date();
 }
 
-export const attachments = mapableState(
-  "idx",
-  (a) => new Attachment(a),
-  (a) => a.isEmpty(),
-);
+export const attachments = mapableState("idx", (a) => new Attachment(a));

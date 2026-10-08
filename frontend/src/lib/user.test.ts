@@ -275,12 +275,13 @@ describe("updateSummary", () => {
     expect(stateValues(attachments)).toHaveLength(0);
   });
 
-  it("an empty attachment (the detach flow) removes the row", () => {
+  it("an empty attachment is upserted, not deleted", () => {
     seedContent();
+    const key = "1/" + new Date("2024-01-01T00:00:00Z").getTime();
     updateSummary(
       summary({
         attachments: {
-          ["1/" + new Date("2024-01-01T00:00:00Z").getTime()]: {
+          [key]: {
             part_id: 1,
             attached: "2024-01-01T00:00:00Z",
             detached: "2024-01-01T00:00:00Z",
@@ -292,6 +293,9 @@ describe("updateSummary", () => {
         },
       }),
     );
-    expect(stateValues(attachments)).toHaveLength(0);
+    expect(stateValues(attachments)).toHaveLength(1);
+    expect(attachments[key]!.attached.getTime()).toBe(
+      attachments[key]!.detached.getTime(),
+    );
   });
 });
