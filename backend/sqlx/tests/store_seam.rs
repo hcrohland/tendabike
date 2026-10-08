@@ -70,6 +70,7 @@
 //! `docs/agents/domain-flow.md`.
 
 use std::collections::{HashMap, HashSet};
+use std::str::FromStr;
 use std::time::Duration;
 
 use sqlx::migrate::MigrateDatabase;
@@ -2047,7 +2048,9 @@ async fn apiwrite_serviceplan_create_and_delete() -> tb_domain::TbResult<()> {
         let mut session = test_session();
 
         let plan = ServicePlan {
-            id: ServicePlanId::from(Uuid::now_v7()),
+            id: ServicePlanId::from(
+                Uuid::from_str("6ba7b810-9dad-11d1-80b4-00c04fd430c8").unwrap(),
+            ),
             part: Some(PartId::from(13)),
             what: CHAIN,
             hook: None,
