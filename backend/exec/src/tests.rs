@@ -1,128 +1,39 @@
-//! Test infrastructure for the `tb_axum` crate.
+/*
+   tendabike - the bike maintenance tracker
+
+   Copyright (C) 2023  Christoph Rohland
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU Affero General Public License as published
+   by the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public License
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+*/
+
+//! Test-only doubles for the transaction seam (ADR-0005, executable spec #446 §4.1).
 //!
-//! Builds the production router stack without a database: the state carries a
-//! `FakeSource` whose `begin` fails fast with a `DatabaseFailure`, so any
-//! handler that touches the database returns a 500, and sessions are backed by
-//! a `MemoryStore` that tests can seed.
+//! `FakeConn` implements the nine `Store` sub-traits (every method
+//! `unimplemented!()` — they are never called) and `Txn` (consuming
+//! `commit`/`rollback` that return a fixed `Ok(())`); `FakeSource` is a
+//! `TxnSource` whose `Conn` is the `FakeConn`. The fakes only prove the trait
+//! bounds compose — they are test-only, not public API.
 
 #![allow(clippy::too_many_arguments)]
 
-use std::sync::{Arc, Once};
-
-use axum::Router;
-use http::{HeaderMap, Method, Request, StatusCode, header};
-use http_body_util::BodyExt;
-use tb_domain::*;
-use tb_exec::{Txn, TxnSource};
-use tb_strava::{StravaId, StravaStore, StravaUser, event::Event};
 use time::OffsetDateTime;
-use tower::ServiceExt;
-use tower_sessions::{MemoryStore, Session, SessionManagerLayer};
 
-use crate::appstate::AppState;
-use crate::routes;
-use crate::strava::RequestSession;
+use crate::{Txn, TxnSource};
+use tb_domain::*;
 
-const SESSION_KEY: &str = "session";
-
-/// Dummies the OAuth client environment variables so the `STRAVACLIENT` lazy static
-/// does not panic when it is first used in a test.
-fn set_oauth_env_once() {
-    static ONCE: Once = Once::new();
-    ONCE.call_once(|| unsafe {
-        std::env::set_var("CLIENT_ID", "test-client-id");
-        std::env::set_var("CLIENT_SECRET", "test-client-secret");
-    });
-}
-
-/// Builds the production routes with a fast-failing source (every `begin` is a
-/// `DatabaseFailure`, so DB-reaching routes answer 500) and a `MemoryStore`
-/// session layer.
-pub(crate) fn test_app(store: MemoryStore) -> Router {
-    set_oauth_env_once();
-    let session_layer = SessionManagerLayer::new(store);
-    routes(AppState::new(FakeSource)).layer(session_layer)
-}
-
-/// Creates a session in `store` containing `value` and returns the cookie header value
-/// that authenticates with it.
-pub(crate) async fn cookie_for(store: &MemoryStore, value: RequestSession) -> String {
-    let session = Session::new(None, Arc::new(store.clone()), None);
-    session
-        .insert(SESSION_KEY, &value)
-        .await
-        .expect("session insert");
-    session.save().await.expect("session save");
-    let id = session.id().expect("session id");
-    format!("id={id}")
-}
-
-/// Cookie header value for a regular (non-admin) user.
-pub(crate) async fn user_cookie(store: &MemoryStore) -> String {
-    cookie_for(store, RequestSession::new_dummy(false)).await
-}
-
-/// Cookie header value for an admin user.
-pub(crate) async fn admin_cookie(store: &MemoryStore) -> String {
-    cookie_for(store, RequestSession::new_dummy(true)).await
-}
-
-/// Runs a single request against `app` and returns its status, headers and body.
-pub(crate) async fn run(
-    app: Router,
-    method: Method,
-    uri: &str,
-    cookie: Option<&str>,
-) -> (StatusCode, HeaderMap, Vec<u8>) {
-    run_with_body(app, method, uri, cookie, None).await
-}
-
-/// Runs a single request with a JSON body against `app`.
-pub(crate) async fn run_json(
-    app: Router,
-    method: Method,
-    uri: &str,
-    cookie: Option<&str>,
-    body: &str,
-) -> (StatusCode, HeaderMap, Vec<u8>) {
-    run_with_body(app, method, uri, cookie, Some(body)).await
-}
-
-async fn run_with_body(
-    app: Router,
-    method: Method,
-    uri: &str,
-    cookie: Option<&str>,
-    json: Option<&str>,
-) -> (StatusCode, HeaderMap, Vec<u8>) {
-    let mut builder = Request::builder()
-        .method(method)
-        .uri(uri)
-        .header(header::HOST, "localhost");
-    let body = if let Some(json) = json {
-        builder = builder.header(header::CONTENT_TYPE, "application/json");
-        axum::body::Body::from(json.as_bytes().to_vec())
-    } else {
-        axum::body::Body::empty()
-    };
-    let mut req = builder.body(body).expect("valid request");
-    if let Some(cookie) = cookie {
-        req.headers_mut()
-            .insert(header::COOKIE, cookie.parse().expect("valid cookie"));
-    }
-    let res = app
-        .oneshot(req)
-        .await
-        .expect("oneshot request should succeed");
-    let status = res.status();
-    let headers = res.headers().clone();
-    let body = res.into_body().collect().await.expect("body").to_bytes();
-    (status, headers, body.to_vec())
-}
-
-/// A fake connection: the nine `Store` sub-traits, `StravaStore` (all methods
-/// `unimplemented!()` — they are never reached because `begin` fails first),
-/// and `Txn` with `commit`/`rollback` returning a `DatabaseFailure`.
+/// A fake connection: the nine `Store` sub-traits + the marker + `Txn`.
 struct FakeConn;
 
 impl Store for FakeConn {}
@@ -543,78 +454,16 @@ impl ServicePlanStore for FakeConn {
 }
 
 #[async_trait::async_trait]
-impl StravaStore for FakeConn {
-    async fn stravaid_get_user_id(&mut self, _who: i32) -> TbResult<i32> {
-        unimplemented!()
-    }
-    async fn strava_event_delete(&mut self, _event_id: Option<i32>) -> TbResult<()> {
-        unimplemented!()
-    }
-    async fn strava_event_set_time(&mut self, _e_id: Option<i32>, _e_time: i64) -> TbResult<()> {
-        unimplemented!()
-    }
-    async fn stravaevent_store(&mut self, _e: Event) -> TbResult<()> {
-        unimplemented!()
-    }
-    async fn strava_event_get_next_for_user(&mut self, _user: StravaId) -> TbResult<Option<Event>> {
-        unimplemented!()
-    }
-    async fn strava_event_get_later(
-        &mut self,
-        _obj_id: i64,
-        _oid: StravaId,
-    ) -> TbResult<Vec<Event>> {
-        unimplemented!()
-    }
-    async fn strava_events_delete_batch(&mut self, _values: Vec<Option<i32>>) -> TbResult<()> {
-        unimplemented!()
-    }
-    async fn stravausers_get_all(&mut self) -> TbResult<Vec<StravaUser>> {
-        unimplemented!()
-    }
-    async fn stravauser_get_by_tbid(&mut self, _id: UserId) -> TbResult<StravaUser> {
-        unimplemented!()
-    }
-    async fn stravauser_get_by_stravaid(&mut self, _id: &StravaId) -> TbResult<Option<StravaUser>> {
-        unimplemented!()
-    }
-    async fn stravauser_new(&mut self, _user: StravaUser) -> TbResult<StravaUser> {
-        unimplemented!()
-    }
-    async fn stravaid_update_token(
-        &mut self,
-        _stravaid: StravaId,
-        _refresh: Option<&String>,
-    ) -> TbResult<StravaUser> {
-        unimplemented!()
-    }
-    async fn strava_events_get_count_for_user(&mut self, _user: &StravaId) -> TbResult<i64> {
-        unimplemented!()
-    }
-    async fn strava_events_delete_for_user(&mut self, _user: &StravaId) -> TbResult<usize> {
-        unimplemented!()
-    }
-    async fn stravauser_delete(&mut self, _user: UserId) -> TbResult<usize> {
-        unimplemented!()
-    }
-}
-#[async_trait::async_trait]
 impl Txn for FakeConn {
     async fn commit(self) -> TbResult<()> {
-        Err(Error::DatabaseFailure(anyhow::anyhow!(
-            "fake connection: no database"
-        )))
+        Ok(())
     }
     async fn rollback(self) -> TbResult<()> {
-        Err(Error::DatabaseFailure(anyhow::anyhow!(
-            "fake connection: no database"
-        )))
+        Ok(())
     }
 }
 
-/// A fake source: every `begin` fails with a `DatabaseFailure`, so any handler
-/// that opens a transaction answers a 500 instead of reaching a database.
-#[derive(Clone)]
+/// A fake source: opens a transaction by returning a fresh `FakeConn`.
 struct FakeSource;
 
 #[async_trait::async_trait]
@@ -622,8 +471,26 @@ impl TxnSource for FakeSource {
     type Conn = FakeConn;
 
     async fn begin(&self) -> TbResult<Self::Conn> {
-        Err(Error::DatabaseFailure(anyhow::anyhow!(
-            "fake source: no database"
-        )))
+        Ok(FakeConn)
     }
+}
+
+/// The seam's contract: a generic caller bounded only on `TxnSource` can
+/// `begin` a connection and then close it with `commit` or `rollback` — the
+/// `Conn: Store + Txn` linkage is what makes this type-check.
+async fn run_one<S: TxnSource>(source: &S, commit: bool) -> TbResult<()> {
+    let conn = source.begin().await?;
+    if commit {
+        conn.commit().await
+    } else {
+        conn.rollback().await
+    }
+}
+
+#[tokio::test]
+async fn a_generic_source_can_begin_then_commit_and_rollback() -> TbResult<()> {
+    let source = FakeSource;
+    run_one(&source, true).await?;
+    run_one(&source, false).await?;
+    Ok(())
 }

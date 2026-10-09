@@ -29,10 +29,11 @@ use http::StatusCode;
 use serde_derive::Deserialize;
 use time::OffsetDateTime;
 
-use crate::{ApiResult, DbPool, RequestSession, appstate::AppState, error::AppError};
+use crate::{ApiResult, RequestSession, appstate::AppState, error::AppError};
 use tb_domain::{PartId, Service, ServiceId, ServicePlanId, Summary};
+use tb_exec::{Txn, TxnSource};
 
-pub(super) fn router() -> Router<AppState> {
+pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
     Router::new()
         .route("/", post(create).put(update))
         .route("/{id}", delete(delete_service))
@@ -48,9 +49,9 @@ struct NewService {
     notes: String,
     plans: Vec<ServicePlanId>,
 }
-async fn create(
+async fn create<S>(
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(NewService {
         part_id,
         time,
@@ -58,42 +59,54 @@ async fn create(
         notes,
         plans,
     }): Json<NewService>,
-) -> Result<(StatusCode, Json<Summary>), AppError> {
-    let mut store = store.begin().await?;
+) -> Result<(StatusCode, Json<Summary>), AppError>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     part_id.checkuser(&user, &mut store).await?;
     let summary = Service::create(part_id, time, name, notes, None, plans, &mut store).await?;
     store.commit().await?;
     Ok((StatusCode::CREATED, Json(summary)))
 }
 
-async fn update(
+async fn update<S>(
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(service): Json<Service>,
-) -> ApiResult<Summary> {
-    let mut store = store.begin().await?;
+) -> ApiResult<Summary>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let res = service.update(&user, &mut store).await.map(Json)?;
     store.commit().await?;
     Ok(res)
 }
 
-async fn delete_service(
+async fn delete_service<S>(
     user: RequestSession,
-    State(pool): State<DbPool>,
+    State(state): State<AppState<S>>,
     Path(id): Path<ServiceId>,
-) -> ApiResult<Summary> {
-    let mut store = pool.begin().await?;
+) -> ApiResult<Summary>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let res = id.delete(&user, &mut store).await.map(Json)?;
     store.commit().await?;
     Ok(res)
 }
 
-async fn redo(
+async fn redo<S>(
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(service): Json<Service>,
-) -> ApiResult<Summary> {
-    let mut store = store.begin().await?;
+) -> ApiResult<Summary>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let res = service.redo(&user, &mut store).await.map(Json)?;
     store.commit().await?;
     Ok(res)

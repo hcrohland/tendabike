@@ -70,175 +70,29 @@
 //! `docs/agents/domain-flow.md`.
 
 use std::collections::{HashMap, HashSet};
+use std::str::FromStr;
 use std::time::Duration;
 
-use sqlx::migrate::MigrateDatabase;
 use tb_domain::test_support::{
     MemStore, StoreSnapshot,
     fixtures::{sample_purchase_date, test_session},
     part_type_ids,
 };
 use tb_domain::{
-    ActTypeId, Activity, ActivityId, ActivityStore, Attachment, AttachmentStore, MAX_TIME, Part,
-    PartId, PartStore, PartTypeId, Usage, UsageId, UsageStore, UserId, UserStore, attach_assembly,
-    detach_assembly, dispose_assembly, round_time,
+    ActTypeId, Activity, ActivityId, ActivityStore, ApiWrite, Attachment, AttachmentStore,
+    MAX_TIME, OnboardingStatus, Part, PartId, PartNoteStore, PartStore, PartTypeId, ServicePlan,
+    ServicePlanId, ShopStore, Summary, Usage, UsageId, UsageStore, UserId, UserStore,
+    attach_assembly, detach_assembly, dispose_assembly, exec, round_time,
 };
 use time::{OffsetDateTime, macros::datetime};
-use tokio::sync::{Mutex, MutexGuard, OnceCell};
+use tokio::sync::MutexGuard;
 use uuid::Uuid;
 
 use part_type_ids::{BIKE, CHAIN, FRONT_WHEEL, TIRE};
 
-// ---------------------------------------------------------------------------
-// Plumbing: scratch-database lifecycle, serialization, one-time fixture seed
-// ---------------------------------------------------------------------------
-
-static LOCK: Mutex<()> = Mutex::const_new(());
-static SETUP: OnceCell<Setup> = OnceCell::const_new();
-
-/// The bound for each scratch-database create/drop step: long enough for a
-/// slow disk, short enough that a blackholed endpoint fails in seconds.
-const SETUP_STEP_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// The one failure message shared by every test when the suite was explicitly
-/// run (`-- --include-ignored`) but no scratch database is configured: the
-/// run has nothing to verify against, so the tests fail loudly instead of
-/// passing without verifying anything.
-const NO_SCRATCH_URL: &str = "SCRATCH_DATABASE_URL is not set — the seam suite \
-was explicitly run (-- --include-ignored) but has no scratch database to run \
-against; set it to a disposable database URL and re-run";
-
-/// The run's one-time scratch-database setup, shared by every test.
-enum Setup {
-    /// The fixture loaded and the sequences set; the high-water marks for
-    /// the per-test sequence reset.
-    Ready(FixtureMarks),
-    /// The scratch database could not be prepared; the error is what every
-    /// test fails with, and what `database_is_reachable` reports.
-    Failed(String),
-}
-
-/// The fixture's id high-water marks, derived from the loaded snapshot so
-/// the database's sequences continue where the fixture left off — the same
-/// values the in-memory store derives for its next-id counters.
-#[derive(Clone, Copy, Debug)]
-struct FixtureMarks {
-    /// The highest part id in the fixture; the next id handed out is one
-    /// higher.
-    parts: i32,
-    /// The highest user id in the fixture; the next id handed out is one
-    /// higher.
-    users: i32,
-}
-
-/// The scratch database url from the environment or `.env`, if any. The URL
-/// names the scratch database itself (see `setup`); the user it connects as
-/// must hold createdb rights on that server.
-///
-/// This is the only database variable the suite *uses*. It also reads
-/// `DATABASE_URL` and `DB_URL` only to refuse a collision: if the scratch
-/// URL equals either, it panics — both point at the developer's working
-/// database, and this suite force-drops and re-seeds whatever database it is
-/// pointed at. Neither variable is ever used as a connection target.
-fn scratch_url() -> Option<String> {
-    let _ = dotenvy::dotenv();
-    let Ok(url) = std::env::var("SCRATCH_DATABASE_URL") else {
-        return None;
-    };
-    // Refuse a scratch URL that is one of the working databases: a run
-    // against it would force-drop and re-seed real data. Exact string
-    // equality on the raw values; an empty value counts as absent, so there
-    // is nothing to collide with.
-    let mut collisions = vec![];
-    for var in ["DATABASE_URL", "DB_URL"] {
-        if let Ok(other) = std::env::var(var)
-            && !other.is_empty()
-            && other == url
-        {
-            collisions.push(var);
-        }
-    }
-    if !collisions.is_empty() {
-        panic!(
-            "SCRATCH_DATABASE_URL matches {} ({url}) — the seam suite \
-             force-drops and re-seeds its scratch database; refusing to run \
-             it against the working database. Set SCRATCH_DATABASE_URL to a \
-             disposable database.",
-            collisions.join(" and ")
-        );
-    }
-    Some(url)
-}
-
-/// A fresh pool for this test's runtime, or the error string when the pool
-/// cannot be built (the test then fails loudly with it).
-///
-/// Each `#[tokio::test]` runs on its own runtime, so a pool must never outlive
-/// the runtime that created it: the pool's background tasks (connection
-/// returns, maintenance) are spawned on that runtime and die with it, which
-/// leaves the pool's slot accounting in a state where the next runtime's
-/// `acquire` waits the full acquire timeout. Every test therefore opens its
-/// own pool and drops it with the test.
-async fn pool(url: &str) -> Result<tb_sqlx::DbPool, String> {
-    tb_sqlx::DbPool::new(url)
-        .await
-        .map_err(|err| err.to_string())
-}
-
-/// Bound one scratch-database step so a blackholed endpoint fails in seconds
-/// instead of hanging the run.
-async fn bounded<T>(
-    fut: impl std::future::Future<Output = Result<T, sqlx::Error>>,
-) -> Result<T, String> {
-    match tokio::time::timeout(SETUP_STEP_TIMEOUT, fut).await {
-        Ok(Ok(value)) => Ok(value),
-        Ok(Err(err)) => Err(err.to_string()),
-        Err(_) => Err(format!("timed out after {SETUP_STEP_TIMEOUT:?}")),
-    }
-}
-
-/// Prepare the scratch database once per run: force-drop any database left
-/// behind by a previous run (nothing is dropped at the end of a run), create
-/// a fresh one via `MigrateDatabase`, run the migrations through the same
-/// `DbPool::new` the app uses, and load the standard fixture.
-///
-/// Every step targets only the database named in `url` (the create/drop pair
-/// from the server's maintenance database, the pool and the seed from the
-/// scratch database itself): the suite never reaches any other database on
-/// the machine.
-async fn setup(url: &str) -> Setup {
-    let exists = match bounded(sqlx::Postgres::database_exists(url)).await {
-        Ok(exists) => exists,
-        Err(err) => return Setup::Failed(format!("could not check the scratch database: {err}")),
-    };
-    if exists && let Err(err) = bounded(sqlx::Postgres::force_drop_database(url)).await {
-        return Setup::Failed(format!(
-            "could not drop the leftover scratch database: {err}"
-        ));
-    }
-    if let Err(err) = bounded(sqlx::Postgres::create_database(url)).await {
-        return Setup::Failed(format!("could not create the scratch database: {err}"));
-    }
-    match tb_sqlx::DbPool::new(url).await {
-        Ok(pool) => match seed(&pool).await {
-            Ok(marks) => Setup::Ready(marks),
-            Err(err) => Setup::Failed(format!("could not seed the scratch database: {err}")),
-        },
-        Err(err) => Setup::Failed(format!("could not connect to the scratch database: {err}")),
-    }
-}
-
-/// The suite's local mapping of `sqlx::Error` to the domain `Error`:
-/// everything becomes `Error::DatabaseFailure`. The crate's `into_domain`
-/// (`src/lib.rs`) also maps `RowNotFound` to `Error::NotFound`, but it is
-/// crate-private and unreachable from this integration test — a separate
-/// crate that can only build errors from the public `tb_domain::Error`
-/// variants — and the raw statements this maps (`INSERT` in
-/// `load_fixture`, `setval` in `seed` / `reset_sequences`) fail only for
-/// database-failure reasons, so the narrower mapping suffices.
-fn db_err(err: sqlx::Error) -> tb_domain::Error {
-    tb_domain::Error::DatabaseFailure(err.into())
-}
+#[path = "common/scratch.rs"]
+mod scratch;
+use scratch::*;
 
 /// A test handle: one transaction on the shared test database. The lock is
 /// held for the whole test so all tests in this suite run serialized; the
@@ -324,130 +178,6 @@ where
         Err(err) => panic!("{err}"),
     };
     f(store).await
-}
-
-/// Load the standard prepopulated fixture (the same snapshot the in-memory
-/// suite uses) into the scratch database — freshly created by `setup`, so it
-/// is empty by construction and needs no truncate — then point the sequences
-/// just past the fixture ids, returning the fixture's high-water marks for
-/// the per-test sequence reset. The fixture is committed once; every test
-/// afterwards works in its own transaction and rolls back.
-async fn seed(pool: &tb_sqlx::DbPool) -> tb_domain::TbResult<FixtureMarks> {
-    let mut tx = pool.begin().await?;
-
-    let snap = MemStore::prepopulated().snapshot();
-
-    load_fixture(&mut tx, &snap).await?;
-
-    // The fixture rows use explicit ids; the sequences must continue just
-    // past the fixture's highest ids.
-    let marks = FixtureMarks {
-        parts: snap
-            .parts
-            .iter()
-            .map(|p| i32::from(p.id))
-            .max()
-            .unwrap_or(0),
-        users: snap
-            .users
-            .iter()
-            .map(|u| i32::from(u.id))
-            .max()
-            .unwrap_or(0),
-    };
-    sqlx::query("SELECT setval(pg_get_serial_sequence('parts', 'id'), $1)")
-        .bind(marks.parts)
-        .execute(&mut **tx)
-        .await
-        .map_err(db_err)?;
-    sqlx::query("SELECT setval(pg_get_serial_sequence('users', 'id'), $1)")
-        .bind(marks.users)
-        .execute(&mut **tx)
-        .await
-        .map_err(db_err)?;
-
-    tx.commit().await?;
-    Ok(marks)
-}
-
-/// Load the snapshot into the database: users and parts through raw inserts
-/// (the trait cannot set their serial ids; the column mapping mirrors
-/// `DbUser`/`DbPart` in `store/user.rs`/`store/part.rs`), everything else
-/// through the existing domain-to-row conversions in the store traits.
-async fn load_fixture(
-    tx: &mut tb_sqlx::SqlxConn<'_>,
-    snap: &StoreSnapshot,
-) -> tb_domain::TbResult<()> {
-    let exec: &mut sqlx::PgConnection = tx;
-
-    for user in &snap.users {
-        sqlx::query(
-            "INSERT INTO users (id, name, firstname, is_admin, avatar, onboarding_status)
-             VALUES ($1, $2, $3, $4, $5, $6)",
-        )
-        .bind(i32::from(user.id))
-        .bind(&user.name)
-        .bind(&user.firstname)
-        .bind(user.is_admin)
-        .bind(&user.avatar)
-        .bind(i32::from(user.onboarding_status))
-        .execute(&mut *exec)
-        .await
-        .map_err(db_err)?;
-    }
-
-    for part in &snap.parts {
-        sqlx::query(
-            "INSERT INTO parts (id, owner, what, name, vendor, model, purchase, last_used,
-                                disposed_at, usage, source, shop)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
-        )
-        .bind(i32::from(part.id))
-        .bind(i32::from(part.owner))
-        .bind(i32::from(part.what))
-        .bind(&part.name)
-        .bind(&part.vendor)
-        .bind(&part.model)
-        .bind(part.purchase)
-        .bind(part.last_used)
-        .bind(part.disposed_at)
-        .bind(Uuid::from(part.usage))
-        .bind(&part.source)
-        .bind(part.shop.map(i32::from))
-        .execute(&mut *exec)
-        .await
-        .map_err(db_err)?;
-    }
-
-    for att in &snap.attachments {
-        tx.attachment_create(*att).await?;
-    }
-    UsageStore::update(tx, &snap.usages).await?;
-    for act in &snap.activities {
-        tx.activity_create(act.clone()).await?;
-    }
-    Ok(())
-}
-
-/// Point the sequences just past the fixture's highest ids inside the test
-/// transaction, so freshly created parts/users get the same ids the
-/// in-memory store hands out (max fixture id + 1). Sequence changes are
-/// non-transactional, so each test resets them on entry.
-async fn reset_sequences(
-    tx: &mut tb_sqlx::SqlxConn<'_>,
-    marks: &FixtureMarks,
-) -> tb_domain::TbResult<()> {
-    sqlx::query("SELECT setval(pg_get_serial_sequence('parts', 'id'), $1)")
-        .bind(marks.parts)
-        .execute(&mut ***tx)
-        .await
-        .map_err(db_err)?;
-    sqlx::query("SELECT setval(pg_get_serial_sequence('users', 'id'), $1)")
-        .bind(marks.users)
-        .execute(&mut ***tx)
-        .await
-        .map_err(db_err)?;
-    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -1721,6 +1451,556 @@ async fn activity_read_rounds_offset_to_30_minutes() -> tb_domain::TbResult<()> 
         );
         // … and the instant never moves.
         assert_eq!(read.start.unix_timestamp(), start.unix_timestamp());
+
+        Ok(())
+    })
+    .await
+}
+
+// ---------------------------------------------------------------------------
+// ApiWrite dispatch (issue #452)
+// ---------------------------------------------------------------------------
+//
+// The same representative set of writes as the in-memory dispatch suite in
+// `tb_domain`, driven through the real database: the dispatch applies the
+// same domain operations the handlers use, and the write contract — a
+// `Summary` of everything touched, tombstones for deletes, an empty summary
+// for the non-Summary kinds — holds on the source of truth.
+
+/// The dispatch applies part writes: create returns the part, change returns
+/// the part, delete reports the tombstone, and a missing part is NotFound.
+#[tokio::test]
+#[ignore]
+async fn apiwrite_part_create_change_delete() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let mut session = test_session();
+
+        let summary = exec(
+            ApiWrite::PartCreate {
+                name: "New Chain".to_string(),
+                vendor: "Shimano".to_string(),
+                model: "CN-HG62".to_string(),
+                what: CHAIN,
+                purchase: sample_purchase_date(),
+            },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        let id = *summary.parts.keys().next().unwrap();
+        assert_eq!(summary.parts[&id].as_ref().unwrap().name, "New Chain");
+
+        let summary = exec(
+            ApiWrite::PartChange {
+                id,
+                name: "Renamed".to_string(),
+                vendor: "New Vendor".to_string(),
+                model: "New Model".to_string(),
+                purchase: sample_purchase_date(),
+            },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        assert_eq!(summary.parts[&id].as_ref().unwrap().name, "Renamed");
+
+        let summary = exec(ApiWrite::PartDelete { id }, &mut session, &mut store).await?;
+        assert_eq!(summary.parts, HashMap::from([(id, None)]));
+        assert!(store.partid_get_part(id).await.is_err());
+
+        // The failed statement aborts the Postgres transaction, so the
+        // missing-part error comes last.
+        let err = exec(
+            ApiWrite::PartDelete {
+                id: PartId::from(9999),
+            },
+            &mut session,
+            &mut store,
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            matches!(err, tb_domain::Error::NotFound(_)),
+            "deleting a missing part must be NotFound, got {err:?}"
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+/// The dispatch drives the attachment rules through the same ops the
+/// handlers use: attach creates the row and bumps the part, detach re-cuts it.
+#[tokio::test]
+#[ignore]
+async fn apiwrite_attach_detach() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let mut session = test_session();
+        let bike = create_part("Main Bike", "TendaBike", "Standard", BIKE, &mut store).await;
+        let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
+        let time = attachment_time();
+
+        let summary = exec(
+            ApiWrite::AttachmentAttach {
+                part: chain.id,
+                time,
+                gear: bike.id,
+                hook: BIKE,
+                all: false,
+            },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        assert!(!summary.parts.is_empty());
+        let att = store
+            .attachment_get_by_part_and_time(chain.id, time)
+            .await?
+            .expect("the chain is attached");
+        assert_eq!(att.gear, bike.id);
+        assert_eq!(att.detached, MAX_TIME);
+
+        let _ = exec(
+            ApiWrite::AttachmentDetach {
+                part: chain.id,
+                time,
+                all: false,
+            },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        assert!(
+            store
+                .attachment_get_by_part_and_time(chain.id, time)
+                .await?
+                .is_none(),
+            "the detach cuts the row"
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+/// The dispatch applies activity writes: update reports the activity, delete
+/// reports the tombstone and reverts the usage accounting.
+#[tokio::test]
+#[ignore]
+async fn apiwrite_activity_update_and_delete() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let mut session = test_session();
+
+        // Update the first fixture ride through the dispatch.
+        let mut act = store
+            .activity_read_by_id(ActivityId::new(1))
+            .await?
+            .expect("the fixture activity");
+        let id = act.id;
+        act.name = "Renamed Ride".to_string();
+        let summary = exec(
+            ApiWrite::ActivityUpdate { id, activity: act },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        assert_eq!(
+            summary.activities[&id].as_ref().unwrap().name,
+            "Renamed Ride"
+        );
+
+        // A path/body id mismatch is the handler's guard, surfaced as BadRequest.
+        let err = exec(
+            ApiWrite::ActivityUpdate {
+                id: ActivityId::new(2),
+                activity: ride(100, "Ride", activity_start(), None),
+            },
+            &mut session,
+            &mut store,
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            matches!(err, tb_domain::Error::BadRequest(_)),
+            "a path/body id mismatch must be BadRequest, got {err:?}"
+        );
+
+        // Delete a created ride: the tombstone and the usage revert.
+        let ride = ride(100, "New Ride", activity_start(), Some(PartId::from(1)));
+        ride.clone().upsert(&session, &mut store).await?;
+        let summary = exec(
+            ApiWrite::ActivityDelete {
+                id: ActivityId::new(100),
+            },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        assert_eq!(
+            summary.activities,
+            HashMap::from([(ActivityId::new(100), None)])
+        );
+        assert!(
+            store
+                .activity_read_by_id(ActivityId::new(100))
+                .await?
+                .is_none(),
+            "the ride is deleted"
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+/// The dispatch runs the CSV descend import the same way the handler does:
+/// matched rows come back in the summary, the others in the store unchanged.
+#[tokio::test]
+#[ignore]
+async fn apiwrite_activity_descend() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let mut session = test_session();
+
+        let csv = "Date,Title,Total Descent\n2023-05-18 22:13:20,Morning Ride,900\n";
+        let summary = exec(
+            ApiWrite::ActivityDescend {
+                data: csv.to_string(),
+            },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        assert_eq!(
+            summary.activities[&ActivityId::new(1)]
+                .as_ref()
+                .unwrap()
+                .descend,
+            Some(900)
+        );
+        let stored = store
+            .activity_read_by_id(ActivityId::new(1))
+            .await?
+            .unwrap();
+        assert_eq!(stored.descend, Some(900));
+
+        Ok(())
+    })
+    .await
+}
+
+/// The dispatch applies part-note writes: create returns the note, delete
+/// reports the tombstone.
+#[tokio::test]
+#[ignore]
+async fn apiwrite_partnote_create_and_delete() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let mut session = test_session();
+        let part = PartId::from(13);
+
+        let summary = exec(
+            ApiWrite::PartNoteCreateText {
+                part,
+                name: "Check the tension".to_string(),
+            },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        assert_eq!(summary.part_notes.len(), 1);
+        let note = summary.part_notes.values().flatten().next().unwrap();
+        assert_eq!(note.name, "Check the tension");
+        assert_eq!(note.part, part);
+
+        let summary = exec(
+            ApiWrite::PartNoteDelete { id: note.id },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        assert_eq!(summary.part_notes, HashMap::from([(note.id, None)]));
+        assert!(
+            store.partnote_get(note.id).await.is_err(),
+            "the note is deleted"
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+/// The dispatch applies service writes: create accounts the part usage and
+/// returns the service plus its usage, delete reports the tombstone.
+#[tokio::test]
+#[ignore]
+async fn apiwrite_service_create_and_delete() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let mut session = test_session();
+
+        let summary = exec(
+            ApiWrite::ServiceCreate {
+                part: PartId::from(13),
+                time: datetime!(2024-06-15 10:00 UTC),
+                name: "Chain Service".to_string(),
+                notes: "Old chain".to_string(),
+                plans: vec![],
+            },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        assert_eq!(summary.services.len(), 1);
+        assert_eq!(summary.usages.len(), 1);
+        let service = summary.services.values().flatten().next().unwrap();
+        assert_eq!(service.name, "Chain Service");
+
+        let summary = exec(
+            ApiWrite::ServiceDelete { id: service.id },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        assert_eq!(summary.services, HashMap::from([(service.id, None)]));
+
+        Ok(())
+    })
+    .await
+}
+
+/// The dispatch applies plan writes: create returns the plan, delete reports
+/// the plan tombstone (and the unlinked services, of which there are none
+/// here).
+#[tokio::test]
+#[ignore]
+async fn apiwrite_serviceplan_create_and_delete() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let mut session = test_session();
+
+        let plan = ServicePlan {
+            id: ServicePlanId::from(
+                Uuid::from_str("6ba7b810-9dad-11d1-80b4-00c04fd430c8").unwrap(),
+            ),
+            part: Some(PartId::from(13)),
+            what: CHAIN,
+            hook: None,
+            name: "Chain Every 1000km".to_string(),
+            days: None,
+            hours: None,
+            km: Some(1000),
+            climb: None,
+            descend: None,
+            rides: None,
+            uid: None,
+            energy: None,
+        };
+        let summary = exec(
+            ApiWrite::ServicePlanCreate { plan },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        assert_eq!(summary.plans.len(), 1);
+        let id = *summary.plans.keys().next().unwrap();
+
+        let summary = exec(ApiWrite::ServicePlanDelete { id }, &mut session, &mut store).await?;
+        assert_eq!(summary.plans, HashMap::from([(id, None)]));
+
+        Ok(())
+    })
+    .await
+}
+
+/// The dispatch applies shop writes: create returns the shop, register and
+/// unregister report the part (the route needs the owner's own subscription
+/// first), delete reports the tombstone.
+#[tokio::test]
+#[ignore]
+async fn apiwrite_shop_crud() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let mut session = test_session();
+
+        let summary = exec(
+            ApiWrite::ShopCreate {
+                name: "Workshop".to_string(),
+                description: None,
+                auto_approve: true,
+            },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        assert_eq!(summary.shops.len(), 1);
+        let shop_id = *summary.shops.keys().next().unwrap();
+
+        // The register route's checkuser requires the owner's subscription;
+        // auto-approve activates it.
+        let _ = exec(
+            ApiWrite::ShopSubscriptionCreate {
+                shop: shop_id,
+                message: None,
+            },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+
+        let part = PartId::from(13); // loose spare, owned by user 1
+        let summary = exec(
+            ApiWrite::ShopRegisterPart {
+                shop: shop_id,
+                part,
+            },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        assert_eq!(summary.parts[&part].as_ref().unwrap().shop, Some(shop_id));
+
+        let summary = exec(
+            ApiWrite::ShopUnregisterPart {
+                shop: shop_id,
+                part,
+            },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        assert_eq!(summary.parts[&part].as_ref().unwrap().shop, None);
+
+        let summary = exec(
+            ApiWrite::ShopDelete { id: shop_id },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        assert_eq!(summary.shops, HashMap::from([(shop_id, None)]));
+
+        Ok(())
+    })
+    .await
+}
+
+/// The dispatch applies subscription writes: a subscription is not a kind of
+/// the `Summary`, so the writes report an empty summary and the side effect
+/// lands in the store.
+#[tokio::test]
+#[ignore]
+async fn apiwrite_subscription_create_and_cancel() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let mut session = test_session();
+
+        let summary = exec(
+            ApiWrite::ShopCreate {
+                name: "Workshop".to_string(),
+                description: None,
+                auto_approve: true,
+            },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        let shop_id = *summary.shops.keys().next().unwrap();
+
+        let summary = exec(
+            ApiWrite::ShopSubscriptionCreate {
+                shop: shop_id,
+                message: Some("Please approve".to_string()),
+            },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        assert_eq!(summary, Summary::default());
+        let sub = store
+            .subscription_find_active(shop_id, UserId::from(1))
+            .await?
+            .expect("auto-approve activates the subscription");
+        assert_eq!(sub.status, tb_domain::SubscriptionStatus::Active);
+
+        let summary = exec(
+            ApiWrite::ShopSubscriptionCancel { id: sub.id },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        assert_eq!(summary, Summary::default());
+        assert!(
+            store.subscription_get(sub.id).await.is_err(),
+            "the subscription is deleted"
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+/// The dispatch does the onboarding domain part only — the status guard with
+/// the handler's message, then the status update; the Strava-side sync event
+/// is the cutover ticket's concern (issue #457). A second trigger is
+/// rejected with the handler's message.
+#[tokio::test]
+#[ignore]
+async fn apiwrite_onboarding_sync() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let mut session = test_session();
+
+        let summary = exec(
+            ApiWrite::UserOnboardingSync { time: 0 },
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        assert_eq!(summary, Summary::default());
+        let user = UserStore::get(&mut store, UserId::from(1)).await?;
+        assert_eq!(user.onboarding_status, OnboardingStatus::Completed);
+
+        // The guard: a second trigger is a BadRequest with the handler's
+        // message. The failed statement aborts the Postgres transaction, so
+        // it comes last.
+        let err = exec(
+            ApiWrite::UserOnboardingSync { time: 0 },
+            &mut session,
+            &mut store,
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            matches!(&err, tb_domain::Error::BadRequest(msg) if msg == "Initial sync already triggered"),
+            "a second sync must be the handler's BadRequest, got {err:?}"
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+/// The onboarding postpone guard and status update, the domain part the
+/// handler runs; a second postpone is rejected with the handler's message.
+#[tokio::test]
+#[ignore]
+async fn apiwrite_onboarding_postpone() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let mut session = test_session();
+
+        let summary = exec(ApiWrite::UserOnboardingPostpone, &mut session, &mut store).await?;
+        assert_eq!(summary, Summary::default());
+        let user = UserStore::get(&mut store, UserId::from(1)).await?;
+        assert_eq!(
+            user.onboarding_status,
+            OnboardingStatus::InitialSyncPostponed
+        );
+
+        // The guard: not pending anymore.
+        let err = exec(ApiWrite::UserOnboardingPostpone, &mut session, &mut store)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(
+                &err,
+                tb_domain::Error::BadRequest(msg)
+                    if msg == "Initial sync already completed or postponed"
+            ),
+            "a second postpone must be the handler's BadRequest, got {err:?}"
+        );
 
         Ok(())
     })

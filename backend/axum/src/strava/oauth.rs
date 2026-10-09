@@ -28,9 +28,10 @@ use oauth2::{
 use serde::{Deserialize, Serialize};
 use std::{env, sync::LazyLock};
 
-use crate::error::AppError;
+use crate::{appstate::AppState, error::AppError};
 use tb_domain::{Error, TbResult};
-use tb_strava::StravaId;
+use tb_exec::{Txn, TxnSource};
+use tb_strava::{StravaId, StravaStore};
 
 pub(super) static STRAVACLIENT: LazyLock<StravaClient> = LazyLock::new(strava_oauth_client);
 pub(super) static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(http_client);
@@ -199,11 +200,15 @@ pub(crate) enum AuthResponse {
     },
 }
 
-pub(crate) async fn login_authorized(
+pub(crate) async fn login_authorized<S>(
     Query(query): Query<AuthResponse>,
     session: Session,
-    State(store): State<crate::DbPool>,
-) -> Result<Redirect, AppError> {
+    State(state): State<AppState<S>>,
+) -> Result<Redirect, AppError>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
+{
     let (code, path) = match query {
         AuthResponse::Error { error, .. } => {
             warn!("Authentication failed with error: {error}");
@@ -225,7 +230,7 @@ pub(crate) async fn login_authorized(
         .await
         .context("token exchange failed")?;
 
-    let mut conn = store.begin().await?;
+    let mut conn = state.source.begin().await?;
     super::RequestSession::create_from_token(token, session, &mut conn).await?;
     conn.commit().await?;
 

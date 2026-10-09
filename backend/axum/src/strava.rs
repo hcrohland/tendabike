@@ -13,6 +13,8 @@ use axum::{
 };
 
 use crate::appstate::AppState;
+use tb_exec::TxnSource;
+use tb_strava::StravaStore;
 
 mod oauth;
 pub(crate) use oauth::*;
@@ -23,7 +25,10 @@ pub(crate) use session::*;
 mod redirect;
 mod webhook;
 
-pub(crate) fn router() -> Router<AppState> {
+pub(crate) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
+where
+    S::Conn: StravaStore,
+{
     Router::new()
         .route("/login", get(oauth::strava_auth))
         .route("/token", get(oauth::login_authorized))

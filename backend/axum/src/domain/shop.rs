@@ -22,9 +22,10 @@ use axum::{
 };
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
+use tb_exec::{Txn, TxnSource};
 
 use crate::{
-    DbPool, RequestSession,
+    RequestSession,
     appstate::AppState,
     error::{ApiResult, AppError},
 };
@@ -63,7 +64,7 @@ pub struct RegisterPartRequest {
     pub part_id: i32,
 }
 
-pub(super) fn router() -> Router<AppState> {
+pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
     Router::new()
         // Shop CRUD
         .route("/", get(list_shops).post(create_shop))
@@ -94,23 +95,32 @@ pub(super) fn router() -> Router<AppState> {
         .route("/{shop}/subscriptions", get(list_shop_subscriptions))
 }
 
-async fn list_shops(session: RequestSession, State(pool): State<DbPool>) -> ApiResult<Vec<Shop>> {
-    let mut store = pool.begin().await?;
+async fn list_shops<S>(
+    session: RequestSession,
+    State(state): State<AppState<S>>,
+) -> ApiResult<Vec<Shop>>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     Ok(Shop::get_all_for_user(&session.user_id(), &mut store)
         .await
         .map(Json)?)
 }
 
-async fn create_shop(
+async fn create_shop<S>(
     session: RequestSession,
-    State(pool): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(NewShop {
         name,
         description,
         auto_approve,
     }): Json<NewShop>,
-) -> Result<(StatusCode, Json<Shop>), AppError> {
-    let mut store = pool.begin().await?;
+) -> Result<(StatusCode, Json<Shop>), AppError>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let shop = ShopId::create(
         name,
         description,
@@ -123,27 +133,33 @@ async fn create_shop(
     Ok((StatusCode::CREATED, Json(shop)))
 }
 
-async fn get_shop(
+async fn get_shop<S>(
     Path(shop_id): Path<i32>,
     _session: RequestSession,
-    State(pool): State<DbPool>,
-) -> ApiResult<Shop> {
-    let mut store = pool.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<Shop>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     // let shop_id = ShopId::get_for_read(shop_id, user, &mut store).await?;
     Ok(ShopId::from(shop_id).read(&mut store).await.map(Json)?)
 }
 
-async fn update_shop(
+async fn update_shop<S>(
     Path(shop_id): Path<i32>,
     session: RequestSession,
-    State(pool): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(UpdateShop {
         name,
         description,
         auto_approve,
     }): Json<UpdateShop>,
-) -> ApiResult<Shop> {
-    let mut store = pool.begin().await?;
+) -> ApiResult<Shop>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let user = session.user_id();
     let shop_id = ShopId::get(shop_id, user, &mut store).await?;
     let shop = shop_id
@@ -153,12 +169,15 @@ async fn update_shop(
     Ok(Json(shop))
 }
 
-async fn delete_shop(
+async fn delete_shop<S>(
     Path(shop_id): Path<i32>,
     session: RequestSession,
-    State(pool): State<DbPool>,
-) -> Result<StatusCode, AppError> {
-    let mut store = pool.begin().await?;
+    State(state): State<AppState<S>>,
+) -> Result<StatusCode, AppError>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let user = session.user_id();
     let shop_id = ShopId::get(shop_id, user, &mut store).await?;
     shop_id.delete(user, &mut store).await?;
@@ -166,24 +185,30 @@ async fn delete_shop(
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn get_shop_parts(
+async fn get_shop_parts<S>(
     Path(shop_id): Path<i32>,
     session: RequestSession,
-    State(pool): State<DbPool>,
-) -> ApiResult<Vec<Part>> {
-    let mut store = pool.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<Vec<Part>>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let user = session.user_id();
     let shop_id = ShopId::get_for_read(shop_id, user, &mut store).await?;
     Ok(shop_id.get_parts(user, &mut store).await.map(Json)?)
 }
 
-async fn register_part(
+async fn register_part<S>(
     Path(shop_id): Path<i32>,
     session: RequestSession,
-    State(pool): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(RegisterPartRequest { part_id }): Json<RegisterPartRequest>,
-) -> ApiResult<tb_domain::Summary> {
-    let mut store = pool.begin().await?;
+) -> ApiResult<tb_domain::Summary>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let shop_id: ShopId = shop_id.into();
     let summary = shop_id
         .register_part(part_id.into(), &session, &mut store)
@@ -192,12 +217,15 @@ async fn register_part(
     Ok(Json(summary))
 }
 
-async fn unregister_part(
+async fn unregister_part<S>(
     Path((shop_id, part_id)): Path<(i32, i32)>,
     session: RequestSession,
-    State(pool): State<DbPool>,
-) -> ApiResult<tb_domain::Summary> {
-    let mut store = pool.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<tb_domain::Summary>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let shop_id: ShopId = shop_id.into();
     let summary = shop_id
         .unregister_part(part_id.into(), &session, &mut store)
@@ -207,13 +235,16 @@ async fn unregister_part(
 }
 
 // Search shops
-async fn search_shops(
+async fn search_shops<S>(
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
     session: RequestSession,
-    State(pool): State<DbPool>,
-) -> ApiResult<(Vec<Shop>, Vec<UserPublic>)> {
+    State(state): State<AppState<S>>,
+) -> ApiResult<(Vec<Shop>, Vec<UserPublic>)>
+where
+    S: TxnSource + Clone + 'static,
+{
     let query = params.get("q").map(|s| s.as_str()).unwrap_or("");
-    let mut store = pool.begin().await?;
+    let mut store = state.source.begin().await?;
     let shops = Shop::search(query, &mut store).await?;
     let users = Shop::get_users(&shops, &session.user_id(), &mut store).await?;
     Ok(Json((shops, users)))
@@ -221,35 +252,44 @@ async fn search_shops(
 
 // Subscription handlers
 
-async fn create_subscription(
+async fn create_subscription<S>(
     user: RequestSession,
-    State(pool): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(NewSubscriptionRequest { shop_id, message }): Json<NewSubscriptionRequest>,
-) -> Result<(StatusCode, Json<ShopSubscription>), AppError> {
-    let mut store = pool.begin().await?;
+) -> Result<(StatusCode, Json<ShopSubscription>), AppError>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let subscription =
         SubscriptionId::create(shop_id.into(), message, user.user_id(), &mut store).await?;
     store.commit().await?;
     Ok((StatusCode::CREATED, Json(subscription)))
 }
 
-async fn list_my_subscriptions(
+async fn list_my_subscriptions<S>(
     session: RequestSession,
-    State(pool): State<DbPool>,
-) -> ApiResult<Vec<ShopSubscriptionWithDetails>> {
-    let mut store = pool.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<Vec<ShopSubscriptionWithDetails>>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let subscriptions = ShopSubscription::get_for_user(session.user_id(), &mut store).await?;
     let subscriptions_with_details =
         ShopSubscription::with_shop_details(subscriptions, &mut store).await?;
     Ok(Json(subscriptions_with_details))
 }
 
-async fn list_shop_subscriptions(
+async fn list_shop_subscriptions<S>(
     Path(shop_id): Path<i32>,
     session: RequestSession,
-    State(pool): State<DbPool>,
-) -> ApiResult<Vec<ShopSubscriptionWithDetails>> {
-    let mut store = pool.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<Vec<ShopSubscriptionWithDetails>>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let user = session.user_id();
     let shop_id = ShopId::get(shop_id, user, &mut store).await?;
     Ok(
@@ -259,24 +299,30 @@ async fn list_shop_subscriptions(
     )
 }
 
-async fn get_subscription(
+async fn get_subscription<S>(
     Path(subscription_id): Path<i32>,
     session: RequestSession,
-    State(pool): State<DbPool>,
-) -> ApiResult<ShopSubscription> {
-    let mut store = pool.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<ShopSubscription>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let user = session.user_id();
     let subscription_id = SubscriptionId::get(subscription_id, user, &mut store).await?;
     Ok(subscription_id.read(user, &mut store).await.map(Json)?)
 }
 
-async fn approve_subscription(
+async fn approve_subscription<S>(
     Path(subscription_id): Path<i32>,
     session: RequestSession,
-    State(pool): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(req): Json<SubscriptionResponseRequest>,
-) -> ApiResult<ShopSubscription> {
-    let mut store = pool.begin().await?;
+) -> ApiResult<ShopSubscription>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let user = session.user_id();
     let subscription_id = SubscriptionId::get(subscription_id, user, &mut store).await?;
     let subscription = subscription_id
@@ -286,13 +332,16 @@ async fn approve_subscription(
     Ok(Json(subscription))
 }
 
-async fn reject_subscription(
+async fn reject_subscription<S>(
     Path(subscription_id): Path<i32>,
     session: RequestSession,
-    State(pool): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(req): Json<SubscriptionResponseRequest>,
-) -> ApiResult<ShopSubscription> {
-    let mut store = pool.begin().await?;
+) -> ApiResult<ShopSubscription>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let user = session.user_id();
     let subscription_id = SubscriptionId::get(subscription_id, user, &mut store).await?;
     let subscription = subscription_id
@@ -302,12 +351,15 @@ async fn reject_subscription(
     Ok(Json(subscription))
 }
 
-async fn cancel_subscription(
+async fn cancel_subscription<S>(
     Path(subscription_id): Path<i32>,
     session: RequestSession,
-    State(pool): State<DbPool>,
-) -> Result<StatusCode, AppError> {
-    let mut store = pool.begin().await?;
+    State(state): State<AppState<S>>,
+) -> Result<StatusCode, AppError>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let user = session.user_id();
     let subscription_id = SubscriptionId::get(subscription_id, user, &mut store).await?;
     subscription_id.cancel(user, &mut store).await?;

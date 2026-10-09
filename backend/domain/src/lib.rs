@@ -25,6 +25,9 @@ pub use error::{Error, TbResult};
 mod entities;
 pub use entities::*;
 
+mod apiwrite;
+pub use apiwrite::*;
+
 mod traits;
 use time::OffsetDateTime;
 pub use traits::*;

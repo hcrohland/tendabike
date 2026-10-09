@@ -2618,8 +2618,9 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sha2 0.11.0",
+ "sqlx",
  "tb_domain",
- "tb_sqlx",
+ "tb_exec",
  "tb_strava",
  "thiserror 2.0.21",
  "time",
@@ -2652,6 +2653,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tb_exec"
+version = "0.9.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "log",
+ "tb_domain",
+ "tb_strava",
+ "time",
+ "tokio",
+]
+
+[[package]]
 name = "tb_sqlx"
 version = "0.9.0"
 dependencies = [
@@ -2660,9 +2674,11 @@ dependencies = [
  "dotenvy",
  "log",
  "oauth2",
+ "serde",
  "serde_json",
  "sqlx",
  "tb_domain",
+ "tb_exec",
  "tb_strava",
  "time",
  "tokio",
@@ -2695,6 +2711,7 @@ dependencies = [
  "dotenvy",
  "mimalloc",
  "tb_axum",
+ "tb_sqlx",
  "tokio",
 ]
 

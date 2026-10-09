@@ -10,49 +10,67 @@ use axum::{
 };
 use tb_domain::UserId;
 
-use crate::{ApiResult, AxumAdmin, DbPool, RequestSession, error::AppError};
+use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, error::AppError};
+use tb_exec::{Txn, TxnSource};
+use tb_strava::StravaStore;
 
-pub(super) async fn redirect_gear(
+pub(super) async fn redirect_gear<S>(
     mut user: RequestSession,
     Path(id): Path<i32>,
-    State(store): State<DbPool>,
-) -> Result<Redirect, AppError> {
-    let mut store = store.begin().await?;
+    State(state): State<AppState<S>>,
+) -> Result<Redirect, AppError>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
+{
+    let mut store = state.source.begin().await?;
     let uri = tb_strava::gear::strava_url(id, &mut user, &mut store)
         .await
         .unwrap_or_else(|_| "/".to_string());
     Ok(Redirect::permanent(&uri))
 }
 
-pub(super) async fn redirect_act(
+pub(super) async fn redirect_act<S>(
     user: RequestSession,
     Path(id): Path<i64>,
-    State(store): State<DbPool>,
-) -> Result<Redirect, AppError> {
-    let mut store = store.begin().await?;
+    State(state): State<AppState<S>>,
+) -> Result<Redirect, AppError>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
+{
+    let mut store = state.source.begin().await?;
     let uri = tb_strava::activity::strava_url(id, &user, &mut store)
         .await
         .unwrap_or_else(|_| "/".to_string());
     Ok(Redirect::permanent(&uri))
 }
 
-pub(super) async fn redirect_user(
+pub(super) async fn redirect_user<S>(
     Path(id): Path<i32>,
-    State(store): State<DbPool>,
-) -> Result<Redirect, AppError> {
-    let mut store = store.begin().await?;
+    State(state): State<AppState<S>>,
+) -> Result<Redirect, AppError>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
+{
+    let mut store = state.source.begin().await?;
     let uri = tb_strava::strava_url(id, &mut store)
         .await
         .unwrap_or_else(|_| "/".to_string());
     Ok(Redirect::permanent(&uri))
 }
 
-pub(super) async fn revoke_user(
+pub(super) async fn revoke_user<S>(
     admin: AxumAdmin,
     Path(tbid): Path<UserId>,
-    State(pool): State<DbPool>,
-) -> ApiResult<()> {
-    let mut store = pool.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<()>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
+{
+    let mut store = state.source.begin().await?;
     let mut user = RequestSession::create_from_id(admin, tbid, &mut store).await?;
     let res = tb_strava::user_deauthorize(&mut user, &mut store)
         .await
@@ -61,12 +79,16 @@ pub(super) async fn revoke_user(
     Ok(res)
 }
 
-pub(super) async fn deleteuser(
+pub(super) async fn deleteuser<S>(
     admin: AxumAdmin,
     Path(tbid): Path<UserId>,
-    State(pool): State<DbPool>,
-) -> ApiResult<()> {
-    let mut store = pool.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<()>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
+{
+    let mut store = state.source.begin().await?;
     let mut user = RequestSession::create_from_id(admin, tbid, &mut store).await?;
     let res = tb_strava::user_delete(&mut user, &mut store)
         .await

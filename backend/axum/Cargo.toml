@@ -8,7 +8,7 @@ edition = { workspace = true }
 [dependencies]
 tb_domain = { workspace = true }
 tb_strava = { workspace = true }
-tb_sqlx = { workspace = true }
+tb_exec = { workspace = true }
 
 reqwest = { version = "0.12", default-features = false, features = [
     "rustls-tls",
@@ -25,12 +25,13 @@ rand = "0.10"
 axum = { version = "0.8", features = ["macros", "multipart"] }
 http = "1"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tower-http = { version = "0.6", features = ["full"] }
 # 0.15 fails on deletion-task...
 # tower-sessions = { version = "0.15", features = ["deletion-task"] }
 tower-sessions = "0.14"
 tower-sessions-sqlx-store = { version = "0.15", features = ["postgres"] }
+sqlx = { version = "0.8", features = ["postgres"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 axum-macros = "0.5"
 
 oauth2 = { workspace = true }

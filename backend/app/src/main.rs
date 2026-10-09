@@ -27,5 +27,11 @@ async fn main() -> anyhow::Result<()> {
         .parse::<SocketAddr>()
         .unwrap_or_else(|_| panic!("BIND_ADDR '{addr}' could not be parsed"));
 
-    Ok(tb_axum::start(&database_url, path, addr).await?)
+    // The composition root wires the concrete crates and process setup;
+    // the crate-internal details (the session store, the logging
+    // subscriber) live in `tb_axum::start`.
+    let pool = tb_sqlx::DbPool::new(&database_url).await?;
+    let db = pool.raw();
+
+    Ok(tb_axum::start(pool, db, path, addr).await?)
 }

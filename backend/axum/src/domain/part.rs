@@ -28,9 +28,10 @@ use axum::{
 };
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
+use tb_exec::{Txn, TxnSource};
 
 use crate::{
-    DbPool, RequestSession,
+    RequestSession,
     appstate::AppState,
     error::{ApiResult, AppError},
 };
@@ -64,25 +65,28 @@ pub struct ChangePart {
     pub purchase: OffsetDateTime,
 }
 
-pub(super) fn router() -> Router<AppState> {
+pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
     Router::new()
         .route("/", post(post_part))
         .route("/{part}", get(get_part).put(put_part).delete(delete_part))
         .route("/categories", get(mycats))
 }
 
-async fn get_part(
+async fn get_part<S>(
     Path(part): Path<PartId>,
     user: RequestSession,
-    State(store): State<DbPool>,
-) -> ApiResult<Part> {
-    let mut store = store.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<Part>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     Ok(part.part(&user, &mut store).await.map(Json)?)
 }
 
-async fn post_part(
+async fn post_part<S>(
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     Json(NewPart {
         what,
         name,
@@ -90,27 +94,33 @@ async fn post_part(
         model,
         purchase,
     }): Json<NewPart>,
-) -> Result<(StatusCode, Json<Part>), AppError> {
-    let mut store = store.begin().await?;
+) -> Result<(StatusCode, Json<Part>), AppError>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let part = Part::create(name, vendor, model, what, None, purchase, &user, &mut store).await?;
     store.commit().await?;
     Ok((StatusCode::CREATED, Json(part)))
 }
 
-async fn delete_part(
+async fn delete_part<S>(
     Path(part): Path<PartId>,
     user: RequestSession,
-    State(store): State<DbPool>,
-) -> ApiResult<PartId> {
-    let mut store = store.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<PartId>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let res = part.delete(&user, &mut store).await.map(Json)?;
     store.commit().await?;
     Ok(res)
 }
 
-async fn put_part(
+async fn put_part<S>(
     user: RequestSession,
-    State(store): State<DbPool>,
+    State(state): State<AppState<S>>,
     Path(part): Path<PartId>,
     Json(ChangePart {
         name,
@@ -118,8 +128,11 @@ async fn put_part(
         model,
         purchase,
     }): Json<ChangePart>,
-) -> ApiResult<Part> {
-    let mut store = store.begin().await?;
+) -> ApiResult<Part>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
 
     let res = part
         .change(name, vendor, model, purchase, &user, &mut store)
@@ -129,10 +142,13 @@ async fn put_part(
     Ok(res)
 }
 
-async fn mycats(
+async fn mycats<S>(
     user: RequestSession,
-    State(store): State<DbPool>,
-) -> ApiResult<HashSet<PartTypeId>> {
-    let mut store = store.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<HashSet<PartTypeId>>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     Ok(Part::categories(&user, &mut store).await.map(Json)?)
 }

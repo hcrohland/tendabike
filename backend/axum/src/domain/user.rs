@@ -14,8 +14,10 @@ use axum::{
 use serde::Serialize;
 use std::collections::HashMap;
 
-use crate::{ApiResult, AxumAdmin, DbPool, RequestSession, appstate::AppState};
+use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState};
 use tb_domain::{Session, ShopId, Summary};
+use tb_exec::{Txn, TxnSource};
+use tb_strava::StravaStore;
 use tb_strava::StravaUser;
 
 /// Flatten an id-keyed `Summary` map to a `Vec` of live entities, dropping tombstones.
@@ -23,7 +25,10 @@ fn live_values<K, V>(m: HashMap<K, Option<V>>) -> Vec<V> {
     m.into_values().flatten().collect()
 }
 
-pub(super) fn router() -> Router<AppState> {
+pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
+where
+    S::Conn: StravaStore,
+{
     Router::new()
         .route("/", get(getuser))
         .route("/summary", get(summary))
@@ -31,8 +36,14 @@ pub(super) fn router() -> Router<AppState> {
         .route("/export", get(export))
 }
 
-async fn getuser(user: RequestSession, State(pool): State<DbPool>) -> ApiResult<tb_domain::User> {
-    let mut store = pool.begin().await?;
+async fn getuser<S>(
+    user: RequestSession,
+    State(state): State<AppState<S>>,
+) -> ApiResult<tb_domain::User>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     Ok(user.user_id().read(&mut store).await.map(Json)?)
 }
 
@@ -40,12 +51,16 @@ async fn getuser(user: RequestSession, State(pool): State<DbPool>) -> ApiResult<
 struct ShopQuery {
     shop: Option<ShopId>,
 }
-async fn summary(
+async fn summary<S>(
     mut session: RequestSession,
-    State(pool): State<DbPool>,
+    State(state): State<AppState<S>>,
     Query(ShopQuery { shop }): Query<ShopQuery>,
-) -> ApiResult<Summary> {
-    let mut store = pool.begin().await?;
+) -> ApiResult<Summary>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
+{
+    let mut store = state.source.begin().await?;
     session.set_shop(shop)?;
     StravaUser::update_gear(&mut session, &mut store).await?;
     let res = session
@@ -69,8 +84,11 @@ pub struct Export {
     pub shops: Vec<tb_domain::Shop>,
 }
 
-async fn export(user: RequestSession, State(pool): State<DbPool>) -> ApiResult<Export> {
-    let mut store = pool.begin().await?;
+async fn export<S>(user: RequestSession, State(state): State<AppState<S>>) -> ApiResult<Export>
+where
+    S: TxnSource + Clone + 'static,
+{
+    let mut store = state.source.begin().await?;
     let user_id = user.user_id();
     let summary = user_id.get_summary(None, &mut store).await?;
     let user = user_id.read(&mut store).await?;
@@ -86,10 +104,14 @@ async fn export(user: RequestSession, State(pool): State<DbPool>) -> ApiResult<E
     }))
 }
 
-async fn userlist(
+async fn userlist<S>(
     _u: AxumAdmin,
-    State(pool): State<DbPool>,
-) -> ApiResult<Vec<tb_strava::StravaStat>> {
-    let mut store = pool.begin().await?;
+    State(state): State<AppState<S>>,
+) -> ApiResult<Vec<tb_strava::StravaStat>>
+where
+    S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
+{
+    let mut store = state.source.begin().await?;
     Ok(tb_strava::get_all_stats(&mut store).await.map(Json)?)
 }

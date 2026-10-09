@@ -1,4 +1,6 @@
 use axum::Router;
+use tb_exec::TxnSource;
+use tb_strava::StravaStore;
 
 use crate::appstate::AppState;
 
@@ -12,7 +14,10 @@ mod shop;
 mod types;
 mod user;
 
-pub(super) fn router() -> Router<AppState> {
+pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
+where
+    S::Conn: StravaStore,
+{
     Router::new()
         .nest("/user", user::router())
         .nest("/types", types::router())

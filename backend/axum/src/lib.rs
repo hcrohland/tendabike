@@ -3,9 +3,18 @@
 //! The presentation layer is responsible for handling HTTP requests and responses, and for translating them into
 //! actions that the application layer can understand. The Axum framework is used to implement the presentation layer.
 //!
-//! This file defines the `start` function, which is the entry point for the presentation layer. It takes a database
-//! connection pool, a path to the directory containing static files, and a socket address to bind to. It sets up the
-//! necessary components for the presentation layer, such as the router and the middleware, and starts the server.
+//! The web layer is storage-agnostic: the state and every handler are generic over a
+//! [`TxnSource`], and the concrete store (the `DbPool` from `tb_sqlx`) is injected at the
+//! composition root (ADR-0005, executable spec #446 §6). It knows none of the details of
+//! `tb_sqlx` — but it did choose a `PostgresStore` for its sessions, so [`start`] also
+//! takes the postgres connection (the `PgPool` the caller built its store from), and it
+//! owns its own logging subscriber: the composition root wires the concrete crates, not
+//! the crate-internal details.
+//!
+//! This file defines the `start` function, which is the entry point for the presentation layer. It takes a
+//! `TxnSource`, the `PgPool` for the session store, a path to the directory containing static files, and a socket address to bind to.
+//! It sets up the necessary components for the presentation layer, such as the router and the middleware,
+//! and starts the server.
 //!
 //! This file also contains the definitions of various modules that implement the endpoints for the different resources
 //! of the Tendabike server, such as users, parts, attachments, activities, and Strava integration.
@@ -13,13 +22,14 @@
 
 use anyhow::Context;
 use axum::Router;
+use sqlx::PgPool;
 use std::net::SocketAddr;
 use tb_domain::TbResult;
+use tb_exec::TxnSource;
+use tb_strava::StravaStore;
 use tower_sessions::{ExpiredDeletion, SessionManagerLayer};
 use tower_sessions_sqlx_store::PostgresStore;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-
-use tb_sqlx::DbPool;
 
 mod domain;
 
@@ -35,14 +45,27 @@ use error::*;
 #[cfg(test)]
 mod test_support;
 
-fn routes(app_state: AppState) -> Router {
+pub fn routes<S: TxnSource + Clone + 'static>(app_state: AppState<S>) -> Router
+where
+    S::Conn: StravaStore,
+{
     Router::new()
         .nest("/api", domain::router())
         .nest("/strava", strava::router())
         .with_state(app_state)
 }
 
-pub async fn start(database_url: &str, path: std::path::PathBuf, addr: SocketAddr) -> TbResult<()> {
+pub async fn start<S: TxnSource + Clone + Send + Sync + 'static>(
+    source: S,
+    pool: PgPool,
+    path: std::path::PathBuf,
+    addr: SocketAddr,
+) -> TbResult<()>
+where
+    S::Conn: StravaStore,
+{
+    // The logging subscriber lives with the web layer it logs (the
+    // composition root owns process setup, not crate-internal wiring).
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -51,9 +74,13 @@ pub async fn start(database_url: &str, path: std::path::PathBuf, addr: SocketAdd
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let pool = tb_sqlx::DbPool::new(database_url).await?;
+    let app_state = AppState::new(source);
 
-    let session_store = PostgresStore::new(pool.raw());
+    // The web layer chose a `PostgresStore` for its sessions, so the
+    // caller hands over the postgres connection — the same pool the
+    // `TxnSource` was built from.
+    let session_store = PostgresStore::new(pool);
+
     session_store
         .migrate()
         .await
@@ -70,8 +97,6 @@ pub async fn start(database_url: &str, path: std::path::PathBuf, addr: SocketAdd
             10,
         )))
         .with_secure(false);
-
-    let app_state = AppState::new(pool);
 
     let app = routes(app_state)
         .fallback_service(tower_http::services::ServeDir::new(path))
