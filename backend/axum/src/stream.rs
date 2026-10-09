@@ -39,9 +39,10 @@ use http::StatusCode;
 use log::error;
 use tokio::sync::{Mutex, broadcast, watch};
 
-use tb_domain::{Session, Summary, TbResult, UserId};
-use tb_exec::{ApiWriteSender, Txn, TxnSource, api_write_channel, run};
-use tb_strava::StravaStore;
+use tb_domain::{ApiWrite, Error, Session, Summary, TbResult, UserId};
+use tb_exec::{ApiWriteRequest, ApiWriteSender, Txn, TxnSource, api_write_channel, run};
+use tb_strava::event::{Event as StravaEvent, ObjectType};
+use tb_strava::{StravaId, StravaStore};
 
 use crate::appstate::AppState;
 use crate::strava::RequestSession;
@@ -76,16 +77,18 @@ pub enum ExecutorStatus {
 }
 
 /// One live per-user executor: the shared fate channel, the send half of the
-/// user's API-write channel (the write handlers enqueue here — next ticket),
-/// and the SSE frame sink the stream tasks subscribe to.
+/// user's API-write channel (the write handlers enqueue here, spec §6.2),
+/// the SSE frame sink the stream tasks subscribe to, and the consumed-
+/// Strava-event channel the admin sync awaits (spec §6.4).
 struct Executor {
     status: watch::Receiver<ExecutorStatus>,
-    /// The write handlers' door into this user's loop (spec §6.2). Held here
-    /// so the next ticket's enqueue-and-await handlers can reach it; unused
-    /// until they land.
-    #[allow(dead_code)]
+    /// The write handlers' door into this user's loop (spec §6.2): enqueue
+    /// an `ApiWrite` here and await its oneshot.
     writer: ApiWriteSender,
     frames: broadcast::Sender<Summary>,
+    /// Every Strava event the loop consumed (spec §6.4): the admin sync's
+    /// completion signal, correlated by the event's identity.
+    events: broadcast::Sender<StravaEvent>,
 }
 
 /// The per-user executor registry (spec §4.4): the live executor per
@@ -131,7 +134,7 @@ impl Registry {
         S::Conn: StravaStore,
     {
         let mut map = self.executors.lock().await;
-        let (frames, status) =
+        let (_writer, frames, _events, status) =
             Self::ensure_running(&mut map, source, user_id, self.idle_timeout).await?;
         Ok((frames.subscribe(), status))
     }
@@ -146,8 +149,130 @@ impl Registry {
         S::Conn: StravaStore,
     {
         let mut map = self.executors.lock().await;
-        let _ = Self::ensure_running(&mut map, source, user_id, self.idle_timeout).await?;
+        let (_writer, _frames, _events, _status) =
+            Self::ensure_running(&mut map, source, user_id, self.idle_timeout).await?;
         Ok(())
+    }
+    /// Enqueue one [`ApiWrite`] on the user's executor and await its outcome
+    /// (spec §6.2): spawn-or-join the executor, send the request on the
+    /// user's API-write channel, and await the oneshot (unbounded — through
+    /// a 15-minute rate-limit backoff the write may wait long, and that is
+    /// the spec'd behavior).
+    pub async fn write<S>(&self, source: &S, user_id: UserId, write: ApiWrite) -> TbResult<Summary>
+    where
+        S: TxnSource + Clone + 'static,
+        S::Conn: StravaStore,
+    {
+        let (request, reply) = ApiWriteRequest::new(write);
+        let mut map = self.executors.lock().await;
+        let (writer, _frames, _events, _status) =
+            Self::ensure_running(&mut map, source, user_id, self.idle_timeout).await?;
+        if writer.send(request).is_err() {
+            // The executor died between the liveness check and the send
+            // (spec §4.6): the write is lost, the client retries.
+            return Err(Error::AnyFailure(anyhow::anyhow!(
+                "the executor for user {user_id} is gone"
+            )));
+        }
+        // Do not hold the registry lock across the (unbounded) await.
+        drop(map);
+        reply.await.map_err(|_| {
+            Error::AnyFailure(anyhow::anyhow!(
+                "the executor for user {user_id} dropped the write"
+            ))
+        })?
+    }
+
+    /// A subscription to the user's executor's consumed-Strava-event channel
+    /// (spec §6.4): spawning the executor if it is not running. The admin
+    /// sync subscribes **before** it enqueues its event, so the completion
+    /// signal cannot be missed.
+    pub async fn events<S>(
+        &self,
+        source: &S,
+        user_id: UserId,
+    ) -> TbResult<broadcast::Receiver<StravaEvent>>
+    where
+        S: TxnSource + Clone + 'static,
+        S::Conn: StravaStore,
+    {
+        let mut map = self.executors.lock().await;
+        let (_writer, _frames, events, _status) =
+            Self::ensure_running(&mut map, source, user_id, self.idle_timeout).await?;
+        Ok(events.subscribe())
+    }
+
+    /// Run one admin sync for `user_id` (spec §6.4): subscribe to the
+    /// executor's consumed-event channel (spawning it if it is not running),
+    /// enqueue a `Sync` event on the `strava_events` queue, wake the
+    /// executor, and await that event's completion (unbounded — the spec'd
+    /// behavior for the admin endpoint).
+    ///
+    /// The completion is correlated by the event's identity (owner, type,
+    /// `event_time`). If the channel closes or lags (the executor settled
+    /// mid-wait), the `strava_events` queue — the source of truth (spec
+    /// §4.6) — is consulted: a sync no longer queued has been consumed.
+    pub async fn sync<S>(
+        &self,
+        source: &S,
+        user_id: UserId,
+        strava_id: StravaId,
+        event_time: i64,
+    ) -> TbResult<()>
+    where
+        S: TxnSource + Clone + 'static,
+        S::Conn: StravaStore,
+    {
+        // Subscribe before enqueuing, so the completion cannot be missed.
+        let mut done = self.events(source, user_id).await?;
+
+        // Enqueue the sync on the DB queue, like the webhook does.
+        let mut store = source.begin().await?;
+        tb_strava::event::insert_sync(strava_id, event_time, false, &mut store).await?;
+        store.commit().await?;
+
+        // Wake the executor (non-critical: the queue is the source of truth).
+        let _ = self.wake(source, user_id).await;
+
+        // Await our sync's completion (unbounded, spec §6.4).
+        loop {
+            match done.recv().await {
+                Ok(event) if is_sync(&event, strava_id, event_time) => return Ok(()),
+                // Some other message completed; keep waiting for ours.
+                Ok(_) => continue,
+                Err(_) => {
+                    // The channel closed (or lagged): the executor settled
+                    // without announcing our event. Consult the queue — the
+                    // source of truth (spec §4.6): a sync no longer queued
+                    // has been consumed; otherwise re-subscribe (respawning
+                    // the executor) and keep waiting.
+                    if !self.sync_queued(source, strava_id, event_time).await? {
+                        return Ok(());
+                    }
+                    done = self.events(source, user_id).await?;
+                }
+            }
+        }
+    }
+
+    /// Whether `strava_id`'s queue still holds the sync at `event_time`
+    /// (the admin sync's fallback completion check, spec §4.6).
+    async fn sync_queued<S>(
+        &self,
+        source: &S,
+        strava_id: StravaId,
+        event_time: i64,
+    ) -> TbResult<bool>
+    where
+        S: TxnSource + Clone + 'static,
+        S::Conn: StravaStore,
+    {
+        let mut store = source.begin().await?;
+        // A non-migrate sync is queued with `object_id` 0, so the user's
+        // `object_id` 0 events are exactly their syncs.
+        let syncs = store.strava_event_get_later(0, strava_id).await?;
+        store.commit().await?;
+        Ok(syncs.iter().any(|event| event.event_time == event_time))
     }
 
     /// Push a frame to the user's SSE streams (test helper: the production
@@ -175,7 +300,12 @@ impl Registry {
         source: &S,
         user_id: UserId,
         idle_timeout: Duration,
-    ) -> TbResult<(broadcast::Sender<Summary>, watch::Receiver<ExecutorStatus>)>
+    ) -> TbResult<(
+        ApiWriteSender,
+        broadcast::Sender<Summary>,
+        broadcast::Sender<StravaEvent>,
+        watch::Receiver<ExecutorStatus>,
+    )>
     where
         S: TxnSource + Clone + 'static,
         S::Conn: StravaStore,
@@ -183,7 +313,12 @@ impl Registry {
         if let Some(exec) = map.get(&user_id)
             && *exec.status.borrow() == ExecutorStatus::Running
         {
-            return Ok((exec.frames.clone(), exec.status.clone()));
+            return Ok((
+                exec.writer.clone(),
+                exec.frames.clone(),
+                exec.events.clone(),
+                exec.status.clone(),
+            ));
         }
 
         // Build the executor's `StravaSession` from the stored `StravaUser`
@@ -196,17 +331,28 @@ impl Registry {
 
         let (writer, reader) = api_write_channel();
         let (frames, _) = broadcast::channel(BROADCAST_CAPACITY);
+        let (events, _) = broadcast::channel(BROADCAST_CAPACITY);
         let (status_tx, status_rx) = watch::channel(ExecutorStatus::Running);
 
         // The task keeps a clone of the frame sender alive until *after* it
         // records its fate, so a stream that sees the frame channel close has
         // already seen the settled status (no race between the two signals).
-        // `source` and `frames_for_run` are owned clones: the `async move`
-        // block needs `'static` values, not the `&S` reference.
+        // `source`, `frames_for_run`, and `events_for_run` are owned clones:
+        // the `async move` block needs `'static` values, not the `&S`
+        // reference.
         let owned_source = source.clone();
         let frames_for_run = frames.clone();
+        let events_for_run = events.clone();
         let join = tokio::spawn(async move {
-            let result = run(owned_source, session, reader, frames_for_run, idle_timeout).await;
+            let result = run(
+                owned_source,
+                session,
+                reader,
+                frames_for_run,
+                events_for_run,
+                idle_timeout,
+            )
+            .await;
             let _ = status_tx.send(match result {
                 Ok(()) => ExecutorStatus::Reaped,
                 Err(_) => ExecutorStatus::Dead,
@@ -220,12 +366,21 @@ impl Registry {
 
         let exec = Executor {
             status: status_rx.clone(),
-            writer,
+            writer: writer.clone(),
             frames: frames.clone(),
+            events: events.clone(),
         };
         map.insert(user_id, exec);
-        Ok((frames, status_rx))
+        Ok((writer, frames, events, status_rx))
     }
+}
+
+/// The admin sync's completion correlation (spec §6.4): the consumed event
+/// is ours when its identity matches the sync we queued.
+fn is_sync(event: &StravaEvent, strava_id: StravaId, event_time: i64) -> bool {
+    event.object_type == ObjectType::Sync
+        && event.owner_id == strava_id
+        && event.event_time == event_time
 }
 
 /// The seed for one SSE connection's `unfold`: the current frame subscription

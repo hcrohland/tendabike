@@ -2,7 +2,7 @@
 //! It includes endpoints for authentication, webhooks, and redirects.
 //! The module also exports the `oauth` module for use in other parts of the application.
 //!
-//! The endpoints are defined using the `Router` from Axum and are mounted on the `/login`, `/token`, `/logout`, `/hooks`, `/callback`, `/sync`, `/sync/{id}`, `/bikes/{id}`, `/activities/{id}`, and `/users/{id}` routes.
+//! The endpoints are defined using the `Router` from Axum and are mounted on the `/login`, `/token`, `/logout`, `/callback`, `/sync`, `/sync/{id}`, `/bikes/{id}`, `/activities/{id}`, and `/users/{id}` routes.
 //!
 //! The `router` function takes an `AppState` as an argument and returns a `Router` with the mounted endpoints and the provided state.
 //!
@@ -33,7 +33,6 @@ where
         .route("/login", get(oauth::strava_auth))
         .route("/token", get(oauth::login_authorized))
         .route("/logout", get(oauth::logout))
-        .route("/hooks", get(webhook::hooks))
         .route(
             "/callback",
             post(webhook::create_event).get(webhook::validate_subscription),

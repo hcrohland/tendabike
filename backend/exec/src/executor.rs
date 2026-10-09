@@ -244,6 +244,11 @@ pub(crate) async fn select_message(
 /// * `rx` — the receive half of the user's API-write channel.
 /// * `frames` — the user's SSE frame sink (`broadcast`); the web layer's
 ///   stream tasks subscribe to it.
+/// * `events` — the user's completed-Strava-event channel (`broadcast`):
+///   every event the loop consumed (its processing transaction committed)
+///   is sent on it, even with an empty summary. The web layer's admin sync
+///   awaits its own queued event on this channel (spec §6.4) — the event's
+///   identity lets the waiter correlate its sync.
 /// * `idle_timeout` — how long the loop idles (no pending work) before it
 ///   reaps, while streams are still attached.
 ///
@@ -288,6 +293,7 @@ pub async fn run<T, S>(
     session: S,
     mut rx: ApiWriteReceiver,
     frames: broadcast::Sender<Summary>,
+    events: broadcast::Sender<Event>,
     idle_timeout: Duration,
 ) -> TbResult<()>
 where
@@ -315,8 +321,15 @@ where
 
             Select::Strava(event) => {
                 last_activity = Instant::now();
-                if let Err(err) =
-                    run_event(&source, &mut session, &event, &frames, &mut backoff).await
+                if let Err(err) = run_event(
+                    &source,
+                    &mut session,
+                    &event,
+                    &frames,
+                    &events,
+                    &mut backoff,
+                )
+                .await
                 {
                     error!("the executor loop is ending: {err:?}");
                     return Err(err);
@@ -559,7 +572,9 @@ fn lifecycle_error(what: &str) -> Error {
 
 /// One Strava event in one transaction (spec §4.3): `begin` → [`process`]
 /// → `commit`, or `rollback` on failure; a successful, non-empty `Summary`
-/// pushes one frame to the user's SSE streams.
+/// pushes one frame to the user's SSE streams, and the consumed event is
+/// announced on the completion channel (spec §6.4 — fired even for an empty
+/// summary, which pushes no frame).
 ///
 /// [`process`] re-reads the queue with `get_event` inside the work
 /// transaction — the accepted double read of the loop: the probe and the work
@@ -581,6 +596,7 @@ async fn run_event<T, S>(
     session: &mut S,
     event: &Event,
     frames: &broadcast::Sender<Summary>,
+    events: &broadcast::Sender<Event>,
     backoff: &mut DbBackoff,
 ) -> Result<(), Error>
 where
@@ -605,6 +621,9 @@ where
         Ok(summary) => match conn.commit().await {
             Ok(()) => {
                 push_frame(frames, &summary);
+                // The completion signal (spec §6.4): the event is consumed
+                // for good, empty summary or not.
+                let _ = events.send(event.clone());
                 backoff.reset();
                 Ok(())
             }

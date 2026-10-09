@@ -28,15 +28,17 @@ use axum::{
 };
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use tb_exec::{Txn, TxnSource};
+use tb_exec::TxnSource;
 
 use crate::{
     RequestSession,
     appstate::AppState,
+    domain::created_entity,
     error::{ApiResult, AppError},
 };
 use serde_with::serde_as;
-use tb_domain::{Part, PartId, PartTypeId};
+use tb_domain::{ApiWrite, Part, PartId, PartTypeId};
+use tb_strava::{StravaSession, StravaStore};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 #[serde_as]
@@ -65,7 +67,10 @@ pub struct ChangePart {
     pub purchase: OffsetDateTime,
 }
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
+where
+    S::Conn: StravaStore,
+{
     Router::new()
         .route("/", post(post_part))
         .route("/{part}", get(get_part).put(put_part).delete(delete_part))
@@ -97,10 +102,25 @@ async fn post_part<S>(
 ) -> Result<(StatusCode, Json<Part>), AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let part = Part::create(name, vendor, model, what, None, purchase, &user, &mut store).await?;
-    store.commit().await?;
+    // The write runs on the user's executor (spec §6.2); the 201 body is the
+    // created part extracted from the write's `Summary`.
+    let summary = state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::PartCreate {
+                name,
+                vendor,
+                model,
+                what,
+                purchase,
+            },
+        )
+        .await?;
+    let part = created_entity(&summary.parts, "part")?;
     Ok((StatusCode::CREATED, Json(part)))
 }
 
@@ -108,14 +128,20 @@ async fn delete_part<S>(
     Path(part): Path<PartId>,
     user: RequestSession,
     State(state): State<AppState<S>>,
-) -> ApiResult<PartId>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let res = part.delete(&user, &mut store).await.map(Json)?;
-    store.commit().await?;
-    Ok(res)
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::PartDelete { id: part },
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn put_part<S>(
@@ -128,18 +154,26 @@ async fn put_part<S>(
         model,
         purchase,
     }): Json<ChangePart>,
-) -> ApiResult<Part>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-
-    let res = part
-        .change(name, vendor, model, purchase, &user, &mut store)
-        .await
-        .map(Json)?;
-    store.commit().await?;
-    Ok(res)
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::PartChange {
+                id: part,
+                name,
+                vendor,
+                model,
+                purchase,
+            },
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn mycats<S>(

@@ -7,13 +7,15 @@
 //! The `router` function creates a new router and maps the API endpoints to their respective functions.
 
 use axum::{Json, Router, extract::State, routing::post};
+use http::StatusCode;
 use log::debug;
 use serde::Deserialize;
 use time::OffsetDateTime;
 
-use crate::{RequestSession, appstate::AppState, error::ApiResult};
-use tb_domain::{PartId, PartTypeId, Summary};
-use tb_exec::{Txn, TxnSource};
+use crate::{RequestSession, appstate::AppState, error::AppError};
+use tb_domain::{ApiWrite, PartId, PartTypeId};
+use tb_exec::TxnSource;
+use tb_strava::{StravaSession, StravaStore};
 
 /// Description of an Attach or Detach request
 
@@ -37,13 +39,12 @@ async fn attach_rt<S>(
     user: RequestSession,
     State(state): State<AppState<S>>,
     Json(event): Json<Event>,
-) -> ApiResult<Summary>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
     debug!("attach {event:?}");
-
     let Event {
         part_id,
         time,
@@ -51,12 +52,21 @@ where
         hook,
         all,
     } = event;
-
-    let res = tb_domain::attach_assembly(&user, part_id, time, gear, hook, all, &mut store)
-        .await
-        .map(Json)?;
-    store.commit().await?;
-    Ok(res)
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::AttachmentAttach {
+                part: part_id,
+                time,
+                gear,
+                hook,
+                all,
+            },
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// route for detach API
@@ -64,20 +74,28 @@ async fn detach_rt<S>(
     user: RequestSession,
     State(state): State<AppState<S>>,
     Json(event): Json<Event>,
-) -> ApiResult<Summary>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
     debug!("detach {event:?}");
     let Event {
         part_id, time, all, ..
     } = event;
-    let res = tb_domain::detach_assembly(&user, part_id, time, all, &mut store)
-        .await
-        .map(Json)?;
-    store.commit().await?;
-    Ok(res)
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::AttachmentDetach {
+                part: part_id,
+                time,
+                all,
+            },
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
@@ -92,45 +110,56 @@ async fn dispose_rt<S>(
     user: RequestSession,
     State(state): State<AppState<S>>,
     Json(event): Json<Dispose>,
-) -> ApiResult<Summary>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
     debug!("{event:?}");
     let Dispose {
         part_id: part,
         time,
         all,
     } = event;
-    let res = tb_domain::dispose_assembly(&user, part, time, all, &mut store)
-        .await
-        .map(Json)?;
-    store.commit().await?;
-    Ok(res)
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::AttachmentDispose { part, time, all },
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn recover_rt<S>(
     user: RequestSession,
     State(state): State<AppState<S>>,
     Json(event): Json<Dispose>,
-) -> ApiResult<Summary>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
     debug!("Recover {event:?}");
     let Dispose {
         part_id: part, all, ..
     } = event;
-    let res = tb_domain::recover_assembly(&user, part, all, &mut store)
-        .await
-        .map(Json)?;
-    store.commit().await?;
-    Ok(res)
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::AttachmentRecover { part, all },
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
-pub(crate) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(crate) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
+where
+    S::Conn: StravaStore,
+{
     Router::new()
         .route("/attach", post(attach_rt))
         .route("/detach", post(detach_rt))

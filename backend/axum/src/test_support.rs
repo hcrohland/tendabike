@@ -7,7 +7,7 @@
 
 #![allow(clippy::too_many_arguments)]
 
-use std::sync::{Arc, Once};
+use std::sync::{Arc, Mutex, Once};
 
 use axum::Router;
 use http::{HeaderMap, Method, Request, StatusCode, header};
@@ -126,10 +126,14 @@ async fn run_with_body(
 /// against the no-op `LiveConn`) and a `MemoryStore` session layer, using an
 /// explicit executor [`Registry`] (the stream tests use a short idle/heartbeat
 /// cadence so the executor's lifecycle is observable).
-pub(crate) fn test_app_live(store: &MemoryStore, registry: std::sync::Arc<Registry>) -> Router {
+pub(crate) fn test_app_live(
+    store: &MemoryStore,
+    source: LiveSource,
+    registry: std::sync::Arc<Registry>,
+) -> Router {
     set_oauth_env_once();
     let session_layer = SessionManagerLayer::new(store.clone());
-    routes(AppState::with_registry(LiveSource, registry)).layer(session_layer)
+    routes(AppState::with_registry(source, registry)).layer(session_layer)
 }
 
 /// Sends a GET request to a long-lived (SSE) endpoint and returns its status,
@@ -701,22 +705,33 @@ impl TxnSource for FakeSource {
 // `None` (so the loop has no events and reaps on idle). Everything else is
 // `unimplemented!()` — the stream path never touches it.
 
-/// A live connection: a `MemStore` the nine `Store` sub-traits delegate to
-/// (so the full `tb_exec` loop runs in-memory), plus the `StravaStore` and
-/// `Txn` the executor names. The stream tests never queue a Strava event, so
-/// the `StravaStore` answers the two reads the loop and session make and
-/// `unimplemented!()` for the rest.
-pub struct LiveConn(pub MemStore);
+/// A live connection: a sibling transaction on the shared in-memory database
+/// (the nine `Store` sub-traits delegate to it, so the full `tb_exec` loop
+/// runs in-memory), plus the `StravaStore` queue the executor's Strava path
+/// names, backed by shared in-memory state.
+pub struct LiveConn {
+    pub mem: MemStore,
+    strava: Arc<Mutex<StravaState>>,
+}
+
+/// The in-memory stand-in for the `strava_events` queue and the user's stored
+/// refresh token (the parts of the database the Strava path touches).
+#[derive(Default)]
+pub struct StravaState {
+    pub events: Vec<Event>,
+    pub next_id: i32,
+    pub refresh_token: Option<String>,
+}
 
 impl Store for LiveConn {}
 
 #[async_trait::async_trait]
 impl PartStore for LiveConn {
     async fn partid_get_part(&mut self, pid: PartId) -> TbResult<Part> {
-        self.0.partid_get_part(pid).await
+        self.mem.partid_get_part(pid).await
     }
     async fn part_get_all_for_userid(&mut self, uid: &UserId) -> TbResult<Vec<Part>> {
-        self.0.part_get_all_for_userid(uid).await
+        self.mem.part_get_all_for_userid(uid).await
     }
     async fn part_create(
         &mut self,
@@ -730,43 +745,43 @@ impl PartStore for LiveConn {
         owner: UserId,
         shop: Option<ShopId>,
     ) -> TbResult<Part> {
-        self.0
+        self.mem
             .part_create(
                 what, name, vendor, model, purchase, source, usage, owner, shop,
             )
             .await
     }
     async fn part_update(&mut self, part: Part) -> TbResult<Part> {
-        self.0.part_update(part).await
+        self.mem.part_update(part).await
     }
     async fn part_delete(&mut self, part: PartId) -> TbResult<PartId> {
-        self.0.part_delete(part).await
+        self.mem.part_delete(part).await
     }
     async fn parts_delete(&mut self, parts: &[Part]) -> TbResult<usize> {
-        self.0.parts_delete(parts).await
+        self.mem.parts_delete(parts).await
     }
     async fn partid_get_by_source(&mut self, strava_id: &str) -> TbResult<Option<PartId>> {
-        self.0.partid_get_by_source(strava_id).await
+        self.mem.partid_get_by_source(strava_id).await
     }
     async fn parts_register_shop(
         &mut self,
         shop_id: ShopId,
         part_id: Vec<PartId>,
     ) -> TbResult<Vec<Part>> {
-        self.0.parts_register_shop(shop_id, part_id).await
+        self.mem.parts_register_shop(shop_id, part_id).await
     }
     async fn parts_unregister_shop(&mut self, part_ids: Vec<PartId>) -> TbResult<Vec<Part>> {
-        self.0.parts_unregister_shop(part_ids).await
+        self.mem.parts_unregister_shop(part_ids).await
     }
     async fn shop_get_parts(&mut self, shop_id: ShopId) -> TbResult<Vec<Part>> {
-        self.0.shop_get_parts(shop_id).await
+        self.mem.shop_get_parts(shop_id).await
     }
 }
 
 #[async_trait::async_trait]
 impl UserStore for LiveConn {
     async fn get(&mut self, uid: UserId) -> TbResult<User> {
-        UserStore::get(&mut self.0, uid).await
+        UserStore::get(&mut self.mem, uid).await
     }
     async fn create(
         &mut self,
@@ -774,7 +789,7 @@ impl UserStore for LiveConn {
         lastname: &str,
         avatar: &Option<String>,
     ) -> TbResult<User> {
-        UserStore::create(&mut self.0, firstname, lastname, avatar).await
+        UserStore::create(&mut self.mem, firstname, lastname, avatar).await
     }
     async fn update(
         &mut self,
@@ -783,17 +798,17 @@ impl UserStore for LiveConn {
         lastname: &str,
         avatar: &Option<String>,
     ) -> TbResult<User> {
-        UserStore::update(&mut self.0, uid, firstname, lastname, avatar).await
+        UserStore::update(&mut self.mem, uid, firstname, lastname, avatar).await
     }
     async fn user_delete(&mut self, user: &UserId) -> TbResult<usize> {
-        self.0.user_delete(user).await
+        self.mem.user_delete(user).await
     }
     async fn update_onboarding_status(
         &mut self,
         uid: &UserId,
         status: OnboardingStatus,
     ) -> TbResult<User> {
-        self.0.update_onboarding_status(uid, status).await
+        self.mem.update_onboarding_status(uid, status).await
     }
 }
 
@@ -806,12 +821,12 @@ impl ShopStore for LiveConn {
         auto_approve: bool,
         owner: UserId,
     ) -> TbResult<Shop> {
-        self.0
+        self.mem
             .shop_create(name, description, auto_approve, owner)
             .await
     }
     async fn shop_get(&mut self, id: ShopId) -> TbResult<Shop> {
-        self.0.shop_get(id).await
+        self.mem.shop_get(id).await
     }
     async fn shop_update(
         &mut self,
@@ -820,18 +835,18 @@ impl ShopStore for LiveConn {
         description: Option<String>,
         auto_approve: bool,
     ) -> TbResult<Shop> {
-        self.0
+        self.mem
             .shop_update(id, name, description, auto_approve)
             .await
     }
     async fn shop_delete(&mut self, id: ShopId) -> TbResult<usize> {
-        self.0.shop_delete(id).await
+        self.mem.shop_delete(id).await
     }
     async fn shops_get_all_for_user(&mut self, user_id: UserId) -> TbResult<Vec<Shop>> {
-        self.0.shops_get_all_for_user(user_id).await
+        self.mem.shops_get_all_for_user(user_id).await
     }
     async fn shops_search(&mut self, query: &str) -> TbResult<Vec<Shop>> {
-        self.0.shops_search(query).await
+        self.mem.shops_search(query).await
     }
     async fn subscription_create(
         &mut self,
@@ -839,31 +854,33 @@ impl ShopStore for LiveConn {
         user_id: UserId,
         message: Option<String>,
     ) -> TbResult<ShopSubscription> {
-        self.0.subscription_create(shop_id, user_id, message).await
+        self.mem
+            .subscription_create(shop_id, user_id, message)
+            .await
     }
     async fn subscription_get(&mut self, id: SubscriptionId) -> TbResult<ShopSubscription> {
-        self.0.subscription_get(id).await
+        self.mem.subscription_get(id).await
     }
     async fn subscription_find_active(
         &mut self,
         shop_id: ShopId,
         user_id: UserId,
     ) -> TbResult<Option<ShopSubscription>> {
-        self.0.subscription_find_active(shop_id, user_id).await
+        self.mem.subscription_find_active(shop_id, user_id).await
     }
     async fn subscription_find_pending(
         &mut self,
         shop_id: ShopId,
         user_id: UserId,
     ) -> TbResult<Option<ShopSubscription>> {
-        self.0.subscription_find_pending(shop_id, user_id).await
+        self.mem.subscription_find_pending(shop_id, user_id).await
     }
     async fn subscription_update_status(
         &mut self,
         id: SubscriptionId,
         status: SubscriptionStatus,
     ) -> TbResult<ShopSubscription> {
-        self.0.subscription_update_status(id, status).await
+        self.mem.subscription_update_status(id, status).await
     }
     async fn subscription_approve(
         &mut self,
@@ -871,40 +888,40 @@ impl ShopStore for LiveConn {
         status: SubscriptionStatus,
         response_message: Option<String>,
     ) -> TbResult<ShopSubscription> {
-        self.0
+        self.mem
             .subscription_approve(id, status, response_message)
             .await
     }
     async fn subscription_delete(&mut self, id: SubscriptionId) -> TbResult<()> {
-        self.0.subscription_delete(id).await
+        self.mem.subscription_delete(id).await
     }
     async fn subscriptions_for_shop(&mut self, shop_id: ShopId) -> TbResult<Vec<ShopSubscription>> {
-        self.0.subscriptions_for_shop(shop_id).await
+        self.mem.subscriptions_for_shop(shop_id).await
     }
     async fn subscriptions_for_user(&mut self, user_id: UserId) -> TbResult<Vec<ShopSubscription>> {
-        self.0.subscriptions_for_user(user_id).await
+        self.mem.subscriptions_for_user(user_id).await
     }
 }
 
 #[async_trait::async_trait]
 impl ActivityStore for LiveConn {
     async fn activity_create(&mut self, act: Activity) -> TbResult<Activity> {
-        self.0.activity_create(act).await
+        self.mem.activity_create(act).await
     }
     async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Option<Activity>> {
-        self.0.activity_read_by_id(aid).await
+        self.mem.activity_read_by_id(aid).await
     }
     async fn activity_update(&mut self, act: Activity) -> TbResult<Activity> {
-        self.0.activity_update(act).await
+        self.mem.activity_update(act).await
     }
     async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize> {
-        self.0.activity_delete(aid).await
+        self.mem.activity_delete(aid).await
     }
     async fn activities_delete(&mut self, activities: &[Activity]) -> TbResult<usize> {
-        self.0.activities_delete(activities).await
+        self.mem.activities_delete(activities).await
     }
     async fn get_all(&mut self, uid: &UserId) -> TbResult<Vec<Activity>> {
-        self.0.get_all(uid).await
+        self.mem.get_all(uid).await
     }
     async fn activities_find_by_gear_and_time(
         &mut self,
@@ -912,7 +929,7 @@ impl ActivityStore for LiveConn {
         begin: OffsetDateTime,
         end: OffsetDateTime,
     ) -> TbResult<Vec<Activity>> {
-        self.0
+        self.mem
             .activities_find_by_gear_and_time(part, begin, end)
             .await
     }
@@ -921,7 +938,7 @@ impl ActivityStore for LiveConn {
         uid: UserId,
         rstart: OffsetDateTime,
     ) -> TbResult<Activity> {
-        self.0.get_by_user_and_time(uid, rstart).await
+        self.mem.get_by_user_and_time(uid, rstart).await
     }
     async fn activity_set_gear_if_null(
         &mut self,
@@ -929,42 +946,44 @@ impl ActivityStore for LiveConn {
         types: Vec<ActTypeId>,
         partid: &PartId,
     ) -> TbResult<Vec<Activity>> {
-        self.0.activity_set_gear_if_null(user, types, partid).await
+        self.mem
+            .activity_set_gear_if_null(user, types, partid)
+            .await
     }
     async fn activity_get_really_all(&mut self) -> TbResult<Vec<Activity>> {
-        self.0.activity_get_really_all().await
+        self.mem.activity_get_really_all().await
     }
 }
 
 #[async_trait::async_trait]
 impl AttachmentStore for LiveConn {
     async fn attachment_create(&mut self, att: Attachment) -> TbResult<Attachment> {
-        self.0.attachment_create(att).await
+        self.mem.attachment_create(att).await
     }
     async fn delete(&mut self, att: Attachment) -> TbResult<Attachment> {
-        AttachmentStore::delete(&mut self.0, att).await
+        AttachmentStore::delete(&mut self.mem, att).await
     }
     async fn attachments_delete_by_parts(&mut self, parts: &[Part]) -> TbResult<usize> {
-        self.0.attachments_delete_by_parts(parts).await
+        self.mem.attachments_delete_by_parts(parts).await
     }
     async fn attachment_get_by_gear_and_time(
         &mut self,
         act_gear: PartId,
         start: OffsetDateTime,
     ) -> TbResult<Vec<Attachment>> {
-        self.0
+        self.mem
             .attachment_get_by_gear_and_time(act_gear, start)
             .await
     }
     async fn attachments_all_by_part(&mut self, id: PartId) -> TbResult<Vec<Attachment>> {
-        self.0.attachments_all_by_part(id).await
+        self.mem.attachments_all_by_part(id).await
     }
     async fn attachment_get_by_part_and_time(
         &mut self,
         pid: PartId,
         time: OffsetDateTime,
     ) -> TbResult<Option<Attachment>> {
-        self.0.attachment_get_by_part_and_time(pid, time).await
+        self.mem.attachment_get_by_part_and_time(pid, time).await
     }
     async fn assembly_get_by_types_time_and_gear(
         &mut self,
@@ -972,7 +991,7 @@ impl AttachmentStore for LiveConn {
         gear: PartId,
         time: OffsetDateTime,
     ) -> TbResult<Vec<Attachment>> {
-        self.0
+        self.mem
             .assembly_get_by_types_time_and_gear(types, gear, time)
             .await
     }
@@ -983,7 +1002,7 @@ impl AttachmentStore for LiveConn {
         hook: PartTypeId,
         time: OffsetDateTime,
     ) -> TbResult<Option<Attachment>> {
-        self.0
+        self.mem
             .attachment_find_part_of_type_at_hook_and_time(what, gear, hook, time)
             .await
     }
@@ -995,7 +1014,7 @@ impl AttachmentStore for LiveConn {
         time: OffsetDateTime,
         what: PartTypeId,
     ) -> TbResult<Option<Attachment>> {
-        self.0
+        self.mem
             .attachment_find_successor(part_id, gear, hook, time, what)
             .await
     }
@@ -1004,7 +1023,7 @@ impl AttachmentStore for LiveConn {
         part_id: PartId,
         time: OffsetDateTime,
     ) -> TbResult<Option<Attachment>> {
-        self.0
+        self.mem
             .attachment_find_later_attachment_for_part(part_id, time)
             .await
     }
@@ -1015,7 +1034,7 @@ impl AttachmentStore for LiveConn {
         hook: PartTypeId,
         time: OffsetDateTime,
     ) -> TbResult<Option<Attachment>> {
-        self.0
+        self.mem
             .attachment_find_part_attached_already(part_id, gear, hook, time)
             .await
     }
@@ -1029,7 +1048,7 @@ impl PartNoteStore for LiveConn {
         name: String,
         created: OffsetDateTime,
     ) -> TbResult<PartNote> {
-        self.0.partnote_create_text(part, name, created).await
+        self.mem.partnote_create_text(part, name, created).await
     }
     async fn partnote_create_file(
         &mut self,
@@ -1041,21 +1060,21 @@ impl PartNoteStore for LiveConn {
         data: Vec<u8>,
         created: OffsetDateTime,
     ) -> TbResult<PartNote> {
-        self.0
+        self.mem
             .partnote_create_file(part, name, mime, filename, size, data, created)
             .await
     }
     async fn partnote_all_by_part(&mut self, part: PartId) -> TbResult<Vec<PartNote>> {
-        self.0.partnote_all_by_part(part).await
+        self.mem.partnote_all_by_part(part).await
     }
     async fn partnote_get(&mut self, id: PartNoteId) -> TbResult<PartNote> {
-        self.0.partnote_get(id).await
+        self.mem.partnote_get(id).await
     }
     async fn partnote_file(&mut self, id: PartNoteId) -> TbResult<Vec<u8>> {
-        self.0.partnote_file(id).await
+        self.mem.partnote_file(id).await
     }
     async fn partnote_update_text(&mut self, id: PartNoteId, name: String) -> TbResult<PartNote> {
-        self.0.partnote_update_text(id, name).await
+        self.mem.partnote_update_text(id, name).await
     }
     async fn partnote_update_file(
         &mut self,
@@ -1066,84 +1085,84 @@ impl PartNoteStore for LiveConn {
         size: i64,
         data: Vec<u8>,
     ) -> TbResult<PartNote> {
-        self.0
+        self.mem
             .partnote_update_file(id, name, mime, filename, size, data)
             .await
     }
     async fn partnote_remove_file(&mut self, id: PartNoteId) -> TbResult<PartNote> {
-        self.0.partnote_remove_file(id).await
+        self.mem.partnote_remove_file(id).await
     }
     async fn partnote_delete(&mut self, id: PartNoteId) -> TbResult<PartNoteId> {
-        self.0.partnote_delete(id).await
+        self.mem.partnote_delete(id).await
     }
 }
 
 #[async_trait::async_trait]
 impl UsageStore for LiveConn {
     async fn get(&mut self, uid: UsageId) -> TbResult<Option<Usage>> {
-        UsageStore::get(&mut self.0, uid).await
+        UsageStore::get(&mut self.mem, uid).await
     }
     async fn update<U>(&mut self, usage: &[U]) -> TbResult<usize>
     where
         U: std::borrow::Borrow<Usage> + Sync,
     {
-        UsageStore::update(&mut self.0, usage).await
+        UsageStore::update(&mut self.mem, usage).await
     }
     async fn delete(&mut self, usage: UsageId) -> TbResult<Usage> {
-        UsageStore::delete(&mut self.0, usage).await
+        UsageStore::delete(&mut self.mem, usage).await
     }
     async fn usages_delete(&mut self, usages: &[Usage]) -> TbResult<usize> {
-        self.0.usages_delete(usages).await
+        self.mem.usages_delete(usages).await
     }
     async fn delete_all(&mut self) -> TbResult<usize> {
-        self.0.delete_all().await
+        self.mem.delete_all().await
     }
 }
 
 #[async_trait::async_trait]
 impl ServiceStore for LiveConn {
     async fn create(&mut self, service: Service) -> TbResult<Service> {
-        ServiceStore::create(&mut self.0, service).await
+        ServiceStore::create(&mut self.mem, service).await
     }
     async fn get(&mut self, service: ServiceId) -> TbResult<Service> {
-        ServiceStore::get(&mut self.0, service).await
+        ServiceStore::get(&mut self.mem, service).await
     }
     async fn update(&mut self, service: Service) -> TbResult<Service> {
-        ServiceStore::update(&mut self.0, service).await
+        ServiceStore::update(&mut self.mem, service).await
     }
     async fn delete(&mut self, service: ServiceId) -> TbResult<usize> {
-        ServiceStore::delete(&mut self.0, service).await
+        ServiceStore::delete(&mut self.mem, service).await
     }
     async fn services_delete(&mut self, services: &[Service]) -> TbResult<usize> {
-        self.0.services_delete(services).await
+        self.mem.services_delete(services).await
     }
     async fn services_by_part(&mut self, part: PartId) -> TbResult<Vec<Service>> {
-        self.0.services_by_part(part).await
+        self.mem.services_by_part(part).await
     }
 }
 
 #[async_trait::async_trait]
 impl ServicePlanStore for LiveConn {
     async fn create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
-        ServicePlanStore::create(&mut self.0, plan).await
+        ServicePlanStore::create(&mut self.mem, plan).await
     }
     async fn get(&mut self, plan: ServicePlanId) -> TbResult<ServicePlan> {
-        ServicePlanStore::get(&mut self.0, plan).await
+        ServicePlanStore::get(&mut self.mem, plan).await
     }
     async fn plan_update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
-        self.0.plan_update(plan).await
+        self.mem.plan_update(plan).await
     }
     async fn delete(&mut self, plan: ServicePlanId) -> TbResult<usize> {
-        ServicePlanStore::delete(&mut self.0, plan).await
+        ServicePlanStore::delete(&mut self.mem, plan).await
     }
     async fn serviceplans_delete(&mut self, serviceplans: &[ServicePlan]) -> TbResult<usize> {
-        self.0.serviceplans_delete(serviceplans).await
+        self.mem.serviceplans_delete(serviceplans).await
     }
     async fn by_part(&mut self, part: PartId) -> TbResult<Vec<ServicePlan>> {
-        self.0.by_part(part).await
+        self.mem.by_part(part).await
     }
     async fn by_user(&mut self, uid: UserId) -> TbResult<Vec<ServicePlan>> {
-        self.0.by_user(uid).await
+        self.mem.by_user(uid).await
     }
 }
 
@@ -1152,40 +1171,60 @@ impl StravaStore for LiveConn {
     async fn stravaid_get_user_id(&mut self, _who: i32) -> TbResult<i32> {
         unimplemented!()
     }
-    async fn strava_event_delete(&mut self, _event_id: Option<i32>) -> TbResult<()> {
-        unimplemented!()
+    async fn strava_event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {
+        let mut st = self.strava.lock().expect("strava state");
+        st.events.retain(|e| e.id != event_id);
+        Ok(())
     }
-    async fn strava_event_set_time(&mut self, _e_id: Option<i32>, _e_time: i64) -> TbResult<()> {
-        unimplemented!()
+    async fn strava_event_set_time(&mut self, e_id: Option<i32>, e_time: i64) -> TbResult<()> {
+        let mut st = self.strava.lock().expect("strava state");
+        if let Some(e) = st.events.iter_mut().find(|e| e.id == e_id) {
+            e.event_time = e_time;
+        }
+        Ok(())
     }
-    async fn stravaevent_store(&mut self, _e: Event) -> TbResult<()> {
-        unimplemented!()
+    async fn stravaevent_store(&mut self, mut e: Event) -> TbResult<()> {
+        let mut st = self.strava.lock().expect("strava state");
+        st.next_id += 1;
+        e.id = Some(st.next_id);
+        st.events.push(e);
+        Ok(())
     }
-    async fn strava_event_get_next_for_user(&mut self, _user: StravaId) -> TbResult<Option<Event>> {
-        // No queued events: the loop has nothing to do and reaps on idle.
-        Ok(None)
+    async fn strava_event_get_next_for_user(&mut self, user: StravaId) -> TbResult<Option<Event>> {
+        let st = self.strava.lock().expect("strava state");
+        let mut next: Vec<&Event> = st
+            .events
+            .iter()
+            .filter(|e| e.owner_id == user || e.owner_id == StravaId::from(0))
+            .collect();
+        next.sort_by_key(|e| e.event_time);
+        Ok(next.first().copied().cloned())
     }
-    async fn strava_event_get_later(
-        &mut self,
-        _obj_id: i64,
-        _oid: StravaId,
-    ) -> TbResult<Vec<Event>> {
-        unimplemented!()
+    async fn strava_event_get_later(&mut self, obj_id: i64, oid: StravaId) -> TbResult<Vec<Event>> {
+        let st = self.strava.lock().expect("strava state");
+        let mut later: Vec<Event> = st
+            .events
+            .iter()
+            .filter(|e| e.object_id == obj_id && e.owner_id == oid)
+            .cloned()
+            .collect();
+        later.sort_by_key(|e| e.event_time);
+        Ok(later)
     }
-    async fn strava_events_delete_batch(&mut self, _values: Vec<Option<i32>>) -> TbResult<()> {
-        unimplemented!()
+    async fn strava_events_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()> {
+        let mut st = self.strava.lock().expect("strava state");
+        st.events.retain(|e| !values.contains(&e.id));
+        Ok(())
     }
     async fn stravausers_get_all(&mut self) -> TbResult<Vec<StravaUser>> {
-        unimplemented!()
+        Ok(Vec::new())
     }
     async fn stravauser_get_by_tbid(&mut self, id: UserId) -> TbResult<StravaUser> {
-        // The `StravaUser` the executor's `StravaSession` is built from: an
-        // empty refresh token, so the first Strava request would force a
-        // refresh (the stream tests never make one).
+        let st = self.strava.lock().expect("strava state");
         Ok(StravaUser {
             id: 1.into(),
             tendabike_id: id,
-            refresh_token: None,
+            refresh_token: st.refresh_token.clone().map(oauth2::RefreshToken::new),
         })
     }
     async fn stravauser_get_by_stravaid(&mut self, _id: &StravaId) -> TbResult<Option<StravaUser>> {
@@ -1196,16 +1235,26 @@ impl StravaStore for LiveConn {
     }
     async fn stravaid_update_token(
         &mut self,
-        _stravaid: StravaId,
-        _refresh: Option<&String>,
+        stravaid: StravaId,
+        refresh: Option<&String>,
     ) -> TbResult<StravaUser> {
-        unimplemented!()
+        let mut st = self.strava.lock().expect("strava state");
+        st.refresh_token = refresh.cloned();
+        Ok(StravaUser {
+            id: stravaid,
+            tendabike_id: 1.into(),
+            refresh_token: st.refresh_token.clone().map(oauth2::RefreshToken::new),
+        })
     }
-    async fn strava_events_get_count_for_user(&mut self, _user: &StravaId) -> TbResult<i64> {
-        unimplemented!()
+    async fn strava_events_get_count_for_user(&mut self, user: &StravaId) -> TbResult<i64> {
+        let st = self.strava.lock().expect("strava state");
+        Ok(st.events.iter().filter(|e| e.owner_id == *user).count() as i64)
     }
-    async fn strava_events_delete_for_user(&mut self, _user: &StravaId) -> TbResult<usize> {
-        unimplemented!()
+    async fn strava_events_delete_for_user(&mut self, user: &StravaId) -> TbResult<usize> {
+        let mut st = self.strava.lock().expect("strava state");
+        let before = st.events.len();
+        st.events.retain(|e| e.owner_id != *user);
+        Ok(before - st.events.len())
     }
     async fn stravauser_delete(&mut self, _user: UserId) -> TbResult<usize> {
         unimplemented!()
@@ -1215,27 +1264,65 @@ impl StravaStore for LiveConn {
 #[async_trait::async_trait]
 impl Txn for LiveConn {
     async fn commit(self) -> TbResult<()> {
-        self.0.commit().await
+        self.mem.commit().await
     }
     async fn rollback(mut self) -> TbResult<()> {
-        self.0.rollback().await
+        self.mem.rollback().await
     }
 }
 
-/// A live source: every `begin` succeeds with a [`LiveConn`] over a fresh
-/// `MemStore` seeded with the user the session reads (the first created user
-/// gets id 1, matching `user_cookie`'s dummy session), so the executor loop
-/// and the session read run in-memory.
+/// A live source: every `begin` succeeds with a [`LiveConn`] — a sibling
+/// transaction on one shared in-memory database (seeded with the user the
+/// session reads; the first created user gets id 1, matching `user_cookie`'s
+/// dummy session) — plus a shared in-memory Strava queue, so the executor
+/// loop, the session read, and post-write assertions all observe the same
+/// state.
 #[derive(Clone)]
-pub struct LiveSource;
+pub struct LiveSource {
+    mem: Arc<Mutex<MemStore>>,
+    strava: Arc<Mutex<StravaState>>,
+}
+
+impl LiveSource {
+    pub async fn new() -> Self {
+        // Seed through a sibling transaction and commit it, so the seeded
+        // user is in the shared base state the siblings (the executor, the
+        // handlers, the assertions) see;  consumes the sibling,
+        // leaving  intact.
+        let base = MemStore::new();
+        {
+            let mut seed = base.begin();
+            UserStore::create(&mut seed, "Test", "User", &None)
+                .await
+                .expect("seed user");
+            seed.commit().await.expect("seed commit");
+        }
+        Self {
+            mem: Arc::new(Mutex::new(base)),
+            strava: Arc::new(Mutex::new(StravaState::default())),
+        }
+    }
+
+    /// The shared in-memory database, for post-write assertions.
+    pub fn mem(&self) -> Arc<Mutex<MemStore>> {
+        Arc::clone(&self.mem)
+    }
+
+    /// The shared in-memory Strava queue state, for post-sync assertions.
+    pub fn strava(&self) -> Arc<Mutex<StravaState>> {
+        Arc::clone(&self.strava)
+    }
+}
 
 #[async_trait::async_trait]
 impl TxnSource for LiveSource {
     type Conn = LiveConn;
 
     async fn begin(&self) -> TbResult<Self::Conn> {
-        let mut mem = MemStore::new();
-        UserStore::create(&mut mem, "Test", "User", &None).await?;
-        Ok(LiveConn(mem))
+        let mem = self.mem.lock().expect("shared in-memory db").begin();
+        Ok(LiveConn {
+            mem,
+            strava: Arc::clone(&self.strava),
+        })
     }
 }

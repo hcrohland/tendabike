@@ -56,12 +56,14 @@ use axum::{
 use log::{info, trace};
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState};
-use tb_domain::{Error, OnboardingStatus, Summary, TbResult, UserStore};
+use http::StatusCode;
+
+use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, error::AppError};
+use tb_domain::{ApiWrite, Error, TbResult};
 use tb_exec::{Txn, TxnSource};
 use tb_strava::StravaSession;
 use tb_strava::StravaStore;
-use tb_strava::event::{InEvent, process};
+use tb_strava::event::InEvent;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Hub {
@@ -91,20 +93,6 @@ impl Hub {
 }
 
 const VERIFY_TOKEN: &str = "tendabike_strava";
-
-pub(crate) async fn hooks<S>(
-    mut user: RequestSession,
-    State(state): State<AppState<S>>,
-) -> ApiResult<Summary>
-where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
-{
-    let mut store = state.source.begin().await?;
-    let res = process(&mut user, &mut store).await;
-    store.commit().await?;
-    Ok(Json(res?))
-}
 
 pub(crate) async fn create_event<S>(
     State(state): State<AppState<S>>,
@@ -160,21 +148,27 @@ where
 
 pub(super) async fn sync<S>(
     Path(tbid): Path<i32>,
-    admin: AxumAdmin,
+    _admin: AxumAdmin,
     State(state): State<AppState<S>>,
-) -> ApiResult<Summary>
+    Query(query): Query<InitialSyncQuery>,
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
     S::Conn: StravaStore,
 {
+    let user_id: tb_domain::UserId = tbid.into();
+    // The executor's event queue is keyed by the Strava id, so read the
+    // administered user's Strava id first (the admin gate is `AxumAdmin`).
     let mut store = state.source.begin().await?;
-    let mut user = RequestSession::create_from_id(admin, tbid.into(), &mut store).await?;
-    let res = process(&mut user, &mut store).await.map_err(|e| match e {
-        Error::NotAuth(_) => Error::AnyFailure(anyhow::anyhow!("User not authenticated at Strava")),
-        err => err,
-    })?;
+    let strava_id = store.stravauser_get_by_tbid(user_id).await?.strava_id();
     store.commit().await?;
-    Ok(Json(res))
+    // Enqueue the sync, wake the user's executor, and await its completion
+    // (spec §6.4).
+    state
+        .registry
+        .sync(&state.source, user_id, strava_id, query.time)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[derive(Deserialize)]
@@ -196,24 +190,28 @@ where
     S: TxnSource + Clone + 'static,
     S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-
-    // Check if user has already completed initial sync
-    let user_data = user.tb_id().read(&mut store).await?;
-    if user_data.onboarding_status.is_initial_sync_completed() {
-        return Err(Error::BadRequest("Initial sync already triggered".to_string()).into());
-    }
-
-    // Insert sync event
-    tb_strava::event::insert_sync(user.strava_id(), query.time, false, &mut store).await?;
-
-    // Mark initial sync as completed and return updated user
-    let updated_user = store
-        .update_onboarding_status(&user.tb_id(), OnboardingStatus::Completed)
+    // The domain's status guard and completion update run on the user's
+    // executor (spec §6.2); the `User` is not part of a `Summary`, so the
+    // 200 body reads it back after the write succeeds.
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::UserOnboardingSync { time: query.time },
+        )
         .await?;
 
+    // The Strava-side event is a web-layer concern: queue it and wake the
+    // executor to consume it (spec §4.6). A failed wake is non-critical —
+    // the queue is the source of truth.
+    let mut store = state.source.begin().await?;
+    tb_strava::event::insert_sync(user.strava_id(), query.time, false, &mut store).await?;
     store.commit().await?;
-    Ok(Json(updated_user))
+    let _ = state.registry.wake(&state.source, user.tb_id()).await;
+
+    let mut store = state.source.begin().await?;
+    Ok(Json(user.tb_id().read(&mut store).await?))
 }
 
 /// Postpone initial sync for a user
@@ -226,24 +224,22 @@ pub(crate) async fn postpone_initial_sync<S>(
 ) -> ApiResult<tb_domain::User>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-
-    // Check if user is still pending
-    let user_data = user.tb_id().read(&mut store).await?;
-    if user_data.onboarding_status != OnboardingStatus::Pending {
-        return Err(
-            Error::BadRequest("Initial sync already completed or postponed".to_string()).into(),
-        );
-    }
-
-    // Mark as postponed and return updated user
-    let updated_user = store
-        .update_onboarding_status(&user.tb_id(), OnboardingStatus::InitialSyncPostponed)
+    // The domain's status guard and postponement run on the user's executor
+    // (spec §6.2); the 200 body reads the `User` back after the write
+    // succeeds.
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::UserOnboardingPostpone,
+        )
         .await?;
 
-    store.commit().await?;
-    Ok(Json(updated_user))
+    let mut store = state.source.begin().await?;
+    Ok(Json(user.tb_id().read(&mut store).await?))
 }
 
 #[cfg(test)]

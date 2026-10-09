@@ -155,11 +155,12 @@ mod tests {
     use http::{Method, StatusCode, header};
     use tower_sessions::MemoryStore;
 
-    use tb_domain::{Summary, UserId};
+    use tb_domain::{PartStore, Summary, UserId};
 
     use crate::stream::Registry;
     use crate::test_support::{
-        admin_cookie, read_sse_frames, run, run_json, run_sse, test_app, test_app_live, user_cookie,
+        LiveSource, admin_cookie, read_sse_frames, run, run_json, run_sse, test_app, test_app_live,
+        user_cookie,
     };
 
     async fn setup() -> (Router, MemoryStore) {
@@ -303,7 +304,8 @@ mod tests {
             Duration::from_secs(60),
             Duration::from_millis(50),
         ));
-        let app = test_app_live(&store, registry);
+        let live = LiveSource::new().await;
+        let app = test_app_live(&store, live, registry);
         let cookie = user_cookie(&store).await;
         let (status, headers, mut body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
         assert_eq!(status, StatusCode::OK);
@@ -328,7 +330,8 @@ mod tests {
             Duration::from_secs(60),
             Duration::from_secs(15),
         ));
-        let app = test_app_live(&store, registry.clone());
+        let live = LiveSource::new().await;
+        let app = test_app_live(&store, live, registry.clone());
         let cookie = user_cookie(&store).await;
         let (status, _headers, mut body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
         assert_eq!(status, StatusCode::OK);
@@ -356,7 +359,8 @@ mod tests {
             Duration::from_millis(100),
             Duration::from_millis(50),
         ));
-        let app = test_app_live(&store, registry);
+        let live = LiveSource::new().await;
+        let app = test_app_live(&store, live, registry);
         let cookie = user_cookie(&store).await;
         let (status, _headers, mut body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
         assert_eq!(status, StatusCode::OK);
@@ -504,5 +508,260 @@ mod tests {
         let (app, _store) = setup().await;
         let (status, _headers, _body) = run(app, Method::GET, "/api/does-not-exist", None).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    // ─── Executor-backed write handlers (spec §6.2) ─────────────────────
+
+    fn part_body(name: &str) -> String {
+        format!(
+            "{{\"what\":1,\"name\":\"{name}\",\"vendor\":\"V\",\"model\":\"M\",\"purchase\":\"2024-01-01T00:00:00Z\"}}"
+        )
+    }
+
+    /// A live-app fixture: shared in-memory db + session store + registry.
+    async fn live_app() -> (Router, MemoryStore, Arc<Registry>, LiveSource) {
+        let store = MemoryStore::default();
+        let registry = Arc::new(Registry::new(
+            Duration::from_secs(60),
+            Duration::from_secs(15),
+        ));
+        let live = LiveSource::new().await;
+        let app = test_app_live(&store, live.clone(), registry.clone());
+        (app, store, registry, live)
+    }
+
+    /// `POST /api/part` runs on the user's executor and answers `201` with
+    /// the created part (extracted from the write's `Summary`); the shared
+    /// store is actually changed.
+    #[tokio::test]
+    async fn create_part_returns_201_and_entity() {
+        let (app, store, _registry, live) = live_app().await;
+        let cookie = user_cookie(&store).await;
+        let (status, _headers, body) = run_json(
+            app,
+            Method::POST,
+            "/api/part",
+            Some(&cookie),
+            &part_body("Chain"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        let text = String::from_utf8_lossy(&body);
+        assert!(text.contains("Chain"), "body: {text}");
+        let mut conn = live.mem().lock().unwrap().begin();
+        let parts = PartStore::part_get_all_for_userid(&mut conn, &UserId::from(1))
+            .await
+            .unwrap();
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0].name, "Chain");
+    }
+
+    /// `PUT /api/part/{part}` runs on the executor and answers `204 No
+    /// Content`; the shared store is updated.
+    #[tokio::test]
+    async fn update_part_returns_204() {
+        let (app, store, _registry, live) = live_app().await;
+        let cookie = user_cookie(&store).await;
+        let (status, _headers, body) = run_json(
+            app.clone(),
+            Method::POST,
+            "/api/part",
+            Some(&cookie),
+            &part_body("Chain"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        let part_id = serde_json::from_str::<serde_json::Value>(&String::from_utf8_lossy(&body))
+            .unwrap()["id"]
+            .as_i64()
+            .unwrap();
+        let (status, _headers, _body) = run_json(
+            app,
+            Method::PUT,
+            &format!("/api/part/{part_id}"),
+            Some(&cookie),
+            &part_body("Drainage"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        let mut conn = live.mem().lock().unwrap().begin();
+        let parts = PartStore::part_get_all_for_userid(&mut conn, &UserId::from(1))
+            .await
+            .unwrap();
+        assert_eq!(parts[0].name, "Drainage");
+    }
+
+    /// `DELETE /api/part/{part}` runs on the executor and answers `204`; the
+    /// part is gone from the shared store.
+    #[tokio::test]
+    async fn delete_part_returns_204() {
+        let (app, store, _registry, live) = live_app().await;
+        let cookie = user_cookie(&store).await;
+        let (status, _headers, body) = run_json(
+            app.clone(),
+            Method::POST,
+            "/api/part",
+            Some(&cookie),
+            &part_body("Chain"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        let part_id = serde_json::from_str::<serde_json::Value>(&String::from_utf8_lossy(&body))
+            .unwrap()["id"]
+            .as_i64()
+            .unwrap();
+        let (status, _headers, _body) = run(
+            app,
+            Method::DELETE,
+            &format!("/api/part/{part_id}"),
+            Some(&cookie),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        let mut conn = live.mem().lock().unwrap().begin();
+        let parts = PartStore::part_get_all_for_userid(&mut conn, &UserId::from(1))
+            .await
+            .unwrap();
+        assert!(parts.is_empty());
+    }
+
+    /// `POST /api/part/{part}/notes` answers `201` with the created note.
+    #[tokio::test]
+    async fn create_text_note_returns_201_and_entity() {
+        let (app, store, _registry, _live) = live_app().await;
+        let cookie = user_cookie(&store).await;
+        let (status, _headers, _body) = run_json(
+            app.clone(),
+            Method::POST,
+            "/api/part",
+            Some(&cookie),
+            &part_body("Chain"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        let (status, _headers, body) = run_json(
+            app,
+            Method::POST,
+            "/api/part/1/notes",
+            Some(&cookie),
+            r#"{"name":"worn"}"#,
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        assert!(
+            String::from_utf8_lossy(&body).contains("worn"),
+            "body: {body:?}"
+        );
+    }
+
+    /// `POST /strava/onboarding/sync` runs the status update on the executor,
+    /// queues the Strava sync event, and answers `200` with the `User`; the
+    /// executor then consumes the queued sync (no refresh token in the
+    /// in-memory seam: `NotAuth` disables the user and clears the queue).
+    #[tokio::test]
+    async fn onboarding_sync_returns_200_and_user() {
+        let (app, store, _registry, live) = live_app().await;
+        let cookie = user_cookie(&store).await;
+        let (status, _headers, body) =
+            run(app, Method::POST, "/strava/onboarding/sync", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(
+            String::from_utf8_lossy(&body).contains("onboarding_status"),
+            "body: {body:?}"
+        );
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(3);
+        loop {
+            if live.strava().lock().unwrap().events.is_empty()
+                || tokio::time::Instant::now() >= deadline
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(
+            live.strava().lock().unwrap().events.is_empty(),
+            "the queued sync must have been consumed"
+        );
+    }
+
+    /// `POST /strava/onboarding/postpone` answers `200` with the `User`.
+    #[tokio::test]
+    async fn onboarding_postpone_returns_200_and_user() {
+        let (app, store, _registry, _live) = live_app().await;
+        let cookie = user_cookie(&store).await;
+        let (status, _headers, body) = run(
+            app,
+            Method::POST,
+            "/strava/onboarding/postpone",
+            Some(&cookie),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(
+            String::from_utf8_lossy(&body).contains("onboarding_status"),
+            "body: {body:?}"
+        );
+    }
+
+    /// `GET /strava/sync/{id}` (admin) enqueues a sync, wakes the target
+    /// user's executor, and answers `204` only after the executor consumed
+    /// the event (the queue is empty by then).
+    #[tokio::test]
+    async fn admin_sync_returns_204_and_consumes_queue() {
+        let (app, store, _registry, live) = live_app().await;
+        let cookie = admin_cookie(&store).await;
+        let (status, _headers, _body) =
+            run(app, Method::GET, "/strava/sync/1", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        assert!(
+            live.strava().lock().unwrap().events.is_empty(),
+            "the queued sync must have been consumed"
+        );
+    }
+
+    /// The admin sync endpoint hides itself from non-admins (`404`).
+    #[tokio::test]
+    async fn admin_sync_requires_admin() {
+        let (app, store, _registry, _live) = live_app().await;
+        let cookie = user_cookie(&store).await;
+        let (status, _headers, _body) =
+            run(app, Method::GET, "/strava/sync/1", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    /// `GET /strava/hooks` is gone (spec: removed with the cutover).
+    #[tokio::test]
+    async fn hooks_route_is_gone() {
+        let (app, store, _registry, _live) = live_app().await;
+        let cookie = user_cookie(&store).await;
+        let (status, _headers, _body) = run(app, Method::GET, "/strava/hooks", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    /// A write enqueued on the user's executor pushes its `Summary` to the
+    /// user's SSE stream.
+    #[tokio::test]
+    async fn write_pushes_summary_frame_to_stream() {
+        let (app, store, _registry, _live) = live_app().await;
+        let cookie = user_cookie(&store).await;
+        let (status, _headers, mut body) =
+            run_sse(app.clone(), "/api/user/stream", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::OK);
+        // Let the executor spawn and register this stream.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let (status, _headers, _body) = run_json(
+            app,
+            Method::POST,
+            "/api/part",
+            Some(&cookie),
+            &part_body("Chain"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        let frames = read_sse_frames(&mut body, 3, Duration::from_secs(3)).await;
+        assert!(
+            frames.iter().any(|f| f.contains("data:")),
+            "expected a data frame, got: {frames:?}"
+        );
     }
 }

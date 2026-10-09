@@ -224,6 +224,7 @@ async fn api_write_end_to_end() {
     let seam = ready().await;
     let (tx, rx) = api_write_channel();
     let (frames, mut frame_rx) = broadcast::channel(16);
+    let (events, _events_rx) = broadcast::channel(16);
     let (request, reply) = ApiWriteRequest::new(ApiWrite::PartCreate {
         name: "Seam Chain".to_string(),
         vendor: "Shimano".to_string(),
@@ -238,6 +239,7 @@ async fn api_write_end_to_end() {
         FakeStrava::new(),
         rx,
         frames,
+        events,
         IDLE_TIMEOUT,
     ));
 
@@ -319,6 +321,7 @@ async fn strava_queue_drains_and_reclaims() {
     // No API writes: the dropped sender closes the channel.
     let (_tx, rx) = api_write_channel();
     let (frames, _frame_rx) = broadcast::channel(8);
+    let (events, _events_rx) = broadcast::channel(8);
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
         run(
@@ -326,6 +329,7 @@ async fn strava_queue_drains_and_reclaims() {
             FakeStrava::new(),
             rx,
             frames,
+            events,
             IDLE_TIMEOUT,
         ),
     )
@@ -352,6 +356,7 @@ async fn idle_loop_reclaims() {
     let seam = ready().await;
     let (_tx, rx) = api_write_channel();
     let (frames, _frame_rx) = broadcast::channel(8);
+    let (events, _events_rx) = broadcast::channel(8);
     let started = std::time::Instant::now();
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
@@ -360,6 +365,7 @@ async fn idle_loop_reclaims() {
             FakeStrava::new(),
             rx,
             frames,
+            events,
             IDLE_TIMEOUT,
         ),
     )
@@ -385,6 +391,7 @@ async fn failed_write_rolls_back_and_reclaims() {
 
     let (tx, rx) = api_write_channel();
     let (frames, _frame_rx) = broadcast::channel(8);
+    let (events, _events_rx) = broadcast::channel(8);
     // Deleting a part that does not exist: `NotFound` from the domain.
     let (request, reply) = ApiWriteRequest::new(ApiWrite::PartDelete {
         id: PartId::from(999_999),
@@ -396,6 +403,7 @@ async fn failed_write_rolls_back_and_reclaims() {
         FakeStrava::new(),
         rx,
         frames,
+        events,
         IDLE_TIMEOUT,
     ));
 

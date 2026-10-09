@@ -26,13 +26,14 @@ use axum::{
     routing::{delete, get, post, put},
 };
 use serde::Deserialize;
-use tb_domain::{Error, PartId, PartNote, PartNoteId};
+use tb_domain::{ApiWrite, Error, NoteFile, PartId, PartNote, PartNoteId};
 use tb_exec::{Txn, TxnSource};
-use time::OffsetDateTime;
+use tb_strava::{StravaSession, StravaStore};
 
 use crate::{
     RequestSession,
     appstate::AppState,
+    domain::created_entity,
     error::{ApiResult, AppError},
 };
 
@@ -48,7 +49,10 @@ pub struct UpdateTextNote {
     pub name: String,
 }
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
+where
+    S::Conn: StravaStore,
+{
     Router::new()
         .route("/{part}/notes", get(list_notes).post(create_text_note))
         .route("/{part}/notes/file", post(create_file_note))
@@ -85,12 +89,17 @@ async fn create_text_note<S>(
 ) -> Result<(StatusCode, Json<PartNote>), AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let note = part
-        .note_create_text(&user, name, OffsetDateTime::now_utc(), &mut store)
+    let summary = state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::PartNoteCreateText { part, name },
+        )
         .await?;
-    store.commit().await?;
+    let note = created_entity(&summary.part_notes, "part note")?;
     Ok((StatusCode::CREATED, Json(note)))
 }
 
@@ -149,24 +158,26 @@ async fn create_file_note<S>(
 ) -> Result<(StatusCode, Json<PartNote>), AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
     let parsed = parse_note_file(multipart).await?;
-    let filename = parsed.filename.unwrap_or_else(|| "file".to_string());
-    let name = parsed.name.unwrap_or_else(|| filename.clone());
-    let mut store = state.source.begin().await?;
-    let note = part
-        .note_create_file(
-            &user,
-            name,
-            parsed.mime,
-            Some(filename),
-            parsed.data.len() as i64,
-            parsed.data,
-            OffsetDateTime::now_utc(),
-            &mut store,
+    let summary = state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::PartNoteCreateFile {
+                part,
+                file: NoteFile {
+                    name: parsed.name,
+                    mime: parsed.mime,
+                    filename: parsed.filename,
+                    data: parsed.data,
+                },
+            },
         )
         .await?;
-    store.commit().await?;
+    let note = created_entity(&summary.part_notes, "part note")?;
     Ok((StatusCode::CREATED, Json(note)))
 }
 
@@ -223,14 +234,20 @@ async fn update_text_note<S>(
     user: RequestSession,
     State(state): State<AppState<S>>,
     Json(UpdateTextNote { name }): Json<UpdateTextNote>,
-) -> ApiResult<PartNote>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let note = id.update_text(&user, name, &mut store).await?;
-    store.commit().await?;
-    Ok(Json(note))
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::PartNoteUpdateText { id, name },
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn update_file_note<S>(
@@ -238,53 +255,65 @@ async fn update_file_note<S>(
     user: RequestSession,
     State(state): State<AppState<S>>,
     multipart: Multipart,
-) -> ApiResult<PartNote>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
     let parsed = parse_note_file(multipart).await?;
-    let mut store = state.source.begin().await?;
-    let note = id
-        .update_file(
-            &user,
-            parsed.name,
-            parsed.mime,
-            parsed.filename,
-            parsed.data.len() as i64,
-            parsed.data,
-            &mut store,
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::PartNoteUpdateFile {
+                id,
+                file: NoteFile {
+                    name: parsed.name,
+                    mime: parsed.mime,
+                    filename: parsed.filename,
+                    data: parsed.data,
+                },
+            },
         )
         .await?;
-    store.commit().await?;
-    Ok(Json(note))
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn delete_note<S>(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
     State(state): State<AppState<S>>,
-) -> ApiResult<PartNoteId>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let res = id.delete(&user, &mut store).await?;
-    store.commit().await?;
-    Ok(Json(res))
+    state
+        .registry
+        .write(&state.source, user.tb_id(), ApiWrite::PartNoteDelete { id })
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn remove_file_note<S>(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
     State(state): State<AppState<S>>,
-) -> ApiResult<PartNote>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let note = id.remove_file(&user, &mut store).await?;
-    store.commit().await?;
-    Ok(Json(note))
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::PartNoteRemoveFile { id },
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 fn rfc5987_encode(s: &str) -> String {
