@@ -116,8 +116,13 @@ where
 {
     trace!("Received {event:#?}");
     let mut store = state.source.begin().await?;
-    event.accept(&mut store).await?;
+    let user_id = event.accept(&mut store).await?;
     store.commit().await?;
+    // Fire the in-memory wake signal (spec §4.4): the DB queue is the source
+    // of truth, so a failed wake is non-critical and must not 500 the ingest.
+    if let Some(user_id) = user_id {
+        let _ = state.registry.wake(&state.source, user_id).await;
+    }
     Ok(Json(()))
 }
 

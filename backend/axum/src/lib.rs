@@ -42,6 +42,8 @@ use appstate::*;
 mod error;
 use error::*;
 
+mod stream;
+
 #[cfg(test)]
 mod test_support;
 
@@ -146,11 +148,19 @@ async fn shutdown_signal(deletion_task_abort_handle: tokio::task::AbortHandle) {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::time::Duration;
+
     use axum::Router;
-    use http::{Method, StatusCode};
+    use http::{Method, StatusCode, header};
     use tower_sessions::MemoryStore;
 
-    use crate::test_support::{admin_cookie, run, run_json, test_app, user_cookie};
+    use tb_domain::{Summary, UserId};
+
+    use crate::stream::Registry;
+    use crate::test_support::{
+        admin_cookie, read_sse_frames, run, run_json, run_sse, test_app, test_app_live, user_cookie,
+    };
 
     async fn setup() -> (Router, MemoryStore) {
         let store = MemoryStore::default();
@@ -277,6 +287,88 @@ mod tests {
     #[tokio::test]
     async fn part_requires_auth() {
         expect_unauth(Method::GET, "/api/part/categories").await;
+    }
+
+    #[tokio::test]
+    async fn stream_requires_auth() {
+        expect_unauth(Method::GET, "/api/user/stream").await;
+    }
+
+    /// A connected stream is `text/event-stream` and emits `: ping` heartbeats
+    /// (spec §4.5): the short heartbeat cadence makes one arrive quickly.
+    #[tokio::test]
+    async fn stream_is_event_stream_and_heartbeats() {
+        let store = MemoryStore::default();
+        let registry = Arc::new(Registry::new(
+            Duration::from_secs(60),
+            Duration::from_millis(50),
+        ));
+        let app = test_app_live(&store, registry);
+        let cookie = user_cookie(&store).await;
+        let (status, headers, mut body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            headers[header::CONTENT_TYPE],
+            "text/event-stream",
+            "the stream must be an event stream"
+        );
+        let frames = read_sse_frames(&mut body, 3, Duration::from_secs(2)).await;
+        assert!(
+            frames.iter().any(|f| f.contains(": ping")),
+            "expected a `: ping` heartbeat, got: {frames:?}"
+        );
+    }
+
+    /// A frame pushed to the user's executor is forwarded on the stream as a
+    /// `data:` event carrying the `Summary` JSON (spec §2, §4.5).
+    #[tokio::test]
+    async fn stream_forwards_summary_frames() {
+        let store = MemoryStore::default();
+        let registry = Arc::new(Registry::new(
+            Duration::from_secs(60),
+            Duration::from_secs(15),
+        ));
+        let app = test_app_live(&store, registry.clone());
+        let cookie = user_cookie(&store).await;
+        let (status, _headers, mut body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::OK);
+        // Give the executor a moment to spawn and register this stream.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        registry
+            .send_frame(UserId::from(1), Summary::default())
+            .await;
+        let frames = read_sse_frames(&mut body, 3, Duration::from_secs(2)).await;
+        assert!(
+            frames.iter().any(|f| f.contains("data:")),
+            "expected a `data:` frame, got: {frames:?}"
+        );
+    }
+
+    /// When the executor reaps on idle, the stream stays alive on heartbeats and
+    /// re-subscribes (respawning the executor) so a later frame is forwarded
+    /// (spec §4.5 — the stream survives the executor's reap).
+    #[tokio::test]
+    async fn stream_survives_executor_reap() {
+        let store = MemoryStore::default();
+        // A short idle window so the executor reaps quickly; a short heartbeat
+        // so the reaped stream's keepalive is observable.
+        let registry = Arc::new(Registry::new(
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+        ));
+        let app = test_app_live(&store, registry);
+        let cookie = user_cookie(&store).await;
+        let (status, _headers, mut body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::OK);
+        // The executor reaps on idle (~100ms here) while this stream is
+        // attached. The reaped stream keeps heartbeating (it does not close),
+        // so frames keep arriving across the reap (spec §9.5). Three beats at
+        // a 50ms interval span the 100ms reap, so at least one is post-reap.
+        let frames = read_sse_frames(&mut body, 3, Duration::from_secs(2)).await;
+        assert!(
+            frames.iter().filter(|f| f.contains(": ping")).count() >= 2,
+            "expected heartbeats across the executor reap, got: {frames:?}"
+        );
     }
 
     #[tokio::test]
