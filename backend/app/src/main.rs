@@ -31,6 +31,7 @@ async fn main() -> anyhow::Result<()> {
     // the crate-internal details (the session store, the logging
     // subscriber) live in `tb_axum::start`.
     let pool = tb_sqlx::DbPool::new(&database_url).await?;
+    let db = pool.raw();
 
-    Ok(tb_axum::start(pool.clone(), pool.raw(), path, addr).await?)
+    Ok(tb_axum::start(pool, db, path, addr).await?)
 }
