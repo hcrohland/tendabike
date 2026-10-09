@@ -5,10 +5,14 @@
 //!
 //! The web layer is storage-agnostic: the state and every handler are generic over a
 //! [`TxnSource`], and the concrete store (the `DbPool` from `tb_sqlx`) is injected at the
-//! composition root (ADR-0005, executable spec #446 §6).
+//! composition root (ADR-0005, executable spec #446 §6). It knows none of the details of
+//! `tb_sqlx` — but it did choose a `PostgresStore` for its sessions, so [`start`] also
+//! takes the postgres connection (the `PgPool` the caller built its store from), and it
+//! owns its own logging subscriber: the composition root wires the concrete crates, not
+//! the crate-internal details.
 //!
 //! This file defines the `start` function, which is the entry point for the presentation layer. It takes a
-//! `TxnSource`, a session store, a path to the directory containing static files, and a socket address to bind to.
+//! `TxnSource`, the `PgPool` for the session store, a path to the directory containing static files, and a socket address to bind to.
 //! It sets up the necessary components for the presentation layer, such as the router and the middleware,
 //! and starts the server.
 //!
@@ -18,12 +22,14 @@
 
 use anyhow::Context;
 use axum::Router;
+use sqlx::PgPool;
 use std::net::SocketAddr;
 use tb_domain::TbResult;
 use tb_exec::TxnSource;
 use tb_strava::StravaStore;
 use tower_sessions::{ExpiredDeletion, SessionManagerLayer};
 use tower_sessions_sqlx_store::PostgresStore;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod domain;
 
@@ -51,14 +57,29 @@ where
 
 pub async fn start<S: TxnSource + Clone + Send + Sync + 'static>(
     source: S,
-    session_store: PostgresStore,
+    pool: PgPool,
     path: std::path::PathBuf,
     addr: SocketAddr,
 ) -> TbResult<()>
 where
     S::Conn: StravaStore,
 {
+    // The logging subscriber lives with the web layer it logs (the
+    // composition root owns process setup, not crate-internal wiring).
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "debug".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
     let app_state = AppState::new(source);
+
+    // The web layer chose a `PostgresStore` for its sessions, so the
+    // caller hands over the postgres connection — the same pool the
+    // `TxnSource` was built from.
+    let session_store = PostgresStore::new(pool);
 
     session_store
         .migrate()

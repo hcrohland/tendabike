@@ -2618,6 +2618,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sha2 0.11.0",
+ "sqlx",
  "tb_domain",
  "tb_exec",
  "tb_strava",
@@ -2629,6 +2630,7 @@ dependencies = [
  "tower-sessions",
  "tower-sessions-sqlx-store",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -2711,8 +2713,6 @@ dependencies = [
  "tb_axum",
  "tb_sqlx",
  "tokio",
- "tower-sessions-sqlx-store",
- "tracing-subscriber",
 ]
 
 [[package]]
