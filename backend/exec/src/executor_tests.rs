@@ -13,7 +13,7 @@ use tb_domain::{ApiWrite, Summary, TbResult, Usage};
 use tb_strava::event::Event;
 use tokio::sync::{broadcast, oneshot};
 
-use crate::executor::{Probe, Select, select_message};
+use crate::executor::{DbBackoff, Probe, Select, select_message, stop_remaining};
 use crate::message::{ApiWriteRequest, push_frame};
 use crate::{Action, Message, api_write_channel, next_action};
 
@@ -178,6 +178,73 @@ async fn select_strava_error_is_its_own_state() {
     assert!(
         matches!(sel, Select::StravaError),
         "a failed probe is StravaError, got {sel:?}"
+    );
+}
+
+#[tokio::test]
+async fn select_limited_when_stop_active() {
+    // An active global rate-limit Stop is its own select state (spec #446
+    // §4.6): the loop sleeps until the deadline as a branch of the select,
+    // interruptible by API writes.
+    let (_tx, mut rx) = api_write_channel();
+    let sel = select_message(rx.recv(), ready_probe(Probe::Limited(1234))).await;
+    assert!(
+        matches!(sel, Select::Limited(1234)),
+        "an active Stop is Select::Limited, got {sel:?}"
+    );
+}
+
+// --- `stop_remaining`: the Stop deadline as a sleep duration ---
+
+#[test]
+fn stop_remaining_until_the_deadline() {
+    assert_eq!(stop_remaining(1000, 400), Duration::from_secs(600));
+}
+
+#[test]
+fn stop_remaining_expired_is_zero() {
+    // An expired (or now-exactly-at) deadline sleeps nothing: the next probe
+    // deletes the Stop and reads on.
+    assert_eq!(stop_remaining(1000, 1000), Duration::ZERO);
+    assert_eq!(stop_remaining(400, 1000), Duration::ZERO);
+}
+
+// --- `DbBackoff`: the in-memory DB-failure backoff (spec #446 §4.6) ---
+
+#[test]
+fn db_backoff_doubles_until_the_cap() {
+    // Exponential, capped at 30s (spec #446 §4.6): a broken database must not
+    // hot-spin the loop, and a recovering one is probed at human pace.
+    let mut b = DbBackoff::new();
+    assert_eq!(b.record_failure(), Duration::from_secs(1));
+    assert_eq!(b.record_failure(), Duration::from_secs(2));
+    assert_eq!(b.record_failure(), Duration::from_secs(4));
+    assert_eq!(b.record_failure(), Duration::from_secs(8));
+    assert_eq!(b.record_failure(), Duration::from_secs(16));
+    assert_eq!(
+        b.record_failure(),
+        Duration::from_secs(30),
+        "16s x 2 caps at 30s"
+    );
+    assert_eq!(
+        b.record_failure(),
+        Duration::from_secs(30),
+        "and stays capped"
+    );
+}
+
+#[test]
+fn db_backoff_resets_after_a_success() {
+    // A healthy database (any committed transaction) restarts the backoff at
+    // its base: the next failure gets the short pause, not the cap.
+    let mut b = DbBackoff::new();
+    b.record_failure();
+    b.record_failure();
+    b.reset();
+    assert_eq!(
+        b.record_failure(),
+        Duration::from_secs(1),
+        "a success resets the backoff to its base"
     );
 }
 

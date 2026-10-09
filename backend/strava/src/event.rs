@@ -204,11 +204,13 @@ impl Event {
         self,
         user: &impl StravaSession,
         store: &mut impl StravaStore,
-    ) -> TbResult<Option<Self>> {
+    ) -> TbResult<QueueRead> {
         // rate limit event
         if self.object_id > get_time() {
             // still rate limited!
-            return Ok(None);
+            return Ok(QueueRead::Limited {
+                until: self.object_id,
+            });
         }
         // remove stop event
         warn!("Starting hooks again");
@@ -222,17 +224,9 @@ impl Event {
         user: &mut impl StravaSession,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
-        let summary = self.process_hook(user, store).await;
-        let summary = match summary {
-            Ok(x) => Ok(x),
-            Err(e) => check_try_again(e, store).await,
-        };
-        match summary {
-            Ok(res) => Ok(res),
-            Err(err) => {
-                self.delete(store).await?;
-                Err(err)
-            }
+        match self.process_hook(user, store).await {
+            Ok(summary) => Ok(summary),
+            Err(err) => self.fail_event(err, store).await,
         }
     }
 
@@ -274,7 +268,7 @@ impl Event {
     }
 
     async fn sync(
-        mut self,
+        &mut self,
         user: &mut impl StravaSession,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
@@ -290,10 +284,31 @@ impl Event {
             } else {
                 trace!("processing sync event at {start}");
                 for a in acts {
+                    let act_id = a.id;
                     start = std::cmp::max(start, a.start_date.unix_timestamp());
-                    let ps = a.send_to_tb(user, store).await?;
+                    match a.send_to_tb(user, store).await {
+                        Ok(ps) => summary += ps,
+                        // Rate limit, dead auth, or DB failure: bubble up to
+                        // the classifier (`fail_event`) — the Stop keeps the
+                        // event at the last good cursor, the disable drops the
+                        // queue, the DB failure backs off in the loop.
+                        Err(err)
+                            if matches!(
+                                err,
+                                Error::TryAgain(_) | Error::NotAuth(_) | Error::DatabaseFailure(_)
+                            ) =>
+                        {
+                            return Err(err);
+                        }
+                        // A permanently bad activity (404, parse): skip it and
+                        // advance the cursor past it (spec #446 §4.6) —
+                        // liveness > completeness. The admin sync endpoint
+                        // re-covers the gap if the user cares.
+                        Err(err) => {
+                            warn!("skipping bad activity {act_id}: {err:#}");
+                        }
+                    }
                     self.setdate(start, store).await?;
-                    summary += ps;
                 }
             }
         }
@@ -302,15 +317,55 @@ impl Event {
     }
 
     async fn process_sync(
-        self,
+        mut self,
         user: &mut impl StravaSession,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
-        let summary = self.sync(user, store).await;
-        if let Err(err) = summary {
-            return check_try_again(err, store).await;
+        match self.sync(user, store).await {
+            Ok(summary) => Ok(summary),
+            Err(err) => self.fail_event(err, store).await,
         }
-        summary
+    }
+
+    /// The failure semantics of a failed Strava message (spec #446 §4.6) —
+    /// drop on permanent failure, no dead-letter table:
+    ///
+    /// - `TryAgain` (rate limited) → insert the global `Stop` and keep the
+    ///   event queued: it is retried after the backoff.
+    /// - `NotAuth` (401 after a token refresh) → disable the user's Strava
+    ///   integration, which drops all their queued events: the data freezes
+    ///   (stale but consistent), and no event-by-event 401s follow.
+    /// - A DB failure → propagate: the executor loop rolls back (the event
+    ///   stays queued) and applies its in-memory backoff.
+    /// - Anything else is permanent (a 404 means the activity is gone; a parse
+    ///   error will not heal): delete the event, log it, and move on — the
+    ///   admin sync endpoint re-covers a gap if the user cares.
+    ///
+    /// Every arm returns `Ok` except the DB failure: the queue-side effects
+    /// (the `Stop`, the disable, the delete) are committed by the loop's
+    /// transaction, and the loop continues.
+    async fn fail_event(&self, err: Error, store: &mut impl StravaStore) -> TbResult<Summary> {
+        match err {
+            Error::TryAgain(msg) => {
+                warn!("Strava rate limited ({msg}); pausing all users for 15 minutes");
+                insert_stop(store).await?;
+                Ok(Summary::default())
+            }
+            Error::NotAuth(msg) => {
+                warn!(
+                    "Strava auth is dead ({msg}); disabling user {}",
+                    self.owner_id
+                );
+                self.owner_id.disable(store).await?;
+                Ok(Summary::default())
+            }
+            Error::DatabaseFailure(_) => Err(err),
+            other => {
+                warn!("dropping poison event {self}: {other:#}");
+                self.delete(store).await?;
+                Ok(Summary::default())
+            }
+        }
     }
 
     async fn process_user(&self, store: &mut impl StravaStore) -> TbResult<()> {
@@ -376,21 +431,49 @@ pub async fn insert_sync(
     store.stravaevent_store(event).await
 }
 
+/// Inserts the global rate-limit `Stop` (spec #446 §4.6): the Strava rate
+/// limit is app-wide, so one user's 429 pauses every user's drain. The
+/// deadline is 15 minutes (the existing tuned value). If a `Stop` is already
+/// queued, its deadline is **extended** rather than stacking rows — the
+/// backoff must not compound: only `Stop`s carry `owner_id` 0, so the next
+/// event for user 0 is the oldest `Stop`.
 pub async fn insert_stop(store: &mut impl StravaStore) -> TbResult<()> {
-    let e = Event {
+    let stop = Event {
         object_type: ObjectType::Stop,
         object_id: get_time() + 900,
         ..Default::default()
     };
-    store.stravaevent_store(e).await
+    if let Some(existing) = store
+        .strava_event_get_next_for_user(StravaId::default())
+        .await?
+        && existing.object_type == ObjectType::Stop
+    {
+        existing.delete(store).await?;
+    }
+    store.stravaevent_store(stop).await
+}
+
+/// One outcome of a read of the `strava_events` queue (spec #446 §4.6):
+/// what is interesting for the user right now, and when the queue is paused.
+#[derive(Debug, Clone, PartialEq)]
+pub enum QueueRead {
+    /// The event to process (the read-side dedup already applied).
+    Event(Event),
+    /// The global rate-limit `Stop` is active until this unix time: the queue
+    /// is paused, and the caller (the executor loop) sleeps until the deadline
+    /// as an interruptible branch of its select — API writes are never delayed.
+    Limited { until: i64 },
+    /// The queue holds nothing interesting for this user (empty, or only an
+    /// expired `Stop`, which the read deleted).
+    Empty,
 }
 
 /// Read the next queued Strava event for the user, with the queue's two
 /// read-side rules applied (ADR-0005, executable spec #446 §4.3):
 ///
 /// - a `Stop` (the global rate-limit backoff) is checked against its expiry:
-///   still limited → `None` (the event stays queued); expired → deleted and
-///   the read recurses for the next event;
+///   still limited → [`QueueRead::Limited`] (the event stays queued); expired
+///   → deleted and the read recurses for the next event;
 /// - only the latest event per object is interesting: older events for the
 ///   same object are deleted and the latest is returned.
 ///
@@ -399,21 +482,16 @@ pub async fn insert_stop(store: &mut impl StravaStore) -> TbResult<()> {
 /// `tb_exec` crate) owns the "read next Strava event" step; reading the queue
 /// stays a Strava-side concern, so the function stays here rather than being
 /// inlined in the loop.
-///
-/// # Returns
-///
-/// The event to process, or `None` when the queue holds nothing interesting
-/// for this user (empty, or only an unexpired `Stop`).
 pub async fn get_event(
     user: &impl StravaSession,
     store: &mut impl StravaStore,
-) -> TbResult<Option<Event>> {
+) -> TbResult<QueueRead> {
     let event = store
         .strava_event_get_next_for_user(user.strava_id())
         .await?;
     let event = match event {
         Some(event) => event,
-        None => return Ok(None),
+        None => return Ok(QueueRead::Empty),
     };
     if event.object_type == ObjectType::Stop {
         return event.rate_limit(user, store).await;
@@ -432,19 +510,10 @@ pub async fn get_event(
         store.strava_events_delete_batch(values).await?;
     }
 
-    Ok(res)
-}
-
-async fn check_try_again(err: tb_domain::Error, store: &mut impl StravaStore) -> TbResult<Summary> {
-    // Keep events for temporary failure - delete others
-    match err {
-        Error::TryAgain(_) => {
-            warn!("Stopping hooks for 15 minutes {err:?}");
-            insert_stop(store).await?;
-            Ok(Summary::default())
-        }
-        _ => Err(err),
-    }
+    Ok(match res {
+        Some(event) => QueueRead::Event(event),
+        None => QueueRead::Empty,
+    })
 }
 
 async fn next_activities(
@@ -464,11 +533,13 @@ pub async fn process(
     user: &mut impl StravaSession,
     store: &mut impl StravaStore,
 ) -> TbResult<Summary> {
-    let event = get_event(user, store).await?;
-    if event.is_none() {
-        return Ok(Summary::default());
+    let read = get_event(user, store).await?;
+    let event = match read {
+        QueueRead::Event(event) => event,
+        // The queue is empty, or paused by a global rate-limit `Stop` (the
+        // executor loop sleeps until its deadline; nothing to process).
+        QueueRead::Limited { .. } | QueueRead::Empty => return Ok(Summary::default()),
     };
-    let event = event.unwrap();
     info!("Processing {event}");
 
     match event.object_type {
@@ -650,6 +721,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn insert_stop_extends_existing() -> TbResult<()> {
+        // A second 429 while a Stop is queued extends the deadline rather
+        // than stacking rows (spec #446 §4.6): the backoff must not compound.
+        let (mut store, _) = setup();
+        insert_stop(&mut store).await?;
+        let first_until = store.events[0].object_id;
+        insert_stop(&mut store).await?;
+        assert_eq!(
+            store.event_count(),
+            1,
+            "the second Stop extends, it does not stack"
+        );
+        let stop = &store.events[0];
+        assert_eq!(stop.object_type, ObjectType::Stop);
+        assert!(
+            stop.object_id >= first_until,
+            "the deadline is never shortened"
+        );
+        assert!(
+            stop.object_id > get_time(),
+            "the extended Stop is still active"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn get_event_returns_latest_and_drops_older() -> TbResult<()> {
         let (mut store, session) = setup();
         let mut first = activity_event();
@@ -657,7 +754,10 @@ mod tests {
         first.event_time = 50;
         store.stravaevent_store(first).await?;
         store.stravaevent_store(activity_event()).await?;
-        let event = get_event(&session, &mut store).await?.unwrap();
+        let event = match get_event(&session, &mut store).await? {
+            QueueRead::Event(event) => event,
+            other => panic!("the latest event is returned, got {other:?}"),
+        };
         assert_eq!(event.aspect_type, AspectType::Create);
         assert_eq!(store.event_count(), 1);
         Ok(())
@@ -672,22 +772,63 @@ mod tests {
                 ..activity_event()
             })
             .await?;
-        assert!(get_event(&session, &mut store).await?.is_none());
+        assert_eq!(get_event(&session, &mut store).await?, QueueRead::Empty);
         Ok(())
     }
 
     #[tokio::test]
-    async fn rate_limit_active_returns_none() -> TbResult<()> {
+    async fn get_event_active_stop_reports_deadline() -> TbResult<()> {
+        // An unexpired global Stop pauses the queue: the read reports the
+        // deadline (the executor loop sleeps until it) and consumes nothing.
         let (mut store, session) = setup();
-        let stop = Event {
-            object_type: ObjectType::Stop,
-            object_id: get_time() + 500,
-            ..Default::default()
-        };
-        store.stravaevent_store(stop).await?;
+        let until = get_time() + 500;
+        store
+            .stravaevent_store(Event {
+                object_type: ObjectType::Stop,
+                object_id: until,
+                ..Default::default()
+            })
+            .await?;
+        store.stravaevent_store(activity_event()).await?;
+        let res = get_event(&session, &mut store).await?;
+        assert_eq!(res, QueueRead::Limited { until });
+        assert_eq!(store.event_count(), 2);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn get_event_expired_stop_deletes_and_returns_next() -> TbResult<()> {
+        // An expired Stop is deleted by the read, which recurses for the next
+        // event (the backoff is over).
+        let (mut store, session) = setup();
+        store
+            .stravaevent_store(Event {
+                object_type: ObjectType::Stop,
+                object_id: 100,
+                ..Default::default()
+            })
+            .await?;
+        store.stravaevent_store(activity_event()).await?;
+        let res = get_event(&session, &mut store).await?;
+        assert!(matches!(res, QueueRead::Event(ref e) if e.object_id == 10));
+        assert_eq!(store.event_count(), 1);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn rate_limit_active_reports_deadline() -> TbResult<()> {
+        let (mut store, session) = setup();
+        let until = get_time() + 500;
+        store
+            .stravaevent_store(Event {
+                object_type: ObjectType::Stop,
+                object_id: until,
+                ..Default::default()
+            })
+            .await?;
         let event = store.events[0].clone();
         let res = event.rate_limit(&session, &mut store).await?;
-        assert!(res.is_none());
+        assert_eq!(res, QueueRead::Limited { until });
         assert_eq!(store.event_count(), 1);
         Ok(())
     }
@@ -703,7 +844,7 @@ mod tests {
         store.stravaevent_store(stop).await?;
         let event = store.events[0].clone();
         let res = event.rate_limit(&session, &mut store).await?;
-        assert!(res.is_none());
+        assert_eq!(res, QueueRead::Empty);
         assert_eq!(store.event_count(), 0);
         Ok(())
     }
@@ -761,6 +902,65 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn process_activity_nontransient_drops_event() -> TbResult<()> {
+        // A permanently bad activity (parse error, a 404's domain shape) is
+        // dropped from the queue and logged — it is committed, so the event
+        // is gone and the queue cannot wedge on it (spec #446 §4.6).
+        let (mut store, mut session) = setup();
+        store.stravaevent_store(activity_event()).await?;
+        session.queue_error(
+            "/activities/10",
+            Error::AnyFailure(anyhow::anyhow!("parse boom")),
+        );
+        let summary = process(&mut session, &mut store).await?;
+        assert_eq!(summary, Summary::default());
+        assert_eq!(store.event_count(), 0, "the poison event is deleted");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn process_activity_not_auth_disables_user() -> TbResult<()> {
+        // A 401 after a token refresh disables the user's Strava integration
+        // and drops all their queued events (spec #446 §4.6): the data freezes
+        // stale-but-consistent; no event-by-event 401s follow.
+        let (mut store, mut session) = setup();
+        store.stravaevent_store(activity_event()).await?;
+        session.queue_error("/activities/10", Error::NotAuth(String::from("token dead")));
+        let summary = process(&mut session, &mut store).await?;
+        assert_eq!(summary, Summary::default());
+        assert_eq!(
+            store.event_count(),
+            0,
+            "the user's queued events are dropped"
+        );
+        let user = store.stravauser_get_by_tbid(UserId::from(1)).await?;
+        assert!(user.disabled(), "the StravaId is disabled");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn process_sync_not_auth_disables_user() -> TbResult<()> {
+        let (mut store, mut session) = setup();
+        store
+            .stravaevent_store(Event {
+                object_type: ObjectType::Sync,
+                owner_id: 42.into(),
+                ..Default::default()
+            })
+            .await?;
+        session.queue_error(
+            "/activities?after=0&per_page=25",
+            Error::NotAuth(String::from("token dead")),
+        );
+        let summary = process(&mut session, &mut store).await?;
+        assert_eq!(summary, Summary::default());
+        assert_eq!(store.event_count(), 0);
+        let user = store.stravauser_get_by_tbid(UserId::from(1)).await?;
+        assert!(user.disabled());
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn process_sync_empty_list_removes_event() -> TbResult<()> {
         let (mut store, mut session) = setup();
         store
@@ -798,6 +998,45 @@ mod tests {
         assert_eq!(store.events[0].event_time, 1767348000);
         let acts = ActivityStore::get_all(&mut store.mem, &UserId::from(1)).await?;
         assert_eq!(acts.len(), 1);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn process_sync_bad_activity_skips_and_advances_cursor() -> TbResult<()> {
+        // A permanently bad activity in a batch is skipped and the cursor
+        // advances past it (spec #446 §4.6) — liveness > completeness: one bad
+        // activity must not wedge the queue in an infinite retry loop. The
+        // event stays queued at the advanced cursor (one page per wake); the
+        // admin sync endpoint re-covers the gap if the user cares.
+        let (mut store, mut session) = setup();
+        store
+            .stravaevent_store(Event {
+                object_type: ObjectType::Sync,
+                owner_id: 42.into(),
+                ..Default::default()
+            })
+            .await?;
+        session.queue(
+            "/activities?after=0&per_page=25",
+            &format!(
+                "[{}, {}]",
+                activity_json(10, "Ride", None),
+                activity_json(11, "Ride", Some("g11"))
+                    .replace("2026-01-02T10:00:00Z", "2026-01-03T10:00:00Z")
+            ),
+        );
+        session.queue("/activities/10", &activity_json(10, "Ride", None));
+        session.queue_error(
+            "/gear/g11",
+            Error::AnyFailure(anyhow::anyhow!("parse boom")),
+        );
+        let summary = process(&mut session, &mut store).await?;
+        assert_eq!(summary.activities.len(), 1, "the good activity imports");
+        assert_eq!(store.event_count(), 1, "the sync event stays queued");
+        assert_eq!(
+            store.events[0].event_time, 1767434400,
+            "the cursor advances past the bad activity (2026-01-03T10:00:00Z)"
+        );
         Ok(())
     }
 
