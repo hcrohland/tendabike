@@ -106,10 +106,12 @@ where
     let mut store = state.source.begin().await?;
     let user_id = event.accept(&mut store).await?;
     store.commit().await?;
-    // Fire the in-memory wake signal (spec §4.4): the DB queue is the source
-    // of truth, so a failed wake is non-critical and must not 500 the ingest.
+    // Fire the in-memory wake signal (spec §4.4): a pure signal to a
+    // running executor — it never spawns one, and the DB queue is the
+    // source of truth, so a missed wake only delays the event to the next
+    // spawn.
     if let Some(user_id) = user_id {
-        let _ = state.registry.wake(&state.source, user_id).await;
+        state.registry.wake(user_id).await;
     }
     Ok(Json(()))
 }
@@ -202,13 +204,13 @@ where
         )
         .await?;
 
-    // The Strava-side event is a web-layer concern: queue it and wake the
-    // executor to consume it (spec §4.6). A failed wake is non-critical —
-    // the queue is the source of truth.
+    // The Strava-side event is a web-layer concern: queue it and fire the
+    // wake signal to a running executor to consume it (spec §4.6). The wake
+    // never spawns and cannot fail — the queue is the source of truth.
     let mut store = state.source.begin().await?;
     tb_strava::event::insert_sync(user.strava_id(), query.time, false, &mut store).await?;
     store.commit().await?;
-    let _ = state.registry.wake(&state.source, user.tb_id()).await;
+    state.registry.wake(user.tb_id()).await;
 
     let mut store = state.source.begin().await?;
     Ok(Json(user.tb_id().read(&mut store).await?))

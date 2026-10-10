@@ -1234,8 +1234,19 @@ impl StravaStore for LiveConn {
             refresh_token: st.refresh_token.clone().map(oauth2::RefreshToken::new),
         })
     }
-    async fn stravauser_get_by_stravaid(&mut self, _id: &StravaId) -> TbResult<Option<StravaUser>> {
-        unimplemented!()
+    /// The seam's one Strava user: `StravaId` 1 owns `UserId` 1 (the same
+    /// pair `stravauser_get_by_tbid` synthesizes), so a webhook event with
+    /// `owner_id` 1 is accepted and wakes that user's executor.
+    async fn stravauser_get_by_stravaid(&mut self, id: &StravaId) -> TbResult<Option<StravaUser>> {
+        if *id != StravaId::from(1) {
+            return Ok(None);
+        }
+        let st = self.strava.lock().expect("strava state");
+        Ok(Some(StravaUser {
+            id: StravaId::from(1),
+            tendabike_id: UserId::from(1),
+            refresh_token: st.refresh_token.clone().map(oauth2::RefreshToken::new),
+        }))
     }
     async fn stravauser_new(&mut self, _user: StravaUser) -> TbResult<StravaUser> {
         unimplemented!()

@@ -61,6 +61,7 @@
 mod scratch;
 use scratch::*;
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
@@ -70,7 +71,7 @@ use tb_exec::{ApiWriteRequest, api_write_channel, run};
 use tb_sqlx::DbPool;
 use tb_strava::{StravaId, StravaSession, StravaStore};
 use time::macros::datetime;
-use tokio::sync::{MutexGuard, broadcast};
+use tokio::sync::{MutexGuard, Notify, broadcast};
 
 /// The database-name suffix this suite's scratch database carries: cargo
 /// runs the `tb_sqlx` test binaries in parallel, and each suite's one-time
@@ -241,6 +242,7 @@ async fn api_write_end_to_end() {
         frames,
         events,
         IDLE_TIMEOUT,
+        Arc::new(Notify::new()),
     ));
 
     // The route's oneshot resolves with the write's outcome; the part
@@ -333,6 +335,7 @@ async fn strava_queue_drains_and_reclaims() {
             frames,
             events,
             IDLE_TIMEOUT,
+            Arc::new(Notify::new()),
         ),
     )
     .await
@@ -369,6 +372,7 @@ async fn idle_loop_reclaims() {
             frames,
             events,
             IDLE_TIMEOUT,
+            Arc::new(Notify::new()),
         ),
     )
     .await
@@ -407,6 +411,7 @@ async fn failed_write_rolls_back_and_reclaims() {
         frames,
         events,
         IDLE_TIMEOUT,
+        Arc::new(Notify::new()),
     ));
 
     // The route gets the domain error, not a 500 and not a hang.

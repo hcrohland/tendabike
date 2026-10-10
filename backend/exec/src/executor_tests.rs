@@ -144,7 +144,14 @@ async fn select_api_write_wins_over_ready_strava() {
     let (_tx, mut rx) = api_write_channel();
     let (req, _reply) = request();
     let _ = _tx.send(req);
-    let sel = select_message(rx.recv(), ready_probe(Probe::Event(Event::default()))).await;
+    let wake = tokio::sync::Notify::new();
+    let mut wake_fut = Box::pin(wake.notified());
+    let sel = select_message(
+        rx.recv(),
+        ready_probe(Probe::Event(Event::default())),
+        &mut wake_fut,
+    )
+    .await;
     assert!(
         matches!(sel, Select::ApiWrite(ref req) if matches!(req.write, ApiWrite::UserOnboardingPostpone)),
         "the ready API write must win the biased select, got {sel:?}"
@@ -156,7 +163,14 @@ async fn select_strava_when_no_write_pending() {
     // An empty-but-open channel parks the write branch; the ready Strava
     // branch is then taken.
     let (_tx, mut rx) = api_write_channel();
-    let sel = select_message(rx.recv(), ready_probe(Probe::Event(Event::default()))).await;
+    let wake = tokio::sync::Notify::new();
+    let mut wake_fut = Box::pin(wake.notified());
+    let sel = select_message(
+        rx.recv(),
+        ready_probe(Probe::Event(Event::default())),
+        &mut wake_fut,
+    )
+    .await;
     assert!(
         matches!(sel, Select::Strava(ref e) if *e == Event::default()),
         "a ready Strava event is taken when no write is pending, got {sel:?}"
@@ -168,7 +182,9 @@ async fn select_idle_when_queue_empty_and_no_write() {
     // Neither branch ready-yet-interesting: an empty queue (committed probe)
     // with no pending write is the idle state the reclaim policy decides on.
     let (_tx, mut rx) = api_write_channel();
-    let sel = select_message(rx.recv(), ready_probe(Probe::Empty)).await;
+    let wake = tokio::sync::Notify::new();
+    let mut wake_fut = Box::pin(wake.notified());
+    let sel = select_message(rx.recv(), ready_probe(Probe::Empty), &mut wake_fut).await;
     assert!(
         matches!(sel, Select::Idle),
         "empty queue + no write is Idle, got {sel:?}"
@@ -182,7 +198,9 @@ async fn select_idle_when_channel_closed_and_queue_empty() {
     // is a shutdown corner, not a normal state).
     let (tx, mut rx) = api_write_channel();
     drop(tx);
-    let sel = select_message(rx.recv(), ready_probe(Probe::Empty)).await;
+    let wake = tokio::sync::Notify::new();
+    let mut wake_fut = Box::pin(wake.notified());
+    let sel = select_message(rx.recv(), ready_probe(Probe::Empty), &mut wake_fut).await;
     assert!(
         matches!(sel, Select::Idle),
         "closed channel + empty queue is Idle, got {sel:?}"
@@ -194,7 +212,9 @@ async fn select_strava_error_is_its_own_state() {
     // A failed probe is reported, not silently read as "empty": the loop
     // pauses instead of deciding the queue drained.
     let (_tx, mut rx) = api_write_channel();
-    let sel = select_message(rx.recv(), ready_probe(Probe::Error)).await;
+    let wake = tokio::sync::Notify::new();
+    let mut wake_fut = Box::pin(wake.notified());
+    let sel = select_message(rx.recv(), ready_probe(Probe::Error), &mut wake_fut).await;
     assert!(
         matches!(sel, Select::StravaError),
         "a failed probe is StravaError, got {sel:?}"
@@ -207,7 +227,9 @@ async fn select_limited_when_stop_active() {
     // §4.6): the loop sleeps until the deadline as a branch of the select,
     // interruptible by API writes.
     let (_tx, mut rx) = api_write_channel();
-    let sel = select_message(rx.recv(), ready_probe(Probe::Limited(1234))).await;
+    let wake = tokio::sync::Notify::new();
+    let mut wake_fut = Box::pin(wake.notified());
+    let sel = select_message(rx.recv(), ready_probe(Probe::Limited(1234)), &mut wake_fut).await;
     assert!(
         matches!(sel, Select::Limited(1234)),
         "an active Stop is Select::Limited, got {sel:?}"
@@ -275,7 +297,9 @@ async fn select_waits_for_the_write_over_a_slow_queue() {
     let (tx, mut rx) = api_write_channel();
     let sel = tokio::spawn(async move {
         let _ = tx.send(request().0);
-        select_message(rx.recv(), Never).await
+        let wake = tokio::sync::Notify::new();
+        let mut wake_fut = Box::pin(wake.notified());
+        select_message(rx.recv(), Never, &mut wake_fut).await
     });
     // Give the task a moment to park on the never-ready queue probe; the send
     // in the same task has already happened, so the write branch is ready.
@@ -286,6 +310,52 @@ async fn select_waits_for_the_write_over_a_slow_queue() {
     assert!(
         matches!(sel, Select::ApiWrite(_)),
         "a write arriving over a slow queue wins, got {sel:?}"
+    );
+}
+
+#[tokio::test]
+async fn select_wake_fired_before_the_select_is_wake() {
+    // Permit semantics: a notify that fires before the `notified()` future is
+    // created is not lost — the select resolves to the wake state (the loop
+    // re-probes the queue on its next cycle), even with a slow probe parked.
+    let (_tx, mut rx) = api_write_channel();
+    let wake = tokio::sync::Notify::new();
+    wake.notify_one();
+    let mut wake_fut = Box::pin(wake.notified());
+    let sel = tokio::time::timeout(
+        Duration::from_secs(5),
+        select_message(rx.recv(), Never, &mut wake_fut),
+    )
+    .await
+    .expect("a pre-fired wake resolves the select");
+    assert!(
+        matches!(sel, Select::Wake),
+        "a fired wake is the wake state, got {sel:?}"
+    );
+}
+
+#[tokio::test]
+async fn select_wake_firing_while_parked_is_wake() {
+    // The queue probe is pending (slow) and no write is queued; a wake that
+    // fires while the select is parked resolves it to the wake state — the
+    // loop re-probes the queue on its next cycle.
+    let (_tx, mut rx) = api_write_channel();
+    let wake = std::sync::Arc::new(tokio::sync::Notify::new());
+    let wake_in_task = wake.clone();
+    let task = tokio::spawn(async move {
+        let mut wake_fut = Box::pin(wake_in_task.notified());
+        select_message(rx.recv(), Never, &mut wake_fut).await
+    });
+    // Let the task park on the never-ready probe, then fire the wake.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    wake.notify_one();
+    let sel = tokio::time::timeout(Duration::from_secs(5), task)
+        .await
+        .expect("a fired wake resolves the select")
+        .expect("the task does not panic");
+    assert!(
+        matches!(sel, Select::Wake),
+        "a wake firing mid-park is the wake state, got {sel:?}"
     );
 }
 

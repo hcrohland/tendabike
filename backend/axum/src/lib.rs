@@ -657,12 +657,20 @@ mod tests {
 
     /// `POST /strava/onboarding/sync` runs the status update on the executor,
     /// queues the Strava sync event, and answers `200` with the `User`; the
-    /// executor then consumes the queued sync (no refresh token in the
-    /// in-memory seam: `NotAuth` disables the user and clears the queue).
+    /// executor then consumes the queued sync via the webhook's wake signal
+    /// (the stream is open, as in production — the user's tab is attached —
+    /// so the executor is running and the wake interrupts its idle wait).
+    /// The in-memory seam has no refresh token: `NotAuth` disables the user
+    /// and clears the queue.
     #[tokio::test]
     async fn onboarding_sync_returns_200_and_user() {
         let (app, store, _registry, live) = live_app().await;
         let cookie = user_cookie(&store).await;
+        // The user's tab is open during onboarding: the stream keeps the
+        // executor running (the wake is a signal only — it never spawns).
+        let (status, _headers, _body) =
+            run_sse(app.clone(), "/api/user/stream", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::OK);
         let (status, _headers, body) =
             run(app, Method::POST, "/strava/onboarding/sync", Some(&cookie)).await;
         assert_eq!(status, StatusCode::OK);
@@ -752,6 +760,154 @@ mod tests {
         assert!(
             live.strava().lock().unwrap().events.is_empty(),
             "the queued sync must have been consumed"
+        );
+    }
+
+    /// A Strava event queued by the webhook is consumed **promptly** by a
+    /// running, idle-sleeping executor: the webhook's wake signal interrupts
+    /// the executor's idle wait, so the event does not wait for the idle
+    /// timeout to expire (spec §4.4/§4.6 — the in-memory wake signal).
+    #[tokio::test]
+    async fn webhook_wake_drains_the_queue_before_the_idle_timeout() {
+        let store = MemoryStore::default();
+        // A long idle window: without the wake interrupting the idle sleep,
+        // the queued event would sit unconsumed for the whole 60s.
+        let registry = Arc::new(Registry::new(
+            Duration::from_secs(60),
+            Duration::from_millis(50),
+        ));
+        let live = LiveSource::new().await;
+        let app = test_app_live(&store, live.clone(), registry.clone());
+        let cookie = user_cookie(&store).await;
+
+        // Open a stream: the executor spawns and stays running (the attached
+        // stream keeps it from reaping).
+        let (status, _headers, _body) =
+            run_sse(app.clone(), "/api/user/stream", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::OK);
+        wait_for_status(&registry, UserId::from(1), ExecutorStatus::Running).await;
+
+        // A canary event first: once it is consumed, the executor has
+        // re-probed the (now empty) queue and parked in its 60s idle sleep
+        // — the state the wake has to interrupt.
+        let (status, _headers, _body) = run_json(
+            app.clone(),
+            Method::POST,
+            "/strava/callback",
+            None,
+            r#"{"object_type":"sync","object_id":0,"aspect_type":"create","updates":{},"owner_id":1,"subscription_id":0,"event_time":1700000000}"#,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_queue_drained(&live).await;
+        // Settle: the executor is in its idle sleep by now.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // The probe event: the webhook queues it and fires the wake.
+        let (status, _headers, _body) = run_json(
+            app,
+            Method::POST,
+            "/strava/callback",
+            None,
+            r#"{"object_type":"sync","object_id":0,"aspect_type":"create","updates":{},"owner_id":1,"subscription_id":0,"event_time":1700000001}"#,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+
+        // The event is consumed well under the 60s idle timeout (bounded
+        // 3s wait): the wake interrupted the idle sleep, the loop re-probed
+        // and drained the queue (the seam has no refresh token, so the
+        // sync's `NotAuth` disable drops the queue — consumed either way).
+        assert_queue_drained(&live).await;
+    }
+
+    /// Wait (bounded) until the shared in-memory Strava queue is empty: the
+    /// seam's executor consumes a queued event by dropping it (the seam has
+    /// no refresh token, so `NotAuth` disables the user and clears the
+    /// queue) — an empty queue is consumption.
+    async fn assert_queue_drained(live: &LiveSource) {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(3);
+        loop {
+            if live.strava().lock().unwrap().events.is_empty()
+                || tokio::time::Instant::now() >= deadline
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(
+            live.strava().lock().unwrap().events.is_empty(),
+            "the queued event must be consumed well under the idle timeout"
+        );
+    }
+
+    /// `Registry::wake` is a pure signal to a **running** executor: with no
+    /// executor running (reaped), the wake spawns nothing and the queued
+    /// event stays queued — the DB queue is the source of truth; the next
+    /// spawn (a write or an SSE connect) drains it (spec §4.4).
+    #[tokio::test]
+    async fn wake_never_spawns_a_reaped_executor() {
+        let store = MemoryStore::default();
+        // A short idle window so the executor reaps quickly once the stream
+        // is closed.
+        let registry = Arc::new(Registry::new(
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+        ));
+        let live = LiveSource::new().await;
+        let app = test_app_live(&store, live.clone(), registry.clone());
+        let cookie = user_cookie(&store).await;
+        let user = UserId::from(1);
+
+        // Spawn the executor with a stream, then close it and let it reap.
+        let (status, _headers, body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::OK);
+        wait_for_status(&registry, user, ExecutorStatus::Running).await;
+        drop(body);
+        wait_for_status(&registry, user, ExecutorStatus::Reaped).await;
+
+        // Queue an event for the user.
+        live.strava()
+            .lock()
+            .unwrap()
+            .events
+            .push(tb_strava::event::Event {
+                object_type: tb_strava::event::ObjectType::Sync,
+                owner_id: tb_strava::StravaId::from(1),
+                event_time: 1700000000,
+                ..Default::default()
+            });
+
+        // The wake is a signal only: no executor is running, so it spawns
+        // nothing and the event stays queued.
+        registry.wake(user).await;
+        assert_ne!(
+            registry.status(user).await,
+            Some(ExecutorStatus::Running),
+            "the wake must not spawn an executor"
+        );
+        assert!(
+            !live.strava().lock().unwrap().events.is_empty(),
+            "the queued event must stay queued for the next spawn"
+        );
+
+        // A write spawns the executor, which drains the queue.
+        registry
+            .write(&live, user, tb_domain::ApiWrite::UserOnboardingPostpone)
+            .await
+            .expect("the write must succeed");
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            if live.strava().lock().unwrap().events.is_empty()
+                || tokio::time::Instant::now() >= deadline
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(
+            live.strava().lock().unwrap().events.is_empty(),
+            "the respawned executor must drain the queue"
         );
     }
 

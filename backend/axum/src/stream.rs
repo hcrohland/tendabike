@@ -36,8 +36,8 @@ use axum::{
 };
 use futures::stream::unfold;
 use http::StatusCode;
-use log::error;
-use tokio::sync::{Mutex, broadcast, watch};
+use log::{error, info};
+use tokio::sync::{Mutex, Notify, broadcast, watch};
 
 use tb_domain::{ApiWrite, DescendReport, Error, Session, Summary, TbResult, UserId, WriteOutcome};
 use tb_exec::{ApiWriteRequest, ApiWriteSender, Txn, TxnSource, api_write_channel, run};
@@ -79,11 +79,12 @@ pub enum ExecutorStatus {
 /// One live per-user executor: the shared fate channel, the send half of the
 /// user's API-write channel (the write handlers enqueue here, spec §6.2),
 /// the SSE frame sink the stream tasks subscribe to, the consumed-
-/// Strava-event channel the admin sync awaits (spec §6.4), and the task's
-/// abort handle (the registry's `stop_all` tears the executor down —
-/// rescan, issue #446). The `AbortHandle` (not the `JoinHandle`) is stored:
-/// the watchdog keeps the original handle to `await` and record `Dead` on
-/// a panic **or** the abort `JoinError`.
+/// Strava-event channel the admin sync awaits (spec §6.4), the in-memory
+/// wake signal the webhook fires after queueing a Strava event (spec
+/// §4.4/§4.6), and the task's abort handle (the registry's `stop_all` tears
+/// the executor down — rescan, issue #446). The `AbortHandle` (not the
+/// `JoinHandle`) is stored: the watchdog keeps the original handle to
+/// `await` and record `Dead` on a panic **or** the abort `JoinError`.
 #[derive(Clone)]
 struct Executor {
     status: watch::Receiver<ExecutorStatus>,
@@ -94,6 +95,10 @@ struct Executor {
     /// Every Strava event the loop consumed (spec §6.4): the admin sync's
     /// completion signal, correlated by the event's identity.
     events: broadcast::Sender<StravaEvent>,
+    /// The in-memory wake signal (spec §4.4/§4.6): fired by `Registry::wake`
+    /// after a Strava event is queued; the running loop selects on it, so
+    /// the event is processed at once, even mid-idle-sleep.
+    wake: Arc<Notify>,
     /// Aborts the executor task (`stop_all`): the watchdog records `Dead`
     /// on the abort `JoinError`, like a panic.
     task: tokio::task::AbortHandle,
@@ -147,16 +152,21 @@ impl Registry {
         .await
     }
 
-    /// Wake the executor for `user_id` (spawning it if it is not running) so a
-    /// just-queued Strava event is picked up on its next wake (spec §4.6).
-    /// Non-critical: the DB queue is the source of truth, so a failed wake
-    /// must not fail the ingest.
-    pub async fn wake<S>(&self, source: &S, user_id: UserId) -> TbResult<()>
-    where
-        S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
-    {
-        self.exec_field(source, user_id, |_| ()).await
+    /// Fire the wake signal for the user's executor (spec §4.4/§4.6): a
+    /// pure signal to a **running** executor — it interrupts the loop's
+    /// idle wait so a just-queued Strava event is processed at once. It
+    /// never spawns an executor: a reaped (or not-yet-spawned) executor
+    /// picks the event up on its next spawn (an SSE connect or an API
+    /// write) — the DB queue is the source of truth. Infallible by design:
+    /// a missed wake only delays the event to the next spawn, so the
+    /// webhook treats it as non-critical.
+    pub async fn wake(&self, user_id: UserId) {
+        let map = self.executors.lock().await;
+        if let Some(exec) = map.get(&user_id)
+            && *exec.status.borrow() == ExecutorStatus::Running
+        {
+            exec.wake.notify_one();
+        }
     }
     /// Enqueue one [`ApiWrite`] on the user's executor and await its outcome
     /// (spec §6.2): spawn-or-join the executor, send the request on the
@@ -304,8 +314,10 @@ impl Registry {
         tb_strava::event::insert_sync(strava_id, event_time, false, &mut store).await?;
         store.commit().await?;
 
-        // Wake the executor (non-critical: the queue is the source of truth).
-        let _ = self.wake(source, user_id).await;
+        // Wake the executor (non-critical: the queue is the source of
+        // truth). The `events` subscription above already ensured the
+        // executor is running, so this only interrupts its idle wait.
+        self.wake(user_id).await;
 
         // Await our sync's completion (unbounded, spec §6.4).
         loop {
@@ -412,6 +424,8 @@ impl Registry {
         let (frames, _) = broadcast::channel(BROADCAST_CAPACITY);
         let (events, _) = broadcast::channel(BROADCAST_CAPACITY);
         let (status_tx, status_rx) = watch::channel(ExecutorStatus::Running);
+        let wake = Arc::new(Notify::new());
+        info!("spawning the executor for user {user_id}");
 
         // The task keeps a clone of the frame sender alive until *after* it
         // records its fate, so a stream that sees the frame channel close has
@@ -422,6 +436,7 @@ impl Registry {
         let owned_source = source.clone();
         let frames_for_run = frames.clone();
         let events_for_run = events.clone();
+        let wake_for_run = wake.clone();
         let watchdog_status = status_tx.clone();
         let join = tokio::spawn(async move {
             let result = run(
@@ -431,6 +446,7 @@ impl Registry {
                 frames_for_run,
                 events_for_run,
                 idle_timeout,
+                wake_for_run,
             )
             .await;
             let _ = status_tx.send(match result {
@@ -461,6 +477,7 @@ impl Registry {
             writer,
             frames,
             events,
+            wake,
             task,
         };
         map.insert(user_id, exec.clone());
