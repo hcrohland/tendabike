@@ -6,28 +6,22 @@
 
   let { user, refresh }: { user: User; refresh: () => void } = $props();
 
-  let promise = $state<Promise<void>>(),
-    count = $state(0);
+  let promise = $state<Promise<void>>();
 
   const sync = (id: number) => {
     promise = getdata(id);
   };
   async function getdata(id: number) {
-    let data;
-    count = 0;
-    do {
-      data = await myfetch("/strava/sync/" + id).catch(handleError);
-      if (!data) break;
-      count += Object.keys(data["activities"]).length;
-    } while (Object.keys(data["activities"]).length > 0);
-    count = 0;
+    // the backend queues the activities onto the per-user executor; the new
+    // rows arrive over the stream, so the client just awaits the write
+    await myfetch("/strava/sync/" + id).catch(handleError);
     refresh();
   }
 </script>
 
 <Button onclick={() => sync(user.id)}>
   {#await promise}
-    {m.sync_processed({ count })}
+    {m.sync_processed()}
   {:then}
     {m.sync_process_queue()}
   {/await}

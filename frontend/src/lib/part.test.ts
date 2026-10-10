@@ -42,13 +42,12 @@ describe("Part CRUD", () => {
       expect(result.name).toBe("Wheel");
     });
 
-    it("updates the parts map with the response", async () => {
+    it("leaves the parts map to the stream frame", async () => {
       const created = partData({ id: 42 });
       fetchMock.mockResolvedValue(resp(created));
       const p = new Part(partData({ id: undefined }));
       await p.create();
-      expect(parts[42]).toBeInstanceOf(Part);
-      expect(parts[42].name).toBe("Wheel");
+      expect(parts[42]).toBeUndefined();
     });
   });
 
@@ -64,26 +63,27 @@ describe("Part CRUD", () => {
       expect(option.method).toBe("PUT");
     });
 
-    it("updates the parts map with the response", async () => {
+    it("leaves the parts map to the stream frame", async () => {
       const updated = partData({ id: 5, name: "Changed" });
       fetchMock.mockResolvedValue(resp(updated));
+      parts.setMap([partData({ id: 5, name: "Old" })]);
       const p = new Part(partData({ id: 5, name: "Old" }));
       p.name = "Changed";
       await p.update();
-      expect(parts[5].name).toBe("Changed");
+      expect(parts[5].name).toBe("Old");
     });
   });
 
   describe("delete", () => {
-    it("DELETEs /api/part/{id} and removes from the parts map", async () => {
+    it("DELETEs /api/part/{id}; the tombstone arrives via the stream", async () => {
       const existing = new Part(partData({ id: 5 }));
       parts.setMap([partData({ id: 5 })]);
-      fetchMock.mockResolvedValue(resp(5));
+      fetchMock.mockResolvedValue(resp(null, 204, true, "No Content"));
       await existing.delete();
       const [url, option] = fetchMock.mock.calls[0];
       expect(url).toBe("/api/part/5");
       expect(option.method).toBe("DELETE");
-      expect(parts[5]).toBeUndefined();
+      expect(parts[5]).toBeDefined();
     });
   });
 
@@ -103,13 +103,13 @@ describe("Part CRUD", () => {
       expect(body.hook).toBe(2);
     });
 
-    it("calls updateSummary with the response", async () => {
+    it("leaves the maps to the stream frame", async () => {
       const data = partData({ id: 5 });
       const sum = summary({ parts: { "5": data } });
       fetchMock.mockResolvedValue(resp(sum));
       const p = new Part(partData({ id: 5 }));
       await p.attach(new Date(), true, 1, 2);
-      expect(parts[5]).toBeInstanceOf(Part);
+      expect(parts[5]).toBeUndefined();
     });
   });
 

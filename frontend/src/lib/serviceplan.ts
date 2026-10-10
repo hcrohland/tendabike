@@ -95,23 +95,18 @@ export class ServicePlan extends Limits {
     this.name = data.name || "";
   }
 
+  /// The writes answer 204 (201 for creates): the change rides the stream
+  /// frame, so the handlers only await the write.
   async create() {
-    return await myfetch("/api/plan", "POST", this)
-      .then((data) => plans.updateMap([data]))
-      .catch(handleError);
+    return await myfetch("/api/plan", "POST", this).catch(handleError);
   }
 
   async update() {
-    return await myfetch("/api/plan", "PUT", this)
-      .then((data) => plans.updateMap([data]))
-      .catch(handleError);
+    return await myfetch("/api/plan", "PUT", this).catch(handleError);
   }
 
   async delete() {
-    await myfetch("/api/plan/" + this.id, "DELETE")
-      .then((data) => services.updateMap(data))
-      .catch(handleError);
-    plans.deleteItem(this.id);
+    await myfetch("/api/plan/" + this.id, "DELETE").catch(handleError);
   }
 
   valid() {

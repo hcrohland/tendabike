@@ -68,6 +68,23 @@ pub fn round_offset(whole_seconds: i32) -> i32 {
     (whole_seconds + 900) / 1800 * 1800
 }
 
+/// The report of a Garmin CSV descend import (`Activity::csv2descend`):
+/// the rows the domain matched against the user's activities and the rows
+/// it skipped (no activity at the row's time). Each entry is a
+/// human-readable description (`"{title} at {start}"`) for the UI to show.
+///
+/// The report is an **operation result**, not `Summary` state: the matched
+/// activities' updated state still rides the stream frame (the executor's
+/// `Summary` push), the report rides the HTTP response body (a `200 +
+/// {good, bad}` object) — the client renders it, it is never merged.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DescendReport {
+    /// The rows matched and updated.
+    pub good: Vec<String>,
+    /// The rows skipped (no matching activity).
+    pub bad: Vec<String>,
+}
+
 /// The database's representation of an activity.
 ///
 /// **Utc-offset normalization.** The database keeps `start` as a `timestamptz`
@@ -335,7 +352,7 @@ impl Activity {
         data: impl std::io::Read,
         user: &dyn Session,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
-    ) -> TbResult<(Summary, Vec<String>, Vec<String>)> {
+    ) -> TbResult<(Summary, DescendReport)> {
         #[derive(Debug, Deserialize)]
         struct Result {
             #[serde(rename = "Datum")]
@@ -352,8 +369,10 @@ impl Activity {
         }
         const FORMAT: &[::time::format_description::FormatItem] =
             format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
-        let mut good = Vec::new();
-        let mut bad = Vec::new();
+        let mut report = DescendReport {
+            good: Vec::new(),
+            bad: Vec::new(),
+        };
         let mut summary = Summary::default();
         let mut rdr = csv::Reader::from_reader(data);
 
@@ -383,15 +402,15 @@ impl Activity {
             match match_and_update(store, user, rstart, rclimb, rdescend).await {
                 Ok(res) => {
                     summary += res;
-                    good.push(description);
+                    report.good.push(description);
                 }
                 Err(_) => {
                     warn!("skipped {description}");
-                    bad.push(description);
+                    report.bad.push(description);
                 }
             }
         }
-        Ok((summary, good, bad))
+        Ok((summary, report))
     }
 
     pub async fn set_default_part(
@@ -1650,7 +1669,7 @@ mod tests {
         let result =
             Activity::csv2descend(csv_data.as_bytes(), &test_session(), &mut store).await?;
 
-        assert_eq!(result.1.len(), 2); // 2 good records
+        assert_eq!(result.1.good.len(), 2); // 2 good records
         Ok(())
     }
 
@@ -1677,7 +1696,7 @@ mod tests {
         let result =
             Activity::csv2descend(csv_data.as_bytes(), &test_session(), &mut store).await?;
 
-        assert_eq!(result.1.len(), 1); // 1 good record
+        assert_eq!(result.1.good.len(), 1); // 1 good record
         Ok(())
     }
 
@@ -1704,7 +1723,7 @@ mod tests {
             Activity::csv2descend(csv_data.as_bytes(), &test_session(), &mut store).await?;
 
         // "1.234" → stripped to "1234" → parsed as 1234
-        assert_eq!(result.1.len(), 1); // record parses successfully
+        assert_eq!(result.1.good.len(), 1); // record parses successfully
         Ok(())
     }
 
@@ -1741,6 +1760,53 @@ mod tests {
         Ok(())
     }
 
+    /// csv2descend reports the rows it matched and skipped as a
+    /// `DescendReport` (the handler's response body): human-readable
+    /// descriptions (`"{title} at {start}"`), one per row.
+    #[tokio::test]
+    async fn csv2descend_reports_matched_and_skipped_rows() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+
+        // One activity at activity_start() (2023-11-14 22:13:20 UTC).
+        let act = Activity {
+            id: ActivityId::new(301),
+            name: "Matched Ride".to_string(),
+            climb: None,
+            descend: None,
+            device_name: None,
+            external_id: None,
+            ..sample_activity()
+        };
+        store.activity_create(act).await?;
+
+        // The first row matches the activity (by the local minute); the
+        // second row has no activity at its time and is skipped.
+        let csv_data = "Datum,Titel,Negativer Höhenunterschied
+2023-11-14 22:13:20,Matched Ride,300
+2023-12-01 08:00:00,Phantom Ride,400";
+
+        let (summary, report) =
+            Activity::csv2descend(csv_data.as_bytes(), &test_session(), &mut store).await?;
+
+        assert_eq!(
+            report,
+            DescendReport {
+                good: vec!["Matched Ride at 2023-11-14 22:13:20".to_string()],
+                bad: vec!["Phantom Ride at 2023-12-01 08:00:00".to_string()],
+            }
+        );
+        // The matched activity carries the new descend value; the phantom
+        // row touched nothing.
+        assert_eq!(
+            summary.activities[&ActivityId::new(301)]
+                .as_ref()
+                .unwrap()
+                .descend,
+            Some(300)
+        );
+        Ok(())
+    }
+
     /// csv2descend calls match_and_update for each valid record
     #[tokio::test]
     async fn csv2descend_calls_match_and_update_for_each_record() -> TbResult<()> {
@@ -1769,7 +1835,7 @@ mod tests {
         let result =
             Activity::csv2descend(csv_data.as_bytes(), &test_session(), &mut store).await?;
 
-        assert_eq!(result.1.len(), 2); // Both records parsed and updated
+        assert_eq!(result.1.good.len(), 2); // Both records parsed and updated
         Ok(())
     }
 

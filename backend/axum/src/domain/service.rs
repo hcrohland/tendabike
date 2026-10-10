@@ -29,11 +29,15 @@ use http::StatusCode;
 use serde_derive::Deserialize;
 use time::OffsetDateTime;
 
-use crate::{ApiResult, RequestSession, appstate::AppState, error::AppError};
-use tb_domain::{PartId, Service, ServiceId, ServicePlanId, Summary};
-use tb_exec::{Txn, TxnSource};
+use crate::{RequestSession, appstate::AppState, domain::created_entity, error::AppError};
+use tb_domain::{ApiWrite, PartId, Service, ServiceId, ServicePlanId};
+use tb_exec::TxnSource;
+use tb_strava::{StravaSession, StravaStore};
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
+where
+    S::Conn: StravaStore,
+{
     Router::new()
         .route("/", post(create).put(update))
         .route("/{id}", delete(delete_service))
@@ -59,55 +63,81 @@ async fn create<S>(
         notes,
         plans,
     }): Json<NewService>,
-) -> Result<(StatusCode, Json<Summary>), AppError>
+) -> Result<(StatusCode, Json<Service>), AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    part_id.checkuser(&user, &mut store).await?;
-    let summary = Service::create(part_id, time, name, notes, None, plans, &mut store).await?;
-    store.commit().await?;
-    Ok((StatusCode::CREATED, Json(summary)))
+    let summary = state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::ServiceCreate {
+                part: part_id,
+                time,
+                name,
+                notes,
+                plans,
+            },
+        )
+        .await?;
+    let service = created_entity(&summary.services, "service")?;
+    Ok((StatusCode::CREATED, Json(service)))
 }
 
 async fn update<S>(
     user: RequestSession,
     State(state): State<AppState<S>>,
     Json(service): Json<Service>,
-) -> ApiResult<Summary>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let res = service.update(&user, &mut store).await.map(Json)?;
-    store.commit().await?;
-    Ok(res)
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::ServiceUpdate { service },
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn delete_service<S>(
     user: RequestSession,
     State(state): State<AppState<S>>,
     Path(id): Path<ServiceId>,
-) -> ApiResult<Summary>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let res = id.delete(&user, &mut store).await.map(Json)?;
-    store.commit().await?;
-    Ok(res)
+    state
+        .registry
+        .write(&state.source, user.tb_id(), ApiWrite::ServiceDelete { id })
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn redo<S>(
     user: RequestSession,
     State(state): State<AppState<S>>,
     Json(service): Json<Service>,
-) -> ApiResult<Summary>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let res = service.redo(&user, &mut store).await.map(Json)?;
-    store.commit().await?;
-    Ok(res)
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::ServiceRedo { service },
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }

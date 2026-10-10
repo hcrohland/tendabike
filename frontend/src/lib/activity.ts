@@ -1,6 +1,5 @@
 import { mapableState } from "./mapable.svelte";
 import { handleError, myfetch } from "./store";
-import { updateSummary } from "./user";
 
 export class Activity {
   id: number;
@@ -41,9 +40,7 @@ export class Activity {
 
   async update() {
     let a = new Activity(this);
-    return await myfetch("/api/activ/" + a.id, "PUT", a)
-      .then((data) => updateSummary(data))
-      .catch(handleError);
+    return await myfetch("/api/activ/" + a.id, "PUT", a).catch(handleError);
   }
 }
 

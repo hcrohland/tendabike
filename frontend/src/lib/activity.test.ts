@@ -79,15 +79,15 @@ describe("Activity.update", () => {
     expect(body.id).toBe(100);
   });
 
-  it("updates the activities map via updateSummary", async () => {
+  it("leaves the activities map to the stream frame", async () => {
     const updated = actData({ id: 100, name: "New Name" });
     const sum = summary({ activities: { "100": updated } });
     fetchMock.mockResolvedValue(resp(sum));
+    activities.setMap([actData({ id: 100, name: "Old Name" })]);
     const a = new Activity(actData({ id: 100 }));
     a.name = "New Name";
     await a.update();
-    expect(activities[100]).toBeInstanceOf(Activity);
-    expect(activities[100].name).toBe("New Name");
+    expect(activities[100].name).toBe("Old Name");
   });
 });
 

@@ -69,14 +69,25 @@ impl InEvent {
         })
     }
 
-    pub async fn accept(self, store: &mut impl StravaStore) -> TbResult<()> {
+    /// Accepts the event: validates the owner, then either processes an
+    /// athlete (de)authorization or stores the event in the DB queue.
+    ///
+    /// Returns the owner's TendaBike [`UserId`] when the event was queued (so
+    /// the caller can wake that user's executor), or `None` for an athlete
+    /// (de)authorization (nothing was queued, so there is nothing to wake).
+    pub async fn accept(self, store: &mut impl StravaStore) -> TbResult<Option<UserId>> {
+        let user_id = StravaId::read(&self.owner_id.into(), store)
+            .await?
+            .map(|user| user.tendabike_id)
+            .ok_or_else(|| Error::BadRequest(format!("Unknown event owner received: {self:?}")))?;
         let event = self.into_event(store).await?;
         if event.object_type == ObjectType::Athlete {
             event.process_user(store).await?;
+            Ok(None)
         } else {
             store.stravaevent_store(event).await?;
+            Ok(Some(user_id))
         }
-        Ok(())
     }
 }
 
@@ -660,9 +671,12 @@ mod tests {
     #[tokio::test]
     async fn accept_stores_activity_event() -> TbResult<()> {
         let (mut store, _) = setup();
-        in_event("activity", 10, "create", 42, serde_json::Map::new())
-            .accept(&mut store)
-            .await?;
+        assert!(
+            in_event("activity", 10, "create", 42, serde_json::Map::new())
+                .accept(&mut store)
+                .await?
+                .is_some()
+        );
         assert_eq!(store.event_count(), 1);
         assert_eq!(store.events[0].object_id, 10);
         assert!(store.events[0].id.is_some());
@@ -683,9 +697,12 @@ mod tests {
             .await?;
         let mut updates = serde_json::Map::new();
         updates.insert("authorized".into(), serde_json::json!("false"));
-        in_event("athlete", 42, "update", 42, updates)
-            .accept(&mut store)
-            .await?;
+        assert!(
+            in_event("athlete", 42, "update", 42, updates)
+                .accept(&mut store)
+                .await?
+                .is_none()
+        );
         assert_eq!(store.event_count(), 0);
         let user = store.stravauser_get_by_tbid(UserId::from(1)).await?;
         assert!(user.disabled());

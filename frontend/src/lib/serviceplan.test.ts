@@ -191,7 +191,7 @@ describe("ServicePlan CRUD", () => {
     vi.stubGlobal("fetch", fetchMock);
   });
 
-  it("ServicePlan.create POSTs to /api/plan and updates the plans store", async () => {
+  it("ServicePlan.create POSTs to /api/plan; the merge arrives via the stream frame", async () => {
     const p = plan({
       id: "00000000-0000-0000-0000-000000000000",
       name: "Test Plan",
@@ -220,10 +220,11 @@ describe("ServicePlan CRUD", () => {
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/plan");
     expect(options.method).toBe("POST");
-    expect(plans["NEW1"]).toBeDefined();
+    expect(plans["NEW1"]).toBeUndefined();
   });
 
-  it("ServicePlan.update PUTs to /api/plan and updates the plans store", async () => {
+  it("ServicePlan.update PUTs to /api/plan; the merge arrives via the stream frame", async () => {
+    plans.updateMap([plan({ id: "P1", name: "Old", what: 10, part: 5 })]);
     const p = plan({ id: "P1", name: "Updated", what: 10, part: 5 });
     fetchMock.mockResolvedValueOnce(
       resp({
@@ -246,10 +247,10 @@ describe("ServicePlan CRUD", () => {
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/plan");
     expect(options.method).toBe("PUT");
-    expect(plans["P1"].name).toBe("Updated");
+    expect(plans["P1"].name).toBe("Old");
   });
 
-  it("ServicePlan.delete removes the plan and updates services", async () => {
+  it("ServicePlan.delete DELETEs /api/plan/{id}; the tombstone arrives via the stream frame", async () => {
     plans.updateMap([plan({ id: "P1" })]);
     services.updateMap([
       new Service({
@@ -264,13 +265,13 @@ describe("ServicePlan CRUD", () => {
         plans: [],
       }),
     ]);
-    fetchMock.mockResolvedValueOnce(resp([]));
+    fetchMock.mockResolvedValueOnce(resp(null, 204, true, "No Content"));
     await plan({ id: "P1" }).delete();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/plan/P1");
     expect(options.method).toBe("DELETE");
-    expect(plans["P1"]).toBeUndefined();
+    expect(plans["P1"]).toBeDefined();
     expect(services["S1"]).toBeDefined();
   });
 });

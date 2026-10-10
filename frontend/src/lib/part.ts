@@ -3,7 +3,6 @@ import { handleError, myfetch } from "./store";
 import { attachments as allAttachments, type Attachment } from "./attachment";
 import { Type, types } from "./types";
 import { activities as allActivities } from "./activity";
-import { updateSummary } from "./user";
 
 export class Part {
   id?: number;
@@ -34,25 +33,25 @@ export class Part {
     this.shop = data.shop;
   }
 
+  /// Creates answer 201 + the created entity: the id is server-assigned and
+  /// the wizard chains on it, so the response is kept. The map merge itself
+  /// arrives via the stream frame (idempotent `updateMap` by id).
   async create() {
     return await myfetch("/api/part", "POST", this)
-      .then((data) => {
-        parts.updateMap([data]);
-        return new Part(data);
-      })
+      .then((data) => new Part(data))
       .catch(handleError);
   }
 
+  /// Non-create mutations answer 204: the change rides the stream frame, so
+  /// the handler only awaits the write.
   async update() {
-    return await myfetch("/api/part/" + this.id, "PUT", this)
-      .then((data) => parts.updateMap([data]))
-      .catch(handleError);
+    return await myfetch("/api/part/" + this.id, "PUT", this).catch(
+      handleError,
+    );
   }
 
   async delete() {
-    return await myfetch("/api/part/" + this.id, "DELETE")
-      .then((data) => parts.deleteItem(data))
-      .catch(handleError);
+    return await myfetch("/api/part/" + this.id, "DELETE").catch(handleError);
   }
 
   async detach(date: Date, all: boolean) {
@@ -145,15 +144,11 @@ class AttEvent {
   }
 
   async attach() {
-    return await myfetch("/api/part/attach", "POST", this)
-      .then(updateSummary)
-      .catch(handleError);
+    return await myfetch("/api/part/attach", "POST", this).catch(handleError);
   }
 
   async detach() {
-    return await myfetch("/api/part/detach", "POST", this)
-      .then(updateSummary)
-      .catch(handleError);
+    return await myfetch("/api/part/detach", "POST", this).catch(handleError);
   }
 }
 
@@ -167,14 +162,10 @@ class DisposeEvent {
     this.all = all;
   }
   async dispose() {
-    return await myfetch("/api/part/dispose", "POST", this)
-      .then(updateSummary)
-      .catch(handleError);
+    return await myfetch("/api/part/dispose", "POST", this).catch(handleError);
   }
 
   async recover() {
-    return await myfetch("/api/part/recover", "POST", this)
-      .then(updateSummary)
-      .catch(handleError);
+    return await myfetch("/api/part/recover", "POST", this).catch(handleError);
   }
 }

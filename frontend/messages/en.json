@@ -348,6 +348,6 @@
   "sync_create_header_all": "Create sync Event for all users",
   "sync_start_label": "Start",
   "sync_migration_label": "Migration",
-  "sync_processed": "Processed {count} ...",
+  "sync_processed": "Processing ...",
   "sync_process_queue": "Process Event Queue"
 }

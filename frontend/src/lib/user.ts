@@ -5,7 +5,7 @@ import { parts, type Part } from "./part";
 import { partNotes, type PartNote } from "./partnote";
 import { Attachment, attachments } from "./attachment";
 import { plans, type ServicePlan } from "./serviceplan";
-import { Shop, shops } from "./shop";
+import { Shop, shops, getShop } from "./shop";
 import { myfetch } from "./store";
 import { mapableState, type StateMap } from "./mapable.svelte";
 import { getUser, setUser } from "./user.svelte";
@@ -16,10 +16,14 @@ export async function initData() {
   let u = await myfetch("/api/user");
   if (u) {
     setUser(u);
-  } else {
-    return;
+    // The initial catch-up snapshot: it runs in parallel with the stream's
+    // connect (the Header opens the stream once the user is known), so
+    // hydration is not behind the SSE handshake. Frames that race it are
+    // buffered in the stream until it lands (`markHydrated`).
+    return refresh(getShop()?.id);
   }
-  return refresh();
+  // Anonymous: no summary — the 401 redirect to the About page is in
+  // flight, and no stream is opened for an unauthenticated session.
 }
 
 export async function refresh(shop?: number) {
@@ -50,8 +54,8 @@ export type User = {
 /// stringified id keys and `null` for tombstones (an entity that no longer
 /// exists). The attachment keys are the client's `Attachment.idx`
 /// (`part_id + "/" + attached ms`) — the backend's `idx()` produces the same
-/// format.
-type Summary = {
+/// format. Exported so the stream client can type the frames it merges.
+export type Summary = {
   parts: Record<string, Part | null>;
   part_notes: Record<string, PartNote | null>;
   attachments: Record<string, Attachment | null>;

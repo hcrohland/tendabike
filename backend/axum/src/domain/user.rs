@@ -32,6 +32,7 @@ where
     Router::new()
         .route("/", get(getuser))
         .route("/summary", get(summary))
+        .route("/stream", get(crate::stream::endpoint))
         .route("/all", get(userlist))
         .route("/export", get(export))
 }

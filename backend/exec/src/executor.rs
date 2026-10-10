@@ -32,10 +32,10 @@
 //! inside transactions it owns.
 
 use std::future::Future;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use log::{debug, error, info, warn};
-use tb_domain::{Error, Summary, TbResult, exec};
+use tb_domain::{Error, Summary, TbResult, WriteOutcome, exec};
 use tb_strava::event::{Event, QueueRead, get_event, process};
 use tb_strava::{StravaSession, StravaStore};
 use tokio::sync::broadcast;
@@ -106,35 +106,33 @@ pub enum Action {
     ProcessWrite,
     /// No write, but a Strava event is queued.
     ProcessStrava,
-    /// No work; stay alive (streams still attached, idle window not over).
+    /// No work; stay alive (streams still attached).
     Sleep,
     /// Reap: exit cleanly with `Ok(())` (spec §4.4 — the next write or SSE
-    /// connect respawns the loop; attached streams keep heartbeating).
+    /// connect respawns the loop; an attached stream keeps the loop alive,
+    /// so a reap always means no stream is attached).
     Reap,
 }
 
-/// The reclaim decision (spec §4.4), isolated from the async machinery:
+/// The reclaim decision (spec §4.4, amended — an attached stream keeps the
+/// executor alive), isolated from the async machinery:
 ///
 /// - a pending API write always wins (the bias of the select);
 /// - else a queued Strava event;
-/// - else (nothing pending) the loop is reaped when there is no active
-///   stream, or when the idle window has elapsed with no messages — streams
-///   that are still attached survive the reap on heartbeats (web layer) and
-///   the next write or (re)connect respawns the loop.
-pub fn next_action(
-    pending_write: bool,
-    queued_event: bool,
-    active_streams: usize,
-    idle: Duration,
-    timeout: Duration,
-) -> Action {
+/// - else (nothing pending) the loop is reaped **only when there is no
+///   active stream**. An attached stream keeps the loop alive: the idle
+///   window (`idle_timeout`) is the cadence at which the idle loop
+///   re-probes the `strava_events` queue, not a reap trigger — the stream's
+///   TCP death is what ends it (its heartbeat write fails, the receiver
+///   drops, and the no-streams rule reaps the loop).
+pub fn next_action(pending_write: bool, queued_event: bool, active_streams: usize) -> Action {
     if pending_write {
         return Action::ProcessWrite;
     }
     if queued_event {
         return Action::ProcessStrava;
     }
-    if active_streams == 0 || idle >= timeout {
+    if active_streams == 0 {
         Action::Reap
     } else {
         Action::Sleep
@@ -169,6 +167,11 @@ pub(crate) enum Select {
     Limited(i64),
     /// Both idle: no pending write and no queued event.
     Idle,
+    /// The wake signal fired: a signal only (spec §4.4/§4.6) — the loop
+    /// falls through to the next cycle, which re-probes the queue. It never
+    /// goes through the reclaim policy (a fired wake must not reap an
+    /// executor that has a just-queued event to process).
+    Wake,
     /// The Strava probe failed (the queue's state is unknown).
     StravaError,
 }
@@ -180,6 +183,7 @@ impl std::fmt::Debug for Select {
             Self::Strava(event) => f.debug_tuple("Select::Strava").field(event).finish(),
             Self::Limited(until) => f.debug_tuple("Select::Limited").field(until).finish(),
             Self::Idle => f.write_str("Select::Idle"),
+            Self::Wake => f.write_str("Select::Wake"),
             Self::StravaError => f.write_str("Select::StravaError"),
         }
     }
@@ -187,16 +191,25 @@ impl std::fmt::Debug for Select {
 
 /// One iteration of the biased select (spec §4.3): the API-write branch is
 /// polled **first** (a client action must not wait behind a batch sync or a
-/// backoff), then the Strava queue probe; neither resolving with work is
-/// the idle state the reclaim policy ([`next_action`]) decides on.
+/// backoff), then the Strava queue probe, then the wake signal; neither
+/// resolving with work is the idle state the reclaim policy
+/// ([`next_action`]) decides on.
 ///
 /// `None` from the channel (its senders all dropped) resolves the write
 /// branch without a message: production senders live for the process, so
 /// this is a shutdown corner — the loop treats it as idle and the next
 /// decision reaps it.
+///
+/// The wake branch (spec §4.4/§4.6) is a signal only: a fired wake resolves
+/// the select to [`Select::Wake`], and the loop falls through to the next
+/// cycle, which re-probes the queue. It is a `&mut` so the caller's
+/// `notified()` future — created before the select, so a notify that fired
+/// just before is not lost (the permit semantics) — survives the select and
+/// can serve the loop's next parking spot (the idle sleep).
 pub(crate) async fn select_message(
     api: impl Future<Output = Option<ApiWriteRequest>>,
     strava: impl Future<Output = Option<Probe>>,
+    wake: &mut (impl Future<Output = ()> + Unpin),
 ) -> Select {
     tokio::select! {
         biased;
@@ -211,12 +224,19 @@ pub(crate) async fn select_message(
             Some(Probe::Error) => Select::StravaError,
             None => Select::Idle,
         },
+        // A fired wake is a signal only (spec §4.4/§4.6): the loop falls
+        // through to the next cycle, which re-probes the queue. A ready
+        // probe result is taken first — it is the queue's committed state;
+        // the wake only says "check again".
+        _ = wake => Select::Wake,
     }
 }
 
 /// The per-user executor loop (spec §4.3–4.5). One task per user, spawned
 /// on demand (the first SSE connect or API write — web layer); it exits
-/// `Ok(())` when reaped on idle and is respawned on the next demand.
+/// `Ok(())` when reaped (no stream is attached) and is respawned on the
+/// next demand. An attached stream keeps it alive: the idle window is the
+/// queue re-probe cadence (spec §4.4, amended — #446).
 ///
 /// One transaction per message (spec §4.3): `begin` → dispatch (`exec` for
 /// an API write, `process` for a Strava event) → `commit` on success,
@@ -244,8 +264,27 @@ pub(crate) async fn select_message(
 /// * `rx` — the receive half of the user's API-write channel.
 /// * `frames` — the user's SSE frame sink (`broadcast`); the web layer's
 ///   stream tasks subscribe to it.
-/// * `idle_timeout` — how long the loop idles (no pending work) before it
-///   reaps, while streams are still attached.
+/// * `events` — the user's completed-Strava-event channel (`broadcast`):
+///   every event the loop consumed (its processing transaction committed)
+///   is sent on it, even with an empty summary. The web layer's admin sync
+///   awaits its own queued event on this channel (spec §6.4) — the event's
+///   identity lets the waiter correlate its sync.
+/// * `idle_timeout` — the queue re-probe cadence while the loop is idle
+///   with streams attached (spec §4.4, amended — #446): the loop is reaped
+///   only when no stream is attached, so an attached stream keeps it alive
+///   and the window sets how often the idle loop re-probes the
+///   `strava_events` queue. A stream-less loop reaps immediately after its
+///   work; the window never reaps it later.
+/// * `wake` — the in-memory wake signal (spec §4.4/§4.6): the web layer's
+///   `Registry` fires it after a Strava event is queued, so the loop's idle
+///   wait is interrupted and the queue re-probed at once. The loop selects
+///   on a `notified()` future created before each select (the permit
+///   semantics: a notify that fires just before the future is created is
+///   not lost); the same future serves both parking spots (the top-level
+///   select and the idle sleep), so a wake that fires while the probe is in
+///   flight is not dropped. A fired wake never spawns the loop — it is a
+///   signal to this running loop only; a reaped loop picks the event up on
+///   its next spawn (the DB queue is the source of truth).
 ///
 /// # Failure semantics (spec §4.6)
 ///
@@ -288,7 +327,9 @@ pub async fn run<T, S>(
     session: S,
     mut rx: ApiWriteReceiver,
     frames: broadcast::Sender<Summary>,
+    events: broadcast::Sender<Event>,
     idle_timeout: Duration,
+    wake: std::sync::Arc<tokio::sync::Notify>,
 ) -> TbResult<()>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
@@ -296,29 +337,47 @@ where
     S: StravaSession + Send + 'static,
 {
     let mut session = session;
-    let mut last_activity = Instant::now();
+    let user_id = session.tb_id();
     let mut backoff = DbBackoff::new();
 
     loop {
-        let select = select_message(rx.recv(), queue_probe(&source, &session, &mut backoff)).await;
+        // One wake permit per cycle, created before any select (the permit
+        // semantics: a notify that fires before the future is created is
+        // not lost — `Notify` stores it). The same future serves both
+        // parking spots (the top-level select and the idle sleep), so a
+        // wake that fires while the probe is in flight is not dropped by
+        // the select. Pinned: `Notified` is `!Unpin`, and the select takes
+        // it by `&mut`.
+        let mut wake_fut = Box::pin(wake.notified());
+        let select = select_message(
+            rx.recv(),
+            queue_probe(&source, &session, &mut backoff),
+            &mut wake_fut,
+        )
+        .await;
 
         match select {
             Select::ApiWrite(request) => {
-                last_activity = Instant::now();
                 if let Err(err) =
                     run_write(&source, &mut session, request, &frames, &mut backoff).await
                 {
-                    error!("the executor loop is ending: {err:?}");
+                    error!("user {user_id}: the executor loop is ending: {err:?}");
                     return Err(err);
                 }
             }
 
             Select::Strava(event) => {
-                last_activity = Instant::now();
-                if let Err(err) =
-                    run_event(&source, &mut session, &event, &frames, &mut backoff).await
+                if let Err(err) = run_event(
+                    &source,
+                    &mut session,
+                    &event,
+                    &frames,
+                    &events,
+                    &mut backoff,
+                )
+                .await
                 {
-                    error!("the executor loop is ending: {err:?}");
+                    error!("user {user_id}: the executor loop is ending: {err:?}");
                     return Err(err);
                 }
             }
@@ -330,17 +389,22 @@ where
                 // ready, so the backoff delays only Strava events. The
                 // deadline is absolute: after an interrupting write the loop
                 // re-probes and sleeps the *remaining* time, not a fresh one.
-                last_activity = Instant::now();
                 let remaining = stop_remaining(until, now_unix());
-                if let Some(request) = sleep_or_take_write(&mut rx, remaining).await {
-                    last_activity = Instant::now();
-                    if let Err(err) =
+                if let Some(request) = sleep_or_take_write(&mut rx, remaining, &mut wake_fut).await
+                    && let Err(err) =
                         run_write(&source, &mut session, request, &frames, &mut backoff).await
-                    {
-                        error!("the executor loop is ending: {err:?}");
-                        return Err(err);
-                    }
+                {
+                    error!("user {user_id}: the executor loop is ending: {err:?}");
+                    return Err(err);
                 }
+            }
+
+            Select::Wake => {
+                // The wake signal fired (spec §4.4/§4.6): a signal only —
+                // the loop falls through to the next cycle, which re-probes
+                // the queue. It never goes through the reclaim policy (a
+                // fired wake must not reap an executor that has a
+                // just-queued event to process).
             }
 
             Select::StravaError => {
@@ -350,46 +414,45 @@ where
                 // arriving mid-pause is taken immediately); the failed event
                 // (if any) stays queued for the retry.
                 let pause = backoff.record_failure();
-                warn!("the queue probe failed; backing off {pause:?}");
-                last_activity = Instant::now();
-                if let Some(request) = sleep_or_take_write(&mut rx, pause).await {
-                    last_activity = Instant::now();
-                    if let Err(err) =
+                warn!("user {user_id}: the queue probe failed; backing off {pause:?}");
+                if let Some(request) = sleep_or_take_write(&mut rx, pause, &mut wake_fut).await
+                    && let Err(err) =
                         run_write(&source, &mut session, request, &frames, &mut backoff).await
-                    {
-                        error!("the executor loop is ending: {err:?}");
-                        return Err(err);
-                    }
+                {
+                    error!("user {user_id}: the executor loop is ending: {err:?}");
+                    return Err(err);
                 }
             }
 
             Select::Idle => {
-                let idle = last_activity.elapsed();
                 let streams = frames.receiver_count();
-                match next_action(false, false, streams, idle, idle_timeout) {
+                match next_action(false, false, streams) {
                     Action::Reap => {
-                        info!(
-                            "the executor loop is idle and reaping (idle {idle:?}, {streams} stream(s))"
+                        info!("closing the executor for user {user_id}");
+                        debug!(
+                            "the executor loop is idle and reaping (user {user_id}, {streams} stream(s))"
                         );
                         return Ok(());
                     }
                     Action::Sleep => {
-                        // Streams are still attached and the idle window is
-                        // not over: stay alive. The wait is a biased select
-                        // so a write arriving mid-wait is taken the moment it
-                        // is ready (the bias of the select, honored across
-                        // the wait too); a closed channel or the window
-                        // expiring falls through to the next cycle's decision.
-                        let remaining = idle_timeout - idle;
-                        if let Some(request) = sleep_or_take_write(&mut rx, remaining).await {
-                            last_activity = Instant::now();
-                            if let Err(err) =
+                        // Streams are still attached: stay alive (spec §4.4,
+                        // amended — #446). The sleep is the queue re-probe
+                        // cadence (a constant `idle_timeout`, not the
+                        // remainder of an idle window — there is no window
+                        // to run out). The wait is a biased select so a
+                        // write arriving mid-wait is taken the moment it is
+                        // ready (the bias of the select, honored across the
+                        // wait too); a closed channel or the cadence
+                        // expiring falls through to the next cycle's
+                        // decision, which re-probes the queue.
+                        if let Some(request) =
+                            sleep_or_take_write(&mut rx, idle_timeout, &mut wake_fut).await
+                            && let Err(err) =
                                 run_write(&source, &mut session, request, &frames, &mut backoff)
                                     .await
-                            {
-                                error!("the executor loop is ending: {err:?}");
-                                return Err(err);
-                            }
+                        {
+                            error!("user {user_id}: the executor loop is ending: {err:?}");
+                            return Err(err);
                         }
                     }
                     // `next_action` hands out `ProcessWrite`/`ProcessStrava`
@@ -404,15 +467,22 @@ where
 
 /// Sleep for `remaining` as a branch of the biased select (spec §4.6): an
 /// API write arriving mid-sleep is returned the moment it is ready (a
-/// backoff delays Strava events, never API writes); the sleep expiring (or
-/// the channel closing — `None`, the shutdown corner) resolves with `None`.
+/// backoff delays Strava events, never API writes); a fired wake (spec
+/// §4.4/§4.6) interrupts the sleep with `None`, so the loop falls through
+/// to the top and re-probes the queue at once; the sleep expiring (or the
+/// channel closing — `None`, the shutdown corner) resolves with `None`.
 async fn sleep_or_take_write(
     rx: &mut ApiWriteReceiver,
     remaining: Duration,
+    wake: &mut (impl Future<Output = ()> + Unpin),
 ) -> Option<ApiWriteRequest> {
     tokio::select! {
         biased;
         request = rx.recv() => request,
+        // A fired wake interrupts the idle sleep: the loop re-probes the
+        // queue on its next cycle, so a just-queued event is processed at
+        // once, not at the sleep's expiry (spec §4.4/§4.6).
+        _ = wake => None,
         _ = tokio::time::sleep(remaining) => None,
     }
 }
@@ -439,7 +509,10 @@ where
     let mut conn = match source.begin().await {
         Ok(conn) => conn,
         Err(err) => {
-            warn!("the queue probe could not begin a transaction: {err:?}");
+            warn!(
+                "user {}: the queue probe could not begin a transaction: {err:?}",
+                session.tb_id()
+            );
             return Some(Probe::Error);
         }
     };
@@ -448,7 +521,7 @@ where
         Ok(QueueRead::Limited { until }) => Probe::Limited(until),
         Ok(QueueRead::Empty) => Probe::Empty,
         Err(err) => {
-            warn!("the queue probe failed: {err:?}");
+            warn!("user {}: the queue probe failed: {err:?}", session.tb_id());
             let _ = conn.rollback().await;
             return Some(Probe::Error);
         }
@@ -457,7 +530,10 @@ where
         // A failed commit is a DB failure (spec #446 §4.6): the housekeeping
         // rolled back, so report the queue's state as unknown — the loop
         // backs off and re-probes.
-        warn!("the queue probe could not commit its housekeeping: {err:?}");
+        warn!(
+            "user {}: the queue probe could not commit its housekeeping: {err:?}",
+            session.tb_id()
+        );
         return Some(Probe::Error);
     }
     backoff.reset();
@@ -490,7 +566,7 @@ where
     S: StravaSession,
 {
     let ApiWriteRequest { write, reply } = request;
-    info!("Processing {write:?}");
+    info!("user {}: Processing {write:?}", session.tb_id());
 
     let mut conn = match source.begin().await {
         Ok(conn) => conn,
@@ -504,12 +580,12 @@ where
         }
     };
 
-    let summary = exec(write, session, &mut conn).await;
-    let outcome: TbResult<Summary> = match summary {
-        Ok(summary) => match conn.commit().await {
+    let outcome = exec(write, session, &mut conn).await;
+    let outcome: TbResult<WriteOutcome> = match outcome {
+        Ok(outcome) => match conn.commit().await {
             Ok(()) => {
                 backoff.reset();
-                Ok(summary)
+                Ok(outcome)
             }
             Err(err) => {
                 // DB failure (spec §4.6): 500 the client, back off, continue.
@@ -537,8 +613,10 @@ where
             Err(err)
         }
     };
-    if let Ok(summary) = &outcome {
-        push_frame(frames, summary);
+    if let Ok(outcome) = &outcome {
+        // The frame is the write's `Summary` (the descend's report is the
+        // response body, not state — it never rides the frame).
+        push_frame(frames, outcome.summary());
     }
     if let Err(err) = &outcome {
         error!("the API write failed: {err:?}");
@@ -559,7 +637,9 @@ fn lifecycle_error(what: &str) -> Error {
 
 /// One Strava event in one transaction (spec §4.3): `begin` → [`process`]
 /// → `commit`, or `rollback` on failure; a successful, non-empty `Summary`
-/// pushes one frame to the user's SSE streams.
+/// pushes one frame to the user's SSE streams, and the consumed event is
+/// announced on the completion channel (spec §6.4 — fired even for an empty
+/// summary, which pushes no frame).
 ///
 /// [`process`] re-reads the queue with `get_event` inside the work
 /// transaction — the accepted double read of the loop: the probe and the work
@@ -581,6 +661,7 @@ async fn run_event<T, S>(
     session: &mut S,
     event: &Event,
     frames: &broadcast::Sender<Summary>,
+    events: &broadcast::Sender<Event>,
     backoff: &mut DbBackoff,
 ) -> Result<(), Error>
 where
@@ -588,7 +669,7 @@ where
     T::Conn: StravaStore,
     S: StravaSession,
 {
-    info!("Processing {event}");
+    info!("user {}: Processing {event}", session.tb_id());
 
     let mut conn = match source.begin().await {
         Ok(conn) => conn,
@@ -605,6 +686,9 @@ where
         Ok(summary) => match conn.commit().await {
             Ok(()) => {
                 push_frame(frames, &summary);
+                // The completion signal (spec §6.4): the event is consumed
+                // for good, empty summary or not.
+                let _ = events.send(event.clone());
                 backoff.reset();
                 Ok(())
             }
