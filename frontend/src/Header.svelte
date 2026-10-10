@@ -15,7 +15,8 @@
     Select,
   } from "flowbite-svelte";
   import { handleError, myfetch } from "./lib/store";
-  import { refresh, updateSummary, getUser, setUser } from "./lib/user";
+  import { refresh, getUser, setUser } from "./lib/user";
+  import { startStream, stopStream } from "./lib/stream";
   import { activities } from "./lib/activity";
   import { stateValues } from "./lib/mapable.svelte";
   import Sport from "./Widgets/Sport.svelte";
@@ -28,49 +29,25 @@
   import { getShop } from "./lib/shop";
   import * as m from "../paraglide/messages";
   import { getLocale, setLocale, locales } from "../paraglide/runtime";
+  import { onDestroy } from "svelte";
 
   let { promise } = $props();
 
   let openGarmin = $state(false);
 
-  let hook_timer: number = 0;
+  /// The stream pushes every completed executor message as a full `Summary`
+  /// frame; the avatar spinner tracks the catch-up snapshot of the initial
+  /// load and of every reconnect.
+  let hook_promise = $state(
+    startStream((p) => {
+      hook_promise = p;
+    }),
+  );
 
-  $effect(() => {
-    return () => {
-      if (hook_timer) {
-        clearInterval(hook_timer);
-      }
-    };
-  });
-
-  let hook_promise = $state(poll());
-
-  async function poll() {
-    if (hook_timer) {
-      clearInterval(hook_timer);
-    }
-    let data;
-    try {
-      do {
-        data = await myfetch("/strava/hooks");
-        if (!data) break;
-        updateSummary(data);
-      } while (Object.keys(data["activities"]).length > 0);
-      hook_timer = setTimeout(() => {
-        hook_promise = poll();
-      }, 60000);
-    } catch (e) {
-      console.error(e);
-      handleError(e as Error);
-    }
-  }
+  onDestroy(() => stopStream());
 
   function fullrefresh() {
-    if (hook_timer) {
-      clearInterval(hook_timer);
-      hook_timer = 0;
-    }
-    hook_promise = refresh(getShop()?.id).then(poll);
+    hook_promise = refresh(getShop()?.id);
   }
 
   async function triggerHistoricSync() {

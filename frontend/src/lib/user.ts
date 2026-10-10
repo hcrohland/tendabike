@@ -50,8 +50,8 @@ export type User = {
 /// stringified id keys and `null` for tombstones (an entity that no longer
 /// exists). The attachment keys are the client's `Attachment.idx`
 /// (`part_id + "/" + attached ms`) — the backend's `idx()` produces the same
-/// format.
-type Summary = {
+/// format. Exported so the stream client can type the frames it merges.
+export type Summary = {
   parts: Record<string, Part | null>;
   part_notes: Record<string, PartNote | null>;
   attachments: Record<string, Attachment | null>;

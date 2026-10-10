@@ -13,14 +13,9 @@
     promise = getdata(id);
   };
   async function getdata(id: number) {
-    let data;
-    count = 0;
-    do {
-      data = await myfetch("/strava/sync/" + id).catch(handleError);
-      if (!data) break;
-      count += Object.keys(data["activities"]).length;
-    } while (Object.keys(data["activities"]).length > 0);
-    count = 0;
+    // the backend queues the activities onto the per-user executor; the new
+    // rows arrive over the stream, so the client just awaits the write
+    await myfetch("/strava/sync/" + id).catch(handleError);
     refresh();
   }
 </script>

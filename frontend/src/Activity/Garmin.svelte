@@ -8,7 +8,6 @@
   import { checkStatus, handleError } from "../lib/store";
   import Modal from "../Widgets/Modal.svelte";
   import * as m from "../../paraglide/messages";
-  import { updateSummary } from "../lib/user";
 
   let files: FileList | undefined = $state();
   let result: { good: string[]; bad: string[] } | undefined = $state();
@@ -36,7 +35,8 @@
     })
       .then(checkStatus)
       .then((a) => {
-        updateSummary(a[0]);
+        // the new activities ride the stream frame; only the per-file
+        // report is needed from the response
         result = {
           good: a[1],
           bad: a[2],

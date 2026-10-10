@@ -186,7 +186,7 @@ describe("Service CRUD", () => {
       },
     });
 
-  it("Service.create POSTs and calls updateSummary", async () => {
+  it("Service.create POSTs; the merge arrives via the stream frame", async () => {
     const time = new Date("2024-01-01T00:00:00Z");
     const sum = summaryWithService();
     fetchMock.mockResolvedValueOnce(resp(sum));
@@ -201,17 +201,19 @@ describe("Service CRUD", () => {
       notes: "good",
       plans: ["P1"],
     });
-    expect(services["S1"]).toBeDefined();
+    expect(services["S1"]).toBeUndefined();
   });
 
-  it("Service.update PUTs and calls updateSummary", async () => {
+  it("Service.update PUTs; the merge arrives via the stream frame", async () => {
     const s = svc({ id: "S1", name: "New Name" });
+    services.updateMap([svc({ id: "S1", name: "Old Name" })]);
     fetchMock.mockResolvedValueOnce(resp(summaryWithService()));
     await s.update();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/service");
     expect(options.method).toBe("PUT");
+    expect(services["S1"].name).toBe("Old Name");
   });
 
   it("Service.delete removes the service and usage from the store", async () => {

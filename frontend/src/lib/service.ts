@@ -1,7 +1,6 @@
 import { get_days, handleError, myfetch } from "./store";
 import { mapableState, stateValues } from "./mapable.svelte";
 import { usages, Usage } from "./usage";
-import { updateSummary } from "./user";
 import type { Part } from "./part";
 
 export class Service {
@@ -30,6 +29,8 @@ export class Service {
     this.plans = data.plans || [];
   }
 
+  /// The writes answer 204 (201 for creates): the change rides the stream
+  /// frame, so the handlers only await the write.
   static async create(
     part_id: number,
     time: Date,
@@ -43,29 +44,22 @@ export class Service {
       name,
       notes,
       plans,
-    })
-      .then(updateSummary)
-      .catch(handleError);
+    }).catch(handleError);
   }
 
   async update() {
-    return await myfetch("/api/service", "PUT", this)
-      .then(updateSummary)
-      .catch(handleError);
+    return await myfetch("/api/service", "PUT", this).catch(handleError);
   }
 
   async delete() {
-    await myfetch("/api/service/" + this.id, "DELETE")
-      .then(updateSummary)
-      .catch(handleError);
+    await myfetch("/api/service/" + this.id, "DELETE").catch(handleError);
+    // optimistic local removal; the stream tombstone is idempotent
     services.deleteItem(this.id);
     usages.deleteItem(this.usage);
   }
 
   async repeat() {
-    return await myfetch("/api/service/redo", "POST", this)
-      .then(updateSummary)
-      .catch(handleError);
+    return await myfetch("/api/service/redo", "POST", this).catch(handleError);
   }
 
   get_successor(): Service | null {

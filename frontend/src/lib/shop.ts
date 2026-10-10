@@ -1,5 +1,5 @@
 import { handleError, myfetch } from "./store";
-import { refresh, updateSummary } from "./user";
+import { refresh } from "./user";
 import { mapableState } from "./mapable.svelte";
 import { type Part } from "./part";
 import { getShop, setShop } from "./shop.svelte";
@@ -23,17 +23,14 @@ export class Shop {
     this.auto_approve = data.auto_approve;
   }
 
+  /// The writes answer 204 (201 for creates): the change rides the stream
+  /// frame, so the handlers only await the write.
   async create() {
     return await myfetch("/api/shop", "POST", {
       name: this.name,
       description: this.description,
       auto_approve: this.auto_approve,
-    })
-      .then((data) => {
-        shops.updateMap([data]);
-        return new Shop(data);
-      })
-      .catch(handleError);
+    }).catch(handleError);
   }
 
   async update() {
@@ -41,29 +38,25 @@ export class Shop {
       name: this.name,
       description: this.description,
       auto_approve: this.auto_approve,
-    })
-      .then((data) => shops.updateMap([data]))
-      .catch(handleError);
+    }).catch(handleError);
   }
 
   async delete() {
     return await myfetch("/api/shop/" + this.id, "DELETE")
-      .then(() => shops.deleteItem(this.id))
+      .then(() => shops.deleteItem(this.id)) // optimistic; the stream tombstone is idempotent
       .catch(handleError);
   }
 
   static async registerPart(part: Part, shopid: number) {
     return await myfetch(`/api/shop/${shopid}/parts`, "POST", {
       part_id: part.id,
-    })
-      .then((data) => updateSummary(data))
-      .catch(handleError);
+    }).catch(handleError);
   }
 
   static async unregisterPart(part: Part) {
-    return await myfetch(`/api/shop/0/parts/${part.id}`, "DELETE")
-      .then((data) => updateSummary(data))
-      .catch(handleError);
+    return await myfetch(`/api/shop/0/parts/${part.id}`, "DELETE").catch(
+      handleError,
+    );
   }
 
   async getParts(): Promise<number[]> {
