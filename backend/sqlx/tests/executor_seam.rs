@@ -61,6 +61,7 @@
 mod scratch;
 use scratch::*;
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
@@ -70,7 +71,7 @@ use tb_exec::{ApiWriteRequest, api_write_channel, run};
 use tb_sqlx::DbPool;
 use tb_strava::{StravaId, StravaSession, StravaStore};
 use time::macros::datetime;
-use tokio::sync::{MutexGuard, broadcast};
+use tokio::sync::{MutexGuard, Notify, broadcast};
 
 /// The database-name suffix this suite's scratch database carries: cargo
 /// runs the `tb_sqlx` test binaries in parallel, and each suite's one-time
@@ -84,9 +85,11 @@ const DB_SUFFIX: &str = "_exec";
 /// fails the test instead of hanging the suite.
 const TEST_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// The loop's idle window in the tests: short enough that the reap the
-/// tests assert happens in a breath, long enough that a healthy loop never
-/// reaps mid-message.
+/// The loop's queue re-probe cadence in the tests (spec §4.4, amended —
+/// #446): the reaps the tests assert come from the no-streams rule
+/// (immediate once the work is done), so this only sets how often an idle
+/// loop with streams attached re-probes the queue — long enough that a
+/// healthy loop never re-probes mid-message.
 const IDLE_TIMEOUT: Duration = Duration::from_millis(300);
 
 /// The in-memory suite's session identity: the fixture's one user and its
@@ -215,15 +218,16 @@ async fn database_is_reachable() {
 
 /// An API write end to end on the live adapter: the channel's request runs
 /// in one live transaction, commits, resolves the route's oneshot with the
-/// write's `Summary`, pushes exactly one stream frame, and the row is
-/// visible to a fresh connection afterwards. The idle loop then reaps and
-/// `run` returns `Ok`.
+/// write's outcome (the `Summary`, the frame), pushes exactly one stream
+/// frame, and the row is visible to a fresh connection afterwards. The idle
+/// loop then reaps and `run` returns `Ok`.
 #[tokio::test]
 #[ignore]
 async fn api_write_end_to_end() {
     let seam = ready().await;
     let (tx, rx) = api_write_channel();
     let (frames, mut frame_rx) = broadcast::channel(16);
+    let (events, _events_rx) = broadcast::channel(16);
     let (request, reply) = ApiWriteRequest::new(ApiWrite::PartCreate {
         name: "Seam Chain".to_string(),
         vendor: "Shimano".to_string(),
@@ -238,15 +242,19 @@ async fn api_write_end_to_end() {
         FakeStrava::new(),
         rx,
         frames,
+        events,
         IDLE_TIMEOUT,
+        Arc::new(Notify::new()),
     ));
 
-    // The route's oneshot resolves with the write's summary.
-    let summary = tokio::time::timeout(TEST_TIMEOUT, reply)
+    // The route's oneshot resolves with the write's outcome; the part
+    // write's `Summary` is the frame.
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, reply)
         .await
         .expect("the route's reply must resolve in time")
         .expect("the loop must resolve the oneshot, not drop it")
         .expect("the part write must succeed");
+    let summary = outcome.summary().clone();
     assert_eq!(summary.parts.len(), 1);
     let part = summary
         .parts
@@ -265,6 +273,10 @@ async fn api_write_end_to_end() {
         .expect("the frame must arrive in time")
         .expect("the stream must stay open");
     assert_eq!(frame, summary);
+    // No streams left attached: the no-streams rule is the only reap rule
+    // (spec §4.4, amended — #446), so the loop's reap needs the receiver
+    // gone.
+    drop(frame_rx);
 
     // A fresh connection sees the committed row.
     let mut conn = seam.pool.begin().await.expect("a fresh connection");
@@ -319,6 +331,10 @@ async fn strava_queue_drains_and_reclaims() {
     // No API writes: the dropped sender closes the channel.
     let (_tx, rx) = api_write_channel();
     let (frames, _frame_rx) = broadcast::channel(8);
+    let (events, _events_rx) = broadcast::channel(8);
+    // No streams attached: the frame receiver must not outlive the loop, or
+    // the no-streams reap rule (spec §4.4, amended — #446) never fires.
+    drop(_frame_rx);
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
         run(
@@ -326,7 +342,9 @@ async fn strava_queue_drains_and_reclaims() {
             FakeStrava::new(),
             rx,
             frames,
+            events,
             IDLE_TIMEOUT,
+            Arc::new(Notify::new()),
         ),
     )
     .await
@@ -352,6 +370,10 @@ async fn idle_loop_reclaims() {
     let seam = ready().await;
     let (_tx, rx) = api_write_channel();
     let (frames, _frame_rx) = broadcast::channel(8);
+    let (events, _events_rx) = broadcast::channel(8);
+    // No streams attached: the frame receiver must not outlive the loop, or
+    // the no-streams reap rule (spec §4.4, amended — #446) never fires.
+    drop(_frame_rx);
     let started = std::time::Instant::now();
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
@@ -360,14 +382,16 @@ async fn idle_loop_reclaims() {
             FakeStrava::new(),
             rx,
             frames,
+            events,
             IDLE_TIMEOUT,
+            Arc::new(Notify::new()),
         ),
     )
     .await
     .expect("an idle loop must reap in time");
     outcome.expect("a reaped loop returns Ok");
-    // The reap came from the no-streams rule, well inside the idle window's
-    // neighbourhood — certainly far under the test bound.
+    // The reap came from the no-streams rule (the first idle cycle, spec
+    // §4.4, amended — #446) — certainly far under the test bound.
     assert!(
         started.elapsed() < TEST_TIMEOUT,
         "the reap must not take the whole test bound"
@@ -385,6 +409,10 @@ async fn failed_write_rolls_back_and_reclaims() {
 
     let (tx, rx) = api_write_channel();
     let (frames, _frame_rx) = broadcast::channel(8);
+    let (events, _events_rx) = broadcast::channel(8);
+    // No streams attached: the frame receiver must not outlive the loop, or
+    // the no-streams reap rule (spec §4.4, amended — #446) never fires.
+    drop(_frame_rx);
     // Deleting a part that does not exist: `NotFound` from the domain.
     let (request, reply) = ApiWriteRequest::new(ApiWrite::PartDelete {
         id: PartId::from(999_999),
@@ -396,7 +424,9 @@ async fn failed_write_rolls_back_and_reclaims() {
         FakeStrava::new(),
         rx,
         frames,
+        events,
         IDLE_TIMEOUT,
+        Arc::new(Notify::new()),
     ));
 
     // The route gets the domain error, not a 500 and not a hang.

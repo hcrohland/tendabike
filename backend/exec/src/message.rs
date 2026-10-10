@@ -35,7 +35,7 @@
 //! (spec §4.5 — an empty `Summary` pushes nothing; a dropped frame is
 //! non-fatal, the client's reconnect + full refresh covers it).
 
-use tb_domain::{ApiWrite, Summary, TbResult};
+use tb_domain::{ApiWrite, Summary, TbResult, WriteOutcome};
 use tb_strava::event::Event;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
@@ -51,8 +51,9 @@ pub enum Message {
 
 /// One API write as the executor receives it: the [`ApiWrite`] plus a
 /// oneshot the mutating route awaits for the write's outcome (spec §6.2:
-/// enqueue + await; success resolves the `Summary`, failure resolves the
-/// error and the route maps it to a 4xx/5xx).
+/// enqueue + await; success resolves the `WriteOutcome` — the `Summary`
+/// (the frame) plus, for the descend, its match report (the response
+/// body) — failure resolves the error and the route maps it to a 4xx/5xx).
 ///
 /// `pub` (fields too) because the web layer builds one per request and the
 /// executor consumes it; the oneshot keeps the type from deriving `Clone`
@@ -61,13 +62,13 @@ pub struct ApiWriteRequest {
     /// The write to apply.
     pub write: ApiWrite,
     /// Resolved exactly once when the write is committed or fails.
-    pub reply: oneshot::Sender<TbResult<Summary>>,
+    pub reply: oneshot::Sender<TbResult<WriteOutcome>>,
 }
 
 impl ApiWriteRequest {
     /// Pairs a write with a fresh reply channel: the request goes on the
     /// user's executor channel, the receiver is awaited by the route.
-    pub fn new(write: ApiWrite) -> (Self, oneshot::Receiver<TbResult<Summary>>) {
+    pub fn new(write: ApiWrite) -> (Self, oneshot::Receiver<TbResult<WriteOutcome>>) {
         let (reply, rx) = oneshot::channel();
         (Self { write, reply }, rx)
     }

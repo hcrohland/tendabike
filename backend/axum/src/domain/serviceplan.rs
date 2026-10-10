@@ -28,11 +28,15 @@ use axum::{
 use http::StatusCode;
 use log::trace;
 
-use crate::{ApiResult, RequestSession, appstate::AppState, error::AppError};
-use tb_domain::{Service, ServicePlan, ServicePlanId};
-use tb_exec::{Txn, TxnSource};
+use crate::{RequestSession, appstate::AppState, domain::created_entity, error::AppError};
+use tb_domain::{ApiWrite, ServicePlan, ServicePlanId};
+use tb_exec::TxnSource;
+use tb_strava::{StravaSession, StravaStore};
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
+where
+    S::Conn: StravaStore,
+{
     Router::new()
         .route("/", post(create).put(update))
         .route("/{id}", delete(delete_plan))
@@ -45,38 +49,57 @@ async fn create<S>(
 ) -> Result<(StatusCode, Json<ServicePlan>), AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
     trace!("ServicePlan::create");
-    let mut store = state.source.begin().await?;
-    let summary = plan.create(&user, &mut store).await?;
-    store.commit().await?;
-    Ok((StatusCode::CREATED, Json(summary)))
+    let summary = state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::ServicePlanCreate { plan },
+        )
+        .await?;
+    let plan = created_entity(&summary.plans, "service plan")?;
+    Ok((StatusCode::CREATED, Json(plan)))
 }
 
 async fn update<S>(
     user: RequestSession,
     State(state): State<AppState<S>>,
     Json(plan): Json<ServicePlan>,
-) -> ApiResult<ServicePlan>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let res = plan.update(&user, &mut store).await.map(Json)?;
-    store.commit().await?;
-    Ok(res)
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::ServicePlanUpdate { plan },
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn delete_plan<S>(
     user: RequestSession,
     State(state): State<AppState<S>>,
     Path(id): Path<ServicePlanId>,
-) -> ApiResult<Vec<Service>>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let res = id.delete(&user, &mut store).await.map(Json)?;
-    store.commit().await?;
-    Ok(res)
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::ServicePlanDelete { id },
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }

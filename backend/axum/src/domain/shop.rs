@@ -22,17 +22,19 @@ use axum::{
 };
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use tb_exec::{Txn, TxnSource};
+use tb_exec::TxnSource;
 
 use crate::{
     RequestSession,
     appstate::AppState,
+    domain::created_entity,
     error::{ApiResult, AppError},
 };
 use tb_domain::{
-    Part, Session, Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails, SubscriptionId,
-    UserPublic,
+    ApiWrite, Error, Part, Session, Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails,
+    SubscriptionId, UserPublic,
 };
+use tb_strava::{StravaSession, StravaStore};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewShop {
@@ -64,7 +66,10 @@ pub struct RegisterPartRequest {
     pub part_id: i32,
 }
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
+where
+    S::Conn: StravaStore,
+{
     Router::new()
         // Shop CRUD
         .route("/", get(list_shops).post(create_shop))
@@ -119,17 +124,21 @@ async fn create_shop<S>(
 ) -> Result<(StatusCode, Json<Shop>), AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let shop = ShopId::create(
-        name,
-        description,
-        auto_approve,
-        session.user_id(),
-        &mut store,
-    )
-    .await?;
-    store.commit().await?;
+    let summary = state
+        .registry
+        .write(
+            &state.source,
+            session.tb_id(),
+            ApiWrite::ShopCreate {
+                name,
+                description,
+                auto_approve,
+            },
+        )
+        .await?;
+    let shop = created_entity(&summary.shops, "shop")?;
     Ok((StatusCode::CREATED, Json(shop)))
 }
 
@@ -155,18 +164,25 @@ async fn update_shop<S>(
         description,
         auto_approve,
     }): Json<UpdateShop>,
-) -> ApiResult<Shop>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let user = session.user_id();
-    let shop_id = ShopId::get(shop_id, user, &mut store).await?;
-    let shop = shop_id
-        .update(name, description, auto_approve, user, &mut store)
+    state
+        .registry
+        .write(
+            &state.source,
+            session.tb_id(),
+            ApiWrite::ShopUpdate {
+                id: ShopId::from(shop_id),
+                name,
+                description,
+                auto_approve,
+            },
+        )
         .await?;
-    store.commit().await?;
-    Ok(Json(shop))
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn delete_shop<S>(
@@ -176,12 +192,18 @@ async fn delete_shop<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let user = session.user_id();
-    let shop_id = ShopId::get(shop_id, user, &mut store).await?;
-    shop_id.delete(user, &mut store).await?;
-    store.commit().await?;
+    state
+        .registry
+        .write(
+            &state.source,
+            session.tb_id(),
+            ApiWrite::ShopDelete {
+                id: ShopId::from(shop_id),
+            },
+        )
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -204,34 +226,46 @@ async fn register_part<S>(
     session: RequestSession,
     State(state): State<AppState<S>>,
     Json(RegisterPartRequest { part_id }): Json<RegisterPartRequest>,
-) -> ApiResult<tb_domain::Summary>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let shop_id: ShopId = shop_id.into();
-    let summary = shop_id
-        .register_part(part_id.into(), &session, &mut store)
+    state
+        .registry
+        .write(
+            &state.source,
+            session.tb_id(),
+            ApiWrite::ShopRegisterPart {
+                shop: shop_id.into(),
+                part: part_id.into(),
+            },
+        )
         .await?;
-    store.commit().await?;
-    Ok(Json(summary))
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn unregister_part<S>(
     Path((shop_id, part_id)): Path<(i32, i32)>,
     session: RequestSession,
     State(state): State<AppState<S>>,
-) -> ApiResult<tb_domain::Summary>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let shop_id: ShopId = shop_id.into();
-    let summary = shop_id
-        .unregister_part(part_id.into(), &session, &mut store)
+    state
+        .registry
+        .write(
+            &state.source,
+            session.tb_id(),
+            ApiWrite::ShopUnregisterPart {
+                shop: shop_id.into(),
+                part: part_id.into(),
+            },
+        )
         .await?;
-    store.commit().await?;
-    Ok(Json(summary))
+    Ok(StatusCode::NO_CONTENT)
 }
 
 // Search shops
@@ -259,11 +293,31 @@ async fn create_subscription<S>(
 ) -> Result<(StatusCode, Json<ShopSubscription>), AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::ShopSubscriptionCreate {
+                shop: shop_id.into(),
+                message,
+            },
+        )
+        .await?;
+
+    // A `ShopSubscription` is in no `Summary`, so the 201 body reads it back
+    // after the write succeeds (spec §6.2, the onboarding pattern): the
+    // create guard allows at most one subscription per (user, shop), so the
+    // one for this shop is the one we just created.
     let mut store = state.source.begin().await?;
-    let subscription =
-        SubscriptionId::create(shop_id.into(), message, user.user_id(), &mut store).await?;
-    store.commit().await?;
+    let shop = ShopId::from(shop_id);
+    let subscription = ShopSubscription::get_for_user(user.user_id(), &mut store)
+        .await?
+        .into_iter()
+        .find(|s| s.shop_id == shop)
+        .ok_or_else(|| Error::NotFound("subscription not found after create".to_string()))?;
     Ok((StatusCode::CREATED, Json(subscription)))
 }
 
@@ -318,18 +372,23 @@ async fn approve_subscription<S>(
     session: RequestSession,
     State(state): State<AppState<S>>,
     Json(req): Json<SubscriptionResponseRequest>,
-) -> ApiResult<ShopSubscription>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let user = session.user_id();
-    let subscription_id = SubscriptionId::get(subscription_id, user, &mut store).await?;
-    let subscription = subscription_id
-        .approve(req.message, user, &mut store)
+    state
+        .registry
+        .write(
+            &state.source,
+            session.tb_id(),
+            ApiWrite::ShopSubscriptionApprove {
+                id: subscription_id.into(),
+                message: req.message,
+            },
+        )
         .await?;
-    store.commit().await?;
-    Ok(Json(subscription))
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn reject_subscription<S>(
@@ -337,18 +396,23 @@ async fn reject_subscription<S>(
     session: RequestSession,
     State(state): State<AppState<S>>,
     Json(req): Json<SubscriptionResponseRequest>,
-) -> ApiResult<ShopSubscription>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let user = session.user_id();
-    let subscription_id = SubscriptionId::get(subscription_id, user, &mut store).await?;
-    let subscription = subscription_id
-        .reject(req.message, user, &mut store)
+    state
+        .registry
+        .write(
+            &state.source,
+            session.tb_id(),
+            ApiWrite::ShopSubscriptionReject {
+                id: subscription_id.into(),
+                message: req.message,
+            },
+        )
         .await?;
-    store.commit().await?;
-    Ok(Json(subscription))
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn cancel_subscription<S>(
@@ -358,11 +422,17 @@ async fn cancel_subscription<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let user = session.user_id();
-    let subscription_id = SubscriptionId::get(subscription_id, user, &mut store).await?;
-    subscription_id.cancel(user, &mut store).await?;
-    store.commit().await?;
+    state
+        .registry
+        .write(
+            &state.source,
+            session.tb_id(),
+            ApiWrite::ShopSubscriptionCancel {
+                id: subscription_id.into(),
+            },
+        )
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }

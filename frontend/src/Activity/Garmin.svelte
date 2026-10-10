@@ -8,9 +8,13 @@
   import { checkStatus, handleError } from "../lib/store";
   import Modal from "../Widgets/Modal.svelte";
   import * as m from "../../paraglide/messages";
-  import { updateSummary } from "../lib/user";
 
   let files: FileList | undefined = $state();
+  /// The match report of the upload (`200 + {good, bad}`): the rows the
+  /// domain matched against the user's activities and the rows it skipped.
+  /// It is rendered, never merged — the matched activities' state rides the
+  /// stream frame the executor publishes (the spec §6.2 deviation recorded
+  /// on issue #446).
   let result: { good: string[]; bad: string[] } | undefined = $state();
 
   interface Props {
@@ -28,6 +32,10 @@
   }
 
   async function sendFile() {
+    // The endpoint takes the raw CSV text (not a JSON body), so the handler
+    // uses a plain fetch with `checkStatus` (204 → `null`, 401 → redirect)
+    // instead of `myfetch`, which would JSON-encode the body. The 200 body
+    // is the match report; the state change rides the stream frame.
     var body = files && (await files[0].text());
     return fetch("/api/activ/descend", {
       method: "POST",
@@ -36,11 +44,7 @@
     })
       .then(checkStatus)
       .then((a) => {
-        updateSummary(a[0]);
-        result = {
-          good: a[1],
-          bad: a[2],
-        };
+        result = a;
         files = undefined;
       })
       .catch(handleError);

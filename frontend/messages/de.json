@@ -348,6 +348,6 @@
   "sync_create_header_all": "Sync für alle Benutzer erstellen",
   "sync_start_label": "Start",
   "sync_migration_label": "Migration",
-  "sync_processed": "{count} verarbeitet ...",
+  "sync_processed": "Verarbeite ...",
   "sync_process_queue": "Warteschlange abarbeiten"
 }

@@ -1467,6 +1467,16 @@ async fn activity_read_rounds_offset_to_30_minutes() -> tb_domain::TbResult<()> 
 // `Summary` of everything touched, tombstones for deletes, an empty summary
 // for the non-Summary kinds — holds on the source of truth.
 
+/// The `Summary` of a write's outcome: every write under test reports
+/// its `Summary` (the descend's `DescendReport` is asserted explicitly
+/// where it is the point).
+fn outcome_summary(outcome: tb_domain::WriteOutcome) -> tb_domain::Summary {
+    match outcome {
+        tb_domain::WriteOutcome::Summary(summary) => summary,
+        tb_domain::WriteOutcome::Descend { summary, .. } => summary,
+    }
+}
+
 /// The dispatch applies part writes: create returns the part, change returns
 /// the part, delete reports the tombstone, and a missing part is NotFound.
 #[tokio::test]
@@ -1475,36 +1485,41 @@ async fn apiwrite_part_create_change_delete() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let mut session = test_session();
 
-        let summary = exec(
-            ApiWrite::PartCreate {
-                name: "New Chain".to_string(),
-                vendor: "Shimano".to_string(),
-                model: "CN-HG62".to_string(),
-                what: CHAIN,
-                purchase: sample_purchase_date(),
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::PartCreate {
+                    name: "New Chain".to_string(),
+                    vendor: "Shimano".to_string(),
+                    model: "CN-HG62".to_string(),
+                    what: CHAIN,
+                    purchase: sample_purchase_date(),
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         let id = *summary.parts.keys().next().unwrap();
         assert_eq!(summary.parts[&id].as_ref().unwrap().name, "New Chain");
 
-        let summary = exec(
-            ApiWrite::PartChange {
-                id,
-                name: "Renamed".to_string(),
-                vendor: "New Vendor".to_string(),
-                model: "New Model".to_string(),
-                purchase: sample_purchase_date(),
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::PartChange {
+                    id,
+                    name: "Renamed".to_string(),
+                    vendor: "New Vendor".to_string(),
+                    model: "New Model".to_string(),
+                    purchase: sample_purchase_date(),
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.parts[&id].as_ref().unwrap().name, "Renamed");
 
-        let summary = exec(ApiWrite::PartDelete { id }, &mut session, &mut store).await?;
+        let summary =
+            outcome_summary(exec(ApiWrite::PartDelete { id }, &mut session, &mut store).await?);
         assert_eq!(summary.parts, HashMap::from([(id, None)]));
         assert!(store.partid_get_part(id).await.is_err());
 
@@ -1540,18 +1555,20 @@ async fn apiwrite_attach_detach() -> tb_domain::TbResult<()> {
         let chain = create_part("Test Chain", "Shimano", "CN-M510", CHAIN, &mut store).await;
         let time = attachment_time();
 
-        let summary = exec(
-            ApiWrite::AttachmentAttach {
-                part: chain.id,
-                time,
-                gear: bike.id,
-                hook: BIKE,
-                all: false,
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::AttachmentAttach {
+                    part: chain.id,
+                    time,
+                    gear: bike.id,
+                    hook: BIKE,
+                    all: false,
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert!(!summary.parts.is_empty());
         let att = store
             .attachment_get_by_part_and_time(chain.id, time)
@@ -1598,12 +1615,14 @@ async fn apiwrite_activity_update_and_delete() -> tb_domain::TbResult<()> {
             .expect("the fixture activity");
         let id = act.id;
         act.name = "Renamed Ride".to_string();
-        let summary = exec(
-            ApiWrite::ActivityUpdate { id, activity: act },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ActivityUpdate { id, activity: act },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(
             summary.activities[&id].as_ref().unwrap().name,
             "Renamed Ride"
@@ -1628,14 +1647,16 @@ async fn apiwrite_activity_update_and_delete() -> tb_domain::TbResult<()> {
         // Delete a created ride: the tombstone and the usage revert.
         let ride = ride(100, "New Ride", activity_start(), Some(PartId::from(1)));
         ride.clone().upsert(&session, &mut store).await?;
-        let summary = exec(
-            ApiWrite::ActivityDelete {
-                id: ActivityId::new(100),
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ActivityDelete {
+                    id: ActivityId::new(100),
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(
             summary.activities,
             HashMap::from([(ActivityId::new(100), None)])
@@ -1662,7 +1683,7 @@ async fn apiwrite_activity_descend() -> tb_domain::TbResult<()> {
         let mut session = test_session();
 
         let csv = "Date,Title,Total Descent\n2023-05-18 22:13:20,Morning Ride,900\n";
-        let summary = exec(
+        let outcome = exec(
             ApiWrite::ActivityDescend {
                 data: csv.to_string(),
             },
@@ -1670,12 +1691,24 @@ async fn apiwrite_activity_descend() -> tb_domain::TbResult<()> {
             &mut store,
         )
         .await?;
+        let tb_domain::WriteOutcome::Descend { summary, report } = outcome else {
+            panic!("the descend write carries its match report");
+        };
         assert_eq!(
             summary.activities[&ActivityId::new(1)]
                 .as_ref()
                 .unwrap()
                 .descend,
             Some(900)
+        );
+        // The dispatch carries the match report (the handler's
+        // response body), not just the Summary.
+        assert_eq!(
+            report,
+            tb_domain::DescendReport {
+                good: vec!["Morning Ride at 2023-05-18 22:13:20".to_string()],
+                bad: vec![],
+            }
         );
         let stored = store
             .activity_read_by_id(ActivityId::new(1))
@@ -1697,26 +1730,30 @@ async fn apiwrite_partnote_create_and_delete() -> tb_domain::TbResult<()> {
         let mut session = test_session();
         let part = PartId::from(13);
 
-        let summary = exec(
-            ApiWrite::PartNoteCreateText {
-                part,
-                name: "Check the tension".to_string(),
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::PartNoteCreateText {
+                    part,
+                    name: "Check the tension".to_string(),
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.part_notes.len(), 1);
         let note = summary.part_notes.values().flatten().next().unwrap();
         assert_eq!(note.name, "Check the tension");
         assert_eq!(note.part, part);
 
-        let summary = exec(
-            ApiWrite::PartNoteDelete { id: note.id },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::PartNoteDelete { id: note.id },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.part_notes, HashMap::from([(note.id, None)]));
         assert!(
             store.partnote_get(note.id).await.is_err(),
@@ -1736,29 +1773,33 @@ async fn apiwrite_service_create_and_delete() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let mut session = test_session();
 
-        let summary = exec(
-            ApiWrite::ServiceCreate {
-                part: PartId::from(13),
-                time: datetime!(2024-06-15 10:00 UTC),
-                name: "Chain Service".to_string(),
-                notes: "Old chain".to_string(),
-                plans: vec![],
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ServiceCreate {
+                    part: PartId::from(13),
+                    time: datetime!(2024-06-15 10:00 UTC),
+                    name: "Chain Service".to_string(),
+                    notes: "Old chain".to_string(),
+                    plans: vec![],
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.services.len(), 1);
         assert_eq!(summary.usages.len(), 1);
         let service = summary.services.values().flatten().next().unwrap();
         assert_eq!(service.name, "Chain Service");
 
-        let summary = exec(
-            ApiWrite::ServiceDelete { id: service.id },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ServiceDelete { id: service.id },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.services, HashMap::from([(service.id, None)]));
 
         Ok(())
@@ -1792,16 +1833,20 @@ async fn apiwrite_serviceplan_create_and_delete() -> tb_domain::TbResult<()> {
             uid: None,
             energy: None,
         };
-        let summary = exec(
-            ApiWrite::ServicePlanCreate { plan },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ServicePlanCreate { plan },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.plans.len(), 1);
         let id = *summary.plans.keys().next().unwrap();
 
-        let summary = exec(ApiWrite::ServicePlanDelete { id }, &mut session, &mut store).await?;
+        let summary = outcome_summary(
+            exec(ApiWrite::ServicePlanDelete { id }, &mut session, &mut store).await?,
+        );
         assert_eq!(summary.plans, HashMap::from([(id, None)]));
 
         Ok(())
@@ -1818,16 +1863,18 @@ async fn apiwrite_shop_crud() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let mut session = test_session();
 
-        let summary = exec(
-            ApiWrite::ShopCreate {
-                name: "Workshop".to_string(),
-                description: None,
-                auto_approve: true,
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ShopCreate {
+                    name: "Workshop".to_string(),
+                    description: None,
+                    auto_approve: true,
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.shops.len(), 1);
         let shop_id = *summary.shops.keys().next().unwrap();
 
@@ -1844,34 +1891,40 @@ async fn apiwrite_shop_crud() -> tb_domain::TbResult<()> {
         .await?;
 
         let part = PartId::from(13); // loose spare, owned by user 1
-        let summary = exec(
-            ApiWrite::ShopRegisterPart {
-                shop: shop_id,
-                part,
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ShopRegisterPart {
+                    shop: shop_id,
+                    part,
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.parts[&part].as_ref().unwrap().shop, Some(shop_id));
 
-        let summary = exec(
-            ApiWrite::ShopUnregisterPart {
-                shop: shop_id,
-                part,
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ShopUnregisterPart {
+                    shop: shop_id,
+                    part,
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.parts[&part].as_ref().unwrap().shop, None);
 
-        let summary = exec(
-            ApiWrite::ShopDelete { id: shop_id },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ShopDelete { id: shop_id },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.shops, HashMap::from([(shop_id, None)]));
 
         Ok(())
@@ -1888,27 +1941,31 @@ async fn apiwrite_subscription_create_and_cancel() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let mut session = test_session();
 
-        let summary = exec(
-            ApiWrite::ShopCreate {
-                name: "Workshop".to_string(),
-                description: None,
-                auto_approve: true,
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ShopCreate {
+                    name: "Workshop".to_string(),
+                    description: None,
+                    auto_approve: true,
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         let shop_id = *summary.shops.keys().next().unwrap();
 
-        let summary = exec(
-            ApiWrite::ShopSubscriptionCreate {
-                shop: shop_id,
-                message: Some("Please approve".to_string()),
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ShopSubscriptionCreate {
+                    shop: shop_id,
+                    message: Some("Please approve".to_string()),
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary, Summary::default());
         let sub = store
             .subscription_find_active(shop_id, UserId::from(1))
@@ -1916,12 +1973,14 @@ async fn apiwrite_subscription_create_and_cancel() -> tb_domain::TbResult<()> {
             .expect("auto-approve activates the subscription");
         assert_eq!(sub.status, tb_domain::SubscriptionStatus::Active);
 
-        let summary = exec(
-            ApiWrite::ShopSubscriptionCancel { id: sub.id },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ShopSubscriptionCancel { id: sub.id },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary, Summary::default());
         assert!(
             store.subscription_get(sub.id).await.is_err(),
@@ -1943,12 +2002,12 @@ async fn apiwrite_onboarding_sync() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let mut session = test_session();
 
-        let summary = exec(
+        let summary = outcome_summary(exec(
             ApiWrite::UserOnboardingSync { time: 0 },
             &mut session,
             &mut store,
         )
-        .await?;
+        .await?);
         assert_eq!(summary, Summary::default());
         let user = UserStore::get(&mut store, UserId::from(1)).await?;
         assert_eq!(user.onboarding_status, OnboardingStatus::Completed);
@@ -1981,7 +2040,9 @@ async fn apiwrite_onboarding_postpone() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
         let mut session = test_session();
 
-        let summary = exec(ApiWrite::UserOnboardingPostpone, &mut session, &mut store).await?;
+        let summary = outcome_summary(
+            exec(ApiWrite::UserOnboardingPostpone, &mut session, &mut store).await?,
+        );
         assert_eq!(summary, Summary::default());
         let user = UserStore::get(&mut store, UserId::from(1)).await?;
         assert_eq!(

@@ -84,6 +84,18 @@ impl RequestSession {
         user: UserId,
         store: &mut impl StravaStore,
     ) -> TbResult<RequestSession> {
+        Self::for_user(user, store).await
+    }
+
+    /// Build a `StravaSession` for a user from their stored [`StravaUser`]
+    /// (the refresh token), the same way [`create_from_id`](Self::create_from_id)
+    /// does, minus the admin gate: an empty access token with a past expiry,
+    /// so the first Strava request forces a token refresh (spec #446 §4.4 —
+    /// the per-user executor's session source).
+    pub(crate) async fn for_user(
+        user: UserId,
+        store: &mut impl StravaStore,
+    ) -> TbResult<RequestSession> {
         let user = StravaUser::read(user, store).await?;
 
         let strava_id = user.strava_id();

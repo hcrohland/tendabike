@@ -9,7 +9,7 @@
     TableHeadCell,
   } from "flowbite-svelte";
   import { handleError, myfetch } from "../lib/store";
-  import { type User, setSummary } from "../lib/user";
+  import { type User } from "../lib/user";
   import Sync from "./Sync.svelte";
   import CreateSync from "./CreateSync.svelte";
   import DeleteUser from "./DeleteUser.svelte";
@@ -29,11 +29,10 @@
   let deleteuser = { start: (_: User) => {} };
 
   function rescan() {
-    promise = myfetch("/api/activ/rescan")
-      .catch(handleError)
-      .then(refresh)
-      .then(() => myfetch("/api/user/summary"))
-      .then(setSummary);
+    // The rescan stops every live stream after its commit (issue #446): each
+    // client — this one included — re-hydrates via the native reconnect +
+    // catch-up snapshot, so no manual refresh is needed here.
+    promise = myfetch("/api/activ/rescan").catch(handleError);
   }
 
   async function disable(user: User) {

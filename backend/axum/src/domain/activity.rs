@@ -14,34 +14,50 @@ use axum::{
     routing::{delete, get, post},
 };
 
-use crate::{AxumAdmin, RequestSession, appstate::AppState, error::ApiResult};
-use tb_domain::{Activity, ActivityId, PartId, Summary};
+use http::StatusCode;
+
+use crate::{
+    AxumAdmin, RequestSession,
+    appstate::AppState,
+    error::{ApiResult, AppError},
+};
+use tb_domain::{Activity, ActivityId, ApiWrite, DescendReport, PartId};
 use tb_exec::{Txn, TxnSource};
+use tb_strava::{StravaSession, StravaStore};
 
 async fn def_part_api<S>(
     user: RequestSession,
     State(state): State<AppState<S>>,
     Json(gear_id): Json<PartId>,
-) -> ApiResult<Summary>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let res = Activity::set_default_part(gear_id, &user, &mut store)
-        .await
-        .map(Json)?;
-    store.commit().await?;
-    Ok(res)
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::ActivityDefaultGear { gear: gear_id },
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
-async fn rescan<S>(_u: AxumAdmin, State(state): State<AppState<S>>) -> ApiResult<()>
+async fn rescan<S>(_u: AxumAdmin, State(state): State<AppState<S>>) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     Activity::rescan_all(&mut store).await?;
     store.commit().await?;
-    Ok(Json(()))
+    // The rescan is all-users maintenance that bypasses the executors (the
+    // spec §3/§6.4 carve-out), so no frame carries its effect: stop every
+    // live executor — open streams end, and each client's native reconnect
+    // + catch-up snapshot re-hydrates it (issue #446).
+    state.registry.stop_all().await;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// web interface to read an activity
@@ -66,19 +82,28 @@ async fn act_put<S>(
     user: RequestSession,
     State(state): State<AppState<S>>,
     Json(activity): Json<Activity>,
-) -> ApiResult<Summary>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
     if ActivityId::from(id) != activity.id {
         Err(tb_domain::Error::BadRequest(
             "ActivityId does not match activity".to_string(),
         ))?
     }
-    let mut store = state.source.begin().await?;
-    let res = activity.update(&user, &mut store).await.map(Json)?;
-    store.commit().await?;
-    Ok(res)
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::ActivityUpdate {
+                id: ActivityId::from(id),
+                activity,
+            },
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// web interface to delete an activity
@@ -86,34 +111,50 @@ async fn act_delete<S>(
     Path(id): Path<i64>,
     user: RequestSession,
     State(state): State<AppState<S>>,
-) -> ApiResult<Summary>
+) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let res = ActivityId::new(id)
-        .delete(&user, &mut store)
-        .await
-        .map(Json)?;
-    store.commit().await?;
-    Ok(res)
+    state
+        .registry
+        .write(
+            &state.source,
+            user.tb_id(),
+            ApiWrite::ActivityDelete {
+                id: ActivityId::new(id),
+            },
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
+/// `POST /api/activ/descend` — the raw CSV body. The write rides the
+/// user's executor (like every write), and the handler answers `200` with
+/// the match report `{good, bad}` (the spec §6.2 deviation recorded on
+/// issue #446): the report is an operation result, not `Summary` state —
+/// the matched activities' updated state arrives as the stream frame the
+/// executor publishes.
 async fn descend<S>(
     user: RequestSession,
     State(state): State<AppState<S>>,
     data: String,
-) -> ApiResult<(Summary, Vec<String>, Vec<String>)>
+) -> Result<Json<DescendReport>, AppError>
 where
     S: TxnSource + Clone + 'static,
+    S::Conn: StravaStore,
 {
-    let mut store = state.source.begin().await?;
-    let (summary, a, b) = Activity::csv2descend(data.as_bytes(), &user, &mut store).await?;
-    store.commit().await?;
-    Ok(Json((summary, a, b)))
+    let report = state
+        .registry
+        .write_descend(&state.source, user.tb_id(), data)
+        .await?;
+    Ok(Json(report))
 }
 
-pub(crate) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(crate) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
+where
+    S::Conn: StravaStore,
+{
     Router::new()
         .route("/descend", post(descend))
         .route("/{id}", delete(act_delete).get(act_get).put(act_put))

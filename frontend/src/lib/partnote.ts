@@ -32,38 +32,37 @@ export class PartNote {
     return this.id ? `/api/part/notes/${this.id}/file` : undefined;
   }
 
+  /// The writes answer 204 (201 for creates): the change rides the stream
+  /// frame, so the handlers only await the write.
   async updateName(name: string) {
-    return await myfetch(`/api/part/notes/${this.id}`, "PUT", { name })
-      .then((data) => partNotes.updateMap([data]))
-      .catch(handleError);
+    return await myfetch(`/api/part/notes/${this.id}`, "PUT", { name }).catch(
+      handleError,
+    );
   }
 
   async updateFile(name: string, file: File) {
     const formData = new FormData();
     formData.append("name", name);
     formData.append("file", file, file.name);
-    const res = await fetch(`/api/part/notes/${this.id}/file`, {
+    return await fetch(`/api/part/notes/${this.id}/file`, {
       method: "PUT",
       credentials: "include",
       body: formData,
     })
       .then(checkStatus)
       .catch(handleError);
-    if (!res) return res;
-    partNotes.updateMap([res]);
-    return res;
   }
 
   async removeFile() {
-    return await myfetch(`/api/part/notes/${this.id}/file`, "DELETE")
-      .then((data) => partNotes.updateMap([data]))
-      .catch(handleError);
+    return await myfetch(`/api/part/notes/${this.id}/file`, "DELETE").catch(
+      handleError,
+    );
   }
 
   async delete() {
-    return await myfetch(`/api/part/notes/${this.id}`, "DELETE")
-      .then((data) => partNotes.deleteItem(data))
-      .catch(handleError);
+    return await myfetch(`/api/part/notes/${this.id}`, "DELETE").catch(
+      handleError,
+    );
   }
 }
 
@@ -74,12 +73,9 @@ export function notes_for_part(partId: number): PartNote[] {
 }
 
 export async function createTextNote(part: number, name: string) {
-  return await myfetch(`/api/part/${part}/notes`, "POST", { name })
-    .then((data) => {
-      partNotes.updateMap([data]);
-      return data;
-    })
-    .catch(handleError);
+  return await myfetch(`/api/part/${part}/notes`, "POST", { name }).catch(
+    handleError,
+  );
 }
 
 export function fmtSize(bytes: number): string {
@@ -92,14 +88,11 @@ export async function createFileNote(part: number, name: string, file: File) {
   const formData = new FormData();
   formData.append("name", name);
   formData.append("file", file);
-  const res = await fetch(`/api/part/${part}/notes/file`, {
+  return await fetch(`/api/part/${part}/notes/file`, {
     method: "POST",
     credentials: "include",
     body: formData,
   })
     .then(checkStatus)
     .catch(handleError);
-  if (!res) return res;
-  partNotes.updateMap([res]);
-  return res;
 }

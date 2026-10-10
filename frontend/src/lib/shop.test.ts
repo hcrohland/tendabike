@@ -47,7 +47,7 @@ describe("Shop CRUD", () => {
       const created = shopData({ id: 10 });
       fetchMock.mockResolvedValue(resp(created));
       const s = new Shop(shopData({ id: undefined }));
-      const result = await s.create();
+      await s.create();
       const [url, option] = fetchMock.mock.calls[0];
       expect(url).toBe("/api/shop");
       expect(option.method).toBe("POST");
@@ -57,17 +57,14 @@ describe("Shop CRUD", () => {
         description: "Local shop",
         auto_approve: true,
       });
-      expect(result!).toBeInstanceOf(Shop);
-      expect((result as Shop).id).toBe(10);
     });
 
-    it("updates the shops map with the response", async () => {
+    it("leaves the shops map to the stream frame", async () => {
       const created = shopData({ id: 10 });
       fetchMock.mockResolvedValue(resp(created));
       const s = new Shop(shopData({ id: undefined }));
       await s.create();
-      expect(shops[10]).toBeInstanceOf(Shop);
-      expect(shops[10].name).toBe("Velo Shop");
+      expect(shops[10]).toBeUndefined();
     });
   });
 
@@ -89,18 +86,19 @@ describe("Shop CRUD", () => {
       });
     });
 
-    it("updates the shops map with the response", async () => {
+    it("leaves the shops map to the stream frame", async () => {
       const updated = shopData({ id: 10, name: "Changed" });
       fetchMock.mockResolvedValue(resp(updated));
+      shops.setMap([shopData({ id: 10, name: "Old" })]);
       const s = new Shop(shopData({ id: 10, name: "Old" }));
       s.name = "Changed";
       await s.update();
-      expect(shops[10].name).toBe("Changed");
+      expect(shops[10].name).toBe("Old");
     });
   });
 
   describe("delete", () => {
-    it("DELETEs /api/shop/{id} and removes from the shops map", async () => {
+    it("DELETEs /api/shop/{id}; the tombstone arrives via the stream frame", async () => {
       const s = new Shop(shopData({ id: 10 }));
       shops.setMap([shopData({ id: 10 })]);
       fetchMock.mockResolvedValue(resp(null, 204, true, "No Content"));
@@ -108,7 +106,7 @@ describe("Shop CRUD", () => {
       const [url, option] = fetchMock.mock.calls[0];
       expect(url).toBe("/api/shop/10");
       expect(option.method).toBe("DELETE");
-      expect(shops[10]).toBeUndefined();
+      expect(shops[10]).toBeDefined();
     });
   });
 
