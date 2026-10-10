@@ -1,79 +1,194 @@
 //! This module contains the implementation of the `Summary` struct and its associated functions.
 //!
-//! `Summary` is the only summary form: nine id-keyed maps, one per entity kind, each
-//! `HashMap<Id, Option<E>>`. A `Some(entity)` value is a live entity; a `None` value is a
-//! **tombstone** marking the entity as deleted. It is the single payload type the wire carries
-//! (ADR-0005, executable spec #446 §2). A custom `Serialize` impl renders it as a uniform JSON object with
-//! stringified id keys and `null` for tombstones.
+//! `Summary` is the only summary form: nine id-keyed maps, one per entity kind, each an
+//! [`IdKeyedMap`] over a `HashMap<Id, Option<E>>`. A `Some(entity)` value is a live entity; a
+//! `None` value is a **tombstone** marking the entity as deleted. It is the single payload type
+//! the wire carries (ADR-0005, executable spec #446 §2). Each map renders as a uniform JSON
+//! object with stringified id keys and `null` for tombstones.
 
 use serde::Serialize;
-use serde::ser::{SerializeMap, SerializeStruct, Serializer};
+use serde::ser::{SerializeMap, Serializer};
 use std::{
-    collections::HashMap,
+    cmp::PartialEq,
+    collections::hash_map::{self, HashMap},
     fmt::Display,
-    ops::{Add, AddAssign, SubAssign},
+    hash::Hash,
+    ops::{Add, AddAssign, Deref, DerefMut, Index},
 };
 
 use crate::*;
 
-/// The id-keyed map summary: nine maps, one per entity kind, keyed by the entity's id. A
-/// `Some(entity)` value is a live entity; a `None` value is a tombstone marking the entity as
-/// deleted. It is the single payload type the wire carries (ADR-0005, executable spec #446 §2).
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct Summary {
-    pub activities: HashMap<ActivityId, Option<Activity>>,
-    pub parts: HashMap<PartId, Option<Part>>,
-    pub attachments: HashMap<String, Option<AttachmentDetail>>,
-    pub usages: HashMap<UsageId, Option<Usage>>,
-    pub services: HashMap<ServiceId, Option<Service>>,
-    pub plans: HashMap<ServicePlanId, Option<ServicePlan>>,
-    pub part_notes: HashMap<PartNoteId, Option<PartNote>>,
-    pub shops: HashMap<ShopId, Option<Shop>>,
-    pub users: HashMap<UserId, Option<UserPublic>>,
+/// An entity that carries its own map key: the id under which its [`IdKeyedMap`] entry lives.
+pub trait IdKeyed {
+    /// The map key type.
+    type Key;
+
+    /// This entity's key.
+    fn key(&self) -> Self::Key;
 }
 
-/// Serializes an id-keyed map as a JSON object with stringified keys and `null` for `None`
+/// The id-keyed map: a `HashMap<K, Option<E>>` under a newtype, hosting every per-map
+/// operation generically — [`upsert`](IdKeyedMap::upsert),
+/// [`upsert_all`](IdKeyedMap::upsert_all), [`tombstone`](IdKeyedMap::tombstone),
+/// [`live`](IdKeyedMap::live), [`merge`](IdKeyedMap::merge) — each written once, applying to
+/// all nine [`Summary`] kinds. A `Some(entity)` value is a live entity; a `None` value is a
+/// tombstone marking the entity as deleted (ADR-0005, executable spec #446 §2; "tombstone" in
+/// `CONTEXT.md`).
+#[derive(Clone, Debug, Serialize)]
+#[serde(bound(serialize = "K: Display, E: Serialize"))]
+pub struct IdKeyedMap<K, E>(
+    #[serde(serialize_with = "serialize_id_keyed_map")] HashMap<K, Option<E>>,
+);
+
+/// Serializes the id-keyed map as a JSON object with stringified keys and `null` for `None`
 /// (tombstone) values, so every collection shares one uniform wire shape (a naive derive would
 /// give pair-arrays for the integer-keyed collections and objects for the string/UUID-keyed
 /// ones).
-struct IdKeyedMap<'a, K, E>(&'a HashMap<K, Option<E>>)
-where
-    K: Display,
-    E: Serialize;
-
-impl<K, E> Serialize for IdKeyedMap<'_, K, E>
+fn serialize_id_keyed_map<K, E, S>(
+    map: &HashMap<K, Option<E>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
 where
     K: Display,
     E: Serialize,
+    S: Serializer,
 {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut map = serializer.serialize_map(Some(self.0.len()))?;
-        for (k, v) in self.0 {
-            map.serialize_entry(&k.to_string(), v)?;
-        }
-        map.end()
+    let mut ser_map = serializer.serialize_map(Some(map.len()))?;
+    for (k, v) in map {
+        ser_map.serialize_entry(&k.to_string(), v)?;
+    }
+    ser_map.end()
+}
+
+impl<K, E> PartialEq for IdKeyedMap<K, E>
+where
+    K: Eq + Hash,
+    E: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
     }
 }
 
-/// The wire shape: a uniform JSON object with stringified id keys and `null` for tombstones —
-/// `{"parts": {"12": null, "13": {...}}, "services": {"<uuid>": {...}}}`.
-impl Serialize for Summary {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut s = serializer.serialize_struct("Summary", 9)?;
-        s.serialize_field("activities", &IdKeyedMap(&self.activities))?;
-        s.serialize_field("parts", &IdKeyedMap(&self.parts))?;
-        s.serialize_field("attachments", &IdKeyedMap(&self.attachments))?;
-        s.serialize_field("usages", &IdKeyedMap(&self.usages))?;
-        s.serialize_field("services", &IdKeyedMap(&self.services))?;
-        s.serialize_field("plans", &IdKeyedMap(&self.plans))?;
-        s.serialize_field("part_notes", &IdKeyedMap(&self.part_notes))?;
-        s.serialize_field("shops", &IdKeyedMap(&self.shops))?;
-        s.serialize_field("users", &IdKeyedMap(&self.users))?;
-        s.end()
+impl<K, E> Default for IdKeyedMap<K, E> {
+    fn default() -> Self {
+        Self(HashMap::default())
     }
+}
+
+// --- Shims so existing bare-`HashMap` field access compiles unchanged ---
+
+impl<K, E> Deref for IdKeyedMap<K, E> {
+    type Target = HashMap<K, Option<E>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<K, E> DerefMut for IdKeyedMap<K, E> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<K, E> Index<&K> for IdKeyedMap<K, E>
+where
+    K: Eq + Hash,
+{
+    type Output = Option<E>;
+
+    fn index(&self, key: &K) -> &Self::Output {
+        &self.0[key]
+    }
+}
+
+impl<K, E> IntoIterator for IdKeyedMap<K, E> {
+    type Item = (K, Option<E>);
+    type IntoIter = hash_map::IntoIter<K, Option<E>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a, K, E> IntoIterator for &'a IdKeyedMap<K, E> {
+    type Item = (&'a K, &'a Option<E>);
+    type IntoIter = hash_map::Iter<'a, K, Option<E>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl<K, E> PartialEq<HashMap<K, Option<E>>> for IdKeyedMap<K, E>
+where
+    K: Eq + Hash,
+    E: PartialEq,
+{
+    fn eq(&self, other: &HashMap<K, Option<E>>) -> bool {
+        self.0 == *other
+    }
+}
+
+impl<K, E> IdKeyedMap<K, E>
+where
+    K: Eq + Hash,
+    E: IdKeyed<Key = K>,
+{
+    /// Upsert one entity as `Some` under its key (per-id last-wins).
+    pub fn upsert(&mut self, e: E) {
+        self.0.insert(e.key(), Some(e));
+    }
+
+    /// Upsert each entity of `ents` as `Some` under its key (per-id last-wins).
+    pub fn upsert_all(&mut self, ents: impl IntoIterator<Item = E>) {
+        for e in ents {
+            self.upsert(e);
+        }
+    }
+
+    /// Record one entity as deleted: insert a `None` tombstone under its key — the deletion
+    /// representation (ADR-0005, executable spec #446 §2).
+    pub fn tombstone(&mut self, e: E) {
+        self.0.insert(e.key(), None);
+    }
+
+    /// Per-id merge, last-wins: each entry of `other` overwrites the entry with the same key
+    /// (a `None` tombstone overwrites a `Some`, deleting the entity).
+    pub fn merge(&mut self, other: Self) {
+        self.0.extend(other.0);
+    }
+}
+
+impl<K, E> IdKeyedMap<K, E>
+where
+    E: Clone,
+{
+    /// All live entities in this map, as an owned `Vec` (cloned; order unspecified; borrowing,
+    /// tombstones dropped).
+    pub fn live(&self) -> Vec<E> {
+        self.0.values().filter_map(|v| v.clone()).collect()
+    }
+}
+
+/// The id-keyed map summary: nine [`IdKeyedMap`]s, one per entity kind, keyed by the entity's
+/// id (its `idx` wire key for [`AttachmentDetail`]). A `Some(entity)` value is a live entity; a
+/// `None` value is a tombstone marking the entity as deleted. It is the single payload type the
+/// wire carries (ADR-0005, executable spec #446 §2). The wire shape: a uniform JSON object with
+/// stringified id keys and `null` for tombstones — `{"parts": {"12": null, "13": {...}},
+/// "services": {"<uuid>": {...}}}`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct Summary {
+    pub activities: IdKeyedMap<ActivityId, Activity>,
+    pub parts: IdKeyedMap<PartId, Part>,
+    pub attachments: IdKeyedMap<String, AttachmentDetail>,
+    pub usages: IdKeyedMap<UsageId, Usage>,
+    pub services: IdKeyedMap<ServiceId, Service>,
+    pub plans: IdKeyedMap<ServicePlanId, ServicePlan>,
+    pub part_notes: IdKeyedMap<PartNoteId, PartNote>,
+    pub shops: IdKeyedMap<ShopId, Shop>,
+    pub users: IdKeyedMap<UserId, UserPublic>,
 }
 
 // --- Merging ---
@@ -84,39 +199,22 @@ impl Serialize for Summary {
 /// upsert of the same id, so each id in a composed `Summary` is either upserted or deleted.
 impl AddAssign<Summary> for Summary {
     fn add_assign(&mut self, rhs: Summary) {
-        for (k, v) in rhs.activities {
-            self.activities.insert(k, v);
-        }
-        for (k, v) in rhs.parts {
-            self.parts.insert(k, v);
-        }
-        for (k, v) in rhs.attachments {
-            self.attachments.insert(k, v);
-        }
-        for (k, v) in rhs.usages {
-            self.usages.insert(k, v);
-        }
-        for (k, v) in rhs.services {
-            self.services.insert(k, v);
-        }
-        for (k, v) in rhs.plans {
-            self.plans.insert(k, v);
-        }
-        for (k, v) in rhs.part_notes {
-            self.part_notes.insert(k, v);
-        }
-        for (k, v) in rhs.shops {
-            self.shops.insert(k, v);
-        }
-        for (k, v) in rhs.users {
-            self.users.insert(k, v);
-        }
+        self.activities.merge(rhs.activities);
+        self.parts.merge(rhs.parts);
+        self.attachments.merge(rhs.attachments);
+        self.usages.merge(rhs.usages);
+        self.services.merge(rhs.services);
+        self.plans.merge(rhs.plans);
+        self.part_notes.merge(rhs.part_notes);
+        self.shops.merge(rhs.shops);
+        self.users.merge(rhs.users);
     }
 }
 
 /// Per-id merge, last-wins (the non-mutating form of [`AddAssign`]).
 impl Add for Summary {
     type Output = Self;
+
     fn add(self, rhs: Summary) -> Self::Output {
         let mut out = self;
         out += rhs;
@@ -124,141 +222,7 @@ impl Add for Summary {
     }
 }
 
-/// Per-kind merge operators: `+=` upserts the entity into its own field as `Some`
-/// (per-id last-wins, same rule as the `Summary` merge) and `-=` (single only) inserts a
-/// `None` tombstone — the deletion representation (ADR-0005, executable spec #446 §2;
-/// "tombstone" in `CONTEXT.md`). Two arms: one keys on the public `id` field, one on
-/// `idx()` for `AttachmentDetail` (whose wire key is the `idx` string).
-macro_rules! impl_summary_entity_ops {
-    ($summary:ty, $field:ident, $entity:ty, $idfield:ident) => {
-        // Upsert a single entity into its field as `Some` (per-id last-wins).
-        impl AddAssign<$entity> for $summary {
-            fn add_assign(&mut self, rhs: $entity) {
-                self.$field.insert(rhs.$idfield, Some(rhs));
-            }
-        }
-
-        // Upsert each element of a vector into its field as `Some` (per-id last-wins).
-        impl AddAssign<Vec<$entity>> for $summary {
-            fn add_assign(&mut self, rhs: Vec<$entity>) {
-                for e in rhs {
-                    self.$field.insert(e.$idfield, Some(e));
-                }
-            }
-        }
-
-        // Record a single entity as deleted: insert a `None` tombstone for its id.
-        impl SubAssign<$entity> for $summary {
-            fn sub_assign(&mut self, rhs: $entity) {
-                self.$field.insert(rhs.$idfield, None);
-            }
-        }
-    };
-    ($summary:ty, $field:ident, $entity:ty) => {
-        // Upsert a single entity into its field as `Some`, keyed by its `idx` wire key
-        // (per-id last-wins).
-        impl AddAssign<$entity> for $summary {
-            fn add_assign(&mut self, rhs: $entity) {
-                self.$field.insert(rhs.idx(), Some(rhs));
-            }
-        }
-
-        // Upsert each element of a vector into its field as `Some`, keyed by its `idx`
-        // wire key (per-id last-wins).
-        impl AddAssign<Vec<$entity>> for $summary {
-            fn add_assign(&mut self, rhs: Vec<$entity>) {
-                for e in rhs {
-                    self.$field.insert(e.idx(), Some(e));
-                }
-            }
-        }
-
-        // Record a single entity as deleted: insert a `None` tombstone for its `idx`
-        // wire key.
-        impl SubAssign<$entity> for $summary {
-            fn sub_assign(&mut self, rhs: $entity) {
-                self.$field.insert(rhs.idx(), None);
-            }
-        }
-    };
-}
-
-// Nine-line table, one row per kind; each row generates the three impls above
-// (`AddAssign<E>`, `AddAssign<Vec<E>>`, `SubAssign<E>`). `AttachmentDetail` is the
-// only `idx()`-keyed kind; the other eight key on their public `id` field.
-impl_summary_entity_ops!(Summary, activities, Activity, id);
-impl_summary_entity_ops!(Summary, parts, Part, id);
-impl_summary_entity_ops!(Summary, attachments, AttachmentDetail);
-impl_summary_entity_ops!(Summary, usages, Usage, id);
-impl_summary_entity_ops!(Summary, services, Service, id);
-impl_summary_entity_ops!(Summary, plans, ServicePlan, id);
-impl_summary_entity_ops!(Summary, part_notes, PartNote, id);
-impl_summary_entity_ops!(Summary, shops, Shop, id);
-impl_summary_entity_ops!(Summary, users, UserPublic, id);
-
-// --- Live-entity accessors ---
-//
-// Written explicitly (no `macro_rules!`): the body is one line per accessor, and a macro
-// would only take the getter name as a token, adding indirection without saving duplication.
-
 impl Summary {
-    /// All live [`Activity`] in this summary, as an owned `Vec` (cloned; order
-    /// unspecified; borrowing, tombstones dropped).
-    pub fn get_activities(&self) -> Vec<Activity> {
-        self.activities.values().filter_map(|v| v.clone()).collect()
-    }
-
-    /// All live [`Part`] in this summary, as an owned `Vec` (cloned; order unspecified;
-    /// borrowing, tombstones dropped).
-    pub fn get_parts(&self) -> Vec<Part> {
-        self.parts.values().filter_map(|v| v.clone()).collect()
-    }
-
-    /// All live [`AttachmentDetail`] in this summary, as an owned `Vec` (cloned;
-    /// order unspecified; borrowing, tombstones dropped).
-    pub fn get_attachments(&self) -> Vec<AttachmentDetail> {
-        self.attachments
-            .values()
-            .filter_map(|v| v.clone())
-            .collect()
-    }
-
-    /// All live [`Usage`] in this summary, as an owned `Vec` (cloned; order unspecified;
-    /// borrowing, tombstones dropped).
-    pub fn get_usages(&self) -> Vec<Usage> {
-        self.usages.values().filter_map(|v| v.clone()).collect()
-    }
-
-    /// All live [`Service`] in this summary, as an owned `Vec` (cloned; order unspecified;
-    /// borrowing, tombstones dropped).
-    pub fn get_services(&self) -> Vec<Service> {
-        self.services.values().filter_map(|v| v.clone()).collect()
-    }
-
-    /// All live [`ServicePlan`] in this summary, as an owned `Vec` (cloned; order unspecified;
-    /// borrowing, tombstones dropped).
-    pub fn get_plans(&self) -> Vec<ServicePlan> {
-        self.plans.values().filter_map(|v| v.clone()).collect()
-    }
-
-    /// All live [`PartNote`] in this summary, as an owned `Vec` (cloned; order unspecified;
-    /// borrowing, tombstones dropped).
-    pub fn get_part_notes(&self) -> Vec<PartNote> {
-        self.part_notes.values().filter_map(|v| v.clone()).collect()
-    }
-
-    /// All live [`Shop`] in this summary, as an owned `Vec` (cloned; order unspecified;
-    /// borrowing, tombstones dropped).
-    pub fn get_shops(&self) -> Vec<Shop> {
-        self.shops.values().filter_map(|v| v.clone()).collect()
-    }
-
-    /// All live [`UserPublic`] in this summary, as an owned `Vec` (cloned; order unspecified;
-    /// borrowing, tombstones dropped).
-    pub fn get_users(&self) -> Vec<UserPublic> {
-        self.users.values().filter_map(|v| v.clone()).collect()
-    }
-
     /// Whether nothing was touched: all nine maps are empty. A tombstone
     /// counts as touched (a delete is something to deliver). The executor
     /// uses this to decide the push: an empty `Summary` pushes no stream
@@ -342,14 +306,14 @@ mod tests {
 
     #[test]
     fn wire_shape_stringified_keys_and_tombstones() {
-        // The `IdKeyedMap` helper renders a map as a JSON object with stringified keys and
+        // The `IdKeyedMap` newtype renders a map as a JSON object with stringified keys and
         // `null` for `None` — the case a naive derive breaks (integer keys would become
         // pair-arrays, string/UUID keys would become objects).
         let mut m: HashMap<i32, Option<i32>> = HashMap::new();
         m.insert(12, None); // tombstone
         m.insert(13, Some(42));
         assert_eq!(
-            serde_json::to_value(super::IdKeyedMap(&m)).unwrap(),
+            serde_json::to_value(IdKeyedMap(m)).unwrap(),
             json!({"12": null, "13": 42})
         );
 
@@ -378,40 +342,40 @@ mod tests {
         assert_eq!(value["activities"], json!({}));
     }
 
-    // --- `+=` / `-=` for a single entity and entity vectors (id-keyed kind) ---
+    // --- `upsert` / `upsert_all` / `tombstone` (id-keyed kind) ---
 
     #[test]
-    fn add_assign_single_upserts_last_wins() {
+    fn upsert_single_last_wins() {
         let id = UsageId::new();
         let mut s = Summary::default();
         s.usages.insert(id, Some(usage(id, 1))); // a pre-existing live entry
-        s += usage(id, 2);
+        s.usages.upsert(usage(id, 2));
         // The upsert overwrote the pre-existing entry (per-id last-wins).
         assert_eq!(s.usages[&id].as_ref().unwrap().count, 2);
 
         let id2 = UsageId::new();
-        s += usage(id2, 5);
+        s.usages.upsert(usage(id2, 5));
         // And it creates the entry for a new id.
         assert_eq!(s.usages[&id2].as_ref().unwrap().count, 5);
         assert_eq!(s.usages.len(), 2);
     }
 
     #[test]
-    fn add_assign_vec_upserts_each() {
+    fn upsert_all_upserts_each() {
         let id1 = UsageId::new();
         let id2 = UsageId::new();
         let mut s = Summary::default();
-        s += vec![usage(id1, 1), usage(id2, 2)];
+        s.usages.upsert_all(vec![usage(id1, 1), usage(id2, 2)]);
         assert_eq!(s.usages[&id1].as_ref().unwrap().count, 1);
         assert_eq!(s.usages[&id2].as_ref().unwrap().count, 2);
         assert_eq!(s.usages.len(), 2);
     }
 
     #[test]
-    fn sub_assign_inserts_tombstone() {
+    fn tombstone_inserts_tombstone() {
         let id = UsageId::new();
         let mut s = Summary::default();
-        s -= usage(id, 1);
+        s.usages.tombstone(usage(id, 1));
         // The id is present, but only as a `None` tombstone (no entity data).
         assert_eq!(s.usages.len(), 1);
         assert_eq!(s.usages[&id], None);
@@ -421,8 +385,8 @@ mod tests {
     fn upsert_then_delete_leaves_tombstone() {
         let id = UsageId::new();
         let mut s = Summary::default();
-        s += usage(id, 1);
-        s -= usage(id, 1);
+        s.usages.upsert(usage(id, 1));
+        s.usages.tombstone(usage(id, 1));
         assert_eq!(s.usages.len(), 1);
         assert_eq!(s.usages[&id], None);
     }
@@ -431,21 +395,21 @@ mod tests {
     fn delete_then_upsert_leaves_live() {
         let id = UsageId::new();
         let mut s = Summary::default();
-        s -= usage(id, 1);
-        s += usage(id, 2);
+        s.usages.tombstone(usage(id, 1));
+        s.usages.upsert(usage(id, 2));
         assert_eq!(s.usages.len(), 1);
         assert_eq!(s.usages[&id].as_ref().unwrap().count, 2);
     }
 
-    // --- `+=` / `-=` for a single entity and entity vectors (idx-keyed kind) ---
+    // --- `upsert` / `upsert_all` / `tombstone` (idx-keyed kind) ---
 
     #[test]
-    fn detail_add_assign_single_upserts_last_wins() {
+    fn detail_upsert_single_last_wins() {
         let d = detail(1);
         let key = d.idx();
         let mut s = Summary::default();
         s.attachments.insert(key.clone(), Some(detail(1)));
-        s += d;
+        s.attachments.upsert(d);
         // Upserted under its `idx` wire key, overwriting the pre-existing entry.
         assert_eq!(
             s.attachments[&key].as_ref().unwrap().a.part_id,
@@ -454,30 +418,30 @@ mod tests {
 
         let d2 = detail(2);
         let key2 = d2.idx();
-        s += d2;
+        s.attachments.upsert(d2);
         assert_eq!(s.attachments.len(), 2);
         assert!(s.attachments.contains_key(&key2));
     }
 
     #[test]
-    fn detail_add_assign_vec_upserts_each() {
+    fn detail_upsert_all_upserts_each() {
         let d1 = detail(1);
         let d2 = detail(2);
         let key1 = d1.idx();
         let key2 = d2.idx();
         let mut s = Summary::default();
-        s += vec![d1, d2];
+        s.attachments.upsert_all(vec![d1, d2]);
         assert_eq!(s.attachments.len(), 2);
         assert!(s.attachments.contains_key(&key1));
         assert!(s.attachments.contains_key(&key2));
     }
 
     #[test]
-    fn detail_sub_assign_inserts_tombstone() {
+    fn detail_tombstone_inserts_tombstone() {
         let d = detail(1);
         let key = d.idx();
         let mut s = Summary::default();
-        s -= d;
+        s.attachments.tombstone(d);
         assert_eq!(s.attachments.len(), 1);
         assert_eq!(s.attachments[&key], None);
     }
@@ -487,8 +451,8 @@ mod tests {
         let d = detail(1);
         let key = d.idx();
         let mut s = Summary::default();
-        s += d.clone();
-        s -= d;
+        s.attachments.upsert(d.clone());
+        s.attachments.tombstone(d);
         assert_eq!(s.attachments.len(), 1);
         assert_eq!(s.attachments[&key], None);
     }
@@ -498,16 +462,16 @@ mod tests {
         let d = detail(1);
         let key = d.idx();
         let mut s = Summary::default();
-        s -= d;
-        s += detail(1);
+        s.attachments.tombstone(d);
+        s.attachments.upsert(detail(1));
         assert_eq!(s.attachments.len(), 1);
         assert!(s.attachments[&key].is_some());
     }
 
-    // --- Live-entity accessors ---
+    // --- `live` ---
 
     #[test]
-    fn get_accessors_return_live_only_and_borrow() {
+    fn live_returns_live_only_and_borrows() {
         let live = UsageId::new();
         let gone = UsageId::new();
         let mut s = Summary::default();
@@ -519,12 +483,12 @@ mod tests {
         s.attachments.insert(live_key.clone(), Some(detail(1)));
         s.attachments.insert(gone_key.clone(), None); // tombstone
 
-        // Each accessor returns only the live entities, cloned into an owned `Vec`.
-        let u = s.get_usages();
+        // Each map returns only its live entities, cloned into an owned `Vec`.
+        let u = s.usages.live();
         assert_eq!(u.len(), 1);
         assert_eq!(u[0].id, live);
         assert_eq!(u[0].count, 1);
-        let a = s.get_attachments();
+        let a = s.attachments.live();
         assert_eq!(a.len(), 1);
         assert_eq!(a[0].idx(), live_key);
 

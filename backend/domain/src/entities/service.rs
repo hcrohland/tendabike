@@ -46,7 +46,7 @@ impl ServiceId {
         // client's merge drops its row (issue #462)
         service.usage.delete(store).await?;
         ServiceStore::delete(store, self).await?;
-        summary -= service;
+        summary.services.tombstone(service);
         Ok(summary)
     }
 }
@@ -76,6 +76,13 @@ pub struct Service {
     pub successor: Option<ServiceId>,
     // an optional ServicePlan it is fullfilling
     pub plans: Vec<ServicePlanId>,
+}
+
+impl IdKeyed for Service {
+    type Key = ServiceId;
+    fn key(&self) -> Self::Key {
+        self.id
+    }
 }
 
 impl Service {
@@ -176,11 +183,10 @@ impl Service {
     ) -> TbResult<Summary> {
         let usages = vec![self.calculate_usage(store).await?.update(store).await?];
         let services = vec![ServiceStore::update(store, self).await?];
-        Ok(Summary {
-            usages: usages.into_iter().map(|u| (u.id, Some(u))).collect(),
-            services: services.into_iter().map(|s| (s.id, Some(s))).collect(),
-            ..Default::default()
-        })
+        let mut summary = Summary::default();
+        summary.usages.upsert_all(usages);
+        summary.services.upsert_all(services);
+        Ok(summary)
     }
 
     pub async fn update(

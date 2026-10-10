@@ -72,6 +72,13 @@ pub struct ServicePlan {
     pub energy: Option<i32>,
 }
 
+impl IdKeyed for ServicePlan {
+    type Key = ServicePlanId;
+    fn key(&self) -> Self::Key {
+        self.id
+    }
+}
+
 impl ServicePlan {
     async fn checkuser(
         &self,

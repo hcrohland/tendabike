@@ -80,6 +80,13 @@ impl AttachmentDetail {
     }
 }
 
+impl IdKeyed for AttachmentDetail {
+    type Key = String;
+    fn key(&self) -> Self::Key {
+        self.idx()
+    }
+}
+
 impl Attachment {
     /// Create a new attachment
     ///
@@ -181,13 +188,11 @@ impl Attachment {
         // Store all usages.
         Usage::update_vec(&usages, store).await?;
 
-        // return all affected objects
-        Ok(Summary {
-            parts: [(part.id, Some(part))].into_iter().collect(),
-            attachments: [(attachment.idx(), Some(attachment))].into_iter().collect(),
-            usages: usages.into_iter().map(|u| (u.id, Some(u))).collect(),
-            ..Default::default()
-        })
+        let mut summary = Summary::default();
+        summary.parts.upsert(part);
+        summary.attachments.upsert(attachment);
+        summary.usages.upsert_all(usages);
+        Ok(summary)
     }
 
     /// deletes an attachment with its side-effects
@@ -216,11 +221,9 @@ impl Attachment {
         // the deleted attachment is reported as a None tombstone under its
         // idx key, so the client's merge drops its row (issue #462)
         let detail = att.add_details("", 0.into());
-        let mut summary = Summary {
-            usages: usages.into_iter().map(|u| (u.id, Some(u))).collect(),
-            ..Default::default()
-        };
-        summary -= detail;
+        let mut summary = Summary::default();
+        summary.usages.upsert_all(usages);
+        summary.attachments.tombstone(detail);
         Ok(summary)
     }
 
@@ -305,11 +308,10 @@ impl Attachment {
         let usages = Usage::get_vec(&usages, store).await? + &usage;
         // store all updated usages
         Usage::update_vec(&usages, store).await?;
-        Ok(Summary {
-            usages: usages.into_iter().map(|u| (u.id, Some(u))).collect(),
-            parts: parts.into_iter().map(|p| (p.id, Some(p))).collect(),
-            ..Default::default()
-        })
+        let mut summary = Summary::default();
+        summary.usages.upsert_all(usages);
+        summary.parts.upsert_all(parts);
+        Ok(summary)
     }
 
     async fn detach_assembly(
@@ -601,7 +603,7 @@ pub async fn dispose_assembly(
     }
 
     let mut res = Summary::default();
-    res += part_id.dispose(time, store).await?;
+    res.parts.upsert(part_id.dispose(time, store).await?);
     res += dispose_subparts(part_id, time, all, store).await?;
 
     Ok(res)
@@ -621,7 +623,8 @@ async fn dispose_subparts(
             debug!("-- detaching {}", attachment.part_id);
             res += attachment.detach(time, store).await?
         } else {
-            res += attachment.part_id.dispose(time, store).await?
+            res.parts
+                .upsert(attachment.part_id.dispose(time, store).await?)
         }
     }
     Ok(res)
@@ -635,10 +638,10 @@ pub async fn recover_assembly(
 ) -> Result<Summary, Error> {
     let mut res = Summary::default();
     if let Some(time) = part.part(user, store).await?.disposed_at {
-        res += part.restore(store).await?;
+        res.parts.upsert(part.restore(store).await?);
         if all {
             for attachment in subattachments(part, part, time, store).await? {
-                res += attachment.part_id.restore(store).await?;
+                res.parts.upsert(attachment.part_id.restore(store).await?);
             }
         }
         Ok(res)

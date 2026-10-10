@@ -477,7 +477,7 @@ pub async fn exec(
             // deleted as well, so report it as a tombstone too.
             let services = id.delete(session, store).await?;
             let mut summary = Summary::default();
-            summary += services;
+            summary.services.upsert_all(services);
             summary.plans.insert(id, None);
             Ok(WriteOutcome::Summary(summary))
         }
@@ -578,23 +578,22 @@ pub async fn exec(
 }
 
 /// A one-entry [`Summary`] upserting a single entity — the body of the three-line
-/// shape (`Summary::default()` + `+=` + `Ok`) that every bare-entity arm repeats.
-/// One helper per entity kind rather than one generic: the `Summary` `+=` impls
-/// are individual, not sealed behind a common bound a generic could name.
+/// shape (`Summary::default()` + `upsert` + `Ok`) that every bare-entity arm repeats.
+/// One helper per entity kind: each names the [`Summary`] field the entity upserts into.
 macro_rules! one_entry_summary {
-    ($name:ident, $entity:ty) => {
+    ($name:ident, $field:ident, $entity:ty) => {
         fn $name(entity: $entity) -> Summary {
             let mut summary = Summary::default();
-            summary += entity;
+            summary.$field.upsert(entity);
             summary
         }
     };
 }
 
-one_entry_summary!(one_part, Part);
-one_entry_summary!(one_part_note, PartNote);
-one_entry_summary!(one_service_plan, ServicePlan);
-one_entry_summary!(one_shop, Shop);
+one_entry_summary!(one_part, parts, Part);
+one_entry_summary!(one_part_note, part_notes, PartNote);
+one_entry_summary!(one_service_plan, plans, ServicePlan);
+one_entry_summary!(one_shop, shops, Shop);
 
 #[cfg(test)]
 mod tests {

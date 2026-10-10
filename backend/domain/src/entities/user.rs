@@ -36,14 +36,8 @@
 use anyhow::Context;
 use derive_more::{Display, From, Into};
 use serde_derive::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 use crate::*;
-
-/// Flatten an id-keyed `Summary` map to a `Vec` of live entities, dropping tombstones.
-fn live_values<K, V>(m: HashMap<K, Option<V>>) -> Vec<V> {
-    m.into_values().flatten().collect()
-}
 
 #[derive(
     Clone, Copy, Debug, Default, Hash, PartialEq, Eq, Serialize, Deserialize, From, Into, Display,
@@ -108,6 +102,13 @@ pub struct UserPublic {
     pub name: String,
     pub firstname: String,
     pub avatar: Option<String>,
+}
+
+impl IdKeyed for UserPublic {
+    type Key = UserId;
+    fn key(&self) -> Self::Key {
+        self.id
+    }
 }
 
 impl From<User> for UserPublic {
@@ -217,19 +218,17 @@ impl UserId {
         let activities = Activity::get_all(self, store).await?;
         let shops = Shop::get_all_for_user(self, store).await?;
         let users = Shop::get_users(&shops, self, store).await?;
-        let summary = {
+        let mut summary = {
             let parts = match shop {
                 None => Part::get_all(self, store).await?,
                 Some(shop) => shop.get_parts(*self, store).await?,
             };
             self.get_part_summary(parts, store).await?
         };
-        Ok(Summary {
-            activities: activities.into_iter().map(|a| (a.id, Some(a))).collect(),
-            shops: shops.into_iter().map(|s| (s.id, Some(s))).collect(),
-            users: users.into_iter().map(|u| (u.id, Some(u))).collect(),
-            ..summary
-        })
+        summary.activities.upsert_all(activities);
+        summary.shops.upsert_all(shops);
+        summary.users.upsert_all(users);
+        Ok(summary)
     }
 
     /// Returns a summary for the user self and the list of parts provided
@@ -275,18 +274,14 @@ impl UserId {
             plans.append(&mut splans);
             part_notes.append(&mut store.partnote_all_by_part(part.id).await?);
         }
-        Ok(Summary {
-            parts: parts.into_iter().map(|p| (p.id, Some(p))).collect(),
-            usages: usages.into_iter().map(|u| (u.id, Some(u))).collect(),
-            attachments: attachments
-                .into_iter()
-                .map(|a| (a.idx(), Some(a)))
-                .collect(),
-            services: services.into_iter().map(|s| (s.id, Some(s))).collect(),
-            part_notes: part_notes.into_iter().map(|n| (n.id, Some(n))).collect(),
-            plans: plans.into_iter().map(|p| (p.id, Some(p))).collect(),
-            ..Default::default()
-        })
+        let mut summary = Summary::default();
+        summary.parts.upsert_all(parts);
+        summary.usages.upsert_all(usages);
+        summary.attachments.upsert_all(attachments);
+        summary.services.upsert_all(services);
+        summary.part_notes.upsert_all(part_notes);
+        summary.plans.upsert_all(plans);
+        Ok(summary)
     }
 
     /// Deletes the user plus their activities, parts, attachments, services, serviceplans and usages
@@ -294,11 +289,11 @@ impl UserId {
     /// Crosses: activity, attachment, part, partnote, service, serviceplan, shop, usage, user.
     pub async fn delete(&self, store: &mut impl Store) -> TbResult<()> {
         let summary = self.get_summary(None, store).await?;
-        let services = live_values(summary.services);
-        let plans = live_values(summary.plans);
-        let parts = live_values(summary.parts);
-        let activities = live_values(summary.activities);
-        let usages = live_values(summary.usages);
+        let services = summary.services.live();
+        let plans = summary.plans.live();
+        let parts = summary.parts.live();
+        let activities = summary.activities.live();
+        let usages = summary.usages.live();
         let n = store.services_delete(&services).await?;
         debug!("deleted {n} services");
         let n = store.serviceplans_delete(&plans).await?;

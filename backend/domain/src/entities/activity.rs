@@ -131,6 +131,13 @@ pub struct Activity {
     pub external_id: Option<String>,
 }
 
+impl IdKeyed for Activity {
+    type Key = ActivityId;
+    fn key(&self) -> Self::Key {
+        self.id
+    }
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum Factor {
     Add = 1,
@@ -311,11 +318,10 @@ impl Activity {
             Factor::Sub => -self.usage(),
         };
 
-        let res = Attachment::register_activity(self.gear, self.start, usage, store).await?;
-        Ok(Summary {
-            activities: std::collections::HashMap::from([(self.id, Some(self))]),
-            ..res
-        })
+        let mut summary =
+            Attachment::register_activity(self.gear, self.start, usage, store).await?;
+        summary.activities.upsert(self);
+        Ok(summary)
     }
 
     /// Get all activities for a given user.
