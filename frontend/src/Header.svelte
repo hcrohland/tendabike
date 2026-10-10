@@ -37,11 +37,13 @@
 
   /// The stream pushes every completed executor message as a full `Summary`
   /// frame; the avatar spinner tracks the catch-up snapshot of the initial
-  /// load and of every reconnect.
+  /// load and of every reconnect. A failed first open surfaces through the
+  /// global banner (`handleError`) — the rejection must not be unhandled
+  /// (spec §7).
   let hook_promise = $state(
     startStream((p) => {
       hook_promise = p;
-    }),
+    }).catch(handleError),
   );
 
   onDestroy(() => stopStream());

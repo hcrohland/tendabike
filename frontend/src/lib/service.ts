@@ -53,9 +53,6 @@ export class Service {
 
   async delete() {
     await myfetch("/api/service/" + this.id, "DELETE").catch(handleError);
-    // optimistic local removal; the stream tombstone is idempotent
-    services.deleteItem(this.id);
-    usages.deleteItem(this.usage);
   }
 
   async repeat() {

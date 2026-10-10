@@ -216,18 +216,18 @@ describe("Service CRUD", () => {
     expect(services["S1"].name).toBe("Old Name");
   });
 
-  it("Service.delete removes the service and usage from the store", async () => {
+  it("Service.delete DELETEs /api/service/{id}; the tombstones arrive via the stream frame", async () => {
     services.updateMap([svc({ id: "S1", usage: "u1" })]);
     usages.updateMap([usage("u1")]);
-    fetchMock.mockResolvedValueOnce(resp(summaryWithService()));
+    fetchMock.mockResolvedValueOnce(resp(null, 204, true, "No Content"));
     const s = svc({ id: "S1", usage: "u1" });
     await s.delete();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/service/S1");
     expect(options.method).toBe("DELETE");
-    expect(services["S1"]).toBeUndefined();
-    expect(usages["u1"]).toBeUndefined();
+    expect(services["S1"]).toBeDefined();
+    expect(usages["u1"]).toBeDefined();
   });
 
   it("Service.repeat POSTs to /api/service/redo", async () => {

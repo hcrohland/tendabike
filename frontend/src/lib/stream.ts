@@ -20,6 +20,13 @@ const streamUrl = "/api/user/stream";
 /// the only way to let the 401 → login redirect fire.
 const maxFailedOpens = 5;
 
+/// The catch-up snapshot's bounded retry (spec §7: "retried on failure"):
+/// the first attempt plus two retries, spaced at the native `EventSource`
+/// reconnect cadence (~3s). Upserts keep flowing on the live stream in the
+/// meantime; deletions wait for the snapshot.
+const snapshotRetries = 2;
+const snapshotRetryDelay = 3000;
+
 let active: UserStream | undefined;
 
 /// Open the user stream and keep it open. Returns the promise of the first
@@ -87,9 +94,30 @@ class UserStream {
 
   /// The catch-up snapshot: the full summary the manual refresh uses, so a
   /// (re)connect reconciles anything the stream missed (stream first, then
-  /// the snapshot).
+  /// the snapshot). Retried on failure (spec §7) — upserts keep flowing on
+  /// the live stream meanwhile, deletions wait for it.
   private snapshot(): Promise<void> {
-    return refresh(getShop()?.id);
+    return this.snapshotAttempt(refresh(getShop()?.id), 0);
+  }
+
+  /// One bounded snapshot attempt: on failure, wait out the retry spacing
+  /// and try again, until the retry budget is spent (then the promise
+  /// rejects, which the avatar spinner's `#await` banner surfaces).
+  private snapshotAttempt(
+    promise: Promise<void>,
+    attempt: number,
+  ): Promise<void> {
+    return promise.catch((e: unknown) => {
+      if (this.stopped) throw e;
+      if (attempt >= snapshotRetries) throw e;
+      return new Promise<void>((resolve) =>
+        setTimeout(
+          () =>
+            resolve(this.snapshotAttempt(refresh(getShop()?.id), attempt + 1)),
+          snapshotRetryDelay,
+        ),
+      );
+    });
   }
 
   /// Liveness probe through `myfetch`, so `checkStatus` centralizes the

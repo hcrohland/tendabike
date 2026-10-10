@@ -1,16 +1,14 @@
 <script lang="ts">
-  import {
-    Listgroup,
-    ListgroupItem,
-    Fileupload,
-    Button,
-  } from "flowbite-svelte";
+  import { Fileupload, Button } from "flowbite-svelte";
   import { checkStatus, handleError } from "../lib/store";
   import Modal from "../Widgets/Modal.svelte";
   import * as m from "../../paraglide/messages";
 
   let files: FileList | undefined = $state();
-  let result: { good: string[]; bad: string[] } | undefined = $state();
+  /// The upload answers 204 (no body): the new activities ride the stream
+  /// frame, so the client keeps only a plain success state (failures go to
+  /// the global banner via `handleError`).
+  let success = $state(false);
 
   interface Props {
     open: boolean;
@@ -23,10 +21,13 @@
   function reset() {
     files = undefined;
     open = false;
-    result = undefined;
+    success = false;
   }
 
   async function sendFile() {
+    // The endpoint takes the raw CSV text (not a JSON body), so the handler
+    // uses a plain fetch with `checkStatus` (204 → `null`, 401 → redirect)
+    // instead of `myfetch`, which would JSON-encode the body.
     var body = files && (await files[0].text());
     return fetch("/api/activ/descend", {
       method: "POST",
@@ -34,13 +35,8 @@
       body,
     })
       .then(checkStatus)
-      .then((a) => {
-        // the new activities ride the stream frame; only the per-file
-        // report is needed from the response
-        result = {
-          good: a[1],
-          bad: a[2],
-        };
+      .then(() => {
+        success = true;
         files = undefined;
       })
       .catch(handleError);
@@ -48,27 +44,15 @@
 </script>
 
 <Modal bind:open title={m.garmin_upload_title()}>
-  {#if result}
-    {#if result.good.length > 0}
-      {m.garmin_sync_success({ count: result.good.length })}
-    {/if}
-    {#if result.bad.length > 0}
-      <br />
-      {m.garmin_sync_failed({ count: result.bad.length })}
-      <br />
-      <Listgroup>
-        {#each result.bad as r}
-          <ListgroupItem>{r}</ListgroupItem>
-        {/each}
-      </Listgroup>
-    {/if}
+  {#if success}
+    {m.garmin_sync_success()}
   {:else}
     <Fileupload bind:files accept="text/csv" title={m.garmin_upload_hint()} />
     <br />
   {/if}
   {#snippet footer()}
     <div class="flex justify-end w-full gap-2">
-      {#if !result}
+      {#if !success}
         <Button onclick={sendFile} color="dark" class="border" {disabled}>
           {m.action_synchronize()}
         </Button>

@@ -7,6 +7,7 @@
 
 #![allow(clippy::too_many_arguments)]
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Once};
 
 use axum::Router;
@@ -712,6 +713,9 @@ impl TxnSource for FakeSource {
 pub struct LiveConn {
     pub mem: MemStore,
     strava: Arc<Mutex<StravaState>>,
+    /// The stream tests' panic seam (spec §4.6): when armed, the next
+    /// Strava-queue read panics, killing the executor task.
+    panic_next: Arc<AtomicBool>,
 }
 
 /// The in-memory stand-in for the `strava_events` queue and the user's stored
@@ -1191,6 +1195,9 @@ impl StravaStore for LiveConn {
         Ok(())
     }
     async fn strava_event_get_next_for_user(&mut self, user: StravaId) -> TbResult<Option<Event>> {
+        if self.panic_next.swap(false, Ordering::SeqCst) {
+            panic!("test: forced executor panic (spec §4.6)");
+        }
         let st = self.strava.lock().expect("strava state");
         let mut next: Vec<&Event> = st
             .events
@@ -1281,14 +1288,15 @@ impl Txn for LiveConn {
 pub struct LiveSource {
     mem: Arc<Mutex<MemStore>>,
     strava: Arc<Mutex<StravaState>>,
+    panic_next: Arc<AtomicBool>,
 }
 
 impl LiveSource {
     pub async fn new() -> Self {
         // Seed through a sibling transaction and commit it, so the seeded
         // user is in the shared base state the siblings (the executor, the
-        // handlers, the assertions) see;  consumes the sibling,
-        // leaving  intact.
+        // handlers, the assertions) see; the seed consumes the sibling,
+        // leaving `base` intact.
         let base = MemStore::new();
         {
             let mut seed = base.begin();
@@ -1300,7 +1308,15 @@ impl LiveSource {
         Self {
             mem: Arc::new(Mutex::new(base)),
             strava: Arc::new(Mutex::new(StravaState::default())),
+            panic_next: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Arm the executor's next Strava-queue read to panic (the stream
+    /// tests' seam for the spec §4.6 panic teardown: a panicked executor
+    /// must record `Dead`, and the next write must respawn it).
+    pub fn arm_panic(&self) {
+        self.panic_next.store(true, Ordering::SeqCst);
     }
 
     /// The shared in-memory database, for post-write assertions.
@@ -1323,6 +1339,7 @@ impl TxnSource for LiveSource {
         Ok(LiveConn {
             mem,
             strava: Arc::clone(&self.strava),
+            panic_next: Arc::clone(&self.panic_next),
         })
     }
 }

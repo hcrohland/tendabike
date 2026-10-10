@@ -98,7 +98,7 @@ describe("Shop CRUD", () => {
   });
 
   describe("delete", () => {
-    it("DELETEs /api/shop/{id} and removes from the shops map", async () => {
+    it("DELETEs /api/shop/{id}; the tombstone arrives via the stream frame", async () => {
       const s = new Shop(shopData({ id: 10 }));
       shops.setMap([shopData({ id: 10 })]);
       fetchMock.mockResolvedValue(resp(null, 204, true, "No Content"));
@@ -106,7 +106,7 @@ describe("Shop CRUD", () => {
       const [url, option] = fetchMock.mock.calls[0];
       expect(url).toBe("/api/shop/10");
       expect(option.method).toBe("DELETE");
-      expect(shops[10]).toBeUndefined();
+      expect(shops[10]).toBeDefined();
     });
   });
 

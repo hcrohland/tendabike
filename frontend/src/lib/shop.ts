@@ -42,9 +42,7 @@ export class Shop {
   }
 
   async delete() {
-    return await myfetch("/api/shop/" + this.id, "DELETE")
-      .then(() => shops.deleteItem(this.id)) // optimistic; the stream tombstone is idempotent
-      .catch(handleError);
+    return await myfetch("/api/shop/" + this.id, "DELETE").catch(handleError);
   }
 
   static async registerPart(part: Part, shopid: number) {

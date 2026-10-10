@@ -61,9 +61,9 @@ const BROADCAST_CAPACITY: usize = 64;
 
 /// The executor task's settled fate, shared with its streams (a `JoinHandle`
 /// is not `Clone`, so it cannot be handed to both the registry and the stream
-/// tasks). `Running` is the initial value; the task records `Reaped` or `Dead`
-/// on exit (a panic leaves it `Running` — the frame channel has closed by
-/// then, which is the disambiguating signal).
+/// tasks). `Running` is the initial value; the task records `Reaped` on a
+/// clean idle exit and `Dead` on a lifecycle error, and a watchdog records
+/// `Dead` if the task panics (a panic skips the task's own record).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExecutorStatus {
     /// The loop is running (or has not yet recorded its exit).
@@ -80,6 +80,7 @@ pub enum ExecutorStatus {
 /// user's API-write channel (the write handlers enqueue here, spec §6.2),
 /// the SSE frame sink the stream tasks subscribe to, and the consumed-
 /// Strava-event channel the admin sync awaits (spec §6.4).
+#[derive(Clone)]
 struct Executor {
     status: watch::Receiver<ExecutorStatus>,
     /// The write handlers' door into this user's loop (spec §6.2): enqueue
@@ -120,7 +121,7 @@ impl Registry {
 
     /// Register a stream for `user_id` (spawning the executor if it is not
     /// running) and return a subscription to its frame channel plus a handle
-    /// to its fate, so the stream can tell a clean reap from a panic.
+    /// to its fate, so the stream can tell a clean reap from a dead executor.
     pub async fn subscribe<S>(
         &self,
         source: &S,
@@ -133,10 +134,10 @@ impl Registry {
         S: TxnSource + Clone + 'static,
         S::Conn: StravaStore,
     {
-        let mut map = self.executors.lock().await;
-        let (_writer, frames, _events, status) =
-            Self::ensure_running(&mut map, source, user_id, self.idle_timeout).await?;
-        Ok((frames.subscribe(), status))
+        self.exec_field(source, user_id, |exec| {
+            (exec.frames.subscribe(), exec.status.clone())
+        })
+        .await
     }
 
     /// Wake the executor for `user_id` (spawning it if it is not running) so a
@@ -148,25 +149,23 @@ impl Registry {
         S: TxnSource + Clone + 'static,
         S::Conn: StravaStore,
     {
-        let mut map = self.executors.lock().await;
-        let (_writer, _frames, _events, _status) =
-            Self::ensure_running(&mut map, source, user_id, self.idle_timeout).await?;
-        Ok(())
+        self.exec_field(source, user_id, |_| ()).await
     }
     /// Enqueue one [`ApiWrite`] on the user's executor and await its outcome
     /// (spec §6.2): spawn-or-join the executor, send the request on the
     /// user's API-write channel, and await the oneshot (unbounded — through
     /// a 15-minute rate-limit backoff the write may wait long, and that is
-    /// the spec'd behavior).
+    /// the spec'd behavior). `exec_field` drops the registry lock on return,
+    /// so the unbounded reply await runs without it.
     pub async fn write<S>(&self, source: &S, user_id: UserId, write: ApiWrite) -> TbResult<Summary>
     where
         S: TxnSource + Clone + 'static,
         S::Conn: StravaStore,
     {
         let (request, reply) = ApiWriteRequest::new(write);
-        let mut map = self.executors.lock().await;
-        let (writer, _frames, _events, _status) =
-            Self::ensure_running(&mut map, source, user_id, self.idle_timeout).await?;
+        let writer = self
+            .exec_field(source, user_id, |exec| exec.writer.clone())
+            .await?;
         if writer.send(request).is_err() {
             // The executor died between the liveness check and the send
             // (spec §4.6): the write is lost, the client retries.
@@ -174,8 +173,6 @@ impl Registry {
                 "the executor for user {user_id} is gone"
             )));
         }
-        // Do not hold the registry lock across the (unbounded) await.
-        drop(map);
         reply.await.map_err(|_| {
             Error::AnyFailure(anyhow::anyhow!(
                 "the executor for user {user_id} dropped the write"
@@ -196,10 +193,8 @@ impl Registry {
         S: TxnSource + Clone + 'static,
         S::Conn: StravaStore,
     {
-        let mut map = self.executors.lock().await;
-        let (_writer, _frames, events, _status) =
-            Self::ensure_running(&mut map, source, user_id, self.idle_timeout).await?;
-        Ok(events.subscribe())
+        self.exec_field(source, user_id, |exec| exec.events.subscribe())
+            .await
     }
 
     /// Run one admin sync for `user_id` (spec §6.4): subscribe to the
@@ -290,8 +285,23 @@ impl Registry {
         map.get(&user_id).map(|exec| *exec.status.borrow())
     }
 
-    /// Return the user's live executor's frame sink and fate channel, spawning
-    /// it if it is absent or has settled (reaped/dead): read the stored
+    /// Lock the registry, ensure the user's executor is live (spawning it if
+    /// it is absent or settled), and pull one field from it: the shared shape
+    /// of `subscribe`, `wake`, `events`, and `write`. The lock is dropped
+    /// when this returns, before the caller's next await.
+    async fn exec_field<S, F, R>(&self, source: &S, user_id: UserId, f: F) -> TbResult<R>
+    where
+        S: TxnSource + Clone + 'static,
+        S::Conn: StravaStore,
+        F: FnOnce(&Executor) -> R,
+    {
+        let mut map = self.executors.lock().await;
+        let exec = Self::ensure_running(&mut map, source, user_id, self.idle_timeout).await?;
+        Ok(f(&exec))
+    }
+
+    /// Return the user's live executor, spawning it if it is absent or has
+    /// settled (reaped/dead): read the stored
     /// [`StravaUser`](tb_strava::StravaUser) to build the executor's
     /// `StravaSession` (spec §4.4), open a fresh API-write channel and frame
     /// channel, and spawn the `tb_exec` loop.
@@ -300,12 +310,7 @@ impl Registry {
         source: &S,
         user_id: UserId,
         idle_timeout: Duration,
-    ) -> TbResult<(
-        ApiWriteSender,
-        broadcast::Sender<Summary>,
-        broadcast::Sender<StravaEvent>,
-        watch::Receiver<ExecutorStatus>,
-    )>
+    ) -> TbResult<Executor>
     where
         S: TxnSource + Clone + 'static,
         S::Conn: StravaStore,
@@ -313,18 +318,14 @@ impl Registry {
         if let Some(exec) = map.get(&user_id)
             && *exec.status.borrow() == ExecutorStatus::Running
         {
-            return Ok((
-                exec.writer.clone(),
-                exec.frames.clone(),
-                exec.events.clone(),
-                exec.status.clone(),
-            ));
+            return Ok(exec.clone());
         }
 
-        // Build the executor's `StravaSession` from the stored `StravaUser`
-        // (the refresh token), the same read `create_from_id` does minus the
-        // admin gate: an empty access token with a past expiry, so the first
-        // Strava request forces a refresh. A read-only transaction.
+        // The session read runs under the registry lock on purpose (the
+        // single-node trade-off is deliberate): it is one row
+        // (`stravauser_get_by_tbid`), and moving it out of the lock would pay
+        // a database read on *every* demand — even with a live executor — to
+        // save a sub-millisecond stall on other users' spawn paths.
         let mut store = source.begin().await?;
         let session = RequestSession::for_user(user_id, &mut store).await?;
         store.commit().await?;
@@ -343,6 +344,7 @@ impl Registry {
         let owned_source = source.clone();
         let frames_for_run = frames.clone();
         let events_for_run = events.clone();
+        let watchdog_status = status_tx.clone();
         let join = tokio::spawn(async move {
             let result = run(
                 owned_source,
@@ -359,19 +361,25 @@ impl Registry {
             });
             result
         });
-        // The fate is observed through `status_rx`, not the handle: drop it
-        // explicitly (a `JoinHandle` that is neither awaited nor dropped would
-        // be a leaked task the registry never reaps).
-        std::mem::drop(join);
+        // A panicked task skips the `status_tx.send` above; the watchdog
+        // records the panic as `Dead` (like any other failure) so
+        // `ensure_running` respawns instead of handing out a dead executor
+        // forever (spec §4.4: the next SSE connect or API write respawns
+        // it). The watchdog lives exactly as long as the executor task.
+        tokio::spawn(async move {
+            if join.await.is_err() {
+                let _ = watchdog_status.send(ExecutorStatus::Dead);
+            }
+        });
 
         let exec = Executor {
-            status: status_rx.clone(),
-            writer: writer.clone(),
-            frames: frames.clone(),
-            events: events.clone(),
+            status: status_rx,
+            writer,
+            frames,
+            events,
         };
-        map.insert(user_id, exec);
-        Ok((writer, frames, events, status_rx))
+        map.insert(user_id, exec.clone());
+        Ok(exec)
     }
 }
 
@@ -451,8 +459,9 @@ where
 fn settled_event(status: ExecutorStatus) -> Option<Result<Event, Infallible>> {
     match status {
         ExecutorStatus::Running => {
-            // The channel closed but the fate is not yet recorded (a panic,
-            // which never records): treat as dead — close the stream.
+            // The channel closed before its fate was recorded (the narrow
+            // window between the task dropping its frame sender and the
+            // watchdog writing `Dead`): treat as dead — close the stream.
             None
         }
         ExecutorStatus::Reaped => Some(Ok(heartbeat_event())),

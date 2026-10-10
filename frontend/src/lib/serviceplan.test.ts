@@ -250,7 +250,7 @@ describe("ServicePlan CRUD", () => {
     expect(plans["P1"].name).toBe("Old");
   });
 
-  it("ServicePlan.delete removes the plan locally; the rest arrives via the stream frame", async () => {
+  it("ServicePlan.delete DELETEs /api/plan/{id}; the tombstone arrives via the stream frame", async () => {
     plans.updateMap([plan({ id: "P1" })]);
     services.updateMap([
       new Service({
@@ -271,7 +271,7 @@ describe("ServicePlan CRUD", () => {
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/plan/P1");
     expect(options.method).toBe("DELETE");
-    expect(plans["P1"]).toBeUndefined();
+    expect(plans["P1"]).toBeDefined();
     expect(services["S1"]).toBeDefined();
   });
 });

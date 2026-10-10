@@ -31,7 +31,7 @@ use crate::{
     error::{ApiResult, AppError},
 };
 use tb_domain::{
-    ApiWrite, Part, Session, Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails,
+    ApiWrite, Error, Part, Session, Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails,
     SubscriptionId, UserPublic,
 };
 use tb_strava::{StravaSession, StravaStore};
@@ -290,13 +290,11 @@ async fn create_subscription<S>(
     user: RequestSession,
     State(state): State<AppState<S>>,
     Json(NewSubscriptionRequest { shop_id, message }): Json<NewSubscriptionRequest>,
-) -> Result<StatusCode, AppError>
+) -> Result<(StatusCode, Json<ShopSubscription>), AppError>
 where
     S: TxnSource + Clone + 'static,
     S::Conn: StravaStore,
 {
-    // A subscription is not part of a `Summary`, so this create is a plain
-    // 204 mutation (spec §6.2).
     state
         .registry
         .write(
@@ -308,7 +306,19 @@ where
             },
         )
         .await?;
-    Ok(StatusCode::NO_CONTENT)
+
+    // A `ShopSubscription` is in no `Summary`, so the 201 body reads it back
+    // after the write succeeds (spec §6.2, the onboarding pattern): the
+    // create guard allows at most one subscription per (user, shop), so the
+    // one for this shop is the one we just created.
+    let mut store = state.source.begin().await?;
+    let shop = ShopId::from(shop_id);
+    let subscription = ShopSubscription::get_for_user(user.user_id(), &mut store)
+        .await?
+        .into_iter()
+        .find(|s| s.shop_id == shop)
+        .ok_or_else(|| Error::NotFound("subscription not found after create".to_string()))?;
+    Ok((StatusCode::CREATED, Json(subscription)))
 }
 
 async fn list_my_subscriptions<S>(

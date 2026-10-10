@@ -107,8 +107,6 @@ export class ServicePlan extends Limits {
 
   async delete() {
     await myfetch("/api/plan/" + this.id, "DELETE").catch(handleError);
-    // optimistic local removal; the stream tombstone is idempotent
-    plans.deleteItem(this.id);
   }
 
   valid() {

@@ -314,8 +314,7 @@
   "act_heading_attached": "Alli Aktivitäte für {name}, iibaut in {part} sit {date}",
   "act_unknown_part": "unbekannts Teil",
   "garmin_upload_title": "Garmin-Aktivitätsdatei uilade",
-  "garmin_sync_success": "{count} Aktivitäte synchronisiert.",
-  "garmin_sync_failed": "Die {count} Aktivitäte hend nöd zuegordnet werde chöne:",
+  "garmin_sync_success": "Aktivitäte synchronisiert.",
   "garmin_upload_hint": "Lad e vo Garmin Connect exportierti CSV-Datei mit Aktivitäte ui. \nD'Zuordnig passiert anhand vo dr Startziit. \nGits kei Übereinstimmig, wird d'Aktivität übersprunge.\nDu chasch mehrmals uilade.",
   "stats_your_stats_for": "Dini Statistik für",
   "stats_vs": "vs",
@@ -348,6 +347,6 @@
   "sync_create_header_all": "Sync für alli Benutzer erstelle",
   "sync_start_label": "Start",
   "sync_migration_label": "Migration",
-  "sync_processed": "{count} verarbeitet ...",
+  "sync_processed": "Verarbeite ...",
   "sync_process_queue": "Warteschlange abarbeite"
 }

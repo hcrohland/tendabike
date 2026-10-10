@@ -73,6 +73,47 @@ describe("stream", () => {
     expect(parts[1]).toBeDefined();
   });
 
+  it("retries the catch-up snapshot on failure, at the native reconnect cadence", async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock
+        .mockRejectedValueOnce(new Error("network"))
+        .mockResolvedValueOnce(resp(summaryContent()));
+      const started = startStream(() => {}, factory);
+      theStream().fireOpen();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      // No retry before the ~3s spacing (the native EventSource cadence).
+      await vi.advanceTimersByTimeAsync(2999);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      await started;
+      expect(parts[1]).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a snapshot that keeps failing rejects after the bounded retries", async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockRejectedValue(new Error("network"));
+      const started = startStream(() => {}, factory);
+      theStream().fireOpen();
+      // Expect the rejection up front, so the promise is handled before the
+      // advances run it out (a late-attached handler is an unhandled
+      // rejection to Node, which fails the suite).
+      const expectation = expect(started).rejects.toThrow();
+      await vi.advanceTimersByTimeAsync(3000);
+      await vi.advanceTimersByTimeAsync(3000);
+      // First attempt + two retries, then the promise gives up.
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      await expectation;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("passes each snapshot to onSnapshot, including the first", async () => {
     fetchMock.mockResolvedValue(resp(summaryContent()));
     let seen: Promise<void> | undefined;
@@ -133,8 +174,9 @@ describe("stream", () => {
     for (let i = 0; i < 4; i++) theStream().fireError();
     theStream().fireOpen();
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    // The open reset the counter, so four more errors stay under the
+    // probe threshold (the probe fires synchronously on the 5th).
     for (let i = 0; i < 4; i++) theStream().fireError();
-    await new Promise((r) => setTimeout(r, 10));
     expect(fetchMock).not.toHaveBeenCalledWith("/api/user", undefined);
   });
 

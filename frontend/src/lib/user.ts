@@ -16,10 +16,10 @@ export async function initData() {
   let u = await myfetch("/api/user");
   if (u) {
     setUser(u);
-  } else {
-    return;
   }
-  return refresh();
+  // No full summary here (spec §7): the stream's open snapshot is the
+  // single hydration — a late full `setSummary` would clobber frames the
+  // stream has already merged.
 }
 
 export async function refresh(shop?: number) {

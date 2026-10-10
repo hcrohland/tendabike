@@ -56,7 +56,7 @@ describe("initData", () => {
     vi.stubGlobal("fetch", fetchMock);
   });
 
-  it("sets user and calls refresh when user is returned", async () => {
+  it("sets the user; the stream's open snapshot is the single hydration", async () => {
     const userData = {
       id: 1,
       firstname: "Max",
@@ -65,16 +65,14 @@ describe("initData", () => {
       is_admin: false,
       onboarding_status: "completed",
     };
-    fetchMock
-      .mockResolvedValueOnce(resp(userData))
-      .mockResolvedValueOnce(resp(summaryContent()));
+    fetchMock.mockResolvedValueOnce(resp(userData));
     await initData();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe("/api/user");
-    expect(fetchMock.mock.calls[1][0]).toBe("/api/user/summary");
     expect(getUser()).toEqual(userData);
   });
 
-  it("returns early without refresh when user is null", async () => {
+  it("does not set a user when the fetch returns null", async () => {
     fetchMock.mockResolvedValueOnce(resp(null, 204, true, "No Content"));
     await initData();
     expect(fetchMock).toHaveBeenCalledTimes(1);

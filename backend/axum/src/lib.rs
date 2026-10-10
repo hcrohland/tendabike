@@ -157,7 +157,7 @@ mod tests {
 
     use tb_domain::{PartStore, Summary, UserId};
 
-    use crate::stream::Registry;
+    use crate::stream::{ExecutorStatus, Registry};
     use crate::test_support::{
         LiveSource, admin_cookie, read_sse_frames, run, run_json, run_sse, test_app, test_app_live,
         user_cookie,
@@ -335,8 +335,9 @@ mod tests {
         let cookie = user_cookie(&store).await;
         let (status, _headers, mut body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
         assert_eq!(status, StatusCode::OK);
-        // Give the executor a moment to spawn and register this stream.
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        // `run_sse` returns only after the endpoint registered this stream
+        // on the executor's frame channel (the `subscribe` ran inside the
+        // handler), so the frame below cannot be missed — no sleep needed.
         registry
             .send_frame(UserId::from(1), Summary::default())
             .await;
@@ -703,6 +704,41 @@ mod tests {
         );
     }
 
+    /// `POST /api/shop/subscriptions` runs on the executor and answers `201`
+    /// with the created subscription, read back after the write (a
+    /// `ShopSubscription` is in no `Summary`, spec §6.2).
+    #[tokio::test]
+    async fn create_subscription_returns_201_and_entity() {
+        let (app, store, _registry, _live) = live_app().await;
+        let cookie = user_cookie(&store).await;
+        // A shop to subscribe to (the create guard checks the shop exists).
+        let (status, _headers, body) = run_json(
+            app.clone(),
+            Method::POST,
+            "/api/shop",
+            Some(&cookie),
+            r#"{"name":"Bike Barn","description":null,"auto_approve":false}"#,
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        let shop_id = serde_json::from_str::<serde_json::Value>(&String::from_utf8_lossy(&body))
+            .unwrap()["id"]
+            .as_i64()
+            .unwrap();
+        let (status, _headers, body) = run_json(
+            app,
+            Method::POST,
+            "/api/shop/subscriptions",
+            Some(&cookie),
+            &format!("{{\"shop_id\":{shop_id},\"message\":\"hi\"}}"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        let text = String::from_utf8_lossy(&body);
+        assert!(text.contains("\"status\":\"pending\""), "body: {text}");
+        assert!(text.contains("\"message\":\"hi\""), "body: {text}");
+    }
+
     /// `GET /strava/sync/{id}` (admin) enqueues a sync, wakes the target
     /// user's executor, and answers `204` only after the executor consumed
     /// the event (the queue is empty by then).
@@ -760,9 +796,9 @@ mod tests {
         let (status, _headers, _body) =
             run(app.clone(), Method::GET, "/strava/hooks", Some(&cookie)).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
-        // Let the executor spawn and register this stream.
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        // (b) The write rides the user's executor.
+        // (b) The write rides the user's executor (its oneshot resolves only
+        // after the executor processed it and pushed the frame, so the frame
+        // is already on the channel by the time the 201 is back — no sleep).
         let (status, _headers, _body) = run_json(
             app,
             Method::POST,
@@ -791,8 +827,6 @@ mod tests {
         let (status, _headers, mut body) =
             run_sse(app.clone(), "/api/user/stream", Some(&cookie)).await;
         assert_eq!(status, StatusCode::OK);
-        // Let the executor spawn and register this stream.
-        tokio::time::sleep(Duration::from_millis(100)).await;
         let (status, _headers, _body) = run_json(
             app,
             Method::POST,
@@ -807,5 +841,68 @@ mod tests {
             frames.iter().any(|f| f.contains("data:")),
             "expected a data frame, got: {frames:?}"
         );
+    }
+
+    /// Poll the registry's executor status until it is `expected` (bounded by
+    /// a deadline, so a missing flip fails the test instead of hanging).
+    async fn wait_for_status(registry: &Arc<Registry>, user: UserId, expected: ExecutorStatus) {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            if registry.status(user).await == Some(expected) {
+                return;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "the executor status never reached {expected:?}"
+            );
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
+    /// A panicked executor task records `Dead` (spec §4.4/§4.6): the next
+    /// write respawns a fresh executor, and the stream reopens on a new
+    /// connection.
+    #[tokio::test]
+    async fn executor_panic_records_dead_and_respawns() {
+        let (app, store, registry, live) = live_app().await;
+        let cookie = user_cookie(&store).await;
+        let user = UserId::from(1);
+        // Open a stream: the executor spawns and stays running while the
+        // stream is attached (a stream-less executor reaps right after its
+        // write, so the stream is what pins it to `Running` here).
+        let (status, _headers, _body) =
+            run_sse(app.clone(), "/api/user/stream", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::OK);
+        wait_for_status(&registry, user, ExecutorStatus::Running).await;
+        // Force a panic on the executor's next Strava-queue read, then
+        // interrupt its idle wait with a write: the write is processed, and
+        // the probe after it panics the task.
+        live.arm_panic();
+        let (status, _headers, _body) = run_json(
+            app.clone(),
+            Method::POST,
+            "/api/part",
+            Some(&cookie),
+            &part_body("Chain"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        // The watchdog records the panic as `Dead` (not a stuck `Running`).
+        wait_for_status(&registry, user, ExecutorStatus::Dead).await;
+        // The next write respawns a fresh executor and succeeds.
+        let (status, _headers, _body) = run_json(
+            app.clone(),
+            Method::POST,
+            "/api/part",
+            Some(&cookie),
+            &part_body("Derailleur"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        // And the stream reopens (respawning the executor for the
+        // connection, which pins it to `Running` again).
+        let (status, _headers, _body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::OK);
+        wait_for_status(&registry, user, ExecutorStatus::Running).await;
     }
 }

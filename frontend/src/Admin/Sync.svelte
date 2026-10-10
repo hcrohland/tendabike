@@ -6,8 +6,7 @@
 
   let { user, refresh }: { user: User; refresh: () => void } = $props();
 
-  let promise = $state<Promise<void>>(),
-    count = $state(0);
+  let promise = $state<Promise<void>>();
 
   const sync = (id: number) => {
     promise = getdata(id);
@@ -22,7 +21,7 @@
 
 <Button onclick={() => sync(user.id)}>
   {#await promise}
-    {m.sync_processed({ count })}
+    {m.sync_processed()}
   {:then}
     {m.sync_process_queue()}
   {/await}
