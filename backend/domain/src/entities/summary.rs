@@ -7,7 +7,7 @@
 //! object with stringified id keys and `null` for tombstones.
 
 use serde::Serialize;
-use serde::ser::{SerializeMap, SerializeStruct, Serializer};
+use serde::ser::{SerializeMap, Serializer};
 use std::{
     cmp::PartialEq,
     collections::hash_map::{self, HashMap},
@@ -34,8 +34,31 @@ pub trait IdKeyed {
 /// all nine [`Summary`] kinds. A `Some(entity)` value is a live entity; a `None` value is a
 /// tombstone marking the entity as deleted (ADR-0005, executable spec #446 §2; "tombstone" in
 /// `CONTEXT.md`).
-#[derive(Clone, Debug)]
-pub struct IdKeyedMap<K, E>(HashMap<K, Option<E>>);
+#[derive(Clone, Debug, Serialize)]
+#[serde(bound(serialize = "K: Display, E: Serialize"))]
+pub struct IdKeyedMap<K, E>(
+    #[serde(serialize_with = "serialize_id_keyed_map")] HashMap<K, Option<E>>,
+);
+
+/// Serializes the id-keyed map as a JSON object with stringified keys and `null` for `None`
+/// (tombstone) values, so every collection shares one uniform wire shape (a naive derive would
+/// give pair-arrays for the integer-keyed collections and objects for the string/UUID-keyed
+/// ones).
+fn serialize_id_keyed_map<K, E, S>(
+    map: &HashMap<K, Option<E>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    K: Display,
+    E: Serialize,
+    S: Serializer,
+{
+    let mut ser_map = serializer.serialize_map(Some(map.len()))?;
+    for (k, v) in map {
+        ser_map.serialize_entry(&k.to_string(), v)?;
+    }
+    ser_map.end()
+}
 
 impl<K, E> PartialEq for IdKeyedMap<K, E>
 where
@@ -108,24 +131,6 @@ where
     }
 }
 
-/// Serializes the id-keyed map as a JSON object with stringified keys and `null` for `None`
-/// (tombstone) values, so every collection shares one uniform wire shape (a naive derive would
-/// give pair-arrays for the integer-keyed collections and objects for the string/UUID-keyed
-/// ones).
-impl<K, E> Serialize for IdKeyedMap<K, E>
-where
-    K: Display,
-    E: Serialize,
-{
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut map = serializer.serialize_map(Some(self.0.len()))?;
-        for (k, v) in &self.0 {
-            map.serialize_entry(&k.to_string(), v)?;
-        }
-        map.end()
-    }
-}
-
 impl<K, E> IdKeyedMap<K, E>
 where
     K: Eq + Hash,
@@ -170,8 +175,10 @@ where
 /// The id-keyed map summary: nine [`IdKeyedMap`]s, one per entity kind, keyed by the entity's
 /// id (its `idx` wire key for [`AttachmentDetail`]). A `Some(entity)` value is a live entity; a
 /// `None` value is a tombstone marking the entity as deleted. It is the single payload type the
-/// wire carries (ADR-0005, executable spec #446 §2).
-#[derive(Clone, Debug, Default, PartialEq)]
+/// wire carries (ADR-0005, executable spec #446 §2). The wire shape: a uniform JSON object with
+/// stringified id keys and `null` for tombstones — `{"parts": {"12": null, "13": {...}},
+/// "services": {"<uuid>": {...}}}`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
 pub struct Summary {
     pub activities: IdKeyedMap<ActivityId, Activity>,
     pub parts: IdKeyedMap<PartId, Part>,
@@ -182,24 +189,6 @@ pub struct Summary {
     pub part_notes: IdKeyedMap<PartNoteId, PartNote>,
     pub shops: IdKeyedMap<ShopId, Shop>,
     pub users: IdKeyedMap<UserId, UserPublic>,
-}
-
-/// The wire shape: a uniform JSON object with stringified id keys and `null` for tombstones —
-/// `{"parts": {"12": null, "13": {...}}, "services": {"<uuid>": {...}}}`.
-impl Serialize for Summary {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut s = serializer.serialize_struct("Summary", 9)?;
-        s.serialize_field("activities", &self.activities)?;
-        s.serialize_field("parts", &self.parts)?;
-        s.serialize_field("attachments", &self.attachments)?;
-        s.serialize_field("usages", &self.usages)?;
-        s.serialize_field("services", &self.services)?;
-        s.serialize_field("plans", &self.plans)?;
-        s.serialize_field("part_notes", &self.part_notes)?;
-        s.serialize_field("shops", &self.shops)?;
-        s.serialize_field("users", &self.users)?;
-        s.end()
-    }
 }
 
 // --- Merging ---
