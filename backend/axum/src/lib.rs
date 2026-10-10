@@ -738,6 +738,50 @@ mod tests {
         assert_eq!(status, StatusCode::NOT_FOUND);
     }
 
+    /// The consolidated cutover scenario (spec §8, §9): in one scenario, (a)
+    /// `GET /api/user/stream` opens with a valid session, (b) a write
+    /// (`POST /api/part`) rides the user's executor and answers `201`, (c) the
+    /// created part arrives as a `data:` frame on that same open stream, and
+    /// (d) the old poll endpoint `GET /strava/hooks` answers `404`.
+    #[tokio::test]
+    async fn cutover_end_to_end_write_rides_stream_and_hooks_gone() {
+        let (app, store, _registry, _live) = live_app().await;
+        let cookie = user_cookie(&store).await;
+        // (a) The stream opens with a valid session.
+        let (status, headers, mut body) =
+            run_sse(app.clone(), "/api/user/stream", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            headers[header::CONTENT_TYPE],
+            "text/event-stream",
+            "the stream must be an event stream"
+        );
+        // (d) The old poll endpoint is gone.
+        let (status, _headers, _body) =
+            run(app.clone(), Method::GET, "/strava/hooks", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        // Let the executor spawn and register this stream.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        // (b) The write rides the user's executor.
+        let (status, _headers, _body) = run_json(
+            app,
+            Method::POST,
+            "/api/part",
+            Some(&cookie),
+            &part_body("Chain"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+        // (c) The created entity arrives as a `data:` frame on the same
+        // open stream (the frame carries the write's `Summary` JSON).
+        let frames = read_sse_frames(&mut body, 3, Duration::from_secs(3)).await;
+        let data: Vec<&String> = frames.iter().filter(|f| f.contains("data:")).collect();
+        assert!(
+            data.iter().any(|f| f.contains("Chain")),
+            "expected the created part in a data frame, got: {frames:?}"
+        );
+    }
+
     /// A write enqueued on the user's executor pushes its `Summary` to the
     /// user's SSE stream.
     #[tokio::test]
