@@ -20,6 +20,7 @@ export default defineConfig({
   },
 
   test: {
+    fsModuleCache: true,
     environment: "jsdom",
     include: ["src/**/*.test.{ts,js}"],
     setupFiles: ["./src/test/setup.ts"],
