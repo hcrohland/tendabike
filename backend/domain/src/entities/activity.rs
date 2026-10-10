@@ -201,7 +201,7 @@ impl ActivityId {
         store.activity_delete(self).await?;
         // The deleted activity is reported as a None tombstone, so the
         // client's merge drops its row (issue #462).
-        res.activities.insert(self, None);
+        res.activities.tombstone(self);
         Ok(res)
     }
 }
@@ -470,9 +470,8 @@ async fn match_and_update(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{MemStore, TestSession, fixtures};
+    use crate::test_support::{MemStore, TestSession, fixtures, only_tombstone, sole_live};
     use crate::traits::AttachmentStore;
-    use std::collections::HashMap;
     use time::OffsetDateTime;
 
     use fixtures::{test_session, test_user};
@@ -852,7 +851,7 @@ mod tests {
         let summary = act.upsert(&test_session(), &mut store).await?;
         assert_eq!(summary.activities.len(), 1);
         assert_eq!(
-            summary.activities[&new_id].as_ref().unwrap().name,
+            summary.activities.get(&new_id).unwrap().name,
             "New Activity"
         );
         Ok(())
@@ -883,13 +882,12 @@ mod tests {
         let summary = act.upsert(&test_session(), &mut store).await?;
 
         // the new activity is reported
-        assert_eq!(
-            summary.activities,
-            HashMap::from([(expected_act.id, Some(expected_act))])
-        );
+        let mut expected = IdKeyedMap::default();
+        expected.upsert(expected_act);
+        assert_eq!(summary.activities, expected);
 
         // the bike and all attached parts: front wheel, rear wheel, chain, tires
-        let part_ids: HashSet<PartId> = summary.parts.values().flatten().map(|p| p.id).collect();
+        let part_ids: HashSet<PartId> = summary.parts.live().into_iter().map(|p| p.id).collect();
         assert_eq!(
             part_ids,
             [1, 2, 3, 4, 5, 6].into_iter().map(PartId::from).collect()
@@ -897,8 +895,8 @@ mod tests {
         // last_used of the bike is bumped to the activity start
         let bike_part = summary
             .parts
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|p| p.id == bike)
             .unwrap();
         assert_eq!(bike_part.last_used, round_time(activity_start()));
@@ -922,7 +920,7 @@ mod tests {
                 expected_ids.insert(att.usage);
             }
         }
-        let usage_ids: HashSet<UsageId> = summary.usages.values().flatten().map(|u| u.id).collect();
+        let usage_ids: HashSet<UsageId> = summary.usages.live().into_iter().map(|u| u.id).collect();
         assert_eq!(usage_ids, expected_ids);
 
         // every affected usage is increased by the activity metrics
@@ -937,9 +935,9 @@ mod tests {
             energy: 1700,
             count: 4,
         };
-        for (id, u) in &summary.usages {
-            expected.id = *id;
-            assert_eq!(u.as_ref().unwrap(), &expected, "unexpected usage for {id}");
+        for u in summary.usages.live() {
+            expected.id = u.id;
+            assert_eq!(u, expected, "unexpected usage for {}", u.id);
         }
 
         // the updates are persisted in the store
@@ -985,10 +983,10 @@ mod tests {
             .await?;
 
         // the deleted activity is reported as a None tombstone
-        assert_eq!(summary.activities, HashMap::from([(act.id, None)]));
+        assert_eq!(summary.activities, only_tombstone(act.id));
 
         // the bike and all attached parts are affected again
-        let part_ids: HashSet<PartId> = summary.parts.values().flatten().map(|p| p.id).collect();
+        let part_ids: HashSet<PartId> = summary.parts.live().into_iter().map(|p| p.id).collect();
         assert_eq!(
             part_ids,
             [1, 2, 3, 4, 5, 6].into_iter().map(PartId::from).collect()
@@ -996,8 +994,8 @@ mod tests {
         // last_used of the bike stays at the activity start
         let bike_part = summary
             .parts
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|p| p.id == bike)
             .unwrap();
         assert_eq!(bike_part.last_used, round_time(activity_start()));
@@ -1021,7 +1019,7 @@ mod tests {
                 expected_ids.insert(att.usage);
             }
         }
-        let usage_ids: HashSet<UsageId> = summary.usages.values().flatten().map(|u| u.id).collect();
+        let usage_ids: HashSet<UsageId> = summary.usages.live().into_iter().map(|u| u.id).collect();
         assert_eq!(usage_ids, expected_ids);
 
         // every affected usage is back at its prepopulated baseline
@@ -1036,9 +1034,9 @@ mod tests {
             energy: 1500,
             count: 3,
         };
-        for (id, u) in &summary.usages {
-            expected.id = *id;
-            assert_eq!(u.as_ref().unwrap(), &expected, "unexpected usage for {id}");
+        for u in summary.usages.live() {
+            expected.id = u.id;
+            assert_eq!(u, expected, "unexpected usage for {}", u.id);
         }
 
         // the updates are persisted in the store
@@ -1079,7 +1077,7 @@ mod tests {
         let summary = modified.upsert(&test_session(), &mut store).await?;
         assert_eq!(summary.activities.len(), 1);
         assert_eq!(
-            summary.activities[&act.id].as_ref().unwrap().name,
+            summary.activities.get(&act.id).unwrap().name,
             "Updated Activity"
         );
         Ok(())
@@ -1169,7 +1167,7 @@ mod tests {
             .await?;
         // After delete, the activity is a None tombstone
         assert_eq!(summary.activities.len(), 1);
-        assert_eq!(summary.activities[&ActivityId::new(100)], None);
+        assert!(summary.activities.is_tombstoned(&ActivityId::new(100)));
         Ok(())
     }
 
@@ -1281,7 +1279,7 @@ mod tests {
         let summary = act.register(Factor::Add, &mut store).await?;
 
         // Only the gear (bike) should be in parts, not the detached chain
-        assert!(summary.parts.values().flatten().all(|p| p.id == bike.id));
+        assert!(summary.parts.live().into_iter().all(|p| p.id == bike.id));
         Ok(())
     }
 
@@ -1471,7 +1469,7 @@ mod tests {
         };
 
         let summary = act.upsert(&test_session(), &mut store).await?;
-        assert_eq!(summary.activities[&act_id].as_ref().unwrap().id, act_id);
+        assert_eq!(summary.activities.get(&act_id).unwrap().id, act_id);
 
         // Verify it was stored and can be read back
         let read_act = ActivityId::new(42)
@@ -1615,8 +1613,8 @@ mod tests {
             &mut store,
         )
         .await?;
-        let svc = summary.services.values().flatten().next().unwrap();
-        let u = summary.usages.values().flatten().next().unwrap();
+        let svc = sole_live(&summary.services);
+        let u = sole_live(&summary.usages);
         assert_eq!(u.count, 3);
 
         Activity::rescan_all(&mut store).await?;
@@ -1804,8 +1802,9 @@ mod tests {
         // The matched activity carries the new descend value; the phantom
         // row touched nothing.
         assert_eq!(
-            summary.activities[&ActivityId::new(301)]
-                .as_ref()
+            summary
+                .activities
+                .get(&ActivityId::new(301))
                 .unwrap()
                 .descend,
             Some(300)

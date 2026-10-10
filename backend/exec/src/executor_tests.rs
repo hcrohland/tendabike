@@ -347,12 +347,27 @@ fn frame_push_delivers_non_empty_summaries() {
     let (tx, mut rx) = broadcast::channel(4);
     let mut frame = Summary::default();
     let usage = Usage::default();
-    frame.usages.insert(usage.id, Some(usage));
+    frame.usages.upsert(usage);
 
     push_frame(&tx, &frame);
     let got = rx
         .try_recv()
         .expect("a non-empty summary pushes exactly one frame");
+    assert_eq!(got, frame);
+}
+
+#[test]
+fn frame_push_delivers_tombstone_only_summaries() {
+    let (tx, mut rx) = broadcast::channel(4);
+    let mut frame = Summary::default();
+    frame.usages.tombstone(Usage::default().id);
+
+    // A tombstone-only summary is not empty: the delete must still reach
+    // the client (spec §4.5).
+    push_frame(&tx, &frame);
+    let got = rx
+        .try_recv()
+        .expect("a tombstone-only summary pushes exactly one frame");
     assert_eq!(got, frame);
 }
 

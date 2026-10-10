@@ -1,7 +1,7 @@
 //! This module contains the implementation of the `Summary` struct and its associated functions.
 //!
 //! `Summary` is the only summary form: nine id-keyed maps, one per entity kind, each an
-//! [`IdKeyedMap`] over a `HashMap<Id, Option<E>>`. A `Some(entity)` value is a live entity; a
+//! [`IdKeyedMap`] hiding a `HashMap<Id, Option<E>>`. A `Some(entity)` value is a live entity; a
 //! `None` value is a **tombstone** marking the entity as deleted. It is the single payload type
 //! the wire carries (ADR-0005, executable spec #446 §2). Each map renders as a uniform JSON
 //! object with stringified id keys and `null` for tombstones.
@@ -10,10 +10,10 @@ use serde::Serialize;
 use serde::ser::{SerializeMap, Serializer};
 use std::{
     cmp::PartialEq,
-    collections::hash_map::{self, HashMap},
+    collections::HashMap,
     fmt::Display,
     hash::Hash,
-    ops::{Add, AddAssign, Deref, DerefMut, Index},
+    ops::{Add, AddAssign},
 };
 
 use crate::*;
@@ -27,13 +27,16 @@ pub trait IdKeyed {
     fn key(&self) -> Self::Key;
 }
 
-/// The id-keyed map: a `HashMap<K, Option<E>>` under a newtype, hosting every per-map
+/// The id-keyed map: a `HashMap<K, Option<E>>` hidden under a newtype, hosting every per-map
 /// operation generically — [`upsert`](IdKeyedMap::upsert),
 /// [`upsert_all`](IdKeyedMap::upsert_all), [`tombstone`](IdKeyedMap::tombstone),
-/// [`live`](IdKeyedMap::live), [`merge`](IdKeyedMap::merge) — each written once, applying to
-/// all nine [`Summary`] kinds. A `Some(entity)` value is a live entity; a `None` value is a
-/// tombstone marking the entity as deleted (ADR-0005, executable spec #446 §2; "tombstone" in
-/// `CONTEXT.md`).
+/// [`live`](IdKeyedMap::live), [`merge`](IdKeyedMap::merge), [`len`](IdKeyedMap::len),
+/// [`is_empty`](IdKeyedMap::is_empty), [`get`](IdKeyedMap::get),
+/// [`is_tombstoned`](IdKeyedMap::is_tombstoned) — each written once, applying to all nine
+/// [`Summary`] kinds. A `Some(entity)` value is a live entity; a `None` value is a tombstone
+/// marking the entity as deleted (ADR-0005, executable spec #446 §2; "tombstone" and "live" in
+/// `CONTEXT.md`). The inner `HashMap` is private and unreachable: every read and write goes
+/// through the nine named ops.
 #[derive(Clone, Debug, Serialize)]
 #[serde(bound(serialize = "K: Display, E: Serialize"))]
 pub struct IdKeyedMap<K, E>(
@@ -76,58 +79,38 @@ impl<K, E> Default for IdKeyedMap<K, E> {
     }
 }
 
-// --- Shims so existing bare-`HashMap` field access compiles unchanged ---
-
-impl<K, E> Deref for IdKeyedMap<K, E> {
-    type Target = HashMap<K, Option<E>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<K, E> DerefMut for IdKeyedMap<K, E> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl<K, E> Index<&K> for IdKeyedMap<K, E>
+impl<K, E> IdKeyedMap<K, E>
 where
     K: Eq + Hash,
 {
-    type Output = Option<E>;
-
-    fn index(&self, key: &K) -> &Self::Output {
-        &self.0[key]
+    /// Record an id as deleted: insert a `None` tombstone under the key — the deletion
+    /// representation (ADR-0005, executable spec #446 §2). The tombstone entry carries no
+    /// entity data ("tombstone" in `CONTEXT.md`), so the key is the whole input.
+    pub fn tombstone(&mut self, k: K) {
+        self.0.insert(k, None);
     }
-}
 
-impl<K, E> IntoIterator for IdKeyedMap<K, E> {
-    type Item = (K, Option<E>);
-    type IntoIter = hash_map::IntoIter<K, Option<E>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+    /// Entry count, tombstones included: a tombstone is an entry, and a delete is something
+    /// to deliver.
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
-}
 
-impl<'a, K, E> IntoIterator for &'a IdKeyedMap<K, E> {
-    type Item = (&'a K, &'a Option<E>);
-    type IntoIter = hash_map::Iter<'a, K, Option<E>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.iter()
+    /// Whether there are no entries at all. A tombstone-only map is **not** empty: the
+    /// executor uses [`Summary::is_empty`] to decide the push, and a delete still delivers a
+    /// frame (ADR-0005, executable spec #446 §4.5).
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
-}
 
-impl<K, E> PartialEq<HashMap<K, Option<E>>> for IdKeyedMap<K, E>
-where
-    K: Eq + Hash,
-    E: PartialEq,
-{
-    fn eq(&self, other: &HashMap<K, Option<E>>) -> bool {
-        self.0 == *other
+    /// The live entity under `k`: `None` for a tombstoned or absent id (never a tombstone).
+    pub fn get(&self, k: &K) -> Option<&E> {
+        self.0.get(k).and_then(Option::as_ref)
+    }
+
+    /// Whether the entry under `k` exists and is a tombstone (absent ids are not tombstoned).
+    pub fn is_tombstoned(&self, k: &K) -> bool {
+        matches!(self.0.get(k), Some(None))
     }
 }
 
@@ -146,12 +129,6 @@ where
         for e in ents {
             self.upsert(e);
         }
-    }
-
-    /// Record one entity as deleted: insert a `None` tombstone under its key — the deletion
-    /// representation (ADR-0005, executable spec #446 §2).
-    pub fn tombstone(&mut self, e: E) {
-        self.0.insert(e.key(), None);
     }
 
     /// Per-id merge, last-wins: each entry of `other` overwrites the entry with the same key
@@ -278,11 +255,10 @@ mod tests {
         assert!(Summary::default().is_empty());
         // A tombstone is touched content: a delete delivers something.
         let mut s = Summary::default();
-        s.usages.insert(UsageId::new(), None);
+        s.usages.tombstone(UsageId::new());
         assert!(!s.is_empty());
         let mut s = Summary::default();
-        s.usages
-            .insert(UsageId::new(), Some(usage(UsageId::new(), 1)));
+        s.usages.upsert(usage(UsageId::new(), 1));
         assert!(!s.is_empty());
     }
 
@@ -291,16 +267,16 @@ mod tests {
         let id1 = UsageId::new();
         let id2 = UsageId::new();
         let mut a = Summary::default();
-        a.usages.insert(id1, Some(usage(id1, 1)));
-        a.usages.insert(id2, Some(usage(id2, 2)));
+        a.usages.upsert(usage(id1, 1));
+        a.usages.upsert(usage(id2, 2));
         let mut b = Summary::default();
         // b overwrites id1 with a tombstone and upserts id2.
-        b.usages.insert(id1, None);
-        b.usages.insert(id2, Some(usage(id2, 20)));
+        b.usages.tombstone(id1);
+        b.usages.upsert(usage(id2, 20));
         let c = a + b;
         // id1 is deleted (tombstone won), id2 is the later upsert.
-        assert_eq!(c.usages[&id1], None);
-        assert_eq!(c.usages[&id2].as_ref().unwrap().count, 20);
+        assert!(c.usages.is_tombstoned(&id1));
+        assert_eq!(c.usages.get(&id2).unwrap().count, 20);
         assert_eq!(c.usages.len(), 2);
     }
 
@@ -321,7 +297,7 @@ mod tests {
         // pair-arrays), even the empty ones.
         let uid = UsageId::new();
         let mut map = Summary::default();
-        map.usages.insert(uid, Some(usage(uid, 1)));
+        map.usages.upsert(usage(uid, 1));
         let value = serde_json::to_value(&map).unwrap();
         for field in [
             "activities",
@@ -348,15 +324,15 @@ mod tests {
     fn upsert_single_last_wins() {
         let id = UsageId::new();
         let mut s = Summary::default();
-        s.usages.insert(id, Some(usage(id, 1))); // a pre-existing live entry
+        s.usages.upsert(usage(id, 1)); // a pre-existing live entry
         s.usages.upsert(usage(id, 2));
         // The upsert overwrote the pre-existing entry (per-id last-wins).
-        assert_eq!(s.usages[&id].as_ref().unwrap().count, 2);
+        assert_eq!(s.usages.get(&id).unwrap().count, 2);
 
         let id2 = UsageId::new();
         s.usages.upsert(usage(id2, 5));
         // And it creates the entry for a new id.
-        assert_eq!(s.usages[&id2].as_ref().unwrap().count, 5);
+        assert_eq!(s.usages.get(&id2).unwrap().count, 5);
         assert_eq!(s.usages.len(), 2);
     }
 
@@ -366,8 +342,8 @@ mod tests {
         let id2 = UsageId::new();
         let mut s = Summary::default();
         s.usages.upsert_all(vec![usage(id1, 1), usage(id2, 2)]);
-        assert_eq!(s.usages[&id1].as_ref().unwrap().count, 1);
-        assert_eq!(s.usages[&id2].as_ref().unwrap().count, 2);
+        assert_eq!(s.usages.get(&id1).unwrap().count, 1);
+        assert_eq!(s.usages.get(&id2).unwrap().count, 2);
         assert_eq!(s.usages.len(), 2);
     }
 
@@ -375,10 +351,10 @@ mod tests {
     fn tombstone_inserts_tombstone() {
         let id = UsageId::new();
         let mut s = Summary::default();
-        s.usages.tombstone(usage(id, 1));
+        s.usages.tombstone(id);
         // The id is present, but only as a `None` tombstone (no entity data).
         assert_eq!(s.usages.len(), 1);
-        assert_eq!(s.usages[&id], None);
+        assert!(s.usages.is_tombstoned(&id));
     }
 
     #[test]
@@ -386,19 +362,30 @@ mod tests {
         let id = UsageId::new();
         let mut s = Summary::default();
         s.usages.upsert(usage(id, 1));
-        s.usages.tombstone(usage(id, 1));
+        s.usages.tombstone(id);
         assert_eq!(s.usages.len(), 1);
-        assert_eq!(s.usages[&id], None);
+        assert!(s.usages.is_tombstoned(&id));
     }
 
     #[test]
     fn delete_then_upsert_leaves_live() {
         let id = UsageId::new();
         let mut s = Summary::default();
-        s.usages.tombstone(usage(id, 1));
+        s.usages.tombstone(id);
         s.usages.upsert(usage(id, 2));
         assert_eq!(s.usages.len(), 1);
-        assert_eq!(s.usages[&id].as_ref().unwrap().count, 2);
+        assert_eq!(s.usages.get(&id).unwrap().count, 2);
+    }
+
+    #[test]
+    fn get_and_is_tombstoned_absent_id() {
+        let id = UsageId::new();
+        let s = Summary::default();
+        // An absent id is neither live nor tombstoned.
+        assert!(s.usages.get(&id).is_none());
+        assert!(!s.usages.is_tombstoned(&id));
+        assert_eq!(s.usages.len(), 0);
+        assert!(s.usages.is_empty());
     }
 
     // --- `upsert` / `upsert_all` / `tombstone` (idx-keyed kind) ---
@@ -408,19 +395,16 @@ mod tests {
         let d = detail(1);
         let key = d.idx();
         let mut s = Summary::default();
-        s.attachments.insert(key.clone(), Some(detail(1)));
+        s.attachments.upsert(detail(1));
         s.attachments.upsert(d);
         // Upserted under its `idx` wire key, overwriting the pre-existing entry.
-        assert_eq!(
-            s.attachments[&key].as_ref().unwrap().a.part_id,
-            PartId::from(1)
-        );
+        assert_eq!(s.attachments.get(&key).unwrap().a.part_id, PartId::from(1));
 
         let d2 = detail(2);
         let key2 = d2.idx();
         s.attachments.upsert(d2);
         assert_eq!(s.attachments.len(), 2);
-        assert!(s.attachments.contains_key(&key2));
+        assert!(s.attachments.get(&key2).is_some());
     }
 
     #[test]
@@ -432,18 +416,17 @@ mod tests {
         let mut s = Summary::default();
         s.attachments.upsert_all(vec![d1, d2]);
         assert_eq!(s.attachments.len(), 2);
-        assert!(s.attachments.contains_key(&key1));
-        assert!(s.attachments.contains_key(&key2));
+        assert!(s.attachments.get(&key1).is_some());
+        assert!(s.attachments.get(&key2).is_some());
     }
 
     #[test]
     fn detail_tombstone_inserts_tombstone() {
-        let d = detail(1);
-        let key = d.idx();
+        let key = detail(1).idx();
         let mut s = Summary::default();
-        s.attachments.tombstone(d);
+        s.attachments.tombstone(key.clone());
         assert_eq!(s.attachments.len(), 1);
-        assert_eq!(s.attachments[&key], None);
+        assert!(s.attachments.is_tombstoned(&key));
     }
 
     #[test]
@@ -451,21 +434,20 @@ mod tests {
         let d = detail(1);
         let key = d.idx();
         let mut s = Summary::default();
-        s.attachments.upsert(d.clone());
-        s.attachments.tombstone(d);
+        s.attachments.upsert(d);
+        s.attachments.tombstone(key.clone());
         assert_eq!(s.attachments.len(), 1);
-        assert_eq!(s.attachments[&key], None);
+        assert!(s.attachments.is_tombstoned(&key));
     }
 
     #[test]
     fn detail_delete_then_upsert_leaves_live() {
-        let d = detail(1);
-        let key = d.idx();
+        let key = detail(1).idx();
         let mut s = Summary::default();
-        s.attachments.tombstone(d);
+        s.attachments.tombstone(key.clone());
         s.attachments.upsert(detail(1));
         assert_eq!(s.attachments.len(), 1);
-        assert!(s.attachments[&key].is_some());
+        assert!(s.attachments.get(&key).is_some());
     }
 
     // --- `live` ---
@@ -475,13 +457,13 @@ mod tests {
         let live = UsageId::new();
         let gone = UsageId::new();
         let mut s = Summary::default();
-        s.usages.insert(live, Some(usage(live, 1)));
-        s.usages.insert(gone, None); // tombstone
+        s.usages.upsert(usage(live, 1));
+        s.usages.tombstone(gone); // tombstone
 
         let live_key = detail(1).idx();
         let gone_key = detail(2).idx();
-        s.attachments.insert(live_key.clone(), Some(detail(1)));
-        s.attachments.insert(gone_key.clone(), None); // tombstone
+        s.attachments.upsert(detail(1));
+        s.attachments.tombstone(gone_key.clone()); // tombstone
 
         // Each map returns only its live entities, cloned into an owned `Vec`.
         let u = s.usages.live();
@@ -494,10 +476,10 @@ mod tests {
 
         // Borrowing, not consuming: each map still holds both entries, incl. the tombstone.
         assert_eq!(s.usages.len(), 2);
-        assert_eq!(s.usages[&live].as_ref().unwrap().count, 1);
-        assert_eq!(s.usages[&gone], None);
+        assert_eq!(s.usages.get(&live).unwrap().count, 1);
+        assert!(s.usages.is_tombstoned(&gone));
         assert_eq!(s.attachments.len(), 2);
-        assert!(s.attachments[&live_key].is_some());
-        assert_eq!(s.attachments[&gone_key], None);
+        assert!(s.attachments.get(&live_key).is_some());
+        assert!(s.attachments.is_tombstoned(&gone_key));
     }
 }

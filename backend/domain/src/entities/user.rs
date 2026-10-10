@@ -506,7 +506,7 @@ mod tests {
         // `last_used` and checks the rule on the sorted sequence. See the
         // seam's `user_summary_read`.
         assert_eq!(summary.parts.len(), 17);
-        let mut parts: Vec<_> = summary.parts.values().flatten().collect();
+        let mut parts = summary.parts.live();
         parts.sort_by_key(|p| p.last_used);
         for (earlier, later) in parts.iter().zip(parts.iter().skip(1)) {
             assert!(
@@ -528,23 +528,23 @@ mod tests {
         // Field lookups: the "Chain A" part, its attachment, and its usage.
         let chain = summary
             .parts
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|p| p.id == PartId::from(4))
             .unwrap();
         assert_eq!(chain.name, "Chain A");
         let att = summary
             .attachments
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|a| a.a.part_id == PartId::from(4))
             .unwrap();
         assert_eq!(att.a.hook, BIKE);
         assert_eq!(att.a.detached, MAX_TIME);
         let usage = summary
             .usages
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|u| u.id == chain.usage)
             .unwrap();
         assert_eq!(usage.time, 8025);
