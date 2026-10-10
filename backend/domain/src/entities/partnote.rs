@@ -60,6 +60,13 @@ pub struct PartNote {
     pub created: OffsetDateTime,
 }
 
+impl IdKeyed for PartNote {
+    type Key = PartNoteId;
+    fn key(&self) -> Self::Key {
+        self.id
+    }
+}
+
 impl PartNote {
     /// Returns `true` when this note has a file attachment.
     pub fn has_file(&self) -> bool {

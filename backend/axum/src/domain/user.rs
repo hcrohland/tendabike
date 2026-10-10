@@ -12,18 +12,12 @@ use axum::{
     routing::get,
 };
 use serde::Serialize;
-use std::collections::HashMap;
 
 use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState};
 use tb_domain::{Session, ShopId, Summary};
 use tb_exec::{Txn, TxnSource};
 use tb_strava::StravaStore;
 use tb_strava::StravaUser;
-
-/// Flatten an id-keyed `Summary` map to a `Vec` of live entities, dropping tombstones.
-fn live_values<K, V>(m: HashMap<K, Option<V>>) -> Vec<V> {
-    m.into_values().flatten().collect()
-}
 
 pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
 where
@@ -95,13 +89,13 @@ where
     let user = user_id.read(&mut store).await?;
     Ok(Json(Export {
         user,
-        activities: live_values(summary.activities),
-        parts: live_values(summary.parts),
-        attachments: live_values(summary.attachments),
-        usages: live_values(summary.usages),
-        services: live_values(summary.services),
-        plans: live_values(summary.plans),
-        shops: live_values(summary.shops),
+        activities: summary.activities.live(),
+        parts: summary.parts.live(),
+        attachments: summary.attachments.live(),
+        usages: summary.usages.live(),
+        services: summary.services.live(),
+        plans: summary.plans.live(),
+        shops: summary.shops.live(),
     }))
 }
 

@@ -55,6 +55,13 @@ pub struct Shop {
     pub created_at: OffsetDateTime,
 }
 
+impl IdKeyed for Shop {
+    type Key = ShopId;
+    fn key(&self) -> Self::Key {
+        self.id
+    }
+}
+
 #[derive(Clone, Copy, Debug, Display, From, Into, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ShopId(i32);
 
@@ -165,10 +172,9 @@ impl ShopId {
         // Register the parts to the shop
         let parts = store.parts_register_shop(self, parts).await?;
 
-        Ok(Summary {
-            parts: parts.into_iter().map(|p| (p.id, Some(p))).collect(),
-            ..Default::default()
-        })
+        let mut summary = Summary::default();
+        summary.parts.upsert_all(parts);
+        Ok(summary)
     }
 
     async fn has_subscription(
@@ -192,10 +198,9 @@ impl ShopId {
 
         let parts = store.parts_unregister_shop(parts).await?;
 
-        Ok(Summary {
-            parts: parts.into_iter().map(|p| (p.id, Some(p))).collect(),
-            ..Default::default()
-        })
+        let mut summary = Summary::default();
+        summary.parts.upsert_all(parts);
+        Ok(summary)
     }
 
     /// Get all parts and their subparts registered to this shop

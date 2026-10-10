@@ -68,6 +68,13 @@ pub struct Part {
     pub shop: Option<ShopId>,
 }
 
+impl IdKeyed for Part {
+    type Key = PartId;
+    fn key(&self) -> Self::Key {
+        self.id
+    }
+}
+
 #[derive(
     Clone,
     Copy,

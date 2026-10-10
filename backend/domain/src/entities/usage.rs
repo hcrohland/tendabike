@@ -66,6 +66,13 @@ pub struct Usage {
     pub count: i32,
 }
 
+impl IdKeyed for Usage {
+    type Key = UsageId;
+    fn key(&self) -> Self::Key {
+        self.id
+    }
+}
+
 impl Usage {
     pub(crate) async fn update(self, store: &mut impl UsageStore) -> TbResult<Usage> {
         Usage::update_vec(&[&self], store).await?;
