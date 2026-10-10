@@ -218,14 +218,13 @@ impl UserId {
         let activities = Activity::get_all(self, store).await?;
         let shops = Shop::get_all_for_user(self, store).await?;
         let users = Shop::get_users(&shops, self, store).await?;
-        let summary = {
+        let mut summary = {
             let parts = match shop {
                 None => Part::get_all(self, store).await?,
                 Some(shop) => shop.get_parts(*self, store).await?,
             };
             self.get_part_summary(parts, store).await?
         };
-        let mut summary = summary;
         summary.activities.upsert_all(activities);
         summary.shops.upsert_all(shops);
         summary.users.upsert_all(users);
