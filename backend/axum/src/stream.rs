@@ -3,7 +3,9 @@
 //!
 //! The web layer owns the SSE streams; the per-user executor task (the
 //! `tb_exec` loop) is spawned on demand (the first SSE connect **or** the
-//! first API write) and reaped on idle. The [`Registry`] tracks the live
+//! first API write) and reaped when no stream is attached (spec §4.4,
+//! amended — #446: an attached stream keeps it alive; the idle window is
+//! the queue re-probe cadence). The [`Registry`] tracks the live
 //! executor per [`UserId`]: a second connect (or write) finds the running
 //! task rather than spawning a duplicate, and a reaped task is respawned on
 //! the next demand — the stream re-registers on the respawned executor's
@@ -47,12 +49,14 @@ use tb_strava::{StravaId, StravaStore};
 use crate::appstate::AppState;
 use crate::strava::RequestSession;
 
-/// The loop's idle window before it reaps while streams are still attached
-/// (spec §4.4): long enough that an active tab's executor is not churned by a
-/// lull in writes, short enough that an abandoned tab's executor is reclaimed.
+/// The loop's queue re-probe cadence while it is idle with streams attached
+/// (spec §4.4, amended — #446): an attached stream keeps the executor alive
+/// (it is reaped only when no stream is attached), so the window sets how
+/// often the idle loop re-probes the `strava_events` queue. A stream-less
+/// executor (a write-only spawn) reaps immediately after its work.
 pub(crate) const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 /// The SSE heartbeat cadence (spec §4.5): a `: ping` comment keeps the
-/// connection alive (and proxies) while the executor is reaped.
+/// connection alive (and proxies) while the executor is idle (or reaped).
 pub(crate) const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 /// The per-user frame channel's capacity: a burst of frames for a lagged
 /// stream is dropped (the client's reconnect + full refresh covers it), so a
@@ -68,8 +72,10 @@ const BROADCAST_CAPACITY: usize = 64;
 pub enum ExecutorStatus {
     /// The loop is running (or has not yet recorded its exit).
     Running,
-    /// The loop exited cleanly on idle (`run` returned `Ok(())`): the stream
-    /// re-subscribes (respawning the executor) and keeps heartbeating.
+    /// The loop exited cleanly (`run` returned `Ok(())`) — always with no
+    /// stream attached (an attached stream keeps the loop alive): a stream
+    /// that met the loop in the connect-time race re-subscribes (respawning
+    /// the executor) and settles.
     Reaped,
     /// The loop ended with a lifecycle error, or the task panicked: the
     /// stream closes so the client reconnects and respawns (spec §4.5).
@@ -106,9 +112,11 @@ struct Executor {
 
 /// The per-user executor registry (spec §4.4): the live executor per
 /// [`UserId`], shared across requests (the `AppState` is `Clone`, so an
-/// `Arc`). Spawn on the first demand (SSE connect or write), reap on idle
-/// (the loop decides), respawn on the next demand — the streams re-register
-/// on the respawned executor's frame channel.
+/// `Arc`). Spawn on the first demand (SSE connect or write), reap when no
+/// stream is attached (the loop decides — an attached stream keeps the
+/// executor alive, the idle window is the queue re-probe cadence), respawn
+/// on the next demand — the streams re-register on the respawned executor's
+/// frame channel.
 #[derive(Clone)]
 pub struct Registry {
     executors: Arc<Mutex<HashMap<UserId, Executor>>>,
@@ -493,7 +501,7 @@ fn is_sync(event: &StravaEvent, strava_id: StravaId, event_time: i64) -> bool {
         && event.event_time == event_time
 }
 
-/// The seed for one SSE connection's `unfold`: the current frame subscription
+/// one SSE connection's `unfold`: the current frame subscription
 /// and its executor's fate channel. A `None` frame subscription means "the
 /// executor settled; re-subscribe (respawning it) on the next step".
 struct StreamSeed<S: TxnSource + Clone + 'static> {
@@ -506,8 +514,10 @@ struct StreamSeed<S: TxnSource + Clone + 'static> {
 /// One step of the SSE stream: ensure a live subscription (re-subscribing —
 /// and respawning the executor — after it settles), then forward the next
 /// frame. A frame is the `Summary` JSON (no envelope, no sequence). A clean
-/// reap yields a heartbeat and re-subscribes on the next step; a dead executor
-/// ends the stream (the client reconnects and respawns, spec §4.5).
+/// reap (the connect-time race — the executor reaped before this
+/// connection's receiver attached) yields a heartbeat and re-subscribes on
+/// the next step; a dead executor ends the stream (the client reconnects
+/// and respawns, spec §4.5).
 async fn next_event<S>(seed: &mut StreamSeed<S>) -> Option<Result<Event, Infallible>>
 where
     S: TxnSource + Clone + 'static,
@@ -587,9 +597,10 @@ fn heartbeat_event() -> Event {
 /// `/api/user/summary` (the session extractor rejects a missing session with
 /// 401). Spawn/get the user's executor, register this connection's stream,
 /// and forward `Summary` frames (heartbeats while the executor is reaped).
-/// Teardown (deregister; the executor reaps on idle once this was the last
-/// stream) happens when the stream is dropped — the broadcast receiver's
-/// count is the loop's stream-count signal.
+/// Teardown (deregister; the executor reaps once this was the last stream —
+/// no streams attached is the only reap rule) happens when the stream is
+/// dropped — the broadcast receiver's count is the loop's stream-count
+/// signal.
 pub(crate) async fn endpoint<S>(user: RequestSession, State(state): State<AppState<S>>) -> Response
 where
     S: TxnSource + Clone + 'static,

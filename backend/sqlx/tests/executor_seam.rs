@@ -85,9 +85,11 @@ const DB_SUFFIX: &str = "_exec";
 /// fails the test instead of hanging the suite.
 const TEST_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// The loop's idle window in the tests: short enough that the reap the
-/// tests assert happens in a breath, long enough that a healthy loop never
-/// reaps mid-message.
+/// The loop's queue re-probe cadence in the tests (spec §4.4, amended —
+/// #446): the reaps the tests assert come from the no-streams rule
+/// (immediate once the work is done), so this only sets how often an idle
+/// loop with streams attached re-probes the queue — long enough that a
+/// healthy loop never re-probes mid-message.
 const IDLE_TIMEOUT: Duration = Duration::from_millis(300);
 
 /// The in-memory suite's session identity: the fixture's one user and its
@@ -271,6 +273,10 @@ async fn api_write_end_to_end() {
         .expect("the frame must arrive in time")
         .expect("the stream must stay open");
     assert_eq!(frame, summary);
+    // No streams left attached: the no-streams rule is the only reap rule
+    // (spec §4.4, amended — #446), so the loop's reap needs the receiver
+    // gone.
+    drop(frame_rx);
 
     // A fresh connection sees the committed row.
     let mut conn = seam.pool.begin().await.expect("a fresh connection");
@@ -326,6 +332,9 @@ async fn strava_queue_drains_and_reclaims() {
     let (_tx, rx) = api_write_channel();
     let (frames, _frame_rx) = broadcast::channel(8);
     let (events, _events_rx) = broadcast::channel(8);
+    // No streams attached: the frame receiver must not outlive the loop, or
+    // the no-streams reap rule (spec §4.4, amended — #446) never fires.
+    drop(_frame_rx);
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
         run(
@@ -362,6 +371,9 @@ async fn idle_loop_reclaims() {
     let (_tx, rx) = api_write_channel();
     let (frames, _frame_rx) = broadcast::channel(8);
     let (events, _events_rx) = broadcast::channel(8);
+    // No streams attached: the frame receiver must not outlive the loop, or
+    // the no-streams reap rule (spec §4.4, amended — #446) never fires.
+    drop(_frame_rx);
     let started = std::time::Instant::now();
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
@@ -378,8 +390,8 @@ async fn idle_loop_reclaims() {
     .await
     .expect("an idle loop must reap in time");
     outcome.expect("a reaped loop returns Ok");
-    // The reap came from the no-streams rule, well inside the idle window's
-    // neighbourhood — certainly far under the test bound.
+    // The reap came from the no-streams rule (the first idle cycle, spec
+    // §4.4, amended — #446) — certainly far under the test bound.
     assert!(
         started.elapsed() < TEST_TIMEOUT,
         "the reap must not take the whole test bound"
@@ -398,6 +410,9 @@ async fn failed_write_rolls_back_and_reclaims() {
     let (tx, rx) = api_write_channel();
     let (frames, _frame_rx) = broadcast::channel(8);
     let (events, _events_rx) = broadcast::channel(8);
+    // No streams attached: the frame receiver must not outlive the loop, or
+    // the no-streams reap rule (spec §4.4, amended — #446) never fires.
+    drop(_frame_rx);
     // Deleting a part that does not exist: `NotFound` from the domain.
     let (request, reply) = ApiWriteRequest::new(ApiWrite::PartDelete {
         id: PartId::from(999_999),

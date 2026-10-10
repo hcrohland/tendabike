@@ -63,77 +63,30 @@ fn request() -> (ApiWriteRequest, oneshot::Receiver<TbResult<WriteOutcome>>) {
 
 #[test]
 fn next_action_prefer_write_over_everything() {
-    // A client action must never wait behind a queued event, active streams,
-    // or an elapsed idle window (spec §4.3: the select is biased).
-    assert_eq!(
-        next_action(
-            true,
-            true,
-            3,
-            Duration::from_secs(999),
-            Duration::from_secs(1)
-        ),
-        Action::ProcessWrite
-    );
+    // A client action must never wait behind a queued event or active
+    // streams (spec §4.3: the select is biased).
+    assert_eq!(next_action(true, true, 3), Action::ProcessWrite);
 }
 
 #[test]
 fn next_action_strava_when_no_write() {
-    assert_eq!(
-        next_action(false, true, 0, Duration::ZERO, Duration::from_secs(1)),
-        Action::ProcessStrava
-    );
+    assert_eq!(next_action(false, true, 0), Action::ProcessStrava);
 }
 
 #[test]
 fn next_action_reap_with_no_streams() {
-    // Nothing pending and no one listening: exit, whatever the idle clock says.
-    assert_eq!(
-        next_action(false, false, 0, Duration::ZERO, Duration::from_secs(60)),
-        Action::Reap
-    );
-    assert_eq!(
-        next_action(
-            false,
-            false,
-            0,
-            Duration::from_secs(3600),
-            Duration::from_secs(60)
-        ),
-        Action::Reap
-    );
+    // Nothing pending and no one listening: exit — the only reap rule
+    // (spec §4.4, amended: the idle window no longer reaps, so no idle
+    // arguments).
+    assert_eq!(next_action(false, false, 0), Action::Reap);
 }
 
 #[test]
 fn next_action_sleep_while_streams_listen() {
-    // Streams still attached and the idle window not over: stay alive.
-    assert_eq!(
-        next_action(
-            false,
-            false,
-            1,
-            Duration::from_secs(10),
-            Duration::from_secs(60)
-        ),
-        Action::Sleep
-    );
-}
-
-#[test]
-fn next_action_reap_after_idle_timeout() {
-    // Streams attached but the idle timeout elapsed with no messages: exit —
-    // the streams keep heartbeating (web layer), the next write or connect
-    // respawns the loop (spec §4.4).
-    assert_eq!(
-        next_action(
-            false,
-            false,
-            2,
-            Duration::from_secs(60),
-            Duration::from_secs(60)
-        ),
-        Action::Reap
-    );
+    // Streams still attached: stay alive — the idle window is the queue
+    // re-probe cadence, not a reap trigger (spec §4.4, amended).
+    assert_eq!(next_action(false, false, 1), Action::Sleep);
+    assert_eq!(next_action(false, false, 2), Action::Sleep);
 }
 
 // --- `select_message`: the biased select ---

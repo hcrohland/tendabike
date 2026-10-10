@@ -348,31 +348,122 @@ mod tests {
         );
     }
 
-    /// When the executor reaps on idle, the stream stays alive on heartbeats and
-    /// re-subscribes (respawning the executor) so a later frame is forwarded
-    /// (spec §4.5 — the stream survives the executor's reap).
+    /// An attached stream keeps the executor alive past the idle window
+    /// (spec §4.4, amended — #446): the idle window is the cadence at which
+    /// the idle loop re-probes the `strava_events` queue, not a reap
+    /// trigger. The stream's **original** executor stays `Running` well
+    /// past the window (a reap-and-respawn churn would leave its fate
+    /// channel at `Reaped`), and the stream body keeps heartbeating.
     #[tokio::test]
-    async fn stream_survives_executor_reap() {
+    async fn attached_stream_keeps_the_executor_alive() {
         let store = MemoryStore::default();
-        // A short idle window so the executor reaps quickly; a short heartbeat
-        // so the reaped stream's keepalive is observable.
+        // A short idle cadence (the queue re-probe cadence) so the old
+        // reap-on-idle policy would have reclaimed this executor quickly;
+        // a short heartbeat so the live stream stays observable.
         let registry = Arc::new(Registry::new(
-            Duration::from_millis(100),
+            Duration::from_millis(300),
             Duration::from_millis(50),
         ));
         let live = LiveSource::new().await;
-        let app = test_app_live(&store, live, registry);
+        let app = test_app_live(&store, live.clone(), registry.clone());
         let cookie = user_cookie(&store).await;
+        let user = UserId::from(1);
+        // The stream opens: `run_sse` returns only after the endpoint
+        // registered this stream on the executor's frame channel (the
+        // `subscribe` ran inside the handler), so the executor is spawned
+        // and pinned by this stream.
         let (status, _headers, mut body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
         assert_eq!(status, StatusCode::OK);
-        // The executor reaps on idle (~100ms here) while this stream is
-        // attached. The reaped stream keeps heartbeating (it does not close),
-        // so frames keep arriving across the reap (spec §9.5). Three beats at
-        // a 50ms interval span the 100ms reap, so at least one is post-reap.
+        wait_for_status(&registry, user, ExecutorStatus::Running).await;
+
+        // Join the stream's executor and hold its fate channel — the
+        // **original** status: a reap-and-respawn churn would leave this
+        // receiver at `Reaped` while the registry points at a fresh
+        // executor. The joined frame receiver is dropped at once, so the
+        // stream that pins the executor is the SSE stream alone.
+        let (frame_rx, fate) = registry
+            .subscribe(&live, user)
+            .await
+            .expect("joining the stream's executor");
+        drop(frame_rx);
+
+        // Wait well past the idle window (3× the 300ms cadence): under the
+        // old policy this executor would have reaped by now.
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        // (a) The original executor is still running — no reap, no respawn.
+        assert_eq!(
+            *fate.borrow(),
+            ExecutorStatus::Running,
+            "an attached stream must keep its executor running past the idle window"
+        );
+
+        // (b) The stream body is still alive: the next frame arrives (a
+        // heartbeat — nothing is queued) and the body has not ended.
+        use http_body_util::BodyExt;
+        let frame = tokio::time::timeout(Duration::from_secs(2), body.frame())
+            .await
+            .expect("the stream must stay open past the idle window")
+            .expect("the stream must not end while its stream is attached")
+            .expect("the stream must not error");
+        let chunk = String::from_utf8_lossy(frame.data_ref().expect("a data chunk")).to_string();
+        assert!(
+            chunk.contains(": ping"),
+            "expected a heartbeat, got: {chunk:?}"
+        );
+    }
+
+    /// The stream survives the executor's reap (spec §4.5, amended — #446):
+    /// a stream-less (write-only) spawn reaps as soon as its work is done —
+    /// no streams attached is the only reap rule — and a stream connecting
+    /// to the reaped executor respawns it and settles: the stream stays
+    /// alive on heartbeats and a later frame is forwarded. (The old version
+    /// asserted a reap *with* the stream attached — steady state under the
+    /// idle-timeout policy, which no longer exists: an attached stream now
+    /// keeps the executor alive.) The one-`: ping` re-subscribe in
+    /// `next_event` remains the safety net for the connect-time race (the
+    /// executor reaps before this connection's receiver attaches); the
+    /// single-threaded test runtime cannot interleave inside `subscribe`,
+    /// so that half is not exercised here.
+    #[tokio::test]
+    async fn stream_survives_executor_reap() {
+        let store = MemoryStore::default();
+        // A short idle cadence (the queue re-probe cadence) and a short
+        // heartbeat so the stream's keepalive is observable.
+        let registry = Arc::new(Registry::new(
+            Duration::from_millis(300),
+            Duration::from_millis(50),
+        ));
+        let live = LiveSource::new().await;
+        let app = test_app_live(&store, live.clone(), registry.clone());
+        let cookie = user_cookie(&store).await;
+        let user = UserId::from(1);
+
+        // A write-only spawn: no stream attached, so the executor reaps as
+        // soon as its work is done (the no-streams rule — immediate, not
+        // after an idle window).
+        registry
+            .write(&live, user, tb_domain::ApiWrite::UserOnboardingPostpone)
+            .await
+            .expect("the write must succeed");
+        wait_for_status(&registry, user, ExecutorStatus::Reaped).await;
+
+        // The stream connects to the reaped executor: the connect respawns
+        // it and settles — the stream stays alive on heartbeats and a later
+        // frame is forwarded (no further reap: the attached stream keeps
+        // the executor alive).
+        let (status, _headers, mut body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::OK);
+        wait_for_status(&registry, user, ExecutorStatus::Running).await;
+        registry.send_frame(user, Summary::default()).await;
         let frames = read_sse_frames(&mut body, 3, Duration::from_secs(2)).await;
         assert!(
-            frames.iter().filter(|f| f.contains(": ping")).count() >= 2,
-            "expected heartbeats across the executor reap, got: {frames:?}"
+            frames.iter().any(|f| f.contains("data:")),
+            "a frame pushed after the connect must be forwarded, got: {frames:?}"
+        );
+        assert!(
+            frames.iter().any(|f| f.contains(": ping")),
+            "the settled stream must heartbeat, got: {frames:?}"
         );
     }
 
