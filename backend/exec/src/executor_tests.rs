@@ -29,7 +29,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use tb_domain::{ApiWrite, Summary, TbResult, Usage};
+use tb_domain::{ApiWrite, Summary, TbResult, Usage, WriteOutcome};
 use tb_strava::event::Event;
 use tokio::sync::{broadcast, oneshot};
 
@@ -55,7 +55,7 @@ async fn ready_probe(probe: Probe) -> Option<Probe> {
     Some(probe)
 }
 
-fn request() -> (ApiWriteRequest, oneshot::Receiver<TbResult<Summary>>) {
+fn request() -> (ApiWriteRequest, oneshot::Receiver<TbResult<WriteOutcome>>) {
     ApiWriteRequest::new(ApiWrite::UserOnboardingPostpone)
 }
 

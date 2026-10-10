@@ -155,7 +155,7 @@ mod tests {
     use http::{Method, StatusCode, header};
     use tower_sessions::MemoryStore;
 
-    use tb_domain::{PartStore, Summary, UserId};
+    use tb_domain::{Activity, ActivityId, ActivityStore, PartStore, Summary, UserId};
 
     use crate::stream::{ExecutorStatus, Registry};
     use crate::test_support::{
@@ -857,6 +857,132 @@ mod tests {
             );
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
+    }
+
+    /// Assert an SSE body **closes** (the stream's `unfold` yields `None`):
+    /// bounded by a deadline, so a stream that stays open fails the test.
+    /// Data frames that arrive before the close are drained and ignored.
+    async fn assert_stream_ends(body: &mut axum::body::Body) {
+        use http_body_util::BodyExt;
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            match tokio::time::timeout_at(deadline, body.frame()).await {
+                Ok(Some(Ok(frame))) => drop(frame),
+                Ok(Some(Err(err))) => panic!("the stream errored instead of closing: {err:?}"),
+                Ok(None) => return,
+                Err(_) => panic!("the stream did not end in time"),
+            }
+        }
+    }
+
+    /// `POST /api/activ/descend` rides the user's executor and answers `200`
+    /// with the match report `{good, bad}` (the spec §6.2 deviation recorded
+    /// on issue #446): the report is an operation result, not `Summary`
+    /// state — the matched activity's updated state arrives as a `data:`
+    /// frame on the open stream.
+    #[tokio::test]
+    async fn descend_answers_with_match_report_and_stream_frame() {
+        let (app, store, _registry, live) = live_app().await;
+        let cookie = user_cookie(&store).await;
+
+        // Seed one activity in the shared db (the executor, the handler, and
+        // the assertions all observe it): the first CSV row matches it by
+        // the local minute, the second has no activity at its time.
+        {
+            let mut conn = live.mem().lock().unwrap().begin();
+            let act = Activity {
+                id: ActivityId::new(1),
+                user_id: UserId::from(1),
+                what: tb_domain::ActTypeId::from(1),
+                name: "Morning Ride".to_string(),
+                start: time::macros::datetime!(2023-05-18 22:13:20 UTC),
+                duration: 3600,
+                time: Some(3500),
+                distance: Some(50000),
+                climb: Some(500),
+                descend: None,
+                energy: Some(1000),
+                gear: None,
+                device_name: None,
+                external_id: None,
+            };
+            ActivityStore::activity_create(&mut conn, act)
+                .await
+                .unwrap();
+            conn.commit().await.unwrap();
+        }
+
+        // The stream opens with a valid session (spawns the executor).
+        let (status, _headers, mut body) =
+            run_sse(app.clone(), "/api/user/stream", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::OK);
+
+        // The CSV: one matching row, one unmatched row.
+        let csv = "Date,Title,Total Descent\n2023-05-18 22:13:20,Morning Ride,900\n2023-06-01 08:00:00,Phantom Ride,500\n";
+        let (status, _headers, resp) =
+            run_json(app, Method::POST, "/api/activ/descend", Some(&cookie), csv).await;
+        assert_eq!(status, StatusCode::OK);
+        let report: serde_json::Value = serde_json::from_slice(&resp).expect("report is json");
+        assert_eq!(
+            report["good"],
+            serde_json::json!(["Morning Ride at 2023-05-18 22:13:20"]),
+            "report: {report:?}"
+        );
+        assert_eq!(
+            report["bad"],
+            serde_json::json!(["Phantom Ride at 2023-06-01 08:00:00"]),
+            "report: {report:?}"
+        );
+
+        // The state change arrives as a `data:` frame on the open stream
+        // (the write rides the executor; the frame carries the Summary).
+        let frames = read_sse_frames(&mut body, 3, Duration::from_secs(3)).await;
+        assert!(
+            frames
+                .iter()
+                .any(|f| f.contains("data:") && f.contains("Morning Ride")),
+            "expected the updated activity in a data frame, got: {frames:?}"
+        );
+    }
+
+    /// `GET /api/activ/rescan` (admin) stays a direct domain op (the spec
+    /// §3/§6.4 carve-out), but after its commit it stops all live executors
+    /// (issue #446): the open stream ends (the client's native reconnect +
+    /// catch-up snapshot re-hydrates it), the answer is `204`, and the next
+    /// write respawns a fresh executor.
+    #[tokio::test]
+    async fn rescan_answers_204_and_stops_streams() {
+        let (app, store, _registry, _live) = live_app().await;
+        let cookie = user_cookie(&store).await;
+        let admin = admin_cookie(&store).await;
+
+        // The stream opens with a valid session (spawns the user's executor).
+        let (status, _headers, mut body) =
+            run_sse(app.clone(), "/api/user/stream", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::OK);
+
+        // The rescan commits and stops all streams.
+        let (status, _headers, _resp) =
+            run(app.clone(), Method::GET, "/api/activ/rescan", Some(&admin)).await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+
+        // The open stream ends (the SSE body closes).
+        assert_stream_ends(&mut body).await;
+
+        // A subsequent write respawns a fresh executor and works.
+        let (status, _headers, _resp) = run_json(
+            app.clone(),
+            Method::POST,
+            "/api/part",
+            Some(&cookie),
+            &part_body("Chain"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+
+        // And a new stream opens on the respawned executor.
+        let (status, _headers, _body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
+        assert_eq!(status, StatusCode::OK);
     }
 
     /// A panicked executor task records `Dead` (spec §4.4/§4.6): the next

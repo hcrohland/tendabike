@@ -39,7 +39,8 @@
 //! contract, with the Postgres behavior as the source of truth.
 //!
 //! The return is the `Summary` of everything the operation touched, per the
-//! write contract in `docs/agents/domain-flow.md`:
+//! write contract in `docs/agents/domain-flow.md`, wrapped in a
+//! [`WriteOutcome`]:
 //!
 //! - operations that already return a `Summary` pass it through;
 //! - bare-entity operations are wrapped into a one-entry `Summary` (`+=`);
@@ -50,7 +51,12 @@
 //! - a `ShopSubscription` and a `User` are not kinds of the `Summary`, so
 //!   subscription writes and onboarding writes report an empty `Summary` —
 //!   the stream carries nothing for them, and the HTTP response is their
-//!   delivery.
+//!   delivery;
+//! - the one write whose result is an operation outcome the `Summary`
+//!   cannot carry is `ActivityDescend`: the CSV rows the domain matched and
+//!   skipped (the [`DescendReport`]) ride the HTTP response body — the
+//!   matched activities' state still rides the frame (the §6.2 deviation,
+//!   recorded on issue #446).
 
 use time::OffsetDateTime;
 
@@ -224,6 +230,39 @@ pub enum ApiWrite {
     UserOnboardingPostpone,
 }
 
+/// The outcome of one applied [`ApiWrite`]: the `Summary` of everything the
+/// operation touched (the SSE frame the executor pushes to the user's
+/// streams), plus — for the writes whose result is an operation outcome the
+/// `Summary` cannot carry — that outcome.
+///
+/// Today that is [`ApiWrite::ActivityDescend`] alone: the CSV rows the
+/// domain matched and skipped (the [`DescendReport`]) are the handler's
+/// response body (`200 + {good, bad}`), not `Summary` state — the matched
+/// activities' updated state still rides the frame (the spec #446 §6.2
+/// deviation, recorded on issue #446).
+#[derive(Clone, Debug, PartialEq)]
+pub enum WriteOutcome {
+    /// The write's `Summary` (every write except the descend).
+    Summary(Summary),
+    /// `ActivityDescend`: the `Summary` plus the match report of the CSV
+    /// rows.
+    Descend {
+        summary: Summary,
+        report: DescendReport,
+    },
+}
+
+impl WriteOutcome {
+    /// The `Summary` of everything the write touched — the frame the
+    /// executor pushes to the user's streams.
+    pub fn summary(&self) -> &Summary {
+        match self {
+            Self::Summary(summary) => summary,
+            Self::Descend { summary, .. } => summary,
+        }
+    }
+}
+
 /// Apply one [`ApiWrite`] through the domain layer.
 ///
 /// This is the single entry point the executor loop and the write handlers
@@ -248,12 +287,13 @@ pub enum ApiWrite {
 ///
 /// Returns the `Summary` of everything the operation touched (see the module
 /// docs for how bare-entity results, tombstones, and the non-Summary
-/// `ShopSubscription`/`User` outcomes are reported).
+/// `ShopSubscription`/`User` outcomes are reported), wrapped in a
+/// [`WriteOutcome`] (the descend carries its [`DescendReport`] alongside).
 pub async fn exec(
     write: ApiWrite,
     session: &mut impl Session,
     store: &mut impl Store,
-) -> TbResult<Summary> {
+) -> TbResult<WriteOutcome> {
     // The domain operations take `&dyn Session`; borrow it once for every arm.
     let session = &*session;
 
@@ -266,19 +306,23 @@ pub async fn exec(
                     "ActivityId does not match activity".to_string(),
                 ));
             }
-            activity.update(session, store).await
+            Ok(WriteOutcome::Summary(
+                activity.update(session, store).await?,
+            ))
         }
-        ApiWrite::ActivityDelete { id } => id.delete(session, store).await,
+        ApiWrite::ActivityDelete { id } => {
+            Ok(WriteOutcome::Summary(id.delete(session, store).await?))
+        }
         ApiWrite::ActivityDescend { data } => {
             // The op also reports the rows it matched and skipped (the
-            // handler's response tuple); the Summary is what the write
-            // contract needs.
-            let (summary, _, _) = Activity::csv2descend(data.as_bytes(), session, store).await?;
-            Ok(summary)
+            // handler's response body): the Summary is what the stream
+            // frame carries, the report what the response carries.
+            let (summary, report) = Activity::csv2descend(data.as_bytes(), session, store).await?;
+            Ok(WriteOutcome::Descend { summary, report })
         }
-        ApiWrite::ActivityDefaultGear { gear } => {
-            Activity::set_default_part(gear, session, store).await
-        }
+        ApiWrite::ActivityDefaultGear { gear } => Ok(WriteOutcome::Summary(
+            Activity::set_default_part(gear, session, store).await?,
+        )),
 
         // --- attachment ---
         ApiWrite::AttachmentAttach {
@@ -287,16 +331,18 @@ pub async fn exec(
             gear,
             hook,
             all,
-        } => attach_assembly(session, part, time, gear, hook, all, store).await,
-        ApiWrite::AttachmentDetach { part, time, all } => {
-            detach_assembly(session, part, time, all, store).await
-        }
-        ApiWrite::AttachmentDispose { part, time, all } => {
-            dispose_assembly(session, part, time, all, store).await
-        }
-        ApiWrite::AttachmentRecover { part, all } => {
-            recover_assembly(session, part, all, store).await
-        }
+        } => Ok(WriteOutcome::Summary(
+            attach_assembly(session, part, time, gear, hook, all, store).await?,
+        )),
+        ApiWrite::AttachmentDetach { part, time, all } => Ok(WriteOutcome::Summary(
+            detach_assembly(session, part, time, all, store).await?,
+        )),
+        ApiWrite::AttachmentDispose { part, time, all } => Ok(WriteOutcome::Summary(
+            dispose_assembly(session, part, time, all, store).await?,
+        )),
+        ApiWrite::AttachmentRecover { part, all } => Ok(WriteOutcome::Summary(
+            recover_assembly(session, part, all, store).await?,
+        )),
 
         // --- part ---
         ApiWrite::PartCreate {
@@ -310,7 +356,7 @@ pub async fn exec(
             // parameterize: a part created through the API has none.
             let part =
                 Part::create(name, vendor, model, what, None, purchase, session, store).await?;
-            Ok(one_part(part))
+            Ok(WriteOutcome::Summary(one_part(part)))
         }
         ApiWrite::PartChange {
             id,
@@ -322,7 +368,7 @@ pub async fn exec(
             let part = id
                 .change(name, vendor, model, purchase, session, store)
                 .await?;
-            Ok(one_part(part))
+            Ok(WriteOutcome::Summary(one_part(part)))
         }
         ApiWrite::PartDelete { id } => {
             // The op returns the id; the part itself is reported as a
@@ -331,7 +377,7 @@ pub async fn exec(
             id.delete(session, store).await?;
             let mut summary = Summary::default();
             summary.parts.insert(id, None);
-            Ok(summary)
+            Ok(WriteOutcome::Summary(summary))
         }
 
         // --- partnote ---
@@ -339,7 +385,7 @@ pub async fn exec(
             let note = part
                 .note_create_text(session, name, OffsetDateTime::now_utc(), store)
                 .await?;
-            Ok(one_part_note(note))
+            Ok(WriteOutcome::Summary(one_part_note(note)))
         }
         ApiWrite::PartNoteCreateFile { part, file } => {
             // The handler's multipart parsing applies these fallbacks before
@@ -358,11 +404,11 @@ pub async fn exec(
                     store,
                 )
                 .await?;
-            Ok(one_part_note(note))
+            Ok(WriteOutcome::Summary(one_part_note(note)))
         }
         ApiWrite::PartNoteUpdateText { id, name } => {
             let note = id.update_text(session, name, store).await?;
-            Ok(one_part_note(note))
+            Ok(WriteOutcome::Summary(one_part_note(note)))
         }
         ApiWrite::PartNoteUpdateFile { id, file } => {
             let note = id
@@ -376,18 +422,18 @@ pub async fn exec(
                     store,
                 )
                 .await?;
-            Ok(one_part_note(note))
+            Ok(WriteOutcome::Summary(one_part_note(note)))
         }
         ApiWrite::PartNoteRemoveFile { id } => {
             let note = id.remove_file(session, store).await?;
-            Ok(one_part_note(note))
+            Ok(WriteOutcome::Summary(one_part_note(note)))
         }
         ApiWrite::PartNoteDelete { id } => {
             // The op returns the id; report the note as a tombstone.
             id.delete(session, store).await?;
             let mut summary = Summary::default();
             summary.part_notes.insert(id, None);
-            Ok(summary)
+            Ok(WriteOutcome::Summary(summary))
         }
 
         // --- service ---
@@ -403,20 +449,28 @@ pub async fn exec(
             part.checkuser(session, store).await?;
             // `successor` is a redo of an existing service; the create route
             // always starts a new chain.
-            Service::create(part, time, name, notes, None, plans, store).await
+            Ok(WriteOutcome::Summary(
+                Service::create(part, time, name, notes, None, plans, store).await?,
+            ))
         }
-        ApiWrite::ServiceUpdate { service } => service.update(session, store).await,
-        ApiWrite::ServiceDelete { id } => id.delete(session, store).await,
-        ApiWrite::ServiceRedo { service } => service.redo(session, store).await,
+        ApiWrite::ServiceUpdate { service } => {
+            Ok(WriteOutcome::Summary(service.update(session, store).await?))
+        }
+        ApiWrite::ServiceDelete { id } => {
+            Ok(WriteOutcome::Summary(id.delete(session, store).await?))
+        }
+        ApiWrite::ServiceRedo { service } => {
+            Ok(WriteOutcome::Summary(service.redo(session, store).await?))
+        }
 
         // --- serviceplan ---
         ApiWrite::ServicePlanCreate { plan } => {
             let plan = plan.create(session, store).await?;
-            Ok(one_service_plan(plan))
+            Ok(WriteOutcome::Summary(one_service_plan(plan)))
         }
         ApiWrite::ServicePlanUpdate { plan } => {
             let plan = plan.update(session, store).await?;
-            Ok(one_service_plan(plan))
+            Ok(WriteOutcome::Summary(one_service_plan(plan)))
         }
         ApiWrite::ServicePlanDelete { id } => {
             // The op reports the services it unlinked; the plan itself is
@@ -425,7 +479,7 @@ pub async fn exec(
             let mut summary = Summary::default();
             summary += services;
             summary.plans.insert(id, None);
-            Ok(summary)
+            Ok(WriteOutcome::Summary(summary))
         }
 
         // --- shop ---
@@ -436,7 +490,7 @@ pub async fn exec(
         } => {
             let shop =
                 ShopId::create(name, description, auto_approve, session.user_id(), store).await?;
-            Ok(one_shop(shop))
+            Ok(WriteOutcome::Summary(one_shop(shop)))
         }
         ApiWrite::ShopUpdate {
             id,
@@ -448,41 +502,43 @@ pub async fn exec(
             let shop = id
                 .update(name, description, auto_approve, session.user_id(), store)
                 .await?;
-            Ok(one_shop(shop))
+            Ok(WriteOutcome::Summary(one_shop(shop)))
         }
         ApiWrite::ShopDelete { id } => {
             let id = ShopId::get(id.into(), session.user_id(), store).await?;
             id.delete(session.user_id(), store).await?;
             let mut summary = Summary::default();
             summary.shops.insert(id, None);
-            Ok(summary)
+            Ok(WriteOutcome::Summary(summary))
         }
-        ApiWrite::ShopRegisterPart { shop, part } => shop.register_part(part, session, store).await,
-        ApiWrite::ShopUnregisterPart { shop, part } => {
-            shop.unregister_part(part, session, store).await
-        }
+        ApiWrite::ShopRegisterPart { shop, part } => Ok(WriteOutcome::Summary(
+            shop.register_part(part, session, store).await?,
+        )),
+        ApiWrite::ShopUnregisterPart { shop, part } => Ok(WriteOutcome::Summary(
+            shop.unregister_part(part, session, store).await?,
+        )),
 
         // A `ShopSubscription` is not a kind of the `Summary`, so these
         // writes report an empty Summary: the stream carries nothing for
         // them, and the HTTP response is their delivery.
         ApiWrite::ShopSubscriptionCreate { shop, message } => {
             SubscriptionId::create(shop, message, session.user_id(), store).await?;
-            Ok(Summary::default())
+            Ok(WriteOutcome::Summary(Summary::default()))
         }
         ApiWrite::ShopSubscriptionApprove { id, message } => {
             let id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
             id.approve(message, session.user_id(), store).await?;
-            Ok(Summary::default())
+            Ok(WriteOutcome::Summary(Summary::default()))
         }
         ApiWrite::ShopSubscriptionReject { id, message } => {
             let id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
             id.reject(message, session.user_id(), store).await?;
-            Ok(Summary::default())
+            Ok(WriteOutcome::Summary(Summary::default()))
         }
         ApiWrite::ShopSubscriptionCancel { id } => {
             let id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
             id.cancel(session.user_id(), store).await?;
-            Ok(Summary::default())
+            Ok(WriteOutcome::Summary(Summary::default()))
         }
 
         // --- user (onboarding) ---
@@ -501,7 +557,7 @@ pub async fn exec(
             store
                 .update_onboarding_status(&session.user_id(), OnboardingStatus::Completed)
                 .await?;
-            Ok(Summary::default())
+            Ok(WriteOutcome::Summary(Summary::default()))
         }
         ApiWrite::UserOnboardingPostpone => {
             let user = session.user_id().read(store).await?;
@@ -516,7 +572,7 @@ pub async fn exec(
                     OnboardingStatus::InitialSyncPostponed,
                 )
                 .await?;
-            Ok(Summary::default())
+            Ok(WriteOutcome::Summary(Summary::default()))
         }
     }
 }
@@ -564,24 +620,36 @@ mod tests {
         CHAIN.get().unwrap().hooks.first().copied().unwrap_or(CHAIN)
     }
 
+    /// The `Summary` of a write's outcome: every write under test reports
+    /// its `Summary` (the descend's `DescendReport` is asserted explicitly
+    /// where it is the point).
+    fn outcome_summary(outcome: WriteOutcome) -> Summary {
+        match outcome {
+            WriteOutcome::Summary(summary) => summary,
+            WriteOutcome::Descend { summary, .. } => summary,
+        }
+    }
+
     // --- Part ---
 
     #[tokio::test]
     async fn part_create_dispatches() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
         let mut session = test_session();
-        let summary = exec(
-            ApiWrite::PartCreate {
-                name: "New Chain".to_string(),
-                vendor: "Shimano".to_string(),
-                model: "CN-HG62".to_string(),
-                what: CHAIN,
-                purchase: sample_purchase_date(),
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::PartCreate {
+                    name: "New Chain".to_string(),
+                    vendor: "Shimano".to_string(),
+                    model: "CN-HG62".to_string(),
+                    what: CHAIN,
+                    purchase: sample_purchase_date(),
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.parts.len(), 1);
         let part = summary.parts.values().flatten().next().unwrap();
         assert_eq!(part.name, "New Chain");
@@ -595,18 +663,20 @@ mod tests {
         let mut store = MemStore::prepopulated();
         let mut session = test_session();
         let id = PartId::from(13); // "Spare Chain 1" — loose, owned by user 1
-        let summary = exec(
-            ApiWrite::PartChange {
-                id,
-                name: "Renamed".to_string(),
-                vendor: "New Vendor".to_string(),
-                model: "New Model".to_string(),
-                purchase: sample_purchase_date(),
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::PartChange {
+                    id,
+                    name: "Renamed".to_string(),
+                    vendor: "New Vendor".to_string(),
+                    model: "New Model".to_string(),
+                    purchase: sample_purchase_date(),
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.parts[&id].as_ref().unwrap().name, "Renamed");
         Ok(())
     }
@@ -616,7 +686,8 @@ mod tests {
         let mut store = MemStore::prepopulated();
         let mut session = test_session();
         let id = PartId::from(13);
-        let summary = exec(ApiWrite::PartDelete { id }, &mut session, &mut store).await?;
+        let summary =
+            outcome_summary(exec(ApiWrite::PartDelete { id }, &mut session, &mut store).await?);
         assert_eq!(summary.parts, HashMap::from([(id, None)]));
         assert!(store.partid_get_part(id).await.is_err());
         Ok(())
@@ -669,18 +740,20 @@ mod tests {
         .await?;
         let time = datetime!(2024-01-01 00:00 UTC);
 
-        let summary = exec(
-            ApiWrite::AttachmentAttach {
-                part: chain.id,
-                time,
-                gear: bike.id,
-                hook: chain_hook(),
-                all: false,
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::AttachmentAttach {
+                    part: chain.id,
+                    time,
+                    gear: bike.id,
+                    hook: chain_hook(),
+                    all: false,
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert!(!summary.parts.is_empty());
         let att = store
             .attachment_get_by_part_and_time(chain.id, time)
@@ -720,12 +793,14 @@ mod tests {
             .expect("the fixture activity");
         let id = act.id;
         act.name = "Renamed Ride".to_string();
-        let summary = exec(
-            ApiWrite::ActivityUpdate { id, activity: act },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ActivityUpdate { id, activity: act },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(
             summary.activities[&id].as_ref().unwrap().name,
             "Renamed Ride"
@@ -761,7 +836,8 @@ mod tests {
         let mut store = MemStore::prepopulated();
         let mut session = test_session();
         let id = ActivityId::new(3);
-        let summary = exec(ApiWrite::ActivityDelete { id }, &mut session, &mut store).await?;
+        let summary =
+            outcome_summary(exec(ApiWrite::ActivityDelete { id }, &mut session, &mut store).await?);
         assert_eq!(summary.activities, HashMap::from([(id, None)]));
         assert!(store.activity_read_by_id(id).await?.is_none());
         Ok(())
@@ -791,7 +867,7 @@ mod tests {
         // A row matching fixture activity 1 (start 2023-05-18 22:13:20Z,
         // matched by local minute) with a descend value.
         let csv = "Date,Title,Total Descent\n2023-05-18 22:13:20,Morning Ride,900\n";
-        let summary = exec(
+        let outcome = exec(
             ApiWrite::ActivityDescend {
                 data: csv.to_string(),
             },
@@ -799,12 +875,24 @@ mod tests {
             &mut store,
         )
         .await?;
+        let WriteOutcome::Descend { summary, report } = outcome else {
+            panic!("the descend write carries its match report");
+        };
         assert_eq!(
             summary.activities[&ActivityId::new(1)]
                 .as_ref()
                 .unwrap()
                 .descend,
             Some(900)
+        );
+        // The dispatch carries the match report (the handler's response
+        // body), not just the Summary.
+        assert_eq!(
+            report,
+            DescendReport {
+                good: vec!["Morning Ride at 2023-05-18 22:13:20".to_string()],
+                bad: vec![],
+            }
         );
         Ok(())
     }
@@ -831,14 +919,16 @@ mod tests {
         };
         store.activity_create(act.clone()).await?;
 
-        let summary = exec(
-            ApiWrite::ActivityDefaultGear {
-                gear: PartId::from(1), // "Main Bike" in the fixture
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ActivityDefaultGear {
+                    gear: PartId::from(1), // "Main Bike" in the fixture
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         let stored = store
             .activity_read_by_id(act.id)
             .await?
@@ -861,27 +951,31 @@ mod tests {
         let mut store = MemStore::prepopulated();
         let mut session = test_session();
         let part = PartId::from(13);
-        let summary = exec(
-            ApiWrite::PartNoteCreateText {
-                part,
-                name: "Check the tension".to_string(),
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::PartNoteCreateText {
+                    part,
+                    name: "Check the tension".to_string(),
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.part_notes.len(), 1);
         let note = summary.part_notes.values().flatten().next().unwrap();
         assert_eq!(note.name, "Check the tension");
         assert_eq!(note.part, part);
         assert!(!note.has_file());
 
-        let summary = exec(
-            ApiWrite::PartNoteDelete { id: note.id },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::PartNoteDelete { id: note.id },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.part_notes, HashMap::from([(note.id, None)]));
         assert!(store.partnote_get(note.id).await.is_err());
         Ok(())
@@ -912,29 +1006,33 @@ mod tests {
         let mut store = MemStore::prepopulated();
         let mut session = test_session();
         let time = datetime!(2024-06-15 10:00 UTC);
-        let summary = exec(
-            ApiWrite::ServiceCreate {
-                part: PartId::from(13),
-                time,
-                name: "Chain Service".to_string(),
-                notes: "Old chain".to_string(),
-                plans: vec![],
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ServiceCreate {
+                    part: PartId::from(13),
+                    time,
+                    name: "Chain Service".to_string(),
+                    notes: "Old chain".to_string(),
+                    plans: vec![],
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.services.len(), 1);
         assert_eq!(summary.usages.len(), 1);
         let service = summary.services.values().flatten().next().unwrap();
         assert_eq!(service.name, "Chain Service");
 
-        let summary = exec(
-            ApiWrite::ServiceDelete { id: service.id },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ServiceDelete { id: service.id },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.services, HashMap::from([(service.id, None)]));
         Ok(())
     }
@@ -982,21 +1080,25 @@ mod tests {
             uid: None,
             energy: None,
         };
-        let summary = exec(
-            ApiWrite::ServicePlanCreate { plan },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ServicePlanCreate { plan },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.plans.len(), 1);
         let plan_id = *summary.plans.keys().next().unwrap();
 
-        let summary = exec(
-            ApiWrite::ServicePlanDelete { id: plan_id },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ServicePlanDelete { id: plan_id },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.plans, HashMap::from([(plan_id, None)]));
         Ok(())
     }
@@ -1007,16 +1109,18 @@ mod tests {
     async fn shop_create_dispatches() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
         let mut session = test_session();
-        let summary = exec(
-            ApiWrite::ShopCreate {
-                name: "Workshop".to_string(),
-                description: None,
-                auto_approve: true,
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ShopCreate {
+                    name: "Workshop".to_string(),
+                    description: None,
+                    auto_approve: true,
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.shops.len(), 1);
         let shop = summary.shops.values().flatten().next().unwrap();
         assert_eq!(shop.name, "Workshop");
@@ -1028,16 +1132,18 @@ mod tests {
     async fn shop_register_and_unregister_part_dispatch() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
         let mut session = test_session();
-        let summary = exec(
-            ApiWrite::ShopCreate {
-                name: "Workshop".to_string(),
-                description: None,
-                auto_approve: true,
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ShopCreate {
+                    name: "Workshop".to_string(),
+                    description: None,
+                    auto_approve: true,
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         let shop_id = *summary.shops.keys().next().unwrap();
         // The route's checkuser requires an (owner) subscription, so create
         // one first — auto-approve activates it.
@@ -1052,26 +1158,30 @@ mod tests {
         .await?;
         let part = PartId::from(13); // loose spare, owned by user 1
 
-        let summary = exec(
-            ApiWrite::ShopRegisterPart {
-                shop: shop_id,
-                part,
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ShopRegisterPart {
+                    shop: shop_id,
+                    part,
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.parts[&part].as_ref().unwrap().shop, Some(shop_id));
 
-        let summary = exec(
-            ApiWrite::ShopUnregisterPart {
-                shop: shop_id,
-                part,
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ShopUnregisterPart {
+                    shop: shop_id,
+                    part,
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary.parts[&part].as_ref().unwrap().shop, None);
         Ok(())
     }
@@ -1080,29 +1190,33 @@ mod tests {
     async fn shop_subscription_create_and_cancel_dispatch() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
         let mut session = test_session();
-        let summary = exec(
-            ApiWrite::ShopCreate {
-                name: "Workshop".to_string(),
-                description: None,
-                auto_approve: true,
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ShopCreate {
+                    name: "Workshop".to_string(),
+                    description: None,
+                    auto_approve: true,
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         let shop_id = *summary.shops.keys().next().unwrap();
 
         // A subscription is not a Summary kind: the write reports an empty
         // Summary, the side effect lands in the store.
-        let summary = exec(
-            ApiWrite::ShopSubscriptionCreate {
-                shop: shop_id,
-                message: Some("Please approve".to_string()),
-            },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ShopSubscriptionCreate {
+                    shop: shop_id,
+                    message: Some("Please approve".to_string()),
+                },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary, Summary::default());
         let sub = store
             .subscription_find_active(shop_id, test_user())
@@ -1110,12 +1224,14 @@ mod tests {
             .expect("auto-approve activates the subscription");
         assert_eq!(sub.status, SubscriptionStatus::Active);
 
-        let summary = exec(
-            ApiWrite::ShopSubscriptionCancel { id: sub.id },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ShopSubscriptionCancel { id: sub.id },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         assert_eq!(summary, Summary::default());
         assert!(store.subscription_get(sub.id).await.is_err());
         Ok(())
@@ -1127,12 +1243,14 @@ mod tests {
     async fn user_onboarding_sync_dispatch() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
         let mut session = test_session();
-        let summary = exec(
-            ApiWrite::UserOnboardingSync { time: 0 },
-            &mut session,
-            &mut store,
-        )
-        .await?;
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::UserOnboardingSync { time: 0 },
+                &mut session,
+                &mut store,
+            )
+            .await?,
+        );
         // A User is not in any Summary.
         assert_eq!(summary, Summary::default());
         let user = UserStore::get(&mut store, UserId::from(1)).await?;
@@ -1157,7 +1275,9 @@ mod tests {
     async fn user_onboarding_postpone_dispatch() -> TbResult<()> {
         let mut store = MemStore::prepopulated();
         let mut session = test_session();
-        let summary = exec(ApiWrite::UserOnboardingPostpone, &mut session, &mut store).await?;
+        let summary = outcome_summary(
+            exec(ApiWrite::UserOnboardingPostpone, &mut session, &mut store).await?,
+        );
         assert_eq!(summary, Summary::default());
         let user = UserStore::get(&mut store, UserId::from(1)).await?;
         assert_eq!(

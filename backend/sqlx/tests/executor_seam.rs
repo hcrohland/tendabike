@@ -215,9 +215,9 @@ async fn database_is_reachable() {
 
 /// An API write end to end on the live adapter: the channel's request runs
 /// in one live transaction, commits, resolves the route's oneshot with the
-/// write's `Summary`, pushes exactly one stream frame, and the row is
-/// visible to a fresh connection afterwards. The idle loop then reaps and
-/// `run` returns `Ok`.
+/// write's outcome (the `Summary`, the frame), pushes exactly one stream
+/// frame, and the row is visible to a fresh connection afterwards. The idle
+/// loop then reaps and `run` returns `Ok`.
 #[tokio::test]
 #[ignore]
 async fn api_write_end_to_end() {
@@ -243,12 +243,14 @@ async fn api_write_end_to_end() {
         IDLE_TIMEOUT,
     ));
 
-    // The route's oneshot resolves with the write's summary.
-    let summary = tokio::time::timeout(TEST_TIMEOUT, reply)
+    // The route's oneshot resolves with the write's outcome; the part
+    // write's `Summary` is the frame.
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, reply)
         .await
         .expect("the route's reply must resolve in time")
         .expect("the loop must resolve the oneshot, not drop it")
         .expect("the part write must succeed");
+    let summary = outcome.summary().clone();
     assert_eq!(summary.parts.len(), 1);
     let part = summary
         .parts

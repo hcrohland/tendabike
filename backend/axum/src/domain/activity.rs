@@ -21,7 +21,7 @@ use crate::{
     appstate::AppState,
     error::{ApiResult, AppError},
 };
-use tb_domain::{Activity, ActivityId, ApiWrite, PartId};
+use tb_domain::{Activity, ActivityId, ApiWrite, DescendReport, PartId};
 use tb_exec::{Txn, TxnSource};
 use tb_strava::{StravaSession, StravaStore};
 
@@ -45,14 +45,19 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn rescan<S>(_u: AxumAdmin, State(state): State<AppState<S>>) -> ApiResult<()>
+async fn rescan<S>(_u: AxumAdmin, State(state): State<AppState<S>>) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     Activity::rescan_all(&mut store).await?;
     store.commit().await?;
-    Ok(Json(()))
+    // The rescan is all-users maintenance that bypasses the executors (the
+    // spec §3/§6.4 carve-out), so no frame carries its effect: stop every
+    // live executor — open streams end, and each client's native reconnect
+    // + catch-up snapshot re-hydrates it (issue #446).
+    state.registry.stop_all().await;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// web interface to read an activity
@@ -124,24 +129,26 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// `POST /api/activ/descend` — the raw CSV body. The write rides the
+/// user's executor (like every write), and the handler answers `200` with
+/// the match report `{good, bad}` (the spec §6.2 deviation recorded on
+/// issue #446): the report is an operation result, not `Summary` state —
+/// the matched activities' updated state arrives as the stream frame the
+/// executor publishes.
 async fn descend<S>(
     user: RequestSession,
     State(state): State<AppState<S>>,
     data: String,
-) -> Result<StatusCode, AppError>
+) -> Result<Json<DescendReport>, AppError>
 where
     S: TxnSource + Clone + 'static,
     S::Conn: StravaStore,
 {
-    state
+    let report = state
         .registry
-        .write(
-            &state.source,
-            user.tb_id(),
-            ApiWrite::ActivityDescend { data },
-        )
+        .write_descend(&state.source, user.tb_id(), data)
         .await?;
-    Ok(StatusCode::NO_CONTENT)
+    Ok(Json(report))
 }
 
 pub(crate) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>

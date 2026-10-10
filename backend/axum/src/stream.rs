@@ -39,7 +39,7 @@ use http::StatusCode;
 use log::error;
 use tokio::sync::{Mutex, broadcast, watch};
 
-use tb_domain::{ApiWrite, Error, Session, Summary, TbResult, UserId};
+use tb_domain::{ApiWrite, DescendReport, Error, Session, Summary, TbResult, UserId, WriteOutcome};
 use tb_exec::{ApiWriteRequest, ApiWriteSender, Txn, TxnSource, api_write_channel, run};
 use tb_strava::event::{Event as StravaEvent, ObjectType};
 use tb_strava::{StravaId, StravaStore};
@@ -78,8 +78,12 @@ pub enum ExecutorStatus {
 
 /// One live per-user executor: the shared fate channel, the send half of the
 /// user's API-write channel (the write handlers enqueue here, spec §6.2),
-/// the SSE frame sink the stream tasks subscribe to, and the consumed-
-/// Strava-event channel the admin sync awaits (spec §6.4).
+/// the SSE frame sink the stream tasks subscribe to, the consumed-
+/// Strava-event channel the admin sync awaits (spec §6.4), and the task's
+/// abort handle (the registry's `stop_all` tears the executor down —
+/// rescan, issue #446). The `AbortHandle` (not the `JoinHandle`) is stored:
+/// the watchdog keeps the original handle to `await` and record `Dead` on
+/// a panic **or** the abort `JoinError`.
 #[derive(Clone)]
 struct Executor {
     status: watch::Receiver<ExecutorStatus>,
@@ -90,6 +94,9 @@ struct Executor {
     /// Every Strava event the loop consumed (spec §6.4): the admin sync's
     /// completion signal, correlated by the event's identity.
     events: broadcast::Sender<StravaEvent>,
+    /// Aborts the executor task (`stop_all`): the watchdog records `Dead`
+    /// on the abort `JoinError`, like a panic.
+    task: tokio::task::AbortHandle,
 }
 
 /// The per-user executor registry (spec §4.4): the live executor per
@@ -162,6 +169,58 @@ impl Registry {
         S: TxnSource + Clone + 'static,
         S::Conn: StravaStore,
     {
+        match self.write_outcome(source, user_id, write).await? {
+            WriteOutcome::Summary(summary) => Ok(summary),
+            WriteOutcome::Descend { summary, .. } => Ok(summary),
+        }
+    }
+
+    /// Enqueue the Garmin CSV descend on the user's executor and await its
+    /// match report (the spec §6.2 deviation recorded on issue #446): the
+    /// report is the response body (`200 + {good, bad}`); the matched
+    /// activities' state rides the stream frame like any other write. The
+    /// spawn-or-join, enqueue, and unbounded await are `write`'s; only the
+    /// outcome the route receives differs.
+    pub async fn write_descend<S>(
+        &self,
+        source: &S,
+        user_id: UserId,
+        data: String,
+    ) -> TbResult<DescendReport>
+    where
+        S: TxnSource + Clone + 'static,
+        S::Conn: StravaStore,
+    {
+        match self
+            .write_outcome(source, user_id, ApiWrite::ActivityDescend { data })
+            .await?
+        {
+            WriteOutcome::Descend { report, .. } => Ok(report),
+            // The descend write always carries its report; anything else is
+            // a bug, not a domain outcome.
+            WriteOutcome::Summary(_) => Err(Error::AnyFailure(anyhow::anyhow!(
+                "the descend write did not carry its match report"
+            ))),
+        }
+    }
+
+    /// Enqueue one [`ApiWrite`] on the user's executor and await the full
+    /// outcome (the `Summary` plus, for the descend, its match report):
+    /// spawn-or-join the executor, send the request on the user's
+    /// API-write channel, and await the oneshot (unbounded — through a
+    /// 15-minute rate-limit backoff the write may wait long, and that is
+    /// the spec'd behavior). `exec_field` drops the registry lock on
+    /// return, so the unbounded reply await runs without it.
+    async fn write_outcome<S>(
+        &self,
+        source: &S,
+        user_id: UserId,
+        write: ApiWrite,
+    ) -> TbResult<WriteOutcome>
+    where
+        S: TxnSource + Clone + 'static,
+        S::Conn: StravaStore,
+    {
         let (request, reply) = ApiWriteRequest::new(write);
         let writer = self
             .exec_field(source, user_id, |exec| exec.writer.clone())
@@ -178,6 +237,25 @@ impl Registry {
                 "the executor for user {user_id} dropped the write"
             ))
         })?
+    }
+
+    /// Stop every live executor (the admin rescan's global re-hydration,
+    /// issue #446): for each executor, abort the task (the watchdog records
+    /// `Dead` on the abort `JoinError`, like a panic) — the aborted task
+    /// drops its clones of the frame and consumed-event senders, and
+    /// clearing the map drops the registry's, so both channels close and
+    /// open streams see the close and end (their clients reconnect and the
+    /// catch-up snapshot re-hydrates them; an in-flight admin sync hits its
+    /// already-handled queue-fallback path) — then clear the map. The next
+    /// `subscribe`/`write` respawns fresh (`ensure_running`'s existing
+    /// behavior). The lock is held across the loop, so no executor can be
+    /// spawned between the aborts and the clear.
+    pub async fn stop_all(&self) {
+        let mut map = self.executors.lock().await;
+        for exec in map.values() {
+            exec.task.abort();
+        }
+        map.clear();
     }
 
     /// A subscription to the user's executor's consumed-Strava-event channel
@@ -366,6 +444,12 @@ impl Registry {
         // `ensure_running` respawns instead of handing out a dead executor
         // forever (spec §4.4: the next SSE connect or API write respawns
         // it). The watchdog lives exactly as long as the executor task.
+        //
+        // The abort handle is taken before the watchdog moves `join`: it is
+        // how `stop_all` tears the task down (rescan, issue #446) — the
+        // watchdog's `join.await` then sees the abort `JoinError` and
+        // records `Dead`, exactly like a panic.
+        let task = join.abort_handle();
         tokio::spawn(async move {
             if join.await.is_err() {
                 let _ = watchdog_status.send(ExecutorStatus::Dead);
@@ -377,6 +461,7 @@ impl Registry {
             writer,
             frames,
             events,
+            task,
         };
         map.insert(user_id, exec.clone());
         Ok(exec)

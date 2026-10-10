@@ -35,7 +35,7 @@ use std::future::Future;
 use std::time::{Duration, Instant};
 
 use log::{debug, error, info, warn};
-use tb_domain::{Error, Summary, TbResult, exec};
+use tb_domain::{Error, Summary, TbResult, WriteOutcome, exec};
 use tb_strava::event::{Event, QueueRead, get_event, process};
 use tb_strava::{StravaSession, StravaStore};
 use tokio::sync::broadcast;
@@ -517,12 +517,12 @@ where
         }
     };
 
-    let summary = exec(write, session, &mut conn).await;
-    let outcome: TbResult<Summary> = match summary {
-        Ok(summary) => match conn.commit().await {
+    let outcome = exec(write, session, &mut conn).await;
+    let outcome: TbResult<WriteOutcome> = match outcome {
+        Ok(outcome) => match conn.commit().await {
             Ok(()) => {
                 backoff.reset();
-                Ok(summary)
+                Ok(outcome)
             }
             Err(err) => {
                 // DB failure (spec §4.6): 500 the client, back off, continue.
@@ -550,8 +550,10 @@ where
             Err(err)
         }
     };
-    if let Ok(summary) = &outcome {
-        push_frame(frames, summary);
+    if let Ok(outcome) = &outcome {
+        // The frame is the write's `Summary` (the descend's report is the
+        // response body, not state — it never rides the frame).
+        push_frame(frames, outcome.summary());
     }
     if let Err(err) = &outcome {
         error!("the API write failed: {err:?}");
