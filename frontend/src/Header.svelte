@@ -16,7 +16,7 @@
   } from "flowbite-svelte";
   import { handleError, myfetch } from "./lib/store";
   import { refresh, getUser, setUser } from "./lib/user";
-  import { startStream, stopStream } from "./lib/stream";
+  import { markHydrated, startStream, stopStream } from "./lib/stream";
   import { activities } from "./lib/activity";
   import { stateValues } from "./lib/mapable.svelte";
   import Sport from "./Widgets/Sport.svelte";
@@ -35,16 +35,28 @@
 
   let openGarmin = $state(false);
 
-  /// The stream pushes every completed executor message as a full `Summary`
-  /// frame; the avatar spinner tracks the catch-up snapshot of the initial
-  /// load and of every reconnect. A failed first open surfaces through the
-  /// global banner (`handleError`) — the rejection must not be unhandled
-  /// (spec §7).
-  let hook_promise = $state(
-    startStream((p) => {
-      hook_promise = p;
-    }).catch(handleError),
-  );
+  /// The avatar spinner tracks the initial catch-up snapshot (part of
+  /// initData's promise) and every reconnect snapshot.
+  // svelte-ignore state_referenced_locally — `promise` is the initData
+  // promise created once in App's module scope; its identity is stable, so
+  // capturing it at init is the intent (it is the initial snapshot).
+  let hook_promise = $state(promise);
+
+  /// The stream opens only once the user is known: an anonymous session
+  /// gets the About page (the 401 redirect), never a stream. The initial
+  /// snapshot (initData's refresh) is the single hydration; the stream
+  /// buffers the frames that race it until it settles — a failed hydration
+  /// flushes too: the frames are the newest state, and the buffer must not
+  /// grow unbounded.
+  $effect(() => {
+    promise.then(
+      () => markHydrated(),
+      () => markHydrated(),
+    );
+    if (getUser()) {
+      startStream((p) => (hook_promise = p));
+    }
+  });
 
   onDestroy(() => stopStream());
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { startStream, stopStream } from "./stream";
+import { markHydrated, startStream, stopStream } from "./stream";
 import { parts } from "./part";
 import { stateValues } from "./mapable.svelte";
 import { setUser, getUser } from "./user";
@@ -63,12 +63,22 @@ describe("stream", () => {
     expect(theStream().url).toBe("/api/user/stream");
   });
 
-  it("on open, fetches the full summary and hydrates the maps", async () => {
+  it("the first open does not snapshot (the session init's snapshot is parallel with the connect)", () => {
     fetchMock.mockResolvedValue(resp(summaryContent()));
-    const started = startStream(() => {}, factory);
+    startStream(() => {}, factory);
     theStream().fireOpen();
-    await started;
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("a reconnect re-runs the snapshot fetch", async () => {
+    fetchMock.mockResolvedValue(resp(summaryContent()));
+    let seen: Promise<void> | undefined;
+    startStream((p) => (seen = p), factory);
+    theStream().fireOpen();
+    theStream().fireError();
+    theStream().fireOpen();
+    await vi.waitFor(() => expect(seen).toBeInstanceOf(Promise));
+    await seen!;
     expect(fetchMock.mock.calls[0][0]).toBe("/api/user/summary");
     expect(parts[1]).toBeDefined();
   });
@@ -79,7 +89,10 @@ describe("stream", () => {
       fetchMock
         .mockRejectedValueOnce(new Error("network"))
         .mockResolvedValueOnce(resp(summaryContent()));
-      const started = startStream(() => {}, factory);
+      let seen: Promise<void> | undefined;
+      startStream((p) => (seen = p), factory);
+      theStream().fireOpen();
+      theStream().fireError();
       theStream().fireOpen();
       expect(fetchMock).toHaveBeenCalledTimes(1);
       // No retry before the ~3s spacing (the native EventSource cadence).
@@ -87,7 +100,7 @@ describe("stream", () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
       await vi.advanceTimersByTimeAsync(1);
       expect(fetchMock).toHaveBeenCalledTimes(2);
-      await started;
+      await seen!;
       expect(parts[1]).toBeDefined();
     } finally {
       vi.useRealTimers();
@@ -98,12 +111,15 @@ describe("stream", () => {
     vi.useFakeTimers();
     try {
       fetchMock.mockRejectedValue(new Error("network"));
-      const started = startStream(() => {}, factory);
+      let seen: Promise<void> | undefined;
+      startStream((p) => (seen = p), factory);
+      theStream().fireOpen();
+      theStream().fireError();
       theStream().fireOpen();
       // Expect the rejection up front, so the promise is handled before the
       // advances run it out (a late-attached handler is an unhandled
       // rejection to Node, which fails the suite).
-      const expectation = expect(started).rejects.toThrow();
+      const expectation = expect(seen!).rejects.toThrow();
       await vi.advanceTimersByTimeAsync(3000);
       await vi.advanceTimersByTimeAsync(3000);
       // First attempt + two retries, then the promise gives up.
@@ -114,20 +130,42 @@ describe("stream", () => {
     }
   });
 
-  it("passes each snapshot to onSnapshot, including the first", async () => {
+  it("passes each reconnect snapshot to onSnapshot", async () => {
     fetchMock.mockResolvedValue(resp(summaryContent()));
     let seen: Promise<void> | undefined;
-    const started = startStream((p) => (seen = p), factory);
+    startStream((p) => (seen = p), factory);
     theStream().fireOpen();
-    await started;
+    expect(seen).toBeUndefined();
+    theStream().fireError();
+    theStream().fireOpen();
     expect(seen).toBeInstanceOf(Promise);
     await seen!;
     expect(parts[1]).toBeDefined();
   });
 
-  it("merges each stream frame via updateSummary", () => {
+  it("buffers frames until the initial hydration, then flushes them in order", () => {
     startStream(() => {}, factory);
     theStream().fireOpen();
+    theStream().fireMessage(
+      JSON.stringify(
+        summary({ parts: { "7": { id: 7, name: "First Frame" } } }),
+      ),
+    );
+    theStream().fireMessage(
+      JSON.stringify(
+        summary({ parts: { "7": { id: 7, name: "Second Frame" } } }),
+      ),
+    );
+    expect(parts[7]).toBeUndefined();
+    markHydrated();
+    expect(parts[7]).toBeDefined();
+    expect(parts[7].name).toBe("Second Frame");
+  });
+
+  it("merges each stream frame via updateSummary once hydrated", () => {
+    startStream(() => {}, factory);
+    theStream().fireOpen();
+    markHydrated();
     theStream().fireMessage(
       JSON.stringify(
         summary({ parts: { "7": { id: 7, name: "Frame Part" } } }),
@@ -141,25 +179,15 @@ describe("stream", () => {
     parts.setMap([summaryContent().parts["1"]]);
     startStream(() => {}, factory);
     theStream().fireOpen();
+    markHydrated();
     theStream().fireMessage(JSON.stringify(summary({ parts: { "1": null } })));
     expect(parts[1]).toBeUndefined();
     expect(stateValues(parts)).toHaveLength(0);
   });
 
-  it("a reconnect re-runs the snapshot fetch", async () => {
-    fetchMock.mockResolvedValue(resp(summaryContent()));
-    startStream(() => {}, factory);
-    theStream().fireOpen();
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    theStream().fireError();
-    theStream().fireOpen();
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(fetchMock.mock.calls[1][0]).toBe("/api/user/summary");
-  });
-
   it("after 5 consecutive failed opens, probes liveness with GET /api/user", async () => {
     fetchMock.mockResolvedValue(resp({ id: 1 }));
-    startStream(() => {}, factory).catch(() => {});
+    startStream(() => {}, factory);
     for (let i = 0; i < 4; i++) theStream().fireError();
     expect(fetchMock).not.toHaveBeenCalledWith("/api/user", undefined);
     theStream().fireError();
@@ -170,10 +198,9 @@ describe("stream", () => {
 
   it("a successful open resets the failed-open counter", async () => {
     fetchMock.mockResolvedValue(resp(summaryContent()));
-    startStream(() => {}, factory).catch(() => {});
+    startStream(() => {}, factory);
     for (let i = 0; i < 4; i++) theStream().fireError();
     theStream().fireOpen();
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     // The open reset the counter, so four more errors stay under the
     // probe threshold (the probe fires synchronously on the 5th).
     for (let i = 0; i < 4; i++) theStream().fireError();
@@ -190,7 +217,7 @@ describe("stream", () => {
       onboarding_status: "completed",
     });
     fetchMock.mockResolvedValue(resp("Unauthorized", 401, false, ""));
-    startStream(() => {}, factory).catch(() => {});
+    startStream(() => {}, factory);
     for (let i = 0; i < 5; i++) theStream().fireError();
     await vi.waitFor(() => expect(getUser()).toBeUndefined());
     expect(message.active).toBe(true);
@@ -206,10 +233,12 @@ describe("stream", () => {
     expect(parts[9]).toBeUndefined();
   });
 
-  it("the snapshot mirrors the manual refresh shop scope", async () => {
+  it("the reconnect snapshot mirrors the manual refresh shop scope", async () => {
     fetchMock.mockResolvedValue(resp(summaryContent()));
     setShop(new Shop({ id: 10, name: "S" }));
     startStream(() => {}, factory);
+    theStream().fireOpen();
+    theStream().fireError();
     theStream().fireOpen();
     await vi.waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -217,11 +246,5 @@ describe("stream", () => {
         undefined,
       ),
     );
-  });
-
-  it("a failed first open rejects the start promise", async () => {
-    const started = startStream(() => {}, factory);
-    theStream().fireError();
-    await expect(started).rejects.toThrow();
   });
 });

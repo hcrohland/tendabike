@@ -15,7 +15,7 @@ import { activities } from "./activity";
 import { services } from "./service";
 import { usages } from "./usage";
 import { plans } from "./serviceplan";
-import { shops } from "./shop";
+import { shops, setShop } from "./shop";
 import { stateValues } from "./mapable.svelte";
 import { resp, summary, summaryContent } from "../test/helpers";
 
@@ -52,11 +52,12 @@ describe("initData", () => {
 
   beforeEach(() => {
     setUser(undefined);
+    setShop(undefined);
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
   });
 
-  it("sets the user; the stream's open snapshot is the single hydration", async () => {
+  it("sets the user and fetches the initial catch-up summary", async () => {
     const userData = {
       id: 1,
       firstname: "Max",
@@ -65,11 +66,15 @@ describe("initData", () => {
       is_admin: false,
       onboarding_status: "completed",
     };
-    fetchMock.mockResolvedValueOnce(resp(userData));
+    fetchMock
+      .mockResolvedValueOnce(resp(userData))
+      .mockResolvedValueOnce(resp(summaryContent()));
     await initData();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0][0]).toBe("/api/user");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/user/summary");
     expect(getUser()).toEqual(userData);
+    expect(parts[1]).toBeDefined();
   });
 
   it("does not set a user when the fetch returns null", async () => {

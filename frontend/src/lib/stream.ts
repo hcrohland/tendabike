@@ -29,16 +29,19 @@ const snapshotRetryDelay = 3000;
 
 let active: UserStream | undefined;
 
-/// Open the user stream and keep it open. Returns the promise of the first
-/// catch-up snapshot; every snapshot (initial and reconnect) is also passed
-/// to `onSnapshot`, so the caller can keep the avatar spinner in step.
+/// Open the user stream and keep it open. The stream opens **only for an
+/// authenticated user** (the caller gates it on `getUser()`) — an anonymous
+/// session gets the About page, never a stream. The initial catch-up
+/// snapshot is the session init's (it runs in parallel with this connect);
+/// every *reconnect* open re-runs the snapshot and passes it to
+/// `onSnapshot`, so the caller can keep the avatar spinner in step.
 export function startStream(
-  onSnapshot: (p: Promise<void>) => void,
+  onSnapshot: (p: Promise<void>) => void = () => {},
   factory: EventSourceFactory = (url) => new EventSource(url),
-): Promise<void> {
+): void {
   stopStream();
-  active = new UserStream(factory);
-  return active.start(onSnapshot);
+  active = new UserStream(factory, onSnapshot);
+  active.start();
 }
 
 /// Close the stream on unmount.
@@ -47,49 +50,65 @@ export function stopStream() {
   active = undefined;
 }
 
+/// The initial hydration (the session init's catch-up snapshot) has landed:
+/// flush the frames that raced it. A frame that arrived while the snapshot
+/// was in flight must not be clobbered by the snapshot's full replace.
+export function markHydrated() {
+  active?.flush();
+}
+
 class UserStream {
   private es: EventSourceLike | undefined;
   private failedOpens = 0;
-  private settled = false;
+  private opened = false;
+  private hydrated = false;
+  private pending: Summary[] = [];
   private stopped = false;
-  private startPromise: Promise<void>;
-  private settleStart: (p: Promise<void>) => void = () => {};
-  private failStart: (e: Error) => void = () => {};
 
-  constructor(private factory: EventSourceFactory) {
-    this.startPromise = new Promise<void>((resolve, reject) => {
-      this.settleStart = resolve;
-      this.failStart = reject;
-    });
-  }
+  constructor(
+    private factory: EventSourceFactory,
+    private onSnapshot: (p: Promise<void>) => void,
+  ) {}
 
-  start(onSnapshot: (p: Promise<void>) => void): Promise<void> {
+  start() {
     const es = this.factory(streamUrl);
     this.es = es;
     es.onopen = () => {
       if (this.stopped) return;
       this.failedOpens = 0;
-      const snapshot = this.snapshot();
-      onSnapshot(snapshot);
-      if (!this.settled) {
-        this.settled = true;
-        this.settleStart(snapshot);
-      }
+      // The initial snapshot is the session init's (parallel with this
+      // connect); every *reconnect* re-runs it, stream first, then snapshot.
+      if (this.opened) this.onSnapshot(this.snapshot());
+      this.opened = true;
     };
     es.onerror = () => {
       if (this.stopped) return;
+      // A failed first open is silent: the native reconnect keeps trying,
+      // and the liveness probe (below) is where a persistent failure —
+      // including the 401 → login redirect — surfaces.
       this.failedOpens += 1;
       if (this.failedOpens >= maxFailedOpens) this.probe();
-      if (!this.settled) {
-        this.settled = true;
-        this.failStart(new Error("stream open failed"));
-      }
     };
     es.onmessage = (e: MessageEvent) => {
       if (this.stopped) return;
-      updateSummary(JSON.parse(e.data) as Summary);
+      const frame = JSON.parse(e.data) as Summary;
+      if (!this.hydrated) {
+        // The initial snapshot is in flight; buffer the frame so the
+        // snapshot's full replace cannot clobber it.
+        this.pending.push(frame);
+        return;
+      }
+      updateSummary(frame);
     };
-    return this.startPromise;
+  }
+
+  /// The initial snapshot has landed: merge the frames that raced it, in
+  /// arrival order.
+  flush() {
+    if (this.stopped || this.hydrated) return;
+    this.hydrated = true;
+    for (const frame of this.pending) updateSummary(frame);
+    this.pending = [];
   }
 
   /// The catch-up snapshot: the full summary the manual refresh uses, so a
@@ -132,5 +151,6 @@ class UserStream {
     this.stopped = true;
     this.es?.close();
     this.es = undefined;
+    this.pending = [];
   }
 }
