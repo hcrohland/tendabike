@@ -264,7 +264,7 @@ class Attachment {
 
 ## Tests
 
-Test coverage lives in `domain/src/entities/attachment.rs:617-3443` with ~15+ tests across:
+Test coverage lives in `domain/src/entities/attachment/attachment_tests.rs` with ~15+ tests across:
 
 | Category                | Tests | What they cover                                                 |
 | ----------------------- | ----- | --------------------------------------------------------------- |
@@ -287,7 +287,8 @@ Test coverage lives in `domain/src/entities/attachment.rs:617-3443` with ~15+ te
 
 | File                                                   | Role                                            |
 | ------------------------------------------------------ | ----------------------------------------------- |
-| `domain/src/entities/attachment.rs`                    | Core entity, operations, and unit tests         |
+| `domain/src/entities/attachment.rs`                    | Core entity and operations                      |
+| `domain/src/entities/attachment/attachment_tests.rs`   | Unit tests (`#[cfg(test)]` suite)               |
 | `domain/src/traits/attachment.rs`                      | Store trait interface (10 methods)              |
 | `domain/src/entities/types.rs`                         | PartType definitions with hooks                 |
 | `domain/src/entities/types/objects.rs`                 | Static part type registry (20 types)            |
