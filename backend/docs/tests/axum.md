@@ -1,6 +1,6 @@
 # tb_axum tests
 
-`SQLX_OFFLINE=true cargo test -p tb_axum`. All tests run in-memory (no database; the one DB-boundary test attempts a refused TCP connect). Unit tests are colocated in each module's `#[cfg(test)] mod tests` (`error.rs`, `strava/oauth.rs`, `strava/webhook.rs`, `strava/session.rs`); router tests live in `lib.rs` `mod tests` and exercise the real router built by the private `routes()` helper.
+`SQLX_OFFLINE=true cargo test -p tb_axum`. All tests run in-memory (no database; the one DB-boundary test attempts a refused TCP connect). Unit tests are colocated in each module's `#[cfg(test)] mod tests` (`error.rs`, `strava/oauth.rs`, `strava/webhook.rs`, `strava/session.rs`); router tests live in `lib_tests.rs` (the `#[cfg(test)]` module declared in `lib.rs`) and exercise the real router built by the private `routes()` helper.
 
 ## Coverage
 
