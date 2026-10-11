@@ -52,4 +52,4 @@ pub use txn::*;
 #[cfg(test)]
 mod executor_tests;
 #[cfg(test)]
-mod tests;
+mod lib_tests;
