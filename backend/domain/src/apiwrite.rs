@@ -376,7 +376,7 @@ pub async fn exec(
             // everything touched).
             id.delete(session, store).await?;
             let mut summary = Summary::default();
-            summary.parts.insert(id, None);
+            summary.parts.tombstone(id);
             Ok(WriteOutcome::Summary(summary))
         }
 
@@ -432,7 +432,7 @@ pub async fn exec(
             // The op returns the id; report the note as a tombstone.
             id.delete(session, store).await?;
             let mut summary = Summary::default();
-            summary.part_notes.insert(id, None);
+            summary.part_notes.tombstone(id);
             Ok(WriteOutcome::Summary(summary))
         }
 
@@ -478,7 +478,7 @@ pub async fn exec(
             let services = id.delete(session, store).await?;
             let mut summary = Summary::default();
             summary.services.upsert_all(services);
-            summary.plans.insert(id, None);
+            summary.plans.tombstone(id);
             Ok(WriteOutcome::Summary(summary))
         }
 
@@ -508,7 +508,7 @@ pub async fn exec(
             let id = ShopId::get(id.into(), session.user_id(), store).await?;
             id.delete(session.user_id(), store).await?;
             let mut summary = Summary::default();
-            summary.shops.insert(id, None);
+            summary.shops.tombstone(id);
             Ok(WriteOutcome::Summary(summary))
         }
         ApiWrite::ShopRegisterPart { shop, part } => Ok(WriteOutcome::Summary(
@@ -601,7 +601,9 @@ mod tests {
     use crate::test_support::{
         MemStore,
         fixtures::{sample_purchase_date, test_session, test_user},
+        only_tombstone,
         part_type_ids::{BIKE, CHAIN},
+        sole_live,
     };
     use crate::traits::{
         ActivityStore, AttachmentStore, PartNoteStore, PartStore, ShopStore, UserStore,
@@ -610,7 +612,6 @@ mod tests {
         ActTypeId, Activity, ActivityId, Error, MAX_TIME, OnboardingStatus, Part, PartId,
         PartTypeId, ServicePlan, ServicePlanId, SubscriptionStatus, Summary, UserId,
     };
-    use std::collections::HashMap;
     use time::macros::datetime;
 
     /// A fresh hook on a bike that a chain can be attached to (the first hook
@@ -650,7 +651,7 @@ mod tests {
             .await?,
         );
         assert_eq!(summary.parts.len(), 1);
-        let part = summary.parts.values().flatten().next().unwrap();
+        let part = sole_live(&summary.parts);
         assert_eq!(part.name, "New Chain");
         assert_eq!(part.owner, test_user());
         assert_eq!(part.what, CHAIN);
@@ -676,7 +677,7 @@ mod tests {
             )
             .await?,
         );
-        assert_eq!(summary.parts[&id].as_ref().unwrap().name, "Renamed");
+        assert_eq!(summary.parts.get(&id).unwrap().name, "Renamed");
         Ok(())
     }
 
@@ -687,7 +688,7 @@ mod tests {
         let id = PartId::from(13);
         let summary =
             outcome_summary(exec(ApiWrite::PartDelete { id }, &mut session, &mut store).await?);
-        assert_eq!(summary.parts, HashMap::from([(id, None)]));
+        assert_eq!(summary.parts, only_tombstone(id));
         assert!(store.partid_get_part(id).await.is_err());
         Ok(())
     }
@@ -800,10 +801,7 @@ mod tests {
             )
             .await?,
         );
-        assert_eq!(
-            summary.activities[&id].as_ref().unwrap().name,
-            "Renamed Ride"
-        );
+        assert_eq!(summary.activities.get(&id).unwrap().name, "Renamed Ride");
         Ok(())
     }
 
@@ -837,7 +835,7 @@ mod tests {
         let id = ActivityId::new(3);
         let summary =
             outcome_summary(exec(ApiWrite::ActivityDelete { id }, &mut session, &mut store).await?);
-        assert_eq!(summary.activities, HashMap::from([(id, None)]));
+        assert_eq!(summary.activities, only_tombstone(id));
         assert!(store.activity_read_by_id(id).await?.is_none());
         Ok(())
     }
@@ -878,10 +876,7 @@ mod tests {
             panic!("the descend write carries its match report");
         };
         assert_eq!(
-            summary.activities[&ActivityId::new(1)]
-                .as_ref()
-                .unwrap()
-                .descend,
+            summary.activities.get(&ActivityId::new(1)).unwrap().descend,
             Some(900)
         );
         // The dispatch carries the match report (the handler's response
@@ -936,8 +931,8 @@ mod tests {
         assert!(
             summary
                 .activities
-                .values()
-                .flatten()
+                .live()
+                .into_iter()
                 .any(|a| a.id == act.id)
         );
         Ok(())
@@ -962,7 +957,7 @@ mod tests {
             .await?,
         );
         assert_eq!(summary.part_notes.len(), 1);
-        let note = summary.part_notes.values().flatten().next().unwrap();
+        let note = sole_live(&summary.part_notes);
         assert_eq!(note.name, "Check the tension");
         assert_eq!(note.part, part);
         assert!(!note.has_file());
@@ -975,7 +970,7 @@ mod tests {
             )
             .await?,
         );
-        assert_eq!(summary.part_notes, HashMap::from([(note.id, None)]));
+        assert_eq!(summary.part_notes, only_tombstone(note.id));
         assert!(store.partnote_get(note.id).await.is_err());
         Ok(())
     }
@@ -1021,7 +1016,7 @@ mod tests {
         );
         assert_eq!(summary.services.len(), 1);
         assert_eq!(summary.usages.len(), 1);
-        let service = summary.services.values().flatten().next().unwrap();
+        let service = sole_live(&summary.services);
         assert_eq!(service.name, "Chain Service");
 
         let summary = outcome_summary(
@@ -1032,7 +1027,7 @@ mod tests {
             )
             .await?,
         );
-        assert_eq!(summary.services, HashMap::from([(service.id, None)]));
+        assert_eq!(summary.services, only_tombstone(service.id));
         Ok(())
     }
 
@@ -1088,7 +1083,8 @@ mod tests {
             .await?,
         );
         assert_eq!(summary.plans.len(), 1);
-        let plan_id = *summary.plans.keys().next().unwrap();
+        // The create assigns a fresh server id (the caller's is discarded).
+        let plan_id = sole_live(&summary.plans).id;
 
         let summary = outcome_summary(
             exec(
@@ -1098,7 +1094,7 @@ mod tests {
             )
             .await?,
         );
-        assert_eq!(summary.plans, HashMap::from([(plan_id, None)]));
+        assert_eq!(summary.plans, only_tombstone(plan_id));
         Ok(())
     }
 
@@ -1121,7 +1117,7 @@ mod tests {
             .await?,
         );
         assert_eq!(summary.shops.len(), 1);
-        let shop = summary.shops.values().flatten().next().unwrap();
+        let shop = sole_live(&summary.shops);
         assert_eq!(shop.name, "Workshop");
         assert_eq!(shop.owner, test_user());
         Ok(())
@@ -1143,7 +1139,7 @@ mod tests {
             )
             .await?,
         );
-        let shop_id = *summary.shops.keys().next().unwrap();
+        let shop_id = sole_live(&summary.shops).id;
         // The route's checkuser requires an (owner) subscription, so create
         // one first — auto-approve activates it.
         exec(
@@ -1168,7 +1164,7 @@ mod tests {
             )
             .await?,
         );
-        assert_eq!(summary.parts[&part].as_ref().unwrap().shop, Some(shop_id));
+        assert_eq!(summary.parts.get(&part).unwrap().shop, Some(shop_id));
 
         let summary = outcome_summary(
             exec(
@@ -1181,7 +1177,7 @@ mod tests {
             )
             .await?,
         );
-        assert_eq!(summary.parts[&part].as_ref().unwrap().shop, None);
+        assert_eq!(summary.parts.get(&part).unwrap().shop, None);
         Ok(())
     }
 
@@ -1201,7 +1197,7 @@ mod tests {
             )
             .await?,
         );
-        let shop_id = *summary.shops.keys().next().unwrap();
+        let shop_id = sole_live(&summary.shops).id;
 
         // A subscription is not a Summary kind: the write reports an empty
         // Summary, the side effect lands in the store.

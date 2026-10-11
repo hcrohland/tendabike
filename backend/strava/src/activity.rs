@@ -308,7 +308,7 @@ mod tests {
         session.queue("/activities/10", &activity_json(10, "Ride", None));
         let summary = upsert_activity(10, &mut session, &mut store).await?;
         assert_eq!(summary.activities.len(), 1);
-        assert_eq!(summary.activities.keys().next(), Some(&ActivityId::new(10)));
+        assert!(summary.activities.get(&ActivityId::new(10)).is_some());
         let acts = ActivityStore::get_all(&mut store.mem, &UserId::from(1)).await?;
         assert_eq!(acts.len(), 1);
         Ok(())

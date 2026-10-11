@@ -223,7 +223,7 @@ impl Attachment {
         let detail = att.add_details("", 0.into());
         let mut summary = Summary::default();
         summary.usages.upsert_all(usages);
-        summary.attachments.tombstone(detail);
+        summary.attachments.tombstone(detail.key());
         Ok(summary)
     }
 
@@ -2143,7 +2143,7 @@ mod tests {
             .add_details("", 0.into())
             .idx();
         assert_eq!(summary.attachments.len(), 1);
-        assert_eq!(summary.attachments[&key], None);
+        assert!(summary.attachments.is_tombstoned(&key));
 
         Ok(())
     }

@@ -143,7 +143,7 @@ impl ServicePlan {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{MemStore, TestSession, fixtures};
+    use crate::test_support::{MemStore, TestSession, fixtures, sole_live};
 
     use fixtures::{sample_purchase_date, test_session, test_user};
 
@@ -182,7 +182,7 @@ mod tests {
             store,
         )
         .await?;
-        Ok(summary.services.values().flatten().next().unwrap().clone())
+        Ok(sole_live(&summary.services))
     }
 
     // === Suite 6: ServicePlan — CRUD ===

@@ -13,6 +13,9 @@ _Avoid_: snapshot, diff (each names only one of the two readings)
 **tombstone**:
 A null entry in a Summary for an entity that no longer exists: the id tells the client which row to remove; the entry carries no entity data.
 
+**live**:
+An entry in a Summary that carries its entity's data; the opposite of a tombstone.
+
 **wake**:
 The in-memory signal the webhook fires after queueing a Strava event, making a running executor check the queue at once, even mid-idle-wait. It never spawns an executor — a queued event waits for the next spawn (an SSE connect or API write).
 _Avoid_: ping, notification, kick

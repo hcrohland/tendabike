@@ -52,10 +52,41 @@ pub mod part_type_ids {
     pub const REAR_BRAKE: PartTypeId = PartTypeId::from_id(8);
 }
 
+// --- Summary assertions ---
+
+/// An [`IdKeyedMap`] holding exactly one entry: the tombstone for `id`.
+/// For whole-map assertions: `assert_eq!(summary.parts, only_tombstone(id))`.
+pub fn only_tombstone<K, E>(id: K) -> IdKeyedMap<K, E>
+where
+    K: Eq + Hash,
+{
+    let mut map = IdKeyedMap::default();
+    map.tombstone(id);
+    map
+}
+
+/// The sole live entity in `map`, cloned out; panics if `map` holds
+/// anything other than exactly one live entry. For tests asserting an op
+/// reported exactly one entity: `let svc = sole_live(&summary.services)`.
+pub fn sole_live<K, E>(map: &IdKeyedMap<K, E>) -> E
+where
+    E: Clone,
+{
+    let mut live = map.live();
+    assert_eq!(
+        live.len(),
+        1,
+        "expected exactly one live entry, found {}",
+        live.len()
+    );
+    live.pop().expect("one live entry, asserted above")
+}
+
 // --- Core types shared by all subtrait impls ---
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::sync::{Arc, RwLock};
 
 use crate::*;

@@ -511,7 +511,7 @@ mod tests {
             .await
             .unwrap();
         let shop_id = shop.id;
-        for part in summary.parts.values().flatten() {
+        for part in summary.parts.live() {
             assert_eq!(
                 part.shop,
                 Some(shop_id),
@@ -610,7 +610,7 @@ mod tests {
             .unwrap();
         // Bike A + Front Wheel A + Rear Wheel A + Chain A + both tires = 6
         assert_eq!(summary.parts.len(), 6);
-        for part in summary.parts.values().flatten() {
+        for part in summary.parts.live() {
             assert_eq!(part.shop, None, "part {} should have no shop", part.id);
         }
     }
@@ -633,7 +633,7 @@ mod tests {
             .unwrap();
         // Bike A + Front Wheel A + Rear Wheel A + Chain A + both tires = 6
         assert_eq!(summary.parts.len(), 6);
-        for part in summary.parts.values().flatten() {
+        for part in summary.parts.live() {
             assert_eq!(part.shop, None, "part {} should have no shop", part.id);
         }
     }

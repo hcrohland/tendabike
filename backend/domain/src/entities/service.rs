@@ -39,14 +39,14 @@ impl ServiceId {
         for mut s in services {
             s.successor = None;
             let s = ServiceStore::update(store, s).await?;
-            summary.services.insert(s.id, Some(s));
+            summary.services.upsert(s);
         }
 
         // delete service: it is reported as a None tombstone, so the
         // client's merge drops its row (issue #462)
         service.usage.delete(store).await?;
         ServiceStore::delete(store, self).await?;
-        summary.services.tombstone(service);
+        summary.services.tombstone(service.key());
         Ok(summary)
     }
 }
@@ -109,8 +109,8 @@ impl Service {
         let usage = service.calculate_usage(store).await?.update(store).await?;
         let service = ServiceStore::create(store, service).await?;
         let mut summary = Summary::default();
-        summary.services.insert(service.id, Some(service));
-        summary.usages.insert(usage.id, Some(usage));
+        summary.services.upsert(service);
+        summary.usages.upsert(usage);
         Ok(summary)
     }
 
@@ -167,10 +167,10 @@ impl Service {
             .await?;
             let new_id = res
                 .services
-                .keys()
-                .next()
-                .copied()
-                .expect("create reports the new service");
+                .live()
+                .pop()
+                .expect("create reports the new service")
+                .id;
             old.successor = Some(new_id);
             res += old.update_unchecked(store).await?;
             Ok(res)
@@ -268,10 +268,11 @@ impl Service {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{MemStore, TestSession, fixtures, part_type_ids};
+    use crate::test_support::{
+        MemStore, TestSession, fixtures, only_tombstone, part_type_ids, sole_live,
+    };
 
     use fixtures::{sample_purchase_date, test_session, test_user};
-    use std::collections::HashMap;
 
     fn sample_time() -> OffsetDateTime {
         time::macros::datetime!(2024-06-15 10:00 UTC)
@@ -327,7 +328,7 @@ mod tests {
         .await?;
 
         assert_eq!(summary.services.len(), 1);
-        let svc = summary.services.values().flatten().next().unwrap();
+        let svc = sole_live(&summary.services);
         assert_eq!(svc.part_id, part.id);
         assert_eq!(svc.time, t);
         assert_eq!(svc.name, "Chain Replacement");
@@ -357,7 +358,7 @@ mod tests {
 
         assert_eq!(summary.usages.len(), 1);
         // Usage was persisted - verify via the stored usage id
-        let created = summary.usages.values().flatten().next().unwrap();
+        let created = sole_live(&summary.usages);
         let stored = created.id.read(&mut store).await?;
         assert_eq!(stored.id, created.id);
         Ok(())
@@ -437,7 +438,7 @@ mod tests {
         .await?;
 
         assert_eq!(summary.usages.len(), 1);
-        let u = summary.usages.values().flatten().next().unwrap();
+        let u = sole_live(&summary.usages);
         assert_eq!(u.time, 10500);
         assert_eq!(u.distance, 60000);
         assert_eq!(u.climb, 300);
@@ -510,7 +511,7 @@ mod tests {
         assert_eq!(summary.usages.len(), 1);
         // Chain is a sub-part, no activities attached via attachments, so count should be 0
         // (activities have gear=chain which is sub-part, Attachment::activities_by_part checks attachments)
-        let u = summary.usages.values().flatten().next().unwrap();
+        let u = sole_live(&summary.usages);
         assert_eq!(u.count, 0);
         Ok(())
     }
@@ -534,7 +535,7 @@ mod tests {
         .await?;
 
         assert_eq!(summary.usages.len(), 1);
-        let u = summary.usages.values().flatten().next().unwrap();
+        let u = sole_live(&summary.usages);
         assert_eq!(u.time, 0);
         assert_eq!(u.distance, 0);
         assert_eq!(u.climb, 0);
@@ -563,7 +564,7 @@ mod tests {
         )
         .await?;
 
-        let created = summary.services.values().flatten().next().unwrap();
+        let created = sole_live(&summary.services);
         let retrieved = created.id.get(&mut store).await?;
         assert_eq!(retrieved.id, created.id);
         assert_eq!(retrieved.part_id, part.id);
@@ -679,13 +680,13 @@ mod tests {
         )
         .await?;
 
-        let mut svc = summary.services.values().flatten().next().unwrap().clone();
+        let mut svc = sole_live(&summary.services);
         svc.notes = "Updated notes".to_string();
         let summary = svc.update(&test_session(), &mut store).await?;
 
         assert_eq!(summary.usages.len(), 1);
         // Usage should reflect activities before service time (act1 is at Jan, service at Jun)
-        let u = summary.usages.values().flatten().next().unwrap();
+        let u = sole_live(&summary.usages);
         assert_eq!(u.time, 3500);
         Ok(())
     }
@@ -708,7 +709,7 @@ mod tests {
         )
         .await?;
 
-        let created = summary.services.values().flatten().next().unwrap();
+        let created = sole_live(&summary.services);
         let original_usage_id = created.usage;
 
         // Update the service
@@ -740,7 +741,7 @@ mod tests {
         )
         .await?;
 
-        let mut svc = summary.services.values().flatten().next().unwrap().clone();
+        let mut svc = sole_live(&summary.services);
         svc.notes = "Hacked".to_string();
         let result = svc
             .update(&TestSession::new(UserId::from(2)), &mut store)
@@ -767,8 +768,8 @@ mod tests {
         )
         .await?;
 
-        let service = summary.services.values().flatten().next().unwrap().clone();
-        let usage_id = summary.usages.values().flatten().next().unwrap().id;
+        let service = sole_live(&summary.services);
+        let usage_id = sole_live(&summary.usages).id;
 
         // Delete via service id
         ServiceStore::delete(&mut store, service.id).await?;
@@ -802,10 +803,10 @@ mod tests {
             &mut store,
         )
         .await?;
-        let svc = summary.services.values().flatten().next().unwrap().clone();
+        let svc = sole_live(&summary.services);
 
         let summary = svc.id.delete(&test_session(), &mut store).await?;
-        assert_eq!(summary.services, HashMap::from([(svc.id, None)]));
+        assert_eq!(summary.services, only_tombstone(svc.id));
         Ok(())
     }
 
@@ -827,7 +828,7 @@ mod tests {
             &mut store,
         )
         .await?;
-        let s1 = summary.services.values().flatten().next().unwrap().clone();
+        let s1 = sole_live(&summary.services);
         let s1_id = s1.id;
 
         // Redo S1 → S2 (s2_new is the new redo service, updated_s1 has successor set)
@@ -835,8 +836,8 @@ mod tests {
         // Find the new redo service (successor=None) vs the updated predecessor (successor=Some)
         let s2_id = summary
             .services
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|s| s.successor.is_none())
             .unwrap()
             .id;
@@ -846,8 +847,8 @@ mod tests {
         let summary = s2_clone.clone().redo(&test_session(), &mut store).await?;
         let s3_id = summary
             .services
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|s| s.successor.is_none())
             .unwrap()
             .id;
@@ -884,7 +885,7 @@ mod tests {
             &mut store,
         )
         .await?;
-        let svc_id = *summary.services.keys().next().unwrap();
+        let svc_id = sole_live(&summary.services).id;
 
         ServiceStore::delete(&mut store, svc_id).await?;
 
@@ -909,7 +910,7 @@ mod tests {
             &mut store,
         )
         .await?;
-        let svc_id = *summary.services.keys().next().unwrap();
+        let svc_id = sole_live(&summary.services).id;
 
         let result = ServiceStore::delete(&mut store, svc_id).await;
         // User 1 owns it, so delete should succeed for user 1 (test_session is user 1)
@@ -936,7 +937,7 @@ mod tests {
             &mut store,
         )
         .await?;
-        let s1 = summary.services.values().flatten().next().unwrap().clone();
+        let s1 = sole_live(&summary.services);
 
         let summary = s1.clone().redo(&test_session(), &mut store).await?;
 
@@ -944,12 +945,12 @@ mod tests {
         // The original S1 gets successor = Some(new service id)
         let s2_id = summary
             .services
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|s| s.successor.is_none())
             .unwrap()
             .id;
-        assert_eq!(summary.services[&s2_id].as_ref().unwrap().successor, None);
+        assert_eq!(summary.services.get(&s2_id).unwrap().successor, None);
         let updated_s1 = ServiceStore::get(&mut store, s1.id).await?;
         assert_eq!(updated_s1.successor, Some(s2_id));
         Ok(())
@@ -973,7 +974,7 @@ mod tests {
             &mut store,
         )
         .await?;
-        let s1 = summary.services.values().flatten().next().unwrap().clone();
+        let s1 = sole_live(&summary.services);
 
         // Redo with later time → creates S2, sets S1.successor = Some(S2.id)
         let t_later = time::macros::datetime!(2024-05-01 10:00 UTC);
@@ -984,12 +985,12 @@ mod tests {
         // S2 should have successor = None (find the new redo service)
         let s2_id = summary
             .services
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|s| s.successor.is_none())
             .unwrap()
             .id;
-        assert_eq!(summary.services[&s2_id].as_ref().unwrap().successor, None);
+        assert_eq!(summary.services.get(&s2_id).unwrap().successor, None);
 
         // S1 should have successor = S2
         let updated_s1 = ServiceStore::get(&mut store, s1.id).await?;
@@ -1014,13 +1015,13 @@ mod tests {
             &mut store,
         )
         .await?;
-        let s1 = summary.services.values().flatten().next().unwrap().clone();
+        let s1 = sole_live(&summary.services);
 
         let summary = s1.redo(&test_session(), &mut store).await?;
         let new_svc = summary
             .services
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|s| s.successor.is_none())
             .unwrap();
 
@@ -1064,13 +1065,13 @@ mod tests {
             &mut store,
         )
         .await?;
-        let s1 = summary.services.values().flatten().next().unwrap().clone();
+        let s1 = sole_live(&summary.services);
 
         let summary = s1.redo(&test_session(), &mut store).await?;
         let new_svc = summary
             .services
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|s| s.successor.is_none())
             .unwrap();
 
@@ -1110,13 +1111,24 @@ mod tests {
         )
         .await?;
 
-        let s1 = summary.services.values().flatten().next().unwrap().clone();
-        let original_usage = summary.usages.values().flatten().next().unwrap().time;
+        let s1 = sole_live(&summary.services);
+        let original_usage = sole_live(&summary.usages).time;
         assert_eq!(original_usage, 3500); // 1 activity before t1
 
         // Redo creates new service at same time → usage should be the same
         let summary = s1.redo(&test_session(), &mut store).await?;
-        let u = summary.usages.values().flatten().next().unwrap();
+        // The redo summary reports both live usages: the new service's and the
+        // updated predecessor's. Assert on the new service's usage.
+        let new_service = summary
+            .services
+            .live()
+            .into_iter()
+            .find(|s| s.successor.is_none())
+            .expect("the redo reports the new service");
+        let u = summary
+            .usages
+            .get(&new_service.usage)
+            .expect("the new service's usage is live");
         assert_eq!(u.time, 3500); // Same activities before the time
         Ok(())
     }
@@ -1138,7 +1150,7 @@ mod tests {
             &mut store,
         )
         .await?;
-        let s1 = summary.services.values().flatten().next().unwrap().clone();
+        let s1 = sole_live(&summary.services);
 
         let result = s1
             .redo(&TestSession::new(UserId::from(2)), &mut store)
@@ -1164,7 +1176,7 @@ mod tests {
             &mut store,
         )
         .await?;
-        let s1 = summary.services.values().flatten().next().unwrap().clone();
+        let s1 = sole_live(&summary.services);
 
         let summary = s1.clone().redo(&test_session(), &mut store).await?;
 
@@ -1533,7 +1545,7 @@ mod tests {
         )
         .await?;
 
-        let svc = summary.services.values().flatten().next().unwrap();
+        let svc = sole_live(&summary.services);
         assert_eq!(svc.name, "");
         Ok(())
     }
@@ -1557,7 +1569,7 @@ mod tests {
         )
         .await?;
 
-        let svc = summary.services.values().flatten().next().unwrap();
+        let svc = sole_live(&summary.services);
         assert_eq!(svc.name, long_name);
         Ok(())
     }
@@ -1580,7 +1592,7 @@ mod tests {
         )
         .await?;
 
-        let svc = summary.services.values().flatten().next().unwrap();
+        let svc = sole_live(&summary.services);
         assert!(svc.successor.is_none());
         Ok(())
     }
@@ -1602,13 +1614,13 @@ mod tests {
             &mut store,
         )
         .await?;
-        let s1 = summary.services.values().flatten().next().unwrap().clone();
+        let s1 = sole_live(&summary.services);
 
         let summary = s1.clone().redo(&test_session(), &mut store).await?;
         let s2_id = summary
             .services
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|s| s.successor.is_none())
             .unwrap()
             .id;
@@ -1636,13 +1648,13 @@ mod tests {
             &mut store,
         )
         .await?;
-        let s1 = summary.services.values().flatten().next().unwrap().clone();
+        let s1 = sole_live(&summary.services);
 
         let summary = s1.clone().redo(&test_session(), &mut store).await?;
         let s2_id = summary
             .services
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|s| s.successor.is_none())
             .unwrap()
             .id;
@@ -1651,8 +1663,8 @@ mod tests {
         let summary = s2_clone.clone().redo(&test_session(), &mut store).await?;
         let s3_id = summary
             .services
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|s| s.successor.is_none())
             .unwrap()
             .id;
@@ -1688,13 +1700,13 @@ mod tests {
             &mut store,
         )
         .await?;
-        let s1 = summary.services.values().flatten().next().unwrap().clone();
+        let s1 = sole_live(&summary.services);
 
         let summary = s1.clone().redo(&test_session(), &mut store).await?;
         let s2_id = summary
             .services
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|s| s.successor.is_none())
             .unwrap()
             .id;
@@ -1703,8 +1715,8 @@ mod tests {
         let summary = s2_clone.clone().redo(&test_session(), &mut store).await?;
         let s3_id = summary
             .services
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|s| s.successor.is_none())
             .unwrap()
             .id;
@@ -1713,8 +1725,8 @@ mod tests {
         let summary = s3_clone.clone().redo(&test_session(), &mut store).await?;
         let s4_id = summary
             .services
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|s| s.successor.is_none())
             .unwrap()
             .id;
@@ -1723,8 +1735,8 @@ mod tests {
         let summary = s4_clone.clone().redo(&test_session(), &mut store).await?;
         let s5_id = summary
             .services
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|s| s.successor.is_none())
             .unwrap()
             .id;
@@ -1821,7 +1833,7 @@ mod tests {
         )
         .await?;
 
-        let service_id = *summary.services.keys().next().unwrap();
+        let service_id = sole_live(&summary.services).id;
         ServiceStore::delete(&mut store, service_id).await?;
 
         assert!(ServiceStore::get(&mut store, service_id).await.is_err());
@@ -1850,7 +1862,7 @@ mod tests {
         .await?;
 
         assert_eq!(summary.usages.len(), 1);
-        let u = summary.usages.values().flatten().next().unwrap();
+        let u = sole_live(&summary.usages);
         assert_eq!(u.time, 8025);
         assert_eq!(u.distance, 125000);
         assert_eq!(u.climb, 1100);
@@ -1860,7 +1872,7 @@ mod tests {
         assert_eq!(u.count, 3);
 
         let stored = u.id.read(&mut store).await?;
-        assert_eq!(stored, *u);
+        assert_eq!(stored, u);
         Ok(())
     }
 
@@ -1885,7 +1897,7 @@ mod tests {
         .await?;
 
         assert_eq!(summary.usages.len(), 1);
-        let u = summary.usages.values().flatten().next().unwrap();
+        let u = sole_live(&summary.usages);
         assert_eq!(u.time, 8025);
         assert_eq!(u.distance, 125000);
         assert_eq!(u.climb, 1100);
@@ -1915,7 +1927,7 @@ mod tests {
         .await?;
 
         assert_eq!(summary.usages.len(), 1);
-        let u = summary.usages.values().flatten().next().unwrap();
+        let u = sole_live(&summary.usages);
         assert_eq!(u.time, 5225);
         assert_eq!(u.distance, 90000);
         assert_eq!(u.climb, 1000);
@@ -1943,8 +1955,8 @@ mod tests {
             &mut store,
         )
         .await?;
-        let svc = summary.services.values().flatten().next().unwrap();
-        let u = summary.usages.values().flatten().next().unwrap();
+        let svc = sole_live(&summary.services);
+        let u = sole_live(&summary.usages);
         assert_eq!(u.count, 3);
 
         // round_time(Recovery Spin start 22:13:20) = 22:00 → spin (22:13:20) excluded
@@ -1982,8 +1994,8 @@ mod tests {
             &mut store,
         )
         .await?;
-        let svc_after = summary.services.values().flatten().next().unwrap();
-        let u = summary.usages.values().flatten().next().unwrap();
+        let svc_after = sole_live(&summary.services);
+        let u = sole_live(&summary.usages);
         assert_eq!(u.count, 3);
 
         // service before the new activity start → stays untouched
@@ -1998,8 +2010,8 @@ mod tests {
             &mut store,
         )
         .await?;
-        let svc_before = summary.services.values().flatten().next().unwrap();
-        let u = summary.usages.values().flatten().next().unwrap();
+        let svc_before = sole_live(&summary.services);
+        let u = sole_live(&summary.usages);
         assert_eq!(u.count, 3);
 
         let act = Activity {
@@ -2061,8 +2073,8 @@ mod tests {
             &mut store,
         )
         .await?;
-        let svc = summary.services.values().flatten().next().unwrap();
-        let u = summary.usages.values().flatten().next().unwrap();
+        let svc = sole_live(&summary.services);
+        let u = sole_live(&summary.usages);
         assert_eq!(u.count, 3);
 
         // round_time(Recovery Spin start 22:13:20) = 22:00 → spin (22:13:20) excluded

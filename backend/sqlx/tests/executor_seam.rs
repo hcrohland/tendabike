@@ -65,7 +65,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
-use tb_domain::test_support::{MemStore, part_type_ids::CHAIN};
+use tb_domain::test_support::{MemStore, part_type_ids::CHAIN, sole_live};
 use tb_domain::{ApiWrite, PartId, Session, ShopId, TbResult, UserId};
 use tb_exec::{ApiWriteRequest, api_write_channel, run};
 use tb_sqlx::DbPool;
@@ -256,14 +256,7 @@ async fn api_write_end_to_end() {
         .expect("the part write must succeed");
     let summary = outcome.summary().clone();
     assert_eq!(summary.parts.len(), 1);
-    let part = summary
-        .parts
-        .values()
-        .next()
-        .into_iter()
-        .flatten()
-        .next()
-        .expect("the part");
+    let part = sole_live(&summary.parts);
     assert_eq!(part.name, "Seam Chain");
     assert_eq!(part.owner, test_identity().0);
 

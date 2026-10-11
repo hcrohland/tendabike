@@ -69,19 +69,19 @@
 //! operation, verified on both store adapters — is recorded in
 //! `docs/agents/domain-flow.md`.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::str::FromStr;
 use std::time::Duration;
 
 use tb_domain::test_support::{
     MemStore, StoreSnapshot,
     fixtures::{sample_purchase_date, test_session},
-    part_type_ids,
+    only_tombstone, part_type_ids, sole_live,
 };
 use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, ApiWrite, Attachment, AttachmentStore,
-    MAX_TIME, OnboardingStatus, Part, PartId, PartNoteStore, PartStore, PartTypeId, ServicePlan,
-    ServicePlanId, ShopStore, Summary, Usage, UsageId, UsageStore, UserId, UserStore,
+    IdKeyedMap, MAX_TIME, OnboardingStatus, Part, PartId, PartNoteStore, PartStore, PartTypeId,
+    ServicePlan, ServicePlanId, ShopStore, Summary, Usage, UsageId, UsageStore, UserId, UserStore,
     attach_assembly, detach_assembly, dispose_assembly, exec, round_time,
 };
 use time::{OffsetDateTime, macros::datetime};
@@ -401,7 +401,7 @@ async fn user_summary_read() -> tb_domain::TbResult<()> {
         // is unordered, so the assertion below sorts the part values by
         // `last_used` and checks the rule on the sorted sequence.
         assert_eq!(summary.parts.len(), 17);
-        let mut parts: Vec<_> = summary.parts.values().flatten().collect();
+        let mut parts = summary.parts.live();
         parts.sort_by_key(|p| p.last_used);
         for (earlier, later) in parts.iter().zip(parts.iter().skip(1)) {
             assert!(
@@ -423,23 +423,23 @@ async fn user_summary_read() -> tb_domain::TbResult<()> {
         // Field lookups: the "Chain A" part, its attachment, and its usage.
         let chain = summary
             .parts
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|p| p.id == PartId::from(4))
             .unwrap();
         assert_eq!(chain.name, "Chain A");
         let att = summary
             .attachments
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|a| a.a.part_id == PartId::from(4))
             .unwrap();
         assert_eq!(att.a.hook, BIKE);
         assert_eq!(att.a.detached, MAX_TIME);
         let usage = summary
             .usages
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|u| u.id == chain.usage)
             .unwrap();
         assert_eq!(usage.time, 8025);
@@ -1017,10 +1017,12 @@ async fn activity_upsert_creates_and_accounts() -> tb_domain::TbResult<()> {
         let summary = act.clone().upsert(&test_session(), &mut store).await?;
 
         // The new activity is reported with the bike as gear.
-        assert_eq!(summary.activities, HashMap::from([(act.id, Some(act))]));
+        let mut expected = IdKeyedMap::default();
+        expected.upsert(act);
+        assert_eq!(summary.activities, expected);
 
         // The bike and all attached parts: front wheel, rear wheel, chain, tires.
-        let part_ids: HashSet<PartId> = summary.parts.values().flatten().map(|p| p.id).collect();
+        let part_ids: HashSet<PartId> = summary.parts.live().into_iter().map(|p| p.id).collect();
         assert_eq!(
             part_ids,
             [1, 2, 3, 4, 5, 6].into_iter().map(PartId::from).collect()
@@ -1028,8 +1030,8 @@ async fn activity_upsert_creates_and_accounts() -> tb_domain::TbResult<()> {
         // The bike's last_used is bumped to the activity start.
         let bike_part = summary
             .parts
-            .values()
-            .flatten()
+            .live()
+            .into_iter()
             .find(|p| p.id == bike)
             .unwrap();
         assert_eq!(bike_part.last_used, round_time(activity_start()));
@@ -1048,9 +1050,9 @@ async fn activity_upsert_creates_and_accounts() -> tb_domain::TbResult<()> {
             energy: 1700,
             count: 4,
         };
-        for (id, u) in &summary.usages {
-            expected.id = *id;
-            assert_eq!(u.as_ref().unwrap(), &expected, "unexpected usage for {id}");
+        for u in summary.usages.live() {
+            expected.id = u.id;
+            assert_eq!(u, expected, "unexpected usage for {}", u.id);
         }
 
         // The updates are persisted in the store.
@@ -1091,10 +1093,10 @@ async fn activity_delete_reverts_usage() -> tb_domain::TbResult<()> {
             .await?;
 
         // The deleted activity is reported as a None tombstone.
-        assert_eq!(summary.activities, HashMap::from([(act.id, None)]));
+        assert_eq!(summary.activities, only_tombstone(act.id));
 
         // The bike and all attached parts are affected again.
-        let part_ids: HashSet<PartId> = summary.parts.values().flatten().map(|p| p.id).collect();
+        let part_ids: HashSet<PartId> = summary.parts.live().into_iter().map(|p| p.id).collect();
         assert_eq!(
             part_ids,
             [1, 2, 3, 4, 5, 6].into_iter().map(PartId::from).collect()
@@ -1110,9 +1112,9 @@ async fn activity_delete_reverts_usage() -> tb_domain::TbResult<()> {
             energy: 1500,
             count: 3,
         };
-        for (id, u) in &summary.usages {
-            expected.id = *id;
-            assert_eq!(u.as_ref().unwrap(), &expected, "unexpected usage for {id}");
+        for u in summary.usages.live() {
+            expected.id = u.id;
+            assert_eq!(u, expected, "unexpected usage for {}", u.id);
         }
 
         // The updates are persisted in the store.
@@ -1159,10 +1161,7 @@ async fn activity_update_returns_summary() -> tb_domain::TbResult<()> {
         let summary = modified.update(&test_session(), &mut store).await?;
         assert_eq!(summary.activities.len(), 1);
         assert_eq!(
-            summary.activities[&ActivityId::new(100)]
-                .as_ref()
-                .unwrap()
-                .name,
+            summary.activities.get(&ActivityId::new(100)).unwrap().name,
             "Modified Ride"
         );
 
@@ -1499,8 +1498,8 @@ async fn apiwrite_part_create_change_delete() -> tb_domain::TbResult<()> {
             )
             .await?,
         );
-        let id = *summary.parts.keys().next().unwrap();
-        assert_eq!(summary.parts[&id].as_ref().unwrap().name, "New Chain");
+        let id = sole_live(&summary.parts).id;
+        assert_eq!(summary.parts.get(&id).unwrap().name, "New Chain");
 
         let summary = outcome_summary(
             exec(
@@ -1516,11 +1515,11 @@ async fn apiwrite_part_create_change_delete() -> tb_domain::TbResult<()> {
             )
             .await?,
         );
-        assert_eq!(summary.parts[&id].as_ref().unwrap().name, "Renamed");
+        assert_eq!(summary.parts.get(&id).unwrap().name, "Renamed");
 
         let summary =
             outcome_summary(exec(ApiWrite::PartDelete { id }, &mut session, &mut store).await?);
-        assert_eq!(summary.parts, HashMap::from([(id, None)]));
+        assert_eq!(summary.parts, only_tombstone(id));
         assert!(store.partid_get_part(id).await.is_err());
 
         // The failed statement aborts the Postgres transaction, so the
@@ -1623,10 +1622,7 @@ async fn apiwrite_activity_update_and_delete() -> tb_domain::TbResult<()> {
             )
             .await?,
         );
-        assert_eq!(
-            summary.activities[&id].as_ref().unwrap().name,
-            "Renamed Ride"
-        );
+        assert_eq!(summary.activities.get(&id).unwrap().name, "Renamed Ride");
 
         // A path/body id mismatch is the handler's guard, surfaced as BadRequest.
         let err = exec(
@@ -1657,10 +1653,7 @@ async fn apiwrite_activity_update_and_delete() -> tb_domain::TbResult<()> {
             )
             .await?,
         );
-        assert_eq!(
-            summary.activities,
-            HashMap::from([(ActivityId::new(100), None)])
-        );
+        assert_eq!(summary.activities, only_tombstone(ActivityId::new(100)));
         assert!(
             store
                 .activity_read_by_id(ActivityId::new(100))
@@ -1695,10 +1688,7 @@ async fn apiwrite_activity_descend() -> tb_domain::TbResult<()> {
             panic!("the descend write carries its match report");
         };
         assert_eq!(
-            summary.activities[&ActivityId::new(1)]
-                .as_ref()
-                .unwrap()
-                .descend,
+            summary.activities.get(&ActivityId::new(1)).unwrap().descend,
             Some(900)
         );
         // The dispatch carries the match report (the handler's
@@ -1742,7 +1732,7 @@ async fn apiwrite_partnote_create_and_delete() -> tb_domain::TbResult<()> {
             .await?,
         );
         assert_eq!(summary.part_notes.len(), 1);
-        let note = summary.part_notes.values().flatten().next().unwrap();
+        let note = sole_live(&summary.part_notes);
         assert_eq!(note.name, "Check the tension");
         assert_eq!(note.part, part);
 
@@ -1754,7 +1744,7 @@ async fn apiwrite_partnote_create_and_delete() -> tb_domain::TbResult<()> {
             )
             .await?,
         );
-        assert_eq!(summary.part_notes, HashMap::from([(note.id, None)]));
+        assert_eq!(summary.part_notes, only_tombstone(note.id));
         assert!(
             store.partnote_get(note.id).await.is_err(),
             "the note is deleted"
@@ -1789,7 +1779,7 @@ async fn apiwrite_service_create_and_delete() -> tb_domain::TbResult<()> {
         );
         assert_eq!(summary.services.len(), 1);
         assert_eq!(summary.usages.len(), 1);
-        let service = summary.services.values().flatten().next().unwrap();
+        let service = sole_live(&summary.services);
         assert_eq!(service.name, "Chain Service");
 
         let summary = outcome_summary(
@@ -1800,7 +1790,7 @@ async fn apiwrite_service_create_and_delete() -> tb_domain::TbResult<()> {
             )
             .await?,
         );
-        assert_eq!(summary.services, HashMap::from([(service.id, None)]));
+        assert_eq!(summary.services, only_tombstone(service.id));
 
         Ok(())
     })
@@ -1842,12 +1832,13 @@ async fn apiwrite_serviceplan_create_and_delete() -> tb_domain::TbResult<()> {
             .await?,
         );
         assert_eq!(summary.plans.len(), 1);
-        let id = *summary.plans.keys().next().unwrap();
+        // The create assigns a fresh server id (the caller's is discarded).
+        let id = sole_live(&summary.plans).id;
 
         let summary = outcome_summary(
             exec(ApiWrite::ServicePlanDelete { id }, &mut session, &mut store).await?,
         );
-        assert_eq!(summary.plans, HashMap::from([(id, None)]));
+        assert_eq!(summary.plans, only_tombstone(id));
 
         Ok(())
     })
@@ -1876,7 +1867,7 @@ async fn apiwrite_shop_crud() -> tb_domain::TbResult<()> {
             .await?,
         );
         assert_eq!(summary.shops.len(), 1);
-        let shop_id = *summary.shops.keys().next().unwrap();
+        let shop_id = sole_live(&summary.shops).id;
 
         // The register route's checkuser requires the owner's subscription;
         // auto-approve activates it.
@@ -1902,7 +1893,7 @@ async fn apiwrite_shop_crud() -> tb_domain::TbResult<()> {
             )
             .await?,
         );
-        assert_eq!(summary.parts[&part].as_ref().unwrap().shop, Some(shop_id));
+        assert_eq!(summary.parts.get(&part).unwrap().shop, Some(shop_id));
 
         let summary = outcome_summary(
             exec(
@@ -1915,7 +1906,7 @@ async fn apiwrite_shop_crud() -> tb_domain::TbResult<()> {
             )
             .await?,
         );
-        assert_eq!(summary.parts[&part].as_ref().unwrap().shop, None);
+        assert_eq!(summary.parts.get(&part).unwrap().shop, None);
 
         let summary = outcome_summary(
             exec(
@@ -1925,7 +1916,7 @@ async fn apiwrite_shop_crud() -> tb_domain::TbResult<()> {
             )
             .await?,
         );
-        assert_eq!(summary.shops, HashMap::from([(shop_id, None)]));
+        assert_eq!(summary.shops, only_tombstone(shop_id));
 
         Ok(())
     })
@@ -1953,7 +1944,7 @@ async fn apiwrite_subscription_create_and_cancel() -> tb_domain::TbResult<()> {
             )
             .await?,
         );
-        let shop_id = *summary.shops.keys().next().unwrap();
+        let shop_id = sole_live(&summary.shops).id;
 
         let summary = outcome_summary(
             exec(

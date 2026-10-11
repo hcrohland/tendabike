@@ -1,4 +1,5 @@
 use axum::Router;
+use tb_domain::IdKeyedMap;
 use tb_exec::TxnSource;
 use tb_strava::StravaStore;
 
@@ -17,13 +18,13 @@ mod user;
 /// The single live entity in a `Summary` map a create write returns (spec
 /// §6.2: a `201` body is the created entity extracted from the write's
 /// `Summary`).
-pub(crate) fn created_entity<V: Clone>(
-    entries: &std::collections::HashMap<impl std::hash::Hash + Eq, Option<V>>,
+pub(crate) fn created_entity<K, V: Clone>(
+    entries: &IdKeyedMap<K, V>,
     what: &str,
 ) -> Result<V, crate::error::AppError> {
-    let mut live: Vec<&V> = entries.values().filter_map(Option::as_ref).collect();
+    let mut live = entries.live();
     match live.pop() {
-        Some(v) if live.is_empty() => Ok((*v).clone()),
+        Some(v) if live.is_empty() => Ok(v),
         _ => Err(crate::error::AppError::TbError(
             tb_domain::Error::AnyFailure(anyhow::anyhow!(
                 "expected exactly one {what} in the write summary"
