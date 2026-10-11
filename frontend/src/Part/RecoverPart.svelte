@@ -16,7 +16,7 @@
 </script>
 
 <script lang="ts">
-  import { fmtDate } from "../lib/store";
+  import { fmtDate } from "../lib/utils";
   import { types } from "../lib/types";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";

@@ -8,7 +8,7 @@ import {
 import { flushSync } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Attachment, attachments } from "../lib/attachment";
-import { maxDate } from "../lib/store";
+import { maxDate } from "../lib/utils";
 import { Part, parts } from "../lib/part";
 import { partNotes } from "../lib/partnote";
 import { getTypes } from "../lib/types";

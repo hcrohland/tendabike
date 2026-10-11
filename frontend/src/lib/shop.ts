@@ -1,4 +1,4 @@
-import { handleError, myfetch } from "./store";
+import { handleError, myfetch } from "./utils";
 import { refresh } from "./user";
 import { mapableState } from "./mapable.svelte";
 import { type Part } from "./part";

@@ -1,5 +1,5 @@
 import { by, mapableState, stateValues } from "./mapable.svelte";
-import { handleError, myfetch } from "./store";
+import { handleError, myfetch } from "./utils";
 import { attachments as allAttachments, type Attachment } from "./attachment";
 import { Type, types } from "./types";
 import { activities as allActivities } from "./activity";

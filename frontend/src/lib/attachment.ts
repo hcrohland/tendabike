@@ -1,7 +1,7 @@
 import { Activity, activities as allActivities } from "./activity";
 import { parts, type Part } from "./part";
 import { mapableState, stateValues } from "./mapable.svelte";
-import { fmtRange, maxDate } from "./store";
+import { fmtRange, maxDate } from "./utils";
 
 export class Attachment {
   part_id: number;

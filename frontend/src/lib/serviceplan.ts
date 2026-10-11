@@ -7,7 +7,7 @@ import {
 import { by, mapableState, stateValues } from "./mapable.svelte";
 import { Part, parts } from "./part";
 import { Service, services } from "./service";
-import { handleError, myfetch } from "./store";
+import { handleError, myfetch } from "./utils";
 import { Type, types } from "./types";
 import { m } from "../../paraglide/messages";
 

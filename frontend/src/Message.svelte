@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { message } from "./lib/store";
+  import { message } from "./lib/utils";
   import { Modal } from "flowbite-svelte";
 
   function onclose() {

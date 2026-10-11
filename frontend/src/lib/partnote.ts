@@ -1,5 +1,5 @@
 import { mapableState, stateValues } from "./mapable.svelte";
-import { checkStatus, handleError, myfetch } from "./store";
+import { checkStatus, handleError, myfetch } from "./utils";
 
 export class PartNote {
   id?: number;

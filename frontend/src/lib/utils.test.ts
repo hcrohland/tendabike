@@ -7,7 +7,7 @@ import {
   get_days,
   maxDate,
   roundTime,
-} from "./store";
+} from "./utils";
 
 describe("roundTime", () => {
   it("floors minutes to the nearest 15 and zeroes seconds/ms", () => {

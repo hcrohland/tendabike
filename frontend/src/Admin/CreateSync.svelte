@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ButtonGroup, InputAddon } from "flowbite-svelte";
-  import { handleError, myfetch } from "../lib/store";
+  import { handleError, myfetch } from "../lib/utils";
   import type { User } from "../lib/user";
   import DateTime from "../Widgets/DateTime.svelte";
   import Buttons from "../Widgets/Buttons.svelte";

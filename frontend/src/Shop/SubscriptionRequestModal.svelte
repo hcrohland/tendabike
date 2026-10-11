@@ -24,7 +24,7 @@
   import * as m from "../../paraglide/messages";
   import Modal from "../Widgets/Modal.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
-  import { handleError } from "../lib/store";
+  import { handleError } from "../lib/utils";
 
   interface Props {
     children?: Snippet;

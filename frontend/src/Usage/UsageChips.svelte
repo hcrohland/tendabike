@@ -1,7 +1,7 @@
 <script lang="ts">
   import { m } from "../../paraglide/messages";
   import type { Due, limit_keys } from "../lib/serviceplan";
-  import { fmtNumber, fmtSeconds } from "../lib/store";
+  import { fmtNumber, fmtSeconds } from "../lib/utils";
   import { Usage, usages } from "../lib/usage";
   import Chip from "../Widgets/Chip.svelte";
 

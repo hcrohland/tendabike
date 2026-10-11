@@ -3,7 +3,7 @@
   import * as m from "../../paraglide/messages";
 
   import ShopList from "./ShopList.svelte";
-  import { handleError, myfetch } from "../lib/store";
+  import { handleError, myfetch } from "../lib/utils";
   import { Shop } from "../lib/shop";
   import { type ShopSubscription } from "../lib/subscription";
   import { getUser, type UserPublic } from "../lib/user";

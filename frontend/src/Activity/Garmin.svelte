@@ -5,7 +5,7 @@
     Fileupload,
     Button,
   } from "flowbite-svelte";
-  import { checkStatus, handleError } from "../lib/store";
+  import { checkStatus, handleError } from "../lib/utils";
   import Modal from "../Widgets/Modal.svelte";
   import * as m from "../../paraglide/messages";
 

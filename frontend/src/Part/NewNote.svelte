@@ -69,7 +69,7 @@
   } from "flowbite-svelte-icons";
   import { onDestroy } from "svelte";
   import { createTextNote, createFileNote } from "../lib/partnote";
-  import { handleError } from "../lib/store";
+  import { handleError } from "../lib/utils";
   import Modal from "../Widgets/Modal.svelte";
   import * as m from "../../paraglide/messages";
 

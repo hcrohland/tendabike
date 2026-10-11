@@ -3,7 +3,7 @@ import { markHydrated, startStream, stopStream } from "./stream";
 import { parts } from "./part";
 import { stateValues } from "./mapable.svelte";
 import { setUser, getUser } from "./user";
-import { message } from "./store";
+import { message } from "./utils";
 import { setShop, Shop } from "./shop";
 import { resp, summary, summaryContent } from "../test/helpers";
 

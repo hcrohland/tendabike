@@ -116,7 +116,7 @@ Marks the initial sync as postponed.
 ```svelte
 <script lang="ts">
   import { Modal, P, Heading, Button } from "flowbite-svelte";
-  import { myfetch, handleError, user } from "./store";
+  import { myfetch, handleError, user } from "./utils";
 
   export let open = false;
   let loading = false;

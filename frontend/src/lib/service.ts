@@ -1,4 +1,4 @@
-import { get_days, handleError, myfetch } from "./store";
+import { get_days, handleError, myfetch } from "./utils";
 import { mapableState, stateValues } from "./mapable.svelte";
 import { usages, Usage } from "./usage";
 import type { Part } from "./part";

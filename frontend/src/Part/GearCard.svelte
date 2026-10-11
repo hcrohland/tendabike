@@ -2,7 +2,7 @@
   import { Card, Badge } from "flowbite-svelte";
   import { link, push } from "svelte-spa-router";
   import { Part } from "../lib/part";
-  import { fmtDate } from "../lib/store";
+  import { fmtDate } from "../lib/utils";
   import { types } from "../lib/types";
   import { getUser, users } from "../lib/user";
   import UsageChips from "../Usage/UsageChips.svelte";
