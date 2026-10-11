@@ -25,6 +25,9 @@ pub use error::{Error, TbResult};
 mod entities;
 pub use entities::*;
 
+mod summary;
+pub use summary::*;
+
 mod apiwrite;
 pub use apiwrite::*;
 

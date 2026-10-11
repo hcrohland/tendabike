@@ -122,7 +122,7 @@ Attachments are the bridge between **Strava cycling activities** and **part wear
 
 ## `Summary` Aggregation
 
-`Summary` (`domain/src/entities/summary.rs`) is the only summary form: nine id-keyed maps, one per entity kind, each `HashMap<Id, Option<E>>`. A `Some(entity)` value is a live entity; a `None` value is a tombstone marking the entity as deleted. Merging is per-id, last-wins: each id in the right-hand side overwrites the entry in the left-hand side.
+`Summary` (`domain/src/summary.rs`) is the only summary form: nine id-keyed maps, one per entity kind, each `HashMap<Id, Option<E>>`. A `Some(entity)` value is a live entity; a `None` value is a tombstone marking the entity as deleted. Merging is per-id, last-wins: each id in the right-hand side overwrites the entry in the left-hand side.
 
 ```rust
 struct Summary {
@@ -292,7 +292,7 @@ Test coverage lives in `domain/src/entities/attachment/attachment_tests.rs` with
 | `domain/src/traits/attachment.rs`                      | Store trait interface (10 methods)              |
 | `domain/src/entities/types.rs`                         | PartType definitions with hooks                 |
 | `domain/src/entities/types/objects.rs`                 | Static part type registry (20 types)            |
-| `domain/src/entities/summary.rs`                       | Id-keyed `Summary` for multi-entity operations  |
+| `domain/src/summary.rs`                                | Id-keyed `Summary` for multi-entity operations  |
 | `domain/src/entities/service.rs`                       | Service recalculation triggered by attachments  |
 | `sqlx/src/store/attachment.rs`                         | PostgreSQL storage implementation               |
 | `sqlx/migrations/20250101000000_initial_schema.up.sql` | Database schema                                 |

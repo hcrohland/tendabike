@@ -25,8 +25,5 @@ pub use service::*;
 mod serviceplan;
 pub use serviceplan::*;
 
-mod summary;
-pub use summary::*;
-
 mod types;
 pub use types::*;
