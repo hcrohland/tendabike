@@ -6,7 +6,7 @@
   import Menu from "../Widgets/Menu.svelte";
   import XsButton from "../Widgets/XsButton.svelte";
   import { mounted_on } from "../lib/attachment";
-  import { fmtDate } from "../lib/store";
+  import { fmtDate } from "../lib/utils";
   import { Type } from "../lib/types";
   import { newPart } from "../Part/NewPart.svelte";
   import { attachPart } from "../Attachment/AttachPart.svelte";

@@ -25,7 +25,7 @@
 </script>
 
 <script lang="ts">
-  import { handleError } from "../lib/store";
+  import { handleError } from "../lib/utils";
   import NewForm from "./PartForm.svelte";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";

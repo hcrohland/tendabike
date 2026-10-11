@@ -1,5 +1,5 @@
 import { mapableState } from "./mapable.svelte";
-import { handleError, myfetch } from "./store";
+import { handleError, myfetch } from "./utils";
 
 export class Activity {
   id: number;

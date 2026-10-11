@@ -10,7 +10,7 @@
     Li,
   } from "flowbite-svelte";
   import * as m from "../../paraglide/messages";
-  import { myfetch, handleError } from "../lib/store";
+  import { myfetch, handleError } from "../lib/utils";
   import { Shop, shops } from "../lib/shop";
   import ShopSearch from "./ShopSearch.svelte";
   import type { ShopSubscription } from "../lib/subscription";

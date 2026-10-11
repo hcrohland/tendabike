@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Table, TableHead, TableBody, Button, Input } from "flowbite-svelte";
   import * as m from "../../paraglide/messages";
-  import { myfetch, handleError } from "../lib/store";
+  import { myfetch, handleError } from "../lib/utils";
   import type { ShopSubscription } from "../lib/subscription";
   import { shops } from "../lib/shop";
   import SubscriptionRow from "./SubscriptionRow.svelte";

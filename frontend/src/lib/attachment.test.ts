@@ -11,7 +11,7 @@ import {
 } from "./attachment";
 import { Part, parts } from "./part";
 import { Activity, activities } from "./activity";
-import { maxDate } from "./store";
+import { maxDate } from "./utils";
 import { stateValues, type Map } from "./mapable.svelte";
 
 function att(overrides: Partial<any> = {}): Attachment {

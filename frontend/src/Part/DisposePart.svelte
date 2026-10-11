@@ -56,7 +56,7 @@
 
 <script lang="ts">
   import { ButtonGroup, InputAddon } from "flowbite-svelte";
-  import { handleError } from "../lib/store";
+  import { handleError } from "../lib/utils";
   import Dispose from "../Widgets/Dispose.svelte";
   import DateTime from "../Widgets/DateTime.svelte";
   import Buttons from "../Widgets/Buttons.svelte";

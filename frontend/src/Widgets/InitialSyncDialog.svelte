@@ -19,7 +19,7 @@
  -->
 <script lang="ts">
   import { Modal, P, Heading, Button } from "flowbite-svelte";
-  import { myfetch, handleError } from "../lib/store";
+  import { myfetch, handleError } from "../lib/utils";
   import { getUser, setUser } from "../lib/user";
   import { m } from "../../paraglide/messages";
 

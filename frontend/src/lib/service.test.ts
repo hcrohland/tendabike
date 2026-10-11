@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { Service, services } from "./service";
 import { Part } from "./part";
 import { usages } from "./usage";
-import { fmtDate } from "./store";
+import { fmtDate } from "./utils";
 import { type Map } from "./mapable.svelte";
 import { resp, summary, usage } from "../test/helpers";
 

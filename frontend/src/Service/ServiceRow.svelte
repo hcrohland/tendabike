@@ -2,7 +2,7 @@
   import UsageChips from "../Usage/UsageChips.svelte";
   import { Service } from "../lib/service";
   import { Part } from "../lib/part";
-  import { fmtRange } from "../lib/store";
+  import { fmtRange } from "../lib/utils";
   import ServiceMenu from "./ServiceMenu.svelte";
   import ServiceBadge from "../Widgets/ServiceBadge.svelte";
   import type { Due, limit_keys } from "../lib/serviceplan";

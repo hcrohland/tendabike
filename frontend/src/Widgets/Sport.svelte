@@ -10,7 +10,7 @@
     }
   }
 
-  import { myfetch, handleError } from "../lib/store";
+  import { myfetch, handleError } from "../lib/utils";
   import { Dropdown, DropdownItem, Spinner } from "flowbite-svelte";
   import { setCategory, types } from "../lib/types";
   import { ChevronDownOutline } from "flowbite-svelte-icons";

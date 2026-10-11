@@ -18,7 +18,7 @@ import { Attachment, attachments } from "./attachment";
 import { Service, services } from "./service";
 import { usages } from "./usage";
 import { getTypes } from "./types";
-import { maxDate } from "./store";
+import { maxDate } from "./utils";
 import { resp, usage } from "../test/helpers";
 
 const wheelType = {

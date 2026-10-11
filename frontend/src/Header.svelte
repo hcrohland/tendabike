@@ -14,7 +14,7 @@
     DarkMode,
     Select,
   } from "flowbite-svelte";
-  import { handleError, myfetch } from "./lib/store";
+  import { handleError, myfetch } from "./lib/utils";
   import { refresh, getUser, setUser } from "./lib/user";
   import { markHydrated, startStream, stopStream } from "./lib/stream";
   import { activities } from "./lib/activity";

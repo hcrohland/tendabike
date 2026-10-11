@@ -22,7 +22,7 @@
   import { Activity } from "../lib/activity";
   import { Usage } from "../lib/usage";
   import Chip from "../Widgets/Chip.svelte";
-  import { DAY, fmtNumber, fmtSeconds } from "../lib/store";
+  import { DAY, fmtNumber, fmtSeconds } from "../lib/utils";
   import RangeSlider from "svelte-range-slider-pips";
   import { tick } from "svelte";
   import * as m from "../../paraglide/messages";

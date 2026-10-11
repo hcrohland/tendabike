@@ -7,7 +7,7 @@ How the Tendabike client holds shared state: Svelte 5 state objects in `.svelte.
 Pick by what the value is:
 
 1. **Collection keyed by id** — the `mapableState` factory (`frontend/src/lib/mapable.svelte.ts`): a `$state` record of entities by id with `setMap`/`updateMap`/`deleteItem` attached. Reference: `part.ts`.
-2. **Object, always defined** — `export const x = $state({...})` in `x.svelte.ts`; writes are property mutation. Reference: `message.svelte.ts`; `store.ts` re-exports the state.
+2. **Object, always defined** — `export const x = $state({...})` in `x.svelte.ts`; writes are property mutation. Reference: `message.svelte.ts`; `utils.ts` re-exports the state.
 3. **Object, nullable or replaced wholesale** — a module-private `let x = $state(...)` in `x.svelte.ts`, exposed through `getX()`/`setX()`; the entity module re-exports the accessors. Reference: `user.svelte.ts`; `user.ts` re-exports the accessors.
 
 **Not a state object: `types` is a plain `Map` carrying configuration** — the type vocabulary, fetched once at startup by `getTypes()` and never mutated in-session. It is deliberately non-reactive and belongs to none of the three shapes (ADR-0004).

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { myfetch, checkStatus, handleError, message } from "./store";
+import { myfetch, checkStatus, handleError, message } from "./utils";
 import { getUser, setUser } from "./user";
 import { resp } from "../test/helpers";
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { handleError, myfetch } from "../lib/store";
+  import { handleError, myfetch } from "../lib/utils";
   import type { User } from "../lib/user";
   import Buttons from "../Widgets/Buttons.svelte";
   import Modal from "../Widgets/Modal.svelte";

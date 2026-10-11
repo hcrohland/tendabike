@@ -1,7 +1,7 @@
 import { Activity, activities as allActivities } from "./activity";
 import { by, filterValues, type Map, stateValues } from "./mapable.svelte";
 import { Part, parts as allParts } from "./part";
-import { myfetch } from "./store";
+import { myfetch } from "./utils";
 import { getCategory, setCategory } from "./types.svelte";
 import * as m from "../../paraglide/messages";
 
