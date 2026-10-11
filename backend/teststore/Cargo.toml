@@ -1,0 +1,28 @@
+[package]
+name = "tb_teststore"
+version = "0.9.0"
+edition = { workspace = true }
+
+# The unified in-memory test store (spec #510). Consumer crates take this
+# as a dev-dependency, so there is no dependency cycle.
+
+[dependencies]
+tb_domain = { workspace = true, features = ["test-support"] }
+tb_strava = { workspace = true }
+tb_exec = { workspace = true }
+
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+oauth2 = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+time = { workspace = true, features = ["serde", "macros"] }
+tokio = { workspace = true, features = ["macros", "rt"] }
+uuid = { workspace = true, features = ["v7", "fast-rng"] }
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "build-snapshot"
+path = "src/bin/build_snapshot.rs"

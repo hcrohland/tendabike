@@ -8,6 +8,7 @@ members = [
     "backend/strava",
     "backend/sqlx",
     "backend/exec",
+    "backend/teststore",
 ]
 
 [workspace.dependencies]
@@ -17,6 +18,7 @@ tb_axum = { path = "./backend/axum" }
 tb_strava = { path = "./backend/strava" }
 tb_sqlx = { path = "./backend/sqlx" }
 tb_exec = { path = "./backend/exec" }
+tb_teststore = { path = "./backend/teststore" }
 
 anyhow = "1.0"
 async-recursion = "1"

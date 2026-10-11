@@ -2707,6 +2707,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "tb_teststore"
+version = "0.9.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "oauth2",
+ "serde",
+ "serde_json",
+ "tb_domain",
+ "tb_exec",
+ "tb_strava",
+ "time",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "tendabike"
 version = "0.9.0"
 dependencies = [
