@@ -1,8 +1,10 @@
 # AGENTS.md
 
-## Commands (run from project root)
+## Workspace
 
-The frontend is a workspace of the root `package.json`; its dependencies and `package-lock.json` live at the root, not in `frontend/`.
+`frontend/` is an npm workspace of the root `package.json`. Run all npm commands, including `npm install`, from the project root (`../`), where `node_modules` and `package-lock.json` live.
+
+## Commands
 
 - `npm run check` - Frontend type checking (svelte-check; the CI variant `check:ci` also compiles paraglide first)
 
