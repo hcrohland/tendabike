@@ -14,7 +14,7 @@ Issues and specs for this repo live as GitHub issues. Use the GitHub MCP server 
 - **Close**: `issue_write` with `method: "update"`, `state: "closed"`, `state_reason: "completed"`; pair with `add_issue_comment` when a closing comment is wanted.
 - **Close from a PR**: the PR collects `Closes` lines from its commits on merge; a single `Closes` closes only its first issue.
 - **Sync**: keep a feature branch up to date by merging `main` into it (`git merge origin/main`); never force-push to the remote — the `.githooks/pre-push` hook rejects non-fast-forward updates.
-- **Merge**: `merge_pull_request` with `merge_method: "squash"` — PRs are squash-merged, and the squashed commit takes the PR title, so write the PR title as the commit title you want on `main`.
+- **Merge**: `merge_pull_request` with `merge_method: "squash"` — PRs are squash-merged, and the squashed commit takes the PR title, so write the PR title as the commit title you want on `main`. Only merge when the required checks are green on the current head: the ruleset's strict check policy voids check runs from a head behind `main`, so if `main` moved since they ran, sync (above) and let the checks re-run first.
 
 ## Pull requests as a triage surface
 
