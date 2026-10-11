@@ -1,15 +1,28 @@
 #!/bin/sh
 protected_branch='main'
+zeros=$(printf '%040d' 0)
 
 while read local_ref local_sha remote_ref remote_sha
 do
     case "$remote_ref" in
         "refs/heads/$protected_branch")
-            if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+            if [ "$local_sha" = "$zeros" ]; then
                 echo "Deleting '$protected_branch' is not allowed."
                 exit 1
             fi
             ;;
     esac
+
+    # A force push is a non-fast-forward update: the remote tip is not an
+    # ancestor of the local tip. New branches (remote tip all zeros) and
+    # deletions (local tip all zeros) are not force pushes.
+    if [ "$local_sha" != "$zeros" ] &&
+       [ "$remote_sha" != "$zeros" ] &&
+       ! git merge-base --is-ancestor "$remote_sha" "$local_sha"
+    then
+        echo "Force push to '$remote_ref' is not allowed (non-fast-forward)."
+        echo "Sync by merging origin/main into your branch; never rewrite pushed history."
+        exit 1
+    fi
 done
 exit 0
