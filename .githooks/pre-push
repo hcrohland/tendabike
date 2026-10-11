@@ -1,6 +1,6 @@
 #!/bin/sh
 protected_branch='main'
-zeros='00000000000000000000000000000000000000'
+zeros=$(printf '%040d' 0)
 
 while read local_ref local_sha remote_ref remote_sha
 do
