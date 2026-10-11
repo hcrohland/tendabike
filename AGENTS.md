@@ -14,8 +14,9 @@
 
 ## Commit rules
 
-- Flow, in order: finish the work → if on `main`, create a feature branch → commit.
+- Flow, in order: finish the work → if on `main`, create a feature branch → commit → push → merge once the checks are green.
 - Commit titles name the change; the issue number goes in a `Closes #N` line in the body, one per issue.
+- Merge with squash. The repo's strict check policy does not accept check runs from a head behind `main`: if `main` has moved since the checks ran, merge `origin/main` into the branch and let the checks re-run first.
 - Never bypass the pre-commit hook with `--no-verify` or `-n` — make the checks pass instead.
 
 ## Agent skills
