@@ -6,11 +6,13 @@ use http::{Method, StatusCode, header};
 use tower_sessions::MemoryStore;
 
 use tb_domain::{Activity, ActivityId, ActivityStore, PartStore, Summary, UserId};
+use tb_exec::{Txn, TxnSource};
+use tb_strava::StravaStore;
+use tb_teststore::TestStore;
 
 use crate::stream::{ExecutorStatus, Registry};
 use crate::test_support::{
-    LiveSource, admin_cookie, read_sse_frames, run, run_json, run_sse, test_app, test_app_live,
-    user_cookie,
+    admin_cookie, read_sse_frames, run, run_json, run_sse, test_app, test_app_live, user_cookie,
 };
 
 async fn setup() -> (Router, MemoryStore) {
@@ -153,8 +155,8 @@ async fn stream_is_event_stream_and_heartbeats() {
         Duration::from_secs(60),
         Duration::from_millis(50),
     ));
-    let live = LiveSource::new().await;
-    let app = test_app_live(&store, live, registry);
+    let live = TestStore::new();
+    let app = test_app_live(&store, live, registry).await;
     let cookie = user_cookie(&store).await;
     let (status, headers, mut body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
@@ -179,8 +181,8 @@ async fn stream_forwards_summary_frames() {
         Duration::from_secs(60),
         Duration::from_secs(15),
     ));
-    let live = LiveSource::new().await;
-    let app = test_app_live(&store, live, registry.clone());
+    let live = TestStore::new();
+    let app = test_app_live(&store, live, registry.clone()).await;
     let cookie = user_cookie(&store).await;
     let (status, _headers, mut body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
@@ -213,8 +215,8 @@ async fn attached_stream_keeps_the_executor_alive() {
         Duration::from_millis(300),
         Duration::from_millis(50),
     ));
-    let live = LiveSource::new().await;
-    let app = test_app_live(&store, live.clone(), registry.clone());
+    let live = TestStore::new();
+    let app = test_app_live(&store, live.clone(), registry.clone()).await;
     let cookie = user_cookie(&store).await;
     let user = UserId::from(1);
     // The stream opens: `run_sse` returns only after the endpoint
@@ -283,8 +285,8 @@ async fn stream_survives_executor_reap() {
         Duration::from_millis(300),
         Duration::from_millis(50),
     ));
-    let live = LiveSource::new().await;
-    let app = test_app_live(&store, live.clone(), registry.clone());
+    let live = TestStore::new();
+    let app = test_app_live(&store, live.clone(), registry.clone()).await;
     let cookie = user_cookie(&store).await;
     let user = UserId::from(1);
 
@@ -459,14 +461,14 @@ fn part_body(name: &str) -> String {
 }
 
 /// A live-app fixture: shared in-memory db + session store + registry.
-async fn live_app() -> (Router, MemoryStore, Arc<Registry>, LiveSource) {
+async fn live_app() -> (Router, MemoryStore, Arc<Registry>, TestStore) {
     let store = MemoryStore::default();
     let registry = Arc::new(Registry::new(
         Duration::from_secs(60),
         Duration::from_secs(15),
     ));
-    let live = LiveSource::new().await;
-    let app = test_app_live(&store, live.clone(), registry.clone());
+    let live = TestStore::new();
+    let app = test_app_live(&store, live.clone(), registry.clone()).await;
     (app, store, registry, live)
 }
 
@@ -488,7 +490,7 @@ async fn create_part_returns_201_and_entity() {
     assert_eq!(status, StatusCode::CREATED);
     let text = String::from_utf8_lossy(&body);
     assert!(text.contains("Chain"), "body: {text}");
-    let mut conn = live.mem().lock().unwrap().begin();
+    let mut conn = live.begin().await.unwrap();
     let parts = PartStore::part_get_all_for_userid(&mut conn, &UserId::from(1))
         .await
         .unwrap();
@@ -524,7 +526,7 @@ async fn update_part_returns_204() {
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
-    let mut conn = live.mem().lock().unwrap().begin();
+    let mut conn = live.begin().await.unwrap();
     let parts = PartStore::part_get_all_for_userid(&mut conn, &UserId::from(1))
         .await
         .unwrap();
@@ -558,7 +560,7 @@ async fn delete_part_returns_204() {
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
-    let mut conn = live.mem().lock().unwrap().begin();
+    let mut conn = live.begin().await.unwrap();
     let parts = PartStore::part_get_all_for_userid(&mut conn, &UserId::from(1))
         .await
         .unwrap();
@@ -618,15 +620,13 @@ async fn onboarding_sync_returns_200_and_user() {
     );
     let deadline = tokio::time::Instant::now() + Duration::from_secs(3);
     loop {
-        if live.strava().lock().unwrap().events.is_empty()
-            || tokio::time::Instant::now() >= deadline
-        {
+        if live.state().strava.events.is_empty() || tokio::time::Instant::now() >= deadline {
             break;
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
     assert!(
-        live.strava().lock().unwrap().events.is_empty(),
+        live.state().strava.events.is_empty(),
         "the queued sync must have been consumed"
     );
 }
@@ -695,7 +695,7 @@ async fn admin_sync_returns_204_and_consumes_queue() {
     let (status, _headers, _body) = run(app, Method::GET, "/strava/sync/1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::NO_CONTENT);
     assert!(
-        live.strava().lock().unwrap().events.is_empty(),
+        live.state().strava.events.is_empty(),
         "the queued sync must have been consumed"
     );
 }
@@ -713,8 +713,8 @@ async fn webhook_wake_drains_the_queue_before_the_idle_timeout() {
         Duration::from_secs(60),
         Duration::from_millis(50),
     ));
-    let live = LiveSource::new().await;
-    let app = test_app_live(&store, live.clone(), registry.clone());
+    let live = TestStore::new();
+    let app = test_app_live(&store, live.clone(), registry.clone()).await;
     let cookie = user_cookie(&store).await;
 
     // Open a stream: the executor spawns and stays running (the attached
@@ -761,18 +761,16 @@ async fn webhook_wake_drains_the_queue_before_the_idle_timeout() {
 /// seam's executor consumes a queued event by dropping it (the seam has
 /// no refresh token, so `NotAuth` disables the user and clears the
 /// queue) — an empty queue is consumption.
-async fn assert_queue_drained(live: &LiveSource) {
+async fn assert_queue_drained(live: &TestStore) {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(3);
     loop {
-        if live.strava().lock().unwrap().events.is_empty()
-            || tokio::time::Instant::now() >= deadline
-        {
+        if live.state().strava.events.is_empty() || tokio::time::Instant::now() >= deadline {
             break;
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
     assert!(
-        live.strava().lock().unwrap().events.is_empty(),
+        live.state().strava.events.is_empty(),
         "the queued event must be consumed well under the idle timeout"
     );
 }
@@ -790,8 +788,8 @@ async fn wake_never_spawns_a_reaped_executor() {
         Duration::from_millis(100),
         Duration::from_millis(50),
     ));
-    let live = LiveSource::new().await;
-    let app = test_app_live(&store, live.clone(), registry.clone());
+    let live = TestStore::new();
+    let app = test_app_live(&store, live.clone(), registry.clone()).await;
     let cookie = user_cookie(&store).await;
     let user = UserId::from(1);
 
@@ -802,17 +800,17 @@ async fn wake_never_spawns_a_reaped_executor() {
     drop(body);
     wait_for_status(&registry, user, ExecutorStatus::Reaped).await;
 
-    // Queue an event for the user.
-    live.strava()
-        .lock()
-        .unwrap()
-        .events
-        .push(tb_strava::event::Event {
-            object_type: tb_strava::event::ObjectType::Sync,
-            owner_id: tb_strava::StravaId::from(1),
-            event_time: 1700000000,
-            ..Default::default()
-        });
+    // Queue an event for the user (an operation through the store).
+    let mut conn = live.begin().await.unwrap();
+    conn.stravaevent_store(tb_strava::event::Event {
+        object_type: tb_strava::event::ObjectType::Sync,
+        owner_id: tb_strava::StravaId::from(1),
+        event_time: 1700000000,
+        ..Default::default()
+    })
+    .await
+    .expect("queue the event");
+    conn.commit().await.expect("commit the queue write");
 
     // The wake is a signal only: no executor is running, so it spawns
     // nothing and the event stays queued.
@@ -823,7 +821,7 @@ async fn wake_never_spawns_a_reaped_executor() {
         "the wake must not spawn an executor"
     );
     assert!(
-        !live.strava().lock().unwrap().events.is_empty(),
+        !live.state().strava.events.is_empty(),
         "the queued event must stay queued for the next spawn"
     );
 
@@ -834,15 +832,13 @@ async fn wake_never_spawns_a_reaped_executor() {
         .expect("the write must succeed");
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     loop {
-        if live.strava().lock().unwrap().events.is_empty()
-            || tokio::time::Instant::now() >= deadline
-        {
+        if live.state().strava.events.is_empty() || tokio::time::Instant::now() >= deadline {
             break;
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
     assert!(
-        live.strava().lock().unwrap().events.is_empty(),
+        live.state().strava.events.is_empty(),
         "the respawned executor must drain the queue"
     );
 }
@@ -979,7 +975,7 @@ async fn descend_answers_with_match_report_and_stream_frame() {
     // the assertions all observe it): the first CSV row matches it by
     // the local minute, the second has no activity at its time.
     {
-        let mut conn = live.mem().lock().unwrap().begin();
+        let mut conn = live.begin().await.unwrap();
         let act = Activity {
             id: ActivityId::new(1),
             user_id: UserId::from(1),

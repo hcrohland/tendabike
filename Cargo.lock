@@ -2625,6 +2625,7 @@ dependencies = [
  "tb_domain",
  "tb_exec",
  "tb_strava",
+ "tb_teststore",
  "thiserror 2.0.21",
  "time",
  "tokio",
