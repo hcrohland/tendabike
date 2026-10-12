@@ -2702,6 +2702,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tb_domain",
+ "tb_teststore",
  "time",
  "tokio",
 ]

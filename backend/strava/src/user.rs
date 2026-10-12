@@ -35,7 +35,7 @@ impl StravaId {
     }
 
     /// disable a user
-    pub(crate) async fn disable(self, store: &mut impl StravaStore) -> TbResult<()> {
+    pub async fn disable(self, store: &mut impl StravaStore) -> TbResult<()> {
         info!("disabling user {self}");
 
         let events = store.strava_events_delete_for_user(&self).await?;
@@ -90,7 +90,7 @@ impl StravaUser {
         self.refresh_token.clone()
     }
 
-    pub(crate) fn disabled(&self) -> bool {
+    pub fn disabled(&self) -> bool {
         self.refresh_token.is_none()
     }
 
@@ -182,8 +182,8 @@ impl StravaUser {
 pub struct StravaStat {
     #[serde(flatten)]
     stat: Stat,
-    events: i64,
-    disabled: bool,
+    pub events: i64,
+    pub disabled: bool,
 }
 
 pub async fn get_all_stats(store: &mut impl StravaStore) -> TbResult<Vec<StravaStat>> {
@@ -247,6 +247,3 @@ pub async fn user_delete(
     debug!("Deleted {n} strava user");
     tbuser.delete(store).await
 }
-
-#[cfg(test)]
-mod user_tests;

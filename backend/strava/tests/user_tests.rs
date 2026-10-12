@@ -1,9 +1,14 @@
-use super::*;
-use crate::event::{AspectType, Event, ObjectType};
-use crate::test_support::{TestStravaSession, TestStravaStore, gear_json, strava_user};
+use oauth2::RefreshToken;
+use tb_domain::{Error, PartStore, TbResult, UserId, UserStore};
+use tb_strava::event::{AspectType, Event, ObjectType};
+use tb_strava::test_support::{TestStravaSession, gear_json, strava_user};
+use tb_strava::{
+    StravaId, StravaStore, StravaUser, get_all_stats, strava_url, user_deauthorize, user_delete,
+};
+use tb_teststore::TestStore;
 
-fn setup() -> (TestStravaStore, TestStravaSession) {
-    let mut store = TestStravaStore::new();
+fn setup() -> (TestStore, TestStravaSession) {
+    let mut store = TestStore::new();
     store.insert_user(strava_user(UserId::from(1), 42, true));
     let session = TestStravaSession::new(UserId::from(1), 42.into());
     (store, session)
@@ -11,7 +16,7 @@ fn setup() -> (TestStravaStore, TestStravaSession) {
 
 #[tokio::test]
 async fn upsert_creates_new_user() -> TbResult<()> {
-    let mut store = TestStravaStore::new();
+    let mut store = TestStore::new();
     let user = StravaUser::upsert(
         42.into(),
         "First",
@@ -23,7 +28,7 @@ async fn upsert_creates_new_user() -> TbResult<()> {
     .await?;
     assert_eq!(user.id, 42.into());
     assert!(!user.disabled());
-    let tb = UserStore::get(&mut store.mem, user.tendabike_id).await?;
+    let tb = store.get(user.tendabike_id).await?;
     assert_eq!(tb.firstname, "First");
     assert_eq!(tb.name, "Last");
     assert!(
@@ -37,8 +42,8 @@ async fn upsert_creates_new_user() -> TbResult<()> {
 
 #[tokio::test]
 async fn upsert_updates_existing_user() -> TbResult<()> {
-    let mut store = TestStravaStore::new();
-    UserStore::create(&mut store.mem, "Old", "Name", &None).await?;
+    let mut store = TestStore::new();
+    store.create("Old", "Name", &None).await?;
     store.insert_user(strava_user(UserId::from(1), 42, true));
     let user = StravaUser::upsert(
         42.into(),
@@ -50,7 +55,7 @@ async fn upsert_updates_existing_user() -> TbResult<()> {
     )
     .await?;
     assert_eq!(user.tendabike_id, UserId::from(1));
-    let tb = UserStore::get(&mut store.mem, UserId::from(1)).await?;
+    let tb = store.get(UserId::from(1)).await?;
     assert_eq!(tb.firstname, "New");
     let stored = store.stravauser_get_by_tbid(UserId::from(1)).await?;
     assert_eq!(
@@ -62,7 +67,7 @@ async fn upsert_updates_existing_user() -> TbResult<()> {
 
 #[tokio::test]
 async fn upsert_without_refresh_is_disabled() -> TbResult<()> {
-    let mut store = TestStravaStore::new();
+    let mut store = TestStore::new();
     let user = StravaUser::upsert(43.into(), "First", "Last", &None, None, &mut store).await?;
     assert!(user.disabled());
     Ok(())
@@ -164,18 +169,18 @@ async fn user_delete_removes_everything() -> TbResult<()> {
         .await?;
     user_delete(&mut session, &mut store).await?;
     assert_eq!(session.deauthorizes, vec![42.into()]);
-    assert!(store.strava_users.is_empty());
+    assert!(store.state().strava.users.is_empty());
     assert_eq!(store.event_count(), 0);
-    let res = UserStore::get(&mut store.mem, UserId::from(1)).await;
+    let res = store.get(UserId::from(1)).await;
     assert!(matches!(res, Err(Error::NotFound(_))));
     Ok(())
 }
 
 #[tokio::test]
 async fn stats_include_event_counts() -> TbResult<()> {
-    let mut store = TestStravaStore::new();
-    UserStore::create(&mut store.mem, "A", "User", &None).await?;
-    UserStore::create(&mut store.mem, "B", "User", &None).await?;
+    let mut store = TestStore::new();
+    store.create("A", "User", &None).await?;
+    store.create("B", "User", &None).await?;
     store.insert_user(strava_user(UserId::from(1), 42, true));
     store.insert_user(strava_user(UserId::from(2), 43, false));
     store
@@ -216,9 +221,9 @@ async fn update_gear_imports_bikes_and_shoes() -> TbResult<()> {
     session.queue("/gear/g1", &gear_json("g1", None));
     let parts = StravaUser::update_gear(&mut session, &mut store).await?;
     assert_eq!(parts.len(), 2);
-    let bike = PartStore::partid_get_part(&mut store.mem, parts[0]).await?;
+    let bike = store.partid_get_part(parts[0]).await?;
     assert_eq!(bike.what, 1.into());
-    let shoes = PartStore::partid_get_part(&mut store.mem, parts[1]).await?;
+    let shoes = store.partid_get_part(parts[1]).await?;
     assert_eq!(shoes.what, 301.into());
     Ok(())
 }

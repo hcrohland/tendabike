@@ -32,6 +32,6 @@ All suites are in-memory (no database, no network) except `tb_sqlx`'s store-seam
 Before writing or changing tests for a crate, read its guide:
 
 - `tb_domain` → [`docs/tests/domain.md`](docs/tests/domain.md) — `MemStore`, fixtures, the prepopulated snapshot and its data rules
-- `tb_strava` → [`docs/tests/strava.md`](docs/tests/strava.md) — `TestStravaStore` / `TestStravaSession`, JSON helpers
+- `tb_strava` → [`docs/tests/strava.md`](docs/tests/strava.md) — integration tests on `TestStore`, `TestStravaSession`, JSON helpers
 - `tb_axum` → [`docs/tests/axum.md`](docs/tests/axum.md) — `test_app`, router tests, coverage map
 - `tb_sqlx` → [`docs/tests/sqlx.md`](docs/tests/sqlx.md) — entity-mapping roundtrips, the store-seam integration suite

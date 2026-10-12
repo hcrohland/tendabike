@@ -1,8 +1,15 @@
-use super::*;
-use crate::test_support::{TestStravaSession, TestStravaStore, activity_json, strava_user};
+use tb_domain::{ActivityId, ActivityStore, Error, Summary, TbResult, UserId, UserStore};
+use tb_strava::StravaStore;
+use tb_strava::event::{
+    AspectType, Event, InEvent, ObjectType, QueueRead, get_event, insert_stop, insert_sync,
+    process, sync_users,
+};
+use tb_strava::get_time;
+use tb_strava::test_support::{TestStravaSession, activity_json, strava_user};
+use tb_teststore::TestStore;
 
-fn setup() -> (TestStravaStore, TestStravaSession) {
-    let mut store = TestStravaStore::new();
+fn setup() -> (TestStore, TestStravaSession) {
+    let mut store = TestStore::new();
     store.insert_user(strava_user(UserId::from(1), 42, true));
     let session = TestStravaSession::new(UserId::from(1), 42.into());
     (store, session)
@@ -89,8 +96,8 @@ async fn accept_stores_activity_event() -> TbResult<()> {
             .is_some()
     );
     assert_eq!(store.event_count(), 1);
-    assert_eq!(store.events[0].object_id, 10);
-    assert!(store.events[0].id.is_some());
+    assert_eq!(store.state().strava.events[0].object_id, 10);
+    assert!(store.state().strava.events[0].id.is_some());
     Ok(())
 }
 
@@ -125,8 +132,8 @@ async fn insert_sync_stores_event() -> TbResult<()> {
     let (mut store, _) = setup();
     insert_sync(42.into(), 100, true, &mut store).await?;
     assert_eq!(store.event_count(), 1);
-    assert_eq!(store.events[0].object_type, ObjectType::Sync);
-    assert_eq!(store.events[0].object_id, 1);
+    assert_eq!(store.state().strava.events[0].object_type, ObjectType::Sync);
+    assert_eq!(store.state().strava.events[0].object_id, 1);
     Ok(())
 }
 
@@ -143,8 +150,8 @@ async fn insert_stop_schedules_future() -> TbResult<()> {
     let (mut store, _) = setup();
     insert_stop(&mut store).await?;
     assert_eq!(store.event_count(), 1);
-    assert_eq!(store.events[0].object_type, ObjectType::Stop);
-    assert!(store.events[0].object_id > get_time());
+    assert_eq!(store.state().strava.events[0].object_type, ObjectType::Stop);
+    assert!(store.state().strava.events[0].object_id > get_time());
     Ok(())
 }
 
@@ -154,14 +161,14 @@ async fn insert_stop_extends_existing() -> TbResult<()> {
     // than stacking rows (spec #446 §4.6): the backoff must not compound.
     let (mut store, _) = setup();
     insert_stop(&mut store).await?;
-    let first_until = store.events[0].object_id;
+    let first_until = store.state().strava.events[0].object_id;
     insert_stop(&mut store).await?;
     assert_eq!(
         store.event_count(),
         1,
         "the second Stop extends, it does not stack"
     );
-    let stop = &store.events[0];
+    let stop = &store.state().strava.events[0];
     assert_eq!(stop.object_type, ObjectType::Stop);
     assert!(
         stop.object_id >= first_until,
@@ -254,7 +261,7 @@ async fn rate_limit_active_reports_deadline() -> TbResult<()> {
             ..Default::default()
         })
         .await?;
-    let event = store.events[0].clone();
+    let event = store.state().strava.events[0].clone();
     let res = event.rate_limit(&session, &mut store).await?;
     assert_eq!(res, QueueRead::Limited { until });
     assert_eq!(store.event_count(), 1);
@@ -270,7 +277,7 @@ async fn rate_limit_expired_removes_stop() -> TbResult<()> {
         ..Default::default()
     };
     store.stravaevent_store(stop).await?;
-    let event = store.events[0].clone();
+    let event = store.state().strava.events[0].clone();
     let res = event.rate_limit(&session, &mut store).await?;
     assert_eq!(res, QueueRead::Empty);
     assert_eq!(store.event_count(), 0);
@@ -320,7 +327,9 @@ async fn process_try_again_inserts_stop() -> TbResult<()> {
     let summary = process(&mut session, &mut store).await?;
     assert_eq!(summary, Summary::default());
     assert_eq!(store.event_count(), 2);
-    let stop = store
+    let state = store.state();
+    let stop = state
+        .strava
         .events
         .iter()
         .find(|e| e.object_type == ObjectType::Stop)
@@ -423,8 +432,8 @@ async fn process_sync_imports_activities() -> TbResult<()> {
     let summary = process(&mut session, &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
     assert_eq!(store.event_count(), 1);
-    assert_eq!(store.events[0].event_time, 1767348000);
-    let acts = ActivityStore::get_all(&mut store.mem, &UserId::from(1)).await?;
+    assert_eq!(store.state().strava.events[0].event_time, 1767348000);
+    let acts = store.get_all(&UserId::from(1)).await?;
     assert_eq!(acts.len(), 1);
     Ok(())
 }
@@ -462,7 +471,8 @@ async fn process_sync_bad_activity_skips_and_advances_cursor() -> TbResult<()> {
     assert_eq!(summary.activities.len(), 1, "the good activity imports");
     assert_eq!(store.event_count(), 1, "the sync event stays queued");
     assert_eq!(
-        store.events[0].event_time, 1767434400,
+        store.state().strava.events[0].event_time,
+        1767434400,
         "the cursor advances past the bad activity (2026-01-03T10:00:00Z)"
     );
     Ok(())
@@ -484,6 +494,8 @@ async fn process_sync_try_again_keeps_event_and_stops() -> TbResult<()> {
     assert_eq!(store.event_count(), 2);
     assert!(
         store
+            .state()
+            .strava
             .events
             .iter()
             .any(|e| e.object_type == ObjectType::Stop)
@@ -509,14 +521,14 @@ async fn process_skips_athlete_event() -> TbResult<()> {
 
 #[tokio::test]
 async fn sync_users_skips_disabled() -> TbResult<()> {
-    let mut store = TestStravaStore::new();
-    UserStore::create(&mut store.mem, "A", "User", &None).await?;
-    UserStore::create(&mut store.mem, "B", "User", &None).await?;
+    let mut store = TestStore::new();
+    store.create("A", "User", &None).await?;
+    store.create("B", "User", &None).await?;
     store.insert_user(strava_user(UserId::from(1), 42, true));
     store.insert_user(strava_user(UserId::from(2), 43, false));
     sync_users(None, 100, false, &mut store).await?;
     assert_eq!(store.event_count(), 1);
-    assert_eq!(store.events[0].owner_id, 42.into());
+    assert_eq!(store.state().strava.events[0].owner_id, 42.into());
     Ok(())
 }
 

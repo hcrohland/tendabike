@@ -13,7 +13,7 @@ use crate::*;
 #[derive(Serialize, Deserialize, Debug)]
 /// A struct that represents an activity from Strava API.
 /// It has fields that represent the activity's properties such as id, type, name, start date, elapsed time, moving time, distance, total elevation gain, average watts, and gear id.
-pub(crate) struct StravaActivity {
+pub struct StravaActivity {
     pub id: i64,
     /// The activity type
     #[serde(rename = "type")]
@@ -56,7 +56,7 @@ impl StravaActivity {
     /// # Returns
     ///
     /// A Result containing a Activity struct if the conversion was successful, or an error if it failed.
-    async fn into_activity(
+    pub async fn into_activity(
         self,
         user: &mut impl StravaSession,
         store: &mut impl StravaStore,
@@ -111,7 +111,7 @@ impl StravaActivity {
     /// # Returns
     ///
     /// A Result containing an ActTypeId if the mapping was successful, or an error if it failed.
-    fn get_type(t: &str) -> TbResult<ActTypeId> {
+    pub fn get_type(t: &str) -> TbResult<ActTypeId> {
         Ok(match t {
             "Ride" => 1,
             "VirtualRide" => 5,
@@ -197,13 +197,10 @@ pub async fn upsert_activity(
     act.send_to_tb(user, store).await
 }
 
-pub(crate) async fn delete_activity(
+pub async fn delete_activity(
     act: i64,
     user: &impl StravaSession,
     store: &mut impl StravaStore,
 ) -> TbResult<Summary> {
     ActivityId::new(act).delete(user, store).await
 }
-
-#[cfg(test)]
-mod activity_tests;

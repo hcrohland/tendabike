@@ -1,8 +1,10 @@
-use super::*;
-use crate::test_support::{TestStravaSession, TestStravaStore, gear_json, strava_user};
+use tb_domain::{Error, Part, PartId, PartStore, TbResult, UserId};
+use tb_strava::gear::{into_partid, strava_url};
+use tb_strava::test_support::{TestStravaSession, gear_json, strava_user};
+use tb_teststore::TestStore;
 
-fn setup() -> (TestStravaStore, TestStravaSession) {
-    let mut store = TestStravaStore::new();
+fn setup() -> (TestStore, TestStravaSession) {
+    let mut store = TestStore::new();
     store.insert_user(strava_user(UserId::from(1), 42, true));
     let session = TestStravaSession::new(UserId::from(1), 42.into());
     (store, session)
@@ -13,7 +15,7 @@ async fn into_partid_creates_bike() -> TbResult<()> {
     let (mut store, mut session) = setup();
     session.queue("/gear/b1", &gear_json("b1", Some(0)));
     let part_id = into_partid("b1".to_string(), &mut session, &mut store).await?;
-    let part = PartStore::partid_get_part(&mut store.mem, part_id).await?;
+    let part = store.partid_get_part(part_id).await?;
     assert_eq!(part.what, 1.into());
     assert_eq!(part.source.as_deref(), Some("b1"));
     assert_eq!(part.vendor, "Test Brand");
@@ -30,7 +32,7 @@ async fn into_partid_creates_shoes() -> TbResult<()> {
         r#"{"id":"g1","name":"Test Shoes","brand_name":null,"model_name":null,"frame_type":null}"#,
     );
     let part_id = into_partid("g1".to_string(), &mut session, &mut store).await?;
-    let part = PartStore::partid_get_part(&mut store.mem, part_id).await?;
+    let part = store.partid_get_part(part_id).await?;
     assert_eq!(part.what, 301.into());
     assert_eq!(part.vendor, "");
     assert_eq!(part.model, "");
@@ -57,7 +59,7 @@ async fn into_partid_propagates_error() {
 }
 
 async fn seed_part(
-    store: &mut TestStravaStore,
+    store: &mut TestStore,
     session: &mut TestStravaSession,
     source: &str,
 ) -> TbResult<PartId> {

@@ -30,9 +30,8 @@ pub mod gear;
 mod user;
 pub use user::*;
 
-#[cfg(test)]
-mod test_support;
+pub mod test_support;
 
-fn get_time() -> i64 {
+pub fn get_time() -> i64 {
     time::OffsetDateTime::now_utc().unix_timestamp()
 }

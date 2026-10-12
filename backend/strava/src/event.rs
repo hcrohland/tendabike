@@ -211,7 +211,7 @@ impl Event {
     // cannot be removed or given a message — allow the lint on the item instead.
     #[allow(clippy::double_must_use)]
     #[async_recursion]
-    async fn rate_limit(
+    pub async fn rate_limit(
         self,
         user: &impl StravaSession,
         store: &mut impl StravaStore,
@@ -584,6 +584,3 @@ pub async fn sync_users(
     }
     Ok(())
 }
-
-#[cfg(test)]
-mod event_tests;

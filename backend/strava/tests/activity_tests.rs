@@ -1,10 +1,10 @@
-use super::*;
-use crate::test_support::{
-    TestStravaSession, TestStravaStore, activity_json, gear_json, strava_user,
-};
+use tb_domain::{ActivityId, ActivityStore, Error, PartStore, TbResult, UserId};
+use tb_strava::activity::{StravaActivity, delete_activity, strava_url, upsert_activity};
+use tb_strava::test_support::{TestStravaSession, activity_json, gear_json, strava_user};
+use tb_teststore::TestStore;
 
-fn setup() -> (TestStravaStore, TestStravaSession) {
-    let mut store = TestStravaStore::new();
+fn setup() -> (TestStore, TestStravaSession) {
+    let mut store = TestStore::new();
     store.insert_user(strava_user(UserId::from(1), 42, true));
     let session = TestStravaSession::new(UserId::from(1), 42.into());
     (store, session)
@@ -63,7 +63,7 @@ async fn into_activity_creates_missing_gear() -> TbResult<()> {
     let act = strava_activity(Some("b1"))
         .into_activity(&mut session, &mut store)
         .await?;
-    let part = PartStore::partid_get_part(&mut store.mem, act.gear.unwrap()).await?;
+    let part = store.partid_get_part(act.gear.unwrap()).await?;
     assert_eq!(part.source.as_deref(), Some("b1"));
     assert_eq!(part.what, 1.into());
     assert_eq!(part.name, "Test Bike");
@@ -100,7 +100,7 @@ async fn upsert_activity_stores_new() -> TbResult<()> {
     let summary = upsert_activity(10, &mut session, &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
     assert!(summary.activities.get(&ActivityId::new(10)).is_some());
-    let acts = ActivityStore::get_all(&mut store.mem, &UserId::from(1)).await?;
+    let acts = store.get_all(&UserId::from(1)).await?;
     assert_eq!(acts.len(), 1);
     Ok(())
 }
@@ -113,7 +113,7 @@ async fn upsert_activity_updates_existing() -> TbResult<()> {
     let json = activity_json(10, "Ride", None).replace("25000.0", "30000.0");
     session.queue("/activities/10", &json);
     upsert_activity(10, &mut session, &mut store).await?;
-    let acts = ActivityStore::get_all(&mut store.mem, &UserId::from(1)).await?;
+    let acts = store.get_all(&UserId::from(1)).await?;
     assert_eq!(acts.len(), 1);
     assert_eq!(acts[0].distance, Some(30000));
     Ok(())
@@ -150,7 +150,7 @@ async fn delete_activity_removes() -> TbResult<()> {
     session.queue("/activities/10", &activity_json(10, "Ride", None));
     upsert_activity(10, &mut session, &mut store).await?;
     delete_activity(10, &session, &mut store).await?;
-    let acts = ActivityStore::get_all(&mut store.mem, &UserId::from(1)).await?;
+    let acts = store.get_all(&UserId::from(1)).await?;
     assert!(acts.is_empty());
     Ok(())
 }

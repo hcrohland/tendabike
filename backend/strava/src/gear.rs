@@ -45,7 +45,7 @@ impl StravaGear {
 ///
 /// If it does not exist create it at tb
 /// None will return None
-pub(crate) async fn into_partid(
+pub async fn into_partid(
     strava_id: String,
     user: &mut impl StravaSession,
     store: &mut impl StravaStore,
@@ -76,6 +76,3 @@ pub(crate) async fn into_partid(
         .id;
     Ok(tbid)
 }
-
-#[cfg(test)]
-mod gear_tests;
