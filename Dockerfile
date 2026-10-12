@@ -50,7 +50,7 @@ COPY --from=build-deps /app/target ./target
 
 ENV SQLX_OFFLINE=true
 COPY Cargo.toml Cargo.lock ./
-COPY .sqlx .sqlx/
+COPY backend/sqlx/.sqlx backend/sqlx/.sqlx/
 COPY backend backend/
 # The copied target directory carries cargo's fingerprints from the stub
 # build: each unit's invoked.timestamp is the stub build time, which is

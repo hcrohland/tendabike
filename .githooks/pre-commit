@@ -25,7 +25,7 @@ fi
 
 cargo fmt --check
 npm run fmtcheck
-cargo sqlx prepare --check --workspace
+(cd backend/sqlx && cargo sqlx prepare --check)
 cargo clippy -- -D warnings
 cargo check
 npm run check:ci

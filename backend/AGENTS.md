@@ -1,8 +1,8 @@
 # AGENTS.md
 
-## Commands (run from project root)
+## Commands
 
-- `cargo sqlx prepare --workspace` - Regenerate the offline query metadata in `.sqlx/`
+- `cargo sqlx prepare` (run from `backend/sqlx/`) - Regenerate the crate-local offline query metadata in `backend/sqlx/.sqlx/`
 
 ## Architecture
 
@@ -19,7 +19,7 @@
 
 ## Critical Gotchas
 
-- **cargo sqlx**: run every `cargo sqlx` command from the project root with `--workspace` — inside a crate directory it only targets that crate and leaves the other crates' offline queries stale.
+- **cargo sqlx**: run every `cargo sqlx` command from inside `backend/sqlx/` — only `tb_sqlx` uses the query macros, and its offline metadata is crate-local (`backend/sqlx/.sqlx/`); `--workspace` would write it to the workspace root instead.
 - **`tb_strava` LSP**: rust-analyzer may report stale errors in this crate (e.g. E0034 on qualified trait paths) — trust `cargo test` / `cargo clippy` output over the LSP.
 
 ## DB-to-Domain Mapping
