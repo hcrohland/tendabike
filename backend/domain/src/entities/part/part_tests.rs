@@ -169,6 +169,37 @@ async fn part_create_with_source() -> TbResult<()> {
     Ok(())
 }
 
+/// Part::by_source returns the part carrying the given Strava source
+#[tokio::test]
+async fn part_by_source_returns_part_with_source() -> TbResult<()> {
+    let mut store = MemStore::prepopulated();
+    let sess = TestSession::new(UserId::from(99));
+    let created = Part::create(
+        "Wheelset".to_string(),
+        "Easton".to_string(),
+        "DA3".to_string(),
+        PartTypeId::from(4),
+        Some("b12345".to_string()),
+        sample_purchase_date(),
+        &sess,
+        &mut store,
+    )
+    .await?;
+
+    let found = Part::by_source("b12345", &mut store).await?;
+    assert_eq!(found, Some(created));
+    Ok(())
+}
+
+/// Part::by_source returns None when no part carries the source
+#[tokio::test]
+async fn part_by_source_returns_none_when_missing() -> TbResult<()> {
+    let mut store = MemStore::prepopulated();
+    let found = Part::by_source("b-no-such-source", &mut store).await?;
+    assert_eq!(found, None);
+    Ok(())
+}
+
 /// Part::get_all returns all parts for a user
 #[tokio::test]
 async fn part_get_all_returns_user_parts() -> TbResult<()> {
