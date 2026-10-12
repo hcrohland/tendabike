@@ -1,13 +1,15 @@
-use super::*;
-use crate::test_support::{MemStore, TestSession};
+use tb_domain::test_support::TestSession;
+use tb_domain::*;
+use tb_teststore::TestStore;
+use time::OffsetDateTime;
 
 fn created() -> OffsetDateTime {
     OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
 }
 
 /// A fresh store with a bike part owned by user 1.
-async fn owned_part() -> (MemStore, PartId) {
-    let mut store = MemStore::new();
+async fn owned_part() -> (TestStore, PartId) {
+    let mut store = TestStore::new();
     let owner = TestSession::new(UserId::from(1));
     let part = Part::create(
         "Bike".to_string(),
@@ -41,7 +43,7 @@ fn file_args() -> (String, String, Option<String>, i64, Vec<u8>) {
 /// partnote_create_text stores a text note with the file fields left empty
 #[tokio::test]
 async fn partnote_create_text_stores_metadata_only() -> TbResult<()> {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     let note = store
         .partnote_create_text(PartId::from(1), "suspicious noise".to_string(), created())
         .await?;
@@ -59,7 +61,7 @@ async fn partnote_create_text_stores_metadata_only() -> TbResult<()> {
 /// partnote_create_file stores the metadata and the file data
 #[tokio::test]
 async fn partnote_create_file_stores_metadata_and_data() -> TbResult<()> {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     let (name, mime, filename, size, data) = file_args();
     let note = store
         .partnote_create_file(
@@ -84,7 +86,7 @@ async fn partnote_create_file_stores_metadata_and_data() -> TbResult<()> {
 /// partnote_all_by_part returns only the notes of the given part
 #[tokio::test]
 async fn partnote_all_by_part_filters_by_part() -> TbResult<()> {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     store
         .partnote_create_text(PartId::from(1), "a".to_string(), created())
         .await?;
@@ -100,7 +102,7 @@ async fn partnote_all_by_part_filters_by_part() -> TbResult<()> {
 /// partnote_get returns an error for an unknown note
 #[tokio::test]
 async fn partnote_get_unknown_returns_not_found() -> TbResult<()> {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     let result = store.partnote_get(PartNoteId::from(99)).await;
     assert!(matches!(result, Err(Error::NotFound(_))));
     Ok(())
@@ -109,7 +111,7 @@ async fn partnote_get_unknown_returns_not_found() -> TbResult<()> {
 /// partnote_file returns an error for a text note without file data
 #[tokio::test]
 async fn partnote_file_of_text_note_errors() -> TbResult<()> {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     let note = store
         .partnote_create_text(PartId::from(1), "a".to_string(), created())
         .await?;
@@ -121,7 +123,7 @@ async fn partnote_file_of_text_note_errors() -> TbResult<()> {
 /// partnote_update_text renames a note
 #[tokio::test]
 async fn partnote_update_text_renames_note() -> TbResult<()> {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     let note = store
         .partnote_create_text(PartId::from(1), "old".to_string(), created())
         .await?;
@@ -136,7 +138,7 @@ async fn partnote_update_text_renames_note() -> TbResult<()> {
 /// partnote_update_text returns an error for an unknown note
 #[tokio::test]
 async fn partnote_update_text_unknown_returns_not_found() -> TbResult<()> {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     let result = store
         .partnote_update_text(PartNoteId::from(99), "x".to_string())
         .await;
@@ -147,7 +149,7 @@ async fn partnote_update_text_unknown_returns_not_found() -> TbResult<()> {
 /// partnote_update_file converts a text note into a file note
 #[tokio::test]
 async fn partnote_update_file_converts_text_to_file() -> TbResult<()> {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     let note = store
         .partnote_create_text(PartId::from(1), "a".to_string(), created())
         .await?;
@@ -165,7 +167,7 @@ async fn partnote_update_file_converts_text_to_file() -> TbResult<()> {
 /// partnote_update_file returns an error for an unknown note
 #[tokio::test]
 async fn partnote_update_file_unknown_returns_not_found() -> TbResult<()> {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     let (name, mime, filename, size, data) = file_args();
     let result = store
         .partnote_update_file(PartNoteId::from(99), name, mime, filename, size, data)
@@ -177,7 +179,7 @@ async fn partnote_update_file_unknown_returns_not_found() -> TbResult<()> {
 /// partnote_remove_file converts a file note into a text note and drops the data
 #[tokio::test]
 async fn partnote_remove_file_converts_file_to_text() -> TbResult<()> {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     let (name, mime, filename, size, data) = file_args();
     let note = store
         .partnote_create_file(PartId::from(1), name, mime, filename, size, data, created())
@@ -195,7 +197,7 @@ async fn partnote_remove_file_converts_file_to_text() -> TbResult<()> {
 /// partnote_remove_file returns an error for an unknown note
 #[tokio::test]
 async fn partnote_remove_file_unknown_returns_not_found() -> TbResult<()> {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     let result = store.partnote_remove_file(PartNoteId::from(99)).await;
     assert!(matches!(result, Err(Error::NotFound(_))));
     Ok(())
@@ -204,7 +206,7 @@ async fn partnote_remove_file_unknown_returns_not_found() -> TbResult<()> {
 /// partnote_delete removes the note and its file data
 #[tokio::test]
 async fn partnote_delete_removes_note_and_file_data() -> TbResult<()> {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     let (name, mime, filename, size, data) = file_args();
     let note = store
         .partnote_create_file(PartId::from(1), name, mime, filename, size, data, created())
@@ -222,7 +224,7 @@ async fn partnote_delete_removes_note_and_file_data() -> TbResult<()> {
 /// partnote_delete returns an error for an unknown note
 #[tokio::test]
 async fn partnote_delete_unknown_returns_not_found() -> TbResult<()> {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     let result = store.partnote_delete(PartNoteId::from(99)).await;
     assert!(matches!(result, Err(Error::NotFound(_))));
     Ok(())
@@ -521,7 +523,7 @@ async fn partnote_id_delete_removes_note() -> TbResult<()> {
 /// notes on an unknown part is NotFound
 #[tokio::test]
 async fn partid_notes_of_unknown_part_is_not_found() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let session = TestSession::new(UserId::from(1));
     let result = PartId::from(99).notes(&session, &mut store).await;
     assert!(matches!(result, Err(Error::NotFound(_))));
@@ -531,7 +533,7 @@ async fn partid_notes_of_unknown_part_is_not_found() -> TbResult<()> {
 /// notes of another user's part is Forbidden
 #[tokio::test]
 async fn partid_notes_of_foreign_part_is_forbidden() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let result = PartId::from(1).notes(&other_user(), &mut store).await;
     assert!(matches!(result, Err(Error::Forbidden(_))));
     Ok(())
@@ -540,7 +542,7 @@ async fn partid_notes_of_foreign_part_is_forbidden() -> TbResult<()> {
 /// note for an unknown id is NotFound
 #[tokio::test]
 async fn partnote_id_note_of_unknown_id_is_not_found() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let session = TestSession::new(UserId::from(1));
     let result = PartNoteId::from(99).note(&session, &mut store).await;
     assert!(matches!(result, Err(Error::NotFound(_))));
@@ -550,7 +552,7 @@ async fn partnote_id_note_of_unknown_id_is_not_found() -> TbResult<()> {
 /// note of another user's part is Forbidden
 #[tokio::test]
 async fn partnote_id_note_of_foreign_part_is_forbidden() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let session = TestSession::new(UserId::from(1));
     let note = PartId::from(1)
         .note_create_text(&session, "a".to_string(), created(), &mut store)
@@ -563,7 +565,7 @@ async fn partnote_id_note_of_foreign_part_is_forbidden() -> TbResult<()> {
 /// note_create_text of another user's part is Forbidden
 #[tokio::test]
 async fn partid_note_create_text_on_foreign_part_is_forbidden() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let result = PartId::from(1)
         .note_create_text(&other_user(), "a".to_string(), created(), &mut store)
         .await;
@@ -574,7 +576,7 @@ async fn partid_note_create_text_on_foreign_part_is_forbidden() -> TbResult<()> 
 /// note_create_file of another user's part is Forbidden
 #[tokio::test]
 async fn partid_note_create_file_on_foreign_part_is_forbidden() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let (name, mime, filename, size, data) = file_args();
     let result = PartId::from(1)
         .note_create_file(
@@ -595,7 +597,7 @@ async fn partid_note_create_file_on_foreign_part_is_forbidden() -> TbResult<()> 
 /// update_text of another user's note is Forbidden
 #[tokio::test]
 async fn partnote_id_update_text_of_foreign_note_is_forbidden() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let session = TestSession::new(UserId::from(1));
     let note = PartId::from(1)
         .note_create_text(&session, "a".to_string(), created(), &mut store)
@@ -611,7 +613,7 @@ async fn partnote_id_update_text_of_foreign_note_is_forbidden() -> TbResult<()> 
 /// update_file of another user's note is Forbidden
 #[tokio::test]
 async fn partnote_id_update_file_of_foreign_note_is_forbidden() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let session = TestSession::new(UserId::from(1));
     let note = PartId::from(1)
         .note_create_text(&session, "a".to_string(), created(), &mut store)
@@ -636,7 +638,7 @@ async fn partnote_id_update_file_of_foreign_note_is_forbidden() -> TbResult<()> 
 /// remove_file of another user's note is Forbidden
 #[tokio::test]
 async fn partnote_id_remove_file_of_foreign_note_is_forbidden() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let session = TestSession::new(UserId::from(1));
     let (name, mime, filename, size, data) = file_args();
     let note = PartId::from(1)
@@ -659,7 +661,7 @@ async fn partnote_id_remove_file_of_foreign_note_is_forbidden() -> TbResult<()> 
 /// delete of another user's note is Forbidden
 #[tokio::test]
 async fn partnote_id_delete_of_foreign_note_is_forbidden() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let session = TestSession::new(UserId::from(1));
     let note = PartId::from(1)
         .note_create_text(&session, "a".to_string(), created(), &mut store)
@@ -672,7 +674,7 @@ async fn partnote_id_delete_of_foreign_note_is_forbidden() -> TbResult<()> {
 /// a shop owner with a session on the registered part can run the note operations
 #[tokio::test]
 async fn shop_owner_can_access_partnotes() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let shop_owner = UserId::create("Shop", "Owner", &None, &mut store).await?;
     let shop = ShopId::create("Bike Barn".to_string(), None, true, shop_owner, &mut store).await?;
     let sub = SubscriptionId::create(shop.id, None, UserId::from(1), &mut store).await?;

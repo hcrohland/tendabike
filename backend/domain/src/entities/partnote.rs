@@ -238,6 +238,3 @@ impl PartNoteId {
     Deserialize,
 )]
 pub struct PartNoteId(i32);
-
-#[cfg(test)]
-mod partnote_tests;

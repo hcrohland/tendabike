@@ -62,8 +62,8 @@ pub struct Attachment {
 pub struct AttachmentDetail {
     #[serde(flatten)]
     pub a: Attachment,
-    name: String,
-    what: PartTypeId,
+    pub name: String,
+    pub what: PartTypeId,
 }
 
 impl AttachmentDetail {
@@ -90,7 +90,7 @@ impl IdKeyed for AttachmentDetail {
 impl Attachment {
     /// Create a new attachment
     ///
-    pub(crate) fn new(
+    pub fn new(
         part_id: PartId,
         attached: OffsetDateTime,
         gear: PartId,
@@ -116,7 +116,7 @@ impl Attachment {
         )
     }
 
-    pub(crate) async fn usage(&self, store: &mut impl UsageStore) -> TbResult<Usage> {
+    pub async fn usage(&self, store: &mut impl UsageStore) -> TbResult<Usage> {
         self.usage.read(store).await
     }
 
@@ -124,7 +124,7 @@ impl Attachment {
     ///
     /// updates the summary with the changes
     /// returns the time the new attachment ends
-    async fn shift(
+    pub async fn shift(
         &self,
         time: OffsetDateTime,
         gear: PartId,
@@ -228,7 +228,7 @@ impl Attachment {
     }
 
     /// add redundant details for client simplicity
-    fn add_details(self, name: &str, what: PartTypeId) -> AttachmentDetail {
+    pub fn add_details(self, name: &str, what: PartTypeId) -> AttachmentDetail {
         AttachmentDetail {
             name: name.to_string(),
             what,
@@ -260,7 +260,7 @@ impl Attachment {
     }
 
     /// return all attachments with details for the parts in 'partlist'
-    pub(crate) async fn for_part_with_usage(
+    pub async fn for_part_with_usage(
         part: PartId,
         store: &mut (impl AttachmentStore + PartStore + UsageStore),
     ) -> TbResult<(Vec<AttachmentDetail>, Vec<Usage>)> {
@@ -314,7 +314,7 @@ impl Attachment {
         Ok(summary)
     }
 
-    async fn detach_assembly(
+    pub async fn detach_assembly(
         self,
         time: OffsetDateTime,
         all: bool,
@@ -364,7 +364,7 @@ async fn subattachments(
         .await
 }
 
-pub(crate) async fn subparts(
+pub async fn subparts(
     part: PartId,
     time: OffsetDateTime,
     store: &mut (impl AttachmentStore + PartStore),
@@ -664,5 +664,3 @@ pub async fn is_attached(
 // ============================================================
 // Phase 3: Unit Tests for Attachment Entity Methods
 // ============================================================
-#[cfg(test)]
-mod attachment_tests;

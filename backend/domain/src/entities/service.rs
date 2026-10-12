@@ -11,11 +11,11 @@ use crate::*;
 pub struct ServiceId(Uuid);
 
 impl ServiceId {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Uuid::now_v7().into()
     }
 
-    async fn get(self, store: &mut impl ServiceStore) -> TbResult<Service> {
+    pub async fn get(self, store: &mut impl ServiceStore) -> TbResult<Service> {
         ServiceStore::get(store, self).await
     }
 
@@ -114,7 +114,7 @@ impl Service {
         Ok(summary)
     }
 
-    async fn calculate_usage(
+    pub async fn calculate_usage(
         &self,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore),
     ) -> TbResult<Usage> {
@@ -216,7 +216,7 @@ impl Service {
             .collect())
     }
 
-    pub(crate) async fn recalculate(
+    pub async fn recalculate(
         part: PartId,
         attach: OffsetDateTime,
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore),
@@ -264,6 +264,3 @@ impl Service {
         Ok(res)
     }
 }
-
-#[cfg(test)]
-mod service_tests;

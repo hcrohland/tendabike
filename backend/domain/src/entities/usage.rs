@@ -74,7 +74,7 @@ impl IdKeyed for Usage {
 }
 
 impl Usage {
-    pub(crate) async fn update(self, store: &mut impl UsageStore) -> TbResult<Usage> {
+    pub async fn update(self, store: &mut impl UsageStore) -> TbResult<Usage> {
         Usage::update_vec(&[&self], store).await?;
         Ok(self)
     }
@@ -86,14 +86,14 @@ impl Usage {
         store.update(vec).await
     }
 
-    pub(crate) fn new(id: UsageId) -> Usage {
+    pub fn new(id: UsageId) -> Usage {
         Usage {
             id,
             ..Default::default()
         }
     }
 
-    pub(crate) async fn delete_all(store: &mut impl UsageStore) -> TbResult<usize> {
+    pub async fn delete_all(store: &mut impl UsageStore) -> TbResult<usize> {
         store.delete_all().await
     }
 
@@ -110,7 +110,7 @@ impl Usage {
 }
 
 impl UsageId {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Uuid::now_v7().into()
     }
 
@@ -121,7 +121,7 @@ impl UsageId {
         }
     }
 
-    pub(crate) async fn read(self, store: &mut impl UsageStore) -> TbResult<Usage> {
+    pub async fn read(self, store: &mut impl UsageStore) -> TbResult<Usage> {
         store
             .get(self)
             .await
@@ -214,6 +214,3 @@ impl Neg for Usage {
         }
     }
 }
-
-#[cfg(test)]
-mod usage_tests;

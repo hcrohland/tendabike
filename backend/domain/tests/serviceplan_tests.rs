@@ -1,7 +1,8 @@
-use super::*;
-use crate::test_support::{MemStore, TestSession, fixtures, sole_live};
+use tb_domain::test_support::{TestSession, sole_live};
+use tb_domain::*;
+use tb_teststore::TestStore;
 
-use fixtures::{sample_purchase_date, test_session, test_user};
+use tb_teststore::fixtures::{self, sample_purchase_date, test_session, test_user};
 
 fn sample_plan(part: Option<PartId>, name: &str, uid: Option<UserId>) -> ServicePlan {
     ServicePlan {
@@ -25,7 +26,7 @@ async fn seed_service_for_plan(
     part: PartId,
     name: &str,
     plan: ServicePlanId,
-    store: &mut MemStore,
+    store: &mut TestStore,
 ) -> TbResult<Service> {
     let t = time::macros::datetime!(2024-06-15 10:00 UTC);
     let summary = Service::create(
@@ -46,7 +47,7 @@ async fn seed_service_for_plan(
 /// SP-01: ServicePlan create with specific part
 #[tokio::test]
 async fn service_plan_create_specific_part() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
 
     let plan = ServicePlan {
@@ -76,7 +77,7 @@ async fn service_plan_create_specific_part() -> TbResult<()> {
 /// SP-02: ServicePlan create generic plan (no specific part)
 #[tokio::test]
 async fn service_plan_create_generic_plan() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
 
     let plan = ServicePlan {
         id: ServicePlanId::new(),
@@ -103,7 +104,7 @@ async fn service_plan_create_generic_plan() -> TbResult<()> {
 /// SP-03: ServicePlan create stores what as-provided (not auto-set from part type)
 #[tokio::test]
 async fn service_plan_create_sets_what_to_part_type() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
 
     // create() does NOT auto-set what from part type; it stores as-is
@@ -131,7 +132,7 @@ async fn service_plan_create_sets_what_to_part_type() -> TbResult<()> {
 /// SP-04: ServicePlan create with thresholds
 #[tokio::test]
 async fn service_plan_create_with_thresholds() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
 
     let plan = ServicePlan {
         id: ServicePlanId::new(),
@@ -158,7 +159,7 @@ async fn service_plan_create_with_thresholds() -> TbResult<()> {
 /// SP-05: ServicePlan get returns stored plan
 #[tokio::test]
 async fn service_plan_get_returns_stored_plan() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let plan = ServicePlan {
         id: ServicePlanId::new(),
         part: None,
@@ -184,7 +185,7 @@ async fn service_plan_get_returns_stored_plan() -> TbResult<()> {
 /// SP-06: ServicePlan by_part returns matching plans
 #[tokio::test]
 async fn serviceplan_by_part_returns_matching_plans() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let part_a = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
     let part_b = Part::create(
         "Part B".to_string(),
@@ -254,7 +255,7 @@ async fn serviceplan_by_part_returns_matching_plans() -> TbResult<()> {
 /// SP-07: ServicePlan by_user returns generic plans
 #[tokio::test]
 async fn serviceplan_by_user_returns_generic_plans() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let session1 = TestSession::new(UserId::from(1));
     let session2 = TestSession::new(UserId::from(2));
 
@@ -333,7 +334,7 @@ async fn serviceplan_by_user_returns_generic_plans() -> TbResult<()> {
 /// SP-08: ServicePlan update preserves immutable fields
 #[tokio::test]
 async fn service_plan_update_preserves_immutable_fields() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let plan = ServicePlan {
         id: ServicePlanId::new(),
         part: None,
@@ -380,7 +381,7 @@ async fn service_plan_update_preserves_immutable_fields() -> TbResult<()> {
 /// SP-09: ServicePlan update requires ownership (specific part)
 #[tokio::test]
 async fn service_plan_update_requires_ownership_specific() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
 
     let plan = ServicePlan {
@@ -425,7 +426,7 @@ async fn service_plan_update_requires_ownership_specific() -> TbResult<()> {
 /// SP-10: ServicePlan update requires ownership (generic plan)
 #[tokio::test]
 async fn service_plan_update_requires_ownership_generic() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
 
     let plan = ServicePlan {
         id: ServicePlanId::new(),
@@ -469,7 +470,7 @@ async fn service_plan_update_requires_ownership_generic() -> TbResult<()> {
 /// SP-11: ServicePlan delete removes plan
 #[tokio::test]
 async fn service_plan_delete_removes_plan() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
 
     let plan = ServicePlan {
         id: ServicePlanId::new(),
@@ -502,7 +503,7 @@ async fn service_plan_delete_removes_plan() -> TbResult<()> {
 /// SP-12: deleting a plan unlinks it from the owner's services and returns them
 #[tokio::test]
 async fn service_plan_delete_unlinks_owner_services() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
     let created = ServicePlan::create(
         sample_plan(Some(part.id), "Unlink Plan", None),
@@ -530,7 +531,7 @@ async fn service_plan_delete_unlinks_owner_services() -> TbResult<()> {
 /// SP-12a: the unlink is scoped to the deleted plan's owner's services only
 #[tokio::test]
 async fn service_plan_delete_unlink_scoped_to_owner() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let other_session = TestSession::new(UserId::from(99));
 
     let created = ServicePlan::create(
@@ -572,7 +573,7 @@ async fn service_plan_delete_unlink_scoped_to_owner() -> TbResult<()> {
 /// SP-12b: a shop session deleting a specific-part plan unlinks the part owner's services
 #[tokio::test]
 async fn service_plan_delete_unlinks_part_owner_via_shop_session() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let shop = ShopId::create(
         "Shop 99".to_string(),
         None,
@@ -611,7 +612,7 @@ async fn service_plan_delete_unlinks_part_owner_via_shop_session() -> TbResult<(
 /// SP-13: All threshold fields None means plan is still valid (time-only)
 #[tokio::test]
 async fn service_plan_all_thresholds_none_means_active() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
 
     let plan = ServicePlan {
         id: ServicePlanId::new(),
@@ -641,7 +642,7 @@ async fn service_plan_all_thresholds_none_means_active() -> TbResult<()> {
 /// SP-14: ServicePlan with single threshold only
 #[tokio::test]
 async fn service_plan_single_threshold_only() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
 
     let plan = ServicePlan {
         id: ServicePlanId::new(),
@@ -672,7 +673,7 @@ async fn service_plan_single_threshold_only() -> TbResult<()> {
 /// SP-15: ServicePlan with multiple thresholds
 #[tokio::test]
 async fn service_plan_multiple_thresholds() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
 
     let plan = ServicePlan {
         id: ServicePlanId::new(),
@@ -704,7 +705,7 @@ async fn service_plan_multiple_thresholds() -> TbResult<()> {
 /// SP-16: ServicePlan for_part returns empty when no plans on part
 #[tokio::test]
 async fn serviceplan_for_part_returns_empty_when_none() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
 
     let plans = ServicePlan::for_part(part.id, &mut store).await?;

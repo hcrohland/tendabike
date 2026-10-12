@@ -158,7 +158,7 @@ impl Txn for TestStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tb_domain::test_support::fixtures::test_session;
+    use crate::fixtures::test_session;
     use tb_domain::{PartStore, TbResult, UserId, UserStore};
     use tb_exec::{Txn, TxnSource};
     use tb_strava::event::Event;
@@ -350,7 +350,7 @@ mod tests {
             .stravaid_update_token(StravaId::from(42), Some(&"new-token".to_string()))
             .await?;
         assert!(updated.refresh_token.is_some());
-        assert_eq!(
+        assert!(
             store
                 .state()
                 .strava
@@ -358,8 +358,7 @@ mod tests {
                 .get(&UserId::from(1))
                 .expect("user row")
                 .refresh_token
-                .is_some(),
-            true
+                .is_some()
         );
         Ok(())
     }
@@ -380,7 +379,7 @@ mod tests {
     #[tokio::test]
     async fn test_store_satisfies_the_executor_bounds() {
         let store = TestStore::new();
-        let _ = executor_bounds(store);
+        executor_bounds(store).await;
     }
 
     /// `prepopulated()` loads the canonical workshop snapshot into a

@@ -2650,6 +2650,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "serde_with",
+ "tb_teststore",
  "thiserror 2.0.21",
  "time",
  "tokio",

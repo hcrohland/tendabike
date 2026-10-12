@@ -1,8 +1,9 @@
-use super::*;
-use crate::test_support::{MemStore, TestSession, fixtures};
+use tb_domain::test_support::TestSession;
+use tb_domain::*;
+use tb_teststore::TestStore;
 use time::OffsetDateTime;
 
-use fixtures::{sample_purchase_date, test_user};
+use tb_teststore::fixtures::{sample_purchase_date, test_user};
 
 fn later_time() -> OffsetDateTime {
     OffsetDateTime::from_unix_timestamp(1700100000).unwrap()
@@ -13,7 +14,7 @@ fn later_time() -> OffsetDateTime {
 /// PartId::read retrieves a stored part
 #[tokio::test]
 async fn partid_read_returns_stored_part() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let retrieved = PartId::from(1).read(&mut store).await?;
     assert_eq!(retrieved.name, "Main Bike");
     assert_eq!(retrieved.vendor, "TendaBike");
@@ -23,7 +24,7 @@ async fn partid_read_returns_stored_part() -> TbResult<()> {
 /// PartId::read returns error for non-existent part
 #[tokio::test]
 async fn partid_read_not_found_error() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let result = PartId::from(999).read(&mut store).await;
     assert!(result.is_err());
     Ok(())
@@ -32,7 +33,7 @@ async fn partid_read_not_found_error() -> TbResult<()> {
 /// PartId::name returns the part name without checking ownership
 #[tokio::test]
 async fn partid_name_returns_name() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let name = PartId::from(1).name(&mut store).await?;
     assert_eq!(name, "Main Bike");
     Ok(())
@@ -41,7 +42,7 @@ async fn partid_name_returns_name() -> TbResult<()> {
 /// PartId::is_main returns true for main part types
 #[tokio::test]
 async fn partid_is_main_for_bike() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let is_main = PartId::from(1).is_main(&mut store).await?;
     assert!(is_main);
     Ok(())
@@ -50,7 +51,7 @@ async fn partid_is_main_for_bike() -> TbResult<()> {
 /// PartId::is_main returns false for sub-part types
 #[tokio::test]
 async fn partid_is_not_main_for_wheel() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let is_main = PartId::from(2).is_main(&mut store).await?;
     assert!(!is_main);
     Ok(())
@@ -59,7 +60,7 @@ async fn partid_is_not_main_for_wheel() -> TbResult<()> {
 /// PartId::update_timestamps updates last_used when start is later
 #[tokio::test]
 async fn update_timestamps_updates_last_used() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let updated = PartId::from(4)
         .update_timestamps(later_time(), &mut store)
         .await?;
@@ -70,7 +71,7 @@ async fn update_timestamps_updates_last_used() -> TbResult<()> {
 /// PartId::dispose sets disposed_at timestamp
 #[tokio::test]
 async fn dispose_sets_disposed_at() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let disposed = PartId::from(4).dispose(later_time(), &mut store).await?;
     assert!(disposed.disposed_at.is_some());
     Ok(())
@@ -79,7 +80,7 @@ async fn dispose_sets_disposed_at() -> TbResult<()> {
 /// PartId::restore clears disposed_at
 #[tokio::test]
 async fn restore_clears_disposed_at() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     PartId::from(4)
         .dispose(sample_purchase_date(), &mut store)
         .await?;
@@ -91,7 +92,7 @@ async fn restore_clears_disposed_at() -> TbResult<()> {
 /// PartId::set_owner_and_shop copies owner and shop from gear
 #[tokio::test]
 async fn set_owner_and_shop_copies_from_gear() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let gear = PartId::from(1).read(&mut store).await?;
     let updated = PartId::from(2)
         .set_owner_and_shop(gear.id, &mut store)
@@ -127,7 +128,7 @@ fn part_usage_returns_usage_id() {
 /// Part::create creates a part with correct purchase date rounding
 #[tokio::test]
 async fn part_create_sets_purchase_date() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let sess = TestSession::new(UserId::from(99));
     let purchase = sample_purchase_date();
     let part = Part::create(
@@ -151,7 +152,7 @@ async fn part_create_sets_purchase_date() -> TbResult<()> {
 /// Part::create sets source
 #[tokio::test]
 async fn part_create_with_source() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let sess = TestSession::new(UserId::from(99));
     let part = Part::create(
         "Wheelset".to_string(),
@@ -172,7 +173,7 @@ async fn part_create_with_source() -> TbResult<()> {
 /// Part::get_all returns all parts for a user
 #[tokio::test]
 async fn part_get_all_returns_user_parts() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let sess = TestSession::new(UserId::from(99));
     Part::create(
         "Part 1".to_string(),
@@ -205,7 +206,7 @@ async fn part_get_all_returns_user_parts() -> TbResult<()> {
 /// Part::get_all returns empty vec when user has no parts
 #[tokio::test]
 async fn part_get_all_empty_for_user_with_no_parts() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let parts = Part::get_all(&UserId::from(98), &mut store).await?;
     assert!(parts.is_empty());
     Ok(())
@@ -214,7 +215,7 @@ async fn part_get_all_empty_for_user_with_no_parts() -> TbResult<()> {
 /// Part::categories returns main part types only
 #[tokio::test]
 async fn part_categories_returns_main_types() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let sess = TestSession::new(UserId::from(99));
     Part::create(
         "Road Bike".to_string(),
@@ -250,7 +251,7 @@ async fn part_categories_returns_main_types() -> TbResult<()> {
 /// Part::categories returns empty when no parts
 #[tokio::test]
 async fn part_categories_empty_for_no_parts() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let categories = Part::categories(&TestSession::new(UserId::from(98)), &mut store).await?;
     assert!(categories.is_empty());
     Ok(())
@@ -259,7 +260,7 @@ async fn part_categories_empty_for_no_parts() -> TbResult<()> {
 /// Part::categories filters to main types only - subtypes are excluded
 #[tokio::test]
 async fn part_categories_filters_subtypes() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let sess = TestSession::new(UserId::from(99));
     Part::create(
         "Road Bike".to_string(),
@@ -294,7 +295,7 @@ async fn part_categories_filters_subtypes() -> TbResult<()> {
 /// PartId::change updates part fields and returns updated part
 #[tokio::test]
 async fn part_change_updates_fields() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let sess = TestSession::new(UserId::from(1));
     let updated = PartId::from(1)
         .change(
@@ -316,7 +317,7 @@ async fn part_change_updates_fields() -> TbResult<()> {
 /// PartId::change returns forbidden for non-owner session
 #[tokio::test]
 async fn part_change_rejects_non_owner() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let other_session = TestSession::new(UserId::from(98));
     let result = PartId::from(1)
         .change(
@@ -335,7 +336,7 @@ async fn part_change_rejects_non_owner() -> TbResult<()> {
 /// PartId::delete returns successfully when part has no attachments
 #[tokio::test]
 async fn part_delete_succeeds_without_attachments() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let sess = TestSession::new(UserId::from(1));
     let result = PartId::from(1).delete(&sess, &mut store).await?;
     assert_eq!(result, PartId::from(1));
@@ -347,11 +348,11 @@ async fn part_delete_succeeds_without_attachments() -> TbResult<()> {
 }
 
 /// PartId::delete returns conflict when part is still attached (conflict check requires AttachmentStore)
-/// Note: AttachmentStore is currently todo!() in MemStore, so this test verifies the delete
+/// Note: AttachmentStore is currently todo!() in TestStore, so this test verifies the delete
 /// succeeds when no attachments exist (the AttachmentStore todo!() is not hit in this path)
 #[tokio::test]
 async fn part_delete_succeeds_without_attachments_documented() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let sess = TestSession::new(UserId::from(1));
     let result = PartId::from(1).delete(&sess, &mut store).await?;
     assert_eq!(result, PartId::from(1));
@@ -361,7 +362,7 @@ async fn part_delete_succeeds_without_attachments_documented() -> TbResult<()> {
 /// PartId::delete returns forbidden for non-owner session
 #[tokio::test]
 async fn part_delete_rejects_non_owner() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let other_session = TestSession::new(UserId::from(98));
     let result = PartId::from(1).delete(&other_session, &mut store).await;
     assert!(matches!(result, Err(Error::Forbidden(_))));

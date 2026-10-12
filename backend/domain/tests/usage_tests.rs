@@ -1,9 +1,10 @@
-use crate::{TbResult, Usage, UsageId, test_support::MemStore};
+use tb_domain::{TbResult, Usage, UsageId};
+use tb_teststore::TestStore;
 
 /// create_usage_returns creates and reads usage correctly
 #[tokio::test]
 async fn create_usage_returns() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let store = &mut store;
     let usage = UsageId::new().read(store).await?;
     assert_eq!(usage.climb, 0);

@@ -283,6 +283,3 @@ impl Shop {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod shop_tests;

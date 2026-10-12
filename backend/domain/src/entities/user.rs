@@ -311,7 +311,7 @@ impl UserId {
         Ok(())
     }
 
-    pub(crate) fn check_owner(&self, owner: UserId, error: String) -> TbResult<()> {
+    pub fn check_owner(&self, owner: UserId, error: String) -> TbResult<()> {
         if *self == owner {
             Ok(())
         } else {
@@ -319,6 +319,3 @@ impl UserId {
         }
     }
 }
-
-#[cfg(test)]
-mod user_tests;

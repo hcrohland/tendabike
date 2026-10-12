@@ -40,7 +40,7 @@ pub trait IdKeyed {
 #[derive(Clone, Debug, Serialize)]
 #[serde(bound(serialize = "K: Display, E: Serialize"))]
 pub struct IdKeyedMap<K, E>(
-    #[serde(serialize_with = "serialize_id_keyed_map")] HashMap<K, Option<E>>,
+    #[serde(serialize_with = "serialize_id_keyed_map")] pub HashMap<K, Option<E>>,
 );
 
 /// Serializes the id-keyed map as a JSON object with stringified keys and `null` for `None`
@@ -216,6 +216,3 @@ impl Summary {
             && self.users.is_empty()
     }
 }
-
-#[cfg(test)]
-mod summary_tests;

@@ -1,11 +1,10 @@
-use super::*;
-use crate::PartStore;
-use crate::ShopStore;
-use crate::test_support::MemStore;
-use crate::{PartTypeId, UsageId};
+use tb_domain::*;
+use tb_domain::{PartStore, PartTypeId, ShopStore, UsageId};
+use tb_teststore::TestStore;
+use time::OffsetDateTime;
 
-async fn setup() -> (MemStore, UserId, UserId, Shop) {
-    let mut store = MemStore::new();
+async fn setup() -> (TestStore, UserId, UserId, Shop) {
+    let mut store = TestStore::new();
     let owner = UserId::create("Shop", "Owner", &None, &mut store)
         .await
         .unwrap();
@@ -18,8 +17,8 @@ async fn setup() -> (MemStore, UserId, UserId, Shop) {
     (store, owner, subscriber, shop)
 }
 
-async fn setup_auto_approve() -> (MemStore, UserId, UserId, Shop) {
-    let mut store = MemStore::new();
+async fn setup_auto_approve() -> (TestStore, UserId, UserId, Shop) {
+    let mut store = TestStore::new();
     let owner = UserId::create("Shop", "Owner", &None, &mut store)
         .await
         .unwrap();

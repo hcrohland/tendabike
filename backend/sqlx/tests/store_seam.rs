@@ -73,16 +73,14 @@ use std::collections::HashSet;
 use std::str::FromStr;
 use std::time::Duration;
 
-use tb_domain::test_support::{
-    fixtures::{sample_purchase_date, test_session},
-    only_tombstone, part_type_ids, sole_live,
-};
+use tb_domain::test_support::{only_tombstone, part_type_ids, sole_live};
 use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, ApiWrite, Attachment, AttachmentStore,
     IdKeyedMap, MAX_TIME, OnboardingStatus, Part, PartId, PartNoteStore, PartStore, PartTypeId,
     ServicePlan, ServicePlanId, ShopStore, Summary, Usage, UsageId, UsageStore, UserId, UserStore,
     attach_assembly, detach_assembly, dispose_assembly, exec, round_time,
 };
+use tb_teststore::fixtures::{sample_purchase_date, test_session};
 use tb_teststore::{StoreSnapshot, TestStore};
 use time::{OffsetDateTime, macros::datetime};
 use tokio::sync::MutexGuard;

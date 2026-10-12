@@ -276,7 +276,7 @@ Test coverage lives in `domain/src/entities/attachment/attachment_tests.rs` with
 
 **Test infrastructure**:
 
-- `MemStore` in-memory implementation of all store traits
+- `TestStore` (`tb_teststore`) in-memory implementation of all store traits
 - `TestSession` with user/shop context
 - Fixtures: `fixture_basic_part()`, `fixture_assembly()`, `fixture_timeline()`, `fixture_concurrent_parts()`
 - Part type constants: 17 uppercase constants in `test_support/part_type_ids`

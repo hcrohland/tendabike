@@ -35,7 +35,7 @@
 //! `begin`/`commit`: the executor loop (a later ticket) drives the
 //! transaction, and `exec` runs inside one live connection. It is bounded by
 //! the `Store` marker, not by the executor's `Txn` trait, so it stays
-//! verifiable on both adapters (`MemStore` and `SqlxConn`) per the store-seam
+//! verifiable on both adapters (`TestStore` and `SqlxConn`) per the store-seam
 //! contract, with the Postgres behavior as the source of truth.
 //!
 //! The return is the `Summary` of everything the operation touched, per the
@@ -281,7 +281,8 @@ impl WriteOutcome {
 /// (the same `BadRequest` messages as the webhook handlers) and the status
 /// update. The Strava-side sync event is deliberately not part of `exec`:
 /// `tb_domain` cannot depend on `tb_strava` (the dependency direction is
-/// `domain ← strava`), and the in-memory `MemStore` is not a `StravaStore`.
+/// `domain ← strava`), so the sync `Event` is enqueued by the layer that can
+/// reach both.
 /// The cutover ticket (issue #457) enqueues a sync `Event` on the user's
 /// executor channel for `UserOnboardingSync`.
 ///
@@ -594,6 +595,3 @@ one_entry_summary!(one_part, parts, Part);
 one_entry_summary!(one_part_note, part_notes, PartNote);
 one_entry_summary!(one_service_plan, plans, ServicePlan);
 one_entry_summary!(one_shop, shops, Shop);
-
-#[cfg(test)]
-mod apiwrite_tests;

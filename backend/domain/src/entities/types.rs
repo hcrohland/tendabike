@@ -113,7 +113,7 @@ impl PartTypeId {
     }
 
     /// get the full type for a type_id
-    pub(crate) fn get(self) -> TbResult<PartType> {
+    pub fn get(self) -> TbResult<PartType> {
         PARTTYPES
             .get(&self)
             .cloned()
@@ -122,7 +122,7 @@ impl PartTypeId {
             )))
     }
 
-    pub(crate) fn is_main(self) -> TbResult<bool> {
+    pub fn is_main(self) -> TbResult<bool> {
         let t = self.get()?;
         Ok(t.hooks.is_empty())
     }
@@ -150,7 +150,7 @@ impl PartTypeId {
     }
 
     /// get all the type_ids you can attach - even indirectly - to this type_id
-    pub(crate) fn subtypes(self) -> Vec<PartTypeId> {
+    pub fn subtypes(self) -> Vec<PartTypeId> {
         let mut types = PartType::all_ordered();
         self.filter_types(&mut types)
             .into_iter()
@@ -159,7 +159,7 @@ impl PartTypeId {
     }
 
     /// Get the activity types valid for this part_type
-    pub(crate) fn act_types(&self) -> Vec<ActTypeId> {
+    pub fn act_types(&self) -> Vec<ActTypeId> {
         ACTTYPES
             .values()
             .filter(|a| a.gear_type == *self)
@@ -173,6 +173,3 @@ impl ActivityType {
         ACTTYPES.values().cloned().collect()
     }
 }
-
-#[cfg(test)]
-mod types_tests;

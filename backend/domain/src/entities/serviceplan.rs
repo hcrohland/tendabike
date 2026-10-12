@@ -10,7 +10,7 @@ use crate::*;
 pub struct ServicePlanId(Uuid);
 
 impl ServicePlanId {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Uuid::now_v7().into()
     }
 
@@ -125,20 +125,11 @@ impl ServicePlan {
         store.plan_update(self).await
     }
 
-    pub(crate) async fn for_part(
-        part: PartId,
-        store: &mut impl ServicePlanStore,
-    ) -> TbResult<Vec<Self>> {
+    pub async fn for_part(part: PartId, store: &mut impl ServicePlanStore) -> TbResult<Vec<Self>> {
         store.by_part(part).await
     }
 
-    pub(crate) async fn for_user(
-        uid: &UserId,
-        store: &mut impl ServicePlanStore,
-    ) -> TbResult<Vec<Self>> {
+    pub async fn for_user(uid: &UserId, store: &mut impl ServicePlanStore) -> TbResult<Vec<Self>> {
         store.by_user(*uid).await
     }
 }
-
-#[cfg(test)]
-mod serviceplan_tests;

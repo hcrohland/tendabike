@@ -1,4 +1,5 @@
-use super::*;
+use tb_domain::*;
+use tb_teststore::TestStore;
 
 #[test]
 fn onboarding_status_try_from_valid() {
@@ -86,11 +87,9 @@ fn user_id_check_owner_different() {
 
 // === Tier B: User CRUD (in-memory store) ===
 
-use crate::test_support::MemStore;
-
 #[tokio::test]
 async fn user_create_and_read() {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     let uid = UserId::create("John", "Doe", &None, &mut store)
         .await
         .unwrap();
@@ -104,7 +103,7 @@ async fn user_create_and_read() {
 
 #[tokio::test]
 async fn user_get_public() {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     let uid = UserId::create("Jane", "Smith", &Some("avatar.png".into()), &mut store)
         .await
         .unwrap();
@@ -117,7 +116,7 @@ async fn user_get_public() {
 
 #[tokio::test]
 async fn user_update() {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     let uid = UserId::create("Alice", "Bob", &None, &mut store)
         .await
         .unwrap();
@@ -132,7 +131,7 @@ async fn user_update() {
 
 #[tokio::test]
 async fn user_is_admin_false_by_default() {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     let uid = UserId::create("Bob", "Builder", &None, &mut store)
         .await
         .unwrap();
@@ -141,7 +140,7 @@ async fn user_is_admin_false_by_default() {
 
 #[tokio::test]
 async fn user_delete_removes_from_store() {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     let uid = UserId::create("Del", "User", &None, &mut store)
         .await
         .unwrap();
@@ -151,7 +150,7 @@ async fn user_delete_removes_from_store() {
 
 #[tokio::test]
 async fn user_update_onboarding_status() {
-    let mut store = MemStore::new();
+    let mut store = TestStore::new();
     let uid = UserId::create("Carol", "C", &None, &mut store)
         .await
         .unwrap();
@@ -165,7 +164,7 @@ async fn user_update_onboarding_status() {
 
 // === Tier C: User summary (prepopulated fixture) ===
 
-use crate::test_support::part_type_ids::BIKE;
+use tb_domain::test_support::part_type_ids::BIKE;
 
 /// The user summary read returns the full prepopulated fixture content
 /// — the in-memory twin of the store-seam suite's `user_summary_read`
@@ -173,7 +172,7 @@ use crate::test_support::part_type_ids::BIKE;
 /// real Postgres).
 #[tokio::test]
 async fn user_summary_read() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let summary = UserId::from(1).get_summary(None, &mut store).await?;
 
     // The fixture content. Parts come back in one unified order on

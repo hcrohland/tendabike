@@ -1,5 +1,4 @@
-use super::*;
-use crate::Error;
+use tb_domain::*;
 
 #[test]
 fn part_type_all_ordered_nonempty() {

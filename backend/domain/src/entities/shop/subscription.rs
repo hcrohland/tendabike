@@ -301,6 +301,3 @@ impl ShopSubscription {
         }
     }
 }
-
-#[cfg(test)]
-mod subscription_tests;

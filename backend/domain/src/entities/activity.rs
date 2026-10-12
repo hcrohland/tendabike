@@ -139,7 +139,7 @@ impl IdKeyed for Activity {
 }
 
 #[derive(Clone, Copy, PartialEq)]
-enum Factor {
+pub enum Factor {
     Add = 1,
     Sub = -1,
 }
@@ -152,7 +152,7 @@ impl ActivityId {
     /// Read the activity with id self
     ///
     /// checks authorization
-    async fn read_optional(
+    pub async fn read_optional(
         self,
         session: &dyn Session,
         store: &mut impl ActivityStore,
@@ -266,7 +266,7 @@ impl Activity {
     ///
     /// If the descend value is missing, assume descend = climb
     /// Account for Factor
-    pub(crate) fn usage(&self) -> Usage {
+    pub fn usage(&self) -> Usage {
         Usage {
             id: UsageId::default(),
             time: self.time.unwrap_or(0),
@@ -281,7 +281,7 @@ impl Activity {
     /// find all activities for gear part in the given time frame
     ///
     /// if end is none it means for the whole future
-    pub(crate) async fn find(
+    pub async fn find(
         gear: PartId,
         begin: OffsetDateTime,
         end: OffsetDateTime,
@@ -298,7 +298,7 @@ impl Activity {
     /// If the factor is `Factor::Subtract`, the activity is unregistered and the usage is subtracted from the parts and attachments.
     ///
     /// Returns a summary of the affected parts, attachments, and activities.
-    async fn register(
+    pub async fn register(
         self,
         factor: Factor,
         store: &mut (impl AttachmentStore + PartStore + ServiceStore + UsageStore),
@@ -466,6 +466,3 @@ async fn match_and_update(
     act.descend = Some(rdescend);
     act.update(user, store).await
 }
-
-#[cfg(test)]
-mod activity_tests;

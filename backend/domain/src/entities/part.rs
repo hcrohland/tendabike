@@ -131,7 +131,7 @@ impl PartId {
         store.part_delete(self).await
     }
 
-    pub(crate) async fn read(self, store: &mut impl PartStore) -> TbResult<Part> {
+    pub async fn read(self, store: &mut impl PartStore) -> TbResult<Part> {
         store.partid_get_part(self).await
     }
 
@@ -183,7 +183,7 @@ impl PartId {
     }
 
     /// if start is later than last_used update last_used
-    pub(crate) async fn update_timestamps(
+    pub async fn update_timestamps(
         self,
         start: OffsetDateTime,
         store: &mut impl PartStore,
@@ -201,7 +201,7 @@ impl PartId {
         Ok(part)
     }
 
-    pub(crate) async fn dispose(
+    pub async fn dispose(
         &self,
         time: OffsetDateTime,
         store: &mut impl PartStore,
@@ -218,7 +218,7 @@ impl PartId {
         store.part_update(part).await
     }
 
-    pub(crate) async fn restore(&self, store: &mut impl PartStore) -> TbResult<Part> {
+    pub async fn restore(&self, store: &mut impl PartStore) -> TbResult<Part> {
         debug!("-- restoring part {self}");
         let mut part = self.read(store).await?;
         part.disposed_at = None;
@@ -249,7 +249,7 @@ impl PartId {
         store.part_update(part).await
     }
 
-    pub(crate) async fn set_owner_and_shop(
+    pub async fn set_owner_and_shop(
         &self,
         gear: PartId,
         store: &mut impl PartStore,
@@ -266,11 +266,11 @@ impl PartId {
 }
 
 impl Part {
-    pub(crate) async fn get_all(pid: &UserId, store: &mut impl PartStore) -> TbResult<Vec<Part>> {
+    pub async fn get_all(pid: &UserId, store: &mut impl PartStore) -> TbResult<Vec<Part>> {
         store.part_get_all_for_userid(pid).await
     }
 
-    pub(crate) fn usage(&self) -> UsageId {
+    pub fn usage(&self) -> UsageId {
         self.usage
     }
 
@@ -316,5 +316,3 @@ impl Part {
         Ok(res)
     }
 }
-#[cfg(test)]
-mod part_tests;

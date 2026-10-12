@@ -11,9 +11,9 @@
 //! UUID values differ between builds.
 
 use super::{TestStore, TestStoreState};
+use crate::fixtures::{sample_purchase_date, test_session};
 use crate::prepopulated_data;
 use crate::store_data::StoreData;
-use tb_domain::test_support::fixtures::{sample_purchase_date, test_session};
 use tb_domain::test_support::part_type_ids::{BIKE, CHAIN, FRONT_WHEEL, REAR_WHEEL, TIRE};
 use tb_domain::{
     ActTypeId, Activity, Attachment, Part, PartId, PartTypeId, Session, TbResult, Usage, User,

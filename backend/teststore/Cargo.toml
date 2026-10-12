@@ -7,7 +7,7 @@ edition = { workspace = true }
 # as a dev-dependency, so there is no dependency cycle.
 
 [dependencies]
-tb_domain = { workspace = true, features = ["test-support"] }
+tb_domain = { workspace = true }
 tb_strava = { workspace = true }
 tb_exec = { workspace = true }
 

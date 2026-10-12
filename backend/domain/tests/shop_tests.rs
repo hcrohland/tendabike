@@ -1,8 +1,10 @@
-use super::*;
-use crate::test_support::{MemStore, TestSession};
+use tb_domain::test_support::TestSession;
+use tb_domain::*;
+use tb_teststore::TestStore;
+use time::OffsetDateTime;
 
-async fn setup() -> (MemStore, UserId, UserId, Shop) {
-    let mut store = MemStore::new();
+async fn setup() -> (TestStore, UserId, UserId, Shop) {
+    let mut store = TestStore::new();
     let owner = UserId::create("Shop", "Owner", &None, &mut store)
         .await
         .unwrap();
@@ -173,13 +175,13 @@ async fn shop_get_all_for_user_owner_and_subscriber() {
 
 // === Part Registration / Unregistration (Tier C) ===
 
-use crate::entities::attachment::is_attached;
-use crate::test_support::part_type_ids;
 use part_type_ids::*;
+use tb_domain::is_attached;
+use tb_domain::test_support::part_type_ids;
 
 /// Creates a shop with auto_approve, a shop owner, and an active subscription
 /// for the customer (user 1, prepopulated). Shop owner gets the next available ID.
-async fn setup_shop_and_sub(mut store: MemStore) -> (MemStore, UserId, UserId, Shop) {
+async fn setup_shop_and_sub(mut store: TestStore) -> (TestStore, UserId, UserId, Shop) {
     let customer = UserId::from(1);
     let shop_owner = UserId::create("Shop", "Owner", &None, &mut store)
         .await
@@ -202,7 +204,7 @@ async fn setup_shop_and_sub(mut store: MemStore) -> (MemStore, UserId, UserId, S
 
 #[tokio::test]
 async fn register_part_ok() {
-    let (mut store, _, customer, shop) = setup_shop_and_sub(MemStore::prepopulated()).await;
+    let (mut store, _, customer, shop) = setup_shop_and_sub(TestStore::prepopulated()).await;
     let session = TestSession::new(customer);
     let summary = shop
         .id
@@ -215,7 +217,7 @@ async fn register_part_ok() {
 
 #[tokio::test]
 async fn register_part_cascades_subparts() {
-    let (mut store, _, customer, shop) = setup_shop_and_sub(MemStore::prepopulated()).await;
+    let (mut store, _, customer, shop) = setup_shop_and_sub(TestStore::prepopulated()).await;
     let session = TestSession::new(customer);
     let summary = shop
         .id
@@ -235,7 +237,7 @@ async fn register_part_cascades_subparts() {
 
 #[tokio::test]
 async fn register_part_requires_subscription() {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let customer = UserId::from(1);
     let shop_owner = UserId::create("Shop", "Owner", &None, &mut store)
         .await
@@ -265,7 +267,7 @@ async fn register_part_requires_subscription() {
 
 #[tokio::test]
 async fn register_part_requires_ownership() {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let shop_owner = UserId::create("Shop", "Owner", &None, &mut store)
         .await
         .unwrap();
@@ -296,7 +298,7 @@ async fn register_part_requires_ownership() {
 
 #[tokio::test]
 async fn register_part_attached_rejected() {
-    let (mut store, _, customer, shop) = setup_shop_and_sub(MemStore::prepopulated()).await;
+    let (mut store, _, customer, shop) = setup_shop_and_sub(TestStore::prepopulated()).await;
     let session = TestSession::new(customer);
     // Front Wheel A (PartId::from(2)) is attached to Bike A, so it can't be registered
     let result = shop
@@ -308,7 +310,7 @@ async fn register_part_attached_rejected() {
 
 #[tokio::test]
 async fn unregister_part_by_owner() {
-    let (mut store, _, customer, shop) = setup_shop_and_sub(MemStore::prepopulated()).await;
+    let (mut store, _, customer, shop) = setup_shop_and_sub(TestStore::prepopulated()).await;
     let session = TestSession::new(customer);
     shop.id
         .register_part(PartId::from(1), &session, &mut store)
@@ -330,7 +332,7 @@ async fn unregister_part_by_owner() {
 #[tokio::test]
 async fn unregister_part_by_shop_owner() {
     let (mut store, shop_owner, customer, shop) =
-        setup_shop_and_sub(MemStore::prepopulated()).await;
+        setup_shop_and_sub(TestStore::prepopulated()).await;
     let cust_session = TestSession::new(customer);
     shop.id
         .register_part(PartId::from(1), &cust_session, &mut store)
@@ -353,7 +355,7 @@ async fn unregister_part_by_shop_owner() {
 #[tokio::test]
 async fn get_parts_returns_registered() {
     let (mut store, shop_owner, customer, shop) =
-        setup_shop_and_sub(MemStore::prepopulated()).await;
+        setup_shop_and_sub(TestStore::prepopulated()).await;
     let session = TestSession::new(customer);
     shop.id
         .register_part(PartId::from(1), &session, &mut store)
@@ -374,7 +376,7 @@ async fn get_parts_returns_registered() {
 
 #[tokio::test]
 async fn get_parts_forbidden_non_owner() {
-    let (mut store, _, _, shop) = setup_shop_and_sub(MemStore::prepopulated()).await;
+    let (mut store, _, _, shop) = setup_shop_and_sub(TestStore::prepopulated()).await;
     let stranger = UserId::create("Stranger", "User", &None, &mut store)
         .await
         .unwrap();
@@ -386,7 +388,7 @@ async fn get_parts_forbidden_non_owner() {
 
 #[tokio::test]
 async fn shop_creates_part_in_shop_context() {
-    let (mut store, shop_owner, _, shop) = setup_shop_and_sub(MemStore::prepopulated()).await;
+    let (mut store, shop_owner, _, shop) = setup_shop_and_sub(TestStore::prepopulated()).await;
     let session = TestSession::with_shop(shop_owner, shop.id);
     let part = Part::create(
         "New Chain".into(),
@@ -406,7 +408,7 @@ async fn shop_creates_part_in_shop_context() {
 
 #[tokio::test]
 async fn shop_owner_attaches_to_customer_bike() {
-    let (mut store, shop_owner, _, shop) = setup_shop_and_sub(MemStore::prepopulated()).await;
+    let (mut store, shop_owner, _, shop) = setup_shop_and_sub(TestStore::prepopulated()).await;
     let session = TestSession::with_shop(shop_owner, shop.id);
 
     let new_part = Part::create(
@@ -446,7 +448,7 @@ async fn shop_owner_attaches_to_customer_bike() {
 #[tokio::test]
 async fn attach_transfers_ownership_to_customer() {
     let (mut store, shop_owner, customer, shop) =
-        setup_shop_and_sub(MemStore::prepopulated()).await;
+        setup_shop_and_sub(TestStore::prepopulated()).await;
     let cust_session = TestSession::new(customer);
     shop.id
         .register_part(PartId::from(1), &cust_session, &mut store)
@@ -489,7 +491,7 @@ async fn attach_transfers_ownership_to_customer() {
 #[tokio::test]
 async fn shop_owner_detaches_from_customer_bike() {
     let (mut store, shop_owner, customer, shop) =
-        setup_shop_and_sub(MemStore::prepopulated()).await;
+        setup_shop_and_sub(TestStore::prepopulated()).await;
     let cust_session = TestSession::new(customer);
     shop.id
         .register_part(PartId::from(1), &cust_session, &mut store)
@@ -510,7 +512,7 @@ async fn shop_owner_detaches_from_customer_bike() {
 
 #[tokio::test]
 async fn no_shop_cannot_access_foreign_bike() {
-    let (mut store, _, _, _) = setup_shop_and_sub(MemStore::prepopulated()).await;
+    let (mut store, _, _, _) = setup_shop_and_sub(TestStore::prepopulated()).await;
     let stranger = UserId::create("Stranger", "User", &None, &mut store)
         .await
         .unwrap();

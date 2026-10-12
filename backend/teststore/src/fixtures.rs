@@ -18,7 +18,6 @@
 
 use super::TestStore;
 use tb_domain::test_support::TestSession;
-use tb_domain::test_support::fixtures::sample_purchase_date;
 use tb_domain::test_support::part_type_ids;
 use tb_domain::{
     Attachment, AttachmentStore, Part, PartId, PartType, PartTypeId, TbResult, UsageId, UserId,
@@ -63,6 +62,16 @@ fn new_attachment(
 /// Returns a test UserId (ID = 1).
 pub fn test_user() -> UserId {
     UserId::from(1)
+}
+
+/// Returns a TestSession initialized with test_user().
+pub fn test_session() -> TestSession {
+    TestSession::new(test_user())
+}
+
+/// Returns a sample purchase date (fixed for deterministic tests).
+pub fn sample_purchase_date() -> OffsetDateTime {
+    OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
 }
 
 /// Create a basic part for testing.
@@ -388,7 +397,6 @@ mod tests {
     use crate::TestStore;
     use crate::snapshot::StoreSnapshot;
     use tb_domain::UsageId;
-    use tb_domain::test_support::fixtures::test_session;
 
     /// The prepopulated fixture is built with fixed times only (issue
     /// #410): two independent builds of the same scenario must yield

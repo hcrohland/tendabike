@@ -1,19 +1,20 @@
-use super::*;
-use crate::test_support::{
-    MemStore,
-    fixtures::{sample_purchase_date, test_session, test_user},
+use tb_domain::test_support::{
     only_tombstone,
     part_type_ids::{BIKE, CHAIN},
     sole_live,
 };
-use crate::traits::{
-    ActivityStore, AttachmentStore, PartNoteStore, PartStore, ShopStore, UserStore,
-};
-use crate::{
+use tb_domain::{
     ActTypeId, Activity, ActivityId, Error, MAX_TIME, OnboardingStatus, Part, PartId, PartTypeId,
-    ServicePlan, ServicePlanId, SubscriptionStatus, Summary, UserId,
+    ServicePlan, ServicePlanId, SubscriptionStatus, Summary, TbResult, UserId,
 };
+use tb_domain::{
+    ActivityStore, ApiWrite, AttachmentStore, DescendReport, PartNoteStore, PartStore, ShopStore,
+    UserStore, WriteOutcome, exec,
+};
+use tb_teststore::TestStore;
 use time::macros::datetime;
+
+use tb_teststore::fixtures::{sample_purchase_date, test_session, test_user};
 
 /// A fresh hook on a bike that a chain can be attached to (the first hook
 /// of the chain part type, like the in-memory attachment suite does).
@@ -35,7 +36,7 @@ fn outcome_summary(outcome: WriteOutcome) -> Summary {
 
 #[tokio::test]
 async fn part_create_dispatches() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let summary = outcome_summary(
         exec(
@@ -61,7 +62,7 @@ async fn part_create_dispatches() -> TbResult<()> {
 
 #[tokio::test]
 async fn part_change_dispatches() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let id = PartId::from(13); // "Spare Chain 1" — loose, owned by user 1
     let summary = outcome_summary(
@@ -84,7 +85,7 @@ async fn part_change_dispatches() -> TbResult<()> {
 
 #[tokio::test]
 async fn part_delete_reports_tombstone() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let id = PartId::from(13);
     let summary =
@@ -96,7 +97,7 @@ async fn part_delete_reports_tombstone() -> TbResult<()> {
 
 #[tokio::test]
 async fn part_delete_missing_is_not_found() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let err = exec(
         ApiWrite::PartDelete {
@@ -115,7 +116,7 @@ async fn part_delete_missing_is_not_found() -> TbResult<()> {
 
 #[tokio::test]
 async fn attach_and_detach_dispatch() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let bike = Part::create(
         "Bike".to_string(),
@@ -186,7 +187,7 @@ async fn attach_and_detach_dispatch() -> TbResult<()> {
 
 #[tokio::test]
 async fn activity_update_dispatches() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let mut act = store
         .activity_read_by_id(ActivityId::new(1))
@@ -208,7 +209,7 @@ async fn activity_update_dispatches() -> TbResult<()> {
 
 #[tokio::test]
 async fn activity_update_id_mismatch_is_bad_request() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let act = store
         .activity_read_by_id(ActivityId::new(1))
@@ -231,7 +232,7 @@ async fn activity_update_id_mismatch_is_bad_request() -> TbResult<()> {
 
 #[tokio::test]
 async fn activity_delete_reports_tombstone() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let id = ActivityId::new(3);
     let summary =
@@ -243,7 +244,7 @@ async fn activity_delete_reports_tombstone() -> TbResult<()> {
 
 #[tokio::test]
 async fn activity_delete_missing_is_not_found() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let err = exec(
         ApiWrite::ActivityDelete {
@@ -260,7 +261,7 @@ async fn activity_delete_missing_is_not_found() -> TbResult<()> {
 
 #[tokio::test]
 async fn activity_descend_updates_matched_activity() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     // A row matching fixture activity 1 (start 2023-05-18 22:13:20Z,
     // matched by local minute) with a descend value.
@@ -294,7 +295,7 @@ async fn activity_descend_updates_matched_activity() -> TbResult<()> {
 
 #[tokio::test]
 async fn activity_default_gear_assigns_null_gear_activities() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let act = Activity {
         id: ActivityId::new(100),
@@ -343,7 +344,7 @@ async fn activity_default_gear_assigns_null_gear_activities() -> TbResult<()> {
 
 #[tokio::test]
 async fn partnote_create_text_and_delete_dispatch() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let part = PartId::from(13);
     let summary = outcome_summary(
@@ -378,7 +379,7 @@ async fn partnote_create_text_and_delete_dispatch() -> TbResult<()> {
 
 #[tokio::test]
 async fn partnote_blank_name_is_bad_request() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let err = exec(
         ApiWrite::PartNoteCreateText {
@@ -398,7 +399,7 @@ async fn partnote_blank_name_is_bad_request() -> TbResult<()> {
 
 #[tokio::test]
 async fn service_create_and_delete_dispatch() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let time = datetime!(2024-06-15 10:00 UTC);
     let summary = outcome_summary(
@@ -434,9 +435,9 @@ async fn service_create_and_delete_dispatch() -> TbResult<()> {
 
 #[tokio::test]
 async fn service_create_on_foreign_part_is_forbidden() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     // Part 1 is owned by user 1; user 2 may not service it.
-    let mut session = crate::test_support::TestSession::new(UserId::from(2));
+    let mut session = tb_domain::test_support::TestSession::new(UserId::from(2));
     let err = exec(
         ApiWrite::ServiceCreate {
             part: PartId::from(1),
@@ -458,7 +459,7 @@ async fn service_create_on_foreign_part_is_forbidden() -> TbResult<()> {
 
 #[tokio::test]
 async fn serviceplan_create_and_delete_dispatch() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let plan = ServicePlan {
         id: ServicePlanId::from(uuid::Uuid::now_v7()),
@@ -503,7 +504,7 @@ async fn serviceplan_create_and_delete_dispatch() -> TbResult<()> {
 
 #[tokio::test]
 async fn shop_create_dispatches() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let summary = outcome_summary(
         exec(
@@ -526,7 +527,7 @@ async fn shop_create_dispatches() -> TbResult<()> {
 
 #[tokio::test]
 async fn shop_register_and_unregister_part_dispatch() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let summary = outcome_summary(
         exec(
@@ -584,7 +585,7 @@ async fn shop_register_and_unregister_part_dispatch() -> TbResult<()> {
 
 #[tokio::test]
 async fn shop_subscription_create_and_cancel_dispatch() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let summary = outcome_summary(
         exec(
@@ -637,7 +638,7 @@ async fn shop_subscription_create_and_cancel_dispatch() -> TbResult<()> {
 
 #[tokio::test]
 async fn user_onboarding_sync_dispatch() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let summary = outcome_summary(
         exec(
@@ -669,7 +670,7 @@ async fn user_onboarding_sync_dispatch() -> TbResult<()> {
 
 #[tokio::test]
 async fn user_onboarding_postpone_dispatch() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = TestStore::prepopulated();
     let mut session = test_session();
     let summary =
         outcome_summary(exec(ApiWrite::UserOnboardingPostpone, &mut session, &mut store).await?);
