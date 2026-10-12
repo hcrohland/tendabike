@@ -41,25 +41,14 @@ impl TestStore {
 
         let mut data = StoreData::empty();
 
-        let max_part_id: i32 = if !snap.parts.is_empty() {
-            snap.parts.iter().map(|p| p.id.into()).max().unwrap_or(0)
-        } else {
-            0
-        };
-        let max_user_id: i32 = if !snap.users.is_empty() {
-            snap.users.iter().map(|u| u.id.into()).max().unwrap_or(0)
-        } else {
-            0
-        };
-        let max_shop_id: i32 = if !snap.parts.iter().any(|p| p.shop.is_some()) {
-            0
-        } else {
-            snap.parts
-                .iter()
-                .filter_map(|p| p.shop.map(|s| s.into()))
-                .max()
-                .unwrap_or(0)
-        };
+        let max_part_id: i32 = snap.parts.iter().map(|p| p.id.into()).max().unwrap_or(0);
+        let max_user_id: i32 = snap.users.iter().map(|u| u.id.into()).max().unwrap_or(0);
+        let max_shop_id: i32 = snap
+            .parts
+            .iter()
+            .filter_map(|p| p.shop.map(|s| s.into()))
+            .max()
+            .unwrap_or(0);
 
         for user in snap.users {
             data.users.insert(user.id, user);
@@ -127,139 +116,32 @@ pub async fn build_workshop_store() -> TbResult<TestStore> {
     store.create("Tenda", "Bike", &None).await?;
 
     // ─── Bike A: Main Bike ────────────────────────────────────────────
-    let bike_a = Part::create(
-        "Main Bike".into(),
-        "TendaBike".into(),
-        "Standard Frame".into(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
+    let bike_a = mount_bike(
         &s,
         &mut store,
-    )
-    .await?;
-
-    let fw_a = mk_part(
-        &s,
-        "Front Wheel A",
-        "Zipp",
-        "404 Firecrest",
-        FRONT_WHEEL,
-        &mut store,
-    )
-    .await?;
-    let rw_a = mk_part(
-        &s,
-        "Rear Wheel A",
-        "DT Swiss",
-        "XR 1501",
-        REAR_WHEEL,
-        &mut store,
-    )
-    .await?;
-    let ch_a = mk_part(&s, "Chain A", "Shimano", "CN-M510", CHAIN, &mut store).await?;
-    let t_a1 = mk_part(
-        &s,
-        "Tire Front A",
-        "Continental",
-        "GP5000",
-        TIRE,
-        &mut store,
-    )
-    .await?;
-    let t_a2 = mk_part(
-        &s,
-        "Tire Rear A",
-        "Continental",
-        "GP5000 ST",
-        TIRE,
-        &mut store,
-    )
-    .await?;
-
-    attach_assembly(&s, fw_a.id, ATTACH_TIME, bike_a.id, BIKE, false, &mut store).await?;
-    attach_assembly(&s, rw_a.id, ATTACH_TIME, bike_a.id, BIKE, false, &mut store).await?;
-    attach_assembly(&s, ch_a.id, ATTACH_TIME, bike_a.id, BIKE, false, &mut store).await?;
-    // tires on mounted wheels carry the bike as gear (flat row model, ADR-0003):
-    // the hook records the wheel, the gear is the top-level part
-    attach_assembly(
-        &s,
-        t_a1.id,
-        ATTACH_TIME,
-        bike_a.id,
-        FRONT_WHEEL,
-        false,
-        &mut store,
-    )
-    .await?;
-    attach_assembly(
-        &s,
-        t_a2.id,
-        ATTACH_TIME,
-        bike_a.id,
-        REAR_WHEEL,
-        false,
-        &mut store,
+        ("Main Bike", "TendaBike", "Standard Frame"),
+        [
+            ("Front Wheel A", "Zipp", "404 Firecrest"),
+            ("Rear Wheel A", "DT Swiss", "XR 1501"),
+            ("Chain A", "Shimano", "CN-M510"),
+            ("Tire Front A", "Continental", "GP5000"),
+            ("Tire Rear A", "Continental", "GP5000 ST"),
+        ],
     )
     .await?;
 
     // ─── Bike B: Road Bike ────────────────────────────────────────────
-    let bike_b = Part::create(
-        "Road Bike".into(),
-        "Trek".into(),
-        "Domane".into(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
+    let _bike_b = mount_bike(
         &s,
         &mut store,
-    )
-    .await?;
-
-    let fw_b = mk_part(
-        &s,
-        "Front Wheel B",
-        "Mavic",
-        "Carbon WS",
-        FRONT_WHEEL,
-        &mut store,
-    )
-    .await?;
-    let rw_b = mk_part(
-        &s,
-        "Rear Wheel B",
-        "Mavic",
-        "Carbon WS",
-        REAR_WHEEL,
-        &mut store,
-    )
-    .await?;
-    let ch_b = mk_part(&s, "Chain B", "SRAM", "PC-XX1", CHAIN, &mut store).await?;
-    let t_b1 = mk_part(&s, "Tire Front B", "Schwalbe", "One", TIRE, &mut store).await?;
-    let t_b2 = mk_part(&s, "Tire Rear B", "Schwalbe", "One Plus", TIRE, &mut store).await?;
-
-    attach_assembly(&s, fw_b.id, ATTACH_TIME, bike_b.id, BIKE, false, &mut store).await?;
-    attach_assembly(&s, rw_b.id, ATTACH_TIME, bike_b.id, BIKE, false, &mut store).await?;
-    attach_assembly(&s, ch_b.id, ATTACH_TIME, bike_b.id, BIKE, false, &mut store).await?;
-    // same as Bike A: tires on mounted wheels carry the bike as gear
-    attach_assembly(
-        &s,
-        t_b1.id,
-        ATTACH_TIME,
-        bike_b.id,
-        FRONT_WHEEL,
-        false,
-        &mut store,
-    )
-    .await?;
-    attach_assembly(
-        &s,
-        t_b2.id,
-        ATTACH_TIME,
-        bike_b.id,
-        REAR_WHEEL,
-        false,
-        &mut store,
+        ("Road Bike", "Trek", "Domane"),
+        [
+            ("Front Wheel B", "Mavic", "Carbon WS"),
+            ("Rear Wheel B", "Mavic", "Carbon WS"),
+            ("Chain B", "SRAM", "PC-XX1"),
+            ("Tire Front B", "Schwalbe", "One"),
+            ("Tire Rear B", "Schwalbe", "One Plus"),
+        ],
     )
     .await?;
 
@@ -349,6 +231,72 @@ pub async fn build_workshop_store() -> TbResult<TestStore> {
     Activity::rescan_all(&mut store).await?;
 
     Ok(store)
+}
+
+/// Mount a bike with its canonical five subparts — front wheel, rear
+/// wheel, chain, front tire, rear tire — in that order (the order fixes
+/// the part IDs in the snapshot), returning the created bike. The shape
+/// shared by Bike A and Bike B in `build_workshop_store`.
+async fn mount_bike(
+    session: &dyn Session,
+    store: &mut TestStore,
+    bike: (&str, &str, &str),
+    subparts: [(&str, &str, &str); 5],
+) -> TbResult<Part> {
+    let (bike_name, bike_brand, bike_model) = bike;
+    let bike = Part::create(
+        bike_name.into(),
+        bike_brand.into(),
+        bike_model.into(),
+        BIKE,
+        None,
+        sample_purchase_date() - time::Duration::days(365),
+        session,
+        store,
+    )
+    .await?;
+
+    let [
+        (fw_name, fw_brand, fw_model),
+        (rw_name, rw_brand, rw_model),
+        (ch_name, ch_brand, ch_model),
+        (tf_name, tf_brand, tf_model),
+        (tr_name, tr_brand, tr_model),
+    ] = subparts;
+
+    let fw = mk_part(session, fw_name, fw_brand, fw_model, FRONT_WHEEL, store).await?;
+    let rw = mk_part(session, rw_name, rw_brand, rw_model, REAR_WHEEL, store).await?;
+    let ch = mk_part(session, ch_name, ch_brand, ch_model, CHAIN, store).await?;
+    let tf = mk_part(session, tf_name, tf_brand, tf_model, TIRE, store).await?;
+    let tr = mk_part(session, tr_name, tr_brand, tr_model, TIRE, store).await?;
+
+    attach_assembly(session, fw.id, ATTACH_TIME, bike.id, BIKE, false, store).await?;
+    attach_assembly(session, rw.id, ATTACH_TIME, bike.id, BIKE, false, store).await?;
+    attach_assembly(session, ch.id, ATTACH_TIME, bike.id, BIKE, false, store).await?;
+    // tires on mounted wheels carry the bike as gear (flat row model, ADR-0003):
+    // the hook records the wheel, the gear is the top-level part
+    attach_assembly(
+        session,
+        tf.id,
+        ATTACH_TIME,
+        bike.id,
+        FRONT_WHEEL,
+        false,
+        store,
+    )
+    .await?;
+    attach_assembly(
+        session,
+        tr.id,
+        ATTACH_TIME,
+        bike.id,
+        REAR_WHEEL,
+        false,
+        store,
+    )
+    .await?;
+
+    Ok(bike)
 }
 
 async fn mk_part(

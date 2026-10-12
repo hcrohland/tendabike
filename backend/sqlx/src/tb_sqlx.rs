@@ -42,9 +42,11 @@ impl<'c> SqlxConn<'c> {
     /// Roll back the transaction and return the connection to the pool.
     ///
     /// Consumes the `SqlxConn`; the in-memory twin `TestStore::rollback`
-    /// keeps the store usable — a deliberate ergonomic difference (see
-    /// `backend/docs/tests/domain.md`, "Transactional semantics (issue
-    /// #409)").
+    /// keeps the store usable — a deliberate ergonomic difference (the
+    /// no-transaction-buffer semantics are documented in
+    /// `backend/docs/tests/domain.md`, "Key infrastructure" — the
+    /// `TestStore` entry — and the `tb_teststore` crate docs on the
+    /// consuming, no-op `Txn` impl).
     ///
     /// `pub` because `SqlxConn` is a public type: the per-user executor loop
     /// (`tb_exec`) calls it when a message fails inside its transaction

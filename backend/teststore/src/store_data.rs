@@ -9,8 +9,8 @@ use tb_domain::{
     ServicePlanId, Shop, ShopId, ShopSubscription, SubscriptionId, Usage, UsageId, User, UserId,
 };
 
-/// The complete state of the in-memory database: every table plus the
-/// auto-increment counters.
+/// The domain half of [`TestStoreState`](crate::TestStoreState): every
+/// domain table plus its auto-increment counters.
 #[derive(Clone)]
 pub struct StoreData {
     /// Parts keyed by PartId

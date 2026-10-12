@@ -24,4 +24,4 @@ doctest = false
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }
-tb_teststore = { path = "../teststore" }
+tb_teststore = { workspace = true }

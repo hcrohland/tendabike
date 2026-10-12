@@ -2,8 +2,8 @@
 //! `tb_domain::test_support::fixtures`, spec #510): the builders drive
 //! operations through a `&mut TestStore`.
 //!
-//! Provides shared helper functions and prepopulated store scenarios for
-//! testing entity operations across all domains.
+//! Provides shared helper functions for testing entity operations across
+//! all domains (the prepopulated store scenarios live in `snapshot.rs`).
 //!
 //! Built through the store's documented interface (issue #410): fixture
 //! data is written with domain operations and store trait methods, and
@@ -341,22 +341,13 @@ async fn attach_test_part_at(
 ) -> TbResult<Attachment> {
     let hook = first_hook(part.what);
 
-    let summary = attach_assembly(
-        session, part.id, time, gear_id, hook, false, // all = false for basic attachment
-        store,
-    )
-    .await?;
+    // all = false for basic attachment
+    attach_assembly(session, part.id, time, gear_id, hook, false, store).await?;
 
-    // Read the attachment back through the store's interface rather than its
-    // internals (issue #410): the part's rows, earliest first.
-    if let Some(part_obj) = summary.parts.live().pop() {
-        let atts = store.attachments_all_by_part(part_obj.id).await?;
-        if let Some(att) = atts.into_iter().min_by_key(|a| a.attached) {
-            return Ok(att);
-        }
-    }
-
-    // Fallback: any attachment row for the part
+    // Read the attachment back through the store's interface rather than
+    // its internals (issue #410): the part's rows, earliest first. The
+    // attach always leaves at least one row for the part, so the lookup
+    // must succeed — the same read-back `fixture_assembly` performs.
     store
         .attachments_all_by_part(part.id)
         .await?
