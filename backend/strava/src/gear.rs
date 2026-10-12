@@ -50,8 +50,8 @@ pub(crate) async fn into_partid(
     user: &mut impl StravaSession,
     store: &mut impl StravaStore,
 ) -> TbResult<PartId> {
-    if let Some(gear) = store.partid_get_by_source(&strava_id).await? {
-        return Ok(gear);
+    if let Some(gear) = Part::by_source(&strava_id, store).await? {
+        return Ok(gear.id);
     }
 
     debug!("New Gear");
@@ -61,8 +61,8 @@ pub(crate) async fn into_partid(
         .context("Couldn't map gear")?;
 
     // maybe the gear was created by now?
-    if let Some(gear) = store.partid_get_by_source(&strava_id).await? {
-        return Ok(gear);
+    if let Some(gear) = Part::by_source(&strava_id, store).await? {
+        return Ok(gear.id);
     }
 
     let what = gear.what();
