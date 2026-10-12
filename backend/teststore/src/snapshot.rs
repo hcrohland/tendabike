@@ -34,8 +34,7 @@ pub struct StoreSnapshot {
 impl TestStore {
     /// Returns a store prepopulated with workshop data: the
     /// `StoreSnapshot` is loaded into a fresh state, id counters derived
-    /// from the loaded data (moved from `MemStore::prepopulated`, spec
-    /// #510).
+    /// from the loaded data (spec #510).
     pub fn prepopulated() -> Self {
         let snap: StoreSnapshot = serde_json::from_str(prepopulated_data::SNAPSHOT_JSON)
             .expect("SNAPSHOT_JSON must be valid JSON");
@@ -97,7 +96,7 @@ impl TestStore {
     }
 
     /// Export store data as a serializable snapshot, deterministically
-    /// ordered (moved from `MemStore::snapshot`, spec #510).
+    /// ordered (spec #510).
     pub fn snapshot(&self) -> StoreSnapshot {
         let d = &self.state.lock().expect("test store state poisoned").domain;
         let mut snap = StoreSnapshot {

@@ -1,6 +1,6 @@
 //! Test fixtures for the in-memory store (moved from
-//! `tb_domain::test_support::fixtures`, spec #510): the signatures change
-//! `&mut MemStore` → `&mut TestStore`.
+//! `tb_domain::test_support::fixtures`, spec #510): the builders drive
+//! operations through a `&mut TestStore`.
 //!
 //! Provides shared helper functions and prepopulated store scenarios for
 //! testing entity operations across all domains.

@@ -61,14 +61,15 @@ pub struct TestStore {
 pub struct TestStoreState {
     /// The domain half (today's `StoreData`, moved here).
     pub domain: StoreData,
-    /// The Strava half (today axum's `StravaState` + strava's user map).
+    /// The Strava half: the event queue, the next-event counter, and the
+    /// user map.
     pub strava: StravaState,
 }
 
 /// In-memory stand-in for the `strava_events` queue and the
 /// `strava_users` table. The refresh token lives on the `StravaUser`
 /// row (`refresh_token: Option<RefreshToken>`), so there is no separate
-/// token field (axum's `StravaState.refresh_token` is subsumed).
+/// token field.
 #[derive(Clone, Default)]
 pub struct StravaState {
     pub events: Vec<Event>,
@@ -95,8 +96,7 @@ impl TestStore {
     }
 
     /// A clone of the shared state, under the lock — for post-write
-    /// assertions and seeding (collapses today's `LiveSource::mem()`/
-    /// `strava()` accessors into one public state surface).
+    /// assertions and seeding: the one public state surface.
     pub fn state(&self) -> TestStoreState {
         self.state
             .lock()
@@ -311,7 +311,7 @@ mod tests {
     }
 
     /// The `StravaStore` methods operate on the shared Strava state
-    /// (moved from `TestStravaStore`, spec #510): user lookups by both
+    /// (spec #510): user lookups by both
     /// id directions, the event queue with assigned ids, and the token
     /// update.
     #[tokio::test]
@@ -383,8 +383,7 @@ mod tests {
     }
 
     /// `prepopulated()` loads the canonical workshop snapshot into a
-    /// fresh state, id counters derived from the loaded data (spec #510,
-    /// moved from `MemStore::prepopulated`).
+    /// fresh state, id counters derived from the loaded data (spec #510).
     #[test]
     fn prepopulated_loads_the_snapshot() {
         let store = TestStore::prepopulated();
@@ -414,8 +413,7 @@ mod tests {
     }
 
     /// The `fixtures::` builders drive operations through a
-    /// `&mut TestStore` (spec #510: the signatures change from
-    /// `&mut MemStore` to `&mut TestStore`).
+    /// `&mut TestStore` (spec #510).
     #[tokio::test]
     async fn fixture_bike_creates_a_bike_in_the_store() -> TbResult<()> {
         let mut store = TestStore::new();

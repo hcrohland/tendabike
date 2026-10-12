@@ -1,6 +1,5 @@
-//! The `StravaStore` impl on [`TestStore`]: the real logic moved from
-//! `tb_strava`'s `TestStravaStore` (spec #510), operating on the shared
-//! Strava state instead of a local field.
+//! The `StravaStore` impl on [`TestStore`] (spec #510), operating on
+//! the shared Strava state.
 
 use async_trait::async_trait;
 use oauth2::RefreshToken;
