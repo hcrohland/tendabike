@@ -74,7 +74,6 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use tb_domain::test_support::{
-    MemStore, StoreSnapshot,
     fixtures::{sample_purchase_date, test_session},
     only_tombstone, part_type_ids, sole_live,
 };
@@ -84,6 +83,7 @@ use tb_domain::{
     ServicePlan, ServicePlanId, ShopStore, Summary, Usage, UsageId, UsageStore, UserId, UserStore,
     attach_assembly, detach_assembly, dispose_assembly, exec, round_time,
 };
+use tb_teststore::{StoreSnapshot, TestStore};
 use time::{OffsetDateTime, macros::datetime};
 use tokio::sync::MutexGuard;
 use uuid::Uuid;
@@ -312,7 +312,7 @@ async fn database_is_reachable() {
 /// The standard prepopulated fixture, the same snapshot the in-memory suite
 /// uses.
 fn fixture() -> StoreSnapshot {
-    MemStore::prepopulated().snapshot()
+    TestStore::prepopulated().snapshot()
 }
 
 /// The prepopulated fixture loads back from the database unchanged.

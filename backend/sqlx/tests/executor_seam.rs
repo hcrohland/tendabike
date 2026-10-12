@@ -65,11 +65,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
-use tb_domain::test_support::{MemStore, part_type_ids::CHAIN, sole_live};
+use tb_domain::test_support::{part_type_ids::CHAIN, sole_live};
 use tb_domain::{ApiWrite, PartId, Session, ShopId, TbResult, UserId};
 use tb_exec::{ApiWriteRequest, api_write_channel, run};
 use tb_sqlx::DbPool;
 use tb_strava::{StravaId, StravaSession, StravaStore};
+use tb_teststore::TestStore;
 use time::macros::datetime;
 use tokio::sync::{MutexGuard, Notify, broadcast};
 
@@ -398,7 +399,7 @@ async fn idle_loop_reclaims() {
 #[ignore]
 async fn failed_write_rolls_back_and_reclaims() {
     let seam = ready().await;
-    let fixture_parts = MemStore::prepopulated().snapshot().parts.len();
+    let fixture_parts = TestStore::prepopulated().snapshot().parts.len();
 
     let (tx, rx) = api_write_channel();
     let (frames, _frame_rx) = broadcast::channel(8);

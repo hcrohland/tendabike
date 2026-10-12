@@ -59,9 +59,9 @@
 
 use sqlx::migrate::MigrateDatabase;
 use std::time::Duration;
-use tb_domain::test_support::{MemStore, StoreSnapshot};
 use tb_domain::{ActivityStore, AttachmentStore, UsageStore};
 use tb_sqlx::{DbPool, SqlxConn};
+use tb_teststore::{StoreSnapshot, TestStore};
 use tokio::sync::{Mutex, OnceCell};
 use uuid::Uuid;
 
@@ -249,7 +249,7 @@ pub fn db_err(err: sqlx::Error) -> tb_domain::Error {
 pub async fn seed(pool: &DbPool) -> tb_domain::TbResult<FixtureMarks> {
     let mut tx = pool.begin().await?;
 
-    let snap = MemStore::prepopulated().snapshot();
+    let snap = TestStore::prepopulated().snapshot();
 
     load_fixture(&mut tx, &snap).await?;
 
@@ -396,7 +396,7 @@ pub async fn fresh_fixture(pool: &DbPool) -> tb_domain::TbResult<()> {
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
-    let snap = MemStore::prepopulated().snapshot();
+    let snap = TestStore::prepopulated().snapshot();
     load_fixture(&mut tx, &snap).await?;
     let marks = FixtureMarks {
         parts: snap

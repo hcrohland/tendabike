@@ -41,7 +41,7 @@ impl<'c> SqlxConn<'c> {
 
     /// Roll back the transaction and return the connection to the pool.
     ///
-    /// Consumes the `SqlxConn`; the in-memory twin `MemStore::rollback`
+    /// Consumes the `SqlxConn`; the in-memory twin `TestStore::rollback`
     /// keeps the store usable — a deliberate ergonomic difference (see
     /// `backend/docs/tests/domain.md`, "Transactional semantics (issue
     /// #409)").
@@ -63,7 +63,7 @@ impl<'c> SqlxConn<'c> {
 
     /// Commit the transaction and return the connection to the pool.
     ///
-    /// Consumes the `SqlxConn`, like the in-memory twin `MemStore::commit`.
+    /// Consumes the `SqlxConn`, like the in-memory twin `TestStore::commit`.
     /// This is the production path the web layer drives after every
     /// `begin()`; the domain never commits (the `Store` marker carries no
     /// transaction lifecycle).
