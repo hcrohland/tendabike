@@ -66,9 +66,9 @@ use std::time::Duration;
 
 use serde::de::DeserializeOwned;
 use tb_domain::test_support::{MemStore, part_type_ids::CHAIN, sole_live};
-use tb_domain::{ApiWrite, PartId, Session, ShopId, TbResult, UserId};
+use tb_domain::{ApiWrite, ConcreteDomain, PartId, Session, ShopId, TbResult, UserId};
 use tb_exec::{ApiWriteRequest, api_write_channel, run};
-use tb_sqlx::DbPool;
+use tb_sqlx::{DbPool, SqlxConn};
 use tb_strava::{StravaId, StravaSession, StravaStore};
 use time::macros::datetime;
 use tokio::sync::{MutexGuard, Notify, broadcast};
@@ -140,18 +140,24 @@ impl Session for FakeStrava {
 }
 
 #[async_trait::async_trait]
-impl StravaSession for FakeStrava {
+impl StravaSession<ConcreteDomain<SqlxConn<'static>>> for FakeStrava {
     fn strava_id(&self) -> StravaId {
         self.strava
+    }
+    fn tb_id(&self) -> UserId {
+        self.user
     }
     async fn request_json<T: DeserializeOwned>(
         &mut self,
         uri: &str,
-        _store: &mut impl StravaStore,
+        _store: &mut impl StravaStore<ConcreteDomain<SqlxConn<'static>>>,
     ) -> TbResult<T> {
         panic!("the executor seam never imports from the Strava API (got {uri})")
     }
-    async fn deauthorize(&mut self, _store: &mut impl StravaStore) -> TbResult<()> {
+    async fn deauthorize(
+        &mut self,
+        _store: &mut impl StravaStore<ConcreteDomain<SqlxConn<'static>>>,
+    ) -> TbResult<()> {
         panic!("the executor seam never deauthorizes a user")
     }
 }
@@ -237,15 +243,20 @@ async fn api_write_end_to_end() {
     });
     tx.send(request).expect("the channel is open");
 
-    let mut loop_task = tokio::spawn(run(
-        seam.pool.clone(),
-        FakeStrava::new(),
-        rx,
-        frames,
-        events,
-        IDLE_TIMEOUT,
-        Arc::new(Notify::new()),
-    ));
+    let pool = seam.pool.clone();
+    let mut session = FakeStrava::new();
+    let mut loop_task = tokio::spawn(async move {
+        run(
+            pool,
+            &mut session,
+            rx,
+            frames,
+            events,
+            IDLE_TIMEOUT,
+            Arc::new(Notify::new()),
+        )
+        .await
+    });
 
     // The route's oneshot resolves with the write's outcome; the part
     // write's `Summary` is the frame.
@@ -328,11 +339,12 @@ async fn strava_queue_drains_and_reclaims() {
     // No streams attached: the frame receiver must not outlive the loop, or
     // the no-streams reap rule (spec §4.4, amended — #446) never fires.
     drop(_frame_rx);
+    let mut session = FakeStrava::new();
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
         run(
             seam.pool.clone(),
-            FakeStrava::new(),
+            &mut session,
             rx,
             frames,
             events,
@@ -368,11 +380,12 @@ async fn idle_loop_reclaims() {
     // the no-streams reap rule (spec §4.4, amended — #446) never fires.
     drop(_frame_rx);
     let started = std::time::Instant::now();
+    let mut session = FakeStrava::new();
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
         run(
             seam.pool.clone(),
-            FakeStrava::new(),
+            &mut session,
             rx,
             frames,
             events,
@@ -412,15 +425,20 @@ async fn failed_write_rolls_back_and_reclaims() {
     });
     tx.send(request).expect("the channel is open");
 
-    let mut loop_task = tokio::spawn(run(
-        seam.pool.clone(),
-        FakeStrava::new(),
-        rx,
-        frames,
-        events,
-        IDLE_TIMEOUT,
-        Arc::new(Notify::new()),
-    ));
+    let pool = seam.pool.clone();
+    let mut session = FakeStrava::new();
+    let mut loop_task = tokio::spawn(async move {
+        run(
+            pool,
+            &mut session,
+            rx,
+            frames,
+            events,
+            IDLE_TIMEOUT,
+            Arc::new(Notify::new()),
+        )
+        .await
+    });
 
     // The route gets the domain error, not a 500 and not a hang.
     let err = tokio::time::timeout(TEST_TIMEOUT, reply)

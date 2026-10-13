@@ -29,13 +29,20 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use tb_domain::{ApiWrite, Summary, TbResult, Usage, WriteOutcome};
+use tb_domain::{ApiWrite, ConcreteDomain, Summary, TbResult, Usage, WriteOutcome};
 use tb_strava::event::Event;
 use tokio::sync::{broadcast, oneshot};
 
 use crate::executor::{DbBackoff, Probe, Select, select_message, stop_remaining};
+use crate::lib_tests::FakeConn;
 use crate::message::{ApiWriteRequest, push_frame};
 use crate::{Action, Message, api_write_channel, next_action};
+
+/// The concrete domain the pure-brain tests instantiate the generic seams
+/// over: the channel/frame types name `D::` associated types, and a
+/// concrete domain pins them (`FakeConn` is the test `Store`; its methods
+/// are never called here).
+type TestDomain = ConcreteDomain<FakeConn>;
 
 /// A future that never resolves: stands in for the Strava queue probe being
 /// blocked (a slow or busy queue), so the select has a second, non-ready
@@ -55,8 +62,11 @@ async fn ready_probe(probe: Probe) -> Option<Probe> {
     Some(probe)
 }
 
-fn request() -> (ApiWriteRequest, oneshot::Receiver<TbResult<WriteOutcome>>) {
-    ApiWriteRequest::new(ApiWrite::UserOnboardingPostpone)
+fn request() -> (
+    ApiWriteRequest<TestDomain>,
+    oneshot::Receiver<TbResult<WriteOutcome>>,
+) {
+    ApiWriteRequest::<TestDomain>::new(ApiWrite::UserOnboardingPostpone)
 }
 
 // --- `next_action`: the reclaim decision ---
@@ -94,7 +104,7 @@ fn next_action_sleep_while_streams_listen() {
 #[tokio::test]
 async fn select_api_write_wins_over_ready_strava() {
     // Both ready at the same instant: the write branch is polled first.
-    let (_tx, mut rx) = api_write_channel();
+    let (_tx, mut rx) = api_write_channel::<TestDomain>();
     let (req, _reply) = request();
     let _ = _tx.send(req);
     let wake = tokio::sync::Notify::new();
@@ -115,7 +125,7 @@ async fn select_api_write_wins_over_ready_strava() {
 async fn select_strava_when_no_write_pending() {
     // An empty-but-open channel parks the write branch; the ready Strava
     // branch is then taken.
-    let (_tx, mut rx) = api_write_channel();
+    let (_tx, mut rx) = api_write_channel::<TestDomain>();
     let wake = tokio::sync::Notify::new();
     let mut wake_fut = Box::pin(wake.notified());
     let sel = select_message(
@@ -134,7 +144,7 @@ async fn select_strava_when_no_write_pending() {
 async fn select_idle_when_queue_empty_and_no_write() {
     // Neither branch ready-yet-interesting: an empty queue (committed probe)
     // with no pending write is the idle state the reclaim policy decides on.
-    let (_tx, mut rx) = api_write_channel();
+    let (_tx, mut rx) = api_write_channel::<TestDomain>();
     let wake = tokio::sync::Notify::new();
     let mut wake_fut = Box::pin(wake.notified());
     let sel = select_message(rx.recv(), ready_probe(Probe::Empty), &mut wake_fut).await;
@@ -149,7 +159,7 @@ async fn select_idle_when_channel_closed_and_queue_empty() {
     // A dropped sender resolves `recv()` with `None`; with an empty queue the
     // select is idle (in production the sender lives for the process, so this
     // is a shutdown corner, not a normal state).
-    let (tx, mut rx) = api_write_channel();
+    let (tx, mut rx) = api_write_channel::<TestDomain>();
     drop(tx);
     let wake = tokio::sync::Notify::new();
     let mut wake_fut = Box::pin(wake.notified());
@@ -164,7 +174,7 @@ async fn select_idle_when_channel_closed_and_queue_empty() {
 async fn select_strava_error_is_its_own_state() {
     // A failed probe is reported, not silently read as "empty": the loop
     // pauses instead of deciding the queue drained.
-    let (_tx, mut rx) = api_write_channel();
+    let (_tx, mut rx) = api_write_channel::<TestDomain>();
     let wake = tokio::sync::Notify::new();
     let mut wake_fut = Box::pin(wake.notified());
     let sel = select_message(rx.recv(), ready_probe(Probe::Error), &mut wake_fut).await;
@@ -179,7 +189,7 @@ async fn select_limited_when_stop_active() {
     // An active global rate-limit Stop is its own select state (spec #446
     // §4.6): the loop sleeps until the deadline as a branch of the select,
     // interruptible by API writes.
-    let (_tx, mut rx) = api_write_channel();
+    let (_tx, mut rx) = api_write_channel::<TestDomain>();
     let wake = tokio::sync::Notify::new();
     let mut wake_fut = Box::pin(wake.notified());
     let sel = select_message(rx.recv(), ready_probe(Probe::Limited(1234)), &mut wake_fut).await;
@@ -247,7 +257,7 @@ fn db_backoff_resets_after_a_success() {
 async fn select_waits_for_the_write_over_a_slow_queue() {
     // The queue probe is pending (slow); a write that arrives while waiting is
     // taken the moment it is ready — the write never waits behind the probe.
-    let (tx, mut rx) = api_write_channel();
+    let (tx, mut rx) = api_write_channel::<TestDomain>();
     let sel = tokio::spawn(async move {
         let _ = tx.send(request().0);
         let wake = tokio::sync::Notify::new();
@@ -271,7 +281,7 @@ async fn select_wake_fired_before_the_select_is_wake() {
     // Permit semantics: a notify that fires before the `notified()` future is
     // created is not lost — the select resolves to the wake state (the loop
     // re-probes the queue on its next cycle), even with a slow probe parked.
-    let (_tx, mut rx) = api_write_channel();
+    let (_tx, mut rx) = api_write_channel::<TestDomain>();
     let wake = tokio::sync::Notify::new();
     wake.notify_one();
     let mut wake_fut = Box::pin(wake.notified());
@@ -292,7 +302,7 @@ async fn select_wake_firing_while_parked_is_wake() {
     // The queue probe is pending (slow) and no write is queued; a wake that
     // fires while the select is parked resolves it to the wake state — the
     // loop re-probes the queue on its next cycle.
-    let (_tx, mut rx) = api_write_channel();
+    let (_tx, mut rx) = api_write_channel::<TestDomain>();
     let wake = std::sync::Arc::new(tokio::sync::Notify::new());
     let wake_in_task = wake.clone();
     let task = tokio::spawn(async move {
@@ -317,10 +327,13 @@ async fn select_wake_firing_while_parked_is_wake() {
 #[test]
 fn message_carries_both_sources() {
     let write = ApiWrite::UserOnboardingPostpone;
-    assert_eq!(Message::ApiWrite(write.clone()), Message::ApiWrite(write));
     assert_eq!(
-        Message::Strava(Event::default()),
-        Message::Strava(Event::default())
+        Message::<TestDomain>::ApiWrite(write.clone()),
+        Message::<TestDomain>::ApiWrite(write)
+    );
+    assert_eq!(
+        Message::<TestDomain>::Strava(Event::default()),
+        Message::<TestDomain>::Strava(Event::default())
     );
 }
 
@@ -335,7 +348,7 @@ fn request_bundles_write_and_reply() {
         ),
         "the reply must be open"
     );
-    let (tx, mut rx) = api_write_channel();
+    let (tx, mut rx) = api_write_channel::<TestDomain>();
     tx.send(req)
         .expect("an unbounded channel accepts the request");
     let back = rx.try_recv().expect("the request round-trips the channel");
@@ -344,12 +357,12 @@ fn request_bundles_write_and_reply() {
 
 #[test]
 fn frame_push_delivers_non_empty_summaries() {
-    let (tx, mut rx) = broadcast::channel(4);
+    let (tx, mut rx) = broadcast::channel::<Summary>(4);
     let mut frame = Summary::default();
     let usage = Usage::default();
     frame.usages.upsert(usage);
 
-    push_frame(&tx, &frame);
+    push_frame::<TestDomain>(&tx, &frame);
     let got = rx
         .try_recv()
         .expect("a non-empty summary pushes exactly one frame");
@@ -358,13 +371,13 @@ fn frame_push_delivers_non_empty_summaries() {
 
 #[test]
 fn frame_push_delivers_tombstone_only_summaries() {
-    let (tx, mut rx) = broadcast::channel(4);
+    let (tx, mut rx) = broadcast::channel::<Summary>(4);
     let mut frame = Summary::default();
     frame.usages.tombstone(Usage::default().id);
 
     // A tombstone-only summary is not empty: the delete must still reach
     // the client (spec §4.5).
-    push_frame(&tx, &frame);
+    push_frame::<TestDomain>(&tx, &frame);
     let got = rx
         .try_recv()
         .expect("a tombstone-only summary pushes exactly one frame");
@@ -373,8 +386,8 @@ fn frame_push_delivers_tombstone_only_summaries() {
 
 #[test]
 fn frame_push_skips_empty_summaries() {
-    let (tx, mut rx) = broadcast::channel(4);
-    push_frame(&tx, &Summary::default());
+    let (tx, mut rx) = broadcast::channel::<Summary>(4);
+    push_frame::<TestDomain>(&tx, &Summary::default());
     assert!(
         rx.try_recv().is_err(),
         "an empty summary pushes nothing (spec §4.5)"

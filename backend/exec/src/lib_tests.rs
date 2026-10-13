@@ -34,7 +34,10 @@ use crate::{Txn, TxnSource};
 use tb_domain::*;
 
 /// A fake connection: the nine `Store` sub-traits + the marker + `Txn`.
-struct FakeConn;
+/// `pub(crate)` so the executor's pure-brain tests (`executor_tests`) can
+/// instantiate the concrete domain over it (the channel/frame types name
+/// `D::` associated types, which the tests pin with a concrete domain).
+pub(crate) struct FakeConn;
 
 impl Store for FakeConn {}
 
@@ -454,11 +457,11 @@ impl ServicePlanStore for FakeConn {
 }
 
 #[async_trait::async_trait]
-impl Txn for FakeConn {
-    async fn commit(self) -> TbResult<()> {
+impl Txn<ConcreteDomain<FakeConn>> for FakeConn {
+    async fn commit(self) -> Result<(), tb_domain::Error> {
         Ok(())
     }
-    async fn rollback(self) -> TbResult<()> {
+    async fn rollback(self) -> Result<(), tb_domain::Error> {
         Ok(())
     }
 }
@@ -467,18 +470,21 @@ impl Txn for FakeConn {
 struct FakeSource;
 
 #[async_trait::async_trait]
-impl TxnSource for FakeSource {
-    type Conn = FakeConn;
-
-    async fn begin(&self) -> TbResult<Self::Conn> {
+impl TxnSource<ConcreteDomain<FakeConn>> for FakeSource {
+    async fn begin(&self) -> Result<FakeConn, tb_domain::Error> {
         Ok(FakeConn)
     }
 }
 
-/// The seam's contract: a generic caller bounded only on `TxnSource` can
-/// `begin` a connection and then close it with `commit` or `rollback` — the
-/// `Conn: Store + Txn` linkage is what makes this type-check.
-async fn run_one<S: TxnSource>(source: &S, commit: bool) -> TbResult<()> {
+/// The seam's contract: a generic caller bounded only on `TxnSource` (and
+/// the combined `Txn` bound on the source's store — associated types cannot
+/// be supertraits) can `begin` a connection and then close it with `commit`
+/// or `rollback` — the `D::Store + Txn<D>` linkage is what makes this
+/// type-check, for any domain `D`.
+async fn run_one<D: Domain, S: TxnSource<D>>(source: &S, commit: bool) -> Result<(), D::Error>
+where
+    D::Store: Txn<D>,
+{
     let conn = source.begin().await?;
     if commit {
         conn.commit().await

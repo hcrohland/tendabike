@@ -17,10 +17,13 @@ pub struct StravaGear {
     frame_type: Option<i32>,
 }
 
-pub async fn strava_url(
+pub async fn strava_url<
+    St: Store + StravaStore<ConcreteDomain<St>>,
+    S: Session + StravaSession<ConcreteDomain<St>>,
+>(
     gear: i32,
-    user: &mut impl StravaSession,
-    store: &mut impl StravaStore,
+    user: &mut S,
+    store: &mut St,
 ) -> TbResult<String> {
     let part = PartId::from(gear).part(user, store).await?;
     let g = part.source.ok_or(Error::NotFound("".to_string()))?;
@@ -32,7 +35,7 @@ pub async fn strava_url(
 }
 
 impl StravaGear {
-    fn what(&self) -> PartTypeId {
+    fn what<D: Domain>(&self) -> D::PartTypeId {
         match self.frame_type {
             None => 301,  // shoes
             Some(_) => 1, // bikes
@@ -45,36 +48,37 @@ impl StravaGear {
 ///
 /// If it does not exist create it at tb
 /// None will return None
-pub(crate) async fn into_partid(
+pub(crate) async fn into_partid<D: Domain, S: Session + StravaSession<D>>(
     strava_id: String,
-    user: &mut impl StravaSession,
-    store: &mut impl StravaStore,
-) -> TbResult<PartId> {
-    if let Some(gear) = Part::by_source(&strava_id, store).await? {
-        return Ok(gear.id);
+    user: &mut S,
+    store: &mut D::Store,
+) -> Result<D::PartId, D::Error>
+where
+    D::Store: StravaStore<D>,
+{
+    if let Some(gear) = D::part_by_source(&strava_id, store).await? {
+        return Ok(D::part_id(&gear));
     }
 
     debug!("New Gear");
     let gear = user
         .request_json::<StravaGear>(&format!("/gear/{}", strava_id), store)
         .await
-        .context("Couldn't map gear")?;
+        .map_err(|e| D::any_failure(anyhow::anyhow!("Couldn't map gear: {e}")))?;
 
     // maybe the gear was created by now?
-    if let Some(gear) = Part::by_source(&strava_id, store).await? {
-        return Ok(gear.id);
+    if let Some(gear) = D::part_by_source(&strava_id, store).await? {
+        return Ok(D::part_id(&gear));
     }
 
-    let what = gear.what();
+    let what = gear.what::<D>();
     let source = Some(gear.id);
     let vendor = gear.brand_name.unwrap_or("".into());
     let model = gear.model_name.unwrap_or("".into());
     let name = gear.name;
     let purchase = OffsetDateTime::now_utc();
-    let tbid = Part::create(name, vendor, model, what, source, purchase, user, store)
-        .await?
-        .id;
-    Ok(tbid)
+    let part = D::create_part(name, vendor, model, what, source, purchase, user, store).await?;
+    Ok(D::part_id(&part))
 }
 
 #[cfg(test)]

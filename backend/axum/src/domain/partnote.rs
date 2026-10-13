@@ -26,9 +26,9 @@ use axum::{
     routing::{delete, get, post, put},
 };
 use serde::Deserialize;
-use tb_domain::{ApiWrite, Error, NoteFile, PartId, PartNote, PartNoteId};
+use tb_domain::{ApiWrite, ConcreteDomain, Error, NoteFile, PartId, PartNote, PartNoteId, Store};
 use tb_exec::{Txn, TxnSource};
-use tb_strava::{StravaSession, StravaStore};
+use tb_strava::StravaStore;
 
 use crate::{
     RequestSession,
@@ -49,9 +49,10 @@ pub struct UpdateTextNote {
     pub name: String,
 }
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
+pub(super) fn router<St, S>() -> Router<AppState<St, S>>
 where
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     Router::new()
         .route("/{part}/notes", get(list_notes).post(create_text_note))
@@ -67,13 +68,14 @@ where
         .layer(DefaultBodyLimit::max(10 * 1024 * 1024))
 }
 
-async fn list_notes<S>(
+async fn list_notes<St, S>(
     Path(part): Path<PartId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> ApiResult<Vec<PartNote>>
 where
-    S: TxnSource + Clone + 'static,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     let notes = part.notes(&user, &mut store).await?;
@@ -81,15 +83,15 @@ where
     Ok(Json(notes))
 }
 
-async fn create_text_note<S>(
+async fn create_text_note<St, S>(
     Path(part): Path<PartId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(NewTextNote { name }): Json<NewTextNote>,
 ) -> Result<(StatusCode, Json<PartNote>), AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let summary = state
         .registry
@@ -150,15 +152,15 @@ async fn parse_note_file(mut multipart: Multipart) -> Result<ParsedNoteFile, App
     })
 }
 
-async fn create_file_note<S>(
+async fn create_file_note<St, S>(
     Path(part): Path<PartId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     multipart: Multipart,
 ) -> Result<(StatusCode, Json<PartNote>), AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let parsed = parse_note_file(multipart).await?;
     let summary = state
@@ -181,13 +183,14 @@ where
     Ok((StatusCode::CREATED, Json(note)))
 }
 
-async fn get_note_file<S>(
+async fn get_note_file<St, S>(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> Result<Response, AppError>
 where
-    S: TxnSource + Clone + 'static,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     let note = id.note(&user, &mut store).await?;
@@ -229,15 +232,15 @@ where
     Ok((headers, data).into_response())
 }
 
-async fn update_text_note<S>(
+async fn update_text_note<St, S>(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(UpdateTextNote { name }): Json<UpdateTextNote>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry
@@ -250,15 +253,15 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn update_file_note<S>(
+async fn update_file_note<St, S>(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     multipart: Multipart,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let parsed = parse_note_file(multipart).await?;
     state
@@ -280,14 +283,14 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn delete_note<S>(
+async fn delete_note<St, S>(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry
@@ -296,14 +299,14 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn remove_file_note<S>(
+async fn remove_file_note<St, S>(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry

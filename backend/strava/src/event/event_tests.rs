@@ -141,7 +141,7 @@ async fn insert_sync_rejects_future() {
 #[tokio::test]
 async fn insert_stop_schedules_future() -> TbResult<()> {
     let (mut store, _) = setup();
-    insert_stop(&mut store).await?;
+    insert_stop::<ConcreteDomain<TestStravaStore>>(&mut store).await?;
     assert_eq!(store.event_count(), 1);
     assert_eq!(store.events[0].object_type, ObjectType::Stop);
     assert!(store.events[0].object_id > get_time());
@@ -153,9 +153,9 @@ async fn insert_stop_extends_existing() -> TbResult<()> {
     // A second 429 while a Stop is queued extends the deadline rather
     // than stacking rows (spec #446 §4.6): the backoff must not compound.
     let (mut store, _) = setup();
-    insert_stop(&mut store).await?;
+    insert_stop::<ConcreteDomain<TestStravaStore>>(&mut store).await?;
     let first_until = store.events[0].object_id;
-    insert_stop(&mut store).await?;
+    insert_stop::<ConcreteDomain<TestStravaStore>>(&mut store).await?;
     assert_eq!(
         store.event_count(),
         1,

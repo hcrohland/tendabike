@@ -35,18 +35,48 @@
 //! (spec §4.5 — an empty `Summary` pushes nothing; a dropped frame is
 //! non-fatal, the client's reconnect + full refresh covers it).
 
-use tb_domain::{ApiWrite, Summary, TbResult, WriteOutcome};
+use tb_domain::Domain;
 use tb_strava::event::Event;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 /// The one message the per-user executor consumes: a unified wrapper over the
 /// two sources (spec §4.2).
-#[derive(Debug, Clone, PartialEq)]
-pub enum Message {
+pub enum Message<D: Domain> {
     /// An in-memory write from the user's API channel.
-    ApiWrite(ApiWrite),
+    ApiWrite(D::ApiWrite),
     /// An event read from the user's `strava_events` queue.
     Strava(Event),
+}
+
+impl<D: Domain> Clone for Message<D> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::ApiWrite(write) => Self::ApiWrite(write.clone()),
+            Self::Strava(event) => Self::Strava(event.clone()),
+        }
+    }
+}
+
+// Hand-written (not derived): the derives would bound `D` itself on
+// `Debug`/`PartialEq`, which a domain is not (the concrete domain's
+// `ConcreteDomain<St>` is a marker — the bounds live on the `D::` types).
+impl<D: Domain> std::fmt::Debug for Message<D> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ApiWrite(write) => f.debug_tuple("Message::ApiWrite").field(write).finish(),
+            Self::Strava(event) => f.debug_tuple("Message::Strava").field(event).finish(),
+        }
+    }
+}
+
+impl<D: Domain> PartialEq for Message<D> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::ApiWrite(a), Self::ApiWrite(b)) => a == b,
+            (Self::Strava(a), Self::Strava(b)) => a == b,
+            _ => false,
+        }
+    }
 }
 
 /// One API write as the executor receives it: the [`ApiWrite`] plus a
@@ -58,23 +88,28 @@ pub enum Message {
 /// `pub` (fields too) because the web layer builds one per request and the
 /// executor consumes it; the oneshot keeps the type from deriving `Clone`
 /// or `PartialEq` — those live on the [`ApiWrite`] the request bundles.
-pub struct ApiWriteRequest {
+pub struct ApiWriteRequest<D: Domain> {
     /// The write to apply.
-    pub write: ApiWrite,
+    pub write: D::ApiWrite,
     /// Resolved exactly once when the write is committed or fails.
-    pub reply: oneshot::Sender<TbResult<WriteOutcome>>,
+    pub reply: oneshot::Sender<Result<D::WriteOutcome, D::Error>>,
 }
 
-impl ApiWriteRequest {
+/// The route's half of a write's oneshot: resolved exactly once with the
+/// write's outcome (the `Summary` the frame carries) or the domain error.
+#[allow(type_alias_bounds)]
+type WriteReply<D: Domain> = oneshot::Receiver<Result<D::WriteOutcome, D::Error>>;
+
+impl<D: Domain> ApiWriteRequest<D> {
     /// Pairs a write with a fresh reply channel: the request goes on the
     /// user's executor channel, the receiver is awaited by the route.
-    pub fn new(write: ApiWrite) -> (Self, oneshot::Receiver<TbResult<WriteOutcome>>) {
+    pub fn new(write: D::ApiWrite) -> (Self, WriteReply<D>) {
         let (reply, rx) = oneshot::channel();
         (Self { write, reply }, rx)
     }
 }
 
-impl std::fmt::Debug for ApiWriteRequest {
+impl<D: Domain> std::fmt::Debug for ApiWriteRequest<D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ApiWriteRequest")
             .field("write", &self.write)
@@ -84,10 +119,10 @@ impl std::fmt::Debug for ApiWriteRequest {
 }
 
 /// The send half of a user's API-write channel (held by the web layer).
-pub type ApiWriteSender = mpsc::UnboundedSender<ApiWriteRequest>;
+pub type ApiWriteSender<D> = mpsc::UnboundedSender<ApiWriteRequest<D>>;
 
 /// The receive half of a user's API-write channel (consumed by the loop).
-pub type ApiWriteReceiver = mpsc::UnboundedReceiver<ApiWriteRequest>;
+pub type ApiWriteReceiver<D> = mpsc::UnboundedReceiver<ApiWriteRequest<D>>;
 
 /// A per-user API-write channel, as the web layer constructs one for a user's
 /// executor (spec §4.2).
@@ -96,7 +131,7 @@ pub type ApiWriteReceiver = mpsc::UnboundedReceiver<ApiWriteRequest>;
 /// write queued behind a slow in-progress message just waits on its oneshot
 /// (the wait is unbounded, per spec §6.2); per-user serialization is the
 /// single loop, not channel backpressure.
-pub fn api_write_channel() -> (ApiWriteSender, ApiWriteReceiver) {
+pub fn api_write_channel<D: Domain>() -> (ApiWriteSender<D>, ApiWriteReceiver<D>) {
     mpsc::unbounded_channel()
 }
 
@@ -105,8 +140,8 @@ pub fn api_write_channel() -> (ApiWriteSender, ApiWriteReceiver) {
 /// one. A send that finds no receiver (or a lagged one) is dropped without
 /// error — a lost frame just means a not-yet-connected or slow client, and
 /// the client's reconnect + full refresh covers it.
-pub fn push_frame(frames: &broadcast::Sender<Summary>, summary: &Summary) {
-    if summary.is_empty() {
+pub fn push_frame<D: Domain>(frames: &broadcast::Sender<D::Summary>, summary: &D::Summary) {
+    if D::summary_is_empty(summary) {
         return;
     }
     let _ = frames.send(summary.clone());

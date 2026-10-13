@@ -35,7 +35,7 @@ fn concrete_domain_satisfies_domain() {
 
 async fn upsert_activity<D: Domain>(
     activity: D::Activity,
-    user: &D::Session,
+    user: &impl Session,
     store: &mut D::Store,
 ) -> D::Summary
 where
@@ -46,7 +46,7 @@ where
 
 async fn read_activity<D: Domain>(
     id: D::ActivityId,
-    session: &D::Session,
+    session: &impl Session,
     store: &mut D::Store,
 ) -> D::Activity
 where
@@ -57,7 +57,7 @@ where
 
 async fn delete_activity<D: Domain>(
     id: D::ActivityId,
-    session: &D::Session,
+    session: &impl Session,
     store: &mut D::Store,
 ) -> D::Summary
 where
@@ -73,7 +73,7 @@ async fn create_part<D: Domain>(
     what: D::PartTypeId,
     source: Option<String>,
     purchase: OffsetDateTime,
-    user: &D::Session,
+    user: &impl Session,
     store: &mut D::Store,
 ) -> D::Part
 where
@@ -93,7 +93,7 @@ where
 
 async fn exec_write<D: Domain>(
     write: D::ApiWrite,
-    session: &mut D::Session,
+    session: &mut impl Session,
     store: &mut D::Store,
 ) -> D::WriteOutcome
 where

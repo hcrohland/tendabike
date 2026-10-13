@@ -8,20 +8,20 @@ use axum::{
     extract::{Path, State},
     response::Redirect,
 };
-use tb_domain::UserId;
+use tb_domain::{ConcreteDomain, Store, UserId};
 
 use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, error::AppError};
 use tb_exec::{Txn, TxnSource};
 use tb_strava::StravaStore;
 
-pub(super) async fn redirect_gear<S>(
+pub(super) async fn redirect_gear<St, S>(
     mut user: RequestSession,
     Path(id): Path<i32>,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> Result<Redirect, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     let uri = tb_strava::gear::strava_url(id, &mut user, &mut store)
@@ -30,14 +30,14 @@ where
     Ok(Redirect::permanent(&uri))
 }
 
-pub(super) async fn redirect_act<S>(
+pub(super) async fn redirect_act<St, S>(
     user: RequestSession,
     Path(id): Path<i64>,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> Result<Redirect, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     let uri = tb_strava::activity::strava_url(id, &user, &mut store)
@@ -46,13 +46,13 @@ where
     Ok(Redirect::permanent(&uri))
 }
 
-pub(super) async fn redirect_user<S>(
+pub(super) async fn redirect_user<St, S>(
     Path(id): Path<i32>,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> Result<Redirect, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     let uri = tb_strava::strava_url(id, &mut store)
@@ -61,14 +61,14 @@ where
     Ok(Redirect::permanent(&uri))
 }
 
-pub(super) async fn revoke_user<S>(
+pub(super) async fn revoke_user<St, S>(
     admin: AxumAdmin,
     Path(tbid): Path<UserId>,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> ApiResult<()>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     let mut user = RequestSession::create_from_id(admin, tbid, &mut store).await?;
@@ -79,14 +79,14 @@ where
     Ok(res)
 }
 
-pub(super) async fn deleteuser<S>(
+pub(super) async fn deleteuser<St, S>(
     admin: AxumAdmin,
     Path(tbid): Path<UserId>,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> ApiResult<()>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     let mut user = RequestSession::create_from_id(admin, tbid, &mut store).await?;

@@ -71,10 +71,13 @@ async fn upsert_without_refresh_is_disabled() -> TbResult<()> {
 #[tokio::test]
 async fn read_stravauser() {
     let (mut store, _) = setup();
-    let user = StravaUser::read(UserId::from(1), &mut store).await.unwrap();
+    let user = StravaUser::read::<ConcreteDomain<TestStravaStore>>(UserId::from(1), &mut store)
+        .await
+        .unwrap();
     assert_eq!(user.strava_id(), 42.into());
     assert_eq!(user.tb_id(), UserId::from(1));
-    let res = StravaUser::read(UserId::from(2), &mut store).await;
+    let res =
+        StravaUser::read::<ConcreteDomain<TestStravaStore>>(UserId::from(2), &mut store).await;
     assert!(matches!(res, Err(Error::NotFound(_))));
 }
 
@@ -82,13 +85,13 @@ async fn read_stravauser() {
 async fn strava_id_read_option() {
     let (mut store, _) = setup();
     assert!(
-        StravaId::read(&42.into(), &mut store)
+        StravaId::read::<ConcreteDomain<TestStravaStore>>(&42.into(), &mut store)
             .await
             .unwrap()
             .is_some()
     );
     assert!(
-        StravaId::read(&99.into(), &mut store)
+        StravaId::read::<ConcreteDomain<TestStravaStore>>(&99.into(), &mut store)
             .await
             .unwrap()
             .is_none()
@@ -99,13 +102,15 @@ async fn strava_id_read_option() {
 async fn update_token() -> TbResult<()> {
     let (mut store, _) = setup();
     let user = StravaId::from(42)
-        .update_token(Some(&"new".to_string()), &mut store)
+        .update_token::<ConcreteDomain<TestStravaStore>>(Some(&"new".to_string()), &mut store)
         .await?;
     assert_eq!(
         user.refresh_token().map(|t| t.secret().to_string()),
         Some("new".to_string())
     );
-    let user = StravaId::from(42).update_token(None, &mut store).await?;
+    let user = StravaId::from(42)
+        .update_token::<ConcreteDomain<TestStravaStore>>(None, &mut store)
+        .await?;
     assert!(user.disabled());
     Ok(())
 }
@@ -123,7 +128,9 @@ async fn disable_removes_events_and_token() -> TbResult<()> {
         })
         .await?;
     assert_eq!(store.event_count(), 1);
-    StravaId::from(42).disable(&mut store).await?;
+    StravaId::from(42)
+        .disable::<ConcreteDomain<TestStravaStore>>(&mut store)
+        .await?;
     assert_eq!(store.event_count(), 0);
     let user = store.stravauser_get_by_tbid(UserId::from(1)).await?;
     assert!(user.disabled());

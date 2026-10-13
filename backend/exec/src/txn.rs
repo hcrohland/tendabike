@@ -29,7 +29,7 @@
 //! a concrete adapter — the `StravaStore` bound sits on the loop, so this
 //! seam stays lifecycle-only.
 
-use tb_domain::{Store, TbResult};
+use tb_domain::Domain;
 
 /// A source of open transactions for the executor loop (ADR-0005, executable
 /// spec #446 §4.1).
@@ -39,29 +39,36 @@ use tb_domain::{Store, TbResult};
 /// `tb_sqlx`'s `DbPool` satisfies it and is injected at the composition root
 /// (`app`). `Send + Sync` because the loop is a long-lived `Send` task that
 /// holds `&self` across awaits.
+///
+/// Generic over the domain (`D`, spec #525 / ADR-0006): `begin` hands out the
+/// domain's store (`D::Store`), so the loop's connection type is fixed by the
+/// domain, not by the source. The `StravaStore`/`Txn` bounds on that store
+/// are combined at the use sites (associated types cannot be supertraits).
 #[async_trait::async_trait]
-pub trait TxnSource: Send + Sync {
-    /// A connection with an open transaction: every [`Store`] sub-trait (so
-    /// it can run the domain operation) and [`Txn`] (so the loop can close
-    /// the transaction).
-    type Conn: Store + Txn;
-
-    /// Opens a new transaction on a fresh connection.
-    async fn begin(&self) -> TbResult<Self::Conn>;
+pub trait TxnSource<D: Domain>: Send + Sync {
+    /// Opens a new transaction on a fresh connection: the domain's store
+    /// (a complete [`tb_domain::Store`] plus the `StravaStore`/`Txn` seams the
+    /// loop drives, bounded at the use sites).
+    async fn begin(&self) -> Result<D::Store, D::Error>;
 }
 
 /// The transaction lifecycle of a connection, named for the executor loop
 /// (ADR-0005, executable spec #446 §4.1).
 ///
-/// While the transaction is open, a connection is a complete [`Store`];
-/// `commit` and `rollback` close it. Both consume the connection, matching
+/// While the transaction is open, a connection is a complete store; `commit`
+/// and `rollback` close it. Both consume the connection, matching
 /// `SqlxConn`'s inherent methods (the Postgres adapter returns the connection
 /// to the pool).
+///
+/// Generic over the domain (`D`, spec #525 / ADR-0006). The `Store` supertrait
+/// is dropped: the connection is the domain's store (`D::Store`), and the
+/// combined bound `D::Store + Txn<D>` sits at the use sites (associated types
+/// cannot be supertraits).
 #[async_trait::async_trait]
-pub trait Txn: Store {
+pub trait Txn<D: Domain> {
     /// Commits the transaction, consuming the connection.
-    async fn commit(self) -> TbResult<()>;
+    async fn commit(self) -> Result<(), D::Error>;
 
     /// Rolls the transaction back, consuming the connection.
-    async fn rollback(self) -> TbResult<()>;
+    async fn rollback(self) -> Result<(), D::Error>;
 }

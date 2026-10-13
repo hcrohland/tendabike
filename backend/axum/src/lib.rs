@@ -24,8 +24,8 @@ use anyhow::Context;
 use axum::Router;
 use sqlx::PgPool;
 use std::net::SocketAddr;
-use tb_domain::TbResult;
-use tb_exec::TxnSource;
+use tb_domain::{ConcreteDomain, Store, TbResult};
+use tb_exec::{Txn, TxnSource};
 use tb_strava::StravaStore;
 use tower_sessions::{ExpiredDeletion, SessionManagerLayer};
 use tower_sessions_sqlx_store::PostgresStore;
@@ -47,9 +47,10 @@ mod stream;
 #[cfg(test)]
 mod test_support;
 
-pub fn routes<S: TxnSource + Clone + 'static>(app_state: AppState<S>) -> Router
+pub fn routes<St, S>(app_state: AppState<St, S>) -> Router
 where
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     Router::new()
         .nest("/api", domain::router())
@@ -57,14 +58,15 @@ where
         .with_state(app_state)
 }
 
-pub async fn start<S: TxnSource + Clone + Send + Sync + 'static>(
+pub async fn start<St, S>(
     source: S,
     pool: PgPool,
     path: std::path::PathBuf,
     addr: SocketAddr,
 ) -> TbResult<()>
 where
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + Send + Sync + 'static,
 {
     // The logging subscriber lives with the web layer it logs (the
     // composition root owns process setup, not crate-internal wiring).

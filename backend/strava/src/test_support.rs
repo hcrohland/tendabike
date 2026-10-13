@@ -51,7 +51,7 @@ impl TestStravaStore {
 }
 
 #[async_trait::async_trait]
-impl StravaStore for TestStravaStore {
+impl StravaStore<ConcreteDomain<TestStravaStore>> for TestStravaStore {
     async fn stravaid_get_user_id(&mut self, who: i32) -> TbResult<i32> {
         self.strava_users
             .values()
@@ -219,15 +219,19 @@ impl Session for TestStravaSession {
 }
 
 #[async_trait::async_trait]
-impl StravaSession for TestStravaSession {
+impl StravaSession<ConcreteDomain<TestStravaStore>> for TestStravaSession {
     fn strava_id(&self) -> StravaId {
         self.strava
+    }
+
+    fn tb_id(&self) -> UserId {
+        self.user
     }
 
     async fn request_json<T: DeserializeOwned>(
         &mut self,
         uri: &str,
-        _store: &mut impl StravaStore,
+        _store: &mut impl StravaStore<ConcreteDomain<TestStravaStore>>,
     ) -> TbResult<T> {
         self.requests.push(uri.to_string());
         let body = self
@@ -241,7 +245,10 @@ impl StravaSession for TestStravaSession {
         serde_json::from_str(&body).map_err(|e| Error::AnyFailure(e.into()))
     }
 
-    async fn deauthorize(&mut self, _store: &mut impl StravaStore) -> TbResult<()> {
+    async fn deauthorize(
+        &mut self,
+        _store: &mut impl StravaStore<ConcreteDomain<TestStravaStore>>,
+    ) -> TbResult<()> {
         self.deauthorizes.push(self.strava);
         Ok(())
     }

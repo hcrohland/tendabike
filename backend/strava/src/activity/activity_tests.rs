@@ -16,19 +16,40 @@ fn strava_activity(gear: Option<&str>) -> StravaActivity {
 
 #[test]
 fn get_type_maps_strava_types() {
-    assert_eq!(StravaActivity::get_type("Ride").unwrap(), 1.into());
-    assert_eq!(StravaActivity::get_type("VirtualRide").unwrap(), 5.into());
-    assert_eq!(StravaActivity::get_type("EBikeRide").unwrap(), 9.into());
-    assert_eq!(StravaActivity::get_type("Run").unwrap(), 3.into());
-    assert_eq!(StravaActivity::get_type("VirtualRun").unwrap(), 3.into());
-    assert_eq!(StravaActivity::get_type("Workout").unwrap(), 0.into());
-    assert_eq!(StravaActivity::get_type("Golf").unwrap(), 0.into());
+    assert_eq!(
+        StravaActivity::get_type::<ConcreteDomain<TestStravaStore>>("Ride").unwrap(),
+        1.into()
+    );
+    assert_eq!(
+        StravaActivity::get_type::<ConcreteDomain<TestStravaStore>>("VirtualRide").unwrap(),
+        5.into()
+    );
+    assert_eq!(
+        StravaActivity::get_type::<ConcreteDomain<TestStravaStore>>("EBikeRide").unwrap(),
+        9.into()
+    );
+    assert_eq!(
+        StravaActivity::get_type::<ConcreteDomain<TestStravaStore>>("Run").unwrap(),
+        3.into()
+    );
+    assert_eq!(
+        StravaActivity::get_type::<ConcreteDomain<TestStravaStore>>("VirtualRun").unwrap(),
+        3.into()
+    );
+    assert_eq!(
+        StravaActivity::get_type::<ConcreteDomain<TestStravaStore>>("Workout").unwrap(),
+        0.into()
+    );
+    assert_eq!(
+        StravaActivity::get_type::<ConcreteDomain<TestStravaStore>>("Golf").unwrap(),
+        0.into()
+    );
 }
 
 #[test]
 fn get_type_rejects_unknown() {
     assert!(matches!(
-        StravaActivity::get_type("Frobnicate"),
+        StravaActivity::get_type::<ConcreteDomain<TestStravaStore>>("Frobnicate"),
         Err(Error::BadRequest(_))
     ));
 }

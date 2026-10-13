@@ -67,6 +67,27 @@ pub trait Session: Send + Sync {
     }
 }
 
+/// The class of a domain error, as the Strava event classifier (spec #446
+/// §4.6) needs it: the classifier lives in `tb_strava`, which is generic
+/// over the domain and cannot name the concrete [`Error`]'s variants
+/// (issue #529).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StravaFailure {
+    /// `TryAgain`: Strava rate limited — the global `Stop` is queued (the
+    /// message is the rate-limit reason).
+    TryAgain(String),
+    /// `NotAuth`: the Strava auth is dead — the user is disabled (the
+    /// message is the auth failure).
+    NotAuth(String),
+    /// `DatabaseFailure`: the transaction rolls back, the loop backs off.
+    DatabaseFailure,
+    /// `NotFound`: the object is gone — a delete of a missing activity is
+    /// not an error.
+    NotFound,
+    /// Any other (permanent) failure — the event is dropped.
+    Other,
+}
+
 /// The entity-operation abstraction that `tb_strava` and `tb_exec` drive
 /// (spec #525, ADR-0006).
 ///
@@ -85,35 +106,49 @@ pub trait Session: Send + Sync {
 ///   over the store (`&mut impl <sub-trait>`), and a trait impl cannot be
 ///   generic. A `dyn Store` cannot serve: the ops' sub-trait bounds are
 ///   sized, and a trait object does not implement its supertraits.
-/// - `Session` is `?Sized`: the concrete domain sets it to `dyn Session`.
-///   The session type varies per caller (the web layer's session, the
-///   executor's `S: StravaSession`), and the trait object is the one type
-///   every caller can coerce to.
+/// - The operations take the session as `&impl Session` (not an associated
+///   type): a caller's session type is its own (the web layer's session,
+///   the executor's `S`), and the operations are generic over it — a
+///   `type Session` associated type would force the caller to name
+///   `D::Session`, which stable Rust cannot express as a bound.
 #[async_trait::async_trait]
 pub trait Domain {
-    /// The domain's error type.
-    type Error;
+    /// The domain's error type. `Debug` + `Display` for the executor's and
+    /// the strava lane's logging; `Send` (it rides the executor's channel
+    /// oneshot and its loop's return); `Into<anyhow::Error>` so the
+    /// executor's transaction-lifecycle failures (a failed
+    /// `begin`/`commit`/`rollback`) can be re-wrapped as a generic
+    /// `AnyFailure` exactly as the concrete loop does.
+    type Error: std::fmt::Debug + std::fmt::Display + Send + Into<anyhow::Error>;
     /// The operation-result map. Bounded exactly by what the executor needs
     /// (`broadcast::Sender`'s `Clone`, summary merging's `AddAssign`,
-    /// `Summary::default()`) — the concrete [`Summary`] satisfies all three.
-    type Summary: Default + Clone + AddAssign<Self::Summary>;
-    /// The session the operations take (`dyn Session` in the concrete
-    /// domain; a concrete type in the minimal test domains).
-    type Session: Send + Sync + ?Sized;
+    /// `Summary::default()`, `Send` — the frame rides the executor's
+    /// broadcast) — the concrete [`Summary`] satisfies all four.
+    type Summary: Default + Clone + Send + AddAssign<Self::Summary>;
     /// The store the operations take; opaque to the generic consumer.
     /// `Send` so the boxed async futures can cross threads.
     type Store: Send;
-    /// The API write the executor dispatches.
-    type ApiWrite;
-    /// The dispatch outcome.
-    type WriteOutcome;
+    /// The API write the executor dispatches. `Debug` for the executor's
+    /// `ApiWriteRequest` logging; `PartialEq` (the executor's `Message`
+    /// compares its writes in tests); `Clone` (the executor's
+    /// channel).
+    type ApiWrite: std::fmt::Debug + Send + Clone + std::cmp::PartialEq;
+    /// The dispatch outcome. `Send` (it rides the executor's channel
+    /// oneshot).
+    type WriteOutcome: Send;
     /// The entity types the consumers construct and name.
     type Activity;
     type ActivityId;
-    type ActTypeId;
+    /// `From<i32>`: the strava-side type maps are string → code → id
+    /// (`tb_strava`'s `get_type`/`StravaGear::what`), and the code is a
+    /// plain `i32` (issue #529).
+    type ActTypeId: From<i32>;
     type PartId;
-    type PartTypeId;
-    type UserId;
+    /// `From<i32>`: the strava gear map is frame-type → code → id
+    /// (`tb_strava`'s `StravaGear::what`), and the code is a plain `i32`
+    /// (issue #529).
+    type PartTypeId: From<i32>;
+    type UserId: std::fmt::Display;
     type Part;
     type Usage;
 
@@ -121,21 +156,21 @@ pub trait Domain {
     /// gear's parts.
     async fn upsert_activity(
         activity: Self::Activity,
-        user: &Self::Session,
+        user: &impl Session,
         store: &mut Self::Store,
     ) -> Result<Self::Summary, Self::Error>;
 
     /// `ActivityId::read`: the activity with the id, authorization-checked.
     async fn read_activity(
         id: Self::ActivityId,
-        session: &Self::Session,
+        session: &impl Session,
         store: &mut Self::Store,
     ) -> Result<Self::Activity, Self::Error>;
 
     /// `ActivityId::delete`: delete the activity and reverse its usage.
     async fn delete_activity(
         id: Self::ActivityId,
-        session: &Self::Session,
+        session: &impl Session,
         store: &mut Self::Store,
     ) -> Result<Self::Summary, Self::Error>;
 
@@ -147,7 +182,7 @@ pub trait Domain {
         what: Self::PartTypeId,
         source: Option<String>,
         purchase: OffsetDateTime,
-        user: &Self::Session,
+        user: &impl Session,
         store: &mut Self::Store,
     ) -> Result<Self::Part, Self::Error>;
 
@@ -160,9 +195,39 @@ pub trait Domain {
     /// `exec`: the `ApiWrite` dispatch — the executor's write lane.
     async fn exec(
         write: Self::ApiWrite,
-        session: &mut Self::Session,
+        session: &mut impl Session,
         store: &mut Self::Store,
     ) -> Result<Self::WriteOutcome, Self::Error>;
+
+    /// `Summary::is_empty` (ADR-0005 §4.5): the executor uses this to decide
+    /// the stream-frame push (an empty `Summary` pushes nothing). Exposed
+    /// because the executor is generic over the domain and cannot name the
+    /// concrete [`Summary`] (issue #529).
+    fn summary_is_empty(summary: &Self::Summary) -> bool;
+
+    /// `WriteOutcome::summary`: the `Summary` of everything the write touched
+    /// — the frame the executor pushes to the user's streams. Exposed for the
+    /// same reason as [`summary_is_empty`] (issue #529).
+    fn write_outcome_summary(outcome: &Self::WriteOutcome) -> &Self::Summary;
+
+    /// `Error::AnyFailure`: wrap an `anyhow::Error` as the domain's generic
+    /// failure — the executor's transaction-lifecycle errors (a failed
+    /// `begin`/`commit`/`rollback`) are re-wrapped this way (issue #529).
+    fn any_failure(err: anyhow::Error) -> Self::Error;
+
+    /// The Strava event classifier's view of a domain error (spec #446
+    /// §4.6): the classifier (`tb_strava`'s `fail_event`/`sync`) is generic
+    /// over the domain and cannot name the concrete [`Error`]'s variants
+    /// (issue #529).
+    fn strava_failure(err: &Self::Error) -> StravaFailure;
+
+    /// `Error::BadRequest`: a bad request — the strava-side constructor the
+    /// generic lane needs (an unsupported activity type, issue #529).
+    fn bad_request(msg: String) -> Self::Error;
+
+    /// `Part.id`: the part's id — the strava gear lane maps a part to its
+    /// id (the part is opaque to the generic consumer, issue #529).
+    fn part_id(part: &Self::Part) -> Self::PartId;
 
     /// The 14-field activity constructor (`tb_strava`'s `into_activity`).
     fn make_activity(
@@ -204,7 +269,6 @@ pub struct ConcreteDomain<St: Store + Send>(PhantomData<St>);
 impl<St: Store + Send> Domain for ConcreteDomain<St> {
     type Error = Error;
     type Summary = Summary;
-    type Session = dyn Session;
     type Store = St;
     type ApiWrite = ApiWrite;
     type WriteOutcome = WriteOutcome;
@@ -219,7 +283,7 @@ impl<St: Store + Send> Domain for ConcreteDomain<St> {
 
     async fn upsert_activity(
         activity: Activity,
-        user: &(dyn Session + 'static),
+        user: &impl Session,
         store: &mut St,
     ) -> TbResult<Summary> {
         activity.upsert(user, store).await
@@ -227,7 +291,7 @@ impl<St: Store + Send> Domain for ConcreteDomain<St> {
 
     async fn read_activity(
         id: ActivityId,
-        session: &(dyn Session + 'static),
+        session: &impl Session,
         store: &mut St,
     ) -> TbResult<Activity> {
         id.read(session, store).await
@@ -235,7 +299,7 @@ impl<St: Store + Send> Domain for ConcreteDomain<St> {
 
     async fn delete_activity(
         id: ActivityId,
-        session: &(dyn Session + 'static),
+        session: &impl Session,
         store: &mut St,
     ) -> TbResult<Summary> {
         id.delete(session, store).await
@@ -248,7 +312,7 @@ impl<St: Store + Send> Domain for ConcreteDomain<St> {
         what: PartTypeId,
         source: Option<String>,
         purchase: OffsetDateTime,
-        user: &(dyn Session + 'static),
+        user: &impl Session,
         store: &mut St,
     ) -> TbResult<Part> {
         Part::create(name, vendor, model, what, source, purchase, user, store).await
@@ -260,10 +324,40 @@ impl<St: Store + Send> Domain for ConcreteDomain<St> {
 
     async fn exec(
         write: ApiWrite,
-        session: &mut (dyn Session + 'static),
+        session: &mut impl Session,
         store: &mut St,
     ) -> TbResult<WriteOutcome> {
         crate::apiwrite::exec_dyn(write, &*session, store).await
+    }
+
+    fn summary_is_empty(summary: &Summary) -> bool {
+        summary.is_empty()
+    }
+
+    fn write_outcome_summary(outcome: &WriteOutcome) -> &Summary {
+        outcome.summary()
+    }
+
+    fn any_failure(err: anyhow::Error) -> Error {
+        Error::AnyFailure(err)
+    }
+
+    fn strava_failure(err: &Error) -> StravaFailure {
+        match err {
+            Error::TryAgain(msg) => StravaFailure::TryAgain(msg.to_string()),
+            Error::NotAuth(msg) => StravaFailure::NotAuth(msg.clone()),
+            Error::DatabaseFailure(_) => StravaFailure::DatabaseFailure,
+            Error::NotFound(_) => StravaFailure::NotFound,
+            _ => StravaFailure::Other,
+        }
+    }
+
+    fn bad_request(msg: String) -> Error {
+        Error::BadRequest(msg)
+    }
+
+    fn part_id(part: &Part) -> PartId {
+        part.id
     }
 
     fn make_activity(

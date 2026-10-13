@@ -22,7 +22,7 @@ use axum::{
 };
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use tb_exec::TxnSource;
+use tb_exec::{Txn, TxnSource};
 
 use crate::{
     RequestSession,
@@ -31,10 +31,10 @@ use crate::{
     error::{ApiResult, AppError},
 };
 use tb_domain::{
-    ApiWrite, Error, Part, Session, Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails,
-    SubscriptionId, UserPublic,
+    ApiWrite, ConcreteDomain, Error, Part, Session, Shop, ShopId, ShopSubscription,
+    ShopSubscriptionWithDetails, Store, SubscriptionId, UserPublic,
 };
-use tb_strava::{StravaSession, StravaStore};
+use tb_strava::StravaStore;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewShop {
@@ -66,9 +66,10 @@ pub struct RegisterPartRequest {
     pub part_id: i32,
 }
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
+pub(super) fn router<St, S>() -> Router<AppState<St, S>>
 where
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     Router::new()
         // Shop CRUD
@@ -100,12 +101,13 @@ where
         .route("/{shop}/subscriptions", get(list_shop_subscriptions))
 }
 
-async fn list_shops<S>(
+async fn list_shops<St, S>(
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> ApiResult<Vec<Shop>>
 where
-    S: TxnSource + Clone + 'static,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     Ok(Shop::get_all_for_user(&session.user_id(), &mut store)
@@ -113,9 +115,9 @@ where
         .map(Json)?)
 }
 
-async fn create_shop<S>(
+async fn create_shop<St, S>(
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(NewShop {
         name,
         description,
@@ -123,8 +125,8 @@ async fn create_shop<S>(
     }): Json<NewShop>,
 ) -> Result<(StatusCode, Json<Shop>), AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let summary = state
         .registry
@@ -142,23 +144,24 @@ where
     Ok((StatusCode::CREATED, Json(shop)))
 }
 
-async fn get_shop<S>(
+async fn get_shop<St, S>(
     Path(shop_id): Path<i32>,
     _session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> ApiResult<Shop>
 where
-    S: TxnSource + Clone + 'static,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     // let shop_id = ShopId::get_for_read(shop_id, user, &mut store).await?;
     Ok(ShopId::from(shop_id).read(&mut store).await.map(Json)?)
 }
 
-async fn update_shop<S>(
+async fn update_shop<St, S>(
     Path(shop_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(UpdateShop {
         name,
         description,
@@ -166,8 +169,8 @@ async fn update_shop<S>(
     }): Json<UpdateShop>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry
@@ -185,14 +188,14 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn delete_shop<S>(
+async fn delete_shop<St, S>(
     Path(shop_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry
@@ -207,13 +210,14 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn get_shop_parts<S>(
+async fn get_shop_parts<St, S>(
     Path(shop_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> ApiResult<Vec<Part>>
 where
-    S: TxnSource + Clone + 'static,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     let user = session.user_id();
@@ -221,15 +225,15 @@ where
     Ok(shop_id.get_parts(user, &mut store).await.map(Json)?)
 }
 
-async fn register_part<S>(
+async fn register_part<St, S>(
     Path(shop_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(RegisterPartRequest { part_id }): Json<RegisterPartRequest>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry
@@ -245,14 +249,14 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn unregister_part<S>(
+async fn unregister_part<St, S>(
     Path((shop_id, part_id)): Path<(i32, i32)>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry
@@ -269,13 +273,14 @@ where
 }
 
 // Search shops
-async fn search_shops<S>(
+async fn search_shops<St, S>(
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> ApiResult<(Vec<Shop>, Vec<UserPublic>)>
 where
-    S: TxnSource + Clone + 'static,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let query = params.get("q").map(|s| s.as_str()).unwrap_or("");
     let mut store = state.source.begin().await?;
@@ -286,14 +291,14 @@ where
 
 // Subscription handlers
 
-async fn create_subscription<S>(
+async fn create_subscription<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(NewSubscriptionRequest { shop_id, message }): Json<NewSubscriptionRequest>,
 ) -> Result<(StatusCode, Json<ShopSubscription>), AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry
@@ -321,12 +326,13 @@ where
     Ok((StatusCode::CREATED, Json(subscription)))
 }
 
-async fn list_my_subscriptions<S>(
+async fn list_my_subscriptions<St, S>(
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> ApiResult<Vec<ShopSubscriptionWithDetails>>
 where
-    S: TxnSource + Clone + 'static,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     let subscriptions = ShopSubscription::get_for_user(session.user_id(), &mut store).await?;
@@ -335,13 +341,14 @@ where
     Ok(Json(subscriptions_with_details))
 }
 
-async fn list_shop_subscriptions<S>(
+async fn list_shop_subscriptions<St, S>(
     Path(shop_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> ApiResult<Vec<ShopSubscriptionWithDetails>>
 where
-    S: TxnSource + Clone + 'static,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     let user = session.user_id();
@@ -353,13 +360,14 @@ where
     )
 }
 
-async fn get_subscription<S>(
+async fn get_subscription<St, S>(
     Path(subscription_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> ApiResult<ShopSubscription>
 where
-    S: TxnSource + Clone + 'static,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     let user = session.user_id();
@@ -367,15 +375,15 @@ where
     Ok(subscription_id.read(user, &mut store).await.map(Json)?)
 }
 
-async fn approve_subscription<S>(
+async fn approve_subscription<St, S>(
     Path(subscription_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(req): Json<SubscriptionResponseRequest>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry
@@ -391,15 +399,15 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn reject_subscription<S>(
+async fn reject_subscription<St, S>(
     Path(subscription_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(req): Json<SubscriptionResponseRequest>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry
@@ -415,14 +423,14 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn cancel_subscription<S>(
+async fn cancel_subscription<St, S>(
     Path(subscription_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry

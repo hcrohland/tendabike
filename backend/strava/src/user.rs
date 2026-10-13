@@ -18,7 +18,13 @@ use crate::*;
 pub struct StravaId(i32);
 
 impl StravaId {
-    pub async fn read(&self, store: &mut impl StravaStore) -> TbResult<Option<StravaUser>> {
+    pub async fn read<D: Domain>(
+        &self,
+        store: &mut D::Store,
+    ) -> Result<Option<StravaUser>, D::Error>
+    where
+        D::Store: StravaStore<D>,
+    {
         store.stravauser_get_by_stravaid(self).await
     }
 
@@ -26,16 +32,22 @@ impl StravaId {
     ///
     /// sets a five minute buffer for the access token
     /// returns the updated user
-    pub async fn update_token(
+    pub async fn update_token<D: Domain>(
         self,
         refresh: Option<&String>,
-        store: &mut impl StravaStore,
-    ) -> TbResult<StravaUser> {
+        store: &mut D::Store,
+    ) -> Result<StravaUser, D::Error>
+    where
+        D::Store: StravaStore<D>,
+    {
         store.stravaid_update_token(self, refresh).await
     }
 
     /// disable a user
-    pub(crate) async fn disable(self, store: &mut impl StravaStore) -> TbResult<()> {
+    pub(crate) async fn disable<D: Domain>(self, store: &mut D::Store) -> Result<(), D::Error>
+    where
+        D::Store: StravaStore<D>,
+    {
         info!("disabling user {self}");
 
         let events = store.strava_events_delete_for_user(&self).await?;
@@ -71,7 +83,10 @@ impl StravaUser {
     /// # Errors
     ///
     /// Returns an `Error` if the user is not registered.
-    pub async fn read(id: UserId, store: &mut impl StravaStore) -> TbResult<Self> {
+    pub async fn read<D: Domain>(id: D::UserId, store: &mut D::Store) -> Result<Self, D::Error>
+    where
+        D::Store: StravaStore<D>,
+    {
         store.stravauser_get_by_tbid(id).await
     }
 
@@ -106,17 +121,17 @@ impl StravaUser {
     /// # Returns
     ///
     /// An `TbResult` containing a `StravaUser` representing the upserted user.
-    pub async fn upsert(
+    pub async fn upsert<St: Store + StravaStore<ConcreteDomain<St>>>(
         id: StravaId,
         firstname: &str,
         lastname: &str,
         avatar: &Option<String>,
         refresh: Option<&RefreshToken>,
-        store: &mut impl StravaStore,
+        store: &mut St,
     ) -> TbResult<StravaUser> {
         debug!("got id {}: {} {}", id, firstname, lastname);
 
-        let user = id.read(store).await?;
+        let user = id.read::<ConcreteDomain<St>>(store).await?;
         if let Some(user) = user {
             user.tendabike_id
                 .update(firstname, lastname, avatar, store)
@@ -143,9 +158,12 @@ impl StravaUser {
     }
 
     /// Get list of gear for user from Strava
-    pub async fn update_gear(
-        user: &mut impl StravaSession,
-        store: &mut impl StravaStore,
+    pub async fn update_gear<
+        St: Store + StravaStore<ConcreteDomain<St>>,
+        S: Session + StravaSession<ConcreteDomain<St>>,
+    >(
+        user: &mut S,
+        store: &mut St,
     ) -> TbResult<Vec<PartId>> {
         #[derive(Deserialize, Debug)]
         struct Gear {
@@ -164,17 +182,20 @@ impl StravaUser {
 
         let mut parts = Vec::new();
         for gear in ath.bikes.into_iter().chain(ath.shoes) {
-            parts.push(gear::into_partid(gear.id, user, store).await?);
+            parts.push(gear::into_partid::<ConcreteDomain<St>, _>(gear.id, user, store).await?);
         }
 
         Ok(parts)
     }
 
-    pub async fn process(
-        user: &mut impl StravaSession,
-        store: &mut impl StravaStore,
+    pub async fn process<
+        St: Store + StravaStore<ConcreteDomain<St>>,
+        S: Session + StravaSession<ConcreteDomain<St>>,
+    >(
+        user: &mut S,
+        store: &mut St,
     ) -> TbResult<Summary> {
-        event::process(user, store).await
+        event::process::<ConcreteDomain<St>, _>(user, store).await
     }
 }
 
@@ -186,7 +207,9 @@ pub struct StravaStat {
     disabled: bool,
 }
 
-pub async fn get_all_stats(store: &mut impl StravaStore) -> TbResult<Vec<StravaStat>> {
+pub async fn get_all_stats<St: Store + StravaStore<ConcreteDomain<St>>>(
+    store: &mut St,
+) -> TbResult<Vec<StravaStat>> {
     let users = store.stravausers_get_all().await?;
 
     let mut res = Vec::new();
@@ -208,9 +231,12 @@ pub async fn get_all_stats(store: &mut impl StravaStore) -> TbResult<Vec<StravaS
 ///
 /// This function will return an error if the user does not exist, is already disabled
 /// or has open events and if strava or the database is not reachable.
-pub async fn user_deauthorize(
-    user: &mut impl StravaSession,
-    store: &mut impl StravaStore,
+pub async fn user_deauthorize<
+    St: Store + StravaStore<ConcreteDomain<St>>,
+    S: Session + StravaSession<ConcreteDomain<St>>,
+>(
+    user: &mut S,
+    store: &mut St,
 ) -> TbResult<()> {
     if let Err(err) = user.deauthorize(store).await {
         warn!("could not deauthorize user {}: {:#}", user.tb_id(), err)
@@ -218,7 +244,7 @@ pub async fn user_deauthorize(
 
     warn!("User {} deauthorized", user.tb_id());
 
-    user.strava_id().disable(store).await
+    user.strava_id().disable::<ConcreteDomain<St>>(store).await
 }
 
 /// Returns the Strava URL for a user with the given Strava ID.
@@ -231,14 +257,20 @@ pub async fn user_deauthorize(
 /// # Returns
 ///
 /// An `TbResult` containing a `String` representing the Strava URL for the user.
-pub async fn strava_url(strava_id: i32, store: &mut impl StravaStore) -> TbResult<String> {
+pub async fn strava_url<St: Store + StravaStore<ConcreteDomain<St>>>(
+    strava_id: i32,
+    store: &mut St,
+) -> TbResult<String> {
     let user_id = store.stravaid_get_user_id(strava_id).await?;
     Ok(format!("https://strava.com/athletes/{}", user_id))
 }
 
-pub async fn user_delete(
-    user: &mut impl StravaSession,
-    store: &mut impl StravaStore,
+pub async fn user_delete<
+    St: Store + StravaStore<ConcreteDomain<St>>,
+    S: Session + StravaSession<ConcreteDomain<St>>,
+>(
+    user: &mut S,
+    store: &mut St,
 ) -> TbResult<()> {
     let tbuser = user.tb_id();
     debug!("Deauthorizing user");

@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 use std::{env, sync::LazyLock};
 
 use crate::{appstate::AppState, error::AppError};
-use tb_domain::{Error, TbResult};
+use tb_domain::{ConcreteDomain, Error, Store, TbResult};
 use tb_exec::{Txn, TxnSource};
 use tb_strava::{StravaId, StravaStore};
 
@@ -200,14 +200,14 @@ pub(crate) enum AuthResponse {
     },
 }
 
-pub(crate) async fn login_authorized<S>(
+pub(crate) async fn login_authorized<St, S>(
     Query(query): Query<AuthResponse>,
     session: Session,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> Result<Redirect, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let (code, path) = match query {
         AuthResponse::Error { error, .. } => {

@@ -130,7 +130,7 @@ async fn run_with_body(
 pub(crate) fn test_app_live(
     store: &MemoryStore,
     source: LiveSource,
-    registry: std::sync::Arc<Registry>,
+    registry: std::sync::Arc<Registry<LiveConn>>,
 ) -> Router {
     set_oauth_env_once();
     let session_layer = SessionManagerLayer::new(store.clone());
@@ -612,7 +612,7 @@ impl ServicePlanStore for FakeConn {
 }
 
 #[async_trait::async_trait]
-impl StravaStore for FakeConn {
+impl StravaStore<ConcreteDomain<FakeConn>> for FakeConn {
     async fn stravaid_get_user_id(&mut self, _who: i32) -> TbResult<i32> {
         unimplemented!()
     }
@@ -668,7 +668,7 @@ impl StravaStore for FakeConn {
     }
 }
 #[async_trait::async_trait]
-impl Txn for FakeConn {
+impl Txn<ConcreteDomain<FakeConn>> for FakeConn {
     async fn commit(self) -> TbResult<()> {
         Err(Error::DatabaseFailure(anyhow::anyhow!(
             "fake connection: no database"
@@ -687,10 +687,8 @@ impl Txn for FakeConn {
 struct FakeSource;
 
 #[async_trait::async_trait]
-impl TxnSource for FakeSource {
-    type Conn = FakeConn;
-
-    async fn begin(&self) -> TbResult<Self::Conn> {
+impl TxnSource<ConcreteDomain<FakeConn>> for FakeSource {
+    async fn begin(&self) -> TbResult<FakeConn> {
         Err(Error::DatabaseFailure(anyhow::anyhow!(
             "fake source: no database"
         )))
@@ -1171,7 +1169,7 @@ impl ServicePlanStore for LiveConn {
 }
 
 #[async_trait::async_trait]
-impl StravaStore for LiveConn {
+impl StravaStore<ConcreteDomain<LiveConn>> for LiveConn {
     async fn stravaid_get_user_id(&mut self, _who: i32) -> TbResult<i32> {
         unimplemented!()
     }
@@ -1280,7 +1278,7 @@ impl StravaStore for LiveConn {
 }
 
 #[async_trait::async_trait]
-impl Txn for LiveConn {
+impl Txn<ConcreteDomain<LiveConn>> for LiveConn {
     async fn commit(self) -> TbResult<()> {
         self.mem.commit().await
     }
@@ -1342,10 +1340,8 @@ impl LiveSource {
 }
 
 #[async_trait::async_trait]
-impl TxnSource for LiveSource {
-    type Conn = LiveConn;
-
-    async fn begin(&self) -> TbResult<Self::Conn> {
+impl TxnSource<ConcreteDomain<LiveConn>> for LiveSource {
+    async fn begin(&self) -> TbResult<LiveConn> {
         let mem = self.mem.lock().expect("shared in-memory db").begin();
         Ok(LiveConn {
             mem,

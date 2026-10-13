@@ -56,11 +56,14 @@ impl StravaActivity {
     /// # Returns
     ///
     /// A Result containing a Activity struct if the conversion was successful, or an error if it failed.
-    async fn into_activity(
+    async fn into_activity<D: Domain, S: Session + StravaSession<D>>(
         self,
-        user: &mut impl StravaSession,
-        store: &mut impl StravaStore,
-    ) -> TbResult<Activity> {
+        user: &mut S,
+        store: &mut D::Store,
+    ) -> Result<D::Activity, D::Error>
+    where
+        D::Store: StravaStore<D>,
+    {
         let StravaActivity {
             id,
             type_,
@@ -76,30 +79,31 @@ impl StravaActivity {
             device_name,
             external_id,
         } = self;
-        let offset =
-            UtcOffset::from_whole_seconds(utc_offset as i32).context("Utc Offset invalid")?;
-        let what = Self::get_type(&type_)?;
+        let offset = UtcOffset::from_whole_seconds(utc_offset as i32)
+            .context("Utc Offset invalid")
+            .map_err(D::any_failure)?;
+        let what = Self::get_type::<D>(&type_)?;
         let gear = match gear_id {
             // cannot use map due to async closure
-            Some(x) => Some(gear::into_partid(x, user, store).await?),
+            Some(x) => Some(gear::into_partid::<D, _>(x, user, store).await?),
             None => None,
         };
-        Ok(Activity {
-            id: id.into(),
+        Ok(D::make_activity(
+            D::make_activity_id(id),
+            user.tb_id(),
             what,
-            gear,
-            user_id: user.tb_id(),
             name,
-            start: start_date.to_offset(offset),
-            duration: elapsed_time,
-            time: Some(moving_time),
-            distance: Some(distance.round() as i32),
-            climb: Some(total_elevation_gain.round() as i32),
-            descend: None,
-            energy: kilojoules.map(|e| e.round() as i32),
+            start_date.to_offset(offset),
+            elapsed_time,
+            Some(moving_time),
+            Some(distance.round() as i32),
+            Some(total_elevation_gain.round() as i32),
+            None,
+            kilojoules.map(|e| e.round() as i32),
+            gear,
             device_name,
             external_id,
-        })
+        ))
     }
 
     /// Maps Strava workout type strings to Tendabike types.
@@ -111,7 +115,7 @@ impl StravaActivity {
     /// # Returns
     ///
     /// A Result containing an ActTypeId if the mapping was successful, or an error if it failed.
-    fn get_type(t: &str) -> TbResult<ActTypeId> {
+    fn get_type<D: Domain>(t: &str) -> Result<D::ActTypeId, D::Error> {
         Ok(match t {
             "Ride" => 1,
             "VirtualRide" => 5,
@@ -151,7 +155,7 @@ impl StravaActivity {
             "WeightTraining" => 0,
             "Wheelchair" => 0,
             "Yoga" => 0,
-            _ => return Err(Error::BadRequest(format!("unsupported activity {t}"))),
+            _ => return Err(D::bad_request(format!("unsupported activity {t}"))),
         }
         .into())
     }
@@ -167,42 +171,54 @@ impl StravaActivity {
     /// # Returns
     ///
     /// A Result containing a `Summary` map if the sending was successful, or an error if it failed.
-    pub(crate) async fn send_to_tb(
+    pub(crate) async fn send_to_tb<D: Domain, S: Session + StravaSession<D>>(
         self,
-        user: &mut impl StravaSession,
-        store: &mut impl StravaStore,
-    ) -> TbResult<Summary> {
-        let activity = self.into_activity(user, store).await?;
-        activity.upsert(user, store).await
+        user: &mut S,
+        store: &mut D::Store,
+    ) -> Result<D::Summary, D::Error>
+    where
+        D::Store: StravaStore<D>,
+    {
+        let activity = self.into_activity::<D, _>(user, store).await?;
+        D::upsert_activity(activity, user, store).await
     }
 }
 
-pub async fn strava_url(
+pub async fn strava_url<
+    St: Store + StravaStore<ConcreteDomain<St>>,
+    S: Session + StravaSession<ConcreteDomain<St>>,
+>(
     act: i64,
-    user: &impl StravaSession,
-    store: &mut impl StravaStore,
+    user: &S,
+    store: &mut St,
 ) -> TbResult<String> {
     let g = ActivityId::new(act).read(user, store).await?;
     Ok(format!("https://strava.com/activities/{}", g.id))
 }
 
-pub async fn upsert_activity(
+pub async fn upsert_activity<D: Domain, S: Session + StravaSession<D>>(
     id: i64,
-    user: &mut impl StravaSession,
-    store: &mut impl StravaStore,
-) -> TbResult<Summary> {
+    user: &mut S,
+    store: &mut D::Store,
+) -> Result<D::Summary, D::Error>
+where
+    D::Store: StravaStore<D>,
+{
     let act: StravaActivity = user
         .request_json(&format!("/activities/{id}"), store)
         .await?;
-    act.send_to_tb(user, store).await
+    act.send_to_tb::<D, _>(user, store).await
 }
 
-pub(crate) async fn delete_activity(
+pub(crate) async fn delete_activity<D: Domain, S: Session + StravaSession<D>>(
     act: i64,
-    user: &impl StravaSession,
-    store: &mut impl StravaStore,
-) -> TbResult<Summary> {
-    ActivityId::new(act).delete(user, store).await
+    user: &S,
+    store: &mut D::Store,
+) -> Result<D::Summary, D::Error>
+where
+    D::Store: StravaStore<D>,
+{
+    D::delete_activity(D::make_activity_id(act), user, store).await
 }
 
 #[cfg(test)]
