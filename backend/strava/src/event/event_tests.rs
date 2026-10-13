@@ -1,5 +1,7 @@
 use super::*;
-use crate::test_support::{TestStravaSession, TestStravaStore, activity_json, strava_user};
+use crate::test_support::{
+    TestDomain, TestStravaSession, TestStravaStore, activity_json, strava_user,
+};
 
 fn setup() -> (TestStravaStore, TestStravaSession) {
     let mut store = TestStravaStore::new();
@@ -43,7 +45,7 @@ fn activity_event() -> Event {
 async fn into_event_maps_fields() -> TbResult<()> {
     let (mut store, _) = setup();
     let event = in_event("activity", 10, "create", 42, serde_json::Map::new())
-        .into_event(&mut store)
+        .into_event::<TestDomain>(&mut store)
         .await?;
     assert!(event.id.is_none());
     assert_eq!(event.object_type, ObjectType::Activity);
@@ -59,7 +61,7 @@ async fn into_event_maps_fields() -> TbResult<()> {
 async fn into_event_rejects_unknown_owner() {
     let (mut store, _) = setup();
     let res = in_event("activity", 10, "create", 99, serde_json::Map::new())
-        .into_event(&mut store)
+        .into_event::<TestDomain>(&mut store)
         .await;
     assert!(matches!(res, Err(Error::BadRequest(_))));
 }
@@ -69,12 +71,12 @@ async fn into_event_rejects_unknown_types() {
     let (mut store, _) = setup();
     let bad_object = in_event("flying", 10, "create", 42, serde_json::Map::new());
     assert!(matches!(
-        bad_object.into_event(&mut store).await,
+        bad_object.into_event::<TestDomain>(&mut store).await,
         Err(Error::BadRequest(_))
     ));
     let bad_aspect = in_event("activity", 10, "explode", 42, serde_json::Map::new());
     assert!(matches!(
-        bad_aspect.into_event(&mut store).await,
+        bad_aspect.into_event::<TestDomain>(&mut store).await,
         Err(Error::BadRequest(_))
     ));
 }
@@ -84,13 +86,13 @@ async fn accept_stores_activity_event() -> TbResult<()> {
     let (mut store, _) = setup();
     assert!(
         in_event("activity", 10, "create", 42, serde_json::Map::new())
-            .accept(&mut store)
+            .accept::<TestDomain>(&mut store)
             .await?
             .is_some()
     );
     assert_eq!(store.event_count(), 1);
-    assert_eq!(store.events[0].object_id, 10);
-    assert!(store.events[0].id.is_some());
+    assert_eq!(store.events()[0].object_id, 10);
+    assert!(store.events()[0].id.is_some());
     Ok(())
 }
 
@@ -110,7 +112,7 @@ async fn accept_athlete_deauth_disables_user() -> TbResult<()> {
     updates.insert("authorized".into(), serde_json::json!("false"));
     assert!(
         in_event("athlete", 42, "update", 42, updates)
-            .accept(&mut store)
+            .accept::<TestDomain>(&mut store)
             .await?
             .is_none()
     );
@@ -123,17 +125,17 @@ async fn accept_athlete_deauth_disables_user() -> TbResult<()> {
 #[tokio::test]
 async fn insert_sync_stores_event() -> TbResult<()> {
     let (mut store, _) = setup();
-    insert_sync(42.into(), 100, true, &mut store).await?;
+    insert_sync::<TestDomain>(42.into(), 100, true, &mut store).await?;
     assert_eq!(store.event_count(), 1);
-    assert_eq!(store.events[0].object_type, ObjectType::Sync);
-    assert_eq!(store.events[0].object_id, 1);
+    assert_eq!(store.events()[0].object_type, ObjectType::Sync);
+    assert_eq!(store.events()[0].object_id, 1);
     Ok(())
 }
 
 #[tokio::test]
 async fn insert_sync_rejects_future() {
     let (mut store, _) = setup();
-    let res = insert_sync(42.into(), get_time() + 1000, false, &mut store).await;
+    let res = insert_sync::<TestDomain>(42.into(), get_time() + 1000, false, &mut store).await;
     assert!(matches!(res, Err(Error::BadRequest(_))));
     assert_eq!(store.event_count(), 0);
 }
@@ -141,10 +143,10 @@ async fn insert_sync_rejects_future() {
 #[tokio::test]
 async fn insert_stop_schedules_future() -> TbResult<()> {
     let (mut store, _) = setup();
-    insert_stop::<ConcreteDomain<TestStravaStore>>(&mut store).await?;
+    insert_stop::<TestDomain>(&mut store).await?;
     assert_eq!(store.event_count(), 1);
-    assert_eq!(store.events[0].object_type, ObjectType::Stop);
-    assert!(store.events[0].object_id > get_time());
+    assert_eq!(store.events()[0].object_type, ObjectType::Stop);
+    assert!(store.events()[0].object_id > get_time());
     Ok(())
 }
 
@@ -153,15 +155,15 @@ async fn insert_stop_extends_existing() -> TbResult<()> {
     // A second 429 while a Stop is queued extends the deadline rather
     // than stacking rows (spec #446 §4.6): the backoff must not compound.
     let (mut store, _) = setup();
-    insert_stop::<ConcreteDomain<TestStravaStore>>(&mut store).await?;
-    let first_until = store.events[0].object_id;
-    insert_stop::<ConcreteDomain<TestStravaStore>>(&mut store).await?;
+    insert_stop::<TestDomain>(&mut store).await?;
+    let first_until = store.events()[0].object_id;
+    insert_stop::<TestDomain>(&mut store).await?;
     assert_eq!(
         store.event_count(),
         1,
         "the second Stop extends, it does not stack"
     );
-    let stop = &store.events[0];
+    let stop = &store.events()[0];
     assert_eq!(stop.object_type, ObjectType::Stop);
     assert!(
         stop.object_id >= first_until,
@@ -254,7 +256,7 @@ async fn rate_limit_active_reports_deadline() -> TbResult<()> {
             ..Default::default()
         })
         .await?;
-    let event = store.events[0].clone();
+    let event = store.events()[0].clone();
     let res = event.rate_limit(&session, &mut store).await?;
     assert_eq!(res, QueueRead::Limited { until });
     assert_eq!(store.event_count(), 1);
@@ -270,7 +272,7 @@ async fn rate_limit_expired_removes_stop() -> TbResult<()> {
         ..Default::default()
     };
     store.stravaevent_store(stop).await?;
-    let event = store.events[0].clone();
+    let event = store.events()[0].clone();
     let res = event.rate_limit(&session, &mut store).await?;
     assert_eq!(res, QueueRead::Empty);
     assert_eq!(store.event_count(), 0);
@@ -321,8 +323,8 @@ async fn process_try_again_inserts_stop() -> TbResult<()> {
     assert_eq!(summary, Summary::default());
     assert_eq!(store.event_count(), 2);
     let stop = store
-        .events
-        .iter()
+        .events()
+        .into_iter()
         .find(|e| e.object_type == ObjectType::Stop)
         .unwrap();
     assert!(stop.object_id > get_time());
@@ -423,8 +425,8 @@ async fn process_sync_imports_activities() -> TbResult<()> {
     let summary = process(&mut session, &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
     assert_eq!(store.event_count(), 1);
-    assert_eq!(store.events[0].event_time, 1767348000);
-    let acts = ActivityStore::get_all(&mut store.mem, &UserId::from(1)).await?;
+    assert_eq!(store.events()[0].event_time, 1767348000);
+    let acts = store.activities();
     assert_eq!(acts.len(), 1);
     Ok(())
 }
@@ -462,7 +464,8 @@ async fn process_sync_bad_activity_skips_and_advances_cursor() -> TbResult<()> {
     assert_eq!(summary.activities.len(), 1, "the good activity imports");
     assert_eq!(store.event_count(), 1, "the sync event stays queued");
     assert_eq!(
-        store.events[0].event_time, 1767434400,
+        store.events()[0].event_time,
+        1767434400,
         "the cursor advances past the bad activity (2026-01-03T10:00:00Z)"
     );
     Ok(())
@@ -484,7 +487,7 @@ async fn process_sync_try_again_keeps_event_and_stops() -> TbResult<()> {
     assert_eq!(store.event_count(), 2);
     assert!(
         store
-            .events
+            .events()
             .iter()
             .any(|e| e.object_type == ObjectType::Stop)
     );
@@ -510,20 +513,18 @@ async fn process_skips_athlete_event() -> TbResult<()> {
 #[tokio::test]
 async fn sync_users_skips_disabled() -> TbResult<()> {
     let mut store = TestStravaStore::new();
-    UserStore::create(&mut store.mem, "A", "User", &None).await?;
-    UserStore::create(&mut store.mem, "B", "User", &None).await?;
     store.insert_user(strava_user(UserId::from(1), 42, true));
     store.insert_user(strava_user(UserId::from(2), 43, false));
-    sync_users(None, 100, false, &mut store).await?;
+    sync_users::<TestDomain>(None, 100, false, &mut store).await?;
     assert_eq!(store.event_count(), 1);
-    assert_eq!(store.events[0].owner_id, 42.into());
+    assert_eq!(store.events()[0].owner_id, 42.into());
     Ok(())
 }
 
 #[tokio::test]
 async fn sync_users_single() -> TbResult<()> {
     let (mut store, _) = setup();
-    sync_users(Some(UserId::from(1)), 100, false, &mut store).await?;
+    sync_users::<TestDomain>(Some(UserId::from(1)), 100, false, &mut store).await?;
     assert_eq!(store.event_count(), 1);
     Ok(())
 }
@@ -531,6 +532,6 @@ async fn sync_users_single() -> TbResult<()> {
 #[tokio::test]
 async fn sync_users_unknown_user() {
     let (mut store, _) = setup();
-    let res = sync_users(Some(UserId::from(99)), 100, false, &mut store).await;
+    let res = sync_users::<TestDomain>(Some(UserId::from(99)), 100, false, &mut store).await;
     assert!(matches!(res, Err(Error::NotFound(_))));
 }

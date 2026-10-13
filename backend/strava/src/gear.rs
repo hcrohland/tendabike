@@ -17,20 +17,20 @@ pub struct StravaGear {
     frame_type: Option<i32>,
 }
 
-pub async fn strava_url<
-    St: Store + StravaStore<ConcreteDomain<St>>,
-    S: Session + StravaSession<ConcreteDomain<St>>,
->(
+pub async fn strava_url<D: Domain, S: Session + StravaSession<D>>(
     gear: i32,
     user: &mut S,
-    store: &mut St,
-) -> TbResult<String> {
-    let part = PartId::from(gear).part(user, store).await?;
-    let g = part.source.ok_or(Error::NotFound("".to_string()))?;
+    store: &mut D::Store,
+) -> Result<String, D::Error>
+where
+    D::Store: StravaStore<D>,
+{
+    let part = D::read_part(D::make_part_id(gear), user, store).await?;
+    let g = part.source.ok_or_else(|| D::not_found("".to_string()))?;
     match &g[0..1] {
         "b" => Ok(format!("https://strava.com/bikes/{}", &g[1..])),
         "g" => Ok("https://www.strava.com/settings/gear".into()),
-        _ => Err(Error::NotFound("".to_string())),
+        _ => Err(D::not_found("".to_string())),
     }
 }
 

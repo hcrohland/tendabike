@@ -24,7 +24,7 @@ where
     S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
-    let uri = tb_strava::gear::strava_url(id, &mut user, &mut store)
+    let uri = tb_strava::gear::strava_url::<ConcreteDomain<St>, _>(id, &mut user, &mut store)
         .await
         .unwrap_or_else(|_| "/".to_string());
     Ok(Redirect::permanent(&uri))
@@ -40,7 +40,7 @@ where
     S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
-    let uri = tb_strava::activity::strava_url(id, &user, &mut store)
+    let uri = tb_strava::activity::strava_url::<ConcreteDomain<St>, _>(id, &user, &mut store)
         .await
         .unwrap_or_else(|_| "/".to_string());
     Ok(Redirect::permanent(&uri))
@@ -55,7 +55,7 @@ where
     S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
-    let uri = tb_strava::strava_url(id, &mut store)
+    let uri = tb_strava::strava_url::<ConcreteDomain<St>>(id, &mut store)
         .await
         .unwrap_or_else(|_| "/".to_string());
     Ok(Redirect::permanent(&uri))
@@ -72,7 +72,7 @@ where
 {
     let mut store = state.source.begin().await?;
     let mut user = RequestSession::create_from_id(admin, tbid, &mut store).await?;
-    let res = tb_strava::user_deauthorize(&mut user, &mut store)
+    let res = tb_strava::user_deauthorize::<ConcreteDomain<St>, _>(&mut user, &mut store)
         .await
         .map(Json)?;
     store.commit().await?;
@@ -90,7 +90,7 @@ where
 {
     let mut store = state.source.begin().await?;
     let mut user = RequestSession::create_from_id(admin, tbid, &mut store).await?;
-    let res = tb_strava::user_delete(&mut user, &mut store)
+    let res = tb_strava::user_delete::<ConcreteDomain<St>, _>(&mut user, &mut store)
         .await
         .map(Json)?;
     store.commit().await?;

@@ -36,15 +36,15 @@ impl InEvent {
     /// # Returns
     ///
     /// Returns a `Result` containing an `Event` struct if the conversion is successful, or an `anyhow::Error` if it fails.
-    pub async fn into_event<St: Store + StravaStore<ConcreteDomain<St>>>(
-        self,
-        store: &mut St,
-    ) -> TbResult<Event> {
-        if StravaId::read::<ConcreteDomain<St>>(&self.owner_id.into(), store)
+    pub async fn into_event<D: Domain>(self, store: &mut D::Store) -> Result<Event, D::Error>
+    where
+        D::Store: StravaStore<D>,
+    {
+        if StravaId::read::<D>(&self.owner_id.into(), store)
             .await?
             .is_none()
         {
-            return Err(Error::BadRequest(format!(
+            return Err(D::bad_request(format!(
                 "Unknown event owner received: {self:?}"
             )));
         }
@@ -57,8 +57,12 @@ impl InEvent {
             subscription_id,
             event_time,
         } = self;
-        let object_type = object_type.try_into()?;
-        let aspect_type = aspect_type.try_into()?;
+        let object_type = object_type
+            .try_into()
+            .map_err(|e: Error| D::bad_request(e.to_string()))?;
+        let aspect_type = aspect_type
+            .try_into()
+            .map_err(|e: Error| D::bad_request(e.to_string()))?;
         let owner_id = owner_id.into();
         Ok(Event {
             id: None,
@@ -78,17 +82,17 @@ impl InEvent {
     /// Returns the owner's TendaBike [`UserId`] when the event was queued (so
     /// the caller can wake that user's executor), or `None` for an athlete
     /// (de)authorization (nothing was queued, so there is nothing to wake).
-    pub async fn accept<St: Store + StravaStore<ConcreteDomain<St>>>(
-        self,
-        store: &mut St,
-    ) -> TbResult<Option<UserId>> {
-        let user_id = StravaId::read::<ConcreteDomain<St>>(&self.owner_id.into(), store)
+    pub async fn accept<D: Domain>(self, store: &mut D::Store) -> Result<Option<UserId>, D::Error>
+    where
+        D::Store: StravaStore<D>,
+    {
+        let user_id = StravaId::read::<D>(&self.owner_id.into(), store)
             .await?
             .map(|user| user.tendabike_id)
-            .ok_or_else(|| Error::BadRequest(format!("Unknown event owner received: {self:?}")))?;
-        let event = self.into_event(store).await?;
+            .ok_or_else(|| D::bad_request(format!("Unknown event owner received: {self:?}")))?;
+        let event = self.into_event::<D>(store).await?;
         if event.object_type == ObjectType::Athlete {
-            event.process_user::<ConcreteDomain<St>>(store).await?;
+            event.process_user::<D>(store).await?;
             Ok(None)
         } else {
             store.stravaevent_store(event).await?;
@@ -459,14 +463,17 @@ impl Event {
 /// # Examples
 ///
 ///
-pub async fn insert_sync<St: Store + StravaStore<ConcreteDomain<St>>>(
+pub async fn insert_sync<D: Domain>(
     owner_id: StravaId,
     event_time: i64,
     migrate: bool,
-    store: &mut St,
-) -> TbResult<()> {
+    store: &mut D::Store,
+) -> Result<(), D::Error>
+where
+    D::Store: StravaStore<D>,
+{
     if event_time > get_time() {
-        return Err(Error::BadRequest(format!("eventtime {event_time} > now!")));
+        return Err(D::bad_request(format!("eventtime {event_time} > now!")));
     }
     let object_id = if migrate { 1 } else { 0 };
     let event = Event {
@@ -613,12 +620,15 @@ where
     }
 }
 
-pub async fn sync_users<St: Store + StravaStore<ConcreteDomain<St>>>(
-    user_id: Option<UserId>,
+pub async fn sync_users<D: Domain>(
+    user_id: Option<D::UserId>,
     time: i64,
     migrate: bool,
-    store: &mut St,
-) -> TbResult<()> {
+    store: &mut D::Store,
+) -> Result<(), D::Error>
+where
+    D::Store: StravaStore<D>,
+{
     let users = match user_id {
         Some(id) => vec![store.stravauser_get_by_tbid(id).await?],
         None => store.stravausers_get_all().await?,
@@ -629,7 +639,7 @@ pub async fn sync_users<St: Store + StravaStore<ConcreteDomain<St>>>(
             continue;
         }
         info!("Adding sync for {:?} at {time}", user.strava_id());
-        event::insert_sync(user.strava_id(), time, migrate, store).await?;
+        event::insert_sync::<D>(user.strava_id(), time, migrate, store).await?;
     }
     Ok(())
 }

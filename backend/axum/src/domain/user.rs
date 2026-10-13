@@ -59,7 +59,7 @@ where
 {
     let mut store = state.source.begin().await?;
     session.set_shop(shop)?;
-    StravaUser::update_gear(&mut session, &mut store).await?;
+    StravaUser::update_gear::<ConcreteDomain<St>, _>(&mut session, &mut store).await?;
     let res = session
         .user_id()
         .get_summary(session.shop(), &mut store)
@@ -114,5 +114,7 @@ where
     S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
-    Ok(tb_strava::get_all_stats(&mut store).await.map(Json)?)
+    Ok(tb_strava::get_all_stats::<ConcreteDomain<St>>(&mut store)
+        .await
+        .map(Json)?)
 }

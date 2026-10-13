@@ -336,7 +336,10 @@ impl<St: Store + 'static> Registry<St> {
 
         // Enqueue the sync on the DB queue, like the webhook does.
         let mut store = source.begin().await?;
-        tb_strava::event::insert_sync(strava_id, event_time, false, &mut store).await?;
+        tb_strava::event::insert_sync::<ConcreteDomain<St>>(
+            strava_id, event_time, false, &mut store,
+        )
+        .await?;
         store.commit().await?;
 
         // Wake the executor (non-critical: the queue is the source of

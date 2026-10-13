@@ -103,7 +103,7 @@ where
 {
     trace!("Received {event:#?}");
     let mut store = state.source.begin().await?;
-    let user_id = event.accept(&mut store).await?;
+    let user_id = event.accept::<ConcreteDomain<St>>(&mut store).await?;
     store.commit().await?;
     // Fire the in-memory wake signal (spec §4.4): a pure signal to a
     // running executor — it never spawns one, and the DB queue is the
@@ -139,9 +139,14 @@ where
 {
     let mut store = state.source.begin().await?;
     let user_id: Option<tb_domain::UserId> = query.user_id.map(|u| u.into());
-    let res = tb_strava::event::sync_users(user_id, query.time, query.migrate, &mut store)
-        .await
-        .map(Json)?;
+    let res = tb_strava::event::sync_users::<ConcreteDomain<St>>(
+        user_id,
+        query.time,
+        query.migrate,
+        &mut store,
+    )
+    .await
+    .map(Json)?;
     store.commit().await?;
 
     Ok(res)
@@ -207,7 +212,13 @@ where
     // wake signal to a running executor to consume it (spec §4.6). The wake
     // never spawns and cannot fail — the queue is the source of truth.
     let mut store = state.source.begin().await?;
-    tb_strava::event::insert_sync(user.strava_id(), query.time, false, &mut store).await?;
+    tb_strava::event::insert_sync::<ConcreteDomain<St>>(
+        user.strava_id(),
+        query.time,
+        false,
+        &mut store,
+    )
+    .await?;
     store.commit().await?;
     state.registry.wake(user.tb_id()).await;
 

@@ -30,8 +30,8 @@ use std::marker::PhantomData;
 use std::ops::AddAssign;
 
 use crate::{
-    ActTypeId, Activity, ActivityId, ApiWrite, Error, Part, PartId, PartTypeId, ShopId, Summary,
-    TbResult, Usage, UserId, WriteOutcome,
+    ActTypeId, Activity, ActivityId, ApiWrite, Error, Part, PartId, PartTypeId, ShopId, Stat,
+    Summary, TbResult, Usage, UserId, WriteOutcome,
 };
 use time::OffsetDateTime;
 
@@ -138,7 +138,9 @@ pub trait Domain {
     type WriteOutcome: Send;
     /// The entity types the consumers construct and name.
     type Activity;
-    type ActivityId;
+    /// `Display`: the strava activity lane formats the id into the Strava
+    /// URL (issue #530).
+    type ActivityId: std::fmt::Display;
     /// `From<i32>`: the strava-side type maps are string → code → id
     /// (`tb_strava`'s `get_type`/`StravaGear::what`), and the code is a
     /// plain `i32` (issue #529).
@@ -148,7 +150,10 @@ pub trait Domain {
     /// (`tb_strava`'s `StravaGear::what`), and the code is a plain `i32`
     /// (issue #529).
     type PartTypeId: From<i32>;
-    type UserId: std::fmt::Display;
+    /// `Display`: the strava lane logs it (the `disable`/`deauthorize`
+    /// messages); `Copy`: the session's `tb_id` is passed by value to
+    /// several lane ops at once (issue #530).
+    type UserId: std::fmt::Display + Copy;
     type Part;
     type Usage;
 
@@ -228,6 +233,51 @@ pub trait Domain {
     /// `Part.id`: the part's id — the strava gear lane maps a part to its
     /// id (the part is opaque to the generic consumer, issue #529).
     fn part_id(part: &Self::Part) -> Self::PartId;
+
+    /// `Activity.id`: the activity's id — the strava activity lane maps an
+    /// activity to its id for the Strava URL (issue #530).
+    fn activity_id(activity: &Self::Activity) -> Self::ActivityId;
+
+    /// `Error::NotFound`: the object is gone — the strava-side constructor the
+    /// generic lane needs (issue #530).
+    fn not_found(msg: String) -> Self::Error;
+
+    /// `PartId::part`: the part with the id, authorization-checked — the
+    /// strava gear-URL lane (issue #530). Named with the concrete [`Part`]:
+    /// the lane reads its `source` field, which an opaque associated type
+    /// cannot expose.
+    async fn read_part(
+        id: Self::PartId,
+        session: &impl Session,
+        store: &mut Self::Store,
+    ) -> Result<Part, Self::Error>;
+
+    /// `UserId::create`: a new user (the strava auth lane, issue #530).
+    async fn create_user(
+        firstname: String,
+        lastname: String,
+        avatar: &Option<String>,
+        store: &mut Self::Store,
+    ) -> Result<UserId, Self::Error>;
+
+    /// `UserId::update`: the user's name and avatar (issue #530).
+    async fn update_user(
+        id: UserId,
+        firstname: String,
+        lastname: String,
+        avatar: &Option<String>,
+        store: &mut Self::Store,
+    ) -> Result<UserId, Self::Error>;
+
+    /// `UserId::delete`: the user plus everything they own (issue #530).
+    /// Named with [`Self::UserId`]: the lane receives the id from the
+    /// session's `tb_id`.
+    async fn delete_user(id: Self::UserId, store: &mut Self::Store) -> Result<(), Self::Error>;
+
+    /// `UserId::get_stat`: the user's stats (the strava stats lane, issue
+    /// #530). Named with the concrete [`Stat`]: the lane serializes it
+    /// straight into its response.
+    async fn read_stats(id: UserId, store: &mut Self::Store) -> Result<Stat, Self::Error>;
 
     /// The 14-field activity constructor (`tb_strava`'s `into_activity`).
     fn make_activity(
@@ -358,6 +408,44 @@ impl<St: Store + Send> Domain for ConcreteDomain<St> {
 
     fn part_id(part: &Part) -> PartId {
         part.id
+    }
+
+    fn activity_id(activity: &Activity) -> ActivityId {
+        activity.id
+    }
+
+    fn not_found(msg: String) -> Error {
+        Error::NotFound(msg)
+    }
+
+    async fn read_part(id: PartId, session: &impl Session, store: &mut St) -> TbResult<Part> {
+        id.part(session, store).await
+    }
+
+    async fn create_user(
+        firstname: String,
+        lastname: String,
+        avatar: &Option<String>,
+        store: &mut St,
+    ) -> TbResult<UserId> {
+        UserId::create(&firstname, &lastname, avatar, store).await
+    }
+
+    async fn update_user(
+        id: UserId,
+        firstname: String,
+        lastname: String,
+        avatar: &Option<String>,
+        store: &mut St,
+    ) -> TbResult<UserId> {
+        id.update(&firstname, &lastname, avatar, store).await
+    }
+
+    async fn delete_user(id: UserId, store: &mut St) -> TbResult<()> {
+        id.delete(store).await
+    }
+    async fn read_stats(id: UserId, store: &mut St) -> TbResult<Stat> {
+        id.get_stat(store).await
     }
 
     fn make_activity(

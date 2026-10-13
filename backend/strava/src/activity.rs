@@ -184,16 +184,19 @@ impl StravaActivity {
     }
 }
 
-pub async fn strava_url<
-    St: Store + StravaStore<ConcreteDomain<St>>,
-    S: Session + StravaSession<ConcreteDomain<St>>,
->(
+pub async fn strava_url<D: Domain, S: Session + StravaSession<D>>(
     act: i64,
     user: &S,
-    store: &mut St,
-) -> TbResult<String> {
-    let g = ActivityId::new(act).read(user, store).await?;
-    Ok(format!("https://strava.com/activities/{}", g.id))
+    store: &mut D::Store,
+) -> Result<String, D::Error>
+where
+    D::Store: StravaStore<D>,
+{
+    let g = D::read_activity(D::make_activity_id(act), user, store).await?;
+    Ok(format!(
+        "https://strava.com/activities/{}",
+        D::activity_id(&g)
+    ))
 }
 
 pub async fn upsert_activity<D: Domain, S: Session + StravaSession<D>>(

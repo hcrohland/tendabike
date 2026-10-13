@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_support::{
-    TestStravaSession, TestStravaStore, activity_json, gear_json, strava_user,
+    TestDomain, TestStravaSession, TestStravaStore, activity_json, gear_json, strava_user,
 };
 
 fn setup() -> (TestStravaStore, TestStravaSession) {
@@ -17,31 +17,31 @@ fn strava_activity(gear: Option<&str>) -> StravaActivity {
 #[test]
 fn get_type_maps_strava_types() {
     assert_eq!(
-        StravaActivity::get_type::<ConcreteDomain<TestStravaStore>>("Ride").unwrap(),
+        StravaActivity::get_type::<TestDomain>("Ride").unwrap(),
         1.into()
     );
     assert_eq!(
-        StravaActivity::get_type::<ConcreteDomain<TestStravaStore>>("VirtualRide").unwrap(),
+        StravaActivity::get_type::<TestDomain>("VirtualRide").unwrap(),
         5.into()
     );
     assert_eq!(
-        StravaActivity::get_type::<ConcreteDomain<TestStravaStore>>("EBikeRide").unwrap(),
+        StravaActivity::get_type::<TestDomain>("EBikeRide").unwrap(),
         9.into()
     );
     assert_eq!(
-        StravaActivity::get_type::<ConcreteDomain<TestStravaStore>>("Run").unwrap(),
+        StravaActivity::get_type::<TestDomain>("Run").unwrap(),
         3.into()
     );
     assert_eq!(
-        StravaActivity::get_type::<ConcreteDomain<TestStravaStore>>("VirtualRun").unwrap(),
+        StravaActivity::get_type::<TestDomain>("VirtualRun").unwrap(),
         3.into()
     );
     assert_eq!(
-        StravaActivity::get_type::<ConcreteDomain<TestStravaStore>>("Workout").unwrap(),
+        StravaActivity::get_type::<TestDomain>("Workout").unwrap(),
         0.into()
     );
     assert_eq!(
-        StravaActivity::get_type::<ConcreteDomain<TestStravaStore>>("Golf").unwrap(),
+        StravaActivity::get_type::<TestDomain>("Golf").unwrap(),
         0.into()
     );
 }
@@ -49,7 +49,7 @@ fn get_type_maps_strava_types() {
 #[test]
 fn get_type_rejects_unknown() {
     assert!(matches!(
-        StravaActivity::get_type::<ConcreteDomain<TestStravaStore>>("Frobnicate"),
+        StravaActivity::get_type::<TestDomain>("Frobnicate"),
         Err(Error::BadRequest(_))
     ));
 }
@@ -84,7 +84,7 @@ async fn into_activity_creates_missing_gear() -> TbResult<()> {
     let act = strava_activity(Some("b1"))
         .into_activity(&mut session, &mut store)
         .await?;
-    let part = PartStore::partid_get_part(&mut store.mem, act.gear.unwrap()).await?;
+    let part = store.part(act.gear.as_ref().unwrap()).unwrap();
     assert_eq!(part.source.as_deref(), Some("b1"));
     assert_eq!(part.what, 1.into());
     assert_eq!(part.name, "Test Bike");
@@ -121,8 +121,7 @@ async fn upsert_activity_stores_new() -> TbResult<()> {
     let summary = upsert_activity(10, &mut session, &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
     assert!(summary.activities.get(&ActivityId::new(10)).is_some());
-    let acts = ActivityStore::get_all(&mut store.mem, &UserId::from(1)).await?;
-    assert_eq!(acts.len(), 1);
+    assert_eq!(store.activities().len(), 1);
     Ok(())
 }
 
@@ -134,7 +133,7 @@ async fn upsert_activity_updates_existing() -> TbResult<()> {
     let json = activity_json(10, "Ride", None).replace("25000.0", "30000.0");
     session.queue("/activities/10", &json);
     upsert_activity(10, &mut session, &mut store).await?;
-    let acts = ActivityStore::get_all(&mut store.mem, &UserId::from(1)).await?;
+    let acts = store.activities();
     assert_eq!(acts.len(), 1);
     assert_eq!(acts[0].distance, Some(30000));
     Ok(())
@@ -171,8 +170,7 @@ async fn delete_activity_removes() -> TbResult<()> {
     session.queue("/activities/10", &activity_json(10, "Ride", None));
     upsert_activity(10, &mut session, &mut store).await?;
     delete_activity(10, &session, &mut store).await?;
-    let acts = ActivityStore::get_all(&mut store.mem, &UserId::from(1)).await?;
-    assert!(acts.is_empty());
+    assert!(store.activities().is_empty());
     Ok(())
 }
 

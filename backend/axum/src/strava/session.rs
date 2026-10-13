@@ -59,8 +59,15 @@ impl RequestSession {
             _ => avatar,
         };
         let refresh_token = token.refresh_token();
-        let user =
-            StravaUser::upsert(*id, firstname, lastname, avatar, refresh_token, store).await?;
+        let user = StravaUser::upsert::<ConcreteDomain<St>>(
+            *id,
+            firstname,
+            lastname,
+            avatar,
+            refresh_token,
+            store,
+        )
+        .await?;
         let id = user.tb_id();
         let is_admin = id.is_admin(store).await?;
 
