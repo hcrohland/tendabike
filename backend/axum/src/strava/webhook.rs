@@ -59,9 +59,8 @@ use serde_derive::{Deserialize, Serialize};
 use http::StatusCode;
 
 use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, error::AppError};
-use tb_domain::{ApiWrite, Error, TbResult};
+use tb_domain::{ApiWrite, ConcreteDomain, Error, Store, TbResult};
 use tb_exec::{Txn, TxnSource};
-use tb_strava::StravaSession;
 use tb_strava::StravaStore;
 use tb_strava::event::InEvent;
 
@@ -94,17 +93,17 @@ impl Hub {
 
 const VERIFY_TOKEN: &str = "tendabike_strava";
 
-pub(crate) async fn create_event<S>(
-    State(state): State<AppState<S>>,
+pub(crate) async fn create_event<St, S>(
+    State(state): State<AppState<St, S>>,
     Json(event): axum::extract::Json<InEvent>,
 ) -> ApiResult<()>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     trace!("Received {event:#?}");
     let mut store = state.source.begin().await?;
-    let user_id = event.accept(&mut store).await?;
+    let user_id = event.accept::<ConcreteDomain<St>>(&mut store).await?;
     store.commit().await?;
     // Fire the in-memory wake signal (spec §4.4): a pure signal to a
     // running executor — it never spawns one, and the DB queue is the
@@ -129,34 +128,39 @@ pub(super) struct SyncQuery {
     migrate: bool,
 }
 
-pub(super) async fn sync_api<S>(
+pub(super) async fn sync_api<St, S>(
     _u: AxumAdmin,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Query(query): Query<SyncQuery>,
 ) -> ApiResult<()>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     let user_id: Option<tb_domain::UserId> = query.user_id.map(|u| u.into());
-    let res = tb_strava::event::sync_users(user_id, query.time, query.migrate, &mut store)
-        .await
-        .map(Json)?;
+    let res = tb_strava::event::sync_users::<ConcreteDomain<St>>(
+        user_id,
+        query.time,
+        query.migrate,
+        &mut store,
+    )
+    .await
+    .map(Json)?;
     store.commit().await?;
 
     Ok(res)
 }
 
-pub(super) async fn sync<S>(
+pub(super) async fn sync<St, S>(
     Path(tbid): Path<i32>,
     _admin: AxumAdmin,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Query(query): Query<InitialSyncQuery>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let user_id: tb_domain::UserId = tbid.into();
     // The executor's event queue is keyed by the Strava id, so read the
@@ -183,14 +187,14 @@ pub(super) struct InitialSyncQuery {
 /// This endpoint allows users to trigger their first activity sync after registration.
 /// It can only be called once - if the user has already completed initial sync, it returns an error.
 /// Returns the updated user object.
-pub(crate) async fn trigger_initial_sync<S>(
+pub(crate) async fn trigger_initial_sync<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Query(query): Query<InitialSyncQuery>,
 ) -> ApiResult<tb_domain::User>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     // The domain's status guard and completion update run on the user's
     // executor (spec §6.2); the `User` is not part of a `Summary`, so the
@@ -208,7 +212,13 @@ where
     // wake signal to a running executor to consume it (spec §4.6). The wake
     // never spawns and cannot fail — the queue is the source of truth.
     let mut store = state.source.begin().await?;
-    tb_strava::event::insert_sync(user.strava_id(), query.time, false, &mut store).await?;
+    tb_strava::event::insert_sync::<ConcreteDomain<St>>(
+        user.strava_id(),
+        query.time,
+        false,
+        &mut store,
+    )
+    .await?;
     store.commit().await?;
     state.registry.wake(user.tb_id()).await;
 
@@ -220,13 +230,13 @@ where
 /// This endpoint allows users to postpone the initial activity sync.
 /// It can only be called if the user is still in pending status.
 /// Returns the updated user object.
-pub(crate) async fn postpone_initial_sync<S>(
+pub(crate) async fn postpone_initial_sync<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> ApiResult<tb_domain::User>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     // The domain's status guard and postponement run on the user's executor
     // (spec §6.2); the 200 body reads the `User` back after the write

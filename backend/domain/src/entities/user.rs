@@ -136,6 +136,18 @@ pub struct Stat {
     activities: i64,
 }
 
+impl Stat {
+    /// A stat with zero counts — the canned stat the minimal test domain
+    /// returns (issue #530).
+    pub fn new(user: User) -> Self {
+        Self {
+            user,
+            parts: 0,
+            activities: 0,
+        }
+    }
+}
+
 impl UserId {
     pub async fn read(self, store: &mut impl UserStore) -> TbResult<User> {
         store.get(self).await

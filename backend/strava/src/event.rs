@@ -36,12 +36,15 @@ impl InEvent {
     /// # Returns
     ///
     /// Returns a `Result` containing an `Event` struct if the conversion is successful, or an `anyhow::Error` if it fails.
-    pub async fn into_event(self, store: &mut impl StravaStore) -> TbResult<Event> {
-        if StravaId::read(&self.owner_id.into(), store)
+    pub async fn into_event<D: Domain>(self, store: &mut D::Store) -> Result<Event, D::Error>
+    where
+        D::Store: StravaStore<D>,
+    {
+        if StravaId::read::<D>(&self.owner_id.into(), store)
             .await?
             .is_none()
         {
-            return Err(Error::BadRequest(format!(
+            return Err(D::bad_request(format!(
                 "Unknown event owner received: {self:?}"
             )));
         }
@@ -54,8 +57,12 @@ impl InEvent {
             subscription_id,
             event_time,
         } = self;
-        let object_type = object_type.try_into()?;
-        let aspect_type = aspect_type.try_into()?;
+        let object_type = object_type
+            .try_into()
+            .map_err(|e: Error| D::bad_request(e.to_string()))?;
+        let aspect_type = aspect_type
+            .try_into()
+            .map_err(|e: Error| D::bad_request(e.to_string()))?;
         let owner_id = owner_id.into();
         Ok(Event {
             id: None,
@@ -75,14 +82,17 @@ impl InEvent {
     /// Returns the owner's TendaBike [`UserId`] when the event was queued (so
     /// the caller can wake that user's executor), or `None` for an athlete
     /// (de)authorization (nothing was queued, so there is nothing to wake).
-    pub async fn accept(self, store: &mut impl StravaStore) -> TbResult<Option<UserId>> {
-        let user_id = StravaId::read(&self.owner_id.into(), store)
+    pub async fn accept<D: Domain>(self, store: &mut D::Store) -> Result<Option<UserId>, D::Error>
+    where
+        D::Store: StravaStore<D>,
+    {
+        let user_id = StravaId::read::<D>(&self.owner_id.into(), store)
             .await?
             .map(|user| user.tendabike_id)
-            .ok_or_else(|| Error::BadRequest(format!("Unknown event owner received: {self:?}")))?;
-        let event = self.into_event(store).await?;
+            .ok_or_else(|| D::bad_request(format!("Unknown event owner received: {self:?}")))?;
+        let event = self.into_event::<D>(store).await?;
         if event.object_type == ObjectType::Athlete {
-            event.process_user(store).await?;
+            event.process_user::<D>(store).await?;
             Ok(None)
         } else {
             store.stravaevent_store(event).await?;
@@ -195,12 +205,18 @@ impl std::fmt::Display for Event {
 }
 
 impl Event {
-    async fn delete(&self, store: &mut impl StravaStore) -> TbResult<()> {
+    async fn delete<D: Domain>(&self, store: &mut D::Store) -> Result<(), D::Error>
+    where
+        D::Store: StravaStore<D>,
+    {
         debug!("Deleting {self}");
         store.strava_event_delete(self.id).await
     }
 
-    async fn setdate(&mut self, time: i64, store: &mut impl StravaStore) -> TbResult<()> {
+    async fn setdate<D: Domain>(&mut self, time: i64, store: &mut D::Store) -> Result<(), D::Error>
+    where
+        D::Store: StravaStore<D>,
+    {
         self.event_time = time;
         store.strava_event_set_time(self.id, self.event_time).await
     }
@@ -211,11 +227,12 @@ impl Event {
     // cannot be removed or given a message — allow the lint on the item instead.
     #[allow(clippy::double_must_use)]
     #[async_recursion]
-    async fn rate_limit(
-        self,
-        user: &impl StravaSession,
-        store: &mut impl StravaStore,
-    ) -> TbResult<QueueRead> {
+    async fn rate_limit<D, S>(self, user: &S, store: &mut D::Store) -> Result<QueueRead, D::Error>
+    where
+        D: Domain,
+        S: Session + StravaSession<D>,
+        D::Store: StravaStore<D>,
+    {
         // rate limit event
         if self.object_id > get_time() {
             // still rate limited!
@@ -225,19 +242,22 @@ impl Event {
         }
         // remove stop event
         warn!("Starting hooks again");
-        self.delete(store).await?;
+        self.delete::<D>(store).await?;
         // get next event
-        get_event(user, store).await
+        get_event::<D, _>(user, store).await
     }
 
-    async fn process_activity(
+    async fn process_activity<D: Domain, S: Session + StravaSession<D>>(
         self,
-        user: &mut impl StravaSession,
-        store: &mut impl StravaStore,
-    ) -> TbResult<Summary> {
+        user: &mut S,
+        store: &mut D::Store,
+    ) -> Result<D::Summary, D::Error>
+    where
+        D::Store: StravaStore<D>,
+    {
         match self.process_hook(user, store).await {
             Ok(summary) => Ok(summary),
-            Err(err) => self.fail_event(err, store).await,
+            Err(err) => self.fail_event::<D>(err, store).await,
         }
     }
 
@@ -255,43 +275,49 @@ impl Event {
     /// # Examples
     ///
     ///
-    async fn process_hook(
+    async fn process_hook<D: Domain, S: Session + StravaSession<D>>(
         &self,
-        user: &mut impl StravaSession,
-        store: &mut impl StravaStore,
-    ) -> TbResult<Summary> {
+        user: &mut S,
+        store: &mut D::Store,
+    ) -> Result<D::Summary, D::Error>
+    where
+        D::Store: StravaStore<D>,
+    {
         let res = match self.aspect_type {
             AspectType::Create | AspectType::Update => {
-                activity::upsert_activity(self.object_id, user, store).await?
+                activity::upsert_activity::<D, _>(self.object_id, user, store).await?
             }
             AspectType::Delete => {
-                match activity::delete_activity(self.object_id, user, store).await {
-                    Err(Error::NotFound(_)) => {
+                match activity::delete_activity::<D, _>(self.object_id, user, store).await {
+                    Err(err) if matches!(D::strava_failure(&err), StravaFailure::NotFound) => {
                         warn!("Activity {} did not exist (yet)", self.object_id);
-                        Summary::default()
+                        D::Summary::default()
                     }
                     res => res?,
                 }
             }
         };
-        self.delete(store).await?;
+        self.delete::<D>(store).await?;
         Ok(res)
     }
 
-    async fn sync(
+    async fn sync<D: Domain, S: Session + StravaSession<D>>(
         &mut self,
-        user: &mut impl StravaSession,
-        store: &mut impl StravaStore,
-    ) -> TbResult<Summary> {
+        user: &mut S,
+        store: &mut D::Store,
+    ) -> Result<D::Summary, D::Error>
+    where
+        D::Store: StravaStore<D>,
+    {
         // let mut len = batch;
         let mut start = self.event_time;
-        let mut summary = Summary::default();
+        let mut summary = D::Summary::default();
 
         // while len == batch
         {
             let acts = next_activities(user, store, 25, start).await?;
             if acts.is_empty() {
-                self.delete(store).await?;
+                self.delete::<D>(store).await?;
             } else {
                 trace!("processing sync event at {start}");
                 for a in acts {
@@ -305,8 +331,10 @@ impl Event {
                         // queue, the DB failure backs off in the loop.
                         Err(err)
                             if matches!(
-                                err,
-                                Error::TryAgain(_) | Error::NotAuth(_) | Error::DatabaseFailure(_)
+                                D::strava_failure(&err),
+                                StravaFailure::TryAgain(_)
+                                    | StravaFailure::NotAuth(_)
+                                    | StravaFailure::DatabaseFailure
                             ) =>
                         {
                             return Err(err);
@@ -319,7 +347,7 @@ impl Event {
                             warn!("skipping bad activity {act_id}: {err:#}");
                         }
                     }
-                    self.setdate(start, store).await?;
+                    self.setdate::<D>(start, store).await?;
                 }
             }
         }
@@ -327,14 +355,17 @@ impl Event {
         Ok(summary)
     }
 
-    async fn process_sync(
+    async fn process_sync<D: Domain, S: Session + StravaSession<D>>(
         mut self,
-        user: &mut impl StravaSession,
-        store: &mut impl StravaStore,
-    ) -> TbResult<Summary> {
+        user: &mut S,
+        store: &mut D::Store,
+    ) -> Result<D::Summary, D::Error>
+    where
+        D::Store: StravaStore<D>,
+    {
         match self.sync(user, store).await {
             Ok(summary) => Ok(summary),
-            Err(err) => self.fail_event(err, store).await,
+            Err(err) => self.fail_event::<D>(err, store).await,
         }
     }
 
@@ -355,31 +386,41 @@ impl Event {
     /// Every arm returns `Ok` except the DB failure: the queue-side effects
     /// (the `Stop`, the disable, the delete) are committed by the loop's
     /// transaction, and the loop continues.
-    async fn fail_event(&self, err: Error, store: &mut impl StravaStore) -> TbResult<Summary> {
-        match err {
-            Error::TryAgain(msg) => {
+    async fn fail_event<D: Domain>(
+        &self,
+        err: D::Error,
+        store: &mut D::Store,
+    ) -> Result<D::Summary, D::Error>
+    where
+        D::Store: StravaStore<D>,
+    {
+        match D::strava_failure(&err) {
+            StravaFailure::TryAgain(msg) => {
                 warn!("Strava rate limited ({msg}); pausing all users for 15 minutes");
-                insert_stop(store).await?;
-                Ok(Summary::default())
+                insert_stop::<D>(store).await?;
+                Ok(D::Summary::default())
             }
-            Error::NotAuth(msg) => {
+            StravaFailure::NotAuth(msg) => {
                 warn!(
                     "Strava auth is dead ({msg}); disabling user {}",
                     self.owner_id
                 );
-                self.owner_id.disable(store).await?;
-                Ok(Summary::default())
+                self.owner_id.disable::<D>(store).await?;
+                Ok(D::Summary::default())
             }
-            Error::DatabaseFailure(_) => Err(err),
-            other => {
-                warn!("dropping poison event {self}: {other:#}");
-                self.delete(store).await?;
-                Ok(Summary::default())
+            StravaFailure::DatabaseFailure => Err(err),
+            StravaFailure::NotFound | StravaFailure::Other => {
+                warn!("dropping poison event {self}: {err:#}");
+                self.delete::<D>(store).await?;
+                Ok(D::Summary::default())
             }
         }
     }
 
-    async fn process_user(&self, store: &mut impl StravaStore) -> TbResult<()> {
+    async fn process_user<D: Domain>(&self, store: &mut D::Store) -> Result<(), D::Error>
+    where
+        D::Store: StravaStore<D>,
+    {
         debug!(
             "processing event user {}: {:?}",
             self.object_id, self.aspect_type,
@@ -388,7 +429,7 @@ impl Event {
         match &self.aspect_type {
             AspectType::Update => {
                 if self.updates.get("authorized") == Some(&String::from("false")) {
-                    let res = self.owner_id.disable(store).await;
+                    let res = self.owner_id.disable::<D>(store).await;
                     if let Err(err) = res {
                         error!("user disable returned: {err:#}")
                     }
@@ -422,14 +463,17 @@ impl Event {
 /// # Examples
 ///
 ///
-pub async fn insert_sync(
+pub async fn insert_sync<D: Domain>(
     owner_id: StravaId,
     event_time: i64,
     migrate: bool,
-    store: &mut impl StravaStore,
-) -> TbResult<()> {
+    store: &mut D::Store,
+) -> Result<(), D::Error>
+where
+    D::Store: StravaStore<D>,
+{
     if event_time > get_time() {
-        return Err(Error::BadRequest(format!("eventtime {event_time} > now!")));
+        return Err(D::bad_request(format!("eventtime {event_time} > now!")));
     }
     let object_id = if migrate { 1 } else { 0 };
     let event = Event {
@@ -448,7 +492,10 @@ pub async fn insert_sync(
 /// queued, its deadline is **extended** rather than stacking rows — the
 /// backoff must not compound: only `Stop`s carry `owner_id` 0, so the next
 /// event for user 0 is the oldest `Stop`.
-pub async fn insert_stop(store: &mut impl StravaStore) -> TbResult<()> {
+pub async fn insert_stop<D: Domain>(store: &mut D::Store) -> Result<(), D::Error>
+where
+    D::Store: StravaStore<D>,
+{
     let stop = Event {
         object_type: ObjectType::Stop,
         object_id: get_time() + 900,
@@ -459,7 +506,7 @@ pub async fn insert_stop(store: &mut impl StravaStore) -> TbResult<()> {
         .await?
         && existing.object_type == ObjectType::Stop
     {
-        existing.delete(store).await?;
+        existing.delete::<D>(store).await?;
     }
     store.stravaevent_store(stop).await
 }
@@ -493,10 +540,13 @@ pub enum QueueRead {
 /// `tb_exec` crate) owns the "read next Strava event" step; reading the queue
 /// stays a Strava-side concern, so the function stays here rather than being
 /// inlined in the loop.
-pub async fn get_event(
-    user: &impl StravaSession,
-    store: &mut impl StravaStore,
-) -> TbResult<QueueRead> {
+pub async fn get_event<D: Domain, S: Session + StravaSession<D>>(
+    user: &S,
+    store: &mut D::Store,
+) -> Result<QueueRead, D::Error>
+where
+    D::Store: StravaStore<D>,
+{
     let event = store
         .strava_event_get_next_for_user(user.strava_id())
         .await?;
@@ -527,12 +577,15 @@ pub async fn get_event(
     })
 }
 
-async fn next_activities(
-    user: &mut impl StravaSession,
-    store: &mut impl StravaStore,
+async fn next_activities<D: Domain, S: Session + StravaSession<D>>(
+    user: &mut S,
+    store: &mut D::Store,
     per_page: usize,
     start: i64,
-) -> TbResult<Vec<StravaActivity>> {
+) -> Result<Vec<StravaActivity>, D::Error>
+where
+    D::Store: StravaStore<D>,
+{
     user.request_json(
         &format!("/activities?after={start}&per_page={per_page}"),
         store,
@@ -540,36 +593,42 @@ async fn next_activities(
     .await
 }
 
-pub async fn process(
-    user: &mut impl StravaSession,
-    store: &mut impl StravaStore,
-) -> TbResult<Summary> {
-    let read = get_event(user, store).await?;
+pub async fn process<D: Domain, S: Session + StravaSession<D>>(
+    user: &mut S,
+    store: &mut D::Store,
+) -> Result<D::Summary, D::Error>
+where
+    D::Store: StravaStore<D>,
+{
+    let read = get_event::<D, _>(user, store).await?;
     let event = match read {
         QueueRead::Event(event) => event,
         // The queue is empty, or paused by a global rate-limit `Stop` (the
         // executor loop sleeps until its deadline; nothing to process).
-        QueueRead::Limited { .. } | QueueRead::Empty => return Ok(Summary::default()),
+        QueueRead::Limited { .. } | QueueRead::Empty => return Ok(D::Summary::default()),
     };
     info!("Processing {event}");
 
     match event.object_type {
-        ObjectType::Activity => event.process_activity(user, store).await,
-        ObjectType::Sync => event.process_sync(user, store).await,
+        ObjectType::Activity => event.process_activity::<D, _>(user, store).await,
+        ObjectType::Sync => event.process_sync::<D, _>(user, store).await,
         _ => {
             warn!("skipping {event}");
-            event.delete(store).await?;
-            Ok(Summary::default())
+            event.delete::<D>(store).await?;
+            Ok(D::Summary::default())
         }
     }
 }
 
-pub async fn sync_users(
-    user_id: Option<UserId>,
+pub async fn sync_users<D: Domain>(
+    user_id: Option<D::UserId>,
     time: i64,
     migrate: bool,
-    store: &mut impl StravaStore,
-) -> TbResult<()> {
+    store: &mut D::Store,
+) -> Result<(), D::Error>
+where
+    D::Store: StravaStore<D>,
+{
     let users = match user_id {
         Some(id) => vec![store.stravauser_get_by_tbid(id).await?],
         None => store.stravausers_get_all().await?,
@@ -580,7 +639,7 @@ pub async fn sync_users(
             continue;
         }
         info!("Adding sync for {:?} at {time}", user.strava_id());
-        event::insert_sync(user.strava_id(), time, migrate, store).await?;
+        event::insert_sync::<D>(user.strava_id(), time, migrate, store).await?;
     }
     Ok(())
 }

@@ -41,7 +41,10 @@ use http::StatusCode;
 use log::{error, info};
 use tokio::sync::{Mutex, Notify, broadcast, watch};
 
-use tb_domain::{ApiWrite, DescendReport, Error, Session, Summary, TbResult, UserId, WriteOutcome};
+use tb_domain::{
+    ApiWrite, ConcreteDomain, DescendReport, Error, Session, Store, Summary, TbResult, UserId,
+    WriteOutcome,
+};
 use tb_exec::{ApiWriteRequest, ApiWriteSender, Txn, TxnSource, api_write_channel, run};
 use tb_strava::event::{Event as StravaEvent, ObjectType};
 use tb_strava::{StravaId, StravaStore};
@@ -91,12 +94,11 @@ pub enum ExecutorStatus {
 /// the executor down — rescan, issue #446). The `AbortHandle` (not the
 /// `JoinHandle`) is stored: the watchdog keeps the original handle to
 /// `await` and record `Dead` on a panic **or** the abort `JoinError`.
-#[derive(Clone)]
-struct Executor {
+struct Executor<St: Store + 'static> {
     status: watch::Receiver<ExecutorStatus>,
     /// The write handlers' door into this user's loop (spec §6.2): enqueue
     /// an `ApiWrite` here and await its oneshot.
-    writer: ApiWriteSender,
+    writer: ApiWriteSender<ConcreteDomain<St>>,
     frames: broadcast::Sender<Summary>,
     /// Every Strava event the loop consumed (spec §6.4): the admin sync's
     /// completion signal, correlated by the event's identity.
@@ -110,6 +112,21 @@ struct Executor {
     task: tokio::task::AbortHandle,
 }
 
+// Hand-written (not derived): the derive would bound `St` on `Clone`, and the
+// store is not `Clone` — every field clones without it.
+impl<St: Store + 'static> Clone for Executor<St> {
+    fn clone(&self) -> Self {
+        Self {
+            status: self.status.clone(),
+            writer: self.writer.clone(),
+            frames: self.frames.clone(),
+            events: self.events.clone(),
+            wake: Arc::clone(&self.wake),
+            task: self.task.clone(),
+        }
+    }
+}
+
 /// The per-user executor registry (spec §4.4): the live executor per
 /// [`UserId`], shared across requests (the `AppState` is `Clone`, so an
 /// `Arc`). Spawn on the first demand (SSE connect or write), reap when no
@@ -118,13 +135,13 @@ struct Executor {
 /// on the next demand — the streams re-register on the respawned executor's
 /// frame channel.
 #[derive(Clone)]
-pub struct Registry {
-    executors: Arc<Mutex<HashMap<UserId, Executor>>>,
+pub struct Registry<St: Store + 'static> {
+    executors: Arc<Mutex<HashMap<UserId, Executor<St>>>>,
     idle_timeout: Duration,
     heartbeat_interval: Duration,
 }
 
-impl Registry {
+impl<St: Store + 'static> Registry<St> {
     pub fn new(idle_timeout: Duration, heartbeat_interval: Duration) -> Self {
         Self {
             executors: Arc::new(Mutex::new(HashMap::new())),
@@ -151,8 +168,8 @@ impl Registry {
         watch::Receiver<ExecutorStatus>,
     )>
     where
-        S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
+        St: 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+        S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
     {
         self.exec_field(source, user_id, |exec| {
             (exec.frames.subscribe(), exec.status.clone())
@@ -184,8 +201,8 @@ impl Registry {
     /// so the unbounded reply await runs without it.
     pub async fn write<S>(&self, source: &S, user_id: UserId, write: ApiWrite) -> TbResult<Summary>
     where
-        S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
+        St: 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+        S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
     {
         match self.write_outcome(source, user_id, write).await? {
             WriteOutcome::Summary(summary) => Ok(summary),
@@ -206,8 +223,8 @@ impl Registry {
         data: String,
     ) -> TbResult<DescendReport>
     where
-        S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
+        St: 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+        S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
     {
         match self
             .write_outcome(source, user_id, ApiWrite::ActivityDescend { data })
@@ -236,8 +253,8 @@ impl Registry {
         write: ApiWrite,
     ) -> TbResult<WriteOutcome>
     where
-        S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
+        St: 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+        S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
     {
         let (request, reply) = ApiWriteRequest::new(write);
         let writer = self
@@ -286,8 +303,8 @@ impl Registry {
         user_id: UserId,
     ) -> TbResult<broadcast::Receiver<StravaEvent>>
     where
-        S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
+        St: 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+        S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
     {
         self.exec_field(source, user_id, |exec| exec.events.subscribe())
             .await
@@ -311,15 +328,18 @@ impl Registry {
         event_time: i64,
     ) -> TbResult<()>
     where
-        S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
+        St: 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+        S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
     {
         // Subscribe before enqueuing, so the completion cannot be missed.
         let mut done = self.events(source, user_id).await?;
 
         // Enqueue the sync on the DB queue, like the webhook does.
         let mut store = source.begin().await?;
-        tb_strava::event::insert_sync(strava_id, event_time, false, &mut store).await?;
+        tb_strava::event::insert_sync::<ConcreteDomain<St>>(
+            strava_id, event_time, false, &mut store,
+        )
+        .await?;
         store.commit().await?;
 
         // Wake the executor (non-critical: the queue is the source of
@@ -357,8 +377,8 @@ impl Registry {
         event_time: i64,
     ) -> TbResult<bool>
     where
-        S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
+        St: 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+        S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
     {
         let mut store = source.begin().await?;
         // A non-migrate sync is queued with `object_id` 0, so the user's
@@ -389,9 +409,9 @@ impl Registry {
     /// when this returns, before the caller's next await.
     async fn exec_field<S, F, R>(&self, source: &S, user_id: UserId, f: F) -> TbResult<R>
     where
-        S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
-        F: FnOnce(&Executor) -> R,
+        St: 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+        S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
+        F: FnOnce(&Executor<St>) -> R,
     {
         let mut map = self.executors.lock().await;
         let exec = Self::ensure_running(&mut map, source, user_id, self.idle_timeout).await?;
@@ -404,14 +424,14 @@ impl Registry {
     /// `StravaSession` (spec §4.4), open a fresh API-write channel and frame
     /// channel, and spawn the `tb_exec` loop.
     async fn ensure_running<S>(
-        map: &mut HashMap<UserId, Executor>,
+        map: &mut HashMap<UserId, Executor<St>>,
         source: &S,
         user_id: UserId,
         idle_timeout: Duration,
-    ) -> TbResult<Executor>
+    ) -> TbResult<Executor<St>>
     where
-        S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
+        St: 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+        S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
     {
         if let Some(exec) = map.get(&user_id)
             && *exec.status.borrow() == ExecutorStatus::Running
@@ -425,7 +445,7 @@ impl Registry {
         // a database read on *every* demand — even with a live executor — to
         // save a sub-millisecond stall on other users' spawn paths.
         let mut store = source.begin().await?;
-        let session = RequestSession::for_user(user_id, &mut store).await?;
+        let mut session = RequestSession::for_user(user_id, &mut store).await?;
         store.commit().await?;
 
         let (writer, reader) = api_write_channel();
@@ -449,7 +469,7 @@ impl Registry {
         let join = tokio::spawn(async move {
             let result = run(
                 owned_source,
-                session,
+                &mut session,
                 reader,
                 frames_for_run,
                 events_for_run,
@@ -504,8 +524,8 @@ fn is_sync(event: &StravaEvent, strava_id: StravaId, event_time: i64) -> bool {
 /// one SSE connection's `unfold`: the current frame subscription
 /// and its executor's fate channel. A `None` frame subscription means "the
 /// executor settled; re-subscribe (respawning it) on the next step".
-struct StreamSeed<S: TxnSource + Clone + 'static> {
-    app: AppState<S>,
+struct StreamSeed<St: Store + 'static, S: TxnSource<ConcreteDomain<St>> + Clone + 'static> {
+    app: AppState<St, S>,
     user_id: UserId,
     rx: Option<broadcast::Receiver<Summary>>,
     status: Option<watch::Receiver<ExecutorStatus>>,
@@ -518,10 +538,10 @@ struct StreamSeed<S: TxnSource + Clone + 'static> {
 /// connection's receiver attached) yields a heartbeat and re-subscribes on
 /// the next step; a dead executor ends the stream (the client reconnects
 /// and respawns, spec §4.5).
-async fn next_event<S>(seed: &mut StreamSeed<S>) -> Option<Result<Event, Infallible>>
+async fn next_event<St, S>(seed: &mut StreamSeed<St, S>) -> Option<Result<Event, Infallible>>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let (mut rx, mut status) = match (seed.rx.take(), seed.status.take()) {
         (Some(rx), Some(status)) => (rx, status),
@@ -601,10 +621,13 @@ fn heartbeat_event() -> Event {
 /// no streams attached is the only reap rule) happens when the stream is
 /// dropped — the broadcast receiver's count is the loop's stream-count
 /// signal.
-pub(crate) async fn endpoint<S>(user: RequestSession, State(state): State<AppState<S>>) -> Response
+pub(crate) async fn endpoint<St, S>(
+    user: RequestSession,
+    State(state): State<AppState<St, S>>,
+) -> Response
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let user_id = user.user_id();
     let heartbeat = state.registry.heartbeat_interval();

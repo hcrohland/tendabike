@@ -30,13 +30,14 @@ use serde_derive::Deserialize;
 use time::OffsetDateTime;
 
 use crate::{RequestSession, appstate::AppState, domain::created_entity, error::AppError};
-use tb_domain::{ApiWrite, PartId, Service, ServiceId, ServicePlanId};
-use tb_exec::TxnSource;
-use tb_strava::{StravaSession, StravaStore};
+use tb_domain::{ApiWrite, ConcreteDomain, PartId, Service, ServiceId, ServicePlanId, Store};
+use tb_exec::{Txn, TxnSource};
+use tb_strava::StravaStore;
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
+pub(super) fn router<St, S>() -> Router<AppState<St, S>>
 where
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     Router::new()
         .route("/", post(create).put(update))
@@ -53,9 +54,9 @@ struct NewService {
     notes: String,
     plans: Vec<ServicePlanId>,
 }
-async fn create<S>(
+async fn create<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(NewService {
         part_id,
         time,
@@ -65,8 +66,8 @@ async fn create<S>(
     }): Json<NewService>,
 ) -> Result<(StatusCode, Json<Service>), AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let summary = state
         .registry
@@ -86,14 +87,14 @@ where
     Ok((StatusCode::CREATED, Json(service)))
 }
 
-async fn update<S>(
+async fn update<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(service): Json<Service>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry
@@ -106,14 +107,14 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn delete_service<S>(
+async fn delete_service<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Path(id): Path<ServiceId>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry
@@ -122,14 +123,14 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn redo<S>(
+async fn redo<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(service): Json<Service>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry

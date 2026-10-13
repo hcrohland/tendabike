@@ -9,8 +9,8 @@ use tb_domain::{Activity, ActivityId, ActivityStore, PartStore, Summary, UserId}
 
 use crate::stream::{ExecutorStatus, Registry};
 use crate::test_support::{
-    LiveSource, admin_cookie, read_sse_frames, run, run_json, run_sse, test_app, test_app_live,
-    user_cookie,
+    LiveConn, LiveSource, admin_cookie, read_sse_frames, run, run_json, run_sse, test_app,
+    test_app_live, user_cookie,
 };
 
 async fn setup() -> (Router, MemoryStore) {
@@ -459,7 +459,7 @@ fn part_body(name: &str) -> String {
 }
 
 /// A live-app fixture: shared in-memory db + session store + registry.
-async fn live_app() -> (Router, MemoryStore, Arc<Registry>, LiveSource) {
+async fn live_app() -> (Router, MemoryStore, Arc<Registry<LiveConn>>, LiveSource) {
     let store = MemoryStore::default();
     let registry = Arc::new(Registry::new(
         Duration::from_secs(60),
@@ -935,7 +935,11 @@ async fn write_pushes_summary_frame_to_stream() {
 
 /// Poll the registry's executor status until it is `expected` (bounded by
 /// a deadline, so a missing flip fails the test instead of hanging).
-async fn wait_for_status(registry: &Arc<Registry>, user: UserId, expected: ExecutorStatus) {
+async fn wait_for_status(
+    registry: &Arc<Registry<LiveConn>>,
+    user: UserId,
+    expected: ExecutorStatus,
+) {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     loop {
         if registry.status(user).await == Some(expected) {

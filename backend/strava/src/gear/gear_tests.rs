@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::{TestStravaSession, TestStravaStore, gear_json, strava_user};
+use crate::test_support::{TestDomain, TestStravaSession, TestStravaStore, gear_json, strava_user};
 
 fn setup() -> (TestStravaStore, TestStravaSession) {
     let mut store = TestStravaStore::new();
@@ -13,7 +13,7 @@ async fn into_partid_creates_bike() -> TbResult<()> {
     let (mut store, mut session) = setup();
     session.queue("/gear/b1", &gear_json("b1", Some(0)));
     let part_id = into_partid("b1".to_string(), &mut session, &mut store).await?;
-    let part = PartStore::partid_get_part(&mut store.mem, part_id).await?;
+    let part = store.part(&part_id).unwrap();
     assert_eq!(part.what, 1.into());
     assert_eq!(part.source.as_deref(), Some("b1"));
     assert_eq!(part.vendor, "Test Brand");
@@ -30,7 +30,7 @@ async fn into_partid_creates_shoes() -> TbResult<()> {
         r#"{"id":"g1","name":"Test Shoes","brand_name":null,"model_name":null,"frame_type":null}"#,
     );
     let part_id = into_partid("g1".to_string(), &mut session, &mut store).await?;
-    let part = PartStore::partid_get_part(&mut store.mem, part_id).await?;
+    let part = store.part(&part_id).unwrap();
     assert_eq!(part.what, 301.into());
     assert_eq!(part.vendor, "");
     assert_eq!(part.model, "");
@@ -95,7 +95,7 @@ async fn gear_strava_url_unknown_source() -> TbResult<()> {
 #[tokio::test]
 async fn gear_strava_url_missing_source() {
     let (mut store, mut session) = setup();
-    let part = Part::create(
+    let part = TestDomain::create_part(
         "Local Part".into(),
         "Brand".into(),
         "Model".into(),

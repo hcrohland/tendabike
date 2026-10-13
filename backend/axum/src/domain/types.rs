@@ -6,8 +6,9 @@
 use axum::{Json, Router, routing::get};
 
 use crate::{appstate::AppState, error::ApiResult};
-use tb_domain::{ActivityType, PartType};
-use tb_exec::TxnSource;
+use tb_domain::{ActivityType, ConcreteDomain, PartType, Store};
+use tb_exec::{Txn, TxnSource};
+use tb_strava::StravaStore;
 
 // get all activity types
 async fn activity() -> ApiResult<Vec<ActivityType>> {
@@ -19,7 +20,11 @@ async fn part() -> ApiResult<Vec<PartType>> {
     Ok(Json(PartType::all_ordered()))
 }
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(super) fn router<St, S>() -> Router<AppState<St, S>>
+where
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
+{
     Router::new()
         .route("/part", get(part))
         .route("/activity", get(activity))

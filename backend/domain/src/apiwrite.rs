@@ -295,8 +295,18 @@ pub async fn exec(
     store: &mut impl Store,
 ) -> TbResult<WriteOutcome> {
     // The domain operations take `&dyn Session`; borrow it once for every arm.
-    let session = &*session;
+    exec_dyn(write, &*session, store).await
+}
 
+/// The session-agnostic core of [`exec`]: the same dispatch, taking a
+/// `&dyn Session` so the `Domain` trait's `exec` (whose concrete `Session`
+/// is the trait object) can dispatch without a sized session type
+/// (issue #528).
+pub(crate) async fn exec_dyn(
+    write: ApiWrite,
+    session: &dyn Session,
+    store: &mut impl Store,
+) -> TbResult<WriteOutcome> {
     match write {
         // --- activity ---
         ApiWrite::ActivityUpdate { id, activity } => {

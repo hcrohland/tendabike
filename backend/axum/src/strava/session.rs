@@ -13,7 +13,7 @@ use time::{Duration, UtcDateTime};
 use tower_sessions::Session as TowerSession;
 
 use crate::strava::{HTTP_CLIENT, StravaAthleteInfo, StravaTokenResponse, oauth::STRAVACLIENT};
-use tb_domain::{Error, Session as TbSession, ShopId, TbResult, UserId};
+use tb_domain::{ConcreteDomain, Error, Session as TbSession, ShopId, Store, TbResult, UserId};
 use tb_strava::{StravaId, StravaSession, StravaStore, StravaUser};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -34,10 +34,10 @@ const SESSION_KEY: &str = "session";
 const SESSION_NEXT_UPDATE: &str = "update";
 
 impl RequestSession {
-    pub(crate) async fn create_from_token(
+    pub(crate) async fn create_from_token<St: Store + StravaStore<ConcreteDomain<St>>>(
         token: StravaTokenResponse,
         session: TowerSession,
-        store: &mut impl StravaStore,
+        store: &mut St,
     ) -> TbResult<()> {
         trace!("got token {:?})", token);
 
@@ -59,8 +59,15 @@ impl RequestSession {
             _ => avatar,
         };
         let refresh_token = token.refresh_token();
-        let user =
-            StravaUser::upsert(*id, firstname, lastname, avatar, refresh_token, store).await?;
+        let user = StravaUser::upsert::<ConcreteDomain<St>>(
+            *id,
+            firstname,
+            lastname,
+            avatar,
+            refresh_token,
+            store,
+        )
+        .await?;
         let id = user.tb_id();
         let is_admin = id.is_admin(store).await?;
 
@@ -79,10 +86,10 @@ impl RequestSession {
     }
 
     /// User for admin actions to impersonate user
-    pub(crate) async fn create_from_id(
+    pub(crate) async fn create_from_id<St: Store + StravaStore<ConcreteDomain<St>>>(
         _admin: AxumAdmin,
         user: UserId,
-        store: &mut impl StravaStore,
+        store: &mut St,
     ) -> TbResult<RequestSession> {
         Self::for_user(user, store).await
     }
@@ -92,11 +99,11 @@ impl RequestSession {
     /// does, minus the admin gate: an empty access token with a past expiry,
     /// so the first Strava request forces a token refresh (spec #446 §4.4 —
     /// the per-user executor's session source).
-    pub(crate) async fn for_user(
+    pub(crate) async fn for_user<St: Store + StravaStore<ConcreteDomain<St>>>(
         user: UserId,
-        store: &mut impl StravaStore,
+        store: &mut St,
     ) -> TbResult<RequestSession> {
-        let user = StravaUser::read(user, store).await?;
+        let user = StravaUser::read::<ConcreteDomain<St>>(user, store).await?;
 
         let strava_id = user.strava_id();
         let id = user.tb_id();
@@ -137,7 +144,10 @@ impl RequestSession {
         }
     }
 
-    async fn refresh_the_token(&mut self, store: &mut impl StravaStore) -> TbResult<()> {
+    async fn refresh_the_token<St: Store + StravaStore<ConcreteDomain<St>>>(
+        &mut self,
+        store: &mut impl StravaStore<ConcreteDomain<St>>,
+    ) -> TbResult<()> {
         let token = match self.refresh_token.clone() {
             Some(token) => token,
             None => {
@@ -159,7 +169,7 @@ impl RequestSession {
         self.expires_at = token.expires_in().map(|d| SystemTime::now() + d);
         self.refresh_token = token.refresh_token().cloned();
         let refresh = token.refresh_token().map(|t| t.secret());
-        self.strava_id.update_token(refresh, store).await?;
+        store.stravaid_update_token(self.strava_id, refresh).await?;
         self.update().await
     }
 
@@ -191,10 +201,10 @@ impl RequestSession {
         Ok(())
     }
 
-    async fn get_strava(
+    async fn get_strava<St: Store + StravaStore<ConcreteDomain<St>>>(
         &mut self,
         uri: &str,
-        store: &mut impl StravaStore,
+        store: &mut impl StravaStore<ConcreteDomain<St>>,
     ) -> TbResult<reqwest::Response> {
         self.check_token(store).await?;
 
@@ -229,12 +239,29 @@ impl RequestSession {
         }
     }
 
-    async fn check_token(&mut self, store: &mut impl StravaStore) -> TbResult<()> {
+    async fn check_token<St: Store + StravaStore<ConcreteDomain<St>>>(
+        &mut self,
+        store: &mut impl StravaStore<ConcreteDomain<St>>,
+    ) -> TbResult<()> {
         if self.is_expired() {
             debug!("access token for user {} is expired", self.id);
             return self.refresh_the_token(store).await;
         }
         Ok(())
+    }
+
+    /// The session's Strava id — the inherent method shadows the
+    /// `StravaSession` trait method (whose domain parameter would be
+    /// ambiguous in method resolution, spec #525 / ADR-0006).
+    pub(crate) fn strava_id(&self) -> StravaId {
+        self.strava_id
+    }
+
+    /// The session's user id — the inherent method shadows the
+    /// `StravaSession` trait method (whose domain parameter would be
+    /// ambiguous in method resolution, spec #525 / ADR-0006).
+    pub(crate) fn tb_id(&self) -> UserId {
+        self.id
     }
 
     fn set_session(mut self, session: TowerSession) -> Self {
@@ -264,15 +291,21 @@ impl TbSession for RequestSession {
 }
 
 #[async_trait::async_trait]
-impl StravaSession for RequestSession {
+impl<St: Store + StravaStore<ConcreteDomain<St>>> StravaSession<ConcreteDomain<St>>
+    for RequestSession
+{
     fn strava_id(&self) -> StravaId {
         self.strava_id
+    }
+
+    fn tb_id(&self) -> UserId {
+        self.id
     }
 
     async fn request_json<T: DeserializeOwned>(
         &mut self,
         uri: &str,
-        store: &mut impl StravaStore,
+        store: &mut impl StravaStore<ConcreteDomain<St>>,
     ) -> TbResult<T> {
         let r = self
             .get_strava(uri, store)
@@ -284,7 +317,10 @@ impl StravaSession for RequestSession {
         Ok(serde_json::from_str::<T>(&r).context("Could not parse response body")?)
     }
 
-    async fn deauthorize(&mut self, store: &mut impl StravaStore) -> TbResult<()> {
+    async fn deauthorize(
+        &mut self,
+        store: &mut impl StravaStore<ConcreteDomain<St>>,
+    ) -> TbResult<()> {
         self.check_token(store).await?;
 
         STRAVACLIENT

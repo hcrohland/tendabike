@@ -25,3 +25,5 @@ doctest = false
 tokio = { workspace = true, features = ["macros", "rt"] }
 serde_json = { workspace = true }
 tb_domain = { workspace = true, features = ["test-support"] }
+# The `Txn` seam the tiny test store implements (issue #530).
+tb_exec = { workspace = true }

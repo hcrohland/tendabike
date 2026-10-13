@@ -21,18 +21,18 @@ use crate::{
     appstate::AppState,
     error::{ApiResult, AppError},
 };
-use tb_domain::{Activity, ActivityId, ApiWrite, DescendReport, PartId};
+use tb_domain::{Activity, ActivityId, ApiWrite, ConcreteDomain, DescendReport, PartId, Store};
 use tb_exec::{Txn, TxnSource};
-use tb_strava::{StravaSession, StravaStore};
+use tb_strava::StravaStore;
 
-async fn def_part_api<S>(
+async fn def_part_api<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(gear_id): Json<PartId>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry
@@ -45,9 +45,13 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn rescan<S>(_u: AxumAdmin, State(state): State<AppState<S>>) -> Result<StatusCode, AppError>
+async fn rescan<St, S>(
+    _u: AxumAdmin,
+    State(state): State<AppState<St, S>>,
+) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     Activity::rescan_all(&mut store).await?;
@@ -61,13 +65,14 @@ where
 }
 
 /// web interface to read an activity
-async fn act_get<S>(
+async fn act_get<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Path(id): Path<i64>,
 ) -> ApiResult<Activity>
 where
-    S: TxnSource + Clone + 'static,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     Ok(ActivityId::new(id)
@@ -77,15 +82,15 @@ where
 }
 
 /// web interface to change an activity
-async fn act_put<S>(
+async fn act_put<St, S>(
     Path(id): Path<i64>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(activity): Json<Activity>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     if ActivityId::from(id) != activity.id {
         Err(tb_domain::Error::BadRequest(
@@ -107,14 +112,14 @@ where
 }
 
 /// web interface to delete an activity
-async fn act_delete<S>(
+async fn act_delete<St, S>(
     Path(id): Path<i64>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry
@@ -135,14 +140,14 @@ where
 /// issue #446): the report is an operation result, not `Summary` state —
 /// the matched activities' updated state arrives as the stream frame the
 /// executor publishes.
-async fn descend<S>(
+async fn descend<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     data: String,
 ) -> Result<Json<DescendReport>, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let report = state
         .registry
@@ -151,9 +156,10 @@ where
     Ok(Json(report))
 }
 
-pub(crate) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
+pub(crate) fn router<St, S>() -> Router<AppState<St, S>>
 where
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     Router::new()
         .route("/descend", post(descend))

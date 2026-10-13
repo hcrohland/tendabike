@@ -11,7 +11,7 @@ use sqlx::{PgPool, PgTransaction, postgres::PgPoolOptions};
 use std::ops::{Deref, DerefMut};
 
 use crate::into_domain;
-use tb_domain::TbResult;
+use tb_domain::{ConcreteDomain, TbResult};
 use tb_exec::{Txn, TxnSource};
 
 pub struct SqlxConn<'conn>(PgTransaction<'conn>);
@@ -85,7 +85,7 @@ impl<'c> SqlxConn<'c> {
 /// the web layer and the seam suite keep calling them on the concrete type;
 /// the traits exist so the loop can be generic over the source).
 #[async_trait::async_trait]
-impl<'c> Txn for SqlxConn<'c> {
+impl<'c> Txn<ConcreteDomain<SqlxConn<'c>>> for SqlxConn<'c> {
     async fn commit(self) -> TbResult<()> {
         // The inherent method (same name, same receiver) wins method
         // resolution over this trait method; that is the delegation.
@@ -155,9 +155,7 @@ impl DbPool {
 /// seam suite keep calling on the concrete type); the trait exists so the
 /// loop can be generic over the source and never name the pool.
 #[async_trait::async_trait]
-impl TxnSource for DbPool {
-    type Conn = SqlxConn<'static>;
-
+impl TxnSource<ConcreteDomain<SqlxConn<'static>>> for DbPool {
     async fn begin(&self) -> TbResult<SqlxConn<'static>> {
         // The inherent method (same name, same receiver) wins method
         // resolution over this trait method; that is the delegation.

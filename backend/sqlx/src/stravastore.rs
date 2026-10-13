@@ -5,7 +5,7 @@ use oauth2::RefreshToken;
 use sqlx::FromRow;
 
 use crate::{SqlxConn, into_domain, option_into, vec_into};
-use tb_domain::{TbResult, UserId};
+use tb_domain::{ConcreteDomain, TbResult, UserId};
 use tb_strava::{StravaId, StravaUser, event::Event};
 
 #[derive(Clone, Debug, Default, FromRow)]
@@ -114,7 +114,7 @@ impl From<DbEvent> for Event {
 }
 
 #[async_trait::async_trait]
-impl<'c> tb_strava::StravaStore for SqlxConn<'c> {
+impl<'c> tb_strava::StravaStore<ConcreteDomain<SqlxConn<'c>>> for SqlxConn<'c> {
     async fn stravaid_get_user_id(&mut self, who: i32) -> TbResult<i32> {
         sqlx::query_scalar!("SELECT id FROM strava_users WHERE tendabike_id = $1", who)
             .fetch_one(&mut **self.inner())

@@ -28,7 +28,7 @@ use axum::{
 };
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use tb_exec::TxnSource;
+use tb_exec::{Txn, TxnSource};
 
 use crate::{
     RequestSession,
@@ -37,8 +37,8 @@ use crate::{
     error::{ApiResult, AppError},
 };
 use serde_with::serde_as;
-use tb_domain::{ApiWrite, Part, PartId, PartTypeId};
-use tb_strava::{StravaSession, StravaStore};
+use tb_domain::{ApiWrite, ConcreteDomain, Part, PartId, PartTypeId, Store};
+use tb_strava::StravaStore;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 #[serde_as]
@@ -67,9 +67,10 @@ pub struct ChangePart {
     pub purchase: OffsetDateTime,
 }
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
+pub(super) fn router<St, S>() -> Router<AppState<St, S>>
 where
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     Router::new()
         .route("/", post(post_part))
@@ -77,21 +78,22 @@ where
         .route("/categories", get(mycats))
 }
 
-async fn get_part<S>(
+async fn get_part<St, S>(
     Path(part): Path<PartId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> ApiResult<Part>
 where
-    S: TxnSource + Clone + 'static,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     Ok(part.part(&user, &mut store).await.map(Json)?)
 }
 
-async fn post_part<S>(
+async fn post_part<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(NewPart {
         what,
         name,
@@ -101,8 +103,8 @@ async fn post_part<S>(
     }): Json<NewPart>,
 ) -> Result<(StatusCode, Json<Part>), AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     // The write runs on the user's executor (spec §6.2); the 201 body is the
     // created part extracted from the write's `Summary`.
@@ -124,14 +126,14 @@ where
     Ok((StatusCode::CREATED, Json(part)))
 }
 
-async fn delete_part<S>(
+async fn delete_part<St, S>(
     Path(part): Path<PartId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry
@@ -144,9 +146,9 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn put_part<S>(
+async fn put_part<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Path(part): Path<PartId>,
     Json(ChangePart {
         name,
@@ -156,8 +158,8 @@ async fn put_part<S>(
     }): Json<ChangePart>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry
@@ -176,12 +178,13 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn mycats<S>(
+async fn mycats<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
 ) -> ApiResult<HashSet<PartTypeId>>
 where
-    S: TxnSource + Clone + 'static,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
     Ok(Part::categories(&user, &mut store).await.map(Json)?)

@@ -29,27 +29,28 @@ use http::StatusCode;
 use log::trace;
 
 use crate::{RequestSession, appstate::AppState, domain::created_entity, error::AppError};
-use tb_domain::{ApiWrite, ServicePlan, ServicePlanId};
-use tb_exec::TxnSource;
-use tb_strava::{StravaSession, StravaStore};
+use tb_domain::{ApiWrite, ConcreteDomain, ServicePlan, ServicePlanId, Store};
+use tb_exec::{Txn, TxnSource};
+use tb_strava::StravaStore;
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
+pub(super) fn router<St, S>() -> Router<AppState<St, S>>
 where
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     Router::new()
         .route("/", post(create).put(update))
         .route("/{id}", delete(delete_plan))
 }
 
-async fn create<S>(
+async fn create<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(plan): Json<ServicePlan>,
 ) -> Result<(StatusCode, Json<ServicePlan>), AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     trace!("ServicePlan::create");
     let summary = state
@@ -64,14 +65,14 @@ where
     Ok((StatusCode::CREATED, Json(plan)))
 }
 
-async fn update<S>(
+async fn update<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(plan): Json<ServicePlan>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry
@@ -84,14 +85,14 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn delete_plan<S>(
+async fn delete_plan<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Path(id): Path<ServicePlanId>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     state
         .registry

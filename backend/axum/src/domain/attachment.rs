@@ -13,9 +13,9 @@ use serde::Deserialize;
 use time::OffsetDateTime;
 
 use crate::{RequestSession, appstate::AppState, error::AppError};
-use tb_domain::{ApiWrite, PartId, PartTypeId};
-use tb_exec::TxnSource;
-use tb_strava::{StravaSession, StravaStore};
+use tb_domain::{ApiWrite, ConcreteDomain, PartId, PartTypeId, Store};
+use tb_exec::{Txn, TxnSource};
+use tb_strava::StravaStore;
 
 /// Description of an Attach or Detach request
 
@@ -35,14 +35,14 @@ pub struct Event {
 }
 
 /// route for attach API
-async fn attach_rt<S>(
+async fn attach_rt<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(event): Json<Event>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     debug!("attach {event:?}");
     let Event {
@@ -70,14 +70,14 @@ where
 }
 
 /// route for detach API
-async fn detach_rt<S>(
+async fn detach_rt<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(event): Json<Event>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     debug!("detach {event:?}");
     let Event {
@@ -106,14 +106,14 @@ pub struct Dispose {
     all: bool,
 }
 
-async fn dispose_rt<S>(
+async fn dispose_rt<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(event): Json<Dispose>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     debug!("{event:?}");
     let Dispose {
@@ -132,14 +132,14 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn recover_rt<S>(
+async fn recover_rt<St, S>(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState<St, S>>,
     Json(event): Json<Dispose>,
 ) -> Result<StatusCode, AppError>
 where
-    S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     debug!("Recover {event:?}");
     let Dispose {
@@ -156,9 +156,10 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-pub(crate) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
+pub(crate) fn router<St, S>() -> Router<AppState<St, S>>
 where
-    S::Conn: StravaStore,
+    St: Store + 'static + StravaStore<ConcreteDomain<St>> + Txn<ConcreteDomain<St>>,
+    S: TxnSource<ConcreteDomain<St>> + Clone + 'static,
 {
     Router::new()
         .route("/attach", post(attach_rt))
