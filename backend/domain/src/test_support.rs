@@ -84,10 +84,9 @@ where
 
 // --- Core types shared by all subtrait impls ---
 
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex};
 
 use crate::*;
 
@@ -147,9 +146,6 @@ impl Session for TestSession {
 
 /// The complete state of the in-memory database: every table plus the
 /// auto-increment counters.
-///
-/// A [`MemStore`] is a transaction on top of one of these, mirroring the
-/// production `SqlxConn` (an open Postgres transaction on the database).
 #[derive(Clone)]
 pub struct StoreData {
     /// Parts keyed by PartId
@@ -222,44 +218,16 @@ impl StoreData {
     }
 }
 
-/// Test-only fault injection for the in-memory store (issue #409):
-/// makes one specific store method fail, so a test can drive a domain
-/// operation to fail mid-transaction — something the production store
-/// cannot be made to do. Arm it with [`MemStore::fail_next`]; the next
-/// call of the armed kind fails with [`Error::DatabaseFailure`], like a
-/// database failure would.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Fault {
-    /// The next `AttachmentStore::attachment_create` call fails.
-    AttachmentCreate,
-    /// The next `UsageStore::update` call fails.
-    UsageUpdate,
-}
-
 /// In-memory store implementing all nine sub-traits + Store.
 ///
-/// A `MemStore` is a transaction on an in-memory database, mirroring the
-/// production `SqlxConn` (an open Postgres transaction): every write lands
-/// in this transaction's working copy only, and reads see the working copy
-/// when it exists, otherwise the committed state.
-/// [`commit`](MemStore::commit) merges the working copy into the database;
-/// dropping the store without commit, or calling [`MemStore::rollback`],
-/// discards it. [`MemStore::begin`] opens a sibling transaction on the same
-/// database, so commit/abort are observable (issue #409).
+/// A `MemStore` is a handle on a shared in-memory database: every write
+/// lands directly in the shared state, and every read sees it.
+/// [`MemStore::begin`] returns a sibling handle on the same state.
+/// [`commit`](MemStore::commit) and [`MemStore::rollback`] are no-ops
+/// because the in-memory store does not simulate transactions.
 pub struct MemStore {
-    /// The committed database state, shared with sibling transactions.
-    /// Production analogue: the database behind the open transaction.
-    base: Arc<RwLock<StoreData>>,
-    /// This transaction's uncommitted writes (a full working copy, taken
-    /// lazily on the first write). `None` means "nothing pending": reads
-    /// go straight to the committed state, so a read-only sibling always
-    /// sees other transactions' commits. Once it exists, the working copy
-    /// is a snapshot: this transaction's writes are visible, commits of
-    /// other transactions are not (re-`begin()` to pick them up) — close
-    /// enough to the database for test purposes (issue #409).
-    buffer: Option<StoreData>,
-    /// Armed test-only fault (see [`Fault`]).
-    fault: Option<Fault>,
+    /// The shared in-memory database state, held by every handle.
+    state: Arc<Mutex<StoreData>>,
 }
 
 impl Default for MemStore {
@@ -269,101 +237,30 @@ impl Default for MemStore {
 }
 
 impl MemStore {
-    /// An empty in-memory database with one fresh transaction on it.
+    /// An empty shared in-memory database.
     pub fn new() -> Self {
         Self {
-            base: Arc::new(RwLock::new(StoreData::empty())),
-            buffer: None,
-            fault: None,
+            state: Arc::new(Mutex::new(StoreData::empty())),
         }
     }
 
-    /// Begin a sibling transaction on the same in-memory database.
-    ///
-    /// Siblings see only committed state: uncommitted writes of the other
-    /// transaction are invisible to it, become visible once the other
-    /// commits, and vanish when the other is dropped or rolled back
-    /// (issue #409).
+    /// A cheap sibling handle on the SAME shared state: writes through
+    /// either handle are immediately visible to the other.
     pub fn begin(&self) -> Self {
         Self {
-            base: Arc::clone(&self.base),
-            buffer: None,
-            fault: None,
+            state: Arc::clone(&self.state),
         }
     }
 
-    /// Abort this transaction: discard every uncommitted write, restoring
-    /// the committed state (the in-memory mirror of the database rolling
-    /// back an uncommitted transaction; issue #409).
-    pub async fn rollback(&mut self) -> TbResult<()> {
-        self.buffer = None;
-        self.fault = None;
-        Ok(())
-    }
-
-    /// Commit this transaction: merge the working copy into the database,
-    /// where sibling transactions can see it (the in-memory mirror of
-    /// `COMMIT`; issue #409). Consumes the store, like `SqlxConn::commit`.
+    /// No-op: writes already landed in the shared state. Consumes the
+    /// handle, like `SqlxConn::commit`.
     pub async fn commit(self) -> TbResult<()> {
-        let Self {
-            base,
-            buffer,
-            fault: _,
-        } = self;
-        let mut committed = base.write().expect("in-memory store base poisoned");
-        if let Some(buffer) = buffer {
-            *committed = buffer;
-        }
         Ok(())
     }
 
-    /// Arm a test-only fault: the next call of the given kind fails with
-    /// [`Error::DatabaseFailure`]. See [`Fault`].
-    pub fn fail_next(&mut self, fault: Fault) {
-        self.fault = Some(fault);
-    }
-
-    /// Fail the armed fault, if the next call of kind `f` is armed.
-    fn check_fault(&mut self, f: Fault) -> TbResult<()> {
-        if self.fault == Some(f) {
-            self.fault = None;
-            return Err(Error::DatabaseFailure(anyhow::anyhow!(
-                "injected fault: {:?}",
-                f
-            )));
-        }
+    /// No-op: writes already landed in the shared state.
+    pub async fn rollback(&mut self) -> TbResult<()> {
         Ok(())
-    }
-
-    /// The state this transaction sees: the uncommitted working copy when
-    /// there is one, otherwise the committed state (cloned). Read methods
-    /// use this; it never materializes the buffer.
-    pub fn state(&self) -> Cow<'_, StoreData> {
-        match &self.buffer {
-            Some(buffer) => Cow::Borrowed(buffer),
-            None => Cow::Owned(
-                self.base
-                    .read()
-                    .expect("in-memory store base poisoned")
-                    .clone(),
-            ),
-        }
-    }
-
-    /// Mutable access to the working copy, materializing it from the
-    /// committed state on the first write. Write methods use this.
-    pub fn state_mut(&mut self) -> &mut StoreData {
-        if self.buffer.is_none() {
-            self.buffer = Some(
-                self.base
-                    .read()
-                    .expect("in-memory store base poisoned")
-                    .clone(),
-            );
-        }
-        self.buffer
-            .as_mut()
-            .expect("buffer materialized by state_mut")
     }
 }
 

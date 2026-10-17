@@ -5,8 +5,7 @@ use time::OffsetDateTime;
 #[async_trait::async_trait]
 impl AttachmentStore for MemStore {
     async fn attachment_create(&mut self, att: Attachment) -> TbResult<Attachment> {
-        self.check_fault(Fault::AttachmentCreate)?;
-        let d = self.state_mut();
+        let mut d = self.state.lock().expect("in-memory store state poisoned");
         // The database keys attachments by (part_id, attached_time) and
         // rejects a duplicate key; mirror that here — including the error
         // it surfaces as (issue #409).
@@ -23,7 +22,7 @@ impl AttachmentStore for MemStore {
     }
 
     async fn delete(&mut self, att: Attachment) -> TbResult<Attachment> {
-        let d = self.state_mut();
+        let mut d = self.state.lock().expect("in-memory store state poisoned");
         // The row is addressed by part + attach time — the database's key
         // (one rule on both stores); the other fields are not part of the
         // identity.
@@ -37,7 +36,7 @@ impl AttachmentStore for MemStore {
     }
 
     async fn attachments_delete_by_parts(&mut self, parts: &[crate::Part]) -> TbResult<usize> {
-        let d = self.state_mut();
+        let mut d = self.state.lock().expect("in-memory store state poisoned");
         let part_ids: Vec<PartId> = parts.iter().map(|p| p.id).collect();
         let before_count = d.attachments.len();
         d.attachments.retain(|(pid, _), _| !part_ids.contains(pid));
@@ -49,7 +48,7 @@ impl AttachmentStore for MemStore {
         act_gear: PartId,
         start: OffsetDateTime,
     ) -> TbResult<Vec<Attachment>> {
-        let d = self.state();
+        let d = self.state.lock().expect("in-memory store state poisoned");
         Ok(d.attachments
             .values()
             .filter(|a| a.gear == act_gear && a.attached <= start && a.detached > start)
@@ -58,7 +57,7 @@ impl AttachmentStore for MemStore {
     }
 
     async fn attachments_all_by_part(&mut self, id: PartId) -> TbResult<Vec<Attachment>> {
-        let d = self.state();
+        let d = self.state.lock().expect("in-memory store state poisoned");
         let mut result: Vec<Attachment> = d
             .attachments
             .values()
@@ -74,7 +73,7 @@ impl AttachmentStore for MemStore {
         pid: PartId,
         time: OffsetDateTime,
     ) -> TbResult<Option<Attachment>> {
-        let d = self.state();
+        let d = self.state.lock().expect("in-memory store state poisoned");
         Ok(d.attachments
             .values()
             .find(|a| a.part_id == pid && a.attached <= time && a.detached > time)
@@ -87,7 +86,7 @@ impl AttachmentStore for MemStore {
         gear: PartId,
         time: OffsetDateTime,
     ) -> TbResult<Vec<Attachment>> {
-        let d = self.state();
+        let d = self.state.lock().expect("in-memory store state poisoned");
         Ok(d.attachments
             .values()
             .filter(|a| {
@@ -104,7 +103,7 @@ impl AttachmentStore for MemStore {
         hook: PartTypeId,
         time: OffsetDateTime,
     ) -> TbResult<Option<Attachment>> {
-        let d = self.state();
+        let d = self.state.lock().expect("in-memory store state poisoned");
         Ok(d.attachments
             .values()
             .find(|a| {
@@ -125,7 +124,7 @@ impl AttachmentStore for MemStore {
         time: OffsetDateTime,
         what: PartTypeId,
     ) -> TbResult<Option<Attachment>> {
-        let d = self.state();
+        let d = self.state.lock().expect("in-memory store state poisoned");
         // The successor: another part, of the same type, at the same hook,
         // attached later — the part's own later rows never count (one rule
         // on both stores).
@@ -149,7 +148,7 @@ impl AttachmentStore for MemStore {
         part_id: PartId,
         time: OffsetDateTime,
     ) -> TbResult<Option<Attachment>> {
-        let d = self.state();
+        let d = self.state.lock().expect("in-memory store state poisoned");
         Ok(d.attachments
             .values()
             .filter(|a| a.part_id == part_id && a.attached > time)
@@ -164,7 +163,7 @@ impl AttachmentStore for MemStore {
         hook: PartTypeId,
         time: OffsetDateTime,
     ) -> TbResult<Option<Attachment>> {
-        let d = self.state();
+        let d = self.state.lock().expect("in-memory store state poisoned");
         // The adjacent-merge trigger: the row of this part at this gear and
         // hook that ended exactly at `time` (one rule on both stores).
         Ok(d.attachments

@@ -4,7 +4,7 @@ use crate::{Error, OnboardingStatus, TbResult, User, UserId};
 #[async_trait::async_trait]
 impl UserStore for MemStore {
     async fn get(&mut self, uid: UserId) -> TbResult<User> {
-        let d = self.state();
+        let d = self.state.lock().expect("in-memory store state poisoned");
         d.users
             .get(&uid)
             .cloned()
@@ -17,7 +17,7 @@ impl UserStore for MemStore {
         lastname: &str,
         avatar: &Option<String>,
     ) -> TbResult<User> {
-        let d = self.state_mut();
+        let mut d = self.state.lock().expect("in-memory store state poisoned");
         let id = UserId::from(d.next_user_id);
         d.next_user_id += 1;
         let user = User {
@@ -39,7 +39,7 @@ impl UserStore for MemStore {
         lastname: &str,
         avatar: &Option<String>,
     ) -> TbResult<User> {
-        let d = self.state_mut();
+        let mut d = self.state.lock().expect("in-memory store state poisoned");
         match d.users.get_mut(uid) {
             Some(user) => {
                 user.firstname = firstname.into();
@@ -52,7 +52,7 @@ impl UserStore for MemStore {
     }
 
     async fn user_delete(&mut self, user: &UserId) -> TbResult<usize> {
-        let d = self.state_mut();
+        let mut d = self.state.lock().expect("in-memory store state poisoned");
         if d.users.remove(user).is_some() {
             Ok(1)
         } else {
@@ -65,7 +65,7 @@ impl UserStore for MemStore {
         uid: &UserId,
         status: OnboardingStatus,
     ) -> TbResult<User> {
-        let d = self.state_mut();
+        let mut d = self.state.lock().expect("in-memory store state poisoned");
         match d.users.get_mut(uid) {
             Some(user) => {
                 user.onboarding_status = status;
