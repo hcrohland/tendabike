@@ -192,6 +192,10 @@ pub(crate) async fn read_sse_frames(
 /// A fake connection: the nine `Store` sub-traits, `StravaDataStore` (all methods
 /// `unimplemented!()` — they are never reached because `begin` fails first),
 /// and `Txn` with `commit`/`rollback` returning a `DatabaseFailure`.
+///
+/// Hand-rolled rather than `mockall`: `TxnSource::Conn` must implement all of
+/// those traits at once, and `mockall` generates one type per trait, so the
+/// multi-trait `Conn` witness cannot be generated.
 struct FakeConn;
 
 impl Store for FakeConn {}
