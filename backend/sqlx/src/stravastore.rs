@@ -114,15 +114,8 @@ impl From<DbEvent> for Event {
 }
 
 #[async_trait::async_trait]
-impl<'c> tb_strava::StravaStore for SqlxConn<'c> {
-    async fn stravaid_get_user_id(&mut self, who: i32) -> TbResult<i32> {
-        sqlx::query_scalar!("SELECT id FROM strava_users WHERE tendabike_id = $1", who)
-            .fetch_one(&mut **self.inner())
-            .await
-            .map_err(into_domain)
-    }
-
-    async fn stravaevent_store(&mut self, e: Event) -> TbResult<()> {
+impl<'c> tb_strava::StravaDataStore for SqlxConn<'c> {
+    async fn strava_event_create(&mut self, e: Event) -> TbResult<()> {
         let e: DbEvent = e.into();
         sqlx::query_as!(
             DbEvent,
@@ -204,7 +197,7 @@ impl<'c> tb_strava::StravaStore for SqlxConn<'c> {
         Ok(())
     }
 
-    async fn stravausers_get_all(&mut self) -> TbResult<Vec<StravaUser>> {
+    async fn stravauser_get_all(&mut self) -> TbResult<Vec<StravaUser>> {
         sqlx::query_as!(DbStravaUser, "SELECT * FROM strava_users")
             .fetch_all(&mut **self.inner())
             .await
@@ -236,7 +229,7 @@ impl<'c> tb_strava::StravaStore for SqlxConn<'c> {
         .map(option_into)
     }
 
-    async fn stravauser_new(&mut self, user: StravaUser) -> TbResult<StravaUser> {
+    async fn stravauser_create(&mut self, user: StravaUser) -> TbResult<StravaUser> {
         let db_user = DbStravaUser::from(user);
         sqlx::query_as!(
             DbStravaUser,
@@ -253,7 +246,7 @@ impl<'c> tb_strava::StravaStore for SqlxConn<'c> {
         .map(Into::into)
     }
 
-    async fn stravaid_update_token(
+    async fn stravauser_update_token(
         &mut self,
         stravaid: StravaId,
         refresh: Option<&String>,
@@ -313,6 +306,8 @@ impl<'c> tb_strava::StravaStore for SqlxConn<'c> {
         Ok(result.rows_affected() as usize)
     }
 }
+
+impl<'c> tb_strava::StravaStore for SqlxConn<'c> {}
 
 #[cfg(test)]
 mod tests {

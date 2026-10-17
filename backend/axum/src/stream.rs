@@ -44,7 +44,7 @@ use tokio::sync::{Mutex, Notify, broadcast, watch};
 use tb_domain::{ApiWrite, DescendReport, Error, Session, Summary, TbResult, UserId, WriteOutcome};
 use tb_exec::{ApiWriteRequest, ApiWriteSender, Txn, TxnSource, api_write_channel, run};
 use tb_strava::{
-    StravaId, StravaStore,
+    StravaDataStore, StravaId,
     event::{Event as StravaEvent, ObjectType},
 };
 

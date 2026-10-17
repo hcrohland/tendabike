@@ -16,7 +16,7 @@ use http_body_util::BodyExt;
 use tb_domain::test_support::MemStore;
 use tb_domain::*;
 use tb_exec::{Txn, TxnSource};
-use tb_strava::{StravaId, StravaStore, StravaUser, event::Event};
+use tb_strava::{StravaDataStore, StravaId, StravaStore, StravaUser, event::Event};
 use time::OffsetDateTime;
 use tower::ServiceExt;
 use tower_sessions::{MemoryStore, Session, SessionManagerLayer};
@@ -189,7 +189,7 @@ pub(crate) async fn read_sse_frames(
     frames
 }
 
-/// A fake connection: the nine `Store` sub-traits, `StravaStore` (all methods
+/// A fake connection: the nine `Store` sub-traits, `StravaDataStore` (all methods
 /// `unimplemented!()` — they are never reached because `begin` fails first),
 /// and `Txn` with `commit`/`rollback` returning a `DatabaseFailure`.
 struct FakeConn;
@@ -612,17 +612,14 @@ impl ServicePlanStore for FakeConn {
 }
 
 #[async_trait::async_trait]
-impl StravaStore for FakeConn {
-    async fn stravaid_get_user_id(&mut self, _who: i32) -> TbResult<i32> {
-        unimplemented!()
-    }
+impl StravaDataStore for FakeConn {
     async fn strava_event_delete(&mut self, _event_id: Option<i32>) -> TbResult<()> {
         unimplemented!()
     }
     async fn strava_event_set_time(&mut self, _e_id: Option<i32>, _e_time: i64) -> TbResult<()> {
         unimplemented!()
     }
-    async fn stravaevent_store(&mut self, _e: Event) -> TbResult<()> {
+    async fn strava_event_create(&mut self, _e: Event) -> TbResult<()> {
         unimplemented!()
     }
     async fn strava_event_get_next_for_user(&mut self, _user: StravaId) -> TbResult<Option<Event>> {
@@ -638,7 +635,7 @@ impl StravaStore for FakeConn {
     async fn strava_events_delete_batch(&mut self, _values: Vec<Option<i32>>) -> TbResult<()> {
         unimplemented!()
     }
-    async fn stravausers_get_all(&mut self) -> TbResult<Vec<StravaUser>> {
+    async fn stravauser_get_all(&mut self) -> TbResult<Vec<StravaUser>> {
         unimplemented!()
     }
     async fn stravauser_get_by_tbid(&mut self, _id: UserId) -> TbResult<StravaUser> {
@@ -647,10 +644,10 @@ impl StravaStore for FakeConn {
     async fn stravauser_get_by_stravaid(&mut self, _id: &StravaId) -> TbResult<Option<StravaUser>> {
         unimplemented!()
     }
-    async fn stravauser_new(&mut self, _user: StravaUser) -> TbResult<StravaUser> {
+    async fn stravauser_create(&mut self, _user: StravaUser) -> TbResult<StravaUser> {
         unimplemented!()
     }
-    async fn stravaid_update_token(
+    async fn stravauser_update_token(
         &mut self,
         _stravaid: StravaId,
         _refresh: Option<&String>,
@@ -667,6 +664,9 @@ impl StravaStore for FakeConn {
         unimplemented!()
     }
 }
+
+impl StravaStore for FakeConn {}
+
 #[async_trait::async_trait]
 impl Txn for FakeConn {
     async fn commit(self) -> TbResult<()> {
@@ -708,7 +708,7 @@ impl TxnSource for FakeSource {
 
 /// A live connection: a sibling transaction on the shared in-memory database
 /// (the nine `Store` sub-traits delegate to it, so the full `tb_exec` loop
-/// runs in-memory), plus the `StravaStore` queue the executor's Strava path
+/// runs in-memory), plus the `StravaDataStore` queue the executor's Strava path
 /// names, backed by shared in-memory state.
 pub struct LiveConn {
     pub mem: MemStore,
@@ -1171,10 +1171,7 @@ impl ServicePlanStore for LiveConn {
 }
 
 #[async_trait::async_trait]
-impl StravaStore for LiveConn {
-    async fn stravaid_get_user_id(&mut self, _who: i32) -> TbResult<i32> {
-        unimplemented!()
-    }
+impl StravaDataStore for LiveConn {
     async fn strava_event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {
         let mut st = self.strava.lock().expect("strava state");
         st.events.retain(|e| e.id != event_id);
@@ -1187,7 +1184,7 @@ impl StravaStore for LiveConn {
         }
         Ok(())
     }
-    async fn stravaevent_store(&mut self, mut e: Event) -> TbResult<()> {
+    async fn strava_event_create(&mut self, mut e: Event) -> TbResult<()> {
         let mut st = self.strava.lock().expect("strava state");
         st.next_id += 1;
         e.id = Some(st.next_id);
@@ -1223,7 +1220,7 @@ impl StravaStore for LiveConn {
         st.events.retain(|e| !values.contains(&e.id));
         Ok(())
     }
-    async fn stravausers_get_all(&mut self) -> TbResult<Vec<StravaUser>> {
+    async fn stravauser_get_all(&mut self) -> TbResult<Vec<StravaUser>> {
         Ok(Vec::new())
     }
     async fn stravauser_get_by_tbid(&mut self, id: UserId) -> TbResult<StravaUser> {
@@ -1248,10 +1245,10 @@ impl StravaStore for LiveConn {
             refresh_token: st.refresh_token.clone().map(oauth2::RefreshToken::new),
         }))
     }
-    async fn stravauser_new(&mut self, _user: StravaUser) -> TbResult<StravaUser> {
+    async fn stravauser_create(&mut self, _user: StravaUser) -> TbResult<StravaUser> {
         unimplemented!()
     }
-    async fn stravaid_update_token(
+    async fn stravauser_update_token(
         &mut self,
         stravaid: StravaId,
         refresh: Option<&String>,
@@ -1278,6 +1275,8 @@ impl StravaStore for LiveConn {
         unimplemented!()
     }
 }
+
+impl StravaStore for LiveConn {}
 
 #[async_trait::async_trait]
 impl Txn for LiveConn {

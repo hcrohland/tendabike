@@ -1,6 +1,13 @@
 /*
-This file defines the StravaStore trait, which extends the tb_domain::traits::Store trait
-and provides additional methods for interacting with Strava data.
+This file defines the Strava data-store traits.
+
+`StravaDataStore` is the local trait: it carries the Strava-specific methods
+(the `strava_users` and `strava_events` tables) and no domain supertrait, so a
+consumer that only drives Strava work can bound on it directly.
+
+`StravaStore` is the method-free umbrella over `tb_domain::Store` +
+`StravaDataStore`, naming a store that can do both domain and Strava work —
+the same "local traits plus an umbrella" shape as `tb_domain::Store` itself.
 */
 
 use serde::de::DeserializeOwned;
@@ -8,109 +15,19 @@ use serde::de::DeserializeOwned;
 use crate::{StravaId, StravaUser, event::Event};
 use tb_domain::{Session, TbResult, UserId};
 
+/// The Strava-side data store: the `strava_users` and `strava_events` tables.
+///
+/// This is the local trait — it carries no domain supertrait, so a consumer
+/// that only drives Strava work can bound on it directly instead of the full
+/// [`StravaStore`] umbrella.
 #[async_trait::async_trait]
-pub trait StravaStore: tb_domain::Store + Send {
-    /// Returns the user ID associated with the given Strava ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `who` - The Strava ID of the user.
-    ///
-    /// # Returns
-    ///
-    /// The user ID associated with the given Strava ID.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the user ID cannot be retrieved from the database.
-    async fn stravaid_get_user_id(&mut self, who: i32) -> TbResult<i32>;
-
-    /// Deletes the Strava event with the given event ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `event_id` - The ID of the event to delete.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the event cannot be deleted.
-    async fn strava_event_delete(&mut self, event_id: Option<i32>) -> TbResult<()>;
-
-    /// Sets the time of the Strava event with the given event ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `e_id` - The ID of the event to update.
-    /// * `e_time` - The new time to set for the event.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the event cannot be updated.
-    async fn strava_event_set_time(&mut self, e_id: Option<i32>, e_time: i64) -> TbResult<()>;
-
-    /// Stores the given Strava event.
-    ///
-    /// # Arguments
-    ///
-    /// * `e` - The event to store.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the event cannot be stored.
-    async fn stravaevent_store(&mut self, e: Event) -> TbResult<()>;
-
-    /// Returns the next Strava event for the given user.
-    ///
-    /// # Arguments
-    ///
-    /// * `user` - The user to get the next event for.
-    ///
-    /// # Returns
-    ///
-    /// The next Strava event for the given user, if one exists.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the event cannot be retrieved.
-    async fn strava_event_get_next_for_user(&mut self, user: StravaId) -> TbResult<Option<Event>>;
-
-    /// Returns all Strava events with a start time later than the given time and associated with the given object ID and Strava ID.
-    ///
-    /// # Arguments
-    ///
-    /// * `obj_id` - The ID of the object associated with the events.
-    /// * `oid` - The Strava ID of the object associated with the events.
-    ///
-    /// # Returns
-    ///
-    /// All Strava events with a start time later than the given time and associated with the given object ID and Strava ID.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the events cannot be retrieved.
-    async fn strava_event_get_later(&mut self, obj_id: i64, oid: StravaId) -> TbResult<Vec<Event>>;
-
-    /// Deletes the Strava events with the given event IDs.
-    ///
-    /// # Arguments
-    ///
-    /// * `values` - The IDs of the events to delete.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the events cannot be deleted.
-    async fn strava_events_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()>;
-
+pub trait StravaDataStore: Send {
     /// Returns all Strava users.
-    ///
-    /// # Returns
-    ///
-    /// All Strava users.
     ///
     /// # Errors
     ///
     /// Returns an error if the users cannot be retrieved.
-    async fn stravausers_get_all(&mut self) -> TbResult<Vec<StravaUser>>;
+    async fn stravauser_get_all(&mut self) -> TbResult<Vec<StravaUser>>;
 
     /// Returns the Strava user associated with the given user ID.
     ///
@@ -155,15 +72,13 @@ pub trait StravaStore: tb_domain::Store + Send {
     /// # Errors
     ///
     /// Returns an error if the user cannot be created.
-    async fn stravauser_new(&mut self, user: StravaUser) -> TbResult<StravaUser>;
+    async fn stravauser_create(&mut self, user: StravaUser) -> TbResult<StravaUser>;
 
     /// Updates the access token for a Strava user.
     ///
     /// # Arguments
     ///
     /// * `stravaid` - The Strava ID of the user.
-    /// * `access` - The new access token.
-    /// * `exp` - The expiration time of the access token.
     /// * `refresh` - The new refresh token, if any.
     ///
     /// # Returns
@@ -173,11 +88,102 @@ pub trait StravaStore: tb_domain::Store + Send {
     /// # Errors
     ///
     /// Returns an error if the user cannot be updated.
-    async fn stravaid_update_token(
+    async fn stravauser_update_token(
         &mut self,
         stravaid: StravaId,
         refresh: Option<&String>,
     ) -> TbResult<StravaUser>;
+
+    /// Deletes the Strava user with the given TendaBike user ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `user` - The TendaBike user ID of the user.
+    ///
+    /// # Returns
+    ///
+    /// The number of Strava users deleted.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the user cannot be deleted.
+    async fn stravauser_delete(&mut self, user: UserId) -> TbResult<usize>;
+
+    /// Stores the given Strava event.
+    ///
+    /// # Arguments
+    ///
+    /// * `e` - The event to store.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the event cannot be stored.
+    async fn strava_event_create(&mut self, e: Event) -> TbResult<()>;
+
+    /// Deletes the Strava event with the given event ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `event_id` - The ID of the event to delete.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the event cannot be deleted.
+    async fn strava_event_delete(&mut self, event_id: Option<i32>) -> TbResult<()>;
+
+    /// Sets the time of the Strava event with the given event ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `e_id` - The ID of the event to update.
+    /// * `e_time` - The new time to set for the event.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the event cannot be updated.
+    async fn strava_event_set_time(&mut self, e_id: Option<i32>, e_time: i64) -> TbResult<()>;
+
+    /// Returns the next Strava event for the given user.
+    ///
+    /// # Arguments
+    ///
+    /// * `user` - The user to get the next event for.
+    ///
+    /// # Returns
+    ///
+    /// The next Strava event for the given user, if one exists.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the event cannot be retrieved.
+    async fn strava_event_get_next_for_user(&mut self, user: StravaId) -> TbResult<Option<Event>>;
+
+    /// Returns all Strava events with a start time later than the given time and associated with the given object ID and Strava ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `obj_id` - The ID of the object associated with the events.
+    /// * `oid` - The Strava ID of the object associated with the events.
+    ///
+    /// # Returns
+    ///
+    /// All Strava events with a start time later than the given time and associated with the given object ID and Strava ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the events cannot be retrieved.
+    async fn strava_event_get_later(&mut self, obj_id: i64, oid: StravaId) -> TbResult<Vec<Event>>;
+
+    /// Deletes the Strava events with the given event IDs.
+    ///
+    /// # Arguments
+    ///
+    /// * `values` - The IDs of the events to delete.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the events cannot be deleted.
+    async fn strava_events_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()>;
 
     /// Returns the number of Strava events for a given user.
     ///
@@ -194,11 +200,11 @@ pub trait StravaStore: tb_domain::Store + Send {
     /// Returns an error if the event count cannot be retrieved.
     async fn strava_events_get_count_for_user(&mut self, user: &StravaId) -> TbResult<i64>;
 
-    /// Deletes a[[ Strava events for a given user.
+    /// Deletes all Strava events for a given user.
     ///
     /// # Arguments
     ///
-    /// * `user` - The Strava user to get the event count for.
+    /// * `user` - The Strava user whose events should be deleted.
     ///
     /// # Returns
     ///
@@ -206,11 +212,15 @@ pub trait StravaStore: tb_domain::Store + Send {
     ///
     /// # Errors
     ///
-    /// Returns an error if the event count cannot be retrieved.
+    /// Returns an error if the events cannot be deleted.
     async fn strava_events_delete_for_user(&mut self, user: &StravaId) -> TbResult<usize>;
-
-    async fn stravauser_delete(&mut self, user: UserId) -> TbResult<usize>;
 }
+
+/// A method-free umbrella naming a complete Strava store: one that implements
+/// the domain [`tb_domain::Store`] *and* the local [`StravaDataStore`]. It
+/// carries no methods of its own — the same shape as `tb_domain::Store`,
+/// which is the umbrella over the domain's per-entity sub-traits.
+pub trait StravaStore: tb_domain::Store + StravaDataStore {}
 
 #[async_trait::async_trait]
 pub trait StravaSession: Session {
@@ -228,8 +238,8 @@ pub trait StravaSession: Session {
     async fn request_json<T: DeserializeOwned>(
         &mut self,
         uri: &str,
-        store: &mut impl StravaStore,
+        store: &mut impl StravaDataStore,
     ) -> TbResult<T>;
 
-    async fn deauthorize(&mut self, store: &mut impl StravaStore) -> TbResult<()>;
+    async fn deauthorize(&mut self, store: &mut impl StravaDataStore) -> TbResult<()>;
 }

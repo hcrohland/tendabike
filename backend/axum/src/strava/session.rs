@@ -14,7 +14,7 @@ use tower_sessions::Session as TowerSession;
 
 use crate::strava::{HTTP_CLIENT, StravaAthleteInfo, StravaTokenResponse, oauth::STRAVACLIENT};
 use tb_domain::{Error, Session as TbSession, ShopId, TbResult, UserId};
-use tb_strava::{StravaId, StravaSession, StravaStore, StravaUser};
+use tb_strava::{StravaDataStore, StravaId, StravaSession, StravaStore, StravaUser};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct RequestSession {
@@ -137,7 +137,7 @@ impl RequestSession {
         }
     }
 
-    async fn refresh_the_token(&mut self, store: &mut impl StravaStore) -> TbResult<()> {
+    async fn refresh_the_token(&mut self, store: &mut impl StravaDataStore) -> TbResult<()> {
         let token = match self.refresh_token.clone() {
             Some(token) => token,
             None => {
@@ -194,7 +194,7 @@ impl RequestSession {
     async fn get_strava(
         &mut self,
         uri: &str,
-        store: &mut impl StravaStore,
+        store: &mut impl StravaDataStore,
     ) -> TbResult<reqwest::Response> {
         self.check_token(store).await?;
 
@@ -229,7 +229,7 @@ impl RequestSession {
         }
     }
 
-    async fn check_token(&mut self, store: &mut impl StravaStore) -> TbResult<()> {
+    async fn check_token(&mut self, store: &mut impl StravaDataStore) -> TbResult<()> {
         if self.is_expired() {
             debug!("access token for user {} is expired", self.id);
             return self.refresh_the_token(store).await;
@@ -272,7 +272,7 @@ impl StravaSession for RequestSession {
     async fn request_json<T: DeserializeOwned>(
         &mut self,
         uri: &str,
-        store: &mut impl StravaStore,
+        store: &mut impl StravaDataStore,
     ) -> TbResult<T> {
         let r = self
             .get_strava(uri, store)
@@ -284,7 +284,7 @@ impl StravaSession for RequestSession {
         Ok(serde_json::from_str::<T>(&r).context("Could not parse response body")?)
     }
 
-    async fn deauthorize(&mut self, store: &mut impl StravaStore) -> TbResult<()> {
+    async fn deauthorize(&mut self, store: &mut impl StravaDataStore) -> TbResult<()> {
         self.check_token(store).await?;
 
         STRAVACLIENT

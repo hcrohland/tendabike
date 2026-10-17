@@ -18,7 +18,7 @@ use crate::*;
 pub struct StravaId(i32);
 
 impl StravaId {
-    pub async fn read(&self, store: &mut impl StravaStore) -> TbResult<Option<StravaUser>> {
+    pub async fn read(&self, store: &mut impl StravaDataStore) -> TbResult<Option<StravaUser>> {
         store.stravauser_get_by_stravaid(self).await
     }
 
@@ -29,13 +29,13 @@ impl StravaId {
     pub async fn update_token(
         self,
         refresh: Option<&String>,
-        store: &mut impl StravaStore,
+        store: &mut impl StravaDataStore,
     ) -> TbResult<StravaUser> {
-        store.stravaid_update_token(self, refresh).await
+        store.stravauser_update_token(self, refresh).await
     }
 
     /// disable a user
-    pub(crate) async fn disable(self, store: &mut impl StravaStore) -> TbResult<()> {
+    pub(crate) async fn disable(self, store: &mut impl StravaDataStore) -> TbResult<()> {
         info!("disabling user {self}");
 
         let events = store.strava_events_delete_for_user(&self).await?;
@@ -44,7 +44,7 @@ impl StravaId {
             info!("deleted {} open events for strava user {}", events, self);
         }
 
-        store.stravaid_update_token(self, None).await?;
+        store.stravauser_update_token(self, None).await?;
         Ok(())
     }
 }
@@ -71,7 +71,7 @@ impl StravaUser {
     /// # Errors
     ///
     /// Returns an `Error` if the user is not registered.
-    pub async fn read(id: UserId, store: &mut impl StravaStore) -> TbResult<Self> {
+    pub async fn read(id: UserId, store: &mut impl StravaDataStore) -> TbResult<Self> {
         store.stravauser_get_by_tbid(id).await
     }
 
@@ -122,7 +122,7 @@ impl StravaUser {
                 .update(firstname, lastname, avatar, store)
                 .await?;
             store
-                .stravaid_update_token(user.id, refresh.map(RefreshToken::secret))
+                .stravauser_update_token(user.id, refresh.map(RefreshToken::secret))
                 .await?;
             return Ok(user);
         }
@@ -137,7 +137,7 @@ impl StravaUser {
         };
         info!("creating new user id {user:?}");
 
-        let user = store.stravauser_new(user).await?;
+        let user = store.stravauser_create(user).await?;
         // Note: Automatic sync removed - user must manually trigger initial activity import
         Ok(user)
     }
@@ -187,7 +187,7 @@ pub struct StravaStat {
 }
 
 pub async fn get_all_stats(store: &mut impl StravaStore) -> TbResult<Vec<StravaStat>> {
-    let users = store.stravausers_get_all().await?;
+    let users = store.stravauser_get_all().await?;
 
     let mut res = Vec::new();
     for u in users {
@@ -210,7 +210,7 @@ pub async fn get_all_stats(store: &mut impl StravaStore) -> TbResult<Vec<StravaS
 /// or has open events and if strava or the database is not reachable.
 pub async fn user_deauthorize(
     user: &mut impl StravaSession,
-    store: &mut impl StravaStore,
+    store: &mut impl StravaDataStore,
 ) -> TbResult<()> {
     if let Err(err) = user.deauthorize(store).await {
         warn!("could not deauthorize user {}: {:#}", user.tb_id(), err)
@@ -225,15 +225,15 @@ pub async fn user_deauthorize(
 ///
 /// # Arguments
 ///
-/// * `strava_id` - An `i32` representing the Strava ID of the user.
+/// * `user_id` - An `UserId` representing the TendaBike user ID of the user.
 /// * `store` - A mutable reference to a `AppConn` representing the database connection.
 ///
 /// # Returns
 ///
 /// An `TbResult` containing a `String` representing the Strava URL for the user.
-pub async fn strava_url(strava_id: i32, store: &mut impl StravaStore) -> TbResult<String> {
-    let user_id = store.stravaid_get_user_id(strava_id).await?;
-    Ok(format!("https://strava.com/athletes/{}", user_id))
+pub async fn strava_url(user_id: UserId, store: &mut impl StravaDataStore) -> TbResult<String> {
+    let user = store.stravauser_get_by_tbid(user_id).await?;
+    Ok(format!("https://strava.com/athletes/{}", user.strava_id()))
 }
 
 pub async fn user_delete(

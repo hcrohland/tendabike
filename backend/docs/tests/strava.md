@@ -4,7 +4,7 @@
 
 ## Key infrastructure
 
-- **`TestStravaStore`** (`strava/src/test_support.rs`) — implements `StravaStore`. Domain data delegates to the domain `MemStore` (accessible as `store.mem`; use qualified calls like `ActivityStore::get_all(&mut store.mem, &user)`). `strava_users: HashMap<UserId, StravaUser>` and `events: Vec<Event>` are plain in-memory collections with auto-assigned event IDs; `insert_user()`, `event_count()` helpers.
+- **`TestStravaStore`** (`strava/src/test_support.rs`) — implements `StravaDataStore` (plus the empty `StravaStore` umbrella). Domain data delegates to the domain `MemStore` (accessible as `store.mem`; use qualified calls like `ActivityStore::get_all(&mut store.mem, &user)`). `strava_users: HashMap<UserId, StravaUser>` and `events: Vec<Event>` are plain in-memory collections with auto-assigned event IDs; `insert_user()`, `event_count()` helpers.
 - **`TestStravaSession`** (`strava/src/test_support.rs`) — implements `StravaSession`:
   - `queue(uri, json)` — script a JSON response body for an **exact** request URI (FIFO per URI)
   - `queue_error(uri, error)` — script an error for an exact URI; unscripted URIs yield `Error::BadRequest`
