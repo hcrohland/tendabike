@@ -302,6 +302,17 @@ impl Part {
             .await
     }
 
+    /// looks up the part carrying the given Strava source
+    ///
+    /// Returns `None` when no part carries that source.
+    pub async fn by_source(source: &str, store: &mut impl PartStore) -> TbResult<Option<Part>> {
+        let pid = store.partid_get_by_source(source).await?;
+        Ok(match pid {
+            Some(pid) => Some(pid.read(store).await?),
+            None => None,
+        })
+    }
+
     pub async fn categories(
         user: &dyn Session,
         store: &mut impl PartStore,
