@@ -100,7 +100,6 @@ pub(crate) async fn create_event<S>(
 ) -> ApiResult<()>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     trace!("Received {event:#?}");
     let mut store = state.source.begin().await?;
@@ -136,7 +135,6 @@ pub(super) async fn sync_api<S>(
 ) -> ApiResult<()>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     let mut store = state.source.begin().await?;
     let user_id: Option<tb_domain::UserId> = query.user_id.map(|u| u.into());
@@ -156,7 +154,6 @@ pub(super) async fn sync<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     let user_id: tb_domain::UserId = tbid.into();
     // The executor's event queue is keyed by the Strava id, so read the
@@ -190,7 +187,6 @@ pub(crate) async fn trigger_initial_sync<S>(
 ) -> ApiResult<tb_domain::User>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     // The domain's status guard and completion update run on the user's
     // executor (spec §6.2); the `User` is not part of a `Summary`, so the
@@ -226,7 +222,6 @@ pub(crate) async fn postpone_initial_sync<S>(
 ) -> ApiResult<tb_domain::User>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     // The domain's status guard and postponement run on the user's executor
     // (spec §6.2); the 200 body reads the `User` back after the write

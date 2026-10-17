@@ -26,10 +26,11 @@
 //! carry methods on two different types, so the seam is two traits linked by
 //! an associated type: a [`TxnSource`] whose `Conn` is a [`Txn`]. The
 //! executor loop is generic over the source and names only the traits, never
-//! a concrete adapter — the `StravaStore` bound sits on the loop, so this
-//! seam stays lifecycle-only.
+//! a concrete adapter — the `StravaStore` bound sits on the associated
+//! type, so every generic over the seam gets it for free.
 
 use tb_domain::{Store, TbResult};
+use tb_strava::StravaStore;
 
 /// A source of open transactions for the executor loop (ADR-0005, executable
 /// spec #446 §4.1).
@@ -41,10 +42,11 @@ use tb_domain::{Store, TbResult};
 /// holds `&self` across awaits.
 #[async_trait::async_trait]
 pub trait TxnSource: Send + Sync {
-    /// A connection with an open transaction: every [`Store`] sub-trait (so
-    /// it can run the domain operation) and [`Txn`] (so the loop can close
-    /// the transaction).
-    type Conn: Store + Txn;
+    /// A connection with an open transaction: every [`Store`] sub-trait
+    /// (so it can run the domain operation), [`StravaStore`] (so the loop
+    /// can drain the Strava event queue), and [`Txn`] (so the loop can
+    /// close the transaction).
+    type Conn: StravaStore + Txn;
 
     /// Opens a new transaction on a fresh connection.
     async fn begin(&self) -> TbResult<Self::Conn>;

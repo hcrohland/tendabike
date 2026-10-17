@@ -38,7 +38,7 @@ use crate::{
 };
 use serde_with::serde_as;
 use tb_domain::{ApiWrite, Part, PartId, PartTypeId};
-use tb_strava::{StravaSession, StravaStore};
+use tb_strava::StravaSession;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 #[serde_as]
@@ -67,10 +67,7 @@ pub struct ChangePart {
     pub purchase: OffsetDateTime,
 }
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
-where
-    S::Conn: StravaStore,
-{
+pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
     Router::new()
         .route("/", post(post_part))
         .route("/{part}", get(get_part).put(put_part).delete(delete_part))
@@ -102,7 +99,6 @@ async fn post_part<S>(
 ) -> Result<(StatusCode, Json<Part>), AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     // The write runs on the user's executor (spec §6.2); the 201 body is the
     // created part extracted from the write's `Summary`.
@@ -131,7 +127,6 @@ async fn delete_part<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     state
         .registry
@@ -157,7 +152,6 @@ async fn put_part<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     state
         .registry

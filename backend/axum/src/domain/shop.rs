@@ -34,7 +34,7 @@ use tb_domain::{
     ApiWrite, Error, Part, Session, Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails,
     SubscriptionId, UserPublic,
 };
-use tb_strava::{StravaSession, StravaStore};
+use tb_strava::StravaSession;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewShop {
@@ -66,10 +66,7 @@ pub struct RegisterPartRequest {
     pub part_id: i32,
 }
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
-where
-    S::Conn: StravaStore,
-{
+pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
     Router::new()
         // Shop CRUD
         .route("/", get(list_shops).post(create_shop))
@@ -124,7 +121,6 @@ async fn create_shop<S>(
 ) -> Result<(StatusCode, Json<Shop>), AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     let summary = state
         .registry
@@ -167,7 +163,6 @@ async fn update_shop<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     state
         .registry
@@ -192,7 +187,6 @@ async fn delete_shop<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     state
         .registry
@@ -229,7 +223,6 @@ async fn register_part<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     state
         .registry
@@ -252,7 +245,6 @@ async fn unregister_part<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     state
         .registry
@@ -293,7 +285,6 @@ async fn create_subscription<S>(
 ) -> Result<(StatusCode, Json<ShopSubscription>), AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     state
         .registry
@@ -375,7 +366,6 @@ async fn approve_subscription<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     state
         .registry
@@ -399,7 +389,6 @@ async fn reject_subscription<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     state
         .registry
@@ -422,7 +411,6 @@ async fn cancel_subscription<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     state
         .registry

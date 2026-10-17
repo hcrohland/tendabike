@@ -15,7 +15,7 @@ use time::OffsetDateTime;
 use crate::{RequestSession, appstate::AppState, error::AppError};
 use tb_domain::{ApiWrite, PartId, PartTypeId};
 use tb_exec::TxnSource;
-use tb_strava::{StravaSession, StravaStore};
+use tb_strava::StravaSession;
 
 /// Description of an Attach or Detach request
 
@@ -42,7 +42,6 @@ async fn attach_rt<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     debug!("attach {event:?}");
     let Event {
@@ -77,7 +76,6 @@ async fn detach_rt<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     debug!("detach {event:?}");
     let Event {
@@ -113,7 +111,6 @@ async fn dispose_rt<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     debug!("{event:?}");
     let Dispose {
@@ -139,7 +136,6 @@ async fn recover_rt<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     debug!("Recover {event:?}");
     let Dispose {
@@ -156,10 +152,7 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-pub(crate) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
-where
-    S::Conn: StravaStore,
-{
+pub(crate) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
     Router::new()
         .route("/attach", post(attach_rt))
         .route("/detach", post(detach_rt))

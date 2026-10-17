@@ -28,7 +28,7 @@ use axum::{
 use serde::Deserialize;
 use tb_domain::{ApiWrite, Error, NoteFile, PartId, PartNote, PartNoteId};
 use tb_exec::{Txn, TxnSource};
-use tb_strava::{StravaSession, StravaStore};
+use tb_strava::StravaSession;
 
 use crate::{
     RequestSession,
@@ -49,10 +49,7 @@ pub struct UpdateTextNote {
     pub name: String,
 }
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
-where
-    S::Conn: StravaStore,
-{
+pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
     Router::new()
         .route("/{part}/notes", get(list_notes).post(create_text_note))
         .route("/{part}/notes/file", post(create_file_note))
@@ -89,7 +86,6 @@ async fn create_text_note<S>(
 ) -> Result<(StatusCode, Json<PartNote>), AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     let summary = state
         .registry
@@ -158,7 +154,6 @@ async fn create_file_note<S>(
 ) -> Result<(StatusCode, Json<PartNote>), AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     let parsed = parse_note_file(multipart).await?;
     let summary = state
@@ -237,7 +232,6 @@ async fn update_text_note<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     state
         .registry
@@ -258,7 +252,6 @@ async fn update_file_note<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     let parsed = parse_note_file(multipart).await?;
     state
@@ -287,7 +280,6 @@ async fn delete_note<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     state
         .registry
@@ -303,7 +295,6 @@ async fn remove_file_note<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     state
         .registry

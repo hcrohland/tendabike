@@ -16,13 +16,9 @@ use serde::Serialize;
 use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState};
 use tb_domain::{Session, ShopId, Summary};
 use tb_exec::{Txn, TxnSource};
-use tb_strava::StravaStore;
 use tb_strava::StravaUser;
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
-where
-    S::Conn: StravaStore,
-{
+pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
     Router::new()
         .route("/", get(getuser))
         .route("/summary", get(summary))
@@ -53,7 +49,6 @@ async fn summary<S>(
 ) -> ApiResult<Summary>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     let mut store = state.source.begin().await?;
     session.set_shop(shop)?;
@@ -105,7 +100,6 @@ async fn userlist<S>(
 ) -> ApiResult<Vec<tb_strava::StravaStat>>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     let mut store = state.source.begin().await?;
     Ok(tb_strava::get_all_stats(&mut store).await.map(Json)?)
