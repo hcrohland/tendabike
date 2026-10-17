@@ -51,7 +51,7 @@ where
     S: TxnSource + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
-    let uri = tb_strava::strava_url(id, &mut store)
+    let uri = tb_strava::strava_url(id.into(), &mut store)
         .await
         .unwrap_or_else(|_| "/".to_string());
     Ok(Redirect::permanent(&uri))

@@ -98,7 +98,7 @@ async fn accept_stores_activity_event() -> TbResult<()> {
 async fn accept_athlete_deauth_disables_user() -> TbResult<()> {
     let (mut store, _) = setup();
     store
-        .stravaevent_store(Event {
+        .strava_event_create(Event {
             owner_id: 42.into(),
             object_type: ObjectType::Activity,
             object_id: 10,
@@ -180,8 +180,8 @@ async fn get_event_returns_latest_and_drops_older() -> TbResult<()> {
     let mut first = activity_event();
     first.aspect_type = AspectType::Update;
     first.event_time = 50;
-    store.stravaevent_store(first).await?;
-    store.stravaevent_store(activity_event()).await?;
+    store.strava_event_create(first).await?;
+    store.strava_event_create(activity_event()).await?;
     let event = match get_event(&session, &mut store).await? {
         QueueRead::Event(event) => event,
         other => panic!("the latest event is returned, got {other:?}"),
@@ -195,7 +195,7 @@ async fn get_event_returns_latest_and_drops_older() -> TbResult<()> {
 async fn get_event_ignores_other_owners() -> TbResult<()> {
     let (mut store, session) = setup();
     store
-        .stravaevent_store(Event {
+        .strava_event_create(Event {
             owner_id: 43.into(),
             ..activity_event()
         })
@@ -211,13 +211,13 @@ async fn get_event_active_stop_reports_deadline() -> TbResult<()> {
     let (mut store, session) = setup();
     let until = get_time() + 500;
     store
-        .stravaevent_store(Event {
+        .strava_event_create(Event {
             object_type: ObjectType::Stop,
             object_id: until,
             ..Default::default()
         })
         .await?;
-    store.stravaevent_store(activity_event()).await?;
+    store.strava_event_create(activity_event()).await?;
     let res = get_event(&session, &mut store).await?;
     assert_eq!(res, QueueRead::Limited { until });
     assert_eq!(store.event_count(), 2);
@@ -230,13 +230,13 @@ async fn get_event_expired_stop_deletes_and_returns_next() -> TbResult<()> {
     // event (the backoff is over).
     let (mut store, session) = setup();
     store
-        .stravaevent_store(Event {
+        .strava_event_create(Event {
             object_type: ObjectType::Stop,
             object_id: 100,
             ..Default::default()
         })
         .await?;
-    store.stravaevent_store(activity_event()).await?;
+    store.strava_event_create(activity_event()).await?;
     let res = get_event(&session, &mut store).await?;
     assert!(matches!(res, QueueRead::Event(ref e) if e.object_id == 10));
     assert_eq!(store.event_count(), 1);
@@ -248,7 +248,7 @@ async fn rate_limit_active_reports_deadline() -> TbResult<()> {
     let (mut store, session) = setup();
     let until = get_time() + 500;
     store
-        .stravaevent_store(Event {
+        .strava_event_create(Event {
             object_type: ObjectType::Stop,
             object_id: until,
             ..Default::default()
@@ -269,7 +269,7 @@ async fn rate_limit_expired_removes_stop() -> TbResult<()> {
         object_id: 100,
         ..Default::default()
     };
-    store.stravaevent_store(stop).await?;
+    store.strava_event_create(stop).await?;
     let event = store.events[0].clone();
     let res = event.rate_limit(&session, &mut store).await?;
     assert_eq!(res, QueueRead::Empty);
@@ -288,7 +288,7 @@ async fn process_no_events() -> TbResult<()> {
 #[tokio::test]
 async fn process_activity_create_imports() -> TbResult<()> {
     let (mut store, mut session) = setup();
-    store.stravaevent_store(activity_event()).await?;
+    store.strava_event_create(activity_event()).await?;
     session.queue("/activities/10", &activity_json(10, "Ride", None));
     let summary = process(&mut session, &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
@@ -301,7 +301,7 @@ async fn process_activity_create_imports() -> TbResult<()> {
 async fn process_activity_delete_missing_ignores() -> TbResult<()> {
     let (mut store, mut session) = setup();
     store
-        .stravaevent_store(Event {
+        .strava_event_create(Event {
             aspect_type: AspectType::Delete,
             ..activity_event()
         })
@@ -315,7 +315,7 @@ async fn process_activity_delete_missing_ignores() -> TbResult<()> {
 #[tokio::test]
 async fn process_try_again_inserts_stop() -> TbResult<()> {
     let (mut store, mut session) = setup();
-    store.stravaevent_store(activity_event()).await?;
+    store.strava_event_create(activity_event()).await?;
     session.queue_error("/activities/10", Error::TryAgain("rate limit"));
     let summary = process(&mut session, &mut store).await?;
     assert_eq!(summary, Summary::default());
@@ -335,7 +335,7 @@ async fn process_activity_nontransient_drops_event() -> TbResult<()> {
     // dropped from the queue and logged — it is committed, so the event
     // is gone and the queue cannot wedge on it (spec #446 §4.6).
     let (mut store, mut session) = setup();
-    store.stravaevent_store(activity_event()).await?;
+    store.strava_event_create(activity_event()).await?;
     session.queue_error(
         "/activities/10",
         Error::AnyFailure(anyhow::anyhow!("parse boom")),
@@ -352,7 +352,7 @@ async fn process_activity_not_auth_disables_user() -> TbResult<()> {
     // and drops all their queued events (spec #446 §4.6): the data freezes
     // stale-but-consistent; no event-by-event 401s follow.
     let (mut store, mut session) = setup();
-    store.stravaevent_store(activity_event()).await?;
+    store.strava_event_create(activity_event()).await?;
     session.queue_error("/activities/10", Error::NotAuth(String::from("token dead")));
     let summary = process(&mut session, &mut store).await?;
     assert_eq!(summary, Summary::default());
@@ -370,7 +370,7 @@ async fn process_activity_not_auth_disables_user() -> TbResult<()> {
 async fn process_sync_not_auth_disables_user() -> TbResult<()> {
     let (mut store, mut session) = setup();
     store
-        .stravaevent_store(Event {
+        .strava_event_create(Event {
             object_type: ObjectType::Sync,
             owner_id: 42.into(),
             ..Default::default()
@@ -392,7 +392,7 @@ async fn process_sync_not_auth_disables_user() -> TbResult<()> {
 async fn process_sync_empty_list_removes_event() -> TbResult<()> {
     let (mut store, mut session) = setup();
     store
-        .stravaevent_store(Event {
+        .strava_event_create(Event {
             object_type: ObjectType::Sync,
             owner_id: 42.into(),
             ..Default::default()
@@ -409,7 +409,7 @@ async fn process_sync_empty_list_removes_event() -> TbResult<()> {
 async fn process_sync_imports_activities() -> TbResult<()> {
     let (mut store, mut session) = setup();
     store
-        .stravaevent_store(Event {
+        .strava_event_create(Event {
             object_type: ObjectType::Sync,
             owner_id: 42.into(),
             ..Default::default()
@@ -438,7 +438,7 @@ async fn process_sync_bad_activity_skips_and_advances_cursor() -> TbResult<()> {
     // admin sync endpoint re-covers the gap if the user cares.
     let (mut store, mut session) = setup();
     store
-        .stravaevent_store(Event {
+        .strava_event_create(Event {
             object_type: ObjectType::Sync,
             owner_id: 42.into(),
             ..Default::default()
@@ -472,7 +472,7 @@ async fn process_sync_bad_activity_skips_and_advances_cursor() -> TbResult<()> {
 async fn process_sync_try_again_keeps_event_and_stops() -> TbResult<()> {
     let (mut store, mut session) = setup();
     store
-        .stravaevent_store(Event {
+        .strava_event_create(Event {
             object_type: ObjectType::Sync,
             owner_id: 42.into(),
             ..Default::default()
@@ -495,7 +495,7 @@ async fn process_sync_try_again_keeps_event_and_stops() -> TbResult<()> {
 async fn process_skips_athlete_event() -> TbResult<()> {
     let (mut store, mut session) = setup();
     store
-        .stravaevent_store(Event {
+        .strava_event_create(Event {
             object_type: ObjectType::Athlete,
             object_id: 42,
             ..Default::default()

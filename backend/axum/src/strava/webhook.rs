@@ -61,8 +61,8 @@ use http::StatusCode;
 use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, error::AppError};
 use tb_domain::{ApiWrite, Error, TbResult};
 use tb_exec::{Txn, TxnSource};
+use tb_strava::StravaDataStore;
 use tb_strava::StravaSession;
-use tb_strava::StravaStore;
 use tb_strava::event::InEvent;
 
 #[derive(Debug, Deserialize, Serialize)]

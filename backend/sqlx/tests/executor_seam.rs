@@ -69,7 +69,7 @@ use tb_domain::test_support::{MemStore, part_type_ids::CHAIN, sole_live};
 use tb_domain::{ApiWrite, PartId, Session, ShopId, TbResult, UserId};
 use tb_exec::{ApiWriteRequest, api_write_channel, run};
 use tb_sqlx::DbPool;
-use tb_strava::{StravaId, StravaSession, StravaStore};
+use tb_strava::{StravaDataStore, StravaId, StravaSession};
 use time::macros::datetime;
 use tokio::sync::{MutexGuard, Notify, broadcast};
 
@@ -147,11 +147,11 @@ impl StravaSession for FakeStrava {
     async fn request_json<T: DeserializeOwned>(
         &mut self,
         uri: &str,
-        _store: &mut impl StravaStore,
+        _store: &mut impl StravaDataStore,
     ) -> TbResult<T> {
         panic!("the executor seam never imports from the Strava API (got {uri})")
     }
-    async fn deauthorize(&mut self, _store: &mut impl StravaStore) -> TbResult<()> {
+    async fn deauthorize(&mut self, _store: &mut impl StravaDataStore) -> TbResult<()> {
         panic!("the executor seam never deauthorizes a user")
     }
 }

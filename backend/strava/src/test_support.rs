@@ -17,7 +17,7 @@ use time::OffsetDateTime;
 use crate::event::Event;
 use crate::*;
 
-/// In-memory [`StravaStore`] delegating domain data to the domain [`MemStore`].
+/// In-memory [`StravaDataStore`] delegating domain data to the domain [`MemStore`].
 pub struct TestStravaStore {
     pub mem: MemStore,
     pub strava_users: HashMap<UserId, StravaUser>,
@@ -51,15 +51,7 @@ impl TestStravaStore {
 }
 
 #[async_trait::async_trait]
-impl StravaStore for TestStravaStore {
-    async fn stravaid_get_user_id(&mut self, who: i32) -> TbResult<i32> {
-        self.strava_users
-            .values()
-            .find(|u| u.tendabike_id == UserId::from(who))
-            .map(|u| i32::from(u.id))
-            .ok_or_else(|| Error::NotFound(format!("strava user {who} not found")))
-    }
-
+impl StravaDataStore for TestStravaStore {
     async fn strava_event_delete(&mut self, event_id: Option<i32>) -> TbResult<()> {
         self.events.retain(|e| e.id != event_id);
         Ok(())
@@ -74,7 +66,7 @@ impl StravaStore for TestStravaStore {
         Ok(())
     }
 
-    async fn stravaevent_store(&mut self, mut e: Event) -> TbResult<()> {
+    async fn strava_event_create(&mut self, mut e: Event) -> TbResult<()> {
         self.next_event_id += 1;
         e.id = Some(self.next_event_id);
         self.events.push(e);
@@ -106,7 +98,7 @@ impl StravaStore for TestStravaStore {
         Ok(())
     }
 
-    async fn stravausers_get_all(&mut self) -> TbResult<Vec<StravaUser>> {
+    async fn stravauser_get_all(&mut self) -> TbResult<Vec<StravaUser>> {
         Ok(self.strava_users.values().cloned().collect())
     }
 
@@ -121,13 +113,13 @@ impl StravaStore for TestStravaStore {
         Ok(self.strava_users.values().find(|u| u.id == *id).cloned())
     }
 
-    async fn stravauser_new(&mut self, user: StravaUser) -> TbResult<StravaUser> {
+    async fn stravauser_create(&mut self, user: StravaUser) -> TbResult<StravaUser> {
         let res = user.clone();
         self.strava_users.insert(user.tendabike_id, user);
         Ok(res)
     }
 
-    async fn stravaid_update_token(
+    async fn stravauser_update_token(
         &mut self,
         stravaid: StravaId,
         refresh: Option<&String>,
@@ -157,6 +149,8 @@ impl StravaStore for TestStravaStore {
 }
 
 impl Store for TestStravaStore {}
+
+impl StravaStore for TestStravaStore {}
 
 /// Scripted [`StravaSession`] for tests.
 ///
@@ -227,7 +221,7 @@ impl StravaSession for TestStravaSession {
     async fn request_json<T: DeserializeOwned>(
         &mut self,
         uri: &str,
-        _store: &mut impl StravaStore,
+        _store: &mut impl StravaDataStore,
     ) -> TbResult<T> {
         self.requests.push(uri.to_string());
         let body = self
@@ -241,7 +235,7 @@ impl StravaSession for TestStravaSession {
         serde_json::from_str(&body).map_err(|e| Error::AnyFailure(e.into()))
     }
 
-    async fn deauthorize(&mut self, _store: &mut impl StravaStore) -> TbResult<()> {
+    async fn deauthorize(&mut self, _store: &mut impl StravaDataStore) -> TbResult<()> {
         self.deauthorizes.push(self.strava);
         Ok(())
     }

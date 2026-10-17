@@ -114,7 +114,7 @@ async fn update_token() -> TbResult<()> {
 async fn disable_removes_events_and_token() -> TbResult<()> {
     let (mut store, _) = setup();
     store
-        .stravaevent_store(Event {
+        .strava_event_create(Event {
             owner_id: 42.into(),
             object_type: ObjectType::Activity,
             object_id: 10,
@@ -134,7 +134,7 @@ async fn disable_removes_events_and_token() -> TbResult<()> {
 async fn deauthorizes_user_and_events() -> TbResult<()> {
     let (mut store, mut session) = setup();
     store
-        .stravaevent_store(Event {
+        .strava_event_create(Event {
             owner_id: 42.into(),
             object_type: ObjectType::Activity,
             object_id: 10,
@@ -154,7 +154,7 @@ async fn deauthorizes_user_and_events() -> TbResult<()> {
 async fn user_delete_removes_everything() -> TbResult<()> {
     let (mut store, mut session) = setup();
     store
-        .stravaevent_store(Event {
+        .strava_event_create(Event {
             owner_id: 42.into(),
             object_type: ObjectType::Activity,
             object_id: 10,
@@ -179,7 +179,7 @@ async fn stats_include_event_counts() -> TbResult<()> {
     store.insert_user(strava_user(UserId::from(1), 42, true));
     store.insert_user(strava_user(UserId::from(2), 43, false));
     store
-        .stravaevent_store(Event {
+        .strava_event_create(Event {
             owner_id: 42.into(),
             object_type: ObjectType::Activity,
             object_id: 10,
@@ -199,9 +199,9 @@ async fn stats_include_event_counts() -> TbResult<()> {
 #[tokio::test]
 async fn user_strava_url() {
     let (mut store, _) = setup();
-    let url = strava_url(1, &mut store).await.unwrap();
+    let url = strava_url(UserId::from(1), &mut store).await.unwrap();
     assert_eq!(url, "https://strava.com/athletes/42");
-    let res = strava_url(99, &mut store).await;
+    let res = strava_url(UserId::from(99), &mut store).await;
     assert!(matches!(res, Err(Error::NotFound(_))));
 }
 

@@ -36,7 +36,7 @@ impl InEvent {
     /// # Returns
     ///
     /// Returns a `Result` containing an `Event` struct if the conversion is successful, or an `anyhow::Error` if it fails.
-    pub async fn into_event(self, store: &mut impl StravaStore) -> TbResult<Event> {
+    pub async fn into_event(self, store: &mut impl StravaDataStore) -> TbResult<Event> {
         if StravaId::read(&self.owner_id.into(), store)
             .await?
             .is_none()
@@ -75,7 +75,7 @@ impl InEvent {
     /// Returns the owner's TendaBike [`UserId`] when the event was queued (so
     /// the caller can wake that user's executor), or `None` for an athlete
     /// (de)authorization (nothing was queued, so there is nothing to wake).
-    pub async fn accept(self, store: &mut impl StravaStore) -> TbResult<Option<UserId>> {
+    pub async fn accept(self, store: &mut impl StravaDataStore) -> TbResult<Option<UserId>> {
         let user_id = StravaId::read(&self.owner_id.into(), store)
             .await?
             .map(|user| user.tendabike_id)
@@ -85,7 +85,7 @@ impl InEvent {
             event.process_user(store).await?;
             Ok(None)
         } else {
-            store.stravaevent_store(event).await?;
+            store.strava_event_create(event).await?;
             Ok(Some(user_id))
         }
     }
@@ -195,12 +195,12 @@ impl std::fmt::Display for Event {
 }
 
 impl Event {
-    async fn delete(&self, store: &mut impl StravaStore) -> TbResult<()> {
+    async fn delete(&self, store: &mut impl StravaDataStore) -> TbResult<()> {
         debug!("Deleting {self}");
         store.strava_event_delete(self.id).await
     }
 
-    async fn setdate(&mut self, time: i64, store: &mut impl StravaStore) -> TbResult<()> {
+    async fn setdate(&mut self, time: i64, store: &mut impl StravaDataStore) -> TbResult<()> {
         self.event_time = time;
         store.strava_event_set_time(self.id, self.event_time).await
     }
@@ -214,7 +214,7 @@ impl Event {
     async fn rate_limit(
         self,
         user: &impl StravaSession,
-        store: &mut impl StravaStore,
+        store: &mut impl StravaDataStore,
     ) -> TbResult<QueueRead> {
         // rate limit event
         if self.object_id > get_time() {
@@ -355,7 +355,7 @@ impl Event {
     /// Every arm returns `Ok` except the DB failure: the queue-side effects
     /// (the `Stop`, the disable, the delete) are committed by the loop's
     /// transaction, and the loop continues.
-    async fn fail_event(&self, err: Error, store: &mut impl StravaStore) -> TbResult<Summary> {
+    async fn fail_event(&self, err: Error, store: &mut impl StravaDataStore) -> TbResult<Summary> {
         match err {
             Error::TryAgain(msg) => {
                 warn!("Strava rate limited ({msg}); pausing all users for 15 minutes");
@@ -379,7 +379,7 @@ impl Event {
         }
     }
 
-    async fn process_user(&self, store: &mut impl StravaStore) -> TbResult<()> {
+    async fn process_user(&self, store: &mut impl StravaDataStore) -> TbResult<()> {
         debug!(
             "processing event user {}: {:?}",
             self.object_id, self.aspect_type,
@@ -426,7 +426,7 @@ pub async fn insert_sync(
     owner_id: StravaId,
     event_time: i64,
     migrate: bool,
-    store: &mut impl StravaStore,
+    store: &mut impl StravaDataStore,
 ) -> TbResult<()> {
     if event_time > get_time() {
         return Err(Error::BadRequest(format!("eventtime {event_time} > now!")));
@@ -439,7 +439,7 @@ pub async fn insert_sync(
         object_type: ObjectType::Sync,
         ..Default::default()
     };
-    store.stravaevent_store(event).await
+    store.strava_event_create(event).await
 }
 
 /// Inserts the global rate-limit `Stop` (spec #446 §4.6): the Strava rate
@@ -448,7 +448,7 @@ pub async fn insert_sync(
 /// queued, its deadline is **extended** rather than stacking rows — the
 /// backoff must not compound: only `Stop`s carry `owner_id` 0, so the next
 /// event for user 0 is the oldest `Stop`.
-pub async fn insert_stop(store: &mut impl StravaStore) -> TbResult<()> {
+pub async fn insert_stop(store: &mut impl StravaDataStore) -> TbResult<()> {
     let stop = Event {
         object_type: ObjectType::Stop,
         object_id: get_time() + 900,
@@ -461,7 +461,7 @@ pub async fn insert_stop(store: &mut impl StravaStore) -> TbResult<()> {
     {
         existing.delete(store).await?;
     }
-    store.stravaevent_store(stop).await
+    store.strava_event_create(stop).await
 }
 
 /// One outcome of a read of the `strava_events` queue (spec #446 §4.6):
@@ -495,7 +495,7 @@ pub enum QueueRead {
 /// inlined in the loop.
 pub async fn get_event(
     user: &impl StravaSession,
-    store: &mut impl StravaStore,
+    store: &mut impl StravaDataStore,
 ) -> TbResult<QueueRead> {
     let event = store
         .strava_event_get_next_for_user(user.strava_id())
@@ -529,7 +529,7 @@ pub async fn get_event(
 
 async fn next_activities(
     user: &mut impl StravaSession,
-    store: &mut impl StravaStore,
+    store: &mut impl StravaDataStore,
     per_page: usize,
     start: i64,
 ) -> TbResult<Vec<StravaActivity>> {
@@ -568,11 +568,11 @@ pub async fn sync_users(
     user_id: Option<UserId>,
     time: i64,
     migrate: bool,
-    store: &mut impl StravaStore,
+    store: &mut impl StravaDataStore,
 ) -> TbResult<()> {
     let users = match user_id {
         Some(id) => vec![store.stravauser_get_by_tbid(id).await?],
-        None => store.stravausers_get_all().await?,
+        None => store.stravauser_get_all().await?,
     };
     for user in users {
         if user.disabled() {
