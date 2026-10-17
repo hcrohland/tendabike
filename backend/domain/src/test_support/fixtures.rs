@@ -357,3 +357,64 @@ pub async fn fixture_bike(session: &TestSession, store: &mut MemStore) -> TbResu
 fn sample_attach_time() -> OffsetDateTime {
     sample_purchase_date() + time::Duration::days(30)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::UsageId;
+    use crate::test_support::StoreSnapshot;
+
+    /// The prepopulated fixture is built with fixed times only (issue #410):
+    /// two independent builds of the same scenario must yield identical data.
+    ///
+    /// Usage UUIDs are the one non-deterministic byte: the domain operations
+    /// mint them via `Uuid::now_v7()` on every run (the same model the
+    /// snapshot documents — "the structure is deterministic; only the UUID
+    /// values differ between builds"). The comparison canonicalizes them to
+    /// nil; every other field — times, ids, relationships, values — must
+    /// match exactly.
+    #[tokio::test]
+    async fn prepopulated_fixture_is_deterministic_across_builds() -> TbResult<()> {
+        async fn build() -> TbResult<StoreSnapshot> {
+            let mut store = MemStore::prepopulated();
+            let s = test_session();
+
+            // every fixture function of this module, in one scenario
+            let _ = fixture_assembly(&s, &mut store, sample_attach_time()).await?;
+            let _ = fixture_attached_part(&s, &mut store).await?;
+            let _ = fixture_concurrent_parts(&s, &mut store).await?;
+            let bike = fixture_bike(&s, &mut store).await?;
+            let part = fixture_basic_part(&s, &mut store).await?;
+            let _ = fixture_attached_part_to_gear(&s, &mut store, part, bike.id).await?;
+
+            Ok(store.snapshot())
+        }
+
+        let a = canonicalize_usage_uuids(build().await?);
+        let b = canonicalize_usage_uuids(build().await?);
+
+        assert_eq!(a, b);
+        Ok(())
+    }
+
+    /// Strips the run-dependent usage UUIDs from a snapshot so two builds of
+    /// the same scenario can be compared byte for byte (see
+    /// `prepopulated_fixture_is_deterministic_across_builds`). Usage rows are
+    /// compared as a value-sorted multiset once their ids are nilled.
+    fn canonicalize_usage_uuids(mut snap: StoreSnapshot) -> StoreSnapshot {
+        for p in &mut snap.parts {
+            p.usage = UsageId::default();
+        }
+        for a in &mut snap.attachments {
+            a.usage = UsageId::default();
+        }
+        for u in &mut snap.usages {
+            u.id = UsageId::default();
+        }
+        snap.usages.sort_by(|x, y| {
+            (x.time, x.distance, x.climb, x.descend, x.energy, x.count)
+                .cmp(&(y.time, y.distance, y.climb, y.descend, y.energy, y.count))
+        });
+        snap
+    }
+}

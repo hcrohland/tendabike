@@ -187,3 +187,52 @@ impl<'c> tb_domain::PartNoteStore for SqlxConn<'c> {
         Ok(id)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn date() -> OffsetDateTime {
+        OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
+    }
+
+    fn db_note() -> DbPartNote {
+        DbPartNote {
+            id: 7,
+            part: 3,
+            name: "torn tire".to_string(),
+            mime: Some("image/png".to_string()),
+            filename: Some("tire.png".to_string()),
+            size: Some(1234),
+            created: date(),
+        }
+    }
+
+    #[test]
+    fn from_db_part_note_maps_file_note() {
+        let note = PartNote::from(db_note());
+        assert_eq!(note.id, PartNoteId::from(7));
+        assert_eq!(note.part, PartId::from(3));
+        assert!(note.has_file());
+        assert_eq!(note.name, "torn tire");
+        assert_eq!(note.mime, Some("image/png".to_string()));
+        assert_eq!(note.filename, Some("tire.png".to_string()));
+        assert_eq!(note.size, Some(1234));
+        assert_eq!(note.created, date());
+    }
+
+    #[test]
+    fn from_db_part_note_maps_text_note() {
+        let db = DbPartNote {
+            mime: None,
+            filename: None,
+            size: None,
+            ..db_note()
+        };
+        let note = PartNote::from(db);
+        assert!(!note.has_file());
+        assert_eq!(note.mime, None);
+        assert_eq!(note.filename, None);
+        assert_eq!(note.size, None);
+    }
+}

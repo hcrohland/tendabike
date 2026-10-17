@@ -175,3 +175,135 @@ impl AttachmentStore for MemStore {
             .cloned())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::fixtures::test_session;
+    use crate::test_support::part_type_ids::{BIKE, FRONT_WHEEL};
+    use crate::{Attachment, Error, Part};
+    use time::Duration;
+
+    const T: time::OffsetDateTime = time::macros::datetime!(2024-01-15 12:00 UTC);
+
+    /// The database keys attachments by (part_id, attached); creating a
+    /// second row for the same part at the same instant must fail with the
+    /// same error the production store raises for a key violation —
+    /// `DatabaseFailure` (issue #409).
+    #[tokio::test]
+    async fn attachment_create_rejects_duplicate_part_and_time() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let bike1 = Part::create(
+            "Bike One".into(),
+            "Cannondale".into(),
+            "Road".into(),
+            BIKE,
+            None,
+            T - Duration::days(2),
+            &test_session(),
+            &mut store,
+        )
+        .await?;
+        let bike2 = Part::create(
+            "Bike Two".into(),
+            "Trek".into(),
+            "Road".into(),
+            BIKE,
+            None,
+            T - Duration::days(2),
+            &test_session(),
+            &mut store,
+        )
+        .await?;
+        let wheel = Part::create(
+            "Wheel".into(),
+            "Zipp".into(),
+            "404".into(),
+            FRONT_WHEEL,
+            None,
+            T - Duration::days(1),
+            &test_session(),
+            &mut store,
+        )
+        .await?;
+
+        let first = Attachment::new(wheel.id, T, bike1.id, FRONT_WHEEL, crate::MAX_TIME);
+        store.attachment_create(first).await?;
+
+        // same part, same instant, different bike: the key rejects it
+        let dup = Attachment::new(wheel.id, T, bike2.id, FRONT_WHEEL, crate::MAX_TIME);
+        let err = store
+            .attachment_create(dup)
+            .await
+            .expect_err("duplicate (part_id, attached) must fail");
+        assert!(
+            matches!(err, Error::DatabaseFailure(_)),
+            "expected DatabaseFailure, got {err:?}"
+        );
+        Ok(())
+    }
+
+    /// Distinct parts may share an attach time — the key is the pair, not
+    /// the time alone (issue #409).
+    #[tokio::test]
+    async fn attachment_create_allows_distinct_parts_at_same_time() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let bike = Part::create(
+            "Bike".into(),
+            "Cannondale".into(),
+            "Road".into(),
+            BIKE,
+            None,
+            T - Duration::days(2),
+            &test_session(),
+            &mut store,
+        )
+        .await?;
+        let wheel_a = Part::create(
+            "Wheel A".into(),
+            "Zipp".into(),
+            "404".into(),
+            FRONT_WHEEL,
+            None,
+            T - Duration::days(1),
+            &test_session(),
+            &mut store,
+        )
+        .await?;
+        let wheel_b = Part::create(
+            "Wheel B".into(),
+            "DT Swiss".into(),
+            "XR".into(),
+            FRONT_WHEEL,
+            None,
+            T - Duration::days(1),
+            &test_session(),
+            &mut store,
+        )
+        .await?;
+
+        store
+            .attachment_create(Attachment::new(
+                wheel_a.id,
+                T,
+                bike.id,
+                FRONT_WHEEL,
+                crate::MAX_TIME,
+            ))
+            .await?;
+        store
+            .attachment_create(Attachment::new(
+                wheel_b.id,
+                T,
+                bike.id,
+                FRONT_WHEEL,
+                crate::MAX_TIME,
+            ))
+            .await?;
+
+        let got_a = store.attachment_get_by_part_and_time(wheel_a.id, T).await?;
+        let got_b = store.attachment_get_by_part_and_time(wheel_b.id, T).await?;
+        assert!(got_a.is_some() && got_b.is_some());
+        Ok(())
+    }
+}

@@ -301,3 +301,50 @@ impl<'c> tb_domain::AttachmentStore for SqlxConn<'c> {
         Ok(result.rows_affected() as usize)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    fn date() -> OffsetDateTime {
+        OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
+    }
+
+    fn attachment() -> Attachment {
+        Attachment {
+            part_id: PartId::from(5),
+            attached: date(),
+            gear: PartId::from(1),
+            hook: PartTypeId::from(2),
+            detached: date(),
+            usage: tb_domain::UsageId::from(
+                Uuid::from_str("6ba7b810-9dad-11d1-80b4-00c04fd430c8").unwrap(),
+            ),
+        }
+    }
+
+    #[test]
+    fn attachment_into_db_maps_ids() {
+        let att = attachment();
+        let db = DbAttachment::from(att);
+        assert_eq!(db.part_id, 5);
+        assert_eq!(db.gear, 1);
+        assert_eq!(db.hook, 2);
+        assert_eq!(db.usage, Uuid::from(att.usage));
+    }
+
+    #[test]
+    fn attachment_db_roundtrip_preserves_fields() {
+        let att = attachment();
+        assert_eq!(Attachment::from(DbAttachment::from(att)), att);
+    }
+
+    #[test]
+    fn attachment_db_is_copy() {
+        let a = DbAttachment::from(attachment());
+        let b = a;
+        assert_eq!(a, b);
+        assert_eq!(a.part_id, 5);
+    }
+}

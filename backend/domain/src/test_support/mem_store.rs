@@ -397,3 +397,152 @@ fn mk_activity(
         external_id: None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::Fault;
+    use crate::test_support::fixtures::{fixture_bike, test_session};
+    use crate::test_support::part_type_ids::FRONT_WHEEL;
+    use crate::traits::UserStore;
+    use crate::{Attachment, Error, Part, UserId};
+    use time::Duration;
+
+    const T: time::OffsetDateTime = time::macros::datetime!(2024-01-15 12:00 UTC);
+
+    /// Commit lands writes in the database: a sibling transaction that began
+    /// before the write cannot see it until the write is committed, and can
+    /// see it afterwards (issue #409).
+    #[tokio::test]
+    async fn commit_lands_writes_in_the_database() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let mut sibling = store.begin();
+
+        store.create("Ada", "Lovelace", &None).await?;
+
+        // not committed yet: invisible to the sibling transaction
+        assert!(sibling.get(UserId::from(1)).await.is_err());
+
+        store.commit().await?;
+
+        let user = sibling.get(UserId::from(1)).await?;
+        assert_eq!(user.firstname, "Ada");
+        Ok(())
+    }
+
+    /// An aborted (dropped) store discards its writes, like the database
+    /// would roll back an uncommitted transaction (issue #409).
+    #[tokio::test]
+    async fn aborted_store_discards_writes() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let mut sibling = store.begin();
+
+        store.create("Ada", "Lovelace", &None).await?;
+        drop(store); // the transaction is aborted without commit
+
+        assert!(sibling.get(UserId::from(1)).await.is_err());
+        Ok(())
+    }
+
+    /// `rollback()` discards everything this transaction has written: the
+    /// store is back at exactly the committed state (issue #409).
+    #[tokio::test]
+    async fn rollback_discards_uncommitted_writes() -> TbResult<()> {
+        let mut store = MemStore::new();
+        let before = store.snapshot();
+
+        store.create("Ada", "Lovelace", &None).await?;
+        store.rollback().await?;
+
+        assert_eq!(store.snapshot(), before);
+        Ok(())
+    }
+
+    /// The final write of an attach fails; the earlier writes (part
+    /// timestamps, the attachment row) are partial state. A rollback
+    /// discards all of it, leaving the committed state untouched (issue
+    /// #409).
+    #[tokio::test]
+    async fn failed_attach_rolls_back_to_committed_state() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let before = store.snapshot();
+        let s = test_session();
+
+        // The last write of the attach flow fails, like a database failure.
+        store.fail_next(Fault::UsageUpdate);
+
+        let bike = fixture_bike(&s, &mut store).await?;
+        let wheel = Part::create(
+            "Spare Wheel".into(),
+            "Zipp".into(),
+            "404".into(),
+            FRONT_WHEEL,
+            None,
+            T - Duration::days(1),
+            &s,
+            &mut store,
+        )
+        .await?;
+
+        let att = Attachment::new(wheel.id, T, bike.id, FRONT_WHEEL, crate::MAX_TIME);
+        let err = att
+            .create(&mut store)
+            .await
+            .expect_err("the armed fault must fail the attach");
+        assert!(matches!(err, Error::DatabaseFailure(_)));
+
+        // The partial writes of the transaction are visible in the store…
+        assert_ne!(
+            store.snapshot(),
+            before,
+            "partial state must exist before the rollback"
+        );
+
+        // …and the rollback restores the committed state exactly.
+        store.rollback().await?;
+        assert_eq!(store.snapshot(), before);
+        Ok(())
+    }
+
+    /// Same shape, earlier failure: the attach row never lands, but the
+    /// part-timestamp write still happened. The rollback discards it (issue
+    /// #409).
+    #[tokio::test]
+    async fn failed_attach_before_row_rolls_back() -> TbResult<()> {
+        let mut store = MemStore::prepopulated();
+        let before = store.snapshot();
+        let s = test_session();
+
+        store.fail_next(Fault::AttachmentCreate);
+
+        let bike = fixture_bike(&s, &mut store).await?;
+        let wheel = Part::create(
+            "Spare Wheel".into(),
+            "Zipp".into(),
+            "404".into(),
+            FRONT_WHEEL,
+            None,
+            T - Duration::days(1),
+            &s,
+            &mut store,
+        )
+        .await?;
+
+        let att = Attachment::new(wheel.id, T, bike.id, FRONT_WHEEL, crate::MAX_TIME);
+        let err = att
+            .create(&mut store)
+            .await
+            .expect_err("the armed fault must fail the attach");
+        assert!(matches!(err, Error::DatabaseFailure(_)));
+
+        assert_ne!(
+            store.snapshot(),
+            before,
+            "the part-timestamp write must be partial state"
+        );
+
+        store.rollback().await?;
+        assert_eq!(store.snapshot(), before);
+        Ok(())
+    }
+}

@@ -59,6 +59,44 @@ fn map_merge_last_wins() {
     assert_eq!(c.usages.len(), 2);
 }
 
+#[test]
+fn wire_shape_stringified_keys_and_tombstones() {
+    // The `IdKeyedMap` newtype renders a map as a JSON object with stringified keys and
+    // `null` for `None` — the case a naive derive breaks (integer keys would become
+    // pair-arrays, string/UUID keys would become objects).
+    let mut m: HashMap<i32, Option<i32>> = HashMap::new();
+    m.insert(12, None); // tombstone
+    m.insert(13, Some(42));
+    assert_eq!(
+        serde_json::to_value(IdKeyedMap(m)).unwrap(),
+        json!({"12": null, "13": 42})
+    );
+
+    // The full `Summary` is a uniform object: all nine collections are objects (never
+    // pair-arrays), even the empty ones.
+    let uid = UsageId::new();
+    let mut map = Summary::default();
+    map.usages.upsert(usage(uid, 1));
+    let value = serde_json::to_value(&map).unwrap();
+    for field in [
+        "activities",
+        "parts",
+        "attachments",
+        "usages",
+        "services",
+        "plans",
+        "part_notes",
+        "shops",
+        "users",
+    ] {
+        assert!(value[field].is_object(), "{field} should be an object");
+    }
+    // Stringified UUID key; the entity's fields are present.
+    assert_eq!(value["usages"][uid.to_string()]["count"], json!(1));
+    // Empty collections serialize as empty objects, not arrays.
+    assert_eq!(value["activities"], json!({}));
+}
+
 // --- `upsert` / `upsert_all` / `tombstone` (id-keyed kind) ---
 
 #[test]

@@ -206,3 +206,64 @@ impl<'c> tb_domain::ServicePlanStore for SqlxConn<'c> {
         Ok(result.rows_affected() as usize)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+    use tb_domain::PartTypeId;
+
+    fn uuid() -> Uuid {
+        Uuid::from_str("6ba7b810-9dad-11d1-80b4-00c04fd430c8").unwrap()
+    }
+
+    fn serviceplan(
+        part: Option<PartId>,
+        hook: Option<PartTypeId>,
+        uid: Option<UserId>,
+    ) -> ServicePlan {
+        ServicePlan {
+            id: ServicePlanId::from(uuid()),
+            part,
+            what: PartTypeId::from(6),
+            hook,
+            name: "Lube chain".to_string(),
+            days: Some(30),
+            hours: Some(50),
+            km: Some(1000),
+            climb: Some(5000),
+            descend: Some(5000),
+            rides: Some(20),
+            energy: Some(30000000),
+            uid,
+        }
+    }
+
+    #[test]
+    fn serviceplan_into_db_maps_options() {
+        let plan = serviceplan(
+            Some(PartId::from(3)),
+            Some(PartTypeId::from(7)),
+            Some(UserId::from(1)),
+        );
+        let db = DbServicePlan::from(plan.clone());
+        assert_eq!(db.id, uuid::Uuid::from(plan.id));
+        assert_eq!(db.part, Some(3));
+        assert_eq!(db.hook, Some(7));
+        assert_eq!(db.uid, Some(1));
+        let db = DbServicePlan::from(serviceplan(None, None, None));
+        assert_eq!(db.part, None);
+        assert_eq!(db.hook, None);
+        assert_eq!(db.uid, None);
+    }
+
+    #[test]
+    fn serviceplan_db_roundtrip_preserves_fields() {
+        let plan = serviceplan(
+            Some(PartId::from(3)),
+            Some(PartTypeId::from(7)),
+            Some(UserId::from(1)),
+        );
+        assert_eq!(ServicePlan::from(DbServicePlan::from(plan.clone())), plan);
+    }
+}

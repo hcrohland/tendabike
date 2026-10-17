@@ -189,3 +189,152 @@ impl ActivityStore for MemStore {
 fn minute_floor(unix: i64) -> i64 {
     unix - unix.rem_euclid(60)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{ActTypeId, Activity, ActivityId, Error, UserId};
+    use time::{OffsetDateTime, UtcOffset};
+
+    fn activity_at(offset_secs: i32) -> Activity {
+        Activity {
+            id: ActivityId::new(1),
+            user_id: UserId::from(1),
+            what: ActTypeId::from(1),
+            name: "Ride".to_string(),
+            start: OffsetDateTime::from_unix_timestamp(1718430600)
+                .unwrap()
+                .to_offset(UtcOffset::from_whole_seconds(offset_secs).unwrap()),
+            duration: 3600,
+            time: None,
+            distance: None,
+            climb: None,
+            descend: None,
+            energy: None,
+            gear: None,
+            device_name: None,
+            external_id: None,
+        }
+    }
+
+    /// The production store keeps the start instant in a `timestamptz` and
+    /// the offset in 30-minute buckets: every activity it returns has its
+    /// offset rounded to the nearest 30 minutes. The in-memory store must
+    /// apply the same rule (issue #409): a +5:45 offset comes back as
+    /// +6:00, the instant unchanged.
+    #[tokio::test]
+    async fn activity_offsets_normalized_to_30_minutes() -> TbResult<()> {
+        let mut store = MemStore::new();
+
+        let created = store.activity_create(activity_at(20_700)).await?;
+        assert_eq!(
+            created.start.offset().whole_seconds(),
+            21_600,
+            "+5:45 must round to +6:00"
+        );
+        assert_eq!(
+            created.start.unix_timestamp(),
+            1718430600,
+            "the instant must not move"
+        );
+
+        let read = store
+            .activity_read_by_id(created.id)
+            .await?
+            .expect("created activity readable");
+        assert_eq!(read.start.offset().whole_seconds(), 21_600);
+        Ok(())
+    }
+
+    /// Negative offsets round toward zero the same way the database does:
+    /// -5:45 becomes -5:30 (issue #409).
+    #[tokio::test]
+    async fn activity_negative_offsets_round_toward_zero() -> TbResult<()> {
+        let mut store = MemStore::new();
+
+        let created = store.activity_create(activity_at(-20_700)).await?;
+        assert_eq!(
+            created.start.offset().whole_seconds(),
+            -19_800,
+            "-5:45 must round to -5:30"
+        );
+        assert_eq!(created.start.unix_timestamp(), 1718430600);
+        Ok(())
+    }
+
+    /// Offsets already on a 30-minute boundary are left untouched (issue
+    /// #409).
+    #[tokio::test]
+    async fn activity_offsets_on_boundary_unchanged() -> TbResult<()> {
+        let mut store = MemStore::new();
+
+        let created = store.activity_create(activity_at(3_600)).await?; // +1:00
+        assert_eq!(created.start.offset().whole_seconds(), 3_600);
+        Ok(())
+    }
+
+    /// `get_all` returns the user's activities in ascending start instant —
+    /// the database's `ORDER BY start` is the one rule on both stores
+    /// (issue #405). The later ride is created first; the listing must not
+    /// follow creation order.
+    #[tokio::test]
+    async fn activity_get_all_orders_by_start() -> TbResult<()> {
+        let mut store = MemStore::new();
+
+        // The later ride is created first.
+        let mut later = activity_at(0);
+        later.id = ActivityId::new(2);
+        later.name = "Later Ride".to_string();
+        store.activity_create(later).await?;
+
+        // The earlier ride is created second.
+        let mut earlier = activity_at(0);
+        earlier.id = ActivityId::new(1);
+        earlier.name = "Earlier Ride".to_string();
+        earlier.start -= time::Duration::hours(1);
+        store.activity_create(earlier).await?;
+
+        let acts = store.get_all(&UserId::from(1)).await?;
+        let names: Vec<&str> = acts.iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(names, vec!["Earlier Ride", "Later Ride"]);
+        let ids: Vec<ActivityId> = acts.iter().map(|a| a.id).collect();
+        assert_eq!(ids, vec![ActivityId::new(1), ActivityId::new(2)]);
+        Ok(())
+    }
+
+    /// The activity id is a primary key on both stores (issue #405): the
+    /// database's INSERT hits the key and fails, and the in-memory store
+    /// must apply the same rule instead of accepting the duplicate
+    /// silently. The failure is the variant a Postgres primary-key
+    /// violation maps to: `Error::DatabaseFailure`.
+    #[tokio::test]
+    async fn activity_create_rejects_duplicate_id() -> TbResult<()> {
+        let mut store = MemStore::new();
+
+        let first = activity_at(0);
+        store.activity_create(first.clone()).await?;
+
+        // A second activity with the same id must fail …
+        let err = store
+            .activity_create(activity_at(0))
+            .await
+            .expect_err("a duplicate activity id must fail");
+        assert!(
+            matches!(err, Error::DatabaseFailure(_)),
+            "a duplicate activity id must be a DatabaseFailure, got {err:?}"
+        );
+
+        // … and the first activity is still there. …
+        let stored = store
+            .activity_read_by_id(first.id)
+            .await?
+            .expect("the original activity is stored");
+        assert_eq!(stored.id, first.id);
+
+        // … while a different id still succeeds.
+        let mut other = activity_at(0);
+        other.id = ActivityId::new(2);
+        store.activity_create(other).await?;
+        Ok(())
+    }
+}
