@@ -21,7 +21,7 @@ fn normalize_offset(a: &Activity) -> TbResult<Activity> {
 #[async_trait::async_trait]
 impl ActivityStore for MemStore {
     async fn activity_create(&mut self, act: Activity) -> TbResult<Activity> {
-        let d = self.state_mut();
+        let mut d = self.state();
         // One rule on both stores (issue #405): the activity id is a
         // primary key — the database's INSERT hits the key on a duplicate,
         // and this in-memory mirror rejects the same insert instead of
@@ -48,7 +48,7 @@ impl ActivityStore for MemStore {
     }
 
     async fn activity_update(&mut self, new: Activity) -> TbResult<Activity> {
-        let d = self.state_mut();
+        let mut d = self.state();
         // One rule on both stores: the data fields are replaced, but the row
         // keeps its utc_offset (the new start is expressed in the stored
         // offset), device_name, and external_id; a missing row is NotFound.
@@ -75,14 +75,14 @@ impl ActivityStore for MemStore {
     }
 
     async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize> {
-        let d = self.state_mut();
+        let mut d = self.state();
         let len_before = d.activities.len();
         d.activities.retain(|a| a.id != aid);
         Ok(len_before - d.activities.len())
     }
 
     async fn activities_delete(&mut self, activities: &[Activity]) -> TbResult<usize> {
-        let d = self.state_mut();
+        let mut d = self.state();
         let ids: Vec<ActivityId> = activities.iter().map(|a| a.id).collect();
         let len_before = d.activities.len();
         d.activities.retain(|a| !ids.contains(&a.id));
@@ -158,7 +158,7 @@ impl ActivityStore for MemStore {
         types: Vec<ActTypeId>,
         partid: &PartId,
     ) -> TbResult<Vec<Activity>> {
-        let d = self.state_mut();
+        let mut d = self.state();
         let mut updated = Vec::new();
         for act in d.activities.iter_mut() {
             if act.user_id == user && act.gear.is_none() && types.contains(&act.what) {

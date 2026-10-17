@@ -12,7 +12,7 @@ impl ShopStore for MemStore {
         auto_approve: bool,
         owner: UserId,
     ) -> TbResult<Shop> {
-        let d = self.state_mut();
+        let mut d = self.state();
         let id = ShopId::from(d.next_shop_id);
         d.next_shop_id += 1;
         let now = time::OffsetDateTime::now_utc();
@@ -43,7 +43,7 @@ impl ShopStore for MemStore {
         description: Option<String>,
         auto_approve: bool,
     ) -> TbResult<Shop> {
-        let d = self.state_mut();
+        let mut d = self.state();
         match d.shops.get_mut(&id) {
             Some(shop) => {
                 shop.name = name;
@@ -56,7 +56,7 @@ impl ShopStore for MemStore {
     }
 
     async fn shop_delete(&mut self, id: ShopId) -> TbResult<usize> {
-        let d = self.state_mut();
+        let mut d = self.state();
         if d.shops.remove(&id).is_some() {
             Ok(1)
         } else {
@@ -104,7 +104,7 @@ impl ShopStore for MemStore {
         user_id: UserId,
         message: Option<String>,
     ) -> TbResult<ShopSubscription> {
-        let d = self.state_mut();
+        let mut d = self.state();
         let id = SubscriptionId::from(d.next_subscription_id);
         d.next_subscription_id += 1;
         let now = time::OffsetDateTime::now_utc();
@@ -167,7 +167,7 @@ impl ShopStore for MemStore {
         id: SubscriptionId,
         status: SubscriptionStatus,
     ) -> TbResult<ShopSubscription> {
-        let d = self.state_mut();
+        let mut d = self.state();
         match d.subscriptions.get_mut(&id) {
             Some(sub) => {
                 sub.status = status;
@@ -184,7 +184,7 @@ impl ShopStore for MemStore {
         status: SubscriptionStatus,
         response_message: Option<String>,
     ) -> TbResult<ShopSubscription> {
-        let d = self.state_mut();
+        let mut d = self.state();
         match d.subscriptions.get_mut(&id) {
             Some(sub) => {
                 sub.status = status;
@@ -197,7 +197,7 @@ impl ShopStore for MemStore {
     }
 
     async fn subscription_delete(&mut self, id: SubscriptionId) -> TbResult<()> {
-        let d = self.state_mut();
+        let mut d = self.state();
         d.subscriptions.remove(&id);
         Ok(())
     }

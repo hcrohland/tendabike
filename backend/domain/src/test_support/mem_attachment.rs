@@ -5,8 +5,7 @@ use time::OffsetDateTime;
 #[async_trait::async_trait]
 impl AttachmentStore for MemStore {
     async fn attachment_create(&mut self, att: Attachment) -> TbResult<Attachment> {
-        self.check_fault(Fault::AttachmentCreate)?;
-        let d = self.state_mut();
+        let mut d = self.state();
         // The database keys attachments by (part_id, attached_time) and
         // rejects a duplicate key; mirror that here — including the error
         // it surfaces as (issue #409).
@@ -23,7 +22,7 @@ impl AttachmentStore for MemStore {
     }
 
     async fn delete(&mut self, att: Attachment) -> TbResult<Attachment> {
-        let d = self.state_mut();
+        let mut d = self.state();
         // The row is addressed by part + attach time — the database's key
         // (one rule on both stores); the other fields are not part of the
         // identity.
@@ -37,7 +36,7 @@ impl AttachmentStore for MemStore {
     }
 
     async fn attachments_delete_by_parts(&mut self, parts: &[crate::Part]) -> TbResult<usize> {
-        let d = self.state_mut();
+        let mut d = self.state();
         let part_ids: Vec<PartId> = parts.iter().map(|p| p.id).collect();
         let before_count = d.attachments.len();
         d.attachments.retain(|(pid, _), _| !part_ids.contains(pid));
