@@ -43,8 +43,10 @@ use tokio::sync::{Mutex, Notify, broadcast, watch};
 
 use tb_domain::{ApiWrite, DescendReport, Error, Session, Summary, TbResult, UserId, WriteOutcome};
 use tb_exec::{ApiWriteRequest, ApiWriteSender, Txn, TxnSource, api_write_channel, run};
-use tb_strava::event::{Event as StravaEvent, ObjectType};
-use tb_strava::{StravaId, StravaStore};
+use tb_strava::{
+    StravaId, StravaStore,
+    event::{Event as StravaEvent, ObjectType},
+};
 
 use crate::appstate::AppState;
 use crate::strava::RequestSession;
@@ -152,7 +154,6 @@ impl Registry {
     )>
     where
         S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
     {
         self.exec_field(source, user_id, |exec| {
             (exec.frames.subscribe(), exec.status.clone())
@@ -185,7 +186,6 @@ impl Registry {
     pub async fn write<S>(&self, source: &S, user_id: UserId, write: ApiWrite) -> TbResult<Summary>
     where
         S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
     {
         match self.write_outcome(source, user_id, write).await? {
             WriteOutcome::Summary(summary) => Ok(summary),
@@ -207,7 +207,6 @@ impl Registry {
     ) -> TbResult<DescendReport>
     where
         S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
     {
         match self
             .write_outcome(source, user_id, ApiWrite::ActivityDescend { data })
@@ -237,7 +236,6 @@ impl Registry {
     ) -> TbResult<WriteOutcome>
     where
         S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
     {
         let (request, reply) = ApiWriteRequest::new(write);
         let writer = self
@@ -287,7 +285,6 @@ impl Registry {
     ) -> TbResult<broadcast::Receiver<StravaEvent>>
     where
         S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
     {
         self.exec_field(source, user_id, |exec| exec.events.subscribe())
             .await
@@ -312,7 +309,6 @@ impl Registry {
     ) -> TbResult<()>
     where
         S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
     {
         // Subscribe before enqueuing, so the completion cannot be missed.
         let mut done = self.events(source, user_id).await?;
@@ -358,7 +354,6 @@ impl Registry {
     ) -> TbResult<bool>
     where
         S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
     {
         let mut store = source.begin().await?;
         // A non-migrate sync is queued with `object_id` 0, so the user's
@@ -390,7 +385,6 @@ impl Registry {
     async fn exec_field<S, F, R>(&self, source: &S, user_id: UserId, f: F) -> TbResult<R>
     where
         S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
         F: FnOnce(&Executor) -> R,
     {
         let mut map = self.executors.lock().await;
@@ -411,7 +405,6 @@ impl Registry {
     ) -> TbResult<Executor>
     where
         S: TxnSource + Clone + 'static,
-        S::Conn: StravaStore,
     {
         if let Some(exec) = map.get(&user_id)
             && *exec.status.borrow() == ExecutorStatus::Running
@@ -521,7 +514,6 @@ struct StreamSeed<S: TxnSource + Clone + 'static> {
 async fn next_event<S>(seed: &mut StreamSeed<S>) -> Option<Result<Event, Infallible>>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     let (mut rx, mut status) = match (seed.rx.take(), seed.status.take()) {
         (Some(rx), Some(status)) => (rx, status),
@@ -604,7 +596,6 @@ fn heartbeat_event() -> Event {
 pub(crate) async fn endpoint<S>(user: RequestSession, State(state): State<AppState<S>>) -> Response
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     let user_id = user.user_id();
     let heartbeat = state.registry.heartbeat_interval();

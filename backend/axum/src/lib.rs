@@ -26,7 +26,6 @@ use sqlx::PgPool;
 use std::net::SocketAddr;
 use tb_domain::TbResult;
 use tb_exec::TxnSource;
-use tb_strava::StravaStore;
 use tower_sessions::{ExpiredDeletion, SessionManagerLayer};
 use tower_sessions_sqlx_store::PostgresStore;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -47,10 +46,7 @@ mod stream;
 #[cfg(test)]
 mod test_support;
 
-pub fn routes<S: TxnSource + Clone + 'static>(app_state: AppState<S>) -> Router
-where
-    S::Conn: StravaStore,
-{
+pub fn routes<S: TxnSource + Clone + 'static>(app_state: AppState<S>) -> Router {
     Router::new()
         .nest("/api", domain::router())
         .nest("/strava", strava::router())
@@ -62,10 +58,7 @@ pub async fn start<S: TxnSource + Clone + Send + Sync + 'static>(
     pool: PgPool,
     path: std::path::PathBuf,
     addr: SocketAddr,
-) -> TbResult<()>
-where
-    S::Conn: StravaStore,
-{
+) -> TbResult<()> {
     // The logging subscriber lives with the web layer it logs (the
     // composition root owns process setup, not crate-internal wiring).
     tracing_subscriber::registry()

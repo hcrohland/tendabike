@@ -36,8 +36,8 @@ use std::time::Duration;
 
 use log::{debug, error, info, warn};
 use tb_domain::{Error, Summary, TbResult, WriteOutcome, exec};
+use tb_strava::StravaSession;
 use tb_strava::event::{Event, QueueRead, get_event, process};
-use tb_strava::{StravaSession, StravaStore};
 use tokio::sync::broadcast;
 
 use crate::message::{ApiWriteReceiver, ApiWriteRequest, push_frame};
@@ -333,7 +333,6 @@ pub async fn run<T, S>(
 ) -> TbResult<()>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
-    T::Conn: StravaStore,
     S: StravaSession + Send + 'static,
 {
     let mut session = session;
@@ -502,10 +501,7 @@ async fn queue_probe<T: TxnSource, S: StravaSession>(
     source: &T,
     session: &S,
     backoff: &mut DbBackoff,
-) -> Option<Probe>
-where
-    T::Conn: StravaStore,
-{
+) -> Option<Probe> {
     let mut conn = match source.begin().await {
         Ok(conn) => conn,
         Err(err) => {
@@ -562,7 +558,6 @@ async fn run_write<T, S>(
 ) -> Result<(), Error>
 where
     T: TxnSource,
-    T::Conn: StravaStore,
     S: StravaSession,
 {
     let ApiWriteRequest { write, reply } = request;
@@ -666,7 +661,6 @@ async fn run_event<T, S>(
 ) -> Result<(), Error>
 where
     T: TxnSource,
-    T::Conn: StravaStore,
     S: StravaSession,
 {
     info!("user {}: Processing {event}", session.tb_id());

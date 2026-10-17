@@ -31,7 +31,7 @@ use std::{env, sync::LazyLock};
 use crate::{appstate::AppState, error::AppError};
 use tb_domain::{Error, TbResult};
 use tb_exec::{Txn, TxnSource};
-use tb_strava::{StravaId, StravaStore};
+use tb_strava::StravaId;
 
 pub(super) static STRAVACLIENT: LazyLock<StravaClient> = LazyLock::new(strava_oauth_client);
 pub(super) static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(http_client);
@@ -207,7 +207,6 @@ pub(crate) async fn login_authorized<S>(
 ) -> Result<Redirect, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     let (code, path) = match query {
         AuthResponse::Error { error, .. } => {

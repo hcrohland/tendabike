@@ -1,7 +1,6 @@
 use axum::Router;
 use tb_domain::IdKeyedMap;
 use tb_exec::TxnSource;
-use tb_strava::StravaStore;
 
 use crate::appstate::AppState;
 
@@ -33,10 +32,7 @@ pub(crate) fn created_entity<K, V: Clone>(
     }
 }
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
-where
-    S::Conn: StravaStore,
-{
+pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
     Router::new()
         .nest("/user", user::router())
         .nest("/types", types::router())

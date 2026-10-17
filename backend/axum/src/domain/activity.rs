@@ -23,7 +23,7 @@ use crate::{
 };
 use tb_domain::{Activity, ActivityId, ApiWrite, DescendReport, PartId};
 use tb_exec::{Txn, TxnSource};
-use tb_strava::{StravaSession, StravaStore};
+use tb_strava::StravaSession;
 
 async fn def_part_api<S>(
     user: RequestSession,
@@ -32,7 +32,6 @@ async fn def_part_api<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     state
         .registry
@@ -85,7 +84,6 @@ async fn act_put<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     if ActivityId::from(id) != activity.id {
         Err(tb_domain::Error::BadRequest(
@@ -114,7 +112,6 @@ async fn act_delete<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     state
         .registry
@@ -142,7 +139,6 @@ async fn descend<S>(
 ) -> Result<Json<DescendReport>, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     let report = state
         .registry
@@ -151,10 +147,7 @@ where
     Ok(Json(report))
 }
 
-pub(crate) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
-where
-    S::Conn: StravaStore,
-{
+pub(crate) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
     Router::new()
         .route("/descend", post(descend))
         .route("/{id}", delete(act_delete).get(act_get).put(act_put))

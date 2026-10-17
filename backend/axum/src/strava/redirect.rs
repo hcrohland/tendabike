@@ -12,7 +12,6 @@ use tb_domain::UserId;
 
 use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, error::AppError};
 use tb_exec::{Txn, TxnSource};
-use tb_strava::StravaStore;
 
 pub(super) async fn redirect_gear<S>(
     mut user: RequestSession,
@@ -21,7 +20,6 @@ pub(super) async fn redirect_gear<S>(
 ) -> Result<Redirect, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     let mut store = state.source.begin().await?;
     let uri = tb_strava::gear::strava_url(id, &mut user, &mut store)
@@ -37,7 +35,6 @@ pub(super) async fn redirect_act<S>(
 ) -> Result<Redirect, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     let mut store = state.source.begin().await?;
     let uri = tb_strava::activity::strava_url(id, &user, &mut store)
@@ -52,7 +49,6 @@ pub(super) async fn redirect_user<S>(
 ) -> Result<Redirect, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     let mut store = state.source.begin().await?;
     let uri = tb_strava::strava_url(id, &mut store)
@@ -68,7 +64,6 @@ pub(super) async fn revoke_user<S>(
 ) -> ApiResult<()>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     let mut store = state.source.begin().await?;
     let mut user = RequestSession::create_from_id(admin, tbid, &mut store).await?;
@@ -86,7 +81,6 @@ pub(super) async fn deleteuser<S>(
 ) -> ApiResult<()>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     let mut store = state.source.begin().await?;
     let mut user = RequestSession::create_from_id(admin, tbid, &mut store).await?;

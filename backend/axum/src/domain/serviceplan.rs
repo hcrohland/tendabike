@@ -31,12 +31,9 @@ use log::trace;
 use crate::{RequestSession, appstate::AppState, domain::created_entity, error::AppError};
 use tb_domain::{ApiWrite, ServicePlan, ServicePlanId};
 use tb_exec::TxnSource;
-use tb_strava::{StravaSession, StravaStore};
+use tb_strava::StravaSession;
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>>
-where
-    S::Conn: StravaStore,
-{
+pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
     Router::new()
         .route("/", post(create).put(update))
         .route("/{id}", delete(delete_plan))
@@ -49,7 +46,6 @@ async fn create<S>(
 ) -> Result<(StatusCode, Json<ServicePlan>), AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     trace!("ServicePlan::create");
     let summary = state
@@ -71,7 +67,6 @@ async fn update<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     state
         .registry
@@ -91,7 +86,6 @@ async fn delete_plan<S>(
 ) -> Result<StatusCode, AppError>
 where
     S: TxnSource + Clone + 'static,
-    S::Conn: StravaStore,
 {
     state
         .registry
