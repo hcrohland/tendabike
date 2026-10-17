@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted.
+Under review (2026-10-17). The implementation (`feature/generic-domain`,
+spec #525) is stopped while the spec is scrutinized; the decision is not
+final. Verdict map: [#534](https://github.com/hcrohland/tendabike/issues/534).
 
 ## Context
 
