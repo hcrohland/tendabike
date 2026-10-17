@@ -21,7 +21,7 @@ fn normalize_offset(a: &Activity) -> TbResult<Activity> {
 #[async_trait::async_trait]
 impl ActivityStore for MemStore {
     async fn activity_create(&mut self, act: Activity) -> TbResult<Activity> {
-        let mut d = self.state.lock().expect("in-memory store state poisoned");
+        let mut d = self.state();
         // One rule on both stores (issue #405): the activity id is a
         // primary key — the database's INSERT hits the key on a duplicate,
         // and this in-memory mirror rejects the same insert instead of
@@ -39,7 +39,7 @@ impl ActivityStore for MemStore {
     }
 
     async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Option<Activity>> {
-        let d = self.state.lock().expect("in-memory store state poisoned");
+        let d = self.state();
         d.activities
             .iter()
             .find(|a| a.id == aid)
@@ -48,7 +48,7 @@ impl ActivityStore for MemStore {
     }
 
     async fn activity_update(&mut self, new: Activity) -> TbResult<Activity> {
-        let mut d = self.state.lock().expect("in-memory store state poisoned");
+        let mut d = self.state();
         // One rule on both stores: the data fields are replaced, but the row
         // keeps its utc_offset (the new start is expressed in the stored
         // offset), device_name, and external_id; a missing row is NotFound.
@@ -75,14 +75,14 @@ impl ActivityStore for MemStore {
     }
 
     async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize> {
-        let mut d = self.state.lock().expect("in-memory store state poisoned");
+        let mut d = self.state();
         let len_before = d.activities.len();
         d.activities.retain(|a| a.id != aid);
         Ok(len_before - d.activities.len())
     }
 
     async fn activities_delete(&mut self, activities: &[Activity]) -> TbResult<usize> {
-        let mut d = self.state.lock().expect("in-memory store state poisoned");
+        let mut d = self.state();
         let ids: Vec<ActivityId> = activities.iter().map(|a| a.id).collect();
         let len_before = d.activities.len();
         d.activities.retain(|a| !ids.contains(&a.id));
@@ -90,7 +90,7 @@ impl ActivityStore for MemStore {
     }
 
     async fn get_all(&mut self, uid: &UserId) -> TbResult<Vec<Activity>> {
-        let d = self.state.lock().expect("in-memory store state poisoned");
+        let d = self.state();
         let mut result = Vec::new();
         for a in d.activities.iter().filter(|a| &a.user_id == uid) {
             result.push(normalize_offset(a)?);
@@ -109,7 +109,7 @@ impl ActivityStore for MemStore {
         begin: OffsetDateTime,
         end: OffsetDateTime,
     ) -> TbResult<Vec<Activity>> {
-        let d = self.state.lock().expect("in-memory store state poisoned");
+        let d = self.state();
         let mut result = Vec::new();
         for a in &d.activities {
             // One rule on both stores: begin is included, end is excluded.
@@ -125,7 +125,7 @@ impl ActivityStore for MemStore {
         uid: UserId,
         rstart: OffsetDateTime,
     ) -> TbResult<Activity> {
-        let d = self.state.lock().expect("in-memory store state poisoned");
+        let d = self.state();
         // One rule on both stores (maintainer-confirmed, issue #408): the
         // activity's local wall-clock minute (its start in the stored offset,
         // floored to the minute) must equal the query's UTC wall-clock
@@ -158,7 +158,7 @@ impl ActivityStore for MemStore {
         types: Vec<ActTypeId>,
         partid: &PartId,
     ) -> TbResult<Vec<Activity>> {
-        let mut d = self.state.lock().expect("in-memory store state poisoned");
+        let mut d = self.state();
         let mut updated = Vec::new();
         for act in d.activities.iter_mut() {
             if act.user_id == user && act.gear.is_none() && types.contains(&act.what) {
@@ -174,7 +174,7 @@ impl ActivityStore for MemStore {
     }
 
     async fn activity_get_really_all(&mut self) -> TbResult<Vec<Activity>> {
-        let d = self.state.lock().expect("in-memory store state poisoned");
+        let d = self.state();
         let mut result = Vec::new();
         for a in &d.activities {
             result.push(normalize_offset(a)?);

@@ -4,13 +4,13 @@ use crate::{PartId, ServicePlan, ServicePlanId, TbResult, UserId};
 #[async_trait::async_trait]
 impl ServicePlanStore for MemStore {
     async fn create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
-        let mut d = self.state.lock().expect("in-memory store state poisoned");
+        let mut d = self.state();
         d.service_plans.insert(plan.id, plan.clone());
         Ok(plan)
     }
 
     async fn get(&mut self, id: ServicePlanId) -> TbResult<ServicePlan> {
-        let d = self.state.lock().expect("in-memory store state poisoned");
+        let d = self.state();
         d.service_plans
             .get(&id)
             .cloned()
@@ -21,7 +21,7 @@ impl ServicePlanStore for MemStore {
     }
 
     async fn plan_update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
-        let mut d = self.state.lock().expect("in-memory store state poisoned");
+        let mut d = self.state();
         match d.service_plans.get_mut(&plan.id) {
             Some(p) => {
                 *p = plan.clone();
@@ -35,7 +35,7 @@ impl ServicePlanStore for MemStore {
     }
 
     async fn delete(&mut self, id: ServicePlanId) -> TbResult<usize> {
-        let mut d = self.state.lock().expect("in-memory store state poisoned");
+        let mut d = self.state();
         match d.service_plans.remove(&id) {
             Some(_) => Ok(1),
             None => Ok(0),
@@ -43,7 +43,7 @@ impl ServicePlanStore for MemStore {
     }
 
     async fn serviceplans_delete(&mut self, plans: &[ServicePlan]) -> TbResult<usize> {
-        let mut d = self.state.lock().expect("in-memory store state poisoned");
+        let mut d = self.state();
         let mut count = 0;
         for p in plans {
             if d.service_plans.remove(&p.id).is_some() {
@@ -54,7 +54,7 @@ impl ServicePlanStore for MemStore {
     }
 
     async fn by_part(&mut self, part: PartId) -> TbResult<Vec<ServicePlan>> {
-        let d = self.state.lock().expect("in-memory store state poisoned");
+        let d = self.state();
         Ok(d.service_plans
             .values()
             .filter(|p| p.part == Some(part))
@@ -63,7 +63,7 @@ impl ServicePlanStore for MemStore {
     }
 
     async fn by_user(&mut self, uid: UserId) -> TbResult<Vec<ServicePlan>> {
-        let d = self.state.lock().expect("in-memory store state poisoned");
+        let d = self.state();
         Ok(d.service_plans
             .values()
             .filter(|p| p.uid == Some(uid))

@@ -86,7 +86,7 @@ where
 
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::*;
 
@@ -242,6 +242,11 @@ impl MemStore {
         Self {
             state: Arc::new(Mutex::new(StoreData::empty())),
         }
+    }
+
+    /// A guard on the shared state; panics if the lock is poisoned.
+    fn state(&self) -> MutexGuard<'_, StoreData> {
+        self.state.lock().expect("in-memory store state poisoned")
     }
 
     /// A cheap sibling handle on the SAME shared state: writes through

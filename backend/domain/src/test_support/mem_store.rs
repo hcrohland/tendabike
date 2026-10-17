@@ -77,7 +77,7 @@ impl MemStore {
         data.next_subscription_id = 1;
 
         // Seed the shared state with the workshop data.
-        *store.state.lock().expect("in-memory store state poisoned") = data;
+        *store.state() = data;
         store
     }
 }
@@ -97,7 +97,7 @@ pub struct StoreSnapshot {
 impl MemStore {
     /// Export store data as a serializable snapshot, deterministically ordered.
     pub fn snapshot(&self) -> StoreSnapshot {
-        let d = self.state.lock().expect("in-memory store state poisoned");
+        let d = self.state();
         let mut snap = StoreSnapshot {
             users: d.users.values().cloned().collect(),
             parts: d.parts.values().cloned().collect(),
