@@ -193,9 +193,12 @@ pub(crate) async fn read_sse_frames(
 /// `unimplemented!()` — they are never reached because `begin` fails first),
 /// and `Txn` with `commit`/`rollback` returning a `DatabaseFailure`.
 ///
-/// Hand-rolled rather than `mockall`: `TxnSource::Conn` must implement all of
-/// those traits at once, and `mockall` generates one type per trait, so the
-/// multi-trait `Conn` witness cannot be generated.
+/// Hand-rolled, not `mockall`: `mock!` can combine traits on one type (with
+/// `#[async_trait]` on the impl blocks), but the store traits share method
+/// names (`get`, `create`, `update`, `delete`) and `mock!`'s expectations are
+/// one `expect_<name>` per type — so the multi-trait `Conn` witness cannot be
+/// generated while the seam keeps these names. Full analysis:
+/// `docs/research/mockall-conn-witness.md`.
 struct FakeConn;
 
 impl Store for FakeConn {}
