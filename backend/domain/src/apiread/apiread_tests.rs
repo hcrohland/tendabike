@@ -643,7 +643,7 @@ async fn shop_subscriptions_for_shop_dispatches() -> TbResult<()> {
 #[tokio::test]
 async fn shop_subscriptions_for_shop_foreign_is_forbidden() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let shop = ShopId::create(
         "Workshop".to_string(),
         None,
