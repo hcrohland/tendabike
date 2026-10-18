@@ -33,11 +33,11 @@ use tb_exec::TxnSource;
 use crate::{
     RequestSession,
     appstate::AppState,
-    domain::created_entity,
+    domain::{created_entity, read_mismatch},
     error::{ApiResult, AppError},
 };
 use serde_with::serde_as;
-use tb_domain::{ApiRead, ApiWrite, Error, Part, PartId, PartTypeId, ReadOutcome};
+use tb_domain::{ApiRead, ApiWrite, Part, PartId, PartTypeId, ReadOutcome};
 use tb_strava::StravaSession;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
@@ -88,11 +88,7 @@ where
         .await?
     {
         ReadOutcome::Part(part) => Ok(Json(part)),
-        // This route sent the `Part` read; any other outcome is a bug, not
-        // a domain outcome.
-        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
-            "the part read did not carry its part"
-        )))),
+        _ => Err(read_mismatch("part", "part")),
     }
 }
 
@@ -193,10 +189,6 @@ where
         .await?
     {
         ReadOutcome::PartCategories(categories) => Ok(Json(categories)),
-        // This route sent the `PartCategories` read; any other outcome is a
-        // bug, not a domain outcome.
-        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
-            "the part categories read did not carry its categories"
-        )))),
+        _ => Err(read_mismatch("part categories", "categories")),
     }
 }

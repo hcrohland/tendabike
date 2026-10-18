@@ -182,8 +182,14 @@ impl UserId {
         })
     }
 
-    pub async fn get_stat(&self, store: &mut impl Store) -> TbResult<Stat> {
-        let user = self.read(None, store).await.context("User record")?.user;
+    pub async fn get_stat(
+        &self,
+        store: &mut (impl ActivityStore + PartStore + UserStore),
+    ) -> TbResult<Stat> {
+        // The lightweight single-row read: the stat needs the user record,
+        // not the `UserState` composite (the composite is the unified
+        // read's primitive, spec #558 §3.5 — the per-user routes only).
+        let user = UserStore::get(store, *self).await.context("User record")?;
         let parts = Part::get_all(self, store)
             .await
             .context("User parts")?
@@ -224,10 +230,10 @@ impl UserId {
             .map(|u| u.id)
     }
 
-    pub async fn is_admin(&self, store: &mut impl Store) -> TbResult<bool> {
-        self.read(None, store)
-            .await
-            .map(|state| state.user.is_admin)
+    pub async fn is_admin(&self, store: &mut impl UserStore) -> TbResult<bool> {
+        // The lightweight single-row read: one bool, no `UserState`
+        // composite (this runs at every login and every executor spawn).
+        UserStore::get(store, *self).await.map(|u| u.is_admin)
     }
 
     /// get all parts, attachments and activities for the user

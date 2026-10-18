@@ -33,7 +33,7 @@ use tb_strava::StravaSession;
 use crate::{
     RequestSession,
     appstate::AppState,
-    domain::created_entity,
+    domain::{created_entity, read_mismatch},
     error::{ApiResult, AppError},
 };
 
@@ -78,11 +78,7 @@ where
         .await?
     {
         ReadOutcome::PartNotes(notes) => Ok(Json(notes)),
-        // This route sent the `PartNotes` read; any other outcome is a bug,
-        // not a domain outcome.
-        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
-            "the part notes read did not carry its notes"
-        )))),
+        _ => Err(read_mismatch("part notes", "notes")),
     }
 }
 
@@ -200,13 +196,7 @@ where
         .await?
     {
         ReadOutcome::PartNoteFile(note, data) => (note, data),
-        // This route sent the `PartNoteFile` read; any other outcome is a
-        // bug, not a domain outcome.
-        _ => {
-            return Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
-                "the part note file read did not carry its note and file"
-            ))));
-        }
+        _ => return Err(read_mismatch("part note file", "note and file")),
     };
 
     let mime = note

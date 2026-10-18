@@ -32,6 +32,16 @@ pub(crate) fn created_entity<K, V: Clone>(
     }
 }
 
+/// The read route's mismatch guard (spec #558 §3.1): this route sent the
+/// read of its own variant; any other `ReadOutcome` is a bug, not a domain
+/// outcome — the `AnyFailure` names the read (`what`) that lost its payload
+/// (`payload`).
+pub(crate) fn read_mismatch(what: &str, payload: &str) -> crate::error::AppError {
+    crate::error::AppError::TbError(tb_domain::Error::AnyFailure(anyhow::anyhow!(
+        "the {what} read did not carry its {payload}"
+    )))
+}
+
 pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
     Router::new()
         .nest("/user", user::router())

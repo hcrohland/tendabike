@@ -27,7 +27,7 @@ use tb_exec::TxnSource;
 use crate::{
     RequestSession,
     appstate::AppState,
-    domain::created_entity,
+    domain::{created_entity, read_mismatch},
     error::{ApiResult, AppError},
 };
 use tb_domain::{
@@ -110,11 +110,7 @@ where
         .await?
     {
         ReadOutcome::Shops(shops) => Ok(Json(shops)),
-        // This route sent the `Shops` read; any other outcome is a bug, not
-        // a domain outcome.
-        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
-            "the shops read did not carry its shops"
-        )))),
+        _ => Err(read_mismatch("shops", "shops")),
     }
 }
 
@@ -164,11 +160,7 @@ where
         .await?
     {
         ReadOutcome::Shop(shop) => Ok(Json(shop)),
-        // This route sent the `Shop` read; any other outcome is a bug, not
-        // a domain outcome.
-        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
-            "the shop read did not carry its shop"
-        )))),
+        _ => Err(read_mismatch("shop", "shop")),
     }
 }
 
@@ -240,11 +232,7 @@ where
         .await?
     {
         ReadOutcome::ShopParts(parts) => Ok(Json(parts)),
-        // This route sent the `ShopParts` read; any other outcome is a bug,
-        // not a domain outcome.
-        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
-            "the shop parts read did not carry its parts"
-        )))),
+        _ => Err(read_mismatch("shop parts", "parts")),
     }
 }
 
@@ -313,11 +301,7 @@ where
         .await?
     {
         ReadOutcome::ShopSearch { shops, users } => Ok(Json((shops, users))),
-        // This route sent the `ShopSearch` read; any other outcome is a
-        // bug, not a domain outcome.
-        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
-            "the shop search read did not carry its shops and users"
-        )))),
+        _ => Err(read_mismatch("shop search", "shops and users")),
     }
 }
 
@@ -374,11 +358,7 @@ where
         .await?
     {
         ReadOutcome::ShopSubscriptions(subscriptions) => Ok(Json(subscriptions)),
-        // This route sent the `ShopSubscriptions` read; any other outcome
-        // is a bug, not a domain outcome.
-        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
-            "the shop subscriptions read did not carry its subscriptions"
-        )))),
+        _ => Err(read_mismatch("shop subscriptions", "subscriptions")),
     }
 }
 
@@ -400,11 +380,7 @@ where
         .await?
     {
         ReadOutcome::ShopSubscriptions(subscriptions) => Ok(Json(subscriptions)),
-        // This route sent the `ShopSubscriptions` read; any other outcome
-        // is a bug, not a domain outcome.
-        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
-            "the shop subscriptions read did not carry its subscriptions"
-        )))),
+        _ => Err(read_mismatch("shop subscriptions", "subscriptions")),
     }
 }
 
@@ -426,11 +402,7 @@ where
         .await?
     {
         ReadOutcome::ShopSubscription(subscription) => Ok(Json(subscription)),
-        // This route sent the `ShopSubscription` read; any other outcome
-        // is a bug, not a domain outcome.
-        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
-            "the shop subscription read did not carry its subscription"
-        )))),
+        _ => Err(read_mismatch("shop subscription", "subscription")),
     }
 }
 

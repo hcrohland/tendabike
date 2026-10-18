@@ -19,11 +19,10 @@ use http::StatusCode;
 use crate::{
     AxumAdmin, RequestSession,
     appstate::AppState,
+    domain::read_mismatch,
     error::{ApiResult, AppError},
 };
-use tb_domain::{
-    Activity, ActivityId, ApiRead, ApiWrite, DescendReport, Error, PartId, ReadOutcome,
-};
+use tb_domain::{Activity, ActivityId, ApiRead, ApiWrite, DescendReport, PartId, ReadOutcome};
 use tb_exec::{Txn, TxnSource};
 use tb_strava::StravaSession;
 
@@ -80,11 +79,7 @@ where
         .await?
     {
         ReadOutcome::Activity(activity) => Ok(Json(activity)),
-        // This route sent the `Activity` read; any other outcome is a bug,
-        // not a domain outcome.
-        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
-            "the activity read did not carry its activity"
-        )))),
+        _ => Err(read_mismatch("activity", "activity")),
     }
 }
 

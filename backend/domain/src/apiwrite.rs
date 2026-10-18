@@ -548,7 +548,11 @@ pub async fn exec(
         // so the result is empty. The Strava-side sync event is the cutover
         // ticket's concern (issue #457) — see the `exec` docs.
         ApiWrite::UserOnboardingSync { .. } => {
-            let user = session.user_id().read(None, store).await?.user;
+            // The lightweight single-row read: the guard needs only the
+            // onboarding status, not the `UserState` composite (this is a
+            // write path — spec #558 §3.5's composite is for the per-user
+            // routes only).
+            let user = UserStore::get(store, session.user_id()).await?;
             if user.onboarding_status.is_initial_sync_completed() {
                 return Err(Error::BadRequest(
                     "Initial sync already triggered".to_string(),
@@ -560,7 +564,7 @@ pub async fn exec(
             Ok(WriteOutcome::Summary(Summary::default()))
         }
         ApiWrite::UserOnboardingPostpone => {
-            let user = session.user_id().read(None, store).await?.user;
+            let user = UserStore::get(store, session.user_id()).await?;
             if user.onboarding_status != OnboardingStatus::Pending {
                 return Err(Error::BadRequest(
                     "Initial sync already completed or postponed".to_string(),

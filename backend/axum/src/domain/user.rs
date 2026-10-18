@@ -13,8 +13,8 @@ use axum::{
 };
 use serde::Serialize;
 
-use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, error::AppError};
-use tb_domain::{ApiRead, Error, ReadOutcome, Session, ShopId, Summary};
+use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, domain::read_mismatch};
+use tb_domain::{ApiRead, ReadOutcome, Session, ShopId, Summary};
 use tb_exec::TxnSource;
 use tb_strava::StravaSession;
 
@@ -42,11 +42,7 @@ where
         .await?
     {
         ReadOutcome::User(state) => Ok(Json(state.user)),
-        // This route sent the `User` read; any other outcome is a bug, not
-        // a domain outcome.
-        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
-            "the user read did not carry its user state"
-        )))),
+        _ => Err(read_mismatch("user", "user state")),
     }
 }
 
@@ -81,11 +77,7 @@ where
         .await?
     {
         ReadOutcome::User(state) => Ok(Json(state.summary)),
-        // This route sent the `User` read; any other outcome is a bug, not
-        // a domain outcome.
-        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
-            "the user read did not carry its user state"
-        )))),
+        _ => Err(read_mismatch("user", "user state")),
     }
 }
 
@@ -126,11 +118,7 @@ where
                 shops: summary.shops.live(),
             }))
         }
-        // This route sent the `User` read; any other outcome is a bug, not
-        // a domain outcome.
-        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
-            "the user read did not carry its user state"
-        )))),
+        _ => Err(read_mismatch("user", "user state")),
     }
 }
 
