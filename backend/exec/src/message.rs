@@ -19,14 +19,15 @@
 */
 
 //! The executor loop's messages and in-memory plumbing (ADR-0005, executable
-//! spec #446 §4.2).
+//! spec #446 §4.2; ADR-0007, executable spec #558 §3.2).
 //!
-//! The per-user executor consumes two message sources, unified in
-//! [`Message`]:
+//! The per-user executor consumes two message sources:
 //!
-//! - **API writes** — an in-memory channel, one per user. Every mutating
-//!   route enqueues an [`ApiWriteRequest`] (the [`ApiWrite`] plus a oneshot
-//!   reply) and awaits the reply; within the channel, writes process FIFO.
+//! - **API requests** — an in-memory channel, one per user. Every read and
+//!   mutating route enqueues a [`Request`] (the operation plus a oneshot
+//!   reply) and awaits the reply; within the channel, requests process in
+//!   **FIFO total order per user** (spec #558 §3.2: a read enqueued after a
+//!   write sees that write — the ordering contract a second driver gets).
 //! - **Strava events** — the existing `strava_events` database queue, read
 //!   latest-per-object (`tb_strava::event::get_event`).
 //!
@@ -35,7 +36,8 @@
 //! (spec §4.5 — an empty `Summary` pushes nothing; a dropped frame is
 //! non-fatal, the client's reconnect + full refresh covers it).
 
-use tb_domain::{ApiWrite, Summary, TbResult, WriteOutcome};
+use tb_domain::{ApiRead, ApiWrite, ReadOutcome, Summary, TbResult, WriteOutcome};
+use tb_strava::StravaStat;
 use tb_strava::event::Event;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
@@ -49,54 +51,128 @@ pub enum Message {
     Strava(Event),
 }
 
-/// One API write as the executor receives it: the [`ApiWrite`] plus a
-/// oneshot the mutating route awaits for the write's outcome (spec §6.2:
-/// enqueue + await; success resolves the `WriteOutcome` — the `Summary`
-/// (the frame) plus, for the descend, its match report (the response
-/// body) — failure resolves the error and the route maps it to a 4xx/5xx).
+/// One API request as the executor receives it: the unified per-user
+/// message (spec #558 §3.2), replacing the bare write request. One variant
+/// per message type the routes enqueue, each carrying its oneshot reply —
+/// the route awaits it (unbounded, spec #558 §3.7), and the loop resolves
+/// it exactly once when the message commits or fails:
+///
+/// - [`Request::Write`] — a mutating route's [`ApiWrite`]: success resolves
+///   the `WriteOutcome` (the `Summary` — the frame — plus, for the descend,
+///   its match report, the response body), failure resolves the error and
+///   the route maps it to a 4xx/5xx.
+/// - [`Request::Read`] — a read route's [`ApiRead`] descriptor: the loop
+///   runs it in its own transaction (read-only within it by spec) and
+///   resolves the read's data (a [`ReadOutcome`]) or the error.
+/// - [`Request::Gear`] — the hydration write (spec #558 §4): `update_gear`
+///   is a `tb_strava` op, so it is dispatched loop-side, not an `ApiWrite`
+///   variant; the reply carries the created-parts `Summary` (the frame).
+/// - [`Request::AllStats`] — the admin `GET /user/all` read (spec #558
+///   §3.3): `get_all_stats` is a `tb_strava` op, so it rides the admin
+///   user's channel as an exec-level variant, dispatched loop-side.
 ///
 /// `pub` (fields too) because the web layer builds one per request and the
-/// executor consumes it; the oneshot keeps the type from deriving `Clone`
-/// or `PartialEq` — those live on the [`ApiWrite`] the request bundles.
-pub struct ApiWriteRequest {
-    /// The write to apply.
-    pub write: ApiWrite,
-    /// Resolved exactly once when the write is committed or fails.
-    pub reply: oneshot::Sender<TbResult<WriteOutcome>>,
+/// executor consumes it; the oneshots keep the type from deriving `Clone`
+/// or `PartialEq` — those live on the payloads the request bundles.
+pub enum Request {
+    /// An API write from the user's channel (today's bare write request).
+    Write {
+        /// The write to apply.
+        write: ApiWrite,
+        /// Resolved exactly once when the write is committed or fails.
+        reply: oneshot::Sender<TbResult<WriteOutcome>>,
+    },
+    /// An API read from the user's channel: the [`ApiRead`] descriptor, run
+    /// in the loop's own transaction (read-only within it by spec).
+    Read {
+        /// The read to apply.
+        read: ApiRead,
+        /// Resolved exactly once when the read commits or fails.
+        reply: oneshot::Sender<TbResult<ReadOutcome>>,
+    },
+    /// The hydration write (spec #558 §4): `update_gear` in the loop's own
+    /// transaction, with the loop's `StravaUserSession`.
+    Gear {
+        /// Resolved with the created-parts `Summary` (the frame) on commit,
+        /// or the error on failure.
+        reply: oneshot::Sender<TbResult<Summary>>,
+    },
+    /// The admin `GET /user/all` read (spec #558 §3.3): `get_all_stats` in
+    /// the loop's own transaction, read-only within it by spec.
+    AllStats {
+        /// Resolved with the all-user stats on commit, or the error on
+        /// failure.
+        reply: oneshot::Sender<TbResult<Vec<StravaStat>>>,
+    },
 }
 
-impl ApiWriteRequest {
+impl Request {
     /// Pairs a write with a fresh reply channel: the request goes on the
     /// user's executor channel, the receiver is awaited by the route.
-    pub fn new(write: ApiWrite) -> (Self, oneshot::Receiver<TbResult<WriteOutcome>>) {
+    pub fn new_write(write: ApiWrite) -> (Self, oneshot::Receiver<TbResult<WriteOutcome>>) {
         let (reply, rx) = oneshot::channel();
-        (Self { write, reply }, rx)
+        (Self::Write { write, reply }, rx)
+    }
+
+    /// Pairs a read with a fresh reply channel: the request goes on the
+    /// user's executor channel, the receiver is awaited by the route.
+    pub fn new_read(read: ApiRead) -> (Self, oneshot::Receiver<TbResult<ReadOutcome>>) {
+        let (reply, rx) = oneshot::channel();
+        (Self::Read { read, reply }, rx)
+    }
+
+    /// The hydration write with a fresh reply channel (spec #558 §4).
+    pub fn new_gear() -> (Self, oneshot::Receiver<TbResult<Summary>>) {
+        let (reply, rx) = oneshot::channel();
+        (Self::Gear { reply }, rx)
+    }
+
+    /// The admin stats read with a fresh reply channel (spec #558 §3.3).
+    pub fn new_all_stats() -> (Self, oneshot::Receiver<TbResult<Vec<StravaStat>>>) {
+        let (reply, rx) = oneshot::channel();
+        (Self::AllStats { reply }, rx)
     }
 }
 
-impl std::fmt::Debug for ApiWriteRequest {
+impl std::fmt::Debug for Request {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ApiWriteRequest")
-            .field("write", &self.write)
-            .field("reply", &"<oneshot>")
-            .finish()
+        match self {
+            Self::Write { write, .. } => f
+                .debug_struct("Request::Write")
+                .field("write", write)
+                .field("reply", &"<oneshot>")
+                .finish(),
+            Self::Read { read, .. } => f
+                .debug_struct("Request::Read")
+                .field("read", read)
+                .field("reply", &"<oneshot>")
+                .finish(),
+            Self::Gear { .. } => f
+                .debug_struct("Request::Gear")
+                .field("reply", &"<oneshot>")
+                .finish(),
+            Self::AllStats { .. } => f
+                .debug_struct("Request::AllStats")
+                .field("reply", &"<oneshot>")
+                .finish(),
+        }
     }
 }
 
-/// The send half of a user's API-write channel (held by the web layer).
-pub type ApiWriteSender = mpsc::UnboundedSender<ApiWriteRequest>;
+/// The send half of a user's request channel (held by the web layer).
+pub type RequestSender = mpsc::UnboundedSender<Request>;
 
-/// The receive half of a user's API-write channel (consumed by the loop).
-pub type ApiWriteReceiver = mpsc::UnboundedReceiver<ApiWriteRequest>;
+/// The receive half of a user's request channel (consumed by the loop).
+pub type RequestReceiver = mpsc::UnboundedReceiver<Request>;
 
-/// A per-user API-write channel, as the web layer constructs one for a user's
-/// executor (spec §4.2).
+/// A per-user request channel, as the web layer constructs one for a user's
+/// executor (spec #446 §4.2; #558 §3.2).
 ///
-/// Unbounded on purpose: enqueuing a write must never block the route — a
-/// write queued behind a slow in-progress message just waits on its oneshot
-/// (the wait is unbounded, per spec §6.2); per-user serialization is the
-/// single loop, not channel backpressure.
-pub fn api_write_channel() -> (ApiWriteSender, ApiWriteReceiver) {
+/// Unbounded on purpose: enqueuing a request must never block the route — a
+/// request queued behind a slow in-progress message just waits on its
+/// oneshot (the wait is unbounded, per spec #558 §3.7); per-user
+/// serialization is the single loop, not channel backpressure.
+pub fn request_channel() -> (RequestSender, RequestReceiver) {
     mpsc::unbounded_channel()
 }
 

@@ -17,5 +17,8 @@ tokio = { workspace = true, features = ["sync", "time", "macros"] }
 doctest = false
 
 [dev-dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+tb_domain = { workspace = true, features = ["test-support"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
 time = { workspace = true }
