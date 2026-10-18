@@ -74,15 +74,16 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use tb_domain::test_support::{
-    MemStore, StoreSnapshot,
+    MemStore, StoreSnapshot, TestSession,
     fixtures::{sample_purchase_date, test_session},
     only_tombstone, part_type_ids, sole_live,
 };
 use tb_domain::{
-    ActTypeId, Activity, ActivityId, ActivityStore, ApiWrite, Attachment, AttachmentStore,
+    ActTypeId, Activity, ActivityId, ActivityStore, ApiRead, ApiWrite, Attachment, AttachmentStore,
     IdKeyedMap, MAX_TIME, OnboardingStatus, Part, PartId, PartNoteStore, PartStore, PartTypeId,
-    ServicePlan, ServicePlanId, ShopStore, Summary, Usage, UsageId, UsageStore, UserId, UserStore,
-    attach_assembly, detach_assembly, dispose_assembly, exec, round_time,
+    ReadOutcome, ServicePlan, ServicePlanId, ShopId, ShopStore, SubscriptionId, Summary, Usage,
+    UsageId, UsageStore, UserId, UserStore, attach_assembly, detach_assembly, dispose_assembly,
+    exec, read, round_time,
 };
 use time::{OffsetDateTime, macros::datetime};
 use tokio::sync::MutexGuard;
@@ -2052,6 +2053,287 @@ async fn apiwrite_onboarding_postpone() -> tb_domain::TbResult<()> {
                     if msg == "Initial sync already completed or postponed"
             ),
             "a second postpone must be the handler's BadRequest, got {err:?}"
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+// ---------------------------------------------------------------------------
+// ApiRead dispatch (issue #560)
+// ---------------------------------------------------------------------------
+//
+// The same representative set of reads as the in-memory dispatch suite in
+// `tb_domain`, driven through the real database: the dispatch applies the
+// same domain operations the handlers use, and the read catalog — the
+// `UserState` composite for the unified user read, the bare entities,
+// and the `TbResult` errors — holds on the source of truth. A failed
+// statement aborts the Postgres transaction, so the error assertions come
+// last in each test.
+
+/// The unified user read returns the `UserState` composite on the source of
+/// truth: the full `User` plus the `Summary` of the full fixture content
+/// (the same snapshot `user_summary_read` asserts).
+#[tokio::test]
+#[ignore]
+async fn apiread_user_read() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let mut session = test_session();
+
+        let outcome = read(ApiRead::User { shop: None }, &mut session, &mut store).await?;
+        let ReadOutcome::User(state) = outcome else {
+            panic!("the User read returns the UserState composite");
+        };
+        // The full user record — the bare `User` projection.
+        assert_eq!(state.user.id, UserId::from(1));
+        assert_eq!(state.user.name, "Bike");
+        assert_eq!(state.user.firstname, "Tenda");
+        assert!(!state.user.is_admin);
+        // The `Summary` projection: the full fixture content.
+        assert_eq!(state.summary.parts.len(), 17);
+        assert_eq!(state.summary.activities.len(), 3);
+        assert_eq!(state.summary.attachments.len(), 11);
+        assert_eq!(state.summary.usages.len(), 28);
+        assert!(state.summary.shops.is_empty());
+        assert!(state.summary.users.is_empty());
+        assert!(state.summary.services.is_empty());
+        assert!(state.summary.plans.is_empty());
+        assert!(state.summary.part_notes.is_empty());
+
+        Ok(())
+    })
+    .await
+}
+
+/// The dispatch reads activities, parts, and categories the same way the
+/// handlers do: the fixture's first ride, its bike, and the main part types;
+/// missing entities are `NotFound`.
+#[tokio::test]
+#[ignore]
+async fn apiread_activity_part_and_categories() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let mut session = test_session();
+
+        let outcome = read(
+            ApiRead::Activity(ActivityId::new(1)),
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        let ReadOutcome::Activity(act) = outcome else {
+            panic!("the Activity read returns the Activity");
+        };
+        assert_eq!(act.id, ActivityId::new(1));
+        assert_eq!(act.name, "Morning Ride");
+
+        let outcome = read(ApiRead::Part(PartId::from(1)), &mut session, &mut store).await?;
+        let ReadOutcome::Part(part) = outcome else {
+            panic!("the Part read returns the Part");
+        };
+        assert_eq!(part.id, PartId::from(1));
+        assert_eq!(part.name, "Main Bike");
+
+        let outcome = read(ApiRead::PartCategories, &mut session, &mut store).await?;
+        let ReadOutcome::PartCategories(categories) = outcome else {
+            panic!("the PartCategories read returns the category set");
+        };
+        // The op's rule: only the main part types — the fixture's single bike.
+        assert_eq!(categories, HashSet::from([BIKE]));
+
+        // The failed statement aborts the Postgres transaction, so the
+        // missing-entity errors come last.
+        let err = read(
+            ApiRead::Activity(ActivityId::new(999_999)),
+            &mut session,
+            &mut store,
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            matches!(err, tb_domain::Error::NotFound(_)),
+            "a missing activity must be NotFound, got {err:?}"
+        );
+        let err = read(ApiRead::Part(PartId::from(9999)), &mut session, &mut store)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, tb_domain::Error::NotFound(_)),
+            "a missing part must be NotFound, got {err:?}"
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+/// The dispatch reads a part note's file the same way the download handler
+/// does: the note plus its bytes; a text note is the op's `NotFound`.
+#[tokio::test]
+#[ignore]
+async fn apiread_partnote_file_read() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let mut session = test_session();
+        let part = PartId::from(13);
+        let data = b"file content".to_vec();
+        let note = part
+            .note_create_file(
+                &session,
+                "Manual".to_string(),
+                "application/pdf".to_string(),
+                Some("manual.pdf".to_string()),
+                data.len() as i64,
+                data.clone(),
+                OffsetDateTime::now_utc(),
+                &mut store,
+            )
+            .await?;
+
+        let outcome = read(ApiRead::PartNoteFile(note.id), &mut session, &mut store).await?;
+        let ReadOutcome::PartNoteFile(got_note, file) = outcome else {
+            panic!("the PartNoteFile read returns the note plus its bytes");
+        };
+        assert_eq!(got_note.id, note.id);
+        assert_eq!(got_note.name, "Manual");
+        assert_eq!(file, data);
+
+        // A text note has no file: the op's NotFound. The failed statement
+        // aborts the Postgres transaction, so it comes last.
+        let text = part
+            .note_create_text(
+                &session,
+                "Text".to_string(),
+                OffsetDateTime::now_utc(),
+                &mut store,
+            )
+            .await?;
+        let err = read(ApiRead::PartNoteFile(text.id), &mut session, &mut store)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, tb_domain::Error::NotFound(_)),
+            "a text note's file must be NotFound, got {err:?}"
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+/// The dispatch reads the shop catalog the same way the handlers do: the
+/// shop list, the shop, its parts, the search, the subscriptions (mine and
+/// the shop's pending), and one subscription by id; a foreign user's access
+/// is `Forbidden`.
+#[tokio::test]
+#[ignore]
+async fn apiread_shop_reads() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let mut session = test_session();
+        let user = UserId::from(1);
+
+        let shop = ShopId::create("Workshop".to_string(), None, true, user, &mut store).await?;
+        // The register op requires the owner's subscription; auto-approve
+        // activates it.
+        SubscriptionId::create(shop.id, None, user, &mut store).await?;
+        let part = PartId::from(13); // loose spare, owned by user 1
+        shop.id.register_part(part, &session, &mut store).await?;
+
+        let outcome = read(ApiRead::Shops, &mut session, &mut store).await?;
+        let ReadOutcome::Shops(shops) = outcome else {
+            panic!("the Shops read returns the shop list");
+        };
+        assert_eq!(shops.len(), 1);
+        assert_eq!(shops[0].id, shop.id);
+
+        let outcome = read(ApiRead::Shop(shop.id), &mut session, &mut store).await?;
+        let ReadOutcome::Shop(got) = outcome else {
+            panic!("the Shop read returns the Shop");
+        };
+        assert_eq!(got.id, shop.id);
+        assert_eq!(got.name, "Workshop");
+        assert_eq!(got.owner, user);
+
+        let outcome = read(ApiRead::ShopParts(shop.id), &mut session, &mut store).await?;
+        let ReadOutcome::ShopParts(parts) = outcome else {
+            panic!("the ShopParts read returns the part list");
+        };
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0].id, part);
+        assert_eq!(parts[0].shop, Some(shop.id));
+
+        let outcome = read(
+            ApiRead::ShopSearch("Workshop".to_string()),
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        let ReadOutcome::ShopSearch { shops, users } = outcome else {
+            panic!("the ShopSearch read returns the shops plus their users");
+        };
+        assert_eq!(shops.len(), 1);
+        assert_eq!(shops[0].id, shop.id);
+        // The owner's public record, with the admin flag and onboarding
+        // status dropped (the `UserPublic` projection).
+        assert_eq!(users.len(), 1);
+        assert_eq!(users[0].id, user);
+
+        // Mine: the session user's subscription, with shop details.
+        let outcome = read(ApiRead::ShopSubscriptions(None), &mut session, &mut store).await?;
+        let ReadOutcome::ShopSubscriptions(subs) = outcome else {
+            panic!("the ShopSubscriptions read returns the subscriptions with details");
+        };
+        assert_eq!(subs.len(), 1);
+        assert_eq!(subs[0].shop_id, shop.id);
+        assert_eq!(subs[0].shop.name, "Workshop");
+
+        // The shop's pending: the auto-approved subscription is active, so
+        // the owner sees none.
+        let outcome = read(
+            ApiRead::ShopSubscriptions(Some(shop.id)),
+            &mut session,
+            &mut store,
+        )
+        .await?;
+        let ReadOutcome::ShopSubscriptions(subs) = outcome else {
+            panic!("the ShopSubscriptions read returns the subscriptions with details");
+        };
+        assert!(
+            subs.is_empty(),
+            "the auto-approved subscription is not pending"
+        );
+
+        // One subscription by id, accessible to the subscriber.
+        let sub = store
+            .subscription_find_active(shop.id, user)
+            .await?
+            .expect("the auto-approved subscription");
+        let outcome = read(ApiRead::ShopSubscription(sub.id), &mut session, &mut store).await?;
+        let ReadOutcome::ShopSubscription(got) = outcome else {
+            panic!("the ShopSubscription read returns the ShopSubscription");
+        };
+        assert_eq!(got.id, sub.id);
+        assert_eq!(got.shop_id, shop.id);
+
+        // The failed statement aborts the Postgres transaction, so the
+        // access errors come last. User 2 is neither owner nor subscriber.
+        let mut other = TestSession::new(UserId::from(2));
+        let err = read(
+            ApiRead::ShopSubscriptions(Some(shop.id)),
+            &mut other,
+            &mut store,
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            matches!(err, tb_domain::Error::Forbidden(_)),
+            "a foreign user's shop subscriptions must be Forbidden, got {err:?}"
+        );
+        let err = read(ApiRead::ShopSubscription(sub.id), &mut other, &mut store)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, tb_domain::Error::Forbidden(_)),
+            "a foreign user's subscription must be Forbidden, got {err:?}"
         );
 
         Ok(())

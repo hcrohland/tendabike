@@ -35,7 +35,9 @@ where
     S: TxnSource + Clone + 'static,
 {
     let mut store = state.source.begin().await?;
-    Ok(user.user_id().read(&mut store).await.map(Json)?)
+    // The unified user read (spec #558 §3.5): the route projects the bare
+    // `User` from the `UserState` composite.
+    Ok(Json(user.user_id().read(None, &mut store).await?.user))
 }
 
 #[derive(serde::Deserialize)]
@@ -80,10 +82,12 @@ where
 {
     let mut store = state.source.begin().await?;
     let user_id = user.user_id();
-    let summary = user_id.get_summary(None, &mut store).await?;
-    let user = user_id.read(&mut store).await?;
+    // The unified user read (spec #558 §3.5): the export is a projection
+    // of the `UserState` composite (the bare `User` plus the `Summary`).
+    let user_state = user_id.read(None, &mut store).await?;
+    let summary = user_state.summary;
     Ok(Json(Export {
-        user,
+        user: user_state.user,
         activities: summary.activities.live(),
         parts: summary.parts.live(),
         attachments: summary.attachments.live(),

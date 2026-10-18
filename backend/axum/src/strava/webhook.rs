@@ -209,7 +209,9 @@ where
     state.registry.wake(user.tb_id()).await;
 
     let mut store = state.source.begin().await?;
-    Ok(Json(user.tb_id().read(&mut store).await?))
+    // The `User` is a projection of the unified read's `UserState`
+    // (spec #558 §3.5).
+    Ok(Json(user.tb_id().read(None, &mut store).await?.user))
 }
 
 /// Postpone initial sync for a user
@@ -236,7 +238,7 @@ where
         .await?;
 
     let mut store = state.source.begin().await?;
-    Ok(Json(user.tb_id().read(&mut store).await?))
+    Ok(Json(user.tb_id().read(None, &mut store).await?.user))
 }
 
 #[cfg(test)]
