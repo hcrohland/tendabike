@@ -211,6 +211,41 @@ impl Registry {
         })?
     }
 
+    /// Enqueue the [`Gear`](Request::Gear) hydration write on the user's
+    /// executor and await its frame (spec #558 §4): spawn-or-join the
+    /// executor, send the request on the user's request channel, and await
+    /// the oneshot (unbounded — the hydration is serialized behind any
+    /// in-flight message, spec #558 §3.7). The loop runs `update_gear` in
+    /// its own transaction with its own session (a `tb_strava` op — it
+    /// cannot be an `ApiWrite` variant) and resolves with the created
+    /// parts' `Summary` — the frame (the union of the parts it created, one
+    /// entry per part, empty when nothing is new). The `/user/summary`
+    /// route runs this **before** its unified `User` read, FIFO-ordered, so
+    /// the snapshot body carries the new parts exactly as today.
+    /// `exec_field` drops the registry lock on return, so the unbounded
+    /// reply await runs without it.
+    pub async fn hydrate_gear<S>(&self, source: &S, user_id: UserId) -> TbResult<Summary>
+    where
+        S: TxnSource + Clone + 'static,
+    {
+        let (request, reply) = Request::new_gear();
+        let writer = self
+            .exec_field(source, user_id, |exec| exec.writer.clone())
+            .await?;
+        if writer.send(request).is_err() {
+            // The executor died between the liveness check and the send
+            // (spec §4.6): the hydration is lost, the client retries.
+            return Err(Error::AnyFailure(anyhow::anyhow!(
+                "the executor for user {user_id} is gone"
+            )));
+        }
+        reply.await.map_err(|_| {
+            Error::AnyFailure(anyhow::anyhow!(
+                "the executor for user {user_id} dropped the hydration"
+            ))
+        })?
+    }
+
     /// Enqueue the admin [`AllStats`] read on the user's executor and await
     /// its stats (spec #558 §3.3): the admin's `GET /user/all` rides the
     /// admin user's own channel — `get_all_stats` is a `tb_strava` op, so

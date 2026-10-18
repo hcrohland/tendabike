@@ -1335,6 +1335,12 @@ pub struct LiveSource {
 
 impl LiveSource {
     pub async fn new() -> Self {
+        // The executor loop's session is a real `RequestSession`, and the
+        // summary route's hydration (spec #558 §4) would hit the Strava
+        // API: the suite runs offline, so `update_gear` gets a canned empty
+        // athlete — no new gear, the common case (no frame, unchanged
+        // snapshot).
+        crate::strava::canned_strava("/athlete", r#"{"bikes":[],"shoes":[]}"#);
         // Seed through a sibling transaction and commit it, so the seeded
         // user is in the shared base state the siblings (the executor, the
         // handlers, the assertions) see; the seed consumes the sibling,

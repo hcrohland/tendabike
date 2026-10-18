@@ -65,10 +65,16 @@ where
     // `set_shop`'s tower-session persistence stays in axum (spec #558
     // §3.5 — session plumbing, not domain state).
     session.set_shop(shop)?;
-    // The unified user read (spec #558 §3.5): the route projects the
-    // `Summary` from the `UserState` composite. The hydration write
-    // (spec #558 §4) is the executor's own message, FIFO-ordered before
-    // this read.
+    // The hydration write (spec #558 §4), then the unified user read (spec
+    // #558 §3.5): two FIFO-ordered messages on the user's executor — the
+    // loop runs `update_gear` in its own transaction, and the read's
+    // pure-FIFO snapshot (spec #558 §3.7) sees the committed hydration, so
+    // the response body carries the new parts exactly as today. The route
+    // projects the `Summary` from the `UserState` composite.
+    state
+        .registry
+        .hydrate_gear(&state.source, session.tb_id())
+        .await?;
     match state
         .registry
         .read(&state.source, session.tb_id(), ApiRead::User { shop })

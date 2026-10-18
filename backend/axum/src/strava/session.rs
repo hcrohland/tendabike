@@ -263,6 +263,36 @@ impl TbSession for RequestSession {
     }
 }
 
+/// Test-only canned Strava responses (the axum suite runs the real
+/// executor loop, whose session is a real [`RequestSession`]): when a URI
+/// is mapped here, [`RequestSession`] answers `request_json` with the
+/// canned JSON instead of hitting the Strava API. The suite maps an empty
+/// athlete so the summary route's hydration (spec #558 §4) succeeds
+/// offline — no new gear, the common case (no frame, unchanged snapshot).
+#[cfg(test)]
+pub(crate) static CANNED_STRAVA: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<String, String>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
+/// Maps a canned response for `uri` (test-only, see [`CANNED_STRAVA`]).
+#[cfg(test)]
+pub(crate) fn canned_strava(uri: &str, json: &str) {
+    CANNED_STRAVA
+        .lock()
+        .expect("the canned Strava responses are not poisoned")
+        .insert(uri.to_string(), json.to_string());
+}
+
+/// The canned response for `uri`, if one is mapped (test-only).
+#[cfg(test)]
+fn canned_response(uri: &str) -> Option<String> {
+    CANNED_STRAVA
+        .lock()
+        .expect("the canned Strava responses are not poisoned")
+        .get(uri)
+        .cloned()
+}
+
 #[async_trait::async_trait]
 impl StravaSession for RequestSession {
     fn strava_id(&self) -> StravaId {
@@ -274,6 +304,12 @@ impl StravaSession for RequestSession {
         uri: &str,
         store: &mut impl StravaDataStore,
     ) -> TbResult<T> {
+        // The suite's offline seam: a canned response stands in for the
+        // Strava API (see [`CANNED_STRAVA`]).
+        #[cfg(test)]
+        if let Some(json) = canned_response(uri) {
+            return Ok(serde_json::from_str(&json).context("Could not parse response body")?);
+        }
         let r = self
             .get_strava(uri, store)
             .await?

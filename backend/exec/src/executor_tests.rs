@@ -1057,6 +1057,47 @@ impl StravaSession for GearSession {
     }
 }
 
+/// The no-new-gear test's session: the Strava API is canned JSON with an
+/// **empty** athlete, so the hydration's `update_gear` creates nothing —
+/// the common case (spec #558 §4).
+struct EmptyGearSession;
+
+impl Session for EmptyGearSession {
+    fn user_id(&self) -> UserId {
+        UserId::from(1)
+    }
+    fn shop(&self) -> Option<ShopId> {
+        None
+    }
+    fn set_shop(&mut self, _shop: Option<ShopId>) -> TbResult<()> {
+        Ok(())
+    }
+    fn is_admin(&self) -> bool {
+        false
+    }
+}
+
+#[async_trait::async_trait]
+impl StravaSession for EmptyGearSession {
+    fn strava_id(&self) -> StravaId {
+        StravaId::from(42)
+    }
+    async fn request_json<T: DeserializeOwned>(
+        &mut self,
+        uri: &str,
+        _store: &mut impl StravaDataStore,
+    ) -> TbResult<T> {
+        let json = match uri {
+            "/athlete" => r#"{"bikes":[],"shoes":[]}"#,
+            _ => panic!("unexpected Strava call: {uri}"),
+        };
+        serde_json::from_str(json).map_err(|err| Error::AnyFailure(err.into()))
+    }
+    async fn deauthorize(&mut self, _store: &mut impl StravaDataStore) -> TbResult<()> {
+        panic!("the gear test never deauthorizes a user")
+    }
+}
+
 // --- `select_message` and the sleep: the read's select discipline ---
 
 #[tokio::test]
@@ -1276,5 +1317,32 @@ async fn failed_gear_arms_the_backoff_like_a_write() {
         backoff.record_failure(),
         Duration::from_secs(4),
         "the hydration is a write: a failed begin arms the backoff (1s → 2s → 4s)"
+    );
+}
+
+#[tokio::test]
+async fn gear_hydration_without_new_gear_pushes_no_frame() {
+    // The hydration's common case (spec #558 §4): the Strava athlete carries
+    // no new gear — `update_gear` creates nothing, the `Summary` is empty,
+    // and `push_frame` sends **nothing**: exactly today's behavior. The
+    // oneshot resolves with the empty summary.
+    let source = FakeSource { begin_fails: false };
+    let mut session = EmptyGearSession;
+    let mut backoff = DbBackoff::new();
+    let (frames, mut frame_rx) = broadcast::channel(4);
+    let (request, reply) = Request::new_gear();
+    let result = run_request(&source, &mut session, request, &frames, &mut backoff).await;
+    assert!(
+        result.is_ok(),
+        "a committed hydration must not end the loop"
+    );
+    let summary = reply
+        .await
+        .expect("the oneshot resolves")
+        .expect("the hydration succeeds");
+    assert!(summary.is_empty(), "nothing new: the summary is empty");
+    assert!(
+        frame_rx.try_recv().is_err(),
+        "no new gear: an empty summary pushes no frame"
     );
 }

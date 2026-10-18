@@ -1177,11 +1177,12 @@ async fn get_user_export_returns_200_and_export_body() {
     );
 }
 
-/// `GET /api/user/summary` rides the user's executor as a read message and
-/// answers `200` with the user's `Summary` — the nine id-keyed maps, all
-/// empty for a fresh user. The hydration write is the executor's own
-/// message (spec #558 §4), not the read's: the snapshot is a pure-FIFO
-/// read, so the route answers without any Strava network call.
+/// `GET /api/user/summary` runs the hydration write, then the unified
+/// `User` read — two FIFO-ordered messages on the user's executor (spec
+/// #558 §4) — and answers `200` with the user's `Summary`: the nine
+/// id-keyed maps, all empty for a fresh user. The loop's hydration gets a
+/// canned empty athlete (the suite runs offline — no new gear, the common
+/// case: no frame, the snapshot body unchanged, exactly as today).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn summary_returns_200_and_summary_body() {
     let (app, store, _registry, _live) = live_app().await;
