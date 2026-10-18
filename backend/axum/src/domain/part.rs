@@ -37,7 +37,7 @@ use crate::{
     error::{ApiResult, AppError},
 };
 use serde_with::serde_as;
-use tb_domain::{ApiWrite, Part, PartId, PartTypeId};
+use tb_domain::{ApiRead, ApiWrite, Error, Part, PartId, PartTypeId, ReadOutcome};
 use tb_strava::StravaSession;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
@@ -82,8 +82,18 @@ async fn get_part<S>(
 where
     S: TxnSource + Clone + 'static,
 {
-    let mut store = state.source.begin().await?;
-    Ok(part.part(&user, &mut store).await.map(Json)?)
+    match state
+        .registry
+        .read(&state.source, user.tb_id(), ApiRead::Part(part))
+        .await?
+    {
+        ReadOutcome::Part(part) => Ok(Json(part)),
+        // This route sent the `Part` read; any other outcome is a bug, not
+        // a domain outcome.
+        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
+            "the part read did not carry its part"
+        )))),
+    }
 }
 
 async fn post_part<S>(
@@ -177,6 +187,16 @@ async fn mycats<S>(
 where
     S: TxnSource + Clone + 'static,
 {
-    let mut store = state.source.begin().await?;
-    Ok(Part::categories(&user, &mut store).await.map(Json)?)
+    match state
+        .registry
+        .read(&state.source, user.tb_id(), ApiRead::PartCategories)
+        .await?
+    {
+        ReadOutcome::PartCategories(categories) => Ok(Json(categories)),
+        // This route sent the `PartCategories` read; any other outcome is a
+        // bug, not a domain outcome.
+        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
+            "the part categories read did not carry its categories"
+        )))),
+    }
 }

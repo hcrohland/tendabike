@@ -5,12 +5,13 @@ use axum::Router;
 use http::{Method, StatusCode, header};
 use tower_sessions::MemoryStore;
 
-use tb_domain::{Activity, ActivityId, ActivityStore, PartStore, Summary, UserId};
+use tb_domain::{ActTypeId, Activity, ActivityId, ActivityStore, PartStore, Summary, UserId};
+use time::OffsetDateTime;
 
 use crate::stream::{ExecutorStatus, Registry};
 use crate::test_support::{
-    LiveSource, admin_cookie, read_sse_frames, run, run_json, run_sse, test_app, test_app_live,
-    user_cookie,
+    LiveSource, admin_cookie, read_sse_frames, run, run_json, run_raw, run_sse, test_app,
+    test_app_live, user_cookie,
 };
 
 async fn setup() -> (Router, MemoryStore) {
@@ -683,6 +684,515 @@ async fn create_subscription_returns_201_and_entity() {
     let text = String::from_utf8_lossy(&body);
     assert!(text.contains("\"status\":\"pending\""), "body: {text}");
     assert!(text.contains("\"message\":\"hi\""), "body: {text}");
+}
+
+// ─── Executor-backed read handlers (spec #558 §3) ─────────────────
+
+/// `GET /api/activ/{id}` rides the user's executor as an `Activity` read
+/// message and answers `200` with the activity's JSON body.
+#[tokio::test]
+async fn get_activity_returns_200_and_activity_body() {
+    let (app, store, _registry, live) = live_app().await;
+    let cookie = user_cookie(&store).await;
+    // Seed an activity through a sibling transaction (activities are
+    // Strava-imported; no write route creates them).
+    let mut conn = live.mem().lock().unwrap().begin();
+    ActivityStore::activity_create(
+        &mut conn,
+        Activity {
+            id: ActivityId::from(1),
+            user_id: UserId::from(1),
+            what: ActTypeId::from(1),
+            name: "Morning Ride".to_string(),
+            start: OffsetDateTime::from_unix_timestamp(1704096000).unwrap(),
+            duration: 3600,
+            time: None,
+            distance: Some(20000),
+            climb: Some(100),
+            descend: Some(100),
+            energy: Some(5000),
+            gear: None,
+            device_name: None,
+            external_id: None,
+        },
+    )
+    .await
+    .unwrap();
+    conn.commit().await.unwrap();
+    let (status, _headers, body) = run(app, Method::GET, "/api/activ/1", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    let text = String::from_utf8_lossy(&body);
+    assert_eq!(
+        text,
+        r#"{"id":1,"user_id":1,"what":1,"name":"Morning Ride","start":"2024-01-01T08:00:00Z","duration":3600,"time":null,"distance":20000,"climb":100,"descend":100,"energy":5000,"gear":null,"device_name":null,"external_id":null}"#
+    );
+}
+
+/// `GET /api/user/all` (admin) rides the admin user's own channel as the
+/// exec-level `AllStats` message (spec #558 §3.3 — the handler no longer
+/// discards the session) and answers `200` with the per-user stats —
+/// empty for the fresh in-memory store (no stravauser rows).
+#[tokio::test]
+async fn user_all_returns_200_and_stats() {
+    let (app, store, _registry, _live) = live_app().await;
+    let cookie = admin_cookie(&store).await;
+    let (status, _headers, body) = run(app, Method::GET, "/api/user/all", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(String::from_utf8_lossy(&body), "[]");
+}
+
+/// `GET /api/shop/subscriptions/{id}` rides the user's executor as a
+/// `ShopSubscription` read message and answers `200` with the
+/// subscription's JSON body — the stored subscription itself, field for
+/// field.
+#[tokio::test]
+async fn get_subscription_returns_200_and_subscription() {
+    let (app, store, _registry, live) = live_app().await;
+    let cookie = user_cookie(&store).await;
+    let (status, _h, _b) = run_json(
+        app.clone(),
+        Method::POST,
+        "/api/shop",
+        Some(&cookie),
+        r#"{"name":"Bike Barn","description":null,"auto_approve":true}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _h, _b) = run_json(
+        app.clone(),
+        Method::POST,
+        "/api/shop/subscriptions",
+        Some(&cookie),
+        r#"{"shop_id":1,"message":"hi"}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _headers, body) =
+        run(app, Method::GET, "/api/shop/subscriptions/1", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    let sub: tb_domain::ShopSubscription =
+        serde_json::from_str(&String::from_utf8_lossy(&body)).unwrap();
+    let mut conn = live.mem().lock().unwrap().begin();
+    let stored =
+        tb_domain::ShopStore::subscription_get(&mut conn, tb_domain::SubscriptionId::from(1))
+            .await
+            .unwrap();
+    assert_eq!(sub, stored);
+}
+
+/// `GET /api/shop/{shop}/subscriptions` rides the user's executor as a
+/// `ShopSubscriptions(Some(shop))` read message and answers `200` with the
+/// shop's pending subscriptions (the owner's view).
+#[tokio::test]
+async fn get_shop_subscriptions_returns_200_and_subs() {
+    let (app, store, _registry, _live) = live_app().await;
+    let cookie = user_cookie(&store).await;
+    let (status, _h, _b) = run_json(
+        app.clone(),
+        Method::POST,
+        "/api/shop",
+        Some(&cookie),
+        r#"{"name":"Bike Barn","description":null,"auto_approve":false}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _h, _b) = run_json(
+        app.clone(),
+        Method::POST,
+        "/api/shop/subscriptions",
+        Some(&cookie),
+        r#"{"shop_id":1,"message":"hi"}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _headers, body) =
+        run(app, Method::GET, "/api/shop/1/subscriptions", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    let value: serde_json::Value = serde_json::from_str(&String::from_utf8_lossy(&body)).unwrap();
+    let subs = value.as_array().unwrap();
+    assert_eq!(subs.len(), 1);
+    assert_eq!(subs[0]["status"], serde_json::json!("pending"));
+    assert_eq!(subs[0]["shop"]["name"], serde_json::json!("Bike Barn"));
+}
+
+/// `GET /api/shop/subscriptions` (mine) rides the user's executor as a
+/// `ShopSubscriptions(None)` read message and answers `200` with the
+/// user's subscriptions, each carrying its shop details.
+#[tokio::test]
+async fn get_my_subscriptions_returns_200_and_subs() {
+    let (app, store, _registry, _live) = live_app().await;
+    let cookie = user_cookie(&store).await;
+    let (status, _h, _b) = run_json(
+        app.clone(),
+        Method::POST,
+        "/api/shop",
+        Some(&cookie),
+        r#"{"name":"Bike Barn","description":null,"auto_approve":true}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _h, _b) = run_json(
+        app.clone(),
+        Method::POST,
+        "/api/shop/subscriptions",
+        Some(&cookie),
+        r#"{"shop_id":1,"message":"hi"}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _headers, body) =
+        run(app, Method::GET, "/api/shop/subscriptions", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    let value: serde_json::Value = serde_json::from_str(&String::from_utf8_lossy(&body)).unwrap();
+    let subs = value.as_array().unwrap();
+    assert_eq!(subs.len(), 1);
+    assert_eq!(subs[0]["shop_id"], serde_json::json!(1));
+    assert_eq!(subs[0]["user_id"], serde_json::json!(1));
+    assert_eq!(subs[0]["status"], serde_json::json!("active"));
+    assert_eq!(subs[0]["message"], serde_json::json!("hi"));
+    assert_eq!(subs[0]["shop"]["name"], serde_json::json!("Bike Barn"));
+}
+
+/// `GET /api/shop/search` rides the user's executor as a `ShopSearch`
+/// read message and answers `200` with the two-tuple body: the matched
+/// shops, then their owners' (and, for the caller's own shops,
+/// subscribers') public user records.
+#[tokio::test]
+async fn get_shop_search_returns_200_and_search() {
+    let (app, store, _registry, _live) = live_app().await;
+    let cookie = user_cookie(&store).await;
+    let (status, _h, _b) = run_json(
+        app.clone(),
+        Method::POST,
+        "/api/shop",
+        Some(&cookie),
+        r#"{"name":"Bike Barn","description":null,"auto_approve":false}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _headers, body) =
+        run(app, Method::GET, "/api/shop/search?q=Bike", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    let value: serde_json::Value = serde_json::from_str(&String::from_utf8_lossy(&body)).unwrap();
+    let shops: Vec<tb_domain::Shop> = serde_json::from_value(value[0].clone()).unwrap();
+    let users = &value[1];
+    assert_eq!(shops.len(), 1);
+    assert_eq!(shops[0].name, "Bike Barn");
+    // The shop owner's public record is among the users.
+    assert!(
+        users
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|u| u["id"] == serde_json::json!(1))
+    );
+}
+
+/// `GET /api/shop/{shop}/parts` rides the user's executor as a
+/// `ShopParts` read message and answers `200` with the shop's registered
+/// parts.
+#[tokio::test]
+async fn get_shop_parts_returns_200_and_parts() {
+    let (app, store, _registry, live) = live_app().await;
+    let cookie = user_cookie(&store).await;
+    // Shop 1 (auto-approving), the user's active subscription, part 1,
+    // registered to the shop.
+    let (status, _h, _b) = run_json(
+        app.clone(),
+        Method::POST,
+        "/api/shop",
+        Some(&cookie),
+        r#"{"name":"Bike Barn","description":null,"auto_approve":true}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _h, _b) = run_json(
+        app.clone(),
+        Method::POST,
+        "/api/shop/subscriptions",
+        Some(&cookie),
+        r#"{"shop_id":1,"message":null}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _h, _b) = run_json(
+        app.clone(),
+        Method::POST,
+        "/api/part",
+        Some(&cookie),
+        &part_body("Chain"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _h, _b) = run_json(
+        app.clone(),
+        Method::POST,
+        "/api/shop/1/parts",
+        Some(&cookie),
+        r#"{"part_id":1}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _headers, body) = run(app, Method::GET, "/api/shop/1/parts", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    let parts: Vec<tb_domain::Part> =
+        serde_json::from_str(&String::from_utf8_lossy(&body)).unwrap();
+    let mut conn = live.mem().lock().unwrap().begin();
+    let stored = tb_domain::PartStore::shop_get_parts(&mut conn, tb_domain::ShopId::from(1))
+        .await
+        .unwrap();
+    assert_eq!(parts, stored);
+    assert_eq!(parts.len(), 1);
+    assert_eq!(parts[0].name, "Chain");
+}
+
+/// `GET /api/shop/{shop}` rides the user's executor as a `Shop` read
+/// message and answers `200` with the shop's JSON body — the stored shop
+/// itself, field for field.
+#[tokio::test]
+async fn get_shop_returns_200_and_shop() {
+    let (app, store, _registry, live) = live_app().await;
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, _body) = run_json(
+        app.clone(),
+        Method::POST,
+        "/api/shop",
+        Some(&cookie),
+        r#"{"name":"Bike Barn","description":null,"auto_approve":false}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _headers, body) = run(app, Method::GET, "/api/shop/1", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    let shop: tb_domain::Shop = serde_json::from_str(&String::from_utf8_lossy(&body)).unwrap();
+    let mut conn = live.mem().lock().unwrap().begin();
+    let stored = tb_domain::ShopStore::shop_get(&mut conn, tb_domain::ShopId::from(1))
+        .await
+        .unwrap();
+    assert_eq!(shop, stored);
+}
+
+/// `GET /api/shop` rides the user's executor as a `Shops` read message
+/// and answers `200` with the user's shops — every stored shop, field for
+/// field.
+#[tokio::test]
+async fn get_shops_returns_200_and_shops() {
+    let (app, store, _registry, live) = live_app().await;
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, _body) = run_json(
+        app.clone(),
+        Method::POST,
+        "/api/shop",
+        Some(&cookie),
+        r#"{"name":"Bike Barn","description":null,"auto_approve":false}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _headers, body) = run(app, Method::GET, "/api/shop", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    let shops: Vec<tb_domain::Shop> =
+        serde_json::from_str(&String::from_utf8_lossy(&body)).unwrap();
+    let mut conn = live.mem().lock().unwrap().begin();
+    let stored =
+        tb_domain::ShopStore::shops_get_all_for_user(&mut conn, tb_domain::UserId::from(1))
+            .await
+            .unwrap();
+    assert_eq!(shops, stored);
+    assert_eq!(shops.len(), 1);
+    assert_eq!(shops[0].name, "Bike Barn");
+}
+
+/// `GET /api/part/notes/{id}/file` rides the user's executor as a
+/// `PartNoteFile` read message and answers `200` with the file bytes and
+/// the note's download headers — the headers/encoding stay in axum (spec
+/// #558 §3.4), so the body is the exact uploaded bytes.
+#[tokio::test]
+async fn get_note_file_returns_200_file_body_and_headers() {
+    let (app, store, _registry, _live) = live_app().await;
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, _body) = run_json(
+        app.clone(),
+        Method::POST,
+        "/api/part",
+        Some(&cookie),
+        &part_body("Chain"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    // A file note on the part (multipart upload, as the browser sends it).
+    let multipart = concat!(
+        "--tbnote\r\n",
+        "Content-Disposition: form-data; name=\"name\"\r\n\r\n",
+        "worn\r\n",
+        "--tbnote\r\n",
+        "Content-Disposition: form-data; name=\"file\"; filename=\"chain.pdf\"\r\n",
+        "Content-Type: application/pdf\r\n\r\n",
+        "PDFDATA\r\n",
+        "--tbnote--\r\n",
+    );
+    let (status, _headers, _body) = run_raw(
+        app.clone(),
+        Method::POST,
+        "/api/part/1/notes/file",
+        Some(&cookie),
+        multipart.as_bytes(),
+        "multipart/form-data; boundary=tbnote",
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, headers, body) =
+        run(app, Method::GET, "/api/part/notes/1/file", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, b"PDFDATA");
+    assert_eq!(
+        headers.get(header::CONTENT_TYPE).unwrap(),
+        "application/pdf"
+    );
+    assert_eq!(
+        headers.get(header::X_CONTENT_TYPE_OPTIONS).unwrap(),
+        "nosniff"
+    );
+    assert_eq!(
+        headers.get(header::CONTENT_DISPOSITION).unwrap(),
+        "attachment; filename=\"chain.pdf\"; filename*=UTF-8''chain.pdf"
+    );
+}
+
+/// `GET /api/part/{part}/notes` rides the user's executor as a
+/// `PartNotes` read message and answers `200` with the part's notes —
+/// every stored note, field for field.
+#[tokio::test]
+async fn get_part_notes_returns_200_and_notes() {
+    let (app, store, _registry, live) = live_app().await;
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, _body) = run_json(
+        app.clone(),
+        Method::POST,
+        "/api/part",
+        Some(&cookie),
+        &part_body("Chain"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _headers, _body) = run_json(
+        app.clone(),
+        Method::POST,
+        "/api/part/1/notes",
+        Some(&cookie),
+        r#"{"name":"worn"}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _headers, body) = run(app, Method::GET, "/api/part/1/notes", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    let notes: Vec<tb_domain::PartNote> =
+        serde_json::from_str(&String::from_utf8_lossy(&body)).unwrap();
+    let mut conn = live.mem().lock().unwrap().begin();
+    let stored =
+        tb_domain::PartNoteStore::partnote_all_by_part(&mut conn, tb_domain::PartId::from(1))
+            .await
+            .unwrap();
+    assert_eq!(notes, stored);
+}
+
+/// `GET /api/part/categories` rides the user's executor as a
+/// `PartCategories` read message and answers `200` with the JSON array of
+/// the part types the user's parts use.
+#[tokio::test]
+async fn get_part_categories_returns_200_and_categories() {
+    let (app, store, _registry, _live) = live_app().await;
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, _body) = run_json(
+        app.clone(),
+        Method::POST,
+        "/api/part",
+        Some(&cookie),
+        &part_body("Chain"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _headers, body) =
+        run(app, Method::GET, "/api/part/categories", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(String::from_utf8_lossy(&body), "[1]");
+}
+
+/// `GET /api/part/{part}` rides the user's executor as a `Part` read
+/// message and answers `200` with the part's JSON body — the stored part
+/// itself, field for field.
+#[tokio::test]
+async fn get_part_returns_200_and_part_body() {
+    let (app, store, _registry, live) = live_app().await;
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, _body) = run_json(
+        app.clone(),
+        Method::POST,
+        "/api/part",
+        Some(&cookie),
+        &part_body("Chain"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _headers, body) = run(app, Method::GET, "/api/part/1", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    let text = String::from_utf8_lossy(&body);
+    let part: tb_domain::Part = serde_json::from_str(&text).unwrap();
+    let mut conn = live.mem().lock().unwrap().begin();
+    let stored = PartStore::partid_get_part(&mut conn, tb_domain::PartId::from(1))
+        .await
+        .unwrap();
+    assert_eq!(part, stored);
+}
+
+/// `GET /api/user` rides the user's executor as the unified `User` read
+/// message and answers `200` with the bare `User` projection of the
+/// `UserState` composite (spec #558 §3.5).
+#[tokio::test]
+async fn get_user_returns_200_and_user_body() {
+    let (app, store, _registry, _live) = live_app().await;
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, body) = run(app, Method::GET, "/api/user", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    let text = String::from_utf8_lossy(&body);
+    assert_eq!(
+        text,
+        r#"{"id":1,"name":"User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"}"#
+    );
+}
+
+/// `GET /api/user/export` rides the same unified `User` read (staying
+/// non-hydrating, spec #558 §3.4/§4) and answers `200` with the export
+/// composite — the `User` plus the live entities of every `Summary` map
+/// (all empty for a fresh user).
+#[tokio::test]
+async fn get_user_export_returns_200_and_export_body() {
+    let (app, store, _registry, _live) = live_app().await;
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, body) = run(app, Method::GET, "/api/user/export", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    let text = String::from_utf8_lossy(&body);
+    assert_eq!(
+        text,
+        r#"{"user":{"id":1,"name":"User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"},"parts":[],"attachments":[],"services":[],"plans":[],"usages":[],"activities":[],"shops":[]}"#
+    );
+}
+
+/// `GET /api/user/summary` rides the user's executor as a read message and
+/// answers `200` with the user's `Summary` — the nine id-keyed maps, all
+/// empty for a fresh user. The hydration write is the executor's own
+/// message (spec #558 §4), not the read's: the snapshot is a pure-FIFO
+/// read, so the route answers without any Strava network call.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn summary_returns_200_and_summary_body() {
+    let (app, store, _registry, _live) = live_app().await;
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, body) = run(app, Method::GET, "/api/user/summary", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    let text = String::from_utf8_lossy(&body);
+    assert_eq!(
+        text,
+        r#"{"activities":{},"parts":{},"attachments":{},"usages":{},"services":{},"plans":{},"part_notes":{},"shops":{},"users":{}}"#
+    );
 }
 
 /// `GET /strava/sync/{id}` (admin) enqueues a sync, wakes the target

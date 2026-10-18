@@ -47,7 +47,7 @@ use tb_domain::{
 };
 use tb_exec::{Request, RequestSender, Txn, TxnSource, request_channel, run};
 use tb_strava::{
-    StravaDataStore, StravaId,
+    StravaDataStore, StravaId, StravaStat,
     event::{Event as StravaEvent, ObjectType},
 };
 
@@ -207,6 +207,35 @@ impl Registry {
         reply.await.map_err(|_| {
             Error::AnyFailure(anyhow::anyhow!(
                 "the executor for user {user_id} dropped the read"
+            ))
+        })?
+    }
+
+    /// Enqueue the admin [`AllStats`] read on the user's executor and await
+    /// its stats (spec #558 §3.3): the admin's `GET /user/all` rides the
+    /// admin user's own channel — `get_all_stats` is a `tb_strava` op, so
+    /// it is an exec-level variant, dispatched loop-side in the loop's own
+    /// transaction. The oneshot wait is unbounded, like a read's (spec
+    /// #558 §3.7). `exec_field` drops the registry lock on return, so the
+    /// unbounded reply await runs without it.
+    pub async fn all_stats<S>(&self, source: &S, user_id: UserId) -> TbResult<Vec<StravaStat>>
+    where
+        S: TxnSource + Clone + 'static,
+    {
+        let (request, reply) = Request::new_all_stats();
+        let writer = self
+            .exec_field(source, user_id, |exec| exec.writer.clone())
+            .await?;
+        if writer.send(request).is_err() {
+            // The executor died between the liveness check and the send
+            // (spec §4.6): the read is lost, the client retries.
+            return Err(Error::AnyFailure(anyhow::anyhow!(
+                "the executor for user {user_id} is gone"
+            )));
+        }
+        reply.await.map_err(|_| {
+            Error::AnyFailure(anyhow::anyhow!(
+                "the executor for user {user_id} dropped the stats read"
             ))
         })?
     }

@@ -21,7 +21,9 @@ use crate::{
     appstate::AppState,
     error::{ApiResult, AppError},
 };
-use tb_domain::{Activity, ActivityId, ApiWrite, DescendReport, PartId};
+use tb_domain::{
+    Activity, ActivityId, ApiRead, ApiWrite, DescendReport, Error, PartId, ReadOutcome,
+};
 use tb_exec::{Txn, TxnSource};
 use tb_strava::StravaSession;
 
@@ -68,11 +70,22 @@ async fn act_get<S>(
 where
     S: TxnSource + Clone + 'static,
 {
-    let mut store = state.source.begin().await?;
-    Ok(ActivityId::new(id)
-        .read(&user, &mut store)
-        .await
-        .map(Json)?)
+    match state
+        .registry
+        .read(
+            &state.source,
+            user.tb_id(),
+            ApiRead::Activity(ActivityId::new(id)),
+        )
+        .await?
+    {
+        ReadOutcome::Activity(activity) => Ok(Json(activity)),
+        // This route sent the `Activity` read; any other outcome is a bug,
+        // not a domain outcome.
+        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
+            "the activity read did not carry its activity"
+        )))),
+    }
 }
 
 /// web interface to change an activity

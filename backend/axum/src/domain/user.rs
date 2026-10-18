@@ -13,10 +13,10 @@ use axum::{
 };
 use serde::Serialize;
 
-use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState};
-use tb_domain::{Session, ShopId, Summary};
-use tb_exec::{Txn, TxnSource};
-use tb_strava::StravaUser;
+use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, error::AppError};
+use tb_domain::{ApiRead, Error, ReadOutcome, Session, ShopId, Summary};
+use tb_exec::TxnSource;
+use tb_strava::StravaSession;
 
 pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
     Router::new()
@@ -34,10 +34,20 @@ async fn getuser<S>(
 where
     S: TxnSource + Clone + 'static,
 {
-    let mut store = state.source.begin().await?;
     // The unified user read (spec #558 §3.5): the route projects the bare
     // `User` from the `UserState` composite.
-    Ok(Json(user.user_id().read(None, &mut store).await?.user))
+    match state
+        .registry
+        .read(&state.source, user.tb_id(), ApiRead::User { shop: None })
+        .await?
+    {
+        ReadOutcome::User(state) => Ok(Json(state.user)),
+        // This route sent the `User` read; any other outcome is a bug, not
+        // a domain outcome.
+        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
+            "the user read did not carry its user state"
+        )))),
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -52,16 +62,25 @@ async fn summary<S>(
 where
     S: TxnSource + Clone + 'static,
 {
-    let mut store = state.source.begin().await?;
+    // `set_shop`'s tower-session persistence stays in axum (spec #558
+    // §3.5 — session plumbing, not domain state).
     session.set_shop(shop)?;
-    StravaUser::update_gear(&mut session, &mut store).await?;
-    let res = session
-        .user_id()
-        .get_summary(session.shop(), &mut store)
-        .await
-        .map(Json)?;
-    store.commit().await?;
-    Ok(res)
+    // The unified user read (spec #558 §3.5): the route projects the
+    // `Summary` from the `UserState` composite. The hydration write
+    // (spec #558 §4) is the executor's own message, FIFO-ordered before
+    // this read.
+    match state
+        .registry
+        .read(&state.source, session.tb_id(), ApiRead::User { shop })
+        .await?
+    {
+        ReadOutcome::User(state) => Ok(Json(state.summary)),
+        // This route sent the `User` read; any other outcome is a bug, not
+        // a domain outcome.
+        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
+            "the user read did not carry its user state"
+        )))),
+    }
 }
 
 #[derive(Clone, Serialize, Debug)]
@@ -80,31 +99,50 @@ async fn export<S>(user: RequestSession, State(state): State<AppState<S>>) -> Ap
 where
     S: TxnSource + Clone + 'static,
 {
-    let mut store = state.source.begin().await?;
-    let user_id = user.user_id();
     // The unified user read (spec #558 §3.5): the export is a projection
-    // of the `UserState` composite (the bare `User` plus the `Summary`).
-    let user_state = user_id.read(None, &mut store).await?;
-    let summary = user_state.summary;
-    Ok(Json(Export {
-        user: user_state.user,
-        activities: summary.activities.live(),
-        parts: summary.parts.live(),
-        attachments: summary.attachments.live(),
-        usages: summary.usages.live(),
-        services: summary.services.live(),
-        plans: summary.plans.live(),
-        shops: summary.shops.live(),
-    }))
+    // of the `UserState` composite (the bare `User` plus the `Summary`),
+    // staying non-hydrating (spec #558 §3.4/§4).
+    match state
+        .registry
+        .read(&state.source, user.tb_id(), ApiRead::User { shop: None })
+        .await?
+    {
+        ReadOutcome::User(state) => {
+            let summary = state.summary;
+            Ok(Json(Export {
+                user: state.user,
+                activities: summary.activities.live(),
+                parts: summary.parts.live(),
+                attachments: summary.attachments.live(),
+                usages: summary.usages.live(),
+                services: summary.services.live(),
+                plans: summary.plans.live(),
+                shops: summary.shops.live(),
+            }))
+        }
+        // This route sent the `User` read; any other outcome is a bug, not
+        // a domain outcome.
+        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
+            "the user read did not carry its user state"
+        )))),
+    }
 }
 
 async fn userlist<S>(
-    _u: AxumAdmin,
+    user: RequestSession,
+    _admin: AxumAdmin,
     State(state): State<AppState<S>>,
 ) -> ApiResult<Vec<tb_strava::StravaStat>>
 where
     S: TxnSource + Clone + 'static,
 {
-    let mut store = state.source.begin().await?;
-    Ok(tb_strava::get_all_stats(&mut store).await.map(Json)?)
+    // The admin read rides the admin user's own channel (spec #558 §3.3):
+    // the `AxumAdmin` gate is unchanged; the session's identity is no
+    // longer discarded.
+    Ok(Json(
+        state
+            .registry
+            .all_stats(&state.source, user.tb_id())
+            .await?,
+    ))
 }

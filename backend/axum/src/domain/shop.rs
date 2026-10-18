@@ -31,8 +31,8 @@ use crate::{
     error::{ApiResult, AppError},
 };
 use tb_domain::{
-    ApiWrite, Error, Part, Session, Shop, ShopId, ShopSubscription, ShopSubscriptionWithDetails,
-    SubscriptionId, UserPublic,
+    ApiRead, ApiWrite, Error, Part, ReadOutcome, Session, Shop, ShopId, ShopSubscription,
+    ShopSubscriptionWithDetails, SubscriptionId, UserPublic,
 };
 use tb_strava::StravaSession;
 
@@ -104,10 +104,18 @@ async fn list_shops<S>(
 where
     S: TxnSource + Clone + 'static,
 {
-    let mut store = state.source.begin().await?;
-    Ok(Shop::get_all_for_user(&session.user_id(), &mut store)
-        .await
-        .map(Json)?)
+    match state
+        .registry
+        .read(&state.source, session.tb_id(), ApiRead::Shops)
+        .await?
+    {
+        ReadOutcome::Shops(shops) => Ok(Json(shops)),
+        // This route sent the `Shops` read; any other outcome is a bug, not
+        // a domain outcome.
+        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
+            "the shops read did not carry its shops"
+        )))),
+    }
 }
 
 async fn create_shop<S>(
@@ -140,15 +148,28 @@ where
 
 async fn get_shop<S>(
     Path(shop_id): Path<i32>,
-    _session: RequestSession,
+    session: RequestSession,
     State(state): State<AppState<S>>,
 ) -> ApiResult<Shop>
 where
     S: TxnSource + Clone + 'static,
 {
-    let mut store = state.source.begin().await?;
-    // let shop_id = ShopId::get_for_read(shop_id, user, &mut store).await?;
-    Ok(ShopId::from(shop_id).read(&mut store).await.map(Json)?)
+    match state
+        .registry
+        .read(
+            &state.source,
+            session.tb_id(),
+            ApiRead::Shop(ShopId::from(shop_id)),
+        )
+        .await?
+    {
+        ReadOutcome::Shop(shop) => Ok(Json(shop)),
+        // This route sent the `Shop` read; any other outcome is a bug, not
+        // a domain outcome.
+        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
+            "the shop read did not carry its shop"
+        )))),
+    }
 }
 
 async fn update_shop<S>(
@@ -209,10 +230,22 @@ async fn get_shop_parts<S>(
 where
     S: TxnSource + Clone + 'static,
 {
-    let mut store = state.source.begin().await?;
-    let user = session.user_id();
-    let shop_id = ShopId::get_for_read(shop_id, user, &mut store).await?;
-    Ok(shop_id.get_parts(user, &mut store).await.map(Json)?)
+    match state
+        .registry
+        .read(
+            &state.source,
+            session.tb_id(),
+            ApiRead::ShopParts(ShopId::from(shop_id)),
+        )
+        .await?
+    {
+        ReadOutcome::ShopParts(parts) => Ok(Json(parts)),
+        // This route sent the `ShopParts` read; any other outcome is a bug,
+        // not a domain outcome.
+        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
+            "the shop parts read did not carry its parts"
+        )))),
+    }
 }
 
 async fn register_part<S>(
@@ -270,10 +303,22 @@ where
     S: TxnSource + Clone + 'static,
 {
     let query = params.get("q").map(|s| s.as_str()).unwrap_or("");
-    let mut store = state.source.begin().await?;
-    let shops = Shop::search(query, &mut store).await?;
-    let users = Shop::get_users(&shops, &session.user_id(), &mut store).await?;
-    Ok(Json((shops, users)))
+    match state
+        .registry
+        .read(
+            &state.source,
+            session.tb_id(),
+            ApiRead::ShopSearch(query.to_string()),
+        )
+        .await?
+    {
+        ReadOutcome::ShopSearch { shops, users } => Ok(Json((shops, users))),
+        // This route sent the `ShopSearch` read; any other outcome is a
+        // bug, not a domain outcome.
+        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
+            "the shop search read did not carry its shops and users"
+        )))),
+    }
 }
 
 // Subscription handlers
@@ -319,11 +364,22 @@ async fn list_my_subscriptions<S>(
 where
     S: TxnSource + Clone + 'static,
 {
-    let mut store = state.source.begin().await?;
-    let subscriptions = ShopSubscription::get_for_user(session.user_id(), &mut store).await?;
-    let subscriptions_with_details =
-        ShopSubscription::with_shop_details(subscriptions, &mut store).await?;
-    Ok(Json(subscriptions_with_details))
+    match state
+        .registry
+        .read(
+            &state.source,
+            session.tb_id(),
+            ApiRead::ShopSubscriptions(None),
+        )
+        .await?
+    {
+        ReadOutcome::ShopSubscriptions(subscriptions) => Ok(Json(subscriptions)),
+        // This route sent the `ShopSubscriptions` read; any other outcome
+        // is a bug, not a domain outcome.
+        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
+            "the shop subscriptions read did not carry its subscriptions"
+        )))),
+    }
 }
 
 async fn list_shop_subscriptions<S>(
@@ -334,14 +390,22 @@ async fn list_shop_subscriptions<S>(
 where
     S: TxnSource + Clone + 'static,
 {
-    let mut store = state.source.begin().await?;
-    let user = session.user_id();
-    let shop_id = ShopId::get(shop_id, user, &mut store).await?;
-    Ok(
-        ShopSubscription::get_pending_for_shop(shop_id, user, &mut store)
-            .await
-            .map(Json)?,
-    )
+    match state
+        .registry
+        .read(
+            &state.source,
+            session.tb_id(),
+            ApiRead::ShopSubscriptions(Some(ShopId::from(shop_id))),
+        )
+        .await?
+    {
+        ReadOutcome::ShopSubscriptions(subscriptions) => Ok(Json(subscriptions)),
+        // This route sent the `ShopSubscriptions` read; any other outcome
+        // is a bug, not a domain outcome.
+        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
+            "the shop subscriptions read did not carry its subscriptions"
+        )))),
+    }
 }
 
 async fn get_subscription<S>(
@@ -352,10 +416,22 @@ async fn get_subscription<S>(
 where
     S: TxnSource + Clone + 'static,
 {
-    let mut store = state.source.begin().await?;
-    let user = session.user_id();
-    let subscription_id = SubscriptionId::get(subscription_id, user, &mut store).await?;
-    Ok(subscription_id.read(user, &mut store).await.map(Json)?)
+    match state
+        .registry
+        .read(
+            &state.source,
+            session.tb_id(),
+            ApiRead::ShopSubscription(SubscriptionId::from(subscription_id)),
+        )
+        .await?
+    {
+        ReadOutcome::ShopSubscription(subscription) => Ok(Json(subscription)),
+        // This route sent the `ShopSubscription` read; any other outcome
+        // is a bug, not a domain outcome.
+        _ => Err(AppError::TbError(Error::AnyFailure(anyhow::anyhow!(
+            "the shop subscription read did not carry its subscription"
+        )))),
+    }
 }
 
 async fn approve_subscription<S>(
