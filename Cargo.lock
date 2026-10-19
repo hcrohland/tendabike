@@ -2661,6 +2661,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "log",
+ "serde",
+ "serde_json",
  "tb_domain",
  "tb_strava",
  "time",

@@ -21,11 +21,24 @@
 //! `StravaSession`: the loop's transaction lifecycle is what this suite
 //! verifies, not the Strava API.
 //!
-//! What the four seam tests verify, end to end on the live adapter:
+//! What the eight seam tests verify, end to end on the live adapter:
 //!
 //! - an **API write** travels the in-memory channel, runs in one live
 //!   transaction, commits, resolves the route's oneshot, and pushes one
 //!   stream frame — and the row is visible to a fresh connection afterwards;
+//! - a **read as a message** travels the in-memory channel, runs in one live
+//!   loop-owned transaction (read-only within it by spec #558 §3.6),
+//!   resolves the route's oneshot with the `ReadOutcome`, and pushes **no**
+//!   stream frame;
+//! - a **read enqueued after a write** sees that write (FIFO total order
+//!   per user, spec #558 §3.2) — the write's committed row is in the
+//!   read's `ReadOutcome`;
+//! - a **hydration write** (`Request::Gear`) runs `update_gear` in one live
+//!   loop-owned transaction with the loop's session and pushes a frame —
+//!   the union of the parts it created — and a `User` read enqueued after
+//!   it (FIFO) sees the committed hydration in its snapshot (spec #558
+//!   §4); the common case (no new gear) pushes **no** frame and leaves the
+//!   snapshot unchanged;
 //! - a **queued Strava `Stop`** past its expiry is dropped by the queue
 //!   probe's housekeeping (committed by the probe) and the queue is empty
 //!   afterwards;
@@ -66,8 +79,8 @@ use std::time::Duration;
 
 use serde::de::DeserializeOwned;
 use tb_domain::test_support::{MemStore, part_type_ids::CHAIN, sole_live};
-use tb_domain::{ApiWrite, PartId, Session, ShopId, TbResult, UserId};
-use tb_exec::{ApiWriteRequest, api_write_channel, run};
+use tb_domain::{ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, TbResult, UserId};
+use tb_exec::{Request, request_channel, run};
 use tb_sqlx::DbPool;
 use tb_strava::{StravaDataStore, StravaId, StravaSession};
 use time::macros::datetime;
@@ -156,6 +169,73 @@ impl StravaSession for FakeStrava {
     }
 }
 
+/// The gear tests' `StravaSession` (spec #558 §4): the loop's session is the
+/// user's identity plus the Strava API client, and the client is canned
+/// JSON. `athlete` is the canned `/athlete` response: a `b-seam` bike (the
+/// hydration creates it) or an empty athlete (no new gear — the common
+/// case).
+#[derive(Clone, Copy)]
+struct GearStrava {
+    /// The canned `/athlete` response.
+    athlete: &'static str,
+}
+
+impl GearStrava {
+    /// A Strava athlete with one bike the fixture does not know: the
+    /// hydration's `update_gear` creates it.
+    fn new_gear() -> Self {
+        Self {
+            athlete: r#"{"bikes":[{"id":"b-seam"}],"shoes":[]}"#,
+        }
+    }
+
+    /// A Strava athlete with no gear: the hydration creates nothing.
+    fn no_new_gear() -> Self {
+        Self {
+            athlete: r#"{"bikes":[],"shoes":[]}"#,
+        }
+    }
+}
+
+impl Session for GearStrava {
+    fn user_id(&self) -> UserId {
+        test_identity().0
+    }
+    fn shop(&self) -> Option<ShopId> {
+        None
+    }
+    fn set_shop(&mut self, _shop: Option<ShopId>) -> TbResult<()> {
+        Ok(())
+    }
+    fn is_admin(&self) -> bool {
+        false
+    }
+}
+
+#[async_trait::async_trait]
+impl StravaSession for GearStrava {
+    fn strava_id(&self) -> StravaId {
+        test_identity().1
+    }
+    async fn request_json<T: DeserializeOwned>(
+        &mut self,
+        uri: &str,
+        _store: &mut impl StravaDataStore,
+    ) -> TbResult<T> {
+        let json = match uri {
+            "/athlete" => self.athlete,
+            "/gear/b-seam" => {
+                r#"{"id":"b-seam","name":"Seam Bike","brand_name":"SeamBrand","model_name":"SB1","frame_type":1}"#
+            }
+            _ => panic!("unexpected Strava call: {uri}"),
+        };
+        serde_json::from_str(json).map_err(|err| Error::AnyFailure(err.into()))
+    }
+    async fn deauthorize(&mut self, _store: &mut impl StravaDataStore) -> TbResult<()> {
+        panic!("the gear tests never deauthorize a user")
+    }
+}
+
 /// One test's hold on the scratch database: a pool for the test's runtime
 /// plus the run's lock. The lock is held for the whole test (declared last
 /// so it drops last): the tests serialize on the database, so a run is
@@ -225,10 +305,10 @@ async fn database_is_reachable() {
 #[ignore]
 async fn api_write_end_to_end() {
     let seam = ready().await;
-    let (tx, rx) = api_write_channel();
+    let (tx, rx) = request_channel();
     let (frames, mut frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
-    let (request, reply) = ApiWriteRequest::new(ApiWrite::PartCreate {
+    let (request, reply) = Request::new_write(ApiWrite::PartCreate {
         name: "Seam Chain".to_string(),
         vendor: "Shimano".to_string(),
         model: "CN-HG62".to_string(),
@@ -322,7 +402,7 @@ async fn strava_queue_drains_and_reclaims() {
     }
 
     // No API writes: the dropped sender closes the channel.
-    let (_tx, rx) = api_write_channel();
+    let (_tx, rx) = request_channel();
     let (frames, _frame_rx) = broadcast::channel(8);
     let (events, _events_rx) = broadcast::channel(8);
     // No streams attached: the frame receiver must not outlive the loop, or
@@ -361,7 +441,7 @@ async fn strava_queue_drains_and_reclaims() {
 #[ignore]
 async fn idle_loop_reclaims() {
     let seam = ready().await;
-    let (_tx, rx) = api_write_channel();
+    let (_tx, rx) = request_channel();
     let (frames, _frame_rx) = broadcast::channel(8);
     let (events, _events_rx) = broadcast::channel(8);
     // No streams attached: the frame receiver must not outlive the loop, or
@@ -391,6 +471,286 @@ async fn idle_loop_reclaims() {
     );
 }
 
+/// A read as a message end to end on the live adapter (spec #558 §3.6/§8):
+/// the `Request::Read` travels the in-memory channel, runs in one live
+/// loop-owned transaction (read-only within it by spec), resolves the
+/// route's oneshot with the `ReadOutcome`, and pushes **no** stream frame
+/// (a read produces no `Summary`). The idle loop then reaps and `run`
+/// returns `Ok`.
+#[tokio::test]
+#[ignore]
+async fn read_as_message_round_trip() {
+    let seam = ready().await;
+    let (tx, rx) = request_channel();
+    let (frames, mut frame_rx) = broadcast::channel(16);
+    let (events, _events_rx) = broadcast::channel(16);
+    let (request, reply) = Request::new_read(ApiRead::User { shop: None });
+    tx.send(request).expect("the channel is open");
+
+    let mut loop_task = tokio::spawn(run(
+        seam.pool.clone(),
+        FakeStrava::new(),
+        rx,
+        frames,
+        events,
+        IDLE_TIMEOUT,
+        Arc::new(Notify::new()),
+    ));
+
+    // The route's oneshot resolves with the read's data — the unified user
+    // read (spec #558 §3.5): the fixture's full state.
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, reply)
+        .await
+        .expect("the route's reply must resolve in time")
+        .expect("the loop must resolve the oneshot, not drop it")
+        .expect("the user read must succeed");
+    let ReadOutcome::User(state) = outcome else {
+        panic!("the User read returns the UserState composite");
+    };
+    assert_eq!(state.user.id, test_identity().0);
+    assert_eq!(state.summary.parts.len(), 17, "the fixture's full state");
+
+    // A read pushes no frame (spec #558 §3.6): the reply resolved after the
+    // loop's committed read, so any frame would already be in the channel.
+    assert!(
+        frame_rx.try_recv().is_err(),
+        "a read must push no stream frame"
+    );
+
+    // No streams left attached: the no-streams rule is the only reap rule
+    // (spec §4.4, amended — #446), so the loop's reap needs the receiver
+    // gone.
+    drop(frame_rx);
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, &mut loop_task)
+        .await
+        .expect("the idle loop must reap in time")
+        .expect("the loop must not panic");
+    outcome.expect("a reaped loop returns Ok");
+}
+
+/// FIFO total order per user (spec #558 §3.2/§8): a read enqueued after a
+/// write sees that write — the loop consumes the channel in order, so the
+/// write's transaction commits before the read's `begin`, and the read's
+/// `ReadOutcome` carries the written row.
+#[tokio::test]
+#[ignore]
+async fn read_sees_every_earlier_write() {
+    let seam = ready().await;
+    let (tx, rx) = request_channel();
+    let (frames, frame_rx) = broadcast::channel(16);
+    let (events, _events_rx) = broadcast::channel(16);
+    // The write, then the read — enqueued in order before the loop starts
+    // (the channel is the FIFO the loop consumes in order).
+    let (write_request, write_reply) = Request::new_write(ApiWrite::PartCreate {
+        name: "Seam Chain".to_string(),
+        vendor: "Shimano".to_string(),
+        model: "CN-HG62".to_string(),
+        what: CHAIN,
+        purchase: datetime!(2024-01-01 00:00 UTC),
+    });
+    tx.send(write_request).expect("the channel is open");
+    let (read_request, read_reply) = Request::new_read(ApiRead::User { shop: None });
+    tx.send(read_request).expect("the channel is open");
+
+    let mut loop_task = tokio::spawn(run(
+        seam.pool.clone(),
+        FakeStrava::new(),
+        rx,
+        frames,
+        events,
+        IDLE_TIMEOUT,
+        Arc::new(Notify::new()),
+    ));
+
+    // The write commits first (its oneshot resolves with its `Summary`).
+    let write_outcome = tokio::time::timeout(TEST_TIMEOUT, write_reply)
+        .await
+        .expect("the write's reply must resolve in time")
+        .expect("the loop must resolve the write's oneshot")
+        .expect("the part write must succeed");
+    let written = sole_live(&write_outcome.summary().parts);
+
+    // The read — enqueued after the write — sees the committed row.
+    let read_outcome = tokio::time::timeout(TEST_TIMEOUT, read_reply)
+        .await
+        .expect("the read's reply must resolve in time")
+        .expect("the loop must resolve the read's oneshot")
+        .expect("the user read must succeed");
+    let ReadOutcome::User(state) = read_outcome else {
+        panic!("the User read returns the UserState composite");
+    };
+    // The fixture's 17 parts plus the write's — and the written part is in
+    // the read's state, exactly as committed.
+    assert_eq!(
+        state.summary.parts.len(),
+        18,
+        "the read must see the earlier write"
+    );
+    assert_eq!(
+        state.summary.parts.get(&written.id),
+        Some(&written),
+        "the read's state must carry the write's row"
+    );
+
+    drop(frame_rx);
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, &mut loop_task)
+        .await
+        .expect("the idle loop must reap in time")
+        .expect("the loop must not panic");
+    outcome.expect("a reaped loop returns Ok");
+}
+
+/// The hydration write end to end on the live adapter (spec #558 §4/§8):
+/// the `Request::Gear` travels the in-memory channel, runs `update_gear`
+/// in one live loop-owned transaction with the loop's session, commits, and
+/// pushes exactly one frame — the **union of the parts it created** (one
+/// entry per part, published on commit before the oneshot reply). The `User`
+/// read enqueued after it (FIFO total order per user) sees the committed
+/// hydration: its snapshot carries the new part.
+#[tokio::test]
+#[ignore]
+async fn gear_hydration_frame_and_fifo_read() {
+    let seam = ready().await;
+    let (tx, rx) = request_channel();
+    let (frames, mut frame_rx) = broadcast::channel(16);
+    let (events, _events_rx) = broadcast::channel(16);
+    // The hydration, then the snapshot read — enqueued in order before the
+    // loop starts (the channel is the FIFO the loop consumes in order).
+    let (gear_request, gear_reply) = Request::new_gear();
+    tx.send(gear_request).expect("the channel is open");
+    let (read_request, read_reply) = Request::new_read(ApiRead::User { shop: None });
+    tx.send(read_request).expect("the channel is open");
+
+    let mut loop_task = tokio::spawn(run(
+        seam.pool.clone(),
+        GearStrava::new_gear(),
+        rx,
+        frames,
+        events,
+        IDLE_TIMEOUT,
+        Arc::new(Notify::new()),
+    ));
+
+    // The hydration commits: the oneshot resolves with the created parts'
+    // summary — one entry per created part.
+    let summary = tokio::time::timeout(TEST_TIMEOUT, gear_reply)
+        .await
+        .expect("the gear reply must resolve in time")
+        .expect("the loop must resolve the oneshot, not drop it")
+        .expect("the hydration must succeed");
+    assert_eq!(
+        summary.parts.len(),
+        1,
+        "the frame is the created parts' union"
+    );
+    let created = sole_live(&summary.parts);
+    assert_eq!(created.name, "Seam Bike");
+    assert_eq!(created.source.as_deref(), Some("b-seam"));
+
+    // The created part pushes exactly one frame, published on commit — the
+    // reply already resolved, so the frame is already in the channel.
+    let frame = tokio::time::timeout(TEST_TIMEOUT, frame_rx.recv())
+        .await
+        .expect("the frame must arrive in time")
+        .expect("the stream must stay open");
+    assert_eq!(frame, summary, "the frame is the created parts' union");
+
+    // The read — enqueued after the hydration — sees the committed part:
+    // the fixture's 17 parts plus the hydration's, and the snapshot carries
+    // the new part exactly as committed.
+    let read_outcome = tokio::time::timeout(TEST_TIMEOUT, read_reply)
+        .await
+        .expect("the read's reply must resolve in time")
+        .expect("the loop must resolve the read's oneshot")
+        .expect("the user read must succeed");
+    let ReadOutcome::User(state) = read_outcome else {
+        panic!("the User read returns the UserState composite");
+    };
+    assert_eq!(
+        state.summary.parts.len(),
+        18,
+        "the FIFO read sees the committed hydration"
+    );
+    assert_eq!(
+        state.summary.parts.get(&created.id),
+        Some(&created),
+        "the snapshot body carries the new part"
+    );
+
+    drop(frame_rx);
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, &mut loop_task)
+        .await
+        .expect("the idle loop must reap in time")
+        .expect("the loop must not panic");
+    outcome.expect("a reaped loop returns Ok");
+}
+
+/// The hydration's common case end to end on the live adapter (spec #558
+/// §4/§8): the Strava athlete carries no new gear — `update_gear` creates
+/// nothing, the `Summary` is empty, and **no frame is pushed** (exactly
+/// today's behavior). The `User` read enqueued after it (FIFO) answers with
+/// the fixture's state, unchanged.
+#[tokio::test]
+#[ignore]
+async fn gear_hydration_without_new_gear_pushes_no_frame() {
+    let seam = ready().await;
+    let fixture_parts = MemStore::prepopulated().snapshot().parts.len();
+    let (tx, rx) = request_channel();
+    let (frames, mut frame_rx) = broadcast::channel(16);
+    let (events, _events_rx) = broadcast::channel(16);
+    let (gear_request, gear_reply) = Request::new_gear();
+    tx.send(gear_request).expect("the channel is open");
+    let (read_request, read_reply) = Request::new_read(ApiRead::User { shop: None });
+    tx.send(read_request).expect("the channel is open");
+
+    let mut loop_task = tokio::spawn(run(
+        seam.pool.clone(),
+        GearStrava::no_new_gear(),
+        rx,
+        frames,
+        events,
+        IDLE_TIMEOUT,
+        Arc::new(Notify::new()),
+    ));
+
+    // The hydration commits with an empty summary (nothing new).
+    let summary = tokio::time::timeout(TEST_TIMEOUT, gear_reply)
+        .await
+        .expect("the gear reply must resolve in time")
+        .expect("the loop must resolve the oneshot, not drop it")
+        .expect("the hydration must succeed");
+    assert!(summary.is_empty(), "no new gear: the summary is empty");
+
+    // An empty summary pushes no frame (the gear's commit resolved before
+    // this point, so any frame would already be in the channel).
+    assert!(
+        frame_rx.try_recv().is_err(),
+        "no new gear: an empty summary pushes no frame"
+    );
+
+    // The FIFO read answers with the fixture's state, unchanged.
+    let read_outcome = tokio::time::timeout(TEST_TIMEOUT, read_reply)
+        .await
+        .expect("the read's reply must resolve in time")
+        .expect("the loop must resolve the read's oneshot")
+        .expect("the user read must succeed");
+    let ReadOutcome::User(state) = read_outcome else {
+        panic!("the User read returns the UserState composite");
+    };
+    assert_eq!(
+        state.summary.parts.len(),
+        fixture_parts,
+        "no new gear: the snapshot is the fixture's state"
+    );
+
+    drop(frame_rx);
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, &mut loop_task)
+        .await
+        .expect("the idle loop must reap in time")
+        .expect("the loop must not panic");
+    outcome.expect("a reaped loop returns Ok");
+}
+
 /// A failed write: the domain op errors, the transaction rolls back (no
 /// partial row), the oneshot carries the domain error to the route, and
 /// the loop keeps going until it reaps.
@@ -400,14 +760,14 @@ async fn failed_write_rolls_back_and_reclaims() {
     let seam = ready().await;
     let fixture_parts = MemStore::prepopulated().snapshot().parts.len();
 
-    let (tx, rx) = api_write_channel();
+    let (tx, rx) = request_channel();
     let (frames, _frame_rx) = broadcast::channel(8);
     let (events, _events_rx) = broadcast::channel(8);
     // No streams attached: the frame receiver must not outlive the loop, or
     // the no-streams reap rule (spec §4.4, amended — #446) never fires.
     drop(_frame_rx);
     // Deleting a part that does not exist: `NotFound` from the domain.
-    let (request, reply) = ApiWriteRequest::new(ApiWrite::PartDelete {
+    let (request, reply) = Request::new_write(ApiWrite::PartDelete {
         id: PartId::from(999_999),
     });
     tx.send(request).expect("the channel is open");

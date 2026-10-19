@@ -18,11 +18,12 @@
 
 */
 
-//! The per-user executor loop (ADR-0005, executable spec #446 §4.3–4.5):
-//! one long-lived task per user that consumes the two message sources
-//! (the user's API-write channel, then the `strava_events` queue), runs each
-//! message in one transaction, and pushes the resulting `Summary` to the
-//! user's SSE streams.
+//! The per-user executor loop (ADR-0005, executable spec #446 §4.3–4.5;
+//! ADR-0007, executable spec #558 §3): one long-lived task per user that
+//! consumes the two message sources (the user's request channel — writes,
+//! reads, the hydration write, the admin stats read — then the
+//! `strava_events` queue), runs each message in one transaction, and pushes
+//! the resulting `Summary` to the user's SSE streams.
 //!
 //! The loop is generic over the transaction source ([`TxnSource`]; the
 //! production `DbPool` is injected at the composition root — `DbPool` is
@@ -35,12 +36,12 @@ use std::future::Future;
 use std::time::Duration;
 
 use log::{debug, error, info, warn};
-use tb_domain::{Error, Summary, TbResult, WriteOutcome, exec};
-use tb_strava::StravaSession;
+use tb_domain::{ApiRead, ApiWrite, Error, ReadOutcome, Summary, TbResult, WriteOutcome, exec};
 use tb_strava::event::{Event, QueueRead, get_event, process};
-use tokio::sync::broadcast;
+use tb_strava::{StravaSession, StravaStat, StravaUser, get_all_stats};
+use tokio::sync::{broadcast, oneshot};
 
-use crate::message::{ApiWriteReceiver, ApiWriteRequest, push_frame};
+use crate::message::{Request, RequestReceiver, push_frame};
 use crate::{Txn, TxnSource};
 
 /// The per-executor in-memory backoff for database failures (spec #446
@@ -159,8 +160,9 @@ pub(crate) enum Probe {
 /// One outcome of the biased select: which branch resolved, if any branch
 /// resolved with work. Crate-internal.
 pub(crate) enum Select {
-    /// An API write arrived on the channel.
-    ApiWrite(ApiWriteRequest),
+    /// An API request (write, read, hydration, admin stats) arrived on the
+    /// channel.
+    Request(Request),
     /// A Strava event was queued.
     Strava(Event),
     /// The global rate-limit `Stop` is active until this unix time.
@@ -179,7 +181,7 @@ pub(crate) enum Select {
 impl std::fmt::Debug for Select {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ApiWrite(req) => f.debug_tuple("Select::ApiWrite").field(req).finish(),
+            Self::Request(req) => f.debug_tuple("Select::Request").field(req).finish(),
             Self::Strava(event) => f.debug_tuple("Select::Strava").field(event).finish(),
             Self::Limited(until) => f.debug_tuple("Select::Limited").field(until).finish(),
             Self::Idle => f.write_str("Select::Idle"),
@@ -207,14 +209,14 @@ impl std::fmt::Debug for Select {
 /// just before is not lost (the permit semantics) — survives the select and
 /// can serve the loop's next parking spot (the idle sleep).
 pub(crate) async fn select_message(
-    api: impl Future<Output = Option<ApiWriteRequest>>,
+    api: impl Future<Output = Option<Request>>,
     strava: impl Future<Output = Option<Probe>>,
     wake: &mut (impl Future<Output = ()> + Unpin),
 ) -> Select {
     tokio::select! {
         biased;
         req = api => match req {
-            Some(req) => Select::ApiWrite(req),
+            Some(req) => Select::Request(req),
             None => Select::Idle,
         },
         probe = strava => match probe {
@@ -261,7 +263,8 @@ pub(crate) async fn select_message(
 ///   the caller keep a handle — no `Arc` is needed.
 /// * `session` — the user's `StravaSession` (drives the queue read and
 ///   event processing; the executor supplies the identity `ApiWrite` needs).
-/// * `rx` — the receive half of the user's API-write channel.
+/// * `rx` — the receive half of the user's request channel (writes, reads,
+///   the hydration write, and the admin stats read — spec #558 §3.2).
 /// * `frames` — the user's SSE frame sink (`broadcast`); the web layer's
 ///   stream tasks subscribe to it.
 /// * `events` — the user's completed-Strava-event channel (`broadcast`):
@@ -296,6 +299,15 @@ pub(crate) async fn select_message(
 ///   client is the retry layer), and the loop continues. A `begin` or `commit`
 ///   failure is a **DB failure**: the oneshot 500s, the in-memory backoff
 ///   records it, the loop continues.
+/// - **A failed `ApiRead`** (spec #558 §3.7) — fail fast, no retry, and
+///   **never arm the backoff**: the oneshot resolves with the error (the
+///   route maps it to a 4xx/5xx), the message is consumed, and the loop
+///   continues — the queue probe is the DB health monitor, and read traffic
+///   (e.g. a reconnecting client's burst) must not push the 30s cap up. A
+///   read transaction that completes cleanly (committed, or rolled back
+///   after a domain error) resets the backoff, like any healthy
+///   transaction. A read pushes no SSE frame (read-only within its
+///   transaction by spec).
 /// - **A failed Strava message** — classified inside `process` (spec §4.6):
 ///   `TryAgain` inserts the global `Stop` (the probe then reports it and the
 ///   loop sleeps until its deadline); `NotAuth` disables the user and drops
@@ -325,7 +337,7 @@ pub(crate) async fn select_message(
 pub async fn run<T, S>(
     source: T,
     session: S,
-    mut rx: ApiWriteReceiver,
+    mut rx: RequestReceiver,
     frames: broadcast::Sender<Summary>,
     events: broadcast::Sender<Event>,
     idle_timeout: Duration,
@@ -356,9 +368,9 @@ where
         .await;
 
         match select {
-            Select::ApiWrite(request) => {
+            Select::Request(request) => {
                 if let Err(err) =
-                    run_write(&source, &mut session, request, &frames, &mut backoff).await
+                    run_request(&source, &mut session, request, &frames, &mut backoff).await
                 {
                     error!("user {user_id}: the executor loop is ending: {err:?}");
                     return Err(err);
@@ -389,9 +401,10 @@ where
                 // deadline is absolute: after an interrupting write the loop
                 // re-probes and sleeps the *remaining* time, not a fresh one.
                 let remaining = stop_remaining(until, now_unix());
-                if let Some(request) = sleep_or_take_write(&mut rx, remaining, &mut wake_fut).await
+                if let Some(request) =
+                    sleep_or_take_request(&mut rx, remaining, &mut wake_fut).await
                     && let Err(err) =
-                        run_write(&source, &mut session, request, &frames, &mut backoff).await
+                        run_request(&source, &mut session, request, &frames, &mut backoff).await
                 {
                     error!("user {user_id}: the executor loop is ending: {err:?}");
                     return Err(err);
@@ -414,9 +427,9 @@ where
                 // (if any) stays queued for the retry.
                 let pause = backoff.record_failure();
                 warn!("user {user_id}: the queue probe failed; backing off {pause:?}");
-                if let Some(request) = sleep_or_take_write(&mut rx, pause, &mut wake_fut).await
+                if let Some(request) = sleep_or_take_request(&mut rx, pause, &mut wake_fut).await
                     && let Err(err) =
-                        run_write(&source, &mut session, request, &frames, &mut backoff).await
+                        run_request(&source, &mut session, request, &frames, &mut backoff).await
                 {
                     error!("user {user_id}: the executor loop is ending: {err:?}");
                     return Err(err);
@@ -445,9 +458,9 @@ where
                         // expiring falls through to the next cycle's
                         // decision, which re-probes the queue.
                         if let Some(request) =
-                            sleep_or_take_write(&mut rx, idle_timeout, &mut wake_fut).await
+                            sleep_or_take_request(&mut rx, idle_timeout, &mut wake_fut).await
                             && let Err(err) =
-                                run_write(&source, &mut session, request, &frames, &mut backoff)
+                                run_request(&source, &mut session, request, &frames, &mut backoff)
                                     .await
                         {
                             error!("user {user_id}: the executor loop is ending: {err:?}");
@@ -464,17 +477,19 @@ where
     }
 }
 
-/// Sleep for `remaining` as a branch of the biased select (spec §4.6): an
-/// API write arriving mid-sleep is returned the moment it is ready (a
-/// backoff delays Strava events, never API writes); a fired wake (spec
+/// Sleep for `remaining` as a branch of the biased select (spec §4.6;
+/// #558 §3.7): a request (write, read, hydration, admin stats) arriving
+/// mid-sleep is returned the moment it is ready (a backoff delays Strava
+/// events, never the user's requests — a read is never delayed by the
+/// Strava `Stop` nor by the `DbBackoff`); a fired wake (spec
 /// §4.4/§4.6) interrupts the sleep with `None`, so the loop falls through
 /// to the top and re-probes the queue at once; the sleep expiring (or the
 /// channel closing — `None`, the shutdown corner) resolves with `None`.
-async fn sleep_or_take_write(
-    rx: &mut ApiWriteReceiver,
+pub(crate) async fn sleep_or_take_request(
+    rx: &mut RequestReceiver,
     remaining: Duration,
     wake: &mut (impl Future<Output = ()> + Unpin),
-) -> Option<ApiWriteRequest> {
+) -> Option<Request> {
     tokio::select! {
         biased;
         request = rx.recv() => request,
@@ -537,6 +552,139 @@ async fn queue_probe<T: TxnSource, S: StravaSession>(
     Some(probe)
 }
 
+/// One in-memory request in the loop's own transaction (spec #558 §3.2):
+/// the variant decides the work — the write's `exec` dispatch, the read's
+/// `apiread` dispatch, the hydration write, the admin stats read — and the
+/// backoff discipline (the writes and the hydration record DB failures;
+/// the reads never arm the backoff, spec #558 §3.7). The oneshot always
+/// resolves and the message is consumed; only a failed `rollback` ends the
+/// loop (the sub-dispatchers' `Err` return).
+pub(crate) async fn run_request<T, S>(
+    source: &T,
+    session: &mut S,
+    request: Request,
+    frames: &broadcast::Sender<Summary>,
+    backoff: &mut DbBackoff,
+) -> Result<(), Error>
+where
+    T: TxnSource,
+    S: StravaSession,
+{
+    match request {
+        Request::Write { write, reply } => {
+            run_write(source, session, write, reply, frames, backoff).await
+        }
+        Request::Read { read, reply } => {
+            run_read(source, session, read, reply, frames, backoff).await
+        }
+        Request::Gear { reply } => run_gear(source, session, reply, frames, backoff).await,
+        Request::AllStats { reply } => run_all_stats(source, session, reply, frames, backoff).await,
+    }
+}
+
+/// The shared transaction shape of the four request runners (spec #558
+/// §3.6): `begin` → `work` → `commit`, or `rollback` on `work`'s failure;
+/// the oneshot always resolves and the message is consumed.
+///
+/// The two disciplines that differ per variant:
+///
+/// - `record_db_failure` — a `begin`/`commit` failure records it on the
+///   in-memory backoff for the writes and the hydration (spec §4.6); the
+///   reads never arm the backoff (spec #558 §3.7 — the queue probe is the
+///   DB health monitor, and read traffic must not push the 30s cap up).
+///   Either way, a transaction that completes cleanly (committed, or
+///   rolled back after a domain error) resets the backoff, and only a
+///   failed `rollback` ends the loop (the `Err` return).
+/// - `frame` — a committed outcome the closure maps to a `Summary` pushes
+///   one SSE frame to the user's streams before the oneshot reply; a
+///   `None` pushes nothing (a read produces no `Summary`, spec #558 §3.6).
+///
+/// `noun` names the variant in the transaction log lines ("write", "read",
+/// "hydration", "stats read"); `what` names it in the final failure line
+/// ("API write", "API read", "hydration write", "all-user stats read").
+///
+/// `work` takes the connection by value and yields it back with the
+/// outcome, so the commit/rollback (which consume the connection) stay in
+/// this helper.
+#[allow(clippy::too_many_arguments)] // the shape's nine degrees of freedom
+async fn run_message<T, Out, Fut>(
+    noun: &str,
+    what: &str,
+    source: &T,
+    reply: oneshot::Sender<TbResult<Out>>,
+    frames: &broadcast::Sender<Summary>,
+    backoff: &mut DbBackoff,
+    record_db_failure: bool,
+    frame: impl for<'a> Fn(&'a Out) -> Option<&'a Summary>,
+    work: impl FnOnce(T::Conn) -> Fut,
+) -> Result<(), Error>
+where
+    T: TxnSource,
+    Fut: Future<Output = (TbResult<Out>, T::Conn)>,
+{
+    let conn = match source.begin().await {
+        Ok(conn) => conn,
+        Err(err) => {
+            // A `begin` failure: resolve the oneshot with the error and
+            // continue — the message is consumed (the client is the retry
+            // layer), the loop stays up.
+            error!("could not begin the {noun}'s transaction: {err:?}");
+            let _ = reply.send(Err(Error::AnyFailure(err.into())));
+            if record_db_failure {
+                backoff.record_failure();
+            }
+            return Ok(());
+        }
+    };
+
+    let (outcome, conn) = work(conn).await;
+    let outcome: TbResult<Out> = match outcome {
+        Ok(outcome) => match conn.commit().await {
+            Ok(()) => {
+                // A cleanly committed transaction is a healthy one: reset
+                // the backoff.
+                backoff.reset();
+                Ok(outcome)
+            }
+            Err(err) => {
+                // A `commit` failure: resolve the oneshot with the error
+                // and continue.
+                error!("committing the {noun}'s transaction failed: {err:?}");
+                if record_db_failure {
+                    backoff.record_failure();
+                }
+                Err(Error::AnyFailure(err.into()))
+            }
+        },
+        Err(err) => {
+            // A domain error: roll back and resolve the oneshot with it.
+            // The transaction ran to completion, so the database is
+            // healthy: reset the backoff.
+            if let Err(rollback_err) = conn.rollback().await {
+                error!("rolling back the {noun}'s transaction failed: {rollback_err:?}");
+                let _ = reply.send(Err(Error::AnyFailure(rollback_err.into())));
+                return Err(lifecycle_error(format_args!(
+                    "rolling back the {noun}'s transaction failed"
+                )));
+            }
+            backoff.reset();
+            Err(err)
+        }
+    };
+    if let Ok(outcome) = &outcome {
+        // The frame (if the variant has one) is published on commit,
+        // before the oneshot reply.
+        if let Some(frame) = frame(outcome) {
+            push_frame(frames, frame);
+        }
+    }
+    if let Err(err) = &outcome {
+        error!("the {what} failed: {err:?}");
+    }
+    let _ = reply.send(outcome);
+    Ok(())
+}
+
 /// One `ApiWrite` in one transaction (spec §4.3): `begin` → [`exec`] →
 /// `commit`, or `rollback` on failure; the oneshot resolves with the
 /// outcome either way, and a successful, non-empty `Summary` pushes one
@@ -552,7 +700,8 @@ async fn queue_probe<T: TxnSource, S: StravaSession>(
 async fn run_write<T, S>(
     source: &T,
     session: &mut S,
-    request: ApiWriteRequest,
+    write: ApiWrite,
+    reply: oneshot::Sender<TbResult<WriteOutcome>>,
     frames: &broadcast::Sender<Summary>,
     backoff: &mut DbBackoff,
 ) -> Result<(), Error>
@@ -560,64 +709,160 @@ where
     T: TxnSource,
     S: StravaSession,
 {
-    let ApiWriteRequest { write, reply } = request;
     info!("user {}: Processing {write:?}", session.tb_id());
-
-    let mut conn = match source.begin().await {
-        Ok(conn) => conn,
-        Err(err) => {
-            // DB failure (spec §4.6): 500 the client, back off, continue —
-            // the write is consumed (the client retries), the loop stays up.
-            error!("could not begin the write's transaction: {err:?}");
-            let _ = reply.send(Err(Error::AnyFailure(err.into())));
-            backoff.record_failure();
-            return Ok(());
-        }
-    };
-
-    let outcome = exec(write, session, &mut conn).await;
-    let outcome: TbResult<WriteOutcome> = match outcome {
-        Ok(outcome) => match conn.commit().await {
-            Ok(()) => {
-                backoff.reset();
-                Ok(outcome)
-            }
-            Err(err) => {
-                // DB failure (spec §4.6): 500 the client, back off, continue.
-                // The write is consumed; if the commit in fact landed, the
-                // client's retry meets the committed state and resolves
-                // through the normal error mapping.
-                error!("committing the write's transaction failed: {err:?}");
-                backoff.record_failure();
-                Err(Error::AnyFailure(err.into()))
-            }
-        },
-        Err(err) => {
-            // Fail fast (spec §6.2): the operation's partial writes roll
-            // back, the oneshot carries the error, the message is consumed —
-            // the client is the retry layer. The loop continues; the
-            // database just ran a full transaction, so it is healthy.
-            if let Err(rollback_err) = conn.rollback().await {
-                error!("rolling back the write's transaction failed: {rollback_err:?}");
-                let _ = reply.send(Err(Error::AnyFailure(rollback_err.into())));
-                return Err(lifecycle_error(
-                    "rolling back the write's transaction failed",
-                ));
-            }
-            backoff.reset();
-            Err(err)
-        }
-    };
-    if let Ok(outcome) = &outcome {
+    run_message(
+        "write",
+        "API write",
+        source,
+        reply,
+        frames,
+        backoff,
+        true,
         // The frame is the write's `Summary` (the descend's report is the
         // response body, not state — it never rides the frame).
-        push_frame(frames, outcome.summary());
-    }
-    if let Err(err) = &outcome {
-        error!("the API write failed: {err:?}");
-    }
-    let _ = reply.send(outcome);
-    Ok(())
+        |outcome| Some(outcome.summary()),
+        |mut conn| async move {
+            let outcome = exec(write, session, &mut conn).await;
+            (outcome, conn)
+        },
+    )
+    .await
+}
+
+/// One `ApiRead` in the loop's own transaction (spec #558 §3.6/§3.7):
+/// `begin` → [`tb_domain::read`] → `commit`, **read-only within it by spec** — a read
+/// computes and returns data, and it pushes **no** SSE frame (it produces
+/// no `Summary`).
+///
+/// The backoff discipline is the lane's, not a gate (spec #558 §3.7): a
+/// read is never *delayed* by the Strava `Stop` nor the `DbBackoff` (both
+/// sleeps are biased-select branches the read interrupts, like a write),
+/// and a failed read **never arms** the backoff — a `begin`/transaction
+/// failure resolves the oneshot with the `Err` (the route maps it to a
+/// 4xx/5xx) and the loop continues with no `record_failure()`: the queue
+/// probe is the DB health monitor, and read traffic (e.g. a reconnecting
+/// client's burst) must not push the 30s cap up. Symmetrically, a read
+/// transaction that completes cleanly (committed, or rolled back after a
+/// domain error) **resets** the backoff, per the existing "any healthy
+/// transaction resets" rule. Only a failed `rollback` ends the loop.
+async fn run_read<T, S>(
+    source: &T,
+    session: &mut S,
+    read: ApiRead,
+    reply: oneshot::Sender<TbResult<ReadOutcome>>,
+    frames: &broadcast::Sender<Summary>,
+    backoff: &mut DbBackoff,
+) -> Result<(), Error>
+where
+    T: TxnSource,
+    S: StravaSession,
+{
+    info!("user {}: Reading {read:?}", session.tb_id());
+    run_message(
+        "read",
+        "API read",
+        source,
+        reply,
+        frames,
+        backoff,
+        false,    // a failed read never arms the backoff (spec #558 §3.7)
+        |_| None, // a read pushes no frame (spec #558 §3.6)
+        |mut conn| async move {
+            let outcome = tb_domain::read(read, session, &mut conn).await;
+            (outcome, conn)
+        },
+    )
+    .await
+}
+
+/// The hydration write in the loop's own transaction (spec #558 §4):
+/// `begin` → [`StravaUser::update_gear`] → read the parts it created →
+/// `commit`. `update_gear` is a `tb_strava` op (the session's
+/// `request_json` plus the `into_partid` store work), so it is dispatched
+/// loop-side with the loop's session — not an `ApiWrite` variant.
+///
+/// The frame is uniform (like every other write): the hydrate's `Summary`
+/// is the **union of the parts it created** — one entry per part, empty
+/// when nothing is new (the common case: `push_frame` sends nothing) — and
+/// it is published on commit, before the oneshot reply (the client already
+/// buffers frames that race the snapshot). The backoff discipline is the
+/// write's: a `begin`/`commit` failure records it, a completed transaction
+/// (committed, or rolled back after an error) resets it, and only a failed
+/// `rollback` ends the loop.
+async fn run_gear<T, S>(
+    source: &T,
+    session: &mut S,
+    reply: oneshot::Sender<TbResult<Summary>>,
+    frames: &broadcast::Sender<Summary>,
+    backoff: &mut DbBackoff,
+) -> Result<(), Error>
+where
+    T: TxnSource,
+    S: StravaSession,
+{
+    info!("user {}: Hydrating the user's gear", session.tb_id());
+    // The hydration's work in the loop's transaction: import the Strava
+    // gear, then read back the parts it created — the frame is their union
+    // (one entry per part, empty when nothing is new, spec #558 §4).
+    let mut summary = Summary::default();
+    run_message(
+        "hydration",
+        "hydration write",
+        source,
+        reply,
+        frames,
+        backoff,
+        true,
+        |summary| Some(summary),
+        |mut conn| async move {
+            let outcome = async {
+                let created = StravaUser::update_gear(session, &mut conn).await?;
+                for id in created {
+                    summary.parts.upsert(id.part(session, &mut conn).await?);
+                }
+                Ok(())
+            }
+            .await;
+            (outcome.map(|()| summary), conn)
+        },
+    )
+    .await
+}
+
+/// The admin `AllStats` read in the loop's own transaction (spec #558
+/// §3.3): `begin` → [`get_all_stats`] → `commit`, read-only within it by
+/// spec. `get_all_stats` is a `tb_strava` op, so it is dispatched loop-side
+/// — the same home the `Gear` hydration and the Strava events' `process`
+/// get — riding the admin user's channel. The backoff discipline is the
+/// read's (spec #558 §3.7): a failure resolves the oneshot with the `Err`
+/// and never arms the backoff; a cleanly committed read resets it.
+async fn run_all_stats<T, S>(
+    source: &T,
+    session: &mut S,
+    reply: oneshot::Sender<TbResult<Vec<StravaStat>>>,
+    frames: &broadcast::Sender<Summary>,
+    backoff: &mut DbBackoff,
+) -> Result<(), Error>
+where
+    T: TxnSource,
+    S: StravaSession,
+{
+    info!("user {}: Reading the all-user stats", session.tb_id());
+    run_message(
+        "stats read",
+        "all-user stats read",
+        source,
+        reply,
+        frames,
+        backoff,
+        false,    // a failed read never arms the backoff (spec #558 §3.7)
+        |_| None, // the stats read pushes no frame (spec #558 §3.7)
+        |mut conn| async move {
+            let outcome = get_all_stats(&mut conn).await;
+            (outcome, conn)
+        },
+    )
+    .await
 }
 
 /// The `Err` value `run` returns when a message's transaction lifecycle
@@ -626,7 +871,7 @@ where
 /// must 500 the client), so what ends the loop is a fresh marker. The web
 /// layer treats an `Err` from `run` like a panic (close the streams, let the
 /// client reconnect and respawn); the original is named in the log.
-fn lifecycle_error(what: &str) -> Error {
+fn lifecycle_error(what: impl std::fmt::Display) -> Error {
     Error::AnyFailure(anyhow::anyhow!("the executor loop's transaction: {what}"))
 }
 

@@ -94,7 +94,7 @@ async fn user_create_and_read() {
     let uid = UserId::create("John", "Doe", &None, &mut store)
         .await
         .unwrap();
-    let user = uid.read(&mut store).await.unwrap();
+    let user = uid.read(None, &mut store).await.unwrap().user;
     assert_eq!(user.id, uid);
     assert_eq!(user.firstname, "John");
     assert_eq!(user.name, "Doe");
@@ -124,7 +124,7 @@ async fn user_update() {
     uid.update("Alice", "NewName", &Some("new.png".into()), &mut store)
         .await
         .unwrap();
-    let user = uid.read(&mut store).await.unwrap();
+    let user = uid.read(None, &mut store).await.unwrap().user;
     assert_eq!(user.firstname, "Alice");
     assert_eq!(user.name, "NewName");
     assert_eq!(user.avatar, Some("new.png".into()));
@@ -146,7 +146,7 @@ async fn user_delete_removes_from_store() {
         .await
         .unwrap();
     uid.delete(&mut store).await.unwrap();
-    assert!(uid.read(&mut store).await.is_err());
+    assert!(uid.read(None, &mut store).await.is_err());
 }
 
 #[tokio::test]
@@ -159,7 +159,7 @@ async fn user_update_onboarding_status() {
         .update_onboarding_status(&uid, OnboardingStatus::Completed)
         .await
         .unwrap();
-    let user = uid.read(&mut store).await.unwrap();
+    let user = uid.read(None, &mut store).await.unwrap().user;
     assert_eq!(user.onboarding_status, OnboardingStatus::Completed);
 }
 

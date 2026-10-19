@@ -39,12 +39,15 @@ use axum::{
 use futures::stream::unfold;
 use http::StatusCode;
 use log::{error, info};
-use tokio::sync::{Mutex, Notify, broadcast, watch};
+use tokio::sync::{Mutex, Notify, broadcast, oneshot, watch};
 
-use tb_domain::{ApiWrite, DescendReport, Error, Session, Summary, TbResult, UserId, WriteOutcome};
-use tb_exec::{ApiWriteRequest, ApiWriteSender, Txn, TxnSource, api_write_channel, run};
+use tb_domain::{
+    ApiRead, ApiWrite, DescendReport, Error, ReadOutcome, Session, Summary, TbResult, UserId,
+    WriteOutcome,
+};
+use tb_exec::{Request, RequestSender, Txn, TxnSource, request_channel, run};
 use tb_strava::{
-    StravaDataStore, StravaId,
+    StravaDataStore, StravaId, StravaStat,
     event::{Event as StravaEvent, ObjectType},
 };
 
@@ -85,20 +88,20 @@ pub enum ExecutorStatus {
 }
 
 /// One live per-user executor: the shared fate channel, the send half of the
-/// user's API-write channel (the write handlers enqueue here, spec §6.2),
-/// the SSE frame sink the stream tasks subscribe to, the consumed-
-/// Strava-event channel the admin sync awaits (spec §6.4), the in-memory
-/// wake signal the webhook fires after queueing a Strava event (spec
-/// §4.4/§4.6), and the task's abort handle (the registry's `stop_all` tears
-/// the executor down — rescan, issue #446). The `AbortHandle` (not the
-/// `JoinHandle`) is stored: the watchdog keeps the original handle to
+/// user's request channel (the write and read handlers enqueue here,
+/// spec #558 §3.2), the SSE frame sink the stream tasks subscribe to, the
+/// consumed- Strava-event channel the admin sync awaits (spec §6.4), the
+/// in-memory wake signal the webhook fires after queueing a Strava event
+/// (spec §4.4/§4.6), and the task's abort handle (the registry's `stop_all`
+/// tears the executor down — rescan, issue #446). The `AbortHandle` (not
+/// the `JoinHandle`) is stored: the watchdog keeps the original handle to
 /// `await` and record `Dead` on a panic **or** the abort `JoinError`.
 #[derive(Clone)]
 struct Executor {
     status: watch::Receiver<ExecutorStatus>,
-    /// The write handlers' door into this user's loop (spec §6.2): enqueue
-    /// an `ApiWrite` here and await its oneshot.
-    writer: ApiWriteSender,
+    /// The request handlers' door into this user's loop (spec #558 §3.2):
+    /// enqueue a `Request` here and await its oneshot.
+    request_sender: RequestSender,
     frames: broadcast::Sender<Summary>,
     /// Every Strava event the loop consumed (spec §6.4): the admin sync's
     /// completion signal, correlated by the event's identity.
@@ -177,12 +180,58 @@ impl Registry {
             exec.wake.notify_one();
         }
     }
-    /// Enqueue one [`ApiWrite`] on the user's executor and await its outcome
-    /// (spec §6.2): spawn-or-join the executor, send the request on the
-    /// user's API-write channel, and await the oneshot (unbounded — through
-    /// a 15-minute rate-limit backoff the write may wait long, and that is
-    /// the spec'd behavior). `exec_field` drops the registry lock on return,
-    /// so the unbounded reply await runs without it.
+    /// Enqueue one [`ApiRead`] on the user's executor and await its data
+    /// (spec #558 §3): the loop runs the read in its own transaction
+    /// (read-only within it by spec) and resolves the [`ReadOutcome`] —
+    /// the route maps a `Err` through the existing `AppError` helper,
+    /// exactly as today.
+    pub async fn read<S>(&self, source: &S, user_id: UserId, read: ApiRead) -> TbResult<ReadOutcome>
+    where
+        S: TxnSource + Clone + 'static,
+    {
+        let (request, reply) = Request::new_read(read);
+        self.send_request(source, user_id, request, reply, "read")
+            .await
+    }
+
+    /// Enqueue the [`Gear`](Request::Gear) hydration write on the user's
+    /// executor and await its frame (spec #558 §4): the loop runs
+    /// `update_gear` in its own transaction with its own session (a
+    /// `tb_strava` op — it cannot be an `ApiWrite` variant) and resolves
+    /// with the created parts' `Summary` — the frame (the union of the
+    /// parts it created, one entry per part, empty when nothing is new).
+    /// The `/user/summary` route runs this **before** its unified `User`
+    /// read, FIFO-ordered, so the snapshot body carries the new parts
+    /// exactly as today.
+    pub async fn hydrate_gear<S>(&self, source: &S, user_id: UserId) -> TbResult<Summary>
+    where
+        S: TxnSource + Clone + 'static,
+    {
+        let (request, reply) = Request::new_gear();
+        self.send_request(source, user_id, request, reply, "hydration")
+            .await
+    }
+
+    /// Enqueue the admin [`AllStats`] read on the user's executor and await
+    /// its stats (spec #558 §3.3): the admin's `GET /user/all` rides the
+    /// admin user's own channel — `get_all_stats` is a `tb_strava` op, so
+    /// it is an exec-level variant, dispatched loop-side in the loop's own
+    /// transaction. The oneshot wait is unbounded, like a read's (spec
+    /// #558 §3.7).
+    pub async fn all_stats<S>(&self, source: &S, user_id: UserId) -> TbResult<Vec<StravaStat>>
+    where
+        S: TxnSource + Clone + 'static,
+    {
+        let (request, reply) = Request::new_all_stats();
+        self.send_request(source, user_id, request, reply, "stats read")
+            .await
+    }
+
+    /// Enqueue one [`ApiWrite`] on the user's executor and await its
+    /// outcome (spec §6.2): the oneshot is unbounded — through a 15-minute
+    /// rate-limit backoff the write may wait long, and that is the spec'd
+    /// behavior. The descend is the same message with its report projected
+    /// out ([`write_descend`]).
     pub async fn write<S>(&self, source: &S, user_id: UserId, write: ApiWrite) -> TbResult<Summary>
     where
         S: TxnSource + Clone + 'static,
@@ -222,12 +271,10 @@ impl Registry {
     }
 
     /// Enqueue one [`ApiWrite`] on the user's executor and await the full
-    /// outcome (the `Summary` plus, for the descend, its match report):
-    /// spawn-or-join the executor, send the request on the user's
-    /// API-write channel, and await the oneshot (unbounded — through a
-    /// 15-minute rate-limit backoff the write may wait long, and that is
-    /// the spec'd behavior). `exec_field` drops the registry lock on
-    /// return, so the unbounded reply await runs without it.
+    /// outcome (the `Summary` plus, for the descend, its match report)
+    /// (spec §6.2): the oneshot is unbounded — through a 15-minute
+    /// rate-limit backoff the write may wait long, and that is the spec'd
+    /// behavior.
     async fn write_outcome<S>(
         &self,
         source: &S,
@@ -237,20 +284,44 @@ impl Registry {
     where
         S: TxnSource + Clone + 'static,
     {
-        let (request, reply) = ApiWriteRequest::new(write);
-        let writer = self
-            .exec_field(source, user_id, |exec| exec.writer.clone())
+        let (request, reply) = Request::new_write(write);
+        self.send_request(source, user_id, request, reply, "write")
+            .await
+    }
+
+    /// Enqueue a [`Request`] on the user's executor and await its oneshot
+    /// — the shared shape of `read`, `hydrate_gear`, `all_stats`, and
+    /// `write_outcome` (spec #558 §3): spawn-or-join the executor, send
+    /// the request on the user's request channel, and await the oneshot
+    /// (unbounded — the message is serialized behind any in-flight one,
+    /// spec #558 §3.7). `dropped` names the message in the reply-drop
+    /// error ("read", "hydration", "stats read", "write"). `exec_field`
+    /// drops the registry lock on return, so the unbounded reply await
+    /// runs without it.
+    async fn send_request<S, Out>(
+        &self,
+        source: &S,
+        user_id: UserId,
+        request: Request,
+        reply: oneshot::Receiver<TbResult<Out>>,
+        dropped: &str,
+    ) -> TbResult<Out>
+    where
+        S: TxnSource + Clone + 'static,
+    {
+        let request_sender = self
+            .exec_field(source, user_id, |exec| exec.request_sender.clone())
             .await?;
-        if writer.send(request).is_err() {
+        if request_sender.send(request).is_err() {
             // The executor died between the liveness check and the send
-            // (spec §4.6): the write is lost, the client retries.
+            // (spec §4.6): the message is lost, the client retries.
             return Err(Error::AnyFailure(anyhow::anyhow!(
                 "the executor for user {user_id} is gone"
             )));
         }
         reply.await.map_err(|_| {
             Error::AnyFailure(anyhow::anyhow!(
-                "the executor for user {user_id} dropped the write"
+                "the executor for user {user_id} dropped the {dropped}"
             ))
         })?
     }
@@ -395,7 +466,7 @@ impl Registry {
     /// Return the user's live executor, spawning it if it is absent or has
     /// settled (reaped/dead): read the stored
     /// [`StravaUser`](tb_strava::StravaUser) to build the executor's
-    /// `StravaSession` (spec §4.4), open a fresh API-write channel and frame
+    /// `StravaSession` (spec §4.4), open a fresh request channel and frame
     /// channel, and spawn the `tb_exec` loop.
     async fn ensure_running<S>(
         map: &mut HashMap<UserId, Executor>,
@@ -421,7 +492,7 @@ impl Registry {
         let session = RequestSession::for_user(user_id, &mut store).await?;
         store.commit().await?;
 
-        let (writer, reader) = api_write_channel();
+        let (request_sender, reader) = request_channel();
         let (frames, _) = broadcast::channel(BROADCAST_CAPACITY);
         let (events, _) = broadcast::channel(BROADCAST_CAPACITY);
         let (status_tx, status_rx) = watch::channel(ExecutorStatus::Running);
@@ -459,7 +530,7 @@ impl Registry {
         // A panicked task skips the `status_tx.send` above; the watchdog
         // records the panic as `Dead` (like any other failure) so
         // `ensure_running` respawns instead of handing out a dead executor
-        // forever (spec §4.4: the next SSE connect or API write respawns
+        // forever (spec §4.4: the next SSE connect or API request respawns
         // it). The watchdog lives exactly as long as the executor task.
         //
         // The abort handle is taken before the watchdog moves `join`: it is
@@ -475,7 +546,7 @@ impl Registry {
 
         let exec = Executor {
             status: status_rx,
-            writer,
+            request_sender,
             frames,
             events,
             wake,

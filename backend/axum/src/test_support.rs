@@ -98,17 +98,42 @@ async fn run_with_body(
     cookie: Option<&str>,
     json: Option<&str>,
 ) -> (StatusCode, HeaderMap, Vec<u8>) {
+    match json {
+        Some(json) => {
+            run_raw(
+                app,
+                method,
+                uri,
+                cookie,
+                json.as_bytes(),
+                "application/json",
+            )
+            .await
+        }
+        None => run_raw(app, method, uri, cookie, &[], "").await,
+    }
+}
+
+/// Runs a single request with a raw body and an explicit content type
+/// (the multipart uploads' shape — `run_json` cannot carry one).
+pub(crate) async fn run_raw(
+    app: Router,
+    method: Method,
+    uri: &str,
+    cookie: Option<&str>,
+    body: &[u8],
+    content_type: &str,
+) -> (StatusCode, HeaderMap, Vec<u8>) {
     let mut builder = Request::builder()
         .method(method)
         .uri(uri)
         .header(header::HOST, "localhost");
-    let body = if let Some(json) = json {
-        builder = builder.header(header::CONTENT_TYPE, "application/json");
-        axum::body::Body::from(json.as_bytes().to_vec())
-    } else {
-        axum::body::Body::empty()
-    };
-    let mut req = builder.body(body).expect("valid request");
+    if !content_type.is_empty() {
+        builder = builder.header(header::CONTENT_TYPE, content_type);
+    }
+    let mut req = builder
+        .body(axum::body::Body::from(body.to_vec()))
+        .expect("valid request");
     if let Some(cookie) = cookie {
         req.headers_mut()
             .insert(header::COOKIE, cookie.parse().expect("valid cookie"));
@@ -1310,6 +1335,12 @@ pub struct LiveSource {
 
 impl LiveSource {
     pub async fn new() -> Self {
+        // The executor loop's session is a real `RequestSession`, and the
+        // summary route's hydration (spec #558 §4) would hit the Strava
+        // API: the suite runs offline, so `update_gear` gets a canned empty
+        // athlete — no new gear, the common case (no frame, unchanged
+        // snapshot).
+        crate::strava::canned_strava("/athlete", r#"{"bikes":[],"shoes":[]}"#);
         // Seed through a sibling transaction and commit it, so the seeded
         // user is in the shared base state the siblings (the executor, the
         // handlers, the assertions) see; the seed consumes the sibling,

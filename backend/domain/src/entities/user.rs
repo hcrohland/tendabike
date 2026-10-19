@@ -111,6 +111,22 @@ impl IdKeyed for UserPublic {
     }
 }
 
+/// The user with its state: the full [`User`] plus the [`Summary`] of
+/// everything the user owns — parts, usages, attachments, services, plans,
+/// part notes, shops, activities, and the shop users — optionally filtered
+/// by the `?shop=` parameter. The one primitive a read driver asks for
+/// (spec #558 §3.5): the per-user routes project `User`, `Summary`, and the
+/// export composite from it, and `UserId::read` is the single op that
+/// returns it.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct UserState {
+    /// The full user record (admin flag and onboarding status included —
+    /// the `Summary`'s `UserPublic` entries carry neither).
+    pub user: User,
+    /// The user's state, as `UserId::get_summary` computes it.
+    pub summary: Summary,
+}
+
 impl From<User> for UserPublic {
     fn from(value: User) -> Self {
         let User {
@@ -137,8 +153,17 @@ pub struct Stat {
 }
 
 impl UserId {
-    pub async fn read(self, store: &mut impl UserStore) -> TbResult<User> {
-        store.get(self).await
+    /// The unified user read (spec #558 §3.5): the user with its state —
+    /// the full [`User`] plus the [`Summary`] of everything the user owns,
+    /// optionally filtered by `shop` (the route's `?shop=` parameter).
+    /// Bare `User` and `Summary` are projections of the [`UserState`].
+    ///
+    /// Crosses: activity, attachment, part, partnote, service, serviceplan,
+    /// shop, usage, user.
+    pub async fn read(self, shop: Option<ShopId>, store: &mut impl Store) -> TbResult<UserState> {
+        let user = UserStore::get(store, self).await?;
+        let summary = self.get_summary(shop, store).await?;
+        Ok(UserState { user, summary })
     }
 
     pub async fn get_public(self, store: &mut impl UserStore) -> TbResult<UserPublic> {
@@ -161,7 +186,10 @@ impl UserId {
         &self,
         store: &mut (impl ActivityStore + PartStore + UserStore),
     ) -> TbResult<Stat> {
-        let user = self.read(store).await.context("User record")?;
+        // The lightweight single-row read: the stat needs the user record,
+        // not the `UserState` composite (the composite is the unified
+        // read's primitive, spec #558 §3.5 — the per-user routes only).
+        let user = UserStore::get(store, *self).await.context("User record")?;
         let parts = Part::get_all(self, store)
             .await
             .context("User parts")?
@@ -203,7 +231,9 @@ impl UserId {
     }
 
     pub async fn is_admin(&self, store: &mut impl UserStore) -> TbResult<bool> {
-        self.read(store).await.map(|u| u.is_admin)
+        // The lightweight single-row read: one bool, no `UserState`
+        // composite (this runs at every login and every executor spawn).
+        UserStore::get(store, *self).await.map(|u| u.is_admin)
     }
 
     /// get all parts, attachments and activities for the user

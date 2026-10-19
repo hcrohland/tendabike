@@ -26,14 +26,14 @@ use axum::{
     routing::{delete, get, post, put},
 };
 use serde::Deserialize;
-use tb_domain::{ApiWrite, Error, NoteFile, PartId, PartNote, PartNoteId};
-use tb_exec::{Txn, TxnSource};
+use tb_domain::{ApiRead, ApiWrite, Error, NoteFile, PartId, PartNote, PartNoteId, ReadOutcome};
+use tb_exec::TxnSource;
 use tb_strava::StravaSession;
 
 use crate::{
     RequestSession,
     appstate::AppState,
-    domain::created_entity,
+    domain::{created_entity, read_mismatch},
     error::{ApiResult, AppError},
 };
 
@@ -72,10 +72,14 @@ async fn list_notes<S>(
 where
     S: TxnSource + Clone + 'static,
 {
-    let mut store = state.source.begin().await?;
-    let notes = part.notes(&user, &mut store).await?;
-    store.commit().await?;
-    Ok(Json(notes))
+    match state
+        .registry
+        .read(&state.source, user.tb_id(), ApiRead::PartNotes(part))
+        .await?
+    {
+        ReadOutcome::PartNotes(notes) => Ok(Json(notes)),
+        _ => Err(read_mismatch("part notes", "notes")),
+    }
 }
 
 async fn create_text_note<S>(
@@ -184,10 +188,16 @@ async fn get_note_file<S>(
 where
     S: TxnSource + Clone + 'static,
 {
-    let mut store = state.source.begin().await?;
-    let note = id.note(&user, &mut store).await?;
-    let data = note.file(&mut store).await?;
-    store.commit().await?;
+    // The note and its file bytes ride the executor as one read message
+    // (spec #558 §3.4); the response headers/encoding stay in axum.
+    let (note, data) = match state
+        .registry
+        .read(&state.source, user.tb_id(), ApiRead::PartNoteFile(id))
+        .await?
+    {
+        ReadOutcome::PartNoteFile(note, data) => (note, data),
+        _ => return Err(read_mismatch("part note file", "note and file")),
+    };
 
     let mime = note
         .mime

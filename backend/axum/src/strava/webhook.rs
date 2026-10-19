@@ -59,7 +59,7 @@ use serde_derive::{Deserialize, Serialize};
 use http::StatusCode;
 
 use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, error::AppError};
-use tb_domain::{ApiWrite, Error, TbResult};
+use tb_domain::{ApiWrite, Error, TbResult, UserStore};
 use tb_exec::{Txn, TxnSource};
 use tb_strava::StravaDataStore;
 use tb_strava::StravaSession;
@@ -209,7 +209,10 @@ where
     state.registry.wake(user.tb_id()).await;
 
     let mut store = state.source.begin().await?;
-    Ok(Json(user.tb_id().read(&mut store).await?))
+    // The lightweight single-row read back: the 200 body is the `User`
+    // record, not the `UserState` composite (the composite is the unified
+    // read's primitive, spec #558 §3.5 — the per-user routes only).
+    Ok(Json(UserStore::get(&mut store, user.tb_id()).await?))
 }
 
 /// Postpone initial sync for a user
@@ -236,7 +239,7 @@ where
         .await?;
 
     let mut store = state.source.begin().await?;
-    Ok(Json(user.tb_id().read(&mut store).await?))
+    Ok(Json(UserStore::get(&mut store, user.tb_id()).await?))
 }
 
 #[cfg(test)]

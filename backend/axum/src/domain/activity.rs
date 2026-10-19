@@ -19,9 +19,10 @@ use http::StatusCode;
 use crate::{
     AxumAdmin, RequestSession,
     appstate::AppState,
+    domain::read_mismatch,
     error::{ApiResult, AppError},
 };
-use tb_domain::{Activity, ActivityId, ApiWrite, DescendReport, PartId};
+use tb_domain::{Activity, ActivityId, ApiRead, ApiWrite, DescendReport, PartId, ReadOutcome};
 use tb_exec::{Txn, TxnSource};
 use tb_strava::StravaSession;
 
@@ -68,11 +69,18 @@ async fn act_get<S>(
 where
     S: TxnSource + Clone + 'static,
 {
-    let mut store = state.source.begin().await?;
-    Ok(ActivityId::new(id)
-        .read(&user, &mut store)
-        .await
-        .map(Json)?)
+    match state
+        .registry
+        .read(
+            &state.source,
+            user.tb_id(),
+            ApiRead::Activity(ActivityId::new(id)),
+        )
+        .await?
+    {
+        ReadOutcome::Activity(activity) => Ok(Json(activity)),
+        _ => Err(read_mismatch("activity", "activity")),
+    }
 }
 
 /// web interface to change an activity
