@@ -23,6 +23,12 @@ use tb_domain::*;
 mod traits;
 pub use traits::*;
 
+pub mod client;
+pub use client::*;
+
+mod session;
+pub use session::*;
+
 pub mod activity;
 pub mod event;
 pub mod gear;
@@ -30,8 +36,8 @@ pub mod gear;
 mod user;
 pub use user::*;
 
-#[cfg(test)]
-mod test_support;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
 
 fn get_time() -> i64 {
     time::OffsetDateTime::now_utc().unix_timestamp()

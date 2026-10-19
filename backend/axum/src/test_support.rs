@@ -24,7 +24,7 @@ use tower_sessions::{MemoryStore, Session, SessionManagerLayer};
 use crate::appstate::AppState;
 use crate::routes;
 use crate::strava::RequestSession;
-use crate::stream::Registry;
+use tb_exec::{Registry, ServiceApi};
 
 const SESSION_KEY: &str = "session";
 
@@ -44,7 +44,8 @@ fn set_oauth_env_once() {
 pub(crate) fn test_app(store: MemoryStore) -> Router {
     set_oauth_env_once();
     let session_layer = SessionManagerLayer::new(store);
-    routes(AppState::new(FakeSource)).layer(session_layer)
+    let api = Arc::new(Registry::with_defaults(FakeSource)) as Arc<dyn ServiceApi>;
+    routes(AppState::new(api)).layer(session_layer)
 }
 
 /// Creates a session in `store` containing `value` and returns the cookie header value
@@ -150,16 +151,14 @@ pub(crate) async fn run_raw(
 
 /// Builds the production routes with a live source (the executor loop runs
 /// against the no-op `LiveConn`) and a `MemoryStore` session layer, using an
-/// explicit executor [`Registry`] (the stream tests use a short idle/heartbeat
-/// cadence so the executor's lifecycle is observable).
-pub(crate) fn test_app_live(
-    store: &MemoryStore,
-    source: LiveSource,
-    registry: std::sync::Arc<Registry>,
-) -> Router {
+/// explicit executor [`Registry`] constructed from the source (the stream
+/// tests use a short idle/heartbeat cadence so the executor's lifecycle is
+/// observable).
+pub(crate) fn test_app_live(store: &MemoryStore, registry: Arc<Registry<LiveSource>>) -> Router {
     set_oauth_env_once();
     let session_layer = SessionManagerLayer::new(store.clone());
-    routes(AppState::with_registry(source, registry)).layer(session_layer)
+    let api = registry as Arc<dyn ServiceApi>;
+    routes(AppState::new(api)).layer(session_layer)
 }
 
 /// Sends a GET request to a long-lived (SSE) endpoint and returns its status,
@@ -1335,12 +1334,12 @@ pub struct LiveSource {
 
 impl LiveSource {
     pub async fn new() -> Self {
-        // The executor loop's session is a real `RequestSession`, and the
-        // summary route's hydration (spec #558 §4) would hit the Strava
-        // API: the suite runs offline, so `update_gear` gets a canned empty
-        // athlete — no new gear, the common case (no frame, unchanged
-        // snapshot).
-        crate::strava::canned_strava("/athlete", r#"{"bikes":[],"shoes":[]}"#);
+        // The executor loop's session is the executor's `StravaUserSession`,
+        // and the summary route's hydration (spec #558 §4) would hit the
+        // Strava API: the suite runs offline, so `update_gear` gets a
+        // canned empty athlete — no new gear, the common case (no frame,
+        // unchanged snapshot).
+        tb_strava::test_support::canned_strava("/athlete", r#"{"bikes":[],"shoes":[]}"#);
         // Seed through a sibling transaction and commit it, so the seeded
         // user is in the shared base state the siblings (the executor, the
         // handlers, the assertions) see; the seed consumes the sibling,

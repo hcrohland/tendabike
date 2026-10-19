@@ -33,5 +33,12 @@ async fn main() -> anyhow::Result<()> {
     let pool = tb_sqlx::DbPool::new(&database_url).await?;
     let db = pool.raw();
 
-    Ok(tb_axum::start(pool, db, path, addr).await?)
+    // Build the `Registry` over the pool (it owns the seam — the web layer
+    // names the trait, never a seam type, spec #558 §1/§6.1) and hand the
+    // web layer the service API handle. The raw pool handed to the tower
+    // session store is unchanged (it is not a seam type).
+    let api = std::sync::Arc::new(tb_exec::Registry::with_defaults(pool))
+        as std::sync::Arc<dyn tb_exec::ServiceApi>;
+
+    Ok(tb_axum::start(api, db, path, addr).await?)
 }

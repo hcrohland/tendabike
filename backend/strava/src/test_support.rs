@@ -718,3 +718,33 @@ impl ServicePlanStore for TestStravaStore {
         ServicePlanStore::by_user(&mut self.mem, uid).await
     }
 }
+
+// ─── Canned Strava responses (feature `test-support`) ──────────────────────
+//
+// The axum suite runs the real executor loop, whose session is a real
+// `StravaUserSession`, so the suite maps canned responses for the URIs the
+// loop asks for — an empty athlete makes the summary route's hydration
+// (spec #558 §4) succeed offline (no new gear, the common case: no frame,
+// unchanged snapshot). `StravaUserSession::request_json` consults
+// [`canned_response`] before reaching the Strava API.
+
+/// The canned Strava responses, keyed by URI (see the section docs).
+pub static CANNED_STRAVA: std::sync::LazyLock<std::sync::Mutex<HashMap<String, String>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(HashMap::new()));
+
+/// Maps a canned response for `uri` (test-only, see [`CANNED_STRAVA`]).
+pub fn canned_strava(uri: &str, json: &str) {
+    CANNED_STRAVA
+        .lock()
+        .expect("the canned Strava responses are not poisoned")
+        .insert(uri.to_string(), json.to_string());
+}
+
+/// The canned response for `uri`, if one is mapped (test-only).
+pub fn canned_response(uri: &str) -> Option<String> {
+    CANNED_STRAVA
+        .lock()
+        .expect("the canned Strava responses are not poisoned")
+        .get(uri)
+        .cloned()
+}

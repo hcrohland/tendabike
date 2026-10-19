@@ -26,9 +26,9 @@ use axum::{
     routing::{delete, get, post, put},
 };
 use serde::Deserialize;
-use tb_domain::{ApiRead, ApiWrite, Error, NoteFile, PartId, PartNote, PartNoteId, ReadOutcome};
-use tb_exec::TxnSource;
-use tb_strava::StravaSession;
+use tb_domain::{
+    ApiRead, ApiWrite, Error, NoteFile, PartId, PartNote, PartNoteId, ReadOutcome, Session,
+};
 
 use crate::{
     RequestSession,
@@ -49,7 +49,7 @@ pub struct UpdateTextNote {
     pub name: String,
 }
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route("/{part}/notes", get(list_notes).post(create_text_note))
         .route("/{part}/notes/file", post(create_file_note))
@@ -64,17 +64,14 @@ pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
         .layer(DefaultBodyLimit::max(10 * 1024 * 1024))
 }
 
-async fn list_notes<S>(
+async fn list_notes(
     Path(part): Path<PartId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
-) -> ApiResult<Vec<PartNote>>
-where
-    S: TxnSource + Clone + 'static,
-{
+    State(state): State<AppState>,
+) -> ApiResult<Vec<PartNote>> {
     match state
-        .registry
-        .read(&state.source, user.tb_id(), ApiRead::PartNotes(part))
+        .api
+        .read(user.user_id(), ApiRead::PartNotes(part))
         .await?
     {
         ReadOutcome::PartNotes(notes) => Ok(Json(notes)),
@@ -82,24 +79,17 @@ where
     }
 }
 
-async fn create_text_note<S>(
+async fn create_text_note(
     Path(part): Path<PartId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Json(NewTextNote { name }): Json<NewTextNote>,
-) -> Result<(StatusCode, Json<PartNote>), AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
-    let summary = state
-        .registry
-        .write(
-            &state.source,
-            user.tb_id(),
-            ApiWrite::PartNoteCreateText { part, name },
-        )
+) -> Result<(StatusCode, Json<PartNote>), AppError> {
+    let outcome = state
+        .api
+        .write(user.user_id(), ApiWrite::PartNoteCreateText { part, name })
         .await?;
-    let note = created_entity(&summary.part_notes, "part note")?;
+    let note = created_entity(&outcome.summary().part_notes, "part note")?;
     Ok((StatusCode::CREATED, Json(note)))
 }
 
@@ -150,21 +140,17 @@ async fn parse_note_file(mut multipart: Multipart) -> Result<ParsedNoteFile, App
     })
 }
 
-async fn create_file_note<S>(
+async fn create_file_note(
     Path(part): Path<PartId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     multipart: Multipart,
-) -> Result<(StatusCode, Json<PartNote>), AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<(StatusCode, Json<PartNote>), AppError> {
     let parsed = parse_note_file(multipart).await?;
-    let summary = state
-        .registry
+    let outcome = state
+        .api
         .write(
-            &state.source,
-            user.tb_id(),
+            user.user_id(),
             ApiWrite::PartNoteCreateFile {
                 part,
                 file: NoteFile {
@@ -176,23 +162,20 @@ where
             },
         )
         .await?;
-    let note = created_entity(&summary.part_notes, "part note")?;
+    let note = created_entity(&outcome.summary().part_notes, "part note")?;
     Ok((StatusCode::CREATED, Json(note)))
 }
 
-async fn get_note_file<S>(
+async fn get_note_file(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
-) -> Result<Response, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+    State(state): State<AppState>,
+) -> Result<Response, AppError> {
     // The note and its file bytes ride the executor as one read message
     // (spec #558 §3.4); the response headers/encoding stay in axum.
     let (note, data) = match state
-        .registry
-        .read(&state.source, user.tb_id(), ApiRead::PartNoteFile(id))
+        .api
+        .read(user.user_id(), ApiRead::PartNoteFile(id))
         .await?
     {
         ReadOutcome::PartNoteFile(note, data) => (note, data),
@@ -234,41 +217,30 @@ where
     Ok((headers, data).into_response())
 }
 
-async fn update_text_note<S>(
+async fn update_text_note(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Json(UpdateTextNote { name }): Json<UpdateTextNote>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<StatusCode, AppError> {
     state
-        .registry
-        .write(
-            &state.source,
-            user.tb_id(),
-            ApiWrite::PartNoteUpdateText { id, name },
-        )
+        .api
+        .write(user.user_id(), ApiWrite::PartNoteUpdateText { id, name })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn update_file_note<S>(
+async fn update_file_note(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     multipart: Multipart,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<StatusCode, AppError> {
     let parsed = parse_note_file(multipart).await?;
     state
-        .registry
+        .api
         .write(
-            &state.source,
-            user.tb_id(),
+            user.user_id(),
             ApiWrite::PartNoteUpdateFile {
                 id,
                 file: NoteFile {
@@ -283,36 +255,26 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn delete_note<S>(
+async fn delete_note(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+    State(state): State<AppState>,
+) -> Result<StatusCode, AppError> {
     state
-        .registry
-        .write(&state.source, user.tb_id(), ApiWrite::PartNoteDelete { id })
+        .api
+        .write(user.user_id(), ApiWrite::PartNoteDelete { id })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn remove_file_note<S>(
+async fn remove_file_note(
     Path(id): Path<PartNoteId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+    State(state): State<AppState>,
+) -> Result<StatusCode, AppError> {
     state
-        .registry
-        .write(
-            &state.source,
-            user.tb_id(),
-            ApiWrite::PartNoteRemoveFile { id },
-        )
+        .api
+        .write(user.user_id(), ApiWrite::PartNoteRemoveFile { id })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

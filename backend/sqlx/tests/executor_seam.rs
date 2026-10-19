@@ -813,3 +813,81 @@ async fn failed_write_rolls_back_and_reclaims() {
         .expect("the loop must not panic");
     outcome.expect("a reaped loop returns Ok");
 }
+
+/// The onboarding cutover write end to end on the live adapter (spec #558
+/// §5.1): the `UserOnboardingSync` message's one loop-owned transaction
+/// does the domain half (the status update) **and** the Strava-side
+/// `insert_sync` — one message = one loop-owned transaction containing the
+/// message's entire work (domain + Strava).
+#[tokio::test]
+#[ignore]
+async fn onboarding_sync_write_queues_the_sync_event() {
+    let seam = ready().await;
+    let (tx, rx) = request_channel();
+    let (frames, _frame_rx) = broadcast::channel(8);
+    let (events, _events_rx) = broadcast::channel(8);
+    // No streams attached: the frame receiver must not outlive the loop, or
+    // the no-streams reap rule (spec §4.4, amended — #446) never fires.
+    drop(_frame_rx);
+    let (request, reply) = Request::new_write(ApiWrite::UserOnboardingSync { time: 100 });
+    tx.send(request).expect("the channel is open");
+
+    let mut loop_task = tokio::spawn(run(
+        seam.pool.clone(),
+        FakeStrava::new(),
+        rx,
+        frames,
+        events,
+        IDLE_TIMEOUT,
+        Arc::new(Notify::new()),
+    ));
+
+    // The write commits: the oneshot resolves with the write's (empty)
+    // summary — a `User` is in no `Summary`.
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, reply)
+        .await
+        .expect("the route's reply must resolve in time")
+        .expect("the loop must resolve the oneshot, not drop it")
+        .expect("the onboarding sync write must succeed");
+    assert!(
+        outcome.summary().is_empty(),
+        "a `User` is in no `Summary`: the write's frame is empty"
+    );
+
+    // The Strava-side event is in the queue: the write's one loop-owned
+    // transaction did the domain half and the `insert_sync` (spec #558
+    // §5.1) — the queue row is committed with the domain half.
+    let (user, strava) = test_identity();
+    let n = queue_sync_count(&seam.pool, strava, 100).await;
+    assert_eq!(n, 1, "the write's transaction must queue the sync event");
+
+    // The loop's next cycle probes the queue and finds the sync: the seam's
+    // session never imports from the Strava API, so the task panics in the
+    // processing — the expected end of this test's loop.
+    let _ = tokio::time::timeout(TEST_TIMEOUT, &mut loop_task)
+        .await
+        .expect("the loop must settle in time");
+
+    // The event the write's transaction committed is still queued: the
+    // panicked processing never committed its own deletion.
+    let n = queue_sync_count(&seam.pool, strava, 100).await;
+    assert_eq!(n, 1, "the queued sync must survive the panicked processing");
+    let _ = user;
+}
+
+/// The queue's sync count for `strava` at `event_time` on a fresh
+/// connection (the onboarding test's committed-row check).
+async fn queue_sync_count(pool: &DbPool, strava: StravaId, event_time: i64) -> i64 {
+    let mut conn = pool.begin().await.expect("a fresh connection");
+    let n: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM strava_events \
+         WHERE object_type = 'sync' AND owner_id = $1 AND event_time = $2",
+    )
+    .bind(i32::from(strava))
+    .bind(event_time)
+    .fetch_one(&mut **conn)
+    .await
+    .expect("reading the queue");
+    drop(conn);
+    n
+}

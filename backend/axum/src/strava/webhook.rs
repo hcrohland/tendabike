@@ -58,11 +58,11 @@ use serde_derive::{Deserialize, Serialize};
 
 use http::StatusCode;
 
-use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, error::AppError};
-use tb_domain::{ApiWrite, Error, TbResult, UserStore};
-use tb_exec::{Txn, TxnSource};
-use tb_strava::StravaDataStore;
-use tb_strava::StravaSession;
+use crate::{
+    ApiResult, AxumAdmin, RequestSession, appstate::AppState, domain::read_mismatch,
+    error::AppError,
+};
+use tb_domain::{ApiRead, ApiWrite, Error, ReadOutcome, Session, TbResult};
 use tb_strava::event::InEvent;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -94,24 +94,16 @@ impl Hub {
 
 const VERIFY_TOKEN: &str = "tendabike_strava";
 
-pub(crate) async fn create_event<S>(
-    State(state): State<AppState<S>>,
+pub(crate) async fn create_event(
+    State(state): State<AppState>,
     Json(event): axum::extract::Json<InEvent>,
-) -> ApiResult<()>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> ApiResult<()> {
     trace!("Received {event:#?}");
-    let mut store = state.source.begin().await?;
-    let user_id = event.accept(&mut store).await?;
-    store.commit().await?;
-    // Fire the in-memory wake signal (spec §4.4): a pure signal to a
-    // running executor — it never spawns one, and the DB queue is the
-    // source of truth, so a missed wake only delays the event to the next
-    // spawn.
-    if let Some(user_id) = user_id {
-        state.registry.wake(user_id).await;
-    }
+    // The service API's direct op (spec #558 §5.2): one transaction
+    // (`InEvent::accept` — the queue insert, or the athlete-deauth
+    // branch), then the wake if a user was queued (fire-and-forget). A
+    // failed ingest 500s to Strava (its own retry policy applies).
+    state.api.accept_event(event).await?;
     Ok(Json(()))
 }
 
@@ -128,45 +120,36 @@ pub(super) struct SyncQuery {
     migrate: bool,
 }
 
-pub(super) async fn sync_api<S>(
+pub(super) async fn sync_api(
     _u: AxumAdmin,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Query(query): Query<SyncQuery>,
-) -> ApiResult<()>
-where
-    S: TxnSource + Clone + 'static,
-{
-    let mut store = state.source.begin().await?;
+) -> ApiResult<()> {
     let user_id: Option<tb_domain::UserId> = query.user_id.map(|u| u.into());
-    let res = tb_strava::event::sync_users(user_id, query.time, query.migrate, &mut store)
-        .await
-        .map(Json)?;
-    store.commit().await?;
-
-    Ok(res)
+    // The service API's direct op (spec #558 §5.2): one transaction
+    // (`sync_users`) queuing a `Sync` event per (non-disabled) user;
+    // `user_id` narrows the sync to one user (the route's `?user_id=`
+    // query).
+    state
+        .api
+        .sync_all(user_id, query.time, query.migrate)
+        .await?;
+    Ok(Json(()))
 }
 
-pub(super) async fn sync<S>(
+pub(super) async fn sync(
     Path(tbid): Path<i32>,
     _admin: AxumAdmin,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Query(query): Query<InitialSyncQuery>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<StatusCode, AppError> {
     let user_id: tb_domain::UserId = tbid.into();
-    // The executor's event queue is keyed by the Strava id, so read the
-    // administered user's Strava id first (the admin gate is `AxumAdmin`).
-    let mut store = state.source.begin().await?;
-    let strava_id = store.stravauser_get_by_tbid(user_id).await?.strava_id();
-    store.commit().await?;
-    // Enqueue the sync, wake the user's executor, and await its completion
-    // (spec §6.4).
-    state
-        .registry
-        .sync(&state.source, user_id, strava_id, query.time)
-        .await?;
+    // The service API's direct op (spec #558 §5.2): read the target's
+    // Strava id, enqueue a `Sync` event on the `strava_events` queue, wake
+    // the executor, and await that event's completion (unbounded — the
+    // spec'd behavior for the admin endpoint), with the queue-fallback
+    // read only on a lost broadcast.
+    state.api.sync(user_id, query.time).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -180,66 +163,58 @@ pub(super) struct InitialSyncQuery {
 /// This endpoint allows users to trigger their first activity sync after registration.
 /// It can only be called once - if the user has already completed initial sync, it returns an error.
 /// Returns the updated user object.
-pub(crate) async fn trigger_initial_sync<S>(
+pub(crate) async fn trigger_initial_sync(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Query(query): Query<InitialSyncQuery>,
-) -> ApiResult<tb_domain::User>
-where
-    S: TxnSource + Clone + 'static,
-{
-    // The domain's status guard and completion update run on the user's
-    // executor (spec §6.2); the `User` is not part of a `Summary`, so the
-    // 200 body reads it back after the write succeeds.
+) -> ApiResult<tb_domain::User> {
+    // The domain's status guard and completion update — **and** the
+    // Strava-side `insert_sync` — run on the user's executor in one
+    // loop-owned transaction (spec #558 §5.1: one message = one loop-owned
+    // transaction containing the message's entire work, domain + Strava).
+    // The 200 body reads the `User` back as a read message (the
+    // `UserState` composite projected to the bare `User` — the composite
+    // is the unified read's primitive, spec #558 §3.5).
     state
-        .registry
+        .api
         .write(
-            &state.source,
-            user.tb_id(),
+            user.user_id(),
             ApiWrite::UserOnboardingSync { time: query.time },
         )
         .await?;
-
-    // The Strava-side event is a web-layer concern: queue it and fire the
-    // wake signal to a running executor to consume it (spec §4.6). The wake
-    // never spawns and cannot fail — the queue is the source of truth.
-    let mut store = state.source.begin().await?;
-    tb_strava::event::insert_sync(user.strava_id(), query.time, false, &mut store).await?;
-    store.commit().await?;
-    state.registry.wake(user.tb_id()).await;
-
-    let mut store = state.source.begin().await?;
-    // The lightweight single-row read back: the 200 body is the `User`
-    // record, not the `UserState` composite (the composite is the unified
-    // read's primitive, spec #558 §3.5 — the per-user routes only).
-    Ok(Json(UserStore::get(&mut store, user.tb_id()).await?))
+    match state
+        .api
+        .read(user.user_id(), ApiRead::User { shop: None })
+        .await?
+    {
+        ReadOutcome::User(state) => Ok(Json(state.user)),
+        _ => Err(read_mismatch("user", "user state")),
+    }
 }
 
 /// Postpone initial sync for a user
 /// This endpoint allows users to postpone the initial activity sync.
 /// It can only be called if the user is still in pending status.
 /// Returns the updated user object.
-pub(crate) async fn postpone_initial_sync<S>(
+pub(crate) async fn postpone_initial_sync(
     user: RequestSession,
-    State(state): State<AppState<S>>,
-) -> ApiResult<tb_domain::User>
-where
-    S: TxnSource + Clone + 'static,
-{
-    // The domain's status guard and postponement run on the user's executor
-    // (spec §6.2); the 200 body reads the `User` back after the write
-    // succeeds.
+    State(state): State<AppState>,
+) -> ApiResult<tb_domain::User> {
+    // The domain's status guard and postponement run on the user's
+    // executor (spec §6.2); the 200 body reads the `User` back as a read
+    // message (the `UserState` composite projected to the bare `User`).
     state
-        .registry
-        .write(
-            &state.source,
-            user.tb_id(),
-            ApiWrite::UserOnboardingPostpone,
-        )
+        .api
+        .write(user.user_id(), ApiWrite::UserOnboardingPostpone)
         .await?;
-
-    let mut store = state.source.begin().await?;
-    Ok(Json(UserStore::get(&mut store, user.tb_id()).await?))
+    match state
+        .api
+        .read(user.user_id(), ApiRead::User { shop: None })
+        .await?
+    {
+        ReadOutcome::User(state) => Ok(Json(state.user)),
+        _ => Err(read_mismatch("user", "user state")),
+    }
 }
 
 #[cfg(test)]

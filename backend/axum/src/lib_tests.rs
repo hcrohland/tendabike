@@ -8,11 +8,11 @@ use tower_sessions::MemoryStore;
 use tb_domain::{ActTypeId, Activity, ActivityId, ActivityStore, PartStore, Summary, UserId};
 use time::OffsetDateTime;
 
-use crate::stream::{ExecutorStatus, Registry};
 use crate::test_support::{
     LiveSource, admin_cookie, read_sse_frames, run, run_json, run_raw, run_sse, test_app,
     test_app_live, user_cookie,
 };
+use tb_exec::{ExecutorStatus, Registry};
 
 async fn setup() -> (Router, MemoryStore) {
     let store = MemoryStore::default();
@@ -146,16 +146,18 @@ async fn stream_requires_auth() {
 }
 
 /// A connected stream is `text/event-stream` and emits `: ping` heartbeats
-/// (spec §4.5): the short heartbeat cadence makes one arrive quickly.
+/// (spec §4.5): the SSE `KeepAlive` cadence is the 15s `tb_exec::HEARTBEAT_INTERVAL`
+/// constant (spec #558 §2.1), so the window spans one full cadence.
 #[tokio::test]
 async fn stream_is_event_stream_and_heartbeats() {
     let store = MemoryStore::default();
-    let registry = Arc::new(Registry::new(
-        Duration::from_secs(60),
-        Duration::from_millis(50),
-    ));
     let live = LiveSource::new().await;
-    let app = test_app_live(&store, live, registry);
+    let registry = Arc::new(Registry::new(
+        live.clone(),
+        Duration::from_secs(60),
+        tb_exec::HEARTBEAT_INTERVAL,
+    ));
+    let app = test_app_live(&store, registry);
     let cookie = user_cookie(&store).await;
     let (status, headers, mut body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
@@ -164,10 +166,10 @@ async fn stream_is_event_stream_and_heartbeats() {
         "text/event-stream",
         "the stream must be an event stream"
     );
-    let frames = read_sse_frames(&mut body, 3, Duration::from_secs(2)).await;
+    let frames = read_sse_frames(&mut body, 3, Duration::from_secs(18)).await;
     assert!(
         frames.iter().any(|f| f.contains(": ping")),
-        "expected a `: ping` heartbeat, got: {frames:?}"
+        "expected a `: ping` heartbeat within one `HEARTBEAT_INTERVAL` cadence, got: {frames:?}"
     );
 }
 
@@ -176,12 +178,13 @@ async fn stream_is_event_stream_and_heartbeats() {
 #[tokio::test]
 async fn stream_forwards_summary_frames() {
     let store = MemoryStore::default();
-    let registry = Arc::new(Registry::new(
-        Duration::from_secs(60),
-        Duration::from_secs(15),
-    ));
     let live = LiveSource::new().await;
-    let app = test_app_live(&store, live, registry.clone());
+    let registry = Arc::new(Registry::new(
+        live.clone(),
+        Duration::from_secs(60),
+        tb_exec::HEARTBEAT_INTERVAL,
+    ));
+    let app = test_app_live(&store, registry.clone());
     let cookie = user_cookie(&store).await;
     let (status, _headers, mut body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
@@ -203,19 +206,21 @@ async fn stream_forwards_summary_frames() {
 /// the idle loop re-probes the `strava_events` queue, not a reap
 /// trigger. The stream's **original** executor stays `Running` well
 /// past the window (a reap-and-respawn churn would leave its fate
-/// channel at `Reaped`), and the stream body keeps heartbeating.
+/// channel at `Reaped`), and the stream body keeps forwarding (the
+/// `: ping` heartbeats are on the 15s `KeepAlive` cadence, spec #558
+/// §2.1 — not observable on this window).
 #[tokio::test]
 async fn attached_stream_keeps_the_executor_alive() {
     let store = MemoryStore::default();
     // A short idle cadence (the queue re-probe cadence) so the old
-    // reap-on-idle policy would have reclaimed this executor quickly;
-    // a short heartbeat so the live stream stays observable.
-    let registry = Arc::new(Registry::new(
-        Duration::from_millis(300),
-        Duration::from_millis(50),
-    ));
+    // reap-on-idle policy would have reclaimed this executor quickly.
     let live = LiveSource::new().await;
-    let app = test_app_live(&store, live.clone(), registry.clone());
+    let registry = Arc::new(Registry::new(
+        live.clone(),
+        Duration::from_millis(300),
+        tb_exec::HEARTBEAT_INTERVAL,
+    ));
+    let app = test_app_live(&store, registry.clone());
     let cookie = user_cookie(&store).await;
     let user = UserId::from(1);
     // The stream opens: `run_sse` returns only after the endpoint
@@ -232,7 +237,7 @@ async fn attached_stream_keeps_the_executor_alive() {
     // executor. The joined frame receiver is dropped at once, so the
     // stream that pins the executor is the SSE stream alone.
     let (frame_rx, fate) = registry
-        .subscribe(&live, user)
+        .subscribe(user)
         .await
         .expect("joining the stream's executor");
     drop(frame_rx);
@@ -248,8 +253,9 @@ async fn attached_stream_keeps_the_executor_alive() {
         "an attached stream must keep its executor running past the idle window"
     );
 
-    // (b) The stream body is still alive: the next frame arrives (a
-    // heartbeat — nothing is queued) and the body has not ended.
+    // (b) The stream body is still alive: a frame pushed well past the
+    // idle window arrives (the body has not ended and forwards).
+    registry.send_frame(user, Summary::default()).await;
     use http_body_util::BodyExt;
     let frame = tokio::time::timeout(Duration::from_secs(2), body.frame())
         .await
@@ -258,8 +264,8 @@ async fn attached_stream_keeps_the_executor_alive() {
         .expect("the stream must not error");
     let chunk = String::from_utf8_lossy(frame.data_ref().expect("a data chunk")).to_string();
     assert!(
-        chunk.contains(": ping"),
-        "expected a heartbeat, got: {chunk:?}"
+        chunk.contains("data:"),
+        "expected the pushed frame, got: {chunk:?}"
     );
 }
 
@@ -267,7 +273,8 @@ async fn attached_stream_keeps_the_executor_alive() {
 /// a stream-less (write-only) spawn reaps as soon as its work is done —
 /// no streams attached is the only reap rule — and a stream connecting
 /// to the reaped executor respawns it and settles: the stream stays
-/// alive on heartbeats and a later frame is forwarded. (The old version
+/// alive (on the 15s `KeepAlive` heartbeat cadence, spec #558 §2.1)
+/// and a later frame is forwarded. (The old version
 /// asserted a reap *with* the stream attached — steady state under the
 /// idle-timeout policy, which no longer exists: an attached stream now
 /// keeps the executor alive.) The one-`: ping` re-subscribe in
@@ -278,14 +285,15 @@ async fn attached_stream_keeps_the_executor_alive() {
 #[tokio::test]
 async fn stream_survives_executor_reap() {
     let store = MemoryStore::default();
-    // A short idle cadence (the queue re-probe cadence) and a short
-    // heartbeat so the stream's keepalive is observable.
-    let registry = Arc::new(Registry::new(
-        Duration::from_millis(300),
-        Duration::from_millis(50),
-    ));
+    // A short idle cadence (the queue re-probe cadence) so the write-only
+    // spawn reaps quickly.
     let live = LiveSource::new().await;
-    let app = test_app_live(&store, live.clone(), registry.clone());
+    let registry = Arc::new(Registry::new(
+        live.clone(),
+        Duration::from_millis(300),
+        tb_exec::HEARTBEAT_INTERVAL,
+    ));
+    let app = test_app_live(&store, registry.clone());
     let cookie = user_cookie(&store).await;
     let user = UserId::from(1);
 
@@ -293,15 +301,15 @@ async fn stream_survives_executor_reap() {
     // soon as its work is done (the no-streams rule — immediate, not
     // after an idle window).
     registry
-        .write(&live, user, tb_domain::ApiWrite::UserOnboardingPostpone)
+        .write(user, tb_domain::ApiWrite::UserOnboardingPostpone)
         .await
         .expect("the write must succeed");
     wait_for_status(&registry, user, ExecutorStatus::Reaped).await;
 
     // The stream connects to the reaped executor: the connect respawns
-    // it and settles — the stream stays alive on heartbeats and a later
-    // frame is forwarded (no further reap: the attached stream keeps
-    // the executor alive).
+    // it and settles — the stream stays alive and a later frame is
+    // forwarded (no further reap: the attached stream keeps the
+    // executor alive).
     let (status, _headers, mut body) = run_sse(app, "/api/user/stream", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
     wait_for_status(&registry, user, ExecutorStatus::Running).await;
@@ -310,10 +318,6 @@ async fn stream_survives_executor_reap() {
     assert!(
         frames.iter().any(|f| f.contains("data:")),
         "a frame pushed after the connect must be forwarded, got: {frames:?}"
-    );
-    assert!(
-        frames.iter().any(|f| f.contains(": ping")),
-        "the settled stream must heartbeat, got: {frames:?}"
     );
 }
 
@@ -460,14 +464,15 @@ fn part_body(name: &str) -> String {
 }
 
 /// A live-app fixture: shared in-memory db + session store + registry.
-async fn live_app() -> (Router, MemoryStore, Arc<Registry>, LiveSource) {
+async fn live_app() -> (Router, MemoryStore, Arc<Registry<LiveSource>>, LiveSource) {
     let store = MemoryStore::default();
-    let registry = Arc::new(Registry::new(
-        Duration::from_secs(60),
-        Duration::from_secs(15),
-    ));
     let live = LiveSource::new().await;
-    let app = test_app_live(&store, live.clone(), registry.clone());
+    let registry = Arc::new(Registry::new(
+        live.clone(),
+        Duration::from_secs(60),
+        tb_exec::HEARTBEAT_INTERVAL,
+    ));
+    let app = test_app_live(&store, registry.clone());
     (app, store, registry, live)
 }
 
@@ -1220,12 +1225,13 @@ async fn webhook_wake_drains_the_queue_before_the_idle_timeout() {
     let store = MemoryStore::default();
     // A long idle window: without the wake interrupting the idle sleep,
     // the queued event would sit unconsumed for the whole 60s.
+    let live = LiveSource::new().await;
     let registry = Arc::new(Registry::new(
+        live.clone(),
         Duration::from_secs(60),
         Duration::from_millis(50),
     ));
-    let live = LiveSource::new().await;
-    let app = test_app_live(&store, live.clone(), registry.clone());
+    let app = test_app_live(&store, registry.clone());
     let cookie = user_cookie(&store).await;
 
     // Open a stream: the executor spawns and stays running (the attached
@@ -1297,12 +1303,13 @@ async fn wake_never_spawns_a_reaped_executor() {
     let store = MemoryStore::default();
     // A short idle window so the executor reaps quickly once the stream
     // is closed.
+    let live = LiveSource::new().await;
     let registry = Arc::new(Registry::new(
+        live.clone(),
         Duration::from_millis(100),
         Duration::from_millis(50),
     ));
-    let live = LiveSource::new().await;
-    let app = test_app_live(&store, live.clone(), registry.clone());
+    let app = test_app_live(&store, registry.clone());
     let cookie = user_cookie(&store).await;
     let user = UserId::from(1);
 
@@ -1340,7 +1347,7 @@ async fn wake_never_spawns_a_reaped_executor() {
 
     // A write spawns the executor, which drains the queue.
     registry
-        .write(&live, user, tb_domain::ApiWrite::UserOnboardingPostpone)
+        .write(user, tb_domain::ApiWrite::UserOnboardingPostpone)
         .await
         .expect("the write must succeed");
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
@@ -1446,7 +1453,11 @@ async fn write_pushes_summary_frame_to_stream() {
 
 /// Poll the registry's executor status until it is `expected` (bounded by
 /// a deadline, so a missing flip fails the test instead of hanging).
-async fn wait_for_status(registry: &Arc<Registry>, user: UserId, expected: ExecutorStatus) {
+async fn wait_for_status(
+    registry: &Arc<Registry<LiveSource>>,
+    user: UserId,
+    expected: ExecutorStatus,
+) {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     loop {
         if registry.status(user).await == Some(expected) {

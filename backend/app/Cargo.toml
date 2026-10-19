@@ -13,4 +13,5 @@ mimalloc = { version = "0.1", features = ["secure"] }
 anyhow = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tb_axum = { workspace = true }
+tb_exec = { workspace = true }
 tb_sqlx = { workspace = true }

@@ -30,11 +30,9 @@ use serde_derive::Deserialize;
 use time::OffsetDateTime;
 
 use crate::{RequestSession, appstate::AppState, domain::created_entity, error::AppError};
-use tb_domain::{ApiWrite, PartId, Service, ServiceId, ServicePlanId};
-use tb_exec::TxnSource;
-use tb_strava::StravaSession;
+use tb_domain::{ApiWrite, PartId, Service, ServiceId, ServicePlanId, Session};
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route("/", post(create).put(update))
         .route("/{id}", delete(delete_service))
@@ -50,9 +48,9 @@ struct NewService {
     notes: String,
     plans: Vec<ServicePlanId>,
 }
-async fn create<S>(
+async fn create(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Json(NewService {
         part_id,
         time,
@@ -60,15 +58,11 @@ async fn create<S>(
         notes,
         plans,
     }): Json<NewService>,
-) -> Result<(StatusCode, Json<Service>), AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
-    let summary = state
-        .registry
+) -> Result<(StatusCode, Json<Service>), AppError> {
+    let outcome = state
+        .api
         .write(
-            &state.source,
-            user.tb_id(),
+            user.user_id(),
             ApiWrite::ServiceCreate {
                 part: part_id,
                 time,
@@ -78,59 +72,42 @@ where
             },
         )
         .await?;
-    let service = created_entity(&summary.services, "service")?;
+    let service = created_entity(&outcome.summary().services, "service")?;
     Ok((StatusCode::CREATED, Json(service)))
 }
 
-async fn update<S>(
+async fn update(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Json(service): Json<Service>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<StatusCode, AppError> {
     state
-        .registry
-        .write(
-            &state.source,
-            user.tb_id(),
-            ApiWrite::ServiceUpdate { service },
-        )
+        .api
+        .write(user.user_id(), ApiWrite::ServiceUpdate { service })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn delete_service<S>(
+async fn delete_service(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Path(id): Path<ServiceId>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<StatusCode, AppError> {
     state
-        .registry
-        .write(&state.source, user.tb_id(), ApiWrite::ServiceDelete { id })
+        .api
+        .write(user.user_id(), ApiWrite::ServiceDelete { id })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn redo<S>(
+async fn redo(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Json(service): Json<Service>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<StatusCode, AppError> {
     state
-        .registry
-        .write(
-            &state.source,
-            user.tb_id(),
-            ApiWrite::ServiceRedo { service },
-        )
+        .api
+        .write(user.user_id(), ApiWrite::ServiceRedo { service })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

@@ -13,10 +13,8 @@ use axum::{
 };
 
 use crate::appstate::AppState;
-use tb_exec::TxnSource;
 
 mod oauth;
-pub(crate) use oauth::*;
 
 mod session;
 pub(crate) use session::*;
@@ -24,7 +22,7 @@ pub(crate) use session::*;
 mod redirect;
 mod webhook;
 
-pub(crate) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .route("/login", get(oauth::strava_auth))
         .route("/token", get(oauth::login_authorized))

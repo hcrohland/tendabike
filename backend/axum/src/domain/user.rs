@@ -15,10 +15,8 @@ use serde::Serialize;
 
 use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, domain::read_mismatch};
 use tb_domain::{ApiRead, ReadOutcome, Session, ShopId, Summary};
-use tb_exec::TxnSource;
-use tb_strava::StravaSession;
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(getuser))
         .route("/summary", get(summary))
@@ -27,18 +25,15 @@ pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
         .route("/export", get(export))
 }
 
-async fn getuser<S>(
+async fn getuser(
     user: RequestSession,
-    State(state): State<AppState<S>>,
-) -> ApiResult<tb_domain::User>
-where
-    S: TxnSource + Clone + 'static,
-{
+    State(state): State<AppState>,
+) -> ApiResult<tb_domain::User> {
     // The unified user read (spec #558 §3.5): the route projects the bare
     // `User` from the `UserState` composite.
     match state
-        .registry
-        .read(&state.source, user.tb_id(), ApiRead::User { shop: None })
+        .api
+        .read(user.user_id(), ApiRead::User { shop: None })
         .await?
     {
         ReadOutcome::User(state) => Ok(Json(state.user)),
@@ -50,14 +45,11 @@ where
 struct ShopQuery {
     shop: Option<ShopId>,
 }
-async fn summary<S>(
+async fn summary(
     mut session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Query(ShopQuery { shop }): Query<ShopQuery>,
-) -> ApiResult<Summary>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> ApiResult<Summary> {
     // `set_shop`'s tower-session persistence stays in axum (spec #558
     // §3.5 — session plumbing, not domain state).
     session.set_shop(shop)?;
@@ -67,13 +59,10 @@ where
     // pure-FIFO snapshot (spec #558 §3.7) sees the committed hydration, so
     // the response body carries the new parts exactly as today. The route
     // projects the `Summary` from the `UserState` composite.
-    state
-        .registry
-        .hydrate_gear(&state.source, session.tb_id())
-        .await?;
+    state.api.hydrate_gear(session.user_id()).await?;
     match state
-        .registry
-        .read(&state.source, session.tb_id(), ApiRead::User { shop })
+        .api
+        .read(session.user_id(), ApiRead::User { shop })
         .await?
     {
         ReadOutcome::User(state) => Ok(Json(state.summary)),
@@ -93,16 +82,13 @@ pub struct Export {
     pub shops: Vec<tb_domain::Shop>,
 }
 
-async fn export<S>(user: RequestSession, State(state): State<AppState<S>>) -> ApiResult<Export>
-where
-    S: TxnSource + Clone + 'static,
-{
+async fn export(user: RequestSession, State(state): State<AppState>) -> ApiResult<Export> {
     // The unified user read (spec #558 §3.5): the export is a projection
     // of the `UserState` composite (the bare `User` plus the `Summary`),
     // staying non-hydrating (spec #558 §3.4/§4).
     match state
-        .registry
-        .read(&state.source, user.tb_id(), ApiRead::User { shop: None })
+        .api
+        .read(user.user_id(), ApiRead::User { shop: None })
         .await?
     {
         ReadOutcome::User(state) => {
@@ -122,21 +108,13 @@ where
     }
 }
 
-async fn userlist<S>(
+async fn userlist(
     user: RequestSession,
     _admin: AxumAdmin,
-    State(state): State<AppState<S>>,
-) -> ApiResult<Vec<tb_strava::StravaStat>>
-where
-    S: TxnSource + Clone + 'static,
-{
+    State(state): State<AppState>,
+) -> ApiResult<Vec<tb_strava::StravaStat>> {
     // The admin read rides the admin user's own channel (spec #558 §3.3):
     // the `AxumAdmin` gate is unchanged; the session's identity is no
     // longer discarded.
-    Ok(Json(
-        state
-            .registry
-            .all_stats(&state.source, user.tb_id())
-            .await?,
-    ))
+    Ok(Json(state.api.all_stats(user.user_id()).await?))
 }

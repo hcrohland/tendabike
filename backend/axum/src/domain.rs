@@ -1,6 +1,5 @@
 use axum::Router;
 use tb_domain::IdKeyedMap;
-use tb_exec::TxnSource;
 
 use crate::appstate::AppState;
 
@@ -42,7 +41,7 @@ pub(crate) fn read_mismatch(what: &str, payload: &str) -> crate::error::AppError
     )))
 }
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(super) fn router() -> Router<AppState> {
     Router::new()
         .nest("/user", user::router())
         .nest("/types", types::router())

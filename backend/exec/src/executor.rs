@@ -37,7 +37,7 @@ use std::time::Duration;
 
 use log::{debug, error, info, warn};
 use tb_domain::{ApiRead, ApiWrite, Error, ReadOutcome, Summary, TbResult, WriteOutcome, exec};
-use tb_strava::event::{Event, QueueRead, get_event, process};
+use tb_strava::event::{Event, QueueRead, get_event, insert_sync, process};
 use tb_strava::{StravaSession, StravaStat, StravaUser, get_all_stats};
 use tokio::sync::{broadcast, oneshot};
 
@@ -690,6 +690,12 @@ where
 /// outcome either way, and a successful, non-empty `Summary` pushes one
 /// frame to the user's SSE streams.
 ///
+/// The onboarding cutover's Strava side (spec #558 §5.1): one message = one
+/// loop-owned transaction containing the message's entire work — the
+/// `UserOnboardingSync`'s transaction does the domain half (`exec`) and the
+/// `insert_sync` in the same transaction, so the queued event commits with
+/// the domain half (a failed write leaves neither behind).
+///
 /// Fail fast (spec §6.2, §4.6): the oneshot always resolves, the message is
 /// consumed, and the loop continues — the client is the retry layer. A
 /// `begin` or `commit` failure is a **DB failure**: the oneshot 500s, the
@@ -710,6 +716,12 @@ where
     S: StravaSession,
 {
     info!("user {}: Processing {write:?}", session.tb_id());
+    // The onboarding cutover's Strava side (spec #558 §5.1): extracted
+    // before `exec` consumes the write, added to the same transaction.
+    let onboarding_time = match &write {
+        ApiWrite::UserOnboardingSync { time } => Some(*time),
+        _ => None,
+    };
     run_message(
         "write",
         "API write",
@@ -722,7 +734,14 @@ where
         // response body, not state — it never rides the frame).
         |outcome| Some(outcome.summary()),
         |mut conn| async move {
-            let outcome = exec(write, session, &mut conn).await;
+            let outcome = async {
+                let outcome = exec(write, session, &mut conn).await?;
+                if let Some(time) = onboarding_time {
+                    insert_sync(session.strava_id(), time, false, &mut conn).await?;
+                }
+                Ok(outcome)
+            }
+            .await;
             (outcome, conn)
         },
     )
