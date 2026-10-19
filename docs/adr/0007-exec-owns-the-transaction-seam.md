@@ -1,44 +1,32 @@
-# ADR-0007: exec owns the transaction seam
+# ADR-0007: The executor owns the transaction seam
 
 ## Status
 
-Accepted. The design is locked and execution is in progress (step 1 of 4, spec §9).
+Accepted.
 
 ## Context
 
-ADR-0005 introduced the per-user executor loop in `tb_exec`, but the transaction seam stayed split: the loop opened the executor's transactions, while the presentation layer (`tb_axum`) opened its own — every read route, the Strava plumbing (login, webhook, sync, deauthorise), and the admin routes ran inline `begin` … `commit` in the handlers. Three consequences:
-
-- the web layer named the seam types (`TxnSource`, `Txn`, `SqlxConn`, `DbPool` — 116 references in 14 files, spec §1), so a second presentation driver (a CLI) would have to learn the same seam vocabulary;
-- reads bypassed the executor's per-user FIFO order entirely — a read could race an in-flight write on the same user;
-- the transaction lifecycle was decided in two places (the loop and the handlers), with the same begin/commit/rollback discipline duplicated.
-
-This ADR records the design for moving the transaction seam into `tb_exec` so that only the executor loop opens transactions. The full executable spec is issue [#558](https://github.com/hcrohland/tendabike/issues/558); the decisions it synthesizes are the seven tickets of the ["exec owns the transaction seam — axum as a dumb interface" map](https://github.com/hcrohland/tendabike/issues/549) ([#550](https://github.com/hcrohland/tendabike/issues/550)–[#556](https://github.com/hcrohland/tendabike/issues/556)).
+ADR-0005 moved the write path through a per-user executor loop in `tb_exec`, but left the seam's *ownership* in the web layer. `tb_axum` held the executor `Registry`, was generic over the `TxnSource` (an `AppState<S: TxnSource>`), and every read route (~16) plus the Strava plumbing routes (login upsert, webhook accept, admin sync, rescan, the redirect URL reads, deauth/delete) opened transactions inline in handlers. The seam types (`TxnSource`, `Txn`, `SqlxConn`, `DbPool`) were named throughout `tb_axum` source — the presentation layer knew everything about the store it was supposed to be insulated from. The surface a presentation layer needs (run a read, enqueue a write, subscribe to frames, run the plumbing ops) was entangled with the storage it drives, and a second presentation layer — the named second driver, a CLI — could not be written without re-learning the seam.
 
 ## Decision
 
-**`tb_exec` behaviorally owns the transaction seam.** Only the executor loop opens transactions:
+**`tb_exec` behaviorally owns the transaction seam; `tb_axum` is a dumb interface among potentially many presentation layers.** Only the executor loop opens per-user transactions. Reads cross into the executor as descriptor messages (`ApiRead` → sealed `ReadOutcome`, run in a loop-owned transaction, read-only by spec). The non-message ops (rescan, admin sync, Strava plumbing) become direct `Registry` methods that own their own transactions. The `Registry` moves to `tb_exec` and owns the `TxnSource`; the executor's session becomes a concrete `tb_strava::StravaUserSession`.
 
-- **Reads become executor messages.** A new `ApiRead` descriptor enum in `tb_domain` (one variant per per-user read route, carrying exactly the parsed arguments the handler extracts today) is enqueued on the user's per-user request channel beside the writes; the loop runs each read in its own transaction (read-only within it, by spec) and resolves a sealed `ReadOutcome` enum over the read payloads. A read inherits the lane's discipline: FIFO behind every earlier message, never delayed by the Strava `Stop` nor the `DbBackoff`, and a failed read never arms the backoff.
-- **The non-message ops become direct `Registry` methods.** The ops that are not per-user messages (rescan, the admin syncs, the Strava plumbing — login upsert, webhook accept, the redirect URL reads, deauthorise/delete) become direct `Registry` methods that own their own transaction(s) and any lifecycle control; the presentation layer calls only the service API.
-- **The `Registry` moves to `tb_exec`, owning the `TxnSource`** (injected at construction; the seam traits stay `pub` because `tb_sqlx` implements them). The exec-owned surface is a trait — **`ServiceApi`** — that is the app's presentation-agnostic service API: axum (and the named second driver, a CLI) depend on the trait and never name a seam type.
-- **`tb_axum` becomes a zero-reference dumb presentation layer**: no `TxnSource`/`Txn`/`SqlxConn`/`DbPool` anywhere in its source — the grep is the test. Handlers thin to one shape: extract the session and the JSON/path arguments, call the `ServiceApi`, map the outcome.
+The exec-owned surface is exposed as a trait — **`ServiceApi`** in `tb_exec` — that is the app's presentation-agnostic **service API**: axum (and the future CLI) depend on the trait through `Arc<dyn ServiceApi>` and never name a seam type. The acceptance bar is grep-verifiable: **zero references to `TxnSource`/`Txn`/`SqlxConn`/`DbPool` anywhere in `tb_axum` source** (prod, tests, test_support). The traits stay `pub` in `tb_exec` — `tb_sqlx` must implement them; axum simply never names them.
 
-**The HTTP contract is unchanged** — routes, status codes, response bodies. The only intentional behavior deltas are the all-users sync's per-user wake and the `update_gear` hydration frame; both are internal.
-
-**Single node.** One process owns a user's executor and their SSE streams (ADR-0005). Durable state lives in Postgres; the in-memory structures are per-process and respawn on demand.
-
-The domain-flow claim is unchanged and generalized: the domain computes entity state; triggers drive domain operations. The executor computes nothing of its own — now for reads too.
+The full executable spec is issue [#558](https://github.com/hcrohland/tendabike/issues/558); the decisions it synthesizes are the seven tickets of the "exec owns the transaction seam — axum as a dumb interface" map ([#549](https://github.com/hcrohland/tendabike/issues/549), tickets [#550](https://github.com/hcrohland/tendabike/issues/550)–[#556](https://github.com/hcrohland/tendabike/issues/556)).
 
 ## Rejected alternatives
 
-- **Keep the handler-owned transactions (the status quo).** Two places decide the transaction lifecycle, reads bypass the per-user FIFO order, and the web layer must keep naming the seam types — a second driver inherits the same coupling.
-- **Capability closures for reads (the handler hands the loop a closure to run).** The service surface a second driver gets must be explicit: an enum *is* that API, and the read's behavior (which domain op, which arguments) lives in the domain once, not in the presentation layer. Closures are uncomparable, unloggable, and break the loop's message discipline.
-- **A plain (non-transactional) connection path on the seam for reads.** The measured cost was re-implementing 92 store/Strava impl bodies (or a one-time mechanical refactor of all of them) for two saved round-trips and a type guarantee the contract cannot observe. The seam keeps its current shape (nine store sub-traits + `Txn`/`TxnSource`).
-- **Keep the `Registry` in `tb_axum`.** The Registry is the service API's single handle (its ordered surface is the per-user channel; its direct surface is the non-message ops); leaving it in the web layer keeps the web layer the seam's owner, which is the disease.
+- **Keep reads inline in axum on plain (non-transactional) connections.** The seam would need a plain-connection path: re-implementing ~92 store/Strava impl bodies (or a one-time mechanical refactor of all of them) for two saved round-trips and a type guarantee the contract cannot observe. Reads instead ride the loop's transaction.
+- **Capability-closure reads** (a `Box<dyn FnOnce(&mut impl Store) -> TbResult<R> + Send + 'static` the loop runs). Closures are uncomparable, unloggable, and put the read's behavior in the presentation layer; an explicit descriptor enum *is* the service API a second driver gets, and the read's behavior lives in the domain once.
+- **A concrete `Registry` as the surface (no trait).** One adapter means a hypothetical seam. The trait exists because two adapters do — the production `Registry` and the test `StubApi` — and because the CLI takes the same `Arc<dyn ServiceApi>` handle.
+- **A separate read channel (a non-gated lane).** A second channel would break the per-user FIFO total order — the ordering contract a second driver relies on.
 
 ## Consequences
 
-- The dependency graph layers (each layer depends only on the layers below it): `tb_axum → tb_domain, tb_strava, tb_exec` (naming `ServiceApi`, `ExecutorStatus`, and the cadence constants — never a seam type); `tb_exec → tb_domain, tb_strava` (gains the `Registry`, `ServiceApi`, the read dispatch, the direct ops); `tb_sqlx → tb_domain, tb_strava, tb_exec` (implements `Txn`/`TxnSource` — unchanged); `tb_strava` gains the executor's concrete `StravaUserSession`; `tb_domain` gains the read side (`ApiRead`, `ReadOutcome`, the `apiread` dispatch beside `apiwrite::exec`, the unified `UserState` composite).
-- `AppState` goes non-generic (`Arc<dyn ServiceApi>`); `start`/`routes` and every handler drop their `TxnSource` bound and the `source` parameter.
-- The axum suite's `TxnSource` doubles are deleted in favor of a recording `StubApi`; the contract tests assert the recorded messages — the suite gains the ability to check what a handler sent.
-- The migration is four steps, one PR each, every step green (spec §9); the zero-reference grep lands last as a one-time acceptance check, not a CI gate.
+- Crate graph: `tb_axum` loses its `TxnSource` genericity (`AppState` holds `Arc<dyn ServiceApi>`); the composition root (`app`) builds the `Registry` over the `DbPool`. `tb_domain` gains the read side (`ApiRead`, `ReadOutcome`, the dispatch, the user-composite) bounded by `Store`; `tb_strava` gains `StravaUserSession`.
+- The in-memory seam doubles (`LiveSource`/`LiveConn`/`FakeSource`/`FakeConn`) are deleted, not moved; the axum suite becomes pure HTTP-contract tests against a recording `StubApi` (no loop, no `MemStore`).
+- The both-stores contract governs the test split: Postgres is the source of truth for database behavior; the in-memory store follows at the call level only.
+- The HTTP contract (routes, status codes, response bodies) is unchanged. The only intentional behavior deltas are the all-users sync's per-user wake and the `update_gear` hydration frame — both internal.
+- The single-node assumption stands (ADR-0005); multi-node is out of scope.
