@@ -59,7 +59,7 @@ use serde_derive::{Deserialize, Serialize};
 use http::StatusCode;
 
 use crate::{
-    ApiResult, AxumAdmin, RequestSession, appstate::AppState, domain::read_mismatch,
+    ApiResult, AxumAdmin, RequestSession, appstate::AppState, domain::result_mismatch,
     error::AppError,
 };
 use tb_domain::{ApiRead, ApiWrite, Error, ReadOutcome, Session, TbResult};
@@ -189,7 +189,7 @@ pub(crate) async fn trigger_initial_sync(
         .await?
     {
         ReadOutcome::User(state) => Ok(Json(state.user)),
-        _ => Err(read_mismatch("user", "user state")),
+        _ => Err(result_mismatch("user", "user state")),
     }
 }
 
@@ -214,7 +214,7 @@ pub(crate) async fn postpone_initial_sync(
         .await?
     {
         ReadOutcome::User(state) => Ok(Json(state.user)),
-        _ => Err(read_mismatch("user", "user state")),
+        _ => Err(result_mismatch("user", "user state")),
     }
 }
 

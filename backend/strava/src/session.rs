@@ -62,8 +62,7 @@ impl StravaUserSession {
     /// Build the executor's session for a user from their stored
     /// [`StravaUser`] (the refresh token): an empty access token with a
     /// past expiry, so the first Strava request forces a token refresh
-    /// (spec #558 §6.2 — the executor-side twin of the web layer's admin
-    /// impersonation constructor).
+    /// (spec #558 §6.2).
     pub async fn for_user(user: UserId, store: &mut impl StravaStore) -> TbResult<Self> {
         let user = StravaUser::read(user, store).await?;
 

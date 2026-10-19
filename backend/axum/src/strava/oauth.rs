@@ -126,28 +126,20 @@ pub(crate) async fn login_authorized(
     // transaction (`StravaUser::upsert` + `is_admin`), returning the
     // identity and the admin flag. The wire-shape parsing stays in axum,
     // beside the exchange it feeds.
-    let StravaAthleteInfo {
-        id,
-        firstname,
-        lastname,
-        avatar,
-        ..
-    } = token
+    let mut athlete: StravaAthleteInfo = token
         .extra_fields()
         .athlete
-        .as_ref()
+        .clone()
         .ok_or(Error::BadRequest("No Athlete Info from Strava".to_string()))?;
 
     // make sure you have a non-local url
-    let avatar = match avatar {
-        Some(a) if !a.starts_with("http") => &None,
-        _ => avatar,
-    };
-    let refresh_token = token.refresh_token();
-    let (user, is_admin) = state
-        .api
-        .login_from_token(*id, firstname, lastname, avatar, refresh_token.cloned())
-        .await?;
+    if let Some(a) = &athlete.avatar
+        && !a.starts_with("http")
+    {
+        athlete.avatar = None;
+    }
+    let refresh_token = token.refresh_token().cloned();
+    let (user, is_admin) = state.api.login_from_token(athlete, refresh_token).await?;
 
     // The tower-session write stays in axum (spec #558 §5.2): the access
     // token and expiry ride the session, not the DB.

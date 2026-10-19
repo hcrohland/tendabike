@@ -32,7 +32,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     RequestSession,
     appstate::AppState,
-    domain::{created_entity, read_mismatch},
+    domain::{created_entity, result_mismatch},
     error::{ApiResult, AppError},
 };
 use serde_with::serde_as;
@@ -79,7 +79,7 @@ async fn get_part(
 ) -> ApiResult<Part> {
     match state.api.read(user.user_id(), ApiRead::Part(part)).await? {
         ReadOutcome::Part(part) => Ok(Json(part)),
-        _ => Err(read_mismatch("part", "part")),
+        _ => Err(result_mismatch("part", "part")),
     }
 }
 
@@ -162,6 +162,6 @@ async fn mycats(
         .await?
     {
         ReadOutcome::PartCategories(categories) => Ok(Json(categories)),
-        _ => Err(read_mismatch("part categories", "categories")),
+        _ => Err(result_mismatch("part categories", "categories")),
     }
 }

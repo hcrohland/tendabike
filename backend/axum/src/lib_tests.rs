@@ -2127,8 +2127,8 @@ async fn redirect_gear_permains_to_strava_url() {
     assert_eq!(
         stub.calls(),
         vec![
-            StubCall::GearUrl(UserId::from(1), 7),
-            StubCall::GearUrl(UserId::from(1), 9),
+            StubCall::GearUrl(UserId::from(1), PartId::from(7)),
+            StubCall::GearUrl(UserId::from(1), PartId::from(9)),
         ]
     );
 }
@@ -2146,7 +2146,7 @@ async fn redirect_activity_permains_to_strava_url() {
     assert_eq!(headers["location"], "https://www.strava.com/activities/8");
     assert_eq!(
         stub.calls(),
-        vec![StubCall::ActivityUrl(UserId::from(1), 8)]
+        vec![StubCall::ActivityUrl(UserId::from(1), ActivityId::from(8))]
     );
 }
 

@@ -56,14 +56,17 @@ use oauth2::RefreshToken;
 use tokio::sync::{Mutex, Notify, broadcast, oneshot, watch};
 
 use tb_domain::{
-    Activity, ApiRead, ApiWrite, Error, ReadOutcome, Summary, TbResult, UserId, WriteOutcome,
+    Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Summary, TbResult, UserId,
+    WriteOutcome,
 };
 use tb_strava::{
     StravaDataStore, StravaId, StravaStat, StravaUser, StravaUserSession, activity,
+    client::StravaAthleteInfo,
     event::{Event as StravaEvent, InEvent, ObjectType, insert_sync, sync_users},
     gear,
 };
 
+use crate::api::ServiceApi;
 use crate::message::{Request, RequestSender};
 use crate::{Txn, TxnSource, request_channel, run};
 
@@ -150,50 +153,28 @@ pub struct Registry<S: TxnSource + Clone + 'static> {
     source: S,
     executors: Arc<Mutex<HashMap<UserId, Executor>>>,
     idle_timeout: Duration,
-    heartbeat_interval: Duration,
 }
 
 impl<S> Registry<S>
 where
     S: TxnSource + Clone + 'static,
 {
-    /// The registry with explicit cadences (test ergonomics: a short
-    /// idle/heartbeat cadence makes the executor's lifecycle observable).
-    pub fn new(source: S, idle_timeout: Duration, heartbeat_interval: Duration) -> Self {
+    /// The registry with an explicit idle cadence (test ergonomics: a
+    /// short idle cadence makes the executor's lifecycle observable).
+    /// The SSE heartbeat cadence is the crate constant
+    /// [`HEARTBEAT_INTERVAL`] — the `KeepAlive` wiring uses it directly.
+    pub fn new(source: S, idle_timeout: Duration) -> Self {
         Self {
             source,
             executors: Arc::new(Mutex::new(HashMap::new())),
             idle_timeout,
-            heartbeat_interval,
         }
     }
 
-    /// The registry with the production defaults (the 60s idle re-probe
-    /// cadence and the 15s SSE heartbeat).
+    /// The registry with the production default (the 60s idle re-probe
+    /// cadence).
     pub fn with_defaults(source: S) -> Self {
-        Self::new(source, IDLE_TIMEOUT, HEARTBEAT_INTERVAL)
-    }
-
-    /// The heartbeat cadence the SSE `KeepAlive` uses (the stream stays
-    /// alive on `: ping` comments while the executor is reaped).
-    pub fn heartbeat_interval(&self) -> Duration {
-        self.heartbeat_interval
-    }
-
-    /// Register a stream for `user_id` (spawning the executor if it is not
-    /// running) and return a subscription to its frame channel plus a handle
-    /// to its fate, so the stream can tell a clean reap from a dead executor.
-    pub async fn subscribe(
-        &self,
-        user_id: UserId,
-    ) -> TbResult<(
-        broadcast::Receiver<Summary>,
-        watch::Receiver<ExecutorStatus>,
-    )> {
-        self.exec_field(user_id, |exec| {
-            (exec.frames.subscribe(), exec.status.clone())
-        })
-        .await
+        Self::new(source, IDLE_TIMEOUT)
     }
 
     /// Fire the wake signal for the user's executor (spec §4.4/§4.6): a
@@ -211,55 +192,6 @@ where
         {
             exec.wake.notify_one();
         }
-    }
-
-    /// Enqueue one [`ApiRead`] on the user's executor and await its data
-    /// (spec #558 §3): the loop runs the read in its own transaction
-    /// (read-only within it by spec) and resolves the [`ReadOutcome`] —
-    /// the route maps a `Err` through the existing `AppError` helper,
-    /// exactly as today.
-    pub async fn read(&self, user_id: UserId, read: ApiRead) -> TbResult<ReadOutcome> {
-        let (request, reply) = Request::new_read(read);
-        self.send_request(user_id, request, reply, "read").await
-    }
-
-    /// Enqueue the [`Gear`](Request::Gear) hydration write on the user's
-    /// executor and await its frame (spec #558 §4): the loop runs
-    /// `update_gear` in its own transaction with its own session (a
-    /// `tb_strava` op — it cannot be an `ApiWrite` variant) and resolves
-    /// with the created parts' `Summary` — the frame (the union of the
-    /// parts it created, one entry per part, empty when nothing is new).
-    /// The `/user/summary` route runs this **before** its unified `User`
-    /// read, FIFO-ordered, so the snapshot body carries the new parts
-    /// exactly as today.
-    pub async fn hydrate_gear(&self, user_id: UserId) -> TbResult<Summary> {
-        let (request, reply) = Request::new_gear();
-        self.send_request(user_id, request, reply, "hydration")
-            .await
-    }
-
-    /// Enqueue the admin [`AllStats`] read on the user's executor and await
-    /// its stats (spec #558 §3.3): the admin's `GET /user/all` rides the
-    /// admin user's own channel — `get_all_stats` is a `tb_strava` op, so
-    /// it is an exec-level variant, dispatched loop-side in the loop's own
-    /// transaction. The oneshot wait is unbounded, like a read's (spec
-    /// #558 §3.7).
-    pub async fn all_stats(&self, user_id: UserId) -> TbResult<Vec<StravaStat>> {
-        let (request, reply) = Request::new_all_stats();
-        self.send_request(user_id, request, reply, "stats read")
-            .await
-    }
-
-    /// Enqueue one [`ApiWrite`] on the user's executor and await the full
-    /// outcome (the `Summary` plus, for the descend, its match report)
-    /// (spec §6.2): the oneshot is unbounded — through a 15-minute
-    /// rate-limit backoff the write may wait long, and that is the spec'd
-    /// behavior. The route projects its payload: a create's `201` entity
-    /// or the descend's report body from the `WriteOutcome`, a `204`
-    /// otherwise.
-    pub async fn write(&self, user_id: UserId, write: ApiWrite) -> TbResult<WriteOutcome> {
-        let (request, reply) = Request::new_write(write);
-        self.send_request(user_id, request, reply, "write").await
     }
 
     /// Stop every live executor (the admin rescan's global re-hydration,
@@ -290,57 +222,6 @@ where
             .await
     }
 
-    /// Run one admin sync for `user_id` (spec #558 §5.2): subscribe to
-    /// the executor's consumed-event channel (spawning it if it is not
-    /// running), then the enqueue transaction — the target's Strava id
-    /// (the queue is keyed by it) **and** the `Sync` event, committed
-    /// together — then wake the executor and await that event's
-    /// completion (unbounded — the spec'd behavior for the admin
-    /// endpoint). The awaited work runs in the target user's loop
-    /// transaction.
-    ///
-    /// The completion is correlated by the event's identity (owner, type,
-    /// `event_time`). If the channel closes or lags (the executor settled
-    /// mid-wait), the `strava_events` queue — the source of truth (spec
-    /// §4.6) — is consulted: a sync no longer queued has been consumed.
-    pub async fn sync(&self, user_id: UserId, event_time: i64) -> TbResult<()> {
-        // Subscribe before enqueuing, so the completion cannot be missed.
-        let mut done = self.events(user_id).await?;
-
-        // The enqueue txn (spec #558 §5.2): the target's Strava id (the
-        // queue is keyed by it) and the `Sync` event, committed together —
-        // the handler's user lookup folded into the enqueue.
-        let mut store = self.source.begin().await?;
-        let strava_id = store.stravauser_get_by_tbid(user_id).await?.strava_id();
-        insert_sync(strava_id, event_time, false, &mut store).await?;
-        store.commit().await?;
-
-        // Wake the executor (non-critical: the queue is the source of
-        // truth). The `events` subscription above already ensured the
-        // executor is running, so this only interrupts its idle wait.
-        self.wake(user_id).await;
-
-        // Await our sync's completion (unbounded, spec §6.4).
-        loop {
-            match done.recv().await {
-                Ok(event) if is_sync(&event, strava_id, event_time) => return Ok(()),
-                // Some other message completed; keep waiting for ours.
-                Ok(_) => continue,
-                Err(_) => {
-                    // The channel closed (or lagged): the executor settled
-                    // without announcing our event. Consult the queue — the
-                    // source of truth (spec §4.6): a sync no longer queued
-                    // has been consumed; otherwise re-subscribe (respawning
-                    // the executor) and keep waiting.
-                    if !self.sync_queued(strava_id, event_time).await? {
-                        return Ok(());
-                    }
-                    done = self.events(user_id).await?;
-                }
-            }
-        }
-    }
-
     /// Whether `strava_id`'s queue still holds the sync at `event_time`
     /// (the admin sync's fallback completion check, spec §4.6).
     async fn sync_queued(&self, strava_id: StravaId, event_time: i64) -> TbResult<bool> {
@@ -365,161 +246,6 @@ where
     pub async fn status(&self, user_id: UserId) -> Option<ExecutorStatus> {
         let map = self.executors.lock().await;
         map.get(&user_id).map(|exec| *exec.status.borrow())
-    }
-
-    // ── The direct ops (spec #558 §5) ──────────────────────────────────
-    //
-    // The direct surface beside the channel's ordered surface: each owns
-    // its own transaction(s) and any lifecycle control, and calls the
-    // existing `tb_domain`/`tb_strava` ops that take a store — the same
-    // shape as the loop's `run_write`.
-
-    /// The admin rescan (spec #558 §5.2): one transaction
-    /// (`Activity::rescan_all`), then stop every live executor — the
-    /// rescan is all-users maintenance that bypasses the executors (the
-    /// spec §3/§6.4 carve-out), so no frame carries its effect: open
-    /// streams end, and each client's native reconnect + catch-up snapshot
-    /// re-hydrates it (issue #446).
-    pub async fn rescan(&self) -> TbResult<()> {
-        let mut store = self.source.begin().await?;
-        Activity::rescan_all(&mut store).await?;
-        store.commit().await?;
-        self.stop_all().await;
-        Ok(())
-    }
-
-    /// The all-users admin sync (spec #558 §5.2): one transaction
-    /// (`sync_users`) queuing a `Sync` event per (non-disabled) user, then
-    /// a wake **per queued user** — the intentional behavior change of the
-    /// migration: a running executor drains its queued sync immediately,
-    /// matching the per-user variant (a reaped, or not-yet-spawned,
-    /// executor is never woken into existence: the wake is a signal only,
-    /// and the DB queue is the source of truth). `user_id` narrows the
-    /// sync to one user (the route's `?user_id=` query), as before the
-    /// move.
-    pub async fn sync_all(
-        &self,
-        user_id: Option<UserId>,
-        event_time: i64,
-        migrate: bool,
-    ) -> TbResult<()> {
-        let mut store = self.source.begin().await?;
-        let queued = sync_users(user_id, event_time, migrate, &mut store).await?;
-        store.commit().await?;
-        // The per-user wake (spec #558 §5.2): a pure signal to a running
-        // executor — it never spawns one, and the DB queue is the source
-        // of truth, so a missed wake only delays the sync to the next
-        // spawn.
-        for user_id in queued {
-            self.wake(user_id).await;
-        }
-        Ok(())
-    }
-
-    /// The login upsert (spec #558 §5.2): one transaction
-    /// (`StravaUser::upsert` + `is_admin`), returning the identity and the
-    /// admin flag. The web layer keeps the query-parse, the scope check,
-    /// the HMAC path, the outbound exchange, and the tower-session write —
-    /// the wire-shape parsing stays beside the exchange it feeds.
-    pub async fn login_from_token(
-        &self,
-        id: StravaId,
-        firstname: &str,
-        lastname: &str,
-        avatar: &Option<String>,
-        refresh: Option<RefreshToken>,
-    ) -> TbResult<(StravaUser, bool)> {
-        let mut store = self.source.begin().await?;
-        let user = StravaUser::upsert(
-            id,
-            firstname,
-            lastname,
-            avatar,
-            refresh.as_ref(),
-            &mut store,
-        )
-        .await?;
-        let is_admin = user.tb_id().is_admin(&mut store).await?;
-        store.commit().await?;
-        Ok((user, is_admin))
-    }
-
-    /// The webhook accept (spec #558 §5.2): one transaction
-    /// (`InEvent::accept` — the queue insert, or the athlete-deauth
-    /// branch), then wake the user's executor if an event was queued
-    /// (fire-and-forget, `200`). A failed ingest 500s to Strava (its own
-    /// retry policy applies).
-    pub async fn accept_event(&self, event: InEvent) -> TbResult<()> {
-        let mut store = self.source.begin().await?;
-        let user_id = event.accept(&mut store).await?;
-        store.commit().await?;
-        // Fire the in-memory wake signal (spec §4.4): a pure signal to a
-        // running executor — it never spawns one, and the DB queue is the
-        // source of truth, so a missed wake only delays the event to the
-        // next spawn.
-        if let Some(user_id) = user_id {
-            self.wake(user_id).await;
-        }
-        Ok(())
-    }
-
-    /// The gear redirect URL (spec #558 §5.2): one transaction — the
-    /// caller's [`StravaUserSession`] built in-txn (the user-gated
-    /// `tb_strava` `strava_url` op, which checks the part's ownership),
-    /// then the Strava URL.
-    pub async fn gear_url(&self, user: UserId, id: i32) -> TbResult<String> {
-        let mut store = self.source.begin().await?;
-        let mut session = StravaUserSession::for_user(user, &mut store).await?;
-        let uri = gear::strava_url(id, &mut session, &mut store).await?;
-        store.commit().await?;
-        Ok(uri)
-    }
-
-    /// The activity redirect URL (spec #558 §5.2): one transaction — the
-    /// caller's [`StravaUserSession`] built in-txn (the user-gated
-    /// `tb_strava` `strava_url` op, which checks the activity's ownership),
-    /// then the Strava URL.
-    pub async fn activity_url(&self, user: UserId, id: i64) -> TbResult<String> {
-        let mut store = self.source.begin().await?;
-        let session = StravaUserSession::for_user(user, &mut store).await?;
-        let uri = activity::strava_url(id, &session, &mut store).await?;
-        store.commit().await?;
-        Ok(uri)
-    }
-
-    /// The user redirect URL (spec #558 §5.2): one transaction — the
-    /// `tb_strava` `strava_url` op for the target's tbid (no session: the
-    /// route has no user context to gate on).
-    pub async fn user_url(&self, id: UserId) -> TbResult<String> {
-        let mut store = self.source.begin().await?;
-        let uri = tb_strava::strava_url(id, &mut store).await?;
-        store.commit().await?;
-        Ok(uri)
-    }
-
-    /// The deauthorization (spec #558 §5.2): one transaction — the
-    /// target's [`StravaUserSession`] built in-txn, then
-    /// `tb_strava::user_deauthorize`. No wake, no message; the existing
-    /// race (deauth deletes the target's queued events outside the
-    /// target's loop) is preserved.
-    pub async fn deauthorize(&self, tbid: UserId) -> TbResult<()> {
-        let mut store = self.source.begin().await?;
-        let mut session = StravaUserSession::for_user(tbid, &mut store).await?;
-        tb_strava::user_deauthorize(&mut session, &mut store).await?;
-        store.commit().await?;
-        Ok(())
-    }
-
-    /// The user delete (spec #558 §5.2): one transaction — the target's
-    /// [`StravaUserSession`] built in-txn, then `tb_strava::user_delete`
-    /// (the deauthorization plus the row deletions). No wake, no message;
-    /// the existing race is preserved.
-    pub async fn delete_user(&self, tbid: UserId) -> TbResult<()> {
-        let mut store = self.source.begin().await?;
-        let mut session = StravaUserSession::for_user(tbid, &mut store).await?;
-        tb_strava::user_delete(&mut session, &mut store).await?;
-        store.commit().await?;
-        Ok(())
     }
 
     /// Lock the registry, ensure the user's executor is live (spawning it if
@@ -620,6 +346,284 @@ where
         };
         map.insert(user_id, exec.clone());
         Ok(exec)
+    }
+}
+
+/// The service API's impl for the registry (spec #558 §2): the per-user
+/// channel ops ride [`Self::send_request`] (spawn-or-join the executor,
+/// enqueue, await the oneshot); the direct ops own their own
+/// transaction(s) and any lifecycle control.
+#[async_trait::async_trait]
+impl<S> ServiceApi for Registry<S>
+where
+    S: TxnSource + Clone + 'static,
+{
+    /// Enqueue one [`ApiRead`] on the user's executor and await its data
+    /// (spec #558 §3): the loop runs the read in its own transaction
+    /// (read-only within it by spec) and resolves the [`ReadOutcome`] —
+    /// the route maps a `Err` through the existing `AppError` helper,
+    /// exactly as today.
+    async fn read(&self, user_id: UserId, read: ApiRead) -> TbResult<ReadOutcome> {
+        let (request, reply) = Request::new_read(read);
+        self.send_request(user_id, request, reply, "read").await
+    }
+
+    /// Enqueue one [`ApiWrite`] on the user's executor and await the full
+    /// outcome (the `Summary` plus, for the descend, its match report)
+    /// (spec §6.2): the oneshot is unbounded — through a 15-minute
+    /// rate-limit backoff the write may wait long, and that is the spec'd
+    /// behavior. The route projects its payload: a create's `201` entity
+    /// or the descend's report body from the `WriteOutcome`, a `204`
+    /// otherwise.
+    async fn write(&self, user_id: UserId, write: ApiWrite) -> TbResult<WriteOutcome> {
+        let (request, reply) = Request::new_write(write);
+        self.send_request(user_id, request, reply, "write").await
+    }
+
+    /// Enqueue the [`Gear`](Request::Gear) hydration write on the user's
+    /// executor and await its frame (spec #558 §4): the loop runs
+    /// `update_gear` in its own transaction with its own session (a
+    /// `tb_strava` op — it cannot be an `ApiWrite` variant) and resolves
+    /// with the created parts' `Summary` — the frame (the union of the
+    /// parts it created, one entry per part, empty when nothing is new).
+    /// The `/user/summary` route runs this **before** its unified `User`
+    /// read, FIFO-ordered, so the snapshot body carries the new parts
+    /// exactly as today.
+    async fn hydrate_gear(&self, user_id: UserId) -> TbResult<Summary> {
+        let (request, reply) = Request::new_gear();
+        self.send_request(user_id, request, reply, "hydration")
+            .await
+    }
+
+    /// Register a stream for `user_id` (spawning the executor if it is not
+    /// running) and return a subscription to its frame channel plus a handle
+    /// to its fate, so the stream can tell a clean reap from a dead executor.
+    async fn subscribe(
+        &self,
+        user_id: UserId,
+    ) -> TbResult<(
+        broadcast::Receiver<Summary>,
+        watch::Receiver<ExecutorStatus>,
+    )> {
+        self.exec_field(user_id, |exec| {
+            (exec.frames.subscribe(), exec.status.clone())
+        })
+        .await
+    }
+
+    /// Enqueue the admin [`AllStats`] read on the user's executor and await
+    /// its stats (spec #558 §3.3): the admin's `GET /user/all` rides the
+    /// admin user's own channel — `get_all_stats` is a `tb_strava` op, so
+    /// it is an exec-level variant, dispatched loop-side in the loop's own
+    /// transaction. The oneshot wait is unbounded, like a read's (spec
+    /// #558 §3.7).
+    async fn all_stats(&self, user_id: UserId) -> TbResult<Vec<StravaStat>> {
+        let (request, reply) = Request::new_all_stats();
+        self.send_request(user_id, request, reply, "stats read")
+            .await
+    }
+
+    /// The admin rescan (spec #558 §5.2): one transaction
+    /// (`Activity::rescan_all`), then stop every live executor — the
+    /// rescan is all-users maintenance that bypasses the executors (the
+    /// spec §3/§6.4 carve-out), so no frame carries its effect: open
+    /// streams end, and each client's native reconnect + catch-up snapshot
+    /// re-hydrates it (issue #446).
+    async fn rescan(&self) -> TbResult<()> {
+        let mut store = self.source.begin().await?;
+        Activity::rescan_all(&mut store).await?;
+        store.commit().await?;
+        self.stop_all().await;
+        Ok(())
+    }
+
+    /// Run one admin sync for `user_id` (spec #558 §5.2): subscribe to
+    /// the executor's consumed-event channel (spawning it if it is not
+    /// running), then the enqueue transaction — the target's Strava id
+    /// (the queue is keyed by it) **and** the `Sync` event, committed
+    /// together — then wake the executor and await that event's
+    /// completion (unbounded — the spec'd behavior for the admin
+    /// endpoint). The awaited work runs in the target user's loop
+    /// transaction.
+    ///
+    /// The completion is correlated by the event's identity (owner, type,
+    /// `event_time`). If the channel closes or lags (the executor settled
+    /// mid-wait), the `strava_events` queue — the source of truth (spec
+    /// §4.6) — is consulted: a sync no longer queued has been consumed.
+    async fn sync(&self, user_id: UserId, event_time: i64) -> TbResult<()> {
+        // Subscribe before enqueuing, so the completion cannot be missed.
+        let mut done = self.events(user_id).await?;
+
+        // The enqueue txn (spec #558 §5.2): the target's Strava id (the
+        // queue is keyed by it) and the `Sync` event, committed together —
+        // the handler's user lookup folded into the enqueue.
+        let mut store = self.source.begin().await?;
+        let strava_id = store.stravauser_get_by_tbid(user_id).await?.strava_id();
+        insert_sync(strava_id, event_time, false, &mut store).await?;
+        store.commit().await?;
+
+        // Wake the executor (non-critical: the queue is the source of
+        // truth). The `events` subscription above already ensured the
+        // executor is running, so this only interrupts its idle wait.
+        self.wake(user_id).await;
+
+        // Await our sync's completion (unbounded, spec §6.4).
+        loop {
+            match done.recv().await {
+                Ok(event) if is_sync(&event, strava_id, event_time) => return Ok(()),
+                // Some other message completed; keep waiting for ours.
+                Ok(_) => continue,
+                Err(_) => {
+                    // The channel closed (or lagged): the executor settled
+                    // without announcing our event. Consult the queue — the
+                    // source of truth (spec §4.6): a sync no longer queued
+                    // has been consumed; otherwise re-subscribe (respawning
+                    // the executor) and keep waiting.
+                    if !self.sync_queued(strava_id, event_time).await? {
+                        return Ok(());
+                    }
+                    done = self.events(user_id).await?;
+                }
+            }
+        }
+    }
+
+    /// The all-users admin sync (spec #558 §5.2): one transaction
+    /// (`sync_users`) queuing a `Sync` event per (non-disabled) user, then
+    /// a wake **per queued user** — the intentional behavior change of the
+    /// migration: a running executor drains its queued sync immediately,
+    /// matching the per-user variant (a reaped, or not-yet-spawned,
+    /// executor is never woken into existence: the wake is a signal only,
+    /// and the DB queue is the source of truth). `user_id` narrows the
+    /// sync to one user (the route's `?user_id=` query), as before the
+    /// move.
+    async fn sync_all(
+        &self,
+        user_id: Option<UserId>,
+        event_time: i64,
+        migrate: bool,
+    ) -> TbResult<()> {
+        let mut store = self.source.begin().await?;
+        let queued = sync_users(user_id, event_time, migrate, &mut store).await?;
+        store.commit().await?;
+        // The per-user wake (spec #558 §5.2): a pure signal to a running
+        // executor — it never spawns one, and the DB queue is the source
+        // of truth, so a missed wake only delays the sync to the next
+        // spawn.
+        for user_id in queued {
+            self.wake(user_id).await;
+        }
+        Ok(())
+    }
+
+    /// The login upsert (spec #558 §5.2): one transaction
+    /// (`StravaUser::upsert` + `is_admin`), returning the identity and the
+    /// admin flag. The web layer keeps the query-parse, the scope check,
+    /// the HMAC path, the outbound exchange, and the tower-session write —
+    /// the wire-shape parsing stays beside the exchange it feeds.
+    async fn login_from_token(
+        &self,
+        athlete: StravaAthleteInfo,
+        refresh: Option<RefreshToken>,
+    ) -> TbResult<(StravaUser, bool)> {
+        let StravaAthleteInfo {
+            id,
+            firstname,
+            lastname,
+            avatar,
+            ..
+        } = athlete;
+        let mut store = self.source.begin().await?;
+        let user = StravaUser::upsert(
+            id,
+            &firstname,
+            &lastname,
+            &avatar,
+            refresh.as_ref(),
+            &mut store,
+        )
+        .await?;
+        let is_admin = user.tb_id().is_admin(&mut store).await?;
+        store.commit().await?;
+        Ok((user, is_admin))
+    }
+
+    /// The webhook accept (spec #558 §5.2): one transaction
+    /// (`InEvent::accept` — the queue insert, or the athlete-deauth
+    /// branch), then wake the user's executor if an event was queued
+    /// (fire-and-forget, `200`). A failed ingest 500s to Strava (its own
+    /// retry policy applies).
+    async fn accept_event(&self, event: InEvent) -> TbResult<()> {
+        let mut store = self.source.begin().await?;
+        let user_id = event.accept(&mut store).await?;
+        store.commit().await?;
+        // Fire the in-memory wake signal (spec §4.4): a pure signal to a
+        // running executor — it never spawns one, and the DB queue is the
+        // source of truth, so a missed wake only delays the event to the
+        // next spawn.
+        if let Some(user_id) = user_id {
+            self.wake(user_id).await;
+        }
+        Ok(())
+    }
+
+    /// The gear redirect URL (spec #558 §5.2): one transaction — the
+    /// caller's [`StravaUserSession`] built in-txn (the user-gated
+    /// `tb_strava` `strava_url` op, which checks the part's ownership),
+    /// then the Strava URL.
+    async fn gear_url(&self, user: UserId, id: PartId) -> TbResult<String> {
+        let mut store = self.source.begin().await?;
+        let mut session = StravaUserSession::for_user(user, &mut store).await?;
+        let uri = gear::strava_url(i32::from(id), &mut session, &mut store).await?;
+        store.commit().await?;
+        Ok(uri)
+    }
+
+    /// The activity redirect URL (spec #558 §5.2): one transaction — the
+    /// caller's [`StravaUserSession`] built in-txn (the user-gated
+    /// `tb_strava` `strava_url` op, which checks the activity's ownership),
+    /// then the Strava URL.
+    async fn activity_url(&self, user: UserId, id: ActivityId) -> TbResult<String> {
+        let mut store = self.source.begin().await?;
+        let session = StravaUserSession::for_user(user, &mut store).await?;
+        let uri = activity::strava_url(i64::from(id), &session, &mut store).await?;
+        store.commit().await?;
+        Ok(uri)
+    }
+
+    /// The user redirect URL (spec #558 §5.2): one transaction — the
+    /// `tb_strava` `strava_url` op for the target's tbid (no session: the
+    /// route has no user context to gate on).
+    async fn user_url(&self, id: UserId) -> TbResult<String> {
+        let mut store = self.source.begin().await?;
+        let uri = tb_strava::strava_url(id, &mut store).await?;
+        store.commit().await?;
+        Ok(uri)
+    }
+
+    /// The deauthorization (spec #558 §5.2): one transaction — the
+    /// target's [`StravaUserSession`] built in-txn, then
+    /// `tb_strava::user_deauthorize`. No wake, no message; the existing
+    /// race (deauth deletes the target's queued events outside the
+    /// target's loop) is preserved.
+    async fn deauthorize(&self, tbid: UserId) -> TbResult<()> {
+        let mut store = self.source.begin().await?;
+        let mut session = StravaUserSession::for_user(tbid, &mut store).await?;
+        tb_strava::user_deauthorize(&mut session, &mut store).await?;
+        store.commit().await?;
+        Ok(())
+    }
+
+    /// The user delete (spec #558 §5.2): one transaction — the target's
+    /// [`StravaUserSession`] built in-txn, then `tb_strava::user_delete`
+    /// (the deauthorization plus the row deletions). No wake, no message;
+    /// the existing race is preserved.
+    async fn delete_user(&self, tbid: UserId) -> TbResult<()> {
+        let mut store = self.source.begin().await?;
+        let mut session = StravaUserSession::for_user(tbid, &mut store).await?;
+        tb_strava::user_delete(&mut session, &mut store).await?;
+        store.commit().await?;
+        Ok(())
     }
 }
 

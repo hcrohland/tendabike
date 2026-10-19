@@ -721,12 +721,13 @@ impl ServicePlanStore for TestStravaStore {
 
 // ─── Canned Strava responses (feature `test-support`) ──────────────────────
 //
-// The axum suite runs the real executor loop, whose session is a real
-// `StravaUserSession`, so the suite maps canned responses for the URIs the
-// loop asks for — an empty athlete makes the summary route's hydration
-// (spec #558 §4) succeed offline (no new gear, the common case: no frame,
-// unchanged snapshot). `StravaUserSession::request_json` consults
-// [`canned_response`] before reaching the Strava API.
+// The seam suite (`sqlx/tests/executor_seam.rs`) runs the real executor
+// loop, whose session is a real `StravaUserSession`, so the suite maps
+// canned responses for the URIs the loop asks for — an empty activity list
+// makes the sync's activities fetch succeed offline (no new activities:
+// the loop's processing consumes the event and commits).
+// `StravaUserSession::request_json` consults [`canned_response`] before
+// reaching the Strava API.
 
 /// The canned Strava responses, keyed by URI (see the section docs).
 pub static CANNED_STRAVA: std::sync::LazyLock<std::sync::Mutex<HashMap<String, String>>> =

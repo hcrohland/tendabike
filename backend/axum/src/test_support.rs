@@ -15,7 +15,7 @@ use http::{HeaderMap, Method, Request, StatusCode, header};
 use http_body_util::BodyExt;
 use tb_domain::*;
 use tb_exec::{ExecutorStatus, ServiceApi};
-use tb_strava::{StravaId, StravaStat, StravaUser};
+use tb_strava::{StravaId, StravaStat, StravaUser, client::StravaAthleteInfo};
 use tokio::sync::{broadcast, watch};
 use tower::ServiceExt;
 use tower_sessions::{MemoryStore, Session, SessionManagerLayer};
@@ -248,9 +248,9 @@ pub enum StubCall {
     /// is the wire shape; the recorded value is what the handler sent).
     AcceptEvent(serde_json::Value),
     /// The gear redirect URL direct op.
-    GearUrl(UserId, i32),
+    GearUrl(UserId, PartId),
     /// The activity redirect URL direct op.
-    ActivityUrl(UserId, i64),
+    ActivityUrl(UserId, ActivityId),
     /// The user redirect URL direct op.
     UserUrl(UserId),
     /// The deauthorization direct op.
@@ -447,20 +447,17 @@ impl ServiceApi for StubApi {
 
     async fn login_from_token(
         &self,
-        id: StravaId,
-        firstname: &str,
-        lastname: &str,
-        avatar: &Option<String>,
+        athlete: StravaAthleteInfo,
         refresh: Option<oauth2::RefreshToken>,
     ) -> TbResult<(StravaUser, bool)> {
         self.calls
             .lock()
             .expect("stub")
             .push(StubCall::LoginFromToken {
-                id,
-                firstname: firstname.to_owned(),
-                lastname: lastname.to_owned(),
-                avatar: avatar.clone(),
+                id: athlete.id,
+                firstname: athlete.firstname,
+                lastname: athlete.lastname,
+                avatar: athlete.avatar,
                 refresh: refresh.map(|token| token.secret().to_owned()),
             });
         stub_reply(&self.login, "login_from_token")
@@ -473,7 +470,7 @@ impl ServiceApi for StubApi {
         stub_reply(&self.unit, "accept_event")
     }
 
-    async fn gear_url(&self, user: UserId, id: i32) -> TbResult<String> {
+    async fn gear_url(&self, user: UserId, id: PartId) -> TbResult<String> {
         self.calls
             .lock()
             .expect("stub")
@@ -481,7 +478,7 @@ impl ServiceApi for StubApi {
         stub_reply(&self.url, "gear_url")
     }
 
-    async fn activity_url(&self, user: UserId, id: i64) -> TbResult<String> {
+    async fn activity_url(&self, user: UserId, id: ActivityId) -> TbResult<String> {
         self.calls
             .lock()
             .expect("stub")

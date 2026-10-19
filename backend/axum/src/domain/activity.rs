@@ -19,7 +19,7 @@ use http::StatusCode;
 use crate::{
     AxumAdmin, RequestSession,
     appstate::AppState,
-    domain::read_mismatch,
+    domain::result_mismatch,
     error::{ApiResult, AppError},
 };
 use tb_domain::{
@@ -64,7 +64,7 @@ async fn act_get(
         .await?
     {
         ReadOutcome::Activity(activity) => Ok(Json(activity)),
-        _ => Err(read_mismatch("activity", "activity")),
+        _ => Err(result_mismatch("activity", "activity")),
     }
 }
 
@@ -124,14 +124,14 @@ async fn descend(
 ) -> Result<Json<DescendReport>, AppError> {
     // The write's outcome carries the report (the response body, not state
     // — it never rides the frame): the handler knows it sent the descend,
-    // any other outcome is a bug, guarded like the read mismatch.
+    // any other outcome is a bug, guarded by the outcome mismatch.
     let report = match state
         .api
         .write(user.user_id(), ApiWrite::ActivityDescend { data })
         .await?
     {
         WriteOutcome::Descend { report, .. } => report,
-        _ => return Err(read_mismatch("descend", "report")),
+        _ => return Err(result_mismatch("descend", "report")),
     };
     Ok(Json(report))
 }

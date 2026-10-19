@@ -33,7 +33,7 @@ use tb_domain::{
 use crate::{
     RequestSession,
     appstate::AppState,
-    domain::{created_entity, read_mismatch},
+    domain::{created_entity, result_mismatch},
     error::{ApiResult, AppError},
 };
 
@@ -75,7 +75,7 @@ async fn list_notes(
         .await?
     {
         ReadOutcome::PartNotes(notes) => Ok(Json(notes)),
-        _ => Err(read_mismatch("part notes", "notes")),
+        _ => Err(result_mismatch("part notes", "notes")),
     }
 }
 
@@ -179,7 +179,7 @@ async fn get_note_file(
         .await?
     {
         ReadOutcome::PartNoteFile(note, data) => (note, data),
-        _ => return Err(read_mismatch("part note file", "note and file")),
+        _ => return Err(result_mismatch("part note file", "note and file")),
     };
 
     let mime = note

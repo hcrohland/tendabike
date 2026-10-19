@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     RequestSession,
     appstate::AppState,
-    domain::{created_entity, read_mismatch},
+    domain::{created_entity, result_mismatch},
     error::{ApiResult, AppError},
 };
 use tb_domain::{
@@ -101,7 +101,7 @@ async fn list_shops(
 ) -> ApiResult<Vec<Shop>> {
     match state.api.read(session.user_id(), ApiRead::Shops).await? {
         ReadOutcome::Shops(shops) => Ok(Json(shops)),
-        _ => Err(read_mismatch("shops", "shops")),
+        _ => Err(result_mismatch("shops", "shops")),
     }
 }
 
@@ -140,7 +140,7 @@ async fn get_shop(
         .await?
     {
         ReadOutcome::Shop(shop) => Ok(Json(shop)),
-        _ => Err(read_mismatch("shop", "shop")),
+        _ => Err(result_mismatch("shop", "shop")),
     }
 }
 
@@ -197,7 +197,7 @@ async fn get_shop_parts(
         .await?
     {
         ReadOutcome::ShopParts(parts) => Ok(Json(parts)),
-        _ => Err(read_mismatch("shop parts", "parts")),
+        _ => Err(result_mismatch("shop parts", "parts")),
     }
 }
 
@@ -251,7 +251,7 @@ async fn search_shops(
         .await?
     {
         ReadOutcome::ShopSearch { shops, users } => Ok(Json((shops, users))),
-        _ => Err(read_mismatch("shop search", "shops and users")),
+        _ => Err(result_mismatch("shop search", "shops and users")),
     }
 }
 
@@ -286,7 +286,7 @@ async fn create_subscription(
         .await?
     {
         ReadOutcome::ShopSubscriptions(subscriptions) => subscriptions,
-        _ => return Err(read_mismatch("shop subscriptions", "subscriptions")),
+        _ => return Err(result_mismatch("shop subscriptions", "subscriptions")),
     };
     let subscription = subscriptions
         .into_iter()
@@ -317,7 +317,7 @@ async fn list_my_subscriptions(
         .await?
     {
         ReadOutcome::ShopSubscriptions(subscriptions) => Ok(Json(subscriptions)),
-        _ => Err(read_mismatch("shop subscriptions", "subscriptions")),
+        _ => Err(result_mismatch("shop subscriptions", "subscriptions")),
     }
 }
 
@@ -335,7 +335,7 @@ async fn list_shop_subscriptions(
         .await?
     {
         ReadOutcome::ShopSubscriptions(subscriptions) => Ok(Json(subscriptions)),
-        _ => Err(read_mismatch("shop subscriptions", "subscriptions")),
+        _ => Err(result_mismatch("shop subscriptions", "subscriptions")),
     }
 }
 
@@ -353,7 +353,7 @@ async fn get_subscription(
         .await?
     {
         ReadOutcome::ShopSubscription(subscription) => Ok(Json(subscription)),
-        _ => Err(read_mismatch("shop subscription", "subscription")),
+        _ => Err(result_mismatch("shop subscription", "subscription")),
     }
 }
 

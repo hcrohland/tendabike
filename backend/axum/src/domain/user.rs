@@ -13,7 +13,7 @@ use axum::{
 };
 use serde::Serialize;
 
-use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, domain::read_mismatch};
+use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, domain::result_mismatch};
 use tb_domain::{ApiRead, ReadOutcome, Session, ShopId, Summary};
 
 pub(super) fn router() -> Router<AppState> {
@@ -37,7 +37,7 @@ async fn getuser(
         .await?
     {
         ReadOutcome::User(state) => Ok(Json(state.user)),
-        _ => Err(read_mismatch("user", "user state")),
+        _ => Err(result_mismatch("user", "user state")),
     }
 }
 
@@ -66,7 +66,7 @@ async fn summary(
         .await?
     {
         ReadOutcome::User(state) => Ok(Json(state.summary)),
-        _ => Err(read_mismatch("user", "user state")),
+        _ => Err(result_mismatch("user", "user state")),
     }
 }
 
@@ -104,7 +104,7 @@ async fn export(user: RequestSession, State(state): State<AppState>) -> ApiResul
                 shops: summary.shops.live(),
             }))
         }
-        _ => Err(read_mismatch("user", "user state")),
+        _ => Err(result_mismatch("user", "user state")),
     }
 }
 

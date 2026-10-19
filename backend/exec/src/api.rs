@@ -44,15 +44,17 @@
 use oauth2::RefreshToken;
 use tokio::sync::{broadcast, watch};
 
-use tb_domain::{ApiRead, ApiWrite, ReadOutcome, Summary, TbResult, UserId, WriteOutcome};
-use tb_strava::{StravaId, StravaStat, StravaUser, event::InEvent};
+use tb_domain::{
+    ActivityId, ApiRead, ApiWrite, PartId, ReadOutcome, Summary, TbResult, UserId, WriteOutcome,
+};
+use tb_strava::{StravaStat, StravaUser, client::StravaAthleteInfo, event::InEvent};
 
-use crate::{ExecutorStatus, Registry, TxnSource};
+use crate::ExecutorStatus;
 
 /// The app's presentation-agnostic service API (spec #558 §2): 15 methods —
 /// the five channel ops (`read`, `write`, `hydrate_gear`, `subscribe`,
 /// `all_stats`) and the ten direct ops (spec #558 §5.2). Presentation
-/// layers depend on this trait, not the concrete [`Registry`].
+/// layers depend on this trait, not the concrete [`crate::Registry`].
 #[async_trait::async_trait]
 pub trait ServiceApi: Send + Sync {
     /// One per-user read on the user's executor (spec #558 §3): the loop
@@ -121,10 +123,7 @@ pub trait ServiceApi: Send + Sync {
     /// HMAC path, the outbound exchange, and the tower-session write.
     async fn login_from_token(
         &self,
-        id: StravaId,
-        firstname: &str,
-        lastname: &str,
-        avatar: &Option<String>,
+        athlete: StravaAthleteInfo,
         refresh: Option<RefreshToken>,
     ) -> TbResult<(StravaUser, bool)>;
 
@@ -136,12 +135,12 @@ pub trait ServiceApi: Send + Sync {
     /// The gear redirect URL (spec #558 §5.2): the `tb_strava` `strava_url`
     /// op for `id`, gated on the caller's ownership (the caller's session
     /// built in-txn).
-    async fn gear_url(&self, user: UserId, id: i32) -> TbResult<String>;
+    async fn gear_url(&self, user: UserId, id: PartId) -> TbResult<String>;
 
     /// The activity redirect URL (spec #558 §5.2): the `tb_strava`
     /// `strava_url` op for `id`, gated on the caller's ownership (the
     /// caller's session built in-txn).
-    async fn activity_url(&self, user: UserId, id: i64) -> TbResult<String>;
+    async fn activity_url(&self, user: UserId, id: ActivityId) -> TbResult<String>;
 
     /// The user redirect URL (spec #558 §5.2): the `tb_strava` `strava_url`
     /// op for the target's tbid (no session: the route has no user context
@@ -157,88 +156,4 @@ pub trait ServiceApi: Send + Sync {
     /// session built in-txn, then `tb_strava::user_delete`. The existing
     /// queue race is preserved.
     async fn delete_user(&self, tbid: UserId) -> TbResult<()>;
-}
-
-#[async_trait::async_trait]
-impl<S> ServiceApi for Registry<S>
-where
-    S: TxnSource + Clone + 'static,
-{
-    async fn read(&self, user_id: UserId, read: ApiRead) -> TbResult<ReadOutcome> {
-        Registry::read(self, user_id, read).await
-    }
-
-    async fn write(&self, user_id: UserId, write: ApiWrite) -> TbResult<WriteOutcome> {
-        Registry::write(self, user_id, write).await
-    }
-
-    async fn hydrate_gear(&self, user_id: UserId) -> TbResult<Summary> {
-        Registry::hydrate_gear(self, user_id).await
-    }
-
-    async fn subscribe(
-        &self,
-        user_id: UserId,
-    ) -> TbResult<(
-        broadcast::Receiver<Summary>,
-        watch::Receiver<ExecutorStatus>,
-    )> {
-        Registry::subscribe(self, user_id).await
-    }
-
-    async fn all_stats(&self, user_id: UserId) -> TbResult<Vec<StravaStat>> {
-        Registry::all_stats(self, user_id).await
-    }
-
-    async fn rescan(&self) -> TbResult<()> {
-        Registry::rescan(self).await
-    }
-
-    async fn sync(&self, user_id: UserId, event_time: i64) -> TbResult<()> {
-        Registry::sync(self, user_id, event_time).await
-    }
-
-    async fn sync_all(
-        &self,
-        user_id: Option<UserId>,
-        event_time: i64,
-        migrate: bool,
-    ) -> TbResult<()> {
-        Registry::sync_all(self, user_id, event_time, migrate).await
-    }
-
-    async fn login_from_token(
-        &self,
-        id: StravaId,
-        firstname: &str,
-        lastname: &str,
-        avatar: &Option<String>,
-        refresh: Option<RefreshToken>,
-    ) -> TbResult<(StravaUser, bool)> {
-        Registry::login_from_token(self, id, firstname, lastname, avatar, refresh).await
-    }
-
-    async fn accept_event(&self, event: InEvent) -> TbResult<()> {
-        Registry::accept_event(self, event).await
-    }
-
-    async fn gear_url(&self, user: UserId, id: i32) -> TbResult<String> {
-        Registry::gear_url(self, user, id).await
-    }
-
-    async fn activity_url(&self, user: UserId, id: i64) -> TbResult<String> {
-        Registry::activity_url(self, user, id).await
-    }
-
-    async fn user_url(&self, id: UserId) -> TbResult<String> {
-        Registry::user_url(self, id).await
-    }
-
-    async fn deauthorize(&self, tbid: UserId) -> TbResult<()> {
-        Registry::deauthorize(self, tbid).await
-    }
-
-    async fn delete_user(&self, tbid: UserId) -> TbResult<()> {
-        Registry::delete_user(self, tbid).await
-    }
 }

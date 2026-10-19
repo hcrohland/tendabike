@@ -13,7 +13,7 @@ use tower_sessions::Session as TowerSession;
 
 use tb_domain::{Session as TbSession, ShopId, TbResult, UserId};
 use tb_strava::client::StravaTokenResponse;
-use tb_strava::{StravaId, StravaStore, StravaUser};
+use tb_strava::{StravaId, StravaUser};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct RequestSession {
@@ -58,39 +58,6 @@ impl RequestSession {
         }
         .update()
         .await
-    }
-
-    /// User for admin actions to impersonate user. The body is the
-    /// executor-side twin's (`tb_strava::StravaUserSession::for_user`)
-    /// six-field init list — the types deliberately diverge (spec #558
-    /// §6.5): this one is serialized into the tower session and carries
-    /// `shop`; the twin is in-memory and executor-scoped. An empty access
-    /// token with a past expiry, so the first Strava call forces a token
-    /// refresh. Kept as the web layer's impersonation constructor even
-    /// though the direct ops build their session in-txn via the twin.
-    #[allow(dead_code)]
-    pub(crate) async fn create_from_id(
-        _admin: AxumAdmin,
-        user: UserId,
-        store: &mut impl StravaStore,
-    ) -> TbResult<RequestSession> {
-        let user = StravaUser::read(user, store).await?;
-
-        let strava_id = user.strava_id();
-        let id = user.tb_id();
-        let is_admin = id.is_admin(store).await?;
-        let refresh_token = user.refresh_token();
-
-        Ok(Self {
-            id,
-            strava_id,
-            is_admin,
-            access_token: AccessToken::new(String::default()),
-            expires_at: Some(SystemTime::UNIX_EPOCH),
-            refresh_token,
-            session: None,
-            shop: None,
-        })
     }
 
     /// A session with plausible values for tests (valid access token for an hour).
