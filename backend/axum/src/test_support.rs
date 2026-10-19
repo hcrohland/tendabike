@@ -279,8 +279,6 @@ pub struct StubApi {
     unit: Mutex<VecDeque<TbResult<()>>>,
     /// The redirect-URL direct ops (gear, activity, user).
     url: Mutex<VecDeque<TbResult<String>>>,
-    /// The login upsert direct op.
-    login: Mutex<VecDeque<TbResult<(StravaUser, bool)>>>,
     /// The SSE pairs the stub owns: one broadcast (the frames) + watch
     /// (the executor's fate) per subscribed user.
     streams: Mutex<HashMap<UserId, (broadcast::Sender<Summary>, watch::Sender<ExecutorStatus>)>>,
@@ -320,11 +318,6 @@ impl StubApi {
     /// Queue the reply the next redirect-URL direct op gets.
     pub fn reply_url(&self, reply: TbResult<String>) {
         self.url.lock().expect("stub").push_back(reply);
-    }
-
-    /// Queue the reply the next `login_from_token` call gets.
-    pub fn reply_login(&self, reply: TbResult<(StravaUser, bool)>) {
-        self.login.lock().expect("stub").push_back(reply);
     }
 
     /// Every call the handlers made, in order — the recorded-call
@@ -460,7 +453,18 @@ impl ServiceApi for StubApi {
                 avatar: athlete.avatar,
                 refresh: refresh.map(|token| token.secret().to_owned()),
             });
-        stub_reply(&self.login, "login_from_token")
+        // The only route that reaches the op (`GET /strava/token`) cannot
+        // complete in this suite — the outbound token exchange is a real
+        // `tb_strava` op over the raw HTTP client, which the canned-response
+        // hook does not intercept — so the stub records and always succeeds.
+        Ok((
+            StravaUser {
+                id: StravaId::from(1),
+                tendabike_id: UserId::from(1),
+                refresh_token: None,
+            },
+            false,
+        ))
     }
 
     async fn accept_event(&self, event: tb_strava::event::InEvent) -> TbResult<()> {
