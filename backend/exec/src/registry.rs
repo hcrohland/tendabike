@@ -51,7 +51,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use log::info;
+use log::debug;
 use oauth2::RefreshToken;
 use tokio::sync::{Mutex, Notify, broadcast, oneshot, watch};
 
@@ -289,7 +289,7 @@ where
         let (events, _) = broadcast::channel(BROADCAST_CAPACITY);
         let (status_tx, status_rx) = watch::channel(ExecutorStatus::Running);
         let wake = Arc::new(Notify::new());
-        info!("spawning the executor for user {user_id}");
+        debug!("spawning the executor for user {user_id}");
 
         // The task keeps a clone of the frame sender alive until *after* it
         // records its fate, so a stream that sees the frame channel close has
