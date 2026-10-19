@@ -290,42 +290,28 @@ where
             .await
     }
 
-    /// Run one admin sync for `user_id` (spec §6.4): read the target's
-    /// Strava id (the queue is keyed by it), then subscribe to the
-    /// executor's consumed-event channel (spawning it if it is not
-    /// running), enqueue a `Sync` event on the `strava_events` queue, wake
-    /// the executor, and await that event's completion (unbounded — the
-    /// spec'd behavior for the admin endpoint).
+    /// Run one admin sync for `user_id` (spec #558 §5.2): subscribe to
+    /// the executor's consumed-event channel (spawning it if it is not
+    /// running), then the enqueue transaction — the target's Strava id
+    /// (the queue is keyed by it) **and** the `Sync` event, committed
+    /// together — then wake the executor and await that event's
+    /// completion (unbounded — the spec'd behavior for the admin
+    /// endpoint). The awaited work runs in the target user's loop
+    /// transaction.
     ///
     /// The completion is correlated by the event's identity (owner, type,
     /// `event_time`). If the channel closes or lags (the executor settled
     /// mid-wait), the `strava_events` queue — the source of truth (spec
     /// §4.6) — is consulted: a sync no longer queued has been consumed.
     pub async fn sync(&self, user_id: UserId, event_time: i64) -> TbResult<()> {
-        // The executor's event queue is keyed by the Strava id, so read the
-        // target user's Strava id first (the lookup's own transaction, as
-        // the web layer's admin sync handler did before the move).
-        let mut store = self.source.begin().await?;
-        let strava_id = store.stravauser_get_by_tbid(user_id).await?.strava_id();
-        store.commit().await?;
-
-        self.sync_strava(user_id, strava_id, event_time).await
-    }
-
-    /// The admin sync's mechanism, given the target's Strava id (spec §6.4):
-    /// subscribe → enqueue → wake → await the consumed-event broadcast,
-    /// with the queue-fallback read txn only on a lost broadcast.
-    async fn sync_strava(
-        &self,
-        user_id: UserId,
-        strava_id: StravaId,
-        event_time: i64,
-    ) -> TbResult<()> {
         // Subscribe before enqueuing, so the completion cannot be missed.
         let mut done = self.events(user_id).await?;
 
-        // Enqueue the sync on the DB queue, like the webhook does.
+        // The enqueue txn (spec #558 §5.2): the target's Strava id (the
+        // queue is keyed by it) and the `Sync` event, committed together —
+        // the handler's user lookup folded into the enqueue.
         let mut store = self.source.begin().await?;
+        let strava_id = store.stravauser_get_by_tbid(user_id).await?.strava_id();
         insert_sync(strava_id, event_time, false, &mut store).await?;
         store.commit().await?;
 
@@ -403,9 +389,14 @@ where
     }
 
     /// The all-users admin sync (spec #558 §5.2): one transaction
-    /// (`sync_users`) queuing a `Sync` event per (non-disabled) user.
-    /// `user_id` narrows the sync to one user (the route's `?user_id=`
-    /// query), as before the move.
+    /// (`sync_users`) queuing a `Sync` event per (non-disabled) user, then
+    /// a wake **per queued user** — the intentional behavior change of the
+    /// migration: a running executor drains its queued sync immediately,
+    /// matching the per-user variant (a reaped, or not-yet-spawned,
+    /// executor is never woken into existence: the wake is a signal only,
+    /// and the DB queue is the source of truth). `user_id` narrows the
+    /// sync to one user (the route's `?user_id=` query), as before the
+    /// move.
     pub async fn sync_all(
         &self,
         user_id: Option<UserId>,
@@ -413,8 +404,15 @@ where
         migrate: bool,
     ) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        sync_users(user_id, event_time, migrate, &mut store).await?;
+        let queued = sync_users(user_id, event_time, migrate, &mut store).await?;
         store.commit().await?;
+        // The per-user wake (spec #558 §5.2): a pure signal to a running
+        // executor — it never spawns one, and the DB queue is the source
+        // of truth, so a missed wake only delays the sync to the next
+        // spawn.
+        for user_id in queued {
+            self.wake(user_id).await;
+        }
         Ok(())
     }
 

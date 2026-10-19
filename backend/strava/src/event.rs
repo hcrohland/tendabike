@@ -564,16 +564,23 @@ pub async fn process(
     }
 }
 
+/// Queue a `Sync` event for every (non-disabled) user (the all-users
+/// admin sync's op, spec #558 §5.2): `user_id` narrows the sync to one
+/// user. Returns the tbids of the users a sync was queued for — the
+/// caller's per-user wake list (running executors drain the queued syncs
+/// immediately, matching the per-user variant; the intentional behavior
+/// change of the migration).
 pub async fn sync_users(
     user_id: Option<UserId>,
     time: i64,
     migrate: bool,
     store: &mut impl StravaDataStore,
-) -> TbResult<()> {
+) -> TbResult<Vec<UserId>> {
     let users = match user_id {
         Some(id) => vec![store.stravauser_get_by_tbid(id).await?],
         None => store.stravauser_get_all().await?,
     };
+    let mut queued = Vec::new();
     for user in users {
         if user.disabled() {
             warn!("user {} disabled, skipping", user.strava_id());
@@ -581,8 +588,9 @@ pub async fn sync_users(
         }
         info!("Adding sync for {:?} at {time}", user.strava_id());
         event::insert_sync(user.strava_id(), time, migrate, store).await?;
+        queued.push(user.tb_id());
     }
-    Ok(())
+    Ok(queued)
 }
 
 #[cfg(test)]

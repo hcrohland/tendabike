@@ -80,9 +80,11 @@ use std::time::Duration;
 use serde::de::DeserializeOwned;
 use tb_domain::test_support::{MemStore, part_type_ids::CHAIN, sole_live};
 use tb_domain::{ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, TbResult, UserId};
-use tb_exec::{Request, request_channel, run};
+use tb_exec::{ExecutorStatus, Registry, Request, request_channel, run};
 use tb_sqlx::DbPool;
-use tb_strava::{StravaDataStore, StravaId, StravaSession};
+use tb_strava::{
+    StravaDataStore, StravaId, StravaSession, event::InEvent, test_support::canned_strava,
+};
 use time::macros::datetime;
 use tokio::sync::{MutexGuard, Notify, broadcast};
 
@@ -890,4 +892,406 @@ async fn queue_sync_count(pool: &DbPool, strava: StravaId, event_time: i64) -> i
     .expect("reading the queue");
     drop(conn);
     n
+}
+
+/// The per-user admin sync direct op end to end on the live adapter (spec
+/// #558 §5.2/§8): the enqueue transaction — the target's Strava id lookup
+/// **and** the `Sync` event, committed together — then the wake, then the
+/// await on the consumed-event broadcast (unbounded). The awaited work
+/// runs in the target user's loop transaction; the offline seam's canned
+/// empty-activities response completes the sync without the Strava API.
+#[tokio::test]
+#[ignore]
+async fn sync_enqueues_wakes_and_awaits() {
+    let seam = ready().await;
+    let (user, strava) = test_identity();
+    // The user's Strava row (the enqueue txn's lookup).
+    {
+        let mut conn = seam.pool.begin().await.expect("a transaction");
+        sqlx::query(
+            "INSERT INTO strava_users (id, tendabike_id, refresh_token) VALUES ($1, $2, 'tok')",
+        )
+        .bind(i32::from(strava))
+        .bind(i32::from(user))
+        .execute(&mut **conn)
+        .await
+        .expect("seeding the strava user");
+        conn.commit().await.expect("committing the seed");
+    }
+    // The offline seam: the sync's activities fetch (the `after` cursor is
+    // the event time) returns nothing, so the loop's processing deletes
+    // the event (consumed) and commits.
+    canned_strava("/activities?after=100&per_page=25", "[]");
+    // The long idle window: with no stream attached the spawned executor's
+    // first probe drains the queue — the wake is the signal that keeps the
+    // mechanism intact for a running, idle-waiting executor.
+    let registry = Registry::new(
+        seam.pool.clone(),
+        Duration::from_secs(3600),
+        Duration::from_secs(15),
+    );
+
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, registry.sync(user, 100))
+        .await
+        .expect("the admin sync must complete in time");
+    outcome.expect("the sync must succeed");
+
+    // The awaited work ran in the target user's loop transaction: the
+    // consumed event is gone from the queue for good.
+    let n = queue_sync_count(&seam.pool, strava, 100).await;
+    assert_eq!(n, 0, "the consumed sync must be gone from the queue");
+}
+
+/// The all-users admin sync direct op (spec #558 §5.2/§8) — the one
+/// intentional behavior change of the migration: one transaction
+/// (`sync_users`) queuing a `Sync` event per (non-disabled) user, then a
+/// wake **per queued user**. The test's two executors are running and
+/// idle-waiting with streams attached (the long idle window never
+/// re-probes mid-test), so the per-user wake is the only drain trigger:
+/// without it the queues would stay full for the whole idle window.
+#[tokio::test]
+#[ignore]
+async fn sync_all_wakes_each_running_executor() {
+    let seam = ready().await;
+    let (user, strava) = test_identity();
+    // A second user (the users row plus the Strava row).
+    let (user2, strava2) = (UserId::from(2), StravaId::from(43));
+    {
+        let mut conn = seam.pool.begin().await.expect("a transaction");
+        sqlx::query(
+            "INSERT INTO users (id, name, firstname, is_admin) VALUES (2, 'Seam Two', 'Seam', false)",
+        )
+        .execute(&mut **conn)
+        .await
+        .expect("seeding the second user");
+        sqlx::query(
+            "INSERT INTO strava_users (id, tendabike_id, refresh_token) VALUES ($1, $2, 'tok')",
+        )
+        .bind(i32::from(strava))
+        .bind(i32::from(user))
+        .execute(&mut **conn)
+        .await
+        .expect("seeding the strava user");
+        sqlx::query(
+            "INSERT INTO strava_users (id, tendabike_id, refresh_token) VALUES ($1, $2, 'tok')",
+        )
+        .bind(i32::from(strava2))
+        .bind(i32::from(user2))
+        .execute(&mut **conn)
+        .await
+        .expect("seeding the second strava user");
+        conn.commit().await.expect("committing the seed");
+    }
+    // The offline seam: both users' syncs find no activities and complete
+    // (the `after` cursor is the event time).
+    canned_strava("/activities?after=200&per_page=25", "[]");
+    let registry = Registry::new(
+        seam.pool.clone(),
+        Duration::from_secs(3600),
+        Duration::from_secs(15),
+    );
+    // Both executors running and idle-waiting (streams attached keep them
+    // alive; the one-hour re-probe never fires mid-test).
+    let (_frames1, _status1) = registry.subscribe(user).await.expect("subscribing user 1");
+    let (_frames2, _status2) = registry.subscribe(user2).await.expect("subscribing user 2");
+    // Let both executors finish their first (empty) probe and park in the
+    // idle sleep: from here on, the per-user wake is the only drain
+    // trigger (the re-probe is an hour out).
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, registry.sync_all(None, 200, false))
+        .await
+        .expect("the all-users sync must return in time");
+    outcome.expect("the all-users sync must succeed");
+
+    // Both queues drain — the per-user wake is the only trigger (the idle
+    // re-probe is an hour out).
+    let deadline = tokio::time::Instant::now() + TEST_TIMEOUT;
+    loop {
+        let n1 = queue_sync_count(&seam.pool, strava, 200).await;
+        let n2 = queue_sync_count(&seam.pool, strava2, 200).await;
+        if n1 == 0 && n2 == 0 {
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "both queued syncs must be consumed (user 1: {n1}, user 2: {n2})"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The direct ops (spec #558 §5.2/§8)
+// ---------------------------------------------------------------------------
+
+/// Seed the fixture user's Strava row (and, when `queue_event`, one queued
+/// event for it) — the direct ops' setup shape.
+async fn seed_strava_user(pool: &DbPool, queue_event: bool) {
+    let (user, strava) = test_identity();
+    let mut conn = pool.begin().await.expect("a transaction");
+    sqlx::query(
+        "INSERT INTO strava_users (id, tendabike_id, refresh_token) VALUES ($1, $2, 'tok')",
+    )
+    .bind(i32::from(strava))
+    .bind(i32::from(user))
+    .execute(&mut **conn)
+    .await
+    .expect("seeding the strava user");
+    if queue_event {
+        sqlx::query(
+            "INSERT INTO strava_events \
+             (object_type, object_id, aspect_type, updates, owner_id, subscription_id, event_time) \
+             VALUES ('activity', 7, 'create', '{}', $1, 0, 100)",
+        )
+        .bind(i32::from(strava))
+        .execute(&mut **conn)
+        .await
+        .expect("seeding the queued event");
+    }
+    conn.commit().await.expect("committing the seed");
+}
+
+/// One test's registry over the live pool (the direct ops' shape): the
+/// suite's short idle cadence; the ops under test never rely on the
+/// re-probe.
+fn registry(pool: &DbPool) -> Registry<DbPool> {
+    Registry::new(pool.clone(), IDLE_TIMEOUT, Duration::from_secs(15))
+}
+
+/// The queue's row count for `strava` on a fresh connection.
+async fn queue_count(pool: &DbPool, strava: StravaId) -> i64 {
+    let mut conn = pool.begin().await.expect("a fresh connection");
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM strava_events WHERE owner_id = $1")
+        .bind(i32::from(strava))
+        .fetch_one(&mut **conn)
+        .await
+        .expect("reading the queue");
+    drop(conn);
+    n
+}
+
+/// The admin rescan direct op (spec #558 §5.2/§8): one transaction
+/// (`Activity::rescan_all`), then `stop_all` — every live executor aborted
+/// (the watchdog records `Dead` on the abort `JoinError`), its frame
+/// channel closed, so the open stream ends (the client's native reconnect
+/// + catch-up snapshot re-hydrates it).
+#[tokio::test]
+#[ignore]
+async fn rescan_stops_the_executors() {
+    let seam = ready().await;
+    let (user, _strava) = test_identity();
+    seed_strava_user(&seam.pool, false).await;
+    let reg = registry(&seam.pool);
+    let (mut frames, status) = reg.subscribe(user).await.expect("subscribing");
+    // Let the executor finish its first (empty) probe: it is live when the
+    // rescan stops it.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.rescan())
+        .await
+        .expect("the rescan must finish in time");
+    outcome.expect("the rescan must succeed");
+
+    // The executor is dead (the abort's watchdog recorded it on the fate
+    // channel — the registry's own map is cleared by `stop_all`).
+    let deadline = tokio::time::Instant::now() + TEST_TIMEOUT;
+    loop {
+        if *status.borrow() == ExecutorStatus::Dead {
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "the aborted executor must record Dead"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    // The frame channel is closed: the open stream ends (the recv's own
+    // `Err(Closed)` — all senders dropped by the abort + map clear).
+    let recv = tokio::time::timeout(TEST_TIMEOUT, frames.recv())
+        .await
+        .expect("the close must be observed in time");
+    assert!(recv.is_err(), "the rescan must close the frame channel");
+}
+
+/// The webhook accept direct op (spec #558 §5.2/§8): one transaction — the
+/// queue insert (or the athlete-deauth branch) — then the wake if a user
+/// was queued (fire-and-forget: it never spawns). A failed ingest (an
+/// unknown owner) 500s to Strava (its own retry policy applies).
+#[tokio::test]
+#[ignore]
+async fn accept_event_queues_the_event() {
+    let seam = ready().await;
+    let (_user, strava) = test_identity();
+    seed_strava_user(&seam.pool, false).await;
+    let reg = registry(&seam.pool);
+
+    // A valid activity event (the webhook's wire shape, deserialized the
+    // way the route does).
+    let event: InEvent = serde_json::from_value(serde_json::json!({
+        "object_type": "activity",
+        "object_id": 7,
+        "aspect_type": "create",
+        "updates": {},
+        "owner_id": i32::from(strava),
+        "subscription_id": 0,
+        "event_time": 100
+    }))
+    .expect("a valid event");
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.accept_event(event))
+        .await
+        .expect("the accept must finish in time");
+    outcome.expect("the accept must succeed");
+
+    // The event is queued (the DB queue is the source of truth; no
+    // executor was running, so nothing consumed it).
+    let n = queue_count(&seam.pool, strava).await;
+    assert_eq!(n, 1, "the accepted event must be queued");
+
+    // An unknown owner: the ingest fails (the 500 to Strava).
+    let bad: InEvent = serde_json::from_value(serde_json::json!({
+        "object_type": "activity",
+        "object_id": 7,
+        "aspect_type": "create",
+        "updates": {},
+        "owner_id": 999,
+        "subscription_id": 0,
+        "event_time": 100
+    }))
+    .expect("a valid event");
+    let err = reg.accept_event(bad).await.expect_err("unknown owner");
+    assert!(
+        matches!(err, tb_domain::Error::BadRequest(_)),
+        "the unknown-owner ingest must fail, got {err:?}"
+    );
+}
+
+/// The webhook accept's athlete-deauth branch (spec #558 §5.2): one
+/// transaction — the deauthorization disables the user (the queued events
+/// dropped, the refresh token cleared) — and no wake (nothing was queued).
+#[tokio::test]
+#[ignore]
+async fn accept_event_athlete_deauth_disables_the_user() {
+    let seam = ready().await;
+    let (_user, strava) = test_identity();
+    seed_strava_user(&seam.pool, true).await;
+    let reg = registry(&seam.pool);
+
+    let event: InEvent = serde_json::from_value(serde_json::json!({
+        "object_type": "athlete",
+        "object_id": 0,
+        "aspect_type": "update",
+        "updates": {"authorized": "false"},
+        "owner_id": i32::from(strava),
+        "subscription_id": 0,
+        "event_time": 100
+    }))
+    .expect("a valid event");
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.accept_event(event))
+        .await
+        .expect("the accept must finish in time");
+    outcome.expect("the accept must succeed");
+
+    // The user is disabled (the refresh token cleared) and the queue is
+    // empty: the deauthorization's one transaction did both.
+    let mut conn = seam.pool.begin().await.expect("a fresh connection");
+    let token: Option<String> =
+        sqlx::query_scalar("SELECT refresh_token FROM strava_users WHERE id = $1")
+            .bind(i32::from(strava))
+            .fetch_one(&mut **conn)
+            .await
+            .expect("reading the strava user");
+    assert!(token.is_none(), "the deauth must clear the refresh token");
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM strava_events")
+        .fetch_one(&mut **conn)
+        .await
+        .expect("reading the queue");
+    assert_eq!(n, 0, "the deauth must drop the queued events");
+    drop(conn);
+}
+
+/// The deauthorization direct op (spec #558 §5.2/§8): one transaction —
+/// the target's session built in-txn, then `user_deauthorize` (the Strava
+/// token revocation, a failure of which is non-fatal and logged, plus the
+/// local disable). No wake, no message; the existing queue race is
+/// preserved.
+#[tokio::test]
+#[ignore]
+async fn deauthorize_disables_the_user_and_clears_the_queue() {
+    let seam = ready().await;
+    // The op's Strava token revocation builds the (lazily-constructed)
+    // Strava client: the credentials are placeholders (the revocation
+    // fails, and `user_deauthorize` treats that as non-fatal).
+    unsafe {
+        std::env::set_var("CLIENT_ID", "seam");
+        std::env::set_var("CLIENT_SECRET", "seam");
+    }
+    let (user, strava) = test_identity();
+    seed_strava_user(&seam.pool, true).await;
+    let reg = registry(&seam.pool);
+
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.deauthorize(user))
+        .await
+        .expect("the deauthorization must finish in time");
+    outcome.expect("the deauthorization must succeed");
+
+    // The one transaction disabled the user: the refresh token is cleared
+    // and the queued events are gone.
+    let n = queue_count(&seam.pool, strava).await;
+    assert_eq!(n, 0, "the deauth must drop the queued events");
+    let mut conn = seam.pool.begin().await.expect("a fresh connection");
+    let token: Option<String> =
+        sqlx::query_scalar("SELECT refresh_token FROM strava_users WHERE id = $1")
+            .bind(i32::from(strava))
+            .fetch_one(&mut **conn)
+            .await
+            .expect("reading the strava user");
+    assert!(token.is_none(), "the deauth must clear the refresh token");
+    drop(conn);
+}
+
+/// The user delete direct op (spec #558 §5.2/§8): one transaction — the
+/// target's session, the deauthorization, the row deletions (the user plus
+/// their parts, services, plans, attachments, activities, usages). No wake,
+/// no message.
+#[tokio::test]
+#[ignore]
+async fn delete_user_removes_the_rows() {
+    let seam = ready().await;
+    // As the deauth test: the delete's deauthorization half builds the
+    // Strava client (placeholder credentials; the failure is non-fatal).
+    unsafe {
+        std::env::set_var("CLIENT_ID", "seam");
+        std::env::set_var("CLIENT_SECRET", "seam");
+    }
+    let (user, strava) = test_identity();
+    seed_strava_user(&seam.pool, true).await;
+    let reg = registry(&seam.pool);
+
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.delete_user(user))
+        .await
+        .expect("the delete must finish in time");
+    outcome.expect("the delete must succeed");
+
+    // The rows are gone: the Strava row, the user row, the user's parts.
+    let mut conn = seam.pool.begin().await.expect("a fresh connection");
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM strava_users WHERE id = $1")
+        .bind(i32::from(strava))
+        .fetch_one(&mut **conn)
+        .await
+        .expect("reading the strava users");
+    assert_eq!(n, 0, "the strava user row must be gone");
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM users WHERE id = $1")
+        .bind(i32::from(user))
+        .fetch_one(&mut **conn)
+        .await
+        .expect("reading the users");
+    assert_eq!(n, 0, "the user row must be gone");
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM parts WHERE owner = $1")
+        .bind(i32::from(user))
+        .fetch_one(&mut **conn)
+        .await
+        .expect("reading the parts");
+    assert_eq!(n, 0, "the user's parts must be gone");
+    drop(conn);
 }
