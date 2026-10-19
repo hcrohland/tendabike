@@ -1,5 +1,5 @@
 use log::debug;
-use sqlx::{Acquire, FromRow};
+use sqlx::FromRow;
 use std::borrow::Borrow;
 use uuid::Uuid;
 
@@ -89,9 +89,12 @@ impl<'c> UsageStore for SqlxConn<'c> {
     {
         let len = vec.len();
 
-        // Start a SQLx transaction
-        let mut tx = self.begin().await.map_err(into_domain)?;
-
+        // The upserts run on the caller's transaction (`self` is already the
+        // open `PgTransaction` — the seam's contract: one operation, one
+        // store, inside the caller's `begin → … → commit`); a nested
+        // `begin` here would be ignored by Postgres (the "already a
+        // transaction in progress" notice) and its `commit` would commit
+        // the caller's transaction early.
         for usage in vec {
             let usage = DbUsage::from(usage.borrow());
             sqlx::query!(
@@ -107,13 +110,10 @@ impl<'c> UsageStore for SqlxConn<'c> {
                 usage.energy,
                 usage.count
             )
-            .execute(&mut *tx)
+            .execute(&mut **self.inner())
             .await
             .map_err(into_domain)?;
         }
-
-        // Commit the transaction
-        tx.commit().await.map_err(into_domain)?;
 
         Ok(len)
     }
