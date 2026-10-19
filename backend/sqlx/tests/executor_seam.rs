@@ -79,7 +79,9 @@ use std::time::Duration;
 
 use serde::de::DeserializeOwned;
 use tb_domain::test_support::{MemStore, part_type_ids::CHAIN, sole_live};
-use tb_domain::{ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, TbResult, UserId};
+use tb_domain::{
+    ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
+};
 use tb_exec::{ExecutorStatus, Registry, Request, request_channel, run};
 use tb_sqlx::DbPool;
 use tb_strava::{
@@ -1294,4 +1296,122 @@ async fn delete_user_removes_the_rows() {
         .expect("reading the parts");
     assert_eq!(n, 0, "the user's parts must be gone");
     drop(conn);
+}
+
+// ---------------------------------------------------------------------------
+// The executor lifecycle (spec #558 §4.4/§4.5)
+// ---------------------------------------------------------------------------
+
+/// Poll the registry's status map until the user's executor reports `want`
+/// (bounded by `TEST_TIMEOUT`): the reap/respawn transitions are these
+/// lifecycle tests' observables. The map's entry outlives a clean reap —
+/// the watchdog records `Reaped` on the fate watch, it does not remove the
+/// entry (only `stop_all` clears the map).
+async fn wait_for_status(reg: &Registry<DbPool>, user: UserId, want: ExecutorStatus) {
+    let deadline = tokio::time::Instant::now() + TEST_TIMEOUT;
+    loop {
+        if reg.status(user).await == Some(want) {
+            return;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "the executor must reach {want:?} in time"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+/// An attached stream keeps the executor alive past the idle window
+/// (spec #558 §4.4, amended — #446): the idle window is the cadence at
+/// which the idle loop re-probes the `strava_events` queue, not a reap
+/// trigger. `subscribe` is what the SSE endpoint does (it registers the
+/// stream on the frame channel and pins the executor), so the test's
+/// subscription's fate watch **is** the original executor's status: well
+/// past the window it still says `Running` (a reap-and-respawn churn would
+/// leave it `Reaped`), and a frame pushed past the window arrives on the
+/// stream (the channel is open and forwarding).
+#[tokio::test]
+#[ignore]
+async fn attached_stream_keeps_the_executor_alive() {
+    let seam = ready().await;
+    let (user, _strava) = test_identity();
+    // The user's Strava row: the spawn reads it to build the session.
+    seed_strava_user(&seam.pool, false).await;
+    // A short idle cadence (the queue re-probe cadence) so the old
+    // reap-on-idle policy would have reclaimed this executor quickly.
+    let registry = Registry::new(
+        seam.pool.clone(),
+        Duration::from_millis(300),
+        Duration::from_secs(15),
+    );
+
+    // The stream connects: `subscribe` is what the SSE endpoint does — it
+    // registers this stream on the executor's frame channel and pins the
+    // executor (spawning it if needed).
+    let (mut frames, status) = registry.subscribe(user).await.expect("subscribing");
+    wait_for_status(&registry, user, ExecutorStatus::Running).await;
+
+    // Wait well past the idle window (3× the 300ms cadence): under the old
+    // policy this executor would have reaped by now.
+    tokio::time::sleep(Duration::from_millis(1000)).await;
+
+    // (a) The original executor is still running — no reap, no respawn:
+    // the subscription's fate watch still says `Running`.
+    assert_eq!(
+        *status.borrow(),
+        ExecutorStatus::Running,
+        "an attached stream must keep its executor running past the idle window"
+    );
+
+    // (b) The stream is still alive: a frame pushed well past the idle
+    // window arrives on the subscriber's receiver.
+    registry.send_frame(user, Summary::default()).await;
+    let frame = tokio::time::timeout(TEST_TIMEOUT, frames.recv())
+        .await
+        .expect("the stream must stay open past the idle window")
+        .expect("the stream must not end while a stream is attached");
+    assert_eq!(frame, Summary::default());
+}
+
+/// The stream survives the executor's reap (spec #558 §4.5, amended —
+/// #446): a stream-less (write-only) spawn reaps as soon as its work is
+/// done — no streams attached is the only reap rule — and a stream
+/// connecting to the reaped executor respawns it and settles: the stream
+/// stays alive and a later frame is forwarded (no further reap: the
+/// attached stream keeps the executor alive).
+#[tokio::test]
+#[ignore]
+async fn stream_survives_executor_reap() {
+    let seam = ready().await;
+    let (user, _strava) = test_identity();
+    // The user's Strava row: both spawns read it to build their sessions.
+    seed_strava_user(&seam.pool, false).await;
+    // A short idle cadence (the queue re-probe cadence) so the write-only
+    // spawn reaps quickly.
+    let registry = Registry::new(
+        seam.pool.clone(),
+        Duration::from_millis(300),
+        Duration::from_secs(15),
+    );
+
+    // A write-only spawn: no stream attached, so the executor reaps as
+    // soon as its work is done (the no-streams rule — immediate, not after
+    // an idle window).
+    registry
+        .write(user, ApiWrite::UserOnboardingPostpone)
+        .await
+        .expect("the write must succeed");
+    wait_for_status(&registry, user, ExecutorStatus::Reaped).await;
+
+    // The stream connects to the reaped executor: the connect respawns it
+    // and settles — the stream stays alive and a later frame is forwarded
+    // (no further reap: the attached stream keeps the executor alive).
+    let (mut frames, _status) = registry.subscribe(user).await.expect("subscribing");
+    wait_for_status(&registry, user, ExecutorStatus::Running).await;
+    registry.send_frame(user, Summary::default()).await;
+    let frame = tokio::time::timeout(TEST_TIMEOUT, frames.recv())
+        .await
+        .expect("the stream must stay open after the respawn")
+        .expect("the stream must not end while a stream is attached");
+    assert_eq!(frame, Summary::default());
 }
