@@ -368,6 +368,11 @@ async fn user_requires_auth() {
 }
 
 #[tokio::test]
+async fn user_ping_requires_auth() {
+    expect_unauth(Method::GET, "/api/user/ping").await;
+}
+
+#[tokio::test]
 async fn part_requires_auth() {
     expect_unauth(Method::GET, "/api/part/categories").await;
 }
@@ -469,7 +474,7 @@ async fn admin_sync_requires_admin() {
 #[tokio::test]
 async fn wrong_method_not_allowed() {
     let (app, _store, _stub) = stub_app();
-    let (status, _headers, _body) = run(app, Method::POST, "/api/user/summary", None).await;
+    let (status, _headers, _body) = run(app, Method::POST, "/api/user", None).await;
     assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
 }
 
@@ -482,12 +487,14 @@ async fn unknown_path_not_found() {
 
 // ─── Read routes (canned `ReadOutcome` in, status + body + recorded call) ─
 
-/// `GET /api/user` rides the unified `User` read (spec #558 §3.5) and
-/// answers `200` with the bare `User` projection of the `UserState`
-/// composite.
-#[tokio::test]
-async fn get_user_returns_200_and_user_body() {
+/// `GET /api/user` runs the hydration write, then the unified `User` read
+/// — two FIFO-ordered messages on the user's executor (spec #558 §4) — and
+/// answers `200` with the full `UserState` (the user record plus the
+/// `Summary`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn get_user_returns_200_and_userstate_body() {
     let (app, store, stub) = stub_app();
+    stub.reply_hydrate(Ok(Summary::default()));
     stub.reply_read(Ok(ReadOutcome::User(Box::new(UserState {
         user: user(),
         summary: Summary::default(),
@@ -497,14 +504,14 @@ async fn get_user_returns_200_and_user_body() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"}"#
+        r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"},"summary":{"activities":{},"parts":{},"attachments":{},"usages":{},"services":{},"plans":{},"part_notes":{},"shops":{},"users":{}}}"#
     );
     assert_eq!(
         stub.calls(),
-        vec![StubCall::Read(
-            UserId::from(1),
-            ApiRead::User { shop: None }
-        )]
+        vec![
+            StubCall::HydrateGear(UserId::from(1)),
+            StubCall::Read(UserId::from(1), ApiRead::User { shop: None }),
+        ]
     );
 }
 
@@ -535,10 +542,10 @@ async fn get_user_export_returns_200_and_export_body() {
     );
 }
 
-/// `GET /api/user/summary` runs the hydration write, then the unified
-/// `User` read — two FIFO-ordered messages on the user's executor (spec
-/// #558 §4) — and answers `200` with the `Summary` projection: the nine
-/// id-keyed maps, all empty for this user.
+/// `GET /api/user` runs the hydration write, then the unified `User` read
+/// — two FIFO-ordered messages on the user's executor (spec #558 §4) — and
+/// answers `200` with the full `UserState` (the user record plus the
+/// `Summary`).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn summary_returns_200_and_summary_body() {
     let (app, store, stub) = stub_app();
@@ -548,11 +555,11 @@ async fn summary_returns_200_and_summary_body() {
         summary: Summary::default(),
     }))));
     let cookie = user_cookie(&store).await;
-    let (status, _headers, body) = run(app, Method::GET, "/api/user/summary", Some(&cookie)).await;
+    let (status, _headers, body) = run(app, Method::GET, "/api/user", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"activities":{},"parts":{},"attachments":{},"usages":{},"services":{},"plans":{},"part_notes":{},"shops":{},"users":{}}"#
+        r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"},"summary":{"activities":{},"parts":{},"attachments":{},"usages":{},"services":{},"plans":{},"part_notes":{},"shops":{},"users":{}}}"#
     );
     assert_eq!(
         stub.calls(),
@@ -563,7 +570,7 @@ async fn summary_returns_200_and_summary_body() {
     );
 }
 
-/// `GET /api/user/summary?shop=1` rides the same two messages, with the
+/// `GET /api/user?shop=1` rides the same two messages, with the
 /// `?shop=` filter on the read (spec #558 §3.4).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn summary_shop_filter_rides_the_read() {
@@ -574,8 +581,7 @@ async fn summary_shop_filter_rides_the_read() {
         summary: Summary::default(),
     }))));
     let cookie = user_cookie(&store).await;
-    let (status, _headers, _body) =
-        run(app, Method::GET, "/api/user/summary?shop=1", Some(&cookie)).await;
+    let (status, _headers, _body) = run(app, Method::GET, "/api/user?shop=1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         stub.calls(),
@@ -589,6 +595,18 @@ async fn summary_shop_filter_rides_the_read() {
             ),
         ]
     );
+}
+
+/// `GET /api/user/ping` is the content-free liveness probe (spec #572):
+/// `204` for an authenticated session, no body, no DB work.
+#[tokio::test]
+async fn user_ping_returns_204() {
+    let (app, store, stub) = stub_app();
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, body) = run(app, Method::GET, "/api/user/ping", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert!(body.is_empty());
+    assert!(stub.calls().is_empty());
 }
 
 /// `GET /api/user/all` (admin) rides the admin user's own channel as the

@@ -66,13 +66,12 @@ describe("initData", () => {
       is_admin: false,
       onboarding_status: "completed",
     };
-    fetchMock
-      .mockResolvedValueOnce(resp(userData))
-      .mockResolvedValueOnce(resp(summaryContent()));
+    fetchMock.mockResolvedValueOnce(
+      resp({ user: userData, summary: summaryContent() }),
+    );
     await initData();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe("/api/user");
-    expect(fetchMock.mock.calls[1][0]).toBe("/api/user/summary");
     expect(getUser()).toEqual(userData);
     expect(parts[1]).toBeDefined();
   });
@@ -102,17 +101,17 @@ describe("refresh", () => {
     vi.stubGlobal("fetch", fetchMock);
   });
 
-  it("GETs /api/user/summary and calls setSummary", async () => {
-    fetchMock.mockResolvedValue(resp(summaryContent()));
+  it("GETs /api/user and calls setSummary", async () => {
+    fetchMock.mockResolvedValue(resp({ user: {}, summary: summaryContent() }));
     await refresh();
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/user/summary");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/user");
     expect(parts[1]).toBeDefined();
   });
 
   it("appends shop query parameter", async () => {
-    fetchMock.mockResolvedValue(resp(summaryContent()));
+    fetchMock.mockResolvedValue(resp({ user: {}, summary: summaryContent() }));
     await refresh(42);
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/user/summary?shop=42");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/user?shop=42");
   });
 });
 
@@ -176,10 +175,10 @@ describe("updateSummary", () => {
   });
 
   it("calls refresh() when data is undefined", () => {
-    fetchMock.mockResolvedValue(resp(summaryContent()));
+    fetchMock.mockResolvedValue(resp({ user: {}, summary: summaryContent() }));
     updateSummary();
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/user/summary");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/user");
   });
 
   it("merges all nine collections, including users", () => {

@@ -140,9 +140,11 @@ class UserStream {
   }
 
   /// Liveness probe through `myfetch`, so `checkStatus` centralizes the
-  /// 401 → login redirect; a 401 is terminal (it redirects).
+  /// 401 → login redirect; a 401 is terminal (it redirects). The probe
+  /// hits the content-free `/api/user/ping` endpoint (204/401, no body,
+  /// no DB work).
   private probe() {
-    myfetch("/api/user").catch((e) => {
+    myfetch("/api/user/ping").catch((e) => {
       if (e instanceof Error) handleError(e);
     });
   }

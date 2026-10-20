@@ -9,47 +9,33 @@
 use axum::{
     Json, Router,
     extract::{Query, State},
+    http::StatusCode,
     routing::get,
 };
 use serde::Serialize;
 
 use crate::{ApiResult, AxumAdmin, RequestSession, appstate::AppState, domain::result_mismatch};
-use tb_domain::{ApiRead, ReadOutcome, Session, ShopId, Summary};
+use tb_domain::{ApiRead, ReadOutcome, Session, ShopId, UserState};
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(getuser))
-        .route("/summary", get(summary))
+        .route("/ping", get(ping))
         .route("/stream", get(crate::stream::endpoint))
         .route("/all", get(userlist))
         .route("/export", get(export))
 }
 
+/// `GET /api/user` — the one-call initial state (spec #572): returns the
+/// full `UserState` (the user record plus the `Summary`). Replaces the old
+/// bare-user and summary-only routes. The handler runs `hydrate_gear`
+/// (the hydration write) before the read, so a read can change state —
+/// the committed hydration is visible to the pure-FIFO snapshot.
 async fn getuser(
-    user: RequestSession,
-    State(state): State<AppState>,
-) -> ApiResult<tb_domain::User> {
-    // The unified user read (spec #558 §3.5): the route projects the bare
-    // `User` from the `UserState` composite.
-    match state
-        .api
-        .read(user.user_id(), ApiRead::User { shop: None })
-        .await?
-    {
-        ReadOutcome::User(state) => Ok(Json(state.user)),
-        _ => Err(result_mismatch("user", "user state")),
-    }
-}
-
-#[derive(serde::Deserialize)]
-struct ShopQuery {
-    shop: Option<ShopId>,
-}
-async fn summary(
     mut session: RequestSession,
     State(state): State<AppState>,
     Query(ShopQuery { shop }): Query<ShopQuery>,
-) -> ApiResult<Summary> {
+) -> ApiResult<UserState> {
     // `set_shop`'s tower-session persistence stays in axum (spec #558
     // §3.5 — session plumbing, not domain state).
     session.set_shop(shop)?;
@@ -57,17 +43,28 @@ async fn summary(
     // #558 §3.5): two FIFO-ordered messages on the user's executor — the
     // loop runs `update_gear` in its own transaction, and the read's
     // pure-FIFO snapshot (spec #558 §3.7) sees the committed hydration, so
-    // the response body carries the new parts exactly as today. The route
-    // projects the `Summary` from the `UserState` composite.
+    // the response body carries the new parts exactly as today.
     state.api.hydrate_gear(session.user_id()).await?;
     match state
         .api
         .read(session.user_id(), ApiRead::User { shop })
         .await?
     {
-        ReadOutcome::User(state) => Ok(Json(state.summary)),
+        ReadOutcome::User(state) => Ok(Json(*state)),
         _ => Err(result_mismatch("user", "user state")),
     }
+}
+
+/// `GET /api/user/ping` — content-free liveness probe (spec #572): returns
+/// `204` for an authenticated session, `401` otherwise. No body, no DB,
+/// no executor work — the `RequestSession` extractor is the entire check.
+async fn ping(_user: RequestSession) -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+#[derive(serde::Deserialize)]
+struct ShopQuery {
+    shop: Option<ShopId>,
 }
 
 #[derive(Clone, Serialize, Debug)]
