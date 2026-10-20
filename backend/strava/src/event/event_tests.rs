@@ -207,7 +207,7 @@ async fn get_event_ignores_other_owners() -> TbResult<()> {
 #[tokio::test]
 async fn get_event_active_stop_reports_deadline() -> TbResult<()> {
     // An unexpired global Stop pauses the queue: the read reports the
-    // deadline (the executor loop sleeps until it) and consumes nothing.
+    // deadline (the caller sleeps until it) and consumes nothing.
     let (mut store, session) = setup();
     let until = get_time() + 500;
     store

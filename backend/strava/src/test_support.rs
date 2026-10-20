@@ -721,9 +721,9 @@ impl ServicePlanStore for TestStravaStore {
 
 // ─── Canned Strava responses (feature `test-support`) ──────────────────────
 //
-// The seam suite (`sqlx/tests/executor_seam.rs`) runs the real executor
-// loop, whose session is a real `StravaUserSession`, so the suite maps
-// canned responses for the URIs the loop asks for — an empty activity list
+// The seam suite runs the real loop, whose session is a real
+// `StravaUserSession`, so the suite maps canned responses for the URIs the
+// loop asks for — an empty activity list
 // makes the sync's activities fetch succeed offline (no new activities:
 // the loop's processing consumes the event and commits).
 // `StravaUserSession::request_json` consults [`canned_response`] before

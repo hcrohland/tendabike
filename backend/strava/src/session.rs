@@ -18,7 +18,7 @@
 
 */
 
-//! The executor's concrete [`StravaSession`] (ADR-0007, executable spec
+//! The concrete [`StravaSession`] (ADR-0007, executable spec
 //! #558 §6.2).
 //!
 //! The token-refresh machinery (`check_token`/`refresh_the_token`/
@@ -28,7 +28,7 @@
 //! tower-session half and its impersonation constructor for the HTTP path;
 //! the two types deliberately diverge (the request session is serialized
 //! into the tower session and carries `shop`; this one is in-memory and
-//! executor-scoped — its `update()` was already a no-op without a tower
+//! loop-scoped — its `update()` was already a no-op without a tower
 //! session, so it is dropped here).
 
 use std::time::SystemTime;
@@ -45,10 +45,9 @@ use tb_domain::{Error, Session as TbSession, ShopId, TbResult, UserId};
 
 const API: &str = "https://www.strava.com/api/v3";
 
-/// The executor's concrete [`StravaSession`] (spec #558 §6.2): the user's
+/// The concrete [`StravaSession`] (spec #558 §6.2): the user's
 /// identity plus the Strava API client, with the token-refresh machinery
-/// the executor's loop drives. In-memory and executor-scoped — no
-/// tower-session half.
+/// the loop drives. In-memory and loop-scoped — no tower-session half.
 pub struct StravaUserSession {
     id: UserId,
     strava_id: StravaId,
@@ -59,7 +58,7 @@ pub struct StravaUserSession {
 }
 
 impl StravaUserSession {
-    /// Build the executor's session for a user from their stored
+    /// Build the session for a user from their stored
     /// [`StravaUser`] (the refresh token): an empty access token with a
     /// past expiry, so the first Strava request forces a token refresh
     /// (spec #558 §6.2).

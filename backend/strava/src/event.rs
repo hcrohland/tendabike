@@ -73,7 +73,7 @@ impl InEvent {
     /// athlete (de)authorization or stores the event in the DB queue.
     ///
     /// Returns the owner's TendaBike [`UserId`] when the event was queued (so
-    /// the caller can wake that user's executor), or `None` for an athlete
+    /// the caller can wake that user), or `None` for an athlete
     /// (de)authorization (nothing was queued, so there is nothing to wake).
     pub async fn accept(self, store: &mut impl StravaDataStore) -> TbResult<Option<UserId>> {
         let user_id = StravaId::read(&self.owner_id.into(), store)
@@ -346,7 +346,7 @@ impl Event {
     /// - `NotAuth` (401 after a token refresh) → disable the user's Strava
     ///   integration, which drops all their queued events: the data freezes
     ///   (stale but consistent), and no event-by-event 401s follow.
-    /// - A DB failure → propagate: the executor loop rolls back (the event
+    /// - A DB failure → propagate: the caller rolls back (the event
     ///   stays queued) and applies its in-memory backoff.
     /// - Anything else is permanent (a 404 means the activity is gone; a parse
     ///   error will not heal): delete the event, log it, and move on — the
@@ -471,7 +471,7 @@ pub enum QueueRead {
     /// The event to process (the read-side dedup already applied).
     Event(Event),
     /// The global rate-limit `Stop` is active until this unix time: the queue
-    /// is paused, and the caller (the executor loop) sleeps until the deadline
+    /// is paused, and the caller sleeps until the deadline
     /// as an interruptible branch of its select — API writes are never delayed.
     Limited { until: i64 },
     /// The queue holds nothing interesting for this user (empty, or only an
@@ -489,10 +489,9 @@ pub enum QueueRead {
 ///   same object are deleted and the latest is returned.
 ///
 /// The read runs inside the caller's transaction (the deletions above commit
-/// or roll back with it). `pub` because the per-user executor loop (the
-/// `tb_exec` crate) owns the "read next Strava event" step; reading the queue
-/// stays a Strava-side concern, so the function stays here rather than being
-/// inlined in the loop.
+/// or roll back with it). `pub` because the caller owns the "read next Strava
+/// event" step; reading the queue stays a Strava-side concern, so the
+/// function stays here rather than being inlined in the caller.
 pub async fn get_event(
     user: &impl StravaSession,
     store: &mut impl StravaDataStore,
@@ -548,7 +547,7 @@ pub async fn process(
     let event = match read {
         QueueRead::Event(event) => event,
         // The queue is empty, or paused by a global rate-limit `Stop` (the
-        // executor loop sleeps until its deadline; nothing to process).
+        // caller sleeps until its deadline; nothing to process).
         QueueRead::Limited { .. } | QueueRead::Empty => return Ok(Summary::default()),
     };
     info!("Processing {event}");
@@ -567,8 +566,7 @@ pub async fn process(
 /// Queue a `Sync` event for every (non-disabled) user (the all-users
 /// admin sync's op, spec #558 §5.2): `user_id` narrows the sync to one
 /// user. Returns the tbids of the users a sync was queued for — the
-/// caller's per-user wake list (running executors drain the queued syncs
-/// immediately, matching the per-user variant; the intentional behavior
+/// caller's per-user wake list (the intentional behavior
 /// change of the migration).
 pub async fn sync_users(
     user_id: Option<UserId>,

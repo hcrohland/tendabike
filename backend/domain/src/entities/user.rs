@@ -233,7 +233,7 @@ impl UserId {
 
     pub async fn is_admin(&self, store: &mut impl UserStore) -> TbResult<bool> {
         // The lightweight single-row read: one bool, no `UserState`
-        // composite (this runs at every login and every executor spawn).
+        // composite (this runs at every login and every session build).
         UserStore::get(store, *self).await.map(|u| u.is_admin)
     }
 

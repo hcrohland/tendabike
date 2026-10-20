@@ -45,13 +45,12 @@ impl<'c> SqlxConn<'c> {
     /// `backend/docs/tests/domain.md`, "Transactional semantics (issue
     /// #409)").
     ///
-    /// `pub` because `SqlxConn` is a public type: the per-user executor loop
-    /// (`tb_exec`) calls it when a message fails inside its transaction
-    /// (spec #446 §4.3: `commit` on success, `rollback` on failure), and the
-    /// store-seam integration suite (`tests/store_seam.rs`) calls it — or
-    /// rolls back implicitly by dropping the `SqlxConn` (a dropped
-    /// `PgTransaction` rolls back) — so a transaction an external caller does
-    /// not commit is torn down explicitly.
+    /// `pub` because `SqlxConn` is a public type: callers that drive a
+    /// transaction (the loop, the seam suite) call it when a message fails
+    /// inside its transaction (commit on success, rollback on failure), and
+    /// a dropped `SqlxConn` rolls back implicitly (a dropped `PgTransaction`
+    /// rolls back) — so a transaction an external caller does not commit is
+    /// torn down explicitly.
     pub async fn rollback(self) -> TbResult<()> {
         self.into_inner()
             .rollback()
@@ -75,14 +74,13 @@ impl<'c> SqlxConn<'c> {
     }
 }
 
-/// The transaction lifecycle named for the per-user executor loop
-/// (`tb_exec`, spec #446 §5): every `SqlxConn` is a transaction, and the
-/// loop is the caller the `Txn` seam exists for — it `commit`s after a
-/// successful message and `rollback`s after a failed one.
+/// The transaction lifecycle: every `SqlxConn` is a transaction, and the
+/// caller `commit`s after a successful operation and `rollback`s after a
+/// failed one.
 ///
 /// Both methods delegate to the inherent `commit`/`rollback` (which stay:
-/// the web layer and the seam suite keep calling them on the concrete type;
-/// the traits exist so the loop can be generic over the source).
+/// callers keep calling them on the concrete type; the traits exist so the
+/// caller can be generic over the source).
 #[async_trait::async_trait]
 impl<'c> Txn for SqlxConn<'c> {
     async fn commit(self) -> TbResult<()> {
@@ -117,11 +115,8 @@ impl DbPool {
     ///
     /// This is the plain, thin sqlx-wrapper `begin`: it calls
     /// `pool.begin()` directly. The cancellation-safe spawn (which detaches
-    /// the `BEGIN` from the caller's task via a spawned task + oneshot) is
-    /// an executor-level concern and lives in `tb_exec`'s
-    /// [`DetachedBegin`](tb_exec::DetachedBegin) wrapper, which the
-    /// composition root applies over this pool before handing it to the
-    /// executor's `Registry`.
+    /// the `BEGIN` from the caller's task via a spawned task + oneshot) is a
+    /// separate concern handled by a wrapper applied at the composition root.
     pub async fn begin(&self) -> TbResult<SqlxConn<'static>> {
         self.0.begin().await.map(SqlxConn).map_err(into_domain)
     }
@@ -144,13 +139,12 @@ impl DbPool {
     }
 }
 
-/// The transaction source for the per-user executor loop (`tb_exec`, spec
-/// #446 §5). `DbPool` is `Clone` + `Send` + `Sync`, so the loop takes a
-/// clone by value and keeps its own handle — no `Arc` is needed.
+/// The transaction source. `DbPool` is `Clone` + `Send` + `Sync`, so
+/// callers take a clone by value and keep their own handle — no `Arc` is
+/// needed.
 ///
-/// The impl delegates to the inherent `begin` (which the web layer and the
-/// seam suite keep calling on the concrete type); the trait exists so the
-/// loop can be generic over the source and never name the pool.
+/// The impl delegates to the inherent `begin`; the trait exists so callers
+/// can be generic over the source and never name the pool.
 #[async_trait::async_trait]
 impl TxnSource for DbPool {
     type Conn = SqlxConn<'static>;
