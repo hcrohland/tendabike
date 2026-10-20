@@ -29,7 +29,7 @@
 //! a concrete adapter — the `StravaStore` bound sits on the associated
 //! type, so every generic over the seam gets it for free.
 
-use tb_domain::{Store, TbResult};
+use tb_domain::{Error, Store, TbResult};
 use tb_strava::StravaStore;
 
 /// A source of open transactions for the executor loop (ADR-0005, executable
@@ -66,4 +66,55 @@ pub trait Txn: Store {
 
     /// Rolls the transaction back, consuming the connection.
     async fn rollback(self) -> TbResult<()>;
+}
+
+/// A [`TxnSource`] wrapper that detaches `begin` from the caller's task:
+/// the inner source's `begin` runs to completion in a spawned task, and the
+/// caller awaits its result on a oneshot. A caller that cancels — a dropped
+/// future (the executor's `tokio::select!` dropping the probe branch when a
+/// request arrives, an axum handler dropped on client disconnect) — does not
+/// cancel the wire-level `BEGIN`: the spawned task reads the `BEGIN`
+/// response (so the client's transaction depth is incremented correctly) and
+/// then drops the transaction it got — a clean lazy rollback that the pool
+/// flushes on release. A plain `pool.begin()` cancelled between the `BEGIN`
+/// being sent and its response being read would instead return the
+/// connection to the pool inside a server-side transaction the client does
+/// not know about (sqlx increments the depth only after the response, and
+/// its drop guard is a no-op at depth 0) — the next `begin` on that
+/// connection would issue a second, noticed `BEGIN` and its `COMMIT` would
+/// commit the stale work with the new work (regression test
+/// `request_burst_does_not_fire_transaction_notice` in
+/// `tests/executor_seam.rs`).
+///
+/// This is an executor-level concern (managing the pool's lifecycle and
+/// cancellation safety), not a sqlx-wrapper concern: the spawn lives here,
+/// in `tb_exec`, where the executor owns the pool — `tb_sqlx` stays a thin
+/// pool/conn wrapper.
+#[derive(Clone)]
+pub struct DetachedBegin<S: TxnSource>(S);
+
+impl<S: TxnSource> DetachedBegin<S> {
+    /// Wrap a transaction source with the cancellation-safe `begin`.
+    pub fn new(source: S) -> Self {
+        Self(source)
+    }
+}
+
+#[async_trait::async_trait]
+impl<S> TxnSource for DetachedBegin<S>
+where
+    S: TxnSource + Clone + Send + Sync + 'static,
+{
+    type Conn = S::Conn;
+
+    async fn begin(&self) -> TbResult<S::Conn> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let source = self.0.clone();
+        tokio::spawn(async move {
+            let result = source.begin().await;
+            let _ = tx.send(result);
+        });
+        rx.await
+            .map_err(|err| Error::AnyFailure(anyhow::anyhow!("the begin's task ended: {err}")))?
+    }
 }

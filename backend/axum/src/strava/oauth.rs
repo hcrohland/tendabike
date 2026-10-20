@@ -15,115 +15,13 @@ use axum::{
     response::{IntoResponse, Redirect},
 };
 use log::{debug, error, warn};
-use oauth2::{
-    AuthUrl, AuthorizationCode, Client, ClientId, ClientSecret, CsrfToken, EndpointNotSet,
-    EndpointSet, ExtraTokenFields, RedirectUrl, RevocationUrl, Scope, StandardRevocableToken,
-    StandardTokenResponse, TokenUrl,
-    basic::{
-        BasicErrorResponse, BasicRevocationErrorResponse, BasicTokenIntrospectionResponse,
-        BasicTokenType,
-    },
-    reqwest,
-};
+use oauth2::{AuthorizationCode, CsrfToken, Scope, TokenResponse};
 use serde::{Deserialize, Serialize};
-use std::{env, sync::LazyLock};
+use std::sync::LazyLock;
 
 use crate::{appstate::AppState, error::AppError};
 use tb_domain::{Error, TbResult};
-use tb_exec::{Txn, TxnSource};
-use tb_strava::StravaId;
-
-pub(super) static STRAVACLIENT: LazyLock<StravaClient> = LazyLock::new(strava_oauth_client);
-pub(super) static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(http_client);
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct StravaAthleteInfo {
-    pub id: StravaId,
-    pub firstname: String,
-    pub lastname: String,
-    #[serde(rename = "profile_medium")]
-    pub avatar: Option<String>,
-    // profile: String,
-    // bio: String,
-    // city: String,
-    // state: String,
-    // country: String,
-    // sex: String,
-    // premium: bool,
-    // summit: bool,
-    // created_at: String,
-    // updated_at: String,
-    // badge_type_id: i32,
-    // weight: f32,
-    #[serde(flatten)]
-    other: serde_json::Value,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct StravaExtraTokenFields {
-    pub athlete: Option<StravaAthleteInfo>,
-}
-
-impl ExtraTokenFields for StravaExtraTokenFields {}
-
-pub(crate) type StravaTokenResponse = StandardTokenResponse<StravaExtraTokenFields, BasicTokenType>;
-
-pub(crate) type StravaClient<
-    HasAuthUrl = EndpointSet,
-    HasDeviceAuthUrl = EndpointNotSet,
-    HasIntrospectionUrl = EndpointNotSet,
-    HasRevocationUrl = EndpointSet,
-    HasTokenUrl = EndpointSet,
-> = Client<
-    BasicErrorResponse,
-    StravaTokenResponse,
-    BasicTokenIntrospectionResponse,
-    StandardRevocableToken,
-    BasicRevocationErrorResponse,
-    HasAuthUrl,
-    HasDeviceAuthUrl,
-    HasIntrospectionUrl,
-    HasRevocationUrl,
-    HasTokenUrl,
->;
-
-pub fn strava_oauth_client() -> StravaClient {
-    // Environment variables (* = required):
-    // *"CLIENT_ID"     "REPLACE_ME";
-    // *"CLIENT_SECRET" "REPLACE_ME";
-    //  "REDIRECT_URL"  "http://127.0.0.1:3000/auth/authorized";
-    //  "AUTH_URL"      "https://www.strava.com/oauth/authorize";
-    //  "TOKEN_URL"     "https://www.strava.com/oauth/token";
-
-    let client_id = ClientId::new(env::var("CLIENT_ID").expect("Missing CLIENT_ID!"));
-    let client_secret =
-        ClientSecret::new(env::var("CLIENT_SECRET").expect("Missing CLIENT_SECRET!"));
-
-    let redirect_url = env::var("REDIRECT_URL")
-        .unwrap_or_else(|_| "http://localhost:8000/strava/token".to_string());
-    let redirect_url = RedirectUrl::new(redirect_url).unwrap();
-
-    let auth_url = AuthUrl::new("https://www.strava.com/oauth/authorize".to_string()).unwrap();
-    let token_url = TokenUrl::new("https://www.strava.com/oauth/token".to_string()).unwrap();
-    let revocation_url =
-        RevocationUrl::new("https://www.strava.com/oauth/deauthorize".to_string()).unwrap();
-
-    StravaClient::new(client_id)
-        .set_client_secret(client_secret)
-        .set_auth_uri(auth_url)
-        .set_token_uri(token_url)
-        .set_auth_type(oauth2::AuthType::RequestBody)
-        .set_redirect_uri(redirect_url)
-        .set_revocation_url(revocation_url)
-}
-
-fn http_client() -> reqwest::Client {
-    reqwest::ClientBuilder::new()
-        // Following redirects opens the client up to SSRF vulnerabilities.
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .expect("Client should build")
-}
+use tb_strava::client::{HTTP_CLIENT, SCOPES, STRAVACLIENT, StravaAthleteInfo};
 
 static CSRF_KEY: LazyLock<Vec<u8>> = LazyLock::new(|| {
     if let Ok(secret) = std::env::var("CSRF_SECRET") {
@@ -173,8 +71,6 @@ pub struct PathParam {
     inner: Option<String>,
 }
 
-const SCOPES: &str = "read,activity:read_all,profile:read_all";
-
 pub(crate) async fn strava_auth(Query(path): Query<PathParam>) -> impl IntoResponse {
     let path = path.inner.unwrap_or("/".to_owned());
     let (auth_url, _csrf_token) = STRAVACLIENT
@@ -200,14 +96,11 @@ pub(crate) enum AuthResponse {
     },
 }
 
-pub(crate) async fn login_authorized<S>(
+pub(crate) async fn login_authorized(
     Query(query): Query<AuthResponse>,
     session: Session,
-    State(state): State<AppState<S>>,
-) -> Result<Redirect, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+    State(state): State<AppState>,
+) -> Result<Redirect, AppError> {
     let (code, path) = match query {
         AuthResponse::Error { error, .. } => {
             warn!("Authentication failed with error: {error}");
@@ -222,16 +115,35 @@ where
         }
     };
 
-    // Get an auth token
+    // Get an auth token (the outbound exchange — a `tb_strava` op, no seam)
     let token = STRAVACLIENT
         .exchange_code(AuthorizationCode::new(code))
         .request_async(&*HTTP_CLIENT)
         .await
         .context("token exchange failed")?;
 
-    let mut conn = state.source.begin().await?;
-    super::RequestSession::create_from_token(token, session, &mut conn).await?;
-    conn.commit().await?;
+    // The service API's direct op (spec #558 §5.2): the one upsert
+    // transaction (`StravaUser::upsert` + `is_admin`), returning the
+    // identity and the admin flag. The wire-shape parsing stays in axum,
+    // beside the exchange it feeds.
+    let mut athlete: StravaAthleteInfo = token
+        .extra_fields()
+        .athlete
+        .clone()
+        .ok_or(Error::BadRequest("No Athlete Info from Strava".to_string()))?;
+
+    // make sure you have a non-local url
+    if let Some(a) = &athlete.avatar
+        && !a.starts_with("http")
+    {
+        athlete.avatar = None;
+    }
+    let refresh_token = token.refresh_token().cloned();
+    let (user, is_admin) = state.api.login_from_token(athlete, refresh_token).await?;
+
+    // The tower-session write stays in axum (spec #558 §5.2): the access
+    // token and expiry ride the session, not the DB.
+    super::RequestSession::create_from_token(token, session, user, is_admin).await?;
 
     debug!("Redirecting to {path}");
     Ok(Redirect::to(&path))

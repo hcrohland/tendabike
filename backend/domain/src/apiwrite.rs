@@ -21,22 +21,22 @@
 //! The `ApiWrite` dispatch (ADR-0005, executable spec #446 §3).
 //!
 //! `ApiWrite` is the one in-memory message an API write becomes on its way
-//! through the per-user executor: a flat enum with one variant per mutating
+//! through the per-user loop: a flat enum with one variant per mutating
 //! route, entity-prefixed, each variant carrying exactly the operation's
 //! parsed arguments — the same values the current axum handlers extract.
 //! Reads are not `ApiWrite` variants; they bypass the loop.
 //!
 //! No variant carries a `user_id`: the channel is per-user, the loop runs in
-//! that user's context, and the `Session` the executor supplies carries the
+//! that user's context, and the `Session` the caller supplies carries the
 //! identity.
 //!
-//! [`exec`] applies one `ApiWrite` through the domain layer — the same call
+//! [`read`] applies one `ApiWrite` through the domain layer — the same call
 //! the current axum handler makes, minus the HTTP extraction and minus
-//! `begin`/`commit`: the executor loop (a later ticket) drives the
-//! transaction, and `exec` runs inside one live connection. It is bounded by
-//! the `Store` marker, not by the executor's `Txn` trait, so it stays
-//! verifiable on both adapters (`MemStore` and `SqlxConn`) per the store-seam
-//! contract, with the Postgres behavior as the source of truth.
+//! `begin`/`commit`: the loop drives the transaction, and this runs inside
+//! one live connection. It is bounded by the `Store` marker, not by the
+//! caller's `Txn` trait, so it stays verifiable on both adapters
+//! (`MemStore` and `SqlxConn`) per the store-seam contract, with the
+//! Postgres behavior as the source of truth.
 //!
 //! The return is the `Summary` of everything the operation touched, per the
 //! write contract in `docs/agents/domain-flow.md`, wrapped in a
@@ -44,10 +44,10 @@
 //!
 //! - operations that already return a `Summary` pass it through;
 //! - bare-entity operations are wrapped into a one-entry `Summary` (`+=`);
-//! - deletes report their entity as a `None` tombstone: after the cutover,
-//!   every non-create mutation returns 204 and the stream frame is the sole
-//!   delivery of the change (spec #446 §6.2), so a deleted entity must reach
-//!   the client as a tombstone — the stream merge drops it;
+//! - deletes report their entity as a `None` tombstone: every non-create
+//!   mutation returns 204 and the stream frame is the sole delivery of the
+//!   change (spec #446 §6.2), so a deleted entity must reach the client as
+//!   a tombstone — the stream merge drops it;
 //! - a `ShopSubscription` and a `User` are not kinds of the `Summary`, so
 //!   subscription writes and onboarding writes report an empty `Summary` —
 //!   the stream carries nothing for them, and the HTTP response is their
@@ -78,7 +78,7 @@ pub struct NoteFile {
     pub data: Vec<u8>,
 }
 
-/// One mutating API route, as the per-user executor receives it.
+/// One mutating API route, as the per-user loop receives it.
 ///
 /// The variants are the full mutating route table of `backend/axum`
 /// (`src/domain/*.rs` plus the two onboarding routes in `src/strava/webhook.rs`),
@@ -231,7 +231,7 @@ pub enum ApiWrite {
 }
 
 /// The outcome of one applied [`ApiWrite`]: the `Summary` of everything the
-/// operation touched (the SSE frame the executor pushes to the user's
+/// operation touched (the SSE frame the caller pushes to the user's
 /// streams), plus — for the writes whose result is an operation outcome the
 /// `Summary` cannot carry — that outcome.
 ///
@@ -254,7 +254,7 @@ pub enum WriteOutcome {
 
 impl WriteOutcome {
     /// The `Summary` of everything the write touched — the frame the
-    /// executor pushes to the user's streams.
+    /// caller pushes to the user's streams.
     pub fn summary(&self) -> &Summary {
         match self {
             Self::Summary(summary) => summary,
@@ -265,12 +265,11 @@ impl WriteOutcome {
 
 /// Apply one [`ApiWrite`] through the domain layer.
 ///
-/// This is the single entry point the executor loop and the write handlers
-/// use to apply an API write. It runs **inside** one live transaction — the
-/// executor loop (a later ticket) owns `begin`/`commit`/`rollback` — so it
-/// takes the session and the store by mutable reference, exactly like the
-/// domain operations it calls, and it never touches the transaction
-/// lifecycle itself.
+/// This is the single entry point the loop and the write handlers use to
+/// apply an API write. It runs **inside** one live transaction — the loop
+/// owns `begin`/`commit`/`rollback` — so it takes the session and the store
+/// by mutable reference, exactly like the domain operations it calls, and it
+/// never touches the transaction lifecycle itself.
 ///
 /// Each arm is the same call the current axum handler makes, minus the HTTP
 /// extraction: path ids are already in their domain types, and the
@@ -279,11 +278,11 @@ impl WriteOutcome {
 ///
 /// The `UserOnboarding*` arms do the **domain part only** — the status guard
 /// (the same `BadRequest` messages as the webhook handlers) and the status
-/// update. The Strava-side sync event is deliberately not part of `exec`:
-/// `tb_domain` cannot depend on `tb_strava` (the dependency direction is
-/// `domain ← strava`), and the in-memory `MemStore` is not a `StravaStore`.
-/// The cutover ticket (issue #457) enqueues a sync `Event` on the user's
-/// executor channel for `UserOnboardingSync`.
+/// update. The Strava-side sync event is deliberately not part of this
+/// crate: the domain cannot depend on the Strava driver (the dependency
+/// direction is `domain ← strava`), and the in-memory `MemStore` is not a
+/// `StravaStore`. The cutover ticket (issue #457) enqueues a sync `Event`
+/// on the user's channel for `UserOnboardingSync`.
 ///
 /// Returns the `Summary` of everything the operation touched (see the module
 /// docs for how bare-entity results, tombstones, and the non-Summary
@@ -545,8 +544,8 @@ pub async fn exec(
 
         // Domain part only: the status guard, exactly as in the webhook
         // handlers, plus the status update. A `User` is not in any `Summary`,
-        // so the result is empty. The Strava-side sync event is the cutover
-        // ticket's concern (issue #457) — see the `exec` docs.
+        // so the result is empty. The Strava-side sync event is handled by
+        // the loop — see the `exec` docs.
         ApiWrite::UserOnboardingSync { .. } => {
             // The lightweight single-row read: the guard needs only the
             // onboarding status, not the `UserState` composite (this is a

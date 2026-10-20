@@ -11,6 +11,7 @@ tb_strava = { workspace = true }
 async-trait = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
+oauth2 = { workspace = true }
 tokio = { workspace = true, features = ["sync", "time", "macros"] }
 
 [lib]

@@ -10,14 +10,7 @@ tb_domain = { workspace = true }
 tb_strava = { workspace = true }
 tb_exec = { workspace = true }
 
-reqwest = { version = "0.12", default-features = false, features = [
-    "rustls-tls",
-    "json",
-    "gzip",
-    "brotli",
-    "deflate",
-    "zstd",
-] }
+reqwest = { workspace = true }
 hmac = "*"
 sha2 = "*"
 base64 = "*"
@@ -56,9 +49,6 @@ hex = "0.4.3"
 # "full" because the test code needs tokio's `macros`/`rt` features, which are
 # not guaranteed when building only tb_axum's own dependency graph
 tokio = { workspace = true, features = ["full"] }
-# `test-support` exposes the in-memory `MemStore` the stream tests' `LiveConn`
-# delegates its `Store` sub-traits to (the full `tb_exec` loop runs in-memory)
-tb_domain = { workspace = true, features = ["test-support"] }
 # `memory-store` is only used by the tests; declared here rather than in
 # [dependencies] so it is not enabled when tb_axum is consumed as a regular
 # dependency (workspace-root builds still unify it in, per cargo's

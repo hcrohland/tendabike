@@ -254,15 +254,28 @@ impl Shop {
         store.shops_search(query).await
     }
 
-    /// Convert a list of shops to shops with owner information
+    /// Convert a list of shops to shops with owner information.
+    ///
+    /// `caller` is the pre-fetched [`UserPublic`] of the calling user
+    /// (the `user` argument): when `Some`, it is reused for the caller's
+    /// own shops instead of re-reading the row.
     pub async fn get_users(
         shops: &Vec<Shop>,
         user: &UserId,
+        caller: Option<UserPublic>,
         store: &mut (impl ShopStore + UserStore),
     ) -> TbResult<Vec<UserPublic>> {
         let mut result: HashMap<UserId, UserPublic> = HashMap::new();
         for shop in shops {
-            let owner = shop.owner.get_public(store).await?;
+            let owner = if *user == shop.owner {
+                if let Some(ref c) = caller {
+                    c.clone()
+                } else {
+                    shop.owner.get_public(store).await?
+                }
+            } else {
+                shop.owner.get_public(store).await?
+            };
             result.insert(owner.id, owner);
             if *user == shop.owner {
                 shop.add_subscribers(&mut result, store).await?;

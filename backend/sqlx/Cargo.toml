@@ -13,6 +13,7 @@ sqlx = { version = "0.8", features = [
     "uuid",
     "macros",
 ] }
+tokio = { workspace = true, features = ["rt", "sync"] }
 async-trait = { workspace = true }
 log = { workspace = true }
 anyhow = { workspace = true }
@@ -29,6 +30,7 @@ doctest = false
 
 [dev-dependencies]
 tb_domain = { workspace = true, features = ["test-support"] }
+tb_strava = { workspace = true, features = ["test-support"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 sqlx = { version = "0.8", features = ["postgres", "runtime-tokio", "time", "uuid", "macros", "chrono"] }
 dotenvy = "0.15"

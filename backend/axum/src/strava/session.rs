@@ -4,17 +4,16 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use http::{StatusCode, request::Parts};
-use log::{debug, trace};
+use log::trace;
 use oauth2::{AccessToken, RefreshToken, TokenResponse};
-use serde::de::DeserializeOwned;
 use serde_derive::{Deserialize, Serialize};
 use std::time::SystemTime;
 use time::{Duration, UtcDateTime};
 use tower_sessions::Session as TowerSession;
 
-use crate::strava::{HTTP_CLIENT, StravaAthleteInfo, StravaTokenResponse, oauth::STRAVACLIENT};
-use tb_domain::{Error, Session as TbSession, ShopId, TbResult, UserId};
-use tb_strava::{StravaDataStore, StravaId, StravaSession, StravaStore, StravaUser};
+use tb_domain::{Session as TbSession, ShopId, TbResult, UserId};
+use tb_strava::client::StravaTokenResponse;
+use tb_strava::{StravaId, StravaUser};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct RequestSession {
@@ -29,43 +28,26 @@ pub(crate) struct RequestSession {
     session: Option<TowerSession>,
 }
 
-const API: &str = "https://www.strava.com/api/v3";
 const SESSION_KEY: &str = "session";
 const SESSION_NEXT_UPDATE: &str = "update";
 
 impl RequestSession {
+    /// Write the tower session for a just-logged-in user (spec #558 §5.2):
+    /// the identity upsert is the service API's `login_from_token` op (one
+    /// transaction — `StravaUser::upsert` + `is_admin`); this keeps only the
+    /// tower-session half (the access token and expiry ride the session,
+    /// not the DB).
     pub(crate) async fn create_from_token(
         token: StravaTokenResponse,
         session: TowerSession,
-        store: &mut impl StravaStore,
+        user: StravaUser,
+        is_admin: bool,
     ) -> TbResult<()> {
         trace!("got token {:?})", token);
 
-        let StravaAthleteInfo {
-            id,
-            firstname,
-            lastname,
-            avatar,
-            ..
-        } = token
-            .extra_fields()
-            .athlete
-            .as_ref()
-            .ok_or(Error::BadRequest("No Athlete Info from Strava".to_string()))?;
-
-        // make sure you have a non-local url
-        let avatar = match avatar {
-            Some(a) if !a.starts_with("http") => &None,
-            _ => avatar,
-        };
         let refresh_token = token.refresh_token();
-        let user =
-            StravaUser::upsert(*id, firstname, lastname, avatar, refresh_token, store).await?;
-        let id = user.tb_id();
-        let is_admin = id.is_admin(store).await?;
-
         Self {
-            id,
+            id: user.tb_id(),
             strava_id: user.strava_id(),
             is_admin,
             access_token: token.access_token().clone(),
@@ -76,43 +58,6 @@ impl RequestSession {
         }
         .update()
         .await
-    }
-
-    /// User for admin actions to impersonate user
-    pub(crate) async fn create_from_id(
-        _admin: AxumAdmin,
-        user: UserId,
-        store: &mut impl StravaStore,
-    ) -> TbResult<RequestSession> {
-        Self::for_user(user, store).await
-    }
-
-    /// Build a `StravaSession` for a user from their stored [`StravaUser`]
-    /// (the refresh token), the same way [`create_from_id`](Self::create_from_id)
-    /// does, minus the admin gate: an empty access token with a past expiry,
-    /// so the first Strava request forces a token refresh (spec #446 §4.4 —
-    /// the per-user executor's session source).
-    pub(crate) async fn for_user(
-        user: UserId,
-        store: &mut impl StravaStore,
-    ) -> TbResult<RequestSession> {
-        let user = StravaUser::read(user, store).await?;
-
-        let strava_id = user.strava_id();
-        let id = user.tb_id();
-        let is_admin = id.is_admin(store).await?;
-        let refresh_token = user.refresh_token();
-
-        Ok(Self {
-            id,
-            strava_id,
-            is_admin,
-            access_token: AccessToken::new(String::default()),
-            expires_at: Some(SystemTime::UNIX_EPOCH),
-            refresh_token,
-            session: None,
-            shop: None,
-        })
     }
 
     /// A session with plausible values for tests (valid access token for an hour).
@@ -128,39 +73,6 @@ impl RequestSession {
             shop: None,
             session: None,
         }
-    }
-
-    fn is_expired(&self) -> bool {
-        match self.expires_at {
-            Some(expires_at) => SystemTime::now() > expires_at,
-            None => false,
-        }
-    }
-
-    async fn refresh_the_token(&mut self, store: &mut impl StravaDataStore) -> TbResult<()> {
-        let token = match self.refresh_token.clone() {
-            Some(token) => token,
-            None => {
-                return Err(Error::NotAuth(
-                    "No Refresh Token provided and Access Token expired".to_string(),
-                ));
-            }
-        };
-        debug!("refreshing token for user {}", self.id);
-        let token = match STRAVACLIENT
-            .exchange_refresh_token(&token)
-            .request_async(&*HTTP_CLIENT)
-            .await
-        {
-            Ok(token) => token,
-            Err(err) => return Err(Error::NotAuth(err.to_string())),
-        };
-        self.access_token = token.access_token().clone();
-        self.expires_at = token.expires_in().map(|d| SystemTime::now() + d);
-        self.refresh_token = token.refresh_token().cloned();
-        let refresh = token.refresh_token().map(|t| t.secret());
-        self.strava_id.update_token(refresh, store).await?;
-        self.update().await
     }
 
     async fn check_update(&self) -> TbResult<()> {
@@ -191,52 +103,6 @@ impl RequestSession {
         Ok(())
     }
 
-    async fn get_strava(
-        &mut self,
-        uri: &str,
-        store: &mut impl StravaDataStore,
-    ) -> TbResult<reqwest::Response> {
-        self.check_token(store).await?;
-
-        let resp = reqwest::Client::new()
-            .get(format!("{API}{uri}"))
-            .bearer_auth(self.access_token.secret())
-            .send()
-            .await
-            .context("Could not reach strava")?;
-
-        let status = resp.status();
-        if status.is_success() {
-            return Ok(resp);
-        }
-
-        match status {
-            StatusCode::TOO_MANY_REQUESTS
-            | StatusCode::BAD_GATEWAY
-            | StatusCode::SERVICE_UNAVAILABLE
-            | StatusCode::GATEWAY_TIMEOUT => {
-                Err(Error::TryAgain(status.canonical_reason().unwrap()))
-            }
-            StatusCode::UNAUTHORIZED => Err(Error::NotAuth(format!(
-                "Strava request authorization withdrawn for {uri}"
-            ))),
-            _ => Err(Error::BadRequest(format!(
-                "Strava request error: {}",
-                status
-                    .canonical_reason()
-                    .unwrap_or("Unknown status received")
-            ))),
-        }
-    }
-
-    async fn check_token(&mut self, store: &mut impl StravaDataStore) -> TbResult<()> {
-        if self.is_expired() {
-            debug!("access token for user {} is expired", self.id);
-            return self.refresh_the_token(store).await;
-        }
-        Ok(())
-    }
-
     fn set_session(mut self, session: TowerSession) -> Self {
         self.session = Some(session);
         self
@@ -260,78 +126,6 @@ impl TbSession for RequestSession {
         self.shop = shop;
         // Keep the trait dyn compatible
         tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(self.update()))
-    }
-}
-
-/// Test-only canned Strava responses (the axum suite runs the real
-/// executor loop, whose session is a real [`RequestSession`]): when a URI
-/// is mapped here, [`RequestSession`] answers `request_json` with the
-/// canned JSON instead of hitting the Strava API. The suite maps an empty
-/// athlete so the summary route's hydration (spec #558 §4) succeeds
-/// offline — no new gear, the common case (no frame, unchanged snapshot).
-#[cfg(test)]
-pub(crate) static CANNED_STRAVA: std::sync::LazyLock<
-    std::sync::Mutex<std::collections::HashMap<String, String>>,
-> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
-
-/// Maps a canned response for `uri` (test-only, see [`CANNED_STRAVA`]).
-#[cfg(test)]
-pub(crate) fn canned_strava(uri: &str, json: &str) {
-    CANNED_STRAVA
-        .lock()
-        .expect("the canned Strava responses are not poisoned")
-        .insert(uri.to_string(), json.to_string());
-}
-
-/// The canned response for `uri`, if one is mapped (test-only).
-#[cfg(test)]
-fn canned_response(uri: &str) -> Option<String> {
-    CANNED_STRAVA
-        .lock()
-        .expect("the canned Strava responses are not poisoned")
-        .get(uri)
-        .cloned()
-}
-
-#[async_trait::async_trait]
-impl StravaSession for RequestSession {
-    fn strava_id(&self) -> StravaId {
-        self.strava_id
-    }
-
-    async fn request_json<T: DeserializeOwned>(
-        &mut self,
-        uri: &str,
-        store: &mut impl StravaDataStore,
-    ) -> TbResult<T> {
-        // The suite's offline seam: a canned response stands in for the
-        // Strava API (see [`CANNED_STRAVA`]).
-        #[cfg(test)]
-        if let Some(json) = canned_response(uri) {
-            return Ok(serde_json::from_str(&json).context("Could not parse response body")?);
-        }
-        let r = self
-            .get_strava(uri, store)
-            .await?
-            .text()
-            .await
-            .context("could not reach strava")?;
-        trace!("{uri}:\n{r}");
-        Ok(serde_json::from_str::<T>(&r).context("Could not parse response body")?)
-    }
-
-    async fn deauthorize(&mut self, store: &mut impl StravaDataStore) -> TbResult<()> {
-        self.check_token(store).await?;
-
-        STRAVACLIENT
-            .revoke_token(self.access_token.clone().into())
-            .context("revoke token config error")?
-            .add_extra_param("access_token", self.access_token.secret()) // Strava does not follow the standard.
-            .request_async(&*HTTP_CLIENT)
-            .await
-            .context("token exchange failed")?;
-        debug!("user {} token revoked", self.strava_id);
-        Ok(())
     }
 }
 
@@ -378,32 +172,5 @@ where
         } else {
             Ok(AxumAdmin)
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::time::Duration;
-
-    fn dummy(expires_at: Option<SystemTime>) -> RequestSession {
-        let mut session = RequestSession::new_dummy(true);
-        session.expires_at = expires_at;
-        session
-    }
-
-    #[test]
-    fn expired_when_access_token_expired() {
-        assert!(dummy(Some(SystemTime::now() - Duration::from_secs(1))).is_expired());
-    }
-
-    #[test]
-    fn not_expired_when_access_token_valid() {
-        assert!(!dummy(Some(SystemTime::now() + Duration::from_secs(3600))).is_expired());
-    }
-
-    #[test]
-    fn not_expired_when_expiry_unknown() {
-        assert!(!dummy(None).is_expired());
     }
 }

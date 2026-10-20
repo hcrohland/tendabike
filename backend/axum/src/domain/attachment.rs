@@ -13,9 +13,7 @@ use serde::Deserialize;
 use time::OffsetDateTime;
 
 use crate::{RequestSession, appstate::AppState, error::AppError};
-use tb_domain::{ApiWrite, PartId, PartTypeId};
-use tb_exec::TxnSource;
-use tb_strava::StravaSession;
+use tb_domain::{ApiWrite, PartId, PartTypeId, Session};
 
 /// Description of an Attach or Detach request
 
@@ -35,14 +33,11 @@ pub struct Event {
 }
 
 /// route for attach API
-async fn attach_rt<S>(
+async fn attach_rt(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Json(event): Json<Event>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<StatusCode, AppError> {
     debug!("attach {event:?}");
     let Event {
         part_id,
@@ -52,10 +47,9 @@ where
         all,
     } = event;
     state
-        .registry
+        .api
         .write(
-            &state.source,
-            user.tb_id(),
+            user.user_id(),
             ApiWrite::AttachmentAttach {
                 part: part_id,
                 time,
@@ -69,23 +63,19 @@ where
 }
 
 /// route for detach API
-async fn detach_rt<S>(
+async fn detach_rt(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Json(event): Json<Event>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<StatusCode, AppError> {
     debug!("detach {event:?}");
     let Event {
         part_id, time, all, ..
     } = event;
     state
-        .registry
+        .api
         .write(
-            &state.source,
-            user.tb_id(),
+            user.user_id(),
             ApiWrite::AttachmentDetach {
                 part: part_id,
                 time,
@@ -104,14 +94,11 @@ pub struct Dispose {
     all: bool,
 }
 
-async fn dispose_rt<S>(
+async fn dispose_rt(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Json(event): Json<Dispose>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<StatusCode, AppError> {
     debug!("{event:?}");
     let Dispose {
         part_id: part,
@@ -119,40 +106,32 @@ where
         all,
     } = event;
     state
-        .registry
+        .api
         .write(
-            &state.source,
-            user.tb_id(),
+            user.user_id(),
             ApiWrite::AttachmentDispose { part, time, all },
         )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn recover_rt<S>(
+async fn recover_rt(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Json(event): Json<Dispose>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<StatusCode, AppError> {
     debug!("Recover {event:?}");
     let Dispose {
         part_id: part, all, ..
     } = event;
     state
-        .registry
-        .write(
-            &state.source,
-            user.tb_id(),
-            ApiWrite::AttachmentRecover { part, all },
-        )
+        .api
+        .write(user.user_id(), ApiWrite::AttachmentRecover { part, all })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
-pub(crate) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .route("/attach", post(attach_rt))
         .route("/detach", post(detach_rt))

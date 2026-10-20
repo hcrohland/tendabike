@@ -3,16 +3,18 @@
 //! The presentation layer is responsible for handling HTTP requests and responses, and for translating them into
 //! actions that the application layer can understand. The Axum framework is used to implement the presentation layer.
 //!
-//! The web layer is storage-agnostic: the state and every handler are generic over a
-//! [`TxnSource`], and the concrete store (the `DbPool` from `tb_sqlx`) is injected at the
-//! composition root (ADR-0005, executable spec #446 §6). It knows none of the details of
-//! `tb_sqlx` — but it did choose a `PostgresStore` for its sessions, so [`start`] also
-//! takes the postgres connection (the `PgPool` the caller built its store from), and it
-//! owns its own logging subscriber: the composition root wires the concrete crates, not
-//! the crate-internal details.
+//! The web layer is a dumb presentation layer (ADR-0007, executable spec
+//! #558 §7): the state and every handler carry the app's service API as
+//! `Arc<dyn ServiceApi>` (the exec-owned surface), and the concrete adapter
+//! (the `tb_exec::Registry` over the database pool) is injected at the
+//! composition root. It names the trait, never a seam type — but it did
+//! choose a `PostgresStore` for its sessions, so [`start`] also takes the
+//! postgres connection (the `PgPool` the caller built its store from), and it
+//! owns its own logging subscriber: the composition root wires the concrete
+//! crates, not the crate-internal details.
 //!
-//! This file defines the `start` function, which is the entry point for the presentation layer. It takes a
-//! `TxnSource`, the `PgPool` for the session store, a path to the directory containing static files, and a socket address to bind to.
+//! This file defines the `start` function, which is the entry point for the presentation layer. It takes the
+//! service API handle, the `PgPool` for the session store, a path to the directory containing static files, and a socket address to bind to.
 //! It sets up the necessary components for the presentation layer, such as the router and the middleware,
 //! and starts the server.
 //!
@@ -20,12 +22,14 @@
 //! of the Tendabike server, such as users, parts, attachments, activities, and Strava integration.
 //!
 
+use std::net::SocketAddr;
+use std::sync::Arc;
+
 use anyhow::Context;
 use axum::Router;
 use sqlx::PgPool;
-use std::net::SocketAddr;
 use tb_domain::TbResult;
-use tb_exec::TxnSource;
+use tb_exec::ServiceApi;
 use tower_sessions::{ExpiredDeletion, SessionManagerLayer};
 use tower_sessions_sqlx_store::PostgresStore;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -46,15 +50,15 @@ mod stream;
 #[cfg(test)]
 mod test_support;
 
-pub fn routes<S: TxnSource + Clone + 'static>(app_state: AppState<S>) -> Router {
+pub fn routes(app_state: AppState) -> Router {
     Router::new()
         .nest("/api", domain::router())
         .nest("/strava", strava::router())
         .with_state(app_state)
 }
 
-pub async fn start<S: TxnSource + Clone + Send + Sync + 'static>(
-    source: S,
+pub async fn start(
+    api: Arc<dyn ServiceApi>,
     pool: PgPool,
     path: std::path::PathBuf,
     addr: SocketAddr,
@@ -69,11 +73,11 @@ pub async fn start<S: TxnSource + Clone + Send + Sync + 'static>(
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let app_state = AppState::new(source);
+    let app_state = AppState::new(api);
 
     // The web layer chose a `PostgresStore` for its sessions, so the
     // caller hands over the postgres connection — the same pool the
-    // `TxnSource` was built from.
+    // service API's registry was built from.
     let session_store = PostgresStore::new(pool);
 
     session_store

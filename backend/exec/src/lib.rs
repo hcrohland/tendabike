@@ -41,12 +41,16 @@
 //! half lives in `tb_sqlx`, and the transaction integration is verified
 //! against real Postgres in `tb_sqlx`'s `tests/executor_seam.rs`.
 
+mod api;
 mod executor;
 mod message;
+mod registry;
 mod txn;
 
+pub use api::*;
 pub use executor::*;
 pub use message::*;
+pub use registry::*;
 pub use txn::*;
 
 #[cfg(test)]

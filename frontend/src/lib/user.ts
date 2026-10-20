@@ -5,7 +5,7 @@ import { parts, type Part } from "./part";
 import { partNotes, type PartNote } from "./partnote";
 import { Attachment, attachments } from "./attachment";
 import { plans, type ServicePlan } from "./serviceplan";
-import { Shop, shops, getShop } from "./shop";
+import { Shop, shops } from "./shop";
 import { myfetch } from "./utils";
 import { mapableState, type StateMap } from "./mapable.svelte";
 import { getUser, setUser } from "./user.svelte";
@@ -13,14 +13,14 @@ import { getUser, setUser } from "./user.svelte";
 export { getUser, setUser };
 
 export async function initData() {
-  let u = await myfetch("/api/user");
-  if (u) {
-    setUser(u);
+  let state = await myfetch("/api/user");
+  if (state) {
+    setUser(state.user);
     // The initial catch-up snapshot: it runs in parallel with the stream's
     // connect (the Header opens the stream once the user is known), so
     // hydration is not behind the SSE handshake. Frames that race it are
     // buffered in the stream until it lands (`markHydrated`).
-    return refresh(getShop()?.id);
+    setSummary(state.summary);
   }
   // Anonymous: no summary — the 401 redirect to the About page is in
   // flight, and no stream is opened for an unauthenticated session.
@@ -28,7 +28,11 @@ export async function initData() {
 
 export async function refresh(shop?: number) {
   let query = shop ? "?shop=" + shop : "";
-  await myfetch("/api/user/summary" + query).then(setSummary);
+  let state = await myfetch("/api/user" + query);
+  if (state) {
+    setUser(state.user);
+    setSummary(state.summary);
+  }
 }
 
 export type UserPublic = {
@@ -48,6 +52,13 @@ export type User = {
   avatar: string | undefined;
   is_admin: boolean;
   onboarding_status: OnboardingStatus;
+};
+
+/// The wire shape of `GET /api/user`: the full user record plus the
+/// `Summary` of everything the user owns.
+export type UserState = {
+  user: User;
+  summary: Summary;
 };
 
 /// The wire shape of a Summary: a uniform object per collection, with

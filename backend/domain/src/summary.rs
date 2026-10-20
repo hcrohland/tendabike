@@ -97,7 +97,7 @@ where
     }
 
     /// Whether there are no entries at all. A tombstone-only map is **not** empty: the
-    /// executor uses [`Summary::is_empty`] to decide the push, and a delete still delivers a
+    /// caller uses [`Summary::is_empty`] to decide the push, and a delete still delivers a
     /// frame (ADR-0005, executable spec #446 §4.5).
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
@@ -201,7 +201,7 @@ impl Add for Summary {
 
 impl Summary {
     /// Whether nothing was touched: all nine maps are empty. A tombstone
-    /// counts as touched (a delete is something to deliver). The executor
+    /// counts as touched (a delete is something to deliver). The caller
     /// uses this to decide the push: an empty `Summary` pushes no stream
     /// frame (ADR-0005, executable spec #446 §4.5).
     pub fn is_empty(&self) -> bool {

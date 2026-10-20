@@ -45,9 +45,9 @@ pub use traits::*;
 ///
 /// `pub` because it is domain vocabulary that production code (attachment
 /// and service logic) and tests assert against — including the external
-/// store-seam integration suite (`tb_sqlx`'s `tests/store_seam.rs`), a
-/// separate crate that can only import public items. `MIN_TIME` has no such
-/// external consumers and stays private.
+/// store-seam integration suite, a separate crate that can only import
+/// public items. `MIN_TIME` has no such external consumers and stays
+/// private.
 pub const MAX_TIME: OffsetDateTime = time::macros::datetime!(9100-01-01 0:00 UTC);
 /// The opposite bound (year 0): the "from the very beginning" end of a span,
 /// as in a service's usage window `[MIN_TIME, service.time]` (`entities/SERVICE.md`).

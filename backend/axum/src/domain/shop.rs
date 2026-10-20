@@ -22,19 +22,17 @@ use axum::{
 };
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use tb_exec::TxnSource;
 
 use crate::{
     RequestSession,
     appstate::AppState,
-    domain::{created_entity, read_mismatch},
+    domain::{created_entity, result_mismatch},
     error::{ApiResult, AppError},
 };
 use tb_domain::{
     ApiRead, ApiWrite, Error, Part, ReadOutcome, Session, Shop, ShopId, ShopSubscription,
     ShopSubscriptionWithDetails, SubscriptionId, UserPublic,
 };
-use tb_strava::StravaSession;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewShop {
@@ -66,7 +64,7 @@ pub struct RegisterPartRequest {
     pub part_id: i32,
 }
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(super) fn router() -> Router<AppState> {
     Router::new()
         // Shop CRUD
         .route("/", get(list_shops).post(create_shop))
@@ -97,40 +95,29 @@ pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
         .route("/{shop}/subscriptions", get(list_shop_subscriptions))
 }
 
-async fn list_shops<S>(
+async fn list_shops(
     session: RequestSession,
-    State(state): State<AppState<S>>,
-) -> ApiResult<Vec<Shop>>
-where
-    S: TxnSource + Clone + 'static,
-{
-    match state
-        .registry
-        .read(&state.source, session.tb_id(), ApiRead::Shops)
-        .await?
-    {
+    State(state): State<AppState>,
+) -> ApiResult<Vec<Shop>> {
+    match state.api.read(session.user_id(), ApiRead::Shops).await? {
         ReadOutcome::Shops(shops) => Ok(Json(shops)),
-        _ => Err(read_mismatch("shops", "shops")),
+        _ => Err(result_mismatch("shops", "shops")),
     }
 }
 
-async fn create_shop<S>(
+async fn create_shop(
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Json(NewShop {
         name,
         description,
         auto_approve,
     }): Json<NewShop>,
-) -> Result<(StatusCode, Json<Shop>), AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
-    let summary = state
-        .registry
+) -> Result<(StatusCode, Json<Shop>), AppError> {
+    let outcome = state
+        .api
         .write(
-            &state.source,
-            session.tb_id(),
+            session.user_id(),
             ApiWrite::ShopCreate {
                 name,
                 description,
@@ -138,50 +125,39 @@ where
             },
         )
         .await?;
-    let shop = created_entity(&summary.shops, "shop")?;
+    let shop = created_entity(&outcome.summary().shops, "shop")?;
     Ok((StatusCode::CREATED, Json(shop)))
 }
 
-async fn get_shop<S>(
+async fn get_shop(
     Path(shop_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
-) -> ApiResult<Shop>
-where
-    S: TxnSource + Clone + 'static,
-{
+    State(state): State<AppState>,
+) -> ApiResult<Shop> {
     match state
-        .registry
-        .read(
-            &state.source,
-            session.tb_id(),
-            ApiRead::Shop(ShopId::from(shop_id)),
-        )
+        .api
+        .read(session.user_id(), ApiRead::Shop(ShopId::from(shop_id)))
         .await?
     {
         ReadOutcome::Shop(shop) => Ok(Json(shop)),
-        _ => Err(read_mismatch("shop", "shop")),
+        _ => Err(result_mismatch("shop", "shop")),
     }
 }
 
-async fn update_shop<S>(
+async fn update_shop(
     Path(shop_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Json(UpdateShop {
         name,
         description,
         auto_approve,
     }): Json<UpdateShop>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<StatusCode, AppError> {
     state
-        .registry
+        .api
         .write(
-            &state.source,
-            session.tb_id(),
+            session.user_id(),
             ApiWrite::ShopUpdate {
                 id: ShopId::from(shop_id),
                 name,
@@ -193,19 +169,15 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn delete_shop<S>(
+async fn delete_shop(
     Path(shop_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+    State(state): State<AppState>,
+) -> Result<StatusCode, AppError> {
     state
-        .registry
+        .api
         .write(
-            &state.source,
-            session.tb_id(),
+            session.user_id(),
             ApiWrite::ShopDelete {
                 id: ShopId::from(shop_id),
             },
@@ -214,42 +186,31 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn get_shop_parts<S>(
+async fn get_shop_parts(
     Path(shop_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
-) -> ApiResult<Vec<Part>>
-where
-    S: TxnSource + Clone + 'static,
-{
+    State(state): State<AppState>,
+) -> ApiResult<Vec<Part>> {
     match state
-        .registry
-        .read(
-            &state.source,
-            session.tb_id(),
-            ApiRead::ShopParts(ShopId::from(shop_id)),
-        )
+        .api
+        .read(session.user_id(), ApiRead::ShopParts(ShopId::from(shop_id)))
         .await?
     {
         ReadOutcome::ShopParts(parts) => Ok(Json(parts)),
-        _ => Err(read_mismatch("shop parts", "parts")),
+        _ => Err(result_mismatch("shop parts", "parts")),
     }
 }
 
-async fn register_part<S>(
+async fn register_part(
     Path(shop_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Json(RegisterPartRequest { part_id }): Json<RegisterPartRequest>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<StatusCode, AppError> {
     state
-        .registry
+        .api
         .write(
-            &state.source,
-            session.tb_id(),
+            session.user_id(),
             ApiWrite::ShopRegisterPart {
                 shop: shop_id.into(),
                 part: part_id.into(),
@@ -259,19 +220,15 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn unregister_part<S>(
+async fn unregister_part(
     Path((shop_id, part_id)): Path<(i32, i32)>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+    State(state): State<AppState>,
+) -> Result<StatusCode, AppError> {
     state
-        .registry
+        .api
         .write(
-            &state.source,
-            session.tb_id(),
+            session.user_id(),
             ApiWrite::ShopUnregisterPart {
                 shop: shop_id.into(),
                 part: part_id.into(),
@@ -282,44 +239,33 @@ where
 }
 
 // Search shops
-async fn search_shops<S>(
+async fn search_shops(
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
-) -> ApiResult<(Vec<Shop>, Vec<UserPublic>)>
-where
-    S: TxnSource + Clone + 'static,
-{
+    State(state): State<AppState>,
+) -> ApiResult<(Vec<Shop>, Vec<UserPublic>)> {
     let query = params.get("q").map(|s| s.as_str()).unwrap_or("");
     match state
-        .registry
-        .read(
-            &state.source,
-            session.tb_id(),
-            ApiRead::ShopSearch(query.to_string()),
-        )
+        .api
+        .read(session.user_id(), ApiRead::ShopSearch(query.to_string()))
         .await?
     {
         ReadOutcome::ShopSearch { shops, users } => Ok(Json((shops, users))),
-        _ => Err(read_mismatch("shop search", "shops and users")),
+        _ => Err(result_mismatch("shop search", "shops and users")),
     }
 }
 
 // Subscription handlers
 
-async fn create_subscription<S>(
+async fn create_subscription(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Json(NewSubscriptionRequest { shop_id, message }): Json<NewSubscriptionRequest>,
-) -> Result<(StatusCode, Json<ShopSubscription>), AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<(StatusCode, Json<ShopSubscription>), AppError> {
     state
-        .registry
+        .api
         .write(
-            &state.source,
-            user.tb_id(),
+            user.user_id(),
             ApiWrite::ShopSubscriptionCreate {
                 shop: shop_id.into(),
                 message,
@@ -330,96 +276,97 @@ where
     // A `ShopSubscription` is in no `Summary`, so the 201 body reads it back
     // after the write succeeds (spec §6.2, the onboarding pattern): the
     // create guard allows at most one subscription per (user, shop), so the
-    // one for this shop is the one we just created.
-    let mut store = state.source.begin().await?;
+    // one for this shop is the one we just created. The read is the user's
+    // own subscriptions (the mine route's read); the 201 body projects the
+    // bare `ShopSubscription` from the with-details composite.
     let shop = ShopId::from(shop_id);
-    let subscription = ShopSubscription::get_for_user(user.user_id(), &mut store)
+    let subscriptions = match state
+        .api
+        .read(user.user_id(), ApiRead::ShopSubscriptions(None))
         .await?
+    {
+        ReadOutcome::ShopSubscriptions(subscriptions) => subscriptions,
+        _ => return Err(result_mismatch("shop subscriptions", "subscriptions")),
+    };
+    let subscription = subscriptions
         .into_iter()
         .find(|s| s.shop_id == shop)
         .ok_or_else(|| Error::NotFound("subscription not found after create".to_string()))?;
-    Ok((StatusCode::CREATED, Json(subscription)))
+    Ok((
+        StatusCode::CREATED,
+        Json(ShopSubscription {
+            id: subscription.id,
+            shop_id: subscription.shop_id,
+            user_id: subscription.user_id,
+            status: subscription.status,
+            message: subscription.message,
+            response_message: subscription.response_message,
+            created_at: subscription.created_at,
+            updated_at: subscription.updated_at,
+        }),
+    ))
 }
 
-async fn list_my_subscriptions<S>(
+async fn list_my_subscriptions(
     session: RequestSession,
-    State(state): State<AppState<S>>,
-) -> ApiResult<Vec<ShopSubscriptionWithDetails>>
-where
-    S: TxnSource + Clone + 'static,
-{
+    State(state): State<AppState>,
+) -> ApiResult<Vec<ShopSubscriptionWithDetails>> {
     match state
-        .registry
-        .read(
-            &state.source,
-            session.tb_id(),
-            ApiRead::ShopSubscriptions(None),
-        )
+        .api
+        .read(session.user_id(), ApiRead::ShopSubscriptions(None))
         .await?
     {
         ReadOutcome::ShopSubscriptions(subscriptions) => Ok(Json(subscriptions)),
-        _ => Err(read_mismatch("shop subscriptions", "subscriptions")),
+        _ => Err(result_mismatch("shop subscriptions", "subscriptions")),
     }
 }
 
-async fn list_shop_subscriptions<S>(
+async fn list_shop_subscriptions(
     Path(shop_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
-) -> ApiResult<Vec<ShopSubscriptionWithDetails>>
-where
-    S: TxnSource + Clone + 'static,
-{
+    State(state): State<AppState>,
+) -> ApiResult<Vec<ShopSubscriptionWithDetails>> {
     match state
-        .registry
+        .api
         .read(
-            &state.source,
-            session.tb_id(),
+            session.user_id(),
             ApiRead::ShopSubscriptions(Some(ShopId::from(shop_id))),
         )
         .await?
     {
         ReadOutcome::ShopSubscriptions(subscriptions) => Ok(Json(subscriptions)),
-        _ => Err(read_mismatch("shop subscriptions", "subscriptions")),
+        _ => Err(result_mismatch("shop subscriptions", "subscriptions")),
     }
 }
 
-async fn get_subscription<S>(
+async fn get_subscription(
     Path(subscription_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
-) -> ApiResult<ShopSubscription>
-where
-    S: TxnSource + Clone + 'static,
-{
+    State(state): State<AppState>,
+) -> ApiResult<ShopSubscription> {
     match state
-        .registry
+        .api
         .read(
-            &state.source,
-            session.tb_id(),
+            session.user_id(),
             ApiRead::ShopSubscription(SubscriptionId::from(subscription_id)),
         )
         .await?
     {
         ReadOutcome::ShopSubscription(subscription) => Ok(Json(subscription)),
-        _ => Err(read_mismatch("shop subscription", "subscription")),
+        _ => Err(result_mismatch("shop subscription", "subscription")),
     }
 }
 
-async fn approve_subscription<S>(
+async fn approve_subscription(
     Path(subscription_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Json(req): Json<SubscriptionResponseRequest>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<StatusCode, AppError> {
     state
-        .registry
+        .api
         .write(
-            &state.source,
-            session.tb_id(),
+            session.user_id(),
             ApiWrite::ShopSubscriptionApprove {
                 id: subscription_id.into(),
                 message: req.message,
@@ -429,20 +376,16 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn reject_subscription<S>(
+async fn reject_subscription(
     Path(subscription_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Json(req): Json<SubscriptionResponseRequest>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<StatusCode, AppError> {
     state
-        .registry
+        .api
         .write(
-            &state.source,
-            session.tb_id(),
+            session.user_id(),
             ApiWrite::ShopSubscriptionReject {
                 id: subscription_id.into(),
                 message: req.message,
@@ -452,19 +395,15 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn cancel_subscription<S>(
+async fn cancel_subscription(
     Path(subscription_id): Path<i32>,
     session: RequestSession,
-    State(state): State<AppState<S>>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+    State(state): State<AppState>,
+) -> Result<StatusCode, AppError> {
     state
-        .registry
+        .api
         .write(
-            &state.source,
-            session.tb_id(),
+            session.user_id(),
             ApiWrite::ShopSubscriptionCancel {
                 id: subscription_id.into(),
             },

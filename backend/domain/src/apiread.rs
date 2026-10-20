@@ -21,26 +21,27 @@
 //! The `ApiRead` dispatch (ADR-0007, executable spec #558 §3).
 //!
 //! `ApiRead` is the one in-memory message an API read becomes on its way
-//! through the per-user executor: a flat enum with one variant per per-user
+//! through the per-user loop: a flat enum with one variant per per-user
 //! read route, entity-prefixed, each variant carrying exactly the operation's
 //! parsed arguments — the same values the current axum handlers extract. The
 //! 15 per-user read routes collapse to the 12 catalog variants (spec #558
 //! §3.4): `User { shop }` covers `GET /user`, `GET /user/summary`, and
 //! `GET /user/export`, and `ShopSubscriptions(Option<ShopId>)` covers the
 //! mine route and the shop's route. The admin `GET /user/all` is not a
-//! variant: `get_all_stats` is a `tb_strava` op, and `tb_domain` cannot
-//! depend on `tb_strava` (the dependency direction is `domain ← strava`).
+//! variant: `get_all_stats` is a Strava-driver op, and the domain cannot
+//! depend on the Strava driver (the dependency direction is
+//! `domain ← strava`).
 //!
 //! No variant carries a `user_id`: the channel is per-user, the loop runs in
-//! that user's context, and the `Session` the executor supplies carries the
+//! that user's context, and the `Session` the caller supplies carries the
 //! identity.
 //!
 //! [`read`] applies one `ApiRead` through the domain layer — the same call
 //! the current axum handler makes, minus the HTTP extraction and minus
-//! `begin`/`commit`: the executor loop (a later ticket) drives the
+//! `begin`/`commit`: the loop drives the
 //! transaction (one loop-owned transaction per message, read-only within it
 //! by spec), and `read` runs inside one live connection. It is bounded by
-//! the `Store` marker, not by the executor's `Txn` trait, so it stays
+//! the `Store` marker, not by the caller's `Txn` trait, so it stays
 //! verifiable on both adapters (`MemStore` and `SqlxConn`) per the
 //! store-seam contract, with the Postgres behavior as the source of truth.
 //!
@@ -54,7 +55,7 @@ use std::collections::HashSet;
 
 use crate::*;
 
-/// One per-user read API route, as the per-user executor receives it.
+/// One per-user read API route, as the per-user loop receives it.
 ///
 /// The variants are the per-user read route table of `backend/axum`
 /// (`src/domain/*.rs`), entity-prefixed. The `/types` routes are static (no
@@ -70,6 +71,12 @@ pub enum ApiRead {
     /// the summary to the shop's parts. The routes project `User`,
     /// `Summary`, and the export composite from the one message.
     User { shop: Option<ShopId> },
+
+    /// The light user-record read: just the [`User`] row, no `Summary`
+    /// computation. Used by the onboarding read-backs (the webhook's
+    /// `trigger_initial_sync` / `postpone_initial_sync`) which need only
+    /// the updated record in their 200 body.
+    UserRecord,
 
     // --- activity (`/api/activ`) ---
     /// `GET /activ/{id}`.
@@ -118,6 +125,8 @@ pub enum ReadOutcome {
     /// carries a full `Summary` (nine id-keyed maps), and the enum is an
     /// owned channel message — one allocation keeps the other payloads small.
     User(Box<UserState>),
+    /// `ApiRead::UserRecord`: the bare user row (no `Summary`).
+    UserRecord(User),
     /// `ApiRead::Activity`.
     Activity(Activity),
     /// `ApiRead::Part`.
@@ -149,12 +158,11 @@ pub enum ReadOutcome {
 
 /// Apply one [`ApiRead`] through the domain layer.
 ///
-/// This is the single entry point the executor loop and the read handlers
-/// use to apply an API read. It runs **inside** one live transaction — the
-/// executor loop (a later ticket) owns `begin`/`commit`/`rollback` — so it
-/// takes the session and the store by mutable reference, exactly like the
-/// domain operations it calls, and it never touches the transaction
-/// lifecycle itself. A read is read-only within that transaction by spec:
+/// This is the single entry point the loop and the read handlers use to
+/// apply an API read. It runs **inside** one live transaction — the loop
+/// owns `begin`/`commit`/`rollback` — so it takes the session and the store
+/// by mutable reference, exactly like the domain operations it calls, and it
+/// never touches the transaction lifecycle itself. A read is read-only within that transaction by spec:
 /// it computes and returns data, and it pushes no stream frame.
 ///
 /// Each arm is the same call the current axum handler makes, minus the HTTP
@@ -178,6 +186,11 @@ pub async fn read(
         ApiRead::User { shop } => {
             let state = session.user_id().read(shop, store).await?;
             Ok(ReadOutcome::User(Box::new(state)))
+        }
+        // The light record-only read: just the `User` row, no `Summary`.
+        ApiRead::UserRecord => {
+            let user = UserStore::get(store, session.user_id()).await?;
+            Ok(ReadOutcome::UserRecord(user))
         }
 
         // --- activity ---
@@ -221,7 +234,7 @@ pub async fn read(
             // The `?q=` query, the shops, and their owners' (and, for the
             // caller's own shops, subscribers') public records.
             let shops = Shop::search(&query, store).await?;
-            let users = Shop::get_users(&shops, &session.user_id(), store).await?;
+            let users = Shop::get_users(&shops, &session.user_id(), None, store).await?;
             Ok(ReadOutcome::ShopSearch { shops, users })
         }
         ApiRead::ShopSubscriptions(shop) => match shop {

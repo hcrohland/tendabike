@@ -162,7 +162,8 @@ impl UserId {
     /// shop, usage, user.
     pub async fn read(self, shop: Option<ShopId>, store: &mut impl Store) -> TbResult<UserState> {
         let user = UserStore::get(store, self).await?;
-        let summary = self.get_summary(shop, store).await?;
+        let caller: UserPublic = user.clone().into();
+        let summary = self.get_summary(shop, Some(caller), store).await?;
         Ok(UserState { user, summary })
     }
 
@@ -232,22 +233,26 @@ impl UserId {
 
     pub async fn is_admin(&self, store: &mut impl UserStore) -> TbResult<bool> {
         // The lightweight single-row read: one bool, no `UserState`
-        // composite (this runs at every login and every executor spawn).
+        // composite (this runs at every login and every session build).
         UserStore::get(store, *self).await.map(|u| u.is_admin)
     }
 
     /// get all parts, attachments and activities for the user
     ///
+    /// `caller` is the pre-fetched [`UserPublic`] of `self`: when `Some`,
+    /// it is reused in the shop-user lookup instead of re-reading the row.
+    ///
     /// Crosses: activity, attachment, part, partnote, service, serviceplan, shop, usage, user.
     pub async fn get_summary(
         &self,
         shop: Option<ShopId>,
+        caller: Option<UserPublic>,
         store: &mut impl Store,
     ) -> TbResult<Summary> {
         use crate::*;
         let activities = Activity::get_all(self, store).await?;
         let shops = Shop::get_all_for_user(self, store).await?;
-        let users = Shop::get_users(&shops, self, store).await?;
+        let users = Shop::get_users(&shops, self, caller, store).await?;
         let mut summary = {
             let parts = match shop {
                 None => Part::get_all(self, store).await?,
@@ -318,7 +323,7 @@ impl UserId {
     ///
     /// Crosses: activity, attachment, part, partnote, service, serviceplan, shop, usage, user.
     pub async fn delete(&self, store: &mut impl Store) -> TbResult<()> {
-        let summary = self.get_summary(None, store).await?;
+        let summary = self.get_summary(None, None, store).await?;
         let services = summary.services.live();
         let plans = summary.plans.live();
         let parts = summary.parts.live();

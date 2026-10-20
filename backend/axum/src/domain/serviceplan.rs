@@ -29,71 +29,48 @@ use http::StatusCode;
 use log::trace;
 
 use crate::{RequestSession, appstate::AppState, domain::created_entity, error::AppError};
-use tb_domain::{ApiWrite, ServicePlan, ServicePlanId};
-use tb_exec::TxnSource;
-use tb_strava::StravaSession;
+use tb_domain::{ApiWrite, ServicePlan, ServicePlanId, Session};
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route("/", post(create).put(update))
         .route("/{id}", delete(delete_plan))
 }
 
-async fn create<S>(
+async fn create(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Json(plan): Json<ServicePlan>,
-) -> Result<(StatusCode, Json<ServicePlan>), AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<(StatusCode, Json<ServicePlan>), AppError> {
     trace!("ServicePlan::create");
-    let summary = state
-        .registry
-        .write(
-            &state.source,
-            user.tb_id(),
-            ApiWrite::ServicePlanCreate { plan },
-        )
+    let outcome = state
+        .api
+        .write(user.user_id(), ApiWrite::ServicePlanCreate { plan })
         .await?;
-    let plan = created_entity(&summary.plans, "service plan")?;
+    let plan = created_entity(&outcome.summary().plans, "service plan")?;
     Ok((StatusCode::CREATED, Json(plan)))
 }
 
-async fn update<S>(
+async fn update(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Json(plan): Json<ServicePlan>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<StatusCode, AppError> {
     state
-        .registry
-        .write(
-            &state.source,
-            user.tb_id(),
-            ApiWrite::ServicePlanUpdate { plan },
-        )
+        .api
+        .write(user.user_id(), ApiWrite::ServicePlanUpdate { plan })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn delete_plan<S>(
+async fn delete_plan(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Path(id): Path<ServicePlanId>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<StatusCode, AppError> {
     state
-        .registry
-        .write(
-            &state.source,
-            user.tb_id(),
-            ApiWrite::ServicePlanDelete { id },
-        )
+        .api
+        .write(user.user_id(), ApiWrite::ServicePlanDelete { id })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

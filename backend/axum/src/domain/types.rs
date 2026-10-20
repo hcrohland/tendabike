@@ -7,7 +7,6 @@ use axum::{Json, Router, routing::get};
 
 use crate::{appstate::AppState, error::ApiResult};
 use tb_domain::{ActivityType, PartType};
-use tb_exec::TxnSource;
 
 // get all activity types
 async fn activity() -> ApiResult<Vec<ActivityType>> {
@@ -19,7 +18,7 @@ async fn part() -> ApiResult<Vec<PartType>> {
     Ok(Json(PartType::all_ordered()))
 }
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route("/part", get(part))
         .route("/activity", get(activity))

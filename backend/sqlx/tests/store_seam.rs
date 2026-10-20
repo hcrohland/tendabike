@@ -395,7 +395,7 @@ async fn fixture_roundtrip() -> tb_domain::TbResult<()> {
 #[ignore]
 async fn user_summary_read() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
-        let summary = UserId::from(1).get_summary(None, &mut store).await?;
+        let summary = UserId::from(1).get_summary(None, None, &mut store).await?;
 
         // The fixture content. Parts come back in one unified order on
         // both stores — ascending `last_used` (#405) — but the summary map
@@ -1986,7 +1986,7 @@ async fn apiwrite_subscription_create_and_cancel() -> tb_domain::TbResult<()> {
 
 /// The dispatch does the onboarding domain part only — the status guard with
 /// the handler's message, then the status update; the Strava-side sync event
-/// is the cutover ticket's concern (issue #457). A second trigger is
+/// is handled by the loop. A second trigger is
 /// rejected with the handler's message.
 #[tokio::test]
 #[ignore]

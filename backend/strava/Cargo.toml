@@ -12,11 +12,17 @@ log = { workspace = true }
 derive_more = { workspace = true, features = ["from", "into", "display"] }
 serde = { workspace = true }
 serde_derive = { workspace = true }
+serde_json = { workspace = true }
 anyhow = { workspace = true }
 time = { workspace = true, features = ["serde"] }
 async-recursion = { workspace = true }
 async-trait = { workspace = true }
 oauth2 = { workspace = true }
+http = "1"
+reqwest = { workspace = true }
+
+[features]
+test-support = []
 
 [lib]
 doctest = false

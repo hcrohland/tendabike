@@ -74,7 +74,7 @@ pub fn round_offset(whole_seconds: i32) -> i32 {
 /// human-readable description (`"{title} at {start}"`) for the UI to show.
 ///
 /// The report is an **operation result**, not `Summary` state: the matched
-/// activities' updated state still rides the stream frame (the executor's
+/// activities' updated state still rides the stream frame (the caller's
 /// `Summary` push), the report rides the HTTP response body (a `200 +
 /// {good, bad}` object) — the client renders it, it is never merged.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

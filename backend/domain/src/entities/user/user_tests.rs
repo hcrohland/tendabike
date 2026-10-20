@@ -174,7 +174,7 @@ use crate::test_support::part_type_ids::BIKE;
 #[tokio::test]
 async fn user_summary_read() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let summary = UserId::from(1).get_summary(None, &mut store).await?;
+    let summary = UserId::from(1).get_summary(None, None, &mut store).await?;
 
     // The fixture content. Parts come back in one unified order on
     // both stores — ascending `last_used` (#405) — but the summary map

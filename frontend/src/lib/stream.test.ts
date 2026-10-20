@@ -49,7 +49,7 @@ describe("stream", () => {
     setShop(undefined);
     message.active = false;
     fetchMock = vi.fn();
-    fetchMock.mockResolvedValue(resp(summary()));
+    fetchMock.mockResolvedValue(resp({ user: {}, summary: summary() }));
     vi.stubGlobal("fetch", fetchMock);
   });
 
@@ -71,7 +71,7 @@ describe("stream", () => {
   });
 
   it("a reconnect re-runs the snapshot fetch", async () => {
-    fetchMock.mockResolvedValue(resp(summaryContent()));
+    fetchMock.mockResolvedValue(resp({ user: {}, summary: summaryContent() }));
     let seen: Promise<void> | undefined;
     startStream((p) => (seen = p), factory);
     theStream().fireOpen();
@@ -79,7 +79,7 @@ describe("stream", () => {
     theStream().fireOpen();
     await vi.waitFor(() => expect(seen).toBeInstanceOf(Promise));
     await seen!;
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/user/summary");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/user");
     expect(parts[1]).toBeDefined();
   });
 
@@ -88,7 +88,7 @@ describe("stream", () => {
     try {
       fetchMock
         .mockRejectedValueOnce(new Error("network"))
-        .mockResolvedValueOnce(resp(summaryContent()));
+        .mockResolvedValueOnce(resp({ user: {}, summary: summaryContent() }));
       let seen: Promise<void> | undefined;
       startStream((p) => (seen = p), factory);
       theStream().fireOpen();
@@ -131,7 +131,7 @@ describe("stream", () => {
   });
 
   it("passes each reconnect snapshot to onSnapshot", async () => {
-    fetchMock.mockResolvedValue(resp(summaryContent()));
+    fetchMock.mockResolvedValue(resp({ user: {}, summary: summaryContent() }));
     let seen: Promise<void> | undefined;
     startStream((p) => (seen = p), factory);
     theStream().fireOpen();
@@ -185,26 +185,26 @@ describe("stream", () => {
     expect(stateValues(parts)).toHaveLength(0);
   });
 
-  it("after 5 consecutive failed opens, probes liveness with GET /api/user", async () => {
-    fetchMock.mockResolvedValue(resp({ id: 1 }));
+  it("after 5 consecutive failed opens, probes liveness with GET /api/user/ping", async () => {
+    fetchMock.mockResolvedValue(resp(null, 204, true, "No Content"));
     startStream(() => {}, factory);
     for (let i = 0; i < 4; i++) theStream().fireError();
-    expect(fetchMock).not.toHaveBeenCalledWith("/api/user", undefined);
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/user/ping", undefined);
     theStream().fireError();
     await vi.waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith("/api/user", undefined),
+      expect(fetchMock).toHaveBeenCalledWith("/api/user/ping", undefined),
     );
   });
 
   it("a successful open resets the failed-open counter", async () => {
-    fetchMock.mockResolvedValue(resp(summaryContent()));
+    fetchMock.mockResolvedValue(resp({ user: {}, summary: summaryContent() }));
     startStream(() => {}, factory);
     for (let i = 0; i < 4; i++) theStream().fireError();
     theStream().fireOpen();
     // The open reset the counter, so four more errors stay under the
     // probe threshold (the probe fires synchronously on the 5th).
     for (let i = 0; i < 4; i++) theStream().fireError();
-    expect(fetchMock).not.toHaveBeenCalledWith("/api/user", undefined);
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/user/ping", undefined);
   });
 
   it("a 401 probe clears the user and raises the banner", async () => {
@@ -234,17 +234,14 @@ describe("stream", () => {
   });
 
   it("the reconnect snapshot mirrors the manual refresh shop scope", async () => {
-    fetchMock.mockResolvedValue(resp(summaryContent()));
+    fetchMock.mockResolvedValue(resp({ user: {}, summary: summaryContent() }));
     setShop(new Shop({ id: 10, name: "S" }));
     startStream(() => {}, factory);
     theStream().fireOpen();
     theStream().fireError();
     theStream().fireOpen();
     await vi.waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/user/summary?shop=10",
-        undefined,
-      ),
+      expect(fetchMock).toHaveBeenCalledWith("/api/user?shop=10", undefined),
     );
   });
 });

@@ -28,17 +28,15 @@ use axum::{
 };
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use tb_exec::TxnSource;
 
 use crate::{
     RequestSession,
     appstate::AppState,
-    domain::{created_entity, read_mismatch},
+    domain::{created_entity, result_mismatch},
     error::{ApiResult, AppError},
 };
 use serde_with::serde_as;
-use tb_domain::{ApiRead, ApiWrite, Part, PartId, PartTypeId, ReadOutcome};
-use tb_strava::StravaSession;
+use tb_domain::{ApiRead, ApiWrite, Part, PartId, PartTypeId, ReadOutcome, Session};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 #[serde_as]
@@ -67,34 +65,27 @@ pub struct ChangePart {
     pub purchase: OffsetDateTime,
 }
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route("/", post(post_part))
         .route("/{part}", get(get_part).put(put_part).delete(delete_part))
         .route("/categories", get(mycats))
 }
 
-async fn get_part<S>(
+async fn get_part(
     Path(part): Path<PartId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
-) -> ApiResult<Part>
-where
-    S: TxnSource + Clone + 'static,
-{
-    match state
-        .registry
-        .read(&state.source, user.tb_id(), ApiRead::Part(part))
-        .await?
-    {
+    State(state): State<AppState>,
+) -> ApiResult<Part> {
+    match state.api.read(user.user_id(), ApiRead::Part(part)).await? {
         ReadOutcome::Part(part) => Ok(Json(part)),
-        _ => Err(read_mismatch("part", "part")),
+        _ => Err(result_mismatch("part", "part")),
     }
 }
 
-async fn post_part<S>(
+async fn post_part(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Json(NewPart {
         what,
         name,
@@ -102,17 +93,13 @@ async fn post_part<S>(
         model,
         purchase,
     }): Json<NewPart>,
-) -> Result<(StatusCode, Json<Part>), AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<(StatusCode, Json<Part>), AppError> {
     // The write runs on the user's executor (spec §6.2); the 201 body is the
     // created part extracted from the write's `Summary`.
-    let summary = state
-        .registry
+    let outcome = state
+        .api
         .write(
-            &state.source,
-            user.tb_id(),
+            user.user_id(),
             ApiWrite::PartCreate {
                 name,
                 vendor,
@@ -122,32 +109,25 @@ where
             },
         )
         .await?;
-    let part = created_entity(&summary.parts, "part")?;
+    let part = created_entity(&outcome.summary().parts, "part")?;
     Ok((StatusCode::CREATED, Json(part)))
 }
 
-async fn delete_part<S>(
+async fn delete_part(
     Path(part): Path<PartId>,
     user: RequestSession,
-    State(state): State<AppState<S>>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+    State(state): State<AppState>,
+) -> Result<StatusCode, AppError> {
     state
-        .registry
-        .write(
-            &state.source,
-            user.tb_id(),
-            ApiWrite::PartDelete { id: part },
-        )
+        .api
+        .write(user.user_id(), ApiWrite::PartDelete { id: part })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn put_part<S>(
+async fn put_part(
     user: RequestSession,
-    State(state): State<AppState<S>>,
+    State(state): State<AppState>,
     Path(part): Path<PartId>,
     Json(ChangePart {
         name,
@@ -155,15 +135,11 @@ async fn put_part<S>(
         model,
         purchase,
     }): Json<ChangePart>,
-) -> Result<StatusCode, AppError>
-where
-    S: TxnSource + Clone + 'static,
-{
+) -> Result<StatusCode, AppError> {
     state
-        .registry
+        .api
         .write(
-            &state.source,
-            user.tb_id(),
+            user.user_id(),
             ApiWrite::PartChange {
                 id: part,
                 name,
@@ -176,19 +152,16 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn mycats<S>(
+async fn mycats(
     user: RequestSession,
-    State(state): State<AppState<S>>,
-) -> ApiResult<HashSet<PartTypeId>>
-where
-    S: TxnSource + Clone + 'static,
-{
+    State(state): State<AppState>,
+) -> ApiResult<HashSet<PartTypeId>> {
     match state
-        .registry
-        .read(&state.source, user.tb_id(), ApiRead::PartCategories)
+        .api
+        .read(user.user_id(), ApiRead::PartCategories)
         .await?
     {
         ReadOutcome::PartCategories(categories) => Ok(Json(categories)),
-        _ => Err(read_mismatch("part categories", "categories")),
+        _ => Err(result_mismatch("part categories", "categories")),
     }
 }

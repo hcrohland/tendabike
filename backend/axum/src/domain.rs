@@ -1,6 +1,5 @@
 use axum::Router;
 use tb_domain::IdKeyedMap;
-use tb_exec::TxnSource;
 
 use crate::appstate::AppState;
 
@@ -32,17 +31,17 @@ pub(crate) fn created_entity<K, V: Clone>(
     }
 }
 
-/// The read route's mismatch guard (spec #558 §3.1): this route sent the
-/// read of its own variant; any other `ReadOutcome` is a bug, not a domain
-/// outcome — the `AnyFailure` names the read (`what`) that lost its payload
-/// (`payload`).
-pub(crate) fn read_mismatch(what: &str, payload: &str) -> crate::error::AppError {
+/// The handler's outcome mismatch guard: this route sent its own read
+/// (spec #558 §3.1) or write (spec §6.2); any other outcome is a bug, not
+/// a domain outcome — the `AnyFailure` names the op (`what`) that lost its
+/// payload (`payload`).
+pub(crate) fn result_mismatch(what: &str, payload: &str) -> crate::error::AppError {
     crate::error::AppError::TbError(tb_domain::Error::AnyFailure(anyhow::anyhow!(
-        "the {what} read did not carry its {payload}"
+        "the {what} outcome did not carry its {payload}"
     )))
 }
 
-pub(super) fn router<S: TxnSource + Clone + 'static>() -> Router<AppState<S>> {
+pub(super) fn router() -> Router<AppState> {
     Router::new()
         .nest("/user", user::router())
         .nest("/types", types::router())

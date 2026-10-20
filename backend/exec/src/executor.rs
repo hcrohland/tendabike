@@ -35,9 +35,9 @@
 use std::future::Future;
 use std::time::Duration;
 
-use log::{debug, error, info, warn};
+use log::{debug, error, warn};
 use tb_domain::{ApiRead, ApiWrite, Error, ReadOutcome, Summary, TbResult, WriteOutcome, exec};
-use tb_strava::event::{Event, QueueRead, get_event, process};
+use tb_strava::event::{Event, QueueRead, get_event, insert_sync, process};
 use tb_strava::{StravaSession, StravaStat, StravaUser, get_all_stats};
 use tokio::sync::{broadcast, oneshot};
 
@@ -350,6 +350,7 @@ where
     let mut session = session;
     let user_id = session.tb_id();
     let mut backoff = DbBackoff::new();
+    let mut first_idle = true;
 
     loop {
         // One wake permit per cycle, created before any select (the permit
@@ -438,11 +439,21 @@ where
 
             Select::Idle => {
                 let streams = frames.receiver_count();
-                match next_action(false, false, streams) {
+                let action = next_action(false, false, streams);
+                // Don't reap on the first idle cycle: the executor just
+                // spawned (a read or write triggered it), and the client's
+                // stream is likely to connect moments later. The first idle
+                // cycle sleeps instead, giving the stream time to attach.
+                let action = if action == Action::Reap && first_idle {
+                    first_idle = false;
+                    Action::Sleep
+                } else {
+                    action
+                };
+                match action {
                     Action::Reap => {
-                        info!("closing the executor for user {user_id}");
                         debug!(
-                            "the executor loop is idle and reaping (user {user_id}, {streams} stream(s))"
+                            "closing the executor for user {user_id} (idle, {streams} stream(s))"
                         );
                         return Ok(());
                     }
@@ -690,6 +701,12 @@ where
 /// outcome either way, and a successful, non-empty `Summary` pushes one
 /// frame to the user's SSE streams.
 ///
+/// The onboarding cutover's Strava side (spec #558 §5.1): one message = one
+/// loop-owned transaction containing the message's entire work — the
+/// `UserOnboardingSync`'s transaction does the domain half (`exec`) and the
+/// `insert_sync` in the same transaction, so the queued event commits with
+/// the domain half (a failed write leaves neither behind).
+///
 /// Fail fast (spec §6.2, §4.6): the oneshot always resolves, the message is
 /// consumed, and the loop continues — the client is the retry layer. A
 /// `begin` or `commit` failure is a **DB failure**: the oneshot 500s, the
@@ -709,7 +726,13 @@ where
     T: TxnSource,
     S: StravaSession,
 {
-    info!("user {}: Processing {write:?}", session.tb_id());
+    debug!("user {}: Processing {write:?}", session.tb_id());
+    // The onboarding cutover's Strava side (spec #558 §5.1): extracted
+    // before `exec` consumes the write, added to the same transaction.
+    let onboarding_time = match &write {
+        ApiWrite::UserOnboardingSync { time } => Some(*time),
+        _ => None,
+    };
     run_message(
         "write",
         "API write",
@@ -722,7 +745,14 @@ where
         // response body, not state — it never rides the frame).
         |outcome| Some(outcome.summary()),
         |mut conn| async move {
-            let outcome = exec(write, session, &mut conn).await;
+            let outcome = async {
+                let outcome = exec(write, session, &mut conn).await?;
+                if let Some(time) = onboarding_time {
+                    insert_sync(session.strava_id(), time, false, &mut conn).await?;
+                }
+                Ok(outcome)
+            }
+            .await;
             (outcome, conn)
         },
     )
@@ -757,7 +787,7 @@ where
     T: TxnSource,
     S: StravaSession,
 {
-    info!("user {}: Reading {read:?}", session.tb_id());
+    debug!("user {}: Reading {read:?}", session.tb_id());
     run_message(
         "read",
         "API read",
@@ -800,7 +830,7 @@ where
     T: TxnSource,
     S: StravaSession,
 {
-    info!("user {}: Hydrating the user's gear", session.tb_id());
+    debug!("user {}: Hydrating the user's gear", session.tb_id());
     // The hydration's work in the loop's transaction: import the Strava
     // gear, then read back the parts it created — the frame is their union
     // (one entry per part, empty when nothing is new, spec #558 §4).
@@ -847,7 +877,7 @@ where
     T: TxnSource,
     S: StravaSession,
 {
-    info!("user {}: Reading the all-user stats", session.tb_id());
+    debug!("user {}: Reading the all-user stats", session.tb_id());
     run_message(
         "stats read",
         "all-user stats read",
@@ -908,7 +938,7 @@ where
     T: TxnSource,
     S: StravaSession,
 {
-    info!("user {}: Processing {event}", session.tb_id());
+    debug!("user {}: Processing {event}", session.tb_id());
 
     let mut conn = match source.begin().await {
         Ok(conn) => conn,
