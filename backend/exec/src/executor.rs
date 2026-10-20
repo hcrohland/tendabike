@@ -350,6 +350,7 @@ where
     let mut session = session;
     let user_id = session.tb_id();
     let mut backoff = DbBackoff::new();
+    let mut first_idle = true;
 
     loop {
         // One wake permit per cycle, created before any select (the permit
@@ -438,7 +439,18 @@ where
 
             Select::Idle => {
                 let streams = frames.receiver_count();
-                match next_action(false, false, streams) {
+                let action = next_action(false, false, streams);
+                // Don't reap on the first idle cycle: the executor just
+                // spawned (a read or write triggered it), and the client's
+                // stream is likely to connect moments later. The first idle
+                // cycle sleeps instead, giving the stream time to attach.
+                let action = if action == Action::Reap && first_idle {
+                    first_idle = false;
+                    Action::Sleep
+                } else {
+                    action
+                };
+                match action {
                     Action::Reap => {
                         debug!(
                             "closing the executor for user {user_id} (idle, {streams} stream(s))"
