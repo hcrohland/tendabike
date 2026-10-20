@@ -49,6 +49,7 @@ hex = "0.4.3"
 # "full" because the test code needs tokio's `macros`/`rt` features, which are
 # not guaranteed when building only tb_axum's own dependency graph
 tokio = { workspace = true, features = ["full"] }
+tb_exec = { workspace = true, features = ["mock"] }
 # `memory-store` is only used by the tests; declared here rather than in
 # [dependencies] so it is not enabled when tb_axum is consumed as a regular
 # dependency (workspace-root builds still unify it in, per cargo's
