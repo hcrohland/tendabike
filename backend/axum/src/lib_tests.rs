@@ -1918,16 +1918,13 @@ async fn delete_plan_returns_204() {
 // ─── The direct ops (the carve-out surface, spec #558 §5.2) ───────────────
 
 /// `POST /strava/onboarding/sync?time=N` enqueues the
-/// `UserOnboardingSync` write, then reads the `User` back as a read message
-/// (spec #558 §5.1's collapsed cutover) and answers `200` with the user.
+/// `UserOnboardingSync` write, then reads the `User` record back (the light
+/// record-only read) and answers `200` with the user.
 #[tokio::test]
 async fn onboarding_sync_returns_200_and_user() {
     let (app, store, stub) = stub_app();
     stub.reply_write(Ok(WriteOutcome::Summary(Summary::default())));
-    stub.reply_read(Ok(ReadOutcome::User(Box::new(UserState {
-        user: user(),
-        summary: Summary::default(),
-    }))));
+    stub.reply_read(Ok(ReadOutcome::UserRecord(user())));
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(
         app,
@@ -1948,22 +1945,19 @@ async fn onboarding_sync_returns_200_and_user() {
                 UserId::from(1),
                 ApiWrite::UserOnboardingSync { time: 1700000000 }
             ),
-            StubCall::Read(UserId::from(1), ApiRead::User { shop: None }),
+            StubCall::Read(UserId::from(1), ApiRead::UserRecord),
         ]
     );
 }
 
 /// `POST /strava/onboarding/postpone` enqueues the
-/// `UserOnboardingPostpone` write, then reads the `User` back and answers
-/// `200` with the user.
+/// `UserOnboardingPostpone` write, then reads the `User` record back
+/// (the light record-only read) and answers `200` with the user.
 #[tokio::test]
 async fn onboarding_postpone_returns_200_and_user() {
     let (app, store, stub) = stub_app();
     stub.reply_write(Ok(WriteOutcome::Summary(Summary::default())));
-    stub.reply_read(Ok(ReadOutcome::User(Box::new(UserState {
-        user: user(),
-        summary: Summary::default(),
-    }))));
+    stub.reply_read(Ok(ReadOutcome::UserRecord(user())));
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(
         app,
@@ -1981,7 +1975,7 @@ async fn onboarding_postpone_returns_200_and_user() {
         stub.calls(),
         vec![
             StubCall::Write(UserId::from(1), ApiWrite::UserOnboardingPostpone),
-            StubCall::Read(UserId::from(1), ApiRead::User { shop: None }),
+            StubCall::Read(UserId::from(1), ApiRead::UserRecord),
         ]
     );
 }

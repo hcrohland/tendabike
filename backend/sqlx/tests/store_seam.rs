@@ -395,7 +395,7 @@ async fn fixture_roundtrip() -> tb_domain::TbResult<()> {
 #[ignore]
 async fn user_summary_read() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
-        let summary = UserId::from(1).get_summary(None, &mut store).await?;
+        let summary = UserId::from(1).get_summary(None, None, &mut store).await?;
 
         // The fixture content. Parts come back in one unified order on
         // both stores — ascending `last_used` (#405) — but the summary map

@@ -173,9 +173,8 @@ pub(crate) async fn trigger_initial_sync(
     // Strava-side `insert_sync` — run on the user's executor in one
     // loop-owned transaction (spec #558 §5.1: one message = one loop-owned
     // transaction containing the message's entire work, domain + Strava).
-    // The 200 body reads the `User` back as a read message (the
-    // `UserState` composite projected to the bare `User` — the composite
-    // is the unified read's primitive, spec #558 §3.5).
+    // The 200 body reads the `User` record back (the light record-only
+    // read — no `Summary` computation needed).
     state
         .api
         .write(
@@ -183,13 +182,9 @@ pub(crate) async fn trigger_initial_sync(
             ApiWrite::UserOnboardingSync { time: query.time },
         )
         .await?;
-    match state
-        .api
-        .read(user.user_id(), ApiRead::User { shop: None })
-        .await?
-    {
-        ReadOutcome::User(state) => Ok(Json(state.user)),
-        _ => Err(result_mismatch("user", "user state")),
+    match state.api.read(user.user_id(), ApiRead::UserRecord).await? {
+        ReadOutcome::UserRecord(user) => Ok(Json(user)),
+        _ => Err(result_mismatch("user", "user record")),
     }
 }
 
@@ -202,19 +197,15 @@ pub(crate) async fn postpone_initial_sync(
     State(state): State<AppState>,
 ) -> ApiResult<tb_domain::User> {
     // The domain's status guard and postponement run on the user's
-    // executor (spec §6.2); the 200 body reads the `User` back as a read
-    // message (the `UserState` composite projected to the bare `User`).
+    // executor (spec §6.2); the 200 body reads the `User` record back
+    // (the light record-only read — no `Summary` computation needed).
     state
         .api
         .write(user.user_id(), ApiWrite::UserOnboardingPostpone)
         .await?;
-    match state
-        .api
-        .read(user.user_id(), ApiRead::User { shop: None })
-        .await?
-    {
-        ReadOutcome::User(state) => Ok(Json(state.user)),
-        _ => Err(result_mismatch("user", "user state")),
+    match state.api.read(user.user_id(), ApiRead::UserRecord).await? {
+        ReadOutcome::UserRecord(user) => Ok(Json(user)),
+        _ => Err(result_mismatch("user", "user record")),
     }
 }
 

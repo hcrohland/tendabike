@@ -71,6 +71,12 @@ pub enum ApiRead {
     /// `Summary`, and the export composite from the one message.
     User { shop: Option<ShopId> },
 
+    /// The light user-record read: just the [`User`] row, no `Summary`
+    /// computation. Used by the onboarding read-backs (the webhook's
+    /// `trigger_initial_sync` / `postpone_initial_sync`) which need only
+    /// the updated record in their 200 body.
+    UserRecord,
+
     // --- activity (`/api/activ`) ---
     /// `GET /activ/{id}`.
     Activity(ActivityId),
@@ -118,6 +124,8 @@ pub enum ReadOutcome {
     /// carries a full `Summary` (nine id-keyed maps), and the enum is an
     /// owned channel message — one allocation keeps the other payloads small.
     User(Box<UserState>),
+    /// `ApiRead::UserRecord`: the bare user row (no `Summary`).
+    UserRecord(User),
     /// `ApiRead::Activity`.
     Activity(Activity),
     /// `ApiRead::Part`.
@@ -179,6 +187,11 @@ pub async fn read(
             let state = session.user_id().read(shop, store).await?;
             Ok(ReadOutcome::User(Box::new(state)))
         }
+        // The light record-only read: just the `User` row, no `Summary`.
+        ApiRead::UserRecord => {
+            let user = UserStore::get(store, session.user_id()).await?;
+            Ok(ReadOutcome::UserRecord(user))
+        }
 
         // --- activity ---
         // The op checks authorization (the handler's `read` call).
@@ -221,7 +234,7 @@ pub async fn read(
             // The `?q=` query, the shops, and their owners' (and, for the
             // caller's own shops, subscribers') public records.
             let shops = Shop::search(&query, store).await?;
-            let users = Shop::get_users(&shops, &session.user_id(), store).await?;
+            let users = Shop::get_users(&shops, &session.user_id(), None, store).await?;
             Ok(ReadOutcome::ShopSearch { shops, users })
         }
         ApiRead::ShopSubscriptions(shop) => match shop {
