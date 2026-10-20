@@ -83,7 +83,7 @@ use tb_domain::test_support::{MemStore, part_type_ids::CHAIN, sole_live};
 use tb_domain::{
     ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
 };
-use tb_exec::{ExecutorStatus, Registry, Request, ServiceApi, request_channel, run};
+use tb_exec::{DetachedBegin, ExecutorStatus, Registry, Request, ServiceApi, request_channel, run};
 use tb_sqlx::DbPool;
 use tb_strava::{
     StravaDataStore, StravaId, StravaSession, event::InEvent, test_support::canned_strava,
@@ -356,7 +356,7 @@ async fn api_write_end_to_end() {
     tx.send(request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
-        seam.pool.clone(),
+        DetachedBegin::new(seam.pool.clone()),
         FakeStrava::new(),
         rx,
         frames,
@@ -449,7 +449,7 @@ async fn strava_queue_drains_and_reclaims() {
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
         run(
-            seam.pool.clone(),
+            DetachedBegin::new(seam.pool.clone()),
             FakeStrava::new(),
             rx,
             frames,
@@ -489,7 +489,7 @@ async fn idle_loop_reclaims() {
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
         run(
-            seam.pool.clone(),
+            DetachedBegin::new(seam.pool.clone()),
             FakeStrava::new(),
             rx,
             frames,
@@ -526,7 +526,7 @@ async fn read_as_message_round_trip() {
     tx.send(request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
-        seam.pool.clone(),
+        DetachedBegin::new(seam.pool.clone()),
         FakeStrava::new(),
         rx,
         frames,
@@ -591,7 +591,7 @@ async fn read_sees_every_earlier_write() {
     tx.send(read_request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
-        seam.pool.clone(),
+        DetachedBegin::new(seam.pool.clone()),
         FakeStrava::new(),
         rx,
         frames,
@@ -660,7 +660,7 @@ async fn gear_hydration_frame_and_fifo_read() {
     tx.send(read_request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
-        seam.pool.clone(),
+        DetachedBegin::new(seam.pool.clone()),
         GearStrava::new_gear(),
         rx,
         frames,
@@ -742,7 +742,7 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
     tx.send(read_request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
-        seam.pool.clone(),
+        DetachedBegin::new(seam.pool.clone()),
         GearStrava::no_new_gear(),
         rx,
         frames,
@@ -811,7 +811,7 @@ async fn failed_write_rolls_back_and_reclaims() {
     tx.send(request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
-        seam.pool.clone(),
+        DetachedBegin::new(seam.pool.clone()),
         FakeStrava::new(),
         rx,
         frames,
@@ -871,7 +871,7 @@ async fn onboarding_sync_write_queues_the_sync_event() {
     tx.send(request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
-        seam.pool.clone(),
+        DetachedBegin::new(seam.pool.clone()),
         FakeStrava::new(),
         rx,
         frames,
@@ -961,7 +961,10 @@ async fn sync_enqueues_wakes_and_awaits() {
     // The long idle window: with no stream attached the spawned executor's
     // first probe drains the queue — the wake is the signal that keeps the
     // mechanism intact for a running, idle-waiting executor.
-    let registry = Registry::new(seam.pool.clone(), Duration::from_secs(3600));
+    let registry = Registry::new(
+        DetachedBegin::new(seam.pool.clone()),
+        Duration::from_secs(3600),
+    );
 
     let outcome = tokio::time::timeout(TEST_TIMEOUT, registry.sync(user, 100))
         .await
@@ -1017,7 +1020,10 @@ async fn sync_all_wakes_each_running_executor() {
     // The offline seam: both users' syncs find no activities and complete
     // (the `after` cursor is the event time).
     canned_strava("/activities?after=200&per_page=25", "[]");
-    let registry = Registry::new(seam.pool.clone(), Duration::from_secs(3600));
+    let registry = Registry::new(
+        DetachedBegin::new(seam.pool.clone()),
+        Duration::from_secs(3600),
+    );
     // Both executors running and idle-waiting (streams attached keep them
     // alive; the one-hour re-probe never fires mid-test).
     let (_frames1, _status1) = registry.subscribe(user).await.expect("subscribing user 1");
@@ -1083,8 +1089,8 @@ async fn seed_strava_user(pool: &DbPool, queue_event: bool) {
 /// One test's registry over the live pool (the direct ops' shape): the
 /// suite's short idle cadence; the ops under test never rely on the
 /// re-probe.
-fn registry(pool: &DbPool) -> Registry<DbPool> {
-    Registry::new(pool.clone(), IDLE_TIMEOUT)
+fn registry(pool: &DbPool) -> Registry<DetachedBegin<DbPool>> {
+    Registry::new(DetachedBegin::new(pool.clone()), IDLE_TIMEOUT)
 }
 
 /// The queue's row count for `strava` on a fresh connection.
@@ -1333,7 +1339,11 @@ async fn delete_user_removes_the_rows() {
 /// lifecycle tests' observables. The map's entry outlives a clean reap —
 /// the watchdog records `Reaped` on the fate watch, it does not remove the
 /// entry (only `stop_all` clears the map).
-async fn wait_for_status(reg: &Registry<DbPool>, user: UserId, want: ExecutorStatus) {
+async fn wait_for_status<S: tb_exec::TxnSource + Clone>(
+    reg: &Registry<S>,
+    user: UserId,
+    want: ExecutorStatus,
+) {
     let deadline = tokio::time::Instant::now() + TEST_TIMEOUT;
     loop {
         if reg.status(user).await == Some(want) {
@@ -1365,7 +1375,10 @@ async fn attached_stream_keeps_the_executor_alive() {
     seed_strava_user(&seam.pool, false).await;
     // A short idle cadence (the queue re-probe cadence) so the old
     // reap-on-idle policy would have reclaimed this executor quickly.
-    let registry = Registry::new(seam.pool.clone(), Duration::from_millis(300));
+    let registry = Registry::new(
+        DetachedBegin::new(seam.pool.clone()),
+        Duration::from_millis(300),
+    );
 
     // The stream connects: `subscribe` is what the SSE endpoint does — it
     // registers this stream on the executor's frame channel and pins the
@@ -1410,7 +1423,10 @@ async fn stream_survives_executor_reap() {
     seed_strava_user(&seam.pool, false).await;
     // A short idle cadence (the queue re-probe cadence) so the write-only
     // spawn reaps quickly.
-    let registry = Registry::new(seam.pool.clone(), Duration::from_millis(300));
+    let registry = Registry::new(
+        DetachedBegin::new(seam.pool.clone()),
+        Duration::from_millis(300),
+    );
 
     // A write-only spawn: no stream attached, so the executor reaps as
     // soon as its work is done (the no-streams rule — immediate, not after
@@ -1470,7 +1486,7 @@ async fn request_burst_does_not_fire_transaction_notice() {
     // the second read can land in the probe's window).
 
     let mut loop_task = tokio::spawn(run(
-        seam.pool.clone(),
+        DetachedBegin::new(seam.pool.clone()),
         FakeStrava::new(),
         rx,
         frames,

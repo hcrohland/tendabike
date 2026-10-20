@@ -10,7 +10,7 @@ use sqlx::{PgPool, PgTransaction, postgres::PgPoolOptions};
 use std::ops::{Deref, DerefMut};
 
 use crate::into_domain;
-use tb_domain::{Error, TbResult};
+use tb_domain::TbResult;
 use tb_exec::{Txn, TxnSource};
 
 pub struct SqlxConn<'conn>(PgTransaction<'conn>);
@@ -115,40 +115,15 @@ impl DbPool {
 
     /// Begin a transaction on a pooled connection.
     ///
-    /// The begin is **detached from the caller's task**: `pool.begin()`
-    /// runs to completion in a spawned task, and the caller awaits its
-    /// result on a oneshot. A caller that cancels — a dropped future (the
-    /// executor's `tokio::select!` dropping the probe branch when a request
-    /// arrives, an axum handler dropped on client disconnect) — does not
-    /// cancel the wire-level `BEGIN`: the spawned task reads the `BEGIN`
-    /// response (so the client's transaction depth is incremented
-    /// correctly) and then drops the transaction it got — a clean lazy
-    /// rollback that the pool flushes on release. A plain `pool.begin()`
-    /// cancelled between the `BEGIN` being sent and its response being
-    /// read would instead return the connection to the pool inside a
-    /// server-side transaction the client does not know about (sqlx
-    /// increments the depth only after the response, and its drop guard is
-    /// a no-op at depth 0) — the next `begin` on that connection would
-    /// issue a second, noticed `BEGIN` and its `COMMIT` would commit the
-    /// stale work with the new work (regression test
-    /// `request_burst_does_not_fire_transaction_notice` in
-    /// `tests/executor_seam.rs`).
-    ///
-    /// The returned connection is `'static`: it owns its pool handle
-    /// through the transaction, so it stays valid after the pool itself is
-    /// dropped (the pool is kept alive by the connection's own reference
-    /// until the transaction commits or rolls back).
+    /// This is the plain, thin sqlx-wrapper `begin`: it calls
+    /// `pool.begin()` directly. The cancellation-safe spawn (which detaches
+    /// the `BEGIN` from the caller's task via a spawned task + oneshot) is
+    /// an executor-level concern and lives in `tb_exec`'s
+    /// [`DetachedBegin`](tb_exec::DetachedBegin) wrapper, which the
+    /// composition root applies over this pool before handing it to the
+    /// executor's `Registry`.
     pub async fn begin(&self) -> TbResult<SqlxConn<'static>> {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        let pool = self.0.clone();
-        tokio::spawn(async move {
-            let result = pool.begin().await;
-            let _ = tx.send(result);
-        });
-        rx.await
-            .map_err(|err| Error::AnyFailure(anyhow::anyhow!("the begin's task ended: {err}")))?
-            .map(SqlxConn)
-            .map_err(into_domain)
+        self.0.begin().await.map(SqlxConn).map_err(into_domain)
     }
 
     pub fn raw(&self) -> PgPool {
