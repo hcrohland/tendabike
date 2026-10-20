@@ -112,11 +112,6 @@ impl DbPool {
     }
 
     /// Begin a transaction on a pooled connection.
-    ///
-    /// This is the plain, thin sqlx-wrapper `begin`: it calls
-    /// `pool.begin()` directly. The cancellation-safe spawn (which detaches
-    /// the `BEGIN` from the caller's task via a spawned task + oneshot) is a
-    /// separate concern handled by a wrapper applied at the composition root.
     pub async fn begin(&self) -> TbResult<SqlxConn<'static>> {
         self.0.begin().await.map(SqlxConn).map_err(into_domain)
     }
