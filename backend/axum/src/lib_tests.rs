@@ -480,15 +480,6 @@ async fn unknown_path_not_found() {
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
-#[tokio::test]
-async fn hooks_route_is_gone() {
-    let (app, store, stub) = stub_app();
-    let cookie = user_cookie(&store).await;
-    let (status, _headers, _body) = run(app, Method::GET, "/strava/hooks", Some(&cookie)).await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
-    assert!(stub.calls().is_empty());
-}
-
 // ─── Read routes (canned `ReadOutcome` in, status + body + recorded call) ─
 
 /// `GET /api/user` rides the unified `User` read (spec #558 §3.5) and

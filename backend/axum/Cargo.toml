@@ -10,14 +10,7 @@ tb_domain = { workspace = true }
 tb_strava = { workspace = true }
 tb_exec = { workspace = true }
 
-reqwest = { version = "0.12", default-features = false, features = [
-    "rustls-tls",
-    "json",
-    "gzip",
-    "brotli",
-    "deflate",
-    "zstd",
-] }
+reqwest = { workspace = true }
 hmac = "*"
 sha2 = "*"
 base64 = "*"

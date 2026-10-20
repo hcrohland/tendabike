@@ -19,14 +19,7 @@ async-recursion = { workspace = true }
 async-trait = { workspace = true }
 oauth2 = { workspace = true }
 http = "1"
-reqwest = { version = "0.12", default-features = false, features = [
-    "rustls-tls",
-    "json",
-    "gzip",
-    "brotli",
-    "deflate",
-    "zstd",
-] }
+reqwest = { workspace = true }
 
 [features]
 test-support = []
