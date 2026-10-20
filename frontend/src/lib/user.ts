@@ -29,7 +29,10 @@ export async function initData() {
 export async function refresh(shop?: number) {
   let query = shop ? "?shop=" + shop : "";
   let state = await myfetch("/api/user" + query);
-  if (state) setSummary(state.summary);
+  if (state) {
+    setUser(state.user);
+    setSummary(state.summary);
+  }
 }
 
 export type UserPublic = {
