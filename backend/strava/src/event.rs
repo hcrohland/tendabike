@@ -566,8 +566,7 @@ pub async fn process(
 /// Queue a `Sync` event for every (non-disabled) user (the all-users
 /// admin sync's op, spec #558 §5.2): `user_id` narrows the sync to one
 /// user. Returns the tbids of the users a sync was queued for — the
-/// caller's per-user wake list (the intentional behavior
-/// change of the migration).
+/// caller's per-user wake list.
 pub async fn sync_users(
     user_id: Option<UserId>,
     time: i64,

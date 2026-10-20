@@ -128,9 +128,9 @@ pub(super) async fn sync_api(
     let user_id: Option<tb_domain::UserId> = query.user_id.map(|u| u.into());
     // The service API's direct op (spec #558 §5.2): one transaction
     // (`sync_users`) queuing a `Sync` event per (non-disabled) user, then
-    // a wake per queued user (the intentional behavior change: a running
-    // executor drains its queued sync immediately); `user_id` narrows the
-    // sync to one user (the route's `?user_id=` query).
+    // a wake per queued user (a running executor drains its queued sync
+    // immediately); `user_id` narrows the sync to one user (the route's
+    // `?user_id=` query).
     state
         .api
         .sync_all(user_id, query.time, query.migrate)

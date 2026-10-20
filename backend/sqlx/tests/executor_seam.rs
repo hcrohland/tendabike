@@ -977,8 +977,7 @@ async fn sync_enqueues_wakes_and_awaits() {
     assert_eq!(n, 0, "the consumed sync must be gone from the queue");
 }
 
-/// The all-users admin sync direct op (spec #558 §5.2/§8) — the one
-/// intentional behavior change of the migration: one transaction
+/// The all-users admin sync direct op (spec #558 §5.2/§8): one transaction
 /// (`sync_users`) queuing a `Sync` event per (non-disabled) user, then a
 /// wake **per queued user**. The test's two executors are running and
 /// idle-waiting with streams attached (the long idle window never

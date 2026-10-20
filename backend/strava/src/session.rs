@@ -18,18 +18,15 @@
 
 */
 
-//! The concrete [`StravaSession`] (ADR-0007, executable spec
-//! #558 §6.2).
+//! The concrete [`StravaSession`].
 //!
 //! The token-refresh machinery (`check_token`/`refresh_the_token`/
-//! `get_strava`/`request_json`/`deauthorize`) moved out of the web layer's
-//! request session as-is: it depends only on `&mut impl StravaDataStore`
-//! plus the Strava client. The web layer's request session keeps its
-//! tower-session half and its impersonation constructor for the HTTP path;
-//! the two types deliberately diverge (the request session is serialized
-//! into the tower session and carries `shop`; this one is in-memory and
-//! loop-scoped — its `update()` was already a no-op without a tower
-//! session, so it is dropped here).
+//! `get_strava`/`request_json`/`deauthorize`) depends only on
+//! `&mut impl StravaDataStore` plus the Strava client. The web layer's
+//! request session keeps its tower-session half and its impersonation
+//! constructor for the HTTP path; the two types deliberately diverge (the
+//! request session is serialized into the tower session and carries
+//! `shop`; this one is in-memory and loop-scoped).
 
 use std::time::SystemTime;
 

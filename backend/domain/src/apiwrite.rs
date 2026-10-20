@@ -44,10 +44,10 @@
 //!
 //! - operations that already return a `Summary` pass it through;
 //! - bare-entity operations are wrapped into a one-entry `Summary` (`+=`);
-//! - deletes report their entity as a `None` tombstone: after the cutover,
-//!   every non-create mutation returns 204 and the stream frame is the sole
-//!   delivery of the change (spec #446 §6.2), so a deleted entity must reach
-//!   the client as a tombstone — the stream merge drops it;
+//! - deletes report their entity as a `None` tombstone: every non-create
+//!   mutation returns 204 and the stream frame is the sole delivery of the
+//!   change (spec #446 §6.2), so a deleted entity must reach the client as
+//!   a tombstone — the stream merge drops it;
 //! - a `ShopSubscription` and a `User` are not kinds of the `Summary`, so
 //!   subscription writes and onboarding writes report an empty `Summary` —
 //!   the stream carries nothing for them, and the HTTP response is their
@@ -544,8 +544,8 @@ pub async fn exec(
 
         // Domain part only: the status guard, exactly as in the webhook
         // handlers, plus the status update. A `User` is not in any `Summary`,
-        // so the result is empty. The Strava-side sync event is the cutover
-        // ticket's concern (issue #457) — see the `exec` docs.
+        // so the result is empty. The Strava-side sync event is handled by
+        // the loop — see the `exec` docs.
         ApiWrite::UserOnboardingSync { .. } => {
             // The lightweight single-row read: the guard needs only the
             // onboarding status, not the `UserState` composite (this is a

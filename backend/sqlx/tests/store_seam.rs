@@ -1986,7 +1986,7 @@ async fn apiwrite_subscription_create_and_cancel() -> tb_domain::TbResult<()> {
 
 /// The dispatch does the onboarding domain part only — the status guard with
 /// the handler's message, then the status update; the Strava-side sync event
-/// is the cutover ticket's concern (issue #457). A second trigger is
+/// is handled by the loop. A second trigger is
 /// rejected with the handler's message.
 #[tokio::test]
 #[ignore]

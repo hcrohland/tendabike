@@ -18,8 +18,7 @@
 
 */
 
-//! The Strava API client and its wire types (moved out of the web layer's
-//! oauth module, ADR-0007, executable spec #558 §6.2): the concrete session
+//! The Strava API client and its wire types: the concrete session
 //! (`tb_strava::StravaUserSession`) needs the oauth client for its
 //! token-refresh machinery, so the client lives with the Strava driver, not
 //! the presentation layer. The web layer's login exchange uses the same

@@ -106,10 +106,9 @@ pub trait ServiceApi: Send + Sync {
 
     /// The all-users admin sync (spec #558 §5.2): one transaction
     /// (`sync_users`) queuing a `Sync` event per (non-disabled) user, then
-    /// a wake per queued user — the intentional behavior change of the
-    /// migration (a running executor drains its queued sync immediately,
-    /// matching the per-user variant). `user_id` narrows the sync to one
-    /// user (the route's `?user_id=` query).
+    /// a wake per queued user (a running executor drains its queued sync
+    /// immediately, matching the per-user variant). `user_id` narrows the
+    /// sync to one user (the route's `?user_id=` query).
     async fn sync_all(
         &self,
         user_id: Option<UserId>,
