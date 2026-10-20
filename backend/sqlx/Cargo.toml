@@ -13,6 +13,7 @@ sqlx = { version = "0.8", features = [
     "uuid",
     "macros",
 ] }
+tokio = { workspace = true, features = ["rt", "sync"] }
 async-trait = { workspace = true }
 log = { workspace = true }
 anyhow = { workspace = true }

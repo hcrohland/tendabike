@@ -75,6 +75,7 @@ mod scratch;
 use scratch::*;
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
@@ -113,6 +114,38 @@ const IDLE_TIMEOUT: Duration = Duration::from_millis(300);
 /// Strava id (the same pair the seam suite and the `tb_strava` tests use).
 fn test_identity() -> (UserId, StravaId) {
     (UserId::from(1), StravaId::from(42))
+}
+
+/// Postgres's "there is already a transaction in progress" notices
+/// captured by the suite's logger (sqlx surfaces server notices through
+/// the `log` crate, target `sqlx::postgres::notice`): the signal of the
+/// cancelled-begin pool-poisoning bug, asserted on by
+/// `request_burst_does_not_fire_transaction_notice`.
+static NOTICES: AtomicUsize = AtomicUsize::new(0);
+
+struct NoticeCapture;
+
+impl log::Log for NoticeCapture {
+    fn enabled(&self, _metadata: &log::Metadata) -> bool {
+        true
+    }
+    fn log(&self, record: &log::Record) {
+        if record.target() == "sqlx::postgres::notice"
+            && record.args().to_string().contains("already a transaction")
+        {
+            NOTICES.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    fn flush(&self) {}
+}
+
+/// Install the notice-capture logger (process-global: the first call wins,
+/// the rest are no-ops). Called from `ready()`, so it is installed before
+/// any test in this binary asserts on the counter. It captures nothing but
+/// the notice, so the other tests' logging behavior is unchanged.
+fn install_notice_capture() {
+    let _ = log::set_logger(&NoticeCapture);
+    log::set_max_level(log::LevelFilter::Warn);
 }
 
 /// The suite's `StravaSession`: the loop's session is the user's identity
@@ -262,6 +295,7 @@ struct ExecSeam {
 /// the seam suite's rolled-back model only needs the sequence reset).
 async fn ready() -> ExecSeam {
     let _lock = LOCK.lock().await;
+    install_notice_capture();
     let url = match suffixed_scratch_url(DB_SUFFIX) {
         Some(url) => url,
         None => panic!("{NO_SCRATCH_URL}"),
@@ -1398,4 +1432,136 @@ async fn stream_survives_executor_reap() {
         .expect("the stream must stay open after the respawn")
         .expect("the stream must not end while a stream is attached");
     assert_eq!(frame, Summary::default());
+}
+
+/// A burst of user reads — the `GET /api/user/summary` shape (the frontend
+/// calls summary for both entering and leaving a shop, so the reads arrive
+/// back-to-back) — must not fire Postgres's "there is already a transaction
+/// in progress" notice.
+///
+/// Each arriving read is a cancellation point of the loop's biased select:
+/// a `queue_probe` whose `begin` is in flight (the `BEGIN` sent, the
+/// response not yet read) is dropped the moment the read branch wins.
+/// sqlx increments the client's transaction depth only *after* reading the
+/// `BEGIN` response, and its drop guard is a no-op at depth 0 — a
+/// cancelled begin therefore returns the connection to the pool with the
+/// server-side transaction still active, and the next `begin` on that
+/// connection issues a second, noticed `BEGIN`. This test drives the real
+/// loop over the real pool with enter/leave read pairs (sub-millisecond
+/// apart, like the browser's two fetches) and asserts the notice never
+/// fires: the loop's transaction lifecycle must be safe under the
+/// select's cancellations.
+#[tokio::test]
+#[ignore]
+async fn request_burst_does_not_fire_transaction_notice() {
+    let seam = ready().await;
+    let (tx, rx) = request_channel();
+    // Pre-fill the channel before the loop spawns: the loop's first select
+    // must find work, or its no-streams idle decision reaps it before the
+    // burst starts (the reaped loop closes the channel under the senders).
+    let (request, warm_reply) = Request::new_read(ApiRead::User { shop: None });
+    tx.send(request).expect("the channel is open");
+    let (frames, frame_rx) = broadcast::channel(8);
+    let (events, _events_rx) = broadcast::channel(8);
+    // A stream stays attached for the whole burst (the user is on the page:
+    // the SSE connect is what keeps the loop alive through the gap between
+    // the enter-shop and leave-shop summary calls — without it, the
+    // probe's `Empty` + no-streams rule reaps the loop in the gap, before
+    // the second read can land in the probe's window).
+
+    let mut loop_task = tokio::spawn(run(
+        seam.pool.clone(),
+        FakeStrava::new(),
+        rx,
+        frames,
+        events,
+        IDLE_TIMEOUT,
+        Arc::new(Notify::new()),
+    ));
+
+    // Warm the pool with a full complement of idle connections: the bug's
+    // window is between the probe's `BEGIN` being sent and its response
+    // being read, and the probe's `begin` only reaches that window when
+    // its acquire is instant (an idle connection). With a cold pool the
+    // probe's acquire opens a fresh connection (milliseconds), and the
+    // next request lands before the `BEGIN` is even sent — a clean
+    // pre-wire cancel. Ten parallel acquires give the probe idle
+    // connections for the whole burst.
+    {
+        let mut warmed = Vec::new();
+        for _ in 0..10 {
+            warmed.push(
+                seam.pool
+                    .raw()
+                    .acquire()
+                    .await
+                    .expect("a warm-up connection"),
+            );
+        }
+        drop(warmed);
+    }
+    // The warm-up read's reply: the loop is alive and the pool is warmed.
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, warm_reply)
+        .await
+        .expect("the warm-up reply must resolve in time")
+        .expect("the loop must resolve the oneshot, not drop it");
+    outcome.expect("the warm-up read must succeed");
+
+    // The burst shape of `GET /api/user/summary`: one client calls it for
+    // entering a shop and again for leaving — the two reads arrive
+    // back-to-back (the browser's two fetches, milliseconds apart at the
+    // backend). The leave-read lands within the few hundred microseconds
+    // after the enter-read's commit — exactly the window in which the
+    // loop's next select has the queue probe's `begin` in flight (`BEGIN`
+    // sent, response unread) — and cancels it mid-wire (the bug's exact
+    // interleaving). Pairs are separated by a short gap so the loop
+    // settles (probe + idle sleep) between them, like real page navigation.
+    const PAIRS: usize = 200;
+    let baseline = NOTICES.load(Ordering::SeqCst);
+    let tx2 = tx.clone();
+    let sender = tokio::spawn(async move {
+        for pair in 0..PAIRS {
+            for which in 0..2 {
+                let (request, reply) = Request::new_read(ApiRead::User { shop: None });
+                if tx2.send(request).is_err() {
+                    return; // channel closed: the loop ended; report via the join
+                }
+                let outcome = tokio::time::timeout(TEST_TIMEOUT, reply)
+                    .await
+                    .expect("the route's reply must resolve in time")
+                    .expect("the loop must resolve the oneshot, not drop it");
+                outcome.expect("the user read must succeed");
+                // The second read of the pair goes out just after the
+                // first's reply (the browser's back-to-back fetches, with
+                // sub-millisecond jitter): the reply is the moment the
+                // loop's next select starts the queue probe, and this send
+                // lands in the probe begin's in-flight window (after the
+                // `BEGIN` is sent, before its response is read).
+                if which == 0 {
+                    tokio::time::sleep(Duration::from_micros(30 + (pair % 120) as u64)).await;
+                }
+            }
+            // The gap between page navigations: the loop settles (probe +
+            // idle sleep) before the next pair.
+            tokio::time::sleep(Duration::from_millis(5 + (pair % 15) as u64)).await;
+        }
+    });
+    drop(tx);
+    let _ = sender.await; // a closed channel ends the sender quietly; the loop's fate is below
+    drop(frame_rx); // the stream disconnects only after the burst: the no-streams rule can now reap
+
+    // The channel is closed and no stream is attached: the loop reaps.
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, &mut loop_task)
+        .await
+        .expect("the idle loop must reap in time")
+        .expect("the loop must not panic");
+    outcome.expect("a reaped loop returns Ok");
+
+    let notices = NOTICES.load(Ordering::SeqCst) - baseline;
+    assert_eq!(
+        notices, 0,
+        "the burst fired {notices} 'there is already a transaction in progress' \
+         notice(s): a cancelled probe begin left a pooled connection inside a \
+         server-side transaction the client does not know about"
+    );
 }
