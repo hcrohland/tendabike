@@ -13,6 +13,10 @@ anyhow = { workspace = true }
 log = { workspace = true }
 oauth2 = { workspace = true }
 tokio = { workspace = true, features = ["sync", "time", "macros"] }
+mockall = { version = "0.13", optional = true }
+
+[features]
+mock = ["dep:mockall"]
 
 [lib]
 doctest = false

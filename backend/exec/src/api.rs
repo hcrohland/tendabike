@@ -55,6 +55,7 @@ use crate::ExecutorStatus;
 /// the five channel ops (`read`, `write`, `hydrate_gear`, `subscribe`,
 /// `all_stats`) and the ten direct ops (spec #558 §5.2). Presentation
 /// layers depend on this trait, not the concrete [`crate::Registry`].
+#[cfg_attr(feature = "mock", mockall::automock)]
 #[async_trait::async_trait]
 pub trait ServiceApi: Send + Sync {
     /// One per-user read on the user's executor (spec #558 §3): the loop
