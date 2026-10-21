@@ -2,9 +2,11 @@
 
 ## Status
 
-Under review (2026-10-17). The implementation (`feature/generic-domain`,
-spec #525) is stopped while the spec is scrutinized; the decision is not
-final. Verdict map: [#534](https://github.com/hcrohland/tendabike/issues/534).
+Rejected (2026-10-21). The generic-over-domain mechanism was abandoned:
+ADR-0007 (the executor owns the transaction seam) plus `mockall` solved the
+axum test case with a small `ServiceApi` seam and a generated `MockServiceApi`,
+making the large `Domain` trait unnecessary. The implementation (PR #533,
+spec #525) was never merged; the verdict map #534 and its tickets are closed.
 
 ## Context
 
