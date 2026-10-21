@@ -83,7 +83,9 @@ use tb_domain::test_support::{MemStore, part_type_ids::CHAIN, sole_live};
 use tb_domain::{
     ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
 };
-use tb_exec::{DetachedBegin, ExecutorStatus, Registry, Request, ServiceApi, request_channel, run};
+use tb_exec::{
+    DetachedBegin, ExecutorStatus, FramePusher, Registry, Request, ServiceApi, request_channel, run,
+};
 use tb_sqlx::DbPool;
 use tb_strava::{
     StravaDataStore, StravaId, StravaSession, event::InEvent, test_support::canned_strava,
@@ -97,6 +99,16 @@ use tokio::sync::{MutexGuard, Notify, broadcast};
 /// the suites drop each other's database out from under the run (see the
 /// module docs).
 const DB_SUFFIX: &str = "_exec";
+
+/// A no-op `FramePusher`: the seam tests' sessions all have `shop() == None`,
+/// so the executor takes the user-context path and never calls the pusher.
+struct NoopPusher;
+
+#[async_trait::async_trait]
+impl FramePusher for NoopPusher {
+    async fn push_to_shop(&self, _shop_id: ShopId, _summary: Summary) {}
+    async fn push_to_user(&self, _user_id: UserId, _summary: Summary) {}
+}
 
 /// The bound for awaiting the loop or one of its effects in a test: long
 /// enough for a slow scratch database, short enough that a wedged loop
@@ -360,6 +372,7 @@ async fn api_write_end_to_end() {
         FakeStrava::new(),
         rx,
         frames,
+        Box::new(NoopPusher),
         events,
         IDLE_TIMEOUT,
         Arc::new(Notify::new()),
@@ -453,6 +466,7 @@ async fn strava_queue_drains_and_reclaims() {
             FakeStrava::new(),
             rx,
             frames,
+            Box::new(NoopPusher),
             events,
             IDLE_TIMEOUT,
             Arc::new(Notify::new()),
@@ -493,6 +507,7 @@ async fn idle_loop_reclaims() {
             FakeStrava::new(),
             rx,
             frames,
+            Box::new(NoopPusher),
             events,
             IDLE_TIMEOUT,
             Arc::new(Notify::new()),
@@ -530,6 +545,7 @@ async fn read_as_message_round_trip() {
         FakeStrava::new(),
         rx,
         frames,
+        Box::new(NoopPusher),
         events,
         IDLE_TIMEOUT,
         Arc::new(Notify::new()),
@@ -595,6 +611,7 @@ async fn read_sees_every_earlier_write() {
         FakeStrava::new(),
         rx,
         frames,
+        Box::new(NoopPusher),
         events,
         IDLE_TIMEOUT,
         Arc::new(Notify::new()),
@@ -664,6 +681,7 @@ async fn gear_hydration_frame_and_fifo_read() {
         GearStrava::new_gear(),
         rx,
         frames,
+        Box::new(NoopPusher),
         events,
         IDLE_TIMEOUT,
         Arc::new(Notify::new()),
@@ -746,6 +764,7 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
         GearStrava::no_new_gear(),
         rx,
         frames,
+        Box::new(NoopPusher),
         events,
         IDLE_TIMEOUT,
         Arc::new(Notify::new()),
@@ -815,6 +834,7 @@ async fn failed_write_rolls_back_and_reclaims() {
         FakeStrava::new(),
         rx,
         frames,
+        Box::new(NoopPusher),
         events,
         IDLE_TIMEOUT,
         Arc::new(Notify::new()),
@@ -875,6 +895,7 @@ async fn onboarding_sync_write_queues_the_sync_event() {
         FakeStrava::new(),
         rx,
         frames,
+        Box::new(NoopPusher),
         events,
         IDLE_TIMEOUT,
         Arc::new(Notify::new()),
@@ -1489,6 +1510,7 @@ async fn request_burst_does_not_fire_transaction_notice() {
         FakeStrava::new(),
         rx,
         frames,
+        Box::new(NoopPusher),
         events,
         IDLE_TIMEOUT,
         Arc::new(Notify::new()),
