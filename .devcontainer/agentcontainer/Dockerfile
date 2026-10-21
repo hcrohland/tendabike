@@ -1,4 +1,4 @@
-# Development environment: Rust (stable) + Node 24 + npm + pi + gh
+# Development environment: Rust (stable) + Node 24 + npm + opencode
 #
 #   docker build -t rust-node-dev .
 #
@@ -50,22 +50,6 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 
 RUN cargo install sqlx-cli --no-default-features --features postgres,rustls
 
-# Pi coding agent (https://pi.dev); --ignore-scripts is the documented
-# install form. Global install puts `pi` on PATH for every user; per-user
-# state lives in ~/.pi.
-RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent
-
-# GitHub CLI from GitHub's official apt repository. Per-user auth lives in
-# ~/.config/gh (created on first `gh auth login`).
-RUN mkdir -p /etc/apt/keyrings \
-    && curl -fsSLo /etc/apt/keyrings/githubcli.gpg \
-    https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli.gpg] https://cli.github.com/packages stable main" \
-    > /etc/apt/sources.list.d/github-cli.list \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends gh \
-    && rm -rf /var/lib/apt/lists/*
-
 # The base image ships a `vscode` user on uid/gid 1000 with passwordless
 # sudo. Rename it to `pythia` (and its sudoers drop-in) rather than
 # colliding on the UID. cargo/rustup homes are made world-writable so the
@@ -83,6 +67,14 @@ USER pythia
 LABEL devcontainer.metadata='[{"remoteUser":"pythia"}]'
 
 WORKDIR /workspaces
+
+# OpenCode (https://opencode.ai). The official install script drops the binary
+# in the user's home (~/.opencode/bin); being user-owned, the `pythia` user can
+# upgrade it later by re-running the same command, no root needed.
+# --no-modify-path keeps it out of the shell rc files, so we own the PATH entry
+# below (reliable for both login and non-login shells).
+RUN curl -fsSL https://opencode.ai/v2/install | bash -s -- --no-modify-path
+ENV PATH="/home/pythia/.opencode/bin:${PATH}"
 
 RUN git config --global core.hooksPath .githooks
 
