@@ -9,10 +9,12 @@
 
 FROM mcr.microsoft.com/devcontainers/base:trixie
 
-# System dependencies not already in the base image
+# System dependencies not already in the base image. golang-go is needed to
+# build mcp-language-server (see below).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     pkg-config \
+    golang-go \
     tmux \
     vim \
     ripgrep \
@@ -36,6 +38,15 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# Language servers (LSPs) for the agent, installed globally so
+# mcp-language-server can find them on PATH:
+#   - typescript-language-server + typescript (TypeScript/JS)
+#   - svelte-language-server (exposes the `svelteserver` binary)
+RUN npm install -g --ignore-scripts \
+    typescript \
+    typescript-language-server \
+    svelte-language-server
+
 # Rust toolchain, installed system-wide under /usr/local so every user gets it
 ENV CARGO_HOME=/usr/local/cargo \
     RUSTUP_HOME=/usr/local/rustup \
@@ -46,6 +57,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
     --component clippy \
     --component rustfmt \
     --component rust-src \
+    --component rust-analyzer \
     && rustup -V
 
 RUN cargo install sqlx-cli --no-default-features --features postgres,rustls
@@ -75,6 +87,13 @@ WORKDIR /workspaces
 # below (reliable for both login and non-login shells).
 RUN curl -fsSL https://opencode.ai/v2/install | bash -s -- --no-modify-path
 ENV PATH="/home/laios/.opencode/bin:${PATH}"
+
+# mcp-language-server: the MCP wrapper that exposes the language servers above
+# to the agent. It is a Go binary, so we `go install` it as the `laios` user;
+# the binary lands in ~/go/bin, matching the path in the agent's OpenCode
+# config.
+RUN go install github.com/isaacphi/mcp-language-server@latest
+ENV PATH="/home/laios/go/bin:${PATH}"
 
 RUN git config --global core.hooksPath .githooks
 
