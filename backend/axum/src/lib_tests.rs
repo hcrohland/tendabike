@@ -2142,6 +2142,19 @@ fn mock_sse(
     (frame_tx, fate_tx)
 }
 
+/// Set up the mock's `expect_subscribe_shop` with a real broadcast channel
+/// (the shop stream is a standalone channel — no `ExecutorStatus`, spec
+/// #517, ticket #583). Returns the frame sender (push `Summary` frames) and
+/// the mock ready for [`build_app`].
+fn mock_sse_shop(mock: &mut MockServiceApi) -> tokio::sync::broadcast::Sender<Summary> {
+    let (frame_tx, _) = tokio::sync::broadcast::channel(16);
+    let frame_tx_inner = frame_tx.clone();
+    mock.expect_subscribe_shop()
+        .times(1..)
+        .returning(move |_uid, _sid| Ok(frame_tx_inner.subscribe()));
+    frame_tx
+}
+
 /// A connected stream is `text/event-stream` and emits `: ping` heartbeats
 /// (the SSE `KeepAlive` cadence is the 15s `tb_exec::HEARTBEAT_INTERVAL`
 /// constant, spec #558 §2.1, so the window spans one full cadence).
@@ -2256,4 +2269,49 @@ async fn assert_stream_ends(body: &mut axum::body::Body) {
             Err(_) => panic!("the stream did not end in time"),
         }
     }
+}
+
+/// `GET /api/user/stream?shop=X` with the shop owner's session returns a 200
+/// `text/event-stream` and forwards the shop channel's frames (spec #517,
+/// ticket #583). The shop stream is a standalone channel — no `ExecutorStatus`.
+#[tokio::test]
+async fn shop_stream_owner_forwards_frames() {
+    let (store, mut mock) = mock_ctx();
+    let frame_tx = mock_sse_shop(&mut mock);
+    let app = build_app(&store, mock);
+    let cookie = user_cookie(&store).await;
+    let (status, headers, mut body) = run_sse(app, "/api/user/stream?shop=1", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        headers[header::CONTENT_TYPE],
+        "text/event-stream",
+        "the shop stream must be an event stream"
+    );
+    // `run_sse` returns only after the endpoint opened this stream (the
+    // `subscribe_shop` ran inside the handler), so the frame below cannot
+    // be missed — no sleep needed.
+    frame_tx
+        .send(Summary::default())
+        .expect("the shop stream is attached");
+    let frames = read_sse_frames(&mut body, 3, Duration::from_secs(2)).await;
+    assert!(
+        frames.iter().any(|f| f.contains(
+            "data: {\"activities\":{},\"parts\":{},\"attachments\":{},\"usages\":{},\"services\":{},\"plans\":{},\"part_notes\":{},\"shops\":{},\"users\":{}}"
+        )),
+        "expected the Summary JSON as a `data:` frame, got: {frames:?}"
+    );
+}
+
+/// `GET /api/user/stream?shop=X` with a non-owner's session returns a 403
+/// (the `subscribe_shop`'s `Forbidden` maps to 403, spec #517, ticket #583).
+#[tokio::test]
+async fn shop_stream_non_owner_is_forbidden() {
+    let (store, mut mock) = mock_ctx();
+    mock.expect_subscribe_shop()
+        .times(1)
+        .returning(|_uid, _sid| Err(tb_domain::Error::Forbidden("not yours".to_string())));
+    let app = build_app(&store, mock);
+    let cookie = user_cookie(&store).await;
+    let (status, _headers, _body) = run_sse(app, "/api/user/stream?shop=1", Some(&cookie)).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
 }
