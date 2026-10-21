@@ -56,8 +56,8 @@ use oauth2::RefreshToken;
 use tokio::sync::{Mutex, Notify, broadcast, oneshot, watch};
 
 use tb_domain::{
-    Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Summary, TbResult, UserId,
-    WriteOutcome,
+    Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, ShopId, ShopStore,
+    Summary, TbResult, UserId, WriteOutcome,
 };
 use tb_strava::{
     StravaDataStore, StravaId, StravaStat, StravaUser, StravaUserSession, activity,
@@ -152,7 +152,38 @@ struct Executor {
 pub struct Registry<S: TxnSource + Clone + 'static> {
     source: S,
     executors: Arc<Mutex<HashMap<UserId, Executor>>>,
+    /// The per-shop frame channels (spec #517, ticket #582): a standalone
+    /// `broadcast` channel per shop, created on demand by `subscribe_shop`
+    /// and reaped when its last receiver disconnects (the "open shop" check
+    /// is implicit: `receiver_count() > 0`). A separate mutex from the
+    /// executor map keeps the two lock scopes tight (an ownership read never
+    /// holds the shop-map lock, and a shop push never holds the executor
+    /// lock).
+    shop_streams: Arc<Mutex<HashMap<ShopId, broadcast::Sender<Summary>>>>,
     idle_timeout: Duration,
+}
+
+/// The frame push surface the executor uses to route a completed `Summary`
+/// to an arbitrary target (spec #517, ticket #582): a shop stream
+/// (`push_to_shop`) or a user's personal stream (`push_to_user`). The
+/// [`Registry`] implements it; the executor calls it in a shop context,
+/// after a write commit (ticket #584 wires the context-based routing).
+///
+/// Both methods are infallible: a push to a target with no live receiver
+/// (a reaped shop channel, a settled executor) is a no-op — a lost frame
+/// just means a not-yet-connected or gone client, and the client's
+/// reconnect + catch-up snapshot covers it (spec §4.5).
+#[async_trait::async_trait]
+pub trait FramePusher: Send + Sync {
+    /// Push a frame to `shop_id`'s stream: sends on the shop channel if it
+    /// exists and has a receiver (the "open shop" check is implicit:
+    /// `receiver_count() > 0`); a no-op otherwise.
+    async fn push_to_shop(&self, shop_id: ShopId, summary: Summary);
+
+    /// Push a frame to `user_id`'s personal stream: sends on the user's
+    /// executor's frame channel if the executor is running; a no-op
+    /// otherwise (no executor, or a settled one).
+    async fn push_to_user(&self, user_id: UserId, summary: Summary);
 }
 
 impl<S> Registry<S>
@@ -167,6 +198,7 @@ where
         Self {
             source,
             executors: Arc::new(Mutex::new(HashMap::new())),
+            shop_streams: Arc::new(Mutex::new(HashMap::new())),
             idle_timeout,
         }
     }
@@ -246,6 +278,54 @@ where
     pub async fn status(&self, user_id: UserId) -> Option<ExecutorStatus> {
         let map = self.executors.lock().await;
         map.get(&user_id).map(|exec| *exec.status.borrow())
+    }
+
+    /// Whether `shop_id`'s stream is open (test helper): the channel exists
+    /// and has a receiver (the "open shop" check, spec #517). Dead channels
+    /// (no receiver) are reaped on the way, so this is the observable form
+    /// of "the channel is dropped when its last receiver disconnects".
+    pub async fn shop_open(&self, shop_id: ShopId) -> bool {
+        let mut map = self.shop_streams.lock().await;
+        Self::reap_shop_streams(&mut map);
+        map.contains_key(&shop_id)
+    }
+
+    /// Test helper: install a synthetic executor for `user_id` (bypassing
+    /// [`Self::ensure_running`], which needs a Strava session the unit fakes
+    /// don't have) and return a receiver on its frame channel. The
+    /// executor's fate is `status`. The task handle is a completed task (its
+    /// `AbortHandle` is valid; `abort` on it is a no-op), so no task leaks.
+    pub async fn install_executor_for_test(
+        &self,
+        user_id: UserId,
+        status: ExecutorStatus,
+    ) -> broadcast::Receiver<Summary> {
+        let (status_tx, status_rx) = watch::channel(status);
+        let (request_sender, _request_receiver) = request_channel();
+        let (frames, frame_rx) = broadcast::channel(BROADCAST_CAPACITY);
+        let (events, _events_rx) = broadcast::channel(BROADCAST_CAPACITY);
+        let wake = Arc::new(Notify::new());
+        let task = tokio::spawn(async {}).abort_handle();
+        // The stored receiver keeps the watch channel open; drop the sender.
+        drop(status_tx);
+        let exec = Executor {
+            status: status_rx,
+            request_sender,
+            frames,
+            events,
+            wake,
+            task,
+        };
+        self.executors.lock().await.insert(user_id, exec);
+        frame_rx
+    }
+
+    /// Reap shop channels whose last receiver has disconnected (the "open
+    /// shop" check is implicit: `receiver_count() > 0`). Called on every
+    /// shop-map access (`subscribe_shop`, `push_to_shop`, `shop_open`) so a
+    /// dead channel does not linger in the map.
+    fn reap_shop_streams(map: &mut HashMap<ShopId, broadcast::Sender<Summary>>) {
+        map.retain(|_, tx| tx.receiver_count() > 0);
     }
 
     /// Lock the registry, ensure the user's executor is live (spawning it if
@@ -349,6 +429,39 @@ where
     }
 }
 
+/// The frame push surface (spec #517, ticket #582): the executor routes a
+/// completed `Summary` to a shop stream or a user's personal stream through
+/// these. Each locks its own map (the shop stream map, the executor map) —
+/// the two are independent, so a push never holds both locks.
+#[async_trait::async_trait]
+impl<S> FramePusher for Registry<S>
+where
+    S: TxnSource + Clone + 'static,
+{
+    /// Push to `shop_id`'s stream (spec #517): reap the dead channels, then
+    /// send on the shop channel if it exists (after the reap, an existing
+    /// entry has a receiver, so the send is not dropped).
+    async fn push_to_shop(&self, shop_id: ShopId, summary: Summary) {
+        let mut map = self.shop_streams.lock().await;
+        Self::reap_shop_streams(&mut map);
+        if let Some(tx) = map.get(&shop_id) {
+            let _ = tx.send(summary);
+        }
+    }
+
+    /// Push to `user_id`'s personal stream (spec #517): send on the user's
+    /// executor's frame channel if the executor is running; a no-op
+    /// otherwise (no executor, or a settled one).
+    async fn push_to_user(&self, user_id: UserId, summary: Summary) {
+        let map = self.executors.lock().await;
+        if let Some(exec) = map.get(&user_id)
+            && *exec.status.borrow() == ExecutorStatus::Running
+        {
+            let _ = exec.frames.send(summary);
+        }
+    }
+}
+
 /// The service API's impl for the registry (spec #558 §2): the per-user
 /// channel ops ride [`Self::send_request`] (spawn-or-join the executor,
 /// enqueue, await the oneshot); the direct ops own their own
@@ -409,6 +522,39 @@ where
             (exec.frames.subscribe(), exec.status.clone())
         })
         .await
+    }
+
+    /// Register a shop stream for `shop_id` (spec #517, ticket #582): verify
+    /// the caller is the shop owner in a transaction (a non-owner is
+    /// `Forbidden`, mapped to a 403 by the web layer), then create the shop
+    /// channel on demand and return a subscription to it. No `ExecutorStatus`
+    /// — the shop stream is a standalone channel, not tied to the executor's
+    /// lifecycle.
+    async fn subscribe_shop(
+        &self,
+        user_id: UserId,
+        shop_id: ShopId,
+    ) -> TbResult<broadcast::Receiver<Summary>> {
+        // Verify ownership in a transaction (the web layer maps `Forbidden`
+        // to a 403).
+        let mut store = self.source.begin().await?;
+        let shop = store.shop_get(shop_id).await?;
+        store.commit().await?;
+        if shop.owner != user_id {
+            return Err(Error::Forbidden(
+                "You must be the shop owner to open this shop's stream".into(),
+            ));
+        }
+
+        // Create the shop channel on demand and subscribe (the "open shop"
+        // check is implicit: `receiver_count() > 0`).
+        let mut map = self.shop_streams.lock().await;
+        Self::reap_shop_streams(&mut map);
+        let tx = map
+            .entry(shop_id)
+            .or_insert_with(|| broadcast::channel(BROADCAST_CAPACITY).0)
+            .clone();
+        Ok(tx.subscribe())
     }
 
     /// Enqueue the admin [`AllStats`] read on the user's executor and await

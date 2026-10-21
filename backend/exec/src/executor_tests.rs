@@ -48,7 +48,10 @@ use crate::executor::{
     DbBackoff, Probe, Select, run_request, select_message, sleep_or_take_request, stop_remaining,
 };
 use crate::message::{Request, push_frame};
-use crate::{Action, Message, Txn, TxnSource, next_action, request_channel};
+use crate::{
+    Action, ExecutorStatus, FramePusher, Message, Registry, ServiceApi, Txn, TxnSource,
+    next_action, request_channel,
+};
 
 /// A future that never resolves: stands in for the Strava queue probe being
 /// blocked (a slow or busy queue), so the select has a second, non-ready
@@ -1344,5 +1347,192 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
     assert!(
         frame_rx.try_recv().is_err(),
         "no new gear: an empty summary pushes no frame"
+    );
+}
+
+// --- Shop stream infrastructure (spec #517, ticket #582) ---
+//
+// The `Registry` owns a per-shop `broadcast` channel map (the shop streams),
+// a `FramePusher` (`push_to_shop`/`push_to_user`), and `ServiceApi::
+// subscribe_shop` (owner-only, on-demand). The tests drive the `Registry`
+// through its public surface (`subscribe_shop`, `push_to_shop`,
+// `push_to_user`, `shop_open`); the store is a `MemStore` shared across
+// transactions so a shop created before the `Registry` is visible to
+// `subscribe_shop`'s ownership read.
+
+/// A `TxnSource` whose connections share one `MemStore` (a sibling handle on
+/// the same state): a shop created before the `Registry` is built is visible
+/// to `subscribe_shop`'s ownership read (the prepopulated fixture has no
+/// shops, so the tests create their own in the shared store).
+struct ShopSource {
+    store: MemStore,
+}
+
+impl Clone for ShopSource {
+    fn clone(&self) -> Self {
+        Self {
+            store: self.store.begin(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl TxnSource for ShopSource {
+    type Conn = FakeConn;
+
+    async fn begin(&self) -> TbResult<FakeConn> {
+        Ok(FakeConn {
+            store: self.store.begin(),
+        })
+    }
+}
+
+/// A shop owned by `owner` in the shared `MemStore`.
+async fn create_shop(store: &MemStore, owner: UserId) -> Shop {
+    let mut store = store.begin();
+    ShopId::create("Test Shop".into(), None, true, owner, &mut store)
+        .await
+        .expect("the shop is created")
+}
+
+/// A non-empty `Summary` (a frame the shop/user streams should deliver).
+fn non_empty_summary() -> Summary {
+    let mut summary = Summary::default();
+    summary.usages.upsert(Usage::default());
+    summary
+}
+
+#[tokio::test]
+async fn subscribe_shop_rejects_a_non_owner() {
+    // A non-owner is forbidden (the web layer maps this to a 403).
+    let store = MemStore::new();
+    let registry = Registry::new(
+        ShopSource {
+            store: store.begin(),
+        },
+        Duration::from_secs(60),
+    );
+    let shop = create_shop(&store, UserId::from(1)).await;
+
+    let result = registry.subscribe_shop(UserId::from(2), shop.id).await;
+    assert!(
+        matches!(result, Err(Error::Forbidden(_))),
+        "a non-owner is forbidden, got {result:?}"
+    );
+}
+
+#[tokio::test]
+async fn shop_stream_lifecycle_create_receive_drop() {
+    let store = MemStore::new();
+    let registry = Registry::new(
+        ShopSource {
+            store: store.begin(),
+        },
+        Duration::from_secs(60),
+    );
+    let shop = create_shop(&store, UserId::from(1)).await;
+
+    // Created on demand: no stream before the owner's first connect.
+    assert!(
+        !registry.shop_open(shop.id).await,
+        "no shop stream before a connect"
+    );
+
+    // The owner's connect opens the channel.
+    let mut rx = registry
+        .subscribe_shop(UserId::from(1), shop.id)
+        .await
+        .expect("the owner can subscribe");
+    assert!(
+        registry.shop_open(shop.id).await,
+        "the channel is open while a receiver is attached"
+    );
+
+    // A frame pushed to the shop stream reaches the subscriber.
+    let summary = non_empty_summary();
+    registry.push_to_shop(shop.id, summary.clone()).await;
+    let got = rx.recv().await.expect("the subscriber receives the frame");
+    assert_eq!(got, summary);
+
+    // Dropping the last receiver closes the channel: the "open shop" check
+    // (receiver_count() > 0) is no longer met, so the entry is reaped.
+    drop(rx);
+    assert!(
+        !registry.shop_open(shop.id).await,
+        "the channel is dropped when the last receiver disconnects"
+    );
+}
+
+#[tokio::test]
+async fn push_to_shop_is_a_noop_without_a_subscriber() {
+    let store = MemStore::new();
+    let registry = Registry::new(
+        ShopSource {
+            store: store.begin(),
+        },
+        Duration::from_secs(60),
+    );
+    let shop = create_shop(&store, UserId::from(1)).await;
+
+    // No subscriber: the push is dropped (no panic, no receiver to send to).
+    registry.push_to_shop(shop.id, non_empty_summary()).await;
+
+    // And after a subscriber disconnects, the push is dropped too (the
+    // reaped channel has no receiver, so the send is a no-op).
+    let rx = registry
+        .subscribe_shop(UserId::from(1), shop.id)
+        .await
+        .expect("the owner can subscribe");
+    drop(rx);
+    registry.push_to_shop(shop.id, non_empty_summary()).await;
+}
+
+#[tokio::test]
+async fn push_to_user_delivers_to_a_running_executor() {
+    let registry = Registry::new(
+        ShopSource {
+            store: MemStore::new(),
+        },
+        Duration::from_secs(60),
+    );
+    let mut frame_rx = registry
+        .install_executor_for_test(UserId::from(1), ExecutorStatus::Running)
+        .await;
+
+    let summary = non_empty_summary();
+    registry
+        .push_to_user(UserId::from(1), summary.clone())
+        .await;
+
+    let got = frame_rx
+        .try_recv()
+        .expect("the running executor's frame channel receives the frame");
+    assert_eq!(got, summary);
+}
+
+#[tokio::test]
+async fn push_to_user_is_a_noop_without_a_running_executor() {
+    let registry = Registry::new(
+        ShopSource {
+            store: MemStore::new(),
+        },
+        Duration::from_secs(60),
+    );
+
+    // No executor for the user: a no-op (no panic, no receiver).
+    registry
+        .push_to_user(UserId::from(1), non_empty_summary())
+        .await;
+
+    // A reaped executor: a no-op (the frame channel is not fed).
+    let mut frame_rx = registry
+        .install_executor_for_test(UserId::from(2), ExecutorStatus::Reaped)
+        .await;
+    registry
+        .push_to_user(UserId::from(2), non_empty_summary())
+        .await;
+    assert!(
+        frame_rx.try_recv().is_err(),
+        "a reaped executor receives no frame"
     );
 }

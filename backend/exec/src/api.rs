@@ -45,7 +45,8 @@ use oauth2::RefreshToken;
 use tokio::sync::{broadcast, watch};
 
 use tb_domain::{
-    ActivityId, ApiRead, ApiWrite, PartId, ReadOutcome, Summary, TbResult, UserId, WriteOutcome,
+    ActivityId, ApiRead, ApiWrite, PartId, ReadOutcome, ShopId, Summary, TbResult, UserId,
+    WriteOutcome,
 };
 use tb_strava::{StravaStat, StravaUser, client::StravaAthleteInfo, event::InEvent};
 
@@ -87,6 +88,18 @@ pub trait ServiceApi: Send + Sync {
         broadcast::Receiver<Summary>,
         watch::Receiver<ExecutorStatus>,
     )>;
+
+    /// Register a shop stream for `shop_id` (spec #517, ticket #582): the
+    /// caller must be the shop owner (a non-owner is `Forbidden`, which the
+    /// web layer maps to a 403); the channel is created on demand and the
+    /// returned receiver is a subscription to it. No `ExecutorStatus` — the
+    /// shop stream is a standalone channel, not tied to the executor's
+    /// lifecycle (unlike [`Self::subscribe`]).
+    async fn subscribe_shop(
+        &self,
+        user_id: UserId,
+        shop_id: ShopId,
+    ) -> TbResult<broadcast::Receiver<Summary>>;
 
     /// The admin `GET /user/all` read (spec #558 §3.3): `get_all_stats` in
     /// the admin user's own channel, in the loop's own transaction.
