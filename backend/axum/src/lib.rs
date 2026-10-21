@@ -47,9 +47,6 @@ use error::*;
 
 mod stream;
 
-#[cfg(test)]
-mod test_support;
-
 pub fn routes(app_state: AppState) -> Router {
     Router::new()
         .nest("/api", domain::router())

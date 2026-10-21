@@ -19,12 +19,13 @@
 //! keeps the executor alive; a stream survives the executor's reap; a wake
 //! never spawns) live there too.
 
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 use std::time::Duration;
 
 use axum::Router;
-use http::{Method, StatusCode, header};
-use tower_sessions::MemoryStore;
+use http::{HeaderMap, Method, Request, StatusCode, header};
+use http_body_util::BodyExt;
+use tower_sessions::{MemoryStore, Session, SessionManagerLayer};
 
 use tb_domain::{
     ActTypeId, Activity, ActivityId, DescendReport, OnboardingStatus, Part, PartId, PartNote,
@@ -32,12 +33,187 @@ use tb_domain::{
     ShopSubscriptionWithDetails, SubscriptionId, SubscriptionStatus, Summary, UsageId, User,
     UserId, UserPublic, UserState, WriteOutcome,
 };
-use tb_exec::{ExecutorStatus, MockServiceApi};
+use tb_exec::{ExecutorStatus, MockServiceApi, ServiceApi};
 use time::macros::datetime;
+use tower::ServiceExt;
 
-use crate::test_support::{
-    admin_cookie, read_sse_frames, run, run_json, run_raw, run_sse, test_app, user_cookie,
-};
+use crate::appstate::AppState;
+use crate::routes;
+use crate::strava::RequestSession;
+
+// ─── Test infrastructure ──────────────────────────────────────────────────
+
+const SESSION_KEY: &str = "session";
+
+/// Dummies the OAuth client environment variables so the `STRAVACLIENT` lazy
+/// static does not panic when it is first used in a test.
+fn set_oauth_env_once() {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| unsafe {
+        std::env::set_var("CLIENT_ID", "test-client-id");
+        std::env::set_var("CLIENT_SECRET", "test-client-secret");
+    });
+}
+
+/// Builds the production routes over the service API and a `MemoryStore`
+/// session layer.
+fn test_app(store: MemoryStore, api: Arc<dyn ServiceApi>) -> Router {
+    set_oauth_env_once();
+    let session_layer = SessionManagerLayer::new(store);
+    routes(AppState::new(api)).layer(session_layer)
+}
+
+/// Creates a session in `store` containing `value` and returns the cookie
+/// header value that authenticates with it.
+async fn cookie_for(store: &MemoryStore, value: RequestSession) -> String {
+    let session = Session::new(None, Arc::new(store.clone()), None);
+    session
+        .insert(SESSION_KEY, &value)
+        .await
+        .expect("session insert");
+    session.save().await.expect("session save");
+    let id = session.id().expect("session id");
+    format!("id={id}")
+}
+
+/// Cookie header value for a regular (non-admin) user.
+async fn user_cookie(store: &MemoryStore) -> String {
+    cookie_for(store, RequestSession::new_dummy(false)).await
+}
+
+/// Cookie header value for an admin user.
+async fn admin_cookie(store: &MemoryStore) -> String {
+    cookie_for(store, RequestSession::new_dummy(true)).await
+}
+
+/// Runs a single request against `app` and returns its status, headers and
+/// body.
+async fn run(
+    app: Router,
+    method: Method,
+    uri: &str,
+    cookie: Option<&str>,
+) -> (StatusCode, HeaderMap, Vec<u8>) {
+    run_with_body(app, method, uri, cookie, None).await
+}
+
+/// Runs a single request with a JSON body against `app`.
+async fn run_json(
+    app: Router,
+    method: Method,
+    uri: &str,
+    cookie: Option<&str>,
+    body: &str,
+) -> (StatusCode, HeaderMap, Vec<u8>) {
+    run_with_body(app, method, uri, cookie, Some(body)).await
+}
+
+async fn run_with_body(
+    app: Router,
+    method: Method,
+    uri: &str,
+    cookie: Option<&str>,
+    json: Option<&str>,
+) -> (StatusCode, HeaderMap, Vec<u8>) {
+    match json {
+        Some(json) => {
+            run_raw(
+                app,
+                method,
+                uri,
+                cookie,
+                json.as_bytes(),
+                "application/json",
+            )
+            .await
+        }
+        None => run_raw(app, method, uri, cookie, &[], "").await,
+    }
+}
+
+/// Runs a single request with a raw body and an explicit content type
+/// (the multipart uploads' shape — `run_json` cannot carry one).
+async fn run_raw(
+    app: Router,
+    method: Method,
+    uri: &str,
+    cookie: Option<&str>,
+    body: &[u8],
+    content_type: &str,
+) -> (StatusCode, HeaderMap, Vec<u8>) {
+    let mut builder = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header(header::HOST, "localhost");
+    if !content_type.is_empty() {
+        builder = builder.header(header::CONTENT_TYPE, content_type);
+    }
+    let mut req = builder
+        .body(axum::body::Body::from(body.to_vec()))
+        .expect("valid request");
+    if let Some(cookie) = cookie {
+        req.headers_mut()
+            .insert(header::COOKIE, cookie.parse().expect("valid cookie"));
+    }
+    let res = app
+        .oneshot(req)
+        .await
+        .expect("oneshot request should succeed");
+    let status = res.status();
+    let headers = res.headers().clone();
+    let body = res.into_body().collect().await.expect("body").to_bytes();
+    (status, headers, body.to_vec())
+}
+
+/// Runs a GET request and returns the SSE body (can read it frame by frame;
+/// collecting it would hang on a live stream).
+async fn run_sse(
+    app: Router,
+    uri: &str,
+    cookie: Option<&str>,
+) -> (StatusCode, HeaderMap, axum::body::Body) {
+    let builder = Request::builder()
+        .method(Method::GET)
+        .uri(uri)
+        .header(header::HOST, "localhost");
+    let mut req = builder
+        .body(axum::body::Body::empty())
+        .expect("valid request");
+    if let Some(cookie) = cookie {
+        req.headers_mut()
+            .insert(header::COOKIE, cookie.parse().expect("valid cookie"));
+    }
+    let res = app
+        .oneshot(req)
+        .await
+        .expect("oneshot request should succeed");
+    let status = res.status();
+    let headers = res.headers().clone();
+    let body = res.into_body();
+    (status, headers, body)
+}
+
+/// Reads up to `count` frames off an SSE body, each within `timeout` (a live
+/// stream never ends, so a per-frame timeout bounds the read). Returns the
+/// frames as lossy UTF-8 strings.
+async fn read_sse_frames(
+    body: &mut axum::body::Body,
+    count: usize,
+    timeout: Duration,
+) -> Vec<String> {
+    let mut frames = Vec::new();
+    for _ in 0..count {
+        match tokio::time::timeout(timeout, body.frame()).await {
+            Ok(Some(Ok(frame))) => {
+                if let Ok(chunk) = frame.into_data() {
+                    frames.push(String::from_utf8_lossy(&chunk).to_string());
+                }
+            }
+            _ => break,
+        }
+    }
+    frames
+}
 
 // ─── Canned values (the mock's replies, the assertions' subjects) ─────────
 
@@ -242,8 +418,8 @@ fn build_app(store: &MemoryStore, mock: MockServiceApi) -> Router {
 /// extractor rejects it first; the mock has no expectations, so any call
 /// would panic).
 async fn expect_unauth(method: Method, uri: &str) {
-    let (_store, _mock) = mock_ctx();
-    let app = build_app(&_store, _mock);
+    let (store, mock) = mock_ctx();
+    let app = build_app(&store, mock);
     let (status, _headers, body) = run(app, method, uri, None).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(body, "Please login".as_bytes());
@@ -252,8 +428,8 @@ async fn expect_unauth(method: Method, uri: &str) {
 /// An authenticated non-admin request to an admin route answers `404`
 /// (hidden, not forbidden) — and never reaches the service API.
 async fn expect_hidden_from_non_admin(method: Method, uri: &str) {
-    let (store, _mock) = mock_ctx();
-    let app = build_app(&store, _mock);
+    let (store, mock) = mock_ctx();
+    let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(app, method, uri, Some(&cookie)).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
@@ -263,8 +439,8 @@ async fn expect_hidden_from_non_admin(method: Method, uri: &str) {
 
 #[tokio::test]
 async fn types_part_returns_part_types() {
-    let (_store, _mock) = mock_ctx();
-    let app = build_app(&_store, _mock);
+    let (store, mock) = mock_ctx();
+    let app = build_app(&store, mock);
     let (status, _headers, body) = run(app, Method::GET, "/api/types/part", None).await;
     assert_eq!(status, StatusCode::OK);
     let types: Vec<serde_json::Value> = serde_json::from_slice(&body).expect("part types are json");
@@ -273,8 +449,8 @@ async fn types_part_returns_part_types() {
 
 #[tokio::test]
 async fn types_activity_returns_activity_types() {
-    let (_store, _mock) = mock_ctx();
-    let app = build_app(&_store, _mock);
+    let (store, mock) = mock_ctx();
+    let app = build_app(&store, mock);
     let (status, _headers, body) = run(app, Method::GET, "/api/types/activity", None).await;
     assert_eq!(status, StatusCode::OK);
     let types: Vec<serde_json::Value> =
@@ -284,8 +460,8 @@ async fn types_activity_returns_activity_types() {
 
 #[tokio::test]
 async fn callback_validation_echoes_challenge() {
-    let (_store, _mock) = mock_ctx();
-    let app = build_app(&_store, _mock);
+    let (store, mock) = mock_ctx();
+    let app = build_app(&store, mock);
     let (status, _headers, body) = run(
         app,
         Method::GET,
@@ -300,8 +476,8 @@ async fn callback_validation_echoes_challenge() {
 
 #[tokio::test]
 async fn callback_validation_rejects_wrong_token() {
-    let (_store, _mock) = mock_ctx();
-    let app = build_app(&_store, _mock);
+    let (store, mock) = mock_ctx();
+    let app = build_app(&store, mock);
     let (status, _headers, _body) = run(
         app,
         Method::GET,
@@ -314,8 +490,8 @@ async fn callback_validation_rejects_wrong_token() {
 
 #[tokio::test]
 async fn login_redirects_to_strava_authorize() {
-    let (_store, _mock) = mock_ctx();
-    let app = build_app(&_store, _mock);
+    let (store, mock) = mock_ctx();
+    let app = build_app(&store, mock);
     let (status, headers, _body) = run(app, Method::GET, "/strava/login", None).await;
     assert_eq!(status, StatusCode::SEE_OTHER);
     let location = headers["location"].to_str().expect("location").to_owned();
@@ -329,8 +505,8 @@ async fn login_redirects_to_strava_authorize() {
 
 #[tokio::test]
 async fn token_error_redirects_to_root() {
-    let (_store, _mock) = mock_ctx();
-    let app = build_app(&_store, _mock);
+    let (store, mock) = mock_ctx();
+    let app = build_app(&store, mock);
     let (status, headers, _body) = run(
         app,
         Method::GET,
@@ -344,8 +520,8 @@ async fn token_error_redirects_to_root() {
 
 #[tokio::test]
 async fn token_wrong_scope_redirects_to_root() {
-    let (_store, _mock) = mock_ctx();
-    let app = build_app(&_store, _mock);
+    let (store, mock) = mock_ctx();
+    let app = build_app(&store, mock);
     let (status, headers, _body) = run(
         app,
         Method::GET,
@@ -359,8 +535,8 @@ async fn token_wrong_scope_redirects_to_root() {
 
 #[tokio::test]
 async fn logout_redirects_to_root() {
-    let (_store, _mock) = mock_ctx();
-    let app = build_app(&_store, _mock);
+    let (store, mock) = mock_ctx();
+    let app = build_app(&store, mock);
     let (status, headers, _body) = run(app, Method::GET, "/strava/logout", None).await;
     assert_eq!(status, StatusCode::SEE_OTHER);
     assert_eq!(headers["location"], "/");
@@ -470,8 +646,8 @@ async fn strava_sync_hidden_from_non_admin() {
 
 #[tokio::test]
 async fn admin_sync_requires_admin() {
-    let (store, _mock) = mock_ctx();
-    let app = build_app(&store, _mock);
+    let (store, mock) = mock_ctx();
+    let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(app, Method::GET, "/strava/sync/1", Some(&cookie)).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
@@ -479,16 +655,16 @@ async fn admin_sync_requires_admin() {
 
 #[tokio::test]
 async fn wrong_method_not_allowed() {
-    let (_store, _mock) = mock_ctx();
-    let app = build_app(&_store, _mock);
+    let (store, mock) = mock_ctx();
+    let app = build_app(&store, mock);
     let (status, _headers, _body) = run(app, Method::POST, "/api/user", None).await;
     assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
 }
 
 #[tokio::test]
 async fn unknown_path_not_found() {
-    let (_store, _mock) = mock_ctx();
-    let app = build_app(&_store, _mock);
+    let (store, mock) = mock_ctx();
+    let app = build_app(&store, mock);
     let (status, _headers, _body) = run(app, Method::GET, "/api/does-not-exist", None).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
@@ -594,8 +770,8 @@ async fn summary_shop_filter_rides_the_read() {
 /// `204` for an authenticated session, no body, no DB work.
 #[tokio::test]
 async fn user_ping_returns_204() {
-    let (store, _mock) = mock_ctx();
-    let app = build_app(&store, _mock);
+    let (store, mock) = mock_ctx();
+    let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::GET, "/api/user/ping", Some(&cookie)).await;
     assert_eq!(status, StatusCode::NO_CONTENT);
@@ -1727,11 +1903,11 @@ async fn admin_sync_all_returns_200() {
 /// insert + wake is the seam suite's territory.
 #[tokio::test]
 async fn webhook_accepts_the_event() {
-    let (_store, mut mock) = mock_ctx();
+    let (store, mut mock) = mock_ctx();
     mock.expect_accept_event()
         .times(1)
         .returning(|_event| Ok(()));
-    let app = build_app(&_store, mock);
+    let app = build_app(&store, mock);
     let (status, _headers, body) = run_json(
         app,
         Method::POST,
@@ -1748,13 +1924,13 @@ async fn webhook_accepts_the_event() {
 /// the mock's `Err` direct, no failing `begin` anywhere.
 #[tokio::test]
 async fn webhook_ingest_failure_500s() {
-    let (_store, mut mock) = mock_ctx();
+    let (store, mut mock) = mock_ctx();
     mock.expect_accept_event().times(1).returning(|_event| {
         Err(tb_domain::Error::AnyFailure(anyhow::anyhow!(
             "ingest failed"
         )))
     });
-    let app = build_app(&_store, mock);
+    let app = build_app(&store, mock);
     let (status, _headers, _body) = run_json(
         app,
         Method::POST,
@@ -1810,11 +1986,11 @@ async fn redirect_activity_permains_to_strava_url() {
 /// context — the route is public): the Strava URL permanent-redirects.
 #[tokio::test]
 async fn redirect_user_permains_to_strava_url() {
-    let (_store, mut mock) = mock_ctx();
+    let (store, mut mock) = mock_ctx();
     mock.expect_user_url()
         .times(1)
         .returning(|_id| Ok("https://www.strava.com/athletes/3".to_string()));
-    let app = build_app(&_store, mock);
+    let app = build_app(&store, mock);
     let (status, headers, _body) = run(app, Method::GET, "/strava/users/3", None).await;
     assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
     assert_eq!(headers["location"], "https://www.strava.com/athletes/3");
