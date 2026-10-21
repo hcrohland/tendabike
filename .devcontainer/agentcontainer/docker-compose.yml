@@ -27,6 +27,8 @@ services:
       - DATABASE_URL=postgres://tendabike@localhost/tendabike
       - SCRATCH_DATABASE_URL=postgres://tendabike@localhost/scratch
       - SSH_AUTH_SOCK=/tmp/ssh-agent-pythia.sock
+      - PYTHIA_API_KEY=${PYTHIA_API_KEY}
+      - DELPHI_API_KEY=${DELPHI_API_KEY}
 
 volumes:
   postgres-data:
