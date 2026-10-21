@@ -334,7 +334,13 @@ where
     /// when this returns, before the caller's next await.
     async fn exec_field<R>(&self, user_id: UserId, f: impl FnOnce(&Executor) -> R) -> TbResult<R> {
         let mut map = self.executors.lock().await;
-        let exec = Self::ensure_running(&mut map, &self.source, user_id, self.idle_timeout).await?;
+        // The executor routes a committed `Summary` by context (spec #517,
+        // ticket #584) through the registry itself: `self.clone()` shares the
+        // shop-stream and executor maps (the `Arc`s), so its `push_to_shop` /
+        // `push_to_user` reach the live shop streams and executors.
+        let pusher: Box<dyn FramePusher> = Box::new(self.clone());
+        let exec = Self::ensure_running(&mut map, &self.source, user_id, self.idle_timeout, pusher)
+            .await?;
         Ok(f(&exec))
     }
 
@@ -348,6 +354,7 @@ where
         source: &S,
         user_id: UserId,
         idle_timeout: Duration,
+        pusher: Box<dyn FramePusher>,
     ) -> TbResult<Executor> {
         if let Some(exec) = map.get(&user_id)
             && *exec.status.borrow() == ExecutorStatus::Running
@@ -388,6 +395,7 @@ where
                 session,
                 reader,
                 frames_for_run,
+                pusher,
                 events_for_run,
                 idle_timeout,
                 wake_for_run,
