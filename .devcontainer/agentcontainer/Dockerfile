@@ -51,30 +51,30 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 RUN cargo install sqlx-cli --no-default-features --features postgres,rustls
 
 # The base image ships a `vscode` user on uid/gid 1000 with passwordless
-# sudo. Rename it to `pythia` (and its sudoers drop-in) rather than
+# sudo. Rename it to `laios` (and its sudoers drop-in) rather than
 # colliding on the UID. cargo/rustup homes are made world-writable so the
 # non-root user can write the registry cache and run `rustup update`.
-RUN groupmod -n pythia vscode \
-    && usermod -l pythia -d /home/pythia -m -s /bin/bash vscode \
-    && mv /etc/sudoers.d/vscode /etc/sudoers.d/pythia \
-    && sed -i 's/vscode/pythia/g' /etc/sudoers.d/pythia \
-    && chmod 0440 /etc/sudoers.d/pythia \
+RUN groupmod -n laios vscode \
+    && usermod -l laios -d /home/laios -m -s /bin/bash vscode \
+    && mv /etc/sudoers.d/vscode /etc/sudoers.d/laios \
+    && sed -i 's/vscode/laios/g' /etc/sudoers.d/laios \
+    && chmod 0440 /etc/sudoers.d/laios \
     && mkdir -p /workspaces \
-    && chown pythia:pythia /workspaces \
+    && chown laios:laios /workspaces \
     && chmod -R a+rwX /usr/local/cargo /usr/local/rustup
 
-USER pythia
-LABEL devcontainer.metadata='[{"remoteUser":"pythia"}]'
+USER laios
+LABEL devcontainer.metadata='[{"remoteUser":"laios"}]'
 
 WORKDIR /workspaces
 
 # OpenCode (https://opencode.ai). The official install script drops the binary
-# in the user's home (~/.opencode/bin); being user-owned, the `pythia` user can
+# in the user's home (~/.opencode/bin); being user-owned, the `laios` user can
 # upgrade it later by re-running the same command, no root needed.
 # --no-modify-path keeps it out of the shell rc files, so we own the PATH entry
 # below (reliable for both login and non-login shells).
 RUN curl -fsSL https://opencode.ai/v2/install | bash -s -- --no-modify-path
-ENV PATH="/home/pythia/.opencode/bin:${PATH}"
+ENV PATH="/home/laios/.opencode/bin:${PATH}"
 
 RUN git config --global core.hooksPath .githooks
 
