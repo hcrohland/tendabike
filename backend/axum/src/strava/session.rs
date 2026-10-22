@@ -15,7 +15,7 @@ use tb_domain::{Session as TbSession, ShopId, TbResult, UserId};
 use tb_strava::client::StravaTokenResponse;
 use tb_strava::{StravaId, StravaUser};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct RequestSession {
     id: UserId,
     strava_id: StravaId,
@@ -107,6 +107,15 @@ impl RequestSession {
         self.session = Some(session);
         self
     }
+
+    /// Set the active shop and persist it to the tower session (spec #517,
+    /// ticket #588): the web layer's cookie-persistence concern, kept out of
+    /// the domain `Session` trait (which is all `&self` — the acting session
+    /// is immutable to the domain).
+    pub(crate) fn set_shop(&mut self, shop: Option<ShopId>) -> TbResult<()> {
+        self.shop = shop;
+        tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(self.update()))
+    }
 }
 
 impl TbSession for RequestSession {
@@ -120,12 +129,6 @@ impl TbSession for RequestSession {
 
     fn shop(&self) -> Option<ShopId> {
         self.shop
-    }
-
-    fn set_shop(&mut self, shop: Option<ShopId>) -> TbResult<()> {
-        self.shop = shop;
-        // Keep the trait dyn compatible
-        tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(self.update()))
     }
 }
 

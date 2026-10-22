@@ -66,11 +66,12 @@ pub enum ApiRead {
     // --- user (`/api/user`) ---
     /// `GET /user`, `GET /user/summary` (after the hydrate write, spec
     /// #558 §4), and `GET /user/export` — the unified user read (spec
-    /// #558 §3.5). `shop` is the route's `?shop=` filter: `None` (the bare
-    /// and export projections) reads the user's whole state, `Some` filters
-    /// the summary to the shop's parts. The routes project `User`,
-    /// `Summary`, and the export composite from the one message.
-    User { shop: Option<ShopId> },
+    /// #558 §3.5). The `?shop=` filter is the acting session's own shop
+    /// (spec #517, ticket #588): `None` (personal mode) reads the user's
+    /// whole state, `Some` filters the summary to the shop's parts. The
+    /// routes project `User`, `Summary`, and the export composite from the
+    /// one message.
+    User,
 
     /// The light user-record read: just the [`User`] row, no `Summary`
     /// computation. Used by the onboarding read-backs (the webhook's
@@ -172,19 +173,16 @@ pub enum ReadOutcome {
 /// Returns the read's data wrapped in a [`ReadOutcome`].
 pub async fn read(
     read: ApiRead,
-    session: &mut impl Session,
+    session: &dyn Session,
     store: &mut impl Store,
 ) -> TbResult<ReadOutcome> {
-    // The domain operations take `&dyn Session`; borrow it once for every arm.
-    let session = &*session;
-
     match read {
         // --- user ---
         // The unified user read (spec #558 §3.5): the `UserState` composite —
         // the full `User` plus the `Summary` of everything the user owns,
-        // optionally filtered by the `?shop=` parameter.
-        ApiRead::User { shop } => {
-            let state = session.user_id().read(shop, store).await?;
+        // filtered by the acting session's shop (spec #517, ticket #588).
+        ApiRead::User => {
+            let state = session.user_id().read(session.shop(), store).await?;
             Ok(ReadOutcome::User(Box::new(state)))
         }
         // The light record-only read: just the `User` row, no `Summary`.

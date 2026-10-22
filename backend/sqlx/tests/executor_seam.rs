@@ -192,10 +192,6 @@ impl Session for FakeStrava {
     fn shop(&self) -> Option<ShopId> {
         self.shop
     }
-    fn set_shop(&mut self, shop: Option<ShopId>) -> TbResult<()> {
-        self.shop = shop;
-        Ok(())
-    }
     fn is_admin(&self) -> bool {
         self.admin
     }
@@ -252,9 +248,6 @@ impl Session for GearStrava {
     }
     fn shop(&self) -> Option<ShopId> {
         None
-    }
-    fn set_shop(&mut self, _shop: Option<ShopId>) -> TbResult<()> {
-        Ok(())
     }
     fn is_admin(&self) -> bool {
         false
@@ -366,7 +359,7 @@ async fn api_write_end_to_end() {
             what: CHAIN,
             purchase: datetime!(2024-01-01 00:00 UTC),
         },
-        None,
+        Box::new(FakeStrava::new()),
     );
     tx.send(request).expect("the channel is open");
 
@@ -540,7 +533,7 @@ async fn read_as_message_round_trip() {
     let (tx, rx) = request_channel();
     let (frames, mut frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
-    let (request, reply) = Request::new_read(ApiRead::User { shop: None });
+    let (request, reply) = Request::new_read(ApiRead::User, Box::new(FakeStrava::new()));
     tx.send(request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
@@ -606,10 +599,10 @@ async fn read_sees_every_earlier_write() {
             what: CHAIN,
             purchase: datetime!(2024-01-01 00:00 UTC),
         },
-        None,
+        Box::new(FakeStrava::new()),
     );
     tx.send(write_request).expect("the channel is open");
-    let (read_request, read_reply) = Request::new_read(ApiRead::User { shop: None });
+    let (read_request, read_reply) = Request::new_read(ApiRead::User, Box::new(FakeStrava::new()));
     tx.send(read_request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
@@ -679,7 +672,8 @@ async fn gear_hydration_frame_and_fifo_read() {
     // loop starts (the channel is the FIFO the loop consumes in order).
     let (gear_request, gear_reply) = Request::new_gear();
     tx.send(gear_request).expect("the channel is open");
-    let (read_request, read_reply) = Request::new_read(ApiRead::User { shop: None });
+    let (read_request, read_reply) =
+        Request::new_read(ApiRead::User, Box::new(GearStrava::new_gear()));
     tx.send(read_request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
@@ -762,7 +756,8 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
     let (events, _events_rx) = broadcast::channel(16);
     let (gear_request, gear_reply) = Request::new_gear();
     tx.send(gear_request).expect("the channel is open");
-    let (read_request, read_reply) = Request::new_read(ApiRead::User { shop: None });
+    let (read_request, read_reply) =
+        Request::new_read(ApiRead::User, Box::new(GearStrava::no_new_gear()));
     tx.send(read_request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
@@ -834,7 +829,7 @@ async fn failed_write_rolls_back_and_reclaims() {
         ApiWrite::PartDelete {
             id: PartId::from(999_999),
         },
-        None,
+        Box::new(FakeStrava::new()),
     );
     tx.send(request).expect("the channel is open");
 
@@ -896,7 +891,10 @@ async fn onboarding_sync_write_queues_the_sync_event() {
     // No streams attached: the frame receiver must not outlive the loop, or
     // the no-streams reap rule (spec §4.4, amended — #446) never fires.
     drop(_frame_rx);
-    let (request, reply) = Request::new_write(ApiWrite::UserOnboardingSync { time: 100 }, None);
+    let (request, reply) = Request::new_write(
+        ApiWrite::UserOnboardingSync { time: 100 },
+        Box::new(FakeStrava::new()),
+    );
     tx.send(request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
@@ -1461,7 +1459,10 @@ async fn stream_survives_executor_reap() {
     // soon as its work is done (the no-streams rule — immediate, not after
     // an idle window).
     registry
-        .write(user, None, ApiWrite::UserOnboardingPostpone)
+        .write(
+            Box::new(FakeStrava::new()),
+            ApiWrite::UserOnboardingPostpone,
+        )
         .await
         .expect("the write must succeed");
     wait_for_status(&registry, user, ExecutorStatus::Reaped).await;
@@ -1504,7 +1505,7 @@ async fn request_burst_does_not_fire_transaction_notice() {
     // Pre-fill the channel before the loop spawns: the loop's first select
     // must find work, or its no-streams idle decision reaps it before the
     // burst starts (the reaped loop closes the channel under the senders).
-    let (request, warm_reply) = Request::new_read(ApiRead::User { shop: None });
+    let (request, warm_reply) = Request::new_read(ApiRead::User, Box::new(FakeStrava::new()));
     tx.send(request).expect("the channel is open");
     let (frames, frame_rx) = broadcast::channel(8);
     let (events, _events_rx) = broadcast::channel(8);
@@ -1568,7 +1569,8 @@ async fn request_burst_does_not_fire_transaction_notice() {
     let sender = tokio::spawn(async move {
         for pair in 0..PAIRS {
             for which in 0..2 {
-                let (request, reply) = Request::new_read(ApiRead::User { shop: None });
+                let (request, reply) =
+                    Request::new_read(ApiRead::User, Box::new(FakeStrava::new()));
                 if tx2.send(request).is_err() {
                     return; // channel closed: the loop ended; report via the join
                 }

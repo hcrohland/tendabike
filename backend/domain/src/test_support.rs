@@ -130,10 +130,6 @@ impl Session for TestSession {
     fn shop(&self) -> Option<ShopId> {
         self.shop
     }
-    fn set_shop(&mut self, shop: Option<ShopId>) -> TbResult<()> {
-        self.shop = shop;
-        Ok(())
-    }
     fn is_admin(&self) -> bool {
         self.admin
     }

@@ -26,9 +26,7 @@ use axum::{
     routing::{delete, get, post, put},
 };
 use serde::Deserialize;
-use tb_domain::{
-    ApiRead, ApiWrite, Error, NoteFile, PartId, PartNote, PartNoteId, ReadOutcome, Session,
-};
+use tb_domain::{ApiRead, ApiWrite, Error, NoteFile, PartId, PartNote, PartNoteId, ReadOutcome};
 
 use crate::{
     RequestSession,
@@ -71,7 +69,7 @@ async fn list_notes(
 ) -> ApiResult<Vec<PartNote>> {
     match state
         .api
-        .read(user.user_id(), ApiRead::PartNotes(part))
+        .read(Box::new(user), ApiRead::PartNotes(part))
         .await?
     {
         ReadOutcome::PartNotes(notes) => Ok(Json(notes)),
@@ -87,11 +85,7 @@ async fn create_text_note(
 ) -> Result<(StatusCode, Json<PartNote>), AppError> {
     let outcome = state
         .api
-        .write(
-            user.user_id(),
-            user.shop(),
-            ApiWrite::PartNoteCreateText { part, name },
-        )
+        .write(Box::new(user), ApiWrite::PartNoteCreateText { part, name })
         .await?;
     let note = created_entity(&outcome.summary().part_notes, "part note")?;
     Ok((StatusCode::CREATED, Json(note)))
@@ -154,8 +148,7 @@ async fn create_file_note(
     let outcome = state
         .api
         .write(
-            user.user_id(),
-            user.shop(),
+            Box::new(user),
             ApiWrite::PartNoteCreateFile {
                 part,
                 file: NoteFile {
@@ -180,7 +173,7 @@ async fn get_note_file(
     // (spec #558 §3.4); the response headers/encoding stay in axum.
     let (note, data) = match state
         .api
-        .read(user.user_id(), ApiRead::PartNoteFile(id))
+        .read(Box::new(user), ApiRead::PartNoteFile(id))
         .await?
     {
         ReadOutcome::PartNoteFile(note, data) => (note, data),
@@ -230,11 +223,7 @@ async fn update_text_note(
 ) -> Result<StatusCode, AppError> {
     state
         .api
-        .write(
-            user.user_id(),
-            user.shop(),
-            ApiWrite::PartNoteUpdateText { id, name },
-        )
+        .write(Box::new(user), ApiWrite::PartNoteUpdateText { id, name })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -249,8 +238,7 @@ async fn update_file_note(
     state
         .api
         .write(
-            user.user_id(),
-            user.shop(),
+            Box::new(user),
             ApiWrite::PartNoteUpdateFile {
                 id,
                 file: NoteFile {
@@ -272,7 +260,7 @@ async fn delete_note(
 ) -> Result<StatusCode, AppError> {
     state
         .api
-        .write(user.user_id(), user.shop(), ApiWrite::PartNoteDelete { id })
+        .write(Box::new(user), ApiWrite::PartNoteDelete { id })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -284,11 +272,7 @@ async fn remove_file_note(
 ) -> Result<StatusCode, AppError> {
     state
         .api
-        .write(
-            user.user_id(),
-            user.shop(),
-            ApiWrite::PartNoteRemoveFile { id },
-        )
+        .write(Box::new(user), ApiWrite::PartNoteRemoveFile { id })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

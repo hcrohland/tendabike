@@ -37,7 +37,7 @@ use std::time::Duration;
 
 use log::{debug, error, warn};
 use tb_domain::{
-    ApiRead, ApiWrite, Error, ReadOutcome, ShopId, Summary, TbResult, WriteOutcome, exec,
+    ApiRead, ApiWrite, Error, ReadOutcome, Session, ShopId, Summary, TbResult, WriteOutcome, exec,
 };
 use tb_strava::event::{Event, QueueRead, get_event, insert_sync, process};
 use tb_strava::{StravaSession, StravaStat, StravaUser, get_all_stats};
@@ -656,23 +656,35 @@ where
     T: TxnSource,
     S: StravaSession,
 {
-    // The delivery context (spec #517, ticket #584): a write's shop travels
-    // with the request (the session's shop is retired — in production the
-    // executor's session has no shop), and the read/gear/stats lanes have no
-    // shop context (a read pushes no frame; gear hydration is the user's own
-    // gear; the stats read pushes no frame).
+    // The acting session (spec #517, ticket #588) travels with the write and
+    // read requests: the loop hands it to `exec`/`read` (so the domain op sees
+    // the real `shop()` context) and keys the delivery routing on it. The
+    // gear/stats lanes have no acting session (they run in the executor's own
+    // context — the user's own gear; a read/stats pushes no frame).
     match request {
-        Request::Write { write, shop, reply } => {
-            run_write(source, session, write, reply, frames, backoff, pusher, shop).await
+        Request::Write {
+            write,
+            session: acting,
+            reply,
+        } => {
+            run_write(
+                source, session, write, &*acting, reply, frames, backoff, pusher,
+            )
+            .await
         }
-        Request::Read { read, reply } => {
-            run_read(source, session, read, reply, frames, backoff, pusher, None).await
+        Request::Read {
+            read,
+            session: acting,
+            reply,
+        } => {
+            run_read(
+                source, session, read, &*acting, reply, frames, backoff, pusher,
+            )
+            .await
         }
-        Request::Gear { reply } => {
-            run_gear(source, session, reply, frames, backoff, pusher, None).await
-        }
+        Request::Gear { reply } => run_gear(source, session, reply, frames, backoff, pusher).await,
         Request::AllStats { reply } => {
-            run_all_stats(source, session, reply, frames, backoff, pusher, None).await
+            run_all_stats(source, session, reply, frames, backoff, pusher).await
         }
     }
 }
@@ -801,16 +813,16 @@ where
 /// failed `rollback` ends the loop with `Err` (the transaction's fate is not
 /// ours to reason about); any other continued path proves the database
 /// healthy and resets the backoff.
-#[allow(clippy::too_many_arguments)] // the write's eight wiring degrees of freedom
+#[allow(clippy::too_many_arguments)] // the write's wiring degrees of freedom
 async fn run_write<T, S>(
     source: &T,
     session: &mut S,
     write: ApiWrite,
+    acting: &dyn Session,
     reply: oneshot::Sender<TbResult<WriteOutcome>>,
     frames: &broadcast::Sender<Summary>,
     backoff: &mut DbBackoff,
     pusher: &dyn FramePusher,
-    shop: Option<ShopId>,
 ) -> Result<(), Error>
 where
     T: TxnSource,
@@ -823,6 +835,10 @@ where
         ApiWrite::UserOnboardingSync { time } => Some(*time),
         _ => None,
     };
+    // The delivery context is the acting session's shop (spec #517, ticket
+    // #588): the acting session carries the shop; the executor's session is
+    // for the Strava-only side (the onboarding `insert_sync`).
+    let shop = acting.shop();
     run_message(
         "write",
         "API write",
@@ -838,7 +854,7 @@ where
         |outcome| Some(outcome.summary()),
         |mut conn| async move {
             let outcome = async {
-                let outcome = exec(write, session, &mut conn).await?;
+                let outcome = exec(write, acting, &mut conn).await?;
                 if let Some(time) = onboarding_time {
                     insert_sync(session.strava_id(), time, false, &mut conn).await?;
                 }
@@ -867,16 +883,16 @@ where
 /// transaction that completes cleanly (committed, or rolled back after a
 /// domain error) **resets** the backoff, per the existing "any healthy
 /// transaction resets" rule. Only a failed `rollback` ends the loop.
-#[allow(clippy::too_many_arguments)] // the read's eight wiring degrees of freedom
+#[allow(clippy::too_many_arguments)] // the read's wiring degrees of freedom
 async fn run_read<T, S>(
     source: &T,
     session: &mut S,
     read: ApiRead,
+    acting: &dyn Session,
     reply: oneshot::Sender<TbResult<ReadOutcome>>,
     frames: &broadcast::Sender<Summary>,
     backoff: &mut DbBackoff,
     pusher: &dyn FramePusher,
-    shop: Option<ShopId>,
 ) -> Result<(), Error>
 where
     T: TxnSource,
@@ -892,10 +908,10 @@ where
         backoff,
         false, // a failed read never arms the backoff (spec #558 §3.7)
         pusher,
-        shop,
-        |_| None, // a read pushes no frame (spec #558 §3.6)
+        acting.shop(), // a read pushes no frame; the context is unused
+        |_| None,      // a read pushes no frame (spec #558 §3.6)
         |mut conn| async move {
-            let outcome = tb_domain::read(read, session, &mut conn).await;
+            let outcome = tb_domain::read(read, acting, &mut conn).await;
             (outcome, conn)
         },
     )
@@ -923,7 +939,6 @@ async fn run_gear<T, S>(
     frames: &broadcast::Sender<Summary>,
     backoff: &mut DbBackoff,
     pusher: &dyn FramePusher,
-    shop: Option<ShopId>,
 ) -> Result<(), Error>
 where
     T: TxnSource,
@@ -934,6 +949,10 @@ where
     // gear, then read back the parts it created — the frame is their union
     // (one entry per part, empty when nothing is new, spec #558 §4).
     let mut summary = Summary::default();
+    // The hydration runs in the executor's own context (the user's own gear):
+    // the delivery context is the executor's session shop (always `None` in
+    // production).
+    let shop = session.shop();
     run_message(
         "hydration",
         "hydration write",
@@ -974,13 +993,16 @@ async fn run_all_stats<T, S>(
     frames: &broadcast::Sender<Summary>,
     backoff: &mut DbBackoff,
     pusher: &dyn FramePusher,
-    shop: Option<ShopId>,
 ) -> Result<(), Error>
 where
     T: TxnSource,
     S: StravaSession,
 {
     debug!("user {}: Reading the all-user stats", session.tb_id());
+    // The stats read runs in the executor's own context (it pushes no frame);
+    // the delivery context is the executor's session shop (always `None` in
+    // production).
+    let shop = session.shop();
     run_message(
         "stats read",
         "all-user stats read",

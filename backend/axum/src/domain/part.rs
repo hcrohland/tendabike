@@ -36,7 +36,7 @@ use crate::{
     error::{ApiResult, AppError},
 };
 use serde_with::serde_as;
-use tb_domain::{ApiRead, ApiWrite, Part, PartId, PartTypeId, ReadOutcome, Session};
+use tb_domain::{ApiRead, ApiWrite, Part, PartId, PartTypeId, ReadOutcome};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 #[serde_as]
@@ -77,7 +77,7 @@ async fn get_part(
     user: RequestSession,
     State(state): State<AppState>,
 ) -> ApiResult<Part> {
-    match state.api.read(user.user_id(), ApiRead::Part(part)).await? {
+    match state.api.read(Box::new(user), ApiRead::Part(part)).await? {
         ReadOutcome::Part(part) => Ok(Json(part)),
         _ => Err(result_mismatch("part", "part")),
     }
@@ -99,8 +99,7 @@ async fn post_part(
     let outcome = state
         .api
         .write(
-            user.user_id(),
-            user.shop(),
+            Box::new(user),
             ApiWrite::PartCreate {
                 name,
                 vendor,
@@ -121,11 +120,7 @@ async fn delete_part(
 ) -> Result<StatusCode, AppError> {
     state
         .api
-        .write(
-            user.user_id(),
-            user.shop(),
-            ApiWrite::PartDelete { id: part },
-        )
+        .write(Box::new(user), ApiWrite::PartDelete { id: part })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -144,8 +139,7 @@ async fn put_part(
     state
         .api
         .write(
-            user.user_id(),
-            user.shop(),
+            Box::new(user),
             ApiWrite::PartChange {
                 id: part,
                 name,
@@ -164,7 +158,7 @@ async fn mycats(
 ) -> ApiResult<HashSet<PartTypeId>> {
     match state
         .api
-        .read(user.user_id(), ApiRead::PartCategories)
+        .read(Box::new(user), ApiRead::PartCategories)
         .await?
     {
         ReadOutcome::PartCategories(categories) => Ok(Json(categories)),

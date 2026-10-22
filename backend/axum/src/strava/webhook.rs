@@ -62,7 +62,7 @@ use crate::{
     ApiResult, AxumAdmin, RequestSession, appstate::AppState, domain::result_mismatch,
     error::AppError,
 };
-use tb_domain::{ApiRead, ApiWrite, Error, ReadOutcome, Session, TbResult};
+use tb_domain::{ApiRead, ApiWrite, Error, ReadOutcome, TbResult};
 use tb_strava::event::InEvent;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -178,12 +178,11 @@ pub(crate) async fn trigger_initial_sync(
     state
         .api
         .write(
-            user.user_id(),
-            user.shop(),
+            Box::new(user.clone()),
             ApiWrite::UserOnboardingSync { time: query.time },
         )
         .await?;
-    match state.api.read(user.user_id(), ApiRead::UserRecord).await? {
+    match state.api.read(Box::new(user), ApiRead::UserRecord).await? {
         ReadOutcome::UserRecord(user) => Ok(Json(user)),
         _ => Err(result_mismatch("user", "user record")),
     }
@@ -202,13 +201,9 @@ pub(crate) async fn postpone_initial_sync(
     // (the light record-only read — no `Summary` computation needed).
     state
         .api
-        .write(
-            user.user_id(),
-            user.shop(),
-            ApiWrite::UserOnboardingPostpone,
-        )
+        .write(Box::new(user.clone()), ApiWrite::UserOnboardingPostpone)
         .await?;
-    match state.api.read(user.user_id(), ApiRead::UserRecord).await? {
+    match state.api.read(Box::new(user), ApiRead::UserRecord).await? {
         ReadOutcome::UserRecord(user) => Ok(Json(user)),
         _ => Err(result_mismatch("user", "user record")),
     }

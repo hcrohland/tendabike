@@ -209,10 +209,6 @@ impl Session for TestStravaSession {
         None
     }
 
-    fn set_shop(&mut self, _shop: Option<ShopId>) -> TbResult<()> {
-        Ok(())
-    }
-
     fn is_admin(&self) -> bool {
         self.admin
     }

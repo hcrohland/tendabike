@@ -75,7 +75,7 @@ async fn ready_probe(probe: Probe) -> Option<Probe> {
 }
 
 fn request() -> (Request, oneshot::Receiver<TbResult<WriteOutcome>>) {
-    Request::new_write(ApiWrite::UserOnboardingPostpone, None)
+    Request::new_write(ApiWrite::UserOnboardingPostpone, Box::new(UnitSession))
 }
 
 // --- `next_action`: the reclaim decision ---
@@ -376,7 +376,7 @@ fn request_bundles_write_and_reply() {
 fn request_bundles_read_and_reply() {
     // The read variant bundles the `ApiRead` descriptor and its oneshot the
     // same way the write does (spec #558 §3.2).
-    let (req, mut reply) = Request::new_read(ApiRead::PartCategories);
+    let (req, mut reply) = Request::new_read(ApiRead::PartCategories, Box::new(UnitSession));
     assert!(
         matches!(
             reply.try_recv(),
@@ -994,9 +994,6 @@ impl Session for UnitSession {
     fn shop(&self) -> Option<ShopId> {
         None
     }
-    fn set_shop(&mut self, _shop: Option<ShopId>) -> TbResult<()> {
-        Ok(())
-    }
     fn is_admin(&self) -> bool {
         false
     }
@@ -1030,9 +1027,6 @@ impl Session for GearSession {
     }
     fn shop(&self) -> Option<ShopId> {
         None
-    }
-    fn set_shop(&mut self, _shop: Option<ShopId>) -> TbResult<()> {
-        Ok(())
     }
     fn is_admin(&self) -> bool {
         false
@@ -1074,9 +1068,6 @@ impl Session for EmptyGearSession {
     }
     fn shop(&self) -> Option<ShopId> {
         None
-    }
-    fn set_shop(&mut self, _shop: Option<ShopId>) -> TbResult<()> {
-        Ok(())
     }
     fn is_admin(&self) -> bool {
         false
@@ -1171,9 +1162,6 @@ impl Session for ShopSession {
     fn shop(&self) -> Option<ShopId> {
         Some(self.shop_id)
     }
-    fn set_shop(&mut self, _shop: Option<ShopId>) -> TbResult<()> {
-        Ok(())
-    }
     fn is_admin(&self) -> bool {
         false
     }
@@ -1229,7 +1217,7 @@ async fn select_read_wins_over_ready_strava() {
     // Both ready at the same instant: the request branch (a read) is polled
     // first — a read is never delayed by the Strava side (spec #558 §3.7).
     let (tx, mut rx) = request_channel();
-    let (req, _reply) = Request::new_read(ApiRead::PartCategories);
+    let (req, _reply) = Request::new_read(ApiRead::PartCategories, Box::new(UnitSession));
     let _ = tx.send(req);
     let wake = tokio::sync::Notify::new();
     let mut wake_fut = Box::pin(wake.notified());
@@ -1259,7 +1247,7 @@ async fn read_arriving_during_a_sleep_is_taken_immediately() {
     });
     // Let the task park in the 30s sleep, then enqueue the read.
     tokio::time::sleep(Duration::from_millis(50)).await;
-    let (req, _reply) = Request::new_read(ApiRead::PartCategories);
+    let (req, _reply) = Request::new_read(ApiRead::PartCategories, Box::new(UnitSession));
     tx.send(req).expect("the channel is open");
     let got = tokio::time::timeout(Duration::from_secs(5), task)
         .await
@@ -1285,7 +1273,7 @@ async fn failed_read_never_arms_the_backoff_and_the_loop_survives() {
     backoff.record_failure();
     backoff.record_failure(); // prime: the next pause would be 4s
     let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_read(ApiRead::PartCategories);
+    let (request, reply) = Request::new_read(ApiRead::PartCategories, Box::new(UnitSession));
     let pusher = RecordingPusher::new();
     let result = run_request(
         &source,
@@ -1320,7 +1308,8 @@ async fn domain_failed_read_resets_the_backoff_and_the_loop_survives() {
     backoff.record_failure();
     backoff.record_failure(); // prime: the next pause would be 4s
     let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_read(ApiRead::Part(PartId::from(999_999)));
+    let (request, reply) =
+        Request::new_read(ApiRead::Part(PartId::from(999_999)), Box::new(UnitSession));
     let pusher = RecordingPusher::new();
     let result = run_request(
         &source,
@@ -1355,7 +1344,7 @@ async fn cleanly_committed_read_resets_the_backoff() {
     backoff.record_failure();
     backoff.record_failure(); // prime: the next pause would be 4s
     let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_read(ApiRead::User { shop: None });
+    let (request, reply) = Request::new_read(ApiRead::User, Box::new(UnitSession));
     let pusher = RecordingPusher::new();
     let result = run_request(
         &source,
@@ -1845,13 +1834,12 @@ async fn deliver_shop_context_to_shop_owner_when_part_owner() {
 
 #[tokio::test]
 async fn run_request_shop_context_routes_via_pusher_not_own_stream() {
-    // Wiring: a write carrying a shop context (`shop: Some`) routes the
+    // Wiring: a write whose acting session is in a shop context routes the
     // committed `Summary`'s frame through the pusher (shop stream + part
     // owner) and NOT the executor's own `frames` channel. The routing keys on
-    // the **write's** shop (not the session's — see the production-path test
-    // below); here the session is also in a shop context, matching the write.
-    // The part created by `PartCreate` is owned by the session user (1) — the
-    // part owner.
+    // the **acting session's** `shop()` (see the production-path test
+    // below); here the acting session is in a shop context. The part created
+    // by `PartCreate` is owned by the session user (1) — the part owner.
     let source = FakeSource { begin_fails: false };
     let mut session = ShopSession {
         shop_id: ShopId::from(7),
@@ -1867,7 +1855,9 @@ async fn run_request_shop_context_routes_via_pusher_not_own_stream() {
             what: CHAIN,
             purchase: sample_purchase_date(),
         },
-        Some(ShopId::from(7)),
+        Box::new(ShopSession {
+            shop_id: ShopId::from(7),
+        }),
     );
 
     let result = run_request(
@@ -1916,16 +1906,17 @@ async fn run_request_shop_context_routes_via_pusher_not_own_stream() {
 
 #[tokio::test]
 async fn write_shop_context_flows_through_the_production_path() {
-    // The production path (spec #517, ticket #584): the shop travels with the
-    // **write**, not the session. In production the executor's session has no
-    // shop (`StravaUserSession::shop()` is always `None`), so a user-context
-    // session (`UnitSession`, `shop() == None`) plus a write carrying
-    // `shop: Some(shop_id)` must route the committed `Summary` to the shop
-    // stream and the part owner's personal stream — and NOT to the executor's
-    // own `frames` channel. This is the test that catches the bug where the
-    // routing keyed on `session.shop()` (always `None` in production), which
-    // left the shop stream dead and leaked the frame into the shop owner's
-    // personal stream.
+    // The production path (spec #517, ticket #588): the shop travels with the
+    // **acting session**, not the executor's session. In production the
+    // executor's session has no shop (`StravaUserSession::shop()` is always
+    // `None`), so a user-context executor session (`UnitSession`,
+    // `shop() == None`) plus a shop-context acting session (`ShopSession`,
+    // `shop() == Some(shop_id)`) must route the committed `Summary` to the
+    // shop stream and the part owner's personal stream — and NOT to the
+    // executor's own `frames` channel. This is the test that catches the bug
+    // where the routing keyed on the executor's `session.shop()` (always
+    // `None` in production), which left the shop stream dead and leaked the
+    // frame into the shop owner's personal stream.
     let source = FakeSource { begin_fails: false };
     let mut session = UnitSession; // user context: shop() == None (production)
     let mut backoff = DbBackoff::new();
@@ -1940,7 +1931,9 @@ async fn write_shop_context_flows_through_the_production_path() {
             what: CHAIN,
             purchase: sample_purchase_date(),
         },
-        Some(ShopId::from(7)),
+        Box::new(ShopSession {
+            shop_id: ShopId::from(7),
+        }),
     );
 
     let result = run_request(

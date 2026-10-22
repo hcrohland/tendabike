@@ -56,8 +56,8 @@ use oauth2::RefreshToken;
 use tokio::sync::{Mutex, Notify, broadcast, oneshot, watch};
 
 use tb_domain::{
-    Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, ShopId, ShopStore,
-    Summary, TbResult, UserId, WriteOutcome,
+    Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId,
+    ShopStore, Summary, TbResult, UserId, WriteOutcome,
 };
 use tb_strava::{
     StravaDataStore, StravaId, StravaStat, StravaUser, StravaUserSession, activity,
@@ -486,8 +486,9 @@ where
     /// (read-only within it by spec) and resolves the [`ReadOutcome`] —
     /// the route maps a `Err` through the existing `AppError` helper,
     /// exactly as today.
-    async fn read(&self, user_id: UserId, read: ApiRead) -> TbResult<ReadOutcome> {
-        let (request, reply) = Request::new_read(read);
+    async fn read(&self, session: Box<dyn Session>, read: ApiRead) -> TbResult<ReadOutcome> {
+        let user_id = session.user_id();
+        let (request, reply) = Request::new_read(read, session);
         self.send_request(user_id, request, reply, "read").await
     }
 
@@ -498,13 +499,9 @@ where
     /// behavior. The route projects its payload: a create's `201` entity
     /// or the descend's report body from the `WriteOutcome`, a `204`
     /// otherwise.
-    async fn write(
-        &self,
-        user_id: UserId,
-        shop: Option<ShopId>,
-        write: ApiWrite,
-    ) -> TbResult<WriteOutcome> {
-        let (request, reply) = Request::new_write(write, shop);
+    async fn write(&self, session: Box<dyn Session>, write: ApiWrite) -> TbResult<WriteOutcome> {
+        let user_id = session.user_id();
+        let (request, reply) = Request::new_write(write, session);
         self.send_request(user_id, request, reply, "write").await
     }
 
