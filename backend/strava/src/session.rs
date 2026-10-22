@@ -21,26 +21,22 @@
 //! The concrete [`StravaSession`].
 //!
 //! The token-refresh machinery (`check_token`/`refresh_the_token`/
-//! `get_strava`/`request_json`/`deauthorize`) depends only on
-//! `&mut impl StravaDataStore` plus the Strava client. The web layer's
-//! request session keeps its tower-session half and its impersonation
-//! constructor for the HTTP path; the two types deliberately diverge (the
-//! request session is serialized into the tower session and carries
-//! `shop`; this one is in-memory and loop-scoped).
-
-use std::time::SystemTime;
+//! `get_strava`) lives in the shared [`StravaTokens`] helper (see
+//! [`crate::token`]); this session is the loop-scoped driver. It embeds a
+//! [`StravaTokens`] and persists a refreshed token to the DB via
+//! [`DbTokenPersistence`]. The web layer's request session keeps its
+//! tower-session half and its impersonation constructor for the HTTP path; the
+//! two types deliberately diverge (the request session is serialized into the
+//! tower session and carries `shop`; this one is in-memory and loop-scoped).
 
 use anyhow::Context;
-use http::StatusCode;
 use log::{debug, trace};
-use oauth2::{AccessToken, RefreshToken, TokenResponse};
 use serde::de::DeserializeOwned;
 
 use crate::client::{HTTP_CLIENT, STRAVACLIENT};
+use crate::token::{DbTokenPersistence, StravaTokens};
 use crate::{StravaDataStore, StravaId, StravaSession, StravaStore, StravaUser};
-use tb_domain::{Error, Session as TbSession, ShopId, TbResult, UserId};
-
-const API: &str = "https://www.strava.com/api/v3";
+use tb_domain::{Session as TbSession, ShopId, TbResult, UserId};
 
 /// The concrete [`StravaSession`] (spec #558 §6.2): the user's
 /// identity plus the Strava API client, with the token-refresh machinery
@@ -49,111 +45,30 @@ pub struct StravaUserSession {
     id: UserId,
     strava_id: StravaId,
     is_admin: bool,
-    access_token: AccessToken,
-    expires_at: Option<SystemTime>,
-    refresh_token: Option<RefreshToken>,
+    tokens: StravaTokens,
 }
 
 impl StravaUserSession {
     /// Build the session for a user from their stored
-    /// [`StravaUser`] (the refresh token): an empty access token with a
-    /// past expiry, so the first Strava request forces a token refresh
-    /// (spec #558 §6.2).
+    /// [`StravaUser`] (the refresh token): a cold token state (an empty
+    /// access token with a past expiry), so the first Strava request forces a
+    /// token refresh (spec #558 §6.2).
     pub async fn for_user(user: UserId, store: &mut impl StravaStore) -> TbResult<Self> {
         let user = StravaUser::read(user, store).await?;
 
         let strava_id = user.strava_id();
         let id = user.tb_id();
         let is_admin = id.is_admin(store).await?;
-        let refresh_token = user.refresh_token();
+
+        let mut tokens = StravaTokens::cold();
+        tokens.refresh_token = user.refresh_token();
 
         Ok(Self {
             id,
             strava_id,
             is_admin,
-            access_token: AccessToken::new(String::default()),
-            expires_at: Some(SystemTime::UNIX_EPOCH),
-            refresh_token,
+            tokens,
         })
-    }
-
-    fn is_expired(&self) -> bool {
-        match self.expires_at {
-            Some(expires_at) => SystemTime::now() > expires_at,
-            None => false,
-        }
-    }
-
-    async fn refresh_the_token(&mut self, store: &mut impl StravaDataStore) -> TbResult<()> {
-        let token = match self.refresh_token.clone() {
-            Some(token) => token,
-            None => {
-                return Err(Error::NotAuth(
-                    "No Refresh Token provided and Access Token expired".to_string(),
-                ));
-            }
-        };
-        debug!("refreshing token for user {}", self.id);
-        let token = match STRAVACLIENT
-            .exchange_refresh_token(&token)
-            .request_async(&*HTTP_CLIENT)
-            .await
-        {
-            Ok(token) => token,
-            Err(err) => return Err(Error::NotAuth(err.to_string())),
-        };
-        self.access_token = token.access_token().clone();
-        self.expires_at = token.expires_in().map(|d| SystemTime::now() + d);
-        self.refresh_token = token.refresh_token().cloned();
-        let refresh = token.refresh_token().map(|t| t.secret());
-        self.strava_id.update_token(refresh, store).await?;
-        Ok(())
-    }
-
-    async fn get_strava(
-        &mut self,
-        uri: &str,
-        store: &mut impl StravaDataStore,
-    ) -> TbResult<reqwest::Response> {
-        self.check_token(store).await?;
-
-        let resp = reqwest::Client::new()
-            .get(format!("{API}{uri}"))
-            .bearer_auth(self.access_token.secret())
-            .send()
-            .await
-            .context("Could not reach strava")?;
-
-        let status = resp.status();
-        if status.is_success() {
-            return Ok(resp);
-        }
-
-        match status {
-            StatusCode::TOO_MANY_REQUESTS
-            | StatusCode::BAD_GATEWAY
-            | StatusCode::SERVICE_UNAVAILABLE
-            | StatusCode::GATEWAY_TIMEOUT => {
-                Err(Error::TryAgain(status.canonical_reason().unwrap()))
-            }
-            StatusCode::UNAUTHORIZED => Err(Error::NotAuth(format!(
-                "Strava request authorization withdrawn for {uri}"
-            ))),
-            _ => Err(Error::BadRequest(format!(
-                "Strava request error: {}",
-                status
-                    .canonical_reason()
-                    .unwrap_or("Unknown status received")
-            ))),
-        }
-    }
-
-    async fn check_token(&mut self, store: &mut impl StravaDataStore) -> TbResult<()> {
-        if self.is_expired() {
-            debug!("access token for user {} is expired", self.id);
-            return self.refresh_the_token(store).await;
-        }
-        Ok(())
     }
 }
 
@@ -188,8 +103,10 @@ impl StravaSession for StravaUserSession {
         if let Some(json) = crate::test_support::canned_response(uri) {
             return Ok(serde_json::from_str(&json).context("Could not parse response body")?);
         }
+        let mut persist = DbTokenPersistence::new(self.strava_id, store);
         let r = self
-            .get_strava(uri, store)
+            .tokens
+            .get_strava(uri, &self.id, &mut persist)
             .await?
             .text()
             .await
@@ -199,12 +116,13 @@ impl StravaSession for StravaUserSession {
     }
 
     async fn deauthorize(&mut self, store: &mut impl StravaDataStore) -> TbResult<()> {
-        self.check_token(store).await?;
+        let mut persist = DbTokenPersistence::new(self.strava_id, store);
+        self.tokens.check_token(&self.id, &mut persist).await?;
 
         STRAVACLIENT
-            .revoke_token(self.access_token.clone().into())
+            .revoke_token(self.tokens.access_token.clone().into())
             .context("revoke token config error")?
-            .add_extra_param("access_token", self.access_token.secret()) // Strava does not follow the standard.
+            .add_extra_param("access_token", self.tokens.access_token.secret()) // Strava does not follow the standard.
             .request_async(&*HTTP_CLIENT)
             .await
             .context("token exchange failed")?;
@@ -216,31 +134,31 @@ impl StravaSession for StravaUserSession {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
 
-    fn dummy(expires_at: Option<SystemTime>) -> StravaUserSession {
-        StravaUserSession {
-            id: UserId::from(1),
-            strava_id: StravaId::from(1),
-            is_admin: true,
-            access_token: AccessToken::new("test-access-token".to_owned()),
-            expires_at,
-            refresh_token: Some(RefreshToken::new("test-refresh-token".to_owned())),
-        }
-    }
+    use crate::test_support::{TestStravaStore, strava_user};
+    use tb_domain::UserStore;
 
-    #[test]
-    fn expired_when_access_token_expired() {
-        assert!(dummy(Some(SystemTime::now() - Duration::from_secs(1))).is_expired());
-    }
+    /// The loop-scoped session is built cold from the DB's refresh token: an
+    /// empty, expired access token (so the first request forces a refresh)
+    /// plus the stored refresh token.
+    #[tokio::test]
+    async fn for_user_builds_a_cold_session() -> TbResult<()> {
+        let mut store = TestStravaStore::new();
+        UserStore::create(&mut store.mem, "Tenda", "Bike", &None).await?;
+        store.insert_user(strava_user(UserId::from(1), 42, true));
 
-    #[test]
-    fn not_expired_when_access_token_valid() {
-        assert!(!dummy(Some(SystemTime::now() + Duration::from_secs(3600))).is_expired());
-    }
+        let session = StravaUserSession::for_user(UserId::from(1), &mut store).await?;
 
-    #[test]
-    fn not_expired_when_expiry_unknown() {
-        assert!(!dummy(None).is_expired());
+        assert!(session.tokens.is_expired());
+        assert_eq!(session.tokens.access_token.secret(), "");
+        assert_eq!(
+            session
+                .tokens
+                .refresh_token
+                .as_ref()
+                .map(|t| t.secret().to_string()),
+            Some("test-token".to_string())
+        );
+        Ok(())
     }
 }
