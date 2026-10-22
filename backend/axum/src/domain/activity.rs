@@ -36,6 +36,7 @@ async fn def_part_api(
         .api
         .write(
             user.user_id(),
+            user.shop(),
             ApiWrite::ActivityDefaultGear { gear: gear_id },
         )
         .await?;
@@ -84,6 +85,7 @@ async fn act_put(
         .api
         .write(
             user.user_id(),
+            user.shop(),
             ApiWrite::ActivityUpdate {
                 id: ActivityId::from(id),
                 activity,
@@ -103,6 +105,7 @@ async fn act_delete(
         .api
         .write(
             user.user_id(),
+            user.shop(),
             ApiWrite::ActivityDelete {
                 id: ActivityId::new(id),
             },
@@ -127,7 +130,11 @@ async fn descend(
     // any other outcome is a bug, guarded by the outcome mismatch.
     let report = match state
         .api
-        .write(user.user_id(), ApiWrite::ActivityDescend { data })
+        .write(
+            user.user_id(),
+            user.shop(),
+            ApiWrite::ActivityDescend { data },
+        )
         .await?
     {
         WriteOutcome::Descend { report, .. } => report,

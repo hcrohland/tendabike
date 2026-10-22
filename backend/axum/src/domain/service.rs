@@ -63,6 +63,7 @@ async fn create(
         .api
         .write(
             user.user_id(),
+            user.shop(),
             ApiWrite::ServiceCreate {
                 part: part_id,
                 time,
@@ -83,7 +84,11 @@ async fn update(
 ) -> Result<StatusCode, AppError> {
     state
         .api
-        .write(user.user_id(), ApiWrite::ServiceUpdate { service })
+        .write(
+            user.user_id(),
+            user.shop(),
+            ApiWrite::ServiceUpdate { service },
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -95,7 +100,7 @@ async fn delete_service(
 ) -> Result<StatusCode, AppError> {
     state
         .api
-        .write(user.user_id(), ApiWrite::ServiceDelete { id })
+        .write(user.user_id(), user.shop(), ApiWrite::ServiceDelete { id })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -107,7 +112,11 @@ async fn redo(
 ) -> Result<StatusCode, AppError> {
     state
         .api
-        .write(user.user_id(), ApiWrite::ServiceRedo { service })
+        .write(
+            user.user_id(),
+            user.shop(),
+            ApiWrite::ServiceRedo { service },
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

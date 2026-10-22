@@ -179,6 +179,7 @@ pub(crate) async fn trigger_initial_sync(
         .api
         .write(
             user.user_id(),
+            user.shop(),
             ApiWrite::UserOnboardingSync { time: query.time },
         )
         .await?;
@@ -201,7 +202,11 @@ pub(crate) async fn postpone_initial_sync(
     // (the light record-only read — no `Summary` computation needed).
     state
         .api
-        .write(user.user_id(), ApiWrite::UserOnboardingPostpone)
+        .write(
+            user.user_id(),
+            user.shop(),
+            ApiWrite::UserOnboardingPostpone,
+        )
         .await?;
     match state.api.read(user.user_id(), ApiRead::UserRecord).await? {
         ReadOutcome::UserRecord(user) => Ok(Json(user)),

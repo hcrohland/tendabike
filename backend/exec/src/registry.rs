@@ -284,6 +284,7 @@ where
     /// and has a receiver (the "open shop" check, spec #517). Dead channels
     /// (no receiver) are reaped on the way, so this is the observable form
     /// of "the channel is dropped when its last receiver disconnects".
+    #[cfg(test)]
     pub async fn shop_open(&self, shop_id: ShopId) -> bool {
         let mut map = self.shop_streams.lock().await;
         Self::reap_shop_streams(&mut map);
@@ -295,6 +296,7 @@ where
     /// don't have) and return a receiver on its frame channel. The
     /// executor's fate is `status`. The task handle is a completed task (its
     /// `AbortHandle` is valid; `abort` on it is a no-op), so no task leaks.
+    #[cfg(test)]
     pub async fn install_executor_for_test(
         &self,
         user_id: UserId,
@@ -496,8 +498,13 @@ where
     /// behavior. The route projects its payload: a create's `201` entity
     /// or the descend's report body from the `WriteOutcome`, a `204`
     /// otherwise.
-    async fn write(&self, user_id: UserId, write: ApiWrite) -> TbResult<WriteOutcome> {
-        let (request, reply) = Request::new_write(write);
+    async fn write(
+        &self,
+        user_id: UserId,
+        shop: Option<ShopId>,
+        write: ApiWrite,
+    ) -> TbResult<WriteOutcome> {
+        let (request, reply) = Request::new_write(write, shop);
         self.send_request(user_id, request, reply, "write").await
     }
 

@@ -50,6 +50,7 @@ async fn attach_rt(
         .api
         .write(
             user.user_id(),
+            user.shop(),
             ApiWrite::AttachmentAttach {
                 part: part_id,
                 time,
@@ -76,6 +77,7 @@ async fn detach_rt(
         .api
         .write(
             user.user_id(),
+            user.shop(),
             ApiWrite::AttachmentDetach {
                 part: part_id,
                 time,
@@ -109,6 +111,7 @@ async fn dispose_rt(
         .api
         .write(
             user.user_id(),
+            user.shop(),
             ApiWrite::AttachmentDispose { part, time, all },
         )
         .await?;
@@ -126,7 +129,11 @@ async fn recover_rt(
     } = event;
     state
         .api
-        .write(user.user_id(), ApiWrite::AttachmentRecover { part, all })
+        .write(
+            user.user_id(),
+            user.shop(),
+            ApiWrite::AttachmentRecover { part, all },
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

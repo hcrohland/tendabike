@@ -87,7 +87,11 @@ async fn create_text_note(
 ) -> Result<(StatusCode, Json<PartNote>), AppError> {
     let outcome = state
         .api
-        .write(user.user_id(), ApiWrite::PartNoteCreateText { part, name })
+        .write(
+            user.user_id(),
+            user.shop(),
+            ApiWrite::PartNoteCreateText { part, name },
+        )
         .await?;
     let note = created_entity(&outcome.summary().part_notes, "part note")?;
     Ok((StatusCode::CREATED, Json(note)))
@@ -151,6 +155,7 @@ async fn create_file_note(
         .api
         .write(
             user.user_id(),
+            user.shop(),
             ApiWrite::PartNoteCreateFile {
                 part,
                 file: NoteFile {
@@ -225,7 +230,11 @@ async fn update_text_note(
 ) -> Result<StatusCode, AppError> {
     state
         .api
-        .write(user.user_id(), ApiWrite::PartNoteUpdateText { id, name })
+        .write(
+            user.user_id(),
+            user.shop(),
+            ApiWrite::PartNoteUpdateText { id, name },
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -241,6 +250,7 @@ async fn update_file_note(
         .api
         .write(
             user.user_id(),
+            user.shop(),
             ApiWrite::PartNoteUpdateFile {
                 id,
                 file: NoteFile {
@@ -262,7 +272,7 @@ async fn delete_note(
 ) -> Result<StatusCode, AppError> {
     state
         .api
-        .write(user.user_id(), ApiWrite::PartNoteDelete { id })
+        .write(user.user_id(), user.shop(), ApiWrite::PartNoteDelete { id })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -274,7 +284,11 @@ async fn remove_file_note(
 ) -> Result<StatusCode, AppError> {
     state
         .api
-        .write(user.user_id(), ApiWrite::PartNoteRemoveFile { id })
+        .write(
+            user.user_id(),
+            user.shop(),
+            ApiWrite::PartNoteRemoveFile { id },
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

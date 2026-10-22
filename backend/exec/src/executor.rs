@@ -262,10 +262,10 @@ pub(crate) async fn deliver_frame(
         Some(shop_id) => {
             pusher.push_to_shop(shop_id, summary.clone()).await;
             // The single-owner `Summary`: every part shares one owner (a
-            // domain-layer invariant), so the first live part's owner is the
-            // unambiguous `push_to_user` target. No parts (defensive) → no
-            // part-owner target, but the shop stream still gets the frame.
-            if let Some(owner) = summary.parts.live().first().map(|part| part.owner) {
+            // domain-layer invariant), so the part owner is the unambiguous
+            // `push_to_user` target. No parts (defensive) → no part-owner
+            // target, but the shop stream still gets the frame.
+            if let Some(owner) = summary.part_owner() {
                 pusher.push_to_user(owner, summary.clone()).await;
             }
         }
@@ -656,21 +656,23 @@ where
     T: TxnSource,
     S: StravaSession,
 {
-    // The delivery context (spec #517, ticket #584): the session's shop
-    // determines where a committed `Summary`'s frame is routed.
-    let shop = session.shop();
+    // The delivery context (spec #517, ticket #584): a write's shop travels
+    // with the request (the session's shop is retired — in production the
+    // executor's session has no shop), and the read/gear/stats lanes have no
+    // shop context (a read pushes no frame; gear hydration is the user's own
+    // gear; the stats read pushes no frame).
     match request {
-        Request::Write { write, reply } => {
+        Request::Write { write, shop, reply } => {
             run_write(source, session, write, reply, frames, backoff, pusher, shop).await
         }
         Request::Read { read, reply } => {
-            run_read(source, session, read, reply, frames, backoff, pusher, shop).await
+            run_read(source, session, read, reply, frames, backoff, pusher, None).await
         }
         Request::Gear { reply } => {
-            run_gear(source, session, reply, frames, backoff, pusher, shop).await
+            run_gear(source, session, reply, frames, backoff, pusher, None).await
         }
         Request::AllStats { reply } => {
-            run_all_stats(source, session, reply, frames, backoff, pusher, shop).await
+            run_all_stats(source, session, reply, frames, backoff, pusher, None).await
         }
     }
 }
@@ -1058,10 +1060,11 @@ where
     match process(session, &mut conn).await {
         Ok(summary) => match conn.commit().await {
             Ok(()) => {
-                // Route the event's `Summary` by the session's context
-                // (spec #517, ticket #584), then announce the consumed event
-                // (spec §6.4) for good, empty summary or not.
-                deliver_frame(pusher, frames, session.shop(), &summary).await;
+                // Route the event's `Summary`: a Strava event is the user's
+                // own parts, so no shop context (spec #517, ticket #584) —
+                // the executor's own personal stream. Then announce the
+                // consumed event (spec §6.4) for good, empty summary or not.
+                deliver_frame(pusher, frames, None, &summary).await;
                 let _ = events.send(event.clone());
                 backoff.reset();
                 Ok(())

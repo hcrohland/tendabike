@@ -1060,7 +1060,7 @@ async fn create_part_returns_201_and_entity() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(summary_with_part())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(summary_with_part())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run_json(
@@ -1085,7 +1085,7 @@ async fn update_part_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
@@ -1106,7 +1106,7 @@ async fn delete_part_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(app, Method::DELETE, "/api/part/1", Some(&cookie)).await;
@@ -1120,7 +1120,7 @@ async fn create_text_note_returns_201_and_entity() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(summary_with_note())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(summary_with_note())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run_json(
@@ -1144,16 +1144,18 @@ async fn create_text_note_returns_201_and_entity() {
 #[tokio::test]
 async fn create_file_note_returns_201_and_entity() {
     let (store, mut mock) = mock_ctx();
-    mock.expect_write().times(1).returning(|_uid, _write| {
-        Ok(WriteOutcome::Summary(Summary {
-            part_notes: {
-                let mut m = tb_domain::IdKeyedMap::default();
-                m.upsert(file_note());
-                m
-            },
-            ..Summary::default()
-        }))
-    });
+    mock.expect_write()
+        .times(1)
+        .returning(|_uid, _shop, _write| {
+            Ok(WriteOutcome::Summary(Summary {
+                part_notes: {
+                    let mut m = tb_domain::IdKeyedMap::default();
+                    m.upsert(file_note());
+                    m
+                },
+                ..Summary::default()
+            }))
+        });
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let multipart = concat!(
@@ -1189,7 +1191,7 @@ async fn update_text_note_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
@@ -1210,7 +1212,7 @@ async fn update_file_note_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let multipart = concat!(
@@ -1239,7 +1241,7 @@ async fn remove_file_note_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) =
@@ -1254,7 +1256,7 @@ async fn delete_note_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) =
@@ -1269,7 +1271,7 @@ async fn create_shop_returns_201_and_entity() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(summary_with_shop())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(summary_with_shop())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run_json(
@@ -1294,7 +1296,7 @@ async fn update_shop_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
@@ -1315,7 +1317,7 @@ async fn delete_shop_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(app, Method::DELETE, "/api/shop/1", Some(&cookie)).await;
@@ -1329,7 +1331,7 @@ async fn register_shop_part_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
@@ -1350,7 +1352,7 @@ async fn unregister_shop_part_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) =
@@ -1367,7 +1369,7 @@ async fn create_subscription_returns_201_and_entity() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     mock.expect_read().times(1).returning(|_uid, _read| {
         Ok(ReadOutcome::ShopSubscriptions(vec![
             subscription_with_details(),
@@ -1397,7 +1399,7 @@ async fn approve_subscription_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
@@ -1418,7 +1420,7 @@ async fn reject_subscription_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
@@ -1439,7 +1441,7 @@ async fn cancel_subscription_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(
@@ -1459,7 +1461,7 @@ async fn update_activity_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
@@ -1480,7 +1482,7 @@ async fn delete_activity_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(app, Method::DELETE, "/api/activ/1", Some(&cookie)).await;
@@ -1494,7 +1496,7 @@ async fn default_gear_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
@@ -1516,15 +1518,17 @@ async fn default_gear_returns_204() {
 #[tokio::test]
 async fn descend_answers_with_match_report() {
     let (store, mut mock) = mock_ctx();
-    mock.expect_write().times(1).returning(|_uid, _write| {
-        Ok(WriteOutcome::Descend {
-            summary: Summary::default(),
-            report: DescendReport {
-                good: vec!["Morning Ride at 2023-05-18 22:13:20".to_string()],
-                bad: vec!["Phantom Ride at 2023-06-01 08:00:00".to_string()],
-            },
-        })
-    });
+    mock.expect_write()
+        .times(1)
+        .returning(|_uid, _shop, _write| {
+            Ok(WriteOutcome::Descend {
+                summary: Summary::default(),
+                report: DescendReport {
+                    good: vec!["Morning Ride at 2023-05-18 22:13:20".to_string()],
+                    bad: vec!["Phantom Ride at 2023-06-01 08:00:00".to_string()],
+                },
+            })
+        });
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let csv = "Date,Title,Total Descent\n2023-05-18 22:13:20,Morning Ride,900\n2023-06-01 08:00:00,Phantom Ride,500\n";
@@ -1544,7 +1548,7 @@ async fn attach_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
@@ -1565,7 +1569,7 @@ async fn detach_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
@@ -1586,7 +1590,7 @@ async fn dispose_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
@@ -1607,7 +1611,7 @@ async fn recover_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
@@ -1628,7 +1632,7 @@ async fn create_service_returns_201_and_entity() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(summary_with_service())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(summary_with_service())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run_json(
@@ -1653,7 +1657,7 @@ async fn update_service_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
@@ -1674,7 +1678,7 @@ async fn delete_service_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(
@@ -1694,7 +1698,7 @@ async fn redo_service_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
@@ -1715,7 +1719,7 @@ async fn create_plan_returns_201_and_entity() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(summary_with_plan())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(summary_with_plan())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, body) = run_json(
@@ -1740,7 +1744,7 @@ async fn update_plan_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
@@ -1761,7 +1765,7 @@ async fn delete_plan_returns_204() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run(
@@ -1784,7 +1788,7 @@ async fn onboarding_sync_returns_200_and_user() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     mock.expect_read()
         .times(1)
         .returning(|_uid, _read| Ok(ReadOutcome::UserRecord(user())));
@@ -1812,7 +1816,7 @@ async fn onboarding_postpone_returns_200_and_user() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Ok(WriteOutcome::Summary(Summary::default())));
+        .returning(|_uid, _shop, _write| Ok(WriteOutcome::Summary(Summary::default())));
     mock.expect_read()
         .times(1)
         .returning(|_uid, _read| Ok(ReadOutcome::UserRecord(user())));
@@ -2085,7 +2089,9 @@ async fn write_bad_request_maps_to_400() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Err(tb_domain::Error::BadRequest("malformed".to_string())));
+        .returning(|_uid, _shop, _write| {
+            Err(tb_domain::Error::BadRequest("malformed".to_string()))
+        });
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(
@@ -2105,7 +2111,7 @@ async fn write_conflict_maps_to_409() {
     let (store, mut mock) = mock_ctx();
     mock.expect_write()
         .times(1)
-        .returning(|_uid, _write| Err(tb_domain::Error::Conflict("in use".to_string())));
+        .returning(|_uid, _shop, _write| Err(tb_domain::Error::Conflict("in use".to_string())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, _headers, _body) = run_json(

@@ -36,7 +36,7 @@
 //! (spec §4.5 — an empty `Summary` pushes nothing; a dropped frame is
 //! non-fatal, the client's reconnect + full refresh covers it).
 
-use tb_domain::{ApiRead, ApiWrite, ReadOutcome, Summary, TbResult, WriteOutcome};
+use tb_domain::{ApiRead, ApiWrite, ReadOutcome, ShopId, Summary, TbResult, WriteOutcome};
 use tb_strava::StravaStat;
 use tb_strava::event::Event;
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -79,6 +79,14 @@ pub enum Request {
     Write {
         /// The write to apply.
         write: ApiWrite,
+        /// The write's shop context (spec #517, ticket #584): the shop the
+        /// write belongs to, carried from the request session so the executor
+        /// can route the committed `Summary` to the shop stream and the part
+        /// owner's personal stream. The shop travels with the request that
+        /// needs it — in production the executor's own session has no shop,
+        /// so the routing cannot key on the session. `None` is a user-context
+        /// write (the executor's own personal stream).
+        shop: Option<ShopId>,
         /// Resolved exactly once when the write is committed or fails.
         reply: oneshot::Sender<TbResult<WriteOutcome>>,
     },
@@ -108,10 +116,16 @@ pub enum Request {
 
 impl Request {
     /// Pairs a write with a fresh reply channel: the request goes on the
-    /// user's executor channel, the receiver is awaited by the route.
-    pub fn new_write(write: ApiWrite) -> (Self, oneshot::Receiver<TbResult<WriteOutcome>>) {
+    /// user's executor channel, the receiver is awaited by the route. `shop`
+    /// is the write's shop context (spec #517, ticket #584) — `Some` routes
+    /// the committed `Summary` to the shop stream and the part owner, `None`
+    /// to the executor's own personal stream.
+    pub fn new_write(
+        write: ApiWrite,
+        shop: Option<ShopId>,
+    ) -> (Self, oneshot::Receiver<TbResult<WriteOutcome>>) {
         let (reply, rx) = oneshot::channel();
-        (Self::Write { write, reply }, rx)
+        (Self::Write { write, shop, reply }, rx)
     }
 
     /// Pairs a read with a fresh reply channel: the request goes on the

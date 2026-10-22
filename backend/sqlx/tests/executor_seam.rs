@@ -358,13 +358,16 @@ async fn api_write_end_to_end() {
     let (tx, rx) = request_channel();
     let (frames, mut frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
-    let (request, reply) = Request::new_write(ApiWrite::PartCreate {
-        name: "Seam Chain".to_string(),
-        vendor: "Shimano".to_string(),
-        model: "CN-HG62".to_string(),
-        what: CHAIN,
-        purchase: datetime!(2024-01-01 00:00 UTC),
-    });
+    let (request, reply) = Request::new_write(
+        ApiWrite::PartCreate {
+            name: "Seam Chain".to_string(),
+            vendor: "Shimano".to_string(),
+            model: "CN-HG62".to_string(),
+            what: CHAIN,
+            purchase: datetime!(2024-01-01 00:00 UTC),
+        },
+        None,
+    );
     tx.send(request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
@@ -595,13 +598,16 @@ async fn read_sees_every_earlier_write() {
     let (events, _events_rx) = broadcast::channel(16);
     // The write, then the read — enqueued in order before the loop starts
     // (the channel is the FIFO the loop consumes in order).
-    let (write_request, write_reply) = Request::new_write(ApiWrite::PartCreate {
-        name: "Seam Chain".to_string(),
-        vendor: "Shimano".to_string(),
-        model: "CN-HG62".to_string(),
-        what: CHAIN,
-        purchase: datetime!(2024-01-01 00:00 UTC),
-    });
+    let (write_request, write_reply) = Request::new_write(
+        ApiWrite::PartCreate {
+            name: "Seam Chain".to_string(),
+            vendor: "Shimano".to_string(),
+            model: "CN-HG62".to_string(),
+            what: CHAIN,
+            purchase: datetime!(2024-01-01 00:00 UTC),
+        },
+        None,
+    );
     tx.send(write_request).expect("the channel is open");
     let (read_request, read_reply) = Request::new_read(ApiRead::User { shop: None });
     tx.send(read_request).expect("the channel is open");
@@ -824,9 +830,12 @@ async fn failed_write_rolls_back_and_reclaims() {
     // the no-streams reap rule (spec §4.4, amended — #446) never fires.
     drop(_frame_rx);
     // Deleting a part that does not exist: `NotFound` from the domain.
-    let (request, reply) = Request::new_write(ApiWrite::PartDelete {
-        id: PartId::from(999_999),
-    });
+    let (request, reply) = Request::new_write(
+        ApiWrite::PartDelete {
+            id: PartId::from(999_999),
+        },
+        None,
+    );
     tx.send(request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
@@ -887,7 +896,7 @@ async fn onboarding_sync_write_queues_the_sync_event() {
     // No streams attached: the frame receiver must not outlive the loop, or
     // the no-streams reap rule (spec §4.4, amended — #446) never fires.
     drop(_frame_rx);
-    let (request, reply) = Request::new_write(ApiWrite::UserOnboardingSync { time: 100 });
+    let (request, reply) = Request::new_write(ApiWrite::UserOnboardingSync { time: 100 }, None);
     tx.send(request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
@@ -1452,7 +1461,7 @@ async fn stream_survives_executor_reap() {
     // soon as its work is done (the no-streams rule — immediate, not after
     // an idle window).
     registry
-        .write(user, ApiWrite::UserOnboardingPostpone)
+        .write(user, None, ApiWrite::UserOnboardingPostpone)
         .await
         .expect("the write must succeed");
     wait_for_status(&registry, user, ExecutorStatus::Reaped).await;

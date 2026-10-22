@@ -75,7 +75,7 @@ async fn ready_probe(probe: Probe) -> Option<Probe> {
 }
 
 fn request() -> (Request, oneshot::Receiver<TbResult<WriteOutcome>>) {
-    Request::new_write(ApiWrite::UserOnboardingPostpone)
+    Request::new_write(ApiWrite::UserOnboardingPostpone, None)
 }
 
 // --- `next_action`: the reclaim decision ---
@@ -440,7 +440,7 @@ fn frame_push_skips_empty_summaries() {
 // `Txn`/`StravaStore` seam, so the loop's dispatch runs its real domain ops
 // against real in-memory behavior. The `StravaDataStore` surface is canned
 // (the empty user list the `AllStats` test reads): the unit tests never
-/// drive a Strava queue.
+// drive a Strava queue.
 
 /// The fake transaction source: `begin` fails or succeeds, on demand.
 struct FakeSource {
@@ -1845,10 +1845,13 @@ async fn deliver_shop_context_to_shop_owner_when_part_owner() {
 
 #[tokio::test]
 async fn run_request_shop_context_routes_via_pusher_not_own_stream() {
-    // Wiring: a shop-context write (the session's `shop() == Some`) routes
-    // the committed `Summary`'s frame through the pusher (shop stream + part
-    // owner) and NOT the executor's own `frames` channel. The part created by
-    // `PartCreate` is owned by the session user (1) — the part owner.
+    // Wiring: a write carrying a shop context (`shop: Some`) routes the
+    // committed `Summary`'s frame through the pusher (shop stream + part
+    // owner) and NOT the executor's own `frames` channel. The routing keys on
+    // the **write's** shop (not the session's — see the production-path test
+    // below); here the session is also in a shop context, matching the write.
+    // The part created by `PartCreate` is owned by the session user (1) — the
+    // part owner.
     let source = FakeSource { begin_fails: false };
     let mut session = ShopSession {
         shop_id: ShopId::from(7),
@@ -1856,13 +1859,16 @@ async fn run_request_shop_context_routes_via_pusher_not_own_stream() {
     let mut backoff = DbBackoff::new();
     let (frames, mut frame_rx) = broadcast::channel(4);
     let pusher = RecordingPusher::new();
-    let (request, reply) = Request::new_write(ApiWrite::PartCreate {
-        name: "Shop Chain".to_string(),
-        vendor: "Shimano".to_string(),
-        model: "CN-HG62".to_string(),
-        what: CHAIN,
-        purchase: sample_purchase_date(),
-    });
+    let (request, reply) = Request::new_write(
+        ApiWrite::PartCreate {
+            name: "Shop Chain".to_string(),
+            vendor: "Shimano".to_string(),
+            model: "CN-HG62".to_string(),
+            what: CHAIN,
+            purchase: sample_purchase_date(),
+        },
+        Some(ShopId::from(7)),
+    );
 
     let result = run_request(
         &source,
@@ -1887,6 +1893,79 @@ async fn run_request_shop_context_routes_via_pusher_not_own_stream() {
     );
     // The pusher routes to the shop stream and the part owner (the session
     // user, 1).
+    let calls = pusher.calls();
+    assert!(
+        calls.iter().any(|call| {
+            matches!(
+                call,
+                PushCall::Shop(sid, s) if *sid == ShopId::from(7) && *s == summary
+            )
+        }),
+        "the shop stream receives the frame, got {calls:?}"
+    );
+    assert!(
+        calls.iter().any(|call| {
+            matches!(
+                call,
+                PushCall::User(uid, s) if *uid == UserId::from(1) && *s == summary
+            )
+        }),
+        "the part owner (the session user) receives the frame, got {calls:?}"
+    );
+}
+
+#[tokio::test]
+async fn write_shop_context_flows_through_the_production_path() {
+    // The production path (spec #517, ticket #584): the shop travels with the
+    // **write**, not the session. In production the executor's session has no
+    // shop (`StravaUserSession::shop()` is always `None`), so a user-context
+    // session (`UnitSession`, `shop() == None`) plus a write carrying
+    // `shop: Some(shop_id)` must route the committed `Summary` to the shop
+    // stream and the part owner's personal stream — and NOT to the executor's
+    // own `frames` channel. This is the test that catches the bug where the
+    // routing keyed on `session.shop()` (always `None` in production), which
+    // left the shop stream dead and leaked the frame into the shop owner's
+    // personal stream.
+    let source = FakeSource { begin_fails: false };
+    let mut session = UnitSession; // user context: shop() == None (production)
+    let mut backoff = DbBackoff::new();
+    let (frames, mut frame_rx) = broadcast::channel(4);
+    let pusher = RecordingPusher::new();
+    // The write carries the shop context (the production path).
+    let (request, reply) = Request::new_write(
+        ApiWrite::PartCreate {
+            name: "Shop Chain".to_string(),
+            vendor: "Shimano".to_string(),
+            model: "CN-HG62".to_string(),
+            what: CHAIN,
+            purchase: sample_purchase_date(),
+        },
+        Some(ShopId::from(7)),
+    );
+
+    let result = run_request(
+        &source,
+        &mut session,
+        request,
+        &frames,
+        &mut backoff,
+        &pusher,
+    )
+    .await;
+    assert!(result.is_ok(), "a committed write must not end the loop");
+    let outcome = reply
+        .await
+        .expect("the oneshot resolves")
+        .expect("the write succeeds");
+    let summary = outcome.summary().clone();
+
+    // The executor's own (shop owner's) personal stream gets nothing.
+    assert!(
+        frame_rx.try_recv().is_err(),
+        "a shop-context write must not push to the executor's own stream"
+    );
+    // The pusher routes to the shop stream and the part owner (the session
+    // user, 1 — the owner of the created part).
     let calls = pusher.calls();
     assert!(
         calls.iter().any(|call| {

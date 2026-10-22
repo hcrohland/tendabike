@@ -200,6 +200,15 @@ impl Add for Summary {
 }
 
 impl Summary {
+    /// The single part owner (spec #517): every part in the `Summary` shares
+    /// one owner (a domain-layer invariant), so the first live part's owner is
+    /// the unambiguous answer. `None` when there are no live parts. A
+    /// read-only convenience for the executor's shop-context routing (the
+    /// `push_to_user` target); it does not change the `Summary`'s shape.
+    pub fn part_owner(&self) -> Option<UserId> {
+        self.parts.live().first().map(|part| part.owner)
+    }
+
     /// Whether nothing was touched: all nine maps are empty. A tombstone
     /// counts as touched (a delete is something to deliver). The caller
     /// uses this to decide the push: an empty `Summary` pushes no stream

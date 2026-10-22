@@ -118,6 +118,7 @@ async fn create_shop(
         .api
         .write(
             session.user_id(),
+            session.shop(),
             ApiWrite::ShopCreate {
                 name,
                 description,
@@ -158,6 +159,7 @@ async fn update_shop(
         .api
         .write(
             session.user_id(),
+            session.shop(),
             ApiWrite::ShopUpdate {
                 id: ShopId::from(shop_id),
                 name,
@@ -178,6 +180,7 @@ async fn delete_shop(
         .api
         .write(
             session.user_id(),
+            session.shop(),
             ApiWrite::ShopDelete {
                 id: ShopId::from(shop_id),
             },
@@ -211,6 +214,7 @@ async fn register_part(
         .api
         .write(
             session.user_id(),
+            session.shop(),
             ApiWrite::ShopRegisterPart {
                 shop: shop_id.into(),
                 part: part_id.into(),
@@ -229,6 +233,7 @@ async fn unregister_part(
         .api
         .write(
             session.user_id(),
+            session.shop(),
             ApiWrite::ShopUnregisterPart {
                 shop: shop_id.into(),
                 part: part_id.into(),
@@ -266,6 +271,7 @@ async fn create_subscription(
         .api
         .write(
             user.user_id(),
+            user.shop(),
             ApiWrite::ShopSubscriptionCreate {
                 shop: shop_id.into(),
                 message,
@@ -367,6 +373,7 @@ async fn approve_subscription(
         .api
         .write(
             session.user_id(),
+            session.shop(),
             ApiWrite::ShopSubscriptionApprove {
                 id: subscription_id.into(),
                 message: req.message,
@@ -386,6 +393,7 @@ async fn reject_subscription(
         .api
         .write(
             session.user_id(),
+            session.shop(),
             ApiWrite::ShopSubscriptionReject {
                 id: subscription_id.into(),
                 message: req.message,
@@ -404,6 +412,7 @@ async fn cancel_subscription(
         .api
         .write(
             session.user_id(),
+            session.shop(),
             ApiWrite::ShopSubscriptionCancel {
                 id: subscription_id.into(),
             },

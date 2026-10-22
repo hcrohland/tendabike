@@ -25,6 +25,12 @@ pub struct TestStravaStore {
     next_event_id: i32,
 }
 
+impl Default for TestStravaStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestStravaStore {
     pub fn new() -> Self {
         Self {

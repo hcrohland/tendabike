@@ -168,6 +168,18 @@ fn heartbeat_event() -> Event {
     Event::default().comment("ping")
 }
 
+/// The shared SSE tail (spec #517): wrap a frame stream in an `Sse` response
+/// with the heartbeat `KeepAlive`, so `personal_endpoint` and `shop_endpoint`
+/// share the identical framing instead of each spelling it out.
+fn sse_response<S>(stream: S) -> Response
+where
+    S: futures::Stream<Item = Result<Event, Infallible>> + Send + 'static,
+{
+    Sse::new(stream)
+        .keep_alive(KeepAlive::new().interval(HEARTBEAT_INTERVAL).text("ping"))
+        .into_response()
+}
+
 /// The `?shop=` query on the stream route (spec #517, ticket #583): present
 /// means the shop stream (owner-only), absent means the personal stream.
 #[derive(serde::Deserialize)]
@@ -221,9 +233,7 @@ async fn personal_endpoint(user_id: UserId, state: AppState) -> Response {
         |mut seed| async move { next_event(&mut seed).await.map(|item| (item, seed)) },
     );
 
-    Sse::new(stream)
-        .keep_alive(KeepAlive::new().interval(HEARTBEAT_INTERVAL).text("ping"))
-        .into_response()
+    sse_response(stream)
 }
 
 /// The shop stream (spec #517, ticket #583): open the shop's standalone
@@ -246,7 +256,5 @@ async fn shop_endpoint(user_id: UserId, state: AppState, shop_id: ShopId) -> Res
         |mut seed| async move { next_shop_event(&mut seed).await.map(|item| (item, seed)) },
     );
 
-    Sse::new(stream)
-        .keep_alive(KeepAlive::new().interval(HEARTBEAT_INTERVAL).text("ping"))
-        .into_response()
+    sse_response(stream)
 }

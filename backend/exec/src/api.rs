@@ -68,8 +68,17 @@ pub trait ServiceApi: Send + Sync {
     /// One per-user write on the user's executor (spec §6.2): the loop runs
     /// it in its own transaction and resolves the full [`WriteOutcome`]
     /// (the `Summary` — the frame — plus, for the descend, its match
-    /// report, the response body). The oneshot wait is unbounded.
-    async fn write(&self, user_id: UserId, write: ApiWrite) -> TbResult<WriteOutcome>;
+    /// report, the response body). The oneshot wait is unbounded. `shop` is
+    /// the write's shop context (spec #517, ticket #584) — the caller's
+    /// request-session shop, carried so the executor routes the committed
+    /// `Summary` to the shop stream and the part owner (not the executor's
+    /// own personal stream, whose session has no shop in production).
+    async fn write(
+        &self,
+        user_id: UserId,
+        shop: Option<ShopId>,
+        write: ApiWrite,
+    ) -> TbResult<WriteOutcome>;
 
     /// The hydration write (spec #558 §4): `update_gear` in the loop's own
     /// transaction with the loop's session, resolving with the created

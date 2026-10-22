@@ -45,7 +45,11 @@ async fn create(
     trace!("ServicePlan::create");
     let outcome = state
         .api
-        .write(user.user_id(), ApiWrite::ServicePlanCreate { plan })
+        .write(
+            user.user_id(),
+            user.shop(),
+            ApiWrite::ServicePlanCreate { plan },
+        )
         .await?;
     let plan = created_entity(&outcome.summary().plans, "service plan")?;
     Ok((StatusCode::CREATED, Json(plan)))
@@ -58,7 +62,11 @@ async fn update(
 ) -> Result<StatusCode, AppError> {
     state
         .api
-        .write(user.user_id(), ApiWrite::ServicePlanUpdate { plan })
+        .write(
+            user.user_id(),
+            user.shop(),
+            ApiWrite::ServicePlanUpdate { plan },
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -70,7 +78,11 @@ async fn delete_plan(
 ) -> Result<StatusCode, AppError> {
     state
         .api
-        .write(user.user_id(), ApiWrite::ServicePlanDelete { id })
+        .write(
+            user.user_id(),
+            user.shop(),
+            ApiWrite::ServicePlanDelete { id },
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

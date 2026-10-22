@@ -100,6 +100,7 @@ async fn post_part(
         .api
         .write(
             user.user_id(),
+            user.shop(),
             ApiWrite::PartCreate {
                 name,
                 vendor,
@@ -120,7 +121,11 @@ async fn delete_part(
 ) -> Result<StatusCode, AppError> {
     state
         .api
-        .write(user.user_id(), ApiWrite::PartDelete { id: part })
+        .write(
+            user.user_id(),
+            user.shop(),
+            ApiWrite::PartDelete { id: part },
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -140,6 +145,7 @@ async fn put_part(
         .api
         .write(
             user.user_id(),
+            user.shop(),
             ApiWrite::PartChange {
                 id: part,
                 name,
