@@ -33,6 +33,7 @@ use anyhow::Context;
 use http::StatusCode;
 use log::debug;
 use oauth2::{AccessToken, RefreshToken, TokenResponse};
+use serde::{Deserialize, Serialize};
 use tb_domain::{Error, TbResult, UserId};
 
 use crate::client::{HTTP_CLIENT, STRAVACLIENT};
@@ -46,7 +47,11 @@ const API: &str = "https://www.strava.com/api/v3";
 /// A session owns one and drives Strava calls through it. The token fields are
 /// public so a session — and a pluggable persistence step — can read them;
 /// mutations go through the methods below.
-#[derive(Debug, Clone)]
+///
+/// `Serialize`/`Deserialize` so a cookie-backed session can embed the token
+/// state in a serialized `RequestSession` (the access token stays in the
+/// cookie, not the DB).
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StravaTokens {
     /// The bearer access token.
     pub access_token: AccessToken,
