@@ -1210,6 +1210,27 @@ fn summary_owned_by(owner: UserId) -> Summary {
     summary
 }
 
+/// A non-empty `Summary` with a service referencing a part (no `Part` in the
+/// summary — the common shape for service operations): the frame a
+/// shop-context service write would deliver. The part owner is not derivable
+/// from this summary; the executor resolves it via the store.
+fn summary_with_service() -> Summary {
+    let service = Service {
+        id: ServiceId::default(),
+        part_id: PartId::from(1),
+        time: OffsetDateTime::UNIX_EPOCH,
+        redone: OffsetDateTime::UNIX_EPOCH,
+        name: "Test Service".to_string(),
+        notes: String::new(),
+        usage: UsageId::default(),
+        successor: None,
+        plans: Vec::new(),
+    };
+    let mut summary = Summary::default();
+    summary.services.upsert(service);
+    summary
+}
+
 // --- `select_message` and the sleep: the read's select discipline ---
 
 #[tokio::test]
@@ -1721,7 +1742,7 @@ async fn deliver_user_context_to_personal_stream() {
     let (frames, mut frame_rx) = broadcast::channel(4);
     let summary = summary_owned_by(UserId::from(1));
 
-    deliver_frame(&pusher, &frames, None, &summary).await;
+    deliver_frame(&pusher, &frames, None, None, &summary).await;
 
     let got = frame_rx
         .try_recv()
@@ -1742,7 +1763,14 @@ async fn deliver_shop_context_to_shop_stream() {
     let shop_id = ShopId::from(7);
     let summary = summary_owned_by(UserId::from(2));
 
-    deliver_frame(&pusher, &frames, Some(shop_id), &summary).await;
+    deliver_frame(
+        &pusher,
+        &frames,
+        Some(shop_id),
+        Some(UserId::from(2)),
+        &summary,
+    )
+    .await;
 
     assert!(
         pusher
@@ -1764,7 +1792,7 @@ async fn deliver_shop_context_to_part_owner() {
     let part_owner = UserId::from(2);
     let summary = summary_owned_by(part_owner);
 
-    deliver_frame(&pusher, &frames, Some(shop_id), &summary).await;
+    deliver_frame(&pusher, &frames, Some(shop_id), Some(part_owner), &summary).await;
 
     assert!(
         pusher.calls().iter().any(
@@ -1787,7 +1815,14 @@ async fn deliver_shop_context_not_to_shop_owner() {
     let shop_id = ShopId::from(7);
     let summary = summary_owned_by(UserId::from(2));
 
-    deliver_frame(&pusher, &frames, Some(shop_id), &summary).await;
+    deliver_frame(
+        &pusher,
+        &frames,
+        Some(shop_id),
+        Some(UserId::from(2)),
+        &summary,
+    )
+    .await;
 
     // The executor's own (shop owner's) personal stream gets nothing.
     assert!(
@@ -1821,13 +1856,52 @@ async fn deliver_shop_context_to_shop_owner_when_part_owner() {
     let shop_owner = UserId::from(2);
     let summary = summary_owned_by(shop_owner); // part owner == shop owner
 
-    deliver_frame(&pusher, &frames, Some(shop_id), &summary).await;
+    deliver_frame(&pusher, &frames, Some(shop_id), Some(shop_owner), &summary).await;
 
     assert!(
         pusher.calls().iter().any(
             |call| matches!(call, PushCall::User(uid, s) if *uid == shop_owner && *s == summary)
         ),
         "the shop owner (the part owner) receives the frame via push_to_user, got {:?}",
+        pusher.calls()
+    );
+}
+
+#[tokio::test]
+async fn deliver_shop_context_service_summary_to_part_owner() {
+    // The common shop-context shape: a service operation produces a summary
+    // with a service (referencing a part) but no `Part` entity. The part
+    // owner is resolved by the executor (via the store) and passed to
+    // `deliver_frame` — the summary alone does not carry it.
+    let pusher = RecordingPusher::new();
+    let (frames, _frame_rx) = broadcast::channel(4);
+    let shop_id = ShopId::from(7);
+    let part_owner = UserId::from(2);
+    let summary = summary_with_service();
+
+    // The summary references a part (via the service) but does not contain
+    // the part itself — `referenced_part` finds it.
+    assert_eq!(
+        summary.referenced_part(),
+        Some(PartId::from(1)),
+        "the service's part_id is the referenced part"
+    );
+
+    deliver_frame(&pusher, &frames, Some(shop_id), Some(part_owner), &summary).await;
+
+    assert!(
+        pusher.calls().iter().any(
+            |call| matches!(call, PushCall::User(uid, s) if *uid == part_owner && *s == summary)
+        ),
+        "the part owner's personal stream receives the frame, got {:?}",
+        pusher.calls()
+    );
+    assert!(
+        pusher
+            .calls()
+            .iter()
+            .any(|call| matches!(call, PushCall::Shop(sid, s) if *sid == shop_id && *s == summary)),
+        "the shop stream also receives the frame, got {:?}",
         pusher.calls()
     );
 }

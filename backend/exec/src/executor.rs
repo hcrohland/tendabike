@@ -37,7 +37,8 @@ use std::time::Duration;
 
 use log::{debug, error, warn};
 use tb_domain::{
-    ApiRead, ApiWrite, Error, ReadOutcome, Session, ShopId, Summary, TbResult, WriteOutcome, exec,
+    ApiRead, ApiWrite, Error, PartStore, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
+    WriteOutcome, exec,
 };
 use tb_strava::event::{Event, QueueRead, get_event, insert_sync, process};
 use tb_strava::{StravaSession, StravaStat, StravaUser, get_all_stats};
@@ -252,6 +253,7 @@ pub(crate) async fn deliver_frame(
     pusher: &dyn FramePusher,
     frames: &broadcast::Sender<Summary>,
     shop: Option<ShopId>,
+    part_owner: Option<UserId>,
     summary: &Summary,
 ) {
     if summary.is_empty() {
@@ -261,11 +263,7 @@ pub(crate) async fn deliver_frame(
         None => push_frame(frames, summary),
         Some(shop_id) => {
             pusher.push_to_shop(shop_id, summary.clone()).await;
-            // The single-owner `Summary`: every part shares one owner (a
-            // domain-layer invariant), so the part owner is the unambiguous
-            // `push_to_user` target. No parts (defensive) → no part-owner
-            // target, but the shop stream still gets the frame.
-            if let Some(owner) = summary.part_owner() {
+            if let Some(owner) = part_owner {
                 pusher.push_to_user(owner, summary.clone()).await;
             }
         }
@@ -729,7 +727,7 @@ async fn run_message<T, Out, Fut>(
 ) -> Result<(), Error>
 where
     T: TxnSource,
-    Fut: Future<Output = (TbResult<Out>, T::Conn)>,
+    Fut: Future<Output = (TbResult<Out>, T::Conn, Option<UserId>)>,
 {
     let conn = match source.begin().await {
         Ok(conn) => conn,
@@ -746,7 +744,7 @@ where
         }
     };
 
-    let (outcome, conn) = work(conn).await;
+    let (outcome, conn, part_owner) = work(conn).await;
     let outcome: TbResult<Out> = match outcome {
         Ok(outcome) => match conn.commit().await {
             Ok(()) => {
@@ -785,7 +783,7 @@ where
         // the oneshot reply, routed by the session's context (spec #517,
         // ticket #584).
         if let Some(frame) = frame(outcome) {
-            deliver_frame(pusher, frames, shop, frame).await;
+            deliver_frame(pusher, frames, shop, part_owner, frame).await;
         }
     }
     if let Err(err) = &outcome {
@@ -861,7 +859,24 @@ where
                 Ok(outcome)
             }
             .await;
-            (outcome, conn)
+            // In a shop context, resolve the part owner for the `push_to_user`
+            // target (the rare case: only shop operations need it). The lookup
+            // runs in the same transaction (before commit), so it sees the
+            // operation's effects.
+            let part_owner = if shop.is_some() {
+                if let Some(part_id) = outcome
+                    .as_ref()
+                    .ok()
+                    .and_then(|o| o.summary().referenced_part())
+                {
+                    conn.partid_get_part(part_id).await.ok().map(|p| p.owner)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            (outcome, conn, part_owner)
         },
     )
     .await
@@ -912,7 +927,7 @@ where
         |_| None,      // a read pushes no frame (spec #558 §3.6)
         |mut conn| async move {
             let outcome = tb_domain::read(read, acting, &mut conn).await;
-            (outcome, conn)
+            (outcome, conn, None)
         },
     )
     .await
@@ -973,7 +988,7 @@ where
                 Ok(())
             }
             .await;
-            (outcome.map(|()| summary), conn)
+            (outcome.map(|()| summary), conn, None)
         },
     )
     .await
@@ -1016,7 +1031,7 @@ where
         |_| None, // the stats read pushes no frame (spec #558 §3.7)
         |mut conn| async move {
             let outcome = get_all_stats(&mut conn).await;
-            (outcome, conn)
+            (outcome, conn, None)
         },
     )
     .await
@@ -1086,7 +1101,7 @@ where
                 // own parts, so no shop context (spec #517, ticket #584) —
                 // the executor's own personal stream. Then announce the
                 // consumed event (spec §6.4) for good, empty summary or not.
-                deliver_frame(pusher, frames, None, &summary).await;
+                deliver_frame(pusher, frames, None, None, &summary).await;
                 let _ = events.send(event.clone());
                 backoff.reset();
                 Ok(())

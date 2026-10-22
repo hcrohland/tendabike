@@ -200,13 +200,19 @@ impl Add for Summary {
 }
 
 impl Summary {
-    /// The single part owner (spec #517): every part in the `Summary` shares
-    /// one owner (a domain-layer invariant), so the first live part's owner is
-    /// the unambiguous answer. `None` when there are no live parts. A
-    /// read-only convenience for the executor's shop-context routing (the
-    /// `push_to_user` target); it does not change the `Summary`'s shape.
-    pub fn part_owner(&self) -> Option<UserId> {
-        self.parts.live().first().map(|part| part.owner)
+    /// The part this summary references (spec #517): scans the entity maps
+    /// for a `PartId` reference. In a shop-context operation all referenced
+    /// parts share one owner (a domain-layer invariant), so the first
+    /// `PartId` found is the unambiguous answer. `None` when no entity in
+    /// the summary references a part.
+    pub fn referenced_part(&self) -> Option<PartId> {
+        self.services
+            .live()
+            .first()
+            .map(|s| s.part_id)
+            .or_else(|| self.attachments.live().first().map(|a| a.a.part_id))
+            .or_else(|| self.part_notes.live().first().map(|n| n.part))
+            .or_else(|| self.parts.live().first().map(|p| p.id))
     }
 
     /// Whether nothing was touched: all nine maps are empty. A tombstone
