@@ -45,7 +45,8 @@ use oauth2::RefreshToken;
 use tokio::sync::{broadcast, watch};
 
 use tb_domain::{
-    ActivityId, ApiRead, ApiWrite, PartId, ReadOutcome, Summary, TbResult, UserId, WriteOutcome,
+    ActivityId, ApiRead, ApiWrite, PartId, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
+    WriteOutcome,
 };
 use tb_strava::{StravaStat, StravaUser, client::StravaAthleteInfo, event::InEvent};
 
@@ -61,14 +62,21 @@ pub trait ServiceApi: Send + Sync {
     /// One per-user read on the user's executor (spec #558 §3): the loop
     /// runs it in its own transaction (read-only within it by spec) and
     /// resolves the read's data (a [`ReadOutcome`]); the caller knows which
-    /// variant it sent and pattern-matches its own result.
-    async fn read(&self, user_id: UserId, read: ApiRead) -> TbResult<ReadOutcome>;
+    /// variant it sent and pattern-matches its own result. `session` is the
+    /// caller's acting session (spec #517, ticket #588), handed to `read` so
+    /// the domain op sees the real `shop()` context.
+    async fn read(&self, session: Box<dyn Session>, read: ApiRead) -> TbResult<ReadOutcome>;
 
     /// One per-user write on the user's executor (spec §6.2): the loop runs
     /// it in its own transaction and resolves the full [`WriteOutcome`]
     /// (the `Summary` — the frame — plus, for the descend, its match
-    /// report, the response body). The oneshot wait is unbounded.
-    async fn write(&self, user_id: UserId, write: ApiWrite) -> TbResult<WriteOutcome>;
+    /// report, the response body). The oneshot wait is unbounded. `session`
+    /// is the caller's acting session (spec #517, ticket #588): the loop
+    /// hands it to `exec` (so the domain op sees the real `shop()` context)
+    /// and keys the delivery routing on `shop()` — the committed `Summary`
+    /// goes to the shop stream and the part owner, not the executor's own
+    /// personal stream (whose session has no shop in production).
+    async fn write(&self, session: Box<dyn Session>, write: ApiWrite) -> TbResult<WriteOutcome>;
 
     /// The hydration write (spec #558 §4): `update_gear` in the loop's own
     /// transaction with the loop's session, resolving with the created
@@ -87,6 +95,18 @@ pub trait ServiceApi: Send + Sync {
         broadcast::Receiver<Summary>,
         watch::Receiver<ExecutorStatus>,
     )>;
+
+    /// Register a shop stream for `shop_id` (spec #517, ticket #582): the
+    /// caller must be the shop owner (a non-owner is `Forbidden`, which the
+    /// web layer maps to a 403); the channel is created on demand and the
+    /// returned receiver is a subscription to it. No `ExecutorStatus` — the
+    /// shop stream is a standalone channel, not tied to the executor's
+    /// lifecycle (unlike [`Self::subscribe`]).
+    async fn subscribe_shop(
+        &self,
+        user_id: UserId,
+        shop_id: ShopId,
+    ) -> TbResult<broadcast::Receiver<Summary>>;
 
     /// The admin `GET /user/all` read (spec #558 §3.3): `get_all_stats` in
     /// the admin user's own channel, in the loop's own transaction.

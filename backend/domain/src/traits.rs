@@ -25,7 +25,7 @@ pub use service::*;
 mod serviceplan;
 pub use serviceplan::*;
 
-use crate::{ShopId, TbResult, UserId};
+use crate::{ShopId, UserId};
 
 /// A marker trait naming a complete store: one that implements all nine
 /// sub-traits. It carries no methods — the transaction lifecycle
@@ -47,10 +47,14 @@ pub trait Store:
 }
 
 /// A trait that represents a session.
+///
+/// All methods are `&self`: the acting session is immutable to the domain.
+/// The web layer's cookie persistence for the active shop is not a domain
+/// concern — it stays on the concrete request session as an inherent method
+/// (spec #517, ticket #588).
 pub trait Session: Send + Sync {
     fn user_id(&self) -> UserId;
     fn shop(&self) -> Option<ShopId>;
-    fn set_shop(&mut self, shop: Option<ShopId>) -> TbResult<()>;
     fn is_admin(&self) -> bool;
     fn check_owner(&self, owner: UserId, error: String) -> crate::TbResult<()> {
         self.user_id().check_owner(owner, error)

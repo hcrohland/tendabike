@@ -200,6 +200,21 @@ impl Add for Summary {
 }
 
 impl Summary {
+    /// The part this summary references (spec #517): scans the entity maps
+    /// for a `PartId` reference. In a shop-context operation all referenced
+    /// parts share one owner (a domain-layer invariant), so the first
+    /// `PartId` found is the unambiguous answer. `None` when no entity in
+    /// the summary references a part.
+    pub fn referenced_part(&self) -> Option<PartId> {
+        self.services
+            .live()
+            .first()
+            .map(|s| s.part_id)
+            .or_else(|| self.attachments.live().first().map(|a| a.a.part_id))
+            .or_else(|| self.part_notes.live().first().map(|n| n.part))
+            .or_else(|| self.parts.live().first().map(|p| p.id))
+    }
+
     /// Whether nothing was touched: all nine maps are empty. A tombstone
     /// counts as touched (a delete is something to deliver). The caller
     /// uses this to decide the push: an empty `Summary` pushes no stream

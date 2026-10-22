@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_support::{
-    MemStore,
+    MemStore, TestSession,
     fixtures::{test_session, test_user},
 };
 use crate::{
@@ -12,15 +12,15 @@ use time::OffsetDateTime;
 
 // --- User (the unified read: UserState = User + Summary) ---
 
-/// `ApiRead::User { shop: None }` is the unified user read (spec #558
-/// §3.5): the `UserState` composite — the full `User` plus the `Summary` of
-/// everything the user owns. The fixture content is the same snapshot the
-/// in-memory `user_summary_read` asserts.
+/// `ApiRead::User` is the unified user read (spec #558 §3.5): the
+/// `UserState` composite — the full `User` plus the `Summary` of everything
+/// the user owns (the session here carries no shop). The fixture content is
+/// the same snapshot the in-memory `user_summary_read` asserts.
 #[tokio::test]
 async fn user_read_returns_user_state() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
-    let outcome = read(ApiRead::User { shop: None }, &mut session, &mut store).await?;
+    let session = test_session();
+    let outcome = read(ApiRead::User, &session, &mut store).await?;
     let ReadOutcome::User(state) = outcome else {
         panic!("the User read returns the UserState composite");
     };
@@ -49,13 +49,13 @@ async fn user_read_returns_user_state() -> TbResult<()> {
     Ok(())
 }
 
-/// `ApiRead::User { shop: Some(shop) }` filters the summary to the shop's
-/// parts — the `?shop=` parameter of `GET /user/summary` — while the user
-/// record is unchanged.
+/// `ApiRead::User` read in a shop context (the session carries the shop)
+/// filters the summary to the shop's parts — the `?shop=` context of
+/// `GET /user/summary` — while the user record is unchanged.
 #[tokio::test]
 async fn user_read_shop_filter_limits_parts() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     // A shop the user owns, with one of the user's parts registered.
     let shop = ShopId::create(
         "Workshop".to_string(),
@@ -71,14 +71,10 @@ async fn user_read_shop_filter_limits_parts() -> TbResult<()> {
     let part = PartId::from(13); // "Spare Chain 1" — loose, owned by user 1
     shop.id.register_part(part, &session, &mut store).await?;
 
-    let outcome = read(
-        ApiRead::User {
-            shop: Some(shop.id),
-        },
-        &mut session,
-        &mut store,
-    )
-    .await?;
+    // The acting session carries the shop (spec #517, ticket #588): the read
+    // filters the summary to the session's shop, not an in-message parameter.
+    let shop_session = TestSession::with_shop(session.user_id(), shop.id);
+    let outcome = read(ApiRead::User, &shop_session, &mut store).await?;
     let ReadOutcome::User(state) = outcome else {
         panic!("the User read returns the UserState composite");
     };
@@ -96,10 +92,8 @@ async fn user_read_shop_filter_limits_parts() -> TbResult<()> {
 #[tokio::test]
 async fn user_read_missing_is_not_found() -> TbResult<()> {
     let mut store = MemStore::new();
-    let mut session = test_session();
-    let err = read(ApiRead::User { shop: None }, &mut session, &mut store)
-        .await
-        .unwrap_err();
+    let session = test_session();
+    let err = read(ApiRead::User, &session, &mut store).await.unwrap_err();
     assert!(matches!(err, Error::NotFound(_)));
     Ok(())
 }
@@ -111,13 +105,8 @@ async fn user_read_missing_is_not_found() -> TbResult<()> {
 #[tokio::test]
 async fn activity_read_dispatches() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
-    let outcome = read(
-        ApiRead::Activity(ActivityId::new(1)),
-        &mut session,
-        &mut store,
-    )
-    .await?;
+    let session = test_session();
+    let outcome = read(ApiRead::Activity(ActivityId::new(1)), &session, &mut store).await?;
     let ReadOutcome::Activity(act) = outcome else {
         panic!("the Activity read returns the Activity");
     };
@@ -131,10 +120,10 @@ async fn activity_read_dispatches() -> TbResult<()> {
 #[tokio::test]
 async fn activity_read_missing_is_not_found() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let err = read(
         ApiRead::Activity(ActivityId::new(999_999)),
-        &mut session,
+        &session,
         &mut store,
     )
     .await
@@ -150,14 +139,10 @@ async fn activity_read_foreign_is_forbidden() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
     // Part 1 (and the fixture activities) belong to user 1; user 2 may not
     // read them.
-    let mut session = crate::test_support::TestSession::new(UserId::from(2));
-    let err = read(
-        ApiRead::Activity(ActivityId::new(1)),
-        &mut session,
-        &mut store,
-    )
-    .await
-    .unwrap_err();
+    let session = crate::test_support::TestSession::new(UserId::from(2));
+    let err = read(ApiRead::Activity(ActivityId::new(1)), &session, &mut store)
+        .await
+        .unwrap_err();
     assert!(matches!(err, Error::Forbidden(_)));
     Ok(())
 }
@@ -169,8 +154,8 @@ async fn activity_read_foreign_is_forbidden() -> TbResult<()> {
 #[tokio::test]
 async fn part_read_dispatches() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
-    let outcome = read(ApiRead::Part(PartId::from(1)), &mut session, &mut store).await?;
+    let session = test_session();
+    let outcome = read(ApiRead::Part(PartId::from(1)), &session, &mut store).await?;
     let ReadOutcome::Part(part) = outcome else {
         panic!("the Part read returns the Part");
     };
@@ -185,15 +170,15 @@ async fn part_read_dispatches() -> TbResult<()> {
 #[tokio::test]
 async fn part_read_errors() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
-    let err = read(ApiRead::Part(PartId::from(9999)), &mut session, &mut store)
+    let session = test_session();
+    let err = read(ApiRead::Part(PartId::from(9999)), &session, &mut store)
         .await
         .unwrap_err();
     assert!(matches!(err, Error::NotFound(_)));
 
     // Part 1 belongs to user 1; user 2 (no shop session) may not read it.
-    let mut session = crate::test_support::TestSession::new(UserId::from(2));
-    let err = read(ApiRead::Part(PartId::from(1)), &mut session, &mut store)
+    let session = crate::test_support::TestSession::new(UserId::from(2));
+    let err = read(ApiRead::Part(PartId::from(1)), &session, &mut store)
         .await
         .unwrap_err();
     assert!(matches!(err, Error::Forbidden(_)));
@@ -206,8 +191,8 @@ async fn part_read_errors() -> TbResult<()> {
 #[tokio::test]
 async fn part_categories_dispatches() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
-    let outcome = read(ApiRead::PartCategories, &mut session, &mut store).await?;
+    let session = test_session();
+    let outcome = read(ApiRead::PartCategories, &session, &mut store).await?;
     let ReadOutcome::PartCategories(categories) = outcome else {
         panic!("the PartCategories read returns the category set");
     };
@@ -225,7 +210,7 @@ async fn part_categories_dispatches() -> TbResult<()> {
 #[tokio::test]
 async fn part_notes_dispatches() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let part = PartId::from(13);
     let note = part
         .note_create_text(
@@ -236,7 +221,7 @@ async fn part_notes_dispatches() -> TbResult<()> {
         )
         .await?;
 
-    let outcome = read(ApiRead::PartNotes(part), &mut session, &mut store).await?;
+    let outcome = read(ApiRead::PartNotes(part), &session, &mut store).await?;
     let ReadOutcome::PartNotes(notes) = outcome else {
         panic!("the PartNotes read returns the note list");
     };
@@ -253,19 +238,15 @@ async fn part_notes_dispatches() -> TbResult<()> {
 async fn part_notes_errors() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
     let part = PartId::from(13);
-    let mut session = test_session();
-    let err = read(
-        ApiRead::PartNotes(PartId::from(9999)),
-        &mut session,
-        &mut store,
-    )
-    .await
-    .unwrap_err();
+    let session = test_session();
+    let err = read(ApiRead::PartNotes(PartId::from(9999)), &session, &mut store)
+        .await
+        .unwrap_err();
     assert!(matches!(err, Error::NotFound(_)));
 
     // Part 13 belongs to user 1; user 2 may not list its notes.
-    let mut session = crate::test_support::TestSession::new(UserId::from(2));
-    let err = read(ApiRead::PartNotes(part), &mut session, &mut store)
+    let session = crate::test_support::TestSession::new(UserId::from(2));
+    let err = read(ApiRead::PartNotes(part), &session, &mut store)
         .await
         .unwrap_err();
     assert!(matches!(err, Error::Forbidden(_)));
@@ -278,7 +259,7 @@ async fn part_notes_errors() -> TbResult<()> {
 #[tokio::test]
 async fn part_note_file_dispatches() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let part = PartId::from(13);
     let data = b"file content".to_vec();
     let note = part
@@ -294,7 +275,7 @@ async fn part_note_file_dispatches() -> TbResult<()> {
         )
         .await?;
 
-    let outcome = read(ApiRead::PartNoteFile(note.id), &mut session, &mut store).await?;
+    let outcome = read(ApiRead::PartNoteFile(note.id), &session, &mut store).await?;
     let ReadOutcome::PartNoteFile(got_note, file) = outcome else {
         panic!("the PartNoteFile read returns the note plus its bytes");
     };
@@ -311,7 +292,7 @@ async fn part_note_file_dispatches() -> TbResult<()> {
             &mut store,
         )
         .await?;
-    let err = read(ApiRead::PartNoteFile(text.id), &mut session, &mut store)
+    let err = read(ApiRead::PartNoteFile(text.id), &session, &mut store)
         .await
         .unwrap_err();
     assert!(matches!(err, Error::NotFound(_)));
@@ -323,10 +304,10 @@ async fn part_note_file_dispatches() -> TbResult<()> {
 #[tokio::test]
 async fn part_note_file_errors() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let err = read(
         ApiRead::PartNoteFile(PartNoteId::from(9999)),
-        &mut session,
+        &session,
         &mut store,
     )
     .await
@@ -343,8 +324,8 @@ async fn part_note_file_errors() -> TbResult<()> {
             &mut store,
         )
         .await?;
-    let mut session = crate::test_support::TestSession::new(UserId::from(2));
-    let err = read(ApiRead::PartNoteFile(note.id), &mut session, &mut store)
+    let session = crate::test_support::TestSession::new(UserId::from(2));
+    let err = read(ApiRead::PartNoteFile(note.id), &session, &mut store)
         .await
         .unwrap_err();
     assert!(matches!(err, Error::Forbidden(_)));
@@ -358,9 +339,9 @@ async fn part_note_file_errors() -> TbResult<()> {
 #[tokio::test]
 async fn shops_read_dispatches() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
 
-    let outcome = read(ApiRead::Shops, &mut session, &mut store).await?;
+    let outcome = read(ApiRead::Shops, &session, &mut store).await?;
     let ReadOutcome::Shops(shops) = outcome else {
         panic!("the Shops read returns the shop list");
     };
@@ -374,7 +355,7 @@ async fn shops_read_dispatches() -> TbResult<()> {
         &mut store,
     )
     .await?;
-    let outcome = read(ApiRead::Shops, &mut session, &mut store).await?;
+    let outcome = read(ApiRead::Shops, &session, &mut store).await?;
     let ReadOutcome::Shops(shops) = outcome else {
         panic!("the Shops read returns the shop list");
     };
@@ -389,7 +370,7 @@ async fn shops_read_dispatches() -> TbResult<()> {
 #[tokio::test]
 async fn shop_read_dispatches() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let shop = ShopId::create(
         "Workshop".to_string(),
         None,
@@ -399,7 +380,7 @@ async fn shop_read_dispatches() -> TbResult<()> {
     )
     .await?;
 
-    let outcome = read(ApiRead::Shop(shop.id), &mut session, &mut store).await?;
+    let outcome = read(ApiRead::Shop(shop.id), &session, &mut store).await?;
     let ReadOutcome::Shop(got) = outcome else {
         panic!("the Shop read returns the Shop");
     };
@@ -407,7 +388,7 @@ async fn shop_read_dispatches() -> TbResult<()> {
     assert_eq!(got.name, "Workshop");
     assert_eq!(got.owner, test_user());
 
-    let err = read(ApiRead::Shop(ShopId::from(9999)), &mut session, &mut store)
+    let err = read(ApiRead::Shop(ShopId::from(9999)), &session, &mut store)
         .await
         .unwrap_err();
     assert!(matches!(err, Error::NotFound(_)));
@@ -419,7 +400,7 @@ async fn shop_read_dispatches() -> TbResult<()> {
 #[tokio::test]
 async fn shop_parts_read_dispatches() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let shop = ShopId::create(
         "Workshop".to_string(),
         None,
@@ -434,7 +415,7 @@ async fn shop_parts_read_dispatches() -> TbResult<()> {
     let part = PartId::from(13); // "Spare Chain 1" — loose, owned by user 1
     shop.id.register_part(part, &session, &mut store).await?;
 
-    let outcome = read(ApiRead::ShopParts(shop.id), &mut session, &mut store).await?;
+    let outcome = read(ApiRead::ShopParts(shop.id), &session, &mut store).await?;
     let ReadOutcome::ShopParts(parts) = outcome else {
         panic!("the ShopParts read returns the part list");
     };
@@ -449,7 +430,7 @@ async fn shop_parts_read_dispatches() -> TbResult<()> {
 #[tokio::test]
 async fn shop_parts_read_errors() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let shop = ShopId::create(
         "Workshop".to_string(),
         None,
@@ -459,18 +440,14 @@ async fn shop_parts_read_errors() -> TbResult<()> {
     )
     .await?;
 
-    let err = read(
-        ApiRead::ShopParts(ShopId::from(9999)),
-        &mut session,
-        &mut store,
-    )
-    .await
-    .unwrap_err();
+    let err = read(ApiRead::ShopParts(ShopId::from(9999)), &session, &mut store)
+        .await
+        .unwrap_err();
     assert!(matches!(err, Error::NotFound(_)));
 
     // User 2 is neither owner nor subscriber of the shop.
-    let mut session = crate::test_support::TestSession::new(UserId::from(2));
-    let err = read(ApiRead::ShopParts(shop.id), &mut session, &mut store)
+    let session = crate::test_support::TestSession::new(UserId::from(2));
+    let err = read(ApiRead::ShopParts(shop.id), &session, &mut store)
         .await
         .unwrap_err();
     assert!(matches!(err, Error::Forbidden(_)));
@@ -483,7 +460,7 @@ async fn shop_parts_read_errors() -> TbResult<()> {
 #[tokio::test]
 async fn shop_search_dispatches() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let _ = ShopId::create(
         "Other Shop".to_string(),
         None,
@@ -503,7 +480,7 @@ async fn shop_search_dispatches() -> TbResult<()> {
 
     let outcome = read(
         ApiRead::ShopSearch("Workshop".to_string()),
-        &mut session,
+        &session,
         &mut store,
     )
     .await?;
@@ -528,7 +505,7 @@ async fn shop_search_dispatches() -> TbResult<()> {
 
     // An empty query matches everything the store's search matches (both
     // shops on the in-memory store).
-    let outcome = read(ApiRead::ShopSearch(String::new()), &mut session, &mut store).await?;
+    let outcome = read(ApiRead::ShopSearch(String::new()), &session, &mut store).await?;
     let ReadOutcome::ShopSearch { shops, .. } = outcome else {
         panic!("the ShopSearch read returns the shops plus their users");
     };
@@ -541,9 +518,9 @@ async fn shop_search_dispatches() -> TbResult<()> {
 #[tokio::test]
 async fn shop_subscriptions_mine_dispatches() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
 
-    let outcome = read(ApiRead::ShopSubscriptions(None), &mut session, &mut store).await?;
+    let outcome = read(ApiRead::ShopSubscriptions(None), &session, &mut store).await?;
     let ReadOutcome::ShopSubscriptions(subs) = outcome else {
         panic!("the ShopSubscriptions read returns the subscriptions with details");
     };
@@ -565,7 +542,7 @@ async fn shop_subscriptions_mine_dispatches() -> TbResult<()> {
     )
     .await?;
 
-    let outcome = read(ApiRead::ShopSubscriptions(None), &mut session, &mut store).await?;
+    let outcome = read(ApiRead::ShopSubscriptions(None), &session, &mut store).await?;
     let ReadOutcome::ShopSubscriptions(subs) = outcome else {
         panic!("the ShopSubscriptions read returns the subscriptions with details");
     };
@@ -581,7 +558,7 @@ async fn shop_subscriptions_mine_dispatches() -> TbResult<()> {
 #[tokio::test]
 async fn shop_subscriptions_for_shop_dispatches() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let shop = ShopId::create(
         "Workshop".to_string(),
         None,
@@ -598,7 +575,7 @@ async fn shop_subscriptions_for_shop_dispatches() -> TbResult<()> {
 
     let outcome = read(
         ApiRead::ShopSubscriptions(Some(shop.id)),
-        &mut session,
+        &session,
         &mut store,
     )
     .await?;
@@ -625,7 +602,7 @@ async fn shop_subscriptions_for_shop_dispatches() -> TbResult<()> {
     let pending = SubscriptionId::create(pending_shop.id, None, other, &mut store).await?;
     let outcome = read(
         ApiRead::ShopSubscriptions(Some(pending_shop.id)),
-        &mut session,
+        &session,
         &mut store,
     )
     .await?;
@@ -653,10 +630,10 @@ async fn shop_subscriptions_for_shop_foreign_is_forbidden() -> TbResult<()> {
     )
     .await?;
 
-    let mut session = crate::test_support::TestSession::new(UserId::from(2));
+    let session = crate::test_support::TestSession::new(UserId::from(2));
     let err = read(
         ApiRead::ShopSubscriptions(Some(shop.id)),
-        &mut session,
+        &session,
         &mut store,
     )
     .await
@@ -670,7 +647,7 @@ async fn shop_subscriptions_for_shop_foreign_is_forbidden() -> TbResult<()> {
 #[tokio::test]
 async fn shop_subscription_read_dispatches() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let shop = ShopId::create(
         "Workshop".to_string(),
         None,
@@ -681,7 +658,7 @@ async fn shop_subscription_read_dispatches() -> TbResult<()> {
     .await?;
     let sub = SubscriptionId::create(shop.id, None, session.user_id(), &mut store).await?;
 
-    let outcome = read(ApiRead::ShopSubscription(sub.id), &mut session, &mut store).await?;
+    let outcome = read(ApiRead::ShopSubscription(sub.id), &session, &mut store).await?;
     let ReadOutcome::ShopSubscription(got) = outcome else {
         panic!("the ShopSubscription read returns the ShopSubscription");
     };
@@ -693,15 +670,15 @@ async fn shop_subscription_read_dispatches() -> TbResult<()> {
     // user is neither subscriber of nor shop owner of is a Forbidden.
     let err = read(
         ApiRead::ShopSubscription(SubscriptionId::from(9999)),
-        &mut session,
+        &session,
         &mut store,
     )
     .await
     .unwrap_err();
     assert!(matches!(err, Error::NotFound(_)));
 
-    let mut session = crate::test_support::TestSession::new(UserId::from(2));
-    let err = read(ApiRead::ShopSubscription(sub.id), &mut session, &mut store)
+    let session = crate::test_support::TestSession::new(UserId::from(2));
+    let err = read(ApiRead::ShopSubscription(sub.id), &session, &mut store)
         .await
         .unwrap_err();
     assert!(matches!(err, Error::Forbidden(_)));

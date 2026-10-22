@@ -12,8 +12,15 @@ export type EventSourceLike = Pick<
 export type EventSourceFactory = (url: string) => EventSourceLike;
 
 /// The session-scoped SSE endpoint: each `data:` frame carries the full
-/// `Summary` JSON of one completed executor message, no envelope.
-const streamUrl = "/api/user/stream";
+/// `Summary` JSON of one completed executor message, no envelope. Personal
+/// mode → the bare endpoint; shop mode → the owner-only shop-scoped endpoint
+/// (ticket #583). Derived from `getShop()` at open time, so the stream is
+/// reactive to shop state: the caller's effect reads the shop through this
+/// and re-runs (re-opening) when it changes.
+function streamUrl(): string {
+  const shop = getShop();
+  return shop ? "/api/user/stream?shop=" + shop.id : "/api/user/stream";
+}
 
 /// Consecutive failed opens before the stream probes liveness with a real
 /// fetch: `EventSource` never exposes the response status, so the probe is
@@ -71,7 +78,7 @@ class UserStream {
   ) {}
 
   start() {
-    const es = this.factory(streamUrl);
+    const es = this.factory(streamUrl());
     this.es = es;
     es.onopen = () => {
       if (this.stopped) return;

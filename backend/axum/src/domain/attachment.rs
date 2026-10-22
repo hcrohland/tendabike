@@ -13,7 +13,7 @@ use serde::Deserialize;
 use time::OffsetDateTime;
 
 use crate::{RequestSession, appstate::AppState, error::AppError};
-use tb_domain::{ApiWrite, PartId, PartTypeId, Session};
+use tb_domain::{ApiWrite, PartId, PartTypeId};
 
 /// Description of an Attach or Detach request
 
@@ -49,7 +49,7 @@ async fn attach_rt(
     state
         .api
         .write(
-            user.user_id(),
+            Box::new(user),
             ApiWrite::AttachmentAttach {
                 part: part_id,
                 time,
@@ -75,7 +75,7 @@ async fn detach_rt(
     state
         .api
         .write(
-            user.user_id(),
+            Box::new(user),
             ApiWrite::AttachmentDetach {
                 part: part_id,
                 time,
@@ -108,7 +108,7 @@ async fn dispose_rt(
     state
         .api
         .write(
-            user.user_id(),
+            Box::new(user),
             ApiWrite::AttachmentDispose { part, time, all },
         )
         .await?;
@@ -126,7 +126,7 @@ async fn recover_rt(
     } = event;
     state
         .api
-        .write(user.user_id(), ApiWrite::AttachmentRecover { part, all })
+        .write(Box::new(user), ApiWrite::AttachmentRecover { part, all })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

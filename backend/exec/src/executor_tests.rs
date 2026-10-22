@@ -30,7 +30,9 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
-use tb_domain::test_support::{MemStore, sole_live};
+use tb_domain::test_support::{
+    MemStore, fixtures::sample_purchase_date, part_type_ids::CHAIN, sole_live,
+};
 use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, ApiRead, ApiWrite, Attachment, AttachmentStore,
     Error, OnboardingStatus, Part, PartId, PartNote, PartNoteId, PartNoteStore, PartStore,
@@ -45,10 +47,14 @@ use time::OffsetDateTime;
 use tokio::sync::{broadcast, oneshot};
 
 use crate::executor::{
-    DbBackoff, Probe, Select, run_request, select_message, sleep_or_take_request, stop_remaining,
+    DbBackoff, Probe, Select, deliver_frame, run_request, select_message, sleep_or_take_request,
+    stop_remaining,
 };
 use crate::message::{Request, push_frame};
-use crate::{Action, Message, Txn, TxnSource, next_action, request_channel};
+use crate::{
+    Action, ExecutorStatus, FramePusher, Message, Registry, ServiceApi, Txn, TxnSource,
+    next_action, request_channel,
+};
 
 /// A future that never resolves: stands in for the Strava queue probe being
 /// blocked (a slow or busy queue), so the select has a second, non-ready
@@ -69,7 +75,7 @@ async fn ready_probe(probe: Probe) -> Option<Probe> {
 }
 
 fn request() -> (Request, oneshot::Receiver<TbResult<WriteOutcome>>) {
-    Request::new_write(ApiWrite::UserOnboardingPostpone)
+    Request::new_write(ApiWrite::UserOnboardingPostpone, Box::new(UnitSession))
 }
 
 // --- `next_action`: the reclaim decision ---
@@ -370,7 +376,7 @@ fn request_bundles_write_and_reply() {
 fn request_bundles_read_and_reply() {
     // The read variant bundles the `ApiRead` descriptor and its oneshot the
     // same way the write does (spec #558 §3.2).
-    let (req, mut reply) = Request::new_read(ApiRead::PartCategories);
+    let (req, mut reply) = Request::new_read(ApiRead::PartCategories, Box::new(UnitSession));
     assert!(
         matches!(
             reply.try_recv(),
@@ -434,7 +440,7 @@ fn frame_push_skips_empty_summaries() {
 // `Txn`/`StravaStore` seam, so the loop's dispatch runs its real domain ops
 // against real in-memory behavior. The `StravaDataStore` surface is canned
 // (the empty user list the `AllStats` test reads): the unit tests never
-/// drive a Strava queue.
+// drive a Strava queue.
 
 /// The fake transaction source: `begin` fails or succeeds, on demand.
 struct FakeSource {
@@ -988,9 +994,6 @@ impl Session for UnitSession {
     fn shop(&self) -> Option<ShopId> {
         None
     }
-    fn set_shop(&mut self, _shop: Option<ShopId>) -> TbResult<()> {
-        Ok(())
-    }
     fn is_admin(&self) -> bool {
         false
     }
@@ -1024,9 +1027,6 @@ impl Session for GearSession {
     }
     fn shop(&self) -> Option<ShopId> {
         None
-    }
-    fn set_shop(&mut self, _shop: Option<ShopId>) -> TbResult<()> {
-        Ok(())
     }
     fn is_admin(&self) -> bool {
         false
@@ -1069,9 +1069,6 @@ impl Session for EmptyGearSession {
     fn shop(&self) -> Option<ShopId> {
         None
     }
-    fn set_shop(&mut self, _shop: Option<ShopId>) -> TbResult<()> {
-        Ok(())
-    }
     fn is_admin(&self) -> bool {
         false
     }
@@ -1098,6 +1095,142 @@ impl StravaSession for EmptyGearSession {
     }
 }
 
+// --- Context-based delivery (spec #517, ticket #584) ---
+//
+// The executor routes a committed `Summary` by the session's `shop()` value:
+// a user context pushes to the executor's own personal stream; a shop context
+// pushes to the shop stream and the part owner's personal stream (never the
+// executor's own stream). `deliver_frame` is the routing unit; the tests
+// exercise it directly (full control over the context and the part owner) and
+// through `run_request` (the session's `shop()` feeds the routing).
+
+/// A `FramePusher` test double: records the `push_to_shop`/`push_to_user`
+/// calls (target + summary) so the delivery routing is observable.
+#[derive(Default)]
+struct RecordingPusher {
+    calls: std::sync::Arc<std::sync::Mutex<Vec<PushCall>>>,
+}
+
+/// One recorded push: the target (a shop stream or a user's personal stream)
+/// and the frame it carried.
+#[derive(Debug, Clone, PartialEq)]
+enum PushCall {
+    /// A push to a shop stream.
+    Shop(ShopId, Summary),
+    /// A push to a user's personal stream.
+    User(UserId, Summary),
+}
+
+impl RecordingPusher {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    /// The recorded pushes (a clone: the test reads them after the loop).
+    fn calls(&self) -> Vec<PushCall> {
+        self.calls.lock().unwrap().clone()
+    }
+}
+
+#[async_trait::async_trait]
+impl FramePusher for RecordingPusher {
+    async fn push_to_shop(&self, shop_id: ShopId, summary: Summary) {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(PushCall::Shop(shop_id, summary));
+    }
+
+    async fn push_to_user(&self, user_id: UserId, summary: Summary) {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(PushCall::User(user_id, summary));
+    }
+}
+
+/// A `Session`/`StravaSession` in a **shop context**: `shop()` returns the
+/// given shop id (the delivery tests' shop-context session).
+struct ShopSession {
+    shop_id: ShopId,
+}
+
+impl Session for ShopSession {
+    fn user_id(&self) -> UserId {
+        UserId::from(1)
+    }
+    fn shop(&self) -> Option<ShopId> {
+        Some(self.shop_id)
+    }
+    fn is_admin(&self) -> bool {
+        false
+    }
+}
+
+#[async_trait::async_trait]
+impl StravaSession for ShopSession {
+    fn strava_id(&self) -> StravaId {
+        StravaId::from(42)
+    }
+    async fn request_json<T: DeserializeOwned>(
+        &mut self,
+        _uri: &str,
+        _store: &mut impl StravaDataStore,
+    ) -> TbResult<T> {
+        panic!("the delivery tests never call the Strava API")
+    }
+    async fn deauthorize(&mut self, _store: &mut impl StravaDataStore) -> TbResult<()> {
+        panic!("the delivery tests never deauthorize a user")
+    }
+}
+
+/// A part owned by `owner` (the routing's `push_to_user` target).
+fn part_owned_by(owner: UserId) -> Part {
+    Part {
+        id: PartId::from(1),
+        owner,
+        what: PartTypeId::from(1),
+        name: "Test Part".to_string(),
+        vendor: "Vendor".to_string(),
+        model: "Model".to_string(),
+        purchase: OffsetDateTime::UNIX_EPOCH,
+        last_used: OffsetDateTime::UNIX_EPOCH,
+        disposed_at: None,
+        usage: UsageId::default(),
+        source: None,
+        shop: None,
+    }
+}
+
+/// A non-empty `Summary` with a single part owned by `owner`: the frame a
+/// shop-context write would deliver.
+fn summary_owned_by(owner: UserId) -> Summary {
+    let mut summary = Summary::default();
+    summary.parts.upsert(part_owned_by(owner));
+    summary
+}
+
+/// A non-empty `Summary` with a service referencing a part (no `Part` in the
+/// summary — the common shape for service operations): the frame a
+/// shop-context service write would deliver. The part owner is not derivable
+/// from this summary; the executor resolves it via the store.
+fn summary_with_service() -> Summary {
+    let service = Service {
+        id: ServiceId::default(),
+        part_id: PartId::from(1),
+        time: OffsetDateTime::UNIX_EPOCH,
+        redone: OffsetDateTime::UNIX_EPOCH,
+        name: "Test Service".to_string(),
+        notes: String::new(),
+        usage: UsageId::default(),
+        successor: None,
+        plans: Vec::new(),
+    };
+    let mut summary = Summary::default();
+    summary.services.upsert(service);
+    summary
+}
+
 // --- `select_message` and the sleep: the read's select discipline ---
 
 #[tokio::test]
@@ -1105,7 +1238,7 @@ async fn select_read_wins_over_ready_strava() {
     // Both ready at the same instant: the request branch (a read) is polled
     // first — a read is never delayed by the Strava side (spec #558 §3.7).
     let (tx, mut rx) = request_channel();
-    let (req, _reply) = Request::new_read(ApiRead::PartCategories);
+    let (req, _reply) = Request::new_read(ApiRead::PartCategories, Box::new(UnitSession));
     let _ = tx.send(req);
     let wake = tokio::sync::Notify::new();
     let mut wake_fut = Box::pin(wake.notified());
@@ -1135,7 +1268,7 @@ async fn read_arriving_during_a_sleep_is_taken_immediately() {
     });
     // Let the task park in the 30s sleep, then enqueue the read.
     tokio::time::sleep(Duration::from_millis(50)).await;
-    let (req, _reply) = Request::new_read(ApiRead::PartCategories);
+    let (req, _reply) = Request::new_read(ApiRead::PartCategories, Box::new(UnitSession));
     tx.send(req).expect("the channel is open");
     let got = tokio::time::timeout(Duration::from_secs(5), task)
         .await
@@ -1161,8 +1294,17 @@ async fn failed_read_never_arms_the_backoff_and_the_loop_survives() {
     backoff.record_failure();
     backoff.record_failure(); // prime: the next pause would be 4s
     let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_read(ApiRead::PartCategories);
-    let result = run_request(&source, &mut session, request, &frames, &mut backoff).await;
+    let (request, reply) = Request::new_read(ApiRead::PartCategories, Box::new(UnitSession));
+    let pusher = RecordingPusher::new();
+    let result = run_request(
+        &source,
+        &mut session,
+        request,
+        &frames,
+        &mut backoff,
+        &pusher,
+    )
+    .await;
     assert!(result.is_ok(), "a failed read must not end the loop");
     let err = reply
         .await
@@ -1187,8 +1329,18 @@ async fn domain_failed_read_resets_the_backoff_and_the_loop_survives() {
     backoff.record_failure();
     backoff.record_failure(); // prime: the next pause would be 4s
     let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_read(ApiRead::Part(PartId::from(999_999)));
-    let result = run_request(&source, &mut session, request, &frames, &mut backoff).await;
+    let (request, reply) =
+        Request::new_read(ApiRead::Part(PartId::from(999_999)), Box::new(UnitSession));
+    let pusher = RecordingPusher::new();
+    let result = run_request(
+        &source,
+        &mut session,
+        request,
+        &frames,
+        &mut backoff,
+        &pusher,
+    )
+    .await;
     assert!(result.is_ok(), "a domain-failed read must not end the loop");
     let err = reply
         .await
@@ -1213,8 +1365,17 @@ async fn cleanly_committed_read_resets_the_backoff() {
     backoff.record_failure();
     backoff.record_failure(); // prime: the next pause would be 4s
     let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_read(ApiRead::User { shop: None });
-    let result = run_request(&source, &mut session, request, &frames, &mut backoff).await;
+    let (request, reply) = Request::new_read(ApiRead::User, Box::new(UnitSession));
+    let pusher = RecordingPusher::new();
+    let result = run_request(
+        &source,
+        &mut session,
+        request,
+        &frames,
+        &mut backoff,
+        &pusher,
+    )
+    .await;
     assert!(result.is_ok(), "a committed read must not end the loop");
     let outcome = reply
         .await
@@ -1248,7 +1409,16 @@ async fn all_stats_round_trips_through_the_loop_transaction() {
     let mut backoff = DbBackoff::new();
     let (frames, _frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_all_stats();
-    let result = run_request(&source, &mut session, request, &frames, &mut backoff).await;
+    let pusher = RecordingPusher::new();
+    let result = run_request(
+        &source,
+        &mut session,
+        request,
+        &frames,
+        &mut backoff,
+        &pusher,
+    )
+    .await;
     assert!(
         result.is_ok(),
         "a committed stats read must not end the loop"
@@ -1270,7 +1440,16 @@ async fn gear_hydration_pushes_the_created_parts_frame() {
     let mut backoff = DbBackoff::new();
     let (frames, mut frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_gear();
-    let result = run_request(&source, &mut session, request, &frames, &mut backoff).await;
+    let pusher = RecordingPusher::new();
+    let result = run_request(
+        &source,
+        &mut session,
+        request,
+        &frames,
+        &mut backoff,
+        &pusher,
+    )
+    .await;
     assert!(
         result.is_ok(),
         "a committed hydration must not end the loop"
@@ -1306,7 +1485,16 @@ async fn failed_gear_arms_the_backoff_like_a_write() {
     backoff.record_failure(); // prime: the next pause would be 2s
     let (frames, _frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_gear();
-    let result = run_request(&source, &mut session, request, &frames, &mut backoff).await;
+    let pusher = RecordingPusher::new();
+    let result = run_request(
+        &source,
+        &mut session,
+        request,
+        &frames,
+        &mut backoff,
+        &pusher,
+    )
+    .await;
     assert!(result.is_ok(), "a failed hydration must not end the loop");
     let err = reply
         .await
@@ -1331,7 +1519,16 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
     let mut backoff = DbBackoff::new();
     let (frames, mut frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_gear();
-    let result = run_request(&source, &mut session, request, &frames, &mut backoff).await;
+    let pusher = RecordingPusher::new();
+    let result = run_request(
+        &source,
+        &mut session,
+        request,
+        &frames,
+        &mut backoff,
+        &pusher,
+    )
+    .await;
     assert!(
         result.is_ok(),
         "a committed hydration must not end the loop"
@@ -1344,5 +1541,515 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
     assert!(
         frame_rx.try_recv().is_err(),
         "no new gear: an empty summary pushes no frame"
+    );
+}
+
+// --- Shop stream infrastructure (spec #517, ticket #582) ---
+//
+// The `Registry` owns a per-shop `broadcast` channel map (the shop streams),
+// a `FramePusher` (`push_to_shop`/`push_to_user`), and `ServiceApi::
+// subscribe_shop` (owner-only, on-demand). The tests drive the `Registry`
+// through its public surface (`subscribe_shop`, `push_to_shop`,
+// `push_to_user`, `shop_open`); the store is a `MemStore` shared across
+// transactions so a shop created before the `Registry` is visible to
+// `subscribe_shop`'s ownership read.
+
+/// A `TxnSource` whose connections share one `MemStore` (a sibling handle on
+/// the same state): a shop created before the `Registry` is built is visible
+/// to `subscribe_shop`'s ownership read (the prepopulated fixture has no
+/// shops, so the tests create their own in the shared store).
+struct ShopSource {
+    store: MemStore,
+}
+
+impl Clone for ShopSource {
+    fn clone(&self) -> Self {
+        Self {
+            store: self.store.begin(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl TxnSource for ShopSource {
+    type Conn = FakeConn;
+
+    async fn begin(&self) -> TbResult<FakeConn> {
+        Ok(FakeConn {
+            store: self.store.begin(),
+        })
+    }
+}
+
+/// A shop owned by `owner` in the shared `MemStore`.
+async fn create_shop(store: &MemStore, owner: UserId) -> Shop {
+    let mut store = store.begin();
+    ShopId::create("Test Shop".into(), None, true, owner, &mut store)
+        .await
+        .expect("the shop is created")
+}
+
+/// A non-empty `Summary` (a frame the shop/user streams should deliver).
+fn non_empty_summary() -> Summary {
+    let mut summary = Summary::default();
+    summary.usages.upsert(Usage::default());
+    summary
+}
+
+#[tokio::test]
+async fn subscribe_shop_rejects_a_non_owner() {
+    // A non-owner is forbidden (the web layer maps this to a 403).
+    let store = MemStore::new();
+    let registry = Registry::new(
+        ShopSource {
+            store: store.begin(),
+        },
+        Duration::from_secs(60),
+    );
+    let shop = create_shop(&store, UserId::from(1)).await;
+
+    let result = registry.subscribe_shop(UserId::from(2), shop.id).await;
+    assert!(
+        matches!(result, Err(Error::Forbidden(_))),
+        "a non-owner is forbidden, got {result:?}"
+    );
+}
+
+#[tokio::test]
+async fn shop_stream_lifecycle_create_receive_drop() {
+    let store = MemStore::new();
+    let registry = Registry::new(
+        ShopSource {
+            store: store.begin(),
+        },
+        Duration::from_secs(60),
+    );
+    let shop = create_shop(&store, UserId::from(1)).await;
+
+    // Created on demand: no stream before the owner's first connect.
+    assert!(
+        !registry.shop_open(shop.id).await,
+        "no shop stream before a connect"
+    );
+
+    // The owner's connect opens the channel.
+    let mut rx = registry
+        .subscribe_shop(UserId::from(1), shop.id)
+        .await
+        .expect("the owner can subscribe");
+    assert!(
+        registry.shop_open(shop.id).await,
+        "the channel is open while a receiver is attached"
+    );
+
+    // A frame pushed to the shop stream reaches the subscriber.
+    let summary = non_empty_summary();
+    registry.push_to_shop(shop.id, summary.clone()).await;
+    let got = rx.recv().await.expect("the subscriber receives the frame");
+    assert_eq!(got, summary);
+
+    // Dropping the last receiver closes the channel: the "open shop" check
+    // (receiver_count() > 0) is no longer met, so the entry is reaped.
+    drop(rx);
+    assert!(
+        !registry.shop_open(shop.id).await,
+        "the channel is dropped when the last receiver disconnects"
+    );
+}
+
+#[tokio::test]
+async fn push_to_shop_is_a_noop_without_a_subscriber() {
+    let store = MemStore::new();
+    let registry = Registry::new(
+        ShopSource {
+            store: store.begin(),
+        },
+        Duration::from_secs(60),
+    );
+    let shop = create_shop(&store, UserId::from(1)).await;
+
+    // No subscriber: the push is dropped (no panic, no receiver to send to).
+    registry.push_to_shop(shop.id, non_empty_summary()).await;
+
+    // And after a subscriber disconnects, the push is dropped too (the
+    // reaped channel has no receiver, so the send is a no-op).
+    let rx = registry
+        .subscribe_shop(UserId::from(1), shop.id)
+        .await
+        .expect("the owner can subscribe");
+    drop(rx);
+    registry.push_to_shop(shop.id, non_empty_summary()).await;
+}
+
+#[tokio::test]
+async fn push_to_user_delivers_to_a_running_executor() {
+    let registry = Registry::new(
+        ShopSource {
+            store: MemStore::new(),
+        },
+        Duration::from_secs(60),
+    );
+    let mut frame_rx = registry
+        .install_executor_for_test(UserId::from(1), ExecutorStatus::Running)
+        .await;
+
+    let summary = non_empty_summary();
+    registry
+        .push_to_user(UserId::from(1), summary.clone())
+        .await;
+
+    let got = frame_rx
+        .try_recv()
+        .expect("the running executor's frame channel receives the frame");
+    assert_eq!(got, summary);
+}
+
+#[tokio::test]
+async fn push_to_user_is_a_noop_without_a_running_executor() {
+    let registry = Registry::new(
+        ShopSource {
+            store: MemStore::new(),
+        },
+        Duration::from_secs(60),
+    );
+
+    // No executor for the user: a no-op (no panic, no receiver).
+    registry
+        .push_to_user(UserId::from(1), non_empty_summary())
+        .await;
+
+    // A reaped executor: a no-op (the frame channel is not fed).
+    let mut frame_rx = registry
+        .install_executor_for_test(UserId::from(2), ExecutorStatus::Reaped)
+        .await;
+    registry
+        .push_to_user(UserId::from(2), non_empty_summary())
+        .await;
+    assert!(
+        frame_rx.try_recv().is_err(),
+        "a reaped executor receives no frame"
+    );
+}
+
+// --- Context-based delivery: the five scenarios (spec #517, ticket #584) ---
+
+#[tokio::test]
+async fn deliver_user_context_to_personal_stream() {
+    // AC2: a user context (`shop == None`) delivers to the executor's own
+    // personal stream (the existing `push_frame` behavior, unchanged) — and
+    // never to a shop or user stream through the pusher.
+    let pusher = RecordingPusher::new();
+    let (frames, mut frame_rx) = broadcast::channel(4);
+    let summary = summary_owned_by(UserId::from(1));
+
+    deliver_frame(&pusher, &frames, None, None, &summary).await;
+
+    let got = frame_rx
+        .try_recv()
+        .expect("the user's personal stream gets the frame");
+    assert_eq!(got, summary);
+    assert!(
+        pusher.calls().is_empty(),
+        "a user context pushes nothing through the pusher, got {:?}",
+        pusher.calls()
+    );
+}
+
+#[tokio::test]
+async fn deliver_shop_context_to_shop_stream() {
+    // AC3: a shop context delivers to the shop stream via `push_to_shop`.
+    let pusher = RecordingPusher::new();
+    let (frames, _frame_rx) = broadcast::channel(4);
+    let shop_id = ShopId::from(7);
+    let summary = summary_owned_by(UserId::from(2));
+
+    deliver_frame(
+        &pusher,
+        &frames,
+        Some(shop_id),
+        Some(UserId::from(2)),
+        &summary,
+    )
+    .await;
+
+    assert!(
+        pusher
+            .calls()
+            .iter()
+            .any(|call| matches!(call, PushCall::Shop(sid, s) if *sid == shop_id && *s == summary)),
+        "the shop stream receives the frame, got {:?}",
+        pusher.calls()
+    );
+}
+
+#[tokio::test]
+async fn deliver_shop_context_to_part_owner() {
+    // AC4: a shop context delivers to the part owner's personal stream via
+    // `push_to_user` (the single-owner Summary: the first part's owner).
+    let pusher = RecordingPusher::new();
+    let (frames, _frame_rx) = broadcast::channel(4);
+    let shop_id = ShopId::from(7);
+    let part_owner = UserId::from(2);
+    let summary = summary_owned_by(part_owner);
+
+    deliver_frame(&pusher, &frames, Some(shop_id), Some(part_owner), &summary).await;
+
+    assert!(
+        pusher.calls().iter().any(
+            |call| matches!(call, PushCall::User(uid, s) if *uid == part_owner && *s == summary)
+        ),
+        "the part owner's personal stream receives the frame, got {:?}",
+        pusher.calls()
+    );
+}
+
+#[tokio::test]
+async fn deliver_shop_context_not_to_shop_owner() {
+    // AC5: a shop context does NOT deliver to the shop owner's personal
+    // stream (the executor's own `frames` channel) when the shop owner is not
+    // the part owner — the frame goes only to the shop stream and the part
+    // owner. Here the part owner (2) is not the shop owner (the executor's
+    // user, 1).
+    let pusher = RecordingPusher::new();
+    let (frames, mut frame_rx) = broadcast::channel(4);
+    let shop_id = ShopId::from(7);
+    let summary = summary_owned_by(UserId::from(2));
+
+    deliver_frame(
+        &pusher,
+        &frames,
+        Some(shop_id),
+        Some(UserId::from(2)),
+        &summary,
+    )
+    .await;
+
+    // The executor's own (shop owner's) personal stream gets nothing.
+    assert!(
+        frame_rx.try_recv().is_err(),
+        "the shop owner's personal stream must not receive the frame"
+    );
+    // The pusher never targets the shop owner (1) — only the part owner (2).
+    let calls = pusher.calls();
+    assert!(
+        !calls
+            .iter()
+            .any(|call| matches!(call, PushCall::User(uid, _) if *uid == UserId::from(1))),
+        "the shop owner (1) is not the part owner, so no push targets them, got {calls:?}"
+    );
+    assert!(
+        calls
+            .iter()
+            .any(|call| matches!(call, PushCall::User(uid, _) if *uid == UserId::from(2))),
+        "the part owner (2) is targeted, got {calls:?}"
+    );
+}
+
+#[tokio::test]
+async fn deliver_shop_context_to_shop_owner_when_part_owner() {
+    // AC6: a shop context delivers to the shop owner's personal stream when
+    // the shop owner IS the part owner — the `push_to_user(shop_owner)` call
+    // targets the shop owner's own executor stream.
+    let pusher = RecordingPusher::new();
+    let (frames, _frame_rx) = broadcast::channel(4);
+    let shop_id = ShopId::from(7);
+    let shop_owner = UserId::from(2);
+    let summary = summary_owned_by(shop_owner); // part owner == shop owner
+
+    deliver_frame(&pusher, &frames, Some(shop_id), Some(shop_owner), &summary).await;
+
+    assert!(
+        pusher.calls().iter().any(
+            |call| matches!(call, PushCall::User(uid, s) if *uid == shop_owner && *s == summary)
+        ),
+        "the shop owner (the part owner) receives the frame via push_to_user, got {:?}",
+        pusher.calls()
+    );
+}
+
+#[tokio::test]
+async fn deliver_shop_context_service_summary_to_part_owner() {
+    // The common shop-context shape: a service operation produces a summary
+    // with a service (referencing a part) but no `Part` entity. The part
+    // owner is resolved by the executor (via the store) and passed to
+    // `deliver_frame` — the summary alone does not carry it.
+    let pusher = RecordingPusher::new();
+    let (frames, _frame_rx) = broadcast::channel(4);
+    let shop_id = ShopId::from(7);
+    let part_owner = UserId::from(2);
+    let summary = summary_with_service();
+
+    // The summary references a part (via the service) but does not contain
+    // the part itself — `referenced_part` finds it.
+    assert_eq!(
+        summary.referenced_part(),
+        Some(PartId::from(1)),
+        "the service's part_id is the referenced part"
+    );
+
+    deliver_frame(&pusher, &frames, Some(shop_id), Some(part_owner), &summary).await;
+
+    assert!(
+        pusher.calls().iter().any(
+            |call| matches!(call, PushCall::User(uid, s) if *uid == part_owner && *s == summary)
+        ),
+        "the part owner's personal stream receives the frame, got {:?}",
+        pusher.calls()
+    );
+    assert!(
+        pusher
+            .calls()
+            .iter()
+            .any(|call| matches!(call, PushCall::Shop(sid, s) if *sid == shop_id && *s == summary)),
+        "the shop stream also receives the frame, got {:?}",
+        pusher.calls()
+    );
+}
+
+#[tokio::test]
+async fn run_request_shop_context_routes_via_pusher_not_own_stream() {
+    // Wiring: a write whose acting session is in a shop context routes the
+    // committed `Summary`'s frame through the pusher (shop stream + part
+    // owner) and NOT the executor's own `frames` channel. The routing keys on
+    // the **acting session's** `shop()` (see the production-path test
+    // below); here the acting session is in a shop context. The part created
+    // by `PartCreate` is owned by the session user (1) — the part owner.
+    let source = FakeSource { begin_fails: false };
+    let mut session = ShopSession {
+        shop_id: ShopId::from(7),
+    };
+    let mut backoff = DbBackoff::new();
+    let (frames, mut frame_rx) = broadcast::channel(4);
+    let pusher = RecordingPusher::new();
+    let (request, reply) = Request::new_write(
+        ApiWrite::PartCreate {
+            name: "Shop Chain".to_string(),
+            vendor: "Shimano".to_string(),
+            model: "CN-HG62".to_string(),
+            what: CHAIN,
+            purchase: sample_purchase_date(),
+        },
+        Box::new(ShopSession {
+            shop_id: ShopId::from(7),
+        }),
+    );
+
+    let result = run_request(
+        &source,
+        &mut session,
+        request,
+        &frames,
+        &mut backoff,
+        &pusher,
+    )
+    .await;
+    assert!(result.is_ok(), "a committed write must not end the loop");
+    let outcome = reply
+        .await
+        .expect("the oneshot resolves")
+        .expect("the write succeeds");
+    let summary = outcome.summary().clone();
+
+    // The executor's own (shop owner's) personal stream gets nothing.
+    assert!(
+        frame_rx.try_recv().is_err(),
+        "a shop-context write must not push to the executor's own stream"
+    );
+    // The pusher routes to the shop stream and the part owner (the session
+    // user, 1).
+    let calls = pusher.calls();
+    assert!(
+        calls.iter().any(|call| {
+            matches!(
+                call,
+                PushCall::Shop(sid, s) if *sid == ShopId::from(7) && *s == summary
+            )
+        }),
+        "the shop stream receives the frame, got {calls:?}"
+    );
+    assert!(
+        calls.iter().any(|call| {
+            matches!(
+                call,
+                PushCall::User(uid, s) if *uid == UserId::from(1) && *s == summary
+            )
+        }),
+        "the part owner (the session user) receives the frame, got {calls:?}"
+    );
+}
+
+#[tokio::test]
+async fn write_shop_context_flows_through_the_production_path() {
+    // The production path (spec #517, ticket #588): the shop travels with the
+    // **acting session**, not the executor's session. In production the
+    // executor's session has no shop (`StravaUserSession::shop()` is always
+    // `None`), so a user-context executor session (`UnitSession`,
+    // `shop() == None`) plus a shop-context acting session (`ShopSession`,
+    // `shop() == Some(shop_id)`) must route the committed `Summary` to the
+    // shop stream and the part owner's personal stream — and NOT to the
+    // executor's own `frames` channel. This is the test that catches the bug
+    // where the routing keyed on the executor's `session.shop()` (always
+    // `None` in production), which left the shop stream dead and leaked the
+    // frame into the shop owner's personal stream.
+    let source = FakeSource { begin_fails: false };
+    let mut session = UnitSession; // user context: shop() == None (production)
+    let mut backoff = DbBackoff::new();
+    let (frames, mut frame_rx) = broadcast::channel(4);
+    let pusher = RecordingPusher::new();
+    // The write carries the shop context (the production path).
+    let (request, reply) = Request::new_write(
+        ApiWrite::PartCreate {
+            name: "Shop Chain".to_string(),
+            vendor: "Shimano".to_string(),
+            model: "CN-HG62".to_string(),
+            what: CHAIN,
+            purchase: sample_purchase_date(),
+        },
+        Box::new(ShopSession {
+            shop_id: ShopId::from(7),
+        }),
+    );
+
+    let result = run_request(
+        &source,
+        &mut session,
+        request,
+        &frames,
+        &mut backoff,
+        &pusher,
+    )
+    .await;
+    assert!(result.is_ok(), "a committed write must not end the loop");
+    let outcome = reply
+        .await
+        .expect("the oneshot resolves")
+        .expect("the write succeeds");
+    let summary = outcome.summary().clone();
+
+    // The executor's own (shop owner's) personal stream gets nothing.
+    assert!(
+        frame_rx.try_recv().is_err(),
+        "a shop-context write must not push to the executor's own stream"
+    );
+    // The pusher routes to the shop stream and the part owner (the session
+    // user, 1 — the owner of the created part).
+    let calls = pusher.calls();
+    assert!(
+        calls.iter().any(|call| {
+            matches!(
+                call,
+                PushCall::Shop(sid, s) if *sid == ShopId::from(7) && *s == summary
+            )
+        }),
+        "the shop stream receives the frame, got {calls:?}"
+    );
+    assert!(
+        calls.iter().any(|call| {
+            matches!(
+                call,
+                PushCall::User(uid, s) if *uid == UserId::from(1) && *s == summary
+            )
+        }),
+        "the part owner (the session user) receives the frame, got {calls:?}"
     );
 }

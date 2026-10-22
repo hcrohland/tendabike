@@ -29,7 +29,7 @@ use http::StatusCode;
 use log::trace;
 
 use crate::{RequestSession, appstate::AppState, domain::created_entity, error::AppError};
-use tb_domain::{ApiWrite, ServicePlan, ServicePlanId, Session};
+use tb_domain::{ApiWrite, ServicePlan, ServicePlanId};
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
@@ -45,7 +45,7 @@ async fn create(
     trace!("ServicePlan::create");
     let outcome = state
         .api
-        .write(user.user_id(), ApiWrite::ServicePlanCreate { plan })
+        .write(Box::new(user), ApiWrite::ServicePlanCreate { plan })
         .await?;
     let plan = created_entity(&outcome.summary().plans, "service plan")?;
     Ok((StatusCode::CREATED, Json(plan)))
@@ -58,7 +58,7 @@ async fn update(
 ) -> Result<StatusCode, AppError> {
     state
         .api
-        .write(user.user_id(), ApiWrite::ServicePlanUpdate { plan })
+        .write(Box::new(user), ApiWrite::ServicePlanUpdate { plan })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -70,7 +70,7 @@ async fn delete_plan(
 ) -> Result<StatusCode, AppError> {
     state
         .api
-        .write(user.user_id(), ApiWrite::ServicePlanDelete { id })
+        .write(Box::new(user), ApiWrite::ServicePlanDelete { id })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

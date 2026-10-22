@@ -36,7 +36,7 @@
 //! (spec §4.5 — an empty `Summary` pushes nothing; a dropped frame is
 //! non-fatal, the client's reconnect + full refresh covers it).
 
-use tb_domain::{ApiRead, ApiWrite, ReadOutcome, Summary, TbResult, WriteOutcome};
+use tb_domain::{ApiRead, ApiWrite, ReadOutcome, Session, Summary, TbResult, WriteOutcome};
 use tb_strava::StravaStat;
 use tb_strava::event::Event;
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -79,6 +79,13 @@ pub enum Request {
     Write {
         /// The write to apply.
         write: ApiWrite,
+        /// The caller's acting session (spec #517, ticket #588): the session
+        /// extracted from the request, which the loop hands to `exec` (so the
+        /// domain op sees the real `shop()` context) and which keys the
+        /// delivery routing on `shop()`. In production the executor's own
+        /// session has no shop, so the acting session — not the executor's —
+        /// is what carries the shop context.
+        session: Box<dyn Session>,
         /// Resolved exactly once when the write is committed or fails.
         reply: oneshot::Sender<TbResult<WriteOutcome>>,
     },
@@ -87,6 +94,9 @@ pub enum Request {
     Read {
         /// The read to apply.
         read: ApiRead,
+        /// The caller's acting session (spec #517, ticket #588): handed to
+        /// `read` so the domain op sees the real `shop()` context.
+        session: Box<dyn Session>,
         /// Resolved exactly once when the read commits or fails.
         reply: oneshot::Sender<TbResult<ReadOutcome>>,
     },
@@ -108,17 +118,41 @@ pub enum Request {
 
 impl Request {
     /// Pairs a write with a fresh reply channel: the request goes on the
-    /// user's executor channel, the receiver is awaited by the route.
-    pub fn new_write(write: ApiWrite) -> (Self, oneshot::Receiver<TbResult<WriteOutcome>>) {
+    /// user's executor channel, the receiver is awaited by the route. `session`
+    /// is the caller's acting session (spec #517, ticket #588) — the loop
+    /// hands it to `exec` and keys the delivery routing on `shop()`.
+    pub fn new_write(
+        write: ApiWrite,
+        session: Box<dyn Session>,
+    ) -> (Self, oneshot::Receiver<TbResult<WriteOutcome>>) {
         let (reply, rx) = oneshot::channel();
-        (Self::Write { write, reply }, rx)
+        (
+            Self::Write {
+                write,
+                session,
+                reply,
+            },
+            rx,
+        )
     }
 
     /// Pairs a read with a fresh reply channel: the request goes on the
-    /// user's executor channel, the receiver is awaited by the route.
-    pub fn new_read(read: ApiRead) -> (Self, oneshot::Receiver<TbResult<ReadOutcome>>) {
+    /// user's executor channel, the receiver is awaited by the route. `session`
+    /// is the caller's acting session (spec #517, ticket #588), handed to
+    /// `read`.
+    pub fn new_read(
+        read: ApiRead,
+        session: Box<dyn Session>,
+    ) -> (Self, oneshot::Receiver<TbResult<ReadOutcome>>) {
         let (reply, rx) = oneshot::channel();
-        (Self::Read { read, reply }, rx)
+        (
+            Self::Read {
+                read,
+                session,
+                reply,
+            },
+            rx,
+        )
     }
 
     /// The hydration write with a fresh reply channel (spec #558 §4).

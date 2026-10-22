@@ -36,7 +36,7 @@ fn outcome_summary(outcome: WriteOutcome) -> Summary {
 #[tokio::test]
 async fn part_create_dispatches() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let summary = outcome_summary(
         exec(
             ApiWrite::PartCreate {
@@ -46,7 +46,7 @@ async fn part_create_dispatches() -> TbResult<()> {
                 what: CHAIN,
                 purchase: sample_purchase_date(),
             },
-            &mut session,
+            &session,
             &mut store,
         )
         .await?,
@@ -62,7 +62,7 @@ async fn part_create_dispatches() -> TbResult<()> {
 #[tokio::test]
 async fn part_change_dispatches() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let id = PartId::from(13); // "Spare Chain 1" — loose, owned by user 1
     let summary = outcome_summary(
         exec(
@@ -73,7 +73,7 @@ async fn part_change_dispatches() -> TbResult<()> {
                 model: "New Model".to_string(),
                 purchase: sample_purchase_date(),
             },
-            &mut session,
+            &session,
             &mut store,
         )
         .await?,
@@ -85,10 +85,9 @@ async fn part_change_dispatches() -> TbResult<()> {
 #[tokio::test]
 async fn part_delete_reports_tombstone() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let id = PartId::from(13);
-    let summary =
-        outcome_summary(exec(ApiWrite::PartDelete { id }, &mut session, &mut store).await?);
+    let summary = outcome_summary(exec(ApiWrite::PartDelete { id }, &session, &mut store).await?);
     assert_eq!(summary.parts, only_tombstone(id));
     assert!(store.partid_get_part(id).await.is_err());
     Ok(())
@@ -97,12 +96,12 @@ async fn part_delete_reports_tombstone() -> TbResult<()> {
 #[tokio::test]
 async fn part_delete_missing_is_not_found() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let err = exec(
         ApiWrite::PartDelete {
             id: PartId::from(9999),
         },
-        &mut session,
+        &session,
         &mut store,
     )
     .await
@@ -116,7 +115,7 @@ async fn part_delete_missing_is_not_found() -> TbResult<()> {
 #[tokio::test]
 async fn attach_and_detach_dispatch() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let bike = Part::create(
         "Bike".to_string(),
         "V".to_string(),
@@ -150,7 +149,7 @@ async fn attach_and_detach_dispatch() -> TbResult<()> {
                 hook: chain_hook(),
                 all: false,
             },
-            &mut session,
+            &session,
             &mut store,
         )
         .await?,
@@ -169,7 +168,7 @@ async fn attach_and_detach_dispatch() -> TbResult<()> {
             time,
             all: false,
         },
-        &mut session,
+        &session,
         &mut store,
     )
     .await?;
@@ -187,7 +186,7 @@ async fn attach_and_detach_dispatch() -> TbResult<()> {
 #[tokio::test]
 async fn activity_update_dispatches() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let mut act = store
         .activity_read_by_id(ActivityId::new(1))
         .await?
@@ -197,7 +196,7 @@ async fn activity_update_dispatches() -> TbResult<()> {
     let summary = outcome_summary(
         exec(
             ApiWrite::ActivityUpdate { id, activity: act },
-            &mut session,
+            &session,
             &mut store,
         )
         .await?,
@@ -209,7 +208,7 @@ async fn activity_update_dispatches() -> TbResult<()> {
 #[tokio::test]
 async fn activity_update_id_mismatch_is_bad_request() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let act = store
         .activity_read_by_id(ActivityId::new(1))
         .await?
@@ -220,7 +219,7 @@ async fn activity_update_id_mismatch_is_bad_request() -> TbResult<()> {
             id: ActivityId::new(2),
             activity: act,
         },
-        &mut session,
+        &session,
         &mut store,
     )
     .await
@@ -232,10 +231,10 @@ async fn activity_update_id_mismatch_is_bad_request() -> TbResult<()> {
 #[tokio::test]
 async fn activity_delete_reports_tombstone() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let id = ActivityId::new(3);
     let summary =
-        outcome_summary(exec(ApiWrite::ActivityDelete { id }, &mut session, &mut store).await?);
+        outcome_summary(exec(ApiWrite::ActivityDelete { id }, &session, &mut store).await?);
     assert_eq!(summary.activities, only_tombstone(id));
     assert!(store.activity_read_by_id(id).await?.is_none());
     Ok(())
@@ -244,12 +243,12 @@ async fn activity_delete_reports_tombstone() -> TbResult<()> {
 #[tokio::test]
 async fn activity_delete_missing_is_not_found() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let err = exec(
         ApiWrite::ActivityDelete {
             id: ActivityId::new(999_999),
         },
-        &mut session,
+        &session,
         &mut store,
     )
     .await
@@ -261,7 +260,7 @@ async fn activity_delete_missing_is_not_found() -> TbResult<()> {
 #[tokio::test]
 async fn activity_descend_updates_matched_activity() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     // A row matching fixture activity 1 (start 2023-05-18 22:13:20Z,
     // matched by local minute) with a descend value.
     let csv = "Date,Title,Total Descent\n2023-05-18 22:13:20,Morning Ride,900\n";
@@ -269,7 +268,7 @@ async fn activity_descend_updates_matched_activity() -> TbResult<()> {
         ApiWrite::ActivityDescend {
             data: csv.to_string(),
         },
-        &mut session,
+        &session,
         &mut store,
     )
     .await?;
@@ -295,7 +294,7 @@ async fn activity_descend_updates_matched_activity() -> TbResult<()> {
 #[tokio::test]
 async fn activity_default_gear_assigns_null_gear_activities() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let act = Activity {
         id: ActivityId::new(100),
         user_id: test_user(),
@@ -319,7 +318,7 @@ async fn activity_default_gear_assigns_null_gear_activities() -> TbResult<()> {
             ApiWrite::ActivityDefaultGear {
                 gear: PartId::from(1), // "Main Bike" in the fixture
             },
-            &mut session,
+            &session,
             &mut store,
         )
         .await?,
@@ -344,7 +343,7 @@ async fn activity_default_gear_assigns_null_gear_activities() -> TbResult<()> {
 #[tokio::test]
 async fn partnote_create_text_and_delete_dispatch() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let part = PartId::from(13);
     let summary = outcome_summary(
         exec(
@@ -352,7 +351,7 @@ async fn partnote_create_text_and_delete_dispatch() -> TbResult<()> {
                 part,
                 name: "Check the tension".to_string(),
             },
-            &mut session,
+            &session,
             &mut store,
         )
         .await?,
@@ -366,7 +365,7 @@ async fn partnote_create_text_and_delete_dispatch() -> TbResult<()> {
     let summary = outcome_summary(
         exec(
             ApiWrite::PartNoteDelete { id: note.id },
-            &mut session,
+            &session,
             &mut store,
         )
         .await?,
@@ -379,13 +378,13 @@ async fn partnote_create_text_and_delete_dispatch() -> TbResult<()> {
 #[tokio::test]
 async fn partnote_blank_name_is_bad_request() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let err = exec(
         ApiWrite::PartNoteCreateText {
             part: PartId::from(13),
             name: "   ".to_string(),
         },
-        &mut session,
+        &session,
         &mut store,
     )
     .await
@@ -399,7 +398,7 @@ async fn partnote_blank_name_is_bad_request() -> TbResult<()> {
 #[tokio::test]
 async fn service_create_and_delete_dispatch() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let time = datetime!(2024-06-15 10:00 UTC);
     let summary = outcome_summary(
         exec(
@@ -410,7 +409,7 @@ async fn service_create_and_delete_dispatch() -> TbResult<()> {
                 notes: "Old chain".to_string(),
                 plans: vec![],
             },
-            &mut session,
+            &session,
             &mut store,
         )
         .await?,
@@ -423,7 +422,7 @@ async fn service_create_and_delete_dispatch() -> TbResult<()> {
     let summary = outcome_summary(
         exec(
             ApiWrite::ServiceDelete { id: service.id },
-            &mut session,
+            &session,
             &mut store,
         )
         .await?,
@@ -436,7 +435,7 @@ async fn service_create_and_delete_dispatch() -> TbResult<()> {
 async fn service_create_on_foreign_part_is_forbidden() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
     // Part 1 is owned by user 1; user 2 may not service it.
-    let mut session = crate::test_support::TestSession::new(UserId::from(2));
+    let session = crate::test_support::TestSession::new(UserId::from(2));
     let err = exec(
         ApiWrite::ServiceCreate {
             part: PartId::from(1),
@@ -445,7 +444,7 @@ async fn service_create_on_foreign_part_is_forbidden() -> TbResult<()> {
             notes: "".to_string(),
             plans: vec![],
         },
-        &mut session,
+        &session,
         &mut store,
     )
     .await
@@ -459,7 +458,7 @@ async fn service_create_on_foreign_part_is_forbidden() -> TbResult<()> {
 #[tokio::test]
 async fn serviceplan_create_and_delete_dispatch() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let plan = ServicePlan {
         id: ServicePlanId::from(uuid::Uuid::now_v7()),
         part: Some(PartId::from(13)),
@@ -475,14 +474,8 @@ async fn serviceplan_create_and_delete_dispatch() -> TbResult<()> {
         uid: None,
         energy: None,
     };
-    let summary = outcome_summary(
-        exec(
-            ApiWrite::ServicePlanCreate { plan },
-            &mut session,
-            &mut store,
-        )
-        .await?,
-    );
+    let summary =
+        outcome_summary(exec(ApiWrite::ServicePlanCreate { plan }, &session, &mut store).await?);
     assert_eq!(summary.plans.len(), 1);
     // The create assigns a fresh server id (the caller's is discarded).
     let plan_id = sole_live(&summary.plans).id;
@@ -490,7 +483,7 @@ async fn serviceplan_create_and_delete_dispatch() -> TbResult<()> {
     let summary = outcome_summary(
         exec(
             ApiWrite::ServicePlanDelete { id: plan_id },
-            &mut session,
+            &session,
             &mut store,
         )
         .await?,
@@ -504,7 +497,7 @@ async fn serviceplan_create_and_delete_dispatch() -> TbResult<()> {
 #[tokio::test]
 async fn shop_create_dispatches() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let summary = outcome_summary(
         exec(
             ApiWrite::ShopCreate {
@@ -512,7 +505,7 @@ async fn shop_create_dispatches() -> TbResult<()> {
                 description: None,
                 auto_approve: true,
             },
-            &mut session,
+            &session,
             &mut store,
         )
         .await?,
@@ -527,7 +520,7 @@ async fn shop_create_dispatches() -> TbResult<()> {
 #[tokio::test]
 async fn shop_register_and_unregister_part_dispatch() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let summary = outcome_summary(
         exec(
             ApiWrite::ShopCreate {
@@ -535,7 +528,7 @@ async fn shop_register_and_unregister_part_dispatch() -> TbResult<()> {
                 description: None,
                 auto_approve: true,
             },
-            &mut session,
+            &session,
             &mut store,
         )
         .await?,
@@ -548,7 +541,7 @@ async fn shop_register_and_unregister_part_dispatch() -> TbResult<()> {
             shop: shop_id,
             message: None,
         },
-        &mut session,
+        &session,
         &mut store,
     )
     .await?;
@@ -560,7 +553,7 @@ async fn shop_register_and_unregister_part_dispatch() -> TbResult<()> {
                 shop: shop_id,
                 part,
             },
-            &mut session,
+            &session,
             &mut store,
         )
         .await?,
@@ -573,7 +566,7 @@ async fn shop_register_and_unregister_part_dispatch() -> TbResult<()> {
                 shop: shop_id,
                 part,
             },
-            &mut session,
+            &session,
             &mut store,
         )
         .await?,
@@ -585,7 +578,7 @@ async fn shop_register_and_unregister_part_dispatch() -> TbResult<()> {
 #[tokio::test]
 async fn shop_subscription_create_and_cancel_dispatch() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let summary = outcome_summary(
         exec(
             ApiWrite::ShopCreate {
@@ -593,7 +586,7 @@ async fn shop_subscription_create_and_cancel_dispatch() -> TbResult<()> {
                 description: None,
                 auto_approve: true,
             },
-            &mut session,
+            &session,
             &mut store,
         )
         .await?,
@@ -608,7 +601,7 @@ async fn shop_subscription_create_and_cancel_dispatch() -> TbResult<()> {
                 shop: shop_id,
                 message: Some("Please approve".to_string()),
             },
-            &mut session,
+            &session,
             &mut store,
         )
         .await?,
@@ -623,7 +616,7 @@ async fn shop_subscription_create_and_cancel_dispatch() -> TbResult<()> {
     let summary = outcome_summary(
         exec(
             ApiWrite::ShopSubscriptionCancel { id: sub.id },
-            &mut session,
+            &session,
             &mut store,
         )
         .await?,
@@ -638,11 +631,11 @@ async fn shop_subscription_create_and_cancel_dispatch() -> TbResult<()> {
 #[tokio::test]
 async fn user_onboarding_sync_dispatch() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let summary = outcome_summary(
         exec(
             ApiWrite::UserOnboardingSync { time: 0 },
-            &mut session,
+            &session,
             &mut store,
         )
         .await?,
@@ -655,7 +648,7 @@ async fn user_onboarding_sync_dispatch() -> TbResult<()> {
     // The handler's guard: a second sync is rejected with the same message.
     let err = exec(
         ApiWrite::UserOnboardingSync { time: 0 },
-        &mut session,
+        &session,
         &mut store,
     )
     .await
@@ -670,9 +663,9 @@ async fn user_onboarding_sync_dispatch() -> TbResult<()> {
 #[tokio::test]
 async fn user_onboarding_postpone_dispatch() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let mut session = test_session();
+    let session = test_session();
     let summary =
-        outcome_summary(exec(ApiWrite::UserOnboardingPostpone, &mut session, &mut store).await?);
+        outcome_summary(exec(ApiWrite::UserOnboardingPostpone, &session, &mut store).await?);
     assert_eq!(summary, Summary::default());
     let user = UserStore::get(&mut store, UserId::from(1)).await?;
     assert_eq!(
@@ -681,7 +674,7 @@ async fn user_onboarding_postpone_dispatch() -> TbResult<()> {
     );
 
     // The handler's guard: not pending anymore.
-    let err = exec(ApiWrite::UserOnboardingPostpone, &mut session, &mut store)
+    let err = exec(ApiWrite::UserOnboardingPostpone, &session, &mut store)
         .await
         .unwrap_err();
     assert!(matches!(

@@ -290,12 +290,9 @@ impl WriteOutcome {
 /// [`WriteOutcome`] (the descend carries its [`DescendReport`] alongside).
 pub async fn exec(
     write: ApiWrite,
-    session: &mut impl Session,
+    session: &dyn Session,
     store: &mut impl Store,
 ) -> TbResult<WriteOutcome> {
-    // The domain operations take `&dyn Session`; borrow it once for every arm.
-    let session = &*session;
-
     match write {
         // --- activity ---
         ApiWrite::ActivityUpdate { id, activity } => {

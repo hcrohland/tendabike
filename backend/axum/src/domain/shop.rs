@@ -30,7 +30,7 @@ use crate::{
     error::{ApiResult, AppError},
 };
 use tb_domain::{
-    ApiRead, ApiWrite, Error, Part, ReadOutcome, Session, Shop, ShopId, ShopSubscription,
+    ApiRead, ApiWrite, Error, Part, ReadOutcome, Shop, ShopId, ShopSubscription,
     ShopSubscriptionWithDetails, SubscriptionId, UserPublic,
 };
 
@@ -99,7 +99,7 @@ async fn list_shops(
     session: RequestSession,
     State(state): State<AppState>,
 ) -> ApiResult<Vec<Shop>> {
-    match state.api.read(session.user_id(), ApiRead::Shops).await? {
+    match state.api.read(Box::new(session), ApiRead::Shops).await? {
         ReadOutcome::Shops(shops) => Ok(Json(shops)),
         _ => Err(result_mismatch("shops", "shops")),
     }
@@ -117,7 +117,7 @@ async fn create_shop(
     let outcome = state
         .api
         .write(
-            session.user_id(),
+            Box::new(session),
             ApiWrite::ShopCreate {
                 name,
                 description,
@@ -136,7 +136,7 @@ async fn get_shop(
 ) -> ApiResult<Shop> {
     match state
         .api
-        .read(session.user_id(), ApiRead::Shop(ShopId::from(shop_id)))
+        .read(Box::new(session), ApiRead::Shop(ShopId::from(shop_id)))
         .await?
     {
         ReadOutcome::Shop(shop) => Ok(Json(shop)),
@@ -157,7 +157,7 @@ async fn update_shop(
     state
         .api
         .write(
-            session.user_id(),
+            Box::new(session),
             ApiWrite::ShopUpdate {
                 id: ShopId::from(shop_id),
                 name,
@@ -177,7 +177,7 @@ async fn delete_shop(
     state
         .api
         .write(
-            session.user_id(),
+            Box::new(session),
             ApiWrite::ShopDelete {
                 id: ShopId::from(shop_id),
             },
@@ -193,7 +193,7 @@ async fn get_shop_parts(
 ) -> ApiResult<Vec<Part>> {
     match state
         .api
-        .read(session.user_id(), ApiRead::ShopParts(ShopId::from(shop_id)))
+        .read(Box::new(session), ApiRead::ShopParts(ShopId::from(shop_id)))
         .await?
     {
         ReadOutcome::ShopParts(parts) => Ok(Json(parts)),
@@ -210,7 +210,7 @@ async fn register_part(
     state
         .api
         .write(
-            session.user_id(),
+            Box::new(session),
             ApiWrite::ShopRegisterPart {
                 shop: shop_id.into(),
                 part: part_id.into(),
@@ -228,7 +228,7 @@ async fn unregister_part(
     state
         .api
         .write(
-            session.user_id(),
+            Box::new(session),
             ApiWrite::ShopUnregisterPart {
                 shop: shop_id.into(),
                 part: part_id.into(),
@@ -247,7 +247,7 @@ async fn search_shops(
     let query = params.get("q").map(|s| s.as_str()).unwrap_or("");
     match state
         .api
-        .read(session.user_id(), ApiRead::ShopSearch(query.to_string()))
+        .read(Box::new(session), ApiRead::ShopSearch(query.to_string()))
         .await?
     {
         ReadOutcome::ShopSearch { shops, users } => Ok(Json((shops, users))),
@@ -265,7 +265,7 @@ async fn create_subscription(
     state
         .api
         .write(
-            user.user_id(),
+            Box::new(user.clone()),
             ApiWrite::ShopSubscriptionCreate {
                 shop: shop_id.into(),
                 message,
@@ -282,7 +282,7 @@ async fn create_subscription(
     let shop = ShopId::from(shop_id);
     let subscriptions = match state
         .api
-        .read(user.user_id(), ApiRead::ShopSubscriptions(None))
+        .read(Box::new(user), ApiRead::ShopSubscriptions(None))
         .await?
     {
         ReadOutcome::ShopSubscriptions(subscriptions) => subscriptions,
@@ -313,7 +313,7 @@ async fn list_my_subscriptions(
 ) -> ApiResult<Vec<ShopSubscriptionWithDetails>> {
     match state
         .api
-        .read(session.user_id(), ApiRead::ShopSubscriptions(None))
+        .read(Box::new(session), ApiRead::ShopSubscriptions(None))
         .await?
     {
         ReadOutcome::ShopSubscriptions(subscriptions) => Ok(Json(subscriptions)),
@@ -329,7 +329,7 @@ async fn list_shop_subscriptions(
     match state
         .api
         .read(
-            session.user_id(),
+            Box::new(session),
             ApiRead::ShopSubscriptions(Some(ShopId::from(shop_id))),
         )
         .await?
@@ -347,7 +347,7 @@ async fn get_subscription(
     match state
         .api
         .read(
-            session.user_id(),
+            Box::new(session),
             ApiRead::ShopSubscription(SubscriptionId::from(subscription_id)),
         )
         .await?
@@ -366,7 +366,7 @@ async fn approve_subscription(
     state
         .api
         .write(
-            session.user_id(),
+            Box::new(session),
             ApiWrite::ShopSubscriptionApprove {
                 id: subscription_id.into(),
                 message: req.message,
@@ -385,7 +385,7 @@ async fn reject_subscription(
     state
         .api
         .write(
-            session.user_id(),
+            Box::new(session),
             ApiWrite::ShopSubscriptionReject {
                 id: subscription_id.into(),
                 message: req.message,
@@ -403,7 +403,7 @@ async fn cancel_subscription(
     state
         .api
         .write(
-            session.user_id(),
+            Box::new(session),
             ApiWrite::ShopSubscriptionCancel {
                 id: subscription_id.into(),
             },

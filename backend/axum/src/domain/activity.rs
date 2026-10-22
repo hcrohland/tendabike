@@ -23,8 +23,7 @@ use crate::{
     error::{ApiResult, AppError},
 };
 use tb_domain::{
-    Activity, ActivityId, ApiRead, ApiWrite, DescendReport, PartId, ReadOutcome, Session,
-    WriteOutcome,
+    Activity, ActivityId, ApiRead, ApiWrite, DescendReport, PartId, ReadOutcome, WriteOutcome,
 };
 
 async fn def_part_api(
@@ -35,7 +34,7 @@ async fn def_part_api(
     state
         .api
         .write(
-            user.user_id(),
+            Box::new(user),
             ApiWrite::ActivityDefaultGear { gear: gear_id },
         )
         .await?;
@@ -60,7 +59,7 @@ async fn act_get(
 ) -> ApiResult<Activity> {
     match state
         .api
-        .read(user.user_id(), ApiRead::Activity(ActivityId::new(id)))
+        .read(Box::new(user), ApiRead::Activity(ActivityId::new(id)))
         .await?
     {
         ReadOutcome::Activity(activity) => Ok(Json(activity)),
@@ -83,7 +82,7 @@ async fn act_put(
     state
         .api
         .write(
-            user.user_id(),
+            Box::new(user),
             ApiWrite::ActivityUpdate {
                 id: ActivityId::from(id),
                 activity,
@@ -102,7 +101,7 @@ async fn act_delete(
     state
         .api
         .write(
-            user.user_id(),
+            Box::new(user),
             ApiWrite::ActivityDelete {
                 id: ActivityId::new(id),
             },
@@ -127,7 +126,7 @@ async fn descend(
     // any other outcome is a bug, guarded by the outcome mismatch.
     let report = match state
         .api
-        .write(user.user_id(), ApiWrite::ActivityDescend { data })
+        .write(Box::new(user), ApiWrite::ActivityDescend { data })
         .await?
     {
         WriteOutcome::Descend { report, .. } => report,

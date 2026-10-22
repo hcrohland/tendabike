@@ -30,7 +30,7 @@ use serde_derive::Deserialize;
 use time::OffsetDateTime;
 
 use crate::{RequestSession, appstate::AppState, domain::created_entity, error::AppError};
-use tb_domain::{ApiWrite, PartId, Service, ServiceId, ServicePlanId, Session};
+use tb_domain::{ApiWrite, PartId, Service, ServiceId, ServicePlanId};
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
@@ -62,7 +62,7 @@ async fn create(
     let outcome = state
         .api
         .write(
-            user.user_id(),
+            Box::new(user),
             ApiWrite::ServiceCreate {
                 part: part_id,
                 time,
@@ -83,7 +83,7 @@ async fn update(
 ) -> Result<StatusCode, AppError> {
     state
         .api
-        .write(user.user_id(), ApiWrite::ServiceUpdate { service })
+        .write(Box::new(user), ApiWrite::ServiceUpdate { service })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -95,7 +95,7 @@ async fn delete_service(
 ) -> Result<StatusCode, AppError> {
     state
         .api
-        .write(user.user_id(), ApiWrite::ServiceDelete { id })
+        .write(Box::new(user), ApiWrite::ServiceDelete { id })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -107,7 +107,7 @@ async fn redo(
 ) -> Result<StatusCode, AppError> {
     state
         .api
-        .write(user.user_id(), ApiWrite::ServiceRedo { service })
+        .write(Box::new(user), ApiWrite::ServiceRedo { service })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

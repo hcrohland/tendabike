@@ -41,3 +41,9 @@ A mount position that a type can attach to, expressed as the type of the part it
 **attachment**:
 A part being mounted on another part at a hook, over a span of time. It is the part's place in the assembly: directly on the part it hooks onto, and thereby on the gear.
 _Avoid_: file
+
+### Session
+
+**acting session**:
+The caller's identity and context as a domain operation runs. Carried from the connection with each request; immutable for the operation's duration — the domain reads it, never mutates it. Today the context is the active `shop`; it is open to carrying more.
+_Avoid_: session (the connection also has a cookie session and the loop a Strava session), user id

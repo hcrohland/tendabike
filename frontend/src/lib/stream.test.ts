@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { render } from "@testing-library/svelte";
+import { flushSync } from "svelte";
 import { markHydrated, startStream, stopStream } from "./stream";
 import { parts } from "./part";
 import { stateValues } from "./mapable.svelte";
@@ -6,6 +8,7 @@ import { setUser, getUser } from "./user";
 import { message } from "./utils";
 import { setShop, Shop } from "./shop";
 import { resp, summary, summaryContent } from "../test/helpers";
+import StreamHarness from "../test/StreamHarness.svelte";
 
 /// A stand-in for the native EventSource, which jsdom does not implement.
 /// The stream module takes an injectable factory, so the suite drives the
@@ -243,5 +246,95 @@ describe("stream", () => {
     await vi.waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith("/api/user?shop=10", undefined),
     );
+  });
+});
+
+/// The stream's open/close cycle is driven by a reactive effect (Header's in
+/// the app; `StreamHarness` mirrors it in the suite). These tests exercise
+/// that effect: the stream is reactive to `getShop()`, one stream at a time.
+describe("stream: reactive to shop state", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  function testUser() {
+    return {
+      id: 1,
+      firstname: "Max",
+      name: "Mustermann",
+      avatar: undefined,
+      is_admin: false,
+      onboarding_status: "completed" as const,
+    };
+  }
+
+  beforeEach(() => {
+    FakeES.instances = [];
+    parts.setMap([]);
+    setUser(undefined);
+    setShop(undefined);
+    message.active = false;
+    fetchMock = vi.fn();
+    fetchMock.mockResolvedValue(resp({ user: {}, summary: summary() }));
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    stopStream();
+  });
+
+  it("opens the personal stream for an authenticated user with no shop", () => {
+    setUser(testUser());
+    render(StreamHarness, { promise: Promise.resolve(), factory });
+    flushSync();
+    expect(FakeES.instances).toHaveLength(1);
+    expect(theStream().url).toBe("/api/user/stream");
+  });
+
+  it("never opens a stream for an anonymous session", () => {
+    render(StreamHarness, { promise: Promise.resolve(), factory });
+    flushSync();
+    expect(FakeES.instances).toHaveLength(0);
+  });
+
+  it("switches to the shop stream URL when the current shop is set", () => {
+    setUser(testUser());
+    render(StreamHarness, { promise: Promise.resolve(), factory });
+    flushSync();
+    const personal = theStream();
+    expect(personal.url).toBe("/api/user/stream");
+
+    setShop(new Shop({ id: 10, name: "Velo" }));
+    flushSync();
+    expect(theStream().url).toBe("/api/user/stream?shop=10");
+    // The old personal source is closed the moment the shop source opens.
+    expect(personal.closed).toBe(true);
+    expect(FakeES.instances).toHaveLength(2);
+  });
+
+  it("switches back to the personal stream URL when the shop is cleared", () => {
+    setUser(testUser());
+    setShop(new Shop({ id: 10, name: "Velo" }));
+    render(StreamHarness, { promise: Promise.resolve(), factory });
+    flushSync();
+    const shopStream = theStream();
+    expect(shopStream.url).toBe("/api/user/stream?shop=10");
+
+    setShop(undefined);
+    flushSync();
+    expect(theStream().url).toBe("/api/user/stream");
+    expect(shopStream.closed).toBe(true);
+    expect(FakeES.instances).toHaveLength(2);
+  });
+
+  it("feeds shop stream frames into the same updateSummary merge", () => {
+    setUser(testUser());
+    setShop(new Shop({ id: 10, name: "Velo" }));
+    render(StreamHarness, { promise: Promise.resolve(), factory });
+    flushSync();
+    markHydrated();
+    theStream().fireMessage(
+      JSON.stringify(summary({ parts: { "7": { id: 7, name: "Shop Part" } } })),
+    );
+    expect(parts[7]).toBeDefined();
+    expect(parts[7].name).toBe("Shop Part");
   });
 });

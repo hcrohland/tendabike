@@ -25,6 +25,12 @@ pub struct TestStravaStore {
     next_event_id: i32,
 }
 
+impl Default for TestStravaStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestStravaStore {
     pub fn new() -> Self {
         Self {
@@ -201,10 +207,6 @@ impl Session for TestStravaSession {
 
     fn shop(&self) -> Option<ShopId> {
         None
-    }
-
-    fn set_shop(&mut self, _shop: Option<ShopId>) -> TbResult<()> {
-        Ok(())
     }
 
     fn is_admin(&self) -> bool {

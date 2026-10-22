@@ -169,10 +169,6 @@ impl TbSession for StravaUserSession {
     fn shop(&self) -> Option<ShopId> {
         None
     }
-
-    fn set_shop(&mut self, _shop: Option<ShopId>) -> TbResult<()> {
-        Ok(())
-    }
 }
 
 #[async_trait::async_trait]

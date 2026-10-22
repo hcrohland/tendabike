@@ -45,11 +45,7 @@ async fn getuser(
     // pure-FIFO snapshot (spec #558 §3.7) sees the committed hydration, so
     // the response body carries the new parts exactly as today.
     state.api.hydrate_gear(session.user_id()).await?;
-    match state
-        .api
-        .read(session.user_id(), ApiRead::User { shop })
-        .await?
-    {
+    match state.api.read(Box::new(session), ApiRead::User).await? {
         ReadOutcome::User(state) => Ok(Json(*state)),
         _ => Err(result_mismatch("user", "user state")),
     }
@@ -83,11 +79,7 @@ async fn export(user: RequestSession, State(state): State<AppState>) -> ApiResul
     // The unified user read (spec #558 §3.5): the export is a projection
     // of the `UserState` composite (the bare `User` plus the `Summary`),
     // staying non-hydrating (spec #558 §3.4/§4).
-    match state
-        .api
-        .read(user.user_id(), ApiRead::User { shop: None })
-        .await?
-    {
+    match state.api.read(Box::new(user), ApiRead::User).await? {
         ReadOutcome::User(state) => {
             let summary = state.summary;
             Ok(Json(Export {
