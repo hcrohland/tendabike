@@ -391,7 +391,7 @@ where
     T: TxnSource + Clone + Send + Sync + 'static,
 {
     let mut session = session;
-    let user_id = session.tb_id();
+    let user_id = session.user_id();
     let mut backoff = DbBackoff::new();
     let mut first_idle = true;
 
@@ -604,7 +604,7 @@ async fn queue_probe<T: TxnSource>(
         Err(err) => {
             warn!(
                 "user {}: the queue probe could not begin a transaction: {err:?}",
-                session.tb_id()
+                session.user_id()
             );
             return Some(Probe::Error);
         }
@@ -614,7 +614,10 @@ async fn queue_probe<T: TxnSource>(
         Ok(QueueRead::Limited { until }) => Probe::Limited(until),
         Ok(QueueRead::Empty) => Probe::Empty,
         Err(err) => {
-            warn!("user {}: the queue probe failed: {err:?}", session.tb_id());
+            warn!(
+                "user {}: the queue probe failed: {err:?}",
+                session.user_id()
+            );
             let _ = conn.rollback().await;
             return Some(Probe::Error);
         }
@@ -625,7 +628,7 @@ async fn queue_probe<T: TxnSource>(
         // backs off and re-probes.
         warn!(
             "user {}: the queue probe could not commit its housekeeping: {err:?}",
-            session.tb_id()
+            session.user_id()
         );
         return Some(Probe::Error);
     }
@@ -801,7 +804,7 @@ async fn run_write<T: TxnSource>(
     backoff: &mut DbBackoff,
     pusher: &dyn FramePusher,
 ) -> Result<(), Error> {
-    debug!("user {}: Processing {write:?}", session.tb_id());
+    debug!("user {}: Processing {write:?}", session.user_id());
     // The onboarding cutover's Strava side (spec #558 §5.1): extracted
     // before `exec` consumes the write, added to the same transaction.
     let onboarding_time = match &write {
@@ -883,7 +886,7 @@ async fn run_read<T: TxnSource>(
     backoff: &mut DbBackoff,
     pusher: &dyn FramePusher,
 ) -> Result<(), Error> {
-    debug!("user {}: Reading {read:?}", session.tb_id());
+    debug!("user {}: Reading {read:?}", session.user_id());
     run_message(
         "read",
         "API read",
@@ -925,7 +928,7 @@ async fn run_gear<T: TxnSource>(
     backoff: &mut DbBackoff,
     pusher: &dyn FramePusher,
 ) -> Result<(), Error> {
-    debug!("user {}: Hydrating the user's gear", session.tb_id());
+    debug!("user {}: Hydrating the user's gear", session.user_id());
     // The hydration's work in the loop's transaction: import the Strava
     // gear, then read back the parts it created — the frame is their union
     // (one entry per part, empty when nothing is new, spec #558 §4).
@@ -975,7 +978,7 @@ async fn run_all_stats<T: TxnSource>(
     backoff: &mut DbBackoff,
     pusher: &dyn FramePusher,
 ) -> Result<(), Error> {
-    debug!("user {}: Reading the all-user stats", session.tb_id());
+    debug!("user {}: Reading the all-user stats", session.user_id());
     // The stats read runs in the executor's own context (it pushes no frame);
     // the delivery context is the executor's session shop (always `None` in
     // production).
@@ -1039,7 +1042,7 @@ async fn run_event<T: TxnSource>(
     backoff: &mut DbBackoff,
     pusher: &dyn FramePusher,
 ) -> Result<(), Error> {
-    debug!("user {}: Processing {event}", session.tb_id());
+    debug!("user {}: Processing {event}", session.user_id());
 
     let mut conn = match source.begin().await {
         Ok(conn) => conn,

@@ -123,3 +123,41 @@ async fn the_session_seam_is_object_safe() -> TbResult<()> {
     assert!(new_refresh.is_none());
     Ok(())
 }
+
+/// `access_token` returns the access token for a warm session and persists
+/// nothing: the stored refresh token is left untouched.
+#[tokio::test]
+async fn access_token_warm_session_persists_nothing() -> TbResult<()> {
+    let mut store = TestStravaStore::new();
+    store.insert_user(strava_user(UserId::from(1), 42, true));
+    let mut session = RefreshSession {
+        user: UserId::from(1),
+        strava: StravaId::from(42),
+        new_refresh: None,
+    };
+    let access = access_token(&mut session, &mut store).await?;
+    assert_eq!(access.secret(), "test-access-token");
+    let user = store.stravauser_get_by_tbid(UserId::from(1)).await?;
+    assert_eq!(
+        user.refresh_token().map(|t| t.secret().to_string()),
+        Some("test-token".to_string())
+    );
+    Ok(())
+}
+
+/// `access_token` persists a rotated refresh token to the DB when `get_token`
+/// returns `Some`.
+#[tokio::test]
+async fn access_token_persists_the_rotated_refresh_token() -> TbResult<()> {
+    let mut store = TestStravaStore::new();
+    store.insert_user(strava_user(UserId::from(1), 42, true));
+    let mut session = rotated();
+    let access = access_token(&mut session, &mut store).await?;
+    assert_eq!(access.secret(), "test-access-token");
+    let user = store.stravauser_get_by_tbid(UserId::from(1)).await?;
+    assert_eq!(
+        user.refresh_token().map(|t| t.secret().to_string()),
+        Some("rotated-token".to_string())
+    );
+    Ok(())
+}

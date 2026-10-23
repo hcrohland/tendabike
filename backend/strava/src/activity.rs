@@ -88,7 +88,7 @@ impl StravaActivity {
             id: id.into(),
             what,
             gear,
-            user_id: user.tb_id(),
+            user_id: user.user_id(),
             name,
             start: start_date.to_offset(offset),
             duration: elapsed_time,

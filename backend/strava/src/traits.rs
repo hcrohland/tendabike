@@ -241,10 +241,6 @@ pub trait StravaSession: Session {
     /// The Strava ID of the user.
     fn strava_id(&self) -> StravaId;
 
-    fn tb_id(&self) -> UserId {
-        self.user_id()
-    }
-
     /// Ensure a valid access token (refreshing in place if expired) and return
     /// the access token plus the *new* refresh token if a refresh just happened.
     ///

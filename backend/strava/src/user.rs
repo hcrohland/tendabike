@@ -213,10 +213,10 @@ pub async fn user_deauthorize(
     store: &mut impl StravaDataStore,
 ) -> TbResult<()> {
     if let Err(err) = deauthorize(user, store).await {
-        warn!("could not deauthorize user {}: {:#}", user.tb_id(), err)
+        warn!("could not deauthorize user {}: {:#}", user.user_id(), err)
     }
 
-    warn!("User {} deauthorized", user.tb_id());
+    warn!("User {} deauthorized", user.user_id());
 
     user.strava_id().disable(store).await
 }
@@ -240,7 +240,7 @@ pub async fn user_delete(
     user: &mut dyn StravaSession,
     store: &mut impl StravaStore,
 ) -> TbResult<()> {
-    let tbuser = user.tb_id();
+    let tbuser = user.user_id();
     debug!("Deauthorizing user");
     user_deauthorize(user, store).await?;
     let n = store.stravauser_delete(tbuser).await?;

@@ -18,13 +18,15 @@
 
 */
 
-//! The thin Strava HTTP calls: [`request_json`] and [`deauthorize`].
+//! The thin Strava HTTP calls: [`request_json`], [`deauthorize`], and
+//! [`access_token`].
 //!
-//! These free functions are the Strava API surface. They know nothing about
-//! refresh mechanics: each calls the session's
-//! [`get_token`](crate::StravaSession::get_token), persists the refresh token
-//! to the DB when a refresh issued a new one, and then makes the one HTTP call
-//! (the bearer GET, or the token revocation).
+//! [`access_token`] owns the one piece of refresh machinery the HTTP calls
+//! share: it calls the session's
+//! [`get_token`](crate::StravaSession::get_token) and persists the refresh
+//! token to the DB when a refresh issued a new one. `request_json` and
+//! `deauthorize` then make the one HTTP call (the bearer GET, or the token
+//! revocation) and know nothing about refresh mechanics.
 
 use anyhow::Context;
 use http::StatusCode;
@@ -37,6 +39,18 @@ use crate::{StravaDataStore, StravaSession};
 use tb_domain::{Error, TbResult};
 
 const API: &str = "https://www.strava.com/api/v3";
+
+/// A valid access token for `user`: `get_token` → persist the refresh token to
+/// the DB if a refresh issued a new one. Owns only the persist — the session's
+/// `get_token` owns the exchange.
+pub async fn access_token(
+    user: &mut dyn StravaSession,
+    store: &mut impl StravaDataStore,
+) -> TbResult<AccessToken> {
+    let (access, new_refresh) = user.get_token().await?;
+    persist_refresh(user, store, new_refresh).await?;
+    Ok(access)
+}
 
 /// A bearer GET of `uri` for `user`, parsed as `T`.
 ///
@@ -54,8 +68,7 @@ pub async fn request_json<T: DeserializeOwned>(
     uri: &str,
     store: &mut impl StravaDataStore,
 ) -> TbResult<T> {
-    let (access, new_refresh) = user.get_token().await?;
-    persist_refresh(user, store, new_refresh).await?;
+    let access = access_token(user, store).await?;
 
     // The offline seams (test-only): first the thread-local canned response
     // (per-test isolation: each test runs on its own thread), then the
@@ -90,8 +103,7 @@ pub async fn deauthorize(
     user: &mut dyn StravaSession,
     store: &mut impl StravaDataStore,
 ) -> TbResult<()> {
-    let (access, new_refresh) = user.get_token().await?;
-    persist_refresh(user, store, new_refresh).await?;
+    let access = access_token(user, store).await?;
 
     // The offline seam (test-only): in test mode a deauthorization is recorded
     // in the thread-local map instead of hitting the Strava API. The process-
