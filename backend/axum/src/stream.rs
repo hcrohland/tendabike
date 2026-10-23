@@ -32,6 +32,7 @@ use tokio::sync::{broadcast, watch};
 
 use tb_domain::{Session, ShopId, Summary, UserId};
 use tb_exec::{ExecutorStatus, HEARTBEAT_INTERVAL};
+use tb_strava::StravaSession;
 
 use crate::appstate::AppState;
 use crate::error::AppError;
@@ -43,6 +44,7 @@ use crate::strava::RequestSession;
 struct StreamSeed {
     app: AppState,
     user_id: UserId,
+    session: Option<Box<dyn StravaSession>>,
     rx: Option<broadcast::Receiver<Summary>>,
     status: Option<watch::Receiver<ExecutorStatus>>,
 }
@@ -57,7 +59,16 @@ struct StreamSeed {
 async fn next_event(seed: &mut StreamSeed) -> Option<Result<Event, Infallible>> {
     let (mut rx, mut status) = match (seed.rx.take(), seed.status.take()) {
         (Some(rx), Some(status)) => (rx, status),
-        _ => match seed.app.api.subscribe(seed.user_id).await {
+        _ => match seed
+            .app
+            .api
+            .subscribe(
+                seed.session
+                    .take()
+                    .expect("the session is present on re-subscribe"),
+            )
+            .await
+        {
             Ok(v) => v,
             Err(err) => {
                 error!(
@@ -204,7 +215,7 @@ pub(crate) async fn endpoint(
     let user_id = user.user_id();
     match shop {
         Some(shop_id) => shop_endpoint(user_id, state, shop_id).await,
-        None => personal_endpoint(user_id, state).await,
+        None => personal_endpoint(user, state).await,
     }
 }
 
@@ -214,8 +225,11 @@ pub(crate) async fn endpoint(
 /// this was the last stream — no streams attached is the only reap rule)
 /// happens when the stream is dropped — the broadcast receiver's count is the
 /// loop's stream-count signal.
-async fn personal_endpoint(user_id: UserId, state: AppState) -> Response {
-    let (rx, status) = match state.api.subscribe(user_id).await {
+async fn personal_endpoint(user: RequestSession, state: AppState) -> Response {
+    let user_id = user.user_id();
+    // Keep a clone for re-subscribing after the executor settles.
+    let re_sub_session: Box<dyn StravaSession> = Box::new(user.clone());
+    let (rx, status) = match state.api.subscribe(Box::new(user)).await {
         Ok(v) => v,
         Err(err) => {
             error!("spawning the executor for user {user_id} failed: {err:?}");
@@ -227,6 +241,7 @@ async fn personal_endpoint(user_id: UserId, state: AppState) -> Response {
         StreamSeed {
             app: state,
             user_id,
+            session: Some(re_sub_session),
             rx: Some(rx),
             status: Some(status),
         },

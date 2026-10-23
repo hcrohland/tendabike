@@ -56,11 +56,11 @@ use oauth2::RefreshToken;
 use tokio::sync::{Mutex, Notify, broadcast, oneshot, watch};
 
 use tb_domain::{
-    Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId,
-    ShopStore, Summary, TbResult, UserId, WriteOutcome,
+    Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, ShopId, ShopStore,
+    Summary, TbResult, UserId, WriteOutcome,
 };
 use tb_strava::{
-    StravaDataStore, StravaId, StravaStat, StravaUser, StravaUserSession, activity,
+    StravaDataStore, StravaId, StravaSession, StravaStat, StravaUser, StravaUserSession, activity,
     client::StravaAthleteInfo,
     event::{Event as StravaEvent, InEvent, ObjectType, insert_sync, sync_users},
     gear,
@@ -248,9 +248,14 @@ where
     /// A subscription to the user's executor's consumed-Strava-event channel
     /// (spec §6.4): spawning the executor if it is not running. The admin
     /// sync subscribes **before** it enqueues its event, so the completion
-    /// signal cannot be missed.
-    pub async fn events(&self, user_id: UserId) -> TbResult<broadcast::Receiver<StravaEvent>> {
-        self.exec_field(user_id, |exec| exec.events.subscribe())
+    /// signal cannot be missed. `session` is the `Box<dyn StravaSession>`
+    /// threaded into the loop on spawn.
+    pub async fn events(
+        &self,
+        user_id: UserId,
+        session: Box<dyn StravaSession>,
+    ) -> TbResult<broadcast::Receiver<StravaEvent>> {
+        self.exec_field(user_id, session, |exec| exec.events.subscribe())
             .await
     }
 
@@ -263,6 +268,17 @@ where
         let syncs = store.strava_event_get_later(0, strava_id).await?;
         store.commit().await?;
         Ok(syncs.iter().any(|event| event.event_time == event_time))
+    }
+
+    /// Build a cold [`StravaUserSession`] for `user_id` (the admin-sync and
+    /// internal ops' spawn path): the target's cookie (and access token) is
+    /// not reachable from an `AxumAdmin` handler, so the session starts
+    /// expired and refreshes on first Strava call.
+    async fn cold_session(&self, user_id: UserId) -> TbResult<Box<dyn StravaSession>> {
+        let mut store = self.source.begin().await?;
+        let session = StravaUserSession::for_user(user_id, &mut store).await?;
+        store.commit().await?;
+        Ok(Box::new(session))
     }
 
     /// Push a frame to the user's SSE streams (test helper: the production
@@ -333,23 +349,36 @@ where
     /// Lock the registry, ensure the user's executor is live (spawning it if
     /// it is absent or settled), and pull one field from it: the shared shape
     /// of `subscribe`, `wake`, `events`, and `write`. The lock is dropped
-    /// when this returns, before the caller's next await.
-    async fn exec_field<R>(&self, user_id: UserId, f: impl FnOnce(&Executor) -> R) -> TbResult<R> {
+    /// when this returns, before the caller's next await. `session` is the
+    /// `Box<dyn StravaSession>` threaded into the loop on spawn.
+    async fn exec_field<R>(
+        &self,
+        user_id: UserId,
+        session: Box<dyn StravaSession>,
+        f: impl FnOnce(&Executor) -> R,
+    ) -> TbResult<R> {
         let mut map = self.executors.lock().await;
         // The executor routes a committed `Summary` by context (spec #517,
         // ticket #584) through the registry itself: `self.clone()` shares the
         // shop-stream and executor maps (the `Arc`s), so its `push_to_shop` /
         // `push_to_user` reach the live shop streams and executors.
         let pusher: Box<dyn FramePusher> = Box::new(self.clone());
-        let exec = Self::ensure_running(&mut map, &self.source, user_id, self.idle_timeout, pusher)
-            .await?;
+        let exec = Self::ensure_running(
+            &mut map,
+            &self.source,
+            user_id,
+            self.idle_timeout,
+            pusher,
+            session,
+        )
+        .await?;
         Ok(f(&exec))
     }
 
     /// Return the user's live executor, spawning it if it is absent or has
-    /// settled (reaped/dead): read the stored
-    /// [`StravaUser`](tb_strava::StravaUser) to build the executor's
-    /// [`StravaUserSession`] (spec §4.4), open a fresh request channel and
+    /// settled (reaped/dead): thread the caller's `Box<dyn StravaSession>`
+    /// into the loop (the user-facing paths hand a warm session; the
+    /// admin-sync path hands a cold one), open a fresh request channel and
     /// frame channel, and spawn the `tb_exec` loop.
     async fn ensure_running(
         map: &mut HashMap<UserId, Executor>,
@@ -357,21 +386,13 @@ where
         user_id: UserId,
         idle_timeout: Duration,
         pusher: Box<dyn FramePusher>,
+        session: Box<dyn StravaSession>,
     ) -> TbResult<Executor> {
         if let Some(exec) = map.get(&user_id)
             && *exec.status.borrow() == ExecutorStatus::Running
         {
             return Ok(exec.clone());
         }
-
-        // The session read runs under the registry lock on purpose (the
-        // single-node trade-off is deliberate): it is one row
-        // (`stravauser_get_by_tbid`), and moving it out of the lock would pay
-        // a database read on *every* demand — even with a live executor — to
-        // save a sub-millisecond stall on other users' spawn paths.
-        let mut store = source.begin().await?;
-        let session = StravaUserSession::for_user(user_id, &mut store).await?;
-        store.commit().await?;
 
         let (request_sender, reader) = request_channel();
         let (frames, _) = broadcast::channel(BROADCAST_CAPACITY);
@@ -486,10 +507,11 @@ where
     /// (read-only within it by spec) and resolves the [`ReadOutcome`] —
     /// the route maps a `Err` through the existing `AppError` helper,
     /// exactly as today.
-    async fn read(&self, session: Box<dyn Session>, read: ApiRead) -> TbResult<ReadOutcome> {
+    async fn read(&self, session: Box<dyn StravaSession>, read: ApiRead) -> TbResult<ReadOutcome> {
         let user_id = session.user_id();
-        let (request, reply) = Request::new_read(read, session);
-        self.send_request(user_id, request, reply, "read").await
+        let (request, reply) = Request::new_read(read);
+        self.send_request(user_id, session, request, reply, "read")
+            .await
     }
 
     /// Enqueue one [`ApiWrite`] on the user's executor and await the full
@@ -499,10 +521,15 @@ where
     /// behavior. The route projects its payload: a create's `201` entity
     /// or the descend's report body from the `WriteOutcome`, a `204`
     /// otherwise.
-    async fn write(&self, session: Box<dyn Session>, write: ApiWrite) -> TbResult<WriteOutcome> {
+    async fn write(
+        &self,
+        session: Box<dyn StravaSession>,
+        write: ApiWrite,
+    ) -> TbResult<WriteOutcome> {
         let user_id = session.user_id();
-        let (request, reply) = Request::new_write(write, session);
-        self.send_request(user_id, request, reply, "write").await
+        let (request, reply) = Request::new_write(write);
+        self.send_request(user_id, session, request, reply, "write")
+            .await
     }
 
     /// Enqueue the [`Gear`](Request::Gear) hydration write on the user's
@@ -515,22 +542,24 @@ where
     /// read, FIFO-ordered, so the snapshot body carries the new parts
     /// exactly as today.
     async fn hydrate_gear(&self, user_id: UserId) -> TbResult<Summary> {
+        let session = self.cold_session(user_id).await?;
         let (request, reply) = Request::new_gear();
-        self.send_request(user_id, request, reply, "hydration")
+        self.send_request(user_id, session, request, reply, "hydration")
             .await
     }
 
-    /// Register a stream for `user_id` (spawning the executor if it is not
+    /// Register a stream for the user (spawning the executor if it is not
     /// running) and return a subscription to its frame channel plus a handle
     /// to its fate, so the stream can tell a clean reap from a dead executor.
     async fn subscribe(
         &self,
-        user_id: UserId,
+        session: Box<dyn StravaSession>,
     ) -> TbResult<(
         broadcast::Receiver<Summary>,
         watch::Receiver<ExecutorStatus>,
     )> {
-        self.exec_field(user_id, |exec| {
+        let user_id = session.user_id();
+        self.exec_field(user_id, session, |exec| {
             (exec.frames.subscribe(), exec.status.clone())
         })
         .await
@@ -576,8 +605,9 @@ where
     /// transaction. The oneshot wait is unbounded, like a read's (spec
     /// #558 §3.7).
     async fn all_stats(&self, user_id: UserId) -> TbResult<Vec<StravaStat>> {
+        let session = self.cold_session(user_id).await?;
         let (request, reply) = Request::new_all_stats();
-        self.send_request(user_id, request, reply, "stats read")
+        self.send_request(user_id, session, request, reply, "stats read")
             .await
     }
 
@@ -610,7 +640,10 @@ where
     /// §4.6) — is consulted: a sync no longer queued has been consumed.
     async fn sync(&self, user_id: UserId, event_time: i64) -> TbResult<()> {
         // Subscribe before enqueuing, so the completion cannot be missed.
-        let mut done = self.events(user_id).await?;
+        // The admin-sync path boxes a cold `StravaUserSession` (the
+        // target's cookie is not reachable from an `AxumAdmin` handler).
+        let session = self.cold_session(user_id).await?;
+        let mut done = self.events(user_id, session).await?;
 
         // The enqueue txn (spec #558 §5.2): the target's Strava id (the
         // queue is keyed by it) and the `Sync` event, committed together —
@@ -640,7 +673,8 @@ where
                     if !self.sync_queued(strava_id, event_time).await? {
                         return Ok(());
                     }
-                    done = self.events(user_id).await?;
+                    let session = self.cold_session(user_id).await?;
+                    done = self.events(user_id, session).await?;
                 }
             }
         }
@@ -801,12 +835,13 @@ where
     async fn send_request<Out>(
         &self,
         user_id: UserId,
+        session: Box<dyn StravaSession>,
         request: Request,
         reply: oneshot::Receiver<TbResult<Out>>,
         dropped: &str,
     ) -> TbResult<Out> {
         let request_sender = self
-            .exec_field(user_id, |exec| exec.request_sender.clone())
+            .exec_field(user_id, session, |exec| exec.request_sender.clone())
             .await?;
         if request_sender.send(request).is_err() {
             // The executor died between the liveness check and the send

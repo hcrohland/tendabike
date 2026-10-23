@@ -75,7 +75,7 @@ async fn ready_probe(probe: Probe) -> Option<Probe> {
 }
 
 fn request() -> (Request, oneshot::Receiver<TbResult<WriteOutcome>>) {
-    Request::new_write(ApiWrite::UserOnboardingPostpone, Box::new(UnitSession))
+    Request::new_write(ApiWrite::UserOnboardingPostpone)
 }
 
 // --- `next_action`: the reclaim decision ---
@@ -376,7 +376,7 @@ fn request_bundles_write_and_reply() {
 fn request_bundles_read_and_reply() {
     // The read variant bundles the `ApiRead` descriptor and its oneshot the
     // same way the write does (spec #558 §3.2).
-    let (req, mut reply) = Request::new_read(ApiRead::PartCategories, Box::new(UnitSession));
+    let (req, mut reply) = Request::new_read(ApiRead::PartCategories);
     assert!(
         matches!(
             reply.try_recv(),
@@ -1207,7 +1207,7 @@ async fn select_read_wins_over_ready_strava() {
     // Both ready at the same instant: the request branch (a read) is polled
     // first — a read is never delayed by the Strava side (spec #558 §3.7).
     let (tx, mut rx) = request_channel();
-    let (req, _reply) = Request::new_read(ApiRead::PartCategories, Box::new(UnitSession));
+    let (req, _reply) = Request::new_read(ApiRead::PartCategories);
     let _ = tx.send(req);
     let wake = tokio::sync::Notify::new();
     let mut wake_fut = Box::pin(wake.notified());
@@ -1237,7 +1237,7 @@ async fn read_arriving_during_a_sleep_is_taken_immediately() {
     });
     // Let the task park in the 30s sleep, then enqueue the read.
     tokio::time::sleep(Duration::from_millis(50)).await;
-    let (req, _reply) = Request::new_read(ApiRead::PartCategories, Box::new(UnitSession));
+    let (req, _reply) = Request::new_read(ApiRead::PartCategories);
     tx.send(req).expect("the channel is open");
     let got = tokio::time::timeout(Duration::from_secs(5), task)
         .await
@@ -1263,7 +1263,7 @@ async fn failed_read_never_arms_the_backoff_and_the_loop_survives() {
     backoff.record_failure();
     backoff.record_failure(); // prime: the next pause would be 4s
     let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_read(ApiRead::PartCategories, Box::new(UnitSession));
+    let (request, reply) = Request::new_read(ApiRead::PartCategories);
     let pusher = RecordingPusher::new();
     let result = run_request(
         &source,
@@ -1298,8 +1298,7 @@ async fn domain_failed_read_resets_the_backoff_and_the_loop_survives() {
     backoff.record_failure();
     backoff.record_failure(); // prime: the next pause would be 4s
     let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) =
-        Request::new_read(ApiRead::Part(PartId::from(999_999)), Box::new(UnitSession));
+    let (request, reply) = Request::new_read(ApiRead::Part(PartId::from(999_999)));
     let pusher = RecordingPusher::new();
     let result = run_request(
         &source,
@@ -1334,7 +1333,7 @@ async fn cleanly_committed_read_resets_the_backoff() {
     backoff.record_failure();
     backoff.record_failure(); // prime: the next pause would be 4s
     let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_read(ApiRead::User, Box::new(UnitSession));
+    let (request, reply) = Request::new_read(ApiRead::User);
     let pusher = RecordingPusher::new();
     let result = run_request(
         &source,
@@ -1901,18 +1900,13 @@ async fn run_request_shop_context_routes_via_pusher_not_own_stream() {
     let mut backoff = DbBackoff::new();
     let (frames, mut frame_rx) = broadcast::channel(4);
     let pusher = RecordingPusher::new();
-    let (request, reply) = Request::new_write(
-        ApiWrite::PartCreate {
-            name: "Shop Chain".to_string(),
-            vendor: "Shimano".to_string(),
-            model: "CN-HG62".to_string(),
-            what: CHAIN,
-            purchase: sample_purchase_date(),
-        },
-        Box::new(ShopSession {
-            shop_id: ShopId::from(7),
-        }),
-    );
+    let (request, reply) = Request::new_write(ApiWrite::PartCreate {
+        name: "Shop Chain".to_string(),
+        vendor: "Shimano".to_string(),
+        model: "CN-HG62".to_string(),
+        what: CHAIN,
+        purchase: sample_purchase_date(),
+    });
 
     let result = run_request(
         &source,
@@ -1961,34 +1955,26 @@ async fn run_request_shop_context_routes_via_pusher_not_own_stream() {
 #[tokio::test]
 async fn write_shop_context_flows_through_the_production_path() {
     // The production path (spec #517, ticket #588): the shop travels with the
-    // **acting session**, not the executor's session. In production the
-    // executor's session has no shop (`StravaUserSession::shop()` is always
-    // `None`), so a user-context executor session (`UnitSession`,
-    // `shop() == None`) plus a shop-context acting session (`ShopSession`,
+    // loop's session (the user's `RequestSession` carries the shop context
+    // via `set_shop`). A shop-context session (`ShopSession`,
     // `shop() == Some(shop_id)`) must route the committed `Summary` to the
     // shop stream and the part owner's personal stream — and NOT to the
-    // executor's own `frames` channel. This is the test that catches the bug
-    // where the routing keyed on the executor's `session.shop()` (always
-    // `None` in production), which left the shop stream dead and leaked the
-    // frame into the shop owner's personal stream.
+    // executor's own `frames` channel.
     let source = FakeSource { begin_fails: false };
-    let mut session = UnitSession; // user context: shop() == None (production)
+    let mut session = ShopSession {
+        shop_id: ShopId::from(7),
+    };
     let mut backoff = DbBackoff::new();
     let (frames, mut frame_rx) = broadcast::channel(4);
     let pusher = RecordingPusher::new();
     // The write carries the shop context (the production path).
-    let (request, reply) = Request::new_write(
-        ApiWrite::PartCreate {
-            name: "Shop Chain".to_string(),
-            vendor: "Shimano".to_string(),
-            model: "CN-HG62".to_string(),
-            what: CHAIN,
-            purchase: sample_purchase_date(),
-        },
-        Box::new(ShopSession {
-            shop_id: ShopId::from(7),
-        }),
-    );
+    let (request, reply) = Request::new_write(ApiWrite::PartCreate {
+        name: "Shop Chain".to_string(),
+        vendor: "Shimano".to_string(),
+        model: "CN-HG62".to_string(),
+        what: CHAIN,
+        purchase: sample_purchase_date(),
+    });
 
     let result = run_request(
         &source,

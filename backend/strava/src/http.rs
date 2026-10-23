@@ -50,7 +50,7 @@ const API: &str = "https://www.strava.com/api/v3";
 /// there, hence the targeted allow.
 #[cfg_attr(feature = "test-support", allow(unused_variables, unreachable_code))]
 pub async fn request_json<T: DeserializeOwned>(
-    user: &mut impl StravaSession,
+    user: &mut dyn StravaSession,
     uri: &str,
     store: &mut impl StravaDataStore,
 ) -> TbResult<T> {
@@ -87,7 +87,7 @@ pub async fn request_json<T: DeserializeOwned>(
 /// `get_token` → persist the refresh token to the DB if a refresh issued a new
 /// one → `STRAVACLIENT.revoke_token`. Knows nothing about refresh mechanics.
 pub async fn deauthorize(
-    user: &mut impl StravaSession,
+    user: &mut dyn StravaSession,
     store: &mut impl StravaDataStore,
 ) -> TbResult<()> {
     let (access, new_refresh) = user.get_token().await?;
@@ -118,7 +118,7 @@ pub async fn deauthorize(
 /// Persist a freshly-rotated refresh token to the DB. `None` is a no-op: a warm
 /// session issued no new token, so there is nothing to persist.
 async fn persist_refresh(
-    user: &impl StravaSession,
+    user: &dyn StravaSession,
     store: &mut impl StravaDataStore,
     new_refresh: Option<RefreshToken>,
 ) -> TbResult<()> {
