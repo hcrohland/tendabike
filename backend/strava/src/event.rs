@@ -532,7 +532,8 @@ async fn next_activities(
     per_page: usize,
     start: i64,
 ) -> TbResult<Vec<StravaActivity>> {
-    user.request_json(
+    request_json(
+        user,
         &format!("/activities?after={start}&per_page={per_page}"),
         store,
     )

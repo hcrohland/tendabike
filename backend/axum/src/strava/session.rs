@@ -4,16 +4,16 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use http::{StatusCode, request::Parts};
-use log::trace;
+use log::{debug, trace};
 use oauth2::{AccessToken, RefreshToken, TokenResponse};
 use serde_derive::{Deserialize, Serialize};
 use std::time::SystemTime;
 use time::{Duration, UtcDateTime};
 use tower_sessions::Session as TowerSession;
 
-use tb_domain::{Session as TbSession, ShopId, TbResult, UserId};
-use tb_strava::client::StravaTokenResponse;
-use tb_strava::{StravaId, StravaUser};
+use tb_domain::{Error, Session as TbSession, ShopId, TbResult, UserId};
+use tb_strava::client::{HTTP_CLIENT, STRAVACLIENT, StravaTokenResponse};
+use tb_strava::{StravaId, StravaSession, StravaUser};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct RequestSession {
@@ -116,6 +116,12 @@ impl RequestSession {
         self.shop = shop;
         tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(self.update()))
     }
+
+    /// A one-line inline expiry check: a known expiry in the past is expired;
+    /// an unknown expiry (`None`) is treated as not expired.
+    fn is_expired(&self) -> bool {
+        self.expires_at.is_some_and(|e| SystemTime::now() > e)
+    }
 }
 
 impl TbSession for RequestSession {
@@ -129,6 +135,42 @@ impl TbSession for RequestSession {
 
     fn shop(&self) -> Option<ShopId> {
         self.shop
+    }
+}
+
+#[async_trait::async_trait]
+impl StravaSession for RequestSession {
+    fn strava_id(&self) -> StravaId {
+        self.strava_id
+    }
+
+    /// Ensure a valid access token, refreshing in place if expired. A warm
+    /// session returns `(access, None)`. An expired session makes exactly one
+    /// `STRAVACLIENT` exchange, persists the access token to the cookie via
+    /// [`update`](RequestSession::update), and returns
+    /// `(new_access, Some(new_refresh))`. The refresh token is persisted to the
+    /// DB by the caller (the thin free functions) when the `Option` is `Some`.
+    async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
+        if !self.is_expired() {
+            return Ok((self.access_token.clone(), None));
+        }
+
+        let refresh_token = self.refresh_token.clone().ok_or_else(|| {
+            Error::NotAuth("No Refresh Token provided and Access Token expired".to_string())
+        })?;
+        debug!("refreshing token for user {}", self.id);
+        let token = STRAVACLIENT
+            .exchange_refresh_token(&refresh_token)
+            .request_async(&*HTTP_CLIENT)
+            .await
+            .map_err(|err| Error::NotAuth(err.to_string()))?;
+
+        self.access_token = token.access_token().clone();
+        self.expires_at = token.expires_in().map(|d| SystemTime::now() + d);
+        let new_refresh = token.refresh_token().cloned();
+        self.refresh_token = new_refresh.clone();
+        self.update().await?;
+        Ok((self.access_token.clone(), new_refresh))
     }
 }
 

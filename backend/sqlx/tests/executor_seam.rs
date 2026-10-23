@@ -78,18 +78,16 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use serde::de::DeserializeOwned;
+use oauth2::{AccessToken, RefreshToken};
 use tb_domain::test_support::{MemStore, part_type_ids::CHAIN, sole_live};
 use tb_domain::{
-    ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
+    ApiRead, ApiWrite, PartId, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
 };
 use tb_exec::{
     DetachedBegin, ExecutorStatus, FramePusher, Registry, Request, ServiceApi, request_channel, run,
 };
 use tb_sqlx::DbPool;
-use tb_strava::{
-    StravaDataStore, StravaId, StravaSession, event::InEvent, test_support::canned_strava,
-};
+use tb_strava::{StravaId, StravaSession, event::InEvent, test_support::canned_strava};
 use time::macros::datetime;
 use tokio::sync::{MutexGuard, Notify, broadcast};
 
@@ -202,79 +200,12 @@ impl StravaSession for FakeStrava {
     fn strava_id(&self) -> StravaId {
         self.strava
     }
-    async fn request_json<T: DeserializeOwned>(
-        &mut self,
-        uri: &str,
-        _store: &mut impl StravaDataStore,
-    ) -> TbResult<T> {
-        panic!("the executor seam never imports from the Strava API (got {uri})")
-    }
-    async fn deauthorize(&mut self, _store: &mut impl StravaDataStore) -> TbResult<()> {
-        panic!("the executor seam never deauthorizes a user")
-    }
-}
-
-/// The gear tests' `StravaSession` (spec #558 §4): the loop's session is the
-/// user's identity plus the Strava API client, and the client is canned
-/// JSON. `athlete` is the canned `/athlete` response: a `b-seam` bike (the
-/// hydration creates it) or an empty athlete (no new gear — the common
-/// case).
-#[derive(Clone, Copy)]
-struct GearStrava {
-    /// The canned `/athlete` response.
-    athlete: &'static str,
-}
-
-impl GearStrava {
-    /// A Strava athlete with one bike the fixture does not know: the
-    /// hydration's `update_gear` creates it.
-    fn new_gear() -> Self {
-        Self {
-            athlete: r#"{"bikes":[{"id":"b-seam"}],"shoes":[]}"#,
-        }
-    }
-
-    /// A Strava athlete with no gear: the hydration creates nothing.
-    fn no_new_gear() -> Self {
-        Self {
-            athlete: r#"{"bikes":[],"shoes":[]}"#,
-        }
-    }
-}
-
-impl Session for GearStrava {
-    fn user_id(&self) -> UserId {
-        test_identity().0
-    }
-    fn shop(&self) -> Option<ShopId> {
-        None
-    }
-    fn is_admin(&self) -> bool {
-        false
-    }
-}
-
-#[async_trait::async_trait]
-impl StravaSession for GearStrava {
-    fn strava_id(&self) -> StravaId {
-        test_identity().1
-    }
-    async fn request_json<T: DeserializeOwned>(
-        &mut self,
-        uri: &str,
-        _store: &mut impl StravaDataStore,
-    ) -> TbResult<T> {
-        let json = match uri {
-            "/athlete" => self.athlete,
-            "/gear/b-seam" => {
-                r#"{"id":"b-seam","name":"Seam Bike","brand_name":"SeamBrand","model_name":"SB1","frame_type":1}"#
-            }
-            _ => panic!("unexpected Strava call: {uri}"),
-        };
-        serde_json::from_str(json).map_err(|err| Error::AnyFailure(err.into()))
-    }
-    async fn deauthorize(&mut self, _store: &mut impl StravaDataStore) -> TbResult<()> {
-        panic!("the gear tests never deauthorize a user")
+    /// A warm dummy token: the seam tests' sessions never refresh. The gear
+    /// tests' canned Strava JSON lives in the process-wide `CANNED_STRAVA`
+    /// global the thin free functions consult (the loop runs in a spawned
+    /// task, so the thread-local map is the wrong seam there).
+    async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
+        Ok((AccessToken::new("test-access-token".into()), None))
     }
 }
 
@@ -665,6 +596,15 @@ async fn read_sees_every_earlier_write() {
 #[ignore]
 async fn gear_hydration_frame_and_fifo_read() {
     let seam = ready().await;
+    // The offline seam: the hydration's canned Strava JSON (one `b-seam` bike
+    // the fixture does not know) in the process-wide `CANNED_STRAVA` global —
+    // the loop runs in a spawned task, so the thread-local map is the wrong
+    // seam here.
+    canned_strava("/athlete", r#"{"bikes":[{"id":"b-seam"}],"shoes":[]}"#);
+    canned_strava(
+        "/gear/b-seam",
+        r#"{"id":"b-seam","name":"Seam Bike","brand_name":"SeamBrand","model_name":"SB1","frame_type":1}"#,
+    );
     let (tx, rx) = request_channel();
     let (frames, mut frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
@@ -672,13 +612,12 @@ async fn gear_hydration_frame_and_fifo_read() {
     // loop starts (the channel is the FIFO the loop consumes in order).
     let (gear_request, gear_reply) = Request::new_gear();
     tx.send(gear_request).expect("the channel is open");
-    let (read_request, read_reply) =
-        Request::new_read(ApiRead::User, Box::new(GearStrava::new_gear()));
+    let (read_request, read_reply) = Request::new_read(ApiRead::User, Box::new(FakeStrava::new()));
     tx.send(read_request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        GearStrava::new_gear(),
+        FakeStrava::new(),
         rx,
         frames,
         Box::new(NoopPusher),
@@ -751,18 +690,20 @@ async fn gear_hydration_frame_and_fifo_read() {
 async fn gear_hydration_without_new_gear_pushes_no_frame() {
     let seam = ready().await;
     let fixture_parts = MemStore::prepopulated().snapshot().parts.len();
+    // The offline seam: the hydration's canned (empty) Strava athlete in the
+    // process-wide `CANNED_STRAVA` global (the loop runs in a spawned task).
+    canned_strava("/athlete", r#"{"bikes":[],"shoes":[]}"#);
     let (tx, rx) = request_channel();
     let (frames, mut frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
     let (gear_request, gear_reply) = Request::new_gear();
     tx.send(gear_request).expect("the channel is open");
-    let (read_request, read_reply) =
-        Request::new_read(ApiRead::User, Box::new(GearStrava::no_new_gear()));
+    let (read_request, read_reply) = Request::new_read(ApiRead::User, Box::new(FakeStrava::new()));
     tx.send(read_request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        GearStrava::no_new_gear(),
+        FakeStrava::new(),
         rx,
         frames,
         Box::new(NoopPusher),

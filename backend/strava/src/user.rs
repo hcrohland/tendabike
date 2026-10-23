@@ -160,7 +160,7 @@ impl StravaUser {
             shoes: Vec<Gear>,
         }
 
-        let ath: Athlete = user.request_json("/athlete", store).await?;
+        let ath: Athlete = request_json(user, "/athlete", store).await?;
 
         let mut parts = Vec::new();
         for gear in ath.bikes.into_iter().chain(ath.shoes) {
@@ -212,7 +212,7 @@ pub async fn user_deauthorize(
     user: &mut impl StravaSession,
     store: &mut impl StravaDataStore,
 ) -> TbResult<()> {
-    if let Err(err) = user.deauthorize(store).await {
+    if let Err(err) = deauthorize(user, store).await {
         warn!("could not deauthorize user {}: {:#}", user.tb_id(), err)
     }
 

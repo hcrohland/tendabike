@@ -44,7 +44,7 @@ async fn into_partid_reuses_existing() -> TbResult<()> {
     let first = into_partid("b1".to_string(), &mut session, &mut store).await?;
     let second = into_partid("b1".to_string(), &mut session, &mut store).await?;
     assert_eq!(first, second);
-    assert_eq!(session.requests, vec!["/gear/b1".to_string()]);
+    assert_eq!(session.requests(), vec!["/gear/b1".to_string()]);
     Ok(())
 }
 

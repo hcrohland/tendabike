@@ -29,7 +29,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use serde::de::DeserializeOwned;
+use oauth2::{AccessToken, RefreshToken};
 use tb_domain::test_support::{
     MemStore, fixtures::sample_purchase_date, part_type_ids::CHAIN, sole_live,
 };
@@ -1004,15 +1004,10 @@ impl StravaSession for UnitSession {
     fn strava_id(&self) -> StravaId {
         StravaId::from(42)
     }
-    async fn request_json<T: DeserializeOwned>(
-        &mut self,
-        _uri: &str,
-        _store: &mut impl StravaDataStore,
-    ) -> TbResult<T> {
-        panic!("the read tests never call the Strava API")
-    }
-    async fn deauthorize(&mut self, _store: &mut impl StravaDataStore) -> TbResult<()> {
-        panic!("the read tests never deauthorize a user")
+    /// A warm dummy token: the read tests never refresh (and never call the
+    /// Strava API).
+    async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
+        Ok((AccessToken::new("test-access-token".into()), None))
     }
 }
 
@@ -1038,22 +1033,10 @@ impl StravaSession for GearSession {
     fn strava_id(&self) -> StravaId {
         StravaId::from(42)
     }
-    async fn request_json<T: DeserializeOwned>(
-        &mut self,
-        uri: &str,
-        _store: &mut impl StravaDataStore,
-    ) -> TbResult<T> {
-        let json = match uri {
-            "/athlete" => r#"{"bikes":[{"id":"b123"}],"shoes":[]}"#,
-            "/gear/b123" => {
-                r#"{"id":"b123","name":"Test Bike","brand_name":"TestBrand","model_name":"M1","frame_type":1}"#
-            }
-            _ => panic!("unexpected Strava call: {uri}"),
-        };
-        serde_json::from_str(json).map_err(|err| Error::AnyFailure(err.into()))
-    }
-    async fn deauthorize(&mut self, _store: &mut impl StravaDataStore) -> TbResult<()> {
-        panic!("the gear test never deauthorizes a user")
+    /// A warm dummy token: the hydration's canned Strava JSON lives in the
+    /// thread-local map (set up by the gear tests), not on the session.
+    async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
+        Ok((AccessToken::new("test-access-token".into()), None))
     }
 }
 
@@ -1079,19 +1062,10 @@ impl StravaSession for EmptyGearSession {
     fn strava_id(&self) -> StravaId {
         StravaId::from(42)
     }
-    async fn request_json<T: DeserializeOwned>(
-        &mut self,
-        uri: &str,
-        _store: &mut impl StravaDataStore,
-    ) -> TbResult<T> {
-        let json = match uri {
-            "/athlete" => r#"{"bikes":[],"shoes":[]}"#,
-            _ => panic!("unexpected Strava call: {uri}"),
-        };
-        serde_json::from_str(json).map_err(|err| Error::AnyFailure(err.into()))
-    }
-    async fn deauthorize(&mut self, _store: &mut impl StravaDataStore) -> TbResult<()> {
-        panic!("the gear test never deauthorizes a user")
+    /// A warm dummy token: the hydration's canned (empty) Strava JSON lives in
+    /// the thread-local map (set up by the gear tests), not on the session.
+    async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
+        Ok((AccessToken::new("test-access-token".into()), None))
     }
 }
 
@@ -1172,15 +1146,10 @@ impl StravaSession for ShopSession {
     fn strava_id(&self) -> StravaId {
         StravaId::from(42)
     }
-    async fn request_json<T: DeserializeOwned>(
-        &mut self,
-        _uri: &str,
-        _store: &mut impl StravaDataStore,
-    ) -> TbResult<T> {
-        panic!("the delivery tests never call the Strava API")
-    }
-    async fn deauthorize(&mut self, _store: &mut impl StravaDataStore) -> TbResult<()> {
-        panic!("the delivery tests never deauthorize a user")
+    /// A warm dummy token: the delivery tests never refresh (and never call
+    /// the Strava API).
+    async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
+        Ok((AccessToken::new("test-access-token".into()), None))
     }
 }
 
@@ -1434,7 +1403,15 @@ async fn all_stats_round_trips_through_the_loop_transaction() {
 async fn gear_hydration_pushes_the_created_parts_frame() {
     // The hydration write is dispatched loop-side (spec #558 §4): the
     // created parts' union is the frame (published on commit, before the
-    // oneshot reply) and the reply carries the same summary.
+    // oneshot reply) and the reply carries the same summary. The Strava API is
+    // canned in the thread-local map the thin free functions consult (one
+    // bike).
+    tb_strava::test_support::begin_test();
+    tb_strava::test_support::queue("/athlete", r#"{"bikes":[{"id":"b123"}],"shoes":[]}"#);
+    tb_strava::test_support::queue(
+        "/gear/b123",
+        r#"{"id":"b123","name":"Test Bike","brand_name":"TestBrand","model_name":"M1","frame_type":1}"#,
+    );
     let source = FakeSource { begin_fails: false };
     let mut session = GearSession;
     let mut backoff = DbBackoff::new();
@@ -1513,7 +1490,10 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
     // The hydration's common case (spec #558 §4): the Strava athlete carries
     // no new gear — `update_gear` creates nothing, the `Summary` is empty,
     // and `push_frame` sends **nothing**: exactly today's behavior. The
-    // oneshot resolves with the empty summary.
+    // oneshot resolves with the empty summary. The Strava API is canned in the
+    // thread-local map the thin free functions consult (an empty athlete).
+    tb_strava::test_support::begin_test();
+    tb_strava::test_support::queue("/athlete", r#"{"bikes":[],"shoes":[]}"#);
     let source = FakeSource { begin_fails: false };
     let mut session = EmptyGearSession;
     let mut backoff = DbBackoff::new();

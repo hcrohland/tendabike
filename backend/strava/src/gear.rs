@@ -55,8 +55,7 @@ pub(crate) async fn into_partid(
     }
 
     debug!("New Gear");
-    let gear = user
-        .request_json::<StravaGear>(&format!("/gear/{}", strava_id), store)
+    let gear = request_json::<StravaGear>(user, &format!("/gear/{}", strava_id), store)
         .await
         .context("Couldn't map gear")?;
 
