@@ -47,7 +47,7 @@ impl RequestSession {
 
         let refresh_token = token.refresh_token();
         Self {
-            id: user.tb_id(),
+            id: user.user_id(),
             strava_id: user.strava_id(),
             is_admin,
             access_token: token.access_token().clone(),

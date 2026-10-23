@@ -31,7 +31,7 @@
 use anyhow::Context;
 use http::StatusCode;
 use log::{debug, trace};
-use oauth2::{AccessToken, RefreshToken};
+use oauth2::AccessToken;
 use serde::de::DeserializeOwned;
 
 use crate::client::{HTTP_CLIENT, STRAVACLIENT};
@@ -48,7 +48,10 @@ pub async fn access_token(
     store: &mut impl StravaDataStore,
 ) -> TbResult<AccessToken> {
     let (access, new_refresh) = user.get_token().await?;
-    persist_refresh(user, store, new_refresh).await?;
+    if let Some(refresh) = new_refresh {
+        let secret = refresh.secret().to_string();
+        user.strava_id().update_token(Some(&secret), store).await?;
+    }
     Ok(access)
 }
 
@@ -124,20 +127,6 @@ pub async fn deauthorize(
         .await
         .context("token exchange failed")?;
     debug!("user {} token revoked", user.strava_id());
-    Ok(())
-}
-
-/// Persist a freshly-rotated refresh token to the DB. `None` is a no-op: a warm
-/// session issued no new token, so there is nothing to persist.
-async fn persist_refresh(
-    user: &dyn StravaSession,
-    store: &mut impl StravaDataStore,
-    new_refresh: Option<RefreshToken>,
-) -> TbResult<()> {
-    if let Some(refresh) = new_refresh {
-        let secret = refresh.secret().to_string();
-        user.strava_id().update_token(Some(&secret), store).await?;
-    }
     Ok(())
 }
 

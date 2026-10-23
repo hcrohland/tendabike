@@ -6,6 +6,7 @@
 use super::*;
 use crate::StravaId;
 use crate::test_support::{TestStravaSession, TestStravaStore, begin_test, queue, strava_user};
+use oauth2::RefreshToken;
 use tb_domain::{Session, ShopId, UserId};
 
 /// A session whose `get_token` returns a warm dummy access token plus

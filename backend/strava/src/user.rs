@@ -75,9 +75,8 @@ impl StravaUser {
         store.stravauser_get_by_tbid(id).await
     }
 
-    /// read the current user data for id
     /// get the tendabike id for this user
-    pub fn tb_id(&self) -> UserId {
+    pub fn user_id(&self) -> UserId {
         self.tendabike_id
     }
 

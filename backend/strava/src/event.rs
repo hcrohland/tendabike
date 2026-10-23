@@ -586,7 +586,7 @@ pub async fn sync_users(
         }
         info!("Adding sync for {:?} at {time}", user.strava_id());
         event::insert_sync(user.strava_id(), time, migrate, store).await?;
-        queued.push(user.tb_id());
+        queued.push(user.user_id());
     }
     Ok(queued)
 }

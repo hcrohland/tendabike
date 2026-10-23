@@ -96,7 +96,7 @@ impl StravaUserSession {
         let user = StravaUser::read(user, store).await?;
 
         let strava_id = user.strava_id();
-        let id = user.tb_id();
+        let id = user.user_id();
         let is_admin = id.is_admin(store).await?;
         let refresh_token = user.refresh_token();
 

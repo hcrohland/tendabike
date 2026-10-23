@@ -735,7 +735,7 @@ where
             &mut store,
         )
         .await?;
-        let is_admin = user.tb_id().is_admin(&mut store).await?;
+        let is_admin = user.user_id().is_admin(&mut store).await?;
         store.commit().await?;
         Ok((user, is_admin))
     }

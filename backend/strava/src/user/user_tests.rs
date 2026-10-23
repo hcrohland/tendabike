@@ -73,7 +73,7 @@ async fn read_stravauser() {
     let (mut store, _) = setup();
     let user = StravaUser::read(UserId::from(1), &mut store).await.unwrap();
     assert_eq!(user.strava_id(), 42.into());
-    assert_eq!(user.tb_id(), UserId::from(1));
+    assert_eq!(user.user_id(), UserId::from(1));
     let res = StravaUser::read(UserId::from(2), &mut store).await;
     assert!(matches!(res, Err(Error::NotFound(_))));
 }
