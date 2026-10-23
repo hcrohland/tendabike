@@ -42,6 +42,13 @@ const API: &str = "https://www.strava.com/api/v3";
 ///
 /// `get_token` → persist the refresh token to the DB if a refresh issued a new
 /// one → bearer GET + parse. Knows nothing about refresh mechanics.
+///
+/// `get_token` runs before the offline seams so a rotated refresh token is
+/// persisted even when a canned response stands in for the API. In a
+/// `test-support` build the seams below exhaust every URI (canned or panic),
+/// so the bearer GET is unreachable and its `access` goes unused — expected
+/// there, hence the targeted allow.
+#[cfg_attr(feature = "test-support", allow(unused_variables, unreachable_code))]
 pub async fn request_json<T: DeserializeOwned>(
     user: &mut impl StravaSession,
     uri: &str,
@@ -50,18 +57,24 @@ pub async fn request_json<T: DeserializeOwned>(
     let (access, new_refresh) = user.get_token().await?;
     persist_refresh(user, store, new_refresh).await?;
 
-    // The offline seams (test-only). First the thread-local canned response
+    // The offline seams (test-only): first the thread-local canned response
     // (per-test isolation: each test runs on its own thread), then the
-    // process-wide `CANNED_STRAVA` global (the seam suite's real session, run
-    // in a spawned task on a thread the test-local map never reached).
+    // process-wide `CANNED_STRAVA` global (the seam suite's session, run in a
+    // spawned task on a thread the test-local map never reached). A
+    // test-support build has no real Strava API: an unscripted URI panics
+    // rather than pretend (the seam suite's stubs never import from Strava;
+    // the onboarding test expects the loop to panic on the sync's fetch).
     #[cfg(any(test, feature = "test-support"))]
     if let Some(body) = crate::test_support::pop_canned(uri) {
         let body = body?;
         return Ok(serde_json::from_str(&body).context("Could not parse response body")?);
     }
     #[cfg(feature = "test-support")]
-    if let Some(json) = crate::test_support::canned_response(uri) {
-        return Ok(serde_json::from_str(&json).context("Could not parse response body")?);
+    match crate::test_support::canned_response(uri) {
+        Some(json) => {
+            return Ok(serde_json::from_str(&json).context("Could not parse response body")?);
+        }
+        None => panic!("unexpected strava request: {uri}"),
     }
 
     let r = get_strava(&access, uri).await?;
