@@ -337,4 +337,24 @@ describe("stream: reactive to shop state", () => {
     expect(parts[7]).toBeDefined();
     expect(parts[7].name).toBe("Shop Part");
   });
+
+  it("opens the shop stream only once when both shop and user change (enterShop)", () => {
+    setUser(testUser());
+    render(StreamHarness, { promise: Promise.resolve(), factory });
+    flushSync();
+    expect(FakeES.instances).toHaveLength(1);
+    expect(theStream().url).toBe("/api/user/stream");
+
+    // Simulate enterShop(): setShop() then setUser() (from refresh())
+    setShop(new Shop({ id: 10, name: "Velo" }));
+    flushSync();
+    expect(theStream().url).toBe("/api/user/stream?shop=10");
+    expect(FakeES.instances).toHaveLength(2);
+
+    // setUser() from refresh() — must NOT open a second shop stream
+    setUser(testUser());
+    flushSync();
+    expect(FakeES.instances).toHaveLength(2);
+    expect(theStream().url).toBe("/api/user/stream?shop=10");
+  });
 });
