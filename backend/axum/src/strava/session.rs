@@ -13,7 +13,7 @@ use tower_sessions::Session as TowerSession;
 
 use tb_domain::{Session as TbSession, ShopId, TbResult, UserId};
 use tb_strava::client::StravaTokenResponse;
-use tb_strava::{StravaId, StravaSession, StravaUser, refresh_if_expired};
+use tb_strava::{StravaId, StravaSession, StravaUser, is_expired, refresh_if_expired};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct RequestSession {
@@ -166,7 +166,15 @@ impl StravaSession for RequestSession {
     /// `(new_access, Some(new_refresh))`. The refresh token is persisted to the
     /// DB by the caller (the thin free functions) when the `Option` is `Some`.
     async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
-        debug!("get_token for user {}", self.id);
+        // A warm token does not persist: the `RequestSession` carries the
+        // tower-session handle, and `update()` writes the entire session
+        // (including the `shop` field) to the store. Persisting on every
+        // call would clobber the shop scope set by `set_shop` with the
+        // stale value from spawn time. Only a refresh writes.
+        if !is_expired(&self.expires_at) {
+            return Ok((self.access_token.clone(), None));
+        }
+        debug!("refreshing token for user {}", self.id);
         let result = refresh_if_expired(
             &mut self.access_token,
             &mut self.expires_at,
