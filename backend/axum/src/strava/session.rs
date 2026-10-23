@@ -11,9 +11,9 @@ use std::time::SystemTime;
 use time::{Duration, UtcDateTime};
 use tower_sessions::Session as TowerSession;
 
-use tb_domain::{Error, Session as TbSession, ShopId, TbResult, UserId};
-use tb_strava::client::{HTTP_CLIENT, STRAVACLIENT, StravaTokenResponse};
-use tb_strava::{StravaId, StravaSession, StravaUser};
+use tb_domain::{Session as TbSession, ShopId, TbResult, UserId};
+use tb_strava::client::StravaTokenResponse;
+use tb_strava::{StravaId, StravaSession, StravaUser, refresh_if_expired};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct RequestSession {
@@ -108,6 +108,27 @@ impl RequestSession {
         self
     }
 
+    /// Re-read the current session from the tower session cookie: the fresh
+    /// [`RequestSession`] the stream's re-subscribe hands the loop (warm across
+    /// reaps — the cookie carries the latest token state after a refresh).
+    pub(crate) async fn read_from_cookie(&self) -> TbResult<RequestSession> {
+        let session = self.session.clone().ok_or_else(|| {
+            tb_domain::Error::AnyFailure(anyhow::anyhow!("the tower-session handle is missing"))
+        })?;
+        let Ok(Some(fresh)) = session
+            .get::<RequestSession>(SESSION_KEY)
+            .await
+            .map_err(|err| {
+                tb_domain::Error::AnyFailure(anyhow::anyhow!("reading the session: {err}"))
+            })
+        else {
+            return Err(tb_domain::Error::NotAuth(
+                "no session in the cookie".to_string(),
+            ));
+        };
+        Ok(fresh)
+    }
+
     /// Set the active shop and persist it to the tower session (spec #517,
     /// ticket #588): the web layer's cookie-persistence concern, kept out of
     /// the domain `Session` trait (which is all `&self` — the acting session
@@ -115,12 +136,6 @@ impl RequestSession {
     pub(crate) fn set_shop(&mut self, shop: Option<ShopId>) -> TbResult<()> {
         self.shop = shop;
         tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(self.update()))
-    }
-
-    /// A one-line inline expiry check: a known expiry in the past is expired;
-    /// an unknown expiry (`None`) is treated as not expired.
-    fn is_expired(&self) -> bool {
-        self.expires_at.is_some_and(|e| SystemTime::now() > e)
     }
 }
 
@@ -151,26 +166,15 @@ impl StravaSession for RequestSession {
     /// `(new_access, Some(new_refresh))`. The refresh token is persisted to the
     /// DB by the caller (the thin free functions) when the `Option` is `Some`.
     async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
-        if !self.is_expired() {
-            return Ok((self.access_token.clone(), None));
-        }
-
-        let refresh_token = self.refresh_token.clone().ok_or_else(|| {
-            Error::NotAuth("No Refresh Token provided and Access Token expired".to_string())
-        })?;
-        debug!("refreshing token for user {}", self.id);
-        let token = STRAVACLIENT
-            .exchange_refresh_token(&refresh_token)
-            .request_async(&*HTTP_CLIENT)
-            .await
-            .map_err(|err| Error::NotAuth(err.to_string()))?;
-
-        self.access_token = token.access_token().clone();
-        self.expires_at = token.expires_in().map(|d| SystemTime::now() + d);
-        let new_refresh = token.refresh_token().cloned();
-        self.refresh_token = new_refresh.clone();
+        debug!("get_token for user {}", self.id);
+        let result = refresh_if_expired(
+            &mut self.access_token,
+            &mut self.expires_at,
+            &mut self.refresh_token,
+        )
+        .await?;
         self.update().await?;
-        Ok((self.access_token.clone(), new_refresh))
+        Ok(result)
     }
 }
 

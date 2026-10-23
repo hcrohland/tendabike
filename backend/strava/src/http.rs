@@ -65,12 +65,12 @@ pub async fn request_json<T: DeserializeOwned>(
     // rather than pretend (the seam suite's stubs never import from Strava;
     // the onboarding test expects the loop to panic on the sync's fetch).
     #[cfg(any(test, feature = "test-support"))]
-    if let Some(body) = crate::test_support::pop_canned(uri) {
+    if let Some(body) = crate::test_support::pop_test_canned(uri) {
         let body = body?;
         return Ok(serde_json::from_str(&body).context("Could not parse response body")?);
     }
     #[cfg(feature = "test-support")]
-    match crate::test_support::canned_response(uri) {
+    match crate::test_support::global_canned_response(uri) {
         Some(json) => {
             return Ok(serde_json::from_str(&json).context("Could not parse response body")?);
         }

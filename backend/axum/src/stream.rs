@@ -32,7 +32,6 @@ use tokio::sync::{broadcast, watch};
 
 use tb_domain::{Session, ShopId, Summary, UserId};
 use tb_exec::{ExecutorStatus, HEARTBEAT_INTERVAL};
-use tb_strava::StravaSession;
 
 use crate::appstate::AppState;
 use crate::error::AppError;
@@ -40,11 +39,14 @@ use crate::strava::RequestSession;
 
 /// One SSE connection's `unfold`: the current frame subscription
 /// and its executor's fate channel. A `None` frame subscription means "the
-/// executor settled; re-subscribe (respawning it) on the next step".
+/// executor settled; re-subscribe (respawning it) on the next step". The
+/// `session` carries the [`RequestSession`] (with its tower-session handle)
+/// so each re-subscribe re-reads the **fresh** cookie session (warm across
+/// reaps — the cookie carries the latest token state after a refresh).
 struct StreamSeed {
     app: AppState,
     user_id: UserId,
-    session: Option<Box<dyn StravaSession>>,
+    session: Option<RequestSession>,
     rx: Option<broadcast::Receiver<Summary>>,
     status: Option<watch::Receiver<ExecutorStatus>>,
 }
@@ -59,25 +61,36 @@ struct StreamSeed {
 async fn next_event(seed: &mut StreamSeed) -> Option<Result<Event, Infallible>> {
     let (mut rx, mut status) = match (seed.rx.take(), seed.status.take()) {
         (Some(rx), Some(status)) => (rx, status),
-        _ => match seed
-            .app
-            .api
-            .subscribe(
-                seed.session
-                    .take()
-                    .expect("the session is present on re-subscribe"),
-            )
-            .await
-        {
-            Ok(v) => v,
-            Err(err) => {
-                error!(
-                    "the executor for user {} is gone and could not be respawned: {err:?}",
-                    seed.user_id
-                );
-                return None;
+        _ => {
+            // Re-read the fresh session from the cookie (warm across reaps —
+            // the cookie carries the latest token state after a refresh).
+            let fresh = match seed
+                .session
+                .as_ref()
+                .expect("the session is present on re-subscribe")
+                .read_from_cookie()
+                .await
+            {
+                Ok(fresh) => fresh,
+                Err(err) => {
+                    error!(
+                        "re-reading the session for user {} failed: {err:?}",
+                        seed.user_id
+                    );
+                    return None;
+                }
+            };
+            match seed.app.api.subscribe(Box::new(fresh)).await {
+                Ok(v) => v,
+                Err(err) => {
+                    error!(
+                        "the executor for user {} is gone and could not be respawned: {err:?}",
+                        seed.user_id
+                    );
+                    return None;
+                }
             }
-        },
+        }
     };
 
     tokio::select! {
@@ -227,8 +240,10 @@ pub(crate) async fn endpoint(
 /// loop's stream-count signal.
 async fn personal_endpoint(user: RequestSession, state: AppState) -> Response {
     let user_id = user.user_id();
-    // Keep a clone for re-subscribing after the executor settles.
-    let re_sub_session: Box<dyn StravaSession> = Box::new(user.clone());
+    // Keep a clone for re-subscribing after the executor settles: the
+    // `RequestSession` carries the tower-session handle, so each re-subscribe
+    // re-reads the fresh cookie session (warm across reaps).
+    let re_sub_session = user.clone();
     let (rx, status) = match state.api.subscribe(Box::new(user)).await {
         Ok(v) => v,
         Err(err) => {

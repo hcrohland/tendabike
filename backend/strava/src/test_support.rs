@@ -220,14 +220,15 @@ pub fn queue_error(uri: &str, err: Error) {
     });
 }
 
-/// Pop the canned response for `uri` (the free function's offline seam).
+/// Pop the canned response for `uri` (the free function's thread-local offline
+/// seam).
 ///
 /// Returns `None` when not in test mode (the caller falls through to the
 /// process-wide `CANNED_STRAVA` global, then the real API). In test mode it
 /// always returns `Some`: the queued body (or error), recording the request;
 /// an unqueued URI records the request and yields the "unexpected request"
 /// error.
-pub fn pop_canned(uri: &str) -> Option<TbResult<String>> {
+pub fn pop_test_canned(uri: &str) -> Option<TbResult<String>> {
     CANNED.with(|c| {
         let mut c = c.borrow_mut();
         if !c.test_mode {
@@ -817,7 +818,7 @@ impl ServicePlanStore for TestStravaStore {
 // loop asks for — an empty activity list
 // makes the sync's activities fetch succeed offline (no new activities:
 // the loop's processing consumes the event and commits).
-// `StravaUserSession::request_json` consults [`canned_response`] before
+// `StravaUserSession::request_json` consults [`global_canned_response`] before
 // reaching the Strava API.
 
 /// The canned Strava responses, keyed by URI (see the section docs).
@@ -832,8 +833,10 @@ pub fn canned_strava(uri: &str, json: &str) {
         .insert(uri.to_string(), json.to_string());
 }
 
-/// The canned response for `uri`, if one is mapped (test-only).
-pub fn canned_response(uri: &str) -> Option<String> {
+/// The process-wide canned response for `uri`, if one is mapped (test-only,
+/// the seam-suite's global seam — distinct from the thread-local
+/// [`pop_test_canned`]).
+pub fn global_canned_response(uri: &str) -> Option<String> {
     CANNED_STRAVA
         .lock()
         .expect("the canned Strava responses are not poisoned")
