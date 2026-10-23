@@ -42,17 +42,6 @@
   // capturing it at init is the intent (it is the initial snapshot).
   let hook_promise = $state(promise);
 
-  /// The stream's target: null while anonymous, a stable string once
-  /// authenticated. The effect tracks this key (not the user object), so
-  /// `setUser()` from a refresh — same user, new object reference — does not
-  /// re-run the effect and re-open the stream. Only a shop change (or the
-  /// anonymous → authenticated transition) changes the key.
-  let streamKey = $derived.by(() => {
-    if (!getUser()) return null;
-    const shop = getShop();
-    return shop ? "shop:" + shop.id : "personal";
-  });
-
   /// The stream opens only once the user is known: an anonymous session
   /// gets the About page (the 401 redirect), never a stream. The initial
   /// snapshot (initData's refresh) is the single hydration; the stream
@@ -64,7 +53,7 @@
       () => markHydrated(),
       () => markHydrated(),
     );
-    if (streamKey !== null) {
+    if (getUser()) {
       startStream((p) => (hook_promise = p));
     }
   });

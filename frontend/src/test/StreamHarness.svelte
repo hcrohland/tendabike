@@ -7,12 +7,11 @@
     type EventSourceFactory,
   } from "../lib/stream";
   import { getUser } from "../lib/user";
-  import { getShop } from "../lib/shop";
 
   /// A test seam mirroring Header's stream effect: the stream opens once the
-  /// user is known, and re-opens (closing the previous source) whenever the
-  /// stream target changes — a stable string key derived from user + shop,
-  /// so `setUser()` from a refresh does not re-open the stream.
+  /// user is known, and re-opens (closing the previous source) whenever
+  /// `getShop()` changes — `startStream` reads the shop at open time, so the
+  /// effect tracks it. The `promise` is the initData catch-up snapshot.
   let {
     promise,
     factory,
@@ -21,18 +20,12 @@
     factory: EventSourceFactory;
   } = $props();
 
-  let streamKey = $derived.by(() => {
-    if (!getUser()) return null;
-    const shop = getShop();
-    return shop ? "shop:" + shop.id : "personal";
-  });
-
   $effect(() => {
     promise.then(
       () => markHydrated(),
       () => markHydrated(),
     );
-    if (streamKey !== null) {
+    if (getUser()) {
       startStream(() => {}, factory);
     }
   });

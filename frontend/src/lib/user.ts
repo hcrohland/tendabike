@@ -30,7 +30,10 @@ export async function refresh(shop?: number) {
   let query = shop ? "?shop=" + shop : "";
   let state = await myfetch("/api/user" + query);
   if (state) {
-    setUser(state.user);
+    // The user is set once by initData(); refresh only updates the summary
+    // (the shop-scoped data). Calling setUser() here would replace the user
+    // object with a new reference to the same user, re-triggering the
+    // Header's stream effect and re-opening the stream unnecessarily.
     setSummary(state.summary);
   }
 }
