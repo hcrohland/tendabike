@@ -29,6 +29,9 @@ pub use client::*;
 mod session;
 pub use session::*;
 
+mod http;
+pub use http::*;
+
 pub mod activity;
 pub mod event;
 pub mod gear;

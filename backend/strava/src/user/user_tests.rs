@@ -73,7 +73,7 @@ async fn read_stravauser() {
     let (mut store, _) = setup();
     let user = StravaUser::read(UserId::from(1), &mut store).await.unwrap();
     assert_eq!(user.strava_id(), 42.into());
-    assert_eq!(user.tb_id(), UserId::from(1));
+    assert_eq!(user.user_id(), UserId::from(1));
     let res = StravaUser::read(UserId::from(2), &mut store).await;
     assert!(matches!(res, Err(Error::NotFound(_))));
 }
@@ -143,7 +143,7 @@ async fn deauthorizes_user_and_events() -> TbResult<()> {
         })
         .await?;
     user_deauthorize(&mut session, &mut store).await?;
-    assert_eq!(session.deauthorizes, vec![42.into()]);
+    assert_eq!(session.deauthorizes(), vec![42.into()]);
     assert_eq!(store.event_count(), 0);
     let user = store.stravauser_get_by_tbid(UserId::from(1)).await?;
     assert!(user.disabled());
@@ -163,7 +163,7 @@ async fn user_delete_removes_everything() -> TbResult<()> {
         })
         .await?;
     user_delete(&mut session, &mut store).await?;
-    assert_eq!(session.deauthorizes, vec![42.into()]);
+    assert_eq!(session.deauthorizes(), vec![42.into()]);
     assert!(store.strava_users.is_empty());
     assert_eq!(store.event_count(), 0);
     let res = UserStore::get(&mut store.mem, UserId::from(1)).await;

@@ -69,7 +69,7 @@ async fn into_activity_creates_missing_gear() -> TbResult<()> {
     assert_eq!(part.name, "Test Bike");
     assert_eq!(part.vendor, "Test Brand");
     assert_eq!(part.model, "Test Model");
-    assert_eq!(session.requests, vec!["/gear/b1".to_string()]);
+    assert_eq!(session.requests(), vec!["/gear/b1".to_string()]);
     Ok(())
 }
 
@@ -85,7 +85,7 @@ async fn into_activity_reuses_existing_gear() -> TbResult<()> {
         .await?;
     assert_eq!(first.gear, second.gear);
     let requests = session
-        .requests
+        .requests()
         .iter()
         .filter(|r| r.as_str() == "/gear/b1")
         .count();

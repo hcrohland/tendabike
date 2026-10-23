@@ -19,7 +19,7 @@ pub struct StravaGear {
 
 pub async fn strava_url(
     gear: i32,
-    user: &mut impl StravaSession,
+    user: &mut dyn StravaSession,
     store: &mut impl StravaStore,
 ) -> TbResult<String> {
     let part = PartId::from(gear).part(user, store).await?;
@@ -47,7 +47,7 @@ impl StravaGear {
 /// None will return None
 pub(crate) async fn into_partid(
     strava_id: String,
-    user: &mut impl StravaSession,
+    user: &mut dyn StravaSession,
     store: &mut impl StravaStore,
 ) -> TbResult<PartId> {
     if let Some(gear) = Part::by_source(&strava_id, store).await? {
@@ -55,8 +55,7 @@ pub(crate) async fn into_partid(
     }
 
     debug!("New Gear");
-    let gear = user
-        .request_json::<StravaGear>(&format!("/gear/{}", strava_id), store)
+    let gear = request_json::<StravaGear>(user, &format!("/gear/{}", strava_id), store)
         .await
         .context("Couldn't map gear")?;
 

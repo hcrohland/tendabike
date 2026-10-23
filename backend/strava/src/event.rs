@@ -213,7 +213,7 @@ impl Event {
     #[async_recursion]
     async fn rate_limit(
         self,
-        user: &impl StravaSession,
+        user: &dyn StravaSession,
         store: &mut impl StravaDataStore,
     ) -> TbResult<QueueRead> {
         // rate limit event
@@ -232,7 +232,7 @@ impl Event {
 
     async fn process_activity(
         self,
-        user: &mut impl StravaSession,
+        user: &mut dyn StravaSession,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
         match self.process_hook(user, store).await {
@@ -257,7 +257,7 @@ impl Event {
     ///
     async fn process_hook(
         &self,
-        user: &mut impl StravaSession,
+        user: &mut dyn StravaSession,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
         let res = match self.aspect_type {
@@ -280,7 +280,7 @@ impl Event {
 
     async fn sync(
         &mut self,
-        user: &mut impl StravaSession,
+        user: &mut dyn StravaSession,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
         // let mut len = batch;
@@ -329,7 +329,7 @@ impl Event {
 
     async fn process_sync(
         mut self,
-        user: &mut impl StravaSession,
+        user: &mut dyn StravaSession,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
         match self.sync(user, store).await {
@@ -493,7 +493,7 @@ pub enum QueueRead {
 /// event" step; reading the queue stays a Strava-side concern, so the
 /// function stays here rather than being inlined in the caller.
 pub async fn get_event(
-    user: &impl StravaSession,
+    user: &dyn StravaSession,
     store: &mut impl StravaDataStore,
 ) -> TbResult<QueueRead> {
     let event = store
@@ -527,12 +527,13 @@ pub async fn get_event(
 }
 
 async fn next_activities(
-    user: &mut impl StravaSession,
+    user: &mut dyn StravaSession,
     store: &mut impl StravaDataStore,
     per_page: usize,
     start: i64,
 ) -> TbResult<Vec<StravaActivity>> {
-    user.request_json(
+    request_json(
+        user,
         &format!("/activities?after={start}&per_page={per_page}"),
         store,
     )
@@ -540,7 +541,7 @@ async fn next_activities(
 }
 
 pub async fn process(
-    user: &mut impl StravaSession,
+    user: &mut dyn StravaSession,
     store: &mut impl StravaStore,
 ) -> TbResult<Summary> {
     let read = get_event(user, store).await?;
@@ -585,7 +586,7 @@ pub async fn sync_users(
         }
         info!("Adding sync for {:?} at {time}", user.strava_id());
         event::insert_sync(user.strava_id(), time, migrate, store).await?;
-        queued.push(user.tb_id());
+        queued.push(user.user_id());
     }
     Ok(queued)
 }

@@ -4,7 +4,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use http::{StatusCode, request::Parts};
-use log::trace;
+use log::{debug, trace};
 use oauth2::{AccessToken, RefreshToken, TokenResponse};
 use serde_derive::{Deserialize, Serialize};
 use std::time::SystemTime;
@@ -13,7 +13,7 @@ use tower_sessions::Session as TowerSession;
 
 use tb_domain::{Session as TbSession, ShopId, TbResult, UserId};
 use tb_strava::client::StravaTokenResponse;
-use tb_strava::{StravaId, StravaUser};
+use tb_strava::{StravaId, StravaSession, StravaUser, refresh_if_expired};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct RequestSession {
@@ -47,7 +47,7 @@ impl RequestSession {
 
         let refresh_token = token.refresh_token();
         Self {
-            id: user.tb_id(),
+            id: user.user_id(),
             strava_id: user.strava_id(),
             is_admin,
             access_token: token.access_token().clone(),
@@ -108,6 +108,27 @@ impl RequestSession {
         self
     }
 
+    /// Re-read the current session from the tower session cookie: the fresh
+    /// [`RequestSession`] the stream's re-subscribe hands the loop (warm across
+    /// reaps — the cookie carries the latest token state after a refresh).
+    pub(crate) async fn read_from_cookie(&self) -> TbResult<RequestSession> {
+        let session = self.session.clone().ok_or_else(|| {
+            tb_domain::Error::AnyFailure(anyhow::anyhow!("the tower-session handle is missing"))
+        })?;
+        let Ok(Some(fresh)) = session
+            .get::<RequestSession>(SESSION_KEY)
+            .await
+            .map_err(|err| {
+                tb_domain::Error::AnyFailure(anyhow::anyhow!("reading the session: {err}"))
+            })
+        else {
+            return Err(tb_domain::Error::NotAuth(
+                "no session in the cookie".to_string(),
+            ));
+        };
+        Ok(fresh)
+    }
+
     /// Set the active shop and persist it to the tower session (spec #517,
     /// ticket #588): the web layer's cookie-persistence concern, kept out of
     /// the domain `Session` trait (which is all `&self` — the acting session
@@ -129,6 +150,31 @@ impl TbSession for RequestSession {
 
     fn shop(&self) -> Option<ShopId> {
         self.shop
+    }
+}
+
+#[async_trait::async_trait]
+impl StravaSession for RequestSession {
+    fn strava_id(&self) -> StravaId {
+        self.strava_id
+    }
+
+    /// Ensure a valid access token, refreshing in place if expired. A warm
+    /// session returns `(access, None)`. An expired session makes exactly one
+    /// `STRAVACLIENT` exchange, persists the access token to the cookie via
+    /// [`update`](RequestSession::update), and returns
+    /// `(new_access, Some(new_refresh))`. The refresh token is persisted to the
+    /// DB by the caller (the thin free functions) when the `Option` is `Some`.
+    async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
+        debug!("get_token for user {}", self.id);
+        let result = refresh_if_expired(
+            &mut self.access_token,
+            &mut self.expires_at,
+            &mut self.refresh_token,
+        )
+        .await?;
+        self.update().await?;
+        Ok(result)
     }
 }
 

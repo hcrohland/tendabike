@@ -7,10 +7,10 @@
 
 #![allow(clippy::too_many_arguments)]
 
+use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 
-use oauth2::RefreshToken;
-use serde::de::DeserializeOwned;
+use oauth2::{AccessToken, RefreshToken};
 use tb_domain::test_support::MemStore;
 use time::OffsetDateTime;
 
@@ -158,45 +158,151 @@ impl Store for TestStravaStore {}
 
 impl StravaStore for TestStravaStore {}
 
+// ─── Thread-local canned responses (feature-independent test seam) ──────────
+//
+// The thin free functions (`request_json`/`deauthorize`) take `&mut impl
+// StravaSession` and cannot downcast to a scripted session, so the per-test
+// canned responses live in a thread-local map the free functions consult.
+// Each test runs on its own thread, so the map gives per-test isolation.
+// `TestStravaSession` (and the `tb_exec` gear tests) write to it; the free
+// functions read from it. The process-wide `CANNED_STRAVA` global below is a
+// separate seam for the seam suite's real session, which runs in a spawned
+// task on a thread this map never reaches.
+
+/// The per-thread canned-response state (see the section docs).
+#[derive(Default)]
+struct CannedState {
+    test_mode: bool,
+    responses: HashMap<String, VecDeque<TbResult<String>>>,
+    requests: Vec<String>,
+    deauthorizes: Vec<StravaId>,
+}
+
+thread_local! {
+    static CANNED: RefCell<CannedState> = RefCell::new(CannedState::default());
+}
+
+/// Begin a test's thread-local scope: marks the thread in test mode and clears
+/// any canned responses/records a previous test left on this thread (per-test
+/// isolation — each test runs on its own thread).
+pub fn begin_test() {
+    CANNED.with(|c| {
+        *c.borrow_mut() = CannedState::default();
+        c.borrow_mut().test_mode = true;
+    });
+}
+
+/// Whether the current thread is in test mode (a `TestStravaSession` was
+/// built, or `begin_test` was called).
+pub fn in_test_mode() -> bool {
+    CANNED.with(|c| c.borrow().test_mode)
+}
+
+/// Queue a canned JSON response for an exact request URI (FIFO per URI).
+pub fn queue(uri: &str, json: &str) {
+    CANNED.with(|c| {
+        c.borrow_mut()
+            .responses
+            .entry(uri.to_string())
+            .or_default()
+            .push_back(Ok(json.to_string()));
+    });
+}
+
+/// Queue an error for an exact request URI.
+pub fn queue_error(uri: &str, err: Error) {
+    CANNED.with(|c| {
+        c.borrow_mut()
+            .responses
+            .entry(uri.to_string())
+            .or_default()
+            .push_back(Err(err));
+    });
+}
+
+/// Pop the canned response for `uri` (the free function's thread-local offline
+/// seam).
+///
+/// Returns `None` when not in test mode (the caller falls through to the
+/// process-wide `CANNED_STRAVA` global, then the real API). In test mode it
+/// always returns `Some`: the queued body (or error), recording the request;
+/// an unqueued URI records the request and yields the "unexpected request"
+/// error.
+pub fn pop_test_canned(uri: &str) -> Option<TbResult<String>> {
+    CANNED.with(|c| {
+        let mut c = c.borrow_mut();
+        if !c.test_mode {
+            return None;
+        }
+        c.requests.push(uri.to_string());
+        Some(
+            c.responses
+                .get_mut(uri)
+                .and_then(|q| q.pop_front())
+                .unwrap_or(Err(Error::BadRequest(format!(
+                    "unexpected strava request: {uri}"
+                )))),
+        )
+    })
+}
+
+/// Record a deauthorization in the thread-local map (the free function's
+/// offline seam).
+pub fn record_deauthorize(strava: StravaId) {
+    CANNED.with(|c| c.borrow_mut().deauthorizes.push(strava));
+}
+
+/// The requested URIs, in order (the `TestStravaSession::requests` surface).
+pub fn requests() -> Vec<String> {
+    CANNED.with(|c| c.borrow().requests.clone())
+}
+
+/// The recorded deauthorizations (the `TestStravaSession::deauthorizes`
+/// surface).
+pub fn deauthorizes() -> Vec<StravaId> {
+    CANNED.with(|c| c.borrow().deauthorizes.clone())
+}
+
 /// Scripted [`StravaSession`] for tests.
 ///
-/// `request_json` replays queued responses for the exact request URI and
-/// records all requested URIs in `requests`.
+/// `get_token` returns a warm dummy token (no refresh), so the thin free
+/// functions' `request_json`/`deauthorize` replay the thread-local canned
+/// responses and record the requested URIs / deauthorizations the tests assert
+/// on.
 pub struct TestStravaSession {
     user: UserId,
     strava: StravaId,
     admin: bool,
-    responses: HashMap<String, VecDeque<TbResult<String>>>,
-    pub requests: Vec<String>,
-    pub deauthorizes: Vec<StravaId>,
 }
 
 impl TestStravaSession {
     pub fn new(user: UserId, strava: StravaId) -> Self {
+        begin_test();
         Self {
             user,
             strava,
             admin: false,
-            responses: HashMap::new(),
-            requests: Vec::new(),
-            deauthorizes: Vec::new(),
         }
     }
 
-    /// Queue a JSON response body for an exact request URI.
+    /// Queue a JSON response body for an exact request URI (FIFO per URI).
     pub fn queue(&mut self, uri: &str, json: &str) {
-        self.responses
-            .entry(uri.to_string())
-            .or_default()
-            .push_back(Ok(json.to_string()));
+        queue(uri, json);
     }
 
     /// Queue an error for an exact request URI.
     pub fn queue_error(&mut self, uri: &str, err: Error) {
-        self.responses
-            .entry(uri.to_string())
-            .or_default()
-            .push_back(Err(err));
+        queue_error(uri, err);
+    }
+
+    /// Every requested URI, in order (assert on these to verify API calls).
+    pub fn requests(&self) -> Vec<String> {
+        requests()
+    }
+
+    /// The recorded `deauthorize()` calls.
+    pub fn deauthorizes(&self) -> Vec<StravaId> {
+        deauthorizes()
     }
 }
 
@@ -220,26 +326,10 @@ impl StravaSession for TestStravaSession {
         self.strava
     }
 
-    async fn request_json<T: DeserializeOwned>(
-        &mut self,
-        uri: &str,
-        _store: &mut impl StravaDataStore,
-    ) -> TbResult<T> {
-        self.requests.push(uri.to_string());
-        let body = self
-            .responses
-            .get_mut(uri)
-            .and_then(|q| q.pop_front())
-            .unwrap_or(Err(Error::BadRequest(format!(
-                "unexpected strava request: {uri}"
-            ))));
-        let body = body?;
-        serde_json::from_str(&body).map_err(|e| Error::AnyFailure(e.into()))
-    }
-
-    async fn deauthorize(&mut self, _store: &mut impl StravaDataStore) -> TbResult<()> {
-        self.deauthorizes.push(self.strava);
-        Ok(())
+    /// A warm dummy token: the scripted session never refreshes, so the free
+    /// functions' refresh-token persistence is a no-op for it.
+    async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
+        Ok((AccessToken::new("test-access-token".to_owned()), None))
     }
 }
 
@@ -728,7 +818,7 @@ impl ServicePlanStore for TestStravaStore {
 // loop asks for — an empty activity list
 // makes the sync's activities fetch succeed offline (no new activities:
 // the loop's processing consumes the event and commits).
-// `StravaUserSession::request_json` consults [`canned_response`] before
+// `StravaUserSession::request_json` consults [`global_canned_response`] before
 // reaching the Strava API.
 
 /// The canned Strava responses, keyed by URI (see the section docs).
@@ -743,8 +833,10 @@ pub fn canned_strava(uri: &str, json: &str) {
         .insert(uri.to_string(), json.to_string());
 }
 
-/// The canned response for `uri`, if one is mapped (test-only).
-pub fn canned_response(uri: &str) -> Option<String> {
+/// The process-wide canned response for `uri`, if one is mapped (test-only,
+/// the seam-suite's global seam — distinct from the thread-local
+/// [`pop_test_canned`]).
+pub fn global_canned_response(uri: &str) -> Option<String> {
     CANNED_STRAVA
         .lock()
         .expect("the canned Strava responses are not poisoned")
