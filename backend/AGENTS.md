@@ -27,10 +27,16 @@
 
 ## Tests
 
-All suites are in-memory (no database, no network) except `tb_sqlx`'s store-seam integration suite (`tests/store_seam.rs`): it is ignored by default and runs with `cargo test -p tb_sqlx --test store_seam -- --include-ignored` against a reachable `SCRATCH_DATABASE_URL` (a disposable scratch database — the suite reads `DATABASE_URL`/`DB_URL` only to refuse a collision, never as a target: they point at the developer's working database), fails loudly whenever it cannot run, and runs against a real Postgres service in the required `rust` CI job. `SQLX_OFFLINE=true cargo test -p tb_<crate>`.
+Most suites are in-memory (no database, no network). The `#[ignore]`d seam suites in `tb_sqlx` (`tests/store_seam.rs`, `tests/executor_seam.rs`) are the exception: they run against a real Postgres and are skipped unless `--include-ignored` is passed. The complete suite — seam suites included — is:
+
+```bash
+SQLX_OFFLINE=true SCRATCH_DATABASE_URL=postgres://user@localhost/tendabike_test cargo test -- --include-ignored
+```
+
+`SCRATCH_DATABASE_URL` names a disposable scratch database. Without `--include-ignored`, `cargo test` reports the seam suites as ignored and runs only the in-memory suites; `SQLX_OFFLINE=true cargo test -p tb_<crate>` runs one crate's in-memory suites.
 Before writing or changing tests for a crate, read its guide:
 
 - `tb_domain` → [`docs/tests/domain.md`](docs/tests/domain.md) — `MemStore`, fixtures, the prepopulated snapshot and its data rules
 - `tb_strava` → [`docs/tests/strava.md`](docs/tests/strava.md) — `TestStravaStore` / `TestStravaSession`, JSON helpers
 - `tb_axum` → [`docs/tests/axum.md`](docs/tests/axum.md) — `test_app`, router tests, coverage map
-- `tb_sqlx` → [`docs/tests/sqlx.md`](docs/tests/sqlx.md) — entity-mapping roundtrips, the store-seam integration suite
+- `tb_sqlx` → [`docs/tests/sqlx.md`](docs/tests/sqlx.md) — entity-mapping roundtrips, the seam integration suites
