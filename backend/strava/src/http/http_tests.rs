@@ -81,7 +81,7 @@ async fn access_token_uses_the_token_cache_warm_token() -> TbResult<()> {
     };
     begin_test();
     seed_token_cache(UserId::from(1), StravaId::from(42), "test-access-token");
-    let access = access_token(&mut session, &mut store).await?;
+    let (_strava_id, access) = access_token(&mut session, &mut store).await?;
     assert_eq!(access.secret(), "test-access-token");
     let user = store.stravauser_get_by_tbid(UserId::from(1)).await?;
     assert_eq!(

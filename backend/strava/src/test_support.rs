@@ -187,10 +187,9 @@ thread_local! {
 /// isolation — each test runs on its own thread).
 ///
 /// The process-wide `TokenCache` is *not* cleared here: the in-memory tests
-/// run in parallel threads and all seed the same warm token, so a per-test
-/// clear would let one test's clear race another test's `get_token` (a cache
-/// miss would force a real refresh). Call [`clear_token_cache`] explicitly
-/// where a test needs a clean cache (run serially).
+/// run in parallel threads and all seed the same warm token (via
+/// [`seed_token_cache`]), so a per-test clear would let one test's clear race
+/// another test's `get_token` (a cache miss would force a real refresh).
 pub fn begin_test() {
     CANNED.with(|c| {
         *c.borrow_mut() = CannedState::default();
@@ -209,16 +208,6 @@ pub fn seed_token_cache(user_id: UserId, strava_id: StravaId, access_token: &str
             user_id,
             crate::session::TokenState::warm(strava_id, access_token),
         );
-}
-
-/// Clear the process-wide `TokenCache` (test isolation): the cache is
-/// process-wide, so each test starts with a clean cache (spec #605). Folded
-/// into [`begin_test`].
-pub fn clear_token_cache() {
-    crate::session::TOKEN_CACHE
-        .lock()
-        .expect("the token cache is not poisoned")
-        .clear();
 }
 
 /// Whether the current thread is in test mode (a `TestStravaSession` was

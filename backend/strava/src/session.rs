@@ -143,6 +143,31 @@ impl TokenState {
 pub(crate) static TOKEN_CACHE: LazyLock<Mutex<HashMap<UserId, TokenState>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+/// The `TokenCache` lookup (spec #602): a cache hit clones the warm
+/// [`TokenState`]; a cache miss builds it from the DB's refresh token (and
+/// inserts it), forcing a refresh on the first request.
+///
+/// The `MutexGuard` is not `Send` and must not be held across the `await`:
+/// the lookup lock is scoped to its own block (cloned on a hit), and the miss
+/// path reads the `StravaUser` with no lock held, then locks again to insert
+/// the new state.
+async fn cached_state(user_id: UserId, store: &mut impl StravaDataStore) -> TbResult<TokenState> {
+    let cached = {
+        let cache = TOKEN_CACHE.lock().expect("the token cache is not poisoned");
+        cache.get(&user_id).cloned()
+    };
+    match cached {
+        Some(state) => Ok(state),
+        None => {
+            let user = StravaUser::read(user_id, store).await?;
+            let state = TokenState::from_strava_user(&user);
+            let mut cache = TOKEN_CACHE.lock().expect("the token cache is not poisoned");
+            cache.insert(user_id, state.clone());
+            Ok(state)
+        }
+    }
+}
+
 /// A valid Strava access token for `user_id` (spec #602): a cache hit clones
 /// the warm [`TokenState`]; a cache miss builds it from the DB's refresh
 /// token (and inserts it), forcing a refresh. Returns `(strava_id, access,
@@ -152,26 +177,7 @@ pub(crate) async fn get_token(
     user_id: UserId,
     store: &mut impl StravaDataStore,
 ) -> TbResult<(StravaId, AccessToken, Option<RefreshToken>)> {
-    // The `MutexGuard` is not `Send` and must not be held across the `await`:
-    // the lookup lock is scoped to its own block (cloned on a hit), and the
-    // miss path reads the StravaUser with no lock held, then locks again to
-    // insert the new state.
-    let mut state = {
-        let cached = {
-            let cache = TOKEN_CACHE.lock().expect("the token cache is not poisoned");
-            cache.get(&user_id).cloned()
-        };
-        match cached {
-            Some(state) => state,
-            None => {
-                let user = StravaUser::read(user_id, store).await?;
-                let state = TokenState::from_strava_user(&user);
-                let mut cache = TOKEN_CACHE.lock().expect("the token cache is not poisoned");
-                cache.insert(user_id, state.clone());
-                state
-            }
-        }
-    };
+    let mut state = cached_state(user_id, store).await?;
     let (access, new_refresh) = state.get_token().await?;
     let strava_id = state.strava_id();
     {
@@ -191,21 +197,6 @@ pub(crate) async fn get_strava_id(
     user_id: UserId,
     store: &mut impl StravaDataStore,
 ) -> TbResult<StravaId> {
-    let state = {
-        let cached = {
-            let cache = TOKEN_CACHE.lock().expect("the token cache is not poisoned");
-            cache.get(&user_id).cloned()
-        };
-        match cached {
-            Some(state) => state,
-            None => {
-                let user = StravaUser::read(user_id, store).await?;
-                let state = TokenState::from_strava_user(&user);
-                let mut cache = TOKEN_CACHE.lock().expect("the token cache is not poisoned");
-                cache.insert(user_id, state.clone());
-                state
-            }
-        }
-    };
+    let state = cached_state(user_id, store).await?;
     Ok(state.strava_id())
 }

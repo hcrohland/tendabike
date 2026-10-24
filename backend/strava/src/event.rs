@@ -530,7 +530,7 @@ pub async fn get_event(
     user: &dyn Session,
     store: &mut impl StravaDataStore,
 ) -> TbResult<QueueRead> {
-    let (strava_id, _access, _new_refresh) = get_token(user.user_id(), store).await?;
+    let strava_id = get_strava_id(user.user_id(), store).await?;
     let event = store.strava_event_get_next_for_user(strava_id).await?;
     let event = match event {
         Some(event) => event,

@@ -213,7 +213,7 @@ pub async fn user_deauthorize(
 
     warn!("User {} deauthorized", user.user_id());
 
-    let (strava_id, _access, _new_refresh) = get_token(user.user_id(), store).await?;
+    let strava_id = get_strava_id(user.user_id(), store).await?;
     strava_id.disable(store).await
 }
 

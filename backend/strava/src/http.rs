@@ -34,7 +34,7 @@ use oauth2::AccessToken;
 use serde::de::DeserializeOwned;
 
 use crate::client::{HTTP_CLIENT, STRAVACLIENT};
-use crate::{StravaDataStore, get_token};
+use crate::{StravaDataStore, StravaId, get_token};
 use tb_domain::{Error, Session, TbResult};
 
 const API: &str = "https://www.strava.com/api/v3";
@@ -45,13 +45,13 @@ const API: &str = "https://www.strava.com/api/v3";
 async fn access_token(
     user: &mut dyn Session,
     store: &mut impl StravaDataStore,
-) -> TbResult<AccessToken> {
+) -> TbResult<(StravaId, AccessToken)> {
     let (strava_id, access, new_refresh) = get_token(user.user_id(), store).await?;
     if let Some(refresh) = new_refresh {
         let secret = refresh.secret().to_string();
         strava_id.update_token(Some(&secret), store).await?;
     }
-    Ok(access)
+    Ok((strava_id, access))
 }
 
 /// A bearer GET of `uri` for `user`, parsed as `T`.
@@ -70,7 +70,7 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
     uri: &str,
     store: &mut impl StravaDataStore,
 ) -> TbResult<T> {
-    let access = access_token(user, store).await?;
+    let (_strava_id, access) = access_token(user, store).await?;
 
     // The offline seams (test-only): first the thread-local canned response
     // (per-test isolation: each test runs on its own thread), then the
@@ -99,18 +99,14 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
 
 /// Revoke `user`'s Strava token.
 ///
-/// The `TokenCache`'s `get_token` → persist the refresh token to the DB if a
-/// refresh issued a new one → `STRAVACLIENT.revoke_token`. Knows nothing about
-/// refresh mechanics.
+/// [`access_token`] (the `TokenCache`'s `get_token` → persist the refresh
+/// token to the DB if a refresh issued a new one) →
+/// `STRAVACLIENT.revoke_token`. Knows nothing about refresh mechanics.
 pub(crate) async fn deauthorize(
     user: &mut dyn Session,
     store: &mut impl StravaDataStore,
 ) -> TbResult<()> {
-    let (strava_id, access, new_refresh) = get_token(user.user_id(), store).await?;
-    if let Some(refresh) = new_refresh {
-        let secret = refresh.secret().to_string();
-        strava_id.update_token(Some(&secret), store).await?;
-    }
+    let (strava_id, access) = access_token(user, store).await?;
 
     // The offline seam (test-only): in test mode a deauthorization is recorded
     // in the thread-local map instead of hitting the Strava API. The process-
