@@ -18,16 +18,17 @@
 
 */
 
-//! The concrete [`StravaSession`] the executor's admin-sync path builds
-//! (spec #558 §6.2).
+//! The `tb_strava`-owned Strava token machinery (spec #602): a private
+//! [`TokenState`] (the user's `strava_id` plus the token fields the refresh
+//! machinery drives) and a process-wide in-memory [`TOKEN_CACHE`] keyed by
+//! [`UserId`].
 //!
-//! In-memory and loop-scoped — no tower-session half. The token state
-//! (`access_token`/`expires_at`/`refresh_token`) is plain fields; the refresh
-//! machinery lives entirely in [`get_token`](StravaUserSession::get_token).
-//! The web layer's request session keeps its tower-session half and its
-//! impersonation constructor for the HTTP path; the two types deliberately
-//! diverge (the request session is serialized into the tower session and
-//! carries `shop`; this one is in-memory and loop-scoped).
+//! The DB keeps the refresh token as the durable fallback; on a cache miss the
+//! [`TokenState`] is built from the DB's refresh token (an empty access token
+//! with a past expiry), forcing the first request to refresh. `get_token`
+//! (crate-private) is the seam the thin HTTP free functions drive: it returns a
+//! valid access token plus the *new* refresh token if a refresh just happened
+//! (the signal to persist). No token type or value crosses the crate boundary.
 
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
@@ -37,12 +38,12 @@ use log::debug;
 use oauth2::{AccessToken, RefreshToken, TokenResponse};
 
 use crate::client::{HTTP_CLIENT, STRAVACLIENT};
-use crate::{StravaDataStore, StravaId, StravaSession, StravaStore, StravaUser};
-use tb_domain::{Error, Session as TbSession, ShopId, TbResult, UserId};
+use crate::{StravaDataStore, StravaId, StravaUser};
+use tb_domain::{Error, TbResult, UserId};
 
 /// A one-line expiry check: a known expiry in the past is expired; an unknown
 /// expiry (`None`) is treated as not expired.
-pub fn is_expired(expires_at: &Option<SystemTime>) -> bool {
+fn is_expired(expires_at: &Option<SystemTime>) -> bool {
     expires_at.is_some_and(|e| SystemTime::now() > e)
 }
 
@@ -51,7 +52,7 @@ pub fn is_expired(expires_at: &Option<SystemTime>) -> bool {
 /// fresh pair in place; otherwise return the warm access token. Returns
 /// `(access, new_refresh)` where `new_refresh` is `Some` only when a refresh
 /// issued a new rotating token (the signal to persist).
-pub async fn refresh_if_expired(
+async fn refresh_if_expired(
     access_token: &mut AccessToken,
     expires_at: &mut Option<SystemTime>,
     refresh_token: &mut Option<RefreshToken>,
@@ -147,7 +148,7 @@ pub(crate) static TOKEN_CACHE: LazyLock<Mutex<HashMap<UserId, TokenState>>> =
 /// token (and inserts it), forcing a refresh. Returns `(strava_id, access,
 /// new_refresh)` where `new_refresh` is `Some` only when a refresh issued a
 /// new rotating token (the signal to persist).
-pub async fn get_token(
+pub(crate) async fn get_token(
     user_id: UserId,
     store: &mut impl StravaDataStore,
 ) -> TbResult<(StravaId, AccessToken, Option<RefreshToken>)> {
@@ -207,197 +208,4 @@ pub(crate) async fn get_strava_id(
         }
     };
     Ok(state.strava_id())
-}
-
-/// The concrete [`StravaSession`] (spec #558 §6.2): the user's identity plus
-/// the Strava token state, with the refresh machinery the loop drives.
-/// In-memory and loop-scoped — no tower-session half.
-pub struct StravaUserSession {
-    id: UserId,
-    strava_id: StravaId,
-    is_admin: bool,
-    access_token: AccessToken,
-    expires_at: Option<SystemTime>,
-    refresh_token: Option<RefreshToken>,
-}
-
-impl StravaUserSession {
-    /// Build the session for a user from their stored
-    /// [`StravaUser`] (the refresh token): an empty access token with a
-    /// past expiry, so the first Strava request forces a token refresh
-    /// (spec #558 §6.2).
-    pub async fn for_user(user: UserId, store: &mut impl StravaStore) -> TbResult<Self> {
-        let user = StravaUser::read(user, store).await?;
-
-        let strava_id = user.strava_id();
-        let id = user.user_id();
-        let is_admin = id.is_admin(store).await?;
-        let refresh_token = user.refresh_token();
-
-        Ok(Self {
-            id,
-            strava_id,
-            is_admin,
-            access_token: AccessToken::new(String::default()),
-            expires_at: Some(SystemTime::UNIX_EPOCH),
-            refresh_token,
-        })
-    }
-}
-
-impl TbSession for StravaUserSession {
-    fn user_id(&self) -> UserId {
-        self.id
-    }
-
-    fn is_admin(&self) -> bool {
-        self.is_admin
-    }
-
-    fn shop(&self) -> Option<ShopId> {
-        None
-    }
-}
-
-#[async_trait::async_trait]
-impl StravaSession for StravaUserSession {
-    fn strava_id(&self) -> StravaId {
-        self.strava_id
-    }
-
-    /// Ensure a valid access token, refreshing in place if expired.
-    ///
-    /// A warm session returns `(access, None)` (no refresh call). An expired
-    /// session makes exactly one `STRAVACLIENT` exchange and returns
-    /// `(new_access, Some(new_refresh))`. The refresh token is *not* persisted
-    /// here — the caller (the thin free functions) persists it to the DB when
-    /// the returned `Option` is `Some`.
-    async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
-        debug!("get_token for user {}", self.id);
-        refresh_if_expired(
-            &mut self.access_token,
-            &mut self.expires_at,
-            &mut self.refresh_token,
-        )
-        .await
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::time::Duration;
-
-    fn dummy(expires_at: Option<SystemTime>) -> StravaUserSession {
-        StravaUserSession {
-            id: UserId::from(1),
-            strava_id: StravaId::from(1),
-            is_admin: true,
-            access_token: AccessToken::new("test-access-token".to_owned()),
-            expires_at,
-            refresh_token: Some(RefreshToken::new("test-refresh-token".to_owned())),
-        }
-    }
-
-    #[test]
-    fn expired_when_access_token_expired() {
-        assert!(is_expired(&Some(
-            SystemTime::now() - Duration::from_secs(1)
-        )));
-    }
-
-    #[test]
-    fn not_expired_when_access_token_valid() {
-        assert!(!is_expired(&Some(
-            SystemTime::now() + Duration::from_secs(3600)
-        )));
-    }
-
-    #[test]
-    fn not_expired_when_expiry_unknown() {
-        assert!(!is_expired(&None));
-    }
-
-    /// A warm `get_token` makes no refresh call: it returns the stored access
-    /// token and `None` (no rotated refresh token).
-    #[tokio::test]
-    async fn get_token_warm_returns_the_access_token_and_no_refresh() -> TbResult<()> {
-        let mut session = dummy(Some(SystemTime::now() + Duration::from_secs(3600)));
-        let (access, new_refresh) = session.get_token().await?;
-        assert_eq!(access.secret(), "test-access-token");
-        assert!(new_refresh.is_none());
-        Ok(())
-    }
-
-    /// An expired `get_token` with no refresh token fails with `NotAuth` (the
-    /// refresh is impossible) — no network call is made.
-    #[tokio::test]
-    async fn get_token_expired_without_a_refresh_token_fails() {
-        let mut session = StravaUserSession {
-            id: UserId::from(1),
-            strava_id: StravaId::from(1),
-            is_admin: true,
-            access_token: AccessToken::new(String::default()),
-            expires_at: Some(SystemTime::UNIX_EPOCH),
-            refresh_token: None,
-        };
-        let res = session.get_token().await;
-        assert!(matches!(res, Err(Error::NotAuth(_))));
-    }
-
-    // ─── Tests for the shared `refresh_if_expired` helper ───────────────
-
-    /// A warm `refresh_if_expired` (not expired) returns the stored access
-    /// token and `None` (no refresh call, no rotated refresh token).
-    #[tokio::test]
-    async fn refresh_if_expired_warm_returns_the_access_token_and_no_refresh() {
-        let mut access = AccessToken::new("warm-access".to_owned());
-        let mut expires_at = Some(SystemTime::now() + Duration::from_secs(3600));
-        let mut refresh = Some(RefreshToken::new("warm-refresh".to_owned()));
-
-        let (returned_access, new_refresh) =
-            refresh_if_expired(&mut access, &mut expires_at, &mut refresh)
-                .await
-                .expect("warm session succeeds");
-
-        assert_eq!(returned_access.secret(), "warm-access");
-        assert!(new_refresh.is_none());
-        // The fields are untouched: no refresh happened.
-        assert_eq!(access.secret(), "warm-access");
-        assert!(expires_at.is_some());
-        assert_eq!(refresh.as_ref().unwrap().secret(), "warm-refresh");
-    }
-
-    /// An expired `refresh_if_expired` with no refresh token fails with
-    /// `NotAuth` (the refresh is impossible) — no network call is made.
-    #[tokio::test]
-    async fn refresh_if_expired_expired_without_a_refresh_token_fails() {
-        let mut access = AccessToken::new(String::default());
-        let mut expires_at = Some(SystemTime::UNIX_EPOCH);
-        let mut refresh: Option<RefreshToken> = None;
-
-        let res = refresh_if_expired(&mut access, &mut expires_at, &mut refresh).await;
-        assert!(matches!(res, Err(Error::NotAuth(_))));
-    }
-
-    // ─── Tests for the shared `is_expired` helper ────────────────────────
-
-    #[test]
-    fn is_expired_true_when_expiry_in_the_past() {
-        assert!(is_expired(&Some(
-            SystemTime::now() - Duration::from_secs(1)
-        )));
-    }
-
-    #[test]
-    fn is_expired_false_when_expiry_in_the_future() {
-        assert!(!is_expired(&Some(
-            SystemTime::now() + Duration::from_secs(3600)
-        )));
-    }
-
-    #[test]
-    fn is_expired_false_when_expiry_unknown() {
-        assert!(!is_expired(&None));
-    }
 }

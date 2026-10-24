@@ -18,7 +18,10 @@ use crate::*;
 pub struct StravaId(i32);
 
 impl StravaId {
-    pub async fn read(&self, store: &mut impl StravaDataStore) -> TbResult<Option<StravaUser>> {
+    pub(crate) async fn read(
+        &self,
+        store: &mut impl StravaDataStore,
+    ) -> TbResult<Option<StravaUser>> {
         store.stravauser_get_by_stravaid(self).await
     }
 
@@ -26,7 +29,7 @@ impl StravaId {
     ///
     /// sets a five minute buffer for the access token
     /// returns the updated user
-    pub async fn update_token(
+    pub(crate) async fn update_token(
         self,
         refresh: Option<&String>,
         store: &mut impl StravaDataStore,
@@ -71,7 +74,7 @@ impl StravaUser {
     /// # Errors
     ///
     /// Returns an `Error` if the user is not registered.
-    pub async fn read(id: UserId, store: &mut impl StravaDataStore) -> TbResult<Self> {
+    pub(crate) async fn read(id: UserId, store: &mut impl StravaDataStore) -> TbResult<Self> {
         store.stravauser_get_by_tbid(id).await
     }
 
@@ -85,7 +88,7 @@ impl StravaUser {
         self.id
     }
 
-    pub fn refresh_token(&self) -> Option<RefreshToken> {
+    pub(crate) fn refresh_token(&self) -> Option<RefreshToken> {
         self.refresh_token.clone()
     }
 
@@ -167,13 +170,6 @@ impl StravaUser {
         }
 
         Ok(parts)
-    }
-
-    pub async fn process(
-        user: &mut dyn StravaSession,
-        store: &mut impl StravaStore,
-    ) -> TbResult<Summary> {
-        event::process(user, store).await
     }
 }
 

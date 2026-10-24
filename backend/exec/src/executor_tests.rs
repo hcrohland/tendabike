@@ -1356,12 +1356,12 @@ async fn gear_hydration_pushes_the_created_parts_frame() {
     // oneshot reply) and the reply carries the same summary. The Strava API is
     // canned in the thread-local map the thin free functions consult (one
     // bike).
+    tb_strava::test_support::begin_test();
     tb_strava::test_support::seed_token_cache(
         UserId::from(1),
         StravaId::from(42),
         "test-access-token",
     );
-    tb_strava::test_support::begin_test();
     tb_strava::test_support::queue("/athlete", r#"{"bikes":[{"id":"b123"}],"shoes":[]}"#);
     tb_strava::test_support::queue(
         "/gear/b123",
@@ -1447,12 +1447,12 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
     // and `push_frame` sends **nothing**: exactly today's behavior. The
     // oneshot resolves with the empty summary. The Strava API is canned in the
     // thread-local map the thin free functions consult (an empty athlete).
+    tb_strava::test_support::begin_test();
     tb_strava::test_support::seed_token_cache(
         UserId::from(1),
         StravaId::from(42),
         "test-access-token",
     );
-    tb_strava::test_support::begin_test();
     tb_strava::test_support::queue("/athlete", r#"{"bikes":[],"shoes":[]}"#);
     let source = FakeSource { begin_fails: false };
     let mut session = EmptyGearSession;

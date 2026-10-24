@@ -5,10 +5,8 @@
 
 use super::*;
 use crate::StravaId;
-use crate::StravaSession;
 use crate::test_support::{
-    TestStravaSession, TestStravaStore, begin_test, deauthorizes, queue, seed_token_cache,
-    strava_user,
+    TestStravaStore, begin_test, deauthorizes, queue, seed_token_cache, strava_user,
 };
 use tb_domain::{Session, ShopId, UserId};
 
@@ -39,8 +37,8 @@ async fn request_json_uses_the_token_cache_warm_token() -> TbResult<()> {
     let mut session = PlainSession {
         user: UserId::from(1),
     };
-    seed_token_cache(UserId::from(1), StravaId::from(42), "test-access-token");
     begin_test();
+    seed_token_cache(UserId::from(1), StravaId::from(42), "test-access-token");
     queue("/athlete", r#"{"bikes":[],"shoes":[]}"#);
     let _ath: serde_json::Value = request_json(&mut session, "/athlete", &mut store).await?;
     let user = store.stravauser_get_by_tbid(UserId::from(1)).await?;
@@ -60,8 +58,8 @@ async fn deauthorize_records_with_a_warm_token() -> TbResult<()> {
     let mut session = PlainSession {
         user: UserId::from(1),
     };
-    seed_token_cache(UserId::from(1), StravaId::from(42), "test-access-token");
     begin_test();
+    seed_token_cache(UserId::from(1), StravaId::from(42), "test-access-token");
     deauthorize(&mut session, &mut store).await?;
     assert_eq!(deauthorizes(), vec![StravaId::from(42)]);
     let user = store.stravauser_get_by_tbid(UserId::from(1)).await?;
@@ -69,19 +67,6 @@ async fn deauthorize_records_with_a_warm_token() -> TbResult<()> {
         user.refresh_token().map(|t| t.secret().to_string()),
         Some("test-token".to_string())
     );
-    Ok(())
-}
-
-/// The seam is object-safe: a session boxes as `dyn StravaSession` and its
-/// `get_token` is callable through the trait object (the `StravaSession` trait
-/// still exists in this step; it is removed in Step 3).
-#[tokio::test]
-async fn the_session_seam_is_object_safe() -> TbResult<()> {
-    let mut session: Box<dyn StravaSession> =
-        Box::new(TestStravaSession::new(UserId::from(1), StravaId::from(42)));
-    let (access, new_refresh) = session.get_token().await?;
-    assert_eq!(access.secret(), "test-access-token");
-    assert!(new_refresh.is_none());
     Ok(())
 }
 
@@ -94,6 +79,7 @@ async fn access_token_uses_the_token_cache_warm_token() -> TbResult<()> {
     let mut session = PlainSession {
         user: UserId::from(1),
     };
+    begin_test();
     seed_token_cache(UserId::from(1), StravaId::from(42), "test-access-token");
     let access = access_token(&mut session, &mut store).await?;
     assert_eq!(access.secret(), "test-access-token");

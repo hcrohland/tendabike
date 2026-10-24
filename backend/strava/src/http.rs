@@ -22,8 +22,7 @@
 //! [`access_token`].
 //!
 //! [`access_token`] owns the one piece of refresh machinery the HTTP calls
-//! share: it calls the session's
-//! [`get_token`](crate::StravaSession::get_token) and persists the refresh
+//! share: it calls the `TokenCache`'s `get_token` and persists the refresh
 //! token to the DB when a refresh issued a new one. `request_json` and
 //! `deauthorize` then make the one HTTP call (the bearer GET, or the token
 //! revocation) and know nothing about refresh mechanics.
@@ -43,7 +42,7 @@ const API: &str = "https://www.strava.com/api/v3";
 /// A valid access token for `user`: the `TokenCache`'s `get_token` → persist
 /// the refresh token to the DB if a refresh issued a new one. Owns only the
 /// persist — the `TokenCache` owns the exchange.
-pub async fn access_token(
+async fn access_token(
     user: &mut dyn Session,
     store: &mut impl StravaDataStore,
 ) -> TbResult<AccessToken> {
@@ -66,7 +65,7 @@ pub async fn access_token(
 /// so the bearer GET is unreachable and its `access` goes unused — expected
 /// there, hence the targeted allow.
 #[cfg_attr(feature = "test-support", allow(unused_variables, unreachable_code))]
-pub async fn request_json<T: DeserializeOwned>(
+pub(crate) async fn request_json<T: DeserializeOwned>(
     user: &mut dyn Session,
     uri: &str,
     store: &mut impl StravaDataStore,
@@ -103,7 +102,10 @@ pub async fn request_json<T: DeserializeOwned>(
 /// The `TokenCache`'s `get_token` → persist the refresh token to the DB if a
 /// refresh issued a new one → `STRAVACLIENT.revoke_token`. Knows nothing about
 /// refresh mechanics.
-pub async fn deauthorize(user: &mut dyn Session, store: &mut impl StravaDataStore) -> TbResult<()> {
+pub(crate) async fn deauthorize(
+    user: &mut dyn Session,
+    store: &mut impl StravaDataStore,
+) -> TbResult<()> {
     let (strava_id, access, new_refresh) = get_token(user.user_id(), store).await?;
     if let Some(refresh) = new_refresh {
         let secret = refresh.secret().to_string();
