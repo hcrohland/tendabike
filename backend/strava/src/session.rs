@@ -29,13 +29,15 @@
 //! diverge (the request session is serialized into the tower session and
 //! carries `shop`; this one is in-memory and loop-scoped).
 
+use std::collections::HashMap;
+use std::sync::{LazyLock, Mutex};
 use std::time::SystemTime;
 
 use log::debug;
 use oauth2::{AccessToken, RefreshToken, TokenResponse};
 
 use crate::client::{HTTP_CLIENT, STRAVACLIENT};
-use crate::{StravaId, StravaSession, StravaStore, StravaUser};
+use crate::{StravaDataStore, StravaId, StravaSession, StravaStore, StravaUser};
 use tb_domain::{Error, Session as TbSession, ShopId, TbResult, UserId};
 
 /// A one-line expiry check: a known expiry in the past is expired; an unknown
@@ -73,6 +75,109 @@ pub async fn refresh_if_expired(
     let new_refresh = token.refresh_token().cloned();
     *refresh_token = new_refresh.clone();
     Ok((access_token.clone(), new_refresh))
+}
+
+/// The token state for a single Strava user (spec #602): the user's
+/// `strava_id` plus the token fields the refresh machinery drives.
+///
+/// Private to `tb_strava`: no token type or value crosses the crate
+/// boundary. Built from the DB's durable refresh token on a cache miss (an
+/// empty access token with a past expiry, so the first request forces a
+/// refresh).
+#[derive(Debug, Clone)]
+pub(crate) struct TokenState {
+    strava_id: StravaId,
+    access_token: AccessToken,
+    expires_at: Option<SystemTime>,
+    refresh_token: Option<RefreshToken>,
+}
+
+impl TokenState {
+    /// Build the token state from a stored [`StravaUser`]: an empty access
+    /// token with a past expiry, so the first Strava request forces a token
+    /// refresh (spec #602).
+    fn from_strava_user(user: &StravaUser) -> Self {
+        Self {
+            strava_id: user.strava_id(),
+            access_token: AccessToken::new(String::default()),
+            expires_at: Some(SystemTime::UNIX_EPOCH),
+            refresh_token: user.refresh_token(),
+        }
+    }
+
+    /// A warm token state (test-only): a valid access token with a future
+    /// expiry, so no refresh is needed.
+    #[cfg(any(test, feature = "test-support"))]
+    pub(crate) fn warm(strava_id: StravaId, access_token: &str) -> Self {
+        Self {
+            strava_id,
+            access_token: AccessToken::new(access_token.to_string()),
+            expires_at: Some(SystemTime::now() + std::time::Duration::from_secs(3600)),
+            refresh_token: Some(RefreshToken::new("test-token".to_string())),
+        }
+    }
+
+    /// The user's Strava ID.
+    fn strava_id(&self) -> StravaId {
+        self.strava_id
+    }
+
+    /// Ensure a valid access token, refreshing in place if expired. Returns
+    /// `(access, new_refresh)` where `new_refresh` is `Some` only when a
+    /// refresh issued a new rotating token (the signal to persist).
+    async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
+        refresh_if_expired(
+            &mut self.access_token,
+            &mut self.expires_at,
+            &mut self.refresh_token,
+        )
+        .await
+    }
+}
+
+/// The process-wide in-memory token cache (spec #602), keyed by
+/// [`UserId`]. The DB keeps the refresh token as the durable fallback; on a
+/// cache miss the [`TokenState`] is built from the DB's refresh token,
+/// forcing a refresh.
+pub(crate) static TOKEN_CACHE: LazyLock<Mutex<HashMap<UserId, TokenState>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// A valid Strava access token for `user_id` (spec #602): a cache hit clones
+/// the warm [`TokenState`]; a cache miss builds it from the DB's refresh
+/// token (and inserts it), forcing a refresh. Returns `(strava_id, access,
+/// new_refresh)` where `new_refresh` is `Some` only when a refresh issued a
+/// new rotating token (the signal to persist).
+pub async fn get_token(
+    user_id: UserId,
+    store: &mut impl StravaDataStore,
+) -> TbResult<(StravaId, AccessToken, Option<RefreshToken>)> {
+    // The `MutexGuard` is not `Send` and must not be held across the `await`:
+    // the lookup lock is scoped to its own block (cloned on a hit), and the
+    // miss path reads the StravaUser with no lock held, then locks again to
+    // insert the new state.
+    let mut state = {
+        let cached = {
+            let cache = TOKEN_CACHE.lock().expect("the token cache is not poisoned");
+            cache.get(&user_id).cloned()
+        };
+        match cached {
+            Some(state) => state,
+            None => {
+                let user = StravaUser::read(user_id, store).await?;
+                let state = TokenState::from_strava_user(&user);
+                let mut cache = TOKEN_CACHE.lock().expect("the token cache is not poisoned");
+                cache.insert(user_id, state.clone());
+                state
+            }
+        }
+    };
+    let (access, new_refresh) = state.get_token().await?;
+    let strava_id = state.strava_id();
+    {
+        let mut cache = TOKEN_CACHE.lock().expect("the token cache is not poisoned");
+        cache.insert(user_id, state);
+    }
+    Ok((strava_id, access, new_refresh))
 }
 
 /// The concrete [`StravaSession`] (spec #558 §6.2): the user's identity plus

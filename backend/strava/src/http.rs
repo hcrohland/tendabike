@@ -35,22 +35,22 @@ use oauth2::AccessToken;
 use serde::de::DeserializeOwned;
 
 use crate::client::{HTTP_CLIENT, STRAVACLIENT};
-use crate::{StravaDataStore, StravaSession};
-use tb_domain::{Error, TbResult};
+use crate::{StravaDataStore, get_token};
+use tb_domain::{Error, Session, TbResult};
 
 const API: &str = "https://www.strava.com/api/v3";
 
-/// A valid access token for `user`: `get_token` → persist the refresh token to
-/// the DB if a refresh issued a new one. Owns only the persist — the session's
-/// `get_token` owns the exchange.
+/// A valid access token for `user`: the `TokenCache`'s `get_token` → persist
+/// the refresh token to the DB if a refresh issued a new one. Owns only the
+/// persist — the `TokenCache` owns the exchange.
 pub async fn access_token(
-    user: &mut dyn StravaSession,
+    user: &mut dyn Session,
     store: &mut impl StravaDataStore,
 ) -> TbResult<AccessToken> {
-    let (access, new_refresh) = user.get_token().await?;
+    let (strava_id, access, new_refresh) = get_token(user.user_id(), store).await?;
     if let Some(refresh) = new_refresh {
         let secret = refresh.secret().to_string();
-        user.strava_id().update_token(Some(&secret), store).await?;
+        strava_id.update_token(Some(&secret), store).await?;
     }
     Ok(access)
 }
@@ -67,7 +67,7 @@ pub async fn access_token(
 /// there, hence the targeted allow.
 #[cfg_attr(feature = "test-support", allow(unused_variables, unreachable_code))]
 pub async fn request_json<T: DeserializeOwned>(
-    user: &mut dyn StravaSession,
+    user: &mut dyn Session,
     uri: &str,
     store: &mut impl StravaDataStore,
 ) -> TbResult<T> {
@@ -100,13 +100,15 @@ pub async fn request_json<T: DeserializeOwned>(
 
 /// Revoke `user`'s Strava token.
 ///
-/// `get_token` → persist the refresh token to the DB if a refresh issued a new
-/// one → `STRAVACLIENT.revoke_token`. Knows nothing about refresh mechanics.
-pub async fn deauthorize(
-    user: &mut dyn StravaSession,
-    store: &mut impl StravaDataStore,
-) -> TbResult<()> {
-    let access = access_token(user, store).await?;
+/// The `TokenCache`'s `get_token` → persist the refresh token to the DB if a
+/// refresh issued a new one → `STRAVACLIENT.revoke_token`. Knows nothing about
+/// refresh mechanics.
+pub async fn deauthorize(user: &mut dyn Session, store: &mut impl StravaDataStore) -> TbResult<()> {
+    let (strava_id, access, new_refresh) = get_token(user.user_id(), store).await?;
+    if let Some(refresh) = new_refresh {
+        let secret = refresh.secret().to_string();
+        strava_id.update_token(Some(&secret), store).await?;
+    }
 
     // The offline seam (test-only): in test mode a deauthorization is recorded
     // in the thread-local map instead of hitting the Strava API. The process-
@@ -114,8 +116,8 @@ pub async fn deauthorize(
     // suite's real session attempts the real (non-fatal) revocation.
     #[cfg(any(test, feature = "test-support"))]
     if crate::test_support::in_test_mode() {
-        crate::test_support::record_deauthorize(user.strava_id());
-        debug!("user {} token revoked (test)", user.strava_id());
+        crate::test_support::record_deauthorize(strava_id);
+        debug!("user {} token revoked (test)", strava_id);
         return Ok(());
     }
 
@@ -126,7 +128,7 @@ pub async fn deauthorize(
         .request_async(&*HTTP_CLIENT)
         .await
         .context("token exchange failed")?;
-    debug!("user {} token revoked", user.strava_id());
+    debug!("user {} token revoked", strava_id);
     Ok(())
 }
 
