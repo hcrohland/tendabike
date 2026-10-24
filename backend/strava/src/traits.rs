@@ -10,10 +10,8 @@ consumer that only drives Strava work can bound on it directly.
 the same "local traits plus an umbrella" shape as `tb_domain::Store` itself.
 */
 
-use oauth2::{AccessToken, RefreshToken};
-
 use crate::{StravaId, StravaUser, event::Event};
-use tb_domain::{Session, TbResult, UserId};
+use tb_domain::{TbResult, UserId};
 
 /// The Strava-side data store: the `strava_users` and `strava_events` tables.
 ///
@@ -221,32 +219,3 @@ pub trait StravaDataStore: Send {
 /// carries no methods of its own — the same shape as `tb_domain::Store`,
 /// which is the umbrella over the domain's per-entity sub-traits.
 pub trait StravaStore: tb_domain::Store + StravaDataStore {}
-
-/// The Strava session seam: the user's identity plus the machinery to obtain a
-/// valid Strava access token.
-///
-/// Object-safe (it boxes as `dyn StravaSession`): the single seam method is
-/// [`get_token`](StravaSession::get_token), which owns the token-refresh
-/// machinery (the expiry check plus the `STRAVACLIENT` exchange) and returns
-/// the access token plus the *new* refresh token if a refresh just happened.
-/// The Strava HTTP calls are the thin free functions in
-/// [`crate::http`](crate::http) (`request_json`/`deauthorize`), which know
-/// nothing about refresh mechanics.
-#[async_trait::async_trait]
-pub trait StravaSession: Session {
-    /// Returns the Strava ID of the user.
-    ///
-    /// # Returns
-    ///
-    /// The Strava ID of the user.
-    fn strava_id(&self) -> StravaId;
-
-    /// Ensure a valid access token (refreshing in place if expired) and return
-    /// the access token plus the *new* refresh token if a refresh just happened.
-    ///
-    /// A warm session (a valid access token) makes no refresh call and returns
-    /// `(access, None)`. An expired session refreshes exactly once and returns
-    /// `(new_access, Some(new_refresh))` — the `Some` is the signal for the
-    /// caller to persist the rotating refresh token.
-    async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)>;
-}

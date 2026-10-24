@@ -27,10 +27,10 @@ pub mod client;
 pub use client::*;
 
 mod session;
-pub use session::*;
+use session::*;
 
 mod http;
-pub use http::*;
+use http::*;
 
 pub mod activity;
 pub mod event;

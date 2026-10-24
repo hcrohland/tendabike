@@ -139,11 +139,11 @@ pub(crate) async fn login_authorized(
         athlete.avatar = None;
     }
     let refresh_token = token.refresh_token().cloned();
-    let (user, is_admin) = state.api.login_from_token(athlete, refresh_token).await?;
+    let (user_id, is_admin) = state.api.login_from_token(athlete, refresh_token).await?;
 
-    // The tower-session write stays in axum (spec #558 §5.2): the access
-    // token and expiry ride the session, not the DB.
-    super::RequestSession::create_from_token(token, session, user, is_admin).await?;
+    // The tower-session write stays in axum (spec #558 §5.2): the token
+    // flows through the `tb_strava` `TokenCache`, not the cookie.
+    super::RequestSession::create_from_token(user_id, is_admin, session).await?;
 
     debug!("Redirecting to {path}");
     Ok(Redirect::to(&path))

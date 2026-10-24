@@ -4,25 +4,17 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use http::{StatusCode, request::Parts};
-use log::{debug, trace};
-use oauth2::{AccessToken, RefreshToken, TokenResponse};
+use log::trace;
 use serde_derive::{Deserialize, Serialize};
-use std::time::SystemTime;
 use time::{Duration, UtcDateTime};
 use tower_sessions::Session as TowerSession;
 
 use tb_domain::{Session as TbSession, ShopId, TbResult, UserId};
-use tb_strava::client::StravaTokenResponse;
-use tb_strava::{StravaId, StravaSession, StravaUser, is_expired, refresh_if_expired};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct RequestSession {
     id: UserId,
-    strava_id: StravaId,
     is_admin: bool,
-    access_token: AccessToken,
-    expires_at: Option<SystemTime>,
-    refresh_token: Option<RefreshToken>,
     shop: Option<ShopId>,
     #[serde(skip)]
     session: Option<TowerSession>,
@@ -35,24 +27,16 @@ impl RequestSession {
     /// Write the tower session for a just-logged-in user (spec #558 §5.2):
     /// the identity upsert is the service API's `login_from_token` op (one
     /// transaction — `StravaUser::upsert` + `is_admin`); this keeps only the
-    /// tower-session half (the access token and expiry ride the session,
-    /// not the DB).
+    /// tower-session half (the token flows through the `tb_strava`
+    /// `TokenCache`, not the cookie).
     pub(crate) async fn create_from_token(
-        token: StravaTokenResponse,
-        session: TowerSession,
-        user: StravaUser,
+        user_id: UserId,
         is_admin: bool,
+        session: TowerSession,
     ) -> TbResult<()> {
-        trace!("got token {:?})", token);
-
-        let refresh_token = token.refresh_token();
         Self {
-            id: user.user_id(),
-            strava_id: user.strava_id(),
+            id: user_id,
             is_admin,
-            access_token: token.access_token().clone(),
-            expires_at: token.expires_in().map(|d| SystemTime::now() + d),
-            refresh_token: refresh_token.cloned(),
             session: Some(session),
             shop: None,
         }
@@ -60,16 +44,12 @@ impl RequestSession {
         .await
     }
 
-    /// A session with plausible values for tests (valid access token for an hour).
+    /// A session with plausible values for tests.
     #[cfg(test)]
     pub(crate) fn new_dummy(is_admin: bool) -> Self {
         Self {
             id: UserId::from(1),
-            strava_id: StravaId::from(1),
             is_admin,
-            access_token: AccessToken::new("test-access-token".to_owned()),
-            expires_at: Some(SystemTime::now() + std::time::Duration::from_secs(3600)),
-            refresh_token: Some(RefreshToken::new("test-refresh-token".to_owned())),
             shop: None,
             session: None,
         }
@@ -150,39 +130,6 @@ impl TbSession for RequestSession {
 
     fn shop(&self) -> Option<ShopId> {
         self.shop
-    }
-}
-
-#[async_trait::async_trait]
-impl StravaSession for RequestSession {
-    fn strava_id(&self) -> StravaId {
-        self.strava_id
-    }
-
-    /// Ensure a valid access token, refreshing in place if expired. A warm
-    /// session returns `(access, None)`. An expired session makes exactly one
-    /// `STRAVACLIENT` exchange, persists the access token to the cookie via
-    /// [`update`](RequestSession::update), and returns
-    /// `(new_access, Some(new_refresh))`. The refresh token is persisted to the
-    /// DB by the caller (the thin free functions) when the `Option` is `Some`.
-    async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
-        // A warm token does not persist: the `RequestSession` carries the
-        // tower-session handle, and `update()` writes the entire session
-        // (including the `shop` field) to the store. Persisting on every
-        // call would clobber the shop scope set by `set_shop` with the
-        // stale value from spawn time. Only a refresh writes.
-        if !is_expired(&self.expires_at) {
-            return Ok((self.access_token.clone(), None));
-        }
-        debug!("refreshing token for user {}", self.id);
-        let result = refresh_if_expired(
-            &mut self.access_token,
-            &mut self.expires_at,
-            &mut self.refresh_token,
-        )
-        .await?;
-        self.update().await?;
-        Ok(result)
     }
 }
 

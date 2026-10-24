@@ -18,12 +18,11 @@
 
 */
 
-//! The Strava API client and its wire types: the concrete session
-//! (`tb_strava::StravaUserSession`) needs the oauth client for its
-//! token-refresh machinery, so the client lives with the Strava driver, not
-//! the presentation layer. The web layer's login exchange uses the same
-//! client; the wire-shape *parsing* of a token response stays in the web
-//! layer, beside the exchange it feeds.
+//! The Strava API client and its wire types: the `TokenCache`'s
+//! token-refresh machinery needs the oauth client, so the client lives with
+//! the Strava driver, not the presentation layer. The web layer's login
+//! exchange uses the same client; the wire-shape *parsing* of a token response
+//! stays in the web layer, beside the exchange it feeds.
 
 use oauth2::{
     AuthUrl, Client, ClientId, ClientSecret, EndpointNotSet, EndpointSet, ExtraTokenFields,
@@ -101,7 +100,7 @@ pub static STRAVACLIENT: LazyLock<StravaClient> = LazyLock::new(strava_oauth_cli
 /// them opens the client up to SSRF vulnerabilities).
 pub static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(http_client);
 
-pub fn strava_oauth_client() -> StravaClient {
+fn strava_oauth_client() -> StravaClient {
     // Environment variables (* = required):
     // *"CLIENT_ID"     "REPLACE_ME";
     // *"CLIENT_SECRET" "REPLACE_ME";

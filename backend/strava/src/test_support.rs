@@ -2,15 +2,15 @@
 //!
 //! `TestStravaStore` wraps the domain `MemStore` and adds in-memory
 //! `strava_users` and `events` collections mirroring the SQL semantics.
-//! `TestStravaSession` is a scripted `StravaSession` that replays
-//! queued JSON responses for exact request URIs.
+//! `TestStravaSession` is a plain `Session` that seeds the `TokenCache` with
+//! a warm token and replays queued JSON responses for exact request URIs.
 
 #![allow(clippy::too_many_arguments)]
 
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 
-use oauth2::{AccessToken, RefreshToken};
+use oauth2::RefreshToken;
 use tb_domain::test_support::MemStore;
 use time::OffsetDateTime;
 
@@ -160,13 +160,13 @@ impl StravaStore for TestStravaStore {}
 
 // ─── Thread-local canned responses (feature-independent test seam) ──────────
 //
-// The thin free functions (`request_json`/`deauthorize`) take `&mut impl
-// StravaSession` and cannot downcast to a scripted session, so the per-test
+// The thin free functions (`request_json`/`deauthorize`) take `&mut dyn
+// Session` and cannot downcast to a scripted session, so the per-test
 // canned responses live in a thread-local map the free functions consult.
 // Each test runs on its own thread, so the map gives per-test isolation.
 // `TestStravaSession` (and the `tb_exec` gear tests) write to it; the free
 // functions read from it. The process-wide `CANNED_STRAVA` global below is a
-// separate seam for the seam suite's real session, which runs in a spawned
+// separate seam for the seam suite's session, which runs in a spawned
 // task on a thread this map never reaches.
 
 /// The per-thread canned-response state (see the section docs).
@@ -185,11 +185,29 @@ thread_local! {
 /// Begin a test's thread-local scope: marks the thread in test mode and clears
 /// any canned responses/records a previous test left on this thread (per-test
 /// isolation — each test runs on its own thread).
+///
+/// The process-wide `TokenCache` is *not* cleared here: the in-memory tests
+/// run in parallel threads and all seed the same warm token (via
+/// [`seed_token_cache`]), so a per-test clear would let one test's clear race
+/// another test's `get_token` (a cache miss would force a real refresh).
 pub fn begin_test() {
     CANNED.with(|c| {
         *c.borrow_mut() = CannedState::default();
         c.borrow_mut().test_mode = true;
     });
+}
+
+/// Seed the `TokenCache` with a warm token for `user_id` (test-only): prevents
+/// the `get_token` free function from forcing a (network) refresh on the first
+/// request (spec #602: the token source moved to `tb_strava`).
+pub fn seed_token_cache(user_id: UserId, strava_id: StravaId, access_token: &str) {
+    crate::session::TOKEN_CACHE
+        .lock()
+        .expect("the token cache is not poisoned")
+        .insert(
+            user_id,
+            crate::session::TokenState::warm(strava_id, access_token),
+        );
 }
 
 /// Whether the current thread is in test mode (a `TestStravaSession` was
@@ -263,26 +281,22 @@ pub fn deauthorizes() -> Vec<StravaId> {
     CANNED.with(|c| c.borrow().deauthorizes.clone())
 }
 
-/// Scripted [`StravaSession`] for tests.
+/// Scripted [`Session`] for tests.
 ///
-/// `get_token` returns a warm dummy token (no refresh), so the thin free
-/// functions' `request_json`/`deauthorize` replay the thread-local canned
+/// `new` seeds the `TokenCache` with a warm token (no refresh), so the thin
+/// free functions' `request_json`/`deauthorize` replay the thread-local canned
 /// responses and record the requested URIs / deauthorizations the tests assert
 /// on.
 pub struct TestStravaSession {
     user: UserId,
-    strava: StravaId,
     admin: bool,
 }
 
 impl TestStravaSession {
     pub fn new(user: UserId, strava: StravaId) -> Self {
         begin_test();
-        Self {
-            user,
-            strava,
-            admin: false,
-        }
+        seed_token_cache(user, strava, "test-access-token");
+        Self { user, admin: false }
     }
 
     /// Queue a JSON response body for an exact request URI (FIFO per URI).
@@ -317,19 +331,6 @@ impl Session for TestStravaSession {
 
     fn is_admin(&self) -> bool {
         self.admin
-    }
-}
-
-#[async_trait::async_trait]
-impl StravaSession for TestStravaSession {
-    fn strava_id(&self) -> StravaId {
-        self.strava
-    }
-
-    /// A warm dummy token: the scripted session never refreshes, so the free
-    /// functions' refresh-token persistence is a no-op for it.
-    async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
-        Ok((AccessToken::new("test-access-token".to_owned()), None))
     }
 }
 
@@ -813,13 +814,12 @@ impl ServicePlanStore for TestStravaStore {
 
 // ─── Canned Strava responses (feature `test-support`) ──────────────────────
 //
-// The seam suite runs the real loop, whose session is a real
-// `StravaUserSession`, so the suite maps canned responses for the URIs the
-// loop asks for — an empty activity list
-// makes the sync's activities fetch succeed offline (no new activities:
-// the loop's processing consumes the event and commits).
-// `StravaUserSession::request_json` consults [`global_canned_response`] before
-// reaching the Strava API.
+// The seam suite runs the real loop, whose session is a plain `Session`, so
+// the suite maps canned responses for the URIs the loop asks for — an empty
+// activity list makes the sync's activities fetch succeed offline (no new
+// activities: the loop's processing consumes the event and commits).
+// `request_json` consults [`global_canned_response`] before reaching the
+// Strava API.
 
 /// The canned Strava responses, keyed by URI (see the section docs).
 pub static CANNED_STRAVA: std::sync::LazyLock<std::sync::Mutex<HashMap<String, String>>> =

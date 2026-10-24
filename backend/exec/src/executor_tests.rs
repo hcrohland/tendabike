@@ -29,7 +29,6 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use oauth2::{AccessToken, RefreshToken};
 use tb_domain::test_support::{
     MemStore, fixtures::sample_purchase_date, part_type_ids::CHAIN, sole_live,
 };
@@ -42,7 +41,7 @@ use tb_domain::{
     WriteOutcome,
 };
 use tb_strava::event::Event;
-use tb_strava::{StravaDataStore, StravaId, StravaSession, StravaStore, StravaUser};
+use tb_strava::{StravaDataStore, StravaId, StravaStore, StravaUser};
 use time::OffsetDateTime;
 use tokio::sync::{broadcast, oneshot};
 
@@ -999,18 +998,6 @@ impl Session for UnitSession {
     }
 }
 
-#[async_trait::async_trait]
-impl StravaSession for UnitSession {
-    fn strava_id(&self) -> StravaId {
-        StravaId::from(42)
-    }
-    /// A warm dummy token: the read tests never refresh (and never call the
-    /// Strava API).
-    async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
-        Ok((AccessToken::new("test-access-token".into()), None))
-    }
-}
-
 /// The gear test's session: the Strava API is canned JSON (one bike), so
 /// the hydration's `update_gear` runs its real `into_partid` path against
 /// the `MemStore`.
@@ -1028,18 +1015,6 @@ impl Session for GearSession {
     }
 }
 
-#[async_trait::async_trait]
-impl StravaSession for GearSession {
-    fn strava_id(&self) -> StravaId {
-        StravaId::from(42)
-    }
-    /// A warm dummy token: the hydration's canned Strava JSON lives in the
-    /// thread-local map (set up by the gear tests), not on the session.
-    async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
-        Ok((AccessToken::new("test-access-token".into()), None))
-    }
-}
-
 /// The no-new-gear test's session: the Strava API is canned JSON with an
 /// **empty** athlete, so the hydration's `update_gear` creates nothing —
 /// the common case (spec #558 §4).
@@ -1054,18 +1029,6 @@ impl Session for EmptyGearSession {
     }
     fn is_admin(&self) -> bool {
         false
-    }
-}
-
-#[async_trait::async_trait]
-impl StravaSession for EmptyGearSession {
-    fn strava_id(&self) -> StravaId {
-        StravaId::from(42)
-    }
-    /// A warm dummy token: the hydration's canned (empty) Strava JSON lives in
-    /// the thread-local map (set up by the gear tests), not on the session.
-    async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
-        Ok((AccessToken::new("test-access-token".into()), None))
     }
 }
 
@@ -1123,7 +1086,7 @@ impl FramePusher for RecordingPusher {
     }
 }
 
-/// A `Session`/`StravaSession` in a **shop context**: `shop()` returns the
+/// A `Session` in a **shop context**: `shop()` returns the
 /// given shop id (the delivery tests' shop-context session).
 struct ShopSession {
     shop_id: ShopId,
@@ -1138,18 +1101,6 @@ impl Session for ShopSession {
     }
     fn is_admin(&self) -> bool {
         false
-    }
-}
-
-#[async_trait::async_trait]
-impl StravaSession for ShopSession {
-    fn strava_id(&self) -> StravaId {
-        StravaId::from(42)
-    }
-    /// A warm dummy token: the delivery tests never refresh (and never call
-    /// the Strava API).
-    async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
-        Ok((AccessToken::new("test-access-token".into()), None))
     }
 }
 
@@ -1406,6 +1357,11 @@ async fn gear_hydration_pushes_the_created_parts_frame() {
     // canned in the thread-local map the thin free functions consult (one
     // bike).
     tb_strava::test_support::begin_test();
+    tb_strava::test_support::seed_token_cache(
+        UserId::from(1),
+        StravaId::from(42),
+        "test-access-token",
+    );
     tb_strava::test_support::queue("/athlete", r#"{"bikes":[{"id":"b123"}],"shoes":[]}"#);
     tb_strava::test_support::queue(
         "/gear/b123",
@@ -1492,6 +1448,11 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
     // oneshot resolves with the empty summary. The Strava API is canned in the
     // thread-local map the thin free functions consult (an empty athlete).
     tb_strava::test_support::begin_test();
+    tb_strava::test_support::seed_token_cache(
+        UserId::from(1),
+        StravaId::from(42),
+        "test-access-token",
+    );
     tb_strava::test_support::queue("/athlete", r#"{"bikes":[],"shoes":[]}"#);
     let source = FakeSource { begin_fails: false };
     let mut session = EmptyGearSession;

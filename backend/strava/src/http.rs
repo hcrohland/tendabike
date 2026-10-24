@@ -22,8 +22,7 @@
 //! [`access_token`].
 //!
 //! [`access_token`] owns the one piece of refresh machinery the HTTP calls
-//! share: it calls the session's
-//! [`get_token`](crate::StravaSession::get_token) and persists the refresh
+//! share: it calls the `TokenCache`'s `get_token` and persists the refresh
 //! token to the DB when a refresh issued a new one. `request_json` and
 //! `deauthorize` then make the one HTTP call (the bearer GET, or the token
 //! revocation) and know nothing about refresh mechanics.
@@ -35,24 +34,19 @@ use oauth2::AccessToken;
 use serde::de::DeserializeOwned;
 
 use crate::client::{HTTP_CLIENT, STRAVACLIENT};
-use crate::{StravaDataStore, StravaSession};
-use tb_domain::{Error, TbResult};
+use crate::{StravaDataStore, StravaId, get_token};
+use tb_domain::{Error, Session, TbResult};
 
 const API: &str = "https://www.strava.com/api/v3";
 
-/// A valid access token for `user`: `get_token` → persist the refresh token to
-/// the DB if a refresh issued a new one. Owns only the persist — the session's
-/// `get_token` owns the exchange.
-pub async fn access_token(
-    user: &mut dyn StravaSession,
+/// A valid access token for `user`: the `TokenCache`'s `get_token`, which
+/// owns the refresh exchange and persists the rotated refresh token to the
+/// DB when a refresh issues a new one.
+async fn access_token(
+    user: &mut dyn Session,
     store: &mut impl StravaDataStore,
-) -> TbResult<AccessToken> {
-    let (access, new_refresh) = user.get_token().await?;
-    if let Some(refresh) = new_refresh {
-        let secret = refresh.secret().to_string();
-        user.strava_id().update_token(Some(&secret), store).await?;
-    }
-    Ok(access)
+) -> TbResult<(StravaId, AccessToken)> {
+    get_token(user.user_id(), store).await
 }
 
 /// A bearer GET of `uri` for `user`, parsed as `T`.
@@ -66,12 +60,12 @@ pub async fn access_token(
 /// so the bearer GET is unreachable and its `access` goes unused — expected
 /// there, hence the targeted allow.
 #[cfg_attr(feature = "test-support", allow(unused_variables, unreachable_code))]
-pub async fn request_json<T: DeserializeOwned>(
-    user: &mut dyn StravaSession,
+pub(crate) async fn request_json<T: DeserializeOwned>(
+    user: &mut dyn Session,
     uri: &str,
     store: &mut impl StravaDataStore,
 ) -> TbResult<T> {
-    let access = access_token(user, store).await?;
+    let (_strava_id, access) = access_token(user, store).await?;
 
     // The offline seams (test-only): first the thread-local canned response
     // (per-test isolation: each test runs on its own thread), then the
@@ -100,13 +94,14 @@ pub async fn request_json<T: DeserializeOwned>(
 
 /// Revoke `user`'s Strava token.
 ///
-/// `get_token` → persist the refresh token to the DB if a refresh issued a new
-/// one → `STRAVACLIENT.revoke_token`. Knows nothing about refresh mechanics.
-pub async fn deauthorize(
-    user: &mut dyn StravaSession,
+/// [`access_token`] (the `TokenCache`'s `get_token` → persist the refresh
+/// token to the DB if a refresh issued a new one) →
+/// `STRAVACLIENT.revoke_token`. Knows nothing about refresh mechanics.
+pub(crate) async fn deauthorize(
+    user: &mut dyn Session,
     store: &mut impl StravaDataStore,
 ) -> TbResult<()> {
-    let access = access_token(user, store).await?;
+    let (strava_id, access) = access_token(user, store).await?;
 
     // The offline seam (test-only): in test mode a deauthorization is recorded
     // in the thread-local map instead of hitting the Strava API. The process-
@@ -114,8 +109,8 @@ pub async fn deauthorize(
     // suite's real session attempts the real (non-fatal) revocation.
     #[cfg(any(test, feature = "test-support"))]
     if crate::test_support::in_test_mode() {
-        crate::test_support::record_deauthorize(user.strava_id());
-        debug!("user {} token revoked (test)", user.strava_id());
+        crate::test_support::record_deauthorize(strava_id);
+        debug!("user {} token revoked (test)", strava_id);
         return Ok(());
     }
 
@@ -126,7 +121,7 @@ pub async fn deauthorize(
         .request_async(&*HTTP_CLIENT)
         .await
         .context("token exchange failed")?;
-    debug!("user {} token revoked", user.strava_id());
+    debug!("user {} token revoked", strava_id);
     Ok(())
 }
 

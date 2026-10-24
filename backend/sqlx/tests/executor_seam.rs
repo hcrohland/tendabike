@@ -17,9 +17,8 @@
 //!
 //! Drives the real executor loop — `tb_exec::run` over the real `DbPool`
 //! (`TxnSource`/`Txn` implemented on the live `SqlxConn`, the seam the web
-//! layer will use) — against real Postgres, with a stubbed
-//! `StravaSession`: the loop's transaction lifecycle is what this suite
-//! verifies, not the Strava API.
+//! layer will use) — against real Postgres, with a stubbed `Session`: the
+//! loop's transaction lifecycle is what this suite verifies.
 //!
 //! What the eight seam tests verify, end to end on the live adapter:
 //!
@@ -78,16 +77,17 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use oauth2::{AccessToken, RefreshToken};
 use tb_domain::test_support::{MemStore, part_type_ids::CHAIN, sole_live};
-use tb_domain::{
-    ApiRead, ApiWrite, PartId, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
-};
+use tb_domain::{ApiRead, ApiWrite, PartId, ReadOutcome, Session, ShopId, Summary, UserId};
 use tb_exec::{
     DetachedBegin, ExecutorStatus, FramePusher, Registry, Request, ServiceApi, request_channel, run,
 };
 use tb_sqlx::DbPool;
-use tb_strava::{StravaId, StravaSession, event::InEvent, test_support::canned_strava};
+use tb_strava::{
+    StravaId,
+    event::InEvent,
+    test_support::{canned_strava, seed_token_cache},
+};
 use time::macros::datetime;
 use tokio::sync::{MutexGuard, Notify, broadcast};
 
@@ -158,25 +158,23 @@ fn install_notice_capture() {
     log::set_max_level(log::LevelFilter::Warn);
 }
 
-/// The suite's `StravaSession`: the loop's session is the user's identity
-/// plus the Strava API client, and the API client is what this suite
-/// stubs. These tests never import from Strava (no activity event is
-/// processed; the only queued event is a `Stop`, whose handling never
-/// touches the API), so the client methods panic rather than pretend.
+/// The suite's `Session`: the loop's session is the user's identity; the
+/// Strava API is stubbed by the `TokenCache` seed in `ready()` and the
+/// `CANNED_STRAVA` global. These tests never import from Strava (no activity
+/// event is processed; the only queued event is a `Stop`, whose handling never
+/// touches the API), so the API is canned rather than called.
 #[derive(Clone, Copy)]
 struct FakeStrava {
     user: UserId,
-    strava: StravaId,
     shop: Option<ShopId>,
     admin: bool,
 }
 
 impl FakeStrava {
     fn new() -> Self {
-        let (user, strava) = test_identity();
+        let (user, _strava) = test_identity();
         Self {
             user,
-            strava,
             shop: None,
             admin: false,
         }
@@ -192,20 +190,6 @@ impl Session for FakeStrava {
     }
     fn is_admin(&self) -> bool {
         self.admin
-    }
-}
-
-#[async_trait::async_trait]
-impl StravaSession for FakeStrava {
-    fn strava_id(&self) -> StravaId {
-        self.strava
-    }
-    /// A warm dummy token: the seam tests' sessions never refresh. The gear
-    /// tests' canned Strava JSON lives in the process-wide `CANNED_STRAVA`
-    /// global the thin free functions consult (the loop runs in a spawned
-    /// task, so the thread-local map is the wrong seam there).
-    async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
-        Ok((AccessToken::new("test-access-token".into()), None))
     }
 }
 
@@ -248,6 +232,12 @@ async fn ready() -> ExecSeam {
     fresh_fixture(&pool)
         .await
         .expect("re-seeding the fixture failed");
+    // The loop's Strava path (gear hydration, sync, deauthorize) reads its
+    // token from the `TokenCache` (spec #602): seed it with a warm token so
+    // the seam never forces a real refresh (which needs Strava credentials
+    // the CI runner doesn't have, and would poison the process-wide client).
+    let (user, strava) = test_identity();
+    seed_token_cache(user, strava, "test-access-token");
     ExecSeam { pool, _lock }
 }
 
@@ -973,6 +963,9 @@ async fn sync_all_wakes_each_running_executor() {
         .expect("seeding the second strava user");
         conn.commit().await.expect("committing the seed");
     }
+    // User 2 also goes through the Strava path (its sync's activities
+    // fetch): seed its token too (the `ready()` seed covers only user 1).
+    seed_token_cache(user2, strava2, "test-access-token");
     // The offline seam: both users' syncs find no activities and complete
     // (the `after` cursor is the event time).
     canned_strava("/activities?after=200&per_page=25", "[]");
@@ -989,7 +982,6 @@ async fn sync_all_wakes_each_running_executor() {
     let (_frames2, _status2) = registry
         .subscribe(Box::new(FakeStrava {
             user: user2,
-            strava: StravaId::from(43),
             ..FakeStrava::new()
         }))
         .await

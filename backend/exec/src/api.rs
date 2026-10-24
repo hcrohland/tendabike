@@ -45,10 +45,10 @@ use oauth2::RefreshToken;
 use tokio::sync::{broadcast, watch};
 
 use tb_domain::{
-    ActivityId, ApiRead, ApiWrite, PartId, ReadOutcome, ShopId, Summary, TbResult, UserId,
+    ActivityId, ApiRead, ApiWrite, PartId, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
     WriteOutcome,
 };
-use tb_strava::{StravaSession, StravaStat, StravaUser, client::StravaAthleteInfo, event::InEvent};
+use tb_strava::{StravaStat, client::StravaAthleteInfo, event::InEvent};
 
 use crate::ExecutorStatus;
 
@@ -63,21 +63,15 @@ pub trait ServiceApi: Send + Sync {
     /// runs it in its own transaction (read-only within it by spec) and
     /// resolves the read's data (a [`ReadOutcome`]); the caller knows which
     /// variant it sent and pattern-matches its own result. `session` is the
-    /// user's warm `StravaSession` (the access token stays in it, not
-    /// re-derived from the DB on every spawn).
-    async fn read(&self, session: Box<dyn StravaSession>, read: ApiRead) -> TbResult<ReadOutcome>;
+    /// user's `Session`.
+    async fn read(&self, session: Box<dyn Session>, read: ApiRead) -> TbResult<ReadOutcome>;
 
     /// One per-user write on the user's executor (spec §6.2): the loop runs
     /// it in its own transaction and resolves the full [`WriteOutcome`]
     /// (the `Summary` — the frame — plus, for the descend, its match
     /// report, the response body). The oneshot wait is unbounded. `session`
-    /// is the user's warm `StravaSession`: the loop uses it for both the
-    /// domain op (via the `Session` supertrait) and the Strava side.
-    async fn write(
-        &self,
-        session: Box<dyn StravaSession>,
-        write: ApiWrite,
-    ) -> TbResult<WriteOutcome>;
+    /// is the user's `Session`: the loop uses it for the domain op.
+    async fn write(&self, session: Box<dyn Session>, write: ApiWrite) -> TbResult<WriteOutcome>;
 
     /// The hydration write (spec #558 §4): `update_gear` in the loop's own
     /// transaction with the loop's session, resolving with the created
@@ -89,11 +83,10 @@ pub trait ServiceApi: Send + Sync {
     /// running): a subscription to the frame channel plus a handle to the
     /// executor's fate ([`ExecutorStatus`]), so the stream can tell a clean
     /// reap from a dead executor (spec #558 §6.3). `session` is the user's
-    /// warm `StravaSession` (the access token stays in it, not re-derived
-    /// from the DB on every spawn).
+    /// `Session`.
     async fn subscribe(
         &self,
-        session: Box<dyn StravaSession>,
+        session: Box<dyn Session>,
     ) -> TbResult<(
         broadcast::Receiver<Summary>,
         watch::Receiver<ExecutorStatus>,
@@ -148,7 +141,7 @@ pub trait ServiceApi: Send + Sync {
         &self,
         athlete: StravaAthleteInfo,
         refresh: Option<RefreshToken>,
-    ) -> TbResult<(StravaUser, bool)>;
+    ) -> TbResult<(UserId, bool)>;
 
     /// The webhook accept (spec #558 §5.2): one transaction
     /// (`InEvent::accept` — the queue insert, or the athlete-deauth
