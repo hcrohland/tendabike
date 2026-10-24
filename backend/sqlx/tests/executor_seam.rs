@@ -87,7 +87,11 @@ use tb_exec::{
     DetachedBegin, ExecutorStatus, FramePusher, Registry, Request, ServiceApi, request_channel, run,
 };
 use tb_sqlx::DbPool;
-use tb_strava::{StravaId, StravaSession, event::InEvent, test_support::canned_strava};
+use tb_strava::{
+    StravaId, StravaSession,
+    event::InEvent,
+    test_support::{canned_strava, seed_token_cache},
+};
 use time::macros::datetime;
 use tokio::sync::{MutexGuard, Notify, broadcast};
 
@@ -248,6 +252,12 @@ async fn ready() -> ExecSeam {
     fresh_fixture(&pool)
         .await
         .expect("re-seeding the fixture failed");
+    // The loop's Strava path (gear hydration, sync, deauthorize) reads its
+    // token from the `TokenCache` (spec #602): seed it with a warm token so
+    // the seam never forces a real refresh (which needs Strava credentials
+    // the CI runner doesn't have, and would poison the process-wide client).
+    let (user, strava) = test_identity();
+    seed_token_cache(user, strava, "test-access-token");
     ExecSeam { pool, _lock }
 }
 
@@ -973,6 +983,9 @@ async fn sync_all_wakes_each_running_executor() {
         .expect("seeding the second strava user");
         conn.commit().await.expect("committing the seed");
     }
+    // User 2 also goes through the Strava path (its sync's activities
+    // fetch): seed its token too (the `ready()` seed covers only user 1).
+    seed_token_cache(user2, strava2, "test-access-token");
     // The offline seam: both users' syncs find no activities and complete
     // (the `after` cursor is the event time).
     canned_strava("/activities?after=200&per_page=25", "[]");
