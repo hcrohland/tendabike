@@ -91,7 +91,7 @@ pub enum Request {
         reply: oneshot::Sender<TbResult<ReadOutcome>>,
     },
     /// The hydration write (spec #558 §4): `update_gear` in the loop's own
-    /// transaction, with the loop's `StravaUserSession`.
+    /// transaction, with the loop's `Session`.
     Gear {
         /// Resolved with the created-parts `Summary` (the frame) on commit,
         /// or the error on failure.

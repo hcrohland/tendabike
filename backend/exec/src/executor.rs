@@ -28,7 +28,7 @@
 //! The loop is generic over the transaction source ([`TxnSource`]; the
 //! production `DbPool` is injected at the composition root — `DbPool` is
 //! `Clone` + `Send` + `Sync`, so no `Arc` wrapper is needed) and over the
-//! user's [`StravaSession`]. It computes no domain state of its own: it
+//! user's [`Session`]. It computes no domain state of its own: it
 //! drives the existing `ApiWrite` dispatch and `tb_strava` event processing
 //! inside transactions it owns.
 
@@ -37,11 +37,11 @@ use std::time::Duration;
 
 use log::{debug, error, warn};
 use tb_domain::{
-    ApiRead, ApiWrite, Error, PartStore, ReadOutcome, ShopId, Summary, TbResult, UserId,
+    ApiRead, ApiWrite, Error, PartStore, ReadOutcome, Session, ShopId, Summary, TbResult, UserId,
     WriteOutcome, exec,
 };
 use tb_strava::event::{Event, QueueRead, get_event, insert_sync, process};
-use tb_strava::{StravaSession, StravaStat, StravaUser, get_all_stats};
+use tb_strava::{StravaStat, StravaUser, get_all_stats};
 use tokio::sync::{broadcast, oneshot};
 
 use crate::message::{Request, RequestReceiver, push_frame};
@@ -297,7 +297,7 @@ pub(crate) async fn deliver_frame(
 /// * `source` — the transaction source (`DbPool` in production). Taken by
 ///   value and owned for the loop's life; `Clone` (which `DbPool` is) lets
 ///   the caller keep a handle — no `Arc` is needed.
-/// * `session` — the user's `StravaSession` (drives the queue read and
+/// * `session` — the user's `Session` (drives the queue read and
 ///   event processing; the executor supplies the identity `ApiWrite` needs).
 /// * `rx` — the receive half of the user's request channel (writes, reads,
 ///   the hydration write, and the admin stats read — spec #558 §3.2).
@@ -379,7 +379,7 @@ pub(crate) async fn deliver_frame(
 #[allow(clippy::too_many_arguments)] // the loop's eight wiring degrees of freedom
 pub async fn run<T>(
     source: T,
-    session: Box<dyn StravaSession>,
+    session: Box<dyn Session>,
     mut rx: RequestReceiver,
     frames: broadcast::Sender<Summary>,
     pusher: Box<dyn FramePusher>,
@@ -596,7 +596,7 @@ pub(crate) async fn sleep_or_take_request(
 /// unknown — the re-probe after the pause settles it).
 async fn queue_probe<T: TxnSource>(
     source: &T,
-    session: &dyn StravaSession,
+    session: &dyn Session,
     backoff: &mut DbBackoff,
 ) -> Option<Probe> {
     let mut conn = match source.begin().await {
@@ -646,7 +646,7 @@ async fn queue_probe<T: TxnSource>(
 /// loop (the sub-dispatchers' `Err` return).
 pub(crate) async fn run_request<T: TxnSource>(
     source: &T,
-    session: &mut dyn StravaSession,
+    session: &mut dyn Session,
     request: Request,
     frames: &broadcast::Sender<Summary>,
     backoff: &mut DbBackoff,
@@ -797,7 +797,7 @@ where
 #[allow(clippy::too_many_arguments)] // the write's wiring degrees of freedom
 async fn run_write<T: TxnSource>(
     source: &T,
-    session: &mut dyn StravaSession,
+    session: &mut dyn Session,
     write: ApiWrite,
     reply: oneshot::Sender<TbResult<WriteOutcome>>,
     frames: &broadcast::Sender<Summary>,
@@ -832,7 +832,7 @@ async fn run_write<T: TxnSource>(
             let outcome = async {
                 let outcome = exec(write, session, &mut conn).await?;
                 if let Some(time) = onboarding_time {
-                    insert_sync(session.strava_id(), time, false, &mut conn).await?;
+                    insert_sync(session.user_id(), time, false, &mut conn).await?;
                 }
                 Ok(outcome)
             }
@@ -879,7 +879,7 @@ async fn run_write<T: TxnSource>(
 #[allow(clippy::too_many_arguments)] // the read's wiring degrees of freedom
 async fn run_read<T: TxnSource>(
     source: &T,
-    session: &mut dyn StravaSession,
+    session: &mut dyn Session,
     read: ApiRead,
     reply: oneshot::Sender<TbResult<ReadOutcome>>,
     frames: &broadcast::Sender<Summary>,
@@ -922,7 +922,7 @@ async fn run_read<T: TxnSource>(
 /// `rollback` ends the loop.
 async fn run_gear<T: TxnSource>(
     source: &T,
-    session: &mut dyn StravaSession,
+    session: &mut dyn Session,
     reply: oneshot::Sender<TbResult<Summary>>,
     frames: &broadcast::Sender<Summary>,
     backoff: &mut DbBackoff,
@@ -972,7 +972,7 @@ async fn run_gear<T: TxnSource>(
 /// and never arms the backoff; a cleanly committed read resets it.
 async fn run_all_stats<T: TxnSource>(
     source: &T,
-    session: &mut dyn StravaSession,
+    session: &mut dyn Session,
     reply: oneshot::Sender<TbResult<Vec<StravaStat>>>,
     frames: &broadcast::Sender<Summary>,
     backoff: &mut DbBackoff,
@@ -1035,7 +1035,7 @@ fn lifecycle_error(what: impl std::fmt::Display) -> Error {
 /// processed — the respawn settles it on the next queue read).
 async fn run_event<T: TxnSource>(
     source: &T,
-    session: &mut dyn StravaSession,
+    session: &mut dyn Session,
     event: &Event,
     frames: &broadcast::Sender<Summary>,
     events: &broadcast::Sender<Event>,

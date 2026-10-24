@@ -423,7 +423,7 @@ impl Event {
 ///
 ///
 pub async fn insert_sync(
-    owner_id: StravaId,
+    user_id: UserId,
     event_time: i64,
     migrate: bool,
     store: &mut impl StravaDataStore,
@@ -431,6 +431,9 @@ pub async fn insert_sync(
     if event_time > get_time() {
         return Err(Error::BadRequest(format!("eventtime {event_time} > now!")));
     }
+    // The `strava_id` (the queue's key) is resolved inside `tb_strava` — no
+    // `strava_id` crosses the crate boundary into the executor (spec #602).
+    let owner_id = get_strava_id(user_id, store).await?;
     let object_id = if migrate { 1 } else { 0 };
     let event = Event {
         owner_id,
@@ -440,6 +443,37 @@ pub async fn insert_sync(
         ..Default::default()
     };
     store.strava_event_create(event).await
+}
+
+/// Whether `event` is the admin sync for `user_id` at `event_time` (spec
+/// #558 §6.4): the consumed event is ours when its identity — a `Sync` for the
+/// user's `strava_id` at that time — matches the sync we queued. The
+/// `strava_id` is resolved inside `tb_strava` (no `strava_id` crosses the
+/// crate boundary into the executor).
+pub async fn is_sync_for_user(
+    event: &Event,
+    user_id: UserId,
+    event_time: i64,
+    store: &mut impl StravaDataStore,
+) -> TbResult<bool> {
+    let strava_id = get_strava_id(user_id, store).await?;
+    Ok(event.object_type == ObjectType::Sync
+        && event.owner_id == strava_id
+        && event.event_time == event_time)
+}
+
+/// Whether `user_id`'s queue still holds the sync at `event_time` (the admin
+/// sync's fallback completion check, spec #4.6): a non-migrate sync is queued
+/// with `object_id` 0, so the user's `object_id` 0 events are exactly their
+/// syncs. The `strava_id` is resolved inside `tb_strava`.
+pub async fn sync_queued_for_user(
+    user_id: UserId,
+    event_time: i64,
+    store: &mut impl StravaDataStore,
+) -> TbResult<bool> {
+    let strava_id = get_strava_id(user_id, store).await?;
+    let syncs = store.strava_event_get_later(0, strava_id).await?;
+    Ok(syncs.iter().any(|event| event.event_time == event_time))
 }
 
 /// Inserts the global rate-limit `Stop` (spec #446 §4.6): the Strava rate
@@ -580,8 +614,8 @@ pub async fn sync_users(
             warn!("user {} disabled, skipping", user.strava_id());
             continue;
         }
-        info!("Adding sync for {:?} at {time}", user.strava_id());
-        event::insert_sync(user.strava_id(), time, migrate, store).await?;
+        info!("Adding sync for {:?} at {time}", user.user_id());
+        event::insert_sync(user.user_id(), time, migrate, store).await?;
         queued.push(user.user_id());
     }
     Ok(queued)

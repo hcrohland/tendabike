@@ -123,7 +123,7 @@ async fn accept_athlete_deauth_disables_user() -> TbResult<()> {
 #[tokio::test]
 async fn insert_sync_stores_event() -> TbResult<()> {
     let (mut store, _) = setup();
-    insert_sync(42.into(), 100, true, &mut store).await?;
+    insert_sync(UserId::from(1), 100, true, &mut store).await?;
     assert_eq!(store.event_count(), 1);
     assert_eq!(store.events[0].object_type, ObjectType::Sync);
     assert_eq!(store.events[0].object_id, 1);
@@ -133,7 +133,7 @@ async fn insert_sync_stores_event() -> TbResult<()> {
 #[tokio::test]
 async fn insert_sync_rejects_future() {
     let (mut store, _) = setup();
-    let res = insert_sync(42.into(), get_time() + 1000, false, &mut store).await;
+    let res = insert_sync(UserId::from(1), get_time() + 1000, false, &mut store).await;
     assert!(matches!(res, Err(Error::BadRequest(_))));
     assert_eq!(store.event_count(), 0);
 }

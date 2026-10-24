@@ -180,6 +180,35 @@ pub async fn get_token(
     Ok((strava_id, access, new_refresh))
 }
 
+/// The user's [`StravaId`] (spec #602): the no-refresh sibling of
+/// [`get_token`]. A cache hit returns the cached [`TokenState`]'s `strava_id`;
+/// a cache miss builds it from the DB's [`StravaUser`] (and inserts it). It is
+/// a read-only `strava_id` resolution: it never calls `get_token` /
+/// `refresh_if_expired` / `STRAVACLIENT`. Private to `tb_strava` — no
+/// `strava_id` crosses the crate boundary.
+pub(crate) async fn get_strava_id(
+    user_id: UserId,
+    store: &mut impl StravaDataStore,
+) -> TbResult<StravaId> {
+    let state = {
+        let cached = {
+            let cache = TOKEN_CACHE.lock().expect("the token cache is not poisoned");
+            cache.get(&user_id).cloned()
+        };
+        match cached {
+            Some(state) => state,
+            None => {
+                let user = StravaUser::read(user_id, store).await?;
+                let state = TokenState::from_strava_user(&user);
+                let mut cache = TOKEN_CACHE.lock().expect("the token cache is not poisoned");
+                cache.insert(user_id, state.clone());
+                state
+            }
+        }
+    };
+    Ok(state.strava_id())
+}
+
 /// The concrete [`StravaSession`] (spec #558 §6.2): the user's identity plus
 /// the Strava token state, with the refresh machinery the loop drives.
 /// In-memory and loop-scoped — no tower-session half.

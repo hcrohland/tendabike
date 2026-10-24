@@ -56,13 +56,16 @@ use oauth2::RefreshToken;
 use tokio::sync::{Mutex, Notify, broadcast, oneshot, watch};
 
 use tb_domain::{
-    Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, ShopId, ShopStore,
-    Summary, TbResult, UserId, WriteOutcome,
+    Activity, ActivityId, ApiRead, ApiWrite, Error, PartId, ReadOutcome, Session, ShopId,
+    ShopStore, Summary, TbResult, UserId, WriteOutcome,
 };
 use tb_strava::{
-    StravaDataStore, StravaId, StravaSession, StravaStat, StravaUser, StravaUserSession, activity,
+    StravaStat, StravaUser, activity,
     client::StravaAthleteInfo,
-    event::{Event as StravaEvent, InEvent, ObjectType, insert_sync, sync_users},
+    event::{
+        Event as StravaEvent, InEvent, insert_sync, is_sync_for_user, sync_queued_for_user,
+        sync_users,
+    },
     gear,
 };
 
@@ -84,6 +87,37 @@ pub const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 /// stream is dropped (the client's reconnect + full refresh covers it), so a
 /// modest bound is enough.
 const BROADCAST_CAPACITY: usize = 64;
+
+/// The executor's minimal [`Session`] (spec #602): the user's identity only.
+/// The token no longer rides the session — it flows through the `tb_strava`
+/// `TokenCache` (keyed by the user id), so the executor hands the loop a
+/// plain `Session` and never names a `StravaId` or a token type.
+#[derive(Debug, Clone, Copy)]
+pub struct ExecutorSession {
+    id: UserId,
+}
+
+impl ExecutorSession {
+    /// Build the executor's session for `id` (the token is resolved by the
+    /// `tb_strava` `TokenCache` on demand, not carried here).
+    pub fn new(id: UserId) -> Self {
+        Self { id }
+    }
+}
+
+impl Session for ExecutorSession {
+    fn user_id(&self) -> UserId {
+        self.id
+    }
+
+    fn is_admin(&self) -> bool {
+        false
+    }
+
+    fn shop(&self) -> Option<ShopId> {
+        None
+    }
+}
 
 /// The executor task's settled fate, shared with its streams (a `JoinHandle`
 /// is not `Clone`, so it cannot be handed to both the registry and the
@@ -248,37 +282,23 @@ where
     /// A subscription to the user's executor's consumed-Strava-event channel
     /// (spec §6.4): spawning the executor if it is not running. The admin
     /// sync subscribes **before** it enqueues its event, so the completion
-    /// signal cannot be missed. `session` is the `Box<dyn StravaSession>`
+    /// signal cannot be missed. `session` is the `Box<dyn Session>`
     /// threaded into the loop on spawn.
     pub async fn events(
         &self,
         user_id: UserId,
-        session: Box<dyn StravaSession>,
+        session: Box<dyn Session>,
     ) -> TbResult<broadcast::Receiver<StravaEvent>> {
         self.exec_field(user_id, session, |exec| exec.events.subscribe())
             .await
     }
 
-    /// Whether `strava_id`'s queue still holds the sync at `event_time`
-    /// (the admin sync's fallback completion check, spec §4.6).
-    async fn sync_queued(&self, strava_id: StravaId, event_time: i64) -> TbResult<bool> {
-        let mut store = self.source.begin().await?;
-        // A non-migrate sync is queued with `object_id` 0, so the user's
-        // `object_id` 0 events are exactly their syncs.
-        let syncs = store.strava_event_get_later(0, strava_id).await?;
-        store.commit().await?;
-        Ok(syncs.iter().any(|event| event.event_time == event_time))
-    }
-
-    /// Build a cold [`StravaUserSession`] for `user_id` (the admin-sync and
-    /// internal ops' spawn path): the target's cookie (and access token) is
-    /// not reachable from an `AxumAdmin` handler, so the session starts
-    /// expired and refreshes on first Strava call.
-    async fn cold_session(&self, user_id: UserId) -> TbResult<Box<dyn StravaSession>> {
-        let mut store = self.source.begin().await?;
-        let session = StravaUserSession::for_user(user_id, &mut store).await?;
-        store.commit().await?;
-        Ok(Box::new(session))
+    /// Build the executor's minimal [`ExecutorSession`] for `user_id` (the
+    /// admin-sync and internal ops' spawn path): the token no longer rides
+    /// the session — it flows through the `tb_strava` `TokenCache` (keyed by
+    /// the user id), so the session is just the identity.
+    async fn cold_session(&self, user_id: UserId) -> TbResult<Box<dyn Session>> {
+        Ok(Box::new(ExecutorSession::new(user_id)))
     }
 
     /// Push a frame to the user's SSE streams (test helper: the production
@@ -350,11 +370,11 @@ where
     /// it is absent or settled), and pull one field from it: the shared shape
     /// of `subscribe`, `wake`, `events`, and `write`. The lock is dropped
     /// when this returns, before the caller's next await. `session` is the
-    /// `Box<dyn StravaSession>` threaded into the loop on spawn.
+    /// `Box<dyn Session>` threaded into the loop on spawn.
     async fn exec_field<R>(
         &self,
         user_id: UserId,
-        session: Box<dyn StravaSession>,
+        session: Box<dyn Session>,
         f: impl FnOnce(&Executor) -> R,
     ) -> TbResult<R> {
         let mut map = self.executors.lock().await;
@@ -376,7 +396,7 @@ where
     }
 
     /// Return the user's live executor, spawning it if it is absent or has
-    /// settled (reaped/dead): thread the caller's `Box<dyn StravaSession>`
+    /// settled (reaped/dead): thread the caller's `Box<dyn Session>`
     /// into the loop (the user-facing paths hand a warm session; the
     /// admin-sync path hands a cold one), open a fresh request channel and
     /// frame channel, and spawn the `tb_exec` loop.
@@ -386,7 +406,7 @@ where
         user_id: UserId,
         idle_timeout: Duration,
         pusher: Box<dyn FramePusher>,
-        session: Box<dyn StravaSession>,
+        session: Box<dyn Session>,
     ) -> TbResult<Executor> {
         if let Some(exec) = map.get(&user_id)
             && *exec.status.borrow() == ExecutorStatus::Running
@@ -507,7 +527,7 @@ where
     /// (read-only within it by spec) and resolves the [`ReadOutcome`] —
     /// the route maps a `Err` through the existing `AppError` helper,
     /// exactly as today.
-    async fn read(&self, session: Box<dyn StravaSession>, read: ApiRead) -> TbResult<ReadOutcome> {
+    async fn read(&self, session: Box<dyn Session>, read: ApiRead) -> TbResult<ReadOutcome> {
         let user_id = session.user_id();
         let (request, reply) = Request::new_read(read);
         self.send_request(user_id, session, request, reply, "read")
@@ -521,11 +541,7 @@ where
     /// behavior. The route projects its payload: a create's `201` entity
     /// or the descend's report body from the `WriteOutcome`, a `204`
     /// otherwise.
-    async fn write(
-        &self,
-        session: Box<dyn StravaSession>,
-        write: ApiWrite,
-    ) -> TbResult<WriteOutcome> {
+    async fn write(&self, session: Box<dyn Session>, write: ApiWrite) -> TbResult<WriteOutcome> {
         let user_id = session.user_id();
         let (request, reply) = Request::new_write(write);
         self.send_request(user_id, session, request, reply, "write")
@@ -553,7 +569,7 @@ where
     /// to its fate, so the stream can tell a clean reap from a dead executor.
     async fn subscribe(
         &self,
-        session: Box<dyn StravaSession>,
+        session: Box<dyn Session>,
     ) -> TbResult<(
         broadcast::Receiver<Summary>,
         watch::Receiver<ExecutorStatus>,
@@ -640,17 +656,15 @@ where
     /// §4.6) — is consulted: a sync no longer queued has been consumed.
     async fn sync(&self, user_id: UserId, event_time: i64) -> TbResult<()> {
         // Subscribe before enqueuing, so the completion cannot be missed.
-        // The admin-sync path boxes a cold `StravaUserSession` (the
-        // target's cookie is not reachable from an `AxumAdmin` handler).
+        // The admin-sync path boxes a cold `ExecutorSession` (the token
+        // flows through the `tb_strava` `TokenCache`, not the session).
         let session = self.cold_session(user_id).await?;
         let mut done = self.events(user_id, session).await?;
 
-        // The enqueue txn (spec #558 §5.2): the target's Strava id (the
-        // queue is keyed by it) and the `Sync` event, committed together —
-        // the handler's user lookup folded into the enqueue.
+        // The enqueue txn (spec #558 §5.2): the `Sync` event, committed —
+        // the `strava_id` (the queue's key) is resolved inside `tb_strava`.
         let mut store = self.source.begin().await?;
-        let strava_id = store.stravauser_get_by_tbid(user_id).await?.strava_id();
-        insert_sync(strava_id, event_time, false, &mut store).await?;
+        insert_sync(user_id, event_time, false, &mut store).await?;
         store.commit().await?;
 
         // Wake the executor (non-critical: the queue is the source of
@@ -661,16 +675,28 @@ where
         // Await our sync's completion (unbounded, spec §6.4).
         loop {
             match done.recv().await {
-                Ok(event) if is_sync(&event, strava_id, event_time) => return Ok(()),
-                // Some other message completed; keep waiting for ours.
-                Ok(_) => continue,
+                Ok(event) => {
+                    // The correlation is a `tb_strava` concern (the queue is
+                    // keyed by the `strava_id`, resolved inside the crate).
+                    let mut store = self.source.begin().await?;
+                    let is_our_sync =
+                        is_sync_for_user(&event, user_id, event_time, &mut store).await?;
+                    store.commit().await?;
+                    if is_our_sync {
+                        return Ok(());
+                    }
+                    // Some other message completed; keep waiting for ours.
+                }
                 Err(_) => {
                     // The channel closed (or lagged): the executor settled
                     // without announcing our event. Consult the queue — the
                     // source of truth (spec §4.6): a sync no longer queued
                     // has been consumed; otherwise re-subscribe (respawning
                     // the executor) and keep waiting.
-                    if !self.sync_queued(strava_id, event_time).await? {
+                    let mut store = self.source.begin().await?;
+                    let queued = sync_queued_for_user(user_id, event_time, &mut store).await?;
+                    store.commit().await?;
+                    if !queued {
                         return Ok(());
                     }
                     let session = self.cold_session(user_id).await?;
@@ -717,7 +743,7 @@ where
         &self,
         athlete: StravaAthleteInfo,
         refresh: Option<RefreshToken>,
-    ) -> TbResult<(StravaUser, bool)> {
+    ) -> TbResult<(UserId, bool)> {
         let StravaAthleteInfo {
             id,
             firstname,
@@ -737,7 +763,7 @@ where
         .await?;
         let is_admin = user.user_id().is_admin(&mut store).await?;
         store.commit().await?;
-        Ok((user, is_admin))
+        Ok((user.user_id(), is_admin))
     }
 
     /// The webhook accept (spec #558 §5.2): one transaction
@@ -760,24 +786,24 @@ where
     }
 
     /// The gear redirect URL (spec #558 §5.2): one transaction — the
-    /// caller's [`StravaUserSession`] built in-txn (the user-gated
+    /// executor's [`ExecutorSession`] built in-txn (the user-gated
     /// `tb_strava` `strava_url` op, which checks the part's ownership),
     /// then the Strava URL.
     async fn gear_url(&self, user: UserId, id: PartId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let mut session = StravaUserSession::for_user(user, &mut store).await?;
+        let mut session = ExecutorSession::new(user);
         let uri = gear::strava_url(i32::from(id), &mut session, &mut store).await?;
         store.commit().await?;
         Ok(uri)
     }
 
     /// The activity redirect URL (spec #558 §5.2): one transaction — the
-    /// caller's [`StravaUserSession`] built in-txn (the user-gated
+    /// executor's [`ExecutorSession`] built in-txn (the user-gated
     /// `tb_strava` `strava_url` op, which checks the activity's ownership),
     /// then the Strava URL.
     async fn activity_url(&self, user: UserId, id: ActivityId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let session = StravaUserSession::for_user(user, &mut store).await?;
+        let session = ExecutorSession::new(user);
         let uri = activity::strava_url(i64::from(id), &session, &mut store).await?;
         store.commit().await?;
         Ok(uri)
@@ -794,25 +820,25 @@ where
     }
 
     /// The deauthorization (spec #558 §5.2): one transaction — the
-    /// target's [`StravaUserSession`] built in-txn, then
+    /// target's [`ExecutorSession`] built in-txn, then
     /// `tb_strava::user_deauthorize`. No wake, no message; the existing
     /// race (deauth deletes the target's queued events outside the
     /// target's loop) is preserved.
     async fn deauthorize(&self, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        let mut session = StravaUserSession::for_user(tbid, &mut store).await?;
+        let mut session = ExecutorSession::new(tbid);
         tb_strava::user_deauthorize(&mut session, &mut store).await?;
         store.commit().await?;
         Ok(())
     }
 
     /// The user delete (spec #558 §5.2): one transaction — the target's
-    /// [`StravaUserSession`] built in-txn, then `tb_strava::user_delete`
+    /// [`ExecutorSession`] built in-txn, then `tb_strava::user_delete`
     /// (the deauthorization plus the row deletions). No wake, no message;
     /// the existing race is preserved.
     async fn delete_user(&self, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        let mut session = StravaUserSession::for_user(tbid, &mut store).await?;
+        let mut session = ExecutorSession::new(tbid);
         tb_strava::user_delete(&mut session, &mut store).await?;
         store.commit().await?;
         Ok(())
@@ -835,7 +861,7 @@ where
     async fn send_request<Out>(
         &self,
         user_id: UserId,
-        session: Box<dyn StravaSession>,
+        session: Box<dyn Session>,
         request: Request,
         reply: oneshot::Receiver<TbResult<Out>>,
         dropped: &str,
@@ -856,12 +882,4 @@ where
             ))
         })?
     }
-}
-
-/// The admin sync's completion correlation (spec §6.4): the consumed event
-/// is ours when its identity matches the sync we queued.
-fn is_sync(event: &StravaEvent, strava_id: StravaId, event_time: i64) -> bool {
-    event.object_type == ObjectType::Sync
-        && event.owner_id == strava_id
-        && event.event_time == event_time
 }
