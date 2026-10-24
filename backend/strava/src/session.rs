@@ -170,21 +170,27 @@ async fn cached_state(user_id: UserId, store: &mut impl StravaDataStore) -> TbRe
 
 /// A valid Strava access token for `user_id` (spec #602): a cache hit clones
 /// the warm [`TokenState`]; a cache miss builds it from the DB's refresh
-/// token (and inserts it), forcing a refresh. Returns `(strava_id, access,
-/// new_refresh)` where `new_refresh` is `Some` only when a refresh issued a
-/// new rotating token (the signal to persist).
+/// token (and inserts it), forcing a refresh. A refresh always stores the
+/// durable refresh token: when the exchange issues a new rotating token it is
+/// persisted to the DB via `update_token` before the access token is
+/// returned, so a refresh can never happen without the rotated token being
+/// stored. Returns `(strava_id, access)`.
 pub(crate) async fn get_token(
     user_id: UserId,
     store: &mut impl StravaDataStore,
-) -> TbResult<(StravaId, AccessToken, Option<RefreshToken>)> {
+) -> TbResult<(StravaId, AccessToken)> {
     let mut state = cached_state(user_id, store).await?;
     let (access, new_refresh) = state.get_token().await?;
     let strava_id = state.strava_id();
+    if let Some(refresh) = new_refresh {
+        let secret = refresh.secret().to_string();
+        strava_id.update_token(Some(&secret), store).await?;
+    }
     {
         let mut cache = TOKEN_CACHE.lock().expect("the token cache is not poisoned");
         cache.insert(user_id, state);
     }
-    Ok((strava_id, access, new_refresh))
+    Ok((strava_id, access))
 }
 
 /// The user's [`StravaId`] (spec #602): the no-refresh sibling of

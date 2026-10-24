@@ -39,19 +39,14 @@ use tb_domain::{Error, Session, TbResult};
 
 const API: &str = "https://www.strava.com/api/v3";
 
-/// A valid access token for `user`: the `TokenCache`'s `get_token` → persist
-/// the refresh token to the DB if a refresh issued a new one. Owns only the
-/// persist — the `TokenCache` owns the exchange.
+/// A valid access token for `user`: the `TokenCache`'s `get_token`, which
+/// owns the refresh exchange and persists the rotated refresh token to the
+/// DB when a refresh issues a new one.
 async fn access_token(
     user: &mut dyn Session,
     store: &mut impl StravaDataStore,
 ) -> TbResult<(StravaId, AccessToken)> {
-    let (strava_id, access, new_refresh) = get_token(user.user_id(), store).await?;
-    if let Some(refresh) = new_refresh {
-        let secret = refresh.secret().to_string();
-        strava_id.update_token(Some(&secret), store).await?;
-    }
-    Ok((strava_id, access))
+    get_token(user.user_id(), store).await
 }
 
 /// A bearer GET of `uri` for `user`, parsed as `T`.

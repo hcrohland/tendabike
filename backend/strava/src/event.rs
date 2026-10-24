@@ -431,8 +431,6 @@ pub async fn insert_sync(
     if event_time > get_time() {
         return Err(Error::BadRequest(format!("eventtime {event_time} > now!")));
     }
-    // The `strava_id` (the queue's key) is resolved inside `tb_strava` — no
-    // `strava_id` crosses the crate boundary into the executor (spec #602).
     let owner_id = get_strava_id(user_id, store).await?;
     let object_id = if migrate { 1 } else { 0 };
     let event = Event {
@@ -447,9 +445,7 @@ pub async fn insert_sync(
 
 /// Whether `event` is the admin sync for `user_id` at `event_time` (spec
 /// #558 §6.4): the consumed event is ours when its identity — a `Sync` for the
-/// user's `strava_id` at that time — matches the sync we queued. The
-/// `strava_id` is resolved inside `tb_strava` (no `strava_id` crosses the
-/// crate boundary into the executor).
+/// user's `strava_id` at that time — matches the sync we queued.
 pub async fn is_sync_for_user(
     event: &Event,
     user_id: UserId,
@@ -465,7 +461,7 @@ pub async fn is_sync_for_user(
 /// Whether `user_id`'s queue still holds the sync at `event_time` (the admin
 /// sync's fallback completion check, spec #4.6): a non-migrate sync is queued
 /// with `object_id` 0, so the user's `object_id` 0 events are exactly their
-/// syncs. The `strava_id` is resolved inside `tb_strava`.
+/// syncs.
 pub async fn sync_queued_for_user(
     user_id: UserId,
     event_time: i64,

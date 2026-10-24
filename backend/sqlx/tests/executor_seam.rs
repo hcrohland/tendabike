@@ -18,8 +18,7 @@
 //! Drives the real executor loop — `tb_exec::run` over the real `DbPool`
 //! (`TxnSource`/`Txn` implemented on the live `SqlxConn`, the seam the web
 //! layer will use) — against real Postgres, with a stubbed `Session`: the
-//! loop's transaction lifecycle is what this suite verifies, not the Strava
-//! API.
+//! loop's transaction lifecycle is what this suite verifies.
 //!
 //! What the eight seam tests verify, end to end on the live adapter:
 //!

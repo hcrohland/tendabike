@@ -63,16 +63,14 @@ pub trait ServiceApi: Send + Sync {
     /// runs it in its own transaction (read-only within it by spec) and
     /// resolves the read's data (a [`ReadOutcome`]); the caller knows which
     /// variant it sent and pattern-matches its own result. `session` is the
-    /// user's `Session` (the token flows through the `tb_strava` `TokenCache`,
-    /// not the session).
+    /// user's `Session`.
     async fn read(&self, session: Box<dyn Session>, read: ApiRead) -> TbResult<ReadOutcome>;
 
     /// One per-user write on the user's executor (spec §6.2): the loop runs
     /// it in its own transaction and resolves the full [`WriteOutcome`]
     /// (the `Summary` — the frame — plus, for the descend, its match
     /// report, the response body). The oneshot wait is unbounded. `session`
-    /// is the user's `Session`: the loop uses it for the domain op, and the
-    /// Strava side resolves the token through the `tb_strava` `TokenCache`.
+    /// is the user's `Session`: the loop uses it for the domain op.
     async fn write(&self, session: Box<dyn Session>, write: ApiWrite) -> TbResult<WriteOutcome>;
 
     /// The hydration write (spec #558 §4): `update_gear` in the loop's own
@@ -85,8 +83,7 @@ pub trait ServiceApi: Send + Sync {
     /// running): a subscription to the frame channel plus a handle to the
     /// executor's fate ([`ExecutorStatus`]), so the stream can tell a clean
     /// reap from a dead executor (spec #558 §6.3). `session` is the user's
-    /// `Session` (the token flows through the `tb_strava` `TokenCache`, not
-    /// the session).
+    /// `Session`.
     async fn subscribe(
         &self,
         session: Box<dyn Session>,

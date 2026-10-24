@@ -89,17 +89,13 @@ pub const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 const BROADCAST_CAPACITY: usize = 64;
 
 /// The executor's minimal [`Session`] (spec #602): the user's identity only.
-/// The token no longer rides the session — it flows through the `tb_strava`
-/// `TokenCache` (keyed by the user id), so the executor hands the loop a
-/// plain `Session` and never names a `StravaId` or a token type.
 #[derive(Debug, Clone, Copy)]
 pub struct ExecutorSession {
     id: UserId,
 }
 
 impl ExecutorSession {
-    /// Build the executor's session for `id` (the token is resolved by the
-    /// `tb_strava` `TokenCache` on demand, not carried here).
+    /// Build the executor's session for `id`.
     pub fn new(id: UserId) -> Self {
         Self { id }
     }
@@ -294,9 +290,8 @@ where
     }
 
     /// Build the executor's minimal [`ExecutorSession`] for `user_id` (the
-    /// admin-sync and internal ops' spawn path): the token no longer rides
-    /// the session — it flows through the `tb_strava` `TokenCache` (keyed by
-    /// the user id), so the session is just the identity.
+    /// admin-sync and internal ops' spawn path): the session is just the
+    /// identity.
     async fn cold_session(&self, user_id: UserId) -> TbResult<Box<dyn Session>> {
         Ok(Box::new(ExecutorSession::new(user_id)))
     }
@@ -656,8 +651,7 @@ where
     /// §4.6) — is consulted: a sync no longer queued has been consumed.
     async fn sync(&self, user_id: UserId, event_time: i64) -> TbResult<()> {
         // Subscribe before enqueuing, so the completion cannot be missed.
-        // The admin-sync path boxes a cold `ExecutorSession` (the token
-        // flows through the `tb_strava` `TokenCache`, not the session).
+        // The admin-sync path boxes a cold `ExecutorSession`.
         let session = self.cold_session(user_id).await?;
         let mut done = self.events(user_id, session).await?;
 
