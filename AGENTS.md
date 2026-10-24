@@ -15,7 +15,7 @@
 
 ## Commit rules
 
-- Flow, in order: finish the work → if on `main`, create a feature branch → commit → push.
+- Flow, in order: finish the work → if on `main`, create a feature branch → commit → push → comment on the issue with the commit SHA.
 - Commit titles name the change; the issue number goes in a `Closes #N` line in the body, one per issue.
 - Never bypass the pre-commit hook with `--no-verify` or `-n` — make the checks pass instead.
 
