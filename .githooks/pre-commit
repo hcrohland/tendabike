@@ -13,20 +13,41 @@ if [ "$current_branch" = "$protected_branch" ]; then
     exit 1
 fi
 
+# --- console.log guard: always on, scoped to the staged diff ---
 consoleregexp='^[^-].*(console\.log|@debug|\$inspect)'
 filenamewithconsole='^[^-].*(console\.log|@debug|\$inspect)|^\+\+\+'
-# CHECK
 if test $(git diff --cached * | egrep $consoleregexp | wc -l) != 0
-then 
+then
   echo do not commit console.log:
   exec git diff --cached * | egrep -ne $filenamewithconsole #| egrep -B 1 $consoleregexp
   exit 1; # THE USER DONT WANT TO CONTINUE SO ROLLBACK
 fi
 
-cargo fmt --check
-npm run fmtcheck
-(cd backend/sqlx && cargo sqlx prepare --check)
-cargo clippy -- -D warnings
-cargo check
-npm run check:ci
+# --- language-scoped checks: run only what the staged files touch ---
+# Staged files (added, copied, modified, renamed). Deletions need no checks.
+staged_files=$(git diff --cached --name-only --diff-filter=ACMR)
 
+run_rust=0
+run_frontend=0
+
+# Rust toolchain: any .rs file, a Cargo manifest/lock, or a backend SQL migration.
+if printf '%s\n' "$staged_files" | grep -Eq '(\.rs$|Cargo\.(toml|lock)$|backend/.*\.sql$)'; then
+    run_rust=1
+fi
+
+# Frontend toolchain: anything under frontend/.
+if printf '%s\n' "$staged_files" | grep -Eq '^frontend/'; then
+    run_frontend=1
+fi
+
+if [ "$run_rust" -eq 1 ]; then
+    cargo fmt --check
+    (cd backend/sqlx && cargo sqlx prepare --check)
+    cargo clippy -- -D warnings
+    cargo check
+fi
+
+if [ "$run_frontend" -eq 1 ]; then
+    npm run fmtcheck
+    npm run check:ci
+fi
