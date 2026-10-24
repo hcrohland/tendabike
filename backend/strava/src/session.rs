@@ -47,37 +47,6 @@ fn is_expired(expires_at: &Option<SystemTime>) -> bool {
     expires_at.is_some_and(|e| SystemTime::now() > e)
 }
 
-/// The shared token-refresh machinery (the single seam both `get_token` impls
-/// drive): if the access token is expired, exchange the refresh token for a
-/// fresh pair in place; otherwise return the warm access token. Returns
-/// `(access, new_refresh)` where `new_refresh` is `Some` only when a refresh
-/// issued a new rotating token (the signal to persist).
-async fn refresh_if_expired(
-    access_token: &mut AccessToken,
-    expires_at: &mut Option<SystemTime>,
-    refresh_token: &mut Option<RefreshToken>,
-) -> TbResult<(AccessToken, Option<RefreshToken>)> {
-    if !is_expired(expires_at) {
-        return Ok((access_token.clone(), None));
-    }
-
-    let current_refresh = refresh_token.clone().ok_or_else(|| {
-        Error::NotAuth("No Refresh Token provided and Access Token expired".to_string())
-    })?;
-    debug!("refreshing Strava token");
-    let token = STRAVACLIENT
-        .exchange_refresh_token(&current_refresh)
-        .request_async(&*HTTP_CLIENT)
-        .await
-        .map_err(|err| Error::NotAuth(err.to_string()))?;
-
-    *access_token = token.access_token().clone();
-    *expires_at = token.expires_in().map(|d| SystemTime::now() + d);
-    let new_refresh = token.refresh_token().cloned();
-    *refresh_token = new_refresh.clone();
-    Ok((access_token.clone(), new_refresh))
-}
-
 /// The token state for a single Strava user (spec #602): the user's
 /// `strava_id` plus the token fields the refresh machinery drives.
 ///
@@ -127,12 +96,25 @@ impl TokenState {
     /// `(access, new_refresh)` where `new_refresh` is `Some` only when a
     /// refresh issued a new rotating token (the signal to persist).
     async fn get_token(&mut self) -> TbResult<(AccessToken, Option<RefreshToken>)> {
-        refresh_if_expired(
-            &mut self.access_token,
-            &mut self.expires_at,
-            &mut self.refresh_token,
-        )
-        .await
+        if !is_expired(&self.expires_at) {
+            return Ok((self.access_token.clone(), None));
+        }
+
+        let current_refresh = self.refresh_token.clone().ok_or_else(|| {
+            Error::NotAuth("No Refresh Token provided and Access Token expired".to_string())
+        })?;
+        debug!("refreshing Strava token");
+        let token = STRAVACLIENT
+            .exchange_refresh_token(&current_refresh)
+            .request_async(&*HTTP_CLIENT)
+            .await
+            .map_err(|err| Error::NotAuth(err.to_string()))?;
+
+        self.access_token = token.access_token().clone();
+        self.expires_at = token.expires_in().map(|d| SystemTime::now() + d);
+        let new_refresh = token.refresh_token().cloned();
+        self.refresh_token = new_refresh.clone();
+        Ok((self.access_token.clone(), new_refresh))
     }
 }
 
@@ -197,8 +179,8 @@ pub(crate) async fn get_token(
 /// [`get_token`]. A cache hit returns the cached [`TokenState`]'s `strava_id`;
 /// a cache miss builds it from the DB's [`StravaUser`] (and inserts it). It is
 /// a read-only `strava_id` resolution: it never calls `get_token` /
-/// `refresh_if_expired` / `STRAVACLIENT`. Private to `tb_strava` — no
-/// `strava_id` crosses the crate boundary.
+/// `STRAVACLIENT`. Private to `tb_strava` — no `strava_id` crosses the crate
+/// boundary.
 pub(crate) async fn get_strava_id(
     user_id: UserId,
     store: &mut impl StravaDataStore,
