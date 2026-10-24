@@ -143,7 +143,7 @@ impl StravaUser {
 
     /// Get list of gear for user from Strava
     pub async fn update_gear(
-        user: &mut dyn StravaSession,
+        user: &mut dyn Session,
         store: &mut impl StravaStore,
     ) -> TbResult<Vec<PartId>> {
         #[derive(Deserialize, Debug)]
@@ -208,7 +208,7 @@ pub async fn get_all_stats(store: &mut impl StravaStore) -> TbResult<Vec<StravaS
 /// This function will return an error if the user does not exist, is already disabled
 /// or has open events and if strava or the database is not reachable.
 pub async fn user_deauthorize(
-    user: &mut dyn StravaSession,
+    user: &mut dyn Session,
     store: &mut impl StravaDataStore,
 ) -> TbResult<()> {
     if let Err(err) = deauthorize(user, store).await {
@@ -217,7 +217,8 @@ pub async fn user_deauthorize(
 
     warn!("User {} deauthorized", user.user_id());
 
-    user.strava_id().disable(store).await
+    let (strava_id, _access, _new_refresh) = get_token(user.user_id(), store).await?;
+    strava_id.disable(store).await
 }
 
 /// Returns the Strava URL for a user with the given Strava ID.
@@ -235,10 +236,7 @@ pub async fn strava_url(user_id: UserId, store: &mut impl StravaDataStore) -> Tb
     Ok(format!("https://strava.com/athletes/{}", user.strava_id()))
 }
 
-pub async fn user_delete(
-    user: &mut dyn StravaSession,
-    store: &mut impl StravaStore,
-) -> TbResult<()> {
+pub async fn user_delete(user: &mut dyn Session, store: &mut impl StravaStore) -> TbResult<()> {
     let tbuser = user.user_id();
     debug!("Deauthorizing user");
     user_deauthorize(user, store).await?;

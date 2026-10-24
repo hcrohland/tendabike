@@ -192,6 +192,19 @@ pub fn begin_test() {
     });
 }
 
+/// Seed the `TokenCache` with a warm token for `user_id` (test-only): prevents
+/// the `get_token` free function from forcing a (network) refresh on the first
+/// request (spec #602: the token source moved to `tb_strava`).
+pub fn seed_token_cache(user_id: UserId, strava_id: StravaId, access_token: &str) {
+    crate::session::TOKEN_CACHE
+        .lock()
+        .expect("the token cache is not poisoned")
+        .insert(
+            user_id,
+            crate::session::TokenState::warm(strava_id, access_token),
+        );
+}
+
 /// Whether the current thread is in test mode (a `TestStravaSession` was
 /// built, or `begin_test` was called).
 pub fn in_test_mode() -> bool {
@@ -278,6 +291,7 @@ pub struct TestStravaSession {
 impl TestStravaSession {
     pub fn new(user: UserId, strava: StravaId) -> Self {
         begin_test();
+        seed_token_cache(user, strava, "test-access-token");
         Self {
             user,
             strava,

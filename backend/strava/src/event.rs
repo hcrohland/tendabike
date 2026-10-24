@@ -213,7 +213,7 @@ impl Event {
     #[async_recursion]
     async fn rate_limit(
         self,
-        user: &dyn StravaSession,
+        user: &dyn Session,
         store: &mut impl StravaDataStore,
     ) -> TbResult<QueueRead> {
         // rate limit event
@@ -232,7 +232,7 @@ impl Event {
 
     async fn process_activity(
         self,
-        user: &mut dyn StravaSession,
+        user: &mut dyn Session,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
         match self.process_hook(user, store).await {
@@ -257,7 +257,7 @@ impl Event {
     ///
     async fn process_hook(
         &self,
-        user: &mut dyn StravaSession,
+        user: &mut dyn Session,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
         let res = match self.aspect_type {
@@ -280,7 +280,7 @@ impl Event {
 
     async fn sync(
         &mut self,
-        user: &mut dyn StravaSession,
+        user: &mut dyn Session,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
         // let mut len = batch;
@@ -329,7 +329,7 @@ impl Event {
 
     async fn process_sync(
         mut self,
-        user: &mut dyn StravaSession,
+        user: &mut dyn Session,
         store: &mut impl StravaStore,
     ) -> TbResult<Summary> {
         match self.sync(user, store).await {
@@ -493,12 +493,11 @@ pub enum QueueRead {
 /// event" step; reading the queue stays a Strava-side concern, so the
 /// function stays here rather than being inlined in the caller.
 pub async fn get_event(
-    user: &dyn StravaSession,
+    user: &dyn Session,
     store: &mut impl StravaDataStore,
 ) -> TbResult<QueueRead> {
-    let event = store
-        .strava_event_get_next_for_user(user.strava_id())
-        .await?;
+    let (strava_id, _access, _new_refresh) = get_token(user.user_id(), store).await?;
+    let event = store.strava_event_get_next_for_user(strava_id).await?;
     let event = match event {
         Some(event) => event,
         None => return Ok(QueueRead::Empty),
@@ -527,7 +526,7 @@ pub async fn get_event(
 }
 
 async fn next_activities(
-    user: &mut dyn StravaSession,
+    user: &mut dyn Session,
     store: &mut impl StravaDataStore,
     per_page: usize,
     start: i64,
@@ -540,10 +539,7 @@ async fn next_activities(
     .await
 }
 
-pub async fn process(
-    user: &mut dyn StravaSession,
-    store: &mut impl StravaStore,
-) -> TbResult<Summary> {
+pub async fn process(user: &mut dyn Session, store: &mut impl StravaStore) -> TbResult<Summary> {
     let read = get_event(user, store).await?;
     let event = match read {
         QueueRead::Event(event) => event,
