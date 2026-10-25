@@ -1,6 +1,6 @@
 # tb_strava tests
 
-`SQLX_OFFLINE=true cargo test -p tb_strava`. All tests run in-memory (no database, no network); one `<name>_tests.rs` module per module under `strava/src/<name>/`, declared `#[cfg(test)]` in `activity.rs`, `event.rs`, `gear.rs`, `user.rs`.
+All tests run in-memory (no database, no network); one `<name>_tests.rs` module per module under `strava/src/<name>/`, declared `#[cfg(test)]` in `activity.rs`, `event.rs`, `gear.rs`, `user.rs`.
 
 ## Key infrastructure
 
