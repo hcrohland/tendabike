@@ -588,15 +588,22 @@ pub async fn process(user: &mut dyn Session, store: &mut impl StravaStore) -> Tb
 }
 
 /// Queue a `Sync` event for every (non-disabled) user (the all-users
-/// admin sync's op, spec #558 §5.2): `user_id` narrows the sync to one
+/// admin sync's op, spec #558 §5.2): admin-only — the acting `session` must
+/// be an admin (`Forbidden` otherwise). `user_id` narrows the sync to one
 /// user. Returns the tbids of the users a sync was queued for — the
 /// caller's per-user wake list.
 pub async fn sync_users(
+    session: &mut dyn Session,
     user_id: Option<UserId>,
     time: i64,
     migrate: bool,
     store: &mut impl StravaDataStore,
 ) -> TbResult<Vec<UserId>> {
+    if !session.is_admin() {
+        return Err(Error::Forbidden(
+            "only an admin can trigger processing".to_string(),
+        ));
+    }
     let users = match user_id {
         Some(id) => vec![store.stravauser_get_by_tbid(id).await?],
         None => store.stravauser_get_all().await?,

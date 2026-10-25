@@ -675,7 +675,8 @@ where
         }
     }
 
-    /// Trigger processing for all (or one) users (spec #558 §5.2): one
+    /// Trigger processing for all (or one) users (spec #558 §5.2): admin-only
+    /// (the acting `session` must be an admin — `Forbidden` otherwise). One
     /// transaction (`sync_users`) queuing a `Sync` event per (non-disabled)
     /// user, then — per queued user — spawn the executor (a no-op if it is
     /// already running) and wake it. Spawning is what makes the queue drain
@@ -685,13 +686,13 @@ where
     /// `?user_id=` query).
     async fn trigger_processing(
         &self,
-        _session: Box<dyn Session>,
+        mut session: Box<dyn Session>,
         user_id: Option<UserId>,
         event_time: i64,
         migrate: bool,
     ) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        let queued = sync_users(user_id, event_time, migrate, &mut store).await?;
+        let queued = sync_users(&mut *session, user_id, event_time, migrate, &mut store).await?;
         store.commit().await?;
         // Per queued user: spawn the executor (a no-op if it is already
         // running) so it drains the queued Sync even when the user is

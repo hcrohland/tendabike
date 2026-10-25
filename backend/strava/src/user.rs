@@ -200,7 +200,7 @@ pub async fn get_all_stats(store: &mut impl StravaStore) -> TbResult<Vec<StravaS
 /// Deauthorize a user: revoke their Strava token and disable their local
 /// row. Admin-only — the acting `session` must be an admin (the domain
 /// enforces the invariant, defense-in-depth over the web layer's `AxumAdmin`
-/// guard); `tbid` is the target user.
+/// guard); `user_id` is the target user.
 ///
 /// # Errors
 ///
@@ -210,7 +210,7 @@ pub async fn get_all_stats(store: &mut impl StravaStore) -> TbResult<Vec<StravaS
 /// failed Strava token revocation is non-fatal (logged).
 pub async fn user_deauthorize(
     session: &mut dyn Session,
-    tbid: UserId,
+    user_id: UserId,
     store: &mut impl StravaDataStore,
 ) -> TbResult<()> {
     if !session.is_admin() {
@@ -219,13 +219,13 @@ pub async fn user_deauthorize(
         ));
     }
 
-    if let Err(err) = deauthorize(tbid, store).await {
-        warn!("could not deauthorize user {tbid}: {:#}", err)
+    if let Err(err) = deauthorize(user_id, store).await {
+        warn!("could not deauthorize user {user_id}: {:#}", err)
     }
 
-    warn!("User {tbid} deauthorized");
+    warn!("User {user_id} deauthorized");
 
-    let strava_id = get_strava_id(tbid, store).await?;
+    let strava_id = get_strava_id(user_id, store).await?;
     strava_id.disable(store).await
 }
 

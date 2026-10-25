@@ -1176,7 +1176,15 @@ async fn trigger_processing_drains_each_queued_user() {
 
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
-        registry.trigger_processing(Box::new(FakeStrava::new()), None, 200, false),
+        registry.trigger_processing(
+            Box::new(FakeStrava {
+                admin: true,
+                ..FakeStrava::new()
+            }),
+            None,
+            200,
+            false,
+        ),
     )
     .await
     .expect("the all-users sync must return in time");
