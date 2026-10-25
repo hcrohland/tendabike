@@ -127,14 +127,13 @@ pub(super) async fn sync_api(
 ) -> ApiResult<()> {
     let user_id: Option<tb_domain::UserId> = query.user_id.map(|u| u.into());
     // The service API's direct op (spec #558 §5.2): one transaction
-    // (`sync_users`) queuing a `Sync` event per (non-disabled) user, then
-    // a wake per queued user (a running executor drains its queued sync
-    // immediately); `user_id` narrows the sync to one user (the route's
-    // `?user_id=` query). The admin's acting session rides along (carried
-    // for the admin-verification `tb_strava` change).
+    // (`sync_users`) queuing a `Sync` event per (non-disabled) user, then —
+    // per queued user — spawn the executor (a no-op if already running) and
+    // wake it, so the queue drains even for offline users; `user_id` narrows
+    // the trigger to one user (the route's `?user_id=` query).
     state
         .api
-        .sync_all(
+        .trigger_processing(
             Box::new(admin.session()),
             user_id,
             query.time,

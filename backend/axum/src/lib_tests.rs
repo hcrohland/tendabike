@@ -1868,16 +1868,16 @@ async fn admin_sync_returns_204() {
     assert_eq!(status, StatusCode::NO_CONTENT);
 }
 
-/// `GET /strava/sync?time=0` (admin) is the all-users sync direct op and
+/// `GET /strava/sync?time=0` (admin) is the trigger-processing direct op and
 /// answers `200`; the `?user_id=` query narrows it.
 #[tokio::test]
-async fn admin_sync_all_returns_200() {
+async fn admin_trigger_processing_returns_200() {
     let (store, mut mock) = mock_ctx();
-    mock.expect_sync_all()
+    mock.expect_trigger_processing()
         .times(1)
         .withf(|_session, user, time, _migrate| user.is_none() && *time == 0)
         .returning(|_session, _u, _t, _m| Ok(()));
-    mock.expect_sync_all()
+    mock.expect_trigger_processing()
         .times(1)
         .withf(|_session, user, time, _migrate| user == &Some(UserId::from(1)) && *time == 0)
         .returning(|_session, _u, _t, _m| Ok(()));

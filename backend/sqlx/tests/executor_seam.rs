@@ -286,7 +286,7 @@ async fn api_write_end_to_end() {
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        Box::new(FakeStrava::new()),
+        UserId::from(1),
         rx,
         frames,
         Box::new(NoopPusher),
@@ -380,7 +380,7 @@ async fn strava_queue_drains_and_reclaims() {
         TEST_TIMEOUT,
         run(
             DetachedBegin::new(seam.pool.clone()),
-            Box::new(FakeStrava::new()),
+            UserId::from(1),
             rx,
             frames,
             Box::new(NoopPusher),
@@ -421,7 +421,7 @@ async fn idle_loop_reclaims() {
         TEST_TIMEOUT,
         run(
             DetachedBegin::new(seam.pool.clone()),
-            Box::new(FakeStrava::new()),
+            UserId::from(1),
             rx,
             frames,
             Box::new(NoopPusher),
@@ -459,7 +459,7 @@ async fn read_as_message_round_trip() {
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        Box::new(FakeStrava::new()),
+        UserId::from(1),
         rx,
         frames,
         Box::new(NoopPusher),
@@ -547,7 +547,7 @@ async fn shop_context_read_is_scoped_to_the_request_session() {
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        Box::new(FakeStrava::new()), // spawn-time session: personal
+        UserId::from(1),
         rx,
         frames,
         Box::new(NoopPusher),
@@ -598,15 +598,13 @@ async fn shop_context_read_is_scoped_to_the_request_session() {
 
 /// The sticky-shop fix, read side, end to end (issue #600 / ticket #610): a
 /// `User` read whose **request** session is personal returns the user's full
-/// state even when the executor was **spawned in a shop context** — the
-/// "persistently serves shop data even after a full page refresh" symptom.
-/// The loop runs the read against the request's session, not its (shop)
-/// spawn-time one.
+/// state — not a shop's subset — even when the user owns a shop with
+/// registered parts. The loop is identity-only (a `user_id`, no shop), so the
+/// read runs against the request's personal session alone.
 #[tokio::test]
 #[ignore]
-async fn personal_read_on_a_shop_spawned_executor_returns_personal_data() {
+async fn personal_read_returns_personal_data() {
     let seam = ready().await;
-    let shop = ShopId::from(1);
     // Seed a shop owned by the fixture user and register one of the fixture's
     // parts in it (the prepopulated fixture has no shops).
     {
@@ -632,14 +630,11 @@ async fn personal_read_on_a_shop_spawned_executor_returns_personal_data() {
         Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
     tx.send(personal_read).expect("the channel is open");
 
-    // The executor is SPAWNED IN A SHOP CONTEXT (the sticky-shop case): its
-    // spawn-time session carries the shop.
+    // The loop is identity-only (a `user_id`, no shop): the read runs against
+    // the request's personal session alone, so a shop context can't leak in.
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        Box::new(FakeStrava {
-            shop: Some(shop),
-            ..FakeStrava::new()
-        }), // spawn-time session: shop
+        UserId::from(1),
         rx,
         frames,
         Box::new(NoopPusher),
@@ -701,7 +696,7 @@ async fn read_sees_every_earlier_write() {
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        Box::new(FakeStrava::new()),
+        UserId::from(1),
         rx,
         frames,
         Box::new(NoopPusher),
@@ -780,7 +775,7 @@ async fn gear_hydration_frame_and_fifo_read() {
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        Box::new(FakeStrava::new()),
+        UserId::from(1),
         rx,
         frames,
         Box::new(NoopPusher),
@@ -866,7 +861,7 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        Box::new(FakeStrava::new()),
+        UserId::from(1),
         rx,
         frames,
         Box::new(NoopPusher),
@@ -939,7 +934,7 @@ async fn failed_write_rolls_back_and_reclaims() {
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        Box::new(FakeStrava::new()),
+        UserId::from(1),
         rx,
         frames,
         Box::new(NoopPusher),
@@ -1003,7 +998,7 @@ async fn onboarding_sync_write_queues_the_sync_event() {
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        Box::new(FakeStrava::new()),
+        UserId::from(1),
         rx,
         frames,
         Box::new(NoopPusher),
@@ -1120,7 +1115,7 @@ async fn sync_enqueues_wakes_and_awaits() {
 /// without it the queues would stay full for the whole idle window.
 #[tokio::test]
 #[ignore]
-async fn sync_all_wakes_each_running_executor() {
+async fn trigger_processing_drains_each_queued_user() {
     let seam = ready().await;
     let (user, strava) = test_identity();
     // A second user (the users row plus the Strava row).
@@ -1181,7 +1176,7 @@ async fn sync_all_wakes_each_running_executor() {
 
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
-        registry.sync_all(Box::new(FakeStrava::new()), None, 200, false),
+        registry.trigger_processing(Box::new(FakeStrava::new()), None, 200, false),
     )
     .await
     .expect("the all-users sync must return in time");
@@ -1666,7 +1661,7 @@ async fn request_burst_does_not_fire_transaction_notice() {
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        Box::new(FakeStrava::new()),
+        UserId::from(1),
         rx,
         frames,
         Box::new(NoopPusher),

@@ -127,12 +127,14 @@ pub trait ServiceApi: Send + Sync {
         event_time: i64,
     ) -> TbResult<()>;
 
-    /// The all-users admin sync (spec #558 §5.2): one transaction
-    /// (`sync_users`) queuing a `Sync` event per (non-disabled) user, then
-    /// a wake per queued user (a running executor drains its queued sync
-    /// immediately, matching the per-user variant). `user_id` narrows the
-    /// sync to one user (the route's `?user_id=` query).
-    async fn sync_all(
+    /// Trigger processing for all (or one) users (spec #558 §5.2): one
+    /// transaction (`sync_users`) queuing a `Sync` event per (non-disabled)
+    /// user, then — per queued user — spawn the executor (a no-op if it is
+    /// already running) and wake it, so the queue drains even for users
+    /// whose executor is not running (offline). Distinct from the per-user
+    /// [`Self::sync`], which awaits one user's completion. `user_id` narrows
+    /// the trigger to one user (the route's `?user_id=` query).
+    async fn trigger_processing(
         &self,
         session: Box<dyn Session>,
         user_id: Option<UserId>,

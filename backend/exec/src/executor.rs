@@ -297,8 +297,9 @@ pub(crate) async fn deliver_frame(
 /// * `source` — the transaction source (`DbPool` in production). Taken by
 ///   value and owned for the loop's life; `Clone` (which `DbPool` is) lets
 ///   the caller keep a handle — no `Arc` is needed.
-/// * `session` — the user's `Session` (drives the queue read and
-///   event processing; the executor supplies the identity `ApiWrite` needs).
+/// * `user_id` — the user the loop serves: the queue probe reads the queue by
+///   it, and the event lane builds an identity-only [`ExecutorSession`] from
+///   it (at the last moment) to drive the domain event processing.
 /// * `rx` — the receive half of the user's request channel (writes, reads,
 ///   the hydration write, and the admin stats read — spec #558 §3.2).
 /// * `frames` — the user's SSE frame sink (`broadcast`); the web layer's
@@ -379,7 +380,7 @@ pub(crate) async fn deliver_frame(
 #[allow(clippy::too_many_arguments)] // the loop's eight wiring degrees of freedom
 pub async fn run<T>(
     source: T,
-    session: Box<dyn Session>,
+    user_id: UserId,
     mut rx: RequestReceiver,
     frames: broadcast::Sender<Summary>,
     pusher: Box<dyn FramePusher>,
@@ -390,8 +391,6 @@ pub async fn run<T>(
 where
     T: TxnSource + Clone + Send + Sync + 'static,
 {
-    let mut session = session;
-    let user_id = session.user_id();
     let mut backoff = DbBackoff::new();
     let mut first_idle = true;
 
@@ -406,7 +405,7 @@ where
         let mut wake_fut = Box::pin(wake.notified());
         let select = select_message(
             rx.recv(),
-            queue_probe(&source, &*session, &mut backoff),
+            queue_probe(&source, user_id, &mut backoff),
             &mut wake_fut,
         )
         .await;
@@ -424,7 +423,7 @@ where
             Select::Strava(event) => {
                 if let Err(err) = run_event(
                     &source,
-                    &mut *session,
+                    user_id,
                     &event,
                     &frames,
                     &events,
@@ -568,7 +567,7 @@ pub(crate) async fn sleep_or_take_request(
 /// unknown — the re-probe after the pause settles it).
 async fn queue_probe<T: TxnSource>(
     source: &T,
-    session: &dyn Session,
+    user_id: UserId,
     backoff: &mut DbBackoff,
 ) -> Option<Probe> {
     let mut conn = match source.begin().await {
@@ -576,20 +575,17 @@ async fn queue_probe<T: TxnSource>(
         Err(err) => {
             warn!(
                 "user {}: the queue probe could not begin a transaction: {err:?}",
-                session.user_id()
+                user_id
             );
             return Some(Probe::Error);
         }
     };
-    let probe = match get_event(session.user_id(), &mut conn).await {
+    let probe = match get_event(user_id, &mut conn).await {
         Ok(QueueRead::Event(event)) => Probe::Event(event),
         Ok(QueueRead::Limited { until }) => Probe::Limited(until),
         Ok(QueueRead::Empty) => Probe::Empty,
         Err(err) => {
-            warn!(
-                "user {}: the queue probe failed: {err:?}",
-                session.user_id()
-            );
+            warn!("user {}: the queue probe failed: {err:?}", user_id);
             let _ = conn.rollback().await;
             return Some(Probe::Error);
         }
@@ -600,7 +596,7 @@ async fn queue_probe<T: TxnSource>(
         // backs off and re-probes.
         warn!(
             "user {}: the queue probe could not commit its housekeeping: {err:?}",
-            session.user_id()
+            user_id
         );
         return Some(Probe::Error);
     }
@@ -1038,14 +1034,14 @@ fn lifecycle_error(what: impl std::fmt::Display) -> Error {
 /// processed — the respawn settles it on the next queue read).
 async fn run_event<T: TxnSource>(
     source: &T,
-    session: &mut dyn Session,
+    user_id: UserId,
     event: &Event,
     frames: &broadcast::Sender<Summary>,
     events: &broadcast::Sender<Event>,
     backoff: &mut DbBackoff,
     pusher: &dyn FramePusher,
 ) -> Result<(), Error> {
-    debug!("user {}: Processing {event}", session.user_id());
+    debug!("user {user_id}: Processing {event}");
 
     let mut conn = match source.begin().await {
         Ok(conn) => conn,
@@ -1058,7 +1054,11 @@ async fn run_event<T: TxnSource>(
         }
     };
 
-    match process(session, &mut conn).await {
+    // The identity-only session the domain event processing needs, built at
+    // the last moment (the event is the user's own, so the owner is
+    // `user_id` and no shop context applies).
+    let mut session = crate::registry::ExecutorSession::new(user_id);
+    match process(&mut session, &mut conn).await {
         Ok(summary) => match conn.commit().await {
             Ok(()) => {
                 // Route the event's `Summary`: a Strava event is the user's

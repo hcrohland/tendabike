@@ -403,14 +403,10 @@ where
         let events_for_run = events.clone();
         let wake_for_run = wake.clone();
         let watchdog_status = status_tx.clone();
-        // The loop's session is identity-only (the shop-scoping fix): the
-        // per-request shop rides on each `Request`, and the queue probe /
-        // Strava events / gear lanes read the token from the `TokenCache`.
-        let session: Box<dyn Session> = Box::new(ExecutorSession::new(user_id));
         let join = tokio::spawn(async move {
             let result = run(
                 owned_source,
-                session,
+                user_id,
                 reader,
                 frames_for_run,
                 pusher,
@@ -693,16 +689,15 @@ where
         }
     }
 
-    /// The all-users admin sync (spec #558 §5.2): one transaction
-    /// (`sync_users`) queuing a `Sync` event per (non-disabled) user, then
-    /// a wake **per queued user** (a running executor drains its queued
-    /// sync immediately, matching the per-user variant; a reaped,
-    /// or not-yet-spawned, executor is never woken into existence: the
-    /// wake is a signal only, and the DB queue is the source of truth).
-    /// `user_id` narrows the
-    /// sync to one user (the route's `?user_id=` query), as before the
-    /// move.
-    async fn sync_all(
+    /// Trigger processing for all (or one) users (spec #558 §5.2): one
+    /// transaction (`sync_users`) queuing a `Sync` event per (non-disabled)
+    /// user, then — per queued user — spawn the executor (a no-op if it is
+    /// already running) and wake it. Spawning is what makes the queue drain
+    /// for users whose executor is not running (offline): the wake alone is
+    /// a signal to a *running* executor only, and the DB queue is the source
+    /// of truth. `user_id` narrows the trigger to one user (the route's
+    /// `?user_id=` query).
+    async fn trigger_processing(
         &self,
         _session: Box<dyn Session>,
         user_id: Option<UserId>,
@@ -712,11 +707,12 @@ where
         let mut store = self.source.begin().await?;
         let queued = sync_users(user_id, event_time, migrate, &mut store).await?;
         store.commit().await?;
-        // The per-user wake (spec #558 §5.2): a pure signal to a running
-        // executor — it never spawns one, and the DB queue is the source
-        // of truth, so a missed wake only delays the sync to the next
-        // spawn.
+        // Per queued user: spawn the executor (a no-op if it is already
+        // running) so it drains the queued Sync even when the user is
+        // offline, then wake it (interrupt its idle wait so the Sync is
+        // processed at once).
         for user_id in queued {
+            self.exec_field(user_id, |_| ()).await?;
             self.wake(user_id).await;
         }
         Ok(())
