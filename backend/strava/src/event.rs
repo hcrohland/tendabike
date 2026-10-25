@@ -213,7 +213,7 @@ impl Event {
     #[async_recursion]
     async fn rate_limit(
         self,
-        user: &dyn Session,
+        user_id: UserId,
         store: &mut impl StravaDataStore,
     ) -> TbResult<QueueRead> {
         // rate limit event
@@ -227,7 +227,7 @@ impl Event {
         warn!("Starting hooks again");
         self.delete(store).await?;
         // get next event
-        get_event(user, store).await
+        get_event(user_id, store).await
     }
 
     async fn process_activity(
@@ -522,18 +522,15 @@ pub enum QueueRead {
 /// or roll back with it). `pub` because the caller owns the "read next Strava
 /// event" step; reading the queue stays a Strava-side concern, so the
 /// function stays here rather than being inlined in the caller.
-pub async fn get_event(
-    user: &dyn Session,
-    store: &mut impl StravaDataStore,
-) -> TbResult<QueueRead> {
-    let strava_id = get_strava_id(user.user_id(), store).await?;
+pub async fn get_event(user_id: UserId, store: &mut impl StravaDataStore) -> TbResult<QueueRead> {
+    let strava_id = get_strava_id(user_id, store).await?;
     let event = store.strava_event_get_next_for_user(strava_id).await?;
     let event = match event {
         Some(event) => event,
         None => return Ok(QueueRead::Empty),
     };
     if event.object_type == ObjectType::Stop {
-        return event.rate_limit(user, store).await;
+        return event.rate_limit(user_id, store).await;
     }
 
     // Prevent unneeded calls to Strava
@@ -570,7 +567,7 @@ async fn next_activities(
 }
 
 pub async fn process(user: &mut dyn Session, store: &mut impl StravaStore) -> TbResult<Summary> {
-    let read = get_event(user, store).await?;
+    let read = get_event(user.user_id(), store).await?;
     let event = match read {
         QueueRead::Event(event) => event,
         // The queue is empty, or paused by a global rate-limit `Stop` (the

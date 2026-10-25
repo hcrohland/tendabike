@@ -182,7 +182,7 @@ async fn get_event_returns_latest_and_drops_older() -> TbResult<()> {
     first.event_time = 50;
     store.strava_event_create(first).await?;
     store.strava_event_create(activity_event()).await?;
-    let event = match get_event(&session, &mut store).await? {
+    let event = match get_event(session.user_id(), &mut store).await? {
         QueueRead::Event(event) => event,
         other => panic!("the latest event is returned, got {other:?}"),
     };
@@ -200,7 +200,10 @@ async fn get_event_ignores_other_owners() -> TbResult<()> {
             ..activity_event()
         })
         .await?;
-    assert_eq!(get_event(&session, &mut store).await?, QueueRead::Empty);
+    assert_eq!(
+        get_event(session.user_id(), &mut store).await?,
+        QueueRead::Empty
+    );
     Ok(())
 }
 
@@ -218,7 +221,7 @@ async fn get_event_active_stop_reports_deadline() -> TbResult<()> {
         })
         .await?;
     store.strava_event_create(activity_event()).await?;
-    let res = get_event(&session, &mut store).await?;
+    let res = get_event(session.user_id(), &mut store).await?;
     assert_eq!(res, QueueRead::Limited { until });
     assert_eq!(store.event_count(), 2);
     Ok(())
@@ -237,7 +240,7 @@ async fn get_event_expired_stop_deletes_and_returns_next() -> TbResult<()> {
         })
         .await?;
     store.strava_event_create(activity_event()).await?;
-    let res = get_event(&session, &mut store).await?;
+    let res = get_event(session.user_id(), &mut store).await?;
     assert!(matches!(res, QueueRead::Event(ref e) if e.object_id == 10));
     assert_eq!(store.event_count(), 1);
     Ok(())
@@ -255,7 +258,7 @@ async fn rate_limit_active_reports_deadline() -> TbResult<()> {
         })
         .await?;
     let event = store.events[0].clone();
-    let res = event.rate_limit(&session, &mut store).await?;
+    let res = event.rate_limit(session.user_id(), &mut store).await?;
     assert_eq!(res, QueueRead::Limited { until });
     assert_eq!(store.event_count(), 1);
     Ok(())
@@ -271,7 +274,7 @@ async fn rate_limit_expired_removes_stop() -> TbResult<()> {
     };
     store.strava_event_create(stop).await?;
     let event = store.events[0].clone();
-    let res = event.rate_limit(&session, &mut store).await?;
+    let res = event.rate_limit(session.user_id(), &mut store).await?;
     assert_eq!(res, QueueRead::Empty);
     assert_eq!(store.event_count(), 0);
     Ok(())

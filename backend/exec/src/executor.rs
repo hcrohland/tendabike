@@ -581,7 +581,7 @@ async fn queue_probe<T: TxnSource>(
             return Some(Probe::Error);
         }
     };
-    let probe = match get_event(session, &mut conn).await {
+    let probe = match get_event(session.user_id(), &mut conn).await {
         Ok(QueueRead::Event(event)) => Probe::Event(event),
         Ok(QueueRead::Limited { until }) => Probe::Limited(until),
         Ok(QueueRead::Empty) => Probe::Empty,
