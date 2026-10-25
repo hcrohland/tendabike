@@ -1,5 +1,8 @@
 use super::*;
-use crate::test_support::{MemStore, TestSession};
+use crate::{
+    MockSession,
+    test_support::{MemStore, TestSession},
+};
 
 fn created() -> OffsetDateTime {
     OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
@@ -24,7 +27,7 @@ async fn owned_part() -> (MemStore, PartId) {
     (store, part.id)
 }
 
-fn other_user() -> TestSession {
+fn other_user() -> MockSession {
     TestSession::new(UserId::from(98))
 }
 

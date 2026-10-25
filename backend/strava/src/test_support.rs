@@ -2,8 +2,9 @@
 //!
 //! `TestStravaStore` wraps the domain `MemStore` and adds in-memory
 //! `strava_users` and `events` collections mirroring the SQL semantics.
-//! `TestStravaSession` is a plain `Session` that seeds the `TokenCache` with
-//! a warm token and replays queued JSON responses for exact request URIs.
+//! `strava_session`/`strava_admin_session` build a domain `MockSession` that
+//! seeds the `TokenCache` with a warm token; the free functions replay queued
+//! JSON responses for exact request URIs.
 
 #![allow(clippy::too_many_arguments)]
 
@@ -11,7 +12,10 @@ use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 
 use oauth2::RefreshToken;
-use tb_domain::test_support::MemStore;
+use tb_domain::{
+    MockSession,
+    test_support::{MemStore, mock_session, mock_session_admin},
+};
 use time::OffsetDateTime;
 
 use crate::event::Event;
@@ -164,7 +168,7 @@ impl StravaStore for TestStravaStore {}
 // Session` and cannot downcast to a scripted session, so the per-test
 // canned responses live in a thread-local map the free functions consult.
 // Each test runs on its own thread, so the map gives per-test isolation.
-// `TestStravaSession` (and the `tb_exec` gear tests) write to it; the free
+// `strava_session` (and the `tb_exec` gear tests) write to it; the free
 // functions read from it. The process-wide `CANNED_STRAVA` global below is a
 // separate seam for the seam suite's session, which runs in a spawned
 // task on a thread this map never reaches.
@@ -210,8 +214,8 @@ pub fn seed_token_cache(user_id: UserId, strava_id: StravaId, access_token: &str
         );
 }
 
-/// Whether the current thread is in test mode (a `TestStravaSession` was
-/// built, or `begin_test` was called).
+/// Whether the current thread is in test mode (`strava_session` was built,
+/// or `begin_test` was called).
 pub fn in_test_mode() -> bool {
     CANNED.with(|c| c.borrow().test_mode)
 }
@@ -270,77 +274,34 @@ pub fn record_deauthorize(strava: StravaId) {
     CANNED.with(|c| c.borrow_mut().deauthorizes.push(strava));
 }
 
-/// The requested URIs, in order (the `TestStravaSession::requests` surface).
+/// The requested URIs, in order (assert on these to verify API calls).
 pub fn requests() -> Vec<String> {
     CANNED.with(|c| c.borrow().requests.clone())
 }
 
-/// The recorded deauthorizations (the `TestStravaSession::deauthorizes`
-/// surface).
+/// The recorded `deauthorize()` calls.
 pub fn deauthorizes() -> Vec<StravaId> {
     CANNED.with(|c| c.borrow().deauthorizes.clone())
 }
 
-/// Scripted [`Session`] for tests.
-///
-/// `new` seeds the `TokenCache` with a warm token (no refresh), so the thin
-/// free functions' `request_json`/`deauthorize` replay the thread-local canned
-/// responses and record the requested URIs / deauthorizations the tests assert
-/// on.
-pub struct TestStravaSession {
-    user: UserId,
-    admin: bool,
+/// A [`MockSession`] for `user` with a warm token seeded for `strava`
+/// (test-only, no refresh): the thin free functions' `request_json`/
+/// `deauthorize` replay the thread-local canned responses and record the
+/// requested URIs / deauthorizations the tests assert on (the `queue`/
+/// `requests`/`deauthorizes` free functions below).
+pub fn strava_session(user: UserId, strava: StravaId) -> MockSession {
+    begin_test();
+    seed_token_cache(user, strava, "test-access-token");
+    mock_session(user)
 }
 
-impl TestStravaSession {
-    pub fn new(user: UserId, strava: StravaId) -> Self {
-        begin_test();
-        seed_token_cache(user, strava, "test-access-token");
-        Self { user, admin: false }
-    }
-
-    /// An admin [`TestStravaSession`] for `user` (the admin-verification
-    /// tests): seeds the token cache like [`Self::new`], with `is_admin()`
-    /// returning `true`.
-    pub fn admin(user: UserId, strava: StravaId) -> Self {
-        begin_test();
-        seed_token_cache(user, strava, "test-access-token");
-        Self { user, admin: true }
-    }
-
-    /// Queue a JSON response body for an exact request URI (FIFO per URI).
-    pub fn queue(&mut self, uri: &str, json: &str) {
-        queue(uri, json);
-    }
-
-    /// Queue an error for an exact request URI.
-    pub fn queue_error(&mut self, uri: &str, err: Error) {
-        queue_error(uri, err);
-    }
-
-    /// Every requested URI, in order (assert on these to verify API calls).
-    pub fn requests(&self) -> Vec<String> {
-        requests()
-    }
-
-    /// The recorded `deauthorize()` calls.
-    pub fn deauthorizes(&self) -> Vec<StravaId> {
-        deauthorizes()
-    }
-}
-
-impl Session for TestStravaSession {
-    fn user_id(&self) -> UserId {
-        self.user
-    }
-
-    fn shop(&self) -> Option<ShopId> {
-        None
-    }
-
-    fn is_admin(&self) -> bool {
-        self.admin
-    }
+/// An admin [`MockSession`] for `user` with a warm token seeded for `strava`
+/// (the admin-verification tests): like [`strava_session`], with `is_admin()`
+/// returning `true`.
+pub fn strava_admin_session(user: UserId, strava: StravaId) -> MockSession {
+    begin_test();
+    seed_token_cache(user, strava, "test-access-token");
+    mock_session_admin(user)
 }
 
 /// Builds a [`StravaUser`] for tests.

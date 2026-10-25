@@ -1,11 +1,15 @@
 use super::*;
 use crate::event::{AspectType, Event, ObjectType};
-use crate::test_support::{TestStravaSession, TestStravaStore, gear_json, strava_user};
+use crate::test_support::{
+    TestStravaStore, deauthorizes, gear_json, queue, strava_admin_session, strava_session,
+    strava_user,
+};
+use tb_domain::MockSession;
 
-fn setup() -> (TestStravaStore, TestStravaSession) {
+fn setup() -> (TestStravaStore, MockSession) {
     let mut store = TestStravaStore::new();
     store.insert_user(strava_user(UserId::from(1), 42, true));
-    let session = TestStravaSession::new(UserId::from(1), 42.into());
+    let session = strava_session(UserId::from(1), 42.into());
     (store, session)
 }
 
@@ -144,9 +148,9 @@ async fn deauthorizes_user_and_events() -> TbResult<()> {
         .await?;
     // The acting admin is a distinct user from the target (tbid 1): the
     // target's token (strava 42) is revoked, not the actor's.
-    let mut actor = TestStravaSession::admin(UserId::from(2), 43.into());
+    let mut actor = strava_admin_session(UserId::from(2), 43.into());
     user_deauthorize(&mut actor, UserId::from(1), &mut store).await?;
-    assert_eq!(actor.deauthorizes(), vec![42.into()]);
+    assert_eq!(deauthorizes(), vec![42.into()]);
     assert_eq!(store.event_count(), 0);
     let user = store.stravauser_get_by_tbid(UserId::from(1)).await?;
     assert!(user.disabled());
@@ -167,9 +171,9 @@ async fn user_delete_removes_everything() -> TbResult<()> {
         .await?;
     // The acting admin is a distinct user from the target (tbid 1): the
     // target's token (strava 42) is revoked, not the actor's.
-    let mut actor = TestStravaSession::admin(UserId::from(2), 43.into());
+    let mut actor = strava_admin_session(UserId::from(2), 43.into());
     user_delete(&mut actor, UserId::from(1), &mut store).await?;
-    assert_eq!(actor.deauthorizes(), vec![42.into()]);
+    assert_eq!(deauthorizes(), vec![42.into()]);
     assert!(store.strava_users.is_empty());
     assert_eq!(store.event_count(), 0);
     let res = UserStore::get(&mut store.mem, UserId::from(1)).await;
@@ -230,12 +234,12 @@ async fn user_strava_url() {
 #[tokio::test]
 async fn update_gear_imports_bikes_and_shoes() -> TbResult<()> {
     let (mut store, mut session) = setup();
-    session.queue(
+    queue(
         "/athlete",
         r#"{"bikes":[{"id":"b1"}],"shoes":[{"id":"g1"}]}"#,
     );
-    session.queue("/gear/b1", &gear_json("b1", Some(0)));
-    session.queue("/gear/g1", &gear_json("g1", None));
+    queue("/gear/b1", &gear_json("b1", Some(0)));
+    queue("/gear/g1", &gear_json("g1", None));
     let parts = StravaUser::update_gear(&mut session, &mut store).await?;
     assert_eq!(parts.len(), 2);
     let bike = PartStore::partid_get_part(&mut store.mem, parts[0]).await?;

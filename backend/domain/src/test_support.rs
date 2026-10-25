@@ -90,53 +90,60 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::*;
 
-/// Test session for attachment tests
-pub struct TestSession {
-    user_id: UserId,
-    shop: Option<ShopId>,
-    admin: bool,
+/// Test session constructors over the mockall [`MockSession`].
+///
+/// [`Session`] carries `#[automock]` under the `test-support` feature, so
+/// every test session is a configured [`MockSession`] — one mockall double
+/// replaces the crate's former hand-rolled `Session` fakes. `check_owner`
+/// is wired to the trait's default (delegating to `user_id`), so a session
+/// reports ownership the way a real one does.
+pub struct TestSession;
+
+/// A [`MockSession`] for `user`, `shop`, and `admin`, whose `check_owner`
+/// behaves like the trait default (delegating to `user_id`). The
+/// expectations accept any call count (including zero), so a session built
+/// for one op need not predict which of its methods the op calls.
+fn build_session(user: UserId, shop: Option<ShopId>, admin: bool) -> MockSession {
+    let mut mock = MockSession::new();
+    mock.expect_user_id().times(0..).return_const(user);
+    mock.expect_shop().times(0..).return_const(shop);
+    mock.expect_is_admin().times(0..).return_const(admin);
+    mock.expect_check_owner()
+        .times(0..)
+        .returning(move |owner, error| user.check_owner(owner, error));
+    mock
+}
+
+/// A customer [`MockSession`] for `user` (no shop, not admin).
+pub fn mock_session(user: UserId) -> MockSession {
+    build_session(user, None, false)
+}
+
+/// A shop-owner [`MockSession`] for `user` acting in `shop` (not admin).
+pub fn mock_session_with_shop(user: UserId, shop: ShopId) -> MockSession {
+    build_session(user, Some(shop), false)
+}
+
+/// An admin [`MockSession`] for `user` (no shop).
+pub fn mock_session_admin(user: UserId) -> MockSession {
+    build_session(user, None, true)
 }
 
 impl TestSession {
-    pub fn new(user_id: UserId) -> Self {
-        Self {
-            user_id,
-            shop: None,
-            admin: false,
-        }
+    /// A customer session for `user_id`.
+    #[allow(clippy::new_ret_no_self)] // a namespace of `MockSession` constructors
+    pub fn new(user_id: UserId) -> MockSession {
+        mock_session(user_id)
     }
 
-    pub fn with_shop(user_id: UserId, shop: ShopId) -> Self {
-        Self {
-            user_id,
-            shop: Some(shop),
-            admin: false,
-        }
+    /// A shop-owner session for `user_id` acting in `shop`.
+    pub fn with_shop(user_id: UserId, shop: ShopId) -> MockSession {
+        mock_session_with_shop(user_id, shop)
     }
 
-    pub fn with_admin(user_id: UserId, admin: bool) -> Self {
-        Self {
-            user_id,
-            shop: None,
-            admin,
-        }
-    }
-}
-
-impl Session for TestSession {
-    fn user_id(&self) -> UserId {
-        self.user_id
-    }
-    fn shop(&self) -> Option<ShopId> {
-        self.shop
-    }
-    fn is_admin(&self) -> bool {
-        self.admin
-    }
-
-    // Unused parameters in check_owner use the default implementation
-    fn check_owner(&self, owner: UserId, error: String) -> crate::TbResult<()> {
-        self.user_id.check_owner(owner, error)
+    /// A session for `user_id` with the given admin flag.
+    pub fn with_admin(user_id: UserId, admin: bool) -> MockSession {
+        build_session(user_id, None, admin)
     }
 }
 

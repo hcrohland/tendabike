@@ -13,7 +13,7 @@
 //! tire rows through `attachment_create`, a state the attach operation
 //! never produces (see its comment).
 
-use super::{AttachmentStore, MemStore, TestSession, part_type_ids};
+use super::{AttachmentStore, MemStore, MockSession, Session, TestSession, part_type_ids};
 use crate::MAX_TIME;
 use crate::UserId;
 use crate::attach_assembly;
@@ -27,8 +27,8 @@ pub fn test_user() -> UserId {
     UserId::from(1)
 }
 
-/// Returns a TestSession initialized with test_user().
-pub fn test_session() -> TestSession {
+/// Returns a [`MockSession`] initialized with test_user().
+pub fn test_session() -> MockSession {
     TestSession::new(test_user())
 }
 
@@ -36,7 +36,7 @@ pub fn test_session() -> TestSession {
 ///
 /// Creates a part with minimal required fields using the TestSession
 /// and stores it in the provided MemStore.
-pub async fn fixture_basic_part(session: &TestSession, store: &mut MemStore) -> TbResult<Part> {
+pub async fn fixture_basic_part(session: &dyn Session, store: &mut MemStore) -> TbResult<Part> {
     Part::create(
         "Test Chain".to_string(),
         "Shimano".to_string(),
@@ -55,7 +55,7 @@ pub async fn fixture_basic_part(session: &TestSession, store: &mut MemStore) -> 
 /// Creates a basic part, then a new main bike, and attaches the part to it
 /// at the sample attach time.
 pub async fn fixture_attached_part(
-    session: &TestSession,
+    session: &dyn Session,
     store: &mut MemStore,
 ) -> TbResult<(Part, Attachment)> {
     let part = fixture_basic_part(session, store).await?;
@@ -68,7 +68,7 @@ pub async fn fixture_attached_part(
 /// Unlike `fixture_attached_part`, this accepts an existing gear Part
 /// instead of creating a new bike internally.
 pub async fn fixture_attached_part_to_gear(
-    session: &TestSession,
+    session: &dyn Session,
     store: &mut MemStore,
     part: Part,
     gear_id: PartId,
@@ -78,7 +78,7 @@ pub async fn fixture_attached_part_to_gear(
 
 /// Create a part and attach it to the specified gear at a specific time.
 pub async fn fixture_attached_part_at(
-    session: &TestSession,
+    session: &dyn Session,
     store: &mut MemStore,
     part: Part,
     gear_id: PartId,
@@ -95,7 +95,7 @@ pub async fn fixture_attached_part_at(
 /// rows are written directly, because two tires on one wheel overlap in time
 /// — a state attach never produces (see below).
 pub async fn fixture_assembly(
-    session: &TestSession,
+    session: &dyn Session,
     store: &mut MemStore,
     attach_time: time::OffsetDateTime,
 ) -> TbResult<(Part, Vec<Part>, Attachment)> {
@@ -214,7 +214,7 @@ pub async fn fixture_assembly(
 /// # Returns
 /// Vector of Attachment records in chronological order
 pub async fn fixture_timeline(
-    session: &TestSession,
+    session: &dyn Session,
     store: &mut MemStore,
     parts: Vec<(Part, Part, OffsetDateTime)>,
 ) -> TbResult<Vec<Attachment>> {
@@ -232,7 +232,7 @@ pub async fn fixture_timeline(
 ///
 /// Useful for testing concurrent attachment queries and part replacement scenarios.
 pub async fn fixture_concurrent_parts(
-    session: &TestSession,
+    session: &dyn Session,
     store: &mut MemStore,
 ) -> TbResult<(Part, Part, Attachment, Attachment)> {
     let _gear = Part::create(
@@ -286,7 +286,7 @@ pub fn sample_purchase_date() -> OffsetDateTime {
 
 /// Create a new main bike and attach a part to it at the sample attach time.
 async fn attach_test_part(
-    session: &TestSession,
+    session: &dyn Session,
     store: &mut MemStore,
     part: Part,
 ) -> TbResult<Attachment> {
@@ -296,7 +296,7 @@ async fn attach_test_part(
 
 /// Attach a part to a specific gear at a specific time.
 async fn attach_test_part_at(
-    session: &TestSession,
+    session: &dyn Session,
     store: &mut MemStore,
     part: Part,
     gear_id: PartId,
@@ -335,7 +335,7 @@ async fn attach_test_part_at(
 }
 
 /// Create the main bike frame/gear part.
-pub async fn fixture_bike(session: &TestSession, store: &mut MemStore) -> TbResult<Part> {
+pub async fn fixture_bike(session: &dyn Session, store: &mut MemStore) -> TbResult<Part> {
     Part::create(
         "Main Bike".to_string(),
         "TendaBike".to_string(),
