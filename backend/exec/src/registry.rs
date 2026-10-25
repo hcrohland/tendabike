@@ -803,30 +803,26 @@ where
         Ok(uri)
     }
 
-    /// The deauthorization (spec #558 §5.2): one transaction — the
-    /// target's [`ExecutorSession`] built in-txn, then
-    /// `tb_strava::user_deauthorize`. `_session` is the admin's acting
-    /// session (carried for the admin-verification `tb_strava` change). No
+    /// The deauthorization (spec #558 §5.2): one transaction —
+    /// `tb_strava::user_deauthorize` against the admin's acting `session`
+    /// (which verifies the caller is an admin) and the target `tbid`. No
     /// wake, no message; the existing race (deauth deletes the target's
     /// queued events outside the target's loop) is preserved.
-    async fn deauthorize(&self, _session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
+    async fn deauthorize(&self, mut session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        let mut target = ExecutorSession::new(tbid);
-        tb_strava::user_deauthorize(&mut target, &mut store).await?;
+        tb_strava::user_deauthorize(&mut *session, tbid, &mut store).await?;
         store.commit().await?;
         Ok(())
     }
 
-    /// The user delete (spec #558 §5.2): one transaction — the target's
-    /// [`ExecutorSession`] built in-txn, then `tb_strava::user_delete`
-    /// (the deauthorization plus the row deletions). `_session` is the
-    /// admin's acting session (carried for the admin-verification
-    /// `tb_strava` change). No wake, no message; the existing race is
-    /// preserved.
-    async fn delete_user(&self, _session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
+    /// The user delete (spec #558 §5.2): one transaction —
+    /// `tb_strava::user_delete` against the admin's acting `session` (which
+    /// verifies the caller is an admin) and the target `tbid` (the
+    /// deauthorization plus the row deletions). No wake, no message; the
+    /// existing race is preserved.
+    async fn delete_user(&self, mut session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        let mut target = ExecutorSession::new(tbid);
-        tb_strava::user_delete(&mut target, &mut store).await?;
+        tb_strava::user_delete(&mut *session, tbid, &mut store).await?;
         store.commit().await?;
         Ok(())
     }

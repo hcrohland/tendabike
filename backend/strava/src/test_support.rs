@@ -299,6 +299,15 @@ impl TestStravaSession {
         Self { user, admin: false }
     }
 
+    /// An admin [`TestStravaSession`] for `user` (the admin-verification
+    /// tests): seeds the token cache like [`Self::new`], with `is_admin()`
+    /// returning `true`.
+    pub fn admin(user: UserId, strava: StravaId) -> Self {
+        begin_test();
+        seed_token_cache(user, strava, "test-access-token");
+        Self { user, admin: true }
+    }
+
     /// Queue a JSON response body for an exact request URI (FIFO per URI).
     pub fn queue(&mut self, uri: &str, json: &str) {
         queue(uri, json);

@@ -132,7 +132,7 @@ async fn disable_removes_events_and_token() -> TbResult<()> {
 
 #[tokio::test]
 async fn deauthorizes_user_and_events() -> TbResult<()> {
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     store
         .strava_event_create(Event {
             owner_id: 42.into(),
@@ -142,8 +142,11 @@ async fn deauthorizes_user_and_events() -> TbResult<()> {
             ..Default::default()
         })
         .await?;
-    user_deauthorize(&mut session, &mut store).await?;
-    assert_eq!(session.deauthorizes(), vec![42.into()]);
+    // The acting admin is a distinct user from the target (tbid 1): the
+    // target's token (strava 42) is revoked, not the actor's.
+    let mut actor = TestStravaSession::admin(UserId::from(2), 43.into());
+    user_deauthorize(&mut actor, UserId::from(1), &mut store).await?;
+    assert_eq!(actor.deauthorizes(), vec![42.into()]);
     assert_eq!(store.event_count(), 0);
     let user = store.stravauser_get_by_tbid(UserId::from(1)).await?;
     assert!(user.disabled());
@@ -152,7 +155,7 @@ async fn deauthorizes_user_and_events() -> TbResult<()> {
 
 #[tokio::test]
 async fn user_delete_removes_everything() -> TbResult<()> {
-    let (mut store, mut session) = setup();
+    let (mut store, _) = setup();
     store
         .strava_event_create(Event {
             owner_id: 42.into(),
@@ -162,13 +165,32 @@ async fn user_delete_removes_everything() -> TbResult<()> {
             ..Default::default()
         })
         .await?;
-    user_delete(&mut session, &mut store).await?;
-    assert_eq!(session.deauthorizes(), vec![42.into()]);
+    // The acting admin is a distinct user from the target (tbid 1): the
+    // target's token (strava 42) is revoked, not the actor's.
+    let mut actor = TestStravaSession::admin(UserId::from(2), 43.into());
+    user_delete(&mut actor, UserId::from(1), &mut store).await?;
+    assert_eq!(actor.deauthorizes(), vec![42.into()]);
     assert!(store.strava_users.is_empty());
     assert_eq!(store.event_count(), 0);
     let res = UserStore::get(&mut store.mem, UserId::from(1)).await;
     assert!(matches!(res, Err(Error::NotFound(_))));
     Ok(())
+}
+
+#[tokio::test]
+async fn deauthorize_requires_an_admin() {
+    let (mut store, mut session) = setup();
+    // A non-admin acting session is Forbidden (the domain enforces the
+    // invariant, not just the web layer's AxumAdmin guard).
+    let res = user_deauthorize(&mut session, UserId::from(1), &mut store).await;
+    assert!(matches!(res, Err(Error::Forbidden(_))));
+}
+
+#[tokio::test]
+async fn user_delete_requires_an_admin() {
+    let (mut store, mut session) = setup();
+    let res = user_delete(&mut session, UserId::from(1), &mut store).await;
+    assert!(matches!(res, Err(Error::Forbidden(_))));
 }
 
 #[tokio::test]

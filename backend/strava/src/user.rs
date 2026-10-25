@@ -197,23 +197,35 @@ pub async fn get_all_stats(store: &mut impl StravaStore) -> TbResult<Vec<StravaS
     Ok(res)
 }
 
-/// disable a user
+/// Deauthorize a user: revoke their Strava token and disable their local
+/// row. Admin-only — the acting `session` must be an admin (the domain
+/// enforces the invariant, defense-in-depth over the web layer's `AxumAdmin`
+/// guard); `tbid` is the target user.
 ///
 /// # Errors
 ///
-/// This function will return an error if the user does not exist, is already disabled
-/// or has open events and if strava or the database is not reachable.
+/// This function will return an error if the acting session is not an admin
+/// (`Forbidden`), or if the target user does not exist, is already disabled,
+/// or has open events and if strava or the database is not reachable. A
+/// failed Strava token revocation is non-fatal (logged).
 pub async fn user_deauthorize(
-    user: &mut dyn Session,
+    session: &mut dyn Session,
+    tbid: UserId,
     store: &mut impl StravaDataStore,
 ) -> TbResult<()> {
-    if let Err(err) = deauthorize(user, store).await {
-        warn!("could not deauthorize user {}: {:#}", user.user_id(), err)
+    if !session.is_admin() {
+        return Err(Error::Forbidden(
+            "only an admin can deauthorize a user".to_string(),
+        ));
     }
 
-    warn!("User {} deauthorized", user.user_id());
+    if let Err(err) = deauthorize(tbid, store).await {
+        warn!("could not deauthorize user {tbid}: {:#}", err)
+    }
 
-    let strava_id = get_strava_id(user.user_id(), store).await?;
+    warn!("User {tbid} deauthorized");
+
+    let strava_id = get_strava_id(tbid, store).await?;
     strava_id.disable(store).await
 }
 
@@ -232,13 +244,24 @@ pub async fn strava_url(user_id: UserId, store: &mut impl StravaDataStore) -> Tb
     Ok(format!("https://strava.com/athletes/{}", user.strava_id()))
 }
 
-pub async fn user_delete(user: &mut dyn Session, store: &mut impl StravaStore) -> TbResult<()> {
-    let tbuser = user.user_id();
-    debug!("Deauthorizing user");
-    user_deauthorize(user, store).await?;
-    let n = store.stravauser_delete(tbuser).await?;
+/// Delete a user: deauthorize them (admin-only) plus delete their rows.
+/// Admin-only — the acting `session` must be an admin; `tbid` is the target
+/// user.
+pub async fn user_delete(
+    session: &mut dyn Session,
+    tbid: UserId,
+    store: &mut impl StravaStore,
+) -> TbResult<()> {
+    if !session.is_admin() {
+        return Err(Error::Forbidden(
+            "only an admin can delete a user".to_string(),
+        ));
+    }
+    debug!("Deauthorizing user {tbid}");
+    user_deauthorize(session, tbid, store).await?;
+    let n = store.stravauser_delete(tbid).await?;
     debug!("Deleted {n} strava user");
-    tbuser.delete(store).await
+    tbid.delete(store).await
 }
 
 #[cfg(test)]

@@ -1418,7 +1418,13 @@ async fn deauthorize_disables_the_user_and_clears_the_queue() {
 
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
-        reg.deauthorize(Box::new(FakeStrava::new()), user),
+        reg.deauthorize(
+            Box::new(FakeStrava {
+                admin: true,
+                ..FakeStrava::new()
+            }),
+            user,
+        ),
     )
     .await
     .expect("the deauthorization must finish in time");
@@ -1459,7 +1465,13 @@ async fn delete_user_removes_the_rows() {
 
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
-        reg.delete_user(Box::new(FakeStrava::new()), user),
+        reg.delete_user(
+            Box::new(FakeStrava {
+                admin: true,
+                ..FakeStrava::new()
+            }),
+            user,
+        ),
     )
     .await
     .expect("the delete must finish in time");
