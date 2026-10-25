@@ -773,7 +773,7 @@ async fn gear_hydration_frame_and_fifo_read() {
     let (events, _events_rx) = broadcast::channel(16);
     // The hydration, then the snapshot read — enqueued in order before the
     // loop starts (the channel is the FIFO the loop consumes in order).
-    let (gear_request, gear_reply) = Request::new_gear();
+    let (gear_request, gear_reply) = Request::new_gear(Box::new(FakeStrava::new()));
     tx.send(gear_request).expect("the channel is open");
     let (read_request, read_reply) = Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
     tx.send(read_request).expect("the channel is open");
@@ -859,7 +859,7 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
     let (tx, rx) = request_channel();
     let (frames, mut frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
-    let (gear_request, gear_reply) = Request::new_gear();
+    let (gear_request, gear_reply) = Request::new_gear(Box::new(FakeStrava::new()));
     tx.send(gear_request).expect("the channel is open");
     let (read_request, read_reply) = Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
     tx.send(read_request).expect("the channel is open");

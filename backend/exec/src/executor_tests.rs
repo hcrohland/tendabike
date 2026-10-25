@@ -1209,22 +1209,13 @@ async fn failed_read_never_arms_the_backoff_and_the_loop_survives() {
     // the DB health monitor, and read traffic must not push the 30s cap
     // up) — and the dispatch returns `Ok`, so the loop survives.
     let source = FakeSource { begin_fails: true };
-    let mut session = UnitSession;
     let mut backoff = DbBackoff::new();
     backoff.record_failure();
     backoff.record_failure(); // prime: the next pause would be 4s
     let (frames, _frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_read(Box::new(UnitSession), ApiRead::PartCategories);
     let pusher = RecordingPusher::new();
-    let result = run_request(
-        &source,
-        &mut session,
-        request,
-        &frames,
-        &mut backoff,
-        &pusher,
-    )
-    .await;
+    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
     assert!(result.is_ok(), "a failed read must not end the loop");
     let err = reply
         .await
@@ -1244,7 +1235,6 @@ async fn domain_failed_read_resets_the_backoff_and_the_loop_survives() {
     // transaction, so it **resets** the backoff (spec #558 §3.7) — and the
     // loop survives.
     let source = FakeSource { begin_fails: false };
-    let mut session = UnitSession;
     let mut backoff = DbBackoff::new();
     backoff.record_failure();
     backoff.record_failure(); // prime: the next pause would be 4s
@@ -1252,15 +1242,7 @@ async fn domain_failed_read_resets_the_backoff_and_the_loop_survives() {
     let (request, reply) =
         Request::new_read(Box::new(UnitSession), ApiRead::Part(PartId::from(999_999)));
     let pusher = RecordingPusher::new();
-    let result = run_request(
-        &source,
-        &mut session,
-        request,
-        &frames,
-        &mut backoff,
-        &pusher,
-    )
-    .await;
+    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
     assert!(result.is_ok(), "a domain-failed read must not end the loop");
     let err = reply
         .await
@@ -1280,22 +1262,13 @@ async fn cleanly_committed_read_resets_the_backoff() {
     // backoff (spec #558 §3.7) and resolves the oneshot with the
     // `ReadOutcome` — the unified user read, the fixture's full state.
     let source = FakeSource { begin_fails: false };
-    let mut session = UnitSession;
     let mut backoff = DbBackoff::new();
     backoff.record_failure();
     backoff.record_failure(); // prime: the next pause would be 4s
     let (frames, _frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_read(Box::new(UnitSession), ApiRead::User);
     let pusher = RecordingPusher::new();
-    let result = run_request(
-        &source,
-        &mut session,
-        request,
-        &frames,
-        &mut backoff,
-        &pusher,
-    )
-    .await;
+    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
     assert!(result.is_ok(), "a committed read must not end the loop");
     let outcome = reply
         .await
@@ -1325,20 +1298,11 @@ async fn all_stats_round_trips_through_the_loop_transaction() {
     // after the commit. The fixture has no Strava users, so the stats are
     // empty.
     let source = FakeSource { begin_fails: false };
-    let mut session = UnitSession;
     let mut backoff = DbBackoff::new();
     let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_all_stats();
+    let (request, reply) = Request::new_all_stats(Box::new(UnitSession));
     let pusher = RecordingPusher::new();
-    let result = run_request(
-        &source,
-        &mut session,
-        request,
-        &frames,
-        &mut backoff,
-        &pusher,
-    )
-    .await;
+    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
     assert!(
         result.is_ok(),
         "a committed stats read must not end the loop"
@@ -1369,20 +1333,11 @@ async fn gear_hydration_pushes_the_created_parts_frame() {
         r#"{"id":"b123","name":"Test Bike","brand_name":"TestBrand","model_name":"M1","frame_type":1}"#,
     );
     let source = FakeSource { begin_fails: false };
-    let mut session = GearSession;
     let mut backoff = DbBackoff::new();
     let (frames, mut frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_gear();
+    let (request, reply) = Request::new_gear(Box::new(GearSession));
     let pusher = RecordingPusher::new();
-    let result = run_request(
-        &source,
-        &mut session,
-        request,
-        &frames,
-        &mut backoff,
-        &pusher,
-    )
-    .await;
+    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
     assert!(
         result.is_ok(),
         "a committed hydration must not end the loop"
@@ -1413,21 +1368,12 @@ async fn failed_gear_arms_the_backoff_like_a_write() {
     // **arms** the backoff — unlike a read (spec #558 §3.7) — and the loop
     // survives.
     let source = FakeSource { begin_fails: true };
-    let mut session = GearSession;
     let mut backoff = DbBackoff::new();
     backoff.record_failure(); // prime: the next pause would be 2s
     let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_gear();
+    let (request, reply) = Request::new_gear(Box::new(GearSession));
     let pusher = RecordingPusher::new();
-    let result = run_request(
-        &source,
-        &mut session,
-        request,
-        &frames,
-        &mut backoff,
-        &pusher,
-    )
-    .await;
+    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
     assert!(result.is_ok(), "a failed hydration must not end the loop");
     let err = reply
         .await
@@ -1456,20 +1402,11 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
     );
     tb_strava::test_support::queue("/athlete", r#"{"bikes":[],"shoes":[]}"#);
     let source = FakeSource { begin_fails: false };
-    let mut session = EmptyGearSession;
     let mut backoff = DbBackoff::new();
     let (frames, mut frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_gear();
+    let (request, reply) = Request::new_gear(Box::new(EmptyGearSession));
     let pusher = RecordingPusher::new();
-    let result = run_request(
-        &source,
-        &mut session,
-        request,
-        &frames,
-        &mut backoff,
-        &pusher,
-    )
-    .await;
+    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
     assert!(
         result.is_ok(),
         "a committed hydration must not end the loop"
@@ -1849,16 +1786,12 @@ async fn deliver_shop_context_service_summary_to_part_owner() {
 
 #[tokio::test]
 async fn run_request_shop_context_routes_via_pusher_not_own_stream() {
-    // The core shop-scoping fix: a write whose **request** session is in a
-    // shop context routes the committed `Summary`'s frame through the pusher
-    // (shop stream + part owner) and NOT the executor's own `frames` channel
-    // — even when the executor's spawn-time session is personal. The routing
-    // keys on the request's session, not the loop's. The part created by
-    // `PartCreate` is owned by the session user (1) — the part owner.
+    // A write whose **request** session is in a shop context routes the
+    // committed `Summary`'s frame through the pusher (shop stream + part
+    // owner) and NOT the executor's own `frames` channel — the frame's
+    // delivery keys on the request's session. The part created by `PartCreate`
+    // is owned by the session user (1) — the part owner.
     let source = FakeSource { begin_fails: false };
-    // The executor's spawn-time session: personal (the sticky-state case — the
-    // loop must not reuse it for the request's shop context).
-    let mut session = UnitSession;
     let mut backoff = DbBackoff::new();
     let (frames, mut frame_rx) = broadcast::channel(4);
     let pusher = RecordingPusher::new();
@@ -1876,15 +1809,7 @@ async fn run_request_shop_context_routes_via_pusher_not_own_stream() {
         },
     );
 
-    let result = run_request(
-        &source,
-        &mut session,
-        request,
-        &frames,
-        &mut backoff,
-        &pusher,
-    )
-    .await;
+    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
     assert!(result.is_ok(), "a committed write must not end the loop");
     let outcome = reply
         .await
@@ -1921,18 +1846,13 @@ async fn run_request_shop_context_routes_via_pusher_not_own_stream() {
 }
 
 #[tokio::test]
-async fn personal_write_on_a_shop_spawned_executor_routes_to_own_stream() {
-    // The sticky-shop fix, from the other direction: the executor was spawned
-    // in a shop context (its spawn-time session is a `ShopSession`), but the
-    // request's session is personal. The frame must route to the executor's
-    // own `frames` channel (the personal stream) and NOT through the pusher
-    // (no shop stream, no part-owner push) — the loop uses the request's
-    // session, not its spawn-time one.
+async fn personal_write_routes_to_own_stream_not_pusher() {
+    // A write whose **request** session is personal routes the committed
+    // `Summary`'s frame to the executor's own `frames` channel (the personal
+    // stream) and NOT through the pusher (no shop stream, no part-owner push)
+    // — the frame's delivery keys on the request's session. The part created
+    // by `PartCreate` is owned by the session user (1) — the part owner.
     let source = FakeSource { begin_fails: false };
-    // The executor's spawn-time session: a shop (the sticky-state case).
-    let mut session = ShopSession {
-        shop_id: ShopId::from(7),
-    };
     let mut backoff = DbBackoff::new();
     let (frames, mut frame_rx) = broadcast::channel(4);
     let pusher = RecordingPusher::new();
@@ -1948,15 +1868,7 @@ async fn personal_write_on_a_shop_spawned_executor_routes_to_own_stream() {
         },
     );
 
-    let result = run_request(
-        &source,
-        &mut session,
-        request,
-        &frames,
-        &mut backoff,
-        &pusher,
-    )
-    .await;
+    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
     assert!(result.is_ok(), "a committed write must not end the loop");
     let outcome = reply
         .await

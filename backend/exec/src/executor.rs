@@ -413,15 +413,8 @@ where
 
         match select {
             Select::Request(request) => {
-                if let Err(err) = run_request(
-                    &source,
-                    &mut *session,
-                    request,
-                    &frames,
-                    &mut backoff,
-                    &*pusher,
-                )
-                .await
+                if let Err(err) =
+                    run_request(&source, request, &frames, &mut backoff, &*pusher).await
                 {
                     error!("user {user_id}: the executor loop is ending: {err:?}");
                     return Err(err);
@@ -455,15 +448,8 @@ where
                 let remaining = stop_remaining(until, now_unix());
                 if let Some(request) =
                     sleep_or_take_request(&mut rx, remaining, &mut wake_fut).await
-                    && let Err(err) = run_request(
-                        &source,
-                        &mut *session,
-                        request,
-                        &frames,
-                        &mut backoff,
-                        &*pusher,
-                    )
-                    .await
+                    && let Err(err) =
+                        run_request(&source, request, &frames, &mut backoff, &*pusher).await
                 {
                     error!("user {user_id}: the executor loop is ending: {err:?}");
                     return Err(err);
@@ -487,15 +473,8 @@ where
                 let pause = backoff.record_failure();
                 warn!("user {user_id}: the queue probe failed; backing off {pause:?}");
                 if let Some(request) = sleep_or_take_request(&mut rx, pause, &mut wake_fut).await
-                    && let Err(err) = run_request(
-                        &source,
-                        &mut *session,
-                        request,
-                        &frames,
-                        &mut backoff,
-                        &*pusher,
-                    )
-                    .await
+                    && let Err(err) =
+                        run_request(&source, request, &frames, &mut backoff, &*pusher).await
                 {
                     error!("user {user_id}: the executor loop is ending: {err:?}");
                     return Err(err);
@@ -535,15 +514,8 @@ where
                         // decision, which re-probes the queue.
                         if let Some(request) =
                             sleep_or_take_request(&mut rx, idle_timeout, &mut wake_fut).await
-                            && let Err(err) = run_request(
-                                &source,
-                                &mut *session,
-                                request,
-                                &frames,
-                                &mut backoff,
-                                &*pusher,
-                            )
-                            .await
+                            && let Err(err) =
+                                run_request(&source, request, &frames, &mut backoff, &*pusher).await
                         {
                             error!("user {user_id}: the executor loop is ending: {err:?}");
                             return Err(err);
@@ -646,17 +618,17 @@ async fn queue_probe<T: TxnSource>(
 /// loop (the sub-dispatchers' `Err` return).
 pub(crate) async fn run_request<T: TxnSource>(
     source: &T,
-    session: &mut dyn Session,
     request: Request,
     frames: &broadcast::Sender<Summary>,
     backoff: &mut DbBackoff,
     pusher: &dyn FramePusher,
 ) -> Result<(), Error> {
-    // The acting session for a write/read is the one the request carries: its
-    // `shop()` is the write's frame delivery context and the read's `Summary`
-    // scope. The loop's own spawn-time session is used only for the gear/stats
-    // lanes (the user's own gear; a read/stats pushes no frame) — never for a
-    // per-request write/read (the shop-scoping fix).
+    // Every request carries its own acting session: the loop runs the
+    // write/read/gear/stats against it (the write's frame context, the read's
+    // `Summary` scope, the user's own gear, the stats read). The loop's
+    // spawn-time (identity-only) session is the exception — it is used only
+    // for the background Strava lanes (the queue probe + events), which need
+    // just the fixed user_id + the TokenCache, never a shop.
     match request {
         Request::Write {
             write,
@@ -690,10 +662,14 @@ pub(crate) async fn run_request<T: TxnSource>(
             )
             .await
         }
-        Request::Gear { reply } => run_gear(source, session, reply, frames, backoff, pusher).await,
-        Request::AllStats { reply } => {
-            run_all_stats(source, session, reply, frames, backoff, pusher).await
-        }
+        Request::Gear {
+            session: mut req_session,
+            reply,
+        } => run_gear(source, &mut *req_session, reply, frames, backoff, pusher).await,
+        Request::AllStats {
+            session: mut req_session,
+            reply,
+        } => run_all_stats(source, &mut *req_session, reply, frames, backoff, pusher).await,
     }
 }
 

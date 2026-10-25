@@ -99,15 +99,23 @@ pub enum Request {
         reply: oneshot::Sender<TbResult<ReadOutcome>>,
     },
     /// The hydration write (spec #558 §4): `update_gear` in the loop's own
-    /// transaction, with the loop's `Session`.
+    /// transaction, against the request's acting session (the user's own gear
+    /// — identity-only, no shop).
     Gear {
+        /// The acting session: the loop runs the hydration against it (the
+        /// user's own gear, spec #558 §4).
+        session: Box<dyn Session>,
         /// Resolved with the created-parts `Summary` (the frame) on commit,
         /// or the error on failure.
         reply: oneshot::Sender<TbResult<Summary>>,
     },
     /// The admin `GET /user/all` read (spec #558 §3.3): `get_all_stats` in
-    /// the loop's own transaction, read-only within it by spec.
+    /// the loop's own transaction, against the request's acting session,
+    /// read-only within it by spec.
     AllStats {
+        /// The acting session: the loop runs the stats read against it
+        /// (identity-only — the stats read pushes no frame).
+        session: Box<dyn Session>,
         /// Resolved with the all-user stats on commit, or the error on
         /// failure.
         reply: oneshot::Sender<TbResult<Vec<StravaStat>>>,
@@ -151,16 +159,20 @@ impl Request {
         )
     }
 
-    /// The hydration write with a fresh reply channel (spec #558 §4).
-    pub fn new_gear() -> (Self, oneshot::Receiver<TbResult<Summary>>) {
+    /// The hydration write and its acting session with a fresh reply channel
+    /// (spec #558 §4).
+    pub fn new_gear(session: Box<dyn Session>) -> (Self, oneshot::Receiver<TbResult<Summary>>) {
         let (reply, rx) = oneshot::channel();
-        (Self::Gear { reply }, rx)
+        (Self::Gear { session, reply }, rx)
     }
 
-    /// The admin stats read with a fresh reply channel (spec #558 §3.3).
-    pub fn new_all_stats() -> (Self, oneshot::Receiver<TbResult<Vec<StravaStat>>>) {
+    /// The admin stats read and its acting session with a fresh reply
+    /// channel (spec #558 §3.3).
+    pub fn new_all_stats(
+        session: Box<dyn Session>,
+    ) -> (Self, oneshot::Receiver<TbResult<Vec<StravaStat>>>) {
         let (reply, rx) = oneshot::channel();
-        (Self::AllStats { reply }, rx)
+        (Self::AllStats { session, reply }, rx)
     }
 }
 
@@ -181,10 +193,12 @@ impl std::fmt::Debug for Request {
                 .finish(),
             Self::Gear { .. } => f
                 .debug_struct("Request::Gear")
+                .field("session", &"<session>")
                 .field("reply", &"<oneshot>")
                 .finish(),
             Self::AllStats { .. } => f
                 .debug_struct("Request::AllStats")
+                .field("session", &"<session>")
                 .field("reply", &"<oneshot>")
                 .finish(),
         }

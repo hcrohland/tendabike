@@ -505,7 +505,9 @@ where
     async fn read(&self, session: Box<dyn Session>, read: ApiRead) -> TbResult<ReadOutcome> {
         let user_id = session.user_id();
         // The acting session rides on the request (the shop-scoping fix): the
-        // loop runs the read against it, not its spawn-time session.
+        // loop runs the read against it. The executor's spawn-time session is
+        // the exception — used only for the background Strava lanes (the queue
+        // probe + events), which need just the fixed user_id + the TokenCache.
         let (request, reply) = Request::new_read(session, read);
         self.send_request(user_id, request, reply, "read").await
     }
@@ -520,7 +522,9 @@ where
     async fn write(&self, session: Box<dyn Session>, write: ApiWrite) -> TbResult<WriteOutcome> {
         let user_id = session.user_id();
         // The acting session rides on the request (the shop-scoping fix): the
-        // loop runs the write against it, not its spawn-time session.
+        // loop runs the write against it. The executor's spawn-time session is
+        // the exception — used only for the background Strava lanes (the queue
+        // probe + events), which need just the fixed user_id + the TokenCache.
         let (request, reply) = Request::new_write(session, write);
         self.send_request(user_id, request, reply, "write").await
     }
@@ -535,7 +539,9 @@ where
     /// read, FIFO-ordered, so the snapshot body carries the new parts
     /// exactly as today.
     async fn hydrate_gear(&self, user_id: UserId) -> TbResult<Summary> {
-        let (request, reply) = Request::new_gear();
+        // The hydration runs against an identity-only acting session (the
+        // user's own gear — no shop); the request carries it like any other.
+        let (request, reply) = Request::new_gear(Box::new(ExecutorSession::new(user_id)));
         self.send_request(user_id, request, reply, "hydration")
             .await
     }
@@ -597,7 +603,9 @@ where
     /// transaction. The oneshot wait is unbounded, like a read's (spec
     /// #558 §3.7).
     async fn all_stats(&self, user_id: UserId) -> TbResult<Vec<StravaStat>> {
-        let (request, reply) = Request::new_all_stats();
+        // The stats read runs against an identity-only acting session (it
+        // pushes no frame); the request carries it like any other.
+        let (request, reply) = Request::new_all_stats(Box::new(ExecutorSession::new(user_id)));
         self.send_request(user_id, request, reply, "stats read")
             .await
     }
