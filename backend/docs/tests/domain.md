@@ -1,6 +1,6 @@
 # tb_domain tests
 
-`SQLX_OFFLINE=true cargo test -p tb_domain`. All tests run in-memory (no database); organized by entity, one `<name>_tests.rs` module per entity under `domain/src/entities/<name>/`.
+All tests run in-memory (no database); organized by entity, one `<name>_tests.rs` module per entity under `domain/src/entities/<name>/`.
 
 ## Test tiers
 

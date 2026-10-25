@@ -438,8 +438,6 @@ Both entities have full `#[cfg(test)]` suites using the in-memory `MemStore`:
 - **`service/service_tests.rs`**: covers `Service::create`, `Service::update`, `Service::delete`, `Service::redo`, successor chain linking, usage calculation for main parts vs sub-parts, and recalculation on attachment changes.
 - **`serviceplan/serviceplan_tests.rs`**: covers `ServicePlan::create` (specific vs generic mode), `ServicePlan::update` (immutability of `part`/`what`/`hook`/`uid`), `ServicePlan::delete` including the `unlink_plan` unlink — owner scoping and the shop-session part-owner case (SP-12 / SP-12a / SP-12b) — threshold field round-trips, and ownership enforcement via `checkuser()`.
 
-Run with: `SQLX_OFFLINE=true cargo test -p tb_domain`
-
 ---
 
 ## Key Files
