@@ -36,7 +36,7 @@
 //! (spec §4.5 — an empty `Summary` pushes nothing; a dropped frame is
 //! non-fatal, the client's reconnect + full refresh covers it).
 
-use tb_domain::{ApiRead, ApiWrite, ReadOutcome, Summary, TbResult, WriteOutcome};
+use tb_domain::{ApiRead, ApiWrite, ReadOutcome, Session, Summary, TbResult, WriteOutcome};
 use tb_strava::StravaStat;
 use tb_strava::event::Event;
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -75,18 +75,26 @@ pub enum Message {
 /// executor consumes it; the oneshots keep the type from deriving `Clone`
 /// or `PartialEq` — those live on the payloads the request bundles.
 pub enum Request {
-    /// An API write from the user's channel (today's bare write request).
+    /// An API write from the user's channel: the write plus the acting
+    /// session (the shop context the write runs against).
     Write {
         /// The write to apply.
         write: ApiWrite,
+        /// The acting session: the loop runs the write against it (its
+        /// `shop()` is the frame's delivery context, spec #517).
+        session: Box<dyn Session>,
         /// Resolved exactly once when the write is committed or fails.
         reply: oneshot::Sender<TbResult<WriteOutcome>>,
     },
-    /// An API read from the user's channel: the [`ApiRead`] descriptor, run
-    /// in the loop's own transaction (read-only within it by spec).
+    /// An API read from the user's channel: the [`ApiRead`] descriptor plus
+    /// the acting session, run in the loop's own transaction (read-only
+    /// within it by spec).
     Read {
         /// The read to apply.
         read: ApiRead,
+        /// The acting session: the loop runs the read against it (its
+        /// `shop()` scopes the read's `Summary`, spec #517).
+        session: Box<dyn Session>,
         /// Resolved exactly once when the read commits or fails.
         reply: oneshot::Sender<TbResult<ReadOutcome>>,
     },
@@ -107,18 +115,40 @@ pub enum Request {
 }
 
 impl Request {
-    /// Pairs a write with a fresh reply channel: the request goes on the
-    /// user's executor channel, the receiver is awaited by the route.
-    pub fn new_write(write: ApiWrite) -> (Self, oneshot::Receiver<TbResult<WriteOutcome>>) {
+    /// Pairs a write and its acting session with a fresh reply channel: the
+    /// request goes on the user's executor channel, the receiver is awaited
+    /// by the route.
+    pub fn new_write(
+        session: Box<dyn Session>,
+        write: ApiWrite,
+    ) -> (Self, oneshot::Receiver<TbResult<WriteOutcome>>) {
         let (reply, rx) = oneshot::channel();
-        (Self::Write { write, reply }, rx)
+        (
+            Self::Write {
+                write,
+                session,
+                reply,
+            },
+            rx,
+        )
     }
 
-    /// Pairs a read with a fresh reply channel: the request goes on the
-    /// user's executor channel, the receiver is awaited by the route.
-    pub fn new_read(read: ApiRead) -> (Self, oneshot::Receiver<TbResult<ReadOutcome>>) {
+    /// Pairs a read and its acting session with a fresh reply channel: the
+    /// request goes on the user's executor channel, the receiver is awaited
+    /// by the route.
+    pub fn new_read(
+        session: Box<dyn Session>,
+        read: ApiRead,
+    ) -> (Self, oneshot::Receiver<TbResult<ReadOutcome>>) {
         let (reply, rx) = oneshot::channel();
-        (Self::Read { read, reply }, rx)
+        (
+            Self::Read {
+                read,
+                session,
+                reply,
+            },
+            rx,
+        )
     }
 
     /// The hydration write with a fresh reply channel (spec #558 §4).
@@ -140,11 +170,13 @@ impl std::fmt::Debug for Request {
             Self::Write { write, .. } => f
                 .debug_struct("Request::Write")
                 .field("write", write)
+                .field("session", &"<session>")
                 .field("reply", &"<oneshot>")
                 .finish(),
             Self::Read { read, .. } => f
                 .debug_struct("Request::Read")
                 .field("read", read)
+                .field("session", &"<session>")
                 .field("reply", &"<oneshot>")
                 .finish(),
             Self::Gear { .. } => f

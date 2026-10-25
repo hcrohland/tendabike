@@ -280,20 +280,9 @@ where
     /// sync subscribes **before** it enqueues its event, so the completion
     /// signal cannot be missed. `session` is the `Box<dyn Session>`
     /// threaded into the loop on spawn.
-    pub async fn events(
-        &self,
-        user_id: UserId,
-        session: Box<dyn Session>,
-    ) -> TbResult<broadcast::Receiver<StravaEvent>> {
-        self.exec_field(user_id, session, |exec| exec.events.subscribe())
+    pub async fn events(&self, user_id: UserId) -> TbResult<broadcast::Receiver<StravaEvent>> {
+        self.exec_field(user_id, |exec| exec.events.subscribe())
             .await
-    }
-
-    /// Build the executor's minimal [`ExecutorSession`] for `user_id` (the
-    /// admin-sync and internal ops' spawn path): the session is just the
-    /// identity.
-    async fn cold_session(&self, user_id: UserId) -> TbResult<Box<dyn Session>> {
-        Ok(Box::new(ExecutorSession::new(user_id)))
     }
 
     /// Push a frame to the user's SSE streams (test helper: the production
@@ -364,44 +353,31 @@ where
     /// Lock the registry, ensure the user's executor is live (spawning it if
     /// it is absent or settled), and pull one field from it: the shared shape
     /// of `subscribe`, `wake`, `events`, and `write`. The lock is dropped
-    /// when this returns, before the caller's next await. `session` is the
-    /// `Box<dyn Session>` threaded into the loop on spawn.
-    async fn exec_field<R>(
-        &self,
-        user_id: UserId,
-        session: Box<dyn Session>,
-        f: impl FnOnce(&Executor) -> R,
-    ) -> TbResult<R> {
+    /// when this returns, before the caller's next await.
+    async fn exec_field<R>(&self, user_id: UserId, f: impl FnOnce(&Executor) -> R) -> TbResult<R> {
         let mut map = self.executors.lock().await;
         // The executor routes a committed `Summary` by context (spec #517,
         // ticket #584) through the registry itself: `self.clone()` shares the
         // shop-stream and executor maps (the `Arc`s), so its `push_to_shop` /
         // `push_to_user` reach the live shop streams and executors.
         let pusher: Box<dyn FramePusher> = Box::new(self.clone());
-        let exec = Self::ensure_running(
-            &mut map,
-            &self.source,
-            user_id,
-            self.idle_timeout,
-            pusher,
-            session,
-        )
-        .await?;
+        let exec = Self::ensure_running(&mut map, &self.source, user_id, self.idle_timeout, pusher)
+            .await?;
         Ok(f(&exec))
     }
 
     /// Return the user's live executor, spawning it if it is absent or has
-    /// settled (reaped/dead): thread the caller's `Box<dyn Session>`
-    /// into the loop (the user-facing paths hand a warm session; the
-    /// admin-sync path hands a cold one), open a fresh request channel and
-    /// frame channel, and spawn the `tb_exec` loop.
+    /// settled (reaped/dead): build the loop's identity-only session (the
+    /// shop-scoping fix — the per-request shop rides on each `Request`, and
+    /// the queue probe / Strava events / gear lanes read the token from the
+    /// `TokenCache`, so the spawn-time session's shop is irrelevant), open a
+    /// fresh request channel and frame channel, and spawn the `tb_exec` loop.
     async fn ensure_running(
         map: &mut HashMap<UserId, Executor>,
         source: &S,
         user_id: UserId,
         idle_timeout: Duration,
         pusher: Box<dyn FramePusher>,
-        session: Box<dyn Session>,
     ) -> TbResult<Executor> {
         if let Some(exec) = map.get(&user_id)
             && *exec.status.borrow() == ExecutorStatus::Running
@@ -427,6 +403,10 @@ where
         let events_for_run = events.clone();
         let wake_for_run = wake.clone();
         let watchdog_status = status_tx.clone();
+        // The loop's session is identity-only (the shop-scoping fix): the
+        // per-request shop rides on each `Request`, and the queue probe /
+        // Strava events / gear lanes read the token from the `TokenCache`.
+        let session: Box<dyn Session> = Box::new(ExecutorSession::new(user_id));
         let join = tokio::spawn(async move {
             let result = run(
                 owned_source,
@@ -524,9 +504,10 @@ where
     /// exactly as today.
     async fn read(&self, session: Box<dyn Session>, read: ApiRead) -> TbResult<ReadOutcome> {
         let user_id = session.user_id();
-        let (request, reply) = Request::new_read(read);
-        self.send_request(user_id, session, request, reply, "read")
-            .await
+        // The acting session rides on the request (the shop-scoping fix): the
+        // loop runs the read against it, not its spawn-time session.
+        let (request, reply) = Request::new_read(session, read);
+        self.send_request(user_id, request, reply, "read").await
     }
 
     /// Enqueue one [`ApiWrite`] on the user's executor and await the full
@@ -538,9 +519,10 @@ where
     /// otherwise.
     async fn write(&self, session: Box<dyn Session>, write: ApiWrite) -> TbResult<WriteOutcome> {
         let user_id = session.user_id();
-        let (request, reply) = Request::new_write(write);
-        self.send_request(user_id, session, request, reply, "write")
-            .await
+        // The acting session rides on the request (the shop-scoping fix): the
+        // loop runs the write against it, not its spawn-time session.
+        let (request, reply) = Request::new_write(session, write);
+        self.send_request(user_id, request, reply, "write").await
     }
 
     /// Enqueue the [`Gear`](Request::Gear) hydration write on the user's
@@ -553,9 +535,8 @@ where
     /// read, FIFO-ordered, so the snapshot body carries the new parts
     /// exactly as today.
     async fn hydrate_gear(&self, user_id: UserId) -> TbResult<Summary> {
-        let session = self.cold_session(user_id).await?;
         let (request, reply) = Request::new_gear();
-        self.send_request(user_id, session, request, reply, "hydration")
+        self.send_request(user_id, request, reply, "hydration")
             .await
     }
 
@@ -570,7 +551,7 @@ where
         watch::Receiver<ExecutorStatus>,
     )> {
         let user_id = session.user_id();
-        self.exec_field(user_id, session, |exec| {
+        self.exec_field(user_id, |exec| {
             (exec.frames.subscribe(), exec.status.clone())
         })
         .await
@@ -616,9 +597,8 @@ where
     /// transaction. The oneshot wait is unbounded, like a read's (spec
     /// #558 §3.7).
     async fn all_stats(&self, user_id: UserId) -> TbResult<Vec<StravaStat>> {
-        let session = self.cold_session(user_id).await?;
         let (request, reply) = Request::new_all_stats();
-        self.send_request(user_id, session, request, reply, "stats read")
+        self.send_request(user_id, request, reply, "stats read")
             .await
     }
 
@@ -650,10 +630,9 @@ where
     /// mid-wait), the `strava_events` queue — the source of truth (spec
     /// §4.6) — is consulted: a sync no longer queued has been consumed.
     async fn sync(&self, user_id: UserId, event_time: i64) -> TbResult<()> {
-        // Subscribe before enqueuing, so the completion cannot be missed.
-        // The admin-sync path boxes a cold `ExecutorSession`.
-        let session = self.cold_session(user_id).await?;
-        let mut done = self.events(user_id, session).await?;
+        // Subscribe before enqueuing, so the completion cannot be missed
+        // (the executor spawns identity-only — the shop-scoping fix).
+        let mut done = self.events(user_id).await?;
 
         // The enqueue txn (spec #558 §5.2): the `Sync` event, committed —
         // the `strava_id` (the queue's key) is resolved inside `tb_strava`.
@@ -693,8 +672,7 @@ where
                     if !queued {
                         return Ok(());
                     }
-                    let session = self.cold_session(user_id).await?;
-                    done = self.events(user_id, session).await?;
+                    done = self.events(user_id).await?;
                 }
             }
         }
@@ -855,13 +833,12 @@ where
     async fn send_request<Out>(
         &self,
         user_id: UserId,
-        session: Box<dyn Session>,
         request: Request,
         reply: oneshot::Receiver<TbResult<Out>>,
         dropped: &str,
     ) -> TbResult<Out> {
         let request_sender = self
-            .exec_field(user_id, session, |exec| exec.request_sender.clone())
+            .exec_field(user_id, |exec| exec.request_sender.clone())
             .await?;
         if request_sender.send(request).is_err() {
             // The executor died between the liveness check and the send

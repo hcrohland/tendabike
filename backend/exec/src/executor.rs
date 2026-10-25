@@ -652,16 +652,43 @@ pub(crate) async fn run_request<T: TxnSource>(
     backoff: &mut DbBackoff,
     pusher: &dyn FramePusher,
 ) -> Result<(), Error> {
-    // The loop's session is the acting session: it carries the shop context
-    // (via the `Session` supertrait) and the Strava identity. The gear/stats
-    // lanes run in the executor's own context (the user's own gear; a
-    // read/stats pushes no frame).
+    // The acting session for a write/read is the one the request carries: its
+    // `shop()` is the write's frame delivery context and the read's `Summary`
+    // scope. The loop's own spawn-time session is used only for the gear/stats
+    // lanes (the user's own gear; a read/stats pushes no frame) — never for a
+    // per-request write/read (the shop-scoping fix).
     match request {
-        Request::Write { write, reply } => {
-            run_write(source, session, write, reply, frames, backoff, pusher).await
+        Request::Write {
+            write,
+            session: mut req_session,
+            reply,
+        } => {
+            run_write(
+                source,
+                &mut *req_session,
+                write,
+                reply,
+                frames,
+                backoff,
+                pusher,
+            )
+            .await
         }
-        Request::Read { read, reply } => {
-            run_read(source, session, read, reply, frames, backoff, pusher).await
+        Request::Read {
+            read,
+            session: mut req_session,
+            reply,
+        } => {
+            run_read(
+                source,
+                &mut *req_session,
+                read,
+                reply,
+                frames,
+                backoff,
+                pusher,
+            )
+            .await
         }
         Request::Gear { reply } => run_gear(source, session, reply, frames, backoff, pusher).await,
         Request::AllStats { reply } => {
