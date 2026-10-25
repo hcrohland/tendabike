@@ -121,7 +121,7 @@ pub(super) struct SyncQuery {
 }
 
 pub(super) async fn sync_api(
-    _u: AxumAdmin,
+    admin: AxumAdmin,
     State(state): State<AppState>,
     Query(query): Query<SyncQuery>,
 ) -> ApiResult<()> {
@@ -130,17 +130,23 @@ pub(super) async fn sync_api(
     // (`sync_users`) queuing a `Sync` event per (non-disabled) user, then
     // a wake per queued user (a running executor drains its queued sync
     // immediately); `user_id` narrows the sync to one user (the route's
-    // `?user_id=` query).
+    // `?user_id=` query). The admin's acting session rides along (carried
+    // for the admin-verification `tb_strava` change).
     state
         .api
-        .sync_all(user_id, query.time, query.migrate)
+        .sync_all(
+            Box::new(admin.session()),
+            user_id,
+            query.time,
+            query.migrate,
+        )
         .await?;
     Ok(Json(()))
 }
 
 pub(super) async fn sync(
     Path(tbid): Path<i32>,
-    _admin: AxumAdmin,
+    admin: AxumAdmin,
     State(state): State<AppState>,
     Query(query): Query<InitialSyncQuery>,
 ) -> Result<StatusCode, AppError> {
@@ -149,8 +155,12 @@ pub(super) async fn sync(
     // Strava id, enqueue a `Sync` event on the `strava_events` queue, wake
     // the executor, and await that event's completion (unbounded — the
     // spec'd behavior for the admin endpoint), with the queue-fallback
-    // read only on a lost broadcast.
-    state.api.sync(user_id, query.time).await?;
+    // read only on a lost broadcast. The admin's acting session rides
+    // along (carried for the admin-verification `tb_strava` change).
+    state
+        .api
+        .sync(Box::new(admin.session()), user_id, query.time)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

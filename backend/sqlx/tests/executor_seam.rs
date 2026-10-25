@@ -1098,9 +1098,12 @@ async fn sync_enqueues_wakes_and_awaits() {
         Duration::from_secs(3600),
     );
 
-    let outcome = tokio::time::timeout(TEST_TIMEOUT, registry.sync(user, 100))
-        .await
-        .expect("the admin sync must complete in time");
+    let outcome = tokio::time::timeout(
+        TEST_TIMEOUT,
+        registry.sync(Box::new(FakeStrava::new()), user, 100),
+    )
+    .await
+    .expect("the admin sync must complete in time");
     outcome.expect("the sync must succeed");
 
     // The awaited work ran in the target user's loop transaction: the
@@ -1176,9 +1179,12 @@ async fn sync_all_wakes_each_running_executor() {
     // trigger (the re-probe is an hour out).
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    let outcome = tokio::time::timeout(TEST_TIMEOUT, registry.sync_all(None, 200, false))
-        .await
-        .expect("the all-users sync must return in time");
+    let outcome = tokio::time::timeout(
+        TEST_TIMEOUT,
+        registry.sync_all(Box::new(FakeStrava::new()), None, 200, false),
+    )
+    .await
+    .expect("the all-users sync must return in time");
     outcome.expect("the all-users sync must succeed");
 
     // Both queues drain — the per-user wake is the only trigger (the idle
@@ -1268,7 +1274,7 @@ async fn rescan_stops_the_executors() {
     // rescan stops it.
     tokio::time::sleep(Duration::from_millis(500)).await;
 
-    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.rescan())
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.rescan(Box::new(FakeStrava::new())))
         .await
         .expect("the rescan must finish in time");
     outcome.expect("the rescan must succeed");
@@ -1410,9 +1416,12 @@ async fn deauthorize_disables_the_user_and_clears_the_queue() {
     seed_strava_user(&seam.pool, true).await;
     let reg = registry(&seam.pool);
 
-    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.deauthorize(user))
-        .await
-        .expect("the deauthorization must finish in time");
+    let outcome = tokio::time::timeout(
+        TEST_TIMEOUT,
+        reg.deauthorize(Box::new(FakeStrava::new()), user),
+    )
+    .await
+    .expect("the deauthorization must finish in time");
     outcome.expect("the deauthorization must succeed");
 
     // The one transaction disabled the user: the refresh token is cleared
@@ -1448,9 +1457,12 @@ async fn delete_user_removes_the_rows() {
     seed_strava_user(&seam.pool, true).await;
     let reg = registry(&seam.pool);
 
-    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.delete_user(user))
-        .await
-        .expect("the delete must finish in time");
+    let outcome = tokio::time::timeout(
+        TEST_TIMEOUT,
+        reg.delete_user(Box::new(FakeStrava::new()), user),
+    )
+    .await
+    .expect("the delete must finish in time");
     outcome.expect("the delete must succeed");
 
     // The rows are gone: the Strava row, the user row, the user's parts.

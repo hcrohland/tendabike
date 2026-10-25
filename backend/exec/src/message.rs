@@ -75,46 +75,42 @@ pub enum Message {
 /// executor consumes it; the oneshots keep the type from deriving `Clone`
 /// or `PartialEq` — those live on the payloads the request bundles.
 pub enum Request {
-    /// An API write from the user's channel: the write plus the acting
-    /// session (the shop context the write runs against).
+    /// An API write from the user's channel.
     Write {
         /// The write to apply.
         write: ApiWrite,
-        /// The acting session: the loop runs the write against it (its
-        /// `shop()` is the frame's delivery context, spec #517).
+        /// The session the loop runs the write against (its `shop()` is the
+        /// frame's delivery context, spec #517).
         session: Box<dyn Session>,
         /// Resolved exactly once when the write is committed or fails.
         reply: oneshot::Sender<TbResult<WriteOutcome>>,
     },
-    /// An API read from the user's channel: the [`ApiRead`] descriptor plus
-    /// the acting session, run in the loop's own transaction (read-only
-    /// within it by spec).
+    /// An API read from the user's channel, run in the loop's own
+    /// transaction (read-only within it by spec).
     Read {
         /// The read to apply.
         read: ApiRead,
-        /// The acting session: the loop runs the read against it (its
-        /// `shop()` scopes the read's `Summary`, spec #517).
+        /// The session the loop runs the read against (its `shop()` scopes
+        /// the read's `Summary`, spec #517).
         session: Box<dyn Session>,
         /// Resolved exactly once when the read commits or fails.
         reply: oneshot::Sender<TbResult<ReadOutcome>>,
     },
     /// The hydration write (spec #558 §4): `update_gear` in the loop's own
-    /// transaction, against the request's acting session (the user's own gear
-    /// — identity-only, no shop).
+    /// transaction (the user's own gear — identity-only, no shop).
     Gear {
-        /// The acting session: the loop runs the hydration against it (the
-        /// user's own gear, spec #558 §4).
+        /// The session the loop runs the hydration against (the user's own
+        /// gear, spec #558 §4).
         session: Box<dyn Session>,
         /// Resolved with the created-parts `Summary` (the frame) on commit,
         /// or the error on failure.
         reply: oneshot::Sender<TbResult<Summary>>,
     },
     /// The admin `GET /user/all` read (spec #558 §3.3): `get_all_stats` in
-    /// the loop's own transaction, against the request's acting session,
-    /// read-only within it by spec.
+    /// the loop's own transaction, read-only within it by spec.
     AllStats {
-        /// The acting session: the loop runs the stats read against it
-        /// (identity-only — the stats read pushes no frame).
+        /// The session the loop runs the stats read against (the stats read
+        /// pushes no frame).
         session: Box<dyn Session>,
         /// Resolved with the all-user stats on commit, or the error on
         /// failure.
@@ -123,9 +119,9 @@ pub enum Request {
 }
 
 impl Request {
-    /// Pairs a write and its acting session with a fresh reply channel: the
-    /// request goes on the user's executor channel, the receiver is awaited
-    /// by the route.
+    /// Pairs a write and its session with a fresh reply channel: the request
+    /// goes on the user's executor channel, the receiver is awaited by the
+    /// route.
     pub fn new_write(
         session: Box<dyn Session>,
         write: ApiWrite,
@@ -141,9 +137,9 @@ impl Request {
         )
     }
 
-    /// Pairs a read and its acting session with a fresh reply channel: the
-    /// request goes on the user's executor channel, the receiver is awaited
-    /// by the route.
+    /// Pairs a read and its session with a fresh reply channel: the request
+    /// goes on the user's executor channel, the receiver is awaited by the
+    /// route.
     pub fn new_read(
         session: Box<dyn Session>,
         read: ApiRead,
@@ -159,15 +155,15 @@ impl Request {
         )
     }
 
-    /// The hydration write and its acting session with a fresh reply channel
-    /// (spec #558 §4).
+    /// The hydration write and its session with a fresh reply channel (spec
+    /// #558 §4).
     pub fn new_gear(session: Box<dyn Session>) -> (Self, oneshot::Receiver<TbResult<Summary>>) {
         let (reply, rx) = oneshot::channel();
         (Self::Gear { session, reply }, rx)
     }
 
-    /// The admin stats read and its acting session with a fresh reply
-    /// channel (spec #558 §3.3).
+    /// The admin stats read and its session with a fresh reply channel (spec
+    /// #558 §3.3).
     pub fn new_all_stats(
         session: Box<dyn Session>,
     ) -> (Self, oneshot::Receiver<TbResult<Vec<StravaStat>>>) {

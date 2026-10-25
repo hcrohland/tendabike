@@ -538,10 +538,11 @@ where
     /// The `/user/summary` route runs this **before** its unified `User`
     /// read, FIFO-ordered, so the snapshot body carries the new parts
     /// exactly as today.
-    async fn hydrate_gear(&self, user_id: UserId) -> TbResult<Summary> {
-        // The hydration runs against an identity-only acting session (the
-        // user's own gear — no shop); the request carries it like any other.
-        let (request, reply) = Request::new_gear(Box::new(ExecutorSession::new(user_id)));
+    async fn hydrate_gear(&self, session: Box<dyn Session>) -> TbResult<Summary> {
+        // The acting session rides on the request; the loop runs the
+        // hydration against it (the user's own gear).
+        let user_id = session.user_id();
+        let (request, reply) = Request::new_gear(session);
         self.send_request(user_id, request, reply, "hydration")
             .await
     }
@@ -602,10 +603,11 @@ where
     /// it is an exec-level variant, dispatched loop-side in the loop's own
     /// transaction. The oneshot wait is unbounded, like a read's (spec
     /// #558 §3.7).
-    async fn all_stats(&self, user_id: UserId) -> TbResult<Vec<StravaStat>> {
-        // The stats read runs against an identity-only acting session (it
-        // pushes no frame); the request carries it like any other.
-        let (request, reply) = Request::new_all_stats(Box::new(ExecutorSession::new(user_id)));
+    async fn all_stats(&self, session: Box<dyn Session>) -> TbResult<Vec<StravaStat>> {
+        // The acting session rides on the request (the stats read pushes no
+        // frame); the loop runs it against the request's session.
+        let user_id = session.user_id();
+        let (request, reply) = Request::new_all_stats(session);
         self.send_request(user_id, request, reply, "stats read")
             .await
     }
@@ -616,7 +618,7 @@ where
     /// spec §3/§6.4 carve-out), so no frame carries its effect: open
     /// streams end, and each client's native reconnect + catch-up snapshot
     /// re-hydrates it (issue #446).
-    async fn rescan(&self) -> TbResult<()> {
+    async fn rescan(&self, _session: Box<dyn Session>) -> TbResult<()> {
         let mut store = self.source.begin().await?;
         Activity::rescan_all(&mut store).await?;
         store.commit().await?;
@@ -637,7 +639,12 @@ where
     /// `event_time`). If the channel closes or lags (the executor settled
     /// mid-wait), the `strava_events` queue — the source of truth (spec
     /// §4.6) — is consulted: a sync no longer queued has been consumed.
-    async fn sync(&self, user_id: UserId, event_time: i64) -> TbResult<()> {
+    async fn sync(
+        &self,
+        _session: Box<dyn Session>,
+        user_id: UserId,
+        event_time: i64,
+    ) -> TbResult<()> {
         // Subscribe before enqueuing, so the completion cannot be missed
         // (the executor spawns identity-only — the shop-scoping fix).
         let mut done = self.events(user_id).await?;
@@ -697,6 +704,7 @@ where
     /// move.
     async fn sync_all(
         &self,
+        _session: Box<dyn Session>,
         user_id: Option<UserId>,
         event_time: i64,
         migrate: bool,
@@ -766,25 +774,21 @@ where
     }
 
     /// The gear redirect URL (spec #558 §5.2): one transaction — the
-    /// executor's [`ExecutorSession`] built in-txn (the user-gated
-    /// `tb_strava` `strava_url` op, which checks the part's ownership),
-    /// then the Strava URL.
-    async fn gear_url(&self, user: UserId, id: PartId) -> TbResult<String> {
+    /// `tb_strava` `strava_url` op against the acting session (which checks
+    /// the part's ownership), then the Strava URL.
+    async fn gear_url(&self, mut session: Box<dyn Session>, id: PartId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let mut session = ExecutorSession::new(user);
-        let uri = gear::strava_url(i32::from(id), &mut session, &mut store).await?;
+        let uri = gear::strava_url(i32::from(id), &mut *session, &mut store).await?;
         store.commit().await?;
         Ok(uri)
     }
 
     /// The activity redirect URL (spec #558 §5.2): one transaction — the
-    /// executor's [`ExecutorSession`] built in-txn (the user-gated
-    /// `tb_strava` `strava_url` op, which checks the activity's ownership),
-    /// then the Strava URL.
-    async fn activity_url(&self, user: UserId, id: ActivityId) -> TbResult<String> {
+    /// `tb_strava` `strava_url` op against the acting session (which checks
+    /// the activity's ownership), then the Strava URL.
+    async fn activity_url(&self, session: Box<dyn Session>, id: ActivityId) -> TbResult<String> {
         let mut store = self.source.begin().await?;
-        let session = ExecutorSession::new(user);
-        let uri = activity::strava_url(i64::from(id), &session, &mut store).await?;
+        let uri = activity::strava_url(i64::from(id), &*session, &mut store).await?;
         store.commit().await?;
         Ok(uri)
     }
@@ -801,25 +805,28 @@ where
 
     /// The deauthorization (spec #558 §5.2): one transaction — the
     /// target's [`ExecutorSession`] built in-txn, then
-    /// `tb_strava::user_deauthorize`. No wake, no message; the existing
-    /// race (deauth deletes the target's queued events outside the
-    /// target's loop) is preserved.
-    async fn deauthorize(&self, tbid: UserId) -> TbResult<()> {
+    /// `tb_strava::user_deauthorize`. `_session` is the admin's acting
+    /// session (carried for the admin-verification `tb_strava` change). No
+    /// wake, no message; the existing race (deauth deletes the target's
+    /// queued events outside the target's loop) is preserved.
+    async fn deauthorize(&self, _session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        let mut session = ExecutorSession::new(tbid);
-        tb_strava::user_deauthorize(&mut session, &mut store).await?;
+        let mut target = ExecutorSession::new(tbid);
+        tb_strava::user_deauthorize(&mut target, &mut store).await?;
         store.commit().await?;
         Ok(())
     }
 
     /// The user delete (spec #558 §5.2): one transaction — the target's
     /// [`ExecutorSession`] built in-txn, then `tb_strava::user_delete`
-    /// (the deauthorization plus the row deletions). No wake, no message;
-    /// the existing race is preserved.
-    async fn delete_user(&self, tbid: UserId) -> TbResult<()> {
+    /// (the deauthorization plus the row deletions). `_session` is the
+    /// admin's acting session (carried for the admin-verification
+    /// `tb_strava` change). No wake, no message; the existing race is
+    /// preserved.
+    async fn delete_user(&self, _session: Box<dyn Session>, tbid: UserId) -> TbResult<()> {
         let mut store = self.source.begin().await?;
-        let mut session = ExecutorSession::new(tbid);
-        tb_strava::user_delete(&mut session, &mut store).await?;
+        let mut target = ExecutorSession::new(tbid);
+        tb_strava::user_delete(&mut target, &mut store).await?;
         store.commit().await?;
         Ok(())
     }
