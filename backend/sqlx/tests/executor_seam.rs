@@ -272,18 +272,21 @@ async fn api_write_end_to_end() {
     let (tx, rx) = request_channel();
     let (frames, mut frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
-    let (request, reply) = Request::new_write(ApiWrite::PartCreate {
-        name: "Seam Chain".to_string(),
-        vendor: "Shimano".to_string(),
-        model: "CN-HG62".to_string(),
-        what: CHAIN,
-        purchase: datetime!(2024-01-01 00:00 UTC),
-    });
+    let (request, reply) = Request::new_write(
+        Box::new(FakeStrava::new()),
+        ApiWrite::PartCreate {
+            name: "Seam Chain".to_string(),
+            vendor: "Shimano".to_string(),
+            model: "CN-HG62".to_string(),
+            what: CHAIN,
+            purchase: datetime!(2024-01-01 00:00 UTC),
+        },
+    );
     tx.send(request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        Box::new(FakeStrava::new()),
+        UserId::from(1),
         rx,
         frames,
         Box::new(NoopPusher),
@@ -377,7 +380,7 @@ async fn strava_queue_drains_and_reclaims() {
         TEST_TIMEOUT,
         run(
             DetachedBegin::new(seam.pool.clone()),
-            Box::new(FakeStrava::new()),
+            UserId::from(1),
             rx,
             frames,
             Box::new(NoopPusher),
@@ -418,7 +421,7 @@ async fn idle_loop_reclaims() {
         TEST_TIMEOUT,
         run(
             DetachedBegin::new(seam.pool.clone()),
-            Box::new(FakeStrava::new()),
+            UserId::from(1),
             rx,
             frames,
             Box::new(NoopPusher),
@@ -451,12 +454,12 @@ async fn read_as_message_round_trip() {
     let (tx, rx) = request_channel();
     let (frames, mut frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
-    let (request, reply) = Request::new_read(ApiRead::User);
+    let (request, reply) = Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
     tx.send(request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        Box::new(FakeStrava::new()),
+        UserId::from(1),
         rx,
         frames,
         Box::new(NoopPusher),
@@ -496,6 +499,174 @@ async fn read_as_message_round_trip() {
     outcome.expect("a reaped loop returns Ok");
 }
 
+/// The shop-scoping fix end to end on the live adapter (issue #600 / ticket
+/// #610): a `User` read whose **request** session is in a shop context returns
+/// only the shop's parts (not the user's whole state), even when the executor
+/// was spawned in a personal context — and a personal read enqueued after it
+/// returns the full state. The loop runs the read against the request's
+/// session, not its spawn-time one.
+#[tokio::test]
+#[ignore]
+async fn shop_context_read_is_scoped_to_the_request_session() {
+    let seam = ready().await;
+    let shop = ShopId::from(1);
+    // Seed a shop owned by the fixture user and register one of the fixture's
+    // parts in it (the prepopulated fixture has no shops).
+    {
+        let mut conn = seam.pool.begin().await.expect("a transaction");
+        sqlx::query(
+            "INSERT INTO shops (id, owner, name, description) VALUES (1, 1, 'Seam Shop', '')",
+        )
+        .execute(&mut **conn)
+        .await
+        .expect("seeding the shop");
+        sqlx::query("UPDATE parts SET shop = 1 WHERE id = (SELECT min(id) FROM parts)")
+            .execute(&mut **conn)
+            .await
+            .expect("registering a part in the shop");
+        conn.commit().await.expect("committing the seed");
+    }
+
+    let (tx, rx) = request_channel();
+    let (frames, frame_rx) = broadcast::channel(16);
+    let (events, _events_rx) = broadcast::channel(16);
+    // The shop-context read, then a personal read — enqueued in order (FIFO).
+    // Each carries its own acting session; the executor's spawn-time session
+    // is personal.
+    let (shop_read, shop_reply) = Request::new_read(
+        Box::new(FakeStrava {
+            shop: Some(shop),
+            ..FakeStrava::new()
+        }),
+        ApiRead::User,
+    );
+    tx.send(shop_read).expect("the channel is open");
+    let (personal_read, personal_reply) =
+        Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
+    tx.send(personal_read).expect("the channel is open");
+
+    let mut loop_task = tokio::spawn(run(
+        DetachedBegin::new(seam.pool.clone()),
+        UserId::from(1),
+        rx,
+        frames,
+        Box::new(NoopPusher),
+        events,
+        IDLE_TIMEOUT,
+        Arc::new(Notify::new()),
+    ));
+
+    // The shop-context read is scoped to the shop's part (not the 17-part
+    // fixture state) — the request's shop session scopes the read.
+    let shop_state = tokio::time::timeout(TEST_TIMEOUT, shop_reply)
+        .await
+        .expect("the shop read's reply must resolve in time")
+        .expect("the loop must resolve the oneshot, not drop it")
+        .expect("the user read must succeed");
+    let ReadOutcome::User(shop_state) = shop_state else {
+        panic!("the User read returns the UserState composite");
+    };
+    assert_eq!(
+        shop_state.summary.parts.len(),
+        1,
+        "the shop-context read is scoped to the shop's parts"
+    );
+
+    // The personal read (the request's personal session) returns the full
+    // state — the sticky-shop case: a shop read before it must not leak in.
+    let personal_state = tokio::time::timeout(TEST_TIMEOUT, personal_reply)
+        .await
+        .expect("the personal read's reply must resolve in time")
+        .expect("the loop must resolve the oneshot, not drop it")
+        .expect("the user read must succeed");
+    let ReadOutcome::User(personal_state) = personal_state else {
+        panic!("the User read returns the UserState composite");
+    };
+    assert_eq!(
+        personal_state.summary.parts.len(),
+        17,
+        "the personal read returns the full state"
+    );
+
+    drop(frame_rx);
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, &mut loop_task)
+        .await
+        .expect("the idle loop must reap in time")
+        .expect("the loop must not panic");
+    outcome.expect("a reaped loop returns Ok");
+}
+
+/// The sticky-shop fix, read side, end to end (issue #600 / ticket #610): a
+/// `User` read whose **request** session is personal returns the user's full
+/// state — not a shop's subset — even when the user owns a shop with
+/// registered parts. The loop is identity-only (a `user_id`, no shop), so the
+/// read runs against the request's personal session alone.
+#[tokio::test]
+#[ignore]
+async fn personal_read_returns_personal_data() {
+    let seam = ready().await;
+    // Seed a shop owned by the fixture user and register one of the fixture's
+    // parts in it (the prepopulated fixture has no shops).
+    {
+        let mut conn = seam.pool.begin().await.expect("a transaction");
+        sqlx::query(
+            "INSERT INTO shops (id, owner, name, description) VALUES (1, 1, 'Seam Shop', '')",
+        )
+        .execute(&mut **conn)
+        .await
+        .expect("seeding the shop");
+        sqlx::query("UPDATE parts SET shop = 1 WHERE id = (SELECT min(id) FROM parts)")
+            .execute(&mut **conn)
+            .await
+            .expect("registering a part in the shop");
+        conn.commit().await.expect("committing the seed");
+    }
+
+    let (tx, rx) = request_channel();
+    let (frames, frame_rx) = broadcast::channel(16);
+    let (events, _events_rx) = broadcast::channel(16);
+    // The personal read carries a personal (the request's) session.
+    let (personal_read, personal_reply) =
+        Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
+    tx.send(personal_read).expect("the channel is open");
+
+    // The loop is identity-only (a `user_id`, no shop): the read runs against
+    // the request's personal session alone, so a shop context can't leak in.
+    let mut loop_task = tokio::spawn(run(
+        DetachedBegin::new(seam.pool.clone()),
+        UserId::from(1),
+        rx,
+        frames,
+        Box::new(NoopPusher),
+        events,
+        IDLE_TIMEOUT,
+        Arc::new(Notify::new()),
+    ));
+
+    // The personal read returns the FULL state — not the shop's one part —
+    // even though the executor was spawned in the shop context.
+    let personal_state = tokio::time::timeout(TEST_TIMEOUT, personal_reply)
+        .await
+        .expect("the personal read's reply must resolve in time")
+        .expect("the loop must resolve the oneshot, not drop it")
+        .expect("the user read must succeed");
+    let ReadOutcome::User(personal_state) = personal_state else {
+        panic!("the User read returns the UserState composite");
+    };
+    assert_eq!(
+        personal_state.summary.parts.len(),
+        17,
+        "a personal read on a shop-spawned executor returns the full state"
+    );
+
+    drop(frame_rx);
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, &mut loop_task)
+        .await
+        .expect("the idle loop must reap in time")
+        .expect("the loop must not panic");
+    outcome.expect("a reaped loop returns Ok");
+}
+
 /// FIFO total order per user (spec #558 §3.2/§8): a read enqueued after a
 /// write sees that write — the loop consumes the channel in order, so the
 /// write's transaction commits before the read's `begin`, and the read's
@@ -509,20 +680,23 @@ async fn read_sees_every_earlier_write() {
     let (events, _events_rx) = broadcast::channel(16);
     // The write, then the read — enqueued in order before the loop starts
     // (the channel is the FIFO the loop consumes in order).
-    let (write_request, write_reply) = Request::new_write(ApiWrite::PartCreate {
-        name: "Seam Chain".to_string(),
-        vendor: "Shimano".to_string(),
-        model: "CN-HG62".to_string(),
-        what: CHAIN,
-        purchase: datetime!(2024-01-01 00:00 UTC),
-    });
+    let (write_request, write_reply) = Request::new_write(
+        Box::new(FakeStrava::new()),
+        ApiWrite::PartCreate {
+            name: "Seam Chain".to_string(),
+            vendor: "Shimano".to_string(),
+            model: "CN-HG62".to_string(),
+            what: CHAIN,
+            purchase: datetime!(2024-01-01 00:00 UTC),
+        },
+    );
     tx.send(write_request).expect("the channel is open");
-    let (read_request, read_reply) = Request::new_read(ApiRead::User);
+    let (read_request, read_reply) = Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
     tx.send(read_request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        Box::new(FakeStrava::new()),
+        UserId::from(1),
         rx,
         frames,
         Box::new(NoopPusher),
@@ -594,14 +768,14 @@ async fn gear_hydration_frame_and_fifo_read() {
     let (events, _events_rx) = broadcast::channel(16);
     // The hydration, then the snapshot read — enqueued in order before the
     // loop starts (the channel is the FIFO the loop consumes in order).
-    let (gear_request, gear_reply) = Request::new_gear();
+    let (gear_request, gear_reply) = Request::new_gear(Box::new(FakeStrava::new()));
     tx.send(gear_request).expect("the channel is open");
-    let (read_request, read_reply) = Request::new_read(ApiRead::User);
+    let (read_request, read_reply) = Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
     tx.send(read_request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        Box::new(FakeStrava::new()),
+        UserId::from(1),
         rx,
         frames,
         Box::new(NoopPusher),
@@ -680,14 +854,14 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
     let (tx, rx) = request_channel();
     let (frames, mut frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
-    let (gear_request, gear_reply) = Request::new_gear();
+    let (gear_request, gear_reply) = Request::new_gear(Box::new(FakeStrava::new()));
     tx.send(gear_request).expect("the channel is open");
-    let (read_request, read_reply) = Request::new_read(ApiRead::User);
+    let (read_request, read_reply) = Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
     tx.send(read_request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        Box::new(FakeStrava::new()),
+        UserId::from(1),
         rx,
         frames,
         Box::new(NoopPusher),
@@ -750,14 +924,17 @@ async fn failed_write_rolls_back_and_reclaims() {
     // the no-streams reap rule (spec §4.4, amended — #446) never fires.
     drop(_frame_rx);
     // Deleting a part that does not exist: `NotFound` from the domain.
-    let (request, reply) = Request::new_write(ApiWrite::PartDelete {
-        id: PartId::from(999_999),
-    });
+    let (request, reply) = Request::new_write(
+        Box::new(FakeStrava::new()),
+        ApiWrite::PartDelete {
+            id: PartId::from(999_999),
+        },
+    );
     tx.send(request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        Box::new(FakeStrava::new()),
+        UserId::from(1),
         rx,
         frames,
         Box::new(NoopPusher),
@@ -813,12 +990,15 @@ async fn onboarding_sync_write_queues_the_sync_event() {
     // No streams attached: the frame receiver must not outlive the loop, or
     // the no-streams reap rule (spec §4.4, amended — #446) never fires.
     drop(_frame_rx);
-    let (request, reply) = Request::new_write(ApiWrite::UserOnboardingSync { time: 100 });
+    let (request, reply) = Request::new_write(
+        Box::new(FakeStrava::new()),
+        ApiWrite::UserOnboardingSync { time: 100 },
+    );
     tx.send(request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        Box::new(FakeStrava::new()),
+        UserId::from(1),
         rx,
         frames,
         Box::new(NoopPusher),
@@ -913,9 +1093,12 @@ async fn sync_enqueues_wakes_and_awaits() {
         Duration::from_secs(3600),
     );
 
-    let outcome = tokio::time::timeout(TEST_TIMEOUT, registry.sync(user, 100))
-        .await
-        .expect("the admin sync must complete in time");
+    let outcome = tokio::time::timeout(
+        TEST_TIMEOUT,
+        registry.sync(Box::new(FakeStrava::new()), user, 100),
+    )
+    .await
+    .expect("the admin sync must complete in time");
     outcome.expect("the sync must succeed");
 
     // The awaited work ran in the target user's loop transaction: the
@@ -932,7 +1115,7 @@ async fn sync_enqueues_wakes_and_awaits() {
 /// without it the queues would stay full for the whole idle window.
 #[tokio::test]
 #[ignore]
-async fn sync_all_wakes_each_running_executor() {
+async fn trigger_processing_drains_each_queued_user() {
     let seam = ready().await;
     let (user, strava) = test_identity();
     // A second user (the users row plus the Strava row).
@@ -991,9 +1174,20 @@ async fn sync_all_wakes_each_running_executor() {
     // trigger (the re-probe is an hour out).
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    let outcome = tokio::time::timeout(TEST_TIMEOUT, registry.sync_all(None, 200, false))
-        .await
-        .expect("the all-users sync must return in time");
+    let outcome = tokio::time::timeout(
+        TEST_TIMEOUT,
+        registry.trigger_processing(
+            Box::new(FakeStrava {
+                admin: true,
+                ..FakeStrava::new()
+            }),
+            None,
+            200,
+            false,
+        ),
+    )
+    .await
+    .expect("the all-users sync must return in time");
     outcome.expect("the all-users sync must succeed");
 
     // Both queues drain — the per-user wake is the only trigger (the idle
@@ -1083,7 +1277,7 @@ async fn rescan_stops_the_executors() {
     // rescan stops it.
     tokio::time::sleep(Duration::from_millis(500)).await;
 
-    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.rescan())
+    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.rescan(Box::new(FakeStrava::new())))
         .await
         .expect("the rescan must finish in time");
     outcome.expect("the rescan must succeed");
@@ -1225,9 +1419,18 @@ async fn deauthorize_disables_the_user_and_clears_the_queue() {
     seed_strava_user(&seam.pool, true).await;
     let reg = registry(&seam.pool);
 
-    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.deauthorize(user))
-        .await
-        .expect("the deauthorization must finish in time");
+    let outcome = tokio::time::timeout(
+        TEST_TIMEOUT,
+        reg.deauthorize(
+            Box::new(FakeStrava {
+                admin: true,
+                ..FakeStrava::new()
+            }),
+            user,
+        ),
+    )
+    .await
+    .expect("the deauthorization must finish in time");
     outcome.expect("the deauthorization must succeed");
 
     // The one transaction disabled the user: the refresh token is cleared
@@ -1263,9 +1466,18 @@ async fn delete_user_removes_the_rows() {
     seed_strava_user(&seam.pool, true).await;
     let reg = registry(&seam.pool);
 
-    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.delete_user(user))
-        .await
-        .expect("the delete must finish in time");
+    let outcome = tokio::time::timeout(
+        TEST_TIMEOUT,
+        reg.delete_user(
+            Box::new(FakeStrava {
+                admin: true,
+                ..FakeStrava::new()
+            }),
+            user,
+        ),
+    )
+    .await
+    .expect("the delete must finish in time");
     outcome.expect("the delete must succeed");
 
     // The rows are gone: the Strava row, the user row, the user's parts.
@@ -1445,7 +1657,7 @@ async fn request_burst_does_not_fire_transaction_notice() {
     // Pre-fill the channel before the loop spawns: the loop's first select
     // must find work, or its no-streams idle decision reaps it before the
     // burst starts (the reaped loop closes the channel under the senders).
-    let (request, warm_reply) = Request::new_read(ApiRead::User);
+    let (request, warm_reply) = Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
     tx.send(request).expect("the channel is open");
     let (frames, frame_rx) = broadcast::channel(8);
     let (events, _events_rx) = broadcast::channel(8);
@@ -1457,7 +1669,7 @@ async fn request_burst_does_not_fire_transaction_notice() {
 
     let mut loop_task = tokio::spawn(run(
         DetachedBegin::new(seam.pool.clone()),
-        Box::new(FakeStrava::new()),
+        UserId::from(1),
         rx,
         frames,
         Box::new(NoopPusher),
@@ -1509,7 +1721,8 @@ async fn request_burst_does_not_fire_transaction_notice() {
     let sender = tokio::spawn(async move {
         for pair in 0..PAIRS {
             for which in 0..2 {
-                let (request, reply) = Request::new_read(ApiRead::User);
+                let (request, reply) =
+                    Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
                 if tx2.send(request).is_err() {
                     return; // channel closed: the loop ended; report via the join
                 }

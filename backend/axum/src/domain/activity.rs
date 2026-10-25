@@ -41,13 +41,14 @@ async fn def_part_api(
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn rescan(_u: AxumAdmin, State(state): State<AppState>) -> Result<StatusCode, AppError> {
+async fn rescan(admin: AxumAdmin, State(state): State<AppState>) -> Result<StatusCode, AppError> {
     // The rescan is all-users maintenance that bypasses the executors (the
     // spec §3/§6.4 carve-out): the service API's direct op runs the one
     // transaction (`Activity::rescan_all`), then stops every live executor
     // — open streams end, and each client's native reconnect + catch-up
-    // snapshot re-hydrates it (issue #446).
-    state.api.rescan().await?;
+    // snapshot re-hydrates it (issue #446). The admin's acting session rides
+    // along (carried for the admin-verification `tb_strava` change).
+    state.api.rescan(Box::new(admin.session())).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

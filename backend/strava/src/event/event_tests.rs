@@ -182,7 +182,7 @@ async fn get_event_returns_latest_and_drops_older() -> TbResult<()> {
     first.event_time = 50;
     store.strava_event_create(first).await?;
     store.strava_event_create(activity_event()).await?;
-    let event = match get_event(&session, &mut store).await? {
+    let event = match get_event(session.user_id(), &mut store).await? {
         QueueRead::Event(event) => event,
         other => panic!("the latest event is returned, got {other:?}"),
     };
@@ -200,7 +200,10 @@ async fn get_event_ignores_other_owners() -> TbResult<()> {
             ..activity_event()
         })
         .await?;
-    assert_eq!(get_event(&session, &mut store).await?, QueueRead::Empty);
+    assert_eq!(
+        get_event(session.user_id(), &mut store).await?,
+        QueueRead::Empty
+    );
     Ok(())
 }
 
@@ -218,7 +221,7 @@ async fn get_event_active_stop_reports_deadline() -> TbResult<()> {
         })
         .await?;
     store.strava_event_create(activity_event()).await?;
-    let res = get_event(&session, &mut store).await?;
+    let res = get_event(session.user_id(), &mut store).await?;
     assert_eq!(res, QueueRead::Limited { until });
     assert_eq!(store.event_count(), 2);
     Ok(())
@@ -237,7 +240,7 @@ async fn get_event_expired_stop_deletes_and_returns_next() -> TbResult<()> {
         })
         .await?;
     store.strava_event_create(activity_event()).await?;
-    let res = get_event(&session, &mut store).await?;
+    let res = get_event(session.user_id(), &mut store).await?;
     assert!(matches!(res, QueueRead::Event(ref e) if e.object_id == 10));
     assert_eq!(store.event_count(), 1);
     Ok(())
@@ -255,7 +258,7 @@ async fn rate_limit_active_reports_deadline() -> TbResult<()> {
         })
         .await?;
     let event = store.events[0].clone();
-    let res = event.rate_limit(&session, &mut store).await?;
+    let res = event.rate_limit(session.user_id(), &mut store).await?;
     assert_eq!(res, QueueRead::Limited { until });
     assert_eq!(store.event_count(), 1);
     Ok(())
@@ -271,7 +274,7 @@ async fn rate_limit_expired_removes_stop() -> TbResult<()> {
     };
     store.strava_event_create(stop).await?;
     let event = store.events[0].clone();
-    let res = event.rate_limit(&session, &mut store).await?;
+    let res = event.rate_limit(session.user_id(), &mut store).await?;
     assert_eq!(res, QueueRead::Empty);
     assert_eq!(store.event_count(), 0);
     Ok(())
@@ -510,11 +513,12 @@ async fn process_skips_athlete_event() -> TbResult<()> {
 #[tokio::test]
 async fn sync_users_skips_disabled() -> TbResult<()> {
     let mut store = TestStravaStore::new();
+    let mut session = TestStravaSession::admin(UserId::from(1), 42.into());
     UserStore::create(&mut store.mem, "A", "User", &None).await?;
     UserStore::create(&mut store.mem, "B", "User", &None).await?;
     store.insert_user(strava_user(UserId::from(1), 42, true));
     store.insert_user(strava_user(UserId::from(2), 43, false));
-    sync_users(None, 100, false, &mut store).await?;
+    sync_users(&mut session, None, 100, false, &mut store).await?;
     assert_eq!(store.event_count(), 1);
     assert_eq!(store.events[0].owner_id, 42.into());
     Ok(())
@@ -523,7 +527,8 @@ async fn sync_users_skips_disabled() -> TbResult<()> {
 #[tokio::test]
 async fn sync_users_single() -> TbResult<()> {
     let (mut store, _) = setup();
-    sync_users(Some(UserId::from(1)), 100, false, &mut store).await?;
+    let mut session = TestStravaSession::admin(UserId::from(1), 42.into());
+    sync_users(&mut session, Some(UserId::from(1)), 100, false, &mut store).await?;
     assert_eq!(store.event_count(), 1);
     Ok(())
 }
@@ -531,6 +536,7 @@ async fn sync_users_single() -> TbResult<()> {
 #[tokio::test]
 async fn sync_users_unknown_user() {
     let (mut store, _) = setup();
-    let res = sync_users(Some(UserId::from(99)), 100, false, &mut store).await;
+    let mut session = TestStravaSession::admin(UserId::from(1), 42.into());
+    let res = sync_users(&mut session, Some(UserId::from(99)), 100, false, &mut store).await;
     assert!(matches!(res, Err(Error::NotFound(_))));
 }

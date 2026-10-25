@@ -159,7 +159,20 @@ where
     }
 }
 
-pub struct AxumAdmin;
+/// The admin-verification extractor: a `RequestSession` that has been
+/// checked `is_admin()`. It carries the acting session through, so the admin
+/// handlers can hand it to the registry (which verifies admin in a later
+/// `tb_strava` ticket) rather than rebuilding an identity-only one.
+pub struct AxumAdmin {
+    session: RequestSession,
+}
+
+impl AxumAdmin {
+    /// The admin's acting session.
+    pub(crate) fn session(&self) -> RequestSession {
+        self.session.clone()
+    }
+}
 
 impl<S> FromRequestParts<S> for AxumAdmin
 where
@@ -174,7 +187,7 @@ where
         if !user.is_admin() {
             Err((http::StatusCode::NOT_FOUND, "Page not found").into_response())
         } else {
-            Ok(AxumAdmin)
+            Ok(AxumAdmin { session: user })
         }
     }
 }

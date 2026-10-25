@@ -55,12 +55,9 @@ async fn request_json_uses_the_token_cache_warm_token() -> TbResult<()> {
 async fn deauthorize_records_with_a_warm_token() -> TbResult<()> {
     let mut store = TestStravaStore::new();
     store.insert_user(strava_user(UserId::from(1), 42, true));
-    let mut session = PlainSession {
-        user: UserId::from(1),
-    };
     begin_test();
     seed_token_cache(UserId::from(1), StravaId::from(42), "test-access-token");
-    deauthorize(&mut session, &mut store).await?;
+    deauthorize(UserId::from(1), &mut store).await?;
     assert_eq!(deauthorizes(), vec![StravaId::from(42)]);
     let user = store.stravauser_get_by_tbid(UserId::from(1)).await?;
     assert_eq!(
@@ -76,12 +73,9 @@ async fn deauthorize_records_with_a_warm_token() -> TbResult<()> {
 async fn access_token_uses_the_token_cache_warm_token() -> TbResult<()> {
     let mut store = TestStravaStore::new();
     store.insert_user(strava_user(UserId::from(1), 42, true));
-    let mut session = PlainSession {
-        user: UserId::from(1),
-    };
     begin_test();
     seed_token_cache(UserId::from(1), StravaId::from(42), "test-access-token");
-    let (_strava_id, access) = access_token(&mut session, &mut store).await?;
+    let (_strava_id, access) = access_token(UserId::from(1), &mut store).await?;
     assert_eq!(access.secret(), "test-access-token");
     let user = store.stravauser_get_by_tbid(UserId::from(1)).await?;
     assert_eq!(

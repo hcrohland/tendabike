@@ -680,7 +680,7 @@ async fn get_user_returns_200_and_userstate_body() {
     let (store, mut mock) = mock_ctx();
     mock.expect_hydrate_gear()
         .times(1)
-        .returning(|_uid| Ok(Summary::default()));
+        .returning(|_session| Ok(Summary::default()));
     mock.expect_read().times(1).returning(|_session, _read| {
         Ok(ReadOutcome::User(Box::new(UserState {
             user: user(),
@@ -729,7 +729,7 @@ async fn summary_returns_200_and_summary_body() {
     let (store, mut mock) = mock_ctx();
     mock.expect_hydrate_gear()
         .times(1)
-        .returning(|_uid| Ok(Summary::default()));
+        .returning(|_session| Ok(Summary::default()));
     mock.expect_read().times(1).returning(|_session, _read| {
         Ok(ReadOutcome::User(Box::new(UserState {
             user: user(),
@@ -753,7 +753,7 @@ async fn summary_shop_filter_rides_the_read() {
     let (store, mut mock) = mock_ctx();
     mock.expect_hydrate_gear()
         .times(1)
-        .returning(|_uid| Ok(Summary::default()));
+        .returning(|_session| Ok(Summary::default()));
     mock.expect_read().times(1).returning(|_session, _read| {
         Ok(ReadOutcome::User(Box::new(UserState {
             user: user(),
@@ -786,7 +786,7 @@ async fn user_all_returns_200_and_stats() {
     let (store, mut mock) = mock_ctx();
     mock.expect_all_stats()
         .times(1)
-        .returning(|_uid| Ok(vec![]));
+        .returning(|_session| Ok(vec![]));
     let cookie = admin_cookie(&store).await;
     let app = build_app(&store, mock);
     let (status, _headers, body) = run(app, Method::GET, "/api/user/all", Some(&cookie)).await;
@@ -1840,7 +1840,7 @@ async fn onboarding_postpone_returns_200_and_user() {
 #[tokio::test]
 async fn rescan_answers_204() {
     let (store, mut mock) = mock_ctx();
-    mock.expect_rescan().times(1).returning(|| Ok(()));
+    mock.expect_rescan().times(1).returning(|_session| Ok(()));
     let app = build_app(&store, mock);
     let admin = admin_cookie(&store).await;
     let (status, _headers, _body) = run(app, Method::GET, "/api/activ/rescan", Some(&admin)).await;
@@ -1853,7 +1853,9 @@ async fn rescan_answers_204() {
 #[tokio::test]
 async fn admin_sync_returns_204() {
     let (store, mut mock) = mock_ctx();
-    mock.expect_sync().times(1).returning(|_uid, _time| Ok(()));
+    mock.expect_sync()
+        .times(1)
+        .returning(|_session, _uid, _time| Ok(()));
     let app = build_app(&store, mock);
     let admin = admin_cookie(&store).await;
     let (status, _headers, _body) = run(
@@ -1866,19 +1868,19 @@ async fn admin_sync_returns_204() {
     assert_eq!(status, StatusCode::NO_CONTENT);
 }
 
-/// `GET /strava/sync?time=0` (admin) is the all-users sync direct op and
+/// `GET /strava/sync?time=0` (admin) is the trigger-processing direct op and
 /// answers `200`; the `?user_id=` query narrows it.
 #[tokio::test]
-async fn admin_sync_all_returns_200() {
+async fn admin_trigger_processing_returns_200() {
     let (store, mut mock) = mock_ctx();
-    mock.expect_sync_all()
+    mock.expect_trigger_processing()
         .times(1)
-        .withf(|user, time, _migrate| user.is_none() && *time == 0)
-        .returning(|_u, _t, _m| Ok(()));
-    mock.expect_sync_all()
+        .withf(|_session, user, time, _migrate| user.is_none() && *time == 0)
+        .returning(|_session, _u, _t, _m| Ok(()));
+    mock.expect_trigger_processing()
         .times(1)
-        .withf(|user, time, _migrate| user == &Some(UserId::from(1)) && *time == 0)
-        .returning(|_u, _t, _m| Ok(()));
+        .withf(|_session, user, time, _migrate| user == &Some(UserId::from(1)) && *time == 0)
+        .returning(|_session, _u, _t, _m| Ok(()));
     let app = build_app(&store, mock);
     let admin = admin_cookie(&store).await;
     let (status, _headers, body) = run(
@@ -1951,12 +1953,12 @@ async fn redirect_gear_permains_to_strava_url() {
     let (store, mut mock) = mock_ctx();
     mock.expect_gear_url()
         .times(1)
-        .withf(|_uid, id| *id == PartId::from(7))
-        .returning(|_uid, _id| Ok("https://www.strava.com/bikes/7".to_string()));
+        .withf(|_session, id| *id == PartId::from(7))
+        .returning(|_session, _id| Ok("https://www.strava.com/bikes/7".to_string()));
     mock.expect_gear_url()
         .times(1)
-        .withf(|_uid, id| *id == PartId::from(9))
-        .returning(|_uid, _id| Err(tb_domain::Error::NotFound("part 9".to_string())));
+        .withf(|_session, id| *id == PartId::from(9))
+        .returning(|_session, _id| Err(tb_domain::Error::NotFound("part 9".to_string())));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, headers, _body) =
@@ -1975,7 +1977,7 @@ async fn redirect_activity_permains_to_strava_url() {
     let (store, mut mock) = mock_ctx();
     mock.expect_activity_url()
         .times(1)
-        .returning(|_uid, _id| Ok("https://www.strava.com/activities/8".to_string()));
+        .returning(|_session, _id| Ok("https://www.strava.com/activities/8".to_string()));
     let app = build_app(&store, mock);
     let cookie = user_cookie(&store).await;
     let (status, headers, _body) =
@@ -2003,7 +2005,9 @@ async fn redirect_user_permains_to_strava_url() {
 #[tokio::test]
 async fn deauthorize_answers_200() {
     let (store, mut mock) = mock_ctx();
-    mock.expect_deauthorize().times(1).returning(|_id| Ok(()));
+    mock.expect_deauthorize()
+        .times(1)
+        .returning(|_session, _id| Ok(()));
     let app = build_app(&store, mock);
     let admin = admin_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::POST, "/strava/disable/1", Some(&admin)).await;
@@ -2016,7 +2020,9 @@ async fn deauthorize_answers_200() {
 #[tokio::test]
 async fn delete_user_answers_200() {
     let (store, mut mock) = mock_ctx();
-    mock.expect_delete_user().times(1).returning(|_id| Ok(()));
+    mock.expect_delete_user()
+        .times(1)
+        .returning(|_session, _id| Ok(()));
     let app = build_app(&store, mock);
     let admin = admin_cookie(&store).await;
     let (status, _headers, body) = run(app, Method::DELETE, "/strava/delete/1", Some(&admin)).await;

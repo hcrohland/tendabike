@@ -35,18 +35,18 @@ use serde::de::DeserializeOwned;
 
 use crate::client::{HTTP_CLIENT, STRAVACLIENT};
 use crate::{StravaDataStore, StravaId, get_token};
-use tb_domain::{Error, Session, TbResult};
+use tb_domain::{Error, Session, TbResult, UserId};
 
 const API: &str = "https://www.strava.com/api/v3";
 
-/// A valid access token for `user`: the `TokenCache`'s `get_token`, which
+/// A valid access token for `user_id`: the `TokenCache`'s `get_token`, which
 /// owns the refresh exchange and persists the rotated refresh token to the
 /// DB when a refresh issues a new one.
 async fn access_token(
-    user: &mut dyn Session,
+    user_id: UserId,
     store: &mut impl StravaDataStore,
 ) -> TbResult<(StravaId, AccessToken)> {
-    get_token(user.user_id(), store).await
+    get_token(user_id, store).await
 }
 
 /// A bearer GET of `uri` for `user`, parsed as `T`.
@@ -65,7 +65,7 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
     uri: &str,
     store: &mut impl StravaDataStore,
 ) -> TbResult<T> {
-    let (_strava_id, access) = access_token(user, store).await?;
+    let (_strava_id, access) = access_token(user.user_id(), store).await?;
 
     // The offline seams (test-only): first the thread-local canned response
     // (per-test isolation: each test runs on its own thread), then the
@@ -92,16 +92,13 @@ pub(crate) async fn request_json<T: DeserializeOwned>(
     Ok(serde_json::from_str::<T>(&r).context("Could not parse response body")?)
 }
 
-/// Revoke `user`'s Strava token.
+/// Revoke `user_id`'s Strava token.
 ///
 /// [`access_token`] (the `TokenCache`'s `get_token` → persist the refresh
 /// token to the DB if a refresh issued a new one) →
 /// `STRAVACLIENT.revoke_token`. Knows nothing about refresh mechanics.
-pub(crate) async fn deauthorize(
-    user: &mut dyn Session,
-    store: &mut impl StravaDataStore,
-) -> TbResult<()> {
-    let (strava_id, access) = access_token(user, store).await?;
+pub(crate) async fn deauthorize(user_id: UserId, store: &mut impl StravaDataStore) -> TbResult<()> {
+    let (strava_id, access) = access_token(user_id, store).await?;
 
     // The offline seam (test-only): in test mode a deauthorization is recorded
     // in the thread-local map instead of hitting the Strava API. The process-
