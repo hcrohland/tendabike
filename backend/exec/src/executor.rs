@@ -619,12 +619,6 @@ pub(crate) async fn run_request<T: TxnSource>(
     backoff: &mut DbBackoff,
     pusher: &dyn FramePusher,
 ) -> Result<(), Error> {
-    // Every request carries its own acting session: the loop runs the
-    // write/read/gear/stats against it (the write's frame context, the read's
-    // `Summary` scope, the user's own gear, the stats read). The loop's
-    // spawn-time (identity-only) session is the exception — it is used only
-    // for the background Strava lanes (the queue probe + events), which need
-    // just the fixed user_id + the TokenCache, never a shop.
     match request {
         Request::Write {
             write,
@@ -810,9 +804,6 @@ async fn run_write<T: TxnSource>(
         ApiWrite::UserOnboardingSync { time } => Some(*time),
         _ => None,
     };
-    // The delivery context is the session's shop (spec #517, ticket #588):
-    // the loop's session carries the shop context (via the `Session`
-    // supertrait) and the Strava identity.
     let shop = session.shop();
     run_message(
         "write",
@@ -909,7 +900,7 @@ async fn run_read<T: TxnSource>(
 /// `begin` → [`StravaUser::update_gear`] → read the parts it created →
 /// `commit`. `update_gear` is a `tb_strava` op (the session's
 /// `request_json` plus the `into_partid` store work), so it is dispatched
-/// loop-side with the loop's session — not an `ApiWrite` variant.
+/// loop-side — not an `ApiWrite` variant.
 ///
 /// The frame is uniform (like every other write): the hydrate's `Summary`
 /// is the **union of the parts it created** — one entry per part, empty
@@ -932,9 +923,6 @@ async fn run_gear<T: TxnSource>(
     // gear, then read back the parts it created — the frame is their union
     // (one entry per part, empty when nothing is new, spec #558 §4).
     let mut summary = Summary::default();
-    // The hydration runs in the executor's own context (the user's own gear):
-    // the delivery context is the executor's session shop (always `None` in
-    // production).
     let shop = session.shop();
     run_message(
         "hydration",
@@ -978,9 +966,6 @@ async fn run_all_stats<T: TxnSource>(
     pusher: &dyn FramePusher,
 ) -> Result<(), Error> {
     debug!("user {}: Reading the all-user stats", session.user_id());
-    // The stats read runs in the executor's own context (it pushes no frame);
-    // the delivery context is the executor's session shop (always `None` in
-    // production).
     let shop = session.shop();
     run_message(
         "stats read",

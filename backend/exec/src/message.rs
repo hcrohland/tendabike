@@ -79,8 +79,6 @@ pub enum Request {
     Write {
         /// The write to apply.
         write: ApiWrite,
-        /// The session the loop runs the write against (its `shop()` is the
-        /// frame's delivery context, spec #517).
         session: Box<dyn Session>,
         /// Resolved exactly once when the write is committed or fails.
         reply: oneshot::Sender<TbResult<WriteOutcome>>,
@@ -90,8 +88,6 @@ pub enum Request {
     Read {
         /// The read to apply.
         read: ApiRead,
-        /// The session the loop runs the read against (its `shop()` scopes
-        /// the read's `Summary`, spec #517).
         session: Box<dyn Session>,
         /// Resolved exactly once when the read commits or fails.
         reply: oneshot::Sender<TbResult<ReadOutcome>>,
@@ -99,8 +95,6 @@ pub enum Request {
     /// The hydration write (spec #558 §4): `update_gear` in the loop's own
     /// transaction (the user's own gear — identity-only, no shop).
     Gear {
-        /// The session the loop runs the hydration against (the user's own
-        /// gear, spec #558 §4).
         session: Box<dyn Session>,
         /// Resolved with the created-parts `Summary` (the frame) on commit,
         /// or the error on failure.
@@ -109,8 +103,6 @@ pub enum Request {
     /// The admin `GET /user/all` read (spec #558 §3.3): `get_all_stats` in
     /// the loop's own transaction, read-only within it by spec.
     AllStats {
-        /// The session the loop runs the stats read against (the stats read
-        /// pushes no frame).
         session: Box<dyn Session>,
         /// Resolved with the all-user stats on commit, or the error on
         /// failure.

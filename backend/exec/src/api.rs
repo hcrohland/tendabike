@@ -56,34 +56,42 @@ use crate::ExecutorStatus;
 /// the five channel ops (`read`, `write`, `hydrate_gear`, `subscribe`,
 /// `all_stats`) and the ten direct ops (spec #558 §5.2). Presentation
 /// layers depend on this trait, not the concrete [`crate::Registry`].
+///
+/// Every method that takes a `session` parameter threads the acting
+/// [`Session`] through the executor to the downstream domain/`tb_strava`
+/// functions it runs: the executor hands it to the op in its own
+/// transaction. The session's `shop()` is the frame's delivery context (it
+/// routes a committed `Summary`) and scopes a read's `Summary`; the admin
+/// deauth and delete ops use it to verify the caller is an admin. The
+/// executor's spawn-time session is identity-only — it serves only the
+/// background Strava lanes (the queue probe + events), which need just the
+/// fixed user_id + the TokenCache, never a shop; the per-request shop rides
+/// on each request.
 #[cfg_attr(feature = "mock", mockall::automock)]
 #[async_trait::async_trait]
 pub trait ServiceApi: Send + Sync {
     /// One per-user read on the user's executor (spec #558 §3): the loop
     /// runs it in its own transaction (read-only within it by spec) and
     /// resolves the read's data (a [`ReadOutcome`]); the caller knows which
-    /// variant it sent and pattern-matches its own result. `session` is the
-    /// user's `Session`.
+    /// variant it sent and pattern-matches its own result.
     async fn read(&self, session: Box<dyn Session>, read: ApiRead) -> TbResult<ReadOutcome>;
 
     /// One per-user write on the user's executor (spec §6.2): the loop runs
     /// it in its own transaction and resolves the full [`WriteOutcome`]
     /// (the `Summary` — the frame — plus, for the descend, its match
-    /// report, the response body). The oneshot wait is unbounded. `session`
-    /// is the user's `Session`: the loop uses it for the domain op.
+    /// report, the response body). The oneshot wait is unbounded.
     async fn write(&self, session: Box<dyn Session>, write: ApiWrite) -> TbResult<WriteOutcome>;
 
     /// The hydration write (spec #558 §4): `update_gear` in the loop's own
-    /// transaction against the acting session, resolving with the created
-    /// parts' `Summary` — the frame (the union of the parts it created,
-    /// one entry per part, empty when nothing is new).
+    /// transaction, resolving with the created parts' `Summary` — the frame
+    /// (the union of the parts it created, one entry per part, empty when
+    /// nothing is new).
     async fn hydrate_gear(&self, session: Box<dyn Session>) -> TbResult<Summary>;
 
     /// Register a stream for the user (spawning the executor if it is not
     /// running): a subscription to the frame channel plus a handle to the
     /// executor's fate ([`ExecutorStatus`]), so the stream can tell a clean
-    /// reap from a dead executor (spec #558 §6.3). `session` is the user's
-    /// `Session`.
+    /// reap from a dead executor (spec #558 §6.3).
     async fn subscribe(
         &self,
         session: Box<dyn Session>,
@@ -105,14 +113,13 @@ pub trait ServiceApi: Send + Sync {
     ) -> TbResult<broadcast::Receiver<Summary>>;
 
     /// The admin `GET /user/all` read (spec #558 §3.3): `get_all_stats` in
-    /// the admin user's own channel, in the loop's own transaction, against
-    /// the acting session.
+    /// the admin user's own channel, in the loop's own transaction.
     async fn all_stats(&self, session: Box<dyn Session>) -> TbResult<Vec<StravaStat>>;
 
     /// The admin rescan (spec #558 §5.2): one transaction
     /// (`Activity::rescan_all`), then every live executor stopped (the
     /// rescan's effect rides no frame — the clients re-hydrate on their
-    /// native reconnect). `session` is the admin's acting session.
+    /// native reconnect).
     async fn rescan(&self, session: Box<dyn Session>) -> TbResult<()>;
 
     /// The per-user admin sync (spec #558 §5.2): read the target's Strava
@@ -158,13 +165,11 @@ pub trait ServiceApi: Send + Sync {
     async fn accept_event(&self, event: InEvent) -> TbResult<()>;
 
     /// The gear redirect URL (spec #558 §5.2): the `tb_strava` `strava_url`
-    /// op for `id`, gated on the caller's ownership against the acting
-    /// session.
+    /// op for `id`, gated on the caller's ownership.
     async fn gear_url(&self, session: Box<dyn Session>, id: PartId) -> TbResult<String>;
 
     /// The activity redirect URL (spec #558 §5.2): the `tb_strava`
-    /// `strava_url` op for `id`, gated on the caller's ownership against the
-    /// acting session.
+    /// `strava_url` op for `id`, gated on the caller's ownership.
     async fn activity_url(&self, session: Box<dyn Session>, id: ActivityId) -> TbResult<String>;
 
     /// The user redirect URL (spec #558 §5.2): the `tb_strava` `strava_url`
@@ -173,14 +178,12 @@ pub trait ServiceApi: Send + Sync {
     async fn user_url(&self, id: UserId) -> TbResult<String>;
 
     /// The deauthorization (spec #558 §5.2): one transaction — the target's
-    /// session built in-txn, then `tb_strava::user_deauthorize`. `session` is
-    /// the admin's acting session (carried for the admin-verification
-    /// `tb_strava` change). The existing queue race is preserved.
+    /// session built in-txn, then `tb_strava::user_deauthorize`. The
+    /// existing queue race is preserved.
     async fn deauthorize(&self, session: Box<dyn Session>, tbid: UserId) -> TbResult<()>;
 
     /// The user delete (spec #558 §5.2): one transaction — the target's
-    /// session built in-txn, then `tb_strava::user_delete`. `session` is the
-    /// admin's acting session (carried for the admin-verification
-    /// `tb_strava` change). The existing queue race is preserved.
+    /// session built in-txn, then `tb_strava::user_delete`. The existing
+    /// queue race is preserved.
     async fn delete_user(&self, session: Box<dyn Session>, tbid: UserId) -> TbResult<()>;
 }
