@@ -27,13 +27,13 @@
 
 ## Tests
 
-Most suites are in-memory (no database, no network). The `#[ignore]`d seam suites in `tb_sqlx` (`tests/store_seam.rs`, `tests/executor_seam.rs`) are the exception: they run against a real Postgres and are skipped unless `--include-ignored` is passed. The complete suite — seam suites included — is:
+Most suites are in-memory; the `#[ignore]`d seam suites in `tb_sqlx` need `--include-ignored` and `SCRATCH_DATABASE_URL`.
 
 ```bash
-SQLX_OFFLINE=true cargo test -- --include-ignored
+SQLX_OFFLINE=true cargo test -q -- --include-ignored   # complete suite (seam included)
+SQLX_OFFLINE=true cargo test -q -p tb_<crate>          # one crate's in-memory suites
 ```
 
-It reads `SCRATCH_DATABASE_URL` from the environment (set in the devcontainer) and names a disposable scratch database; the seam suite fails loudly if the variable is unset. `SQLX_OFFLINE=true cargo test -p tb_<crate>` runs one crate's in-memory suites.
 Before writing or changing tests for a crate, read its guide:
 
 - `tb_domain` → [`docs/tests/domain.md`](docs/tests/domain.md) — `MemStore`, fixtures, the prepopulated snapshot and its data rules
