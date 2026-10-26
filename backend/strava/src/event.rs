@@ -451,21 +451,19 @@ pub async fn sync_queued_for_user(
 pub enum QueueRead {
     /// The event to process (the read-side dedup already applied).
     Event(Event),
-    /// The global rate-limit `Stop` is active until this unix time: the queue
-    /// is paused, and the caller sleeps until the deadline
+    /// The Strava rate-limit budget is exhausted until this unix time: the
+    /// queue is paused, and the caller sleeps until the window boundary
     /// as an interruptible branch of its select — API writes are never delayed.
     Limited { until: i64 },
-    /// The queue holds nothing interesting for this user (empty, or only an
-    /// expired `Stop`, which the read deleted).
+    /// The queue holds nothing interesting for this user.
     Empty,
 }
 
-/// Read the next queued Strava event for the user, with the queue's two
-/// read-side rules applied (ADR-0005, executable spec #446 §4.3):
+/// Read the next queued Strava event for the user, with the queue's read-side
+/// rules applied (ADR-0005, executable spec #446 §4.3):
 ///
-/// - a `Stop` (the global rate-limit backoff) is checked against its expiry:
-///   still limited → [`QueueRead::Limited`] (the event stays queued); expired
-///   → deleted and the read recurses for the next event;
+/// - the proactive rate-limit gate is checked first: budget exhausted →
+///   [`QueueRead::Limited`] (the event stays queued);
 /// - only the latest event per object is interesting: older events for the
 ///   same object are deleted and the latest is returned.
 ///

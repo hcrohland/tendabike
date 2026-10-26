@@ -74,29 +74,40 @@ pub fn update_from_headers(headers: &HeaderMap) {
 }
 
 fn limited_until_inner(state: &RateLimitState) -> Option<i64> {
-    // No data yet: allow the request.
-    let read_15 = match (state.read_usage_15min, state.read_limit_15min) {
-        (Some(u), Some(l)) if u >= l => Some(next_15min_boundary()),
-        _ => None,
-    };
-    let read_daily = match (state.read_usage_daily, state.read_limit_daily) {
-        (Some(u), Some(l)) if u >= l => Some(next_midnight_utc()),
-        _ => None,
-    };
-    let overall_15 = match (state.overall_usage_15min, state.overall_limit_15min) {
-        (Some(u), Some(l)) if u >= l => Some(next_15min_boundary()),
-        _ => None,
-    };
-    let overall_daily = match (state.overall_usage_daily, state.overall_limit_daily) {
-        (Some(u), Some(l)) if u >= l => Some(next_midnight_utc()),
-        _ => None,
-    };
-
     // The earliest boundary of any exhausted window.
-    [read_15, read_daily, overall_15, overall_daily]
-        .into_iter()
-        .flatten()
-        .min()
+    [
+        exhausted(
+            state.read_usage_15min,
+            state.read_limit_15min,
+            next_15min_boundary,
+        ),
+        exhausted(
+            state.read_usage_daily,
+            state.read_limit_daily,
+            next_midnight_utc,
+        ),
+        exhausted(
+            state.overall_usage_15min,
+            state.overall_limit_15min,
+            next_15min_boundary,
+        ),
+        exhausted(
+            state.overall_usage_daily,
+            state.overall_limit_daily,
+            next_midnight_utc,
+        ),
+    ]
+    .into_iter()
+    .flatten()
+    .min()
+}
+
+/// Returns `Some(boundary())` when `usage >= limit`, else `None`.
+fn exhausted(usage: Option<u32>, limit: Option<u32>, boundary: fn() -> i64) -> Option<i64> {
+    match (usage, limit) {
+        (Some(u), Some(l)) if u >= l => Some(boundary()),
+        _ => None,
+    }
 }
 
 fn update_from_headers_inner(state: &mut RateLimitState, headers: &HeaderMap) {
@@ -127,22 +138,22 @@ fn parse_pair(header: Option<&http::HeaderValue>) -> Option<(u32, u32)> {
     Some((first, second))
 }
 
-/// The next 15-minute window boundary (:00, :15, :30, :45) in unix seconds.
-fn next_15min_boundary() -> i64 {
-    let now = std::time::SystemTime::now()
+/// The current unix time in seconds.
+fn now_unix() -> i64 {
+    std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
-    (now / 900 + 1) * 900
+        .unwrap_or(0)
+}
+
+/// The next 15-minute window boundary (:00, :15, :30, :45) in unix seconds.
+fn next_15min_boundary() -> i64 {
+    (now_unix() / 900 + 1) * 900
 }
 
 /// The next midnight UTC in unix seconds.
 fn next_midnight_utc() -> i64 {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
-    (now / 86400 + 1) * 86400
+    (now_unix() / 86400 + 1) * 86400
 }
 
 #[cfg(test)]
