@@ -33,7 +33,7 @@ time = "0.3"
 tokio = { version = "1.44.2", features = ["macros", "rt"] }
 uuid = "1.7.0"
 oauth2 = "5.0.0"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip", "brotli", "deflate", "zstd"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "gzip", "brotli", "deflate", "zstd"] }
 
 # Shared across multiple crates; minimal common feature set lives here,
 # each crate adds its own extras on top via `features = [...]`.

@@ -39,7 +39,7 @@
     "vitest": "^5.0.0"
   },
   "dependencies": {
-    "svelte-spa-router": "4",
+    "svelte-spa-router": "5",
     "svelty-picker": "^6.1.6"
   }
 }

@@ -19,7 +19,7 @@ axum = { version = "0.8", features = ["macros", "multipart"] }
 futures = "0.3"
 http = { workspace = true }
 tracing = "0.1"
-tower-http = { version = "0.6", features = ["full"] }
+tower-http = { version = "0.7", features = ["full"] }
 # 0.15 fails on deletion-task...
 # tower-sessions = { version = "0.15", features = ["deletion-task"] }
 tower-sessions = "0.14"
