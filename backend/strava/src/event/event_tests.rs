@@ -12,6 +12,16 @@ fn setup() -> (TestStravaStore, MockSession) {
     (store, session)
 }
 
+/// Sets the global rate limiter to "at limit" (read 15-min exhausted).
+fn set_rate_limited() {
+    crate::ratelimit::test_set_limited();
+}
+
+/// Resets the global rate limiter to "no data" (allows all requests).
+fn reset_rate_limiter() {
+    crate::ratelimit::test_set_not_limited();
+}
+
 fn in_event(
     object_type: &str,
     object_id: i64,
@@ -143,42 +153,6 @@ async fn insert_sync_rejects_future() {
 }
 
 #[tokio::test]
-async fn insert_stop_schedules_future() -> TbResult<()> {
-    let (mut store, _) = setup();
-    insert_stop(&mut store).await?;
-    assert_eq!(store.event_count(), 1);
-    assert_eq!(store.events[0].object_type, ObjectType::Stop);
-    assert!(store.events[0].object_id > get_time());
-    Ok(())
-}
-
-#[tokio::test]
-async fn insert_stop_extends_existing() -> TbResult<()> {
-    // A second 429 while a Stop is queued extends the deadline rather
-    // than stacking rows (spec #446 §4.6): the backoff must not compound.
-    let (mut store, _) = setup();
-    insert_stop(&mut store).await?;
-    let first_until = store.events[0].object_id;
-    insert_stop(&mut store).await?;
-    assert_eq!(
-        store.event_count(),
-        1,
-        "the second Stop extends, it does not stack"
-    );
-    let stop = &store.events[0];
-    assert_eq!(stop.object_type, ObjectType::Stop);
-    assert!(
-        stop.object_id >= first_until,
-        "the deadline is never shortened"
-    );
-    assert!(
-        stop.object_id > get_time(),
-        "the extended Stop is still active"
-    );
-    Ok(())
-}
-
-#[tokio::test]
 async fn get_event_returns_latest_and_drops_older() -> TbResult<()> {
     let (mut store, session) = setup();
     let mut first = activity_event();
@@ -212,75 +186,27 @@ async fn get_event_ignores_other_owners() -> TbResult<()> {
 }
 
 #[tokio::test]
-async fn get_event_active_stop_reports_deadline() -> TbResult<()> {
-    // An unexpired global Stop pauses the queue: the read reports the
-    // deadline (the caller sleeps until it) and consumes nothing.
+async fn get_event_rate_limited_returns_limited() -> TbResult<()> {
+    // When the rate limiter reports no budget, get_event returns Limited
+    // without dequeuing: the event stays queued for when the window resets.
+    set_rate_limited();
     let (mut store, session) = setup();
-    let until = get_time() + 500;
-    store
-        .strava_event_create(Event {
-            object_type: ObjectType::Stop,
-            object_id: until,
-            ..Default::default()
-        })
-        .await?;
     store.strava_event_create(activity_event()).await?;
     let res = get_event(session.user_id(), &mut store).await?;
-    assert_eq!(res, QueueRead::Limited { until });
-    assert_eq!(store.event_count(), 2);
+    assert!(matches!(res, QueueRead::Limited { .. }));
+    assert_eq!(store.event_count(), 1, "the event stays queued");
+    reset_rate_limiter();
     Ok(())
 }
 
 #[tokio::test]
-async fn get_event_expired_stop_deletes_and_returns_next() -> TbResult<()> {
-    // An expired Stop is deleted by the read, which recurses for the next
-    // event (the backoff is over).
+async fn get_event_not_rate_limited_returns_event() -> TbResult<()> {
+    // When the rate limiter has budget, get_event dequeues normally.
+    reset_rate_limiter();
     let (mut store, session) = setup();
-    store
-        .strava_event_create(Event {
-            object_type: ObjectType::Stop,
-            object_id: 100,
-            ..Default::default()
-        })
-        .await?;
     store.strava_event_create(activity_event()).await?;
     let res = get_event(session.user_id(), &mut store).await?;
     assert!(matches!(res, QueueRead::Event(ref e) if e.object_id == 10));
-    assert_eq!(store.event_count(), 1);
-    Ok(())
-}
-
-#[tokio::test]
-async fn rate_limit_active_reports_deadline() -> TbResult<()> {
-    let (mut store, session) = setup();
-    let until = get_time() + 500;
-    store
-        .strava_event_create(Event {
-            object_type: ObjectType::Stop,
-            object_id: until,
-            ..Default::default()
-        })
-        .await?;
-    let event = store.events[0].clone();
-    let res = event.rate_limit(session.user_id(), &mut store).await?;
-    assert_eq!(res, QueueRead::Limited { until });
-    assert_eq!(store.event_count(), 1);
-    Ok(())
-}
-
-#[tokio::test]
-async fn rate_limit_expired_removes_stop() -> TbResult<()> {
-    let (mut store, session) = setup();
-    let stop = Event {
-        object_type: ObjectType::Stop,
-        object_id: 100,
-        ..Default::default()
-    };
-    store.strava_event_create(stop).await?;
-    let event = store.events[0].clone();
-    let res = event.rate_limit(session.user_id(), &mut store).await?;
-    assert_eq!(res, QueueRead::Empty);
-    assert_eq!(store.event_count(), 0);
     Ok(())
 }
 
@@ -320,19 +246,17 @@ async fn process_activity_delete_missing_ignores() -> TbResult<()> {
 }
 
 #[tokio::test]
-async fn process_try_again_inserts_stop() -> TbResult<()> {
+async fn process_try_again_keeps_event_queued() -> TbResult<()> {
+    // A 429 (TryAgain) keeps the event queued: the rate-limit state is
+    // updated from the response headers (in production), and the next
+    // get_event probe will report Limited. No Stop event is created.
+    reset_rate_limiter();
     let (mut store, mut session) = setup();
     store.strava_event_create(activity_event()).await?;
     queue_error("/activities/10", Error::TryAgain("rate limit"));
     let summary = process(&mut session, &mut store).await?;
     assert_eq!(summary, Summary::default());
-    assert_eq!(store.event_count(), 2);
-    let stop = store
-        .events
-        .iter()
-        .find(|e| e.object_type == ObjectType::Stop)
-        .unwrap();
-    assert!(stop.object_id > get_time());
+    assert_eq!(store.event_count(), 1, "the event stays queued");
     Ok(())
 }
 
@@ -476,7 +400,8 @@ async fn process_sync_bad_activity_skips_and_advances_cursor() -> TbResult<()> {
 }
 
 #[tokio::test]
-async fn process_sync_try_again_keeps_event_and_stops() -> TbResult<()> {
+async fn process_sync_try_again_keeps_event_queued() -> TbResult<()> {
+    reset_rate_limiter();
     let (mut store, mut session) = setup();
     store
         .strava_event_create(Event {
@@ -488,13 +413,7 @@ async fn process_sync_try_again_keeps_event_and_stops() -> TbResult<()> {
     queue_error("/activities?after=0&per_page=25", Error::TryAgain("nope"));
     let summary = process(&mut session, &mut store).await?;
     assert_eq!(summary, Summary::default());
-    assert_eq!(store.event_count(), 2);
-    assert!(
-        store
-            .events
-            .iter()
-            .any(|e| e.object_type == ObjectType::Stop)
-    );
+    assert_eq!(store.event_count(), 1, "the sync event stays queued");
     Ok(())
 }
 

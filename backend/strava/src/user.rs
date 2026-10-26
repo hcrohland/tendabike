@@ -144,11 +144,20 @@ impl StravaUser {
         Ok(user)
     }
 
-    /// Get list of gear for user from Strava
+    /// Get list of gear for user from Strava.
+    ///
+    /// Skips the Strava call silently when the rate limiter reports no
+    /// budget: hydration is best-effort and must not be blocked by a
+    /// non-essential API call.
     pub async fn update_gear(
         user: &mut dyn Session,
         store: &mut impl StravaStore,
     ) -> TbResult<Vec<PartId>> {
+        if crate::ratelimit::limited_until().is_some() {
+            log::debug!("update_gear: rate limited, skipping hydration");
+            return Ok(Vec::new());
+        }
+
         #[derive(Deserialize, Debug)]
         struct Gear {
             id: String,
