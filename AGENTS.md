@@ -4,7 +4,8 @@
 
 ## Working rules
 
-- Understand a type by its contract, not its methods. A type's contract is what it is and what it guarantees to callers — its module doc plus its public method signatures. Confirm it with 1–3 representative usages rather than reading every method or tracing every caller. Drop into the implementation only to implement or modify the type, debug, or when the contract is too thin to decide.
+- Work from the interface, not through it. A type's public interface — its module doc and method signatures — is the complete specification. Confirm it with 1–3 representative usages. When the interface is unchanged, callers are out of scope; when calling a function, its internal dependencies are out of scope. Drop into implementation only to modify the type, debug, or when the contract is too thin to decide.
+- The boundary holds at the package level too: a package's public API is its complete interface, even with a single consumer or implementor. Confirm the API; the implementation behind it is out of scope.
 - When more than one option is defensible, ask the user before choosing — even when you're confident in your pick.
 - Keep batch size one: one operation per call — one ticket per create, one file or function per edit — and confirm it landed before starting the next.
 - Formatting is done by external formatters, never by hand: write the code, then run cargo fmt (Rust) or npm run format from the project root.
