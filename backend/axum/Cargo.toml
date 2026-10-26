@@ -11,20 +11,20 @@ tb_strava = { workspace = true }
 tb_exec = { workspace = true }
 
 reqwest = { workspace = true }
-hmac = "*"
-sha2 = "*"
-base64 = "*"
+hmac = "0.13"
+sha2 = "0.11"
+base64 = "0.23"
 rand = "0.10"
 axum = { version = "0.8", features = ["macros", "multipart"] }
 futures = "0.3"
-http = "1"
+http = { workspace = true }
 tracing = "0.1"
 tower-http = { version = "0.6", features = ["full"] }
 # 0.15 fails on deletion-task...
 # tower-sessions = { version = "0.15", features = ["deletion-task"] }
 tower-sessions = "0.14"
 tower-sessions-sqlx-store = { version = "0.15", features = ["postgres"] }
-sqlx = { version = "0.8", features = ["postgres"] }
+sqlx = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 axum-macros = "0.5"
 
@@ -42,7 +42,13 @@ time = { workspace = true, features = [
     "parsing",
     "serde-human-readable",
 ] }
-tokio = { workspace = true }
+tokio = { workspace = true, features = [
+    "net",
+    "signal",
+    "sync",
+    "time",
+    "rt-multi-thread",
+] }
 hex = "0.4.3"
 
 [dev-dependencies]

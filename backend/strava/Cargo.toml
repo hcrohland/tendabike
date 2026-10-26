@@ -18,7 +18,7 @@ time = { workspace = true, features = ["serde"] }
 async-recursion = { workspace = true }
 async-trait = { workspace = true }
 oauth2 = { workspace = true }
-http = "1"
+http = { workspace = true }
 reqwest = { workspace = true }
 
 [features]

@@ -39,7 +39,6 @@
     "vitest": "^5.0.0"
   },
   "dependencies": {
-    "@inlang/paraglide-js": "^2.20.2",
     "svelte-spa-router": "4",
     "svelty-picker": "^6.1.6"
   }

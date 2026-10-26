@@ -7,11 +7,12 @@ default-run = "tendabike"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dotenvy = "0.15"
 mimalloc = { version = "0.1", features = ["secure"] }
 
+dotenvy = { workspace = true }
+
 anyhow = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tb_axum = { workspace = true }
 tb_exec = { workspace = true }
 tb_sqlx = { workspace = true }
