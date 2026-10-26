@@ -8,19 +8,39 @@ use std::sync::Mutex;
 
 use http::HeaderMap;
 
-/// The rate-limit state: usage and limits for both the overall and the
-/// non-upload (read) scopes, each with a 15-minute and a daily window.
+/// A single rate-limit window: the limit and the current usage.
 /// `None` until the first response populates the values.
 #[derive(Debug, Clone, Default, PartialEq)]
+pub struct Window {
+    pub limit: Option<u32>,
+    pub usage: Option<u32>,
+}
+
+impl Window {
+    /// Whether the budget is exhausted (usage >= limit).
+    /// `None` values (no data yet) are not exhausted.
+    pub fn is_exhausted(&self) -> bool {
+        match (self.usage, self.limit) {
+            (Some(u), Some(l)) => u >= l,
+            _ => false,
+        }
+    }
+}
+
+impl std::fmt::Display for Window {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", self.usage.unwrap_or(0), self.limit.unwrap_or(0))
+    }
+}
+
+/// The rate-limit state: usage and limits for both the overall and the
+/// non-upload (read) scopes, each with a 15-minute and a daily window.
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct RateLimitState {
-    pub overall_limit_15min: Option<u32>,
-    pub overall_usage_15min: Option<u32>,
-    pub overall_limit_daily: Option<u32>,
-    pub overall_usage_daily: Option<u32>,
-    pub read_limit_15min: Option<u32>,
-    pub read_usage_15min: Option<u32>,
-    pub read_limit_daily: Option<u32>,
-    pub read_usage_daily: Option<u32>,
+    pub overall_15min: Window,
+    pub overall_daily: Window,
+    pub read_15min: Window,
+    pub read_daily: Window,
     /// Whether the last `limited_until()` call reported a limit (for WARN
     /// log transitions: entering / exiting the rate-limited state).
     pub was_limited: bool,
@@ -39,24 +59,18 @@ pub fn limited_until() -> Option<i64> {
     let is_limited = until.is_some();
     if is_limited && !state.was_limited {
         log::warn!(
-            "Strava rate limit reached (read 15min: {}/{}, read daily: {}/{}, overall 15min: {}/{}, overall daily: {}/{}); pausing until {}",
-            state.read_usage_15min.unwrap_or(0),
-            state.read_limit_15min.unwrap_or(0),
-            state.read_usage_daily.unwrap_or(0),
-            state.read_limit_daily.unwrap_or(0),
-            state.overall_usage_15min.unwrap_or(0),
-            state.overall_limit_15min.unwrap_or(0),
-            state.overall_usage_daily.unwrap_or(0),
-            state.overall_limit_daily.unwrap_or(0),
+            "Strava rate limit reached (read 15min: {}, read daily: {}, overall 15min: {}, overall daily: {}); pausing until {}",
+            state.read_15min,
+            state.read_daily,
+            state.overall_15min,
+            state.overall_daily,
             until.unwrap_or(0),
         );
     } else if !is_limited && state.was_limited {
         log::warn!(
-            "Strava rate limit cleared (read 15min: {}/{}, read daily: {}/{})",
-            state.read_usage_15min.unwrap_or(0),
-            state.read_limit_15min.unwrap_or(0),
-            state.read_usage_daily.unwrap_or(0),
-            state.read_limit_daily.unwrap_or(0),
+            "Strava rate limit cleared (read 15min: {}, read daily: {})",
+            state.read_15min,
+            state.read_daily,
         );
     }
     state.was_limited = is_limited;
@@ -76,57 +90,40 @@ pub fn update_from_headers(headers: &HeaderMap) {
 fn limited_until_inner(state: &RateLimitState) -> Option<i64> {
     // The earliest boundary of any exhausted window.
     [
-        exhausted(
-            state.read_usage_15min,
-            state.read_limit_15min,
-            next_15min_boundary,
-        ),
-        exhausted(
-            state.read_usage_daily,
-            state.read_limit_daily,
-            next_midnight_utc,
-        ),
-        exhausted(
-            state.overall_usage_15min,
-            state.overall_limit_15min,
-            next_15min_boundary,
-        ),
-        exhausted(
-            state.overall_usage_daily,
-            state.overall_limit_daily,
-            next_midnight_utc,
-        ),
+        state.read_15min.is_exhausted().then(next_15min_boundary),
+        state.read_daily.is_exhausted().then(next_midnight_utc),
+        state.overall_15min.is_exhausted().then(next_15min_boundary),
+        state.overall_daily.is_exhausted().then(next_midnight_utc),
     ]
     .into_iter()
     .flatten()
     .min()
 }
 
-/// Returns `Some(boundary())` when `usage >= limit`, else `None`.
-fn exhausted(usage: Option<u32>, limit: Option<u32>, boundary: fn() -> i64) -> Option<i64> {
-    match (usage, limit) {
-        (Some(u), Some(l)) if u >= l => Some(boundary()),
-        _ => None,
-    }
-}
-
 fn update_from_headers_inner(state: &mut RateLimitState, headers: &HeaderMap) {
     if let Some(val) = parse_pair(headers.get("X-RateLimit-Limit")) {
-        state.overall_limit_15min = Some(val.0);
-        state.overall_limit_daily = Some(val.1);
+        state.overall_15min.limit = Some(val.0);
+        state.overall_daily.limit = Some(val.1);
     }
     if let Some(val) = parse_pair(headers.get("X-RateLimit-Usage")) {
-        state.overall_usage_15min = Some(val.0);
-        state.overall_usage_daily = Some(val.1);
+        state.overall_15min.usage = Some(val.0);
+        state.overall_daily.usage = Some(val.1);
     }
     if let Some(val) = parse_pair(headers.get("X-ReadRateLimit-Limit")) {
-        state.read_limit_15min = Some(val.0);
-        state.read_limit_daily = Some(val.1);
+        state.read_15min.limit = Some(val.0);
+        state.read_daily.limit = Some(val.1);
     }
     if let Some(val) = parse_pair(headers.get("X-ReadRateLimit-Usage")) {
-        state.read_usage_15min = Some(val.0);
-        state.read_usage_daily = Some(val.1);
+        state.read_15min.usage = Some(val.0);
+        state.read_daily.usage = Some(val.1);
     }
+    log::debug!(
+        "Strava rate limit state updated: read 15min: {}, read daily: {}, overall 15min: {}, overall daily: {}",
+        state.read_15min,
+        state.read_daily,
+        state.overall_15min,
+        state.overall_daily,
+    );
 }
 
 /// Parses a `"15min,daily"` comma-separated header value into a pair.
@@ -159,19 +156,27 @@ fn next_midnight_utc() -> i64 {
 #[cfg(test)]
 pub fn test_set_limited() {
     let mut state = STATE.lock().unwrap();
-    state.read_usage_15min = Some(100);
-    state.read_limit_15min = Some(100);
-    state.read_usage_daily = Some(500);
-    state.read_limit_daily = Some(1000);
+    state.read_15min = Window {
+        limit: Some(100),
+        usage: Some(100),
+    };
+    state.read_daily = Window {
+        limit: Some(1000),
+        usage: Some(500),
+    };
 }
 
 #[cfg(test)]
 pub fn test_set_not_limited() {
     let mut state = STATE.lock().unwrap();
-    state.read_usage_15min = Some(0);
-    state.read_limit_15min = Some(100);
-    state.read_usage_daily = Some(0);
-    state.read_limit_daily = Some(1000);
+    state.read_15min = Window {
+        limit: Some(100),
+        usage: Some(0),
+    };
+    state.read_daily = Window {
+        limit: Some(1000),
+        usage: Some(0),
+    };
 }
 
 #[cfg(test)]

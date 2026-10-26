@@ -10,6 +10,13 @@ fn headers(pairs: &[(&str, &str)]) -> HeaderMap {
     m
 }
 
+fn window(limit: u32, usage: u32) -> Window {
+    Window {
+        limit: Some(limit),
+        usage: Some(usage),
+    }
+}
+
 // ─── update_from_headers_inner ─────────────────────────────────────────
 
 #[test]
@@ -22,21 +29,17 @@ fn update_from_headers_parses_all_four() {
         ("X-ReadRateLimit-Usage", "80,800"),
     ]);
     update_from_headers_inner(&mut state, &h);
-    assert_eq!(state.overall_limit_15min, Some(200));
-    assert_eq!(state.overall_usage_15min, Some(150));
-    assert_eq!(state.overall_limit_daily, Some(2000));
-    assert_eq!(state.overall_usage_daily, Some(1500));
-    assert_eq!(state.read_limit_15min, Some(100));
-    assert_eq!(state.read_usage_15min, Some(80));
-    assert_eq!(state.read_limit_daily, Some(1000));
-    assert_eq!(state.read_usage_daily, Some(800));
+    assert_eq!(state.overall_15min, window(200, 150));
+    assert_eq!(state.overall_daily, window(2000, 1500));
+    assert_eq!(state.read_15min, window(100, 80));
+    assert_eq!(state.read_daily, window(1000, 800));
 }
 
 #[test]
 fn update_from_headers_missing_headers_keeps_previous() {
     let mut state = RateLimitState {
-        overall_limit_15min: Some(200),
-        overall_usage_15min: Some(150),
+        overall_15min: window(200, 150),
+        overall_daily: window(2000, 1500),
         ..Default::default()
     };
     // Only the read headers are present; overall keeps its previous values.
@@ -45,10 +48,10 @@ fn update_from_headers_missing_headers_keeps_previous() {
         ("X-ReadRateLimit-Usage", "80,800"),
     ]);
     update_from_headers_inner(&mut state, &h);
-    assert_eq!(state.overall_limit_15min, Some(200));
-    assert_eq!(state.overall_usage_15min, Some(150));
-    assert_eq!(state.read_limit_15min, Some(100));
-    assert_eq!(state.read_usage_15min, Some(80));
+    assert_eq!(state.overall_15min, window(200, 150));
+    assert_eq!(state.overall_daily, window(2000, 1500));
+    assert_eq!(state.read_15min, window(100, 80));
+    assert_eq!(state.read_daily, window(1000, 800));
 }
 
 #[test]
@@ -56,19 +59,42 @@ fn update_from_headers_malformed_value_ignored() {
     let mut state = RateLimitState::default();
     let h = headers(&[("X-RateLimit-Limit", "not,a,number")]);
     update_from_headers_inner(&mut state, &h);
-    assert_eq!(state.overall_limit_15min, None);
-    assert_eq!(state.overall_limit_daily, None);
+    assert_eq!(state.overall_15min, Window::default());
+    assert_eq!(state.overall_daily, Window::default());
 }
 
 #[test]
 fn update_from_headers_empty_map_no_change() {
     let mut state = RateLimitState {
-        read_usage_15min: Some(42),
+        read_15min: window(100, 42),
         ..Default::default()
     };
     let h = HeaderMap::new();
     update_from_headers_inner(&mut state, &h);
-    assert_eq!(state.read_usage_15min, Some(42));
+    assert_eq!(state.read_15min, window(100, 42));
+}
+
+// ─── Window::is_exhausted ──────────────────────────────────────────────
+
+#[test]
+fn window_exhausted_when_usage_equals_limit() {
+    assert!(window(100, 100).is_exhausted());
+}
+
+#[test]
+fn window_not_exhausted_when_usage_below_limit() {
+    assert!(!window(100, 99).is_exhausted());
+}
+
+#[test]
+fn window_not_exhausted_when_no_data() {
+    assert!(!Window::default().is_exhausted());
+}
+
+#[test]
+fn window_display_formats_as_slash_pair() {
+    assert_eq!(window(100, 80).to_string(), "80/100");
+    assert_eq!(Window::default().to_string(), "0/0");
 }
 
 // ─── limited_until_inner ───────────────────────────────────────────────
@@ -82,14 +108,10 @@ fn limited_until_no_data_returns_none() {
 #[test]
 fn limited_until_budget_available_returns_none() {
     let state = RateLimitState {
-        read_usage_15min: Some(50),
-        read_limit_15min: Some(100),
-        read_usage_daily: Some(500),
-        read_limit_daily: Some(1000),
-        overall_usage_15min: Some(80),
-        overall_limit_15min: Some(200),
-        overall_usage_daily: Some(800),
-        overall_limit_daily: Some(2000),
+        read_15min: window(100, 50),
+        read_daily: window(1000, 500),
+        overall_15min: window(200, 80),
+        overall_daily: window(2000, 800),
         ..Default::default()
     };
     assert_eq!(limited_until_inner(&state), None);
@@ -98,14 +120,10 @@ fn limited_until_budget_available_returns_none() {
 #[test]
 fn limited_until_read_15min_exhausted_returns_15min_boundary() {
     let state = RateLimitState {
-        read_usage_15min: Some(100),
-        read_limit_15min: Some(100),
-        read_usage_daily: Some(500),
-        read_limit_daily: Some(1000),
-        overall_usage_15min: Some(150),
-        overall_limit_15min: Some(200),
-        overall_usage_daily: Some(800),
-        overall_limit_daily: Some(2000),
+        read_15min: window(100, 100),
+        read_daily: window(1000, 500),
+        overall_15min: window(200, 150),
+        overall_daily: window(2000, 800),
         ..Default::default()
     };
     let until = limited_until_inner(&state).unwrap();
@@ -121,14 +139,10 @@ fn limited_until_read_15min_exhausted_returns_15min_boundary() {
 #[test]
 fn limited_until_daily_exhausted_returns_midnight() {
     let state = RateLimitState {
-        read_usage_15min: Some(50),
-        read_limit_15min: Some(100),
-        read_usage_daily: Some(1000),
-        read_limit_daily: Some(1000),
-        overall_usage_15min: Some(80),
-        overall_limit_15min: Some(200),
-        overall_usage_daily: Some(1500),
-        overall_limit_daily: Some(2000),
+        read_15min: window(100, 50),
+        read_daily: window(1000, 1000),
+        overall_15min: window(200, 80),
+        overall_daily: window(2000, 1500),
         ..Default::default()
     };
     let until = limited_until_inner(&state).unwrap();
@@ -144,14 +158,10 @@ fn limited_until_daily_exhausted_returns_midnight() {
 #[test]
 fn limited_until_both_exhausted_returns_earlier() {
     let state = RateLimitState {
-        read_usage_15min: Some(100),
-        read_limit_15min: Some(100),
-        read_usage_daily: Some(1000),
-        read_limit_daily: Some(1000),
-        overall_usage_15min: Some(200),
-        overall_limit_15min: Some(200),
-        overall_usage_daily: Some(2000),
-        overall_limit_daily: Some(2000),
+        read_15min: window(100, 100),
+        read_daily: window(1000, 1000),
+        overall_15min: window(200, 200),
+        overall_daily: window(2000, 2000),
         ..Default::default()
     };
     let until = limited_until_inner(&state).unwrap();
@@ -166,35 +176,10 @@ fn limited_until_both_exhausted_returns_earlier() {
 }
 
 #[test]
-fn limited_until_usage_equals_limit_is_exhausted() {
-    let state = RateLimitState {
-        read_usage_15min: Some(100),
-        read_limit_15min: Some(100),
-        ..Default::default()
-    };
-    assert!(
-        limited_until_inner(&state).is_some(),
-        "usage == limit means exhausted"
-    );
-}
-
-#[test]
-fn limited_until_usage_below_limit_is_not_exhausted() {
-    let state = RateLimitState {
-        read_usage_15min: Some(99),
-        read_limit_15min: Some(100),
-        ..Default::default()
-    };
-    assert_eq!(limited_until_inner(&state), None);
-}
-
-#[test]
 fn limited_until_overall_15min_exhausted() {
     let state = RateLimitState {
-        overall_usage_15min: Some(200),
-        overall_limit_15min: Some(200),
-        read_usage_15min: Some(50),
-        read_limit_15min: Some(100),
+        overall_15min: window(200, 200),
+        read_15min: window(100, 50),
         ..Default::default()
     };
     assert!(limited_until_inner(&state).is_some());
