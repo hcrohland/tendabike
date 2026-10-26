@@ -304,7 +304,6 @@ async fn api_write_end_to_end() {
     outcome.expect("a reaped loop returns Ok");
 }
 
-/// A queued Strava `Stop` past its expiry (the rate-limit backoff) is
 /// An idle loop — empty queue, closed channel, no streams attached —
 /// reaps: `run` returns `Ok` promptly (the web layer respawns on it), not
 /// a hang and not an error.

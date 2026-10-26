@@ -156,7 +156,7 @@ fn limited_until_daily_exhausted_returns_midnight() {
 }
 
 #[test]
-fn limited_until_both_exhausted_returns_earlier() {
+fn limited_until_both_exhausted_returns_later() {
     let state = RateLimitState {
         read_15min: window(100, 100),
         read_daily: window(1000, 1000),
@@ -169,10 +169,10 @@ fn limited_until_both_exhausted_returns_earlier() {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs() as i64;
-    assert!(
-        until - now <= 900,
-        "the 15-min boundary wins (it's earlier)"
-    );
+    // The longest limit wins: the daily boundary (midnight) is later than
+    // the 15-min boundary, so we sleep until midnight.
+    assert!(until - now > 900, "the daily boundary wins (it's later)");
+    assert_eq!(until % 86400, 0, "the boundary is midnight UTC");
 }
 
 #[test]

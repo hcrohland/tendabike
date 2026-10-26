@@ -88,7 +88,9 @@ pub fn update_from_headers(headers: &HeaderMap) {
 }
 
 fn limited_until_inner(state: &RateLimitState) -> Option<i64> {
-    // The earliest boundary of any exhausted window.
+    // The latest boundary of any exhausted window: the longest limit wins,
+    // so we sleep until the last window resets (waking earlier would find
+    // the other window still exhausted).
     [
         state.read_15min.is_exhausted().then(next_15min_boundary),
         state.read_daily.is_exhausted().then(next_midnight_utc),
@@ -97,7 +99,7 @@ fn limited_until_inner(state: &RateLimitState) -> Option<i64> {
     ]
     .into_iter()
     .flatten()
-    .min()
+    .max()
 }
 
 fn update_from_headers_inner(state: &mut RateLimitState, headers: &HeaderMap) {
