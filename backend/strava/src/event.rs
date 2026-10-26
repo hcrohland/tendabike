@@ -1,4 +1,3 @@
-use async_recursion::async_recursion;
 use log::error;
 use std::collections::HashMap;
 
@@ -97,7 +96,6 @@ pub enum ObjectType {
     Activity,
     Athlete,
     Sync,
-    Stop,
 }
 
 impl TryFrom<String> for ObjectType {
@@ -108,7 +106,6 @@ impl TryFrom<String> for ObjectType {
         Ok(match value.as_str() {
             "activity" => Activity,
             "athlete" => Athlete,
-            "stop" => Stop,
             "sync" => Sync,
             _ => return Err(Error::BadRequest(format!("Unknown object type {value}"))),
         })
@@ -121,7 +118,6 @@ impl From<ObjectType> for String {
         String::from(match value {
             Activity => "activity",
             Athlete => "athlete",
-            Stop => "stop",
             Sync => "sync",
         })
     }
@@ -203,31 +199,6 @@ impl Event {
     async fn setdate(&mut self, time: i64, store: &mut impl StravaDataStore) -> TbResult<()> {
         self.event_time = time;
         store.strava_event_set_time(self.id, self.event_time).await
-    }
-
-    // `#[async_recursion]` stamps `#[must_use]` on its generated boxed-future
-    // wrapper, and clippy 1.99's `double_must_use` then flags that against the
-    // already-must-use `Result` output. The attribute is macro-generated, so it
-    // cannot be removed or given a message — allow the lint on the item instead.
-    #[allow(clippy::double_must_use)]
-    #[async_recursion]
-    async fn rate_limit(
-        self,
-        user_id: UserId,
-        store: &mut impl StravaDataStore,
-    ) -> TbResult<QueueRead> {
-        // rate limit event
-        if self.object_id > get_time() {
-            // still rate limited!
-            return Ok(QueueRead::Limited {
-                until: self.object_id,
-            });
-        }
-        // remove stop event
-        warn!("Starting hooks again");
-        self.delete(store).await?;
-        // get next event
-        get_event(user_id, store).await
     }
 
     async fn process_activity(
@@ -358,8 +329,10 @@ impl Event {
     async fn fail_event(&self, err: Error, store: &mut impl StravaDataStore) -> TbResult<Summary> {
         match err {
             Error::TryAgain(msg) => {
-                warn!("Strava rate limited ({msg}); pausing all users for 15 minutes");
-                insert_stop(store).await?;
+                // The rate-limit state is already updated from the 429
+                // response headers (in `get_strava`); the event stays queued
+                // and the next `get_event` probe will report `Limited`.
+                warn!("Strava rate limited ({msg}); event stays queued until the window resets");
                 Ok(Summary::default())
             }
             Error::NotAuth(msg) => {
@@ -472,28 +445,6 @@ pub async fn sync_queued_for_user(
     Ok(syncs.iter().any(|event| event.event_time == event_time))
 }
 
-/// Inserts the global rate-limit `Stop` (spec #446 §4.6): the Strava rate
-/// limit is app-wide, so one user's 429 pauses every user's drain. The
-/// deadline is 15 minutes (the existing tuned value). If a `Stop` is already
-/// queued, its deadline is **extended** rather than stacking rows — the
-/// backoff must not compound: only `Stop`s carry `owner_id` 0, so the next
-/// event for user 0 is the oldest `Stop`.
-pub async fn insert_stop(store: &mut impl StravaDataStore) -> TbResult<()> {
-    let stop = Event {
-        object_type: ObjectType::Stop,
-        object_id: get_time() + 900,
-        ..Default::default()
-    };
-    if let Some(existing) = store
-        .strava_event_get_next_for_user(StravaId::default())
-        .await?
-        && existing.object_type == ObjectType::Stop
-    {
-        existing.delete(store).await?;
-    }
-    store.strava_event_create(stop).await
-}
-
 /// One outcome of a read of the `strava_events` queue (spec #446 §4.6):
 /// what is interesting for the user right now, and when the queue is paused.
 #[derive(Debug, Clone, PartialEq)]
@@ -523,15 +474,18 @@ pub enum QueueRead {
 /// event" step; reading the queue stays a Strava-side concern, so the
 /// function stays here rather than being inlined in the caller.
 pub async fn get_event(user_id: UserId, store: &mut impl StravaDataStore) -> TbResult<QueueRead> {
+    // Proactive rate-limit gate: if the budget is exhausted, report the
+    // window boundary without dequeuing (the event stays queued).
+    if let Some(until) = crate::ratelimit::limited_until() {
+        return Ok(QueueRead::Limited { until });
+    }
+
     let strava_id = get_strava_id(user_id, store).await?;
     let event = store.strava_event_get_next_for_user(strava_id).await?;
     let event = match event {
         Some(event) => event,
         None => return Ok(QueueRead::Empty),
     };
-    if event.object_type == ObjectType::Stop {
-        return event.rate_limit(user_id, store).await;
-    }
 
     // Prevent unneeded calls to Strava
     // only the latest event for an object is interesting
