@@ -20,8 +20,9 @@ futures = "0.3"
 http = { workspace = true }
 tracing = "0.1"
 tower-http = { version = "0.7", features = ["full"] }
-# 0.15 fails on deletion-task...
-# tower-sessions = { version = "0.15", features = ["deletion-task"] }
+# Pinned to 0.14: the latest tower-sessions-sqlx-store (0.15.0) is built
+# against tower-sessions 0.14, so bumping to 0.15 leaves PostgresStore
+# implementing the 0.14 SessionStore trait (a type mismatch at the layer).
 tower-sessions = "0.14"
 tower-sessions-sqlx-store = { version = "0.15", features = ["postgres"] }
 sqlx = { workspace = true }
