@@ -47,6 +47,7 @@ FROM rust-base AS build-engine
 
 WORKDIR /app
 COPY --from=build-deps /app/target ./target
+COPY --from=build-deps /usr/local/cargo/registry /usr/local/cargo/registry
 
 ENV SQLX_OFFLINE=true
 COPY Cargo.toml Cargo.lock ./
