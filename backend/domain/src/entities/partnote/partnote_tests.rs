@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     MockSession,
-    test_support::{MemStore, TestSession},
+    test_support::{MemStore, mock_session, mock_session_with_shop},
 };
 
 fn created() -> OffsetDateTime {
@@ -11,7 +11,7 @@ fn created() -> OffsetDateTime {
 /// A fresh store with a bike part owned by user 1.
 async fn owned_part() -> (MemStore, PartId) {
     let mut store = MemStore::new();
-    let owner = TestSession::new(UserId::from(1));
+    let owner = mock_session(UserId::from(1));
     let part = Part::create(
         "Bike".to_string(),
         "Trek".to_string(),
@@ -28,7 +28,7 @@ async fn owned_part() -> (MemStore, PartId) {
 }
 
 fn other_user() -> MockSession {
-    TestSession::new(UserId::from(98))
+    mock_session(UserId::from(98))
 }
 
 fn file_args() -> (String, String, Option<String>, i64, Vec<u8>) {
@@ -237,7 +237,7 @@ async fn partnote_delete_unknown_returns_not_found() -> TbResult<()> {
 #[tokio::test]
 async fn partid_note_create_text_rejects_blank_name() -> TbResult<()> {
     let (mut store, part) = owned_part().await;
-    let owner = TestSession::new(UserId::from(1));
+    let owner = mock_session(UserId::from(1));
     let result = part
         .note_create_text(&owner, "   ".to_string(), created(), &mut store)
         .await;
@@ -249,7 +249,7 @@ async fn partid_note_create_text_rejects_blank_name() -> TbResult<()> {
 #[tokio::test]
 async fn partid_note_create_text_stores_note() -> TbResult<()> {
     let (mut store, part) = owned_part().await;
-    let owner = TestSession::new(UserId::from(1));
+    let owner = mock_session(UserId::from(1));
     let note = part
         .note_create_text(
             &owner,
@@ -269,7 +269,7 @@ async fn partid_note_create_text_stores_note() -> TbResult<()> {
 #[tokio::test]
 async fn partid_note_create_file_stores_file() -> TbResult<()> {
     let (mut store, part) = owned_part().await;
-    let owner = TestSession::new(UserId::from(1));
+    let owner = mock_session(UserId::from(1));
     let (name, mime, filename, size, data) = file_args();
     let note = part
         .note_create_file(
@@ -294,7 +294,7 @@ async fn partid_note_create_file_stores_file() -> TbResult<()> {
 #[tokio::test]
 async fn partid_notes_returns_part_notes() -> TbResult<()> {
     let (mut store, part) = owned_part().await;
-    let owner = TestSession::new(UserId::from(1));
+    let owner = mock_session(UserId::from(1));
     part.note_create_text(&owner, "a".to_string(), created(), &mut store)
         .await?;
     let (name, mime, filename, size, data) = file_args();
@@ -324,7 +324,7 @@ async fn partid_notes_returns_part_notes() -> TbResult<()> {
 #[tokio::test]
 async fn partnote_id_update_text_renames_note() -> TbResult<()> {
     let (mut store, part) = owned_part().await;
-    let owner = TestSession::new(UserId::from(1));
+    let owner = mock_session(UserId::from(1));
     let note = part
         .note_create_text(&owner, "old".to_string(), created(), &mut store)
         .await?;
@@ -341,7 +341,7 @@ async fn partnote_id_update_text_renames_note() -> TbResult<()> {
 #[tokio::test]
 async fn partnote_id_update_text_rejects_blank_name() -> TbResult<()> {
     let (mut store, part) = owned_part().await;
-    let owner = TestSession::new(UserId::from(1));
+    let owner = mock_session(UserId::from(1));
     let note = part
         .note_create_text(&owner, "old".to_string(), created(), &mut store)
         .await?;
@@ -357,7 +357,7 @@ async fn partnote_id_update_text_rejects_blank_name() -> TbResult<()> {
 #[tokio::test]
 async fn partnote_id_update_file_converts_text_to_file() -> TbResult<()> {
     let (mut store, part) = owned_part().await;
-    let owner = TestSession::new(UserId::from(1));
+    let owner = mock_session(UserId::from(1));
     let note = part
         .note_create_text(&owner, "a".to_string(), created(), &mut store)
         .await?;
@@ -385,7 +385,7 @@ async fn partnote_id_update_file_converts_text_to_file() -> TbResult<()> {
 #[tokio::test]
 async fn partnote_id_update_file_falls_back_to_existing_filename() -> TbResult<()> {
     let (mut store, part) = owned_part().await;
-    let owner = TestSession::new(UserId::from(1));
+    let owner = mock_session(UserId::from(1));
     let note = part
         .note_create_text(&owner, "a".to_string(), created(), &mut store)
         .await?;
@@ -423,7 +423,7 @@ async fn partnote_id_update_file_falls_back_to_existing_filename() -> TbResult<(
 #[tokio::test]
 async fn partnote_id_remove_file_converts_file_to_text() -> TbResult<()> {
     let (mut store, part) = owned_part().await;
-    let owner = TestSession::new(UserId::from(1));
+    let owner = mock_session(UserId::from(1));
     let (name, mime, filename, size, data) = file_args();
     let note = part
         .note_create_file(
@@ -449,7 +449,7 @@ async fn partnote_id_remove_file_converts_file_to_text() -> TbResult<()> {
 #[tokio::test]
 async fn partnote_id_remove_file_of_text_note_is_not_found() -> TbResult<()> {
     let (mut store, part) = owned_part().await;
-    let owner = TestSession::new(UserId::from(1));
+    let owner = mock_session(UserId::from(1));
     let note = part
         .note_create_text(&owner, "a".to_string(), created(), &mut store)
         .await?;
@@ -462,7 +462,7 @@ async fn partnote_id_remove_file_of_text_note_is_not_found() -> TbResult<()> {
 #[tokio::test]
 async fn partnote_file_returns_stored_bytes() -> TbResult<()> {
     let (mut store, part) = owned_part().await;
-    let owner = TestSession::new(UserId::from(1));
+    let owner = mock_session(UserId::from(1));
     let (name, mime, filename, size, data) = file_args();
     let note = part
         .note_create_file(
@@ -484,7 +484,7 @@ async fn partnote_file_returns_stored_bytes() -> TbResult<()> {
 #[tokio::test]
 async fn partnote_file_of_text_note_is_not_found() -> TbResult<()> {
     let (mut store, part) = owned_part().await;
-    let owner = TestSession::new(UserId::from(1));
+    let owner = mock_session(UserId::from(1));
     let note = part
         .note_create_text(&owner, "a".to_string(), created(), &mut store)
         .await?;
@@ -497,7 +497,7 @@ async fn partnote_file_of_text_note_is_not_found() -> TbResult<()> {
 #[tokio::test]
 async fn partnote_id_delete_removes_note() -> TbResult<()> {
     let (mut store, part) = owned_part().await;
-    let owner = TestSession::new(UserId::from(1));
+    let owner = mock_session(UserId::from(1));
     let (name, mime, filename, size, data) = file_args();
     let note = part
         .note_create_file(
@@ -525,7 +525,7 @@ async fn partnote_id_delete_removes_note() -> TbResult<()> {
 #[tokio::test]
 async fn partid_notes_of_unknown_part_is_not_found() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
     let result = PartId::from(99).notes(&session, &mut store).await;
     assert!(matches!(result, Err(Error::NotFound(_))));
     Ok(())
@@ -544,7 +544,7 @@ async fn partid_notes_of_foreign_part_is_forbidden() -> TbResult<()> {
 #[tokio::test]
 async fn partnote_id_note_of_unknown_id_is_not_found() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
     let result = PartNoteId::from(99).note(&session, &mut store).await;
     assert!(matches!(result, Err(Error::NotFound(_))));
     Ok(())
@@ -554,7 +554,7 @@ async fn partnote_id_note_of_unknown_id_is_not_found() -> TbResult<()> {
 #[tokio::test]
 async fn partnote_id_note_of_foreign_part_is_forbidden() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
     let note = PartId::from(1)
         .note_create_text(&session, "a".to_string(), created(), &mut store)
         .await?;
@@ -599,7 +599,7 @@ async fn partid_note_create_file_on_foreign_part_is_forbidden() -> TbResult<()> 
 #[tokio::test]
 async fn partnote_id_update_text_of_foreign_note_is_forbidden() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
     let note = PartId::from(1)
         .note_create_text(&session, "a".to_string(), created(), &mut store)
         .await?;
@@ -615,7 +615,7 @@ async fn partnote_id_update_text_of_foreign_note_is_forbidden() -> TbResult<()> 
 #[tokio::test]
 async fn partnote_id_update_file_of_foreign_note_is_forbidden() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
     let note = PartId::from(1)
         .note_create_text(&session, "a".to_string(), created(), &mut store)
         .await?;
@@ -640,7 +640,7 @@ async fn partnote_id_update_file_of_foreign_note_is_forbidden() -> TbResult<()> 
 #[tokio::test]
 async fn partnote_id_remove_file_of_foreign_note_is_forbidden() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
     let (name, mime, filename, size, data) = file_args();
     let note = PartId::from(1)
         .note_create_file(
@@ -663,7 +663,7 @@ async fn partnote_id_remove_file_of_foreign_note_is_forbidden() -> TbResult<()> 
 #[tokio::test]
 async fn partnote_id_delete_of_foreign_note_is_forbidden() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
     let note = PartId::from(1)
         .note_create_text(&session, "a".to_string(), created(), &mut store)
         .await?;
@@ -680,12 +680,12 @@ async fn shop_owner_can_access_partnotes() -> TbResult<()> {
     let shop = ShopId::create("Bike Barn".to_string(), None, true, shop_owner, &mut store).await?;
     let sub = SubscriptionId::create(shop.id, None, UserId::from(1), &mut store).await?;
     assert_eq!(sub.status, SubscriptionStatus::Active);
-    let customer = TestSession::new(UserId::from(1));
+    let customer = mock_session(UserId::from(1));
     shop.id
         .register_part(PartId::from(1), &customer, &mut store)
         .await?;
 
-    let shop_session = TestSession::with_shop(shop_owner, shop.id);
+    let shop_session = mock_session_with_shop(shop_owner, shop.id);
     let part = PartId::from(1);
     let note = part
         .note_create_text(

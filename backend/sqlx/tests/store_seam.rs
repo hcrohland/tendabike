@@ -74,9 +74,9 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use tb_domain::test_support::{
-    MemStore, StoreSnapshot, TestSession,
+    MemStore, StoreSnapshot,
     fixtures::{sample_purchase_date, test_session},
-    only_tombstone, part_type_ids, sole_live,
+    mock_session, only_tombstone, part_type_ids, sole_live,
 };
 use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, ApiRead, ApiWrite, Attachment, AttachmentStore,
@@ -2299,7 +2299,7 @@ async fn apiread_shop_reads() -> tb_domain::TbResult<()> {
 
         // The failed statement aborts the Postgres transaction, so the
         // access errors come last. User 2 is neither owner nor subscriber.
-        let other = TestSession::new(UserId::from(2));
+        let other = mock_session(UserId::from(2));
         let err = read(
             ApiRead::ShopSubscriptions(Some(shop.id)),
             &other,

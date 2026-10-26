@@ -13,7 +13,7 @@
 //! tire rows through `attachment_create`, a state the attach operation
 //! never produces (see its comment).
 
-use super::{AttachmentStore, MemStore, MockSession, Session, TestSession, part_type_ids};
+use super::{AttachmentStore, MemStore, MockSession, Session, mock_session, part_type_ids};
 use crate::MAX_TIME;
 use crate::UserId;
 use crate::attach_assembly;
@@ -29,12 +29,12 @@ pub fn test_user() -> UserId {
 
 /// Returns a [`MockSession`] initialized with test_user().
 pub fn test_session() -> MockSession {
-    TestSession::new(test_user())
+    mock_session(test_user())
 }
 
 /// Create a basic part for testing.
 ///
-/// Creates a part with minimal required fields using the TestSession
+/// Creates a part with minimal required fields using the given session
 /// and stores it in the provided MemStore.
 pub async fn fixture_basic_part(session: &dyn Session, store: &mut MemStore) -> TbResult<Part> {
     Part::create(

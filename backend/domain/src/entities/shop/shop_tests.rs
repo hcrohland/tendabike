@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::{MemStore, TestSession};
+use crate::test_support::{MemStore, mock_session, mock_session_with_shop};
 
 async fn setup() -> (MemStore, UserId, UserId, Shop) {
     let mut store = MemStore::new();
@@ -121,7 +121,7 @@ async fn shop_delete_with_bikes_conflict() {
         PartTypeId::from_id(1),
         None,
         OffsetDateTime::now_utc(),
-        &TestSession::new(owner),
+        &mock_session(owner),
         &mut store,
     )
     .await
@@ -203,7 +203,7 @@ async fn setup_shop_and_sub(mut store: MemStore) -> (MemStore, UserId, UserId, S
 #[tokio::test]
 async fn register_part_ok() {
     let (mut store, _, customer, shop) = setup_shop_and_sub(MemStore::prepopulated()).await;
-    let session = TestSession::new(customer);
+    let session = mock_session(customer);
     let summary = shop
         .id
         .register_part(PartId::from(1), &session, &mut store)
@@ -216,7 +216,7 @@ async fn register_part_ok() {
 #[tokio::test]
 async fn register_part_cascades_subparts() {
     let (mut store, _, customer, shop) = setup_shop_and_sub(MemStore::prepopulated()).await;
-    let session = TestSession::new(customer);
+    let session = mock_session(customer);
     let summary = shop
         .id
         .register_part(PartId::from(1), &session, &mut store)
@@ -255,7 +255,7 @@ async fn register_part_requires_subscription() {
         .unwrap();
     assert_eq!(sub.status, SubscriptionStatus::Pending);
 
-    let session = TestSession::new(customer);
+    let session = mock_session(customer);
     let result = shop
         .id
         .register_part(PartId::from(1), &session, &mut store)
@@ -286,7 +286,7 @@ async fn register_part_requires_ownership() {
         .unwrap();
     assert_eq!(sub.status, SubscriptionStatus::Active);
 
-    let session = TestSession::new(stranger);
+    let session = mock_session(stranger);
     let result = shop
         .id
         .register_part(PartId::from(1), &session, &mut store)
@@ -297,7 +297,7 @@ async fn register_part_requires_ownership() {
 #[tokio::test]
 async fn register_part_attached_rejected() {
     let (mut store, _, customer, shop) = setup_shop_and_sub(MemStore::prepopulated()).await;
-    let session = TestSession::new(customer);
+    let session = mock_session(customer);
     // Front Wheel A (PartId::from(2)) is attached to Bike A, so it can't be registered
     let result = shop
         .id
@@ -309,7 +309,7 @@ async fn register_part_attached_rejected() {
 #[tokio::test]
 async fn unregister_part_by_owner() {
     let (mut store, _, customer, shop) = setup_shop_and_sub(MemStore::prepopulated()).await;
-    let session = TestSession::new(customer);
+    let session = mock_session(customer);
     shop.id
         .register_part(PartId::from(1), &session, &mut store)
         .await
@@ -331,13 +331,13 @@ async fn unregister_part_by_owner() {
 async fn unregister_part_by_shop_owner() {
     let (mut store, shop_owner, customer, shop) =
         setup_shop_and_sub(MemStore::prepopulated()).await;
-    let cust_session = TestSession::new(customer);
+    let cust_session = mock_session(customer);
     shop.id
         .register_part(PartId::from(1), &cust_session, &mut store)
         .await
         .unwrap();
 
-    let shop_session = TestSession::with_shop(shop_owner, shop.id);
+    let shop_session = mock_session_with_shop(shop_owner, shop.id);
     let summary = shop
         .id
         .unregister_part(PartId::from(1), &shop_session, &mut store)
@@ -354,7 +354,7 @@ async fn unregister_part_by_shop_owner() {
 async fn get_parts_returns_registered() {
     let (mut store, shop_owner, customer, shop) =
         setup_shop_and_sub(MemStore::prepopulated()).await;
-    let session = TestSession::new(customer);
+    let session = mock_session(customer);
     shop.id
         .register_part(PartId::from(1), &session, &mut store)
         .await
@@ -387,7 +387,7 @@ async fn get_parts_forbidden_non_owner() {
 #[tokio::test]
 async fn shop_creates_part_in_shop_context() {
     let (mut store, shop_owner, _, shop) = setup_shop_and_sub(MemStore::prepopulated()).await;
-    let session = TestSession::with_shop(shop_owner, shop.id);
+    let session = mock_session_with_shop(shop_owner, shop.id);
     let part = Part::create(
         "New Chain".into(),
         "Shimano".into(),
@@ -407,7 +407,7 @@ async fn shop_creates_part_in_shop_context() {
 #[tokio::test]
 async fn shop_owner_attaches_to_customer_bike() {
     let (mut store, shop_owner, _, shop) = setup_shop_and_sub(MemStore::prepopulated()).await;
-    let session = TestSession::with_shop(shop_owner, shop.id);
+    let session = mock_session_with_shop(shop_owner, shop.id);
 
     let new_part = Part::create(
         "New Chain".into(),
@@ -447,13 +447,13 @@ async fn shop_owner_attaches_to_customer_bike() {
 async fn attach_transfers_ownership_to_customer() {
     let (mut store, shop_owner, customer, shop) =
         setup_shop_and_sub(MemStore::prepopulated()).await;
-    let cust_session = TestSession::new(customer);
+    let cust_session = mock_session(customer);
     shop.id
         .register_part(PartId::from(1), &cust_session, &mut store)
         .await
         .unwrap();
 
-    let shop_session = TestSession::with_shop(shop_owner, shop.id);
+    let shop_session = mock_session_with_shop(shop_owner, shop.id);
     let new_part = Part::create(
         "New Chain".into(),
         "Shimano".into(),
@@ -490,13 +490,13 @@ async fn attach_transfers_ownership_to_customer() {
 async fn shop_owner_detaches_from_customer_bike() {
     let (mut store, shop_owner, customer, shop) =
         setup_shop_and_sub(MemStore::prepopulated()).await;
-    let cust_session = TestSession::new(customer);
+    let cust_session = mock_session(customer);
     shop.id
         .register_part(PartId::from(1), &cust_session, &mut store)
         .await
         .unwrap();
 
-    let session = TestSession::with_shop(shop_owner, shop.id);
+    let session = mock_session_with_shop(shop_owner, shop.id);
     detach_assembly(
         &session,
         PartId::from(4),
@@ -514,7 +514,7 @@ async fn no_shop_cannot_access_foreign_bike() {
     let stranger = UserId::create("Stranger", "User", &None, &mut store)
         .await
         .unwrap();
-    let session = TestSession::new(stranger);
+    let session = mock_session(stranger);
 
     let result = PartId::from(1).part(&session, &mut store).await;
     assert!(matches!(result, Err(Error::Forbidden(_))));

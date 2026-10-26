@@ -90,15 +90,6 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::*;
 
-/// Test session constructors over the mockall [`MockSession`].
-///
-/// [`Session`] carries `#[automock]` under the `test-support` feature, so
-/// every test session is a configured [`MockSession`] — one mockall double
-/// replaces the crate's former hand-rolled `Session` fakes. `check_owner`
-/// is wired to the trait's default (delegating to `user_id`), so a session
-/// reports ownership the way a real one does.
-pub struct TestSession;
-
 /// A [`MockSession`] for `user`, `shop`, and `admin`, whose `check_owner`
 /// behaves like the trait default (delegating to `user_id`). The
 /// expectations accept any call count (including zero), so a session built
@@ -127,24 +118,6 @@ pub fn mock_session_with_shop(user: UserId, shop: ShopId) -> MockSession {
 /// An admin [`MockSession`] for `user` (no shop).
 pub fn mock_session_admin(user: UserId) -> MockSession {
     build_session(user, None, true)
-}
-
-impl TestSession {
-    /// A customer session for `user_id`.
-    #[allow(clippy::new_ret_no_self)] // a namespace of `MockSession` constructors
-    pub fn new(user_id: UserId) -> MockSession {
-        mock_session(user_id)
-    }
-
-    /// A shop-owner session for `user_id` acting in `shop`.
-    pub fn with_shop(user_id: UserId, shop: ShopId) -> MockSession {
-        mock_session_with_shop(user_id, shop)
-    }
-
-    /// A session for `user_id` with the given admin flag.
-    pub fn with_admin(user_id: UserId, admin: bool) -> MockSession {
-        build_session(user_id, None, admin)
-    }
 }
 
 /// The complete state of the in-memory database: every table plus the

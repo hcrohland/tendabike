@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_support::{
-    MemStore, TestSession, fixtures, only_tombstone, part_type_ids, sole_live,
+    MemStore, fixtures, mock_session, only_tombstone, part_type_ids, sole_live,
 };
 
 use fixtures::{sample_purchase_date, test_session, test_user};
@@ -473,9 +473,7 @@ async fn service_update_requires_ownership() -> TbResult<()> {
 
     let mut svc = sole_live(&summary.services);
     svc.notes = "Hacked".to_string();
-    let result = svc
-        .update(&TestSession::new(UserId::from(2)), &mut store)
-        .await;
+    let result = svc.update(&mock_session(UserId::from(2)), &mut store).await;
     assert!(result.is_err());
     Ok(())
 }
@@ -882,9 +880,7 @@ async fn redo_requires_ownership() -> TbResult<()> {
     .await?;
     let s1 = sole_live(&summary.services);
 
-    let result = s1
-        .redo(&TestSession::new(UserId::from(2)), &mut store)
-        .await;
+    let result = s1.redo(&mock_session(UserId::from(2)), &mut store).await;
     assert!(result.is_err());
     Ok(())
 }
@@ -1670,7 +1666,7 @@ async fn service_create_before_latest_activity_counts_only_earlier_ones() -> TbR
 #[tokio::test]
 async fn detach_served_part_recalculates_service_usage() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
     let wheel = PartId::from(2);
 
     let t = time::macros::datetime!(2023-06-01 10:00 UTC);
@@ -1708,7 +1704,7 @@ async fn detach_served_part_recalculates_service_usage() -> TbResult<()> {
 #[tokio::test]
 async fn activity_upsert_increments_service_usage_after_start() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
     let bike = PartId::from(1);
 
     // service after the new activity start → gets incremented
@@ -1787,7 +1783,7 @@ async fn activity_upsert_increments_service_usage_after_start() -> TbResult<()> 
 #[tokio::test]
 async fn reattach_served_part_recalculates_service_usage() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
     let wheel = PartId::from(2);
     let bike = PartId::from(1);
 
