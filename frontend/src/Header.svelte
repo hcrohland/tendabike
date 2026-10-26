@@ -21,8 +21,7 @@
   import { stateValues } from "./lib/mapable.svelte";
   import Sport from "./Widgets/Sport.svelte";
   import { getCategory } from "./lib/types";
-  import { querystring } from "svelte-spa-router";
-  import { location } from "svelte-spa-router";
+  import { router } from "svelte-spa-router";
   import { ChevronDownOutline } from "flowbite-svelte-icons";
   import Garmin from "./Activity/Garmin.svelte";
   import ShopMenu from "./Shop/ShopMenu.svelte";
@@ -74,7 +73,7 @@
     }
   }
 
-  let activeUrl = $derived("/#" + $location);
+  let activeUrl = $derived("/#" + router.location);
 
   const isDev = import.meta.env.DEV;
 
@@ -205,7 +204,7 @@
     </NavUl>
   {:else}
     <div class="flex items-center md:order-2">
-      <a href={"/strava/login?" + $querystring}>
+      <a href={"/strava/login?" + router.querystring}>
         <img src="connect_with_strava.png" alt="Login with Strava" />
       </a>
     </div>
