@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::{MemStore, TestSession, fixtures, only_tombstone, sole_live};
+use crate::test_support::{MemStore, fixtures, mock_session, only_tombstone, sole_live};
 use crate::traits::AttachmentStore;
 use time::OffsetDateTime;
 
@@ -112,7 +112,7 @@ async fn activityid_read_rejects_cross_user() -> TbResult<()> {
     store.activity_create(act).await?;
 
     // User 2 tries to access user 1's activity
-    let other_session = TestSession::new(UserId::from(2));
+    let other_session = mock_session(UserId::from(2));
     let result = ActivityId::new(100).read(&other_session, &mut store).await;
     assert!(result.is_err());
     Ok(())
@@ -158,7 +158,7 @@ fn activity_usage_defaults_time_to_zero() {
 #[tokio::test]
 async fn activity_get_all_returns_user_activities() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let sess = TestSession::new(UserId::from(99));
+    let sess = mock_session(UserId::from(99));
 
     let act1 = Activity {
         id: ActivityId::new(101),
@@ -237,7 +237,7 @@ async fn activity_categories_returns_unique_gear_types() -> TbResult<()> {
 #[tokio::test]
 async fn activity_categories_empty_for_no_activities() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let categories = Activity::categories(&TestSession::new(UserId::from(99)), &mut store).await?;
+    let categories = Activity::categories(&mock_session(UserId::from(99)), &mut store).await?;
     assert!(categories.is_empty());
     Ok(())
 }
@@ -708,7 +708,7 @@ async fn activity_delete_rejects_non_owner() -> TbResult<()> {
     store.activity_create(act.clone()).await?;
 
     // Create a different user's session
-    let other_session = TestSession::new(UserId::from(99));
+    let other_session = mock_session(UserId::from(99));
     let result = ActivityId::new(100)
         .delete(&other_session, &mut store)
         .await;
@@ -1124,7 +1124,7 @@ async fn rescan_all_reregisters_every_activity() -> TbResult<()> {
 #[tokio::test]
 async fn rescan_all_rebuilds_part_and_service_usage() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
     let bike = PartId::from(1);
 
     // service created after all snapshot activities → aggregates all three
@@ -1611,7 +1611,7 @@ async fn set_default_part_empty_returns_zero_usage() -> TbResult<()> {
 #[tokio::test]
 async fn set_default_part_accounts_usage_for_newly_assigned_activities() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
     let bike = PartId::from(1);
 
     let baseline = bike
@@ -1694,7 +1694,7 @@ async fn set_default_part_requires_ownership() -> TbResult<()> {
 
     // Verify the activity's gear is still None (not changed by user 1's operation)
     let act = ActivityId::new(1)
-        .read(&TestSession::new(UserId::from(2)), &mut store)
+        .read(&mock_session(UserId::from(2)), &mut store)
         .await?;
     assert_eq!(act.gear, None);
 
@@ -1769,7 +1769,7 @@ async fn replace_changes_affected_parts() -> TbResult<()> {
 #[tokio::test]
 async fn replace_gear_change_moves_usage_between_bikes() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
     let bike1 = PartId::from(1);
 
     let bike2 = Part::create(

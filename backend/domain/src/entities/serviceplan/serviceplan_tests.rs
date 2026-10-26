@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::{MemStore, TestSession, fixtures, sole_live};
+use crate::test_support::{MemStore, fixtures, mock_session, mock_session_with_shop, sole_live};
 
 use fixtures::{sample_purchase_date, test_session, test_user};
 
@@ -255,8 +255,8 @@ async fn serviceplan_by_part_returns_matching_plans() -> TbResult<()> {
 #[tokio::test]
 async fn serviceplan_by_user_returns_generic_plans() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session1 = TestSession::new(UserId::from(1));
-    let session2 = TestSession::new(UserId::from(2));
+    let session1 = mock_session(UserId::from(1));
+    let session2 = mock_session(UserId::from(2));
 
     ServicePlan::create(
         ServicePlan {
@@ -400,7 +400,7 @@ async fn service_plan_update_requires_ownership_specific() -> TbResult<()> {
     };
     let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
 
-    let other_user = TestSession::new(UserId::from(99));
+    let other_user = mock_session(UserId::from(99));
     let update = ServicePlan {
         id: created.id,
         part: Some(part.id),
@@ -444,7 +444,7 @@ async fn service_plan_update_requires_ownership_generic() -> TbResult<()> {
     };
     let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
 
-    let other_user = TestSession::new(UserId::from(99));
+    let other_user = mock_session(UserId::from(99));
     let update = ServicePlan {
         id: created.id,
         part: None,
@@ -531,7 +531,7 @@ async fn service_plan_delete_unlinks_owner_services() -> TbResult<()> {
 #[tokio::test]
 async fn service_plan_delete_unlink_scoped_to_owner() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let other_session = TestSession::new(UserId::from(99));
+    let other_session = mock_session(UserId::from(99));
 
     let created = ServicePlan::create(
         sample_plan(None, "Generic Unlink", Some(test_user())),
@@ -581,7 +581,7 @@ async fn service_plan_delete_unlinks_part_owner_via_shop_session() -> TbResult<(
         &mut store,
     )
     .await?;
-    let shop_session = TestSession::with_shop(UserId::from(99), shop.id);
+    let shop_session = mock_session_with_shop(UserId::from(99), shop.id);
 
     let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
     let created = ServicePlan::create(

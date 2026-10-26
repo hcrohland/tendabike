@@ -37,6 +37,6 @@ SQLX_OFFLINE=true cargo test -q -p tb_<crate>          # one crate's in-memory s
 Before writing or changing tests for a crate, read its guide:
 
 - `tb_domain` → [`docs/tests/domain.md`](docs/tests/domain.md) — `MemStore`, fixtures, the prepopulated snapshot and its data rules
-- `tb_strava` → [`docs/tests/strava.md`](docs/tests/strava.md) — `TestStravaStore` / `TestStravaSession`, JSON helpers
+- `tb_strava` → [`docs/tests/strava.md`](docs/tests/strava.md) — `TestStravaStore`, `strava_session`/`strava_admin_session`, JSON helpers
 - `tb_axum` → [`docs/tests/axum.md`](docs/tests/axum.md) — `test_app`, router tests, coverage map
 - `tb_sqlx` → [`docs/tests/sqlx.md`](docs/tests/sqlx.md) — entity-mapping roundtrips, the seam integration suites

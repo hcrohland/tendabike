@@ -5,7 +5,7 @@ authors = ["Christoph Rohland <tendabike@rohland.net>"]
 edition = { workspace = true }
 
 [features]
-test-support = ["dep:tokio"]
+test-support = ["dep:tokio", "dep:mockall"]
 
 [[bin]]
 name = "build-snapshot"
@@ -40,11 +40,13 @@ uuid = { workspace = true, features = [
     "serde",
 ] }
 serde_json = { workspace = true }
-tokio = { workspace = true, optional = true, features = ["macros", "rt"] }
+tokio = { workspace = true, optional = true }
+mockall = { workspace = true, optional = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt"] }
+tokio = { workspace = true }
 time = { workspace = true, features = ["serde"] }
+mockall = { workspace = true }
 
 [lib]
 doctest = false

@@ -8,25 +8,8 @@ use crate::StravaId;
 use crate::test_support::{
     TestStravaStore, begin_test, deauthorizes, queue, seed_token_cache, strava_user,
 };
-use tb_domain::{Session, ShopId, UserId};
-
-/// A minimal `Session` for the free functions (the token now comes from the
-/// `TokenCache`, not the session).
-struct PlainSession {
-    user: UserId,
-}
-
-impl Session for PlainSession {
-    fn user_id(&self) -> UserId {
-        self.user
-    }
-    fn shop(&self) -> Option<ShopId> {
-        None
-    }
-    fn is_admin(&self) -> bool {
-        false
-    }
-}
+use tb_domain::UserId;
+use tb_domain::test_support::mock_session;
 
 /// `request_json` uses the `TokenCache`'s warm token and persists nothing
 /// (a warm token returns `None` for the new refresh token).
@@ -34,9 +17,7 @@ impl Session for PlainSession {
 async fn request_json_uses_the_token_cache_warm_token() -> TbResult<()> {
     let mut store = TestStravaStore::new();
     store.insert_user(strava_user(UserId::from(1), 42, true));
-    let mut session = PlainSession {
-        user: UserId::from(1),
-    };
+    let mut session = mock_session(UserId::from(1));
     begin_test();
     seed_token_cache(UserId::from(1), StravaId::from(42), "test-access-token");
     queue("/athlete", r#"{"bikes":[],"shoes":[]}"#);

@@ -1,12 +1,14 @@
 use super::*;
 use crate::test_support::{
-    TestStravaSession, TestStravaStore, activity_json, gear_json, strava_user,
+    TestStravaStore, activity_json, gear_json, queue, queue_error, requests, strava_session,
+    strava_user,
 };
+use tb_domain::MockSession;
 
-fn setup() -> (TestStravaStore, TestStravaSession) {
+fn setup() -> (TestStravaStore, MockSession) {
     let mut store = TestStravaStore::new();
     store.insert_user(strava_user(UserId::from(1), 42, true));
-    let session = TestStravaSession::new(UserId::from(1), 42.into());
+    let session = strava_session(UserId::from(1), 42.into());
     (store, session)
 }
 
@@ -59,7 +61,7 @@ async fn into_activity_maps_fields() -> TbResult<()> {
 #[tokio::test]
 async fn into_activity_creates_missing_gear() -> TbResult<()> {
     let (mut store, mut session) = setup();
-    session.queue("/gear/b1", &gear_json("b1", Some(0)));
+    queue("/gear/b1", &gear_json("b1", Some(0)));
     let act = strava_activity(Some("b1"))
         .into_activity(&mut session, &mut store)
         .await?;
@@ -69,14 +71,14 @@ async fn into_activity_creates_missing_gear() -> TbResult<()> {
     assert_eq!(part.name, "Test Bike");
     assert_eq!(part.vendor, "Test Brand");
     assert_eq!(part.model, "Test Model");
-    assert_eq!(session.requests(), vec!["/gear/b1".to_string()]);
+    assert_eq!(requests(), vec!["/gear/b1".to_string()]);
     Ok(())
 }
 
 #[tokio::test]
 async fn into_activity_reuses_existing_gear() -> TbResult<()> {
     let (mut store, mut session) = setup();
-    session.queue("/gear/b1", &gear_json("b1", Some(0)));
+    queue("/gear/b1", &gear_json("b1", Some(0)));
     let first = strava_activity(Some("b1"))
         .into_activity(&mut session, &mut store)
         .await?;
@@ -84,8 +86,7 @@ async fn into_activity_reuses_existing_gear() -> TbResult<()> {
         .into_activity(&mut session, &mut store)
         .await?;
     assert_eq!(first.gear, second.gear);
-    let requests = session
-        .requests()
+    let requests = requests()
         .iter()
         .filter(|r| r.as_str() == "/gear/b1")
         .count();
@@ -96,7 +97,7 @@ async fn into_activity_reuses_existing_gear() -> TbResult<()> {
 #[tokio::test]
 async fn upsert_activity_stores_new() -> TbResult<()> {
     let (mut store, mut session) = setup();
-    session.queue("/activities/10", &activity_json(10, "Ride", None));
+    queue("/activities/10", &activity_json(10, "Ride", None));
     let summary = upsert_activity(10, &mut session, &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
     assert!(summary.activities.get(&ActivityId::new(10)).is_some());
@@ -108,10 +109,10 @@ async fn upsert_activity_stores_new() -> TbResult<()> {
 #[tokio::test]
 async fn upsert_activity_updates_existing() -> TbResult<()> {
     let (mut store, mut session) = setup();
-    session.queue("/activities/10", &activity_json(10, "Ride", None));
+    queue("/activities/10", &activity_json(10, "Ride", None));
     upsert_activity(10, &mut session, &mut store).await?;
     let json = activity_json(10, "Ride", None).replace("25000.0", "30000.0");
-    session.queue("/activities/10", &json);
+    queue("/activities/10", &json);
     upsert_activity(10, &mut session, &mut store).await?;
     let acts = ActivityStore::get_all(&mut store.mem, &UserId::from(1)).await?;
     assert_eq!(acts.len(), 1);
@@ -122,7 +123,7 @@ async fn upsert_activity_updates_existing() -> TbResult<()> {
 #[tokio::test]
 async fn upsert_activity_propagates_try_again() {
     let (mut store, mut session) = setup();
-    session.queue_error("/activities/10", Error::TryAgain("rate limited"));
+    queue_error("/activities/10", Error::TryAgain("rate limited"));
     let res = upsert_activity(10, &mut session, &mut store).await;
     assert!(matches!(res, Err(Error::TryAgain(_))));
 }
@@ -130,7 +131,7 @@ async fn upsert_activity_propagates_try_again() {
 #[tokio::test]
 async fn activity_strava_url() -> TbResult<()> {
     let (mut store, mut session) = setup();
-    session.queue("/activities/10", &activity_json(10, "Ride", None));
+    queue("/activities/10", &activity_json(10, "Ride", None));
     upsert_activity(10, &mut session, &mut store).await?;
     let url = strava_url(10, &session, &mut store).await?;
     assert_eq!(url, "https://strava.com/activities/10");
@@ -147,7 +148,7 @@ async fn activity_strava_url_missing() {
 #[tokio::test]
 async fn delete_activity_removes() -> TbResult<()> {
     let (mut store, mut session) = setup();
-    session.queue("/activities/10", &activity_json(10, "Ride", None));
+    queue("/activities/10", &activity_json(10, "Ride", None));
     upsert_activity(10, &mut session, &mut store).await?;
     delete_activity(10, &session, &mut store).await?;
     let acts = ActivityStore::get_all(&mut store.mem, &UserId::from(1)).await?;
@@ -165,9 +166,9 @@ async fn delete_activity_missing() {
 #[tokio::test]
 async fn delete_activity_forbidden_for_other_user() -> TbResult<()> {
     let (mut store, mut session) = setup();
-    session.queue("/activities/10", &activity_json(10, "Ride", None));
+    queue("/activities/10", &activity_json(10, "Ride", None));
     upsert_activity(10, &mut session, &mut store).await?;
-    let other = TestStravaSession::new(UserId::from(2), 43.into());
+    let other = strava_session(UserId::from(2), 43.into());
     let res = delete_activity(10, &other, &mut store).await;
     assert!(matches!(res, Err(Error::Forbidden(_))));
     Ok(())

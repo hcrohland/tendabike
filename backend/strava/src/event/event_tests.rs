@@ -1,10 +1,14 @@
 use super::*;
-use crate::test_support::{TestStravaSession, TestStravaStore, activity_json, strava_user};
+use crate::test_support::{
+    TestStravaStore, activity_json, queue, queue_error, strava_admin_session, strava_session,
+    strava_user,
+};
+use tb_domain::MockSession;
 
-fn setup() -> (TestStravaStore, TestStravaSession) {
+fn setup() -> (TestStravaStore, MockSession) {
     let mut store = TestStravaStore::new();
     store.insert_user(strava_user(UserId::from(1), 42, true));
-    let session = TestStravaSession::new(UserId::from(1), 42.into());
+    let session = strava_session(UserId::from(1), 42.into());
     (store, session)
 }
 
@@ -292,7 +296,7 @@ async fn process_no_events() -> TbResult<()> {
 async fn process_activity_create_imports() -> TbResult<()> {
     let (mut store, mut session) = setup();
     store.strava_event_create(activity_event()).await?;
-    session.queue("/activities/10", &activity_json(10, "Ride", None));
+    queue("/activities/10", &activity_json(10, "Ride", None));
     let summary = process(&mut session, &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
     assert!(summary.activities.get(&ActivityId::new(10)).is_some());
@@ -319,7 +323,7 @@ async fn process_activity_delete_missing_ignores() -> TbResult<()> {
 async fn process_try_again_inserts_stop() -> TbResult<()> {
     let (mut store, mut session) = setup();
     store.strava_event_create(activity_event()).await?;
-    session.queue_error("/activities/10", Error::TryAgain("rate limit"));
+    queue_error("/activities/10", Error::TryAgain("rate limit"));
     let summary = process(&mut session, &mut store).await?;
     assert_eq!(summary, Summary::default());
     assert_eq!(store.event_count(), 2);
@@ -339,7 +343,7 @@ async fn process_activity_nontransient_drops_event() -> TbResult<()> {
     // is gone and the queue cannot wedge on it (spec #446 §4.6).
     let (mut store, mut session) = setup();
     store.strava_event_create(activity_event()).await?;
-    session.queue_error(
+    queue_error(
         "/activities/10",
         Error::AnyFailure(anyhow::anyhow!("parse boom")),
     );
@@ -356,7 +360,7 @@ async fn process_activity_not_auth_disables_user() -> TbResult<()> {
     // stale-but-consistent; no event-by-event 401s follow.
     let (mut store, mut session) = setup();
     store.strava_event_create(activity_event()).await?;
-    session.queue_error("/activities/10", Error::NotAuth(String::from("token dead")));
+    queue_error("/activities/10", Error::NotAuth(String::from("token dead")));
     let summary = process(&mut session, &mut store).await?;
     assert_eq!(summary, Summary::default());
     assert_eq!(
@@ -379,7 +383,7 @@ async fn process_sync_not_auth_disables_user() -> TbResult<()> {
             ..Default::default()
         })
         .await?;
-    session.queue_error(
+    queue_error(
         "/activities?after=0&per_page=25",
         Error::NotAuth(String::from("token dead")),
     );
@@ -401,7 +405,7 @@ async fn process_sync_empty_list_removes_event() -> TbResult<()> {
             ..Default::default()
         })
         .await?;
-    session.queue("/activities?after=0&per_page=25", "[]");
+    queue("/activities?after=0&per_page=25", "[]");
     let summary = process(&mut session, &mut store).await?;
     assert_eq!(summary, Summary::default());
     assert_eq!(store.event_count(), 0);
@@ -418,11 +422,11 @@ async fn process_sync_imports_activities() -> TbResult<()> {
             ..Default::default()
         })
         .await?;
-    session.queue(
+    queue(
         "/activities?after=0&per_page=25",
         &format!("[{}]", activity_json(10, "Ride", None)),
     );
-    session.queue("/activities/10", &activity_json(10, "Ride", None));
+    queue("/activities/10", &activity_json(10, "Ride", None));
     let summary = process(&mut session, &mut store).await?;
     assert_eq!(summary.activities.len(), 1);
     assert_eq!(store.event_count(), 1);
@@ -447,7 +451,7 @@ async fn process_sync_bad_activity_skips_and_advances_cursor() -> TbResult<()> {
             ..Default::default()
         })
         .await?;
-    session.queue(
+    queue(
         "/activities?after=0&per_page=25",
         &format!(
             "[{}, {}]",
@@ -456,8 +460,8 @@ async fn process_sync_bad_activity_skips_and_advances_cursor() -> TbResult<()> {
                 .replace("2026-01-02T10:00:00Z", "2026-01-03T10:00:00Z")
         ),
     );
-    session.queue("/activities/10", &activity_json(10, "Ride", None));
-    session.queue_error(
+    queue("/activities/10", &activity_json(10, "Ride", None));
+    queue_error(
         "/gear/g11",
         Error::AnyFailure(anyhow::anyhow!("parse boom")),
     );
@@ -481,7 +485,7 @@ async fn process_sync_try_again_keeps_event_and_stops() -> TbResult<()> {
             ..Default::default()
         })
         .await?;
-    session.queue_error("/activities?after=0&per_page=25", Error::TryAgain("nope"));
+    queue_error("/activities?after=0&per_page=25", Error::TryAgain("nope"));
     let summary = process(&mut session, &mut store).await?;
     assert_eq!(summary, Summary::default());
     assert_eq!(store.event_count(), 2);
@@ -513,7 +517,7 @@ async fn process_skips_athlete_event() -> TbResult<()> {
 #[tokio::test]
 async fn sync_users_skips_disabled() -> TbResult<()> {
     let mut store = TestStravaStore::new();
-    let mut session = TestStravaSession::admin(UserId::from(1), 42.into());
+    let mut session = strava_admin_session(UserId::from(1), 42.into());
     UserStore::create(&mut store.mem, "A", "User", &None).await?;
     UserStore::create(&mut store.mem, "B", "User", &None).await?;
     store.insert_user(strava_user(UserId::from(1), 42, true));
@@ -527,7 +531,7 @@ async fn sync_users_skips_disabled() -> TbResult<()> {
 #[tokio::test]
 async fn sync_users_single() -> TbResult<()> {
     let (mut store, _) = setup();
-    let mut session = TestStravaSession::admin(UserId::from(1), 42.into());
+    let mut session = strava_admin_session(UserId::from(1), 42.into());
     sync_users(&mut session, Some(UserId::from(1)), 100, false, &mut store).await?;
     assert_eq!(store.event_count(), 1);
     Ok(())
@@ -536,7 +540,7 @@ async fn sync_users_single() -> TbResult<()> {
 #[tokio::test]
 async fn sync_users_unknown_user() {
     let (mut store, _) = setup();
-    let mut session = TestStravaSession::admin(UserId::from(1), 42.into());
+    let mut session = strava_admin_session(UserId::from(1), 42.into());
     let res = sync_users(&mut session, Some(UserId::from(99)), 100, false, &mut store).await;
     assert!(matches!(res, Err(Error::NotFound(_))));
 }

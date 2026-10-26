@@ -30,13 +30,14 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use tb_domain::test_support::{
-    MemStore, fixtures::sample_purchase_date, part_type_ids::CHAIN, sole_live,
+    MemStore, fixtures::sample_purchase_date, mock_session, mock_session_with_shop,
+    part_type_ids::CHAIN, sole_live,
 };
 use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, ApiRead, ApiWrite, Attachment, AttachmentStore,
     Error, OnboardingStatus, Part, PartId, PartNote, PartNoteId, PartNoteStore, PartStore,
     PartTypeId, ReadOutcome, Service, ServiceId, ServicePlan, ServicePlanId, ServicePlanStore,
-    ServiceStore, Session, Shop, ShopId, ShopStore, ShopSubscription, Store, SubscriptionId,
+    ServiceStore, Shop, ShopId, ShopStore, ShopSubscription, Store, SubscriptionId,
     SubscriptionStatus, Summary, TbResult, Usage, UsageId, UsageStore, User, UserId, UserStore,
     WriteOutcome,
 };
@@ -74,7 +75,10 @@ async fn ready_probe(probe: Probe) -> Option<Probe> {
 }
 
 fn request() -> (Request, oneshot::Receiver<TbResult<WriteOutcome>>) {
-    Request::new_write(Box::new(UnitSession), ApiWrite::UserOnboardingPostpone)
+    Request::new_write(
+        Box::new(mock_session(UserId::from(1))),
+        ApiWrite::UserOnboardingPostpone,
+    )
 }
 
 // --- `next_action`: the reclaim decision ---
@@ -375,7 +379,10 @@ fn request_bundles_write_and_reply() {
 fn request_bundles_read_and_reply() {
     // The read variant bundles the `ApiRead` descriptor and its oneshot the
     // same way the write does (spec #558 §3.2).
-    let (req, mut reply) = Request::new_read(Box::new(UnitSession), ApiRead::PartCategories);
+    let (req, mut reply) = Request::new_read(
+        Box::new(mock_session(UserId::from(1))),
+        ApiRead::PartCategories,
+    );
     assert!(
         matches!(
             reply.try_recv(),
@@ -982,56 +989,6 @@ impl StravaDataStore for FakeConn {
 /// The complete Strava store marker: the domain store plus the data store.
 impl StravaStore for FakeConn {}
 
-/// The read tests' session: the fixture user's identity; the Strava API
-/// client is what the tests never call, so it panics.
-struct UnitSession;
-
-impl Session for UnitSession {
-    fn user_id(&self) -> UserId {
-        UserId::from(1)
-    }
-    fn shop(&self) -> Option<ShopId> {
-        None
-    }
-    fn is_admin(&self) -> bool {
-        false
-    }
-}
-
-/// The gear test's session: the Strava API is canned JSON (one bike), so
-/// the hydration's `update_gear` runs its real `into_partid` path against
-/// the `MemStore`.
-struct GearSession;
-
-impl Session for GearSession {
-    fn user_id(&self) -> UserId {
-        UserId::from(1)
-    }
-    fn shop(&self) -> Option<ShopId> {
-        None
-    }
-    fn is_admin(&self) -> bool {
-        false
-    }
-}
-
-/// The no-new-gear test's session: the Strava API is canned JSON with an
-/// **empty** athlete, so the hydration's `update_gear` creates nothing —
-/// the common case (spec #558 §4).
-struct EmptyGearSession;
-
-impl Session for EmptyGearSession {
-    fn user_id(&self) -> UserId {
-        UserId::from(1)
-    }
-    fn shop(&self) -> Option<ShopId> {
-        None
-    }
-    fn is_admin(&self) -> bool {
-        false
-    }
-}
-
 // --- Context-based delivery (spec #517, ticket #584) ---
 //
 // The executor routes a committed `Summary` by the session's `shop()` value:
@@ -1083,24 +1040,6 @@ impl FramePusher for RecordingPusher {
             .lock()
             .unwrap()
             .push(PushCall::User(user_id, summary));
-    }
-}
-
-/// A `Session` in a **shop context**: `shop()` returns the
-/// given shop id (the delivery tests' shop-context session).
-struct ShopSession {
-    shop_id: ShopId,
-}
-
-impl Session for ShopSession {
-    fn user_id(&self) -> UserId {
-        UserId::from(1)
-    }
-    fn shop(&self) -> Option<ShopId> {
-        Some(self.shop_id)
-    }
-    fn is_admin(&self) -> bool {
-        false
     }
 }
 
@@ -1158,7 +1097,10 @@ async fn select_read_wins_over_ready_strava() {
     // Both ready at the same instant: the request branch (a read) is polled
     // first — a read is never delayed by the Strava side (spec #558 §3.7).
     let (tx, mut rx) = request_channel();
-    let (req, _reply) = Request::new_read(Box::new(UnitSession), ApiRead::PartCategories);
+    let (req, _reply) = Request::new_read(
+        Box::new(mock_session(UserId::from(1))),
+        ApiRead::PartCategories,
+    );
     let _ = tx.send(req);
     let wake = tokio::sync::Notify::new();
     let mut wake_fut = Box::pin(wake.notified());
@@ -1188,7 +1130,10 @@ async fn read_arriving_during_a_sleep_is_taken_immediately() {
     });
     // Let the task park in the 30s sleep, then enqueue the read.
     tokio::time::sleep(Duration::from_millis(50)).await;
-    let (req, _reply) = Request::new_read(Box::new(UnitSession), ApiRead::PartCategories);
+    let (req, _reply) = Request::new_read(
+        Box::new(mock_session(UserId::from(1))),
+        ApiRead::PartCategories,
+    );
     tx.send(req).expect("the channel is open");
     let got = tokio::time::timeout(Duration::from_secs(5), task)
         .await
@@ -1213,7 +1158,10 @@ async fn failed_read_never_arms_the_backoff_and_the_loop_survives() {
     backoff.record_failure();
     backoff.record_failure(); // prime: the next pause would be 4s
     let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_read(Box::new(UnitSession), ApiRead::PartCategories);
+    let (request, reply) = Request::new_read(
+        Box::new(mock_session(UserId::from(1))),
+        ApiRead::PartCategories,
+    );
     let pusher = RecordingPusher::new();
     let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
     assert!(result.is_ok(), "a failed read must not end the loop");
@@ -1239,8 +1187,10 @@ async fn domain_failed_read_resets_the_backoff_and_the_loop_survives() {
     backoff.record_failure();
     backoff.record_failure(); // prime: the next pause would be 4s
     let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) =
-        Request::new_read(Box::new(UnitSession), ApiRead::Part(PartId::from(999_999)));
+    let (request, reply) = Request::new_read(
+        Box::new(mock_session(UserId::from(1))),
+        ApiRead::Part(PartId::from(999_999)),
+    );
     let pusher = RecordingPusher::new();
     let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
     assert!(result.is_ok(), "a domain-failed read must not end the loop");
@@ -1266,7 +1216,8 @@ async fn cleanly_committed_read_resets_the_backoff() {
     backoff.record_failure();
     backoff.record_failure(); // prime: the next pause would be 4s
     let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_read(Box::new(UnitSession), ApiRead::User);
+    let (request, reply) =
+        Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
     let pusher = RecordingPusher::new();
     let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
     assert!(result.is_ok(), "a committed read must not end the loop");
@@ -1300,7 +1251,7 @@ async fn all_stats_round_trips_through_the_loop_transaction() {
     let source = FakeSource { begin_fails: false };
     let mut backoff = DbBackoff::new();
     let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_all_stats(Box::new(UnitSession));
+    let (request, reply) = Request::new_all_stats(Box::new(mock_session(UserId::from(1))));
     let pusher = RecordingPusher::new();
     let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
     assert!(
@@ -1335,7 +1286,7 @@ async fn gear_hydration_pushes_the_created_parts_frame() {
     let source = FakeSource { begin_fails: false };
     let mut backoff = DbBackoff::new();
     let (frames, mut frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_gear(Box::new(GearSession));
+    let (request, reply) = Request::new_gear(Box::new(mock_session(UserId::from(1))));
     let pusher = RecordingPusher::new();
     let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
     assert!(
@@ -1371,7 +1322,7 @@ async fn failed_gear_arms_the_backoff_like_a_write() {
     let mut backoff = DbBackoff::new();
     backoff.record_failure(); // prime: the next pause would be 2s
     let (frames, _frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_gear(Box::new(GearSession));
+    let (request, reply) = Request::new_gear(Box::new(mock_session(UserId::from(1))));
     let pusher = RecordingPusher::new();
     let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
     assert!(result.is_ok(), "a failed hydration must not end the loop");
@@ -1404,7 +1355,7 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
     let source = FakeSource { begin_fails: false };
     let mut backoff = DbBackoff::new();
     let (frames, mut frame_rx) = broadcast::channel(4);
-    let (request, reply) = Request::new_gear(Box::new(EmptyGearSession));
+    let (request, reply) = Request::new_gear(Box::new(mock_session(UserId::from(1))));
     let pusher = RecordingPusher::new();
     let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
     assert!(
@@ -1797,9 +1748,7 @@ async fn run_request_shop_context_routes_via_pusher_not_own_stream() {
     let pusher = RecordingPusher::new();
     // The write carries the shop context in its own (the request's) session.
     let (request, reply) = Request::new_write(
-        Box::new(ShopSession {
-            shop_id: ShopId::from(7),
-        }),
+        Box::new(mock_session_with_shop(UserId::from(1), ShopId::from(7))),
         ApiWrite::PartCreate {
             name: "Shop Chain".to_string(),
             vendor: "Shimano".to_string(),
@@ -1858,7 +1807,7 @@ async fn personal_write_routes_to_own_stream_not_pusher() {
     let pusher = RecordingPusher::new();
     // The write carries a personal session (the request's session).
     let (request, reply) = Request::new_write(
-        Box::new(UnitSession),
+        Box::new(mock_session(UserId::from(1))),
         ApiWrite::PartCreate {
             name: "Personal Chain".to_string(),
             vendor: "Shimano".to_string(),

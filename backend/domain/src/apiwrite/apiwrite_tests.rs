@@ -2,7 +2,7 @@ use super::*;
 use crate::test_support::{
     MemStore,
     fixtures::{sample_purchase_date, test_session, test_user},
-    only_tombstone,
+    mock_session, only_tombstone,
     part_type_ids::{BIKE, CHAIN},
     sole_live,
 };
@@ -435,7 +435,7 @@ async fn service_create_and_delete_dispatch() -> TbResult<()> {
 async fn service_create_on_foreign_part_is_forbidden() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
     // Part 1 is owned by user 1; user 2 may not service it.
-    let session = crate::test_support::TestSession::new(UserId::from(2));
+    let session = mock_session(UserId::from(2));
     let err = exec(
         ApiWrite::ServiceCreate {
             part: PartId::from(1),

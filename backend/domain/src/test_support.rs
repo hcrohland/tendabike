@@ -90,54 +90,34 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::*;
 
-/// Test session for attachment tests
-pub struct TestSession {
-    user_id: UserId,
-    shop: Option<ShopId>,
-    admin: bool,
+/// A [`MockSession`] for `user`, `shop`, and `admin`, whose `check_owner`
+/// behaves like the trait default (delegating to `user_id`). The
+/// expectations accept any call count (including zero), so a session built
+/// for one op need not predict which of its methods the op calls.
+fn build_session(user: UserId, shop: Option<ShopId>, admin: bool) -> MockSession {
+    let mut mock = MockSession::new();
+    mock.expect_user_id().times(0..).return_const(user);
+    mock.expect_shop().times(0..).return_const(shop);
+    mock.expect_is_admin().times(0..).return_const(admin);
+    mock.expect_check_owner()
+        .times(0..)
+        .returning(move |owner, error| user.check_owner(owner, error));
+    mock
 }
 
-impl TestSession {
-    pub fn new(user_id: UserId) -> Self {
-        Self {
-            user_id,
-            shop: None,
-            admin: false,
-        }
-    }
-
-    pub fn with_shop(user_id: UserId, shop: ShopId) -> Self {
-        Self {
-            user_id,
-            shop: Some(shop),
-            admin: false,
-        }
-    }
-
-    pub fn with_admin(user_id: UserId, admin: bool) -> Self {
-        Self {
-            user_id,
-            shop: None,
-            admin,
-        }
-    }
+/// A customer [`MockSession`] for `user` (no shop, not admin).
+pub fn mock_session(user: UserId) -> MockSession {
+    build_session(user, None, false)
 }
 
-impl Session for TestSession {
-    fn user_id(&self) -> UserId {
-        self.user_id
-    }
-    fn shop(&self) -> Option<ShopId> {
-        self.shop
-    }
-    fn is_admin(&self) -> bool {
-        self.admin
-    }
+/// A shop-owner [`MockSession`] for `user` acting in `shop` (not admin).
+pub fn mock_session_with_shop(user: UserId, shop: ShopId) -> MockSession {
+    build_session(user, Some(shop), false)
+}
 
-    // Unused parameters in check_owner use the default implementation
-    fn check_owner(&self, owner: UserId, error: String) -> crate::TbResult<()> {
-        self.user_id.check_owner(owner, error)
-    }
+/// An admin [`MockSession`] for `user` (no shop).
+pub fn mock_session_admin(user: UserId) -> MockSession {
+    build_session(user, None, true)
 }
 
 /// The complete state of the in-memory database: every table plus the

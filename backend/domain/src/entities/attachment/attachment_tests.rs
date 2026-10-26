@@ -1,6 +1,6 @@
 use super::*;
 use crate::Summary;
-use crate::test_support::{self, MemStore, TestSession, fixtures, part_type_ids};
+use crate::test_support::{self, MemStore, fixtures, mock_session, part_type_ids};
 use time::OffsetDateTime;
 use time::macros::datetime;
 
@@ -509,7 +509,7 @@ async fn shift_returns_end_time() -> TbResult<()> {
 #[tokio::test]
 async fn attach_assembly_attaches_part_to_gear() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     // Create bike (gear) and chain (part to attach)
     let bike = Part::create(
@@ -566,7 +566,7 @@ async fn attach_assembly_attaches_part_to_gear() -> TbResult<()> {
 #[tokio::test]
 async fn attach_assembly_resolves_mounted_gear_to_top_level() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
     let time = attachment_time();
 
     let bike = Part::create(
@@ -639,7 +639,7 @@ async fn attach_assembly_resolves_mounted_gear_to_top_level() -> TbResult<()> {
 #[tokio::test]
 async fn attach_assembly_resolves_mounted_gear_to_top_level_with_all() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
     let time = attachment_time();
 
     let bike = Part::create(
@@ -708,7 +708,7 @@ async fn attach_assembly_resolves_mounted_gear_to_top_level_with_all() -> TbResu
 #[tokio::test]
 async fn attach_assembly_rejects_invalid_hook() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let bike = Part::create(
         "Main Bike".to_string(),
@@ -761,7 +761,7 @@ async fn attach_assembly_rejects_invalid_hook() -> TbResult<()> {
 #[tokio::test]
 async fn attach_assembly_rejects_invalid_gear_type() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     // Create a chain
     let chain = Part::create(
@@ -816,7 +816,7 @@ async fn attach_assembly_rejects_invalid_gear_type() -> TbResult<()> {
 #[tokio::test]
 async fn attach_assembly_detaches_existing_attachment() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     // Create bike and chain, attach chain to bike at attachment_time
     let bike = Part::create(
@@ -885,7 +885,7 @@ async fn attach_assembly_detaches_existing_attachment() -> TbResult<()> {
 #[tokio::test]
 async fn attach_assembly_detaches_predecessor_on_gear() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     // Create two bikes
     let bike1 = Part::create(
@@ -984,7 +984,7 @@ async fn attach_assembly_detaches_predecessor_on_gear() -> TbResult<()> {
 #[tokio::test]
 async fn detach_assembly_recalculates_usage_excluding_activity_after_detach() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
     let wheel = PartId::from(2);
 
     // the latest prepopulated activity and its 15-minute floor
@@ -1086,7 +1086,7 @@ async fn detach_assembly_recalculates_usage_excluding_activity_after_detach() ->
 #[tokio::test]
 async fn attach_assembly_with_all_shifts_subparts_and_recalculates_usage() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
     let bike = PartId::from(1);
     let front_wheel = PartId::from(2);
     let spare_wheel = PartId::from(16);
@@ -1253,7 +1253,7 @@ async fn attach_assembly_with_all_shifts_subparts_and_recalculates_usage() -> Tb
 #[tokio::test]
 async fn detach_assembly_api_returns_error_if_not_attached() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     // Create a part, then delete it so there's no attachment
     let chain = Part::create(
@@ -1290,8 +1290,8 @@ async fn detach_assembly_api_returns_error_if_not_attached() -> TbResult<()> {
 #[tokio::test]
 async fn detach_assembly_api_rejects_non_owner() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let owner_session = TestSession::new(UserId::from(1));
-    let non_owner_session = TestSession::new(UserId::from(2));
+    let owner_session = mock_session(UserId::from(1));
+    let non_owner_session = mock_session(UserId::from(2));
 
     let chain = Part::create(
         "Test Chain".to_string(),
@@ -1335,7 +1335,7 @@ async fn detach_assembly_api_rejects_non_owner() -> TbResult<()> {
 #[tokio::test]
 async fn dispose_assembly_disposes_part() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let chain = Part::create(
         "Test Chain".to_string(),
@@ -1363,7 +1363,7 @@ async fn dispose_assembly_disposes_part() -> TbResult<()> {
 #[tokio::test]
 async fn dispose_assembly_disposes_attached_part() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let bike = Part::create(
         "Main Bike".to_string(),
@@ -1416,7 +1416,7 @@ async fn dispose_assembly_disposes_attached_part() -> TbResult<()> {
 #[tokio::test]
 async fn detach_at_attach_time_reports_tombstone() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let bike = Part::create(
         "Main Bike".to_string(),
@@ -1471,7 +1471,7 @@ async fn detach_at_attach_time_reports_tombstone() -> TbResult<()> {
 #[tokio::test]
 async fn dispose_assembly_all_disposes_subparts() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     // Create main bike
     let _bike = Part::create(
@@ -1552,7 +1552,7 @@ async fn dispose_assembly_all_disposes_subparts() -> TbResult<()> {
 #[tokio::test]
 async fn recover_assembly_restores_disposed_part() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let chain = Part::create(
         "Test Chain".to_string(),
@@ -1587,7 +1587,7 @@ async fn recover_assembly_restores_disposed_part() -> TbResult<()> {
 #[tokio::test]
 async fn recover_assembly_error_if_not_disposed() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let chain = Part::create(
         "Test Chain".to_string(),
@@ -1619,7 +1619,7 @@ async fn recover_assembly_error_if_not_disposed() -> TbResult<()> {
 #[tokio::test]
 async fn recover_assembly_all_restores_subparts() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     // Create wheel
     let wheel = Part::create(
@@ -1669,7 +1669,7 @@ async fn recover_assembly_all_restores_subparts() -> TbResult<()> {
 #[tokio::test]
 async fn is_attached_returns_true_for_attached_part() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let chain = Part::create(
         "Test Chain".to_string(),
@@ -1705,7 +1705,7 @@ async fn is_attached_returns_true_for_attached_part() -> TbResult<()> {
 #[tokio::test]
 async fn is_attached_returns_false_for_unattached_part() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let chain = Part::create(
         "Test Chain".to_string(),
@@ -1730,7 +1730,7 @@ async fn is_attached_returns_false_for_unattached_part() -> TbResult<()> {
 #[tokio::test]
 async fn is_attached_returns_false_after_detach() -> TbResult<()> {
     let mut store = MemStore::new();
-    let _session = TestSession::new(UserId::from(1));
+    let _session = mock_session(UserId::from(1));
 
     // Create attachment at attachment_time, detached at later_time
     store
@@ -1758,7 +1758,7 @@ async fn is_attached_returns_false_after_detach() -> TbResult<()> {
 #[tokio::test]
 async fn find_successor_returns_next_attachment() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     // Create two chains and a bike
     let chain = Part::create(
@@ -1835,7 +1835,7 @@ async fn find_successor_returns_next_attachment() -> TbResult<()> {
 #[tokio::test]
 async fn find_successor_no_future_attachment_returns_none() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let chain = Part::create(
         "Chain".to_string(),
@@ -1886,7 +1886,7 @@ async fn find_successor_no_future_attachment_returns_none() -> TbResult<()> {
 #[tokio::test]
 async fn find_successor_for_different_part_returns_none() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let bike = Part::create(
         "Bike".to_string(),
@@ -1956,7 +1956,7 @@ async fn find_successor_for_different_part_returns_none() -> TbResult<()> {
 #[tokio::test]
 async fn find_successor_for_different_gear_returns_none() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     // Create two bikes
     let bike1 = Part::create(
@@ -2021,7 +2021,7 @@ async fn find_successor_for_different_gear_returns_none() -> TbResult<()> {
 #[tokio::test]
 async fn find_successor_returns_earliest_future_attachment() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     // Create three chains and a bike
     let chain = Part::create(
@@ -2116,7 +2116,7 @@ async fn find_successor_returns_earliest_future_attachment() -> TbResult<()> {
 #[tokio::test]
 async fn find_later_attachment_finds_next() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let chain = Part::create(
         "Chain".to_string(),
@@ -2168,7 +2168,7 @@ async fn find_later_attachment_finds_next() -> TbResult<()> {
 #[tokio::test]
 async fn find_later_attachment_no_future_returns_none() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let chain = Part::create(
         "Chain".to_string(),
@@ -2221,7 +2221,7 @@ async fn find_later_attachment_no_future_returns_none() -> TbResult<()> {
 #[tokio::test]
 async fn find_part_attached_already_returns_adjacent_predecessor() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let chain = Part::create(
         "Chain".to_string(),
@@ -2275,7 +2275,7 @@ async fn find_part_attached_already_returns_adjacent_predecessor() -> TbResult<(
 #[tokio::test]
 async fn find_part_attached_already_returns_none_when_not_ended() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let chain = Part::create(
         "Chain".to_string(),
@@ -2329,7 +2329,7 @@ async fn find_part_attached_already_returns_none_when_not_ended() -> TbResult<()
 #[tokio::test]
 async fn delete_addresses_row_by_part_and_attach_time() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let chain = Part::create(
         "Chain".to_string(),
@@ -2397,7 +2397,7 @@ async fn delete_addresses_row_by_part_and_attach_time() -> TbResult<()> {
 #[tokio::test]
 async fn find_part_attached_already_returns_none_when_never_attached() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let chain = Part::create(
         "Chain".to_string(),
@@ -2437,7 +2437,7 @@ async fn find_part_attached_already_returns_none_when_never_attached() -> TbResu
 #[tokio::test]
 async fn find_part_attached_already_checks_hook_and_gear() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     // Create two different bikes
     let bike1 = Part::create(
@@ -2510,7 +2510,7 @@ async fn find_part_attached_already_checks_hook_and_gear() -> TbResult<()> {
 #[tokio::test]
 async fn attach_assembly_auto_detaches_and_reattaches_same_part() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     // Create chain and bike
     let chain = Part::create(
@@ -2589,7 +2589,7 @@ async fn attach_assembly_auto_detaches_and_reattaches_same_part() -> TbResult<()
 #[tokio::test]
 async fn attach_assembly_auto_detaches_competing_part_at_hook() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     // Create chain and derailleur - both attach to same hook type
     let chain = Part::create(
@@ -2654,7 +2654,7 @@ async fn attach_assembly_auto_detaches_competing_part_at_hook() -> TbResult<()> 
 #[tokio::test]
 async fn attach_assembly_merges_adjacent_rows() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let chain = Part::create(
         "Chain".to_string(),
@@ -2716,7 +2716,7 @@ async fn attach_assembly_merges_adjacent_rows() -> TbResult<()> {
 #[tokio::test]
 async fn attach_assembly_merge_adjacent_with_previous() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let chain = Part::create(
         "Chain".to_string(),
@@ -2778,7 +2778,7 @@ async fn attach_assembly_merge_adjacent_with_previous() -> TbResult<()> {
 #[tokio::test]
 async fn detach_assembly_already_detached_returns_none() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let chain = Part::create(
         "Chain".to_string(),
@@ -2818,7 +2818,7 @@ async fn detach_assembly_already_detached_returns_none() -> TbResult<()> {
 #[tokio::test]
 async fn dispose_assembly_already_disposed_keeps_timestamp() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let chain = Part::create(
         "Chain".to_string(),
@@ -2854,7 +2854,7 @@ async fn dispose_assembly_already_disposed_keeps_timestamp() -> TbResult<()> {
 #[tokio::test]
 async fn calculate_usage_returns_valid_result() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let chain = Part::create(
         "Chain".to_string(),
@@ -2895,7 +2895,7 @@ async fn calculate_usage_returns_valid_result() -> TbResult<()> {
 #[tokio::test]
 async fn attach_assembly_returns_summary_with_all_parts() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     // Create bike
     let bike = Part::create(
@@ -2945,7 +2945,7 @@ async fn attach_assembly_returns_summary_with_all_parts() -> TbResult<()> {
 #[tokio::test]
 async fn subparts_returns_correct_for_multiple_times() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     // Create parent part (wheel)
     let wheel = Part::create(
@@ -3018,7 +3018,7 @@ async fn subparts_returns_correct_for_multiple_times() -> TbResult<()> {
 #[tokio::test]
 async fn attachments_all_by_part_returns_all_timeline_entries() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     let chain = Part::create(
         "Chain".to_string(),
@@ -3076,7 +3076,7 @@ async fn attachments_all_by_part_returns_all_timeline_entries() -> TbResult<()> 
 #[tokio::test]
 async fn assembly_get_by_types_time_and_gear_returns_correct() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     // Create bike
     let bike = Part::create(
@@ -3152,7 +3152,7 @@ async fn assembly_get_by_types_time_and_gear_returns_correct() -> TbResult<()> {
 #[tokio::test]
 async fn attachments_delete_by_parts_removes_correct() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
 
     // Create chain and cassette
     let chain = Part::create(

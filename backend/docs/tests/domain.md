@@ -27,7 +27,7 @@ A `MemStore` is a **transaction** on an in-memory database, mirroring the produc
 `store.state()` / `store.state_mut()` expose the `StoreData` working copy (all tables + id counters) for assertions and the fault-injection tests; fixtures build through the store's interface instead (below). `store.snapshot()` returns the ordered `StoreSnapshot`.
 
 **Fault injection** — `store.fail_next(Fault::X)` makes the next call of kind `X` fail with `Error::DatabaseFailure`, like a real database failure, so tests can drive a multi-write domain operation to fail mid-transaction and then `rollback()` (see `failed_attach_rolls_back_to_committed_state` in `mem_store.rs` for the pattern). Current kinds: `Fault::AttachmentCreate`, `Fault::UsageUpdate`.
-- **`TestSession`** (`domain/src/test_support.rs`) — implements the `Session` trait: `new(user_id)` (customer), `with_shop(user_id, shop_id)` (shop owner), `with_admin(user_id, true)` (admin).
+- **`MockSession`** (`domain/src/traits.rs`) — the `Session` trait carries `#[automock]` under `test-support`, so every test session is a mockall `MockSession` with a fixed identity (`check_owner` is wired to the trait default). Build one with the `mock_session(user)` (customer), `mock_session_with_shop(user, shop)` (shop owner), or `mock_session_admin(user)` (admin) helpers in `domain/src/test_support.rs`.
 - **`part_type_ids`** (`domain/src/test_support.rs`) — constants: `BIKE=1`, `FRONT_WHEEL=2`, `TIRE=3`, `CHAIN=4`, `REAR_WHEEL=5`, etc.
 - **`fixtures`** (`domain/src/test_support/fixtures.rs`) — helpers: `fixture_basic_part()`, `fixture_attached_part()`, `fixture_attached_part_to_gear()`, `fixture_attached_part_at()`, `fixture_assembly()`, `fixture_timeline()`, `fixture_concurrent_parts()`, `fixture_bike()`, `sample_purchase_date()`, `sample_attach_time()`.
 
@@ -65,12 +65,12 @@ Part 1 (Bike A) registration cascades to parts [1, 2, 3, 4, 5, 6] (bike + direct
 ## Writing new tests
 
 ```rust
-use crate::test_support::{MemStore, TestSession, part_type_ids::*};
+use crate::test_support::{MemStore, mock_session, part_type_ids::*};
 
 #[tokio::test]
 async fn my_test() -> TbResult<()> {
     let mut store = MemStore::prepopulated(); // or MemStore::new()
-    let session = TestSession::new(UserId::from(1));
+    let session = mock_session(UserId::from(1));
     // ...
     Ok(())
 }

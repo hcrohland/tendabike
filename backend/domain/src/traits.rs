@@ -52,6 +52,11 @@ pub trait Store:
 /// The web layer's cookie persistence for the active shop is not a domain
 /// concern — it stays on the concrete request session as an inherent method
 /// (spec #517, ticket #588).
+///
+/// `#[automock]` under the `test-support` feature generates a
+/// [`MockSession`]: one mockall double replaces every test's hand-rolled
+/// `Session` fake.
+#[cfg_attr(any(test, feature = "test-support"), mockall::automock)]
 pub trait Session: Send + Sync {
     fn user_id(&self) -> UserId;
     fn shop(&self) -> Option<ShopId>;

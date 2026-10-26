@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::{MemStore, TestSession, fixtures};
+use crate::test_support::{MemStore, fixtures, mock_session};
 use time::OffsetDateTime;
 
 use fixtures::{sample_purchase_date, test_user};
@@ -128,7 +128,7 @@ fn part_usage_returns_usage_id() {
 #[tokio::test]
 async fn part_create_sets_purchase_date() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let sess = TestSession::new(UserId::from(99));
+    let sess = mock_session(UserId::from(99));
     let purchase = sample_purchase_date();
     let part = Part::create(
         "Derailleur".to_string(),
@@ -152,7 +152,7 @@ async fn part_create_sets_purchase_date() -> TbResult<()> {
 #[tokio::test]
 async fn part_create_with_source() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let sess = TestSession::new(UserId::from(99));
+    let sess = mock_session(UserId::from(99));
     let part = Part::create(
         "Wheelset".to_string(),
         "Easton".to_string(),
@@ -173,7 +173,7 @@ async fn part_create_with_source() -> TbResult<()> {
 #[tokio::test]
 async fn part_by_source_returns_part_with_source() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let sess = TestSession::new(UserId::from(99));
+    let sess = mock_session(UserId::from(99));
     let created = Part::create(
         "Wheelset".to_string(),
         "Easton".to_string(),
@@ -204,7 +204,7 @@ async fn part_by_source_returns_none_when_missing() -> TbResult<()> {
 #[tokio::test]
 async fn part_get_all_returns_user_parts() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let sess = TestSession::new(UserId::from(99));
+    let sess = mock_session(UserId::from(99));
     Part::create(
         "Part 1".to_string(),
         "V1".to_string(),
@@ -246,7 +246,7 @@ async fn part_get_all_empty_for_user_with_no_parts() -> TbResult<()> {
 #[tokio::test]
 async fn part_categories_returns_main_types() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let sess = TestSession::new(UserId::from(99));
+    let sess = mock_session(UserId::from(99));
     Part::create(
         "Road Bike".to_string(),
         "Trek".to_string(),
@@ -282,7 +282,7 @@ async fn part_categories_returns_main_types() -> TbResult<()> {
 #[tokio::test]
 async fn part_categories_empty_for_no_parts() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let categories = Part::categories(&TestSession::new(UserId::from(98)), &mut store).await?;
+    let categories = Part::categories(&mock_session(UserId::from(98)), &mut store).await?;
     assert!(categories.is_empty());
     Ok(())
 }
@@ -291,7 +291,7 @@ async fn part_categories_empty_for_no_parts() -> TbResult<()> {
 #[tokio::test]
 async fn part_categories_filters_subtypes() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let sess = TestSession::new(UserId::from(99));
+    let sess = mock_session(UserId::from(99));
     Part::create(
         "Road Bike".to_string(),
         "Trek".to_string(),
@@ -326,7 +326,7 @@ async fn part_categories_filters_subtypes() -> TbResult<()> {
 #[tokio::test]
 async fn part_change_updates_fields() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let sess = TestSession::new(UserId::from(1));
+    let sess = mock_session(UserId::from(1));
     let updated = PartId::from(1)
         .change(
             "New Name".to_string(),
@@ -348,7 +348,7 @@ async fn part_change_updates_fields() -> TbResult<()> {
 #[tokio::test]
 async fn part_change_rejects_non_owner() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let other_session = TestSession::new(UserId::from(98));
+    let other_session = mock_session(UserId::from(98));
     let result = PartId::from(1)
         .change(
             "New Name".to_string(),
@@ -367,7 +367,7 @@ async fn part_change_rejects_non_owner() -> TbResult<()> {
 #[tokio::test]
 async fn part_delete_succeeds_without_attachments() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let sess = TestSession::new(UserId::from(1));
+    let sess = mock_session(UserId::from(1));
     let result = PartId::from(1).delete(&sess, &mut store).await?;
     assert_eq!(result, PartId::from(1));
 
@@ -383,7 +383,7 @@ async fn part_delete_succeeds_without_attachments() -> TbResult<()> {
 #[tokio::test]
 async fn part_delete_succeeds_without_attachments_documented() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let sess = TestSession::new(UserId::from(1));
+    let sess = mock_session(UserId::from(1));
     let result = PartId::from(1).delete(&sess, &mut store).await?;
     assert_eq!(result, PartId::from(1));
     Ok(())
@@ -393,7 +393,7 @@ async fn part_delete_succeeds_without_attachments_documented() -> TbResult<()> {
 #[tokio::test]
 async fn part_delete_rejects_non_owner() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
-    let other_session = TestSession::new(UserId::from(98));
+    let other_session = mock_session(UserId::from(98));
     let result = PartId::from(1).delete(&other_session, &mut store).await;
     assert!(matches!(result, Err(Error::Forbidden(_))));
     Ok(())

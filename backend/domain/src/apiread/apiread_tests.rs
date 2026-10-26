@@ -1,7 +1,8 @@
 use super::*;
 use crate::test_support::{
-    MemStore, TestSession,
+    MemStore,
     fixtures::{test_session, test_user},
+    mock_session, mock_session_with_shop,
 };
 use crate::{
     ActivityId, Error, OnboardingStatus, PartId, PartNoteId, PartTypeId, ShopId, SubscriptionId,
@@ -73,7 +74,7 @@ async fn user_read_shop_filter_limits_parts() -> TbResult<()> {
 
     // The acting session carries the shop (spec #517, ticket #588): the read
     // filters the summary to the session's shop, not an in-message parameter.
-    let shop_session = TestSession::with_shop(session.user_id(), shop.id);
+    let shop_session = mock_session_with_shop(session.user_id(), shop.id);
     let outcome = read(ApiRead::User, &shop_session, &mut store).await?;
     let ReadOutcome::User(state) = outcome else {
         panic!("the User read returns the UserState composite");
@@ -139,7 +140,7 @@ async fn activity_read_foreign_is_forbidden() -> TbResult<()> {
     let mut store = MemStore::prepopulated();
     // Part 1 (and the fixture activities) belong to user 1; user 2 may not
     // read them.
-    let session = crate::test_support::TestSession::new(UserId::from(2));
+    let session = mock_session(UserId::from(2));
     let err = read(ApiRead::Activity(ActivityId::new(1)), &session, &mut store)
         .await
         .unwrap_err();
@@ -177,7 +178,7 @@ async fn part_read_errors() -> TbResult<()> {
     assert!(matches!(err, Error::NotFound(_)));
 
     // Part 1 belongs to user 1; user 2 (no shop session) may not read it.
-    let session = crate::test_support::TestSession::new(UserId::from(2));
+    let session = mock_session(UserId::from(2));
     let err = read(ApiRead::Part(PartId::from(1)), &session, &mut store)
         .await
         .unwrap_err();
@@ -245,7 +246,7 @@ async fn part_notes_errors() -> TbResult<()> {
     assert!(matches!(err, Error::NotFound(_)));
 
     // Part 13 belongs to user 1; user 2 may not list its notes.
-    let session = crate::test_support::TestSession::new(UserId::from(2));
+    let session = mock_session(UserId::from(2));
     let err = read(ApiRead::PartNotes(part), &session, &mut store)
         .await
         .unwrap_err();
@@ -324,7 +325,7 @@ async fn part_note_file_errors() -> TbResult<()> {
             &mut store,
         )
         .await?;
-    let session = crate::test_support::TestSession::new(UserId::from(2));
+    let session = mock_session(UserId::from(2));
     let err = read(ApiRead::PartNoteFile(note.id), &session, &mut store)
         .await
         .unwrap_err();
@@ -446,7 +447,7 @@ async fn shop_parts_read_errors() -> TbResult<()> {
     assert!(matches!(err, Error::NotFound(_)));
 
     // User 2 is neither owner nor subscriber of the shop.
-    let session = crate::test_support::TestSession::new(UserId::from(2));
+    let session = mock_session(UserId::from(2));
     let err = read(ApiRead::ShopParts(shop.id), &session, &mut store)
         .await
         .unwrap_err();
@@ -630,7 +631,7 @@ async fn shop_subscriptions_for_shop_foreign_is_forbidden() -> TbResult<()> {
     )
     .await?;
 
-    let session = crate::test_support::TestSession::new(UserId::from(2));
+    let session = mock_session(UserId::from(2));
     let err = read(
         ApiRead::ShopSubscriptions(Some(shop.id)),
         &session,
@@ -677,7 +678,7 @@ async fn shop_subscription_read_dispatches() -> TbResult<()> {
     .unwrap_err();
     assert!(matches!(err, Error::NotFound(_)));
 
-    let session = crate::test_support::TestSession::new(UserId::from(2));
+    let session = mock_session(UserId::from(2));
     let err = read(ApiRead::ShopSubscription(sub.id), &session, &mut store)
         .await
         .unwrap_err();

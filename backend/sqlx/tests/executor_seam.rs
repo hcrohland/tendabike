@@ -77,8 +77,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use tb_domain::test_support::{MemStore, part_type_ids::CHAIN, sole_live};
-use tb_domain::{ApiRead, ApiWrite, PartId, ReadOutcome, Session, ShopId, Summary, UserId};
+use tb_domain::test_support::{
+    MemStore, mock_session, mock_session_admin, mock_session_with_shop, part_type_ids::CHAIN,
+    sole_live,
+};
+use tb_domain::{ApiRead, ApiWrite, PartId, ReadOutcome, ShopId, Summary, UserId};
 use tb_exec::{
     DetachedBegin, ExecutorStatus, FramePusher, Registry, Request, ServiceApi, request_channel, run,
 };
@@ -156,41 +159,6 @@ impl log::Log for NoticeCapture {
 fn install_notice_capture() {
     let _ = log::set_logger(&NoticeCapture);
     log::set_max_level(log::LevelFilter::Warn);
-}
-
-/// The suite's `Session`: the loop's session is the user's identity; the
-/// Strava API is stubbed by the `TokenCache` seed in `ready()` and the
-/// `CANNED_STRAVA` global. These tests never import from Strava (no activity
-/// event is processed; the only queued event is a `Stop`, whose handling never
-/// touches the API), so the API is canned rather than called.
-#[derive(Clone, Copy)]
-struct FakeStrava {
-    user: UserId,
-    shop: Option<ShopId>,
-    admin: bool,
-}
-
-impl FakeStrava {
-    fn new() -> Self {
-        let (user, _strava) = test_identity();
-        Self {
-            user,
-            shop: None,
-            admin: false,
-        }
-    }
-}
-
-impl Session for FakeStrava {
-    fn user_id(&self) -> UserId {
-        self.user
-    }
-    fn shop(&self) -> Option<ShopId> {
-        self.shop
-    }
-    fn is_admin(&self) -> bool {
-        self.admin
-    }
 }
 
 /// One test's hold on the scratch database: a pool for the test's runtime
@@ -273,7 +241,7 @@ async fn api_write_end_to_end() {
     let (frames, mut frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
     let (request, reply) = Request::new_write(
-        Box::new(FakeStrava::new()),
+        Box::new(mock_session(UserId::from(1))),
         ApiWrite::PartCreate {
             name: "Seam Chain".to_string(),
             vendor: "Shimano".to_string(),
@@ -454,7 +422,8 @@ async fn read_as_message_round_trip() {
     let (tx, rx) = request_channel();
     let (frames, mut frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
-    let (request, reply) = Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
+    let (request, reply) =
+        Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
     tx.send(request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
@@ -534,15 +503,12 @@ async fn shop_context_read_is_scoped_to_the_request_session() {
     // Each carries its own acting session; the executor's spawn-time session
     // is personal.
     let (shop_read, shop_reply) = Request::new_read(
-        Box::new(FakeStrava {
-            shop: Some(shop),
-            ..FakeStrava::new()
-        }),
+        Box::new(mock_session_with_shop(UserId::from(1), shop)),
         ApiRead::User,
     );
     tx.send(shop_read).expect("the channel is open");
     let (personal_read, personal_reply) =
-        Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
+        Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
     tx.send(personal_read).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
@@ -627,7 +593,7 @@ async fn personal_read_returns_personal_data() {
     let (events, _events_rx) = broadcast::channel(16);
     // The personal read carries a personal (the request's) session.
     let (personal_read, personal_reply) =
-        Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
+        Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
     tx.send(personal_read).expect("the channel is open");
 
     // The loop is identity-only (a `user_id`, no shop): the read runs against
@@ -681,7 +647,7 @@ async fn read_sees_every_earlier_write() {
     // The write, then the read — enqueued in order before the loop starts
     // (the channel is the FIFO the loop consumes in order).
     let (write_request, write_reply) = Request::new_write(
-        Box::new(FakeStrava::new()),
+        Box::new(mock_session(UserId::from(1))),
         ApiWrite::PartCreate {
             name: "Seam Chain".to_string(),
             vendor: "Shimano".to_string(),
@@ -691,7 +657,8 @@ async fn read_sees_every_earlier_write() {
         },
     );
     tx.send(write_request).expect("the channel is open");
-    let (read_request, read_reply) = Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
+    let (read_request, read_reply) =
+        Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
     tx.send(read_request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
@@ -768,9 +735,10 @@ async fn gear_hydration_frame_and_fifo_read() {
     let (events, _events_rx) = broadcast::channel(16);
     // The hydration, then the snapshot read — enqueued in order before the
     // loop starts (the channel is the FIFO the loop consumes in order).
-    let (gear_request, gear_reply) = Request::new_gear(Box::new(FakeStrava::new()));
+    let (gear_request, gear_reply) = Request::new_gear(Box::new(mock_session(UserId::from(1))));
     tx.send(gear_request).expect("the channel is open");
-    let (read_request, read_reply) = Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
+    let (read_request, read_reply) =
+        Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
     tx.send(read_request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
@@ -854,9 +822,10 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
     let (tx, rx) = request_channel();
     let (frames, mut frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
-    let (gear_request, gear_reply) = Request::new_gear(Box::new(FakeStrava::new()));
+    let (gear_request, gear_reply) = Request::new_gear(Box::new(mock_session(UserId::from(1))));
     tx.send(gear_request).expect("the channel is open");
-    let (read_request, read_reply) = Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
+    let (read_request, read_reply) =
+        Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
     tx.send(read_request).expect("the channel is open");
 
     let mut loop_task = tokio::spawn(run(
@@ -925,7 +894,7 @@ async fn failed_write_rolls_back_and_reclaims() {
     drop(_frame_rx);
     // Deleting a part that does not exist: `NotFound` from the domain.
     let (request, reply) = Request::new_write(
-        Box::new(FakeStrava::new()),
+        Box::new(mock_session(UserId::from(1))),
         ApiWrite::PartDelete {
             id: PartId::from(999_999),
         },
@@ -991,7 +960,7 @@ async fn onboarding_sync_write_queues_the_sync_event() {
     // the no-streams reap rule (spec §4.4, amended — #446) never fires.
     drop(_frame_rx);
     let (request, reply) = Request::new_write(
-        Box::new(FakeStrava::new()),
+        Box::new(mock_session(UserId::from(1))),
         ApiWrite::UserOnboardingSync { time: 100 },
     );
     tx.send(request).expect("the channel is open");
@@ -1095,7 +1064,7 @@ async fn sync_enqueues_wakes_and_awaits() {
 
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
-        registry.sync(Box::new(FakeStrava::new()), user, 100),
+        registry.sync(Box::new(mock_session(UserId::from(1))), user, 100),
     )
     .await
     .expect("the admin sync must complete in time");
@@ -1159,14 +1128,11 @@ async fn trigger_processing_drains_each_queued_user() {
     // Both executors running and idle-waiting (streams attached keep them
     // alive; the one-hour re-probe never fires mid-test).
     let (_frames1, _status1) = registry
-        .subscribe(Box::new(FakeStrava::new()))
+        .subscribe(Box::new(mock_session(UserId::from(1))))
         .await
         .expect("subscribing user 1");
     let (_frames2, _status2) = registry
-        .subscribe(Box::new(FakeStrava {
-            user: user2,
-            ..FakeStrava::new()
-        }))
+        .subscribe(Box::new(mock_session(user2)))
         .await
         .expect("subscribing user 2");
     // Let both executors finish their first (empty) probe and park in the
@@ -1177,10 +1143,7 @@ async fn trigger_processing_drains_each_queued_user() {
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
         registry.trigger_processing(
-            Box::new(FakeStrava {
-                admin: true,
-                ..FakeStrava::new()
-            }),
+            Box::new(mock_session_admin(UserId::from(1))),
             None,
             200,
             false,
@@ -1270,16 +1233,19 @@ async fn rescan_stops_the_executors() {
     seed_strava_user(&seam.pool, false).await;
     let reg = registry(&seam.pool);
     let (mut frames, status) = reg
-        .subscribe(Box::new(FakeStrava::new()))
+        .subscribe(Box::new(mock_session(UserId::from(1))))
         .await
         .expect("subscribing");
     // Let the executor finish its first (empty) probe: it is live when the
     // rescan stops it.
     tokio::time::sleep(Duration::from_millis(500)).await;
 
-    let outcome = tokio::time::timeout(TEST_TIMEOUT, reg.rescan(Box::new(FakeStrava::new())))
-        .await
-        .expect("the rescan must finish in time");
+    let outcome = tokio::time::timeout(
+        TEST_TIMEOUT,
+        reg.rescan(Box::new(mock_session(UserId::from(1)))),
+    )
+    .await
+    .expect("the rescan must finish in time");
     outcome.expect("the rescan must succeed");
 
     // The executor is dead (the abort's watchdog recorded it on the fate
@@ -1421,13 +1387,7 @@ async fn deauthorize_disables_the_user_and_clears_the_queue() {
 
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
-        reg.deauthorize(
-            Box::new(FakeStrava {
-                admin: true,
-                ..FakeStrava::new()
-            }),
-            user,
-        ),
+        reg.deauthorize(Box::new(mock_session_admin(UserId::from(1))), user),
     )
     .await
     .expect("the deauthorization must finish in time");
@@ -1468,13 +1428,7 @@ async fn delete_user_removes_the_rows() {
 
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
-        reg.delete_user(
-            Box::new(FakeStrava {
-                admin: true,
-                ..FakeStrava::new()
-            }),
-            user,
-        ),
+        reg.delete_user(Box::new(mock_session_admin(UserId::from(1))), user),
     )
     .await
     .expect("the delete must finish in time");
@@ -1557,7 +1511,7 @@ async fn attached_stream_keeps_the_executor_alive() {
     // registers this stream on the executor's frame channel and pins the
     // executor (spawning it if needed).
     let (mut frames, status) = registry
-        .subscribe(Box::new(FakeStrava::new()))
+        .subscribe(Box::new(mock_session(UserId::from(1))))
         .await
         .expect("subscribing");
     wait_for_status(&registry, user, ExecutorStatus::Running).await;
@@ -1609,7 +1563,7 @@ async fn stream_survives_executor_reap() {
     // an idle window).
     registry
         .write(
-            Box::new(FakeStrava::new()),
+            Box::new(mock_session(UserId::from(1))),
             ApiWrite::UserOnboardingPostpone,
         )
         .await
@@ -1620,7 +1574,7 @@ async fn stream_survives_executor_reap() {
     // and settles — the stream stays alive and a later frame is forwarded
     // (no further reap: the attached stream keeps the executor alive).
     let (mut frames, _status) = registry
-        .subscribe(Box::new(FakeStrava::new()))
+        .subscribe(Box::new(mock_session(UserId::from(1))))
         .await
         .expect("subscribing");
     wait_for_status(&registry, user, ExecutorStatus::Running).await;
@@ -1657,7 +1611,8 @@ async fn request_burst_does_not_fire_transaction_notice() {
     // Pre-fill the channel before the loop spawns: the loop's first select
     // must find work, or its no-streams idle decision reaps it before the
     // burst starts (the reaped loop closes the channel under the senders).
-    let (request, warm_reply) = Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
+    let (request, warm_reply) =
+        Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
     tx.send(request).expect("the channel is open");
     let (frames, frame_rx) = broadcast::channel(8);
     let (events, _events_rx) = broadcast::channel(8);
@@ -1722,7 +1677,7 @@ async fn request_burst_does_not_fire_transaction_notice() {
         for pair in 0..PAIRS {
             for which in 0..2 {
                 let (request, reply) =
-                    Request::new_read(Box::new(FakeStrava::new()), ApiRead::User);
+                    Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
                 if tx2.send(request).is_err() {
                     return; // channel closed: the loop ended; report via the join
                 }
