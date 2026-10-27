@@ -2,7 +2,7 @@
 # stages inherit from it so these layers are built once and cached
 # identically.
 FROM rust:alpine AS rust-base
-RUN apk add  musl-dev
+RUN apk add  musl-dev ca-certificates
 RUN rustup set profile minimal
 
 # Dependency stage: compiles the full dependency graph from the
@@ -82,6 +82,7 @@ WORKDIR /tendabike
 ENV STATIC_WWW="/tendabike/dist"
 
 COPY --from=build-engine /app/tendabike ./
+COPY --from=build-engine /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build-frontend /build/frontend/dist dist
 
 ENTRYPOINT [ "./tendabike" ]
