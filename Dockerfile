@@ -82,6 +82,7 @@ WORKDIR /tendabike
 ENV STATIC_WWW="/tendabike/dist"
 
 COPY --from=build-engine /app/tendabike ./
+COPY --from=build-engine /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build-frontend /build/frontend/dist dist
 
 ENTRYPOINT [ "./tendabike" ]

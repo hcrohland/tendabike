@@ -132,6 +132,10 @@ async fn get_strava(access: &AccessToken, uri: &str) -> TbResult<String> {
         .await
         .context("Could not reach strava")?;
 
+    // Update the rate-limit state from the response headers: every Strava
+    // API response carries X-RateLimit-* headers (success or error).
+    crate::ratelimit::update_from_headers(resp.headers());
+
     let status = resp.status();
     if status.is_success() {
         return Ok(resp.text().await.context("could not reach strava")?);
