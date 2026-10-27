@@ -2,7 +2,7 @@
 # stages inherit from it so these layers are built once and cached
 # identically.
 FROM rust:alpine AS rust-base
-RUN apk add  musl-dev ca-certificates
+RUN apk add  musl-dev
 RUN rustup set profile minimal
 
 # Dependency stage: compiles the full dependency graph from the
