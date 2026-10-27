@@ -785,7 +785,7 @@ async fn redo_preserves_plans_from_original() -> TbResult<()> {
         uid: None,
         energy: None,
     };
-    ServicePlanStore::create(&mut store, plan.clone()).await?;
+    ServicePlanStore::serviceplan_create(&mut store, plan.clone()).await?;
 
     let summary = Service::create(
         part.id,

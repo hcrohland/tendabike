@@ -908,17 +908,17 @@ impl ServiceStore for FakeConn {
 
 #[async_trait::async_trait]
 impl ServicePlanStore for FakeConn {
-    async fn create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
-        ServicePlanStore::create(&mut self.store, plan).await
+    async fn serviceplan_create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
+        ServicePlanStore::serviceplan_create(&mut self.store, plan).await
     }
-    async fn get(&mut self, plan: ServicePlanId) -> TbResult<ServicePlan> {
-        ServicePlanStore::get(&mut self.store, plan).await
+    async fn serviceplan_get(&mut self, plan: ServicePlanId) -> TbResult<ServicePlan> {
+        ServicePlanStore::serviceplan_get(&mut self.store, plan).await
     }
     async fn plan_update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
         self.store.plan_update(plan).await
     }
-    async fn delete(&mut self, plan: ServicePlanId) -> TbResult<usize> {
-        ServicePlanStore::delete(&mut self.store, plan).await
+    async fn serviceplan_delete(&mut self, plan: ServicePlanId) -> TbResult<usize> {
+        ServicePlanStore::serviceplan_delete(&mut self.store, plan).await
     }
     async fn serviceplans_delete(&mut self, serviceplans: &[ServicePlan]) -> TbResult<usize> {
         self.store.serviceplans_delete(serviceplans).await

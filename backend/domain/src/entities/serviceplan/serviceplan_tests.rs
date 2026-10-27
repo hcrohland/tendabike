@@ -150,7 +150,7 @@ async fn service_plan_create_with_thresholds() -> TbResult<()> {
     };
     let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
 
-    let created_retrieved = ServicePlanStore::get(&mut store, created.id).await?;
+    let created_retrieved = ServicePlanStore::serviceplan_get(&mut store, created.id).await?;
     assert_eq!(created_retrieved.hours, Some(60));
     Ok(())
 }
@@ -175,7 +175,7 @@ async fn service_plan_get_returns_stored_plan() -> TbResult<()> {
         energy: None,
     };
     let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
-    let stored = ServicePlanStore::get(&mut store, created.id).await?;
+    let stored = ServicePlanStore::serviceplan_get(&mut store, created.id).await?;
     assert_eq!(stored.name, "Get Test");
     assert_eq!(stored.days, Some(45));
     Ok(())
@@ -630,7 +630,7 @@ async fn service_plan_all_thresholds_none_means_active() -> TbResult<()> {
     };
     let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
 
-    let stored = ServicePlanStore::get(&mut store, created.id).await?;
+    let stored = ServicePlanStore::serviceplan_get(&mut store, created.id).await?;
     assert_eq!(stored.hours, None);
     assert_eq!(stored.km, None);
     assert_eq!(stored.climb, None);
@@ -660,7 +660,7 @@ async fn service_plan_single_threshold_only() -> TbResult<()> {
     };
     let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
 
-    let stored = ServicePlanStore::get(&mut store, created.id).await?;
+    let stored = ServicePlanStore::serviceplan_get(&mut store, created.id).await?;
     assert_eq!(stored.km, Some(500));
     assert_eq!(stored.hours, None);
     assert_eq!(stored.climb, None);
@@ -691,7 +691,7 @@ async fn service_plan_multiple_thresholds() -> TbResult<()> {
     };
     let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
 
-    let stored = ServicePlanStore::get(&mut store, created.id).await?;
+    let stored = ServicePlanStore::serviceplan_get(&mut store, created.id).await?;
     assert_eq!(stored.hours, Some(100));
     assert_eq!(stored.km, Some(5000));
     assert_eq!(stored.climb, Some(5000));

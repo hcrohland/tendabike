@@ -94,7 +94,7 @@ impl From<DbServicePlan> for ServicePlan {
 
 #[async_trait::async_trait]
 impl<'c> tb_domain::ServicePlanStore for SqlxConn<'c> {
-    async fn create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
+    async fn serviceplan_create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
         let plan = DbServicePlan::from(plan);
         sqlx::query_as!(
             DbServicePlan,
@@ -121,7 +121,7 @@ impl<'c> tb_domain::ServicePlanStore for SqlxConn<'c> {
         .map(Into::into)
     }
 
-    async fn get(&mut self, plan: ServicePlanId) -> TbResult<ServicePlan> {
+    async fn serviceplan_get(&mut self, plan: ServicePlanId) -> TbResult<ServicePlan> {
         sqlx::query_as!(
             DbServicePlan,
             "SELECT * FROM service_plans WHERE id = $1",
@@ -162,7 +162,7 @@ impl<'c> tb_domain::ServicePlanStore for SqlxConn<'c> {
         .map(Into::into)
     }
 
-    async fn delete(&mut self, plan: ServicePlanId) -> TbResult<usize> {
+    async fn serviceplan_delete(&mut self, plan: ServicePlanId) -> TbResult<usize> {
         let result = sqlx::query!("DELETE FROM service_plans WHERE id = $1", Uuid::from(plan))
             .execute(&mut **self.inner())
             .await

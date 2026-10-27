@@ -759,17 +759,17 @@ impl ServiceStore for TestStravaStore {
 
 #[async_trait::async_trait]
 impl ServicePlanStore for TestStravaStore {
-    async fn create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
-        ServicePlanStore::create(&mut self.mem, plan).await
+    async fn serviceplan_create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
+        ServicePlanStore::serviceplan_create(&mut self.mem, plan).await
     }
-    async fn get(&mut self, plan: ServicePlanId) -> TbResult<ServicePlan> {
-        ServicePlanStore::get(&mut self.mem, plan).await
+    async fn serviceplan_get(&mut self, plan: ServicePlanId) -> TbResult<ServicePlan> {
+        ServicePlanStore::serviceplan_get(&mut self.mem, plan).await
     }
     async fn plan_update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
         ServicePlanStore::plan_update(&mut self.mem, plan).await
     }
-    async fn delete(&mut self, plan: ServicePlanId) -> TbResult<usize> {
-        ServicePlanStore::delete(&mut self.mem, plan).await
+    async fn serviceplan_delete(&mut self, plan: ServicePlanId) -> TbResult<usize> {
+        ServicePlanStore::serviceplan_delete(&mut self.mem, plan).await
     }
     async fn serviceplans_delete(&mut self, serviceplans: &[ServicePlan]) -> TbResult<usize> {
         ServicePlanStore::serviceplans_delete(&mut self.mem, serviceplans).await

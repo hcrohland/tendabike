@@ -3,13 +3,13 @@ use crate::{PartId, ServicePlan, ServicePlanId, TbResult, UserId};
 
 #[async_trait::async_trait]
 impl ServicePlanStore for MemStore {
-    async fn create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
+    async fn serviceplan_create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
         let mut d = self.state();
         d.service_plans.insert(plan.id, plan.clone());
         Ok(plan)
     }
 
-    async fn get(&mut self, id: ServicePlanId) -> TbResult<ServicePlan> {
+    async fn serviceplan_get(&mut self, id: ServicePlanId) -> TbResult<ServicePlan> {
         let d = self.state();
         d.service_plans
             .get(&id)
@@ -34,7 +34,7 @@ impl ServicePlanStore for MemStore {
         }
     }
 
-    async fn delete(&mut self, id: ServicePlanId) -> TbResult<usize> {
+    async fn serviceplan_delete(&mut self, id: ServicePlanId) -> TbResult<usize> {
         let mut d = self.state();
         match d.service_plans.remove(&id) {
             Some(_) => Ok(1),
