@@ -21,6 +21,9 @@ pub mod fixtures;
 mod mem_store;
 pub use mem_store::{StoreSnapshot, build_workshop_store};
 
+mod mock_store;
+pub use mock_store::MockStore;
+
 mod prepopulated_data;
 
 // --- Test constants for use in unit tests ---
