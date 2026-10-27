@@ -34,7 +34,7 @@ SQLX_OFFLINE=true cargo test -q -- --include-ignored   # complete suite (seam in
 SQLX_OFFLINE=true cargo test -q -p tb_<crate>          # one crate's in-memory suites
 ```
 
-Before writing or changing tests for a crate, read its guide:
+Before writing, changing, or exploring tests for a crate, read its guide:
 
 - `tb_domain` → [`docs/tests/domain.md`](docs/tests/domain.md) — `MemStore`, fixtures, the prepopulated snapshot and its data rules
 - `tb_strava` → [`docs/tests/strava.md`](docs/tests/strava.md) — `TestStravaStore`, `strava_session`/`strava_admin_session`, JSON helpers
