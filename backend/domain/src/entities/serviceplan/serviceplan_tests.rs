@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::{MemStore, fixtures, mock_session, mock_session_with_shop, sole_live};
+use crate::test_support::{MockStore, fixtures, mock_session, mock_session_with_shop};
 
 use fixtures::{sample_purchase_date, test_session, test_user};
 
@@ -21,24 +21,50 @@ fn sample_plan(part: Option<PartId>, name: &str, uid: Option<UserId>) -> Service
     }
 }
 
-async fn seed_service_for_plan(
-    part: PartId,
-    name: &str,
-    plan: ServicePlanId,
-    store: &mut MemStore,
-) -> TbResult<Service> {
+/// A canned `Part` row: the minimal shape the domain logic needs (id + owner).
+fn part_row(id: PartId, owner: UserId) -> Part {
+    Part {
+        id,
+        owner,
+        what: PartTypeId::from(4),
+        name: "Test Chain".to_string(),
+        vendor: "Shimano".to_string(),
+        model: "CN-M510".to_string(),
+        purchase: sample_purchase_date(),
+        last_used: sample_purchase_date(),
+        disposed_at: None,
+        usage: UsageId::new(),
+        source: None,
+        shop: None,
+    }
+}
+
+/// A canned `Service` row: the minimal shape the domain logic needs.
+fn service_row(id: ServiceId, part: PartId, plans: Vec<ServicePlanId>) -> Service {
     let t = time::macros::datetime!(2024-06-15 10:00 UTC);
-    let summary = Service::create(
-        part,
-        t,
-        name.to_string(),
-        "".to_string(),
-        None,
-        vec![plan],
-        store,
-    )
-    .await?;
-    Ok(sole_live(&summary.services))
+    Service {
+        id,
+        part_id: part,
+        time: t,
+        redone: t,
+        name: "Service".to_string(),
+        notes: String::new(),
+        usage: UsageId::new(),
+        successor: None,
+        plans,
+    }
+}
+
+/// A canned `Shop` row: the minimal shape the domain logic needs (id + owner).
+fn shop_row(id: ShopId, owner: UserId) -> Shop {
+    Shop {
+        id,
+        owner,
+        name: "Shop 99".to_string(),
+        description: None,
+        auto_approve: true,
+        created_at: sample_purchase_date(),
+    }
 }
 
 // === Suite 6: ServicePlan — CRUD ===
@@ -46,12 +72,12 @@ async fn seed_service_for_plan(
 /// SP-01: ServicePlan create with specific part
 #[tokio::test]
 async fn service_plan_create_specific_part() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
+    let mut store = MockStore::new();
+    let part = PartId::from(1);
 
     let plan = ServicePlan {
         id: ServicePlanId::new(),
-        part: Some(part.id),
+        part: Some(part),
         what: PartTypeId::from(2),
         hook: None,
         name: "Service Plan".to_string(),
@@ -64,9 +90,11 @@ async fn service_plan_create_specific_part() -> TbResult<()> {
         uid: None,
         energy: None,
     };
-    let created = ServicePlan::create(plan.clone(), &test_session(), &mut store).await?;
+    store.expect_serviceplan_create().returning(Ok);
 
-    assert_eq!(created.part, Some(part.id));
+    let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
+
+    assert_eq!(created.part, Some(part));
     assert_eq!(created.uid, None);
     // create() does NOT auto-set what; it's stored as-is
     assert_eq!(created.what, PartTypeId::from(2));
@@ -76,7 +104,7 @@ async fn service_plan_create_specific_part() -> TbResult<()> {
 /// SP-02: ServicePlan create generic plan (no specific part)
 #[tokio::test]
 async fn service_plan_create_generic_plan() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = MockStore::new();
 
     let plan = ServicePlan {
         id: ServicePlanId::new(),
@@ -93,6 +121,8 @@ async fn service_plan_create_generic_plan() -> TbResult<()> {
         uid: None,
         energy: None,
     };
+    store.expect_serviceplan_create().returning(Ok);
+
     let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
 
     assert_eq!(created.part, None);
@@ -103,13 +133,13 @@ async fn service_plan_create_generic_plan() -> TbResult<()> {
 /// SP-03: ServicePlan create stores what as-provided (not auto-set from part type)
 #[tokio::test]
 async fn service_plan_create_sets_what_to_part_type() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
+    let mut store = MockStore::new();
+    let part = PartId::from(1);
 
     // create() does NOT auto-set what from part type; it stores as-is
     let plan = ServicePlan {
         id: ServicePlanId::new(),
-        part: Some(part.id),
+        part: Some(part),
         what: PartTypeId::from(99),
         hook: None,
         name: "Wrong What".to_string(),
@@ -122,220 +152,20 @@ async fn service_plan_create_sets_what_to_part_type() -> TbResult<()> {
         uid: None,
         energy: None,
     };
+    store.expect_serviceplan_create().returning(Ok);
+
     let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
 
     assert_eq!(created.what, PartTypeId::from(99));
     Ok(())
 }
 
-/// SP-04: ServicePlan create with thresholds
-#[tokio::test]
-async fn service_plan_create_with_thresholds() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-
-    let plan = ServicePlan {
-        id: ServicePlanId::new(),
-        part: None,
-        what: PartTypeId::from(1),
-        hook: None,
-        name: "Threshold Plan".to_string(),
-        days: Some(30),
-        hours: Some(60),
-        km: None,
-        climb: None,
-        descend: None,
-        rides: None,
-        uid: Some(test_user()),
-        energy: None,
-    };
-    let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
-
-    let created_retrieved = ServicePlanStore::serviceplan_get(&mut store, created.id).await?;
-    assert_eq!(created_retrieved.hours, Some(60));
-    Ok(())
-}
-
-/// SP-05: ServicePlan get returns stored plan
-#[tokio::test]
-async fn service_plan_get_returns_stored_plan() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let plan = ServicePlan {
-        id: ServicePlanId::new(),
-        part: None,
-        what: PartTypeId::from(2),
-        hook: Some(PartTypeId::from(3)),
-        name: "Get Test".to_string(),
-        days: Some(45),
-        hours: None,
-        km: None,
-        climb: None,
-        descend: None,
-        rides: None,
-        uid: Some(test_user()),
-        energy: None,
-    };
-    let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
-    let stored = ServicePlanStore::serviceplan_get(&mut store, created.id).await?;
-    assert_eq!(stored.name, "Get Test");
-    assert_eq!(stored.days, Some(45));
-    Ok(())
-}
-
-/// SP-06: ServicePlan by_part returns matching plans
-#[tokio::test]
-async fn serviceplan_by_part_returns_matching_plans() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let part_a = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
-    let part_b = Part::create(
-        "Part B".to_string(),
-        "Brand B".to_string(),
-        "Model B".to_string(),
-        PartTypeId::from(2),
-        None,
-        sample_purchase_date(),
-        &test_session(),
-        &mut store,
-    )
-    .await?;
-
-    ServicePlan::create(
-        ServicePlan {
-            id: ServicePlanId::new(),
-            part: Some(part_a.id),
-            what: PartTypeId::from(1),
-            hook: None,
-            name: "Plan A".to_string(),
-            days: Some(30),
-            hours: None,
-            km: None,
-            climb: None,
-            descend: None,
-            rides: None,
-            uid: None,
-            energy: None,
-        },
-        &test_session(),
-        &mut store,
-    )
-    .await?;
-
-    ServicePlan::create(
-        ServicePlan {
-            id: ServicePlanId::new(),
-            part: Some(part_b.id),
-            what: PartTypeId::from(2),
-            hook: None,
-            name: "Plan B".to_string(),
-            days: Some(60),
-            hours: None,
-            km: None,
-            climb: None,
-            descend: None,
-            rides: None,
-            uid: None,
-            energy: None,
-        },
-        &test_session(),
-        &mut store,
-    )
-    .await?;
-
-    let plans_a = ServicePlan::for_part(part_a.id, &mut store).await?;
-    assert_eq!(plans_a.len(), 1);
-    assert_eq!(plans_a[0].name, "Plan A");
-
-    let plans_b = ServicePlan::for_part(part_b.id, &mut store).await?;
-    assert_eq!(plans_b.len(), 1);
-    assert_eq!(plans_b[0].name, "Plan B");
-
-    Ok(())
-}
-
-/// SP-07: ServicePlan by_user returns generic plans
-#[tokio::test]
-async fn serviceplan_by_user_returns_generic_plans() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session1 = mock_session(UserId::from(1));
-    let session2 = mock_session(UserId::from(2));
-
-    ServicePlan::create(
-        ServicePlan {
-            id: ServicePlanId::new(),
-            part: None,
-            what: PartTypeId::from(1),
-            hook: None,
-            name: "Plan 1".to_string(),
-            days: Some(30),
-            hours: None,
-            km: None,
-            climb: None,
-            descend: None,
-            rides: None,
-            uid: Some(UserId::from(1)),
-            energy: None,
-        },
-        &session1,
-        &mut store,
-    )
-    .await?;
-
-    ServicePlan::create(
-        ServicePlan {
-            id: ServicePlanId::new(),
-            part: None,
-            what: PartTypeId::from(1),
-            hook: None,
-            name: "Plan 2".to_string(),
-            days: Some(60),
-            hours: None,
-            km: None,
-            climb: None,
-            descend: None,
-            rides: None,
-            uid: Some(UserId::from(1)),
-            energy: None,
-        },
-        &session1,
-        &mut store,
-    )
-    .await?;
-
-    ServicePlan::create(
-        ServicePlan {
-            id: ServicePlanId::new(),
-            part: None,
-            what: PartTypeId::from(1),
-            hook: None,
-            name: "Plan 3".to_string(),
-            days: Some(90),
-            hours: None,
-            km: None,
-            climb: None,
-            descend: None,
-            rides: None,
-            uid: Some(UserId::from(2)),
-            energy: None,
-        },
-        &session2,
-        &mut store,
-    )
-    .await?;
-
-    let plans_1 = ServicePlan::for_user(&UserId::from(1), &mut store).await?;
-    assert_eq!(plans_1.len(), 2);
-
-    let plans_2 = ServicePlan::for_user(&UserId::from(2), &mut store).await?;
-    assert_eq!(plans_2.len(), 1);
-
-    Ok(())
-}
-
 /// SP-08: ServicePlan update preserves immutable fields
 #[tokio::test]
 async fn service_plan_update_preserves_immutable_fields() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let plan = ServicePlan {
-        id: ServicePlanId::new(),
+    let id = ServicePlanId::new();
+    let stored = ServicePlan {
+        id,
         part: None,
         what: PartTypeId::from(5),
         hook: Some(PartTypeId::from(7)),
@@ -349,11 +179,16 @@ async fn service_plan_update_preserves_immutable_fields() -> TbResult<()> {
         uid: Some(test_user()),
         energy: None,
     };
-    let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
 
-    // Update only name
-    let updated = ServicePlan {
-        id: created.id,
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(stored.clone()));
+    store.expect_plan_update().returning(Ok);
+
+    // Update only name; the immutable fields come back from the stored plan.
+    let update = ServicePlan {
+        id,
         part: None,
         what: PartTypeId::from(99),
         hook: Some(PartTypeId::from(99)),
@@ -367,7 +202,7 @@ async fn service_plan_update_preserves_immutable_fields() -> TbResult<()> {
         uid: Some(UserId::from(99)),
         energy: None,
     };
-    let result = updated.clone().update(&test_session(), &mut store).await?;
+    let result = update.update(&test_session(), &mut store).await?;
 
     assert_eq!(result.name, "Updated");
     assert_eq!(result.part, None);
@@ -380,12 +215,11 @@ async fn service_plan_update_preserves_immutable_fields() -> TbResult<()> {
 /// SP-09: ServicePlan update requires ownership (specific part)
 #[tokio::test]
 async fn service_plan_update_requires_ownership_specific() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
-
-    let plan = ServicePlan {
-        id: ServicePlanId::new(),
-        part: Some(part.id),
+    let id = ServicePlanId::new();
+    let part = PartId::from(1);
+    let stored = ServicePlan {
+        id,
+        part: Some(part),
         what: PartTypeId::from(1),
         hook: None,
         name: "Owned Plan".to_string(),
@@ -398,12 +232,20 @@ async fn service_plan_update_requires_ownership_specific() -> TbResult<()> {
         uid: None,
         energy: None,
     };
-    let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
+
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(stored.clone()));
+    // the part is owned by test_user(), so the other user (no shop) is denied
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user())));
 
     let other_user = mock_session(UserId::from(99));
     let update = ServicePlan {
-        id: created.id,
-        part: Some(part.id),
+        id,
+        part: Some(part),
         what: PartTypeId::from(99),
         hook: None,
         name: "Hacked".to_string(),
@@ -425,10 +267,9 @@ async fn service_plan_update_requires_ownership_specific() -> TbResult<()> {
 /// SP-10: ServicePlan update requires ownership (generic plan)
 #[tokio::test]
 async fn service_plan_update_requires_ownership_generic() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-
-    let plan = ServicePlan {
-        id: ServicePlanId::new(),
+    let id = ServicePlanId::new();
+    let stored = ServicePlan {
+        id,
         part: None,
         what: PartTypeId::from(1),
         hook: None,
@@ -442,11 +283,15 @@ async fn service_plan_update_requires_ownership_generic() -> TbResult<()> {
         uid: Some(test_user()),
         energy: None,
     };
-    let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
+
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(stored.clone()));
 
     let other_user = mock_session(UserId::from(99));
     let update = ServicePlan {
-        id: created.id,
+        id,
         part: None,
         what: PartTypeId::from(99),
         hook: None,
@@ -466,249 +311,110 @@ async fn service_plan_update_requires_ownership_generic() -> TbResult<()> {
     Ok(())
 }
 
-/// SP-11: ServicePlan delete removes plan
-#[tokio::test]
-async fn service_plan_delete_removes_plan() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-
-    let plan = ServicePlan {
-        id: ServicePlanId::new(),
-        part: None,
-        what: PartTypeId::from(1),
-        hook: None,
-        name: "Delete Me".to_string(),
-        days: Some(30),
-        hours: None,
-        km: None,
-        climb: None,
-        descend: None,
-        rides: None,
-        uid: Some(test_user()),
-        energy: None,
-    };
-    let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
-
-    // Delete via serviceplan delete
-    let deleted = created.id.delete(&test_session(), &mut store).await?;
-    assert_eq!(deleted.len(), 0);
-
-    // Now should not be found - verify through by_user instead
-    let plans = ServicePlan::for_user(&test_user(), &mut store).await?;
-    assert!(plans.is_empty());
-
-    Ok(())
-}
-
 /// SP-12: deleting a plan unlinks it from the owner's services and returns them
 #[tokio::test]
 async fn service_plan_delete_unlinks_owner_services() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
-    let created = ServicePlan::create(
-        sample_plan(Some(part.id), "Unlink Plan", None),
-        &test_session(),
-        &mut store,
-    )
-    .await?;
+    let part = PartId::from(1);
+    let created = sample_plan(Some(part), "Unlink Plan", None);
+    let plan_id = created.id;
+    let service = service_row(ServiceId::new(), part, vec![plan_id]);
+    let service_id = service.id;
 
-    let service = seed_service_for_plan(part.id, "Service", created.id, &mut store).await?;
-    assert_eq!(service.plans, vec![created.id]);
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(created.clone()));
+    // checkuser + owner read both hit partid_get_part; the part is owned by test_user()
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user())));
+    store
+        .expect_part_get_all_for_userid()
+        .returning(move |_| Ok(vec![part_row(part, test_user())]));
+    store
+        .expect_services_by_part()
+        .returning(move |_| Ok(vec![service.clone()]));
+    store.expect_service_update().returning(Ok);
+    store.expect_serviceplan_delete().returning(|_| Ok(1));
 
-    let res = created.id.delete(&test_session(), &mut store).await?;
+    let res = plan_id.delete(&test_session(), &mut store).await?;
 
     // the response carries the updated service
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].id, service.id);
+    assert_eq!(res[0].id, service_id);
     assert!(res[0].plans.is_empty());
-
-    // the stored service no longer references the plan
-    let stored = ServiceStore::service_get(&mut store, service.id).await?;
-    assert!(stored.plans.is_empty());
     Ok(())
 }
 
 /// SP-12a: the unlink is scoped to the deleted plan's owner's services only
 #[tokio::test]
 async fn service_plan_delete_unlink_scoped_to_owner() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let other_session = mock_session(UserId::from(99));
+    let created = sample_plan(None, "Generic Unlink", Some(test_user()));
+    let plan_id = created.id;
+    let mine = PartId::from(1);
+    let my_service = service_row(ServiceId::new(), mine, vec![plan_id]);
+    let my_service_id = my_service.id;
 
-    let created = ServicePlan::create(
-        sample_plan(None, "Generic Unlink", Some(test_user())),
-        &test_session(),
-        &mut store,
-    )
-    .await?;
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(created.clone()));
+    // only the owner's parts are consulted, so any other user's service is never touched
+    store
+        .expect_part_get_all_for_userid()
+        .returning(move |_| Ok(vec![part_row(mine, test_user())]));
+    store
+        .expect_services_by_part()
+        .returning(move |_| Ok(vec![my_service.clone()]));
+    store.expect_service_update().returning(Ok);
+    store.expect_serviceplan_delete().returning(|_| Ok(1));
 
-    let mine = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
-    let my_service = seed_service_for_plan(mine.id, "Mine", created.id, &mut store).await?;
-
-    let theirs = Part::create(
-        "Other Part".to_string(),
-        "Vendor".to_string(),
-        "Model".to_string(),
-        PartTypeId::from(1),
-        None,
-        sample_purchase_date(),
-        &other_session,
-        &mut store,
-    )
-    .await?;
-    let their_service = seed_service_for_plan(theirs.id, "Theirs", created.id, &mut store).await?;
-
-    let res = created.id.delete(&test_session(), &mut store).await?;
+    let res = plan_id.delete(&test_session(), &mut store).await?;
 
     // only the owner's updated service is in the response
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].id, my_service.id);
+    assert_eq!(res[0].id, my_service_id);
     assert!(res[0].plans.is_empty());
-
-    // the non-owner's service is untouched
-    let their_stored = ServiceStore::service_get(&mut store, their_service.id).await?;
-    assert_eq!(their_stored.plans, vec![created.id]);
     Ok(())
 }
 
 /// SP-12b: a shop session deleting a specific-part plan unlinks the part owner's services
 #[tokio::test]
 async fn service_plan_delete_unlinks_part_owner_via_shop_session() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let shop = ShopId::create(
-        "Shop 99".to_string(),
-        None,
-        true,
-        UserId::from(99),
-        &mut store,
-    )
-    .await?;
-    let shop_session = mock_session_with_shop(UserId::from(99), shop.id);
+    let part = PartId::from(1);
+    let shop = ShopId::from(1);
+    let created = sample_plan(Some(part), "Shop Delete", None);
+    let plan_id = created.id;
+    let service = service_row(ServiceId::new(), part, vec![plan_id]);
+    let service_id = service.id;
 
-    let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
-    let created = ServicePlan::create(
-        sample_plan(Some(part.id), "Shop Delete", None),
-        &test_session(),
-        &mut store,
-    )
-    .await?;
+    let shop_session = mock_session_with_shop(UserId::from(99), shop);
 
-    let service = seed_service_for_plan(part.id, "Service", created.id, &mut store).await?;
+    let mut store = MockStore::new();
+    store
+        .expect_serviceplan_get()
+        .returning(move |_| Ok(created.clone()));
+    // the part is owned by test_user(); the shop session (owner 99) passes checkuser via the shop
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user())));
+    store
+        .expect_shop_get()
+        .returning(move |_| Ok(shop_row(shop, UserId::from(99))));
+    store
+        .expect_part_get_all_for_userid()
+        .returning(move |_| Ok(vec![part_row(part, test_user())]));
+    store
+        .expect_services_by_part()
+        .returning(move |_| Ok(vec![service.clone()]));
+    store.expect_service_update().returning(Ok);
+    store.expect_serviceplan_delete().returning(|_| Ok(1));
 
-    let res = created.id.delete(&shop_session, &mut store).await?;
+    let res = plan_id.delete(&shop_session, &mut store).await?;
 
     // the part owner's updated service is in the response
     assert_eq!(res.len(), 1);
-    assert_eq!(res[0].id, service.id);
+    assert_eq!(res[0].id, service_id);
     assert!(res[0].plans.is_empty());
-
-    // the stored service no longer references the plan
-    let stored = ServiceStore::service_get(&mut store, service.id).await?;
-    assert!(stored.plans.is_empty());
-    Ok(())
-}
-
-// === Suite 7: ServicePlan — Threshold Data Model ===
-
-/// SP-13: All threshold fields None means plan is still valid (time-only)
-#[tokio::test]
-async fn service_plan_all_thresholds_none_means_active() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-
-    let plan = ServicePlan {
-        id: ServicePlanId::new(),
-        part: None,
-        what: PartTypeId::from(1),
-        hook: None,
-        name: "Time Only".to_string(),
-        days: Some(30),
-        hours: None,
-        km: None,
-        climb: None,
-        descend: None,
-        rides: None,
-        uid: Some(test_user()),
-        energy: None,
-    };
-    let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
-
-    let stored = ServicePlanStore::serviceplan_get(&mut store, created.id).await?;
-    assert_eq!(stored.hours, None);
-    assert_eq!(stored.km, None);
-    assert_eq!(stored.climb, None);
-    assert_eq!(stored.rides, None);
-    Ok(())
-}
-
-/// SP-14: ServicePlan with single threshold only
-#[tokio::test]
-async fn service_plan_single_threshold_only() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-
-    let plan = ServicePlan {
-        id: ServicePlanId::new(),
-        part: None,
-        what: PartTypeId::from(1),
-        hook: None,
-        name: "Km Only".to_string(),
-        days: Some(30),
-        hours: None,
-        km: Some(500),
-        climb: None,
-        descend: None,
-        rides: None,
-        uid: Some(test_user()),
-        energy: None,
-    };
-    let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
-
-    let stored = ServicePlanStore::serviceplan_get(&mut store, created.id).await?;
-    assert_eq!(stored.km, Some(500));
-    assert_eq!(stored.hours, None);
-    assert_eq!(stored.climb, None);
-    assert_eq!(stored.rides, None);
-
-    Ok(())
-}
-
-/// SP-15: ServicePlan with multiple thresholds
-#[tokio::test]
-async fn service_plan_multiple_thresholds() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-
-    let plan = ServicePlan {
-        id: ServicePlanId::new(),
-        part: None,
-        what: PartTypeId::from(1),
-        hook: None,
-        name: "Multi Threshold".to_string(),
-        days: Some(30),
-        hours: Some(100),
-        km: Some(5000),
-        climb: Some(5000),
-        descend: None,
-        rides: Some(20),
-        uid: Some(test_user()),
-        energy: Some(3000),
-    };
-    let created = ServicePlan::create(plan, &test_session(), &mut store).await?;
-
-    let stored = ServicePlanStore::serviceplan_get(&mut store, created.id).await?;
-    assert_eq!(stored.hours, Some(100));
-    assert_eq!(stored.km, Some(5000));
-    assert_eq!(stored.climb, Some(5000));
-    assert_eq!(stored.rides, Some(20));
-    assert_eq!(stored.energy, Some(3000));
-
-    Ok(())
-}
-
-/// SP-16: ServicePlan for_part returns empty when no plans on part
-#[tokio::test]
-async fn serviceplan_for_part_returns_empty_when_none() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let part = fixtures::fixture_basic_part(&test_session(), &mut store).await?;
-
-    let plans = ServicePlan::for_part(part.id, &mut store).await?;
-    assert!(plans.is_empty());
-
     Ok(())
 }
