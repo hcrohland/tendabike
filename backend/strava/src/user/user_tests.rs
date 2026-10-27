@@ -103,7 +103,7 @@ async fn strava_id_read_option() {
 async fn update_token() -> TbResult<()> {
     let (mut store, _) = setup();
     let user = StravaId::from(42)
-        .update_token(Some(&"new".to_string()), &mut store)
+        .update_token(Some("new".to_string()), &mut store)
         .await?;
     assert_eq!(
         user.refresh_token().map(|t| t.secret().to_string()),

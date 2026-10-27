@@ -132,14 +132,14 @@ impl StravaDataStore for TestStravaStore {
     async fn stravauser_update_token(
         &mut self,
         stravaid: StravaId,
-        refresh: Option<&String>,
+        refresh: Option<String>,
     ) -> TbResult<StravaUser> {
         let user = self
             .strava_users
             .values_mut()
             .find(|u| u.id == stravaid)
             .ok_or_else(|| Error::NotFound(format!("strava user {stravaid} not found")))?;
-        user.refresh_token = refresh.map(|r| RefreshToken::new(r.clone()));
+        user.refresh_token = refresh.map(RefreshToken::new);
         Ok(user.clone())
     }
 

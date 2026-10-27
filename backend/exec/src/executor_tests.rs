@@ -946,7 +946,7 @@ impl StravaDataStore for FakeConn {
     async fn stravauser_update_token(
         &mut self,
         _stravaid: StravaId,
-        _refresh: Option<&String>,
+        _refresh: Option<String>,
     ) -> TbResult<StravaUser> {
         unimplemented!("the unit tests never update a strava token")
     }

@@ -31,7 +31,7 @@ impl StravaId {
     /// returns the updated user
     pub(crate) async fn update_token(
         self,
-        refresh: Option<&String>,
+        refresh: Option<String>,
         store: &mut impl StravaDataStore,
     ) -> TbResult<StravaUser> {
         store.stravauser_update_token(self, refresh).await
@@ -124,7 +124,7 @@ impl StravaUser {
                 .update(firstname, lastname, avatar, store)
                 .await?;
             store
-                .stravauser_update_token(user.id, refresh.map(RefreshToken::secret))
+                .stravauser_update_token(user.id, refresh.map(|t| t.secret().to_string()))
                 .await?;
             return Ok(user);
         }
