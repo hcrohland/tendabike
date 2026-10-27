@@ -886,17 +886,17 @@ impl UsageStore for FakeConn {
 
 #[async_trait::async_trait]
 impl ServiceStore for FakeConn {
-    async fn create(&mut self, service: Service) -> TbResult<Service> {
-        ServiceStore::create(&mut self.store, service).await
+    async fn service_create(&mut self, service: Service) -> TbResult<Service> {
+        ServiceStore::service_create(&mut self.store, service).await
     }
-    async fn get(&mut self, service: ServiceId) -> TbResult<Service> {
-        ServiceStore::get(&mut self.store, service).await
+    async fn service_get(&mut self, service: ServiceId) -> TbResult<Service> {
+        ServiceStore::service_get(&mut self.store, service).await
     }
-    async fn update(&mut self, service: Service) -> TbResult<Service> {
-        ServiceStore::update(&mut self.store, service).await
+    async fn service_update(&mut self, service: Service) -> TbResult<Service> {
+        ServiceStore::service_update(&mut self.store, service).await
     }
-    async fn delete(&mut self, service: ServiceId) -> TbResult<usize> {
-        ServiceStore::delete(&mut self.store, service).await
+    async fn service_delete(&mut self, service: ServiceId) -> TbResult<usize> {
+        ServiceStore::service_delete(&mut self.store, service).await
     }
     async fn services_delete(&mut self, services: &[Service]) -> TbResult<usize> {
         self.store.services_delete(services).await

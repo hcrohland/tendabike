@@ -522,7 +522,7 @@ async fn service_plan_delete_unlinks_owner_services() -> TbResult<()> {
     assert!(res[0].plans.is_empty());
 
     // the stored service no longer references the plan
-    let stored = ServiceStore::get(&mut store, service.id).await?;
+    let stored = ServiceStore::service_get(&mut store, service.id).await?;
     assert!(stored.plans.is_empty());
     Ok(())
 }
@@ -564,7 +564,7 @@ async fn service_plan_delete_unlink_scoped_to_owner() -> TbResult<()> {
     assert!(res[0].plans.is_empty());
 
     // the non-owner's service is untouched
-    let their_stored = ServiceStore::get(&mut store, their_service.id).await?;
+    let their_stored = ServiceStore::service_get(&mut store, their_service.id).await?;
     assert_eq!(their_stored.plans, vec![created.id]);
     Ok(())
 }
@@ -601,7 +601,7 @@ async fn service_plan_delete_unlinks_part_owner_via_shop_session() -> TbResult<(
     assert!(res[0].plans.is_empty());
 
     // the stored service no longer references the plan
-    let stored = ServiceStore::get(&mut store, service.id).await?;
+    let stored = ServiceStore::service_get(&mut store, service.id).await?;
     assert!(stored.plans.is_empty());
     Ok(())
 }

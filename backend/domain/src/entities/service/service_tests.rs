@@ -448,7 +448,7 @@ async fn service_update_preserves_usage_reference() -> TbResult<()> {
     svc.update(&test_session(), &mut store).await?;
 
     // Usage reference is preserved in the updated service
-    let svc = ServiceStore::get(&mut store, created.id).await?;
+    let svc = ServiceStore::service_get(&mut store, created.id).await?;
     assert_eq!(svc.usage, original_usage_id);
     Ok(())
 }
@@ -500,10 +500,14 @@ async fn service_delete_removes_service_and_usage() -> TbResult<()> {
     let usage_id = sole_live(&summary.usages).id;
 
     // Delete via service id
-    ServiceStore::delete(&mut store, service.id).await?;
+    ServiceStore::service_delete(&mut store, service.id).await?;
 
     // Verify service is deleted
-    assert!(ServiceStore::get(&mut store, service.id).await.is_err());
+    assert!(
+        ServiceStore::service_get(&mut store, service.id)
+            .await
+            .is_err()
+    );
 
     // Verify usage is deleted (read should return the persisted usage since mem store
     // doesn't actually delete usages, even though the usage was in the Summary)
@@ -571,7 +575,7 @@ async fn service_delete_rewires_predecessor_chains() -> TbResult<()> {
         .id;
 
     // Redo S2 → S3
-    let s2_clone = ServiceStore::get(&mut store, s2_id).await?;
+    let s2_clone = ServiceStore::service_get(&mut store, s2_id).await?;
     let summary = s2_clone.clone().redo(&test_session(), &mut store).await?;
     let s3_id = summary
         .services
@@ -582,15 +586,15 @@ async fn service_delete_rewires_predecessor_chains() -> TbResult<()> {
         .id;
 
     // Delete S2 (the middle one) via domain delete which handles chain cleanup
-    let s2_for_delete: Service = ServiceStore::get(&mut store, s2_id).await?;
+    let s2_for_delete: Service = ServiceStore::service_get(&mut store, s2_id).await?;
     s2_for_delete.id.delete(&test_session(), &mut store).await?;
 
     // S1 should now have successor = None (predecessor is severed, not rewired)
-    let s1_updated = ServiceStore::get(&mut store, s1_id).await?;
+    let s1_updated = ServiceStore::service_get(&mut store, s1_id).await?;
     assert!(s1_updated.successor.is_none());
 
     // S3 should have successor = None (it's the latest)
-    let s3_updated = ServiceStore::get(&mut store, s3_id).await?;
+    let s3_updated = ServiceStore::service_get(&mut store, s3_id).await?;
     assert!(s3_updated.successor.is_none());
 
     Ok(())
@@ -615,9 +619,9 @@ async fn service_delete_no_rewire_when_no_predecessors() -> TbResult<()> {
     .await?;
     let svc_id = sole_live(&summary.services).id;
 
-    ServiceStore::delete(&mut store, svc_id).await?;
+    ServiceStore::service_delete(&mut store, svc_id).await?;
 
-    assert!(ServiceStore::get(&mut store, svc_id).await.is_err());
+    assert!(ServiceStore::service_get(&mut store, svc_id).await.is_err());
     Ok(())
 }
 
@@ -640,7 +644,7 @@ async fn service_delete_by_partid_checks_ownership() -> TbResult<()> {
     .await?;
     let svc_id = sole_live(&summary.services).id;
 
-    let result = ServiceStore::delete(&mut store, svc_id).await;
+    let result = ServiceStore::service_delete(&mut store, svc_id).await;
     // User 1 owns it, so delete should succeed for user 1 (test_session is user 1)
     assert!(result.is_ok());
     Ok(())
@@ -679,7 +683,7 @@ async fn redo_same_time_creates_new_entry_as_successor() -> TbResult<()> {
         .unwrap()
         .id;
     assert_eq!(summary.services.get(&s2_id).unwrap().successor, None);
-    let updated_s1 = ServiceStore::get(&mut store, s1.id).await?;
+    let updated_s1 = ServiceStore::service_get(&mut store, s1.id).await?;
     assert_eq!(updated_s1.successor, Some(s2_id));
     Ok(())
 }
@@ -721,7 +725,7 @@ async fn redo_preserves_successor_chain_correctly() -> TbResult<()> {
     assert_eq!(summary.services.get(&s2_id).unwrap().successor, None);
 
     // S1 should have successor = S2
-    let updated_s1 = ServiceStore::get(&mut store, s1.id).await?;
+    let updated_s1 = ServiceStore::service_get(&mut store, s1.id).await?;
     assert_eq!(updated_s1.successor, Some(s2_id));
     Ok(())
 }
@@ -907,7 +911,7 @@ async fn redo_returns_summary_with_new_service_and_updated_old() -> TbResult<()>
     let summary = s1.clone().redo(&test_session(), &mut store).await?;
 
     assert!(!summary.services.is_empty());
-    let updated = ServiceStore::get(&mut store, s1.id).await?;
+    let updated = ServiceStore::service_get(&mut store, s1.id).await?;
     assert!(updated.successor.is_some());
     Ok(())
 }
@@ -1350,7 +1354,7 @@ async fn service_successor_chain_two_elements() -> TbResult<()> {
         .unwrap()
         .id;
 
-    let updated_s1 = ServiceStore::get(&mut store, s1.id).await?;
+    let updated_s1 = ServiceStore::service_get(&mut store, s1.id).await?;
     assert_eq!(updated_s1.successor, Some(s2_id));
     Ok(())
 }
@@ -1384,7 +1388,7 @@ async fn service_successor_chain_three_elements() -> TbResult<()> {
         .unwrap()
         .id;
 
-    let s2_clone = ServiceStore::get(&mut store, s2_id).await?;
+    let s2_clone = ServiceStore::service_get(&mut store, s2_id).await?;
     let summary = s2_clone.clone().redo(&test_session(), &mut store).await?;
     let s3_id = summary
         .services
@@ -1395,9 +1399,9 @@ async fn service_successor_chain_three_elements() -> TbResult<()> {
         .id;
 
     // Fetch from store to verify the full chain
-    let s1_stored = ServiceStore::get(&mut store, s1.id).await?;
-    let s2_stored = ServiceStore::get(&mut store, s2_id).await?;
-    let s3_stored = ServiceStore::get(&mut store, s3_id).await?;
+    let s1_stored = ServiceStore::service_get(&mut store, s1.id).await?;
+    let s2_stored = ServiceStore::service_get(&mut store, s2_id).await?;
+    let s3_stored = ServiceStore::service_get(&mut store, s3_id).await?;
 
     // Chain: S1 → S2 → S3 → None
     assert_eq!(s1_stored.successor, Some(s2_stored.id));
@@ -1436,7 +1440,7 @@ async fn service_delete_middle_of_long_chain_rewires_all() -> TbResult<()> {
         .unwrap()
         .id;
 
-    let s2_clone = ServiceStore::get(&mut store, s2_id).await?;
+    let s2_clone = ServiceStore::service_get(&mut store, s2_id).await?;
     let summary = s2_clone.clone().redo(&test_session(), &mut store).await?;
     let s3_id = summary
         .services
@@ -1446,7 +1450,7 @@ async fn service_delete_middle_of_long_chain_rewires_all() -> TbResult<()> {
         .unwrap()
         .id;
 
-    let s3_clone = ServiceStore::get(&mut store, s3_id).await?;
+    let s3_clone = ServiceStore::service_get(&mut store, s3_id).await?;
     let summary = s3_clone.clone().redo(&test_session(), &mut store).await?;
     let s4_id = summary
         .services
@@ -1456,7 +1460,7 @@ async fn service_delete_middle_of_long_chain_rewires_all() -> TbResult<()> {
         .unwrap()
         .id;
 
-    let s4_clone = ServiceStore::get(&mut store, s4_id).await?;
+    let s4_clone = ServiceStore::service_get(&mut store, s4_id).await?;
     let summary = s4_clone.clone().redo(&test_session(), &mut store).await?;
     let s5_id = summary
         .services
@@ -1467,20 +1471,20 @@ async fn service_delete_middle_of_long_chain_rewires_all() -> TbResult<()> {
         .id;
 
     // Delete S3 via domain delete which handles chain cleanup
-    let s3_to_delete: Service = ServiceStore::get(&mut store, s3_id).await?;
+    let s3_to_delete: Service = ServiceStore::service_get(&mut store, s3_id).await?;
     s3_to_delete.id.delete(&test_session(), &mut store).await?;
 
     // S2 should have successor = None (severed, not rewired)
-    let s2_stored = ServiceStore::get(&mut store, s2_id).await?;
+    let s2_stored = ServiceStore::service_get(&mut store, s2_id).await?;
     assert!(s2_stored.successor.is_none());
 
     // S1 should still point to S2
-    let s1_stored = ServiceStore::get(&mut store, s1.id).await?;
+    let s1_stored = ServiceStore::service_get(&mut store, s1.id).await?;
     assert_eq!(s1_stored.successor, Some(s2_stored.id));
 
     // S4 and S5 are unaffected
-    let s4_stored = ServiceStore::get(&mut store, s4_id).await?;
-    let s5_stored = ServiceStore::get(&mut store, s5_id).await?;
+    let s4_stored = ServiceStore::service_get(&mut store, s4_id).await?;
+    let s5_stored = ServiceStore::service_get(&mut store, s5_id).await?;
     assert_eq!(s4_stored.successor, Some(s5_id));
     assert!(s5_stored.successor.is_none());
 
@@ -1528,7 +1532,7 @@ async fn service_delete_preserves_unrelated_parts_services() -> TbResult<()> {
 
     // Delete service on part1
     let svcs = ServiceStore::services_by_part(&mut store, part1.id).await?;
-    ServiceStore::delete(&mut store, svcs[0].id).await?;
+    ServiceStore::service_delete(&mut store, svcs[0].id).await?;
 
     // Part2's service should be untouched
     let svcs2 = ServiceStore::services_by_part(&mut store, part2.id).await?;
@@ -1559,9 +1563,13 @@ async fn service_delete_removes_from_store() -> TbResult<()> {
     .await?;
 
     let service_id = sole_live(&summary.services).id;
-    ServiceStore::delete(&mut store, service_id).await?;
+    ServiceStore::service_delete(&mut store, service_id).await?;
 
-    assert!(ServiceStore::get(&mut store, service_id).await.is_err());
+    assert!(
+        ServiceStore::service_get(&mut store, service_id)
+            .await
+            .is_err()
+    );
     Ok(())
 }
 
