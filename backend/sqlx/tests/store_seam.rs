@@ -452,6 +452,53 @@ async fn user_summary_read() -> tb_domain::TbResult<()> {
 }
 
 // ---------------------------------------------------------------------------
+// Part: read, name, and not-found (issue #640)
+// ---------------------------------------------------------------------------
+
+/// The stored part reads back losslessly: the fixture's first part comes back
+/// with its name and vendor intact (the `PartId::read` roundtrip).
+#[tokio::test]
+#[ignore]
+async fn partid_read_returns_stored_part() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let retrieved = store.partid_get_part(PartId::from(1)).await?;
+        assert_eq!(retrieved.name, "Main Bike");
+        assert_eq!(retrieved.vendor, "TendaBike");
+        Ok(())
+    })
+    .await
+}
+
+/// Reading a part that does not exist maps to `NotFound` — the `RowNotFound`
+/// mapping.
+#[tokio::test]
+#[ignore]
+async fn partid_read_not_found_error() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let result = store.partid_get_part(PartId::from(999)).await;
+        assert!(
+            matches!(result, Err(tb_domain::Error::NotFound(_))),
+            "reading a missing part must be NotFound, got {result:?}"
+        );
+        Ok(())
+    })
+    .await
+}
+
+/// `PartId::name` returns the part's name without an ownership check — the
+/// lossless roundtrip.
+#[tokio::test]
+#[ignore]
+async fn partid_name_returns_name() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let name = PartId::from(1).name(&mut store).await?;
+        assert_eq!(name, "Main Bike");
+        Ok(())
+    })
+    .await
+}
+
+// ---------------------------------------------------------------------------
 // Attachment: attach
 // ---------------------------------------------------------------------------
 

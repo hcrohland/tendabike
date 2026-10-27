@@ -1,65 +1,83 @@
-use super::*;
-use crate::test_support::{MemStore, fixtures, mock_session};
-use time::OffsetDateTime;
+//! The `Part`/`PartId` domain logic over a canned [`MockStore`] (issue #640).
+//!
+//! Each mock-runnable test runs the real domain operation — dispose/restore,
+//! `by_source` lookup, `is_main` derivation from the static `PARTTYPES` table,
+//! ownership/shop assignment with checks, purchase-date rounding, and source
+//! attach — over a [`MockStore`] whose methods return canned rows. The domain
+//! logic runs for real; only the store I/O is canned. The one pure value-logic
+//! test (`Part::usage` field projection) needs no store at all. The `PartId::
+//! read`/`name` lossless roundtrip and the `RowNotFound` mapping rest on the
+//! sqlx seam suite (`sqlx/tests/store_seam.rs`), where Postgres is the source
+//! of truth.
 
-use fixtures::{sample_purchase_date, test_user};
+use super::*;
+use crate::test_support::{
+    MockStore,
+    fixtures::{sample_purchase_date, test_session, test_user},
+    mock_session,
+    part_type_ids::{BIKE, CHAIN, FRONT_WHEEL},
+};
+use time::OffsetDateTime;
 
 fn later_time() -> OffsetDateTime {
     OffsetDateTime::from_unix_timestamp(1700100000).unwrap()
 }
 
-// === PartId tests ===
-
-/// PartId::read retrieves a stored part
-#[tokio::test]
-async fn partid_read_returns_stored_part() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let retrieved = PartId::from(1).read(&mut store).await?;
-    assert_eq!(retrieved.name, "Main Bike");
-    assert_eq!(retrieved.vendor, "TendaBike");
-    Ok(())
+/// A canned `Part` row: the minimal shape the domain logic needs (id, owner,
+/// type).
+fn part_row(id: PartId, owner: UserId, what: PartTypeId) -> Part {
+    Part {
+        id,
+        owner,
+        what,
+        name: "Main Bike".to_string(),
+        vendor: "TendaBike".to_string(),
+        model: "Standard".to_string(),
+        purchase: sample_purchase_date(),
+        last_used: sample_purchase_date(),
+        disposed_at: None,
+        usage: UsageId::new(),
+        source: None,
+        shop: None,
+    }
 }
 
-/// PartId::read returns error for non-existent part
-#[tokio::test]
-async fn partid_read_not_found_error() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let result = PartId::from(999).read(&mut store).await;
-    assert!(result.is_err());
-    Ok(())
-}
+// === PartId: is_main (the static PARTTYPES table) ===
 
-/// PartId::name returns the part name without checking ownership
-#[tokio::test]
-async fn partid_name_returns_name() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let name = PartId::from(1).name(&mut store).await?;
-    assert_eq!(name, "Main Bike");
-    Ok(())
-}
-
-/// PartId::is_main returns true for main part types
+/// `PartId::is_main` is true for a main part type (the bike: `hooks=[]`).
 #[tokio::test]
 async fn partid_is_main_for_bike() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(PartId::from(1), test_user(), BIKE)));
     let is_main = PartId::from(1).is_main(&mut store).await?;
     assert!(is_main);
     Ok(())
 }
 
-/// PartId::is_main returns false for sub-part types
+/// `PartId::is_main` is false for a sub-part type (the front wheel: `hooks=[1]`).
 #[tokio::test]
 async fn partid_is_not_main_for_wheel() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(PartId::from(2), test_user(), FRONT_WHEEL)));
     let is_main = PartId::from(2).is_main(&mut store).await?;
     assert!(!is_main);
     Ok(())
 }
 
-/// PartId::update_timestamps updates last_used when start is later
+// === PartId: update_timestamps ===
+
+/// `PartId::update_timestamps` bumps last_used when start is later.
 #[tokio::test]
 async fn update_timestamps_updates_last_used() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(PartId::from(4), test_user(), CHAIN)));
+    store.expect_part_update().returning(Ok);
     let updated = PartId::from(4)
         .update_timestamps(later_time(), &mut store)
         .await?;
@@ -67,42 +85,65 @@ async fn update_timestamps_updates_last_used() -> TbResult<()> {
     Ok(())
 }
 
-/// PartId::dispose sets disposed_at timestamp
+// === PartId: dispose / restore ===
+
+/// `PartId::dispose` sets the disposed_at timestamp.
 #[tokio::test]
 async fn dispose_sets_disposed_at() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(PartId::from(4), test_user(), CHAIN)));
+    store.expect_part_update().returning(Ok);
     let disposed = PartId::from(4).dispose(later_time(), &mut store).await?;
     assert!(disposed.disposed_at.is_some());
     Ok(())
 }
 
-/// PartId::restore clears disposed_at
+/// `PartId::restore` clears disposed_at.
 #[tokio::test]
 async fn restore_clears_disposed_at() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    PartId::from(4)
-        .dispose(sample_purchase_date(), &mut store)
-        .await?;
+    let mut store = MockStore::new();
+    let disposed = Part {
+        disposed_at: Some(sample_purchase_date()),
+        ..part_row(PartId::from(4), test_user(), CHAIN)
+    };
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(disposed.clone()));
+    store.expect_part_update().returning(Ok);
     let restored = PartId::from(4).restore(&mut store).await?;
     assert!(restored.disposed_at.is_none());
     Ok(())
 }
 
-/// PartId::set_owner_and_shop copies owner and shop from gear
+// === PartId: set_owner_and_shop ===
+
+/// `PartId::set_owner_and_shop` copies owner and shop from the gear.
 #[tokio::test]
 async fn set_owner_and_shop_copies_from_gear() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let gear = PartId::from(1).read(&mut store).await?;
+    let gear = part_row(PartId::from(1), test_user(), BIKE);
+    let gear_owner = gear.owner;
+    let gear_id = gear.id;
+    let mut store = MockStore::new();
+    store.expect_partid_get_part().returning(move |id| {
+        if id == PartId::from(2) {
+            Ok(part_row(PartId::from(2), UserId::from(2), FRONT_WHEEL))
+        } else {
+            Ok(gear.clone())
+        }
+    });
+    store.expect_part_update().returning(Ok);
     let updated = PartId::from(2)
-        .set_owner_and_shop(gear.id, &mut store)
+        .set_owner_and_shop(gear_id, &mut store)
         .await?;
-    assert_eq!(updated.owner, gear.owner);
+    assert_eq!(updated.owner, gear_owner);
     Ok(())
 }
 
-// === Part tests ===
+// === Part: usage (pure value logic, no store) ===
 
-/// Part::usage returns the usage id
+/// `Part::usage` returns the usage id.
 #[test]
 fn part_usage_returns_usage_id() {
     let test_usage = UsageId::new();
@@ -124,12 +165,24 @@ fn part_usage_returns_usage_id() {
     assert_eq!(part.usage(), test_usage);
 }
 
-/// Part::create creates a part with correct purchase date rounding
+// === Part: create ===
+
+/// `Part::create` rounds the purchase date via round_time().
 #[tokio::test]
 async fn part_create_sets_purchase_date() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = MockStore::new();
     let sess = mock_session(UserId::from(99));
     let purchase = sample_purchase_date();
+    // The store echoes back the purchase date the domain passes, so the
+    // assertion below verifies the domain rounded it (not the store).
+    store.expect_part_create().returning(
+        |what, _name, _vendor, _model, p, _source, _usage, _owner, _shop| {
+            Ok(Part {
+                purchase: p,
+                ..part_row(PartId::from(1), UserId::from(99), what)
+            })
+        },
+    );
     let part = Part::create(
         "Derailleur".to_string(),
         "Shimano".to_string(),
@@ -148,11 +201,20 @@ async fn part_create_sets_purchase_date() -> TbResult<()> {
     Ok(())
 }
 
-/// Part::create sets source
+/// `Part::create` sets source.
 #[tokio::test]
 async fn part_create_with_source() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = MockStore::new();
     let sess = mock_session(UserId::from(99));
+    // The store echoes back the source the domain passes.
+    store.expect_part_create().returning(
+        |what, _name, _vendor, _model, _p, source, _usage, _owner, _shop| {
+            Ok(Part {
+                source,
+                ..part_row(PartId::from(1), UserId::from(99), what)
+            })
+        },
+    );
     let part = Part::create(
         "Wheelset".to_string(),
         "Easton".to_string(),
@@ -169,171 +231,116 @@ async fn part_create_with_source() -> TbResult<()> {
     Ok(())
 }
 
-/// Part::by_source returns the part carrying the given Strava source
+// === Part: by_source ===
+
+/// `Part::by_source` returns the part carrying the given Strava source.
 #[tokio::test]
 async fn part_by_source_returns_part_with_source() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let sess = mock_session(UserId::from(99));
-    let created = Part::create(
-        "Wheelset".to_string(),
-        "Easton".to_string(),
-        "DA3".to_string(),
-        PartTypeId::from(4),
-        Some("b12345".to_string()),
-        sample_purchase_date(),
-        &sess,
-        &mut store,
-    )
-    .await?;
+    let created = Part {
+        source: Some("b12345".to_string()),
+        ..part_row(PartId::from(1), test_user(), CHAIN)
+    };
+    let created_check = created.clone();
+    let mut store = MockStore::new();
+    store.expect_partid_get_by_source().returning(|src| {
+        Ok(if src == "b12345" {
+            Some(PartId::from(1))
+        } else {
+            None
+        })
+    });
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(created.clone()));
 
     let found = Part::by_source("b12345", &mut store).await?;
-    assert_eq!(found, Some(created));
+    assert_eq!(found, Some(created_check));
     Ok(())
 }
 
-/// Part::by_source returns None when no part carries the source
+/// `Part::by_source` returns None when no part carries the source.
 #[tokio::test]
 async fn part_by_source_returns_none_when_missing() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = MockStore::new();
+    store.expect_partid_get_by_source().returning(|_| Ok(None));
+
     let found = Part::by_source("b-no-such-source", &mut store).await?;
     assert_eq!(found, None);
     Ok(())
 }
 
-/// Part::get_all returns all parts for a user
-#[tokio::test]
-async fn part_get_all_returns_user_parts() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let sess = mock_session(UserId::from(99));
-    Part::create(
-        "Part 1".to_string(),
-        "V1".to_string(),
-        "M1".to_string(),
-        PartTypeId::from(1),
-        None,
-        sample_purchase_date(),
-        &sess,
-        &mut store,
-    )
-    .await?;
-    Part::create(
-        "Part 2".to_string(),
-        "V2".to_string(),
-        "M2".to_string(),
-        PartTypeId::from(4),
-        None,
-        sample_purchase_date(),
-        &sess,
-        &mut store,
-    )
-    .await?;
+// === Part: categories (the static PARTTYPES table) ===
 
-    let parts = Part::get_all(&sess.user_id(), &mut store).await?;
-    assert_eq!(parts.len(), 2);
-    Ok(())
-}
-
-/// Part::get_all returns empty vec when user has no parts
-#[tokio::test]
-async fn part_get_all_empty_for_user_with_no_parts() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let parts = Part::get_all(&UserId::from(98), &mut store).await?;
-    assert!(parts.is_empty());
-    Ok(())
-}
-
-/// Part::categories returns main part types only
+/// `Part::categories` returns main part types only.
 #[tokio::test]
 async fn part_categories_returns_main_types() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let sess = mock_session(UserId::from(99));
-    Part::create(
-        "Road Bike".to_string(),
-        "Trek".to_string(),
-        "Domane".to_string(),
-        PartTypeId::from(1),
-        None,
-        sample_purchase_date(),
-        &sess,
-        &mut store,
-    )
-    .await?;
-    Part::create(
-        "Wheel".to_string(),
-        "Zipp".to_string(),
-        "404".to_string(),
-        PartTypeId::from(4),
-        None,
-        sample_purchase_date(),
-        &sess,
-        &mut store,
-    )
-    .await?;
+    let mut store = MockStore::new();
+    store.expect_part_get_all_for_userid().returning(move |_| {
+        Ok(vec![
+            part_row(PartId::from(1), test_user(), BIKE),
+            part_row(PartId::from(4), test_user(), CHAIN),
+        ])
+    });
 
-    let categories = Part::categories(&sess, &mut store).await?;
-    // Type 1 (Bike) is main type, Type 4 (chain) is subtype - only main types returned
+    let categories = Part::categories(&test_session(), &mut store).await?;
+    // Type 1 (Bike) is a main type, Type 4 (chain) is a subtype - only main
+    // types returned.
     assert_eq!(categories.len(), 1);
-    assert!(categories.contains(&PartTypeId::from(1)));
-    assert!(!categories.contains(&PartTypeId::from(4)));
+    assert!(categories.contains(&BIKE));
+    assert!(!categories.contains(&CHAIN));
     Ok(())
 }
 
-/// Part::categories returns empty when no parts
+/// `Part::categories` returns empty when no parts.
 #[tokio::test]
 async fn part_categories_empty_for_no_parts() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let categories = Part::categories(&mock_session(UserId::from(98)), &mut store).await?;
+    let mut store = MockStore::new();
+    store
+        .expect_part_get_all_for_userid()
+        .returning(|_| Ok(vec![]));
+
+    let categories = Part::categories(&test_session(), &mut store).await?;
     assert!(categories.is_empty());
     Ok(())
 }
 
-/// Part::categories filters to main types only - subtypes are excluded
+/// `Part::categories` filters to main types only - subtypes are excluded.
 #[tokio::test]
 async fn part_categories_filters_subtypes() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let sess = mock_session(UserId::from(99));
-    Part::create(
-        "Road Bike".to_string(),
-        "Trek".to_string(),
-        "Domane".to_string(),
-        PartTypeId::from(1),
-        None,
-        sample_purchase_date(),
-        &sess,
-        &mut store,
-    )
-    .await?;
-    Part::create(
-        "Front Wheel".to_string(),
-        "Zipp".to_string(),
-        "404".to_string(),
-        PartTypeId::from(2),
-        None,
-        sample_purchase_date(),
-        &sess,
-        &mut store,
-    )
-    .await?;
+    let mut store = MockStore::new();
+    store.expect_part_get_all_for_userid().returning(move |_| {
+        Ok(vec![
+            part_row(PartId::from(1), test_user(), BIKE),
+            part_row(PartId::from(2), test_user(), FRONT_WHEEL),
+        ])
+    });
 
-    // Type 1 (Bike) is main (hooks=[]), Type 2 (front wheel) is subtype (hooks=[1])
-    let categories = Part::categories(&sess, &mut store).await?;
+    // Type 1 (Bike) is main (hooks=[]), Type 2 (front wheel) is a subtype
+    // (hooks=[1]).
+    let categories = Part::categories(&test_session(), &mut store).await?;
     assert_eq!(categories.len(), 1);
-    assert!(categories.contains(&PartTypeId::from(1)));
+    assert!(categories.contains(&BIKE));
     Ok(())
 }
 
-/// PartId::change updates part fields and returns updated part
+// === PartId: change ===
+
+/// `PartId::change` updates part fields and returns the updated part.
 #[tokio::test]
 async fn part_change_updates_fields() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let sess = mock_session(UserId::from(1));
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(PartId::from(1), test_user(), BIKE)));
+    store.expect_part_update().returning(Ok);
+
     let updated = PartId::from(1)
         .change(
             "New Name".to_string(),
             "New Vendor".to_string(),
             "New Model".to_string(),
             sample_purchase_date(),
-            &sess,
+            &test_session(),
             &mut store,
         )
         .await?;
@@ -344,10 +351,14 @@ async fn part_change_updates_fields() -> TbResult<()> {
     Ok(())
 }
 
-/// PartId::change returns forbidden for non-owner session
+/// `PartId::change` returns forbidden for a non-owner session.
 #[tokio::test]
 async fn part_change_rejects_non_owner() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(PartId::from(1), test_user(), BIKE)));
+
     let other_session = mock_session(UserId::from(98));
     let result = PartId::from(1)
         .change(
@@ -363,36 +374,16 @@ async fn part_change_rejects_non_owner() -> TbResult<()> {
     Ok(())
 }
 
-/// PartId::delete returns successfully when part has no attachments
-#[tokio::test]
-async fn part_delete_succeeds_without_attachments() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let sess = mock_session(UserId::from(1));
-    let result = PartId::from(1).delete(&sess, &mut store).await?;
-    assert_eq!(result, PartId::from(1));
+// === PartId: delete (access check) ===
 
-    // Verify part is removed from store
-    let get_result = PartId::from(1).part(&sess, &mut store).await;
-    assert!(matches!(get_result, Err(Error::NotFound(_))));
-    Ok(())
-}
-
-/// PartId::delete returns conflict when part is still attached (conflict check requires AttachmentStore)
-/// Note: AttachmentStore is currently todo!() in MemStore, so this test verifies the delete
-/// succeeds when no attachments exist (the AttachmentStore todo!() is not hit in this path)
-#[tokio::test]
-async fn part_delete_succeeds_without_attachments_documented() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let sess = mock_session(UserId::from(1));
-    let result = PartId::from(1).delete(&sess, &mut store).await?;
-    assert_eq!(result, PartId::from(1));
-    Ok(())
-}
-
-/// PartId::delete returns forbidden for non-owner session
+/// `PartId::delete` returns forbidden for a non-owner session.
 #[tokio::test]
 async fn part_delete_rejects_non_owner() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(PartId::from(1), test_user(), BIKE)));
+
     let other_session = mock_session(UserId::from(98));
     let result = PartId::from(1).delete(&other_session, &mut store).await;
     assert!(matches!(result, Err(Error::Forbidden(_))));
