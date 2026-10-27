@@ -2454,3 +2454,127 @@ async fn shop_update_owner_only() -> tb_domain::TbResult<()> {
     })
     .await
 }
+
+// ---------------------------------------------------------------------------
+// PartNote: adapter roundtrips (issue #642)
+// ---------------------------------------------------------------------------
+//
+// The raw `partnote_*` adapter roundtrips the in-memory suite's `MockStore`
+// cannot exercise: the list filter, the text rename, the text→file conversion,
+// and the file→text conversion. These are verified on the source of truth
+// (Postgres), the one place the database's own read-back rule is exercised.
+// The create and delete roundtrips already ride the `apiwrite_partnote_*`
+// dispatch above; the file-read roundtrip the `apiread_partnote_file_read`.
+
+/// `partnote_all_by_part` returns only the notes of the given part — the list
+/// filter on the source of truth.
+#[tokio::test]
+#[ignore]
+async fn partnote_all_by_part_filters_by_part() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let part = PartId::from(13); // loose spare, owned by user 1
+        let other = PartId::from(14); // loose spare, owned by user 1
+        let when = datetime!(2023-11-14 22:00 UTC);
+        store
+            .partnote_create_text(part, "a".to_string(), when)
+            .await?;
+        store
+            .partnote_create_text(other, "b".to_string(), when)
+            .await?;
+
+        let notes = store.partnote_all_by_part(part).await?;
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].name, "a");
+        Ok(())
+    })
+    .await
+}
+
+/// `partnote_update_text` renames a note — the text-rename roundtrip on the
+/// source of truth.
+#[tokio::test]
+#[ignore]
+async fn partnote_update_text_renames_note() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let part = PartId::from(13);
+        let when = datetime!(2023-11-14 22:00 UTC);
+        let note = store
+            .partnote_create_text(part, "old".to_string(), when)
+            .await?;
+        let updated = store
+            .partnote_update_text(note.id, "new".to_string())
+            .await?;
+        assert_eq!(updated.name, "new");
+        assert!(!updated.has_file());
+        Ok(())
+    })
+    .await
+}
+
+/// `partnote_update_file` converts a text note into a file note and stores the
+/// bytes — the text→file conversion on the source of truth.
+#[tokio::test]
+#[ignore]
+async fn partnote_update_file_converts_text_to_file() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let part = PartId::from(13);
+        let when = datetime!(2023-11-14 22:00 UTC);
+        let data = b"file content".to_vec();
+        let note = store
+            .partnote_create_text(part, "a".to_string(), when)
+            .await?;
+        let updated = store
+            .partnote_update_file(
+                note.id,
+                "photo".to_string(),
+                "image/png".to_string(),
+                Some("photo.png".to_string()),
+                data.len() as i64,
+                data.clone(),
+            )
+            .await?;
+        assert!(updated.has_file());
+        assert_eq!(updated.mime, Some("image/png".to_string()));
+        assert_eq!(updated.size, Some(data.len() as i64));
+        assert_eq!(store.partnote_file(note.id).await?, data);
+        Ok(())
+    })
+    .await
+}
+
+/// `partnote_remove_file` converts a file note into a text note and drops the
+/// bytes — the file→text conversion on the source of truth.
+#[tokio::test]
+#[ignore]
+async fn partnote_remove_file_converts_file_to_text() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let part = PartId::from(13);
+        let when = datetime!(2023-11-14 22:00 UTC);
+        let data = b"file content".to_vec();
+        let note = store
+            .partnote_create_file(
+                part,
+                "photo".to_string(),
+                "image/png".to_string(),
+                Some("photo.png".to_string()),
+                data.len() as i64,
+                data,
+                when,
+            )
+            .await?;
+        let updated = store.partnote_remove_file(note.id).await?;
+        assert!(!updated.has_file());
+        assert_eq!(updated.mime, None);
+        assert_eq!(updated.filename, None);
+        assert_eq!(updated.size, None);
+        // The bytes are gone: a missing file is the op's NotFound. The failed
+        // statement aborts the Postgres transaction, so it comes last.
+        let result = store.partnote_file(note.id).await;
+        assert!(
+            matches!(result, Err(tb_domain::Error::NotFound(_))),
+            "a de-filed note has no bytes, got {result:?}"
+        );
+        Ok(())
+    })
+    .await
+}
