@@ -629,8 +629,8 @@ impl AttachmentStore for TestStravaStore {
     async fn attachment_create(&mut self, att: Attachment) -> TbResult<Attachment> {
         AttachmentStore::attachment_create(&mut self.mem, att).await
     }
-    async fn delete(&mut self, att: Attachment) -> TbResult<Attachment> {
-        AttachmentStore::delete(&mut self.mem, att).await
+    async fn attachment_delete(&mut self, att: Attachment) -> TbResult<Attachment> {
+        AttachmentStore::attachment_delete(&mut self.mem, att).await
     }
     async fn attachments_delete_by_parts(&mut self, parts: &[crate::Part]) -> TbResult<usize> {
         AttachmentStore::attachments_delete_by_parts(&mut self.mem, parts).await

@@ -697,7 +697,7 @@ async fn attachment_delete_identity() -> tb_domain::TbResult<()> {
             gear: bike2.id,
             ..a1
         };
-        let deleted = AttachmentStore::delete(&mut store, stale).await?;
+        let deleted = AttachmentStore::attachment_delete(&mut store, stale).await?;
         assert_eq!(deleted.gear, bike1.id);
 
         let atts = store.attachments_all_by_part(chain.id).await?;

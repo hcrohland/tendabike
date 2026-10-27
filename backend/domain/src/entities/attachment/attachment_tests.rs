@@ -2384,12 +2384,12 @@ async fn delete_addresses_row_by_part_and_attach_time() -> TbResult<()> {
             .await?
             .unwrap()
     };
-    let deleted = AttachmentStore::delete(&mut store, stale).await?;
+    let deleted = AttachmentStore::attachment_delete(&mut store, stale).await?;
     assert_eq!(deleted.gear, bike1.id);
     assert!(store.attachments_all_by_part(chain.id).await?.is_empty());
 
     // And deleting a row that does not exist is a not-found.
-    let result = AttachmentStore::delete(&mut store, stale).await;
+    let result = AttachmentStore::attachment_delete(&mut store, stale).await;
     assert!(matches!(result, Err(Error::NotFound(_))));
 
     Ok(())

@@ -725,8 +725,8 @@ impl AttachmentStore for FakeConn {
     async fn attachment_create(&mut self, att: Attachment) -> TbResult<Attachment> {
         self.store.attachment_create(att).await
     }
-    async fn delete(&mut self, att: Attachment) -> TbResult<Attachment> {
-        AttachmentStore::delete(&mut self.store, att).await
+    async fn attachment_delete(&mut self, att: Attachment) -> TbResult<Attachment> {
+        AttachmentStore::attachment_delete(&mut self.store, att).await
     }
     async fn attachments_delete_by_parts(&mut self, parts: &[Part]) -> TbResult<usize> {
         self.store.attachments_delete_by_parts(parts).await

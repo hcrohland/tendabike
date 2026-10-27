@@ -12,7 +12,7 @@ pub trait AttachmentStore {
     ///
     /// The row is addressed by part + attach time — the database's key;
     /// the other fields of the argument are not part of the identity.
-    async fn delete(&mut self, att: Attachment) -> TbResult<Attachment>;
+    async fn attachment_delete(&mut self, att: Attachment) -> TbResult<Attachment>;
 
     /// Deletes an array of attachments
     ///

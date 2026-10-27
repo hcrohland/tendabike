@@ -21,7 +21,7 @@ impl AttachmentStore for MemStore {
         Ok(att)
     }
 
-    async fn delete(&mut self, att: Attachment) -> TbResult<Attachment> {
+    async fn attachment_delete(&mut self, att: Attachment) -> TbResult<Attachment> {
         let mut d = self.state();
         // The row is addressed by part + attach time — the database's key
         // (one rule on both stores); the other fields are not part of the
