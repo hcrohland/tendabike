@@ -45,7 +45,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
 RUN npm install -g --ignore-scripts \
     typescript \
     typescript-language-server \
-    svelte-language-server
+    svelte-language-server \
+    prettier
 
 # Rust toolchain, installed system-wide under /usr/local so every user gets it
 ENV CARGO_HOME=/usr/local/cargo \
