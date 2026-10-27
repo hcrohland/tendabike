@@ -1714,6 +1714,61 @@ async fn apiwrite_activity_descend() -> tb_domain::TbResult<()> {
     .await
 }
 
+/// The dispatch runs the default-gear reassignment: the null-gear activity is
+/// pointed at the gear and its usage is re-derived from the gear's assembly
+/// (mirrors the in-memory `activity_default_gear_assigns_null_gear_activities`).
+#[tokio::test]
+#[ignore]
+async fn apiwrite_activity_default_gear() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let session = test_session();
+
+        let act = Activity {
+            id: ActivityId::new(100),
+            user_id: UserId::from(1),
+            what: ActTypeId::from(1),
+            name: "No Gear".to_string(),
+            start: datetime!(2024-06-01 10:00 UTC),
+            duration: 3600,
+            time: Some(3500),
+            distance: Some(50000),
+            climb: Some(500),
+            descend: None,
+            energy: Some(1000),
+            gear: None,
+            device_name: None,
+            external_id: None,
+        };
+        store.activity_create(act.clone()).await?;
+
+        let summary = outcome_summary(
+            exec(
+                ApiWrite::ActivityDefaultGear {
+                    gear: PartId::from(1), // "Main Bike" in the fixture
+                },
+                &session,
+                &mut store,
+            )
+            .await?,
+        );
+        let stored = store
+            .activity_read_by_id(act.id)
+            .await?
+            .expect("the activity still exists");
+        assert_eq!(stored.gear, Some(PartId::from(1)));
+        assert!(
+            summary
+                .activities
+                .live()
+                .into_iter()
+                .any(|a| a.id == act.id)
+        );
+
+        Ok(())
+    })
+    .await
+}
+
 /// The dispatch applies part-note writes: create returns the note, delete
 /// reports the tombstone.
 #[tokio::test]
