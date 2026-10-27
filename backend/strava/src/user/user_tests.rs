@@ -27,7 +27,7 @@ async fn upsert_creates_new_user() -> TbResult<()> {
     .await?;
     assert_eq!(user.id, 42.into());
     assert!(!user.disabled());
-    let tb = UserStore::get(&mut store.mem, user.tendabike_id).await?;
+    let tb = UserStore::user_get(&mut store.mem, user.tendabike_id).await?;
     assert_eq!(tb.firstname, "First");
     assert_eq!(tb.name, "Last");
     assert!(
@@ -42,7 +42,7 @@ async fn upsert_creates_new_user() -> TbResult<()> {
 #[tokio::test]
 async fn upsert_updates_existing_user() -> TbResult<()> {
     let mut store = TestStravaStore::new();
-    UserStore::create(&mut store.mem, "Old", "Name", &None).await?;
+    UserStore::user_create(&mut store.mem, "Old", "Name", &None).await?;
     store.insert_user(strava_user(UserId::from(1), 42, true));
     let user = StravaUser::upsert(
         42.into(),
@@ -54,7 +54,7 @@ async fn upsert_updates_existing_user() -> TbResult<()> {
     )
     .await?;
     assert_eq!(user.tendabike_id, UserId::from(1));
-    let tb = UserStore::get(&mut store.mem, UserId::from(1)).await?;
+    let tb = UserStore::user_get(&mut store.mem, UserId::from(1)).await?;
     assert_eq!(tb.firstname, "New");
     let stored = store.stravauser_get_by_tbid(UserId::from(1)).await?;
     assert_eq!(
@@ -176,7 +176,7 @@ async fn user_delete_removes_everything() -> TbResult<()> {
     assert_eq!(deauthorizes(), vec![42.into()]);
     assert!(store.strava_users.is_empty());
     assert_eq!(store.event_count(), 0);
-    let res = UserStore::get(&mut store.mem, UserId::from(1)).await;
+    let res = UserStore::user_get(&mut store.mem, UserId::from(1)).await;
     assert!(matches!(res, Err(Error::NotFound(_))));
     Ok(())
 }
@@ -200,8 +200,8 @@ async fn user_delete_requires_an_admin() {
 #[tokio::test]
 async fn stats_include_event_counts() -> TbResult<()> {
     let mut store = TestStravaStore::new();
-    UserStore::create(&mut store.mem, "A", "User", &None).await?;
-    UserStore::create(&mut store.mem, "B", "User", &None).await?;
+    UserStore::user_create(&mut store.mem, "A", "User", &None).await?;
+    UserStore::user_create(&mut store.mem, "B", "User", &None).await?;
     store.insert_user(strava_user(UserId::from(1), 42, true));
     store.insert_user(strava_user(UserId::from(2), 43, false));
     store

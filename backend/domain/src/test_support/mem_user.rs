@@ -3,7 +3,7 @@ use crate::{Error, OnboardingStatus, TbResult, User, UserId};
 
 #[async_trait::async_trait]
 impl UserStore for MemStore {
-    async fn get(&mut self, uid: UserId) -> TbResult<User> {
+    async fn user_get(&mut self, uid: UserId) -> TbResult<User> {
         let d = self.state();
         d.users
             .get(&uid)
@@ -11,7 +11,7 @@ impl UserStore for MemStore {
             .ok_or_else(|| Error::NotFound(format!("User {} not found", uid)))
     }
 
-    async fn create(
+    async fn user_create(
         &mut self,
         firstname: &str,
         lastname: &str,
@@ -32,7 +32,7 @@ impl UserStore for MemStore {
         Ok(user)
     }
 
-    async fn update(
+    async fn user_update(
         &mut self,
         uid: &UserId,
         firstname: &str,

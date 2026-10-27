@@ -461,25 +461,25 @@ impl PartNoteStore for TestStravaStore {
 
 #[async_trait::async_trait]
 impl UserStore for TestStravaStore {
-    async fn get(&mut self, uid: UserId) -> TbResult<User> {
-        UserStore::get(&mut self.mem, uid).await
+    async fn user_get(&mut self, uid: UserId) -> TbResult<User> {
+        UserStore::user_get(&mut self.mem, uid).await
     }
-    async fn create(
+    async fn user_create(
         &mut self,
         firstname: &str,
         lastname: &str,
         avatar: &Option<String>,
     ) -> TbResult<User> {
-        UserStore::create(&mut self.mem, firstname, lastname, avatar).await
+        UserStore::user_create(&mut self.mem, firstname, lastname, avatar).await
     }
-    async fn update(
+    async fn user_update(
         &mut self,
         uid: &UserId,
         firstname: &str,
         lastname: &str,
         avatar: &Option<String>,
     ) -> TbResult<User> {
-        UserStore::update(&mut self.mem, uid, firstname, lastname, avatar).await
+        UserStore::user_update(&mut self.mem, uid, firstname, lastname, avatar).await
     }
     async fn user_delete(&mut self, user: &UserId) -> TbResult<usize> {
         UserStore::user_delete(&mut self.mem, user).await

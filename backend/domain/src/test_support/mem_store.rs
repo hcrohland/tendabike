@@ -120,7 +120,7 @@ pub async fn build_workshop_store() -> TbResult<MemStore> {
     let s = test_session();
 
     // Create user 1 (the customer who owns all workshop parts)
-    store.create("Tenda", "Bike", &None).await?;
+    store.user_create("Tenda", "Bike", &None).await?;
 
     // ─── Bike A: Main Bike ────────────────────────────────────────────
     let bike_a = Part::create(

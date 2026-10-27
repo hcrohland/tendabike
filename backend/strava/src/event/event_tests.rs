@@ -437,8 +437,8 @@ async fn process_skips_athlete_event() -> TbResult<()> {
 async fn sync_users_skips_disabled() -> TbResult<()> {
     let mut store = TestStravaStore::new();
     let mut session = strava_admin_session(UserId::from(1), 42.into());
-    UserStore::create(&mut store.mem, "A", "User", &None).await?;
-    UserStore::create(&mut store.mem, "B", "User", &None).await?;
+    UserStore::user_create(&mut store.mem, "A", "User", &None).await?;
+    UserStore::user_create(&mut store.mem, "B", "User", &None).await?;
     store.insert_user(strava_user(UserId::from(1), 42, true));
     store.insert_user(strava_user(UserId::from(2), 43, false));
     sync_users(&mut session, None, 100, false, &mut store).await?;

@@ -642,7 +642,7 @@ async fn user_onboarding_sync_dispatch() -> TbResult<()> {
     );
     // A User is not in any Summary.
     assert_eq!(summary, Summary::default());
-    let user = UserStore::get(&mut store, UserId::from(1)).await?;
+    let user = UserStore::user_get(&mut store, UserId::from(1)).await?;
     assert_eq!(user.onboarding_status, OnboardingStatus::Completed);
 
     // The handler's guard: a second sync is rejected with the same message.
@@ -667,7 +667,7 @@ async fn user_onboarding_postpone_dispatch() -> TbResult<()> {
     let summary =
         outcome_summary(exec(ApiWrite::UserOnboardingPostpone, &session, &mut store).await?);
     assert_eq!(summary, Summary::default());
-    let user = UserStore::get(&mut store, UserId::from(1)).await?;
+    let user = UserStore::user_get(&mut store, UserId::from(1)).await?;
     assert_eq!(
         user.onboarding_status,
         OnboardingStatus::InitialSyncPostponed

@@ -545,25 +545,25 @@ impl PartStore for FakeConn {
 
 #[async_trait::async_trait]
 impl UserStore for FakeConn {
-    async fn get(&mut self, uid: UserId) -> TbResult<User> {
-        UserStore::get(&mut self.store, uid).await
+    async fn user_get(&mut self, uid: UserId) -> TbResult<User> {
+        UserStore::user_get(&mut self.store, uid).await
     }
-    async fn create(
+    async fn user_create(
         &mut self,
         firstname: &str,
         lastname: &str,
         avatar: &Option<String>,
     ) -> TbResult<User> {
-        UserStore::create(&mut self.store, firstname, lastname, avatar).await
+        UserStore::user_create(&mut self.store, firstname, lastname, avatar).await
     }
-    async fn update(
+    async fn user_update(
         &mut self,
         uid: &UserId,
         firstname: &str,
         lastname: &str,
         avatar: &Option<String>,
     ) -> TbResult<User> {
-        UserStore::update(&mut self.store, uid, firstname, lastname, avatar).await
+        UserStore::user_update(&mut self.store, uid, firstname, lastname, avatar).await
     }
     async fn user_delete(&mut self, user: &UserId) -> TbResult<usize> {
         self.store.user_delete(user).await

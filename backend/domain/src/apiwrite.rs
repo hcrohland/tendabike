@@ -548,7 +548,7 @@ pub async fn exec(
             // onboarding status, not the `UserState` composite (this is a
             // write path — spec #558 §3.5's composite is for the per-user
             // routes only).
-            let user = UserStore::get(store, session.user_id()).await?;
+            let user = UserStore::user_get(store, session.user_id()).await?;
             if user.onboarding_status.is_initial_sync_completed() {
                 return Err(Error::BadRequest(
                     "Initial sync already triggered".to_string(),
@@ -560,7 +560,7 @@ pub async fn exec(
             Ok(WriteOutcome::Summary(Summary::default()))
         }
         ApiWrite::UserOnboardingPostpone => {
-            let user = UserStore::get(store, session.user_id()).await?;
+            let user = UserStore::user_get(store, session.user_id()).await?;
             if user.onboarding_status != OnboardingStatus::Pending {
                 return Err(Error::BadRequest(
                     "Initial sync already completed or postponed".to_string(),

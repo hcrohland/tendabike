@@ -324,7 +324,7 @@ async fn fixture_roundtrip() -> tb_domain::TbResult<()> {
         let snap = fixture();
 
         // users
-        let user = UserStore::get(&mut store, UserId::from(1)).await?;
+        let user = UserStore::user_get(&mut store, UserId::from(1)).await?;
         assert_eq!(user.name, snap.users[0].name);
         assert_eq!(user.firstname, snap.users[0].firstname);
         assert_eq!(user.is_admin, snap.users[0].is_admin);
@@ -1990,7 +1990,7 @@ async fn apiwrite_onboarding_sync() -> tb_domain::TbResult<()> {
         )
         .await?);
         assert_eq!(summary, Summary::default());
-        let user = UserStore::get(&mut store, UserId::from(1)).await?;
+        let user = UserStore::user_get(&mut store, UserId::from(1)).await?;
         assert_eq!(user.onboarding_status, OnboardingStatus::Completed);
 
         // The guard: a second trigger is a BadRequest with the handler's
@@ -2024,7 +2024,7 @@ async fn apiwrite_onboarding_postpone() -> tb_domain::TbResult<()> {
         let summary =
             outcome_summary(exec(ApiWrite::UserOnboardingPostpone, &session, &mut store).await?);
         assert_eq!(summary, Summary::default());
-        let user = UserStore::get(&mut store, UserId::from(1)).await?;
+        let user = UserStore::user_get(&mut store, UserId::from(1)).await?;
         assert_eq!(
             user.onboarding_status,
             OnboardingStatus::InitialSyncPostponed
