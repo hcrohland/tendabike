@@ -1044,7 +1044,9 @@ async fn detach_assembly_recalculates_usage_excluding_activity_after_detach() ->
 
     // the old attachment usage row is deleted
     assert!(
-        UsageStore::get(&mut store, old_usage).await?.is_none(),
+        UsageStore::usage_get(&mut store, old_usage)
+            .await?
+            .is_none(),
         "the old attachment usage row is deleted"
     );
 

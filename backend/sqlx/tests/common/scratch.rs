@@ -333,7 +333,7 @@ pub async fn load_fixture(tx: &mut SqlxConn<'_>, snap: &StoreSnapshot) -> tb_dom
     for att in &snap.attachments {
         tx.attachment_create(*att).await?;
     }
-    UsageStore::update(tx, &snap.usages).await?;
+    UsageStore::usages_update(tx, &snap.usages).await?;
     for act in &snap.activities {
         tx.activity_create(act.clone()).await?;
     }

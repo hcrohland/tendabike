@@ -715,11 +715,11 @@ impl AttachmentStore for TestStravaStore {
 
 #[async_trait::async_trait]
 impl UsageStore for TestStravaStore {
-    async fn get(&mut self, uid: UsageId) -> TbResult<Option<Usage>> {
-        UsageStore::get(&mut self.mem, uid).await
+    async fn usage_get(&mut self, uid: UsageId) -> TbResult<Option<Usage>> {
+        UsageStore::usage_get(&mut self.mem, uid).await
     }
-    async fn delete(&mut self, usage: UsageId) -> TbResult<Usage> {
-        UsageStore::delete(&mut self.mem, usage).await
+    async fn usage_delete(&mut self, usage: UsageId) -> TbResult<Usage> {
+        UsageStore::usage_delete(&mut self.mem, usage).await
     }
     async fn usages_delete(&mut self, usages: &[Usage]) -> TbResult<usize> {
         UsageStore::usages_delete(&mut self.mem, usages).await
@@ -727,11 +727,8 @@ impl UsageStore for TestStravaStore {
     async fn delete_all(&mut self) -> TbResult<usize> {
         UsageStore::delete_all(&mut self.mem).await
     }
-    async fn update<U>(&mut self, usage: &[U]) -> TbResult<usize>
-    where
-        U: std::borrow::Borrow<Usage> + Sync,
-    {
-        UsageStore::update(&mut self.mem, usage).await
+    async fn usages_update(&mut self, usage: &[Usage]) -> TbResult<usize> {
+        UsageStore::usages_update(&mut self.mem, usage).await
     }
 }
 

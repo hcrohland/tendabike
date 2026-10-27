@@ -365,7 +365,7 @@ async fn fixture_roundtrip() -> tb_domain::TbResult<()> {
 
         // usages
         for usage in &snap.usages {
-            let stored = UsageStore::get(&mut store, usage.id).await?;
+            let stored = UsageStore::usage_get(&mut store, usage.id).await?;
             assert_eq!(stored.as_ref(), Some(usage), "usage {} differs", usage.id);
         }
 
@@ -855,7 +855,7 @@ async fn detach_recuts_and_recalculates_usage() -> tb_domain::TbResult<()> {
         // (25+5200, 50000+40000, 400+600, 400+600, 500+500, 1+1);
         // descend is None in the activities, so it falls back to climb.
         let wheel_usage = store.partid_get_part(wheel).await?.usage;
-        let stored = UsageStore::get(&mut store, wheel_usage)
+        let stored = UsageStore::usage_get(&mut store, wheel_usage)
             .await?
             .expect("the wheel usage row exists");
         assert_eq!(
@@ -873,7 +873,7 @@ async fn detach_recuts_and_recalculates_usage() -> tb_domain::TbResult<()> {
 
         // The replacement attachment usage row is a separate row with its own
         // id but carries the same recalculated values.
-        let att_usage = UsageStore::get(&mut store, att.usage)
+        let att_usage = UsageStore::usage_get(&mut store, att.usage)
             .await?
             .expect("the replacement attachment usage exists");
         let mut expected = stored;
@@ -882,14 +882,16 @@ async fn detach_recuts_and_recalculates_usage() -> tb_domain::TbResult<()> {
 
         // The old attachment usage row is deleted.
         assert!(
-            UsageStore::get(&mut store, old_usage).await?.is_none(),
+            UsageStore::usage_get(&mut store, old_usage)
+                .await?
+                .is_none(),
             "the old attachment usage row is deleted"
         );
 
         // The other parts attached to the bike are untouched.
         for pid in [PartId::from(1), PartId::from(3), PartId::from(4)] {
             let uid = store.partid_get_part(pid).await?.usage;
-            let stored = UsageStore::get(&mut store, uid)
+            let stored = UsageStore::usage_get(&mut store, uid)
                 .await?
                 .expect("the part usage row exists");
             assert_eq!(
@@ -1058,7 +1060,7 @@ async fn activity_upsert_creates_and_accounts() -> tb_domain::TbResult<()> {
 
         // The updates are persisted in the store.
         let bike_usage = store.partid_get_part(bike).await?.usage;
-        let stored = UsageStore::get(&mut store, bike_usage)
+        let stored = UsageStore::usage_get(&mut store, bike_usage)
             .await?
             .expect("the bike usage row exists");
         assert_eq!(stored.time, 9025);
@@ -1120,7 +1122,7 @@ async fn activity_delete_reverts_usage() -> tb_domain::TbResult<()> {
 
         // The updates are persisted in the store.
         let bike_usage = store.partid_get_part(bike).await?.usage;
-        let stored = UsageStore::get(&mut store, bike_usage)
+        let stored = UsageStore::usage_get(&mut store, bike_usage)
             .await?
             .expect("the bike usage row exists");
         assert_eq!(stored.time, 8025);
