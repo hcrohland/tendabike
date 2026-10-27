@@ -18,20 +18,31 @@
 
 */
 
-//! Pure-brain unit tests for the executor loop's control flow (ADR-0005,
-//! executable spec #446 §10: no store fakes, no database — the loop's
-//! message selection, reclaim decision, and frame construction are structured
-//! as units testable with a channel and dummy futures; the transaction seam
-//! is verified against Postgres in `tb_sqlx`'s `tests/executor_seam.rs`).
+//! Unit tests for the executor loop (ADR-0005, executable spec #446 §10;
+//! ADR-0007, executable spec #558 §3/§4). The loop's control flow — message
+//! selection, reclaim decision, frame construction — is structured as pure
+//! units testable with a channel and dummy futures (no store, no database).
+//!
+//! The transaction seam is a `mockall` `mock!` witness: [`MockConn`] is a
+//! single type accumulating the full `Store` (nine sub-traits + the marker)
+//! plus `StravaStore` and `Txn` — the `TxnSource::Conn` bound. The per-request
+//! tests (`run_request`) assert on **canned `mock!` outcomes** (the store
+//! returns the values the test sets on `expect_*`): they verify the
+//! **executor's** behavior — how it drives the store (`begin` → work →
+//! `commit`/`rollback`) and what it does with the results (frame routing,
+//! the backoff discipline, the oneshot reply) — not the store's internal
+//! behavior. The store's behavior (and the domain logic that runs over it)
+//! is verified against real Postgres in `tb_sqlx`'s seam suites.
 
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::Duration;
 
 use tb_domain::test_support::{
-    MemStore, fixtures::sample_purchase_date, mock_session, mock_session_with_shop,
-    part_type_ids::CHAIN, sole_live,
+    fixtures::sample_purchase_date, mock_session, mock_session_with_shop, part_type_ids::CHAIN,
+    sole_live,
 };
 use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, ApiRead, ApiWrite, Attachment, AttachmentStore,
@@ -55,6 +66,364 @@ use crate::{
     Action, ExecutorStatus, FramePusher, Message, Registry, ServiceApi, Txn, TxnSource,
     next_action, request_channel,
 };
+
+// --- The `mock!` connection witness (issue #631) ---
+//
+// A single type accumulating the full `Store` seam (the nine sub-traits plus
+// the method-free [`Store`] marker) *and* the Strava surface ([`StravaDataStore`]
+// plus the method-free [`StravaStore`] marker) *and* the transaction lifecycle
+// ([`Txn`]) — i.e. the `TxnSource::Conn: StravaStore + Txn` bound.
+//
+// `#[async_trait]` on each impl block is the trick that makes the `async fn`
+// methods desugar correctly in the generated code (see
+// `docs/research/mockall-conn-witness.md` §1). The seam is collision-free
+// (post-recipe: renamed methods, `usages_update(&[Usage])`, `stravauser_update_token`
+// owning its token), so `mock!`'s flat `expect_<name>` API can express every
+// method on one type.
+//
+// The declared struct name is `Conn`, so `mock!` emits [`MockConn`]; the impl
+// blocks reference `Conn` (the macro rewrites it to `MockConn`), and the
+// method-free markers `impl Store for Conn` / `impl StravaStore for Conn`
+// become `impl … for MockConn`.
+//
+// Test-support only: this module is `#[cfg(test)]`, so no production `pub`
+// surface is widened. `mockall` is a dev-dependency of `tb_exec` only.
+
+mockall::mock! {
+    pub Conn {}
+
+    #[async_trait::async_trait]
+    impl PartStore for Conn {
+        async fn partid_get_part(&mut self, pid: PartId) -> TbResult<Part>;
+        async fn part_get_all_for_userid(&mut self, uid: &UserId) -> TbResult<Vec<Part>>;
+        async fn part_create(
+            &mut self,
+            what: PartTypeId,
+            name: String,
+            vendor: String,
+            model: String,
+            purchase: OffsetDateTime,
+            source: Option<String>,
+            usage: UsageId,
+            owner: UserId,
+            shop: Option<ShopId>,
+        ) -> TbResult<Part>;
+        async fn part_update(&mut self, part: Part) -> TbResult<Part>;
+        async fn part_delete(&mut self, part: PartId) -> TbResult<PartId>;
+        async fn parts_delete(&mut self, parts: &[Part]) -> TbResult<usize>;
+        async fn partid_get_by_source(&mut self, strava_id: &str) -> TbResult<Option<PartId>>;
+        async fn parts_register_shop(
+            &mut self,
+            shop_id: ShopId,
+            part_id: Vec<PartId>,
+        ) -> TbResult<Vec<Part>>;
+        async fn parts_unregister_shop(&mut self, part_ids: Vec<PartId>) -> TbResult<Vec<Part>>;
+        async fn shop_get_parts(&mut self, shop_id: ShopId) -> TbResult<Vec<Part>>;
+    }
+
+    #[async_trait::async_trait]
+    impl UserStore for Conn {
+        async fn user_get(&mut self, uid: UserId) -> TbResult<User>;
+        async fn user_create(
+            &mut self,
+            firstname: &str,
+            lastname: &str,
+            avatar: &Option<String>,
+        ) -> TbResult<User>;
+        async fn user_update(
+            &mut self,
+            uid: &UserId,
+            firstname: &str,
+            lastname: &str,
+            avatar: &Option<String>,
+        ) -> TbResult<User>;
+        async fn user_delete(&mut self, user: &UserId) -> TbResult<usize>;
+        async fn update_onboarding_status(
+            &mut self,
+            uid: &UserId,
+            status: OnboardingStatus,
+        ) -> TbResult<User>;
+    }
+
+    #[async_trait::async_trait]
+    impl ShopStore for Conn {
+        async fn shop_create(
+            &mut self,
+            name: String,
+            description: Option<String>,
+            auto_approve: bool,
+            owner: UserId,
+        ) -> TbResult<Shop>;
+        async fn shop_get(&mut self, id: ShopId) -> TbResult<Shop>;
+        async fn shop_update(
+            &mut self,
+            id: ShopId,
+            name: String,
+            description: Option<String>,
+            auto_approve: bool,
+        ) -> TbResult<Shop>;
+        async fn shop_delete(&mut self, id: ShopId) -> TbResult<usize>;
+        async fn shops_get_all_for_user(&mut self, user_id: UserId) -> TbResult<Vec<Shop>>;
+        async fn shops_search(&mut self, query: &str) -> TbResult<Vec<Shop>>;
+        async fn subscription_create(
+            &mut self,
+            shop_id: ShopId,
+            user_id: UserId,
+            message: Option<String>,
+        ) -> TbResult<ShopSubscription>;
+        async fn subscription_get(&mut self, id: SubscriptionId) -> TbResult<ShopSubscription>;
+        async fn subscription_find_active(
+            &mut self,
+            shop_id: ShopId,
+            user_id: UserId,
+        ) -> TbResult<Option<ShopSubscription>>;
+        async fn subscription_find_pending(
+            &mut self,
+            shop_id: ShopId,
+            user_id: UserId,
+        ) -> TbResult<Option<ShopSubscription>>;
+        async fn subscription_update_status(
+            &mut self,
+            id: SubscriptionId,
+            status: SubscriptionStatus,
+        ) -> TbResult<ShopSubscription>;
+        async fn subscription_approve(
+            &mut self,
+            id: SubscriptionId,
+            status: SubscriptionStatus,
+            response_message: Option<String>,
+        ) -> TbResult<ShopSubscription>;
+        async fn subscription_delete(&mut self, id: SubscriptionId) -> TbResult<()>;
+        async fn subscriptions_for_shop(&mut self, shop_id: ShopId) -> TbResult<Vec<ShopSubscription>>;
+        async fn subscriptions_for_user(&mut self, user_id: UserId) -> TbResult<Vec<ShopSubscription>>;
+    }
+
+    #[async_trait::async_trait]
+    impl ActivityStore for Conn {
+        async fn activity_create(&mut self, act: Activity) -> TbResult<Activity>;
+        async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Option<Activity>>;
+        async fn activity_update(&mut self, act: Activity) -> TbResult<Activity>;
+        async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize>;
+        async fn activities_delete(&mut self, activities: &[Activity]) -> TbResult<usize>;
+        async fn get_all(&mut self, uid: &UserId) -> TbResult<Vec<Activity>>;
+        async fn activities_find_by_gear_and_time(
+            &mut self,
+            part: PartId,
+            begin: OffsetDateTime,
+            end: OffsetDateTime,
+        ) -> TbResult<Vec<Activity>>;
+        async fn get_by_user_and_time(
+            &mut self,
+            uid: UserId,
+            rstart: OffsetDateTime,
+        ) -> TbResult<Activity>;
+        async fn activity_set_gear_if_null(
+            &mut self,
+            user: UserId,
+            types: Vec<ActTypeId>,
+            partid: &PartId,
+        ) -> TbResult<Vec<Activity>>;
+        async fn activity_get_really_all(&mut self) -> TbResult<Vec<Activity>>;
+    }
+
+    #[async_trait::async_trait]
+    impl AttachmentStore for Conn {
+        async fn attachment_create(&mut self, att: Attachment) -> TbResult<Attachment>;
+        async fn attachment_delete(&mut self, att: Attachment) -> TbResult<Attachment>;
+        async fn attachments_delete_by_parts(&mut self, parts: &[Part]) -> TbResult<usize>;
+        async fn attachment_get_by_gear_and_time(
+            &mut self,
+            act_gear: PartId,
+            start: OffsetDateTime,
+        ) -> TbResult<Vec<Attachment>>;
+        async fn attachments_all_by_part(&mut self, id: PartId) -> TbResult<Vec<Attachment>>;
+        async fn attachment_get_by_part_and_time(
+            &mut self,
+            pid: PartId,
+            time: OffsetDateTime,
+        ) -> TbResult<Option<Attachment>>;
+        async fn assembly_get_by_types_time_and_gear(
+            &mut self,
+            types: Vec<PartTypeId>,
+            gear: PartId,
+            time: OffsetDateTime,
+        ) -> TbResult<Vec<Attachment>>;
+        async fn attachment_find_part_of_type_at_hook_and_time(
+            &mut self,
+            what: PartTypeId,
+            gear: PartId,
+            hook: PartTypeId,
+            time: OffsetDateTime,
+        ) -> TbResult<Option<Attachment>>;
+        async fn attachment_find_successor(
+            &mut self,
+            part_id: PartId,
+            gear: PartId,
+            hook: PartTypeId,
+            time: OffsetDateTime,
+            what: PartTypeId,
+        ) -> TbResult<Option<Attachment>>;
+        async fn attachment_find_later_attachment_for_part(
+            &mut self,
+            part_id: PartId,
+            time: OffsetDateTime,
+        ) -> TbResult<Option<Attachment>>;
+        async fn attachment_find_part_attached_already(
+            &mut self,
+            part_id: PartId,
+            gear: PartId,
+            hook: PartTypeId,
+            time: OffsetDateTime,
+        ) -> TbResult<Option<Attachment>>;
+    }
+
+    #[async_trait::async_trait]
+    impl PartNoteStore for Conn {
+        async fn partnote_create_text(
+            &mut self,
+            part: PartId,
+            name: String,
+            created: OffsetDateTime,
+        ) -> TbResult<PartNote>;
+        async fn partnote_create_file(
+            &mut self,
+            part: PartId,
+            name: String,
+            mime: String,
+            filename: Option<String>,
+            size: i64,
+            data: Vec<u8>,
+            created: OffsetDateTime,
+        ) -> TbResult<PartNote>;
+        async fn partnote_all_by_part(&mut self, part: PartId) -> TbResult<Vec<PartNote>>;
+        async fn partnote_get(&mut self, id: PartNoteId) -> TbResult<PartNote>;
+        async fn partnote_file(&mut self, id: PartNoteId) -> TbResult<Vec<u8>>;
+        async fn partnote_update_text(&mut self, id: PartNoteId, name: String) -> TbResult<PartNote>;
+        async fn partnote_update_file(
+            &mut self,
+            id: PartNoteId,
+            name: String,
+            mime: String,
+            filename: Option<String>,
+            size: i64,
+            data: Vec<u8>,
+        ) -> TbResult<PartNote>;
+        async fn partnote_remove_file(&mut self, id: PartNoteId) -> TbResult<PartNote>;
+        async fn partnote_delete(&mut self, id: PartNoteId) -> TbResult<PartNoteId>;
+    }
+
+    #[async_trait::async_trait]
+    impl UsageStore for Conn {
+        async fn usage_get(&mut self, uid: UsageId) -> TbResult<Option<Usage>>;
+        async fn usages_update(&mut self, usage: &[Usage]) -> TbResult<usize>;
+        async fn usage_delete(&mut self, usage: UsageId) -> TbResult<Usage>;
+        async fn usages_delete(&mut self, usages: &[Usage]) -> TbResult<usize>;
+        async fn delete_all(&mut self) -> TbResult<usize>;
+    }
+
+    #[async_trait::async_trait]
+    impl ServiceStore for Conn {
+        async fn service_create(&mut self, service: Service) -> TbResult<Service>;
+        async fn service_get(&mut self, service: ServiceId) -> TbResult<Service>;
+        async fn service_update(&mut self, service: Service) -> TbResult<Service>;
+        async fn service_delete(&mut self, service: ServiceId) -> TbResult<usize>;
+        async fn services_delete(&mut self, services: &[Service]) -> TbResult<usize>;
+        async fn services_by_part(&mut self, part: PartId) -> TbResult<Vec<Service>>;
+    }
+
+    #[async_trait::async_trait]
+    impl ServicePlanStore for Conn {
+        async fn serviceplan_create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
+        async fn serviceplan_get(&mut self, plan: ServicePlanId) -> TbResult<ServicePlan>;
+        async fn plan_update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
+        async fn serviceplan_delete(&mut self, plan: ServicePlanId) -> TbResult<usize>;
+        async fn serviceplans_delete(&mut self, serviceplans: &[ServicePlan]) -> TbResult<usize>;
+        async fn by_part(&mut self, part: PartId) -> TbResult<Vec<ServicePlan>>;
+        async fn by_user(&mut self, uid: UserId) -> TbResult<Vec<ServicePlan>>;
+    }
+
+    impl Store for Conn {}
+
+    #[async_trait::async_trait]
+    impl StravaDataStore for Conn {
+        async fn stravauser_get_all(&mut self) -> TbResult<Vec<StravaUser>>;
+        async fn stravauser_get_by_tbid(&mut self, id: UserId) -> TbResult<StravaUser>;
+        async fn stravauser_get_by_stravaid(&mut self, id: &StravaId) -> TbResult<Option<StravaUser>>;
+        async fn stravauser_create(&mut self, user: StravaUser) -> TbResult<StravaUser>;
+        async fn stravauser_update_token(
+            &mut self,
+            stravaid: StravaId,
+            refresh: Option<String>,
+        ) -> TbResult<StravaUser>;
+        async fn stravauser_delete(&mut self, user: UserId) -> TbResult<usize>;
+        async fn strava_event_create(&mut self, e: Event) -> TbResult<()>;
+        async fn strava_event_delete(&mut self, event_id: Option<i32>) -> TbResult<()>;
+        async fn strava_event_set_time(&mut self, e_id: Option<i32>, e_time: i64) -> TbResult<()>;
+        async fn strava_event_get_next_for_user(&mut self, user: StravaId) -> TbResult<Option<Event>>;
+        async fn strava_event_get_later(
+            &mut self,
+            obj_id: i64,
+            oid: StravaId,
+        ) -> TbResult<Vec<Event>>;
+        async fn strava_events_delete_batch(&mut self, values: Vec<Option<i32>>) -> TbResult<()>;
+        async fn strava_events_get_count_for_user(&mut self, user: &StravaId) -> TbResult<i64>;
+        async fn strava_events_delete_for_user(&mut self, user: &StravaId) -> TbResult<usize>;
+    }
+
+    impl StravaStore for Conn {}
+
+    #[async_trait::async_trait]
+    impl Txn for Conn {
+        async fn commit(self) -> TbResult<()>;
+        async fn rollback(self) -> TbResult<()>;
+    }
+}
+
+/// A `TxnSource` whose `begin` fails (the DB-down corner) or hands out the
+/// test's configured [`MockConn`] — the store the executor's per-request
+/// dispatch drives against canned outcomes. `begin` is called exactly once
+/// per `run_request` (one loop-owned transaction), so the mock is taken out
+/// of the `Mutex` on that call.
+#[derive(Clone)]
+struct FakeSource {
+    begin_fails: bool,
+    conn: Arc<Mutex<Option<MockConn>>>,
+}
+
+impl FakeSource {
+    /// A source whose `begin` fails with a `DatabaseFailure` (the DB-down
+    /// corner): no store is ever handed out.
+    fn failing() -> Self {
+        Self {
+            begin_fails: true,
+            conn: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// A source that hands out `conn` on its (single) `begin`.
+    fn with(conn: MockConn) -> Self {
+        Self {
+            begin_fails: false,
+            conn: Arc::new(Mutex::new(Some(conn))),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl TxnSource for FakeSource {
+    type Conn = MockConn;
+
+    async fn begin(&self) -> TbResult<MockConn> {
+        if self.begin_fails {
+            return Err(Error::DatabaseFailure(anyhow::anyhow!(
+                "the fake database is down"
+            )));
+        }
+        self.conn.lock().unwrap().take().ok_or_else(|| {
+            Error::DatabaseFailure(anyhow::anyhow!("begin was called more than once"))
+        })
+    }
+}
 
 /// A future that never resolves: stands in for the Strava queue probe being
 /// blocked (a slow or busy queue), so the select has a second, non-ready
@@ -439,553 +808,6 @@ fn frame_push_skips_empty_summaries() {
     );
 }
 
-// --- The test-internal fake source (spec #558 §8) ---
-//
-// A few lines of test plumbing, not the axum seam doubles: `begin` fails
-// (the DB-down corner) or hands out a [`FakeConn`] — a `MemStore` behind the
-// `Txn`/`StravaStore` seam, so the loop's dispatch runs its real domain ops
-// against real in-memory behavior. The `StravaDataStore` surface is canned
-// (the empty user list the `AllStats` test reads): the unit tests never
-// drive a Strava queue.
-
-/// The fake transaction source: `begin` fails or succeeds, on demand.
-struct FakeSource {
-    begin_fails: bool,
-}
-
-#[async_trait::async_trait]
-impl TxnSource for FakeSource {
-    type Conn = FakeConn;
-
-    async fn begin(&self) -> TbResult<FakeConn> {
-        if self.begin_fails {
-            return Err(Error::DatabaseFailure(anyhow::anyhow!(
-                "the fake database is down"
-            )));
-        }
-        Ok(FakeConn {
-            store: MemStore::prepopulated(),
-        })
-    }
-}
-
-/// One fake connection: a `MemStore` (the domain ops' real behavior) plus
-/// the transaction lifecycle (commit/rollback are no-ops — the tests assert
-/// on the oneshot and the backoff, not on persistence).
-struct FakeConn {
-    store: MemStore,
-}
-
-/// The complete-store marker: every sub-trait impl above.
-impl Store for FakeConn {}
-
-#[async_trait::async_trait]
-impl Txn for FakeConn {
-    async fn commit(self) -> TbResult<()> {
-        Ok(())
-    }
-
-    async fn rollback(self) -> TbResult<()> {
-        Ok(())
-    }
-}
-
-#[async_trait::async_trait]
-impl PartStore for FakeConn {
-    async fn partid_get_part(&mut self, pid: PartId) -> TbResult<Part> {
-        self.store.partid_get_part(pid).await
-    }
-    async fn part_get_all_for_userid(&mut self, uid: &UserId) -> TbResult<Vec<Part>> {
-        self.store.part_get_all_for_userid(uid).await
-    }
-    async fn part_create(
-        &mut self,
-        what: PartTypeId,
-        name: String,
-        vendor: String,
-        model: String,
-        purchase: OffsetDateTime,
-        source: Option<String>,
-        usage: UsageId,
-        owner: UserId,
-        shop: Option<ShopId>,
-    ) -> TbResult<Part> {
-        self.store
-            .part_create(
-                what, name, vendor, model, purchase, source, usage, owner, shop,
-            )
-            .await
-    }
-    async fn part_update(&mut self, part: Part) -> TbResult<Part> {
-        self.store.part_update(part).await
-    }
-    async fn part_delete(&mut self, part: PartId) -> TbResult<PartId> {
-        self.store.part_delete(part).await
-    }
-    async fn parts_delete(&mut self, parts: &[Part]) -> TbResult<usize> {
-        self.store.parts_delete(parts).await
-    }
-    async fn partid_get_by_source(&mut self, strava_id: &str) -> TbResult<Option<PartId>> {
-        self.store.partid_get_by_source(strava_id).await
-    }
-    async fn parts_register_shop(
-        &mut self,
-        shop_id: ShopId,
-        part_id: Vec<PartId>,
-    ) -> TbResult<Vec<Part>> {
-        self.store.parts_register_shop(shop_id, part_id).await
-    }
-    async fn parts_unregister_shop(&mut self, part_ids: Vec<PartId>) -> TbResult<Vec<Part>> {
-        self.store.parts_unregister_shop(part_ids).await
-    }
-    async fn shop_get_parts(&mut self, shop_id: ShopId) -> TbResult<Vec<Part>> {
-        self.store.shop_get_parts(shop_id).await
-    }
-}
-
-#[async_trait::async_trait]
-impl UserStore for FakeConn {
-    async fn user_get(&mut self, uid: UserId) -> TbResult<User> {
-        UserStore::user_get(&mut self.store, uid).await
-    }
-    async fn user_create(
-        &mut self,
-        firstname: &str,
-        lastname: &str,
-        avatar: &Option<String>,
-    ) -> TbResult<User> {
-        UserStore::user_create(&mut self.store, firstname, lastname, avatar).await
-    }
-    async fn user_update(
-        &mut self,
-        uid: &UserId,
-        firstname: &str,
-        lastname: &str,
-        avatar: &Option<String>,
-    ) -> TbResult<User> {
-        UserStore::user_update(&mut self.store, uid, firstname, lastname, avatar).await
-    }
-    async fn user_delete(&mut self, user: &UserId) -> TbResult<usize> {
-        self.store.user_delete(user).await
-    }
-    async fn update_onboarding_status(
-        &mut self,
-        uid: &UserId,
-        status: OnboardingStatus,
-    ) -> TbResult<User> {
-        self.store.update_onboarding_status(uid, status).await
-    }
-}
-
-#[async_trait::async_trait]
-impl ShopStore for FakeConn {
-    async fn shop_create(
-        &mut self,
-        name: String,
-        description: Option<String>,
-        auto_approve: bool,
-        owner: UserId,
-    ) -> TbResult<Shop> {
-        self.store
-            .shop_create(name, description, auto_approve, owner)
-            .await
-    }
-    async fn shop_get(&mut self, id: ShopId) -> TbResult<Shop> {
-        self.store.shop_get(id).await
-    }
-    async fn shop_update(
-        &mut self,
-        id: ShopId,
-        name: String,
-        description: Option<String>,
-        auto_approve: bool,
-    ) -> TbResult<Shop> {
-        self.store
-            .shop_update(id, name, description, auto_approve)
-            .await
-    }
-    async fn shop_delete(&mut self, id: ShopId) -> TbResult<usize> {
-        self.store.shop_delete(id).await
-    }
-    async fn shops_get_all_for_user(&mut self, user_id: UserId) -> TbResult<Vec<Shop>> {
-        self.store.shops_get_all_for_user(user_id).await
-    }
-    async fn shops_search(&mut self, query: &str) -> TbResult<Vec<Shop>> {
-        self.store.shops_search(query).await
-    }
-    async fn subscription_create(
-        &mut self,
-        shop_id: ShopId,
-        user_id: UserId,
-        message: Option<String>,
-    ) -> TbResult<ShopSubscription> {
-        self.store
-            .subscription_create(shop_id, user_id, message)
-            .await
-    }
-    async fn subscription_get(&mut self, id: SubscriptionId) -> TbResult<ShopSubscription> {
-        self.store.subscription_get(id).await
-    }
-    async fn subscription_find_active(
-        &mut self,
-        shop_id: ShopId,
-        user_id: UserId,
-    ) -> TbResult<Option<ShopSubscription>> {
-        self.store.subscription_find_active(shop_id, user_id).await
-    }
-    async fn subscription_find_pending(
-        &mut self,
-        shop_id: ShopId,
-        user_id: UserId,
-    ) -> TbResult<Option<ShopSubscription>> {
-        self.store.subscription_find_pending(shop_id, user_id).await
-    }
-    async fn subscription_update_status(
-        &mut self,
-        id: SubscriptionId,
-        status: SubscriptionStatus,
-    ) -> TbResult<ShopSubscription> {
-        self.store.subscription_update_status(id, status).await
-    }
-    async fn subscription_approve(
-        &mut self,
-        id: SubscriptionId,
-        status: SubscriptionStatus,
-        response_message: Option<String>,
-    ) -> TbResult<ShopSubscription> {
-        self.store
-            .subscription_approve(id, status, response_message)
-            .await
-    }
-    async fn subscription_delete(&mut self, id: SubscriptionId) -> TbResult<()> {
-        self.store.subscription_delete(id).await
-    }
-    async fn subscriptions_for_shop(&mut self, shop_id: ShopId) -> TbResult<Vec<ShopSubscription>> {
-        self.store.subscriptions_for_shop(shop_id).await
-    }
-    async fn subscriptions_for_user(&mut self, user_id: UserId) -> TbResult<Vec<ShopSubscription>> {
-        self.store.subscriptions_for_user(user_id).await
-    }
-}
-
-#[async_trait::async_trait]
-impl ActivityStore for FakeConn {
-    async fn activity_create(&mut self, act: Activity) -> TbResult<Activity> {
-        self.store.activity_create(act).await
-    }
-    async fn activity_read_by_id(&mut self, aid: ActivityId) -> TbResult<Option<Activity>> {
-        self.store.activity_read_by_id(aid).await
-    }
-    async fn activity_update(&mut self, act: Activity) -> TbResult<Activity> {
-        self.store.activity_update(act).await
-    }
-    async fn activity_delete(&mut self, aid: ActivityId) -> TbResult<usize> {
-        self.store.activity_delete(aid).await
-    }
-    async fn activities_delete(&mut self, activities: &[Activity]) -> TbResult<usize> {
-        self.store.activities_delete(activities).await
-    }
-    async fn get_all(&mut self, uid: &UserId) -> TbResult<Vec<Activity>> {
-        self.store.get_all(uid).await
-    }
-    async fn activities_find_by_gear_and_time(
-        &mut self,
-        part: PartId,
-        begin: OffsetDateTime,
-        end: OffsetDateTime,
-    ) -> TbResult<Vec<Activity>> {
-        self.store
-            .activities_find_by_gear_and_time(part, begin, end)
-            .await
-    }
-    async fn get_by_user_and_time(
-        &mut self,
-        uid: UserId,
-        rstart: OffsetDateTime,
-    ) -> TbResult<Activity> {
-        self.store.get_by_user_and_time(uid, rstart).await
-    }
-    async fn activity_set_gear_if_null(
-        &mut self,
-        user: UserId,
-        types: Vec<ActTypeId>,
-        partid: &PartId,
-    ) -> TbResult<Vec<Activity>> {
-        self.store
-            .activity_set_gear_if_null(user, types, partid)
-            .await
-    }
-    async fn activity_get_really_all(&mut self) -> TbResult<Vec<Activity>> {
-        self.store.activity_get_really_all().await
-    }
-}
-
-#[async_trait::async_trait]
-impl AttachmentStore for FakeConn {
-    async fn attachment_create(&mut self, att: Attachment) -> TbResult<Attachment> {
-        self.store.attachment_create(att).await
-    }
-    async fn attachment_delete(&mut self, att: Attachment) -> TbResult<Attachment> {
-        AttachmentStore::attachment_delete(&mut self.store, att).await
-    }
-    async fn attachments_delete_by_parts(&mut self, parts: &[Part]) -> TbResult<usize> {
-        self.store.attachments_delete_by_parts(parts).await
-    }
-    async fn attachment_get_by_gear_and_time(
-        &mut self,
-        act_gear: PartId,
-        start: OffsetDateTime,
-    ) -> TbResult<Vec<Attachment>> {
-        self.store
-            .attachment_get_by_gear_and_time(act_gear, start)
-            .await
-    }
-    async fn attachments_all_by_part(&mut self, id: PartId) -> TbResult<Vec<Attachment>> {
-        self.store.attachments_all_by_part(id).await
-    }
-    async fn attachment_get_by_part_and_time(
-        &mut self,
-        pid: PartId,
-        time: OffsetDateTime,
-    ) -> TbResult<Option<Attachment>> {
-        self.store.attachment_get_by_part_and_time(pid, time).await
-    }
-    async fn assembly_get_by_types_time_and_gear(
-        &mut self,
-        types: Vec<PartTypeId>,
-        gear: PartId,
-        time: OffsetDateTime,
-    ) -> TbResult<Vec<Attachment>> {
-        self.store
-            .assembly_get_by_types_time_and_gear(types, gear, time)
-            .await
-    }
-    async fn attachment_find_part_of_type_at_hook_and_time(
-        &mut self,
-        what: PartTypeId,
-        gear: PartId,
-        hook: PartTypeId,
-        time: OffsetDateTime,
-    ) -> TbResult<Option<Attachment>> {
-        self.store
-            .attachment_find_part_of_type_at_hook_and_time(what, gear, hook, time)
-            .await
-    }
-    async fn attachment_find_successor(
-        &mut self,
-        part_id: PartId,
-        gear: PartId,
-        hook: PartTypeId,
-        time: OffsetDateTime,
-        what: PartTypeId,
-    ) -> TbResult<Option<Attachment>> {
-        self.store
-            .attachment_find_successor(part_id, gear, hook, time, what)
-            .await
-    }
-    async fn attachment_find_later_attachment_for_part(
-        &mut self,
-        part_id: PartId,
-        time: OffsetDateTime,
-    ) -> TbResult<Option<Attachment>> {
-        self.store
-            .attachment_find_later_attachment_for_part(part_id, time)
-            .await
-    }
-    async fn attachment_find_part_attached_already(
-        &mut self,
-        part_id: PartId,
-        gear: PartId,
-        hook: PartTypeId,
-        time: OffsetDateTime,
-    ) -> TbResult<Option<Attachment>> {
-        self.store
-            .attachment_find_part_attached_already(part_id, gear, hook, time)
-            .await
-    }
-}
-
-#[async_trait::async_trait]
-impl PartNoteStore for FakeConn {
-    async fn partnote_create_text(
-        &mut self,
-        part: PartId,
-        name: String,
-        created: OffsetDateTime,
-    ) -> TbResult<PartNote> {
-        self.store.partnote_create_text(part, name, created).await
-    }
-    async fn partnote_create_file(
-        &mut self,
-        part: PartId,
-        name: String,
-        mime: String,
-        filename: Option<String>,
-        size: i64,
-        data: Vec<u8>,
-        created: OffsetDateTime,
-    ) -> TbResult<PartNote> {
-        self.store
-            .partnote_create_file(part, name, mime, filename, size, data, created)
-            .await
-    }
-    async fn partnote_all_by_part(&mut self, part: PartId) -> TbResult<Vec<PartNote>> {
-        self.store.partnote_all_by_part(part).await
-    }
-    async fn partnote_get(&mut self, id: PartNoteId) -> TbResult<PartNote> {
-        self.store.partnote_get(id).await
-    }
-    async fn partnote_file(&mut self, id: PartNoteId) -> TbResult<Vec<u8>> {
-        self.store.partnote_file(id).await
-    }
-    async fn partnote_update_text(&mut self, id: PartNoteId, name: String) -> TbResult<PartNote> {
-        self.store.partnote_update_text(id, name).await
-    }
-    async fn partnote_update_file(
-        &mut self,
-        id: PartNoteId,
-        name: String,
-        mime: String,
-        filename: Option<String>,
-        size: i64,
-        data: Vec<u8>,
-    ) -> TbResult<PartNote> {
-        self.store
-            .partnote_update_file(id, name, mime, filename, size, data)
-            .await
-    }
-    async fn partnote_remove_file(&mut self, id: PartNoteId) -> TbResult<PartNote> {
-        self.store.partnote_remove_file(id).await
-    }
-    async fn partnote_delete(&mut self, id: PartNoteId) -> TbResult<PartNoteId> {
-        self.store.partnote_delete(id).await
-    }
-}
-
-#[async_trait::async_trait]
-impl UsageStore for FakeConn {
-    async fn usage_get(&mut self, uid: UsageId) -> TbResult<Option<Usage>> {
-        UsageStore::usage_get(&mut self.store, uid).await
-    }
-    async fn usages_update(&mut self, usage: &[Usage]) -> TbResult<usize> {
-        UsageStore::usages_update(&mut self.store, usage).await
-    }
-    async fn usage_delete(&mut self, usage: UsageId) -> TbResult<Usage> {
-        UsageStore::usage_delete(&mut self.store, usage).await
-    }
-    async fn usages_delete(&mut self, usages: &[Usage]) -> TbResult<usize> {
-        self.store.usages_delete(usages).await
-    }
-    async fn delete_all(&mut self) -> TbResult<usize> {
-        self.store.delete_all().await
-    }
-}
-
-#[async_trait::async_trait]
-impl ServiceStore for FakeConn {
-    async fn service_create(&mut self, service: Service) -> TbResult<Service> {
-        ServiceStore::service_create(&mut self.store, service).await
-    }
-    async fn service_get(&mut self, service: ServiceId) -> TbResult<Service> {
-        ServiceStore::service_get(&mut self.store, service).await
-    }
-    async fn service_update(&mut self, service: Service) -> TbResult<Service> {
-        ServiceStore::service_update(&mut self.store, service).await
-    }
-    async fn service_delete(&mut self, service: ServiceId) -> TbResult<usize> {
-        ServiceStore::service_delete(&mut self.store, service).await
-    }
-    async fn services_delete(&mut self, services: &[Service]) -> TbResult<usize> {
-        self.store.services_delete(services).await
-    }
-    async fn services_by_part(&mut self, part: PartId) -> TbResult<Vec<Service>> {
-        self.store.services_by_part(part).await
-    }
-}
-
-#[async_trait::async_trait]
-impl ServicePlanStore for FakeConn {
-    async fn serviceplan_create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
-        ServicePlanStore::serviceplan_create(&mut self.store, plan).await
-    }
-    async fn serviceplan_get(&mut self, plan: ServicePlanId) -> TbResult<ServicePlan> {
-        ServicePlanStore::serviceplan_get(&mut self.store, plan).await
-    }
-    async fn plan_update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan> {
-        self.store.plan_update(plan).await
-    }
-    async fn serviceplan_delete(&mut self, plan: ServicePlanId) -> TbResult<usize> {
-        ServicePlanStore::serviceplan_delete(&mut self.store, plan).await
-    }
-    async fn serviceplans_delete(&mut self, serviceplans: &[ServicePlan]) -> TbResult<usize> {
-        self.store.serviceplans_delete(serviceplans).await
-    }
-    async fn by_part(&mut self, part: PartId) -> TbResult<Vec<ServicePlan>> {
-        self.store.by_part(part).await
-    }
-    async fn by_user(&mut self, uid: UserId) -> TbResult<Vec<ServicePlan>> {
-        self.store.by_user(uid).await
-    }
-}
-
-#[async_trait::async_trait]
-impl StravaDataStore for FakeConn {
-    /// The `AllStats` test's canned data: the fixture has no Strava users.
-    async fn stravauser_get_all(&mut self) -> TbResult<Vec<StravaUser>> {
-        Ok(vec![])
-    }
-    async fn stravauser_get_by_tbid(&mut self, _id: UserId) -> TbResult<StravaUser> {
-        unimplemented!("the unit tests never read a strava user")
-    }
-    async fn stravauser_get_by_stravaid(&mut self, _id: &StravaId) -> TbResult<Option<StravaUser>> {
-        unimplemented!("the unit tests never read a strava user")
-    }
-    async fn stravauser_create(&mut self, _user: StravaUser) -> TbResult<StravaUser> {
-        unimplemented!("the unit tests never create a strava user")
-    }
-    async fn stravauser_update_token(
-        &mut self,
-        _stravaid: StravaId,
-        _refresh: Option<String>,
-    ) -> TbResult<StravaUser> {
-        unimplemented!("the unit tests never update a strava token")
-    }
-    async fn stravauser_delete(&mut self, _user: UserId) -> TbResult<usize> {
-        unimplemented!("the unit tests never delete a strava user")
-    }
-    async fn strava_event_create(&mut self, _e: Event) -> TbResult<()> {
-        unimplemented!("the unit tests never queue a strava event")
-    }
-    async fn strava_event_delete(&mut self, _event_id: Option<i32>) -> TbResult<()> {
-        unimplemented!("the unit tests never delete a strava event")
-    }
-    async fn strava_event_set_time(&mut self, _e_id: Option<i32>, _e_time: i64) -> TbResult<()> {
-        unimplemented!("the unit tests never set a strava event time")
-    }
-    async fn strava_event_get_next_for_user(&mut self, _user: StravaId) -> TbResult<Option<Event>> {
-        unimplemented!("the unit tests never probe the strava queue")
-    }
-    async fn strava_event_get_later(
-        &mut self,
-        _obj_id: i64,
-        _oid: StravaId,
-    ) -> TbResult<Vec<Event>> {
-        unimplemented!("the unit tests never read the strava queue")
-    }
-    async fn strava_events_delete_batch(&mut self, _values: Vec<Option<i32>>) -> TbResult<()> {
-        unimplemented!("the unit tests never batch-delete strava events")
-    }
-    async fn strava_events_get_count_for_user(&mut self, _user: &StravaId) -> TbResult<i64> {
-        unimplemented!("the unit tests never count strava events")
-    }
-    async fn strava_events_delete_for_user(&mut self, _user: &StravaId) -> TbResult<usize> {
-        unimplemented!("the unit tests never delete a user's strava events")
-    }
-}
-
-/// The complete Strava store marker: the domain store plus the data store.
-impl StravaStore for FakeConn {}
-
 // --- Context-based delivery (spec #517, ticket #584) ---
 //
 // The executor routes a committed `Summary` by the session's `shop()` value:
@@ -1055,6 +877,49 @@ fn part_owned_by(owner: UserId) -> Part {
         usage: UsageId::default(),
         source: None,
         shop: None,
+    }
+}
+
+/// The canned Strava-imported bike the gear test's store returns: one part
+/// carrying the Strava source `b123`.
+fn part_test_bike() -> Part {
+    Part {
+        id: PartId::from(1),
+        owner: UserId::from(1),
+        what: PartTypeId::from(1),
+        name: "Test Bike".to_string(),
+        vendor: "TestBrand".to_string(),
+        model: "M1".to_string(),
+        purchase: OffsetDateTime::UNIX_EPOCH,
+        last_used: OffsetDateTime::UNIX_EPOCH,
+        disposed_at: None,
+        usage: UsageId::default(),
+        source: Some("b123".to_string()),
+        shop: None,
+    }
+}
+
+/// A canned `User` row the read tests' store returns.
+fn user_record(id: UserId) -> User {
+    User {
+        id,
+        name: "Bike".to_string(),
+        firstname: "Tenda".to_string(),
+        avatar: None,
+        is_admin: false,
+        onboarding_status: OnboardingStatus::Completed,
+    }
+}
+
+/// A canned `Shop` owned by `owner` (the `subscribe_shop` ownership read).
+fn shop_owned_by(owner: UserId) -> Shop {
+    Shop {
+        id: ShopId::from(7),
+        owner,
+        name: "Test Shop".to_string(),
+        description: None,
+        auto_approve: true,
+        created_at: OffsetDateTime::UNIX_EPOCH,
     }
 }
 
@@ -1142,6 +1007,15 @@ async fn read_arriving_during_a_sleep_is_taken_immediately() {
     );
 }
 
+// --- The per-request dispatch against canned store outcomes (spec #558 §3/§4) ---
+//
+// Each test sets canned `expect_*` returns on the [`MockConn`] (the store the
+// executor drives), runs the request through `run_request`, and asserts the
+// executor's handling: the transaction lifecycle (`begin` → work →
+// `commit`/`rollback`), the oneshot reply, the frame routing, and the backoff
+// discipline. The canned store outcomes are independent of any real store —
+// the executor's behavior is what is under test.
+
 // --- The read's backoff discipline (spec #558 §3.7) ---
 
 #[tokio::test]
@@ -1149,8 +1023,9 @@ async fn failed_read_never_arms_the_backoff_and_the_loop_survives() {
     // A failed read (a failed `begin`) resolves the oneshot with the error
     // and **never arms the backoff** (spec #558 §3.7: the queue probe is
     // the DB health monitor, and read traffic must not push the 30s cap
-    // up) — and the dispatch returns `Ok`, so the loop survives.
-    let source = FakeSource { begin_fails: true };
+    // up) — and the dispatch returns `Ok`, so the loop survives. The store is
+    // never reached: `begin` fails fast.
+    let source = FakeSource::failing();
     let mut backoff = DbBackoff::new();
     backoff.record_failure();
     backoff.record_failure(); // prime: the next pause would be 4s
@@ -1178,8 +1053,13 @@ async fn failed_read_never_arms_the_backoff_and_the_loop_survives() {
 async fn domain_failed_read_resets_the_backoff_and_the_loop_survives() {
     // A read that fails with a domain error rolls back cleanly: a healthy
     // transaction, so it **resets** the backoff (spec #558 §3.7) — and the
-    // loop survives.
-    let source = FakeSource { begin_fails: false };
+    // loop survives. The canned store reports the part as missing (the domain
+    // error); the executor rolls the transaction back and 500s the read.
+    let mut conn = MockConn::new();
+    conn.expect_partid_get_part()
+        .returning(|_pid| Err(Error::NotFound("the part does not exist".to_string())));
+    conn.expect_rollback().returning(|| Ok(()));
+    let source = FakeSource::with(conn);
     let mut backoff = DbBackoff::new();
     backoff.record_failure();
     backoff.record_failure(); // prime: the next pause would be 4s
@@ -1207,8 +1087,21 @@ async fn domain_failed_read_resets_the_backoff_and_the_loop_survives() {
 async fn cleanly_committed_read_resets_the_backoff() {
     // A cleanly committed read is a healthy transaction: it **resets** the
     // backoff (spec #558 §3.7) and resolves the oneshot with the
-    // `ReadOutcome` — the unified user read, the fixture's full state.
-    let source = FakeSource { begin_fails: false };
+    // `ReadOutcome`. The canned store returns a user and an empty state
+    // (no parts/activities/shops): the `UserState` composite is built from the
+    // canned outcomes — the executor's handling (commit + backoff reset) is
+    // what is asserted, not the store's behavior.
+    let mut conn = MockConn::new();
+    conn.expect_user_get()
+        .returning(move |_| Ok(user_record(UserId::from(1))));
+    conn.expect_get_all().returning(|_uid| Ok(Vec::new()));
+    conn.expect_shops_get_all_for_user()
+        .returning(|_uid| Ok(Vec::new()));
+    conn.expect_part_get_all_for_userid()
+        .returning(|_uid| Ok(Vec::new()));
+    conn.expect_by_user().returning(|_uid| Ok(Vec::new()));
+    conn.expect_commit().returning(|| Ok(()));
+    let source = FakeSource::with(conn);
     let mut backoff = DbBackoff::new();
     backoff.record_failure();
     backoff.record_failure(); // prime: the next pause would be 4s
@@ -1225,10 +1118,10 @@ async fn cleanly_committed_read_resets_the_backoff() {
     let ReadOutcome::User(state) = outcome else {
         panic!("the User read returns the UserState composite");
     };
-    assert_eq!(
-        state.summary.parts.len(),
-        17,
-        "the fixture's full state (apiread_tests' rule)"
+    assert!(
+        state.summary.parts.is_empty(),
+        "the canned store returns no parts: the summary is empty, got {:?}",
+        state.summary.parts
     );
     assert_eq!(
         backoff.record_failure(),
@@ -1243,9 +1136,13 @@ async fn cleanly_committed_read_resets_the_backoff() {
 async fn all_stats_round_trips_through_the_loop_transaction() {
     // The admin stats read is dispatched loop-side in the loop's own
     // transaction (spec #558 §3.3): the oneshot resolves with the stats
-    // after the commit. The fixture has no Strava users, so the stats are
+    // after the commit. The canned store has no Strava users, so the stats are
     // empty.
-    let source = FakeSource { begin_fails: false };
+    let mut conn = MockConn::new();
+    conn.expect_stravauser_get_all()
+        .returning(|| Ok(Vec::new()));
+    conn.expect_commit().returning(|| Ok(()));
+    let source = FakeSource::with(conn);
     let mut backoff = DbBackoff::new();
     let (frames, _frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_all_stats(Box::new(mock_session(UserId::from(1))));
@@ -1259,7 +1156,7 @@ async fn all_stats_round_trips_through_the_loop_transaction() {
         .await
         .expect("the oneshot resolves")
         .expect("the stats read succeeds");
-    assert!(stats.is_empty(), "the fixture has no Strava users");
+    assert!(stats.is_empty(), "the canned store has no Strava users");
 }
 
 #[tokio::test]
@@ -1268,7 +1165,8 @@ async fn gear_hydration_pushes_the_created_parts_frame() {
     // created parts' union is the frame (published on commit, before the
     // oneshot reply) and the reply carries the same summary. The Strava API is
     // canned in the thread-local map the thin free functions consult (one
-    // bike).
+    // bike); the store is canned on the `MockConn` (no existing part for the
+    // source, the create, the read-back).
     tb_strava::test_support::begin_test();
     tb_strava::test_support::seed_token_cache(
         UserId::from(1),
@@ -1280,7 +1178,20 @@ async fn gear_hydration_pushes_the_created_parts_frame() {
         "/gear/b123",
         r#"{"id":"b123","name":"Test Bike","brand_name":"TestBrand","model_name":"M1","frame_type":1}"#,
     );
-    let source = FakeSource { begin_fails: false };
+    let mut conn = MockConn::new();
+    // The part is not yet imported (twice: before and after the Strava gear
+    // fetch), so `into_partid` creates it; the read-back returns the created
+    // part (the frame's entry).
+    conn.expect_partid_get_by_source().returning(|_s| Ok(None));
+    conn.expect_part_create().returning(
+        move |_what, _name, _vendor, _model, _purchase, _source, _usage, _owner, _shop| {
+            Ok(part_test_bike())
+        },
+    );
+    conn.expect_partid_get_part()
+        .returning(move |_pid| Ok(part_test_bike()));
+    conn.expect_commit().returning(|| Ok(()));
+    let source = FakeSource::with(conn);
     let mut backoff = DbBackoff::new();
     let (frames, mut frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_gear(Box::new(mock_session(UserId::from(1))));
@@ -1314,8 +1225,8 @@ async fn gear_hydration_pushes_the_created_parts_frame() {
 async fn failed_gear_arms_the_backoff_like_a_write() {
     // The hydration is a write, not a read (spec #558 §4): a failed `begin`
     // **arms** the backoff — unlike a read (spec #558 §3.7) — and the loop
-    // survives.
-    let source = FakeSource { begin_fails: true };
+    // survives. The store is never reached: `begin` fails fast.
+    let source = FakeSource::failing();
     let mut backoff = DbBackoff::new();
     backoff.record_failure(); // prime: the next pause would be 2s
     let (frames, _frame_rx) = broadcast::channel(4);
@@ -1341,7 +1252,7 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
     // no new gear — `update_gear` creates nothing, the `Summary` is empty,
     // and `push_frame` sends **nothing**: exactly today's behavior. The
     // oneshot resolves with the empty summary. The Strava API is canned in the
-    // thread-local map the thin free functions consult (an empty athlete).
+    // thread-local map (an empty athlete); the store only commits.
     tb_strava::test_support::begin_test();
     tb_strava::test_support::seed_token_cache(
         UserId::from(1),
@@ -1349,7 +1260,9 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
         "test-access-token",
     );
     tb_strava::test_support::queue("/athlete", r#"{"bikes":[],"shoes":[]}"#);
-    let source = FakeSource { begin_fails: false };
+    let mut conn = MockConn::new();
+    conn.expect_commit().returning(|| Ok(()));
+    let source = FakeSource::with(conn);
     let mut backoff = DbBackoff::new();
     let (frames, mut frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_gear(Box::new(mock_session(UserId::from(1))));
@@ -1370,49 +1283,146 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
     );
 }
 
+// --- The write's frame routing by the request's session context (spec #517) ---
+
+#[tokio::test]
+async fn run_request_shop_context_routes_via_pusher_not_own_stream() {
+    // A write whose **request** session is in a shop context routes the
+    // committed `Summary`'s frame through the pusher (shop stream + part
+    // owner) and NOT the executor's own `frames` channel — the frame's
+    // delivery keys on the request's session. The canned store creates the
+    // part (owned by the session user, 1) and resolves the part owner for the
+    // `push_to_user` target.
+    let mut conn = MockConn::new();
+    conn.expect_part_create().returning(
+        move |_what, _name, _vendor, _model, _purchase, _source, _usage, _owner, _shop| {
+            Ok(part_owned_by(UserId::from(1)))
+        },
+    );
+    conn.expect_partid_get_part()
+        .returning(move |_pid| Ok(part_owned_by(UserId::from(1))));
+    conn.expect_commit().returning(|| Ok(()));
+    let source = FakeSource::with(conn);
+    let mut backoff = DbBackoff::new();
+    let (frames, mut frame_rx) = broadcast::channel(4);
+    let pusher = RecordingPusher::new();
+    // The write carries the shop context in its own (the request's) session.
+    let (request, reply) = Request::new_write(
+        Box::new(mock_session_with_shop(UserId::from(1), ShopId::from(7))),
+        ApiWrite::PartCreate {
+            name: "Shop Chain".to_string(),
+            vendor: "Shimano".to_string(),
+            model: "CN-HG62".to_string(),
+            what: CHAIN,
+            purchase: sample_purchase_date(),
+        },
+    );
+
+    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
+    assert!(result.is_ok(), "a committed write must not end the loop");
+    let outcome = reply
+        .await
+        .expect("the oneshot resolves")
+        .expect("the write succeeds");
+    let summary = outcome.summary().clone();
+
+    // The executor's own (shop owner's) personal stream gets nothing.
+    assert!(
+        frame_rx.try_recv().is_err(),
+        "a shop-context write must not push to the executor's own stream"
+    );
+    // The pusher routes to the shop stream and the part owner (the session
+    // user, 1).
+    let calls = pusher.calls();
+    assert!(
+        calls.iter().any(|call| {
+            matches!(
+                call,
+                PushCall::Shop(sid, s) if *sid == ShopId::from(7) && *s == summary
+            )
+        }),
+        "the shop stream receives the frame, got {calls:?}"
+    );
+    assert!(
+        calls.iter().any(|call| {
+            matches!(
+                call,
+                PushCall::User(uid, s) if *uid == UserId::from(1) && *s == summary
+            )
+        }),
+        "the part owner (the session user) receives the frame, got {calls:?}"
+    );
+}
+
+#[tokio::test]
+async fn personal_write_routes_to_own_stream_not_pusher() {
+    // A write whose **request** session is personal routes the committed
+    // `Summary`'s frame to the executor's own `frames` channel (the personal
+    // stream) and NOT through the pusher (no shop stream, no part-owner push)
+    // — the frame's delivery keys on the request's session. The canned store
+    // creates the part (owned by the session user, 1).
+    let mut conn = MockConn::new();
+    conn.expect_part_create().returning(
+        move |_what, _name, _vendor, _model, _purchase, _source, _usage, _owner, _shop| {
+            Ok(part_owned_by(UserId::from(1)))
+        },
+    );
+    conn.expect_commit().returning(|| Ok(()));
+    let source = FakeSource::with(conn);
+    let mut backoff = DbBackoff::new();
+    let (frames, mut frame_rx) = broadcast::channel(4);
+    let pusher = RecordingPusher::new();
+    // The write carries a personal session (the request's session).
+    let (request, reply) = Request::new_write(
+        Box::new(mock_session(UserId::from(1))),
+        ApiWrite::PartCreate {
+            name: "Personal Chain".to_string(),
+            vendor: "Shimano".to_string(),
+            model: "CN-HG62".to_string(),
+            what: CHAIN,
+            purchase: sample_purchase_date(),
+        },
+    );
+
+    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
+    assert!(result.is_ok(), "a committed write must not end the loop");
+    let outcome = reply
+        .await
+        .expect("the oneshot resolves")
+        .expect("the write succeeds");
+    let summary = outcome.summary().clone();
+
+    // The frame goes to the executor's own personal stream.
+    let frame = frame_rx
+        .try_recv()
+        .expect("a personal-context write pushes to the executor's own stream");
+    assert_eq!(frame, summary);
+    // And NOT through the pusher (no shop stream, no part-owner push).
+    assert!(
+        pusher.calls().is_empty(),
+        "a personal-context write must not route through the pusher, got {:?}",
+        pusher.calls()
+    );
+}
+
 // --- Shop stream infrastructure (spec #517, ticket #582) ---
 //
 // The `Registry` owns a per-shop `broadcast` channel map (the shop streams),
 // a `FramePusher` (`push_to_shop`/`push_to_user`), and `ServiceApi::
 // subscribe_shop` (owner-only, on-demand). The tests drive the `Registry`
 // through its public surface (`subscribe_shop`, `push_to_shop`,
-// `push_to_user`, `shop_open`); the store is a `MemStore` shared across
-// transactions so a shop created before the `Registry` is visible to
-// `subscribe_shop`'s ownership read.
+// `push_to_user`, `shop_open`); the store is a canned [`MockConn`] whose
+// `shop_get` reports the shop's owner (the `subscribe_shop` ownership read).
 
-/// A `TxnSource` whose connections share one `MemStore` (a sibling handle on
-/// the same state): a shop created before the `Registry` is built is visible
-/// to `subscribe_shop`'s ownership read (the prepopulated fixture has no
-/// shops, so the tests create their own in the shared store).
-struct ShopSource {
-    store: MemStore,
-}
-
-impl Clone for ShopSource {
-    fn clone(&self) -> Self {
-        Self {
-            store: self.store.begin(),
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl TxnSource for ShopSource {
-    type Conn = FakeConn;
-
-    async fn begin(&self) -> TbResult<FakeConn> {
-        Ok(FakeConn {
-            store: self.store.begin(),
-        })
-    }
-}
-
-/// A shop owned by `owner` in the shared `MemStore`.
-async fn create_shop(store: &MemStore, owner: UserId) -> Shop {
-    let mut store = store.begin();
-    ShopId::create("Test Shop".into(), None, true, owner, &mut store)
-        .await
-        .expect("the shop is created")
+/// A `TxnSource` whose `subscribe_shop` ownership read is canned: the store
+/// reports `shop_get` → a shop owned by `owner`, so an owner's subscribe
+/// succeeds and a non-owner's is `Forbidden`.
+fn shop_source(owner: UserId) -> FakeSource {
+    let mut conn = MockConn::new();
+    conn.expect_shop_get()
+        .returning(move |_id| Ok(shop_owned_by(owner)));
+    conn.expect_commit().returning(|| Ok(()));
+    FakeSource::with(conn)
 }
 
 /// A non-empty `Summary` (a frame the shop/user streams should deliver).
@@ -1424,17 +1434,13 @@ fn non_empty_summary() -> Summary {
 
 #[tokio::test]
 async fn subscribe_shop_rejects_a_non_owner() {
-    // A non-owner is forbidden (the web layer maps this to a 403).
-    let store = MemStore::new();
-    let registry = Registry::new(
-        ShopSource {
-            store: store.begin(),
-        },
-        Duration::from_secs(60),
-    );
-    let shop = create_shop(&store, UserId::from(1)).await;
+    // A non-owner is forbidden (the web layer maps this to a 403): the canned
+    // store reports the shop's owner as 1, so user 2 is rejected.
+    let registry = Registry::new(shop_source(UserId::from(1)), Duration::from_secs(60));
 
-    let result = registry.subscribe_shop(UserId::from(2), shop.id).await;
+    let result = registry
+        .subscribe_shop(UserId::from(2), ShopId::from(7))
+        .await;
     assert!(
         matches!(result, Err(Error::Forbidden(_))),
         "a non-owner is forbidden, got {result:?}"
@@ -1443,34 +1449,29 @@ async fn subscribe_shop_rejects_a_non_owner() {
 
 #[tokio::test]
 async fn shop_stream_lifecycle_create_receive_drop() {
-    let store = MemStore::new();
-    let registry = Registry::new(
-        ShopSource {
-            store: store.begin(),
-        },
-        Duration::from_secs(60),
-    );
-    let shop = create_shop(&store, UserId::from(1)).await;
+    let registry = Registry::new(shop_source(UserId::from(1)), Duration::from_secs(60));
+    let shop_id = ShopId::from(7);
 
     // Created on demand: no stream before the owner's first connect.
     assert!(
-        !registry.shop_open(shop.id).await,
+        !registry.shop_open(shop_id).await,
         "no shop stream before a connect"
     );
 
-    // The owner's connect opens the channel.
+    // The owner's connect opens the channel (the canned store reports the
+    // owner as the session user).
     let mut rx = registry
-        .subscribe_shop(UserId::from(1), shop.id)
+        .subscribe_shop(UserId::from(1), shop_id)
         .await
         .expect("the owner can subscribe");
     assert!(
-        registry.shop_open(shop.id).await,
+        registry.shop_open(shop_id).await,
         "the channel is open while a receiver is attached"
     );
 
     // A frame pushed to the shop stream reaches the subscriber.
     let summary = non_empty_summary();
-    registry.push_to_shop(shop.id, summary.clone()).await;
+    registry.push_to_shop(shop_id, summary.clone()).await;
     let got = rx.recv().await.expect("the subscriber receives the frame");
     assert_eq!(got, summary);
 
@@ -1478,43 +1479,34 @@ async fn shop_stream_lifecycle_create_receive_drop() {
     // (receiver_count() > 0) is no longer met, so the entry is reaped.
     drop(rx);
     assert!(
-        !registry.shop_open(shop.id).await,
+        !registry.shop_open(shop_id).await,
         "the channel is dropped when the last receiver disconnects"
     );
 }
 
 #[tokio::test]
 async fn push_to_shop_is_a_noop_without_a_subscriber() {
-    let store = MemStore::new();
-    let registry = Registry::new(
-        ShopSource {
-            store: store.begin(),
-        },
-        Duration::from_secs(60),
-    );
-    let shop = create_shop(&store, UserId::from(1)).await;
+    let registry = Registry::new(shop_source(UserId::from(1)), Duration::from_secs(60));
+    let shop_id = ShopId::from(7);
 
     // No subscriber: the push is dropped (no panic, no receiver to send to).
-    registry.push_to_shop(shop.id, non_empty_summary()).await;
+    registry.push_to_shop(shop_id, non_empty_summary()).await;
 
     // And after a subscriber disconnects, the push is dropped too (the
     // reaped channel has no receiver, so the send is a no-op).
     let rx = registry
-        .subscribe_shop(UserId::from(1), shop.id)
+        .subscribe_shop(UserId::from(1), shop_id)
         .await
         .expect("the owner can subscribe");
     drop(rx);
-    registry.push_to_shop(shop.id, non_empty_summary()).await;
+    registry.push_to_shop(shop_id, non_empty_summary()).await;
 }
 
 #[tokio::test]
 async fn push_to_user_delivers_to_a_running_executor() {
-    let registry = Registry::new(
-        ShopSource {
-            store: MemStore::new(),
-        },
-        Duration::from_secs(60),
-    );
+    // No store is involved: `push_to_user` feeds the user's executor frame
+    // channel, so the source's mock is never `begin`-ed.
+    let registry = Registry::new(FakeSource::failing(), Duration::from_secs(60));
     let mut frame_rx = registry
         .install_executor_for_test(UserId::from(1), ExecutorStatus::Running)
         .await;
@@ -1532,12 +1524,9 @@ async fn push_to_user_delivers_to_a_running_executor() {
 
 #[tokio::test]
 async fn push_to_user_is_a_noop_without_a_running_executor() {
-    let registry = Registry::new(
-        ShopSource {
-            store: MemStore::new(),
-        },
-        Duration::from_secs(60),
-    );
+    // No store is involved: `push_to_user` is a no-op with no (or a reaped)
+    // executor, so the source's mock is never `begin`-ed.
+    let registry = Registry::new(FakeSource::failing(), Duration::from_secs(60));
 
     // No executor for the user: a no-op (no panic, no receiver).
     registry
@@ -1728,109 +1717,6 @@ async fn deliver_shop_context_service_summary_to_part_owner() {
             .iter()
             .any(|call| matches!(call, PushCall::Shop(sid, s) if *sid == shop_id && *s == summary)),
         "the shop stream also receives the frame, got {:?}",
-        pusher.calls()
-    );
-}
-
-#[tokio::test]
-async fn run_request_shop_context_routes_via_pusher_not_own_stream() {
-    // A write whose **request** session is in a shop context routes the
-    // committed `Summary`'s frame through the pusher (shop stream + part
-    // owner) and NOT the executor's own `frames` channel — the frame's
-    // delivery keys on the request's session. The part created by `PartCreate`
-    // is owned by the session user (1) — the part owner.
-    let source = FakeSource { begin_fails: false };
-    let mut backoff = DbBackoff::new();
-    let (frames, mut frame_rx) = broadcast::channel(4);
-    let pusher = RecordingPusher::new();
-    // The write carries the shop context in its own (the request's) session.
-    let (request, reply) = Request::new_write(
-        Box::new(mock_session_with_shop(UserId::from(1), ShopId::from(7))),
-        ApiWrite::PartCreate {
-            name: "Shop Chain".to_string(),
-            vendor: "Shimano".to_string(),
-            model: "CN-HG62".to_string(),
-            what: CHAIN,
-            purchase: sample_purchase_date(),
-        },
-    );
-
-    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
-    assert!(result.is_ok(), "a committed write must not end the loop");
-    let outcome = reply
-        .await
-        .expect("the oneshot resolves")
-        .expect("the write succeeds");
-    let summary = outcome.summary().clone();
-
-    // The executor's own (shop owner's) personal stream gets nothing.
-    assert!(
-        frame_rx.try_recv().is_err(),
-        "a shop-context write must not push to the executor's own stream"
-    );
-    // The pusher routes to the shop stream and the part owner (the session
-    // user, 1).
-    let calls = pusher.calls();
-    assert!(
-        calls.iter().any(|call| {
-            matches!(
-                call,
-                PushCall::Shop(sid, s) if *sid == ShopId::from(7) && *s == summary
-            )
-        }),
-        "the shop stream receives the frame, got {calls:?}"
-    );
-    assert!(
-        calls.iter().any(|call| {
-            matches!(
-                call,
-                PushCall::User(uid, s) if *uid == UserId::from(1) && *s == summary
-            )
-        }),
-        "the part owner (the session user) receives the frame, got {calls:?}"
-    );
-}
-
-#[tokio::test]
-async fn personal_write_routes_to_own_stream_not_pusher() {
-    // A write whose **request** session is personal routes the committed
-    // `Summary`'s frame to the executor's own `frames` channel (the personal
-    // stream) and NOT through the pusher (no shop stream, no part-owner push)
-    // — the frame's delivery keys on the request's session. The part created
-    // by `PartCreate` is owned by the session user (1) — the part owner.
-    let source = FakeSource { begin_fails: false };
-    let mut backoff = DbBackoff::new();
-    let (frames, mut frame_rx) = broadcast::channel(4);
-    let pusher = RecordingPusher::new();
-    // The write carries a personal session (the request's session).
-    let (request, reply) = Request::new_write(
-        Box::new(mock_session(UserId::from(1))),
-        ApiWrite::PartCreate {
-            name: "Personal Chain".to_string(),
-            vendor: "Shimano".to_string(),
-            model: "CN-HG62".to_string(),
-            what: CHAIN,
-            purchase: sample_purchase_date(),
-        },
-    );
-
-    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
-    assert!(result.is_ok(), "a committed write must not end the loop");
-    let outcome = reply
-        .await
-        .expect("the oneshot resolves")
-        .expect("the write succeeds");
-    let summary = outcome.summary().clone();
-
-    // The frame goes to the executor's own personal stream.
-    let frame = frame_rx
-        .try_recv()
-        .expect("a personal-context write pushes to the executor's own stream");
-    assert_eq!(frame, summary);
-    // And NOT through the pusher (no shop stream, no part-owner push).
-    assert!(
-        pusher.calls().is_empty(),
-        "a personal-context write must not route through the pusher, got {:?}",
         pusher.calls()
     );
 }
