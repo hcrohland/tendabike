@@ -2427,3 +2427,30 @@ async fn apiread_shop_reads() -> tb_domain::TbResult<()> {
     })
     .await
 }
+
+// ---------------------------------------------------------------------------
+// Shop: update (issue #641)
+// ---------------------------------------------------------------------------
+
+/// `ShopId::update` is a `RETURNING *` roundtrip: the updated name and
+/// auto-approve flag come back from the store (the owner check passes for the
+/// shop owner). The in-memory twin retired in #641 — this is the `RETURNING *`
+/// the sqlx seam was missing, now verified on the source of truth.
+#[tokio::test]
+#[ignore]
+async fn shop_update_owner_only() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let user = UserId::from(1);
+        let shop = ShopId::create("Workshop".to_string(), None, false, user, &mut store).await?;
+
+        let updated = shop
+            .id
+            .update("New Name".to_string(), None, true, user, &mut store)
+            .await?;
+        assert_eq!(updated.name, "New Name");
+        assert!(updated.auto_approve);
+
+        Ok(())
+    })
+    .await
+}
