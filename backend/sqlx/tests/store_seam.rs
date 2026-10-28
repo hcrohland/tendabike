@@ -1507,6 +1507,132 @@ async fn activity_read_rounds_offset_to_30_minutes() -> tb_domain::TbResult<()> 
 }
 
 // ---------------------------------------------------------------------------
+// Activity: rescan_all (issue #644)
+// ---------------------------------------------------------------------------
+//
+// `rescan_all` is a full rebuild: it deletes every usage row and re-derives
+// them from the persisted activities. Because it reads back the rows it just
+// re-derived, it needs real persistence and lives here on the source of truth
+// (Postgres); the `MockStore` suite in `tb_domain` drops it.
+
+/// rescan_all re-derives the part usage from the persisted activities: the
+/// prepopulated bike's usage is rebuilt to the sum of its three rides.
+#[tokio::test]
+#[ignore]
+async fn activity_rescan_all_rebuilds_part_usage() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let bike = PartId::from(1);
+
+        Activity::rescan_all(&mut store).await?;
+
+        // The part usage row is re-derived from the three fixture rides:
+        // 2525+2700+2800, 45000+45000+35000, 500+500+100, …, 1+1+1.
+        let part_usage = store.partid_get_part(bike).await?.usage;
+        let stored = store
+            .usage_get(part_usage)
+            .await?
+            .expect("the part usage row exists");
+        assert_eq!(stored.time, 8025);
+        assert_eq!(stored.distance, 125000);
+        assert_eq!(stored.climb, 1100);
+        assert_eq!(stored.descend, 1100);
+        assert_eq!(stored.energy, 1500);
+        assert_eq!(stored.count, 3);
+        Ok(())
+    })
+    .await
+}
+
+/// rescan_all re-registers every activity, including one added after the
+/// fixture: the bike usage is rebuilt to four rides.
+#[tokio::test]
+#[ignore]
+async fn activity_rescan_all_includes_newly_added_activity() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let session = test_session();
+        let bike = PartId::from(1);
+
+        // A fourth ride on the bike, added after the fixture.
+        let act = Activity {
+            time: Some(1000),
+            distance: Some(10000),
+            climb: Some(100),
+            descend: None,
+            energy: Some(200),
+            ..ride(100, "New Ride", activity_start(), Some(bike))
+        };
+        act.upsert(&session, &mut store).await?;
+
+        Activity::rescan_all(&mut store).await?;
+
+        // The rebuilt usage is the three fixture rides plus the new one:
+        // 8025+1000, 125000+10000, 1100+100, 1100+100, 1500+200, 3+1.
+        let part_usage = store.partid_get_part(bike).await?.usage;
+        let stored = store
+            .usage_get(part_usage)
+            .await?
+            .expect("the part usage row exists");
+        assert_eq!(stored.time, 9025);
+        assert_eq!(stored.distance, 135000);
+        assert_eq!(stored.climb, 1200);
+        assert_eq!(stored.descend, 1200);
+        assert_eq!(stored.energy, 1700);
+        assert_eq!(stored.count, 4);
+        Ok(())
+    })
+    .await
+}
+
+/// rescan_all rebuilds the service usage as well as the part usage: a service
+/// created after the fixture rides is re-derived through the register path.
+#[tokio::test]
+#[ignore]
+async fn activity_rescan_all_rebuilds_service_usage() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let bike = PartId::from(1);
+        // A service created after all fixture activities → aggregates all three.
+        let t = datetime!(2023-06-01 10:00 UTC);
+        let summary = Service::create(
+            bike,
+            t,
+            "Service".to_string(),
+            "".to_string(),
+            None,
+            vec![],
+            &mut store,
+        )
+        .await?;
+        let svc = sole_live(&summary.services);
+
+        Activity::rescan_all(&mut store).await?;
+
+        // The part usage row is re-derived from the three fixture rides.
+        let part_usage = store.partid_get_part(bike).await?.usage;
+        let part = store
+            .usage_get(part_usage)
+            .await?
+            .expect("the part usage row exists");
+        assert_eq!(part.time, 8025);
+        assert_eq!(part.count, 3);
+
+        // The service usage row is re-derived through the register path too.
+        let svc_usage = store
+            .usage_get(svc.usage)
+            .await?
+            .expect("the service usage row exists");
+        assert_eq!(svc_usage.id, svc.usage);
+        assert_eq!(svc_usage.time, 8025);
+        assert_eq!(svc_usage.distance, 125000);
+        assert_eq!(svc_usage.climb, 1100);
+        assert_eq!(svc_usage.descend, 1100);
+        assert_eq!(svc_usage.energy, 1500);
+        assert_eq!(svc_usage.count, 3);
+        Ok(())
+    })
+    .await
+}
+
+// ---------------------------------------------------------------------------
 // ApiWrite dispatch (issue #452)
 // ---------------------------------------------------------------------------
 //
