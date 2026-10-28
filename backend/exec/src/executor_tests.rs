@@ -335,7 +335,7 @@ mockall::mock! {
     impl ServicePlanStore for Conn {
         async fn serviceplan_create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
         async fn serviceplan_get(&mut self, plan: ServicePlanId) -> TbResult<ServicePlan>;
-        async fn plan_update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
+        async fn serviceplan_update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
         async fn serviceplan_delete(&mut self, plan: ServicePlanId) -> TbResult<usize>;
         async fn serviceplans_delete(&mut self, serviceplans: &[ServicePlan]) -> TbResult<usize>;
         async fn by_part(&mut self, part: PartId) -> TbResult<Vec<ServicePlan>>;

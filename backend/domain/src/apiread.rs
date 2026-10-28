@@ -187,7 +187,7 @@ pub async fn read(
         }
         // The light record-only read: just the `User` row, no `Summary`.
         ApiRead::UserRecord => {
-            let user = UserStore::user_get(store, session.user_id()).await?;
+            let user = session.user_id().record(store).await?;
             Ok(ReadOutcome::UserRecord(user))
         }
 

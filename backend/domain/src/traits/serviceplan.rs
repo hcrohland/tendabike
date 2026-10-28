@@ -5,7 +5,7 @@ use crate::{PartId, ServicePlan, ServicePlanId, TbResult, UserId};
 pub trait ServicePlanStore {
     async fn serviceplan_create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
     async fn serviceplan_get(&mut self, plan: ServicePlanId) -> TbResult<ServicePlan>;
-    async fn plan_update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
+    async fn serviceplan_update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
     async fn serviceplan_delete(&mut self, plan: ServicePlanId) -> TbResult<usize>;
 
     /// Deletes an array of serviceplans

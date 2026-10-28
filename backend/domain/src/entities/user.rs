@@ -167,6 +167,14 @@ impl UserId {
         Ok(UserState { user, summary })
     }
 
+    /// The lightweight record-only read: the bare [`User`] row, no [`Summary`].
+    /// For callers that need only the record — the onboarding guard, the
+    /// `ApiRead::UserRecord` webhook read — and must not pay for the full
+    /// [`UserState`] composite (spec #558 §3.5).
+    pub async fn record(&self, store: &mut impl UserStore) -> TbResult<User> {
+        UserStore::user_get(store, *self).await
+    }
+
     pub async fn get_public(self, store: &mut impl UserStore) -> TbResult<UserPublic> {
         let User {
             id,

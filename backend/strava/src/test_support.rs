@@ -19,17 +19,17 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 
+#[cfg(test)]
+use crate::event::Event;
+#[cfg(test)]
+use mockall::mock;
 use oauth2::RefreshToken;
 use tb_domain::{
     MockSession,
     test_support::{mock_session, mock_session_admin},
 };
+#[cfg(test)]
 use time::OffsetDateTime;
-
-#[cfg(test)]
-use crate::event::Event;
-#[cfg(test)]
-use mockall::mock;
 
 use crate::*;
 
@@ -304,7 +304,7 @@ mock! {
     impl ServicePlanStore for StravaConn {
         async fn serviceplan_create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
         async fn serviceplan_get(&mut self, plan: ServicePlanId) -> TbResult<ServicePlan>;
-        async fn plan_update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
+        async fn serviceplan_update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
         async fn serviceplan_delete(&mut self, plan: ServicePlanId) -> TbResult<usize>;
         async fn serviceplans_delete(&mut self, serviceplans: &[ServicePlan]) -> TbResult<usize>;
         async fn by_part(&mut self, part: PartId) -> TbResult<Vec<ServicePlan>>;

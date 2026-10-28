@@ -184,7 +184,7 @@ async fn service_plan_update_preserves_immutable_fields() -> TbResult<()> {
     store
         .expect_serviceplan_get()
         .returning(move |_| Ok(stored.clone()));
-    store.expect_plan_update().returning(Ok);
+    store.expect_serviceplan_update().returning(Ok);
 
     // Update only name; the immutable fields come back from the stored plan.
     let update = ServicePlan {

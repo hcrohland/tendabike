@@ -122,7 +122,7 @@ impl ServicePlan {
         self.what = plan.what;
         self.hook = plan.hook;
         self.uid = plan.uid;
-        store.plan_update(self).await
+        store.serviceplan_update(self).await
     }
 
     pub(crate) async fn for_part(
