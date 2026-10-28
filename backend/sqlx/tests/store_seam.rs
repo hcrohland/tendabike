@@ -675,6 +675,197 @@ async fn attach_detaches_predecessor() -> tb_domain::TbResult<()> {
     .await
 }
 
+/// Attaching a part with `all=true` shifts its subparts onto the gear and
+/// recalculates usage from the prepopulated activities (mirrors
+/// `attach_assembly_with_all_shifts_subparts_and_recalculates_usage`).
+#[tokio::test]
+#[ignore]
+async fn attach_with_all_shifts_subparts_and_recalculates_usage() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let session = test_session();
+        let bike = PartId::from(1);
+        let front_wheel = PartId::from(2);
+        let spare_wheel = PartId::from(16);
+        let spare_tire = PartId::from(17);
+
+        // The attach time is just before the second prepopulated activity
+        // (Hill Repeats, 2023-05-19T00:13:20Z).
+        let attach_at = round_time(datetime!(2023-05-19 00:13:20 UTC));
+        assert_eq!(attach_at, datetime!(2023-05-19 00:00:00 UTC));
+
+        let _ = attach_assembly(
+            &session,
+            spare_wheel,
+            attach_at,
+            bike,
+            BIKE,
+            true,
+            &mut store,
+        )
+        .await?;
+
+        let before = attach_at - time::Duration::hours(1);
+
+        // The bike's front wheel is cut at the swap; before the swap it only
+        // counts the morning ride (25, 50000, 400, 400, 500, 1). Descend is
+        // None in the activity, so it falls back to climb.
+        let old_fw = store
+            .attachment_get_by_part_and_time(front_wheel, before)
+            .await?
+            .expect("the front wheel is attached before the swap");
+        assert_eq!(old_fw.attached, datetime!(2023-01-01 00:00 UTC));
+        assert_eq!(old_fw.gear, bike);
+        assert_eq!(old_fw.hook, BIKE);
+        assert_eq!(old_fw.detached, attach_at);
+        let fw_usage = UsageStore::usage_get(&mut store, old_fw.usage)
+            .await?
+            .expect("the front wheel attachment usage exists");
+        assert_eq!(
+            fw_usage,
+            Usage {
+                id: old_fw.usage,
+                time: 25,
+                distance: 50000,
+                climb: 400,
+                descend: 400,
+                energy: 500,
+                count: 1,
+            }
+        );
+
+        // The spare wheel is mounted on the bike from the swap on; it counts
+        // the two later rides (5200+2800, 40000+35000, 600+100, 600+100,
+        // 500+500, 1+1).
+        let new_sw = store
+            .attachment_get_by_part_and_time(spare_wheel, attach_at)
+            .await?
+            .expect("the spare wheel is attached from the swap on");
+        assert_eq!(new_sw.attached, attach_at);
+        assert_eq!(new_sw.gear, bike);
+        assert_eq!(new_sw.hook, BIKE);
+        assert_eq!(new_sw.detached, MAX_TIME);
+        let sw_usage = UsageStore::usage_get(&mut store, new_sw.usage)
+            .await?
+            .expect("the spare wheel attachment usage exists");
+        assert_eq!(
+            sw_usage,
+            Usage {
+                id: new_sw.usage,
+                time: 8000,
+                distance: 75000,
+                climb: 700,
+                descend: 700,
+                energy: 1000,
+                count: 2,
+            }
+        );
+
+        // The spare tire moved onto the bike at the swap; its old row (on the
+        // spare wheel) is cut at the swap with zero usage since the wheel had
+        // no rides of its own.
+        let tire_old = store
+            .attachment_get_by_part_and_time(spare_tire, before)
+            .await?
+            .expect("the tire is attached to the spare wheel before the swap");
+        assert_eq!(tire_old.gear, spare_wheel);
+        assert_eq!(tire_old.hook, FRONT_WHEEL);
+        assert_eq!(tire_old.detached, attach_at);
+        let tire_old_usage = UsageStore::usage_get(&mut store, tire_old.usage)
+            .await?
+            .expect("the tire old attachment usage exists");
+        assert_eq!(tire_old_usage.time, 0);
+
+        // The tire's new row is on the bike from the swap on; it counts the
+        // two later rides.
+        let tire_new = store
+            .attachment_get_by_part_and_time(spare_tire, attach_at)
+            .await?
+            .expect("the tire is attached to the bike from the swap on");
+        assert_eq!(tire_new.gear, bike);
+        assert_eq!(tire_new.hook, FRONT_WHEEL);
+        assert_eq!(tire_new.detached, MAX_TIME);
+        let tire_new_usage = UsageStore::usage_get(&mut store, tire_new.usage)
+            .await?
+            .expect("the tire new attachment usage exists");
+        assert_eq!(
+            tire_new_usage,
+            Usage {
+                id: tire_new.usage,
+                time: 8000,
+                distance: 75000,
+                climb: 700,
+                descend: 700,
+                energy: 1000,
+                count: 2,
+            }
+        );
+
+        // The bike, rear wheel and chain are untouched: all three rides
+        // (25+5200+2800, 50000+40000+35000, 400+600+100, 400+600+100,
+        // 500+500+500, 1+1+1).
+        for pid in [bike, PartId::from(3), PartId::from(4)] {
+            let uid = store.partid_get_part(pid).await?.usage;
+            let stored = UsageStore::usage_get(&mut store, uid)
+                .await?
+                .expect("the part usage row exists");
+            assert_eq!(
+                stored,
+                Usage {
+                    id: uid,
+                    time: 8025,
+                    distance: 125000,
+                    climb: 1100,
+                    descend: 1100,
+                    energy: 1500,
+                    count: 3,
+                }
+            );
+        }
+
+        // The front wheel's part-level usage is the morning ride only.
+        let fw_part_uid = store.partid_get_part(front_wheel).await?.usage;
+        let fw_part_usage = UsageStore::usage_get(&mut store, fw_part_uid)
+            .await?
+            .expect("the front wheel part usage exists");
+        assert_eq!(
+            fw_part_usage,
+            Usage {
+                id: fw_part_uid,
+                time: 25,
+                distance: 50000,
+                climb: 400,
+                descend: 400,
+                energy: 500,
+                count: 1,
+            }
+        );
+
+        // The spare wheel and its tire: part-level usage is the two later
+        // rides.
+        for pid in [spare_wheel, spare_tire] {
+            let uid = store.partid_get_part(pid).await?.usage;
+            let stored = UsageStore::usage_get(&mut store, uid)
+                .await?
+                .expect("the part usage row exists");
+            assert_eq!(
+                stored,
+                Usage {
+                    id: uid,
+                    time: 8000,
+                    distance: 75000,
+                    climb: 700,
+                    descend: 700,
+                    energy: 1000,
+                    count: 2,
+                }
+            );
+        }
+
+        Ok(())
+    })
+    .await
+}
+
 // ---------------------------------------------------------------------------
 // Attachment: merge and delete (rules unified in #407)
 // ---------------------------------------------------------------------------
