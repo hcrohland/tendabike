@@ -1,4 +1,4 @@
-//! Rebuilds `src/test_support/prepopulated_data.rs` from the canonical workshop store.
+//! Rebuilds `src/prepopulated_data.rs` from the canonical workshop store.
 //!
 //! Run: `cargo run -p tb_domain --bin build-snapshot --features test-support`
 
@@ -25,15 +25,12 @@ async fn main() -> anyhow::Result<()> {
          //! Regenerate: cargo run -p tb_domain --bin build-snapshot --features test-support\n\
          \n\
          /// Formatted JSON snapshot of the prepopulated store.\n\
-         /// This is a pretty-printed JSON string that gets deserialized by MemStore::prepopulated().\n\
+         /// This is a pretty-printed JSON string that gets deserialized into `StoreSnapshot`.\n\
          pub const SNAPSHOT_JSON: &str = r#\"{}\"#;\n",
         json
     );
 
-    let path = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/src/test_support/prepopulated_data.rs"
-    );
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/prepopulated_data.rs");
     std::fs::write(path, &content)?;
     println!("Wrote {}", path);
 

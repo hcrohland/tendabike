@@ -16,17 +16,18 @@
 use super::MemStore;
 use super::fixtures::{sample_purchase_date, test_session};
 use super::part_type_ids::{BIKE, CHAIN, FRONT_WHEEL, REAR_WHEEL, TIRE};
+use crate::snapshot::{SNAPSHOT_JSON, StoreSnapshot};
 use crate::traits::UserStore;
 use crate::{
-    ActTypeId, Activity, Attachment, OffsetDateTime, Part, PartId, PartTypeId, Session, TbResult,
-    Usage, User, attach_assembly,
+    ActTypeId, Activity, OffsetDateTime, Part, PartId, PartTypeId, Session, TbResult,
+    attach_assembly,
 };
 
 impl MemStore {
     /// Returns a store prepopulated with workshop data.
     pub fn prepopulated() -> Self {
-        let snap: StoreSnapshot = serde_json::from_str(super::prepopulated_data::SNAPSHOT_JSON)
-            .expect("SNAPSHOT_JSON must be valid JSON");
+        let snap: StoreSnapshot =
+            serde_json::from_str(SNAPSHOT_JSON).expect("SNAPSHOT_JSON must be valid JSON");
 
         let store = Self::new();
         let mut data = super::StoreData::empty();
@@ -83,16 +84,6 @@ impl MemStore {
 }
 
 const ATTACH_TIME: OffsetDateTime = time::macros::datetime!(2023-01-01 00:00 UTC);
-
-/// Serializable snapshot of store data for JSON persistence.
-#[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct StoreSnapshot {
-    pub users: Vec<User>,
-    pub parts: Vec<Part>,
-    pub attachments: Vec<Attachment>,
-    pub usages: Vec<Usage>,
-    pub activities: Vec<Activity>,
-}
 
 impl MemStore {
     /// Export store data as a serializable snapshot, deterministically ordered.

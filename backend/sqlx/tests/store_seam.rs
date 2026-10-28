@@ -74,16 +74,15 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use tb_domain::test_support::{
-    MemStore, StoreSnapshot,
     fixtures::{sample_purchase_date, test_session},
     mock_session, only_tombstone, part_type_ids, sole_live,
 };
 use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, ApiRead, ApiWrite, Attachment, AttachmentStore,
     IdKeyedMap, MAX_TIME, OnboardingStatus, Part, PartId, PartNoteStore, PartStore, PartTypeId,
-    ReadOutcome, Service, ServicePlan, ServicePlanId, ServiceStore, ShopId, ShopStore,
-    SubscriptionId, Summary, Usage, UsageId, UsageStore, UserId, UserStore, attach_assembly,
-    detach_assembly, dispose_assembly, exec, read, round_time,
+    ReadOutcome, SNAPSHOT_JSON, Service, ServicePlan, ServicePlanId, ServiceStore, ShopId,
+    ShopStore, StoreSnapshot, SubscriptionId, Summary, Usage, UsageId, UsageStore, UserId,
+    UserStore, attach_assembly, detach_assembly, dispose_assembly, exec, read, round_time,
 };
 use time::{OffsetDateTime, macros::datetime};
 use tokio::sync::MutexGuard;
@@ -313,7 +312,7 @@ async fn database_is_reachable() {
 /// The standard prepopulated fixture, the same snapshot the in-memory suite
 /// uses.
 fn fixture() -> StoreSnapshot {
-    MemStore::prepopulated().snapshot()
+    serde_json::from_str(SNAPSHOT_JSON).expect("SNAPSHOT_JSON must be valid JSON")
 }
 
 /// The prepopulated fixture loads back from the database unchanged.

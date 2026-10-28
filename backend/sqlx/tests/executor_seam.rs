@@ -78,10 +78,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use tb_domain::test_support::{
-    MemStore, mock_session, mock_session_admin, mock_session_with_shop, part_type_ids::CHAIN,
-    sole_live,
+    mock_session, mock_session_admin, mock_session_with_shop, part_type_ids::CHAIN, sole_live,
 };
-use tb_domain::{ApiRead, ApiWrite, PartId, ReadOutcome, ShopId, Summary, UserId};
+use tb_domain::{ApiRead, ApiWrite, PartId, ReadOutcome, SNAPSHOT_JSON, ShopId, Summary, UserId};
 use tb_exec::{
     DetachedBegin, ExecutorStatus, FramePusher, Registry, Request, ServiceApi, request_channel, run,
 };
@@ -748,7 +747,10 @@ async fn gear_hydration_frame_and_fifo_read() {
 #[ignore]
 async fn gear_hydration_without_new_gear_pushes_no_frame() {
     let seam = ready().await;
-    let fixture_parts = MemStore::prepopulated().snapshot().parts.len();
+    let fixture_parts: usize = serde_json::from_str::<tb_domain::StoreSnapshot>(SNAPSHOT_JSON)
+        .expect("SNAPSHOT_JSON must be valid JSON")
+        .parts
+        .len();
     // The offline seam: the hydration's canned (empty) Strava athlete in the
     // process-wide `CANNED_STRAVA` global (the loop runs in a spawned task).
     canned_strava("/athlete", r#"{"bikes":[],"shoes":[]}"#);
@@ -817,7 +819,10 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
 #[ignore]
 async fn failed_write_rolls_back_and_reclaims() {
     let seam = ready().await;
-    let fixture_parts = MemStore::prepopulated().snapshot().parts.len();
+    let fixture_parts: usize = serde_json::from_str::<tb_domain::StoreSnapshot>(SNAPSHOT_JSON)
+        .expect("SNAPSHOT_JSON must be valid JSON")
+        .parts
+        .len();
 
     let (tx, rx) = request_channel();
     let (frames, _frame_rx) = broadcast::channel(8);

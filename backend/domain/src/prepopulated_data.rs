@@ -3,7 +3,7 @@
 //! Regenerate: cargo run -p tb_domain --bin build-snapshot --features test-support
 
 /// Formatted JSON snapshot of the prepopulated store.
-/// This is a pretty-printed JSON string that gets deserialized by MemStore::prepopulated().
+/// This is a pretty-printed JSON string that gets deserialized into `StoreSnapshot`.
 pub const SNAPSHOT_JSON: &str = r#"{
   "users": [
     {
