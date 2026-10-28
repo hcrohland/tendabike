@@ -18,9 +18,7 @@ mod mem_serviceplan;
 
 pub mod fixtures;
 
-mod mem_store;
 pub use crate::snapshot::StoreSnapshot;
-pub use mem_store::build_workshop_store;
 
 mod mock_store;
 pub use mock_store::MockStore;

@@ -418,6 +418,46 @@ pub async fn fresh_fixture(pool: &DbPool) -> tb_domain::TbResult<()> {
     Ok(())
 }
 
+/// The fixture builder (issue #647): seeds a scratch Postgres DB from the
+/// relocated `StoreSnapshot` fixture and returns a `Store` over that
+/// Postgres connection.
+///
+/// This is the Postgres-side counterpart that replaces the in-memory
+/// prepopulated store for the DB-required tests. `suffix` is appended to the
+/// scratch database name (the executor suite uses a suffixed database so the
+/// two suites don't drop each other's database out from under a parallel
+/// `cargo test` run); pass `None` for the base database.
+///
+/// The caller holds the suite's lock (the one-time setup and the pool
+/// connection are taken while the lock is held, so tests never contend for
+/// the database). The pool is local to this function: it is dropped when the
+/// function returns, and the transaction keeps the pool alive internally
+/// through its own `Arc` handle until it is rolled back.
+pub async fn build_workshop_store(suffix: Option<&str>) -> Result<SqlxConn<'static>, String> {
+    let url = match suffix {
+        Some(suffix) => suffixed_scratch_url(suffix),
+        None => scratch_url(),
+    };
+    let Some(url) = url else {
+        return Err(NO_SCRATCH_URL.to_string());
+    };
+    let marks = match SETUP.get_or_init(|| setup(&url)).await {
+        Setup::Ready(marks) => *marks,
+        Setup::Failed(err) => {
+            return Err(format!("the scratch database could not be prepared: {err}"));
+        }
+    };
+    let pool = pool(&url).await?;
+    let mut store = pool
+        .begin()
+        .await
+        .map_err(|err| format!("the scratch database could not be prepared: {err}"))?;
+    reset_sequences(&mut store, &marks)
+        .await
+        .map_err(|err| format!("the scratch database could not be prepared: {err}"))?;
+    Ok(store)
+}
+
 /// The body of a suite's `database_is_reachable` canary, shared by the
 /// suites: under the lock, wait for the run's one-time setup of the
 /// scratch database named by `url` — or fail the run loudly with the

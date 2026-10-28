@@ -187,12 +187,14 @@ async fn ready() -> ExecSeam {
         Some(url) => url,
         None => panic!("{NO_SCRATCH_URL}"),
     };
-    let setup = tokio::time::timeout(SETUP_STEP_TIMEOUT, SETUP.get_or_init(|| setup(&url)))
+    // The fixture builder seeds the scratch database from the `StoreSnapshot`
+    // fixture and returns a `Store` over that Postgres connection. The
+    // executor suite drops the transaction (it drives the loop over its own
+    // pool) but the builder's one-time setup (create, migrate, seed) is what
+    // the suite's pool is based on.
+    build_workshop_store(Some(DB_SUFFIX))
         .await
-        .expect("the scratch database setup must finish in time");
-    let Setup::Ready(_) = &setup else {
-        panic!("the executor scratch database could not be prepared: {setup:?}");
-    };
+        .expect("the executor scratch database could not be prepared");
     let pool = pool(&url)
         .await
         .expect("the scratch database pool could not be built");

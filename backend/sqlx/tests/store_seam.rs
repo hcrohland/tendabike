@@ -113,51 +113,15 @@ struct Seam {
 /// connection (and its no-op migration run) are taken while the lock is
 /// held, so tests never contend for the database.
 ///
-/// The pool is local to this test: it is dropped when the `Seam` is built,
-/// together with the test's runtime — the transaction keeps the pool alive
-/// internally through its own `Arc` handle until it is rolled back.
+/// The fixture builder (`build_workshop_store`) seeds the scratch database
+/// from the `StoreSnapshot` fixture and returns a `Store` over that Postgres
+/// connection. The pool is local to the builder: it is dropped when the
+/// builder returns, and the transaction keeps the pool alive internally
+/// through its own `Arc` handle until it is rolled back.
 async fn seam() -> Result<Seam, String> {
     let lock = LOCK.lock().await;
-    let Some(url) = scratch_url() else {
-        return Err(NO_SCRATCH_URL.to_string());
-    };
-    // The one-time setup runs inside the lock. A failure is recorded in the
-    // cell for `database_is_reachable` to report; every test that finds it
-    // failed fails loudly with the one root-cause string, so a broken
-    // scratch database turns the whole suite red instead of passing with
-    // nothing verified.
-    let marks = match SETUP.get_or_init(|| setup(&url)).await {
-        Setup::Ready(marks) => marks,
-        Setup::Failed(err) => {
-            return Err(format!("the scratch database could not be prepared: {err}"));
-        }
-    };
-    let pool = match pool(&url).await {
-        Ok(pool) => pool,
-        Err(err) => {
-            return Err(format!(
-                "the scratch database could not be prepared: could not connect \
-                 to the scratch database: {err}"
-            ));
-        }
-    };
-    let mut store = match pool.begin().await {
-        Ok(store) => store,
-        Err(err) => {
-            return Err(format!(
-                "the scratch database could not be prepared: could not begin a \
-                 test transaction: {err}"
-            ));
-        }
-    };
-    if let Err(err) = reset_sequences(&mut store, marks).await {
-        return Err(format!(
-            "the scratch database could not be prepared: could not reset the \
-             sequences: {err}"
-        ));
-    }
+    let store = build_workshop_store(None).await?;
     Ok(Seam { store, _lock: lock })
-    // `pool` is dropped here, with this test's runtime.
 }
 
 /// Run a test body against a fresh fixture transaction: opens the seam
