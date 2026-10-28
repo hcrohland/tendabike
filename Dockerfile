@@ -25,13 +25,13 @@ COPY backend/strava/Cargo.toml backend/strava/
 COPY backend/sqlx/Cargo.toml backend/sqlx/
 COPY backend/exec/Cargo.toml backend/exec/
 RUN mkdir -p backend/app/src \
-             backend/domain/src/bin \
+             backend/sqlx/src/bin \
              backend/axum/src \
              backend/strava/src \
              backend/sqlx/src \
              backend/exec/src \
     && printf 'fn main() {}\n' > backend/app/src/main.rs \
-    && printf 'fn main() {}\n' > backend/domain/src/bin/build_snapshot.rs \
+    && printf 'fn main() {}\n' > backend/sqlx/src/bin/build_snapshot.rs \
     && for f in backend/domain/src/lib.rs \
                 backend/axum/src/lib.rs \
                 backend/strava/src/lib.rs \
