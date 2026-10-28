@@ -21,7 +21,7 @@ This ADR records the design for replacing that poll with a message-based executo
 ## Rejected alternatives
 
 - **Keep the poll (with or without a feature flag).** The poll's 60-second ceiling is the motivation for the whole effort; keeping it as a fallback would preserve the ceiling and a second write path that bypasses the executor's per-user serialization.
-- **Put the loop in `tb_axum` or `tb_domain`.** `tb_axum` is the web layer; a long-lived per-user task with a transaction lifecycle is domain-adjacent machinery, not presentation. `tb_domain` cannot host the `Txn` trait without a `tb_domain → tb_exec` cycle (the in-memory store must not implement `Txn`). A new `tb_exec` crate keeps the loop and its seam in one place, with the `StravaStore` bound on the loop, not the domain.
+- **Put the loop in `tb_axum` or `tb_domain`.** `tb_axum` is the web layer; a long-lived per-user task with a transaction lifecycle is domain-adjacent machinery, not presentation. `tb_domain` cannot host the `Txn` trait without a `tb_domain → tb_exec` cycle (the `MemStore` must not implement `Txn`). A new `tb_exec` crate keeps the loop and its seam in one place, with the `StravaStore` bound on the loop, not the domain.
 - **A supervisor that restarts a panicked executor.** The client's reconnect + full refresh is the recovery path; a supervisor would hide the visible alarm (the persistent spinner) that a poison event produces.
 
 ## Consequences

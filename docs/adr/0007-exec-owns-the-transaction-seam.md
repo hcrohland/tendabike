@@ -26,7 +26,7 @@ The full executable spec is issue [#558](https://github.com/hcrohland/tendabike/
 ## Consequences
 
 - Crate graph: `tb_axum` loses its `TxnSource` genericity (`AppState` holds `Arc<dyn ServiceApi>`); the composition root (`app`) builds the `Registry` over the `DbPool`. `tb_domain` gains the read side (`ApiRead`, `ReadOutcome`, the dispatch, the user-composite) bounded by `Store`; `tb_strava` gains `StravaUserSession`.
-- The in-memory seam doubles (`LiveSource`/`LiveConn`/`FakeSource`/`FakeConn`) are deleted, not moved; the axum suite becomes pure HTTP-contract tests against a recording `StubApi` (no loop, no in-memory store).
+- The in-memory seam doubles (`LiveSource`/`LiveConn`/`FakeSource`/`FakeConn`) are deleted, not moved; the axum suite becomes pure HTTP-contract tests against a recording `StubApi` (no loop, no `MemStore`).
 - The both-stores contract governs the test split: Postgres is the source of truth for database behavior; the in-memory store follows at the call level only.
 - The HTTP contract (routes, status codes, response bodies) is unchanged. The only intentional behavior deltas are the all-users sync's per-user wake and the `update_gear` hydration frame — both internal.
 - The single-node assumption stands (ADR-0005); multi-node is out of scope.

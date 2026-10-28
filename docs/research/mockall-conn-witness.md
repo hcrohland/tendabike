@@ -37,7 +37,7 @@ scrutiny, the recipe remains the viable mockall route.
   method-free marker over the nine sub-traits. Every method-carrying trait is
   `#[async_trait]`.
 - `mockall` is not a dependency anywhere in the workspace; the established
-  pattern is hand-rolled doubles (`FakeConn`, `LiveConn`, the in-memory store,
+  pattern is hand-rolled doubles (`FakeConn`, `LiveConn`, `MemStore`,
   `TestStravaStore`).
 
 ## 1. Verified `mock!` capabilities (scratch-crate matrix)
