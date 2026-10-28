@@ -36,10 +36,11 @@
 //!
 //! The loop computes no domain state of its own: it drives the existing
 //! `ApiWrite` dispatch and `tb_strava` event processing inside transactions
-//! it owns. `MemStore` deliberately implements neither trait (a
-//! `tb_domain` → `tb_exec` dependency would be a cycle); the seam's Postgres
-//! half lives in `tb_sqlx`, and the transaction integration is verified
-//! against real Postgres in `tb_sqlx`'s `tests/executor_seam.rs`.
+//! it owns. The seam's Postgres half lives in `tb_sqlx`, and the transaction
+//! integration is verified against real Postgres in `tb_sqlx`'s
+//! `tests/executor_seam.rs`; the unit tests stand in for the seam with a
+//! `mockall` `mock!` witness (the `MockConn` in `executor_tests`), not a
+//! hand-rolled store.
 
 mod api;
 mod executor;

@@ -15,7 +15,7 @@ impl ServicePlanId {
     }
 
     async fn get(self, store: &mut impl ServicePlanStore) -> TbResult<ServicePlan> {
-        store.get(self).await
+        store.serviceplan_get(self).await
     }
 
     pub async fn delete(
@@ -34,7 +34,7 @@ impl ServicePlanId {
         let res = Service::unlink_plan(self, owner, store).await?;
 
         // delete service plan
-        ServicePlanStore::delete(store, self).await?;
+        ServicePlanStore::serviceplan_delete(store, self).await?;
         Ok(res)
     }
 }
@@ -107,7 +107,7 @@ impl ServicePlan {
             Some(_) => None,
             None => Some(user.user_id()),
         };
-        store.create(self).await
+        store.serviceplan_create(self).await
     }
 
     pub async fn update(
@@ -122,7 +122,7 @@ impl ServicePlan {
         self.what = plan.what;
         self.hook = plan.hook;
         self.uid = plan.uid;
-        store.plan_update(self).await
+        store.serviceplan_update(self).await
     }
 
     pub(crate) async fn for_part(

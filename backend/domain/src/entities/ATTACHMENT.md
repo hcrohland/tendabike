@@ -276,9 +276,9 @@ Test coverage lives in `domain/src/entities/attachment/attachment_tests.rs` with
 
 **Test infrastructure**:
 
-- `MemStore` in-memory implementation of all store traits
-- `TestSession` with user/shop context
-- Fixtures: `fixture_basic_part()`, `fixture_assembly()`, `fixture_timeline()`, `fixture_concurrent_parts()`
+- `MockStore` — the `mockall` `mock!` store double (all store traits on one type)
+- `mock_session` / `mock_session_with_shop` / `mock_session_admin` for the session
+- Helpers: `test_user()`, `test_session()`, `sample_purchase_date()` (fixed times; the suite has no wall clock)
 - Part type constants: 17 uppercase constants in `test_support/part_type_ids`
 
 ---

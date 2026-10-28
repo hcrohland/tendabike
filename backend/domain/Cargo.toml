@@ -7,11 +7,6 @@ edition = { workspace = true }
 [features]
 test-support = ["dep:tokio", "dep:mockall"]
 
-[[bin]]
-name = "build-snapshot"
-path = "src/bin/build_snapshot.rs"
-required-features = ["test-support"]
-
 [dependencies]
 
 csv = "1.3"

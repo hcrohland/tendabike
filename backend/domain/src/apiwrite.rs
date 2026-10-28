@@ -34,9 +34,9 @@
 //! the current axum handler makes, minus the HTTP extraction and minus
 //! `begin`/`commit`: the loop drives the transaction, and this runs inside
 //! one live connection. It is bounded by the `Store` marker, not by the
-//! caller's `Txn` trait, so it stays verifiable on both adapters
-//! (`MemStore` and `SqlxConn`) per the store-seam contract, with the
-//! Postgres behavior as the source of truth.
+//! caller's `Txn` trait, so it stays verifiable on the `MockStore` double
+//! and on `SqlxConn` per the store-seam contract, with the Postgres
+//! behavior as the source of truth.
 //!
 //! The return is the `Summary` of everything the operation touched, per the
 //! write contract in `docs/agents/domain-flow.md`, wrapped in a
@@ -280,9 +280,9 @@ impl WriteOutcome {
 /// (the same `BadRequest` messages as the webhook handlers) and the status
 /// update. The Strava-side sync event is deliberately not part of this
 /// crate: the domain cannot depend on the Strava driver (the dependency
-/// direction is `domain ← strava`), and the in-memory `MemStore` is not a
-/// `StravaStore`. The cutover ticket (issue #457) enqueues a sync `Event`
-/// on the user's channel for `UserOnboardingSync`.
+/// direction is `domain ← strava`), and the domain's store bound is `Store`,
+/// not a `StravaStore`. The cutover ticket (issue #457) enqueues a sync
+/// `Event` on the user's channel for `UserOnboardingSync`.
 ///
 /// Returns the `Summary` of everything the operation touched (see the module
 /// docs for how bare-entity results, tombstones, and the non-Summary
@@ -548,7 +548,7 @@ pub async fn exec(
             // onboarding status, not the `UserState` composite (this is a
             // write path — spec #558 §3.5's composite is for the per-user
             // routes only).
-            let user = UserStore::get(store, session.user_id()).await?;
+            let user = session.user_id().record(store).await?;
             if user.onboarding_status.is_initial_sync_completed() {
                 return Err(Error::BadRequest(
                     "Initial sync already triggered".to_string(),
@@ -560,7 +560,7 @@ pub async fn exec(
             Ok(WriteOutcome::Summary(Summary::default()))
         }
         ApiWrite::UserOnboardingPostpone => {
-            let user = UserStore::get(store, session.user_id()).await?;
+            let user = session.user_id().record(store).await?;
             if user.onboarding_status != OnboardingStatus::Pending {
                 return Err(Error::BadRequest(
                     "Initial sync already completed or postponed".to_string(),

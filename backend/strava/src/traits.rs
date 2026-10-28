@@ -89,7 +89,7 @@ pub trait StravaDataStore: Send {
     async fn stravauser_update_token(
         &mut self,
         stravaid: StravaId,
-        refresh: Option<&String>,
+        refresh: Option<String>,
     ) -> TbResult<StravaUser>;
 
     /// Deletes the Strava user with the given TendaBike user ID.

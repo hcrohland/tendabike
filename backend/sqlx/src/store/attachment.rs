@@ -78,7 +78,7 @@ impl<'c> tb_domain::AttachmentStore for SqlxConn<'c> {
         .map(Into::into)
     }
 
-    async fn delete(&mut self, att: Attachment) -> TbResult<Attachment> {
+    async fn attachment_delete(&mut self, att: Attachment) -> TbResult<Attachment> {
         let att: DbAttachment = att.into();
         sqlx::query_as!(
             DbAttachment,

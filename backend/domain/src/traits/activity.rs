@@ -10,8 +10,7 @@ pub trait ActivityStore {
     ///
     /// The activity id is a primary key: an id the store already holds
     /// fails the create with [`crate::Error::DatabaseFailure`] — the
-    /// database's INSERT hits the key, and the in-memory store applies the
-    /// same one rule (issue #405).
+    /// database's INSERT hits the key (issue #405).
     ///
     /// # Arguments
     ///

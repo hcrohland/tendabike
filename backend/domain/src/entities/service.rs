@@ -16,7 +16,7 @@ impl ServiceId {
     }
 
     async fn get(self, store: &mut impl ServiceStore) -> TbResult<Service> {
-        ServiceStore::get(store, self).await
+        ServiceStore::service_get(store, self).await
     }
 
     pub async fn delete(
@@ -38,14 +38,14 @@ impl ServiceId {
         let mut summary = Summary::default();
         for mut s in services {
             s.successor = None;
-            let s = ServiceStore::update(store, s).await?;
+            let s = ServiceStore::service_update(store, s).await?;
             summary.services.upsert(s);
         }
 
         // delete service: it is reported as a None tombstone, so the
         // client's merge drops its row (issue #462)
         service.usage.delete(store).await?;
-        ServiceStore::delete(store, self).await?;
+        ServiceStore::service_delete(store, self).await?;
         summary.services.tombstone(service.key());
         Ok(summary)
     }
@@ -107,7 +107,7 @@ impl Service {
             plans,
         };
         let usage = service.calculate_usage(store).await?.update(store).await?;
-        let service = ServiceStore::create(store, service).await?;
+        let service = ServiceStore::service_create(store, service).await?;
         let mut summary = Summary::default();
         summary.services.upsert(service);
         summary.usages.upsert(usage);
@@ -182,7 +182,7 @@ impl Service {
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<Summary> {
         let usages = vec![self.calculate_usage(store).await?.update(store).await?];
-        let services = vec![ServiceStore::update(store, self).await?];
+        let services = vec![ServiceStore::service_update(store, self).await?];
         let mut summary = Summary::default();
         summary.usages.upsert_all(usages);
         summary.services.upsert_all(services);
@@ -257,7 +257,7 @@ impl Service {
             for mut service in store.services_by_part(part.id).await? {
                 if service.plans.contains(&plan) {
                     service.plans.retain(|p| *p != plan);
-                    res.push(store.update(service).await?);
+                    res.push(store.service_update(service).await?);
                 }
             }
         }

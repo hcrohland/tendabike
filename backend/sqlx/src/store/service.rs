@@ -80,7 +80,7 @@ impl From<DbService> for Service {
 
 #[async_trait::async_trait]
 impl<'c> tb_domain::ServiceStore for SqlxConn<'c> {
-    async fn create(&mut self, service: Service) -> TbResult<Service> {
+    async fn service_create(&mut self, service: Service) -> TbResult<Service> {
         let service: DbService = service.into();
         sqlx::query_as!(
             DbService,
@@ -103,7 +103,7 @@ impl<'c> tb_domain::ServiceStore for SqlxConn<'c> {
         .map(Into::into)
     }
 
-    async fn get(&mut self, service: ServiceId) -> TbResult<Service> {
+    async fn service_get(&mut self, service: ServiceId) -> TbResult<Service> {
         sqlx::query_as!(
             DbService,
             r#"SELECT id, part_id, time, redone, name, notes, usage, successor, plans as "plans!" FROM services WHERE id = $1"#,
@@ -115,7 +115,7 @@ impl<'c> tb_domain::ServiceStore for SqlxConn<'c> {
         .map(Into::into)
     }
 
-    async fn update(&mut self, service: Service) -> TbResult<Service> {
+    async fn service_update(&mut self, service: Service) -> TbResult<Service> {
         let service: DbService = service.into();
         sqlx::query_as!(
             DbService,
@@ -140,7 +140,7 @@ impl<'c> tb_domain::ServiceStore for SqlxConn<'c> {
         .map(Into::into)
     }
 
-    async fn delete(&mut self, service: ServiceId) -> TbResult<usize> {
+    async fn service_delete(&mut self, service: ServiceId) -> TbResult<usize> {
         let result = sqlx::query!("DELETE FROM services WHERE id = $1", Uuid::from(service))
             .execute(&mut **self.inner())
             .await

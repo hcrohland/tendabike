@@ -42,7 +42,7 @@
 //! transaction (one loop-owned transaction per message, read-only within it
 //! by spec), and `read` runs inside one live connection. It is bounded by
 //! the `Store` marker, not by the caller's `Txn` trait, so it stays
-//! verifiable on both adapters (`MemStore` and `SqlxConn`) per the
+//! verifiable on the `MockStore` double and on `SqlxConn` per the
 //! store-seam contract, with the Postgres behavior as the source of truth.
 //!
 //! The return is the read's data wrapped in a [`ReadOutcome`], a sealed enum
@@ -187,7 +187,7 @@ pub async fn read(
         }
         // The light record-only read: just the `User` row, no `Summary`.
         ApiRead::UserRecord => {
-            let user = UserStore::get(store, session.user_id()).await?;
+            let user = session.user_id().record(store).await?;
             Ok(ReadOutcome::UserRecord(user))
         }
 

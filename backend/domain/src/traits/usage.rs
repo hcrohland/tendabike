@@ -13,7 +13,7 @@ pub trait UsageStore {
     ///
     /// Returns the Usage object if the Usage exists, None if not
     /// Might returns an error from underlying storage system.
-    async fn get(&mut self, uid: UsageId) -> TbResult<Option<Usage>>;
+    async fn usage_get(&mut self, uid: UsageId) -> TbResult<Option<Usage>>;
 
     /// Changes an array of `Usage` objects.
     /// Might delete the Usages on the store if it is all zero
@@ -26,9 +26,7 @@ pub trait UsageStore {
     /// # Returns
     ///
     /// Returns the updated `Usage` object if it was successfully updated, otherwise returns an error.
-    async fn update<U>(&mut self, usage: &[U]) -> TbResult<usize>
-    where
-        U: std::borrow::Borrow<Usage> + Sync;
+    async fn usages_update(&mut self, usage: &[Usage]) -> TbResult<usize>;
 
     /// Delete the Usage
     ///
@@ -39,7 +37,7 @@ pub trait UsageStore {
     /// # Returns
     ///
     /// Returns the number of deleted objects or returns an error.
-    async fn delete(&mut self, usage: UsageId) -> TbResult<Usage>;
+    async fn usage_delete(&mut self, usage: UsageId) -> TbResult<Usage>;
 
     /// Deletes an array of usages
     ///

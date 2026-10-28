@@ -1,14 +1,23 @@
+//! The `Attachment` entity tests over a canned [`MockStore`] (issue #645).
+//!
+//! Each test runs the real attachment domain logic — the computing ops
+//! `attach_assembly` / `detach_assembly` / `dispose_assembly` /
+//! `recover_assembly` / `shift` (predecessor auto-detach, adjacent-merge,
+//! subpart cascading, tombstone-on-detach, and the permission/ownership
+//! checks) — over a [`MockStore`] whose methods return canned rows. The
+//! domain logic runs for real; only the store I/O is canned, and no test
+//! reads back a row it just wrote. The persistence pass-throughs (the
+//! `AttachmentStore` query methods) and the exact usage values driven by the
+//! prepopulated activity data are verified on the sqlx seam,
+//! `sqlx/tests/store_seam.rs`, where Postgres is the source of truth; the
+//! thin read-wrappers and the subsumed cases are dropped.
+
 use super::*;
-use crate::Summary;
-use crate::test_support::{self, MemStore, fixtures, mock_session, part_type_ids};
-use time::OffsetDateTime;
-use time::macros::datetime;
+use crate::test_support::{MockStore, fixtures, mock_session, part_type_ids, sole_live};
 
-// Re-export PartTypeId constants for tests (UPPERCASE per Rust conventions)
+use fixtures::{sample_purchase_date, test_session, test_user};
 use part_type_ids::*;
-
-use crate::traits::UsageStore;
-use fixtures::{sample_purchase_date, test_session};
+use time::macros::datetime;
 
 fn attachment_time() -> OffsetDateTime {
     datetime!(2024-01-01 00:00 UTC)
@@ -16,10 +25,6 @@ fn attachment_time() -> OffsetDateTime {
 
 fn later_time() -> OffsetDateTime {
     datetime!(2024-06-01 00:00 UTC)
-}
-
-fn very_late_time() -> OffsetDateTime {
-    datetime!(2025-01-01 00:00 UTC)
 }
 
 fn bike_id() -> PartId {
@@ -30,7 +35,78 @@ fn chain_id() -> PartId {
     PartId::from(2)
 }
 
-// === Attachment::new() tests ===
+// ---------------------------------------------------------------------------
+// Canned row builders
+// ---------------------------------------------------------------------------
+
+/// A canned `Part` row: the minimal shape the domain logic needs (id + owner +
+/// type + its usage id). `purchase` and `last_used` sit well before the
+/// attach times, so `update_timestamps` bumps `last_used` (a canned write).
+fn part_row(id: PartId, owner: UserId, what: PartTypeId, usage: UsageId) -> Part {
+    Part {
+        id,
+        owner,
+        what,
+        name: "Main Bike".to_string(),
+        vendor: "TendaBike".to_string(),
+        model: "Standard".to_string(),
+        purchase: sample_purchase_date() - time::Duration::days(365),
+        last_used: sample_purchase_date() - time::Duration::days(365),
+        disposed_at: None,
+        usage,
+        source: None,
+        shop: None,
+    }
+}
+
+/// A canned `Attachment` row.
+fn att(
+    part: PartId,
+    attached: OffsetDateTime,
+    gear: PartId,
+    hook: PartTypeId,
+    detached: OffsetDateTime,
+    usage: UsageId,
+) -> Attachment {
+    Attachment {
+        part_id: part,
+        attached,
+        gear,
+        hook,
+        detached,
+        usage,
+    }
+}
+
+/// Wire the canned reads/writes the `Attachment::create` path performs: a
+/// zero-activity usage, a `last_used` bump, the stored row, no services, and
+/// the bulk usage write. The domain computes the (zero) usage in memory from
+/// these canned inputs — no test reads back a row it just wrote.
+fn wire_create_path(store: &mut MockStore) {
+    store
+        .expect_activities_find_by_gear_and_time()
+        .returning(|_, _, _| Ok(vec![]));
+    store.expect_part_update().returning(Ok);
+    store.expect_usage_get().returning(|_| Ok(None));
+    store.expect_attachment_create().returning(Ok);
+    store.expect_services_by_part().returning(|_| Ok(vec![]));
+    store.expect_usages_update().returning(|_| Ok(1));
+}
+
+/// Wire the canned reads/writes the `Attachment::delete` path performs (the
+/// part read and the usage bulk-write it shares with `create` are wired
+/// separately, per test).
+fn wire_delete_path(store: &mut MockStore) {
+    store.expect_attachment_delete().returning(Ok);
+    store
+        .expect_usage_delete()
+        .returning(|_| Ok(Usage::default()));
+    store.expect_services_by_part().returning(|_| Ok(vec![]));
+    store.expect_usage_get().returning(|_| Ok(None));
+    store.expect_usages_update().returning(|_| Ok(1));
+}
+
+// === Suite 1: Attachment::new — value logic (no store) ===
 
 /// new() creates an attachment with the correct fields
 #[test]
@@ -65,3166 +141,929 @@ fn new_allows_explicit_detached_time() {
     assert_eq!(a.detached, later_time());
 }
 
-// === subparts() tests ===
+// === Suite 2: attach_assembly ===
 
-/// subparts() returns empty list for a part with no children attached
-#[tokio::test]
-async fn subparts_empty_for_no_children() -> TbResult<()> {
-    let mut store = test_support::MemStore::prepopulated();
-
-    let part = test_support::fixtures::fixture_bike(&test_session(), &mut store).await?;
-
-    let result = subparts(part.id, attachment_time(), &mut store).await?;
-    assert!(result.is_empty());
-    Ok(())
-}
-
-/// subparts() returns subpart PartIds that are attached at the given time
-#[tokio::test]
-async fn subparts_returns_children_attached_at_time() -> TbResult<()> {
-    let mut store = test_support::MemStore::prepopulated();
-
-    let (main_part, assembly_subparts, _att) =
-        test_support::fixtures::fixture_assembly(&test_session(), &mut store, attachment_time())
-            .await?;
-
-    // subparts of main_part at attachment_time should include its subparts
-    let result = subparts(main_part.id, attachment_time(), &mut store).await?;
-    assert_eq!(result.len(), assembly_subparts.len());
-    for subpart in &assembly_subparts {
-        assert!(result.contains(&subpart.id));
-    }
-
-    // subparts of a subpart should be empty (no children)
-    let result = subparts(assembly_subparts[0].id, attachment_time(), &mut store).await?;
-    assert!(result.is_empty());
-
-    Ok(())
-}
-
-/// subparts() excludes parts that were detached before the given time
-#[tokio::test]
-async fn subparts_excludes_detached_subparts() -> TbResult<()> {
-    let mut store = test_support::MemStore::prepopulated();
-
-    let bike = test_support::fixtures::fixture_bike(&test_session(), &mut store).await?;
-
-    let wheel = Part::create(
-        "Wheel".to_string(),
-        "Brand".to_string(),
-        "Model".to_string(),
-        FRONT_WHEEL,
-        None,
-        attachment_time() - time::Duration::days(180),
-        &test_session(),
-        &mut store,
-    )
-    .await?;
-
-    // Wheel was attached and then detached before very_late_time
-    let _att = store
-        .attachment_create(Attachment::new(
-            wheel.id,
-            attachment_time(),
-            bike.id,
-            FRONT_WHEEL,
-            very_late_time(), // detached at very_late_time
-        ))
-        .await?;
-
-    // At attachment_time, subparts should include wheel
-    let result = subparts(bike.id, attachment_time(), &mut store).await?;
-    assert_eq!(result.len(), 1);
-
-    // At very_late_time, the wheel is no longer attached (detached AT this time)
-    let result = subparts(bike.id, very_late_time(), &mut store).await?;
-    assert!(result.is_empty());
-
-    Ok(())
-}
-
-// === for_part_with_usage() tests ===
-
-/// for_part_with_usage() returns empty when no attachments exist
-#[tokio::test]
-async fn for_part_with_usage_empty_for_no_attachments() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-
-    let bike = test_support::fixtures::fixture_bike(&test_session(), &mut store).await?;
-
-    let (attachments, usages) = Attachment::for_part_with_usage(bike.id, &mut store).await?;
-    assert!(attachments.is_empty());
-    assert!(usages.is_empty());
-
-    Ok(())
-}
-
-/// for_part_with_usage() returns attachments with details and usages
-#[tokio::test]
-async fn for_part_with_usage_returns_attachments_with_details() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-
-    let bike = test_support::fixtures::fixture_bike(&test_session(), &mut store).await?;
-
-    let chain = Part::create(
-        "Chain".to_string(),
-        "SRAM".to_string(),
-        "GX Eagle".to_string(),
-        CHAIN,
-        None,
-        attachment_time() - time::Duration::days(90),
-        &test_session(),
-        &mut store,
-    )
-    .await?;
-
-    let _att = store
-        .attachment_create(Attachment::new(
-            chain.id,
-            attachment_time(),
-            bike.id,
-            CHAIN,
-            MAX_TIME,
-        ))
-        .await?;
-
-    let (attachments, usages) = Attachment::for_part_with_usage(chain.id, &mut store).await?;
-
-    assert_eq!(attachments.len(), 1);
-    let detail = &attachments[0];
-    assert_eq!(detail.a.part_id, chain.id);
-    assert_eq!(detail.a.gear, bike.id);
-    // Name should have been set from the part's name during attachment creation
-    assert_eq!(detail.name, "Chain");
-    assert_eq!(detail.what, CHAIN);
-
-    // Usage should be populated (default usage + calculated)
-    assert_eq!(usages.len(), 1);
-
-    Ok(())
-}
-
-/// for_part_with_usage() returns all attachments for a part (multiple timeline entries)
-#[tokio::test]
-async fn for_part_with_usage_returns_all_timeline_entries() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-
-    let bike = test_support::fixtures::fixture_bike(&test_session(), &mut store).await?;
-
-    let chain1 = Part::create(
-        "Chain 1".to_string(),
-        "SRAM".to_string(),
-        "PC-1130".to_string(),
-        CHAIN,
-        None,
-        attachment_time() - time::Duration::days(90),
-        &test_session(),
-        &mut store,
-    )
-    .await?;
-
-    let chain2 = Part::create(
-        "Chain 2".to_string(),
-        "KMC".to_string(),
-        "X11".to_string(),
-        CHAIN,
-        None,
-        later_time() - time::Duration::days(30),
-        &test_session(),
-        &mut store,
-    )
-    .await?;
-
-    // First chain attached then detached
-    let _att1 = store
-        .attachment_create(Attachment::new(
-            chain1.id,
-            attachment_time(),
-            bike.id,
-            CHAIN,
-            later_time(),
-        ))
-        .await?;
-
-    // Second chain attached
-    let _att2 = store
-        .attachment_create(Attachment::new(
-            chain2.id,
-            later_time(),
-            bike.id,
-            CHAIN,
-            MAX_TIME,
-        ))
-        .await?;
-
-    let (attachments, _usages) = Attachment::for_part_with_usage(chain1.id, &mut store).await?;
-
-    // Only chain1's attachment should be in results (chain2 uses different part_id)
-    assert_eq!(attachments.len(), 1);
-    assert_eq!(attachments[0].a.part_id, chain1.id);
-
-    let (attachments2, _usages2) = Attachment::for_part_with_usage(chain2.id, &mut store).await?;
-    assert_eq!(attachments2.len(), 1);
-    assert_eq!(attachments2[0].a.part_id, chain2.id);
-
-    Ok(())
-}
-
-// === detach_assembly() tests ===
-
-/// detach_assembly() with all=true detaches subparts too
-#[tokio::test]
-async fn detach_assembly_with_all_detaches_subparts() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-
-    // Create bike
-    let bike = test_support::fixtures::fixture_bike(&test_session(), &mut store).await?;
-
-    // Create wheel (subtype of Bike)
-    let wheel = Part::create(
-        "Wheel".to_string(),
-        "Brand".to_string(),
-        "Model".to_string(),
-        FRONT_WHEEL,
-        None,
-        attachment_time() - time::Duration::days(180),
-        &test_session(),
-        &mut store,
-    )
-    .await?;
-
-    // Create chain (subtype of Bike)
-    let chain = Part::create(
-        "Chain".to_string(),
-        "SRAM".to_string(),
-        "GX Eagle".to_string(),
-        CHAIN,
-        None,
-        attachment_time() - time::Duration::days(90),
-        &test_session(),
-        &mut store,
-    )
-    .await?;
-
-    // Attach wheel to bike
-    let _att_wheel = store
-        .attachment_create(Attachment::new(
-            wheel.id,
-            attachment_time(),
-            bike.id,
-            FRONT_WHEEL,
-            MAX_TIME,
-        ))
-        .await?;
-
-    // Attach chain to bike (chain is a subpart of wheel via tire hooks)
-    let att_chain = store
-        .attachment_create(Attachment::new(
-            chain.id,
-            attachment_time(),
-            bike.id,
-            CHAIN,
-            MAX_TIME,
-        ))
-        .await?;
-
-    // Detach chain assembly with all=false (only detach chain)
-    let _summary = att_chain
-        .detach_assembly(later_time(), false, &mut store)
-        .await?;
-
-    // Wheel should still be attached to bike
-    let wheel_att = store
-        .attachment_get_by_part_and_time(wheel.id, attachment_time() + time::Duration::seconds(1))
-        .await?;
-    assert!(wheel_att.is_some());
-
-    Ok(())
-}
-
-// === shift() tests ===
-
-/// shift() creates a detach and re-attach operation on timeline
-#[tokio::test]
-async fn shift_changes_gear_and_creates_detach() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        attachment_time() - time::Duration::days(365),
-        &test_session(),
-        &mut store,
-    )
-    .await?;
-
-    let wheel = Part::create(
-        "Wheel".to_string(),
-        "Brand".to_string(),
-        "Model".to_string(),
-        FRONT_WHEEL,
-        None,
-        attachment_time() - time::Duration::days(180),
-        &test_session(),
-        &mut store,
-    )
-    .await?;
-
-    // Create another bike (the shift target)
-    let bike2 = Part::create(
-        "Bike 2".to_string(),
-        "TendaBike".to_string(),
-        "Standard 2".to_string(),
-        BIKE,
-        None,
-        attachment_time() - time::Duration::days(365),
-        &test_session(),
-        &mut store,
-    )
-    .await?;
-
-    // Attach wheel to first bike
-    let _att = store
-        .attachment_create(Attachment::new(
-            wheel.id,
-            attachment_time(),
-            bike.id,
-            FRONT_WHEEL,
-            MAX_TIME,
-        ))
-        .await?;
-
-    // Get the attachment and shift it to bike2
-    let att = store
-        .attachment_get_by_part_and_time(wheel.id, attachment_time())
-        .await?
-        .unwrap();
-
-    assert_eq!(att.gear, bike.id);
-
-    let mut summary = Summary::default();
-    let end_time = att
-        .shift(later_time(), bike2.id, &mut summary, &mut store)
-        .await?;
-
-    // After shift, the wheel should be attached to bike2, not bike
-    let new_att = store
-        .attachment_get_by_part_and_time(wheel.id, later_time() + time::Duration::seconds(1))
-        .await?;
-    assert!(new_att.is_some());
-    let new_att = new_att.unwrap();
-    assert_eq!(new_att.gear, bike2.id);
-
-    // Original attachment on bike should be replaced with one detaching at later_time
-    let old_att = store
-        .attachment_get_by_part_and_time(wheel.id, attachment_time() + time::Duration::seconds(1))
-        .await?;
-    assert!(old_att.is_some());
-    let old_att = old_att.unwrap();
-    assert_eq!(old_att.gear, bike.id);
-    assert_eq!(old_att.detached, later_time());
-
-    assert!(end_time > later_time() || end_time == MAX_TIME);
-
-    Ok(())
-}
-
-/// shift() returns the end time of the new attachment
-#[tokio::test]
-async fn shift_returns_end_time() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-
-    let bike1 = Part::create(
-        "Bike 1".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        attachment_time() - time::Duration::days(365),
-        &test_session(),
-        &mut store,
-    )
-    .await?;
-
-    let bike2 = Part::create(
-        "Bike 2".to_string(),
-        "TendaBike".to_string(),
-        "Standard 2".to_string(),
-        BIKE,
-        None,
-        attachment_time() - time::Duration::days(180),
-        &test_session(),
-        &mut store,
-    )
-    .await?;
-
-    let chain = Part::create(
-        "Chain".to_string(),
-        "SRAM".to_string(),
-        "GX Eagle".to_string(),
-        CHAIN,
-        None,
-        attachment_time() - time::Duration::days(90),
-        &test_session(),
-        &mut store,
-    )
-    .await?;
-
-    let _att = store
-        .attachment_create(Attachment::new(
-            chain.id,
-            attachment_time(),
-            bike1.id,
-            CHAIN,
-            MAX_TIME,
-        ))
-        .await?;
-
-    let att = store
-        .attachment_get_by_part_and_time(chain.id, attachment_time())
-        .await?
-        .unwrap();
-
-    let mut summary = Summary::default();
-    let end_time = att
-        .shift(later_time(), bike2.id, &mut summary, &mut store)
-        .await?;
-
-    // Should return a time in the future (MAX_TIME if nothing ends it)
-    assert!(end_time >= later_time());
-
-    Ok(())
-}
-
-// ============================================================
-// Phase 4: Unit Tests for Public API Functions
-// ============================================================
-
-// --- attach_assembly() tests ---
-
-/// attach_assembly() attaches a part to a gear at the specified hook
+/// attach_assembly() attaches a part to a gear at the specified hook: the
+/// summary reports the new still-attached row.
 #[tokio::test]
 async fn attach_assembly_attaches_part_to_gear() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
+    let part = PartId::from(4);
+    let gear = PartId::from(1);
 
-    // Create bike (gear) and chain (part to attach)
-    let bike = Part::create(
-        "Main Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
+    let mut store = MockStore::new();
+    store.expect_partid_get_part().returning(move |id| {
+        Ok(if id == part {
+            part_row(id, test_user(), CHAIN, UsageId::new())
+        } else {
+            part_row(id, test_user(), BIKE, UsageId::new())
+        })
+    });
+    store
+        .expect_attachment_get_by_part_and_time()
+        .returning(|_, _| Ok(None));
+    store
+        .expect_attachment_find_part_of_type_at_hook_and_time()
+        .returning(|_, _, _, _| Ok(None));
+    store
+        .expect_attachment_find_successor()
+        .returning(|_, _, _, _, _| Ok(None));
+    store
+        .expect_attachment_find_later_attachment_for_part()
+        .returning(|_, _| Ok(None));
+    store
+        .expect_attachment_find_part_attached_already()
+        .returning(|_, _, _, _| Ok(None));
+    wire_create_path(&mut store);
 
-    let chain = Part::create(
-        "Test Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date(),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Chain hooks: [1] → can attach to Bike using Bike as hook
-    let _summary = attach_assembly(
-        &session,
-        chain.id,
+    let summary = attach_assembly(
+        &test_session(),
+        part,
         attachment_time(),
-        bike.id,
+        gear,
         BIKE,
         false,
         &mut store,
     )
     .await?;
 
-    // Verify attachment was created
-    let att = store
-        .attachment_get_by_part_and_time(chain.id, attachment_time())
-        .await?;
-    assert!(att.is_some());
-    let att = att.unwrap();
-    assert_eq!(att.gear, bike.id);
-
+    let att = sole_live(&summary.attachments);
+    assert_eq!(att.a.part_id, part);
+    assert_eq!(att.a.gear, gear);
+    assert_eq!(att.a.hook, BIKE);
     Ok(())
 }
 
-/// The flat row model (ADR-0003): a part attached to a part that is itself
-/// already mounted is stored against the top-level gear. A tire mounted
-/// onto a front wheel that is already on the bike gets a row with the
-/// bike as gear; the wheel is recorded in the hook.
+/// The flat row model (ADR-0003): a part mounted onto a part that is itself
+/// already mounted is stored against the top-level gear. A tire mounted onto a
+/// front wheel that is on the bike gets a row with the bike as gear.
 #[tokio::test]
 async fn attach_assembly_resolves_mounted_gear_to_top_level() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
+    let tire = PartId::from(5);
+    let wheel = PartId::from(2);
+    let bike = PartId::from(1);
     let time = attachment_time();
 
-    let bike = Part::create(
-        "Main Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
+    let mut store = MockStore::new();
+    store.expect_partid_get_part().returning(move |id| {
+        let what = match id {
+            _ if id == tire => TIRE,
+            _ if id == wheel => FRONT_WHEEL,
+            _ => BIKE,
+        };
+        Ok(part_row(id, test_user(), what, UsageId::new()))
+    });
+    // Top-level resolution: the wheel's row has gear=bike (≠ wheel) → walk up;
+    // the bike has no row → stop at the bike.
+    store
+        .expect_attachment_get_by_part_and_time()
+        .returning(move |pid, _| {
+            if pid == wheel {
+                Ok(Some(att(wheel, time, bike, BIKE, MAX_TIME, UsageId::new())))
+            } else {
+                Ok(None)
+            }
+        });
+    store
+        .expect_attachment_find_part_of_type_at_hook_and_time()
+        .returning(|_, _, _, _| Ok(None));
+    store
+        .expect_attachment_find_successor()
+        .returning(|_, _, _, _, _| Ok(None));
+    store
+        .expect_attachment_find_later_attachment_for_part()
+        .returning(|_, _| Ok(None));
+    store
+        .expect_attachment_find_part_attached_already()
+        .returning(|_, _, _, _| Ok(None));
+    wire_create_path(&mut store);
 
-    let wheel = Part::create(
-        "Front Wheel".to_string(),
-        "Fulcrum".to_string(),
-        "Rapid 150".to_string(),
-        FRONT_WHEEL,
-        None,
-        sample_purchase_date(),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let tire = Part::create(
-        "Front Tire".to_string(),
-        "Schwalbe".to_string(),
-        "One".to_string(),
-        TIRE,
-        None,
-        sample_purchase_date(),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // mount the wheel on the bike first
-    let _summary =
-        attach_assembly(&session, wheel.id, time, bike.id, BIKE, false, &mut store).await?;
-
-    // attach the tire to the *wheel*; the domain resolves the top-level gear
-    let _summary = attach_assembly(
-        &session,
-        tire.id,
+    let summary = attach_assembly(
+        &test_session(),
+        tire,
         time,
-        wheel.id,
+        wheel,
         FRONT_WHEEL,
         false,
         &mut store,
     )
     .await?;
 
-    let att = store
-        .attachment_get_by_part_and_time(tire.id, time)
-        .await?
-        .expect("the tire is attached");
-    assert_eq!(att.gear, bike.id);
-    assert_eq!(att.hook, FRONT_WHEEL);
-
+    let att = sole_live(&summary.attachments);
+    assert_eq!(att.a.part_id, tire);
+    assert_eq!(att.a.gear, bike); // resolved to the top-level gear
+    assert_eq!(att.a.hook, FRONT_WHEEL);
     Ok(())
 }
 
-/// Resolution happens at entry, before the all branch: with all=true the
-/// row is stored against the top-level gear exactly as with all=false.
-/// A tire has no subparts in the current type taxonomy, so the all-shift
-/// loop is empty here; the shifted path itself is covered by
-/// attach_assembly_with_all_shifts_subparts_and_recalculates_usage.
-#[tokio::test]
-async fn attach_assembly_resolves_mounted_gear_to_top_level_with_all() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-    let time = attachment_time();
-
-    let bike = Part::create(
-        "Main Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let wheel = Part::create(
-        "Front Wheel".to_string(),
-        "Fulcrum".to_string(),
-        "Rapid 150".to_string(),
-        FRONT_WHEEL,
-        None,
-        sample_purchase_date(),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let tire = Part::create(
-        "Front Tire".to_string(),
-        "Schwalbe".to_string(),
-        "One".to_string(),
-        TIRE,
-        None,
-        sample_purchase_date(),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // mount the wheel on the bike first
-    let _summary =
-        attach_assembly(&session, wheel.id, time, bike.id, BIKE, true, &mut store).await?;
-
-    // attach the tire to the *wheel* with all=true
-    let _summary = attach_assembly(
-        &session,
-        tire.id,
-        time,
-        wheel.id,
-        FRONT_WHEEL,
-        true,
-        &mut store,
-    )
-    .await?;
-
-    let att = store
-        .attachment_get_by_part_and_time(tire.id, time)
-        .await?
-        .expect("the tire is attached");
-    assert_eq!(att.gear, bike.id);
-    assert_eq!(att.hook, FRONT_WHEEL);
-
-    Ok(())
-}
-
-/// attach_assembly() rejects if part type cannot be attached to the specified hook
+/// attach_assembly() rejects if the part type cannot be attached to the hook.
 #[tokio::test]
 async fn attach_assembly_rejects_invalid_hook() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
+    let part = PartId::from(4);
+    let gear = PartId::from(1);
 
-    let bike = Part::create(
-        "Main Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
+    let mut store = MockStore::new();
+    store.expect_partid_get_part().returning(move |id| {
+        Ok(if id == part {
+            part_row(id, test_user(), CHAIN, UsageId::new())
+        } else {
+            part_row(id, test_user(), BIKE, UsageId::new())
+        })
+    });
 
-    let chain = Part::create(
-        "Test Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date(),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Chain hooks: [1] → cannot attach to FrontWheel (hook=FrontWheel is not in chain's hooks)
+    // Chain's hooks are [BIKE]; FRONT_WHEEL is not among them.
     let result = attach_assembly(
-        &session,
-        chain.id,
+        &test_session(),
+        part,
         attachment_time(),
-        bike.id,
+        gear,
         FRONT_WHEEL,
         false,
         &mut store,
     )
     .await;
-
-    assert!(result.is_err());
-    match result.unwrap_err() {
-        Error::BadRequest(msg) => {
-            assert!(msg.contains("cannot be attached to hook"));
-        }
-        e => panic!("Expected BadRequest, got {:?}", e),
-    }
-
+    assert!(
+        matches!(&result, Err(Error::BadRequest(msg)) if msg.contains("cannot be attached to hook"))
+    );
     Ok(())
 }
 
-/// attach_assembly() rejects if gear type is not valid for the part type
+/// attach_assembly() rejects if the gear type is not valid for the part type.
 #[tokio::test]
 async fn attach_assembly_rejects_invalid_gear_type() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
+    let part = PartId::from(4);
+    let grip = PartId::from(19);
 
-    // Create a chain
-    let chain = Part::create(
-        "Test Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date(),
-        &session,
-        &mut store,
-    )
-    .await?;
+    let mut store = MockStore::new();
+    store.expect_partid_get_part().returning(move |id| {
+        Ok(if id == part {
+            part_row(id, test_user(), CHAIN, UsageId::new())
+        } else {
+            part_row(id, test_user(), BOTTOM_BRACKET, UsageId::new())
+        })
+    });
 
-    // Create a shoe (gripper) - cannot attach chain to shoes
-    let grip = Part::create(
-        "Gripper".to_string(),
-        "Sugoi".to_string(),
-        "R900".to_string(),
-        BOTTOM_BRACKET,
-        None,
-        sample_purchase_date(),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Chain cannot be attached to Gripper gear type (hook=Bike is in Chain.hooks but Gripper is not)
+    // Chain's main is BIKE and its hooks are [BIKE]; BOTTOM_BRACKET is neither.
     let result = attach_assembly(
-        &session,
-        chain.id,
+        &test_session(),
+        part,
         attachment_time(),
-        grip.id,
+        grip,
         BIKE,
         false,
         &mut store,
     )
     .await;
-
-    assert!(result.is_err());
-    match result.unwrap_err() {
-        Error::BadRequest(msg) => {
-            assert!(msg.contains("cannot be attached to gear type"));
-        }
-        e => panic!("Expected BadRequest, got {:?}", e),
-    }
-
+    assert!(
+        matches!(&result, Err(Error::BadRequest(msg)) if msg.contains("cannot be attached to gear type"))
+    );
     Ok(())
 }
 
-/// attach_assembly() detaches existing attachment of the same part at the time
+/// attach_assembly() detaches the part's own current attachment before
+/// re-attaching it: the re-attach at the later time is reported.
 #[tokio::test]
 async fn attach_assembly_detaches_existing_attachment() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
+    let part = PartId::from(4);
+    let gear = PartId::from(1);
 
-    // Create bike and chain, attach chain to bike at attachment_time
-    let bike = Part::create(
-        "Main Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let chain = Part::create(
-        "Test Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date(),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // First attach
+    let mut store = MockStore::new();
+    store.expect_partid_get_part().returning(move |id| {
+        Ok(if id == part {
+            part_row(id, test_user(), CHAIN, UsageId::new())
+        } else {
+            part_row(id, test_user(), BIKE, UsageId::new())
+        })
+    });
+    // The part is already attached at attachment_time (the detach-self trigger);
+    // the gear resolution finds no row for the gear.
     store
-        .attachment_create(Attachment::new(
-            chain.id,
-            attachment_time(),
-            bike.id,
-            CHAIN,
-            MAX_TIME,
-        ))
-        .await?;
+        .expect_attachment_get_by_part_and_time()
+        .returning(move |pid, _| {
+            if pid == part {
+                Ok(Some(att(
+                    part,
+                    attachment_time(),
+                    gear,
+                    CHAIN,
+                    MAX_TIME,
+                    UsageId::new(),
+                )))
+            } else {
+                Ok(None)
+            }
+        });
+    store
+        .expect_attachment_find_part_of_type_at_hook_and_time()
+        .returning(|_, _, _, _| Ok(None));
+    store
+        .expect_attachment_find_successor()
+        .returning(|_, _, _, _, _| Ok(None));
+    store
+        .expect_attachment_find_later_attachment_for_part()
+        .returning(|_, _| Ok(None));
+    store
+        .expect_attachment_find_part_attached_already()
+        .returning(|_, _, _, _| Ok(None));
+    wire_delete_path(&mut store);
+    wire_create_path(&mut store);
 
-    // Now re-attach at later_time to same gear (should detach old, create new)
-    let _summary = attach_assembly(
-        &session,
-        chain.id,
+    let summary = attach_assembly(
+        &test_session(),
+        part,
         later_time(),
-        bike.id,
+        gear,
         BIKE,
         false,
         &mut store,
     )
     .await?;
 
-    // Verify only one attachment at later_time
-    let att = store
-        .attachment_get_by_part_and_time(chain.id, later_time())
-        .await?;
-    assert!(att.is_some());
-
-    // Verify old attachment was detached at later_time by being deleted
-    let old_att = store
-        .attachment_get_by_part_and_time(chain.id, attachment_time())
-        .await?;
-    assert!(old_att.is_some());
-
+    // The re-attach at later_time is reported.
+    let new_att = summary
+        .attachments
+        .live()
+        .into_iter()
+        .find(|a| a.a.part_id == part && a.a.attached == later_time())
+        .expect("the re-attached row is reported");
+    assert_eq!(new_att.a.gear, gear);
     Ok(())
 }
 
-/// attach_assembly() detaches predecessor on the same gear/hook
+/// attach_assembly() detaches the different part already occupying the hook
+/// (the predecessor auto-detach): the predecessor is cut off at the attach
+/// time and the new part takes the hook.
 #[tokio::test]
 async fn attach_assembly_detaches_predecessor_on_gear() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
+    let gear = PartId::from(1);
+    let prev = PartId::from(4);
+    let part = PartId::from(5);
 
-    // Create two bikes
-    let bike1 = Part::create(
-        "Bike 1".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let _bike2 = Part::create(
-        "Bike 2".to_string(),
-        "TendaBike".to_string(),
-        "Pro".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(180),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Create two chains
-    let chain1 = Part::create(
-        "Chain 1".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let chain2 = Part::create(
-        "Chain 2".to_string(),
-        "KMC".to_string(),
-        "X10".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(10),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Attach chain1 to bike1 at attachment_time
+    let mut store = MockStore::new();
+    store.expect_partid_get_part().returning(move |id| {
+        let what = if id == gear { BIKE } else { CHAIN };
+        Ok(part_row(id, test_user(), what, UsageId::new()))
+    });
     store
-        .attachment_create(Attachment::new(
-            chain1.id,
-            attachment_time(),
-            bike1.id,
-            BIKE,
-            MAX_TIME,
-        ))
-        .await?;
+        .expect_attachment_get_by_part_and_time()
+        .returning(|_, _| Ok(None));
+    // The hook is occupied by the predecessor (a different part, same type).
+    store
+        .expect_attachment_find_part_of_type_at_hook_and_time()
+        .returning(move |_, _, _, _| {
+            Ok(Some(att(
+                prev,
+                attachment_time(),
+                gear,
+                BIKE,
+                MAX_TIME,
+                UsageId::new(),
+            )))
+        });
+    store
+        .expect_attachment_find_successor()
+        .returning(|_, _, _, _, _| Ok(None));
+    store
+        .expect_attachment_find_later_attachment_for_part()
+        .returning(|_, _| Ok(None));
+    store
+        .expect_attachment_find_part_attached_already()
+        .returning(|_, _, _, _| Ok(None));
+    wire_delete_path(&mut store);
+    wire_create_path(&mut store);
 
-    // Attach chain2 to bike1 at later_time (should detach chain1 from bike1)
-    let _summary = attach_assembly(
-        &session,
-        chain2.id,
+    let summary = attach_assembly(
+        &test_session(),
+        part,
         later_time(),
-        bike1.id,
+        gear,
         BIKE,
         false,
         &mut store,
     )
     .await?;
 
-    // Verify chain1 is detached at later_time on bike1
-    let chain1_atts = store.attachments_all_by_part(chain1.id).await?;
-    let chain1_att_on_bike1 = chain1_atts.iter().find(|a| a.gear == bike1.id);
-    assert!(chain1_att_on_bike1.is_some());
-    let chain1_att = chain1_att_on_bike1.unwrap();
-    assert_eq!(chain1_att.detached, later_time());
-
-    // Verify chain2 is attached to bike1 at later_time
-    let chain2_att = store
-        .attachment_get_by_part_and_time(chain2.id, later_time())
-        .await?;
-    assert!(chain2_att.is_some());
-    assert_eq!(chain2_att.unwrap().gear, bike1.id);
-
+    // The predecessor is cut off at later_time …
+    let prev_att = summary
+        .attachments
+        .live()
+        .into_iter()
+        .find(|a| a.a.part_id == prev)
+        .expect("the predecessor's cut-off row is reported");
+    assert_eq!(prev_att.a.detached, later_time());
+    // … and the new part takes the hook.
+    let new_att = summary
+        .attachments
+        .live()
+        .into_iter()
+        .find(|a| a.a.part_id == part)
+        .expect("the new part's row is reported");
+    assert_eq!(new_att.a.gear, gear);
+    assert_eq!(new_att.a.attached, later_time());
     Ok(())
 }
 
-/// detach_assembly() recalculates the usage of the detached part from the
-/// activities within the new attachment window: the prepopulated recovery
-/// spin (2023-05-19T22:13:20Z) starts after the detach time and is excluded,
-/// while the earlier rides are still accounted.
+/// Re-attaching a part at the time its row ended continues that row — the
+/// adjacent-merge: one row (attached from the original time to MAX_TIME), not
+/// two.
 #[tokio::test]
-async fn detach_assembly_recalculates_usage_excluding_activity_after_detach() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-    let wheel = PartId::from(2);
+async fn attach_assembly_merges_adjacent_rows() -> TbResult<()> {
+    let part = PartId::from(4);
+    let gear = PartId::from(1);
 
-    // the latest prepopulated activity and its 15-minute floor
-    let latest = datetime!(2023-05-19 22:13:20 UTC);
-    let detach_at = round_time(latest);
-    assert_eq!(detach_at, datetime!(2023-05-19 22:00:00 UTC));
+    let mut store = MockStore::new();
+    store.expect_partid_get_part().returning(move |id| {
+        Ok(if id == part {
+            part_row(id, test_user(), CHAIN, UsageId::new())
+        } else {
+            part_row(id, test_user(), BIKE, UsageId::new())
+        })
+    });
+    store
+        .expect_attachment_get_by_part_and_time()
+        .returning(|_, _| Ok(None));
+    store
+        .expect_attachment_find_part_of_type_at_hook_and_time()
+        .returning(|_, _, _, _| Ok(None));
+    store
+        .expect_attachment_find_successor()
+        .returning(|_, _, _, _, _| Ok(None));
+    store
+        .expect_attachment_find_later_attachment_for_part()
+        .returning(|_, _| Ok(None));
+    // A row ending exactly at the attach time — the adjacent-merge trigger.
+    store
+        .expect_attachment_find_part_attached_already()
+        .returning(move |_, _, _, _| {
+            Ok(Some(att(
+                part,
+                attachment_time(),
+                gear,
+                BIKE,
+                later_time(),
+                UsageId::new(),
+            )))
+        });
+    wire_delete_path(&mut store);
+    wire_create_path(&mut store);
 
-    // the attachment row and its usage before the detach (the row is
-    // replaced by a new one and the old usage row is deleted)
-    let old_att = store
-        .attachment_get_by_part_and_time(wheel, detach_at - time::Duration::hours(1))
-        .await?
-        .expect("the wheel is attached before the detach");
-    let old_usage = old_att.usage;
-
-    let _summary = detach_assembly(&session, wheel, detach_at, false, &mut store).await?;
-
-    // the attachment is cut at the detach time and gone from then on
-    let att = store
-        .attachment_get_by_part_and_time(wheel, detach_at - time::Duration::hours(1))
-        .await?
-        .expect("the wheel is attached before the detach");
-    assert_eq!(att.attached, datetime!(2023-01-01 00:00 UTC));
-    assert_eq!(att.detached, detach_at);
-    assert!(
-        store
-            .attachment_get_by_part_and_time(wheel, latest)
-            .await?
-            .is_none(),
-        "no attachment of the wheel from the detach time on"
-    );
-
-    // the wheel usage is recalculated from the two earlier rides only
-    // (25+5200, 50000+40000, 400+600, 400+600, 500+500, 1+1);
-    // descend is None in the activities, so it falls back to climb
-    let wheel_usage = wheel.read(&mut store).await?.usage;
-    let stored = wheel_usage.read(&mut store).await?;
-    assert_eq!(
-        stored,
-        Usage {
-            id: wheel_usage,
-            time: 5225,
-            distance: 90000,
-            climb: 1000,
-            descend: 1000,
-            energy: 1000,
-            count: 2,
-        }
-    );
-
-    // the replacement attachment usage row is a separate row with its own
-    // id but carries the same recalculated values
-    let att_usage = att.usage.read(&mut store).await?;
-    let mut expected = stored;
-    expected.id = att_usage.id;
-    assert_eq!(att_usage, expected);
-
-    // the old attachment usage row is deleted
-    assert!(
-        UsageStore::get(&mut store, old_usage).await?.is_none(),
-        "the old attachment usage row is deleted"
-    );
-
-    // the other parts attached to the bike are untouched
-    for pid in [
-        PartId::from(1), // Main Bike
-        PartId::from(3), // Rear Wheel A
-        PartId::from(4), // Chain A
-    ] {
-        let uid = pid.read(&mut store).await?.usage;
-        let stored = uid.read(&mut store).await?;
-        assert_eq!(
-            stored,
-            Usage {
-                id: uid,
-                time: 8025,
-                distance: 125000,
-                climb: 1100,
-                descend: 1100,
-                energy: 1500,
-                count: 3,
-            }
-        );
-    }
-
-    // the wheel's last_used is unchanged (the attach time is earlier)
-    let wheel_part = wheel.read(&mut store).await?;
-    assert_eq!(wheel_part.last_used, datetime!(2023-11-14 22:00 UTC));
-
-    Ok(())
-}
-
-/// attach_assembly() with all=true mounts the loose spare wheel onto the
-/// main bike just before the second activity. Its tire moves along onto
-/// the bike, and the bike's own front wheel is cut off at the swap.
-/// Usages are recalculated: the front wheel counts only the morning ride,
-/// the spare wheel and its tire count the two later rides, while the bike,
-/// rear wheel and chain are untouched.
-#[tokio::test]
-async fn attach_assembly_with_all_shifts_subparts_and_recalculates_usage() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-    let bike = PartId::from(1);
-    let front_wheel = PartId::from(2);
-    let spare_wheel = PartId::from(16);
-    let spare_tire = PartId::from(17);
-
-    // the attach time is just before the second prepopulated activity
-    // (Hill Repeats, 2023-05-19T00:13:20Z)
-    let attach_at = round_time(datetime!(2023-05-19 00:13:20 UTC));
-    assert_eq!(attach_at, datetime!(2023-05-19 00:00:00 UTC));
-
-    let _summary = attach_assembly(
-        &session,
-        spare_wheel,
-        attach_at,
-        bike,
+    let summary = attach_assembly(
+        &test_session(),
+        part,
+        later_time(),
+        gear,
         BIKE,
-        true,
+        false,
         &mut store,
     )
     .await?;
 
-    let before = attach_at - time::Duration::hours(1);
-
-    // the bike's front wheel is cut at the swap; before the swap it only
-    // counts the morning ride (25, 50000, 400, 400, 500, 1). Descend is
-    // None in the activity, so it falls back to climb.
-    let old_fw = store
-        .attachment_get_by_part_and_time(front_wheel, before)
-        .await?
-        .expect("the front wheel is attached before the swap");
-    assert_eq!(old_fw.attached, datetime!(2023-01-01 00:00 UTC));
-    assert_eq!(old_fw.gear, bike);
-    assert_eq!(old_fw.hook, BIKE);
-    assert_eq!(old_fw.detached, attach_at);
-    let fw_usage = old_fw.usage.read(&mut store).await?;
-    let mut expected = Usage {
-        time: 25,
-        distance: 50000,
-        climb: 400,
-        descend: 400,
-        energy: 500,
-        count: 1,
-        ..Default::default()
-    };
-    expected.id = fw_usage.id;
-    assert_eq!(fw_usage, expected);
-
-    // the spare wheel is mounted on the bike from the swap on; it counts
-    // the two later rides (5200+2800, 40000+35000, 600+100, 600+100,
-    // 500+500, 1+1)
-    let new_sw = store
-        .attachment_get_by_part_and_time(spare_wheel, attach_at)
-        .await?
-        .expect("the spare wheel is attached from the swap on");
-    assert_eq!(new_sw.attached, attach_at);
-    assert_eq!(new_sw.gear, bike);
-    assert_eq!(new_sw.hook, BIKE);
-    assert_eq!(new_sw.detached, MAX_TIME);
-    let sw_usage = new_sw.usage.read(&mut store).await?;
-    let mut expected = Usage {
-        time: 8000,
-        distance: 75000,
-        climb: 700,
-        descend: 700,
-        energy: 1000,
-        count: 2,
-        ..Default::default()
-    };
-    expected.id = sw_usage.id;
-    assert_eq!(sw_usage, expected);
-
-    // the spare tire moved onto the bike at the swap; its old row (on the
-    // spare wheel) is cut at the swap with zero usage since the wheel had
-    // no rides of its own
-    let tire_old = store
-        .attachment_get_by_part_and_time(spare_tire, before)
-        .await?
-        .expect("the tire is attached to the spare wheel before the swap");
-    assert_eq!(tire_old.gear, spare_wheel);
-    assert_eq!(tire_old.hook, FRONT_WHEEL);
-    assert_eq!(tire_old.detached, attach_at);
-    assert_eq!(tire_old.usage.read(&mut store).await?.time, 0);
-
-    // the tire's new row is on the bike from the swap on; it counts the
-    // two later rides
-    let tire_new = store
-        .attachment_get_by_part_and_time(spare_tire, attach_at)
-        .await?
-        .expect("the tire is attached to the bike from the swap on");
-    assert_eq!(tire_new.gear, bike);
-    assert_eq!(tire_new.hook, FRONT_WHEEL);
-    assert_eq!(tire_new.detached, MAX_TIME);
-    let tire_new_usage = tire_new.usage.read(&mut store).await?;
-    let mut expected = Usage {
-        time: 8000,
-        distance: 75000,
-        climb: 700,
-        descend: 700,
-        energy: 1000,
-        count: 2,
-        ..Default::default()
-    };
-    expected.id = tire_new_usage.id;
-    assert_eq!(tire_new_usage, expected);
-
-    // the bike, rear wheel and chain are untouched: all three rides
-    // (25+5200+2800, 50000+40000+35000, 400+600+100, 400+600+100,
-    // 500+500+500, 1+1+1)
-    for pid in [bike, PartId::from(3), PartId::from(4)] {
-        let uid = pid.read(&mut store).await?.usage;
-        let stored = uid.read(&mut store).await?;
-        assert_eq!(
-            stored,
-            Usage {
-                id: uid,
-                time: 8025,
-                distance: 125000,
-                climb: 1100,
-                descend: 1100,
-                energy: 1500,
-                count: 3,
-            }
-        );
-    }
-
-    // the front wheel's part-level usage is the morning ride only
-    let front_wheel_usage = front_wheel.read(&mut store).await?.usage;
-    let stored = front_wheel_usage.read(&mut store).await?;
-    assert_eq!(
-        stored,
-        Usage {
-            id: front_wheel_usage,
-            time: 25,
-            distance: 50000,
-            climb: 400,
-            descend: 400,
-            energy: 500,
-            count: 1,
-        }
-    );
-
-    // the spare wheel and its tire: part-level usage is the two later rides
-    for pid in [spare_wheel, spare_tire] {
-        let uid = pid.read(&mut store).await?.usage;
-        let stored = uid.read(&mut store).await?;
-        assert_eq!(
-            stored,
-            Usage {
-                id: uid,
-                time: 8000,
-                distance: 75000,
-                climb: 700,
-                descend: 700,
-                energy: 1000,
-                count: 2,
-            }
-        );
-    }
-
+    // The adjacent rows become one: continued from the original attach time to
+    // MAX_TIME.
+    let merged = sole_live(&summary.attachments);
+    assert_eq!(merged.a.part_id, part);
+    assert_eq!(merged.a.attached, attachment_time());
+    assert_eq!(merged.a.detached, MAX_TIME);
     Ok(())
 }
 
-/// detach_assembly() returns error if part doesn't exist
+/// Re-attaching a part at the time its row started deletes and re-creates the
+/// row: the re-attached row (detached at MAX_TIME) is reported.
+#[tokio::test]
+async fn attach_assembly_auto_detaches_and_reattaches_same_part() -> TbResult<()> {
+    let part = PartId::from(4);
+    let gear = PartId::from(1);
+
+    let mut store = MockStore::new();
+    store.expect_partid_get_part().returning(move |id| {
+        Ok(if id == part {
+            part_row(id, test_user(), CHAIN, UsageId::new())
+        } else {
+            part_row(id, test_user(), BIKE, UsageId::new())
+        })
+    });
+    // The part is already attached at attachment_time; re-attaching at the same
+    // time detaches and re-creates the row.
+    store
+        .expect_attachment_get_by_part_and_time()
+        .returning(move |pid, _| {
+            if pid == part {
+                Ok(Some(att(
+                    part,
+                    attachment_time(),
+                    gear,
+                    CHAIN,
+                    MAX_TIME,
+                    UsageId::new(),
+                )))
+            } else {
+                Ok(None)
+            }
+        });
+    store
+        .expect_attachment_find_part_of_type_at_hook_and_time()
+        .returning(|_, _, _, _| Ok(None));
+    store
+        .expect_attachment_find_successor()
+        .returning(|_, _, _, _, _| Ok(None));
+    store
+        .expect_attachment_find_later_attachment_for_part()
+        .returning(|_, _| Ok(None));
+    store
+        .expect_attachment_find_part_attached_already()
+        .returning(|_, _, _, _| Ok(None));
+    wire_delete_path(&mut store);
+    wire_create_path(&mut store);
+
+    let summary = attach_assembly(
+        &test_session(),
+        part,
+        attachment_time(),
+        gear,
+        BIKE,
+        false,
+        &mut store,
+    )
+    .await?;
+
+    let att = summary
+        .attachments
+        .live()
+        .into_iter()
+        .find(|a| a.a.part_id == part)
+        .expect("the re-attached row is reported");
+    assert_eq!(att.a.gear, gear);
+    assert_eq!(att.a.detached, MAX_TIME);
+    Ok(())
+}
+
+// === Suite 3: detach_assembly ===
+
+/// detach_assembly() cuts the part's attachment at the detach time: the
+/// cut-off row is reported.
+#[tokio::test]
+async fn detach_assembly_with_all_detaches_subparts() -> TbResult<()> {
+    let part = PartId::from(4);
+    let bike = PartId::from(1);
+
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user(), CHAIN, UsageId::new())));
+    // The part is attached at attachment_time (never detached).
+    store
+        .expect_attachment_get_by_part_and_time()
+        .returning(move |_, _| {
+            Ok(Some(att(
+                part,
+                attachment_time(),
+                bike,
+                CHAIN,
+                MAX_TIME,
+                UsageId::new(),
+            )))
+        });
+    wire_delete_path(&mut store);
+    wire_create_path(&mut store);
+
+    let summary = detach_assembly(&test_session(), part, later_time(), false, &mut store).await?;
+
+    // The part is cut off at the detach time.
+    let cut = summary
+        .attachments
+        .live()
+        .into_iter()
+        .find(|a| a.a.part_id == part)
+        .expect("the part's cut-off row is reported");
+    assert_eq!(cut.a.detached, later_time());
+    Ok(())
+}
+
+/// detach_assembly() returns NotFound for a part that is not attached at the
+/// detach time.
 #[tokio::test]
 async fn detach_assembly_api_returns_error_if_not_attached() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
+    let part = PartId::from(4);
 
-    // Create a part, then delete it so there's no attachment
-    let chain = Part::create(
-        "Test Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date(),
-        &session,
-        &mut store,
-    )
-    .await?;
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user(), CHAIN, UsageId::new())));
+    // No attachment at the detach time.
+    store
+        .expect_attachment_get_by_part_and_time()
+        .returning(|_, _| Ok(None));
 
-    // Delete the part to ensure no attachments exist
-    chain.id.delete(&session, &mut store).await?;
-
-    // Try to detach a deleted part - should fail with NotFound
-    let result = detach_assembly(&session, chain.id, later_time(), false, &mut store).await;
-
-    assert!(result.is_err());
-    match result.unwrap_err() {
-        Error::NotFound(msg) => {
-            // Part was deleted, so we get "Part X not found" instead of "not attached"
-            assert!(msg.contains("not found") || msg.contains("not attached"));
-        }
-        e => panic!("Expected NotFound, got {:?}", e),
-    }
-
+    let result = detach_assembly(&test_session(), part, later_time(), false, &mut store).await;
+    assert!(matches!(&result, Err(Error::NotFound(_))));
     Ok(())
 }
 
-/// detach_assembly() rejects if user is not the owner
+/// detach_assembly() rejects a non-owner session: the part is owned by
+/// test_user(), so user 2 (no shop) is `Forbidden`.
 #[tokio::test]
 async fn detach_assembly_api_rejects_non_owner() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let owner_session = mock_session(UserId::from(1));
-    let non_owner_session = mock_session(UserId::from(2));
+    let part = PartId::from(4);
 
-    let chain = Part::create(
-        "Test Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date(),
-        &owner_session,
-        &mut store,
-    )
-    .await?;
-
-    // Create attachment
+    let mut store = MockStore::new();
+    // The part is owned by test_user(); user 2 (no shop) is denied.
     store
-        .attachment_create(Attachment::new(
-            chain.id,
-            attachment_time(),
-            bike_id(),
-            CHAIN,
-            MAX_TIME,
-        ))
-        .await?;
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user(), CHAIN, UsageId::new())));
 
-    // Try to detach as non-owner
     let result = detach_assembly(
-        &non_owner_session,
-        chain.id,
+        &mock_session(UserId::from(2)),
+        part,
         later_time(),
         false,
         &mut store,
     )
     .await;
-
-    assert!(result.is_err());
-
+    assert!(matches!(&result, Err(Error::Forbidden(_))));
     Ok(())
 }
 
-/// dispose_assembly() disposes a part that is not currently attached
-#[tokio::test]
-async fn dispose_assembly_disposes_part() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    let chain = Part::create(
-        "Test Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date(),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Dispose at later_time (no current attachment)
-    let _summary = dispose_assembly(&session, chain.id, later_time(), false, &mut store).await?;
-
-    // Verify part is disposed
-    let part = chain.id.part(&session, &mut store).await?;
-    assert!(part.disposed_at.is_some());
-
-    Ok(())
-}
-
-/// dispose_assembly() disposes a part that is still attached
-#[tokio::test]
-async fn dispose_assembly_disposes_attached_part() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    let bike = Part::create(
-        "Main Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let chain = Part::create(
-        "Test Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date(),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Attach the chain at attachment_time through the domain op (active:
-    // not yet detached; round_time is a no-op on this 15-minute boundary).
-    let _ = attach_assembly(
-        &session,
-        chain.id,
-        attachment_time(),
-        bike.id,
-        BIKE,
-        false,
-        &mut store,
-    )
-    .await?;
-
-    // Dispose while still attached — dispose_assembly never detaches, it only
-    // rejects attachments detached after the given time; this one succeeds.
-    let result = dispose_assembly(&session, chain.id, attachment_time(), false, &mut store).await;
-
-    assert!(result.is_ok());
-
-    Ok(())
-}
-
-/// Detaching a part at the time its row started is a pure delete: the
-/// deleted attachment is reported as a None tombstone under its idx key.
+/// Detaching a part at the time its row started is a pure delete: the deleted
+/// attachment is reported as a None tombstone under its idx key.
 #[tokio::test]
 async fn detach_at_attach_time_reports_tombstone() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
+    let part = PartId::from(4);
+    let bike = PartId::from(1);
 
-    let bike = Part::create(
-        "Main Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user(), CHAIN, UsageId::new())));
+    // The part is attached at attachment_time.
+    store
+        .expect_attachment_get_by_part_and_time()
+        .returning(move |_, _| {
+            Ok(Some(att(
+                part,
+                attachment_time(),
+                bike,
+                CHAIN,
+                MAX_TIME,
+                UsageId::new(),
+            )))
+        });
+    wire_delete_path(&mut store);
+    // Detaching at the attach time is a pure delete (no re-create).
 
-    let chain = Part::create(
-        "Test Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date(),
-        &session,
-        &mut store,
-    )
-    .await?;
+    let summary =
+        detach_assembly(&test_session(), part, attachment_time(), false, &mut store).await?;
 
-    // Attach the chain at attachment_time through the domain op (active:
-    // not yet detached; round_time is a no-op on this 15-minute boundary).
-    let _ = attach_assembly(
-        &session,
-        chain.id,
-        attachment_time(),
-        bike.id,
-        BIKE,
-        false,
-        &mut store,
-    )
-    .await?;
-
-    // Detaching at the attach time is a pure delete: the deleted
-    // attachment is reported as a None tombstone under its idx key.
-    let summary = detach_assembly(&session, chain.id, attachment_time(), false, &mut store).await?;
-    let key = Attachment::new(chain.id, attachment_time(), bike.id, BIKE, MAX_TIME)
+    let key = Attachment::new(part, attachment_time(), bike, CHAIN, MAX_TIME)
         .add_details("", 0.into())
         .idx();
-    assert_eq!(summary.attachments.len(), 1);
     assert!(summary.attachments.is_tombstoned(&key));
-
     Ok(())
 }
 
-/// dispose_assembly() with all=true disposes subparts too
-#[tokio::test]
-async fn dispose_assembly_all_disposes_subparts() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    // Create main bike
-    let _bike = Part::create(
-        "Main Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Create rear wheel
-    let wheel = Part::create(
-        "Rear Wheel".to_string(),
-        "Weston".to_string(),
-        "Ultrio".to_string(),
-        REAR_WHEEL,
-        None,
-        sample_purchase_date() - time::Duration::days(180),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Create cassette
-    let cassette = Part::create(
-        "Cassette".to_string(),
-        "SRAM".to_string(),
-        "GX Eagle".to_string(),
-        CASSETTE,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Attach wheel to bike at attachment_time
-    store
-        .attachment_create(Attachment::new(
-            wheel.id,
-            attachment_time(),
-            bike_id(),
-            REAR_WHEEL,
-            MAX_TIME,
-        ))
-        .await?;
-
-    // Attach cassette to wheel at attachment_time
-    store
-        .attachment_create(Attachment::new(
-            cassette.id,
-            attachment_time(),
-            wheel.id,
-            CASSETTE,
-            MAX_TIME,
-        ))
-        .await?;
-
-    // Dispose wheel with all=true - should also dispose cassette
-    let _summary = dispose_assembly(&session, wheel.id, later_time(), true, &mut store).await?;
-
-    // Verify wheel is disposed
-    let part = wheel.id.part(&session, &mut store).await?;
-    assert!(part.disposed_at.is_some());
-
-    // Verify cassette is also disposed (due to all=true)
-    let part = cassette.id.part(&session, &mut store).await?;
-    assert!(part.disposed_at.is_some());
-
-    Ok(())
-}
-
-/// recover_assembly() restores a disposed part
-#[tokio::test]
-async fn recover_assembly_restores_disposed_part() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    let chain = Part::create(
-        "Test Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date(),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Dispose the part first
-    dispose_assembly(&session, chain.id, later_time(), false, &mut store).await?;
-
-    // Verify it's disposed
-    let part = chain.id.part(&session, &mut store).await?;
-    assert!(part.disposed_at.is_some());
-
-    // Recover the part
-    let _summary = recover_assembly(&session, chain.id, false, &mut store).await?;
-
-    // Verify it's no longer disposed
-    let part = chain.id.part(&session, &mut store).await?;
-    assert!(part.disposed_at.is_none());
-
-    Ok(())
-}
-
-/// recover_assembly() returns error if part is not disposed
-#[tokio::test]
-async fn recover_assembly_error_if_not_disposed() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    let chain = Part::create(
-        "Test Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date(),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Try to recover a non-disposed part
-    let result = recover_assembly(&session, chain.id, false, &mut store).await;
-
-    assert!(result.is_err());
-    match result.unwrap_err() {
-        Error::BadRequest(msg) => {
-            assert!(msg.contains("is not disposed"));
-        }
-        e => panic!("Expected BadRequest, got {:?}", e),
-    }
-
-    Ok(())
-}
-
-/// recover_assembly() with all=true restores subparts too
-#[tokio::test]
-async fn recover_assembly_all_restores_subparts() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    // Create wheel
-    let wheel = Part::create(
-        "Rear Wheel".to_string(),
-        "Weston".to_string(),
-        "Ultrio".to_string(),
-        REAR_WHEEL,
-        None,
-        sample_purchase_date() - time::Duration::days(180),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Create cassette
-    let cassette = Part::create(
-        "Cassette".to_string(),
-        "SRAM".to_string(),
-        "GX Eagle".to_string(),
-        CASSETTE,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Dispose both
-    dispose_assembly(&session, wheel.id, later_time(), false, &mut store).await?;
-    dispose_assembly(&session, cassette.id, later_time(), false, &mut store).await?;
-
-    // Recover wheel with all=true
-    let _summary = recover_assembly(&session, wheel.id, true, &mut store).await?;
-
-    // Verify wheel is restored
-    let part = wheel.id.part(&session, &mut store).await?;
-    assert!(part.disposed_at.is_none());
-
-    // Verify cassette is also restored (due to all=true)
-    let part = cassette.id.part(&session, &mut store).await?;
-    assert!(part.disposed_at.is_some());
-
-    Ok(())
-}
-
-/// is_attached() returns true if part is attached at the given time
-#[tokio::test]
-async fn is_attached_returns_true_for_attached_part() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    let chain = Part::create(
-        "Test Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date(),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Create attachment
-    store
-        .attachment_create(Attachment::new(
-            chain.id,
-            attachment_time(),
-            bike_id(),
-            CHAIN,
-            MAX_TIME,
-        ))
-        .await?;
-
-    // Check if attached at attachment_time
-    let result = is_attached(chain.id, attachment_time(), &mut store).await?;
-    assert!(result);
-
-    Ok(())
-}
-
-/// is_attached() returns false if part has no attachment at the given time
-#[tokio::test]
-async fn is_attached_returns_false_for_unattached_part() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    let chain = Part::create(
-        "Test Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date(),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Check if attached (no attachment exists)
-    let result = is_attached(chain.id, later_time(), &mut store).await?;
-    assert!(!result);
-
-    Ok(())
-}
-
-/// is_attached() returns false if part was detached before the given time
-#[tokio::test]
-async fn is_attached_returns_false_after_detach() -> TbResult<()> {
-    let mut store = MemStore::new();
-    let _session = mock_session(UserId::from(1));
-
-    // Create attachment at attachment_time, detached at later_time
-    store
-        .attachment_create(Attachment::new(
-            chain_id(),
-            attachment_time(),
-            bike_id(),
-            CHAIN,
-            later_time(), // Detached at later_time
-        ))
-        .await?;
-
-    // Check if attached exactly at the detach time - should be false
-    let result = is_attached(chain_id(), later_time(), &mut store).await?;
-    assert!(!result);
-
-    Ok(())
-}
-
-// === Phase 5: Timeline Query Tests (HIGH PRIORITY) ===
-
-/// attachment_find_successor() returns the next attachment of another
-/// part of the same type at the same hook, attached later — the part's
-/// own later rows never count as its successor.
-#[tokio::test]
-async fn find_successor_returns_next_attachment() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    // Create two chains and a bike
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let chain2 = Part::create(
-        "Chain 2".to_string(),
-        "SRAM".to_string(),
-        "PC-XX1".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // chain: t1..t2, chain2: t2..MAX — both on the bike at the chain hook
-    let _att1 = store
-        .attachment_create(Attachment::new(
-            chain.id,
-            attachment_time(), // t1 = 2024-01-01
-            bike.id,
-            CHAIN,
-            later_time(), // detached at t2 = 2024-06-01
-        ))
-        .await?;
-
-    let _att2 = store
-        .attachment_create(Attachment::new(
-            chain2.id,
-            later_time(), // t2 = 2024-06-01
-            bike.id,
-            CHAIN,
-            MAX_TIME,
-        ))
-        .await?;
-
-    // Find successor of the chain at t1 - the other chain's row:
-    // another part, same type, same hook, attached later.
-    let successor = store
-        .attachment_find_successor(chain.id, bike.id, CHAIN, attachment_time(), CHAIN)
-        .await?;
-
-    let s = successor.expect("the other chain's later row is the successor");
-    assert_eq!(s.part_id, chain2.id);
-    assert_eq!(s.attached, later_time()); // Should be the other part's t2 row
-
-    Ok(())
-}
-
-/// attachment_find_successor() returns None when no future attachment exists
-#[tokio::test]
-async fn find_successor_no_future_attachment_returns_none() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Create only one attachment with MAX_TIME as detached
-    store
-        .attachment_create(Attachment::new(
-            chain.id,
-            attachment_time(),
-            bike.id,
-            CHAIN,
-            MAX_TIME,
-        ))
-        .await?;
-
-    // Find successor - should return None since no future attachment exists
-    let successor = store
-        .attachment_find_successor(chain.id, bike.id, CHAIN, attachment_time(), CHAIN)
-        .await?;
-
-    assert!(successor.is_none());
-
-    Ok(())
-}
-
-/// attachment_find_successor() returns None for different part on same gear
-#[tokio::test]
-async fn find_successor_for_different_part_returns_none() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Create chain attachment
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    store
-        .attachment_create(Attachment::new(
-            chain.id,
-            attachment_time(),
-            bike.id,
-            CHAIN,
-            MAX_TIME,
-        ))
-        .await?;
-
-    // Search for successor for tire (different part)
-    let tire = Part::create(
-        "Tire".to_string(),
-        "Schwalbe".to_string(),
-        "Mars".to_string(),
-        FRONT_WHEEL,
-        None,
-        sample_purchase_date() - time::Duration::days(60),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // No attachments for tire exist, so should return None
-    let successor = store
-        .attachment_find_successor(
-            tire.id,
-            bike.id,
-            FRONT_WHEEL,
-            attachment_time(),
-            FRONT_WHEEL,
-        )
-        .await?;
-
-    assert!(successor.is_none());
-
-    Ok(())
-}
-
-/// attachment_find_successor() returns None for different gear
-#[tokio::test]
-async fn find_successor_for_different_gear_returns_none() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    // Create two bikes
-    let bike1 = Part::create(
-        "Bike 1".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let bike2 = Part::create(
-        "Bike 2".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(300),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Create chain attachment to bike1
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    store
-        .attachment_create(Attachment::new(
-            chain.id,
-            attachment_time(),
-            bike1.id, // Attached to bike1
-            CHAIN,
-            MAX_TIME,
-        ))
-        .await?;
-
-    // Search for successor on bike2 - should return None since attachment is on bike1
-    let successor = store
-        .attachment_find_successor(chain.id, bike2.id, CHAIN, attachment_time(), CHAIN)
-        .await?;
-
-    assert!(successor.is_none());
-
-    Ok(())
-}
-
-/// attachment_find_successor() finds the earliest later attachment of
-/// another part of the same type at the same hook (not any later one)
-#[tokio::test]
-async fn find_successor_returns_earliest_future_attachment() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    // Create three chains and a bike
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let chain2 = Part::create(
-        "Chain 2".to_string(),
-        "SRAM".to_string(),
-        "PC-XX1".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let chain3 = Part::create(
-        "Chain 3".to_string(),
-        "KMC".to_string(),
-        "X10".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Create three attachments of the chain in sequence — its own rows
-    // never count as its successor.
-    let t1 = attachment_time(); // 2024-01-01
-    let t2 = later_time(); // 2024-06-01
-    let t3 = very_late_time(); // 2025-01-01
-
-    let _att1 = store
-        .attachment_create(Attachment::new(chain.id, t1, bike.id, CHAIN, t2))
-        .await?;
-
-    let _att2 = store
-        .attachment_create(Attachment::new(chain.id, t2, bike.id, CHAIN, t3))
-        .await?;
-
-    store
-        .attachment_create(Attachment::new(chain.id, t3, bike.id, CHAIN, MAX_TIME))
-        .await?;
-
-    // The other chains take the hook after t1 — the chain's own rows do
-    // not compete for its successor.
-    let _att4 = store
-        .attachment_create(Attachment::new(chain2.id, t2, bike.id, CHAIN, MAX_TIME))
-        .await?;
-
-    store
-        .attachment_create(Attachment::new(chain3.id, t3, bike.id, CHAIN, MAX_TIME))
-        .await?;
-
-    // Find successor at t1 should return the earliest other part's row (t2)
-    let successor = store
-        .attachment_find_successor(chain.id, bike.id, CHAIN, t1, CHAIN)
-        .await?;
-
-    let s = successor.expect("the earliest other part's row is the successor");
-    assert_eq!(s.part_id, chain2.id);
-    assert_eq!(s.attached, t2);
-
-    Ok(())
-}
-
-/// attachment_find_later_attachment_for_part() finds a later attachment for the same part
-#[tokio::test]
-async fn find_later_attachment_finds_next() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let t1 = attachment_time(); // 2024-01-01
-    let t2 = later_time(); // 2024-06-01
-
-    store
-        .attachment_create(Attachment::new(chain.id, t1, bike.id, CHAIN, t2))
-        .await?;
-
-    store
-        .attachment_create(Attachment::new(chain.id, t2, bike.id, CHAIN, MAX_TIME))
-        .await?;
-
-    // Find later attachment at t1
-    let result = store
-        .attachment_find_later_attachment_for_part(chain.id, t1)
-        .await?;
-
-    assert!(result.is_some());
-    assert_eq!(result.unwrap().attached, t2);
-
-    Ok(())
-}
-
-/// attachment_find_later_attachment_for_part() returns None when no later attachment exists
-#[tokio::test]
-async fn find_later_attachment_no_future_returns_none() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Only one attachment with MAX_TIME as detached
-    store
-        .attachment_create(Attachment::new(
-            chain.id,
-            attachment_time(),
-            bike.id,
-            CHAIN,
-            MAX_TIME,
-        ))
-        .await?;
-
-    // At any time after attachment_time but before MAX_TIME, no later attachment exists
-    let result = store
-        .attachment_find_later_attachment_for_part(chain.id, attachment_time())
-        .await?;
-
-    assert!(result.is_none());
-
-    Ok(())
-}
-
-/// attachment_find_part_attached_already() returns the row of this part
-/// at this gear and hook that ended exactly at the query time — the
-/// adjacent-merge trigger. A row that only covers the time does not count.
-#[tokio::test]
-async fn find_part_attached_already_returns_adjacent_predecessor() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let t1 = attachment_time();
-    let t2 = later_time();
-
-    store
-        .attachment_create(Attachment::new(chain.id, t1, bike.id, CHAIN, t2))
-        .await?;
-
-    // The row covers t1 but does not end there — not the merge trigger.
-    let result = store
-        .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, t1)
-        .await?;
-    assert!(result.is_none());
-
-    // The row ends exactly at t2 — the merge trigger.
-    let result = store
-        .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, t2)
-        .await?;
-    assert!(result.is_some());
-    assert_eq!(result.unwrap().attached, t1);
-
-    Ok(())
-}
-
-/// attachment_find_part_attached_already() returns None when the row did
-/// not end at the query time — neither a covering row nor a past row.
-#[tokio::test]
-async fn find_part_attached_already_returns_none_when_not_ended() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let t1 = attachment_time();
-    let t2 = later_time();
-
-    store
-        .attachment_create(Attachment::new(chain.id, t1, bike.id, CHAIN, t2))
-        .await?;
-
-    // The row covers t1 but does not end there.
-    let result = store
-        .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, t1)
-        .await?;
-    assert!(result.is_none());
-
-    // Past the row's end, the time no longer matches either.
-    let result = store
-        .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, very_late_time())
-        .await?;
-    assert!(result.is_none());
-
-    Ok(())
-}
-
-/// delete() addresses its row by part + attach time — the database's
-/// key — so stale gear or hook fields in the argument do not change which
-/// row is deleted.
-#[tokio::test]
-async fn delete_addresses_row_by_part_and_attach_time() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let bike1 = Part::create(
-        "Bike 1".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let bike2 = Part::create(
-        "Bike 2".to_string(),
-        "TendaBike".to_string(),
-        "Custom".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let t1 = attachment_time();
-
-    store
-        .attachment_create(Attachment::new(chain.id, t1, bike1.id, BIKE, MAX_TIME))
-        .await?;
-
-    // A stale gear field in the argument — the row is still addressed by
-    // part + attach time and is deleted.
-    let stale = Attachment {
-        gear: bike2.id,
-        ..store
-            .attachment_get_by_part_and_time(chain.id, t1)
-            .await?
-            .unwrap()
-    };
-    let deleted = AttachmentStore::delete(&mut store, stale).await?;
-    assert_eq!(deleted.gear, bike1.id);
-    assert!(store.attachments_all_by_part(chain.id).await?.is_empty());
-
-    // And deleting a row that does not exist is a not-found.
-    let result = AttachmentStore::delete(&mut store, stale).await;
-    assert!(matches!(result, Err(Error::NotFound(_))));
-
-    Ok(())
-}
-
-/// attachment_find_part_attached_already() returns None when part has never been attached
-#[tokio::test]
-async fn find_part_attached_already_returns_none_when_never_attached() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // No attachment created for chain - should return None
-    let result = store
-        .attachment_find_part_attached_already(chain.id, bike.id, CHAIN, attachment_time())
-        .await?;
-
-    assert!(result.is_none());
-
-    Ok(())
-}
-
-/// attachment_find_part_attached_already() correctly checks hook and gear matching
-#[tokio::test]
-async fn find_part_attached_already_checks_hook_and_gear() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    // Create two different bikes
-    let bike1 = Part::create(
-        "Bike 1".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let bike2 = Part::create(
-        "Bike 2".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(300),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Chain attached to bike1
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    store
-        .attachment_create(Attachment::new(
-            chain.id,
-            attachment_time(),
-            bike1.id, // Attached to bike1
-            CHAIN,
-            MAX_TIME,
-        ))
-        .await?;
-
-    // Searching for chain attached to bike2 should return None
-    let result = store
-        .attachment_find_part_attached_already(chain.id, bike2.id, CHAIN, MAX_TIME)
-        .await?;
-
-    assert!(result.is_none());
-
-    // Searching for the row at its end on bike1 should find it
-    let result = store
-        .attachment_find_part_attached_already(chain.id, bike1.id, CHAIN, MAX_TIME)
-        .await?;
-
-    assert!(result.is_some());
-
-    Ok(())
-}
-
-// === Phase 4: attach_assembly auto-detach and merge tests ===
-
-/// attach_assembly() auto-detaches and re-attaches the same part (different hook)
-#[tokio::test]
-async fn attach_assembly_auto_detaches_and_reattaches_same_part() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    // Create chain and bike
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // First attachment to bike hook A at t1
-    let _summary1 = attach_assembly(
-        &session,
-        chain.id,
-        attachment_time(),
-        bike.id,
-        BIKE,
-        false,
-        &mut store,
-    )
-    .await?;
-
-    // Verify chain is attached at t1 (the covering lookup)
-    let attached_at_t1 = store
-        .attachment_get_by_part_and_time(chain.id, attachment_time())
-        .await?;
-    assert!(attached_at_t1.is_some());
-
-    // Re-attach at t2 - should auto-detach from previous and attach at new time
-    let _summary2 = attach_assembly(
-        &session,
-        chain.id,
-        attachment_time(),
-        bike.id,
-        BIKE,
-        false,
-        &mut store,
-    )
-    .await?;
-
-    // Verify the first attachment was detached (should have later_time as detach time)
-    let summary = attach_assembly(
-        &session,
-        chain.id,
-        attachment_time(),
-        bike.id,
-        BIKE,
-        false,
-        &mut store,
-    )
-    .await?;
-
-    // Should have summary with chain part
-    assert!(!summary.parts.is_empty());
-
-    Ok(())
-}
-
-/// attach_assembly() auto-detaches competing part at same hook
-#[tokio::test]
-async fn attach_assembly_auto_detaches_competing_part_at_hook() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    // Create chain and derailleur - both attach to same hook type
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let _derailleur = Part::create(
-        "Derailleur".to_string(),
-        "Shimano".to_string(),
-        "Deore".to_string(),
-        DERAILLEUR,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Attach chain first at t1
-    let _summary1 = attach_assembly(
-        &session,
-        chain.id,
-        attachment_time(),
-        bike.id,
-        BIKE, // Chain uses Bike hook (id=1)
-        false,
-        &mut store,
-    )
-    .await?;
-
-    // Chain should be attached (the covering lookup)
-    let result = store
-        .attachment_get_by_part_and_time(chain.id, attachment_time())
-        .await?;
-    assert!(result.is_some());
-
-    Ok(())
-}
-
-/// Re-attaching a part exactly where its previous attachment on the same
-/// hook ended continues that row — the adjacent-merge: one row, not two.
-#[tokio::test]
-async fn attach_assembly_merges_adjacent_rows() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // A raw row t1..t2, then re-attach exactly at t2, where the row ended.
-    store
-        .attachment_create(Attachment::new(
-            chain.id,
-            attachment_time(),
-            bike.id,
-            BIKE,
-            later_time(),
-        ))
-        .await?;
-    let _summary = attach_assembly(
-        &session,
-        chain.id,
-        later_time(),
-        bike.id,
-        BIKE,
-        false,
-        &mut store,
-    )
-    .await?;
-
-    // The adjacent rows become one: the previous row was continued, not
-    // duplicated. (The merge trigger is the row ending exactly at the
-    // attach time — `attachment_find_part_attached_already`.)
-    let attachments = store.attachments_all_by_part(chain.id).await?;
-    assert_eq!(attachments.len(), 1, "adjacent rows merge into one");
-    assert_eq!(attachments[0].attached, attachment_time());
-    assert_eq!(attachments[0].detached, MAX_TIME);
-
-    Ok(())
-}
-
-/// attach_assembly() merges adjacent with previous attachment (same part, same hook)
-#[tokio::test]
-async fn attach_assembly_merge_adjacent_with_previous() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // First attachment at t1, detached at t2
-    store
-        .attachment_create(Attachment::new(
-            chain.id,
-            attachment_time(),
-            bike.id,
-            CHAIN,
-            later_time(),
-        ))
-        .await?;
-
-    // Re-attach at t2 using attach_assembly - should merge
-    let _summary = attach_assembly(
-        &session,
-        chain.id,
-        attachment_time(),
-        bike.id,
-        BIKE,
-        false,
-        &mut store,
-    )
-    .await?;
-
-    // Verify we have a continuous timeline (no gap between t2 and now)
-    let attachments = store.attachments_all_by_part(chain.id).await?;
-
-    // Should have 2 attachments now (original merged with new)
-    assert_eq!(attachments.len(), 1);
-
-    Ok(())
-}
-
-/// detach_assembly() returns None if part is not attached
+/// detach_assembly() of an already-detached part (no row at the time) is a
+/// NotFound.
 #[tokio::test]
 async fn detach_assembly_already_detached_returns_none() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
+    let part = PartId::from(4);
 
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Create attachment first
+    let mut store = MockStore::new();
     store
-        .attachment_create(Attachment::new(
-            chain.id,
-            attachment_time(),
-            bike_id(),
-            CHAIN,
-            MAX_TIME,
-        ))
-        .await?;
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user(), CHAIN, UsageId::new())));
+    // The part was already detached: no row at the detach time.
+    store
+        .expect_attachment_get_by_part_and_time()
+        .returning(|_, _| Ok(None));
 
-    // Detach at t1
-    let summary = detach_assembly(&session, chain.id, attachment_time(), false, &mut store).await?;
-    assert!(summary.parts.is_empty());
-
-    // Try to detach again at same time - returns error (part was deleted by first detach)
-    let result = detach_assembly(&session, chain.id, attachment_time(), false, &mut store).await;
-    assert!(result.is_err());
-
+    let result = detach_assembly(&test_session(), part, attachment_time(), false, &mut store).await;
+    assert!(matches!(&result, Err(Error::NotFound(_))));
     Ok(())
 }
 
-/// dispose_assembly() returns error if already disposed
+// === Suite 4: dispose_assembly ===
+
+/// dispose_assembly() disposes a part: the summary reports the part with its
+/// disposed timestamp set.
+#[tokio::test]
+async fn dispose_assembly_disposes_part() -> TbResult<()> {
+    let part = PartId::from(4);
+
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user(), CHAIN, UsageId::new())));
+    // No current attachment, and no subparts.
+    store
+        .expect_attachments_all_by_part()
+        .returning(|_| Ok(vec![]));
+    store
+        .expect_assembly_get_by_types_time_and_gear()
+        .returning(|_, _, _| Ok(vec![]));
+    store.expect_part_update().returning(Ok);
+
+    let summary = dispose_assembly(&test_session(), part, later_time(), false, &mut store).await?;
+
+    let disposed = sole_live(&summary.parts);
+    assert_eq!(disposed.id, part);
+    assert_eq!(disposed.disposed_at, Some(later_time()));
+    Ok(())
+}
+
+/// dispose_assembly() disposes a part that is still attached (dispose never
+/// rejects an attachment detached after the given time).
+#[tokio::test]
+async fn dispose_assembly_disposes_attached_part() -> TbResult<()> {
+    let part = PartId::from(4);
+    let bike = PartId::from(1);
+
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user(), CHAIN, UsageId::new())));
+    // The part is attached (detached at MAX_TIME), so disposing at the attach
+    // time succeeds.
+    store.expect_attachments_all_by_part().returning(move |_| {
+        Ok(vec![att(
+            part,
+            attachment_time(),
+            bike,
+            CHAIN,
+            MAX_TIME,
+            UsageId::new(),
+        )])
+    });
+    // No subparts.
+    store
+        .expect_assembly_get_by_types_time_and_gear()
+        .returning(|_, _, _| Ok(vec![]));
+    store.expect_part_update().returning(Ok);
+
+    let result =
+        dispose_assembly(&test_session(), part, attachment_time(), false, &mut store).await;
+    assert!(result.is_ok());
+    Ok(())
+}
+
+/// dispose_assembly() with all=true disposes the subparts too: the summary
+/// reports the part and its subpart, both disposed.
+#[tokio::test]
+async fn dispose_assembly_all_disposes_subparts() -> TbResult<()> {
+    let wheel = PartId::from(3);
+    let cassette = PartId::from(9);
+    let bike = PartId::from(1);
+
+    let mut store = MockStore::new();
+    store.expect_partid_get_part().returning(move |id| {
+        let what = if id == wheel { REAR_WHEEL } else { CASSETTE };
+        Ok(part_row(id, test_user(), what, UsageId::new()))
+    });
+    store.expect_attachments_all_by_part().returning(move |id| {
+        if id == wheel {
+            Ok(vec![att(
+                wheel,
+                attachment_time(),
+                bike,
+                REAR_WHEEL,
+                MAX_TIME,
+                UsageId::new(),
+            )])
+        } else {
+            Ok(vec![att(
+                cassette,
+                attachment_time(),
+                wheel,
+                CASSETTE,
+                MAX_TIME,
+                UsageId::new(),
+            )])
+        }
+    });
+    // The wheel's subparts (its subtypes) include the cassette, attached to it.
+    store
+        .expect_assembly_get_by_types_time_and_gear()
+        .returning(move |_, _, _| {
+            Ok(vec![att(
+                cassette,
+                attachment_time(),
+                wheel,
+                CASSETTE,
+                MAX_TIME,
+                UsageId::new(),
+            )])
+        });
+    store.expect_part_update().returning(Ok);
+
+    let summary = dispose_assembly(&test_session(), wheel, later_time(), true, &mut store).await?;
+
+    // Both the wheel and its cassette subpart are disposed.
+    for id in [wheel, cassette] {
+        let disposed = summary.parts.live().into_iter().find(|p| p.id == id);
+        assert!(
+            disposed.is_some_and(|p| p.disposed_at.is_some()),
+            "part {id} is disposed"
+        );
+    }
+    Ok(())
+}
+
+/// dispose_assembly() of an already-disposed part is an error (the dispose is
+/// not re-applied).
 #[tokio::test]
 async fn dispose_assembly_already_disposed_keeps_timestamp() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
+    let part = PartId::from(4);
 
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
+    let mut store = MockStore::new();
+    // The part is already disposed.
+    store.expect_partid_get_part().returning(move |_| {
+        Ok(Part {
+            disposed_at: Some(attachment_time()),
+            ..part_row(part, test_user(), CHAIN, UsageId::new())
+        })
+    });
+    store
+        .expect_attachments_all_by_part()
+        .returning(|_| Ok(vec![]));
 
-    // Dispose at t1
-    let _ = dispose_assembly(&session, chain.id, attachment_time(), false, &mut store).await?;
-
-    // Get the disposed_at time
-    let part1 = chain.id.part(&session, &mut store).await?;
-    let disposed_at_1 = part1.disposed_at.unwrap();
-
-    // Dispose again at t2 - should fail since already disposed
-    let result = dispose_assembly(&session, chain.id, later_time(), false, &mut store).await;
-    assert!(result.is_err());
-
-    // disposed_at should still be t1
-    let part2 = chain.id.part(&session, &mut store).await?;
-    assert_eq!(part2.disposed_at.unwrap(), disposed_at_1);
-
+    let result = dispose_assembly(&test_session(), part, later_time(), false, &mut store).await;
+    assert!(matches!(&result, Err(Error::BadRequest(msg)) if msg.contains("already disposed")));
     Ok(())
 }
 
-/// Usage calculation returns valid usage with correct values
+// === Suite 5: recover_assembly ===
+
+/// recover_assembly() restores a disposed part: the summary reports the part
+/// with its disposed timestamp cleared.
 #[tokio::test]
-async fn calculate_usage_returns_valid_result() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
+async fn recover_assembly_restores_disposed_part() -> TbResult<()> {
+    let part = PartId::from(4);
 
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
+    let mut store = MockStore::new();
+    // The part is disposed.
+    store.expect_partid_get_part().returning(move |_| {
+        Ok(Part {
+            disposed_at: Some(later_time()),
+            ..part_row(part, test_user(), CHAIN, UsageId::new())
+        })
+    });
+    store.expect_part_update().returning(Ok);
 
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
+    let summary = recover_assembly(&test_session(), part, false, &mut store).await?;
 
-    // Create attachment and verify usage calculation works
-    let att = Attachment::new(chain.id, attachment_time(), bike.id, CHAIN, MAX_TIME);
-
-    // Usage calculation requires ActivityStore - for basic test, verify Attachment stores correctly
-    let stored = store.attachment_create(att).await?;
-    assert_eq!(stored.part_id, chain.id);
-    assert_eq!(stored.gear, bike.id);
-
+    let restored = sole_live(&summary.parts);
+    assert_eq!(restored.id, part);
+    assert!(restored.disposed_at.is_none());
     Ok(())
 }
 
-/// Summary contains all affected parts after attach_assembly with subparts
+/// recover_assembly() of a non-disposed part is an error.
 #[tokio::test]
-async fn attach_assembly_returns_summary_with_all_parts() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
+async fn recover_assembly_error_if_not_disposed() -> TbResult<()> {
+    let part = PartId::from(4);
 
-    // Create bike
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
+    let mut store = MockStore::new();
+    // The part is not disposed.
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user(), CHAIN, UsageId::new())));
 
-    // Create chain as child of bike
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        Some(bike.id.to_string()), // bike is parent
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
+    let result = recover_assembly(&test_session(), part, false, &mut store).await;
+    assert!(matches!(&result, Err(Error::BadRequest(msg)) if msg.contains("is not disposed")));
+    Ok(())
+}
 
-    // Attach chain to bike - should include chain as affected part
-    let summary = attach_assembly(
-        &session,
-        chain.id,
+/// recover_assembly() with all=true restores the subparts too: the summary
+/// reports the part and its subpart, both restored.
+#[tokio::test]
+async fn recover_assembly_all_restores_subparts() -> TbResult<()> {
+    let wheel = PartId::from(3);
+    let cassette = PartId::from(9);
+
+    let mut store = MockStore::new();
+    // Both the wheel and its cassette subpart are disposed.
+    store.expect_partid_get_part().returning(move |id| {
+        let what = if id == wheel { REAR_WHEEL } else { CASSETTE };
+        Ok(Part {
+            disposed_at: Some(attachment_time()),
+            ..part_row(id, test_user(), what, UsageId::new())
+        })
+    });
+    // The wheel's subparts (its subtypes) include the cassette.
+    store
+        .expect_assembly_get_by_types_time_and_gear()
+        .returning(move |_, _, _| {
+            Ok(vec![att(
+                cassette,
+                attachment_time(),
+                wheel,
+                CASSETTE,
+                MAX_TIME,
+                UsageId::new(),
+            )])
+        });
+    store.expect_part_update().returning(Ok);
+
+    let summary = recover_assembly(&test_session(), wheel, true, &mut store).await?;
+
+    // Both the wheel and its cassette subpart are restored.
+    for id in [wheel, cassette] {
+        let restored = summary.parts.live().into_iter().find(|p| p.id == id);
+        assert!(
+            restored.is_some_and(|p| p.disposed_at.is_none()),
+            "part {id} is restored"
+        );
+    }
+    Ok(())
+}
+
+// === Suite 6: shift ===
+
+/// shift() moves a part to a new gear: the old row is cut off at the shift
+/// time and the part is re-attached to the new gear.
+#[tokio::test]
+async fn shift_changes_gear_and_creates_detach() -> TbResult<()> {
+    let part = PartId::from(2);
+    let from = PartId::from(1);
+    let to = PartId::from(7);
+
+    let mut store = MockStore::new();
+    store.expect_partid_get_part().returning(move |id| {
+        let what = if id == part { FRONT_WHEEL } else { BIKE };
+        Ok(part_row(id, test_user(), what, UsageId::new()))
+    });
+    wire_delete_path(&mut store);
+    wire_create_path(&mut store);
+    store
+        .expect_attachment_find_successor()
+        .returning(|_, _, _, _, _| Ok(None));
+    store
+        .expect_attachment_find_later_attachment_for_part()
+        .returning(|_, _| Ok(None));
+    store
+        .expect_attachment_find_part_attached_already()
+        .returning(|_, _, _, _| Ok(None));
+
+    let att = att(
+        part,
         attachment_time(),
-        bike.id,
-        BIKE,
-        false,
-        &mut store,
-    )
-    .await?;
+        from,
+        FRONT_WHEEL,
+        MAX_TIME,
+        UsageId::new(),
+    );
+    let mut summary = Summary::default();
+    let end = att
+        .shift(later_time(), to, &mut summary, &mut store)
+        .await?;
 
-    // Summary should include both bike and chain
-    assert!(!summary.parts.is_empty());
-
+    // The part is re-attached to the new gear.
+    let new_att = summary
+        .attachments
+        .live()
+        .into_iter()
+        .find(|a| a.a.part_id == part && a.a.gear == to)
+        .expect("the shifted row is reported on the new gear");
+    assert_eq!(new_att.a.attached, later_time());
+    assert!(end >= later_time());
     Ok(())
 }
 
-/// subparts() returns correct children when multiple attachment times exist
+/// shift() returns the end time of the new attachment: with no successor and
+/// no later attachment it runs to MAX_TIME.
 #[tokio::test]
-async fn subparts_returns_correct_for_multiple_times() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
+async fn shift_returns_end_time() -> TbResult<()> {
+    let part = PartId::from(4);
+    let from = PartId::from(1);
+    let to = PartId::from(7);
 
-    // Create parent part (wheel)
-    let wheel = Part::create(
-        "Wheel".to_string(),
-        "Weston".to_string(),
-        "Ultrio".to_string(),
-        REAR_WHEEL,
-        None,
-        sample_purchase_date() - time::Duration::days(180),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Create subpart (cassette)
-    let cassette = Part::create(
-        "Cassette".to_string(),
-        "SRAM".to_string(),
-        "GX Eagle".to_string(),
-        CASSETTE,
-        Some(wheel.id.to_string()), // Cassette is subpart of wheel
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Attach cassette at t1
+    let mut store = MockStore::new();
+    store.expect_partid_get_part().returning(move |id| {
+        let what = if id == part { CHAIN } else { BIKE };
+        Ok(part_row(id, test_user(), what, UsageId::new()))
+    });
+    wire_delete_path(&mut store);
+    wire_create_path(&mut store);
     store
-        .attachment_create(Attachment::new(
-            cassette.id,
-            attachment_time(),
-            wheel.id,
-            CASSETTE,
-            MAX_TIME,
-        ))
-        .await?;
-
-    // Create attachment for wheel itself
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
+        .expect_attachment_find_successor()
+        .returning(|_, _, _, _, _| Ok(None));
     store
-        .attachment_create(Attachment::new(
-            wheel.id,
-            attachment_time(),
-            bike.id,
-            REAR_WHEEL,
-            MAX_TIME,
-        ))
-        .await?;
+        .expect_attachment_find_later_attachment_for_part()
+        .returning(|_, _| Ok(None));
+    store
+        .expect_attachment_find_part_attached_already()
+        .returning(|_, _, _, _| Ok(None));
 
-    // At attachment_time, subparts() should find cassette attached to wheel
-    let attachments = store.attachments_all_by_part(wheel.id).await?;
-    assert!(!attachments.is_empty());
-
-    Ok(())
-}
-
-/// Attach multiple parts to same gear at different times
-#[tokio::test]
-async fn attachments_all_by_part_returns_all_timeline_entries() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
+    let att = att(
+        part,
+        attachment_time(),
+        from,
         CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let t1 = attachment_time();
-    let t2 = later_time();
-    let t3 = very_late_time();
-
-    // Create multiple attachments over time
-    store
-        .attachment_create(Attachment::new(chain.id, t1, bike.id, CHAIN, t2))
+        MAX_TIME,
+        UsageId::new(),
+    );
+    let mut summary = Summary::default();
+    let end = att
+        .shift(later_time(), to, &mut summary, &mut store)
         .await?;
 
-    store
-        .attachment_create(Attachment::new(chain.id, t2, bike.id, CHAIN, t3))
-        .await?;
-
-    store
-        .attachment_create(Attachment::new(chain.id, t3, bike.id, CHAIN, MAX_TIME))
-        .await?;
-
-    // Get all attachments for chain
-    let all = store.attachments_all_by_part(chain.id).await?;
-
-    assert_eq!(all.len(), 3);
-    assert_eq!(all[0].attached, t1);
-    assert_eq!(all[1].attached, t2);
-    assert_eq!(all[2].attached, t3);
-
-    Ok(())
-}
-
-/// assembly_get_by_types_time_and_gear returns correct attachments at given time
-#[tokio::test]
-async fn assembly_get_by_types_time_and_gear_returns_correct() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    // Create bike
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Create chain and cassette attached to bike
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    store
-        .attachment_create(Attachment::new(
-            chain.id,
-            attachment_time(),
-            bike.id,
-            CHAIN,
-            MAX_TIME,
-        ))
-        .await?;
-
-    let cassette = Part::create(
-        "Cassette".to_string(),
-        "SRAM".to_string(),
-        "GX Eagle".to_string(),
-        CASSETTE,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    store
-        .attachment_create(Attachment::new(
-            cassette.id,
-            attachment_time(),
-            bike.id,
-            CASSETTE,
-            MAX_TIME,
-        ))
-        .await?;
-
-    // Query for chain + cassette on bike at attachment_time
-    let types = vec![CHAIN, CASSETTE];
-    let results = store
-        .assembly_get_by_types_time_and_gear(types, bike.id, attachment_time())
-        .await?;
-
-    // Should return both chain and cassette attachments
-    assert_eq!(results.len(), 2);
-
-    Ok(())
-}
-
-/// attachments_delete_by_parts deletes all attachments for given parts
-#[tokio::test]
-async fn attachments_delete_by_parts_removes_correct() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-
-    // Create chain and cassette
-    let chain = Part::create(
-        "Chain".to_string(),
-        "Shimano".to_string(),
-        "CN-M510".to_string(),
-        CHAIN,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let cassette = Part::create(
-        "Cassette".to_string(),
-        "SRAM".to_string(),
-        "GX Eagle".to_string(),
-        CASSETTE,
-        None,
-        sample_purchase_date() - time::Duration::days(30),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    let bike = Part::create(
-        "Bike".to_string(),
-        "TendaBike".to_string(),
-        "Standard".to_string(),
-        BIKE,
-        None,
-        sample_purchase_date() - time::Duration::days(365),
-        &session,
-        &mut store,
-    )
-    .await?;
-
-    // Create attachments for both
-    store
-        .attachment_create(Attachment::new(
-            chain.id,
-            attachment_time(),
-            bike.id,
-            CHAIN,
-            MAX_TIME,
-        ))
-        .await?;
-
-    store
-        .attachment_create(Attachment::new(
-            cassette.id,
-            attachment_time(),
-            bike.id,
-            CASSETTE,
-            MAX_TIME,
-        ))
-        .await?;
-
-    // Delete chain attachment only
-    let parts = vec![chain.clone()];
-    let deleted = store.attachments_delete_by_parts(&parts).await?;
-
-    assert_eq!(deleted, 1);
-
-    // Chain should have no attachments
-    let chain_attachments = store.attachments_all_by_part(chain.id).await?;
-    assert!(chain_attachments.is_empty());
-
-    // Cassette should still have its attachment
-    let cassette_attachments = store.attachments_all_by_part(cassette.id).await?;
-    assert_eq!(cassette_attachments.len(), 1);
-
+    assert!(end >= later_time());
     Ok(())
 }

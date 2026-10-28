@@ -1,6 +1,5 @@
 use log::debug;
 use sqlx::FromRow;
-use std::borrow::Borrow;
 use uuid::Uuid;
 
 use crate::{SqlxConn, into_domain, option_into};
@@ -71,7 +70,7 @@ impl From<DbUsage> for Usage {
 
 #[async_trait::async_trait]
 impl<'c> UsageStore for SqlxConn<'c> {
-    async fn get(&mut self, id: UsageId) -> TbResult<Option<Usage>> {
+    async fn usage_get(&mut self, id: UsageId) -> TbResult<Option<Usage>> {
         sqlx::query_as!(
             DbUsage,
             r#"SELECT id, time, distance, climb, descend, energy as "energy!", count FROM usages WHERE id = $1"#,
@@ -83,10 +82,7 @@ impl<'c> UsageStore for SqlxConn<'c> {
             .map(option_into)
     }
 
-    async fn update<U>(&mut self, vec: &[U]) -> TbResult<usize>
-    where
-        U: Borrow<Usage> + Sync,
-    {
+    async fn usages_update(&mut self, vec: &[Usage]) -> TbResult<usize> {
         let len = vec.len();
 
         // The upserts run on the caller's transaction (`self` is already the
@@ -96,7 +92,7 @@ impl<'c> UsageStore for SqlxConn<'c> {
         // transaction in progress" notice) and its `commit` would commit
         // the caller's transaction early.
         for usage in vec {
-            let usage = DbUsage::from(usage.borrow());
+            let usage = DbUsage::from(usage);
             sqlx::query!(
                 "INSERT INTO usages (id, time, distance, climb, descend, energy, count)
                  VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -118,7 +114,7 @@ impl<'c> UsageStore for SqlxConn<'c> {
         Ok(len)
     }
 
-    async fn delete(&mut self, usage: UsageId) -> TbResult<Usage> {
+    async fn usage_delete(&mut self, usage: UsageId) -> TbResult<Usage> {
         sqlx::query_as!(
             DbUsage,
             r#"DELETE FROM usages WHERE id = $1 RETURNING id, time, distance, climb, descend, energy as "energy!", count"#,

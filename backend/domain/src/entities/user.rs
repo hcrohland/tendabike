@@ -161,10 +161,18 @@ impl UserId {
     /// Crosses: activity, attachment, part, partnote, service, serviceplan,
     /// shop, usage, user.
     pub async fn read(self, shop: Option<ShopId>, store: &mut impl Store) -> TbResult<UserState> {
-        let user = UserStore::get(store, self).await?;
+        let user = UserStore::user_get(store, self).await?;
         let caller: UserPublic = user.clone().into();
         let summary = self.get_summary(shop, Some(caller), store).await?;
         Ok(UserState { user, summary })
+    }
+
+    /// The lightweight record-only read: the bare [`User`] row, no [`Summary`].
+    /// For callers that need only the record — the onboarding guard, the
+    /// `ApiRead::UserRecord` webhook read — and must not pay for the full
+    /// [`UserState`] composite (spec #558 §3.5).
+    pub async fn record(&self, store: &mut impl UserStore) -> TbResult<User> {
+        UserStore::user_get(store, *self).await
     }
 
     pub async fn get_public(self, store: &mut impl UserStore) -> TbResult<UserPublic> {
@@ -174,7 +182,7 @@ impl UserId {
             firstname,
             avatar,
             ..
-        } = store.get(self).await?;
+        } = store.user_get(self).await?;
         Ok(UserPublic {
             id,
             name,
@@ -190,7 +198,9 @@ impl UserId {
         // The lightweight single-row read: the stat needs the user record,
         // not the `UserState` composite (the composite is the unified
         // read's primitive, spec #558 §3.5 — the per-user routes only).
-        let user = UserStore::get(store, *self).await.context("User record")?;
+        let user = UserStore::user_get(store, *self)
+            .await
+            .context("User record")?;
         let parts = Part::get_all(self, store)
             .await
             .context("User parts")?
@@ -213,7 +223,7 @@ impl UserId {
         store: &mut impl UserStore,
     ) -> TbResult<Self> {
         store
-            .create(firstname, lastname, avatar)
+            .user_create(firstname, lastname, avatar)
             .await
             .map(|u| u.id)
     }
@@ -226,7 +236,7 @@ impl UserId {
         store: &mut impl UserStore,
     ) -> TbResult<Self> {
         store
-            .update(self, firstname_, lastname, avatar)
+            .user_update(self, firstname_, lastname, avatar)
             .await
             .map(|u| u.id)
     }
@@ -234,7 +244,7 @@ impl UserId {
     pub async fn is_admin(&self, store: &mut impl UserStore) -> TbResult<bool> {
         // The lightweight single-row read: one bool, no `UserState`
         // composite (this runs at every login and every session build).
-        UserStore::get(store, *self).await.map(|u| u.is_admin)
+        UserStore::user_get(store, *self).await.map(|u| u.is_admin)
     }
 
     /// get all parts, attachments and activities for the user

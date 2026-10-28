@@ -23,11 +23,11 @@ The domain layer (`backend/domain`) is the only thing that computes entity state
 
 ## The store seam
 
-The domain layer is storage-agnostic: every operation goes through the store traits in `backend/domain/src/traits/`, and two adapters implement them — the in-memory store (`MemStore`, `backend/domain/src/test_support/`) and the Postgres store (`SqlxConn`, `backend/sqlx/src/store/`).
+The domain layer is storage-agnostic: every operation goes through the store traits in `backend/domain/src/traits/`, and the Postgres store (`SqlxConn`, `backend/sqlx/src/store/`) is the production adapter. The DB-free test suites run the domain logic over `mockall` `mock!` doubles (the `MockStore` in `backend/domain/src/test_support/`), not a second store adapter.
 
-The `Store` trait is a marker naming a complete store (all nine sub-traits); it carries no methods. The transaction lifecycle — `begin`, `commit`, `rollback` — is inherent on the concrete adapters and is driven only by the web layer, the executor loop, and the tests — never by the domain.
+The `Store` trait is a marker naming a complete store (all nine sub-traits); it carries no methods. The transaction lifecycle — `begin`, `commit`, `rollback` — is inherent on the concrete store (`SqlxConn`) and is driven only by the web layer, the executor loop, and the tests — never by the domain.
 
-The contract: a domain operation must pass on **both** adapters, and where they disagree the **Postgres behavior is the source of truth** — the database is what production runs, so the in-memory store follows it, never the other way around. Where a rule was unified, the trait docs name it (the attachment path rules in #407, the activity path rules in #408, the in-memory store's transactionality and 30-minute offset rounding in #409).
+The contract: a domain operation must pass on the `mock!` double (the DB-free suites) and on the Postgres store (the sqlx seam), and where they disagree the **Postgres behavior is the source of truth** — the database is what production runs. Where a rule was unified, the trait docs name it (the attachment path rules in #407, the activity path rules in #408, and the 30-minute offset rounding in #409).
 
 The contract is enforced in CI: the required `rust` job runs both suites (the seam suite against a real Postgres service); a red seam blocks the PR. See [`backend/docs/tests/sqlx.md`](../../backend/docs/tests/sqlx.md) for the seam suite's mechanics.
 

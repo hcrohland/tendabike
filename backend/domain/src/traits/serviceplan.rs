@@ -3,10 +3,10 @@ use crate::{PartId, ServicePlan, ServicePlanId, TbResult, UserId};
 #[async_trait::async_trait]
 /// A trait representing a store for `Usage` objects.
 pub trait ServicePlanStore {
-    async fn create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
-    async fn get(&mut self, plan: ServicePlanId) -> TbResult<ServicePlan>;
-    async fn plan_update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
-    async fn delete(&mut self, plan: ServicePlanId) -> TbResult<usize>;
+    async fn serviceplan_create(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
+    async fn serviceplan_get(&mut self, plan: ServicePlanId) -> TbResult<ServicePlan>;
+    async fn serviceplan_update(&mut self, plan: ServicePlan) -> TbResult<ServicePlan>;
+    async fn serviceplan_delete(&mut self, plan: ServicePlanId) -> TbResult<usize>;
 
     /// Deletes an array of serviceplans
     ///

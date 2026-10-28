@@ -166,7 +166,7 @@ pub(crate) async fn get_token(
     let strava_id = state.strava_id();
     if let Some(refresh) = new_refresh {
         let secret = refresh.secret().to_string();
-        strava_id.update_token(Some(&secret), store).await?;
+        strava_id.update_token(Some(secret), store).await?;
     }
     {
         let mut cache = TOKEN_CACHE.lock().expect("the token cache is not poisoned");

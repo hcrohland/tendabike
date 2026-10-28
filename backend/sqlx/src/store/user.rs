@@ -58,7 +58,7 @@ impl From<DbUser> for User {
 
 #[async_trait::async_trait]
 impl<'c> tb_domain::UserStore for SqlxConn<'c> {
-    async fn get(&mut self, uid: UserId) -> TbResult<User> {
+    async fn user_get(&mut self, uid: UserId) -> TbResult<User> {
         sqlx::query_as!(
             DbUser,
             "SELECT id, name, firstname, is_admin, avatar, onboarding_status FROM users WHERE id = $1",
@@ -70,7 +70,7 @@ impl<'c> tb_domain::UserStore for SqlxConn<'c> {
         .map(Into::into)
     }
 
-    async fn create(
+    async fn user_create(
         &mut self,
         firstname_: &str,
         lastname: &str,
@@ -94,7 +94,7 @@ impl<'c> tb_domain::UserStore for SqlxConn<'c> {
         .map(Into::into)
     }
 
-    async fn update(
+    async fn user_update(
         &mut self,
         uid: &UserId,
         firstname_: &str,
