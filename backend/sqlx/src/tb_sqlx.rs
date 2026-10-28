@@ -40,10 +40,7 @@ impl<'c> SqlxConn<'c> {
 
     /// Roll back the transaction and return the connection to the pool.
     ///
-    /// Consumes the `SqlxConn`; the in-memory twin `MemStore::rollback`
-    /// keeps the store usable — a deliberate ergonomic difference (see
-    /// `backend/docs/tests/domain.md`, "Transactional semantics (issue
-    /// #409)").
+    /// Consumes the `SqlxConn`.
     ///
     /// `pub` because `SqlxConn` is a public type: callers that drive a
     /// transaction (the loop, the seam suite) call it when a message fails
@@ -61,10 +58,9 @@ impl<'c> SqlxConn<'c> {
 
     /// Commit the transaction and return the connection to the pool.
     ///
-    /// Consumes the `SqlxConn`, like the in-memory twin `MemStore::commit`.
-    /// This is the production path the web layer drives after every
-    /// `begin()`; the domain never commits (the `Store` marker carries no
-    /// transaction lifecycle).
+    /// Consumes the `SqlxConn`. This is the production path the web layer
+    /// drives after every `begin()`; the domain never commits (the `Store`
+    /// marker carries no transaction lifecycle).
     pub async fn commit(self) -> TbResult<()> {
         self.into_inner()
             .commit()

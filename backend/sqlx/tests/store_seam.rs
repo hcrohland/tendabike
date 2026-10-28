@@ -1163,11 +1163,8 @@ async fn dispose_part() -> tb_domain::TbResult<()> {
 // Activity: upsert, update, delete
 // ---------------------------------------------------------------------------
 
-/// The activity id is a primary key on both stores (issue #405): the
-/// INSERT hits the key on a duplicate id and maps to
-/// `Error::DatabaseFailure` — the in-memory store applies the same rule.
-/// The in-memory twin is `activity_create_rejects_duplicate_id` in
-/// `mem_activity.rs`.
+/// The activity id is a primary key (issue #405): the INSERT hits the key
+/// on a duplicate id and maps to `Error::DatabaseFailure`.
 #[tokio::test]
 #[ignore]
 async fn activity_create_rejects_duplicate_id() -> tb_domain::TbResult<()> {
@@ -1626,12 +1623,10 @@ async fn activity_get_all_orders_by_start() -> tb_domain::TbResult<()> {
 
 /// A production read re-expresses the stored start in the stored offset
 /// rounded to the nearest 30 minutes — the instant never moves, only the
-/// label does (the one rule documented on `Activity`, issue #409; the
-/// in-memory twin is `activity_offsets_normalized_to_30_minutes` in
-/// `mem_activity.rs`). Every other ride in this suite sits exactly on a
-/// 30-minute boundary (UTC, +01:00, +02:00), where the rounding is a
-/// no-op, so the rule is only visible with an off-boundary offset: a
-/// +00:20 start comes back as +00:30.
+/// label does (the one rule documented on `Activity`, issue #409). Every
+/// other ride in this suite sits exactly on a 30-minute boundary (UTC,
+/// +01:00, +02:00), where the rounding is a no-op, so the rule is only
+/// visible with an off-boundary offset: a +00:20 start comes back as +00:30.
 #[tokio::test]
 #[ignore]
 async fn activity_read_rounds_offset_to_30_minutes() -> tb_domain::TbResult<()> {

@@ -27,16 +27,16 @@
 
 ## Tests
 
-Most suites are in-memory; the `#[ignore]`d seam suites in `tb_sqlx` need `--include-ignored` and `SCRATCH_DATABASE_URL`.
+The DB-free suites (domain, strava, axum) run against `mockall` `mock!` doubles; the `#[ignore]`d seam suites in `tb_sqlx` run against a real Postgres and are the behavioral bar — they need `--include-ignored` and `SCRATCH_DATABASE_URL`.
 
 ```bash
 SQLX_OFFLINE=true cargo test -q -- --include-ignored   # complete suite (seam included)
-SQLX_OFFLINE=true cargo test -q -p tb_<crate>          # one crate's in-memory suites
+SQLX_OFFLINE=true cargo test -q -p tb_<crate>          # one crate's DB-free suites
 ```
 
 Before writing, changing, or exploring tests for a crate, read its guide:
 
-- `tb_domain` → [`docs/tests/domain.md`](docs/tests/domain.md) — `MemStore`, fixtures, the prepopulated snapshot and its data rules
-- `tb_strava` → [`docs/tests/strava.md`](docs/tests/strava.md) — `TestStravaStore`, `strava_session`/`strava_admin_session`, JSON helpers
+- `tb_domain` → [`docs/tests/domain.md`](docs/tests/domain.md) — `MockStore` (the `mock!` store double), fixtures, the prepopulated snapshot and its data rules
+- `tb_strava` → [`docs/tests/strava.md`](docs/tests/strava.md) — `MockStravaConn` (the `mock!` store double), `strava_session`/`strava_admin_session`, JSON helpers
 - `tb_axum` → [`docs/tests/axum.md`](docs/tests/axum.md) — `test_app`, router tests, coverage map
 - `tb_sqlx` → [`docs/tests/sqlx.md`](docs/tests/sqlx.md) — entity-mapping roundtrips, the seam integration suites

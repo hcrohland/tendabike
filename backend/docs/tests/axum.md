@@ -14,15 +14,15 @@ All tests run in-memory (no database; the DB boundary is a fast-failing source, 
 
 ## Key infrastructure
 
-All in `test_support.rs` (the `#[cfg(test)]` module declared in `lib.rs`).
+All in `lib_tests.rs` (the `#[cfg(test)]` module declared in `lib.rs`).
 
-- **`FakeSource` / `FakeConn`** — the fast-failing source. `FakeSource::begin` returns a `DatabaseFailure` immediately (no connection is ever attempted), so any handler that touches the database answers 500. `FakeConn` is the `TxnSource::Conn` type witness: it implements all nine `Store` sub-traits, `StravaDataStore`, and `Txn`; every method is `unimplemented!()` (never reached because `begin` fails first), and `commit`/`rollback` return a `DatabaseFailure`.
-- **`LiveSource` / `LiveConn`** — the live source. `LiveConn` delegates every store sub-trait to a shared `MemStore` (the in-memory domain store, `tb_domain` `test-support` feature) and carries an in-memory Strava event queue plus an `arm_panic()` seam for the respawn test; the real `tb_exec` executor loop runs against it. `LiveSource::begin` hands out `LiveConn` siblings over one shared store.
-- **`test_app(store)`** — full production `Router` from `routes()` + `SessionManagerLayer` (tower-sessions `MemoryStore` sessions, seedable by tests) + `AppState::new(FakeSource)`.
-- **`test_app_live(store, source, registry)`** — same, with `AppState::with_registry(LiveSource, Arc<Registry>)`; the stream tests use a short idle/heartbeat cadence so the executor's lifecycle is observable.
+- **`MockServiceApi`** (`tb_exec`) — the `mockall` service-API double the whole suite runs against: no loop, no in-memory store, no executor tokio plumbing. The mock's expectations (`.times(n)` + arg predicates) verify the handler called the right operation with the right args; the canned replies are the mock's; the error mapping (404/500/401/403/400/409/429) is the mock returning `Err(...)` directly — no failing `begin` anywhere.
+- **`test_app(store, api)`** — full production `Router` from `routes()` + `SessionManagerLayer` (tower-sessions `MemoryStore` sessions) + `AppState::new(api)`.
 - **`run` / `run_json` / `run_raw`** — `tower::ServiceExt::oneshot` roundtrip; returns `(StatusCode, HeaderMap, Vec<u8>)`. `run_raw` is the multipart/raw-body helper (raw bytes plus an explicit content type — `run_json` cannot carry one), and `run`/`run_json` are refactored on top of it.
 - **`run_sse` / `read_sse_frames`** — GET a long-lived SSE endpoint and keep the body open (collecting it would hang); read frames with a per-frame timeout.
 - **`user_cookie(store)` / `admin_cookie(store)`** — create a session via `RequestSession::new_dummy(is_admin)`, return the `id` cookie header.
+
+What this suite deliberately does not cover: loop + real-store truth (reads-as-messages, FIFO, rollback, reap, queue drain, Registry-level lifecycle, the direct ops' transactions) lives in `sqlx/tests/executor_seam.rs` on real Postgres; the read/write dispatch logic lives in the domain suite (`apiread_tests` beside `apiwrite_tests`).
 - **`RequestSession::new_dummy(is_admin)`** — `#[cfg(test)]` constructor in `strava/session.rs` (fields are private; always construct sessions this way in tests).
 - **`CANNED_STRAVA` / `canned_strava(uri, json)`** — test-only hook in the production module `strava/session.rs`: maps a Strava URI to a canned JSON response, and `RequestSession::request_json` answers with the canned JSON instead of hitting the Strava API. The `LiveSource` suite runs the real executor loop with a real `RequestSession`, and the summary route's hydration (spec #558 §4) calls `/athlete`: `LiveSource::new` maps an empty athlete so the hydration succeeds offline — no new gear, the common case (no frame, unchanged snapshot).
 - Tests force the `CLIENT_ID` / `CLIENT_SECRET` env vars via a `Once` (edition 2024: `std::env::set_var` is `unsafe`), overriding any values from the environment so the redirect-URL assertions are deterministic; `CSRF_SECRET` is left unset (the `CSRF_KEY` falls back to a per-process random key, which is fine for token roundtrips).

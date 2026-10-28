@@ -6,7 +6,7 @@
 //! the Strava-logic free functions take a bare `&mut impl StravaStore`. The
 //! Strava-logic tests (into_partid, activity sync, gear hydration, event
 //! processing, deauthorize) run the logic for real and assert on canned
-//! `mock!` outcomes; the `MemStore` delegation is gone.
+//! `mock!` outcomes; the old in-memory delegation is gone.
 //!
 //! The HTTP seam (the thread-local canned responses, the `TokenCache` seeder,
 //! and the `CANNED_STRAVA` global) is feature-independent: the thin free
