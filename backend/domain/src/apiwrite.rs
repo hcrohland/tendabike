@@ -64,8 +64,8 @@ use crate::*;
 
 /// The parsed multipart file of a file-note upload — the raw fields as the
 /// handler's parser extracts them, before any fallback. Fallbacks for
-/// blank/missing `name` and `filename` are applied by the consumer: [`exec`]
-/// for the create route, the domain op itself for the update route.
+/// blank/missing `name` and `filename` are applied by the domain op: both the
+/// create and update routes resolve them the same way.
 #[derive(Clone, Debug, PartialEq)]
 pub struct NoteFile {
     /// The note's display name; blank or missing.
@@ -87,8 +87,10 @@ pub struct NoteFile {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ApiWrite {
     // --- activity (`/api/activ`) ---
-    /// `PUT /api/activ/{id}` — change an activity.
-    ActivityUpdate { id: ActivityId, activity: Activity },
+    /// `PUT /api/activ/{id}` — change an activity. The path id and the
+    /// body's id must agree; that check is the presentation's (the domain op
+    /// has no path-id concept).
+    ActivityUpdate { activity: Activity },
     /// `DELETE /api/activ/{id}`.
     ActivityDelete { id: ActivityId },
     /// `POST /api/activ/descend` — the raw CSV body; the domain matches the
@@ -145,9 +147,8 @@ pub enum ApiWrite {
     // --- partnote (`/api/part`) ---
     /// `POST /api/part/{part}/notes`
     PartNoteCreateText { part: PartId, name: String },
-    /// `POST /api/part/{part}/notes/file` — the parsed multipart file;
-    /// blank/missing `name` and `filename` fall back in [`exec`], like the
-    /// handler's parser does.
+    /// `POST /api/part/{part}/notes/file` — the parsed multipart file; the
+    /// domain op applies its own `name`/`filename` fallbacks.
     PartNoteCreateFile { part: PartId, file: NoteFile },
     /// `PUT /api/part/notes/{id}`
     PartNoteUpdateText { id: PartNoteId, name: String },
@@ -295,17 +296,9 @@ pub async fn exec(
 ) -> TbResult<WriteOutcome> {
     match write {
         // --- activity ---
-        ApiWrite::ActivityUpdate { id, activity } => {
-            // The handler's guard: the path id and the body's id must agree.
-            if id != activity.id {
-                return Err(Error::BadRequest(
-                    "ActivityId does not match activity".to_string(),
-                ));
-            }
-            Ok(WriteOutcome::Summary(
-                activity.update(session, store).await?,
-            ))
-        }
+        ApiWrite::ActivityUpdate { activity } => Ok(WriteOutcome::Summary(
+            activity.update(session, store).await?,
+        )),
         ApiWrite::ActivityDelete { id } => {
             Ok(WriteOutcome::Summary(id.delete(session, store).await?))
         }
@@ -384,16 +377,12 @@ pub async fn exec(
             Ok(WriteOutcome::Summary(one_part_note(note)))
         }
         ApiWrite::PartNoteCreateFile { part, file } => {
-            // The handler's multipart parsing applies these fallbacks before
-            // the domain op; they live here, so the handler only parses.
-            let filename = file.filename.unwrap_or_else(|| "file".to_string());
-            let name = file.name.unwrap_or_else(|| filename.clone());
             let note = part
                 .note_create_file(
                     session,
-                    name,
+                    file.name,
                     file.mime,
-                    Some(filename),
+                    file.filename,
                     file.data.len() as i64,
                     file.data,
                     OffsetDateTime::now_utc(),
@@ -440,13 +429,10 @@ pub async fn exec(
             notes,
             plans,
         } => {
-            // The op itself does not check ownership; the handler runs the
-            // check first, and it is a domain op too.
-            part.checkuser(session, store).await?;
             // `successor` is a redo of an existing service; the create route
             // always starts a new chain.
             Ok(WriteOutcome::Summary(
-                Service::create(part, time, name, notes, None, plans, store).await?,
+                Service::create(part, time, name, notes, None, plans, session, store).await?,
             ))
         }
         ApiWrite::ServiceUpdate { service } => {

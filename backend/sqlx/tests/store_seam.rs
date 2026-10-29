@@ -1738,6 +1738,7 @@ async fn activity_rescan_all_includes_newly_added_activity() -> tb_domain::TbRes
 #[ignore]
 async fn activity_rescan_all_rebuilds_service_usage() -> tb_domain::TbResult<()> {
     with_seam(|mut store| async move {
+        let session = test_session();
         let bike = PartId::from(1);
         // A service created after all fixture activities → aggregates all three.
         let t = datetime!(2023-06-01 10:00 UTC);
@@ -1748,6 +1749,7 @@ async fn activity_rescan_all_rebuilds_service_usage() -> tb_domain::TbResult<()>
             "".to_string(),
             None,
             vec![],
+            &session,
             &mut store,
         )
         .await?;
@@ -1941,29 +1943,13 @@ async fn apiwrite_activity_update_and_delete() -> tb_domain::TbResult<()> {
         act.name = "Renamed Ride".to_string();
         let summary = outcome_summary(
             exec(
-                ApiWrite::ActivityUpdate { id, activity: act },
+                ApiWrite::ActivityUpdate { activity: act },
                 &session,
                 &mut store,
             )
             .await?,
         );
         assert_eq!(summary.activities.get(&id).unwrap().name, "Renamed Ride");
-
-        // A path/body id mismatch is the handler's guard, surfaced as BadRequest.
-        let err = exec(
-            ApiWrite::ActivityUpdate {
-                id: ActivityId::new(2),
-                activity: ride(100, "Ride", activity_start(), None),
-            },
-            &session,
-            &mut store,
-        )
-        .await
-        .unwrap_err();
-        assert!(
-            matches!(err, tb_domain::Error::BadRequest(_)),
-            "a path/body id mismatch must be BadRequest, got {err:?}"
-        );
 
         // Delete a created ride: the tombstone and the usage revert.
         let ride = ride(100, "New Ride", activity_start(), Some(PartId::from(1)));
@@ -2541,7 +2527,7 @@ async fn apiread_partnote_file_read() -> tb_domain::TbResult<()> {
         let note = part
             .note_create_file(
                 &session,
-                "Manual".to_string(),
+                Some("Manual".to_string()),
                 "application/pdf".to_string(),
                 Some("manual.pdf".to_string()),
                 data.len() as i64,
@@ -2880,6 +2866,7 @@ async fn create_service(
         String::new(),
         None,
         vec![],
+        &test_session(),
         store,
     )
     .await
@@ -3271,6 +3258,7 @@ async fn detach_served_part_recalculates_service_usage() -> tb_domain::TbResult<
             "".to_string(),
             None,
             vec![],
+            &session,
             &mut store,
         )
         .await?;
@@ -3316,6 +3304,7 @@ async fn activity_upsert_increments_service_usage_after_start() -> tb_domain::Tb
             "".to_string(),
             None,
             vec![],
+            &session,
             &mut store,
         )
         .await?;
@@ -3330,6 +3319,7 @@ async fn activity_upsert_increments_service_usage_after_start() -> tb_domain::Tb
             "".to_string(),
             None,
             vec![],
+            &session,
             &mut store,
         )
         .await?;
@@ -3400,6 +3390,7 @@ async fn reattach_served_part_recalculates_service_usage() -> tb_domain::TbResul
             "".to_string(),
             None,
             vec![],
+            &session,
             &mut store,
         )
         .await?;

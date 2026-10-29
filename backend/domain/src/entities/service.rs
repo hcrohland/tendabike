@@ -86,6 +86,7 @@ impl IdKeyed for Service {
 }
 
 impl Service {
+    #[allow(clippy::too_many_arguments)]
     pub async fn create(
         part_id: PartId,
         time: OffsetDateTime,
@@ -93,8 +94,12 @@ impl Service {
         notes: String,
         successor: Option<ServiceId>,
         plans: Vec<ServicePlanId>,
-        store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
+        user: &dyn Session,
+        store: &mut (
+                 impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
+             ),
     ) -> TbResult<Summary> {
+        part_id.checkuser(user, store).await?;
         let service = Service {
             id: ServiceId::new(),
             part_id,
@@ -142,7 +147,6 @@ impl Service {
             ..
         } = self;
         let mut old = id.get(store).await?;
-        old.part_id.checkuser(user, store).await?;
         if self.time < old.time {
             Service::create(
                 old.part_id,
@@ -151,6 +155,7 @@ impl Service {
                 notes,
                 Some(old.id),
                 plans,
+                user,
                 store,
             )
             .await
@@ -162,6 +167,7 @@ impl Service {
                 notes,
                 None,
                 plans,
+                user,
                 store,
             )
             .await?;

@@ -205,6 +205,50 @@ async fn partnote_id_update_file_falls_back_to_existing_filename() -> TbResult<(
     Ok(())
 }
 
+/// note_create_file resolves a blank name and a missing filename the same way
+/// update_file does: the filename falls back to "file" and the name to it.
+#[tokio::test]
+async fn partid_note_create_file_falls_back_to_filename() -> TbResult<()> {
+    let part = PartId::from(1);
+    let owner = UserId::from(1);
+    let session = mock_session(owner);
+
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, owner)));
+    // The domain resolves the filename (and the name that falls back to it)
+    // before calling the store; the returned note echoes those resolved args.
+    store.expect_partnote_create_file().returning(
+        move |_id, name, mime, filename, size, _data, _created| {
+            Ok(note_row(
+                PartNoteId::from(1),
+                part,
+                name,
+                Some(mime),
+                filename,
+                Some(size),
+            ))
+        },
+    );
+
+    let created = part
+        .note_create_file(
+            &session,
+            None,
+            "image/png".to_string(),
+            None,
+            2,
+            vec![2, 2],
+            created(),
+            &mut store,
+        )
+        .await?;
+    assert_eq!(created.filename, Some("file".to_string()));
+    assert_eq!(created.name, "file");
+    Ok(())
+}
+
 // === Permission matrix (owner / foreign / shop-session) ===
 
 /// notes on an unknown part is NotFound: the access check reads the part first.
@@ -301,7 +345,7 @@ async fn partid_note_create_file_on_foreign_part_is_forbidden() -> TbResult<()> 
     let result = part
         .note_create_file(
             &stranger,
-            name,
+            Some(name),
             mime,
             filename,
             size,
