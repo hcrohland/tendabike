@@ -57,9 +57,9 @@ use tb_strava::{StravaDataStore, StravaId, StravaStore, StravaUser};
 use time::OffsetDateTime;
 use tokio::sync::{broadcast, oneshot};
 
-use crate::executor::{
-    DbBackoff, Probe, Select, deliver_frame, run_request, select_message, sleep_or_take_request,
-    stop_remaining,
+use super::{
+    DbBackoff, LoopContext, Probe, Select, deliver_frame, run_request, select_message,
+    sleep_or_take_request, stop_remaining,
 };
 use crate::message::{Request, push_frame};
 use crate::{
@@ -450,6 +450,27 @@ fn request() -> (Request, oneshot::Receiver<TbResult<WriteOutcome>>) {
     )
 }
 
+/// The context the per-request tests drive: the loop's wiring (source,
+/// frames, pusher) with the context's starting state (a fresh backoff, the
+/// first-idle flag set). The consumed-event channel, the re-probe cadence,
+/// and the wake signal are never touched by `run_request`, so they are fresh
+/// dummies.
+fn test_context(
+    source: FakeSource,
+    frames: broadcast::Sender<Summary>,
+    pusher: Box<dyn FramePusher>,
+) -> LoopContext<FakeSource> {
+    LoopContext::new(
+        source,
+        UserId::from(1),
+        frames,
+        pusher,
+        broadcast::channel(64).0,
+        Duration::from_secs(300),
+        Arc::new(tokio::sync::Notify::new()),
+    )
+}
+
 // --- `next_action`: the reclaim decision ---
 
 #[test]
@@ -818,8 +839,10 @@ fn frame_push_skips_empty_summaries() {
 // through `run_request` (the session's `shop()` feeds the routing).
 
 /// A `FramePusher` test double: records the `push_to_shop`/`push_to_user`
-/// calls (target + summary) so the delivery routing is observable.
-#[derive(Default)]
+/// calls (target + summary) so the delivery routing is observable. `Clone`
+/// shares the recording (the `Arc`), so a test keeps an observation handle
+/// after moving the pusher into the context.
+#[derive(Default, Clone)]
 struct RecordingPusher {
     calls: std::sync::Arc<std::sync::Mutex<Vec<PushCall>>>,
 }
@@ -1026,16 +1049,16 @@ async fn failed_read_never_arms_the_backoff_and_the_loop_survives() {
     // up) — and the dispatch returns `Ok`, so the loop survives. The store is
     // never reached: `begin` fails fast.
     let source = FakeSource::failing();
-    let mut backoff = DbBackoff::new();
-    backoff.record_failure();
-    backoff.record_failure(); // prime: the next pause would be 4s
     let (frames, _frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_read(
         Box::new(mock_session(UserId::from(1))),
         ApiRead::PartCategories,
     );
     let pusher = RecordingPusher::new();
-    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
+    let mut ctx = test_context(source, frames, Box::new(pusher));
+    ctx.backoff.record_failure();
+    ctx.backoff.record_failure(); // prime: the next pause would be 4s
+    let result = run_request(&mut ctx, request).await;
     assert!(result.is_ok(), "a failed read must not end the loop");
     let err = reply
         .await
@@ -1043,7 +1066,7 @@ async fn failed_read_never_arms_the_backoff_and_the_loop_survives() {
         .expect_err("a failed begin must 500 the read");
     assert!(matches!(err, Error::AnyFailure(_)), "got {err:?}");
     assert_eq!(
-        backoff.record_failure(),
+        ctx.backoff.record_failure(),
         Duration::from_secs(4),
         "a failed read must not arm the backoff (the prime was 1s → 2s, next is 4s)"
     );
@@ -1060,16 +1083,16 @@ async fn domain_failed_read_resets_the_backoff_and_the_loop_survives() {
         .returning(|_pid| Err(Error::NotFound("the part does not exist".to_string())));
     conn.expect_rollback().returning(|| Ok(()));
     let source = FakeSource::with(conn);
-    let mut backoff = DbBackoff::new();
-    backoff.record_failure();
-    backoff.record_failure(); // prime: the next pause would be 4s
     let (frames, _frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_read(
         Box::new(mock_session(UserId::from(1))),
         ApiRead::Part(PartId::from(999_999)),
     );
     let pusher = RecordingPusher::new();
-    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
+    let mut ctx = test_context(source, frames, Box::new(pusher));
+    ctx.backoff.record_failure();
+    ctx.backoff.record_failure(); // prime: the next pause would be 4s
+    let result = run_request(&mut ctx, request).await;
     assert!(result.is_ok(), "a domain-failed read must not end the loop");
     let err = reply
         .await
@@ -1077,7 +1100,7 @@ async fn domain_failed_read_resets_the_backoff_and_the_loop_survives() {
         .expect_err("a missing part is NotFound");
     assert!(matches!(err, Error::NotFound(_)), "got {err:?}");
     assert_eq!(
-        backoff.record_failure(),
+        ctx.backoff.record_failure(),
         Duration::from_secs(1),
         "a read transaction that rolled back after a domain error resets the backoff"
     );
@@ -1102,14 +1125,14 @@ async fn cleanly_committed_read_resets_the_backoff() {
     conn.expect_by_user().returning(|_uid| Ok(Vec::new()));
     conn.expect_commit().returning(|| Ok(()));
     let source = FakeSource::with(conn);
-    let mut backoff = DbBackoff::new();
-    backoff.record_failure();
-    backoff.record_failure(); // prime: the next pause would be 4s
     let (frames, _frame_rx) = broadcast::channel(4);
     let (request, reply) =
         Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
     let pusher = RecordingPusher::new();
-    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
+    let mut ctx = test_context(source, frames, Box::new(pusher));
+    ctx.backoff.record_failure();
+    ctx.backoff.record_failure(); // prime: the next pause would be 4s
+    let result = run_request(&mut ctx, request).await;
     assert!(result.is_ok(), "a committed read must not end the loop");
     let outcome = reply
         .await
@@ -1124,7 +1147,7 @@ async fn cleanly_committed_read_resets_the_backoff() {
         state.summary.parts
     );
     assert_eq!(
-        backoff.record_failure(),
+        ctx.backoff.record_failure(),
         Duration::from_secs(1),
         "a cleanly committed read resets the backoff"
     );
@@ -1143,11 +1166,11 @@ async fn all_stats_round_trips_through_the_loop_transaction() {
         .returning(|| Ok(Vec::new()));
     conn.expect_commit().returning(|| Ok(()));
     let source = FakeSource::with(conn);
-    let mut backoff = DbBackoff::new();
     let (frames, _frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_all_stats(Box::new(mock_session(UserId::from(1))));
     let pusher = RecordingPusher::new();
-    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
+    let mut ctx = test_context(source, frames, Box::new(pusher));
+    let result = run_request(&mut ctx, request).await;
     assert!(
         result.is_ok(),
         "a committed stats read must not end the loop"
@@ -1192,11 +1215,11 @@ async fn gear_hydration_pushes_the_created_parts_frame() {
         .returning(move |_pid| Ok(part_test_bike()));
     conn.expect_commit().returning(|| Ok(()));
     let source = FakeSource::with(conn);
-    let mut backoff = DbBackoff::new();
     let (frames, mut frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_gear(Box::new(mock_session(UserId::from(1))));
     let pusher = RecordingPusher::new();
-    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
+    let mut ctx = test_context(source, frames, Box::new(pusher));
+    let result = run_request(&mut ctx, request).await;
     assert!(
         result.is_ok(),
         "a committed hydration must not end the loop"
@@ -1227,12 +1250,12 @@ async fn failed_gear_arms_the_backoff_like_a_write() {
     // **arms** the backoff — unlike a read (spec #558 §3.7) — and the loop
     // survives. The store is never reached: `begin` fails fast.
     let source = FakeSource::failing();
-    let mut backoff = DbBackoff::new();
-    backoff.record_failure(); // prime: the next pause would be 2s
     let (frames, _frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_gear(Box::new(mock_session(UserId::from(1))));
     let pusher = RecordingPusher::new();
-    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
+    let mut ctx = test_context(source, frames, Box::new(pusher));
+    ctx.backoff.record_failure(); // prime: the next pause would be 2s
+    let result = run_request(&mut ctx, request).await;
     assert!(result.is_ok(), "a failed hydration must not end the loop");
     let err = reply
         .await
@@ -1240,7 +1263,7 @@ async fn failed_gear_arms_the_backoff_like_a_write() {
         .expect_err("a failed begin must 500 the hydration");
     assert!(matches!(err, Error::AnyFailure(_)), "got {err:?}");
     assert_eq!(
-        backoff.record_failure(),
+        ctx.backoff.record_failure(),
         Duration::from_secs(4),
         "the hydration is a write: a failed begin arms the backoff (1s → 2s → 4s)"
     );
@@ -1263,11 +1286,11 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
     let mut conn = MockConn::new();
     conn.expect_commit().returning(|| Ok(()));
     let source = FakeSource::with(conn);
-    let mut backoff = DbBackoff::new();
     let (frames, mut frame_rx) = broadcast::channel(4);
     let (request, reply) = Request::new_gear(Box::new(mock_session(UserId::from(1))));
     let pusher = RecordingPusher::new();
-    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
+    let mut ctx = test_context(source, frames, Box::new(pusher));
+    let result = run_request(&mut ctx, request).await;
     assert!(
         result.is_ok(),
         "a committed hydration must not end the loop"
@@ -1303,7 +1326,6 @@ async fn run_request_shop_context_routes_via_pusher_not_own_stream() {
         .returning(move |_pid| Ok(part_owned_by(UserId::from(1))));
     conn.expect_commit().returning(|| Ok(()));
     let source = FakeSource::with(conn);
-    let mut backoff = DbBackoff::new();
     let (frames, mut frame_rx) = broadcast::channel(4);
     let pusher = RecordingPusher::new();
     // The write carries the shop context in its own (the request's) session.
@@ -1318,7 +1340,8 @@ async fn run_request_shop_context_routes_via_pusher_not_own_stream() {
         },
     );
 
-    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
+    let mut ctx = test_context(source, frames, Box::new(pusher.clone()));
+    let result = run_request(&mut ctx, request).await;
     assert!(result.is_ok(), "a committed write must not end the loop");
     let outcome = reply
         .await
@@ -1369,7 +1392,6 @@ async fn personal_write_routes_to_own_stream_not_pusher() {
     );
     conn.expect_commit().returning(|| Ok(()));
     let source = FakeSource::with(conn);
-    let mut backoff = DbBackoff::new();
     let (frames, mut frame_rx) = broadcast::channel(4);
     let pusher = RecordingPusher::new();
     // The write carries a personal session (the request's session).
@@ -1384,7 +1406,8 @@ async fn personal_write_routes_to_own_stream_not_pusher() {
         },
     );
 
-    let result = run_request(&source, request, &frames, &mut backoff, &pusher).await;
+    let mut ctx = test_context(source, frames, Box::new(pusher.clone()));
+    let result = run_request(&mut ctx, request).await;
     assert!(result.is_ok(), "a committed write must not end the loop");
     let outcome = reply
         .await
