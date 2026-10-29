@@ -58,13 +58,13 @@ use time::OffsetDateTime;
 use tokio::sync::{broadcast, oneshot};
 
 use super::{
-    DbBackoff, LoopContext, Probe, Select, deliver_frame, run_request, select_message,
+    DbBackoff, LoopContext, Probe, Select, deliver_frame, next_action, run_request, select_message,
     sleep_or_take_request, stop_remaining,
 };
 use crate::message::{Request, push_frame};
 use crate::{
     Action, ExecutorStatus, FramePusher, Message, Registry, ServiceApi, Txn, TxnSource,
-    next_action, request_channel,
+    request_channel,
 };
 
 // --- The `mock!` connection witness (issue #631) ---
