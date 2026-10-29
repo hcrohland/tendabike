@@ -15,10 +15,10 @@
 
 //! The per-user executor loop integration suite (issue #453).
 //!
-//! Drives the real executor loop — `tb_exec::run` over the real `DbPool`
-//! (`TxnSource`/`Txn` implemented on the live `SqlxConn`, the seam the web
-//! layer will use) — against real Postgres, with a stubbed `Session`: the
-//! loop's transaction lifecycle is what this suite verifies.
+//! Drives the real executor loop — `tb_exec::LoopContext` over the real
+//! `DbPool` (`TxnSource`/`Txn` implemented on the live `SqlxConn`, the seam
+//! the web layer will use) — against real Postgres, with a stubbed
+//! `Session`: the loop's transaction lifecycle is what this suite verifies.
 //!
 //! What the eight seam tests verify, end to end on the live adapter:
 //!
@@ -82,12 +82,13 @@ use tb_domain::test_support::{
 };
 use tb_domain::{ApiRead, ApiWrite, PartId, ReadOutcome, SNAPSHOT_JSON, ShopId, Summary, UserId};
 use tb_exec::{
-    DetachedBegin, ExecutorStatus, FramePusher, Registry, Request, ServiceApi, request_channel, run,
+    DetachedBegin, ExecutorStatus, FramePusher, LoopContext, Registry, Request, RequestReceiver,
+    ServiceApi, request_channel,
 };
 use tb_sqlx::DbPool;
 use tb_strava::{
     StravaId,
-    event::InEvent,
+    event::{Event, InEvent},
     test_support::{canned_strava, seed_token_cache},
 };
 use time::macros::datetime;
@@ -121,6 +122,29 @@ const TEST_TIMEOUT: Duration = Duration::from_secs(10);
 /// loop with streams attached re-probes the queue — long enough that a
 /// healthy loop never re-probes mid-message.
 const IDLE_TIMEOUT: Duration = Duration::from_millis(300);
+
+/// One seam test's loop: the same single construction path production uses
+/// — a context over the live pool (the seam's `TxnSource`/`Txn` on the
+/// `SqlxConn`), driven by its request channel. The tests' sessions all have
+/// `shop() == None` (so the pusher is a no-op), and the wake signal is never
+/// fired (the queue is read on the loop's own cadence).
+fn loop_ctx(
+    pool: DbPool,
+    frames: broadcast::Sender<Summary>,
+    events: broadcast::Sender<Event>,
+    rx: RequestReceiver,
+) -> impl std::future::Future<Output = tb_domain::TbResult<()>> {
+    LoopContext::new(
+        DetachedBegin::new(pool),
+        UserId::from(1),
+        frames,
+        Box::new(NoopPusher),
+        events,
+        IDLE_TIMEOUT,
+        Arc::new(Notify::new()),
+    )
+    .run(rx)
+}
 
 /// The in-memory suite's session identity: the fixture's one user and its
 /// Strava id (the same pair the seam suite and the `tb_strava` tests use).
@@ -253,16 +277,7 @@ async fn api_write_end_to_end() {
     );
     tx.send(request).expect("the channel is open");
 
-    let mut loop_task = tokio::spawn(run(
-        DetachedBegin::new(seam.pool.clone()),
-        UserId::from(1),
-        rx,
-        frames,
-        Box::new(NoopPusher),
-        events,
-        IDLE_TIMEOUT,
-        Arc::new(Notify::new()),
-    ));
+    let mut loop_task = tokio::spawn(loop_ctx(seam.pool.clone(), frames, events, rx));
 
     // The route's oneshot resolves with the write's outcome; the part
     // write's `Summary` is the frame.
@@ -321,16 +336,7 @@ async fn idle_loop_reclaims() {
     let started = std::time::Instant::now();
     let outcome = tokio::time::timeout(
         TEST_TIMEOUT,
-        run(
-            DetachedBegin::new(seam.pool.clone()),
-            UserId::from(1),
-            rx,
-            frames,
-            Box::new(NoopPusher),
-            events,
-            IDLE_TIMEOUT,
-            Arc::new(Notify::new()),
-        ),
+        loop_ctx(seam.pool.clone(), frames, events, rx),
     )
     .await
     .expect("an idle loop must reap in time");
@@ -360,16 +366,7 @@ async fn read_as_message_round_trip() {
         Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
     tx.send(request).expect("the channel is open");
 
-    let mut loop_task = tokio::spawn(run(
-        DetachedBegin::new(seam.pool.clone()),
-        UserId::from(1),
-        rx,
-        frames,
-        Box::new(NoopPusher),
-        events,
-        IDLE_TIMEOUT,
-        Arc::new(Notify::new()),
-    ));
+    let mut loop_task = tokio::spawn(loop_ctx(seam.pool.clone(), frames, events, rx));
 
     // The route's oneshot resolves with the read's data — the unified user
     // read (spec #558 §3.5): the fixture's full state.
@@ -445,16 +442,7 @@ async fn shop_context_read_is_scoped_to_the_request_session() {
         Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
     tx.send(personal_read).expect("the channel is open");
 
-    let mut loop_task = tokio::spawn(run(
-        DetachedBegin::new(seam.pool.clone()),
-        UserId::from(1),
-        rx,
-        frames,
-        Box::new(NoopPusher),
-        events,
-        IDLE_TIMEOUT,
-        Arc::new(Notify::new()),
-    ));
+    let mut loop_task = tokio::spawn(loop_ctx(seam.pool.clone(), frames, events, rx));
 
     // The shop-context read is scoped to the shop's part (not the 17-part
     // fixture state) — the request's shop session scopes the read.
@@ -532,16 +520,7 @@ async fn personal_read_returns_personal_data() {
 
     // The loop is identity-only (a `user_id`, no shop): the read runs against
     // the request's personal session alone, so a shop context can't leak in.
-    let mut loop_task = tokio::spawn(run(
-        DetachedBegin::new(seam.pool.clone()),
-        UserId::from(1),
-        rx,
-        frames,
-        Box::new(NoopPusher),
-        events,
-        IDLE_TIMEOUT,
-        Arc::new(Notify::new()),
-    ));
+    let mut loop_task = tokio::spawn(loop_ctx(seam.pool.clone(), frames, events, rx));
 
     // The personal read returns the FULL state — not the shop's one part —
     // even though the executor was spawned in the shop context.
@@ -595,16 +574,7 @@ async fn read_sees_every_earlier_write() {
         Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
     tx.send(read_request).expect("the channel is open");
 
-    let mut loop_task = tokio::spawn(run(
-        DetachedBegin::new(seam.pool.clone()),
-        UserId::from(1),
-        rx,
-        frames,
-        Box::new(NoopPusher),
-        events,
-        IDLE_TIMEOUT,
-        Arc::new(Notify::new()),
-    ));
+    let mut loop_task = tokio::spawn(loop_ctx(seam.pool.clone(), frames, events, rx));
 
     // The write commits first (its oneshot resolves with its `Summary`).
     let write_outcome = tokio::time::timeout(TEST_TIMEOUT, write_reply)
@@ -675,16 +645,7 @@ async fn gear_hydration_frame_and_fifo_read() {
         Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
     tx.send(read_request).expect("the channel is open");
 
-    let mut loop_task = tokio::spawn(run(
-        DetachedBegin::new(seam.pool.clone()),
-        UserId::from(1),
-        rx,
-        frames,
-        Box::new(NoopPusher),
-        events,
-        IDLE_TIMEOUT,
-        Arc::new(Notify::new()),
-    ));
+    let mut loop_task = tokio::spawn(loop_ctx(seam.pool.clone(), frames, events, rx));
 
     // The hydration commits: the oneshot resolves with the created parts'
     // summary — one entry per created part.
@@ -765,16 +726,7 @@ async fn gear_hydration_without_new_gear_pushes_no_frame() {
         Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
     tx.send(read_request).expect("the channel is open");
 
-    let mut loop_task = tokio::spawn(run(
-        DetachedBegin::new(seam.pool.clone()),
-        UserId::from(1),
-        rx,
-        frames,
-        Box::new(NoopPusher),
-        events,
-        IDLE_TIMEOUT,
-        Arc::new(Notify::new()),
-    ));
+    let mut loop_task = tokio::spawn(loop_ctx(seam.pool.clone(), frames, events, rx));
 
     // The hydration commits with an empty summary (nothing new).
     let summary = tokio::time::timeout(TEST_TIMEOUT, gear_reply)
@@ -841,16 +793,7 @@ async fn failed_write_rolls_back_and_reclaims() {
     );
     tx.send(request).expect("the channel is open");
 
-    let mut loop_task = tokio::spawn(run(
-        DetachedBegin::new(seam.pool.clone()),
-        UserId::from(1),
-        rx,
-        frames,
-        Box::new(NoopPusher),
-        events,
-        IDLE_TIMEOUT,
-        Arc::new(Notify::new()),
-    ));
+    let mut loop_task = tokio::spawn(loop_ctx(seam.pool.clone(), frames, events, rx));
 
     // The route gets the domain error, not a 500 and not a hang.
     let err = tokio::time::timeout(TEST_TIMEOUT, reply)
@@ -905,16 +848,7 @@ async fn onboarding_sync_write_queues_the_sync_event() {
     );
     tx.send(request).expect("the channel is open");
 
-    let mut loop_task = tokio::spawn(run(
-        DetachedBegin::new(seam.pool.clone()),
-        UserId::from(1),
-        rx,
-        frames,
-        Box::new(NoopPusher),
-        events,
-        IDLE_TIMEOUT,
-        Arc::new(Notify::new()),
-    ));
+    let mut loop_task = tokio::spawn(loop_ctx(seam.pool.clone(), frames, events, rx));
 
     // The write commits: the oneshot resolves with the write's (empty)
     // summary — a `User` is in no `Summary`.
@@ -1562,16 +1496,7 @@ async fn request_burst_does_not_fire_transaction_notice() {
     // probe's `Empty` + no-streams rule reaps the loop in the gap, before
     // the second read can land in the probe's window).
 
-    let mut loop_task = tokio::spawn(run(
-        DetachedBegin::new(seam.pool.clone()),
-        UserId::from(1),
-        rx,
-        frames,
-        Box::new(NoopPusher),
-        events,
-        IDLE_TIMEOUT,
-        Arc::new(Notify::new()),
-    ));
+    let mut loop_task = tokio::spawn(loop_ctx(seam.pool.clone(), frames, events, rx));
 
     // Warm the pool with a full complement of idle connections: the bug's
     // window is between the probe's `BEGIN` being sent and its response

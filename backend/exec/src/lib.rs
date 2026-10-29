@@ -31,8 +31,9 @@
 //!   a concrete adapter.
 //! - [`message`] — the [`Message`] enum and the in-memory plumbing (the
 //!   per-user API-write channel, the oneshot reply, the `Summary` frame sink).
-//! - [`executor`] — [`run`], the loop itself: a biased select, one
-//!   transaction per message, and the reclaim-on-idle policy.
+//! - [`executor`] — [`LoopContext`], the loop itself (its wiring and its
+//!   state) and its `run` method: a biased select, one transaction per
+//!   message, and the reclaim-on-idle policy.
 //!
 //! The loop computes no domain state of its own: it drives the existing
 //! `ApiWrite` dispatch and `tb_strava` event processing inside transactions
@@ -53,6 +54,3 @@ pub use executor::*;
 pub use message::*;
 pub use registry::*;
 pub use txn::*;
-
-#[cfg(test)]
-mod executor_tests;

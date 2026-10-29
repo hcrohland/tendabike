@@ -71,7 +71,7 @@ use tb_strava::{
 
 use crate::api::ServiceApi;
 use crate::message::{Request, RequestSender};
-use crate::{Txn, TxnSource, request_channel, run};
+use crate::{LoopContext, Txn, TxnSource, request_channel};
 
 /// The loop's queue re-probe cadence while it is idle with streams attached
 /// (spec §4.4, amended — #446): an attached stream keeps the executor alive
@@ -402,16 +402,16 @@ where
         let wake_for_run = wake.clone();
         let watchdog_status = status_tx.clone();
         let join = tokio::spawn(async move {
-            let result = run(
+            let result = LoopContext::new(
                 owned_source,
                 user_id,
-                reader,
                 frames_for_run,
                 pusher,
                 events_for_run,
                 idle_timeout,
                 wake_for_run,
             )
+            .run(reader)
             .await;
             let _ = status_tx.send(match result {
                 Ok(()) => ExecutorStatus::Reaped,
