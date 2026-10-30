@@ -585,6 +585,11 @@ async fn attach_assembly_auto_detaches_and_reattaches_same_part() -> TbResult<()
     )
     .await?;
 
+    assert_eq!(
+        summary.attachments.live().len(),
+        1,
+        "re-attaching replaces the row"
+    );
     let att = summary
         .attachments
         .live()
@@ -654,7 +659,10 @@ async fn detach_assembly_api_returns_error_if_not_attached() -> TbResult<()> {
         .returning(|_, _| Ok(None));
 
     let result = detach_assembly(&test_session(), part, later_time(), false, &mut store).await;
-    assert!(matches!(&result, Err(Error::NotFound(_))));
+    assert!(
+        matches!(&result, Err(Error::NotFound(_))),
+        "detaching a never-attached part must be NotFound, got {result:?}"
+    );
     Ok(())
 }
 
