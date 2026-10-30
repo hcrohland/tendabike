@@ -78,6 +78,13 @@ impl IdKeyed for Notification {
 #[derive(Clone, Copy, Debug, Display, From, Into, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NotificationId(Uuid);
 
+impl std::str::FromStr for NotificationId {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse::<Uuid>().map(Self).map_err(|e| e.to_string())
+    }
+}
+
 impl NotificationId {
     /// Mints a fresh v7 id.
     #[allow(dead_code)]

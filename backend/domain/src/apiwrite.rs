@@ -222,6 +222,14 @@ pub enum ApiWrite {
     /// `DELETE /api/shop/subscriptions/{subscription}`
     ShopSubscriptionCancel { id: SubscriptionId },
 
+    // --- notification (`/api/notification`) ---
+    /// `POST /api/notification/{id}/read` — read a single notification
+    /// (lifecycle-aware: persistent → mark seen, transient → delete).
+    NotificationRead { id: NotificationId },
+    /// `POST /api/notification/read-all` — read all of the user's
+    /// notifications (lifecycle-aware for each).
+    NotificationReadAll,
+
     // --- user (onboarding, `/strava`) ---
     /// Trigger the initial Strava sync (the query's `time`, 0 = "now"). The
     /// domain part runs in [`exec`]; the variant carries `time` for the
@@ -524,6 +532,12 @@ pub async fn exec(
                 id.cancel(session.user_id(), store).await?,
             ))
         }
+
+        // --- notification ---
+        ApiWrite::NotificationRead { id } => Ok(WriteOutcome::Summary(id.read(store).await?)),
+        ApiWrite::NotificationReadAll => Ok(WriteOutcome::Summary(
+            Notification::read_all(session.user_id(), store).await?,
+        )),
 
         // --- user (onboarding) ---
 

@@ -5,6 +5,7 @@ use crate::appstate::AppState;
 
 mod activity;
 mod attachment;
+mod notification;
 mod part;
 mod partnote;
 mod service;
@@ -52,4 +53,5 @@ pub(super) fn router() -> Router<AppState> {
         .nest("/service", service::router())
         .nest("/plan", serviceplan::router())
         .nest("/activ", activity::router())
+        .nest("/notification", notification::router())
 }
