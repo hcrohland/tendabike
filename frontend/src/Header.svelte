@@ -60,7 +60,9 @@
   onDestroy(() => stopStream());
 
   function fullrefresh() {
-    hook_promise = refresh(getShop()?.id);
+    // The shop scope rides the `X-Active-Shop` header the fetch layer
+    // injects (ADR-0009).
+    hook_promise = refresh();
   }
 
   async function triggerHistoricSync() {
