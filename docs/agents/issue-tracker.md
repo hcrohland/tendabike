@@ -6,6 +6,7 @@ Issues and specs for this repo live as GitHub issues. Use the GitHub MCP server 
 
 - **Create an issue**: `issue_write` with `method: "create"` — `title`, `body` (multi-line bodies go in the string as-is).
 - **Feature label**: one `feature:<slug>` label per feature.
+- **Non-feature issues** (bugs, flaky tests, chores): apply the triage label only — no `feature:` label.
 - **Link as a sub-issue**: `issue_write` with `parent_issue_number` for a new issue; `sub_issue_write` (method `add`) for an existing one — it takes the child's numeric **database id** (the `id` field, not its `#number` or `node_id`), which full `search_issues` / `get_sub_issues` entries carry.
 - **Read an issue**: `issue_read` with `method: "get"` for details (body, labels, state, assignees, hierarchy flags) or `get_comments` for comments.
 - **Read sub-issues**: `issue_read` with `method: "get_sub_issues"` — for a large spec the inline result is **truncated**; the full JSON is written to a tool-output file (path in the tool result). Read that file and parse it; don't rely on the truncated inline output.
