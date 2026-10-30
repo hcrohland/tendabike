@@ -14,7 +14,7 @@ The active shop was being persisted into the per-browser cookie (`set_shop` on `
 
 **The active shop is per-request, not per-browser.** The acting session is split into an identity half (per-browser, from the cookie: `user_id`, `is_admin`) and a context half (per-request: the active shop). The shop stops being persisted in the cookie; `set_shop` is removed. The server is stateless with respect to the shop — it reads the shop from each request and stores nothing.
 
-**Carriage.** Fetch requests (reads and mutations) carry the shop in a dedicated `X-Active-Shop` header. The SSE stream keeps `?shop=` as a query parameter, because the client uses the native `EventSource`, which cannot send custom headers. Both populate the same `Session::shop()`.
+**Carriage.** Fetch requests (reads and mutations) carry the shop in a dedicated `X-Active-Shop` header, which the session extractor reads into `Session::shop()`. The SSE stream keeps `?shop=` as a query parameter — the client uses the native `EventSource`, which cannot send custom headers — and the stream route reads it directly to choose the shop stream. Both are projections of the client's single `getShop()` source.
 
 **Single source of truth on the client.** `getShop()` is the tab's shop. Both the stream URL (`?shop=`) and the fetch header (`X-Active-Shop`) are projections of it, and the header is injected centrally by the fetch layer (`myfetch`) rather than set per call — so the two can't diverge. The server is stateless and trusts the header; consistency is a client invariant, guaranteed by the shared source plus central injection.
 
@@ -28,7 +28,7 @@ The active shop was being persisted into the per-browser cookie (`set_shop` on `
 
 ## Consequences
 
-- `RequestSession` keeps its shape (`id`, `is_admin`, `shop`) but `shop` is no longer written to the cookie; `set_shop` and the `GET /api/user?shop=` → `set_shop` wiring are removed. The `FromRequestParts` extractor reads the shop from the `X-Active-Shop` header (fetch) or `?shop=` (SSE stream) per request.
+- `RequestSession` keeps its shape (`id`, `is_admin`, `shop`) but `shop` is no longer written to the cookie; `set_shop` and the `GET /api/user?shop=` → `set_shop` wiring are removed. The `FromRequestParts` extractor reads the shop from the `X-Active-Shop` header per request; the SSE stream route reads its `?shop=` query directly (the native `EventSource` client cannot send headers).
 - `Session::shop()` and all its consumers — the `apiread.rs` user-read filter, `tb_exec` frame routing, and the `part.rs` access checks — are unchanged; they now read the per-request value.
 - The client attaches its tab's shop to every fetch call via the `myfetch` wrapper and keeps the existing `?shop=` on the SSE stream.
 - Strava-event frames no longer reach an open shop view live; the shop view reconciles on its next refresh.

@@ -123,22 +123,25 @@ async fn run_with_body(
                 method,
                 uri,
                 cookie,
+                &[],
                 json.as_bytes(),
                 "application/json",
             )
             .await
         }
-        None => run_raw(app, method, uri, cookie, &[], "").await,
+        None => run_raw(app, method, uri, cookie, &[], &[], "").await,
     }
 }
 
-/// Runs a single request with a raw body and an explicit content type
-/// (the multipart uploads' shape — `run_json` cannot carry one).
+/// Runs a single request with a raw body, an explicit content type, and
+/// extra request headers (the multipart uploads' shape — `run_json` cannot
+/// carry one).
 async fn run_raw(
     app: Router,
     method: Method,
     uri: &str,
     cookie: Option<&str>,
+    headers: &[(&str, &str)],
     body: &[u8],
     content_type: &str,
 ) -> (StatusCode, HeaderMap, Vec<u8>) {
@@ -148,6 +151,9 @@ async fn run_raw(
         .header(header::HOST, "localhost");
     if !content_type.is_empty() {
         builder = builder.header(header::CONTENT_TYPE, content_type);
+    }
+    for (name, value) in headers {
+        builder = builder.header(*name, *value);
     }
     let mut req = builder
         .body(axum::body::Body::from(body.to_vec()))
@@ -177,33 +183,21 @@ async fn run_headers(
     headers: &[(&str, &str)],
     json: Option<&str>,
 ) -> (StatusCode, HeaderMap, Vec<u8>) {
-    let mut builder = Request::builder()
-        .method(method)
-        .uri(uri)
-        .header(header::HOST, "localhost");
-    for (name, value) in headers {
-        builder = builder.header(*name, *value);
+    match json {
+        Some(json) => {
+            run_raw(
+                app,
+                method,
+                uri,
+                cookie,
+                headers,
+                json.as_bytes(),
+                "application/json",
+            )
+            .await
+        }
+        None => run_raw(app, method, uri, cookie, headers, &[], "").await,
     }
-    let mut body = Vec::new();
-    if let Some(json) = json {
-        builder = builder.header(header::CONTENT_TYPE, "application/json");
-        body = json.as_bytes().to_vec();
-    }
-    let mut req = builder
-        .body(axum::body::Body::from(body))
-        .expect("valid request");
-    if let Some(cookie) = cookie {
-        req.headers_mut()
-            .insert(header::COOKIE, cookie.parse().expect("valid cookie"));
-    }
-    let res = app
-        .oneshot(req)
-        .await
-        .expect("oneshot request should succeed");
-    let status = res.status();
-    let headers = res.headers().clone();
-    let body = res.into_body().collect().await.expect("body").to_bytes();
-    (status, headers, body.to_vec())
 }
 
 /// Runs a GET request and returns the SSE body (can read it frame by frame;
@@ -1335,6 +1329,7 @@ async fn create_file_note_returns_201_and_entity() {
         Method::POST,
         "/api/part/1/notes/file",
         Some(&cookie),
+        &[],
         multipart.as_bytes(),
         "multipart/form-data; boundary=tbnote",
     )
@@ -1389,6 +1384,7 @@ async fn update_file_note_returns_204() {
         Method::PUT,
         "/api/part/notes/1/file",
         Some(&cookie),
+        &[],
         multipart.as_bytes(),
         "multipart/form-data; boundary=tbnote",
     )
