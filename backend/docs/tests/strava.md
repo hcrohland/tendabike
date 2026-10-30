@@ -6,7 +6,7 @@ All tests run in-memory (no database, no network); one `<name>_tests.rs` module 
 
 `tb_strava` owns the **Strava → domain mapping**: translating Strava JSON into domain entities (gear JSON → `Part`, activity JSON → `Activity`, user JSON → `StravaUser`) and the Strava-logic free functions over it (activity sync, gear hydration, event processing, deauthorization).
 
-- **What it mocks** — the **domain** (the strava → domain seam): `MockStravaConn` accumulates the `Store` seam + the `StravaStore` surface, and the free functions take a bare `&mut impl StravaStore`, so the domain calls are canned. The **Strava HTTP API** is stubbed behind the thread-local canned-response map (`queue` / `queue_error` / `requests`).
+- **What it mocks** — the **Store** (the I/O boundary beneath the domain): `MockStravaConn` is a `mockall` `mock!` of the `Store` seam, so the domain logic runs for real against canned store outcomes. The **Strava HTTP API** is stubbed behind the thread-local canned-response map (`queue` / `queue_error` / `requests`).
 - **What it delegates to the seam** — the **store I/O** (real Postgres) lives in the sqlx seam suites (see [`sqlx.md`](sqlx.md)); the **frame-push / orchestration** (deciding what to push after hydration) lives in `tb_exec` (see [`exec.md`](exec.md)); the **domain-level results** live in the `tb_domain` suite (see [`domain.md`](domain.md)).
 
 ## Key infrastructure
