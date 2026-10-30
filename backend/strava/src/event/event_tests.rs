@@ -14,12 +14,14 @@ fn setup() -> (MockStravaConn, MockSession) {
     (store, session)
 }
 
-/// Sets the global rate limiter to "at limit" (read 15-min exhausted).
+/// Sets this thread's rate-limiter override to "at limit" (read 15-min
+/// exhausted), so `get_event` reports `Limited`.
 fn set_rate_limited() {
     crate::ratelimit::test_set_limited();
 }
 
-/// Resets the global rate limiter to "no data" (allows all requests).
+/// Sets this thread's rate-limiter override to "no data" (allows all
+/// requests), so `get_event` dequeues normally.
 fn reset_rate_limiter() {
     crate::ratelimit::test_set_not_limited();
 }

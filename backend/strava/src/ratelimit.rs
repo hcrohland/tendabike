@@ -3,7 +3,12 @@
 //!
 //! The state is process-wide (shared across all executors) and in-memory:
 //! on restart it starts empty and learns from the first response.
+//!
+//! Test seam: the test hooks set a per-thread override that
+//! [`limited_until`] reports from, so parallel rate-limiter tests can't
+//! observe each other's process-global state.
 
+use std::cell::RefCell;
 use std::sync::Mutex;
 
 use http::HeaderMap;
@@ -49,11 +54,27 @@ pub struct RateLimitState {
 static STATE: std::sync::LazyLock<Mutex<RateLimitState>> =
     std::sync::LazyLock::new(|| Mutex::new(RateLimitState::default()));
 
+// A per-thread override of the rate-limit state, set by the test hooks
+// (`test_set_limited` / `test_set_not_limited`). When `Some`, `limited_until`
+// reports from this state instead of the process-global `STATE`, so parallel
+// rate-limiter tests can't observe each other's state (each test runs on its
+// own thread, the same isolation the `test_support::CANNED` canned-response
+// map relies on). `None` in production and on any thread a test hook hasn't
+// touched.
+thread_local! {
+    static TEST_OVERRIDE: RefCell<Option<RateLimitState>> = const { RefCell::new(None) };
+}
+
 /// The shared rate-limit state: the unix time at which the exhausted window
 /// resets, or `None` if budget remains (or no data yet).
 ///
 /// Emits a WARN log on transition into or out of the rate-limited state.
 pub fn limited_until() -> Option<i64> {
+    // Test seam: a per-thread override shadows the process-global state, so
+    // parallel rate-limiter tests can't observe each other's state.
+    if let Some(override_state) = TEST_OVERRIDE.with(|o| o.borrow().clone()) {
+        return limited_until_inner(&override_state);
+    }
     let mut state = STATE.lock().unwrap();
     let until = limited_until_inner(&state);
     let is_limited = until.is_some();
@@ -157,28 +178,36 @@ fn next_midnight_utc() -> i64 {
 
 #[cfg(test)]
 pub fn test_set_limited() {
-    let mut state = STATE.lock().unwrap();
-    state.read_15min = Window {
-        limit: Some(100),
-        usage: Some(100),
-    };
-    state.read_daily = Window {
-        limit: Some(1000),
-        usage: Some(500),
-    };
+    TEST_OVERRIDE.with(|o| {
+        *o.borrow_mut() = Some(RateLimitState {
+            read_15min: Window {
+                limit: Some(100),
+                usage: Some(100),
+            },
+            read_daily: Window {
+                limit: Some(1000),
+                usage: Some(500),
+            },
+            ..Default::default()
+        });
+    });
 }
 
 #[cfg(test)]
 pub fn test_set_not_limited() {
-    let mut state = STATE.lock().unwrap();
-    state.read_15min = Window {
-        limit: Some(100),
-        usage: Some(0),
-    };
-    state.read_daily = Window {
-        limit: Some(1000),
-        usage: Some(0),
-    };
+    TEST_OVERRIDE.with(|o| {
+        *o.borrow_mut() = Some(RateLimitState {
+            read_15min: Window {
+                limit: Some(100),
+                usage: Some(0),
+            },
+            read_daily: Window {
+                limit: Some(1000),
+                usage: Some(0),
+            },
+            ..Default::default()
+        });
+    });
 }
 
 #[cfg(test)]
