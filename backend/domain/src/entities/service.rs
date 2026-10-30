@@ -86,20 +86,19 @@ impl IdKeyed for Service {
 }
 
 impl Service {
-    #[allow(clippy::too_many_arguments)]
-    pub async fn create(
+    /// The shared creation logic: no ownership check. The public [`Service::create`]
+    /// and [`Service::redo`] check the part's ownership at their entry point and
+    /// delegate here — the guard lives at the public op (ADR-0008), the creation
+    /// logic is one private unit.
+    async fn create_unchecked(
         part_id: PartId,
         time: OffsetDateTime,
         name: String,
         notes: String,
         successor: Option<ServiceId>,
         plans: Vec<ServicePlanId>,
-        user: &dyn Session,
-        store: &mut (
-                 impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
-             ),
+        store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<Summary> {
-        part_id.checkuser(user, store).await?;
         let service = Service {
             id: ServiceId::new(),
             part_id,
@@ -117,6 +116,26 @@ impl Service {
         summary.services.upsert(service);
         summary.usages.upsert(usage);
         Ok(summary)
+    }
+
+    /// Creates a service on the part, checking the part's ownership first — the
+    /// guard the dispatch used to run, now at this public entry point (like
+    /// [`Service::redo`] and [`Service::update`]).
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create(
+        part_id: PartId,
+        time: OffsetDateTime,
+        name: String,
+        notes: String,
+        successor: Option<ServiceId>,
+        plans: Vec<ServicePlanId>,
+        user: &dyn Session,
+        store: &mut (
+                 impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
+             ),
+    ) -> TbResult<Summary> {
+        part_id.checkuser(user, store).await?;
+        Self::create_unchecked(part_id, time, name, notes, successor, plans, store).await
     }
 
     async fn calculate_usage(
@@ -147,27 +166,26 @@ impl Service {
             ..
         } = self;
         let mut old = id.get(store).await?;
+        old.part_id.checkuser(user, store).await?;
         if self.time < old.time {
-            Service::create(
+            Self::create_unchecked(
                 old.part_id,
                 time,
                 old.name.clone(),
                 notes,
                 Some(old.id),
                 plans,
-                user,
                 store,
             )
             .await
         } else {
-            let mut res = Service::create(
+            let mut res = Self::create_unchecked(
                 old.part_id,
                 time,
                 old.name.clone(),
                 notes,
                 None,
                 plans,
-                user,
                 store,
             )
             .await?;

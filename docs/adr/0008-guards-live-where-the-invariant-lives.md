@@ -14,7 +14,7 @@ The `ApiWrite` dispatch (`exec` in `tb_domain`) applies one mutating route per a
 
 For the dispatch guards that are domain invariants, the guard moves into the op it protects and the dispatch arm becomes a flat "call the op + wrap":
 
-- The **service-ownership** check moves into `Service::create`, which gains the session and the shop-store bound and runs the part's ownership check internally — aligning it with its siblings `redo` and `update`, which already do this (and fixing the one service op that omitted it).
+- The **service-ownership** check moves into the service-mutation ops' entry points: `Service::create` gains the session and the shop-store bound and runs the part's ownership check internally — aligning it with its siblings `redo` and `update`, which already do this (and fixing the one service op that omitted it). `create` and `redo` share the actual creation logic in a private unchecked `create_unchecked`; each public op checks ownership at its entry point, then delegates.
 - The **part-note file defaulting** (blank `name`/`filename` fallback) moves into `note_create_file`, which accepts the raw options and resolves them internally — aligning it with `update_file`, which already does this.
 
 The **activity id-mismatch** check (path id must equal the body's id) is a presentation-boundary invariant, so it is de-duplicated to the axum handler and removed from the dispatch: the dispatch variant drops its path-id field, and the domain op is left untouched, because a domain op has no path-id concept and expressing the check there would leak an HTTP notion into the domain.
@@ -30,7 +30,7 @@ The onboarding status guards are deliberately **not** moved: they stay inline in
 ## Consequences
 
 - The `exec` match reads as a single style (every arm calls an op and wraps the result); the guards that remain are the ones the dispatch genuinely owns.
-- `Service::create`'s signature changes (gains a session and a shop-store bound); its callers — including `redo`, which drops its now-redundant explicit ownership check — and the test suites are updated.
+- `Service::create`'s signature changes (gains a session and a shop-store bound) and shares its creation logic with `redo` through a private unchecked `create_unchecked`; each public op (`create`, `redo`) runs the part's ownership check at its entry point, and the test suites are updated.
 - `note_create_file`'s signature changes (the name becomes an option it resolves internally); its single dispatch caller and test are updated.
 - The activity dispatch variant drops its path-id field; the axum handler keeps the check.
 - A future guard is placed by the same rule: ask which layer owns the invariant, and put the guard there.
