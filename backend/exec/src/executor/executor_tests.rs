@@ -46,11 +46,12 @@ use tb_domain::test_support::{
 };
 use tb_domain::{
     ActTypeId, Activity, ActivityId, ActivityStore, ApiRead, ApiWrite, Attachment, AttachmentStore,
-    Error, OnboardingStatus, Part, PartId, PartNote, PartNoteId, PartNoteStore, PartStore,
-    PartTypeId, ReadOutcome, Service, ServiceId, ServicePlan, ServicePlanId, ServicePlanStore,
-    ServiceStore, Shop, ShopId, ShopStore, ShopSubscription, Store, SubscriptionId,
-    SubscriptionStatus, Summary, TbResult, Usage, UsageId, UsageStore, User, UserId, UserStore,
-    WriteOutcome,
+    Error, Notification, NotificationId, NotificationKind, NotificationLifecycle,
+    NotificationStore, NotificationSubject, OnboardingStatus, Part, PartId, PartNote, PartNoteId,
+    PartNoteStore, PartStore, PartTypeId, ReadOutcome, Service, ServiceId, ServicePlan,
+    ServicePlanId, ServicePlanStore, ServiceStore, Shop, ShopId, ShopStore, ShopSubscription,
+    Store, SubscriptionId, SubscriptionStatus, Summary, TbResult, Usage, UsageId, UsageStore, User,
+    UserId, UserStore, WriteOutcome,
 };
 use tb_strava::event::Event;
 use tb_strava::{StravaDataStore, StravaId, StravaStore, StravaUser};
@@ -340,6 +341,21 @@ mockall::mock! {
         async fn serviceplans_delete(&mut self, serviceplans: &[ServicePlan]) -> TbResult<usize>;
         async fn by_part(&mut self, part: PartId) -> TbResult<Vec<ServicePlan>>;
         async fn by_user(&mut self, uid: UserId) -> TbResult<Vec<ServicePlan>>;
+    }
+
+    #[async_trait::async_trait]
+    impl NotificationStore for Conn {
+        async fn notification_create(
+            &mut self,
+            recipient: UserId,
+            lifecycle: NotificationLifecycle,
+            kind: NotificationKind,
+            subject: NotificationSubject,
+            message: Option<String>,
+        ) -> TbResult<Notification>;
+        async fn notification_read(&mut self, id: NotificationId) -> TbResult<Notification>;
+        async fn notification_read_all(&mut self, recipient: UserId) -> TbResult<Vec<Notification>>;
+        async fn notification_all_for_user(&mut self, recipient: UserId) -> TbResult<Vec<Notification>>;
     }
 
     impl Store for Conn {}
@@ -1123,6 +1139,8 @@ async fn cleanly_committed_read_resets_the_backoff() {
     conn.expect_part_get_all_for_userid()
         .returning(|_uid| Ok(Vec::new()));
     conn.expect_by_user().returning(|_uid| Ok(Vec::new()));
+    conn.expect_notification_all_for_user()
+        .returning(|_uid| Ok(Vec::new()));
     conn.expect_commit().returning(|| Ok(()));
     let source = FakeSource::with(conn);
     let (frames, _frame_rx) = broadcast::channel(4);

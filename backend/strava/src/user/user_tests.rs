@@ -333,6 +333,9 @@ async fn user_delete_removes_everything() -> TbResult<()> {
         .expect_part_get_all_for_userid()
         .returning(|_uid| Ok(Vec::new()));
     store.expect_by_user().returning(|_uid| Ok(Vec::new()));
+    store
+        .expect_notification_all_for_user()
+        .returning(|_uid| Ok(Vec::new()));
     store.expect_services_delete().returning(|_s| Ok(0));
     store.expect_serviceplans_delete().returning(|_s| Ok(0));
     store

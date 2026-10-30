@@ -72,9 +72,9 @@ use tb_domain::test_support::{
     part_type_ids,
 };
 use tb_domain::{
-    ActTypeId, Activity, ActivityId, ActivityStore, Attachment, AttachmentStore, MAX_TIME, Part,
-    PartId, PartStore, PartTypeId, SNAPSHOT_JSON, StoreSnapshot, UsageId, UsageStore, UserId,
-    UserStore,
+    ActTypeId, Activity, ActivityId, ActivityStore, Attachment, AttachmentStore, MAX_TIME,
+    NotificationStore, Part, PartId, PartStore, PartTypeId, SNAPSHOT_JSON, StoreSnapshot, UsageId,
+    UsageStore, UserId, UserStore,
 };
 use time::{OffsetDateTime, macros::datetime};
 use tokio::sync::MutexGuard;
@@ -728,6 +728,227 @@ async fn activity_get_all_orders_by_start() -> tb_domain::TbResult<()> {
             ]
         );
 
+        Ok(())
+    })
+    .await
+}
+
+// ---------------------------------------------------------------------------
+// Notification: store-path rules
+// ---------------------------------------------------------------------------
+
+/// `notification_create` inserts a row and returns it: the id is server-assigned
+/// (v7), the state is `new`, and the subject columns are set correctly.
+#[tokio::test]
+#[ignore]
+async fn notification_create_roundtrip() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let recipient = UserId::from(1);
+        let subject =
+            tb_domain::NotificationSubject::Subscription(tb_domain::SubscriptionId::from(1));
+        let notif = store
+            .notification_create(
+                recipient,
+                tb_domain::NotificationLifecycle::Persistent,
+                tb_domain::NotificationKind::SubRequest,
+                subject,
+                Some("Please approve".to_string()),
+            )
+            .await?;
+
+        assert_eq!(notif.recipient, recipient);
+        assert_eq!(
+            notif.lifecycle,
+            tb_domain::NotificationLifecycle::Persistent
+        );
+        assert_eq!(notif.kind, tb_domain::NotificationKind::SubRequest);
+        assert_eq!(notif.subject, subject);
+        assert_eq!(notif.message, Some("Please approve".to_string()));
+        assert_eq!(notif.state, tb_domain::NotificationState::New);
+
+        Ok(())
+    })
+    .await
+}
+
+/// `notification_read` on a persistent notification marks it `seen` and
+/// returns the updated row: the row still exists in the database.
+#[tokio::test]
+#[ignore]
+async fn notification_read_persistent_marks_seen() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let recipient = UserId::from(1);
+        let notif = store
+            .notification_create(
+                recipient,
+                tb_domain::NotificationLifecycle::Persistent,
+                tb_domain::NotificationKind::SubResponse,
+                tb_domain::NotificationSubject::Subscription(tb_domain::SubscriptionId::from(1)),
+                Some("Welcome!".to_string()),
+            )
+            .await?;
+
+        let read = store.notification_read(notif.id).await?;
+        assert_eq!(read.id, notif.id);
+        assert_eq!(read.state, tb_domain::NotificationState::Seen);
+        assert_eq!(read.lifecycle, tb_domain::NotificationLifecycle::Persistent);
+
+        // The row still exists (persistent stays in history).
+        let all = store.notification_all_for_user(recipient).await?;
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].id, notif.id);
+        assert_eq!(all[0].state, tb_domain::NotificationState::Seen);
+
+        Ok(())
+    })
+    .await
+}
+
+/// `notification_read` on a transient notification deletes the row and
+/// returns the notification as it was before deletion.
+#[tokio::test]
+#[ignore]
+async fn notification_read_transient_deletes_row() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let recipient = UserId::from(1);
+        let notif = store
+            .notification_create(
+                recipient,
+                tb_domain::NotificationLifecycle::Transient,
+                tb_domain::NotificationKind::PartRegistered,
+                tb_domain::NotificationSubject::Part(PartId::from(1)),
+                None,
+            )
+            .await?;
+
+        let read = store.notification_read(notif.id).await?;
+        assert_eq!(read.id, notif.id);
+        assert_eq!(read.lifecycle, tb_domain::NotificationLifecycle::Transient);
+
+        // The row is gone (transient is deleted on read).
+        let all = store.notification_all_for_user(recipient).await?;
+        assert!(all.is_empty(), "transient notification should be deleted");
+
+        Ok(())
+    })
+    .await
+}
+
+/// `notification_read_all` applies the lifecycle to all of the user's
+/// notifications: persistent ones are marked seen, transient ones are deleted.
+#[tokio::test]
+#[ignore]
+async fn notification_read_all_mixed_lifecycles() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let recipient = UserId::from(1);
+
+        // Create one persistent and one transient notification.
+        let persistent = store
+            .notification_create(
+                recipient,
+                tb_domain::NotificationLifecycle::Persistent,
+                tb_domain::NotificationKind::SubRequest,
+                tb_domain::NotificationSubject::Subscription(tb_domain::SubscriptionId::from(1)),
+                None,
+            )
+            .await?;
+        let transient = store
+            .notification_create(
+                recipient,
+                tb_domain::NotificationLifecycle::Transient,
+                tb_domain::NotificationKind::PartRegistered,
+                tb_domain::NotificationSubject::Part(PartId::from(1)),
+                None,
+            )
+            .await?;
+
+        let read_all = store.notification_read_all(recipient).await?;
+        assert_eq!(read_all.len(), 2);
+
+        // The persistent one is now seen.
+        let p = read_all
+            .iter()
+            .find(|n| n.id == persistent.id)
+            .expect("persistent notification in read_all");
+        assert_eq!(p.state, tb_domain::NotificationState::Seen);
+
+        // The transient one is returned (before deletion).
+        let t = read_all
+            .iter()
+            .find(|n| n.id == transient.id)
+            .expect("transient notification in read_all");
+        assert_eq!(t.lifecycle, tb_domain::NotificationLifecycle::Transient);
+
+        // After read_all: persistent stays (seen), transient is gone.
+        let remaining = store.notification_all_for_user(recipient).await?;
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].id, persistent.id);
+        assert_eq!(remaining[0].state, tb_domain::NotificationState::Seen);
+
+        Ok(())
+    })
+    .await
+}
+
+/// `notification_all_for_user` returns all of the user's notifications
+/// without applying any lifecycle (pure read for hydration).
+#[tokio::test]
+#[ignore]
+async fn notification_all_for_user_is_pure_read() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let recipient = UserId::from(1);
+
+        let n1 = store
+            .notification_create(
+                recipient,
+                tb_domain::NotificationLifecycle::Persistent,
+                tb_domain::NotificationKind::SubRequest,
+                tb_domain::NotificationSubject::Subscription(tb_domain::SubscriptionId::from(1)),
+                None,
+            )
+            .await?;
+        let n2 = store
+            .notification_create(
+                recipient,
+                tb_domain::NotificationLifecycle::Transient,
+                tb_domain::NotificationKind::PartRegistered,
+                tb_domain::NotificationSubject::Part(PartId::from(1)),
+                None,
+            )
+            .await?;
+
+        let all = store.notification_all_for_user(recipient).await?;
+        assert_eq!(all.len(), 2);
+        assert!(all.iter().any(|n| n.id == n1.id));
+        assert!(all.iter().any(|n| n.id == n2.id));
+
+        // Both are still `new` (no lifecycle applied).
+        assert!(
+            all.iter()
+                .all(|n| n.state == tb_domain::NotificationState::New)
+        );
+
+        // The rows are still in the database.
+        let all_again = store.notification_all_for_user(recipient).await?;
+        assert_eq!(all_again.len(), 2);
+
+        Ok(())
+    })
+    .await
+}
+
+/// `notification_read` on a non-existent id returns a `NotFound` error.
+#[tokio::test]
+#[ignore]
+async fn notification_read_not_found() -> tb_domain::TbResult<()> {
+    with_seam(|mut store| async move {
+        let nonexistent = tb_domain::NotificationId::from(uuid::Uuid::now_v7());
+        let result = store.notification_read(nonexistent).await;
+        assert!(
+            matches!(result, Err(tb_domain::Error::NotFound(_))),
+            "expected NotFound, got {:?}",
+            result
+        );
         Ok(())
     })
     .await

@@ -3,6 +3,7 @@ use tb_domain::Store;
 
 mod activity;
 mod attachment;
+mod notification;
 mod part;
 mod partnote;
 mod service;

@@ -284,6 +284,21 @@ mock! {
         async fn by_user(&mut self, uid: UserId) -> TbResult<Vec<ServicePlan>>;
     }
 
+    #[async_trait::async_trait]
+    impl NotificationStore for StravaConn {
+        async fn notification_create(
+            &mut self,
+            recipient: UserId,
+            lifecycle: NotificationLifecycle,
+            kind: NotificationKind,
+            subject: NotificationSubject,
+            message: Option<String>,
+        ) -> TbResult<Notification>;
+        async fn notification_read(&mut self, id: NotificationId) -> TbResult<Notification>;
+        async fn notification_read_all(&mut self, recipient: UserId) -> TbResult<Vec<Notification>>;
+        async fn notification_all_for_user(&mut self, recipient: UserId) -> TbResult<Vec<Notification>>;
+    }
+
     impl Store for StravaConn {}
 
     #[async_trait::async_trait]

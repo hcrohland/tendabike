@@ -25,9 +25,12 @@ pub use service::*;
 mod serviceplan;
 pub use serviceplan::*;
 
+mod notification;
+pub use notification::*;
+
 use crate::{ShopId, UserId};
 
-/// A marker trait naming a complete store: one that implements all nine
+/// A marker trait naming a complete store: one that implements all ten
 /// sub-traits. It carries no methods — the transaction lifecycle
 /// (`begin`/`commit`/`rollback`) is inherent on the concrete store types and
 /// is driven only by the callers (the web layer, the loop, and the tests),
@@ -43,6 +46,7 @@ pub trait Store:
     + UsageStore
     + ServiceStore
     + ServicePlanStore
+    + NotificationStore
 {
 }
 

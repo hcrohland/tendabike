@@ -693,7 +693,7 @@ async fn get_user_returns_200_and_userstate_body() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"},"summary":{"activities":{},"parts":{},"attachments":{},"usages":{},"services":{},"plans":{},"part_notes":{},"shops":{},"users":{}}}"#
+        r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"},"summary":{"activities":{},"parts":{},"attachments":{},"usages":{},"services":{},"plans":{},"part_notes":{},"shops":{},"users":{},"notifications":{}}}"#
     );
 }
 
@@ -742,7 +742,7 @@ async fn summary_returns_200_and_summary_body() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         String::from_utf8_lossy(&body),
-        r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"},"summary":{"activities":{},"parts":{},"attachments":{},"usages":{},"services":{},"plans":{},"part_notes":{},"shops":{},"users":{}}}"#
+        r#"{"user":{"id":1,"name":"Test User","firstname":"Test","avatar":null,"is_admin":false,"onboarding_status":"pending"},"summary":{"activities":{},"parts":{},"attachments":{},"usages":{},"services":{},"plans":{},"part_notes":{},"shops":{},"users":{},"notifications":{}}}"#
     );
 }
 
@@ -2226,7 +2226,7 @@ async fn stream_forwards_summary_frames() {
     let frames = read_sse_frames(&mut body, 3, Duration::from_secs(2)).await;
     assert!(
         frames.iter().any(|f| f.contains(
-            "data: {\"activities\":{},\"parts\":{},\"attachments\":{},\"usages\":{},\"services\":{},\"plans\":{},\"part_notes\":{},\"shops\":{},\"users\":{}}"
+            "data: {\"activities\":{},\"parts\":{},\"attachments\":{},\"usages\":{},\"services\":{},\"plans\":{},\"part_notes\":{},\"shops\":{},\"users\":{},\"notifications\":{}}"
         )),
         "expected the Summary JSON as a `data:` frame, got: {frames:?}"
     );
@@ -2324,7 +2324,7 @@ async fn shop_stream_owner_forwards_frames() {
     let frames = read_sse_frames(&mut body, 3, Duration::from_secs(2)).await;
     assert!(
         frames.iter().any(|f| f.contains(
-            "data: {\"activities\":{},\"parts\":{},\"attachments\":{},\"usages\":{},\"services\":{},\"plans\":{},\"part_notes\":{},\"shops\":{},\"users\":{}}"
+            "data: {\"activities\":{},\"parts\":{},\"attachments\":{},\"usages\":{},\"services\":{},\"plans\":{},\"part_notes\":{},\"shops\":{},\"users\":{},\"notifications\":{}}"
         )),
         "expected the Summary JSON as a `data:` frame, got: {frames:?}"
     );

@@ -149,7 +149,7 @@ where
     }
 }
 
-/// The id-keyed map summary: nine [`IdKeyedMap`]s, one per entity kind, keyed by the entity's
+/// The id-keyed map summary: ten [`IdKeyedMap`]s, one per entity kind, keyed by the entity's
 /// id (its `idx` wire key for [`AttachmentDetail`]). A `Some(entity)` value is a live entity; a
 /// `None` value is a tombstone marking the entity as deleted. It is the single payload type the
 /// wire carries (ADR-0005, executable spec #446 §2). The wire shape: a uniform JSON object with
@@ -166,6 +166,7 @@ pub struct Summary {
     pub part_notes: IdKeyedMap<PartNoteId, PartNote>,
     pub shops: IdKeyedMap<ShopId, Shop>,
     pub users: IdKeyedMap<UserId, UserPublic>,
+    pub notifications: IdKeyedMap<NotificationId, Notification>,
 }
 
 // --- Merging ---
@@ -185,6 +186,7 @@ impl AddAssign<Summary> for Summary {
         self.part_notes.merge(rhs.part_notes);
         self.shops.merge(rhs.shops);
         self.users.merge(rhs.users);
+        self.notifications.merge(rhs.notifications);
     }
 }
 
@@ -215,7 +217,7 @@ impl Summary {
             .or_else(|| self.parts.live().first().map(|p| p.id))
     }
 
-    /// Whether nothing was touched: all nine maps are empty. A tombstone
+    /// Whether nothing was touched: all ten maps are empty. A tombstone
     /// counts as touched (a delete is something to deliver). The caller
     /// uses this to decide the push: an empty `Summary` pushes no stream
     /// frame (ADR-0005, executable spec #446 §4.5).
@@ -229,6 +231,7 @@ impl Summary {
             && self.part_notes.is_empty()
             && self.shops.is_empty()
             && self.users.is_empty()
+            && self.notifications.is_empty()
     }
 }
 

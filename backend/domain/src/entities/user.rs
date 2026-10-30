@@ -252,7 +252,7 @@ impl UserId {
     /// `caller` is the pre-fetched [`UserPublic`] of `self`: when `Some`,
     /// it is reused in the shop-user lookup instead of re-reading the row.
     ///
-    /// Crosses: activity, attachment, part, partnote, service, serviceplan, shop, usage, user.
+    /// Crosses: activity, attachment, notification, part, partnote, service, serviceplan, shop, usage, user.
     pub async fn get_summary(
         &self,
         shop: Option<ShopId>,
@@ -263,6 +263,7 @@ impl UserId {
         let activities = Activity::get_all(self, store).await?;
         let shops = Shop::get_all_for_user(self, store).await?;
         let users = Shop::get_users(&shops, self, caller, store).await?;
+        let notifications = store.notification_all_for_user(*self).await?;
         let mut summary = {
             let parts = match shop {
                 None => Part::get_all(self, store).await?,
@@ -273,6 +274,7 @@ impl UserId {
         summary.activities.upsert_all(activities);
         summary.shops.upsert_all(shops);
         summary.users.upsert_all(users);
+        summary.notifications.upsert_all(notifications);
         Ok(summary)
     }
 
