@@ -82,13 +82,7 @@ async fn act_put(
     }
     state
         .api
-        .write(
-            Box::new(user),
-            ApiWrite::ActivityUpdate {
-                id: ActivityId::from(id),
-                activity,
-            },
-        )
+        .write(Box::new(user), ApiWrite::ActivityUpdate { activity })
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

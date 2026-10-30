@@ -282,38 +282,13 @@ async fn activity_update_dispatches() -> TbResult<()> {
     act.name = "Renamed Ride".to_string();
     let summary = outcome_summary(
         exec(
-            ApiWrite::ActivityUpdate { id, activity: act },
+            ApiWrite::ActivityUpdate { activity: act },
             &test_session(),
             &mut store,
         )
         .await?,
     );
     assert_eq!(summary.activities.get(&id).unwrap().name, "Renamed Ride");
-    Ok(())
-}
-
-#[tokio::test]
-async fn activity_update_id_mismatch_is_bad_request() -> TbResult<()> {
-    let mut store = MockStore::new();
-    let stored = activity_row(ActivityId::new(1), "Morning Ride");
-    let stored_read = stored.clone();
-    store
-        .expect_activity_read_by_id()
-        .returning(move |_| Ok(Some(stored_read.clone())));
-
-    let act = stored;
-    // A path id different from the body's: the handler's guard.
-    let err = exec(
-        ApiWrite::ActivityUpdate {
-            id: ActivityId::new(2),
-            activity: act,
-        },
-        &test_session(),
-        &mut store,
-    )
-    .await
-    .unwrap_err();
-    assert!(matches!(err, Error::BadRequest(_)));
     Ok(())
 }
 

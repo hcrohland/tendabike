@@ -153,6 +153,7 @@ async fn service_create_with_valid_data() -> TbResult<()> {
         "Old chain".to_string(),
         None,
         vec![],
+        &test_session(),
         &mut store,
     )
     .await?;
@@ -165,6 +166,35 @@ async fn service_create_with_valid_data() -> TbResult<()> {
     assert_eq!(svc.notes, "Old chain");
     assert!(svc.successor.is_none());
     assert!(svc.plans.is_empty());
+    Ok(())
+}
+
+/// S-03: Service create requires ownership of the part (the guard the dispatch
+/// used to run; it now lives in the op, like its `redo` and `update` siblings).
+#[tokio::test]
+async fn service_create_on_foreign_part_is_forbidden() -> TbResult<()> {
+    let part = PartId::from(1);
+    let t = sample_time();
+
+    let mut store = MockStore::new();
+    // The part is owned by test_user(); user 2 (no shop) is denied before the
+    // service is even created.
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, test_user(), CHAIN)));
+
+    let result = Service::create(
+        part,
+        t,
+        "Service".to_string(),
+        "".to_string(),
+        None,
+        vec![],
+        &mock_session(UserId::from(2)),
+        &mut store,
+    )
+    .await;
+    assert!(matches!(result, Err(Error::Forbidden(_))));
     Ok(())
 }
 
@@ -206,6 +236,7 @@ async fn service_create_usage_main_part_aggregates_all_activities() -> TbResult<
         "".to_string(),
         None,
         vec![],
+        &test_session(),
         &mut store,
     )
     .await?;
@@ -245,6 +276,7 @@ async fn service_create_usage_sub_part_aggregates_activities_during_attachment()
         "".to_string(),
         None,
         vec![],
+        &test_session(),
         &mut store,
     )
     .await?;
@@ -278,6 +310,7 @@ async fn service_create_usage_zero_with_no_activities() -> TbResult<()> {
         "".to_string(),
         None,
         vec![],
+        &test_session(),
         &mut store,
     )
     .await?;
@@ -423,6 +456,7 @@ async fn service_delete_by_partid_checks_ownership() -> TbResult<()> {
         "".to_string(),
         None,
         vec![],
+        &test_session(),
         &mut store,
     )
     .await?;
@@ -767,6 +801,7 @@ async fn service_create_with_empty_name() -> TbResult<()> {
         "".to_string(),
         None,
         vec![],
+        &test_session(),
         &mut store,
     )
     .await?;
@@ -800,6 +835,7 @@ async fn service_create_with_very_long_name() -> TbResult<()> {
         "".to_string(),
         None,
         vec![],
+        &test_session(),
         &mut store,
     )
     .await?;
@@ -855,6 +891,7 @@ async fn service_create_on_main_part_aggregates_prepopulated_activities() -> TbR
         "".to_string(),
         None,
         vec![],
+        &test_session(),
         &mut store,
     )
     .await?;
@@ -929,6 +966,7 @@ async fn service_create_on_subpart_aggregates_prepopulated_activities_during_att
         "".to_string(),
         None,
         vec![],
+        &test_session(),
         &mut store,
     )
     .await?;
@@ -982,6 +1020,7 @@ async fn service_create_before_latest_activity_counts_only_earlier_ones() -> TbR
         "".to_string(),
         None,
         vec![],
+        &test_session(),
         &mut store,
     )
     .await?;
