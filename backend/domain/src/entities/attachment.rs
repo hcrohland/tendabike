@@ -206,7 +206,7 @@ impl Attachment {
         trace!("delete {self:?}");
 
         // delete the attachment on the db
-        let att = AttachmentStore::delete(store, self).await?;
+        let att = AttachmentStore::attachment_delete(store, self).await?;
         let usage = -att.usage.delete(store).await?;
 
         // recalc service usages

@@ -1475,6 +1475,26 @@ async fn update_activity_returns_204() {
     assert_eq!(status, StatusCode::NO_CONTENT);
 }
 
+/// `PUT /api/activ/{id}` answers `400` when the path id differs from the
+/// body's id: the request-internal consistency check is the presentation's,
+/// and it fires before any write is enqueued (the op has no path-id concept).
+#[tokio::test]
+async fn update_activity_id_mismatch_returns_400() {
+    let (store, mock) = mock_ctx();
+    let app = build_app(&store, mock);
+    let cookie = user_cookie(&store).await;
+    // Path id 1, body id 2: the mismatch is the presentation's guard.
+    let (status, _headers, _body) = run_json(
+        app,
+        Method::PUT,
+        "/api/activ/1",
+        Some(&cookie),
+        r#"{"id":2,"user_id":1,"what":1,"name":"Morning Ride","start":"2024-01-01T08:00:00Z","duration":3600,"time":null,"distance":20000,"climb":100,"descend":100,"energy":5000,"gear":null,"device_name":null,"external_id":null}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
 /// `DELETE /api/activ/{id}` enqueues the `ActivityDelete` write and
 /// answers `204`.
 #[tokio::test]

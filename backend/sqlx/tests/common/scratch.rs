@@ -59,8 +59,7 @@
 
 use sqlx::migrate::MigrateDatabase;
 use std::time::Duration;
-use tb_domain::test_support::{MemStore, StoreSnapshot};
-use tb_domain::{ActivityStore, AttachmentStore, UsageStore};
+use tb_domain::{ActivityStore, AttachmentStore, SNAPSHOT_JSON, StoreSnapshot, UsageStore};
 use tb_sqlx::{DbPool, SqlxConn};
 use tokio::sync::{Mutex, OnceCell};
 use uuid::Uuid;
@@ -249,7 +248,8 @@ pub fn db_err(err: sqlx::Error) -> tb_domain::Error {
 pub async fn seed(pool: &DbPool) -> tb_domain::TbResult<FixtureMarks> {
     let mut tx = pool.begin().await?;
 
-    let snap = MemStore::prepopulated().snapshot();
+    let snap: StoreSnapshot =
+        serde_json::from_str(SNAPSHOT_JSON).expect("SNAPSHOT_JSON must be valid JSON");
 
     load_fixture(&mut tx, &snap).await?;
 
@@ -333,7 +333,7 @@ pub async fn load_fixture(tx: &mut SqlxConn<'_>, snap: &StoreSnapshot) -> tb_dom
     for att in &snap.attachments {
         tx.attachment_create(*att).await?;
     }
-    UsageStore::update(tx, &snap.usages).await?;
+    UsageStore::usages_update(tx, &snap.usages).await?;
     for act in &snap.activities {
         tx.activity_create(act.clone()).await?;
     }
@@ -396,7 +396,8 @@ pub async fn fresh_fixture(pool: &DbPool) -> tb_domain::TbResult<()> {
         .execute(&mut **tx)
         .await
         .map_err(db_err)?;
-    let snap = MemStore::prepopulated().snapshot();
+    let snap: StoreSnapshot =
+        serde_json::from_str(SNAPSHOT_JSON).expect("SNAPSHOT_JSON must be valid JSON");
     load_fixture(&mut tx, &snap).await?;
     let marks = FixtureMarks {
         parts: snap
@@ -415,6 +416,46 @@ pub async fn fresh_fixture(pool: &DbPool) -> tb_domain::TbResult<()> {
     reset_sequences(&mut tx, &marks).await?;
     tx.commit().await?;
     Ok(())
+}
+
+/// The fixture builder (issue #647): seeds a scratch Postgres DB from the
+/// relocated `StoreSnapshot` fixture and returns a `Store` over that
+/// Postgres connection.
+///
+/// This is the Postgres-side counterpart that replaces the in-memory
+/// prepopulated store for the DB-required tests. `suffix` is appended to the
+/// scratch database name (the executor suite uses a suffixed database so the
+/// two suites don't drop each other's database out from under a parallel
+/// `cargo test` run); pass `None` for the base database.
+///
+/// The caller holds the suite's lock (the one-time setup and the pool
+/// connection are taken while the lock is held, so tests never contend for
+/// the database). The pool is local to this function: it is dropped when the
+/// function returns, and the transaction keeps the pool alive internally
+/// through its own `Arc` handle until it is rolled back.
+pub async fn build_workshop_store(suffix: Option<&str>) -> Result<SqlxConn<'static>, String> {
+    let url = match suffix {
+        Some(suffix) => suffixed_scratch_url(suffix),
+        None => scratch_url(),
+    };
+    let Some(url) = url else {
+        return Err(NO_SCRATCH_URL.to_string());
+    };
+    let marks = match SETUP.get_or_init(|| setup(&url)).await {
+        Setup::Ready(marks) => *marks,
+        Setup::Failed(err) => {
+            return Err(format!("the scratch database could not be prepared: {err}"));
+        }
+    };
+    let pool = pool(&url).await?;
+    let mut store = pool
+        .begin()
+        .await
+        .map_err(|err| format!("the scratch database could not be prepared: {err}"))?;
+    reset_sequences(&mut store, &marks)
+        .await
+        .map_err(|err| format!("the scratch database could not be prepared: {err}"))?;
+    Ok(store)
 }
 
 /// The body of a suite's `database_is_reachable` canary, shared by the

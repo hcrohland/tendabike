@@ -75,15 +75,14 @@ impl IdKeyed for Usage {
 
 impl Usage {
     pub(crate) async fn update(self, store: &mut impl UsageStore) -> TbResult<Usage> {
-        Usage::update_vec(&[&self], store).await?;
-        Ok(self)
+        let vec = [self];
+        Usage::update_vec(&vec, store).await?;
+        let [result] = vec;
+        Ok(result)
     }
 
-    pub(crate) async fn update_vec<U>(vec: &[U], store: &mut impl UsageStore) -> TbResult<usize>
-    where
-        U: Borrow<Usage> + Sync,
-    {
-        store.update(vec).await
+    pub(crate) async fn update_vec(vec: &[Usage], store: &mut impl UsageStore) -> TbResult<usize> {
+        store.usages_update(vec).await
     }
 
     pub(crate) fn new(id: UsageId) -> Usage {
@@ -115,7 +114,7 @@ impl UsageId {
     }
 
     pub(crate) async fn delete(self, store: &mut impl UsageStore) -> TbResult<Usage> {
-        match store.delete(self).await {
+        match store.usage_delete(self).await {
             Err(Error::NotFound(_)) => Ok(Usage::new(self)),
             x => x,
         }
@@ -123,7 +122,7 @@ impl UsageId {
 
     pub(crate) async fn read(self, store: &mut impl UsageStore) -> TbResult<Usage> {
         store
-            .get(self)
+            .usage_get(self)
             .await
             .map(|u| u.unwrap_or_else(|| Usage::new(self)))
     }

@@ -1,37 +1,8 @@
 # Service & ServicePlan Test Plan
 
-## Pre-requisite: MemStore Infrastructure
+## Pre-requisite: the store seam
 
-Before writing entity tests, the in-memory store stubs need implementation:
-
-**`mem_service.rs`** — currently all methods `todo!()`. Needs:
-```rust
-impl ServiceStore for MemStore {
-    async fn create(...) → insert into self.services, return clone
-    async fn get(...) → find by ServiceId in self.services
-    async fn update(...) → find, mutate, return clone
-    async fn delete(...) → remove by id, count deleted; also cleanup successor chains
-    async fn services_delete(...) → bulk delete
-}
-```
-
-**`mem_serviceplan.rs`** — needs:
-```rust
-impl ServicePlanStore for MemStore {
-    async fn create(...) → insert into self.service_plans
-    async fn get(...) → find by ServicePlanId
-    async fn plan_update(...) → find, mutate
-    async fn delete(...) → remove by id
-    async fn serviceplans_delete(...) → bulk delete
-    async fn by_part(...) → filter self.service_plans by .part == Some(part_id)
-    async fn by_user(...) → filter self.service_plans by .uid == uid
-}
-```
-
-**`mem_activity.rs`** — needs `activities_find_by_gear_and_time()` implementation:
-```rust
-fn activities_find_by_gear_and_time(&mut self, gear: PartId, begin: OffsetDateTime, end: OffsetDateTime)
-```
+Entity tests run the real domain operation over a `mockall` `mock!` store double, `MockStore` (`domain/src/test_support/mock_store.rs`): the domain logic runs for real, only the store I/O is canned. There is no in-memory store to implement — the mock's `expect_<method>()` API scripts each method the operation calls. Store *behavior* (keying, normalization, `RowNotFound` mapping, the read/write roundtrips) is verified once on the real Postgres path, the sqlx seam suite (`sqlx/tests/store_seam.rs`).
 
 ---
 
@@ -155,15 +126,12 @@ fn activities_find_by_gear_and_time(&mut self, gear: PartId, begin: OffsetDateTi
 
 ## Test Patterns to Follow
 
-- Use `test_support::{MemStore, TestSession}` for store and session setup
-- Helper functions: `test_user()`, `test_session()`, fixture parts via `fixtures::fixture_basic_part()` and `fixtures::fixture_attached_part()`
+- Use `test_support::MockStore` for the store and `mock_session`/`mock_session_with_shop`/`mock_session_admin` for the session
+- Helper functions: `test_user()`, `test_session()`, and the fixed `sample_purchase_date()` from `fixtures`
 - Use `#[tokio::test]` for async tests, `#[test]` for sync
 - Return `TbResult<()>` from tests for error propagation
 - Use fixed timestamps via `time::macros::datetime!` for deterministic time-based tests
 
-## Dependencies to Verify in MemStore
+## Store-seam methods the suite scripts
 
-1. **`mem_activity.rs`** needs `activities_find_by_gear_and_time()` — currently no activity store trait impl for MemStore exists; must add it
-2. **`mem_service.rs`** needs full implementation (all methods `todo!()`)
-3. **`mem_serviceplan.rs`** needs full implementation (all methods `todo!()`)
-4. **`MemStore.usages`** HashMap must support `UsageId::read()` and `UsageId.delete()` — verify these methods exist on UsageId
+The mock-runnable tests script the `MockStore` methods the service/serviceplan operations call (`service_*`, `serviceplan_*`, `usage_get`, `usages_update`, `activity_*`, `attachment_*`). Where a rule is about the *database* (the `RowNotFound` mapping, the read/write roundtrips), it rests on the sqlx seam, not here.

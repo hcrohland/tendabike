@@ -120,11 +120,15 @@ impl PartId {
     }
 
     /// Creates a file note on this part, storing the given bytes.
+    ///
+    /// `filename` falls back to `"file"`; `name` falls back to the resolved
+    /// filename — the same resolution [`PartNoteId::update_file`] applies.
+    /// Access is checked against the part.
     #[allow(clippy::too_many_arguments)]
     pub async fn note_create_file(
         self,
         user: &dyn Session,
-        name: String,
+        name: Option<String>,
         mime: String,
         filename: Option<String>,
         size: i64,
@@ -133,8 +137,12 @@ impl PartId {
         store: &mut (impl PartNoteStore + PartStore + ShopStore),
     ) -> TbResult<PartNote> {
         self.checkuser(user, store).await?;
+        let filename = filename.unwrap_or_else(|| "file".to_string());
+        let name = name
+            .filter(|n| !n.trim().is_empty())
+            .unwrap_or_else(|| filename.clone());
         store
-            .partnote_create_file(self, name, mime, filename, size, data, created)
+            .partnote_create_file(self, name, mime, Some(filename), size, data, created)
             .await
     }
 }

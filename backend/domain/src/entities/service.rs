@@ -16,7 +16,7 @@ impl ServiceId {
     }
 
     async fn get(self, store: &mut impl ServiceStore) -> TbResult<Service> {
-        ServiceStore::get(store, self).await
+        ServiceStore::service_get(store, self).await
     }
 
     pub async fn delete(
@@ -38,14 +38,14 @@ impl ServiceId {
         let mut summary = Summary::default();
         for mut s in services {
             s.successor = None;
-            let s = ServiceStore::update(store, s).await?;
+            let s = ServiceStore::service_update(store, s).await?;
             summary.services.upsert(s);
         }
 
         // delete service: it is reported as a None tombstone, so the
         // client's merge drops its row (issue #462)
         service.usage.delete(store).await?;
-        ServiceStore::delete(store, self).await?;
+        ServiceStore::service_delete(store, self).await?;
         summary.services.tombstone(service.key());
         Ok(summary)
     }
@@ -86,7 +86,11 @@ impl IdKeyed for Service {
 }
 
 impl Service {
-    pub async fn create(
+    /// The shared creation logic: no ownership check. The public [`Service::create`]
+    /// and [`Service::redo`] check the part's ownership at their entry point and
+    /// delegate here — the guard lives at the public op (ADR-0008), the creation
+    /// logic is one private unit.
+    async fn create_unchecked(
         part_id: PartId,
         time: OffsetDateTime,
         name: String,
@@ -107,11 +111,31 @@ impl Service {
             plans,
         };
         let usage = service.calculate_usage(store).await?.update(store).await?;
-        let service = ServiceStore::create(store, service).await?;
+        let service = ServiceStore::service_create(store, service).await?;
         let mut summary = Summary::default();
         summary.services.upsert(service);
         summary.usages.upsert(usage);
         Ok(summary)
+    }
+
+    /// Creates a service on the part, checking the part's ownership first — the
+    /// guard the dispatch used to run, now at this public entry point (like
+    /// [`Service::redo`] and [`Service::update`]).
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create(
+        part_id: PartId,
+        time: OffsetDateTime,
+        name: String,
+        notes: String,
+        successor: Option<ServiceId>,
+        plans: Vec<ServicePlanId>,
+        user: &dyn Session,
+        store: &mut (
+                 impl ActivityStore + AttachmentStore + PartStore + ServiceStore + ShopStore + UsageStore
+             ),
+    ) -> TbResult<Summary> {
+        part_id.checkuser(user, store).await?;
+        Self::create_unchecked(part_id, time, name, notes, successor, plans, store).await
     }
 
     async fn calculate_usage(
@@ -144,7 +168,7 @@ impl Service {
         let mut old = id.get(store).await?;
         old.part_id.checkuser(user, store).await?;
         if self.time < old.time {
-            Service::create(
+            Self::create_unchecked(
                 old.part_id,
                 time,
                 old.name.clone(),
@@ -155,7 +179,7 @@ impl Service {
             )
             .await
         } else {
-            let mut res = Service::create(
+            let mut res = Self::create_unchecked(
                 old.part_id,
                 time,
                 old.name.clone(),
@@ -182,7 +206,7 @@ impl Service {
         store: &mut (impl ActivityStore + AttachmentStore + PartStore + ServiceStore + UsageStore),
     ) -> TbResult<Summary> {
         let usages = vec![self.calculate_usage(store).await?.update(store).await?];
-        let services = vec![ServiceStore::update(store, self).await?];
+        let services = vec![ServiceStore::service_update(store, self).await?];
         let mut summary = Summary::default();
         summary.usages.upsert_all(usages);
         summary.services.upsert_all(services);
@@ -257,7 +281,7 @@ impl Service {
             for mut service in store.services_by_part(part.id).await? {
                 if service.plans.contains(&plan) {
                     service.plans.retain(|p| *p != plan);
-                    res.push(store.update(service).await?);
+                    res.push(store.service_update(service).await?);
                 }
             }
         }

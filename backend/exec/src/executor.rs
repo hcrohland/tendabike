@@ -270,58 +270,39 @@ pub(crate) async fn deliver_frame(
     }
 }
 
-/// The per-user executor loop (spec §4.3–4.5). One task per user, spawned
-/// on demand (the first SSE connect or API write — web layer); it exits
-/// `Ok(())` when reaped (no stream is attached) and is respawned on the
-/// next demand. An attached stream keeps it alive: the idle window is the
-/// queue re-probe cadence (spec §4.4, amended — #446).
+/// The per-user executor loop's context (issue #661): the loop's wiring and
+/// its mutable state in one type, so the loop's full set of dependencies is
+/// readable from one struct definition and its stateful behavior has a
+/// single home.
 ///
-/// One transaction per message (spec §4.3): `begin` → dispatch (`exec` for
-/// an API write, `process` for a Strava event) → `commit` on success,
-/// `rollback` on any failure (this is the caller the `Txn` seam exists for).
-/// After a successful commit, a non-empty `Summary` pushes one frame to the
-/// user's SSE streams ([`push_frame`]).
+/// The **wiring** the loop carries for its life:
 ///
-/// API writes fail fast: the oneshot resolves with the error and the message
-/// is consumed (spec §6.2 — the client is the retry layer); the loop never
-/// ends for a message failure. Strava-side failures are classified inside
-/// `process` (spec §4.6 — the `Stop` for `TryAgain`, the disable for
-/// `NotAuth`, the delete for a permanent failure); DB failures — a failed
-/// `begin`/`commit`, a failed probe — pause the loop on the in-memory
-/// [`DbBackoff`] (exponential, capped at 30s, biased so API writes are never
-/// delayed) and retry after the pause. Only a failed `rollback` ends the
-/// loop (its # Failure semantics section spells out each lane).
-///
-/// # Arguments
-///
-/// * `source` — the transaction source (`DbPool` in production). Taken by
-///   value and owned for the loop's life; `Clone` (which `DbPool` is) lets
-///   the caller keep a handle — no `Arc` is needed.
-/// * `user_id` — the user the loop serves: the queue probe reads the queue by
-///   it, and the event lane builds an identity-only [`ExecutorSession`] from
-///   it (at the last moment) to drive the domain event processing.
-/// * `rx` — the receive half of the user's request channel (writes, reads,
-///   the hydration write, and the admin stats read — spec #558 §3.2).
-/// * `frames` — the user's SSE frame sink (`broadcast`); the web layer's
+/// - `source` — the transaction source (`DbPool` in production). Owned for
+///   the loop's life; `Clone` (which `DbPool` is) lets the caller keep a
+///   handle — no `Arc` is needed.
+/// - `user_id` — the user the loop serves: the queue probe reads the queue
+///   by it, and the event lane builds an identity-only [`ExecutorSession`]
+///   from it (at the last moment) to drive the domain event processing.
+/// - `frames` — the user's SSE frame sink (`broadcast`); the web layer's
 ///   stream tasks subscribe to it. In a **user context** (`shop() == None`)
 ///   a committed `Summary` is pushed here (the existing behavior).
-/// * `pusher` — the frame push surface (the [`Registry`] in production) the
+/// - `pusher` — the frame push surface (the [`Registry`] in production) the
 ///   loop uses to route a committed `Summary` in a **shop context**
 ///   (`shop() == Some`): the shop stream plus the part owner's personal
 ///   stream (spec #517, ticket #584). In a user context the loop uses its
-///   own [`frames`] channel and never the pusher.
-/// * `events` — the user's completed-Strava-event channel (`broadcast`):
+///   own `frames` channel and never the pusher.
+/// - `events` — the user's completed-Strava-event channel (`broadcast`):
 ///   every event the loop consumed (its processing transaction committed)
 ///   is sent on it, even with an empty summary. The web layer's admin sync
 ///   awaits its own queued event on this channel (spec §6.4) — the event's
 ///   identity lets the waiter correlate its sync.
-/// * `idle_timeout` — the queue re-probe cadence while the loop is idle
+/// - `idle_timeout` — the queue re-probe cadence while the loop is idle
 ///   with streams attached (spec §4.4, amended — #446): the loop is reaped
 ///   only when no stream is attached, so an attached stream keeps it alive
 ///   and the window sets how often the idle loop re-probes the
 ///   `strava_events` queue. A stream-less loop reaps immediately after its
 ///   work; the window never reaps it later.
-/// * `wake` — the in-memory wake signal (spec §4.4/§4.6): the web layer's
+/// - `wake` — the in-memory wake signal (spec §4.4/§4.6): the web layer's
 ///   `Registry` fires it after a Strava event is queued, so the loop's idle
 ///   wait is interrupted and the queue re-probed at once. The loop selects
 ///   on a `notified()` future created before each select (the permit
@@ -332,198 +313,290 @@ pub(crate) async fn deliver_frame(
 ///   signal to this running loop only; a reaped loop picks the event up on
 ///   its next spawn (the DB queue is the source of truth).
 ///
-/// # Failure semantics (spec §4.6)
+/// The **state** the loop mutates as it runs:
 ///
-/// Message failures are recoverable in the loop; only a failed `rollback`
-/// ends it:
+/// - `backoff` — the per-executor in-memory DB-failure backoff
+///   ([`DbBackoff`]), started at its base.
+/// - `first_idle` — the first-idle flag: the first idle cycle never reaps
+///   (the executor just spawned, and the client's stream is likely to
+///   connect moments later), started set.
 ///
-/// - **A failed `ApiWrite`** — fail fast, no retry: the oneshot resolves with
-///   the error (the route maps it to a 4xx/5xx), the message is consumed (the
-///   client is the retry layer), and the loop continues. A `begin` or `commit`
-///   failure is a **DB failure**: the oneshot 500s, the in-memory backoff
-///   records it, the loop continues.
-/// - **A failed `ApiRead`** (spec #558 §3.7) — fail fast, no retry, and
-///   **never arm the backoff**: the oneshot resolves with the error (the
-///   route maps it to a 4xx/5xx), the message is consumed, and the loop
-///   continues — the queue probe is the DB health monitor, and read traffic
-///   (e.g. a reconnecting client's burst) must not push the 30s cap up. A
-///   read transaction that completes cleanly (committed, or rolled back
-///   after a domain error) resets the backoff, like any healthy
-///   transaction. A read pushes no SSE frame (read-only within its
-///   transaction by spec).
-/// - **A failed Strava message** — classified inside `process` (spec §4.6):
-///   `TryAgain` inserts the global `Stop` (the probe then reports it and the
-///   loop sleeps until its deadline); `NotAuth` disables the user and drops
-///   their events; a permanent failure deletes the event; all of those commit
-///   and the loop continues. A DB failure surfaces as `Err` from `process`:
-///   the transaction rolls back (the event stays queued), the backoff records
-///   it, the loop continues.
-/// - **The global `Stop`** — the probe reports its deadline
-///   ([`Select::Limited`]); the loop sleeps until it as a branch of the
-///   biased select, so API writes interrupt the backoff and are never
-///   delayed by it.
-/// - **DB failures** (`begin`/`commit` failing, a failed probe) — the
-///   per-executor in-memory backoff ([`DbBackoff`]): 1s, 2s, 4s, …, capped at
-///   30s, no `Stop` row; the slept branch is biased, so a write arriving
-///   mid-backoff is taken immediately. Any healthy transaction (a committed
-///   write/event, a successful probe) resets the backoff.
-/// - **A failed `rollback`** (either lane) returns `Err` from `run`: the
-///   transaction's fate is not ours to reason about, so the loop ends. The
-///   web layer (#456) treats an `Err` return like a panic — close the
-///   streams, let the client reconnect and respawn — and the queue read
-///   resumes on demand. There is no supervisor and no panic-loop guard: a
-///   deterministic poison event is a visible alarm (the persistent
-///   reconnect/refresh cycle) that the log names via `Processing {event}`.
+/// The **request channel is not part of the context**: it is the loop's
+/// input stream, conceptually distinct from the wiring the loop carries —
+/// [`LoopContext::run`] takes it as its only argument.
 ///
-/// On a successful commit a non-empty `Summary` pushes one frame to
-/// [`frames`]; an empty `Summary` pushes nothing.
-#[allow(clippy::too_many_arguments)] // the loop's eight wiring degrees of freedom
-pub async fn run<T>(
-    source: T,
-    user_id: UserId,
-    mut rx: RequestReceiver,
-    frames: broadcast::Sender<Summary>,
-    pusher: Box<dyn FramePusher>,
-    events: broadcast::Sender<Event>,
-    idle_timeout: Duration,
-    wake: std::sync::Arc<tokio::sync::Notify>,
-) -> TbResult<()>
+/// Named for the loop, not the session: "context" is already loaded in this
+/// codebase as the session's shop-scoping (the active shop value), and a
+/// bare `Context` would also collide with the standard-library and
+/// `anyhow` context types.
+///
+/// Public (with a public constructor) because the integration (seam) suite
+/// — a separate crate — constructs it to drive the loop over a real
+/// transaction source, the same single construction path as production.
+pub struct LoopContext<T>
 where
     T: TxnSource + Clone + Send + Sync + 'static,
 {
-    let mut backoff = DbBackoff::new();
-    let mut first_idle = true;
+    /// The transaction source (`DbPool` in production).
+    source: T,
+    /// The user the loop serves.
+    user_id: UserId,
+    /// The user's SSE frame sink (`broadcast`).
+    frames: broadcast::Sender<Summary>,
+    /// The frame push surface (the [`Registry`] in production).
+    pusher: Box<dyn FramePusher>,
+    /// The user's completed-Strava-event channel (`broadcast`).
+    events: broadcast::Sender<Event>,
+    /// The queue re-probe cadence while the loop is idle with streams
+    /// attached.
+    idle_timeout: Duration,
+    /// The in-memory wake signal (the [`Registry`] fires it after a Strava
+    /// event is queued).
+    wake: std::sync::Arc<tokio::sync::Notify>,
+    /// The per-executor in-memory DB-failure backoff.
+    backoff: DbBackoff,
+    /// The first-idle flag: the first idle cycle never reaps.
+    first_idle: bool,
+}
 
-    loop {
-        // One wake permit per cycle, created before any select (the permit
-        // semantics: a notify that fires before the future is created is
-        // not lost — `Notify` stores it). The same future serves both
-        // parking spots (the top-level select and the idle sleep), so a
-        // wake that fires while the probe is in flight is not dropped by
-        // the select. Pinned: `Notified` is `!Unpin`, and the select takes
-        // it by `&mut`.
-        let mut wake_fut = Box::pin(wake.notified());
-        let select = select_message(
-            rx.recv(),
-            queue_probe(&source, user_id, &mut backoff),
-            &mut wake_fut,
-        )
-        .await;
+impl<T> LoopContext<T>
+where
+    T: TxnSource + Clone + Send + Sync + 'static,
+{
+    /// Assemble the loop's wiring, starting its mutable state (the backoff
+    /// at its base, the first-idle flag set) — the two state locals the
+    /// entry point used to declare now initialize here.
+    pub fn new(
+        source: T,
+        user_id: UserId,
+        frames: broadcast::Sender<Summary>,
+        pusher: Box<dyn FramePusher>,
+        events: broadcast::Sender<Event>,
+        idle_timeout: Duration,
+        wake: std::sync::Arc<tokio::sync::Notify>,
+    ) -> Self {
+        Self {
+            source,
+            user_id,
+            frames,
+            pusher,
+            events,
+            idle_timeout,
+            wake,
+            backoff: DbBackoff::new(),
+            first_idle: true,
+        }
+    }
 
-        match select {
-            Select::Request(request) => {
-                if let Err(err) =
-                    run_request(&source, request, &frames, &mut backoff, &*pusher).await
-                {
-                    error!("user {user_id}: the executor loop is ending: {err:?}");
-                    return Err(err);
-                }
-            }
+    /// The per-user executor loop (spec §4.3–4.5). One task per user, spawned
+    /// on demand (the first SSE connect or API write — web layer); it exits
+    /// `Ok(())` when reaped (no stream is attached) and is respawned on the
+    /// next demand. An attached stream keeps it alive: the idle window is the
+    /// queue re-probe cadence (spec §4.4, amended — #446).
+    ///
+    /// One transaction per message (spec §4.3): `begin` → dispatch (`exec` for
+    /// an API write, `process` for a Strava event) → `commit` on success,
+    /// `rollback` on any failure (this is the caller the `Txn` seam exists for).
+    /// After a successful commit, a non-empty `Summary` pushes one frame to the
+    /// user's SSE streams ([`push_frame`]).
+    ///
+    /// API writes fail fast: the oneshot resolves with the error and the message
+    /// is consumed (spec §6.2 — the client is the retry layer); the loop never
+    /// ends for a message failure. Strava-side failures are classified inside
+    /// `process` (spec §4.6 — the `Stop` for `TryAgain`, the disable for
+    /// `NotAuth`, the delete for a permanent failure); DB failures — a failed
+    /// `begin`/`commit`, a failed probe — pause the loop on the in-memory
+    /// [`DbBackoff`] (exponential, capped at 30s, biased so API writes are never
+    /// delayed) and retry after the pause. Only a failed `rollback` ends the
+    /// loop (its # Failure semantics section spells out each lane).
+    ///
+    /// # Arguments
+    ///
+    /// * `rx` — the receive half of the user's request channel (writes, reads,
+    ///   the hydration write, and the admin stats read — spec #558 §3.2). The
+    ///   rest of the loop's wiring is the context's ([`LoopContext`]).
+    ///
+    /// # Failure semantics (spec §4.6)
+    ///
+    /// Message failures are recoverable in the loop; only a failed `rollback`
+    /// ends it:
+    ///
+    /// - **A failed `ApiWrite`** — fail fast, no retry: the oneshot resolves with
+    ///   the error (the route maps it to a 4xx/5xx), the message is consumed (the
+    ///   client is the retry layer), and the loop continues. A `begin` or `commit`
+    ///   failure is a **DB failure**: the oneshot 500s, the in-memory backoff
+    ///   records it, the loop continues.
+    /// - **A failed `ApiRead`** (spec #558 §3.7) — fail fast, no retry, and
+    ///   **never arm the backoff**: the oneshot resolves with the error (the
+    ///   route maps it to a 4xx/5xx), the message is consumed, and the loop
+    ///   continues — the queue probe is the DB health monitor, and read traffic
+    ///   (e.g. a reconnecting client's burst) must not push the 30s cap up. A
+    ///   read transaction that completes cleanly (committed, or rolled back
+    ///   after a domain error) resets the backoff, like any healthy
+    ///   transaction. A read pushes no SSE frame (read-only within its
+    ///   transaction by spec).
+    /// - **A failed Strava message** — classified inside `process` (spec §4.6):
+    ///   `TryAgain` inserts the global `Stop` (the probe then reports it and the
+    ///   loop sleeps until its deadline); `NotAuth` disables the user and drops
+    ///   their events; a permanent failure deletes the event; all of those commit
+    ///   and the loop continues. A DB failure surfaces as `Err` from `process`:
+    ///   the transaction rolls back (the event stays queued), the backoff records
+    ///   it, the loop continues.
+    /// - **The global `Stop`** — the probe reports its deadline
+    ///   ([`Select::Limited`]); the loop sleeps until it as a branch of the
+    ///   biased select, so API writes interrupt the backoff and are never
+    ///   delayed by it.
+    /// - **DB failures** (`begin`/`commit` failing, a failed probe) — the
+    ///   per-executor in-memory backoff ([`DbBackoff`]): 1s, 2s, 4s, …, capped at
+    ///   30s, no `Stop` row; the slept branch is biased, so a write arriving
+    ///   mid-backoff is taken immediately. Any healthy transaction (a committed
+    ///   write/event, a successful probe) resets the backoff.
+    /// - **A failed `rollback`** (either lane) returns `Err` from `run`: the
+    ///   transaction's fate is not ours to reason about, so the loop ends. The
+    ///   web layer (#456) treats an `Err` return like a panic — close the
+    ///   streams, let the client reconnect and respawn — and the queue read
+    ///   resumes on demand. There is no supervisor and no panic-loop guard: a
+    ///   deterministic poison event is a visible alarm (the persistent
+    ///   reconnect/refresh cycle) that the log names via `Processing {event}`.
+    ///
+    /// On a successful commit a non-empty `Summary` pushes one frame to
+    /// [`frames`]; an empty `Summary` pushes nothing.
+    pub async fn run(mut self, mut rx: RequestReceiver) -> TbResult<()> {
+        loop {
+            // One wake permit per cycle, created before any select (the permit
+            // semantics: a notify that fires before the future is created is
+            // not lost — `Notify` stores it). The same future serves both
+            // parking spots (the top-level select and the idle sleep), so a
+            // wake that fires while the probe is in flight is not dropped by
+            // the select. Pinned: `Notified` is `!Unpin`, and the select takes
+            // it by `&mut`. The `Arc` is cloned per cycle so the pinned future
+            // borrows the clone, not the context (the queue probe borrows the
+            // context mutably).
+            let wake = self.wake.clone();
+            let mut wake_fut = Box::pin(wake.notified());
+            let select = select_message(rx.recv(), queue_probe(&mut self), &mut wake_fut).await;
 
-            Select::Strava(event) => {
-                if let Err(err) = run_event(
-                    &source,
-                    user_id,
-                    &event,
-                    &frames,
-                    &events,
-                    &mut backoff,
-                    &*pusher,
-                )
-                .await
-                {
-                    error!("user {user_id}: the executor loop is ending: {err:?}");
-                    return Err(err);
-                }
-            }
-
-            Select::Limited(until) => {
-                // The global rate-limit `Stop` is active (spec §4.6): sleep
-                // until its deadline as a branch of the biased select — an
-                // API write arriving mid-sleep is taken the moment it is
-                // ready, so the backoff delays only Strava events. The
-                // deadline is absolute: after an interrupting write the loop
-                // re-probes and sleeps the *remaining* time, not a fresh one.
-                let remaining = stop_remaining(until, now_unix());
-                if let Some(request) =
-                    sleep_or_take_request(&mut rx, remaining, &mut wake_fut).await
-                    && let Err(err) =
-                        run_request(&source, request, &frames, &mut backoff, &*pusher).await
-                {
-                    error!("user {user_id}: the executor loop is ending: {err:?}");
-                    return Err(err);
-                }
-            }
-
-            Select::Wake => {
-                // The wake signal fired (spec §4.4/§4.6): a signal only —
-                // the loop falls through to the next cycle, which re-probes
-                // the queue. It never goes through the reclaim policy (a
-                // fired wake must not reap an executor that has a
-                // just-queued event to process).
-            }
-
-            Select::StravaError => {
-                // The probe failed; the queue's state is unknown. A DB
-                // failure (spec §4.6): the in-memory backoff pauses the
-                // re-probe (exponential, capped at 30s, biased so a write
-                // arriving mid-pause is taken immediately); the failed event
-                // (if any) stays queued for the retry.
-                let pause = backoff.record_failure();
-                warn!("user {user_id}: the queue probe failed; backing off {pause:?}");
-                if let Some(request) = sleep_or_take_request(&mut rx, pause, &mut wake_fut).await
-                    && let Err(err) =
-                        run_request(&source, request, &frames, &mut backoff, &*pusher).await
-                {
-                    error!("user {user_id}: the executor loop is ending: {err:?}");
-                    return Err(err);
-                }
-            }
-
-            Select::Idle => {
-                let streams = frames.receiver_count();
-                let action = next_action(false, false, streams);
-                // Don't reap on the first idle cycle: the executor just
-                // spawned (a read or write triggered it), and the client's
-                // stream is likely to connect moments later. The first idle
-                // cycle sleeps instead, giving the stream time to attach.
-                let action = if action == Action::Reap && first_idle {
-                    first_idle = false;
-                    Action::Sleep
-                } else {
-                    action
-                };
-                match action {
-                    Action::Reap => {
-                        debug!(
-                            "closing the executor for user {user_id} (idle, {streams} stream(s))"
+            match select {
+                Select::Request(request) => {
+                    if let Err(err) = run_request(&mut self, request).await {
+                        error!(
+                            "user {}: the executor loop is ending: {err:?}",
+                            self.user_id
                         );
-                        return Ok(());
+                        return Err(err);
                     }
-                    Action::Sleep => {
-                        // Streams are still attached: stay alive (spec §4.4,
-                        // amended — #446). The sleep is the queue re-probe
-                        // cadence (a constant `idle_timeout`, not the
-                        // remainder of an idle window — there is no window
-                        // to run out). The wait is a biased select so a
-                        // write arriving mid-wait is taken the moment it is
-                        // ready (the bias of the select, honored across the
-                        // wait too); a closed channel or the cadence
-                        // expiring falls through to the next cycle's
-                        // decision, which re-probes the queue.
-                        if let Some(request) =
-                            sleep_or_take_request(&mut rx, idle_timeout, &mut wake_fut).await
-                            && let Err(err) =
-                                run_request(&source, request, &frames, &mut backoff, &*pusher).await
-                        {
-                            error!("user {user_id}: the executor loop is ending: {err:?}");
-                            return Err(err);
+                }
+
+                Select::Strava(event) => {
+                    if let Err(err) = run_event(&mut self, &event).await {
+                        error!(
+                            "user {}: the executor loop is ending: {err:?}",
+                            self.user_id
+                        );
+                        return Err(err);
+                    }
+                }
+
+                Select::Limited(until) => {
+                    // The global rate-limit `Stop` is active (spec §4.6): sleep
+                    // until its deadline as a branch of the biased select — an
+                    // API write arriving mid-sleep is taken the moment it is
+                    // ready, so the backoff delays only Strava events. The
+                    // deadline is absolute: after an interrupting write the loop
+                    // re-probes and sleeps the *remaining* time, not a fresh one.
+                    let remaining = stop_remaining(until, now_unix());
+                    if let Some(request) =
+                        sleep_or_take_request(&mut rx, remaining, &mut wake_fut).await
+                        && let Err(err) = run_request(&mut self, request).await
+                    {
+                        error!(
+                            "user {}: the executor loop is ending: {err:?}",
+                            self.user_id
+                        );
+                        return Err(err);
+                    }
+                }
+
+                Select::Wake => {
+                    // The wake signal fired (spec §4.4/§4.6): a signal only —
+                    // the loop falls through to the next cycle, which re-probes
+                    // the queue. It never goes through the reclaim policy (a
+                    // fired wake must not reap an executor that has a
+                    // just-queued event to process).
+                }
+
+                Select::StravaError => {
+                    // The probe failed; the queue's state is unknown. A DB
+                    // failure (spec §4.6): the in-memory backoff pauses the
+                    // re-probe (exponential, capped at 30s, biased so a write
+                    // arriving mid-pause is taken immediately); the failed event
+                    // (if any) stays queued for the retry.
+                    let pause = self.backoff.record_failure();
+                    warn!(
+                        "user {}: the queue probe failed; backing off {pause:?}",
+                        self.user_id
+                    );
+                    if let Some(request) =
+                        sleep_or_take_request(&mut rx, pause, &mut wake_fut).await
+                        && let Err(err) = run_request(&mut self, request).await
+                    {
+                        error!(
+                            "user {}: the executor loop is ending: {err:?}",
+                            self.user_id
+                        );
+                        return Err(err);
+                    }
+                }
+
+                Select::Idle => {
+                    let streams = self.frames.receiver_count();
+                    let action = next_action(false, false, streams);
+                    // Don't reap on the first idle cycle: the executor just
+                    // spawned (a read or write triggered it), and the client's
+                    // stream is likely to connect moments later. The first idle
+                    // cycle sleeps instead, giving the stream time to attach.
+                    let action = if action == Action::Reap && self.first_idle {
+                        self.first_idle = false;
+                        Action::Sleep
+                    } else {
+                        action
+                    };
+                    match action {
+                        Action::Reap => {
+                            debug!(
+                                "closing the executor for user {} (idle, {streams} stream(s))",
+                                self.user_id
+                            );
+                            return Ok(());
                         }
+                        Action::Sleep => {
+                            // Streams are still attached: stay alive (spec §4.4,
+                            // amended — #446). The sleep is the queue re-probe
+                            // cadence (a constant `idle_timeout`, not the
+                            // remainder of an idle window — there is no window
+                            // to run out). The wait is a biased select so a
+                            // write arriving mid-wait is taken the moment it is
+                            // ready (the bias of the select, honored across the
+                            // wait too); a closed channel or the cadence
+                            // expiring falls through to the next cycle's
+                            // decision, which re-probes the queue.
+                            if let Some(request) =
+                                sleep_or_take_request(&mut rx, self.idle_timeout, &mut wake_fut)
+                                    .await
+                                && let Err(err) = run_request(&mut self, request).await
+                            {
+                                error!(
+                                    "user {}: the executor loop is ending: {err:?}",
+                                    self.user_id
+                                );
+                                return Err(err);
+                            }
+                        }
+                        // `next_action` hands out `ProcessWrite`/`ProcessStrava`
+                        // only for inputs this branch never has (it already
+                        // checked both). `Sleep` and `Reap` are exhaustive here.
+                        Action::ProcessWrite | Action::ProcessStrava => {}
                     }
-                    // `next_action` hands out `ProcessWrite`/`ProcessStrava`
-                    // only for inputs this branch never has (it already
-                    // checked both). `Sleep` and `Reap` are exhaustive here.
-                    Action::ProcessWrite | Action::ProcessStrava => {}
                 }
             }
         }
@@ -565,12 +638,12 @@ pub(crate) async fn sleep_or_take_request(
 /// a DB failure and returns [`Probe::Error`], which the loop answers with the
 /// in-memory backoff (the housekeeping rolled back, so the queue's state is
 /// unknown — the re-probe after the pause settles it).
-async fn queue_probe<T: TxnSource>(
-    source: &T,
-    user_id: UserId,
-    backoff: &mut DbBackoff,
-) -> Option<Probe> {
-    let mut conn = match source.begin().await {
+async fn queue_probe<T>(ctx: &mut LoopContext<T>) -> Option<Probe>
+where
+    T: TxnSource + Clone + Send + Sync + 'static,
+{
+    let user_id = ctx.user_id;
+    let mut conn = match ctx.source.begin().await {
         Ok(conn) => conn,
         Err(err) => {
             warn!(
@@ -600,7 +673,7 @@ async fn queue_probe<T: TxnSource>(
         );
         return Some(Probe::Error);
     }
-    backoff.reset();
+    ctx.backoff.reset();
     debug!("queue probe: {probe:?}");
     Some(probe)
 }
@@ -612,54 +685,29 @@ async fn queue_probe<T: TxnSource>(
 /// the reads never arm the backoff, spec #558 §3.7). The oneshot always
 /// resolves and the message is consumed; only a failed `rollback` ends the
 /// loop (the sub-dispatchers' `Err` return).
-pub(crate) async fn run_request<T: TxnSource>(
-    source: &T,
-    request: Request,
-    frames: &broadcast::Sender<Summary>,
-    backoff: &mut DbBackoff,
-    pusher: &dyn FramePusher,
-) -> Result<(), Error> {
+pub(crate) async fn run_request<T>(ctx: &mut LoopContext<T>, request: Request) -> Result<(), Error>
+where
+    T: TxnSource + Clone + Send + Sync + 'static,
+{
     match request {
         Request::Write {
             write,
             session: mut req_session,
             reply,
-        } => {
-            run_write(
-                source,
-                &mut *req_session,
-                write,
-                reply,
-                frames,
-                backoff,
-                pusher,
-            )
-            .await
-        }
+        } => run_write(ctx, &mut *req_session, write, reply).await,
         Request::Read {
             read,
             session: mut req_session,
             reply,
-        } => {
-            run_read(
-                source,
-                &mut *req_session,
-                read,
-                reply,
-                frames,
-                backoff,
-                pusher,
-            )
-            .await
-        }
+        } => run_read(ctx, &mut *req_session, read, reply).await,
         Request::Gear {
             session: mut req_session,
             reply,
-        } => run_gear(source, &mut *req_session, reply, frames, backoff, pusher).await,
+        } => run_gear(ctx, &mut *req_session, reply).await,
         Request::AllStats {
             session: mut req_session,
             reply,
-        } => run_all_stats(source, &mut *req_session, reply, frames, backoff, pusher).await,
+        } => run_all_stats(ctx, &mut *req_session, reply).await,
     }
 }
 
@@ -687,25 +735,22 @@ pub(crate) async fn run_request<T: TxnSource>(
 /// `work` takes the connection by value and yields it back with the
 /// outcome, so the commit/rollback (which consume the connection) stay in
 /// this helper.
-#[allow(clippy::too_many_arguments)] // the shape's eleven degrees of freedom
+#[allow(clippy::too_many_arguments)] // the shape's eight degrees of freedom
 async fn run_message<T, Out, Fut>(
+    ctx: &mut LoopContext<T>,
     noun: &str,
     what: &str,
-    source: &T,
     reply: oneshot::Sender<TbResult<Out>>,
-    frames: &broadcast::Sender<Summary>,
-    backoff: &mut DbBackoff,
     record_db_failure: bool,
-    pusher: &dyn FramePusher,
     shop: Option<ShopId>,
     frame: impl for<'a> Fn(&'a Out) -> Option<&'a Summary>,
     work: impl FnOnce(T::Conn) -> Fut,
 ) -> Result<(), Error>
 where
-    T: TxnSource,
+    T: TxnSource + Clone + Send + Sync + 'static,
     Fut: Future<Output = (TbResult<Out>, T::Conn, Option<UserId>)>,
 {
-    let conn = match source.begin().await {
+    let conn = match ctx.source.begin().await {
         Ok(conn) => conn,
         Err(err) => {
             // A `begin` failure: resolve the oneshot with the error and
@@ -714,7 +759,7 @@ where
             error!("could not begin the {noun}'s transaction: {err:?}");
             let _ = reply.send(Err(Error::AnyFailure(err.into())));
             if record_db_failure {
-                backoff.record_failure();
+                ctx.backoff.record_failure();
             }
             return Ok(());
         }
@@ -726,7 +771,7 @@ where
             Ok(()) => {
                 // A cleanly committed transaction is a healthy one: reset
                 // the backoff.
-                backoff.reset();
+                ctx.backoff.reset();
                 Ok(outcome)
             }
             Err(err) => {
@@ -734,7 +779,7 @@ where
                 // and continue.
                 error!("committing the {noun}'s transaction failed: {err:?}");
                 if record_db_failure {
-                    backoff.record_failure();
+                    ctx.backoff.record_failure();
                 }
                 Err(Error::AnyFailure(err.into()))
             }
@@ -750,7 +795,7 @@ where
                     "rolling back the {noun}'s transaction failed"
                 )));
             }
-            backoff.reset();
+            ctx.backoff.reset();
             Err(err)
         }
     };
@@ -759,7 +804,7 @@ where
         // the oneshot reply, routed by the session's context (spec #517,
         // ticket #584).
         if let Some(frame) = frame(outcome) {
-            deliver_frame(pusher, frames, shop, part_owner, frame).await;
+            deliver_frame(&*ctx.pusher, &ctx.frames, shop, part_owner, frame).await;
         }
     }
     if let Err(err) = &outcome {
@@ -787,16 +832,15 @@ where
 /// failed `rollback` ends the loop with `Err` (the transaction's fate is not
 /// ours to reason about); any other continued path proves the database
 /// healthy and resets the backoff.
-#[allow(clippy::too_many_arguments)] // the write's wiring degrees of freedom
-async fn run_write<T: TxnSource>(
-    source: &T,
+async fn run_write<T>(
+    ctx: &mut LoopContext<T>,
     session: &mut dyn Session,
     write: ApiWrite,
     reply: oneshot::Sender<TbResult<WriteOutcome>>,
-    frames: &broadcast::Sender<Summary>,
-    backoff: &mut DbBackoff,
-    pusher: &dyn FramePusher,
-) -> Result<(), Error> {
+) -> Result<(), Error>
+where
+    T: TxnSource + Clone + Send + Sync + 'static,
+{
     debug!("user {}: Processing {write:?}", session.user_id());
     // The onboarding cutover's Strava side (spec #558 §5.1): extracted
     // before `exec` consumes the write, added to the same transaction.
@@ -806,14 +850,11 @@ async fn run_write<T: TxnSource>(
     };
     let shop = session.shop();
     run_message(
+        ctx,
         "write",
         "API write",
-        source,
         reply,
-        frames,
-        backoff,
         true,
-        pusher,
         shop,
         // The frame is the write's `Summary` (the descend's report is the
         // response body, not state — it never rides the frame).
@@ -866,26 +907,22 @@ async fn run_write<T: TxnSource>(
 /// transaction that completes cleanly (committed, or rolled back after a
 /// domain error) **resets** the backoff, per the existing "any healthy
 /// transaction resets" rule. Only a failed `rollback` ends the loop.
-#[allow(clippy::too_many_arguments)] // the read's wiring degrees of freedom
-async fn run_read<T: TxnSource>(
-    source: &T,
+async fn run_read<T>(
+    ctx: &mut LoopContext<T>,
     session: &mut dyn Session,
     read: ApiRead,
     reply: oneshot::Sender<TbResult<ReadOutcome>>,
-    frames: &broadcast::Sender<Summary>,
-    backoff: &mut DbBackoff,
-    pusher: &dyn FramePusher,
-) -> Result<(), Error> {
+) -> Result<(), Error>
+where
+    T: TxnSource + Clone + Send + Sync + 'static,
+{
     debug!("user {}: Reading {read:?}", session.user_id());
     run_message(
+        ctx,
         "read",
         "API read",
-        source,
         reply,
-        frames,
-        backoff,
-        false, // a failed read never arms the backoff (spec #558 §3.7)
-        pusher,
+        false,          // a failed read never arms the backoff (spec #558 §3.7)
         session.shop(), // a read pushes no frame; the context is unused
         |_| None,       // a read pushes no frame (spec #558 §3.6)
         |mut conn| async move {
@@ -910,14 +947,14 @@ async fn run_read<T: TxnSource>(
 /// write's: a `begin`/`commit` failure records it, a completed transaction
 /// (committed, or rolled back after an error) resets it, and only a failed
 /// `rollback` ends the loop.
-async fn run_gear<T: TxnSource>(
-    source: &T,
+async fn run_gear<T>(
+    ctx: &mut LoopContext<T>,
     session: &mut dyn Session,
     reply: oneshot::Sender<TbResult<Summary>>,
-    frames: &broadcast::Sender<Summary>,
-    backoff: &mut DbBackoff,
-    pusher: &dyn FramePusher,
-) -> Result<(), Error> {
+) -> Result<(), Error>
+where
+    T: TxnSource + Clone + Send + Sync + 'static,
+{
     debug!("user {}: Hydrating the user's gear", session.user_id());
     // The hydration's work in the loop's transaction: import the Strava
     // gear, then read back the parts it created — the frame is their union
@@ -925,14 +962,11 @@ async fn run_gear<T: TxnSource>(
     let mut summary = Summary::default();
     let shop = session.shop();
     run_message(
+        ctx,
         "hydration",
         "hydration write",
-        source,
         reply,
-        frames,
-        backoff,
         true,
-        pusher,
         shop,
         |summary| Some(summary),
         |mut conn| async move {
@@ -957,25 +991,22 @@ async fn run_gear<T: TxnSource>(
 /// get — riding the admin user's channel. The backoff discipline is the
 /// read's (spec #558 §3.7): a failure resolves the oneshot with the `Err`
 /// and never arms the backoff; a cleanly committed read resets it.
-async fn run_all_stats<T: TxnSource>(
-    source: &T,
+async fn run_all_stats<T>(
+    ctx: &mut LoopContext<T>,
     session: &mut dyn Session,
     reply: oneshot::Sender<TbResult<Vec<StravaStat>>>,
-    frames: &broadcast::Sender<Summary>,
-    backoff: &mut DbBackoff,
-    pusher: &dyn FramePusher,
-) -> Result<(), Error> {
+) -> Result<(), Error>
+where
+    T: TxnSource + Clone + Send + Sync + 'static,
+{
     debug!("user {}: Reading the all-user stats", session.user_id());
     let shop = session.shop();
     run_message(
+        ctx,
         "stats read",
         "all-user stats read",
-        source,
         reply,
-        frames,
-        backoff,
         false, // a failed read never arms the backoff (spec #558 §3.7)
-        pusher,
         shop,
         |_| None, // the stats read pushes no frame (spec #558 §3.7)
         |mut conn| async move {
@@ -1017,24 +1048,19 @@ fn lifecycle_error(what: impl std::fmt::Display) -> Error {
 /// `commit` failure is the same DB failure. Only a failed `rollback` ends
 /// the loop with `Err` (the event is either still queued or already
 /// processed — the respawn settles it on the next queue read).
-async fn run_event<T: TxnSource>(
-    source: &T,
-    user_id: UserId,
-    event: &Event,
-    frames: &broadcast::Sender<Summary>,
-    events: &broadcast::Sender<Event>,
-    backoff: &mut DbBackoff,
-    pusher: &dyn FramePusher,
-) -> Result<(), Error> {
-    debug!("user {user_id}: Processing {event}");
+async fn run_event<T>(ctx: &mut LoopContext<T>, event: &Event) -> Result<(), Error>
+where
+    T: TxnSource + Clone + Send + Sync + 'static,
+{
+    debug!("user {}: Processing {event}", ctx.user_id);
 
-    let mut conn = match source.begin().await {
+    let mut conn = match ctx.source.begin().await {
         Ok(conn) => conn,
         Err(err) => {
             // DB failure (spec §4.6): back off, continue — the event stays
             // queued and is retried after the pause.
             warn!("could not begin a transaction for the event: {err:?}");
-            backoff.record_failure();
+            ctx.backoff.record_failure();
             return Ok(());
         }
     };
@@ -1042,7 +1068,7 @@ async fn run_event<T: TxnSource>(
     // The identity-only session the domain event processing needs, built at
     // the last moment (the event is the user's own, so the owner is
     // `user_id` and no shop context applies).
-    let mut session = crate::registry::ExecutorSession::new(user_id);
+    let mut session = crate::registry::ExecutorSession::new(ctx.user_id);
     match process(&mut session, &mut conn).await {
         Ok(summary) => match conn.commit().await {
             Ok(()) => {
@@ -1050,9 +1076,9 @@ async fn run_event<T: TxnSource>(
                 // own parts, so no shop context (spec #517, ticket #584) —
                 // the executor's own personal stream. Then announce the
                 // consumed event (spec §6.4) for good, empty summary or not.
-                deliver_frame(pusher, frames, None, None, &summary).await;
-                let _ = events.send(event.clone());
-                backoff.reset();
+                deliver_frame(&*ctx.pusher, &ctx.frames, None, None, &summary).await;
+                let _ = ctx.events.send(event.clone());
+                ctx.backoff.reset();
                 Ok(())
             }
             Err(err) => {
@@ -1061,7 +1087,7 @@ async fn run_event<T: TxnSource>(
                 // queued (the re-probe finds it again) — either way the retry
                 // after the pause settles it.
                 error!("committing the event's transaction failed: {err:?}");
-                backoff.record_failure();
+                ctx.backoff.record_failure();
                 Ok(())
             }
         },
@@ -1075,8 +1101,11 @@ async fn run_event<T: TxnSource>(
                     "rolling back the event's transaction failed",
                 ));
             }
-            backoff.record_failure();
+            ctx.backoff.record_failure();
             Ok(())
         }
     }
 }
+
+#[cfg(test)]
+mod executor_tests;

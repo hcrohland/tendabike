@@ -1,34 +1,74 @@
+//! The `PartNote` entity tests over a canned [`MockStore`] (issue #642).
+//!
+//! Each test runs the real part-note domain logic — the blank-name guard that
+//! returns before any store call, the `!has_file()` guards, the
+//! filename-fallback resolution in `update_file`, and the full permission
+//! matrix (owner / foreign / shop-session) — over a [`MockStore`] whose
+//! methods return canned rows. The domain logic runs for real; only the store
+//! I/O is canned. The raw `partnote_*` adapter roundtrips the sqlx seam lacks
+//! (list, `update_text`, `update_file`, `remove_file`) live in the sqlx seam
+//! suite (`sqlx/tests/store_seam.rs`), where the Postgres behavior is the
+//! source of truth; the read-after-write persistence pass-throughs are
+//! covered there too, so they are dropped here.
+
+use std::sync::{Arc, Mutex};
+
 use super::*;
-use crate::{
-    MockSession,
-    test_support::{MemStore, mock_session, mock_session_with_shop},
-};
+use crate::test_support::fixtures::sample_purchase_date;
+use crate::test_support::{MockStore, mock_session, mock_session_with_shop};
 
 fn created() -> OffsetDateTime {
     OffsetDateTime::from_unix_timestamp(1700000000).unwrap()
 }
 
-/// A fresh store with a bike part owned by user 1.
-async fn owned_part() -> (MemStore, PartId) {
-    let mut store = MemStore::new();
-    let owner = mock_session(UserId::from(1));
-    let part = Part::create(
-        "Bike".to_string(),
-        "Trek".to_string(),
-        "Domane".to_string(),
-        PartTypeId::from(1),
-        None,
-        created(),
-        &owner,
-        &mut store,
-    )
-    .await
-    .unwrap();
-    (store, part.id)
+/// A canned `PartNote` row: the minimal shape the domain logic needs.
+fn note_row(
+    id: PartNoteId,
+    part: PartId,
+    name: String,
+    mime: Option<String>,
+    filename: Option<String>,
+    size: Option<i64>,
+) -> PartNote {
+    PartNote {
+        id,
+        part,
+        name,
+        mime,
+        filename,
+        size,
+        created: created(),
+    }
 }
 
-fn other_user() -> MockSession {
-    mock_session(UserId::from(98))
+/// A canned `Part` row: the minimal shape the domain logic needs (id + owner).
+fn part_row(id: PartId, owner: UserId) -> Part {
+    Part {
+        id,
+        owner,
+        what: PartTypeId::from(1),
+        name: "Main Bike".to_string(),
+        vendor: "TendaBike".to_string(),
+        model: "Standard".to_string(),
+        purchase: sample_purchase_date(),
+        last_used: sample_purchase_date(),
+        disposed_at: None,
+        usage: UsageId::new(),
+        source: None,
+        shop: None,
+    }
+}
+
+/// A canned `Shop` row: the minimal shape the domain logic needs (id + owner).
+fn shop_row(id: ShopId, owner: UserId) -> Shop {
+    Shop {
+        id,
+        owner,
+        name: "Bike Barn".to_string(),
+        description: None,
+        auto_approve: true,
+        created_at: sample_purchase_date(),
+    }
 }
 
 fn file_args() -> (String, String, Option<String>, i64, Vec<u8>) {
@@ -41,203 +81,14 @@ fn file_args() -> (String, String, Option<String>, i64, Vec<u8>) {
     )
 }
 
-/// partnote_create_text stores a text note with the file fields left empty
-#[tokio::test]
-async fn partnote_create_text_stores_metadata_only() -> TbResult<()> {
-    let mut store = MemStore::new();
-    let note = store
-        .partnote_create_text(PartId::from(1), "suspicious noise".to_string(), created())
-        .await?;
-    assert_eq!(note.id, PartNoteId::from(1));
-    assert_eq!(note.part, PartId::from(1));
-    assert!(!note.has_file());
-    assert_eq!(note.name, "suspicious noise");
-    assert_eq!(note.mime, None);
-    assert_eq!(note.filename, None);
-    assert_eq!(note.size, None);
-    assert_eq!(note.created, created());
-    Ok(())
-}
+// === Blank-name validation (returns before any store call) ===
 
-/// partnote_create_file stores the metadata and the file data
-#[tokio::test]
-async fn partnote_create_file_stores_metadata_and_data() -> TbResult<()> {
-    let mut store = MemStore::new();
-    let (name, mime, filename, size, data) = file_args();
-    let note = store
-        .partnote_create_file(
-            PartId::from(1),
-            name,
-            mime,
-            filename,
-            size,
-            data.clone(),
-            created(),
-        )
-        .await?;
-    assert_eq!(note.id, PartNoteId::from(1));
-    assert!(note.has_file());
-    assert_eq!(note.mime, Some("image/png".to_string()));
-    assert_eq!(note.filename, Some("photo.png".to_string()));
-    assert_eq!(note.size, Some(1234));
-    assert_eq!(store.partnote_file(note.id).await?, data);
-    Ok(())
-}
-
-/// partnote_all_by_part returns only the notes of the given part
-#[tokio::test]
-async fn partnote_all_by_part_filters_by_part() -> TbResult<()> {
-    let mut store = MemStore::new();
-    store
-        .partnote_create_text(PartId::from(1), "a".to_string(), created())
-        .await?;
-    store
-        .partnote_create_text(PartId::from(2), "b".to_string(), created())
-        .await?;
-    let notes = store.partnote_all_by_part(PartId::from(1)).await?;
-    assert_eq!(notes.len(), 1);
-    assert_eq!(notes[0].name, "a");
-    Ok(())
-}
-
-/// partnote_get returns an error for an unknown note
-#[tokio::test]
-async fn partnote_get_unknown_returns_not_found() -> TbResult<()> {
-    let mut store = MemStore::new();
-    let result = store.partnote_get(PartNoteId::from(99)).await;
-    assert!(matches!(result, Err(Error::NotFound(_))));
-    Ok(())
-}
-
-/// partnote_file returns an error for a text note without file data
-#[tokio::test]
-async fn partnote_file_of_text_note_errors() -> TbResult<()> {
-    let mut store = MemStore::new();
-    let note = store
-        .partnote_create_text(PartId::from(1), "a".to_string(), created())
-        .await?;
-    let result = store.partnote_file(note.id).await;
-    assert!(matches!(result, Err(Error::NotFound(_))));
-    Ok(())
-}
-
-/// partnote_update_text renames a note
-#[tokio::test]
-async fn partnote_update_text_renames_note() -> TbResult<()> {
-    let mut store = MemStore::new();
-    let note = store
-        .partnote_create_text(PartId::from(1), "old".to_string(), created())
-        .await?;
-    let updated = store
-        .partnote_update_text(note.id, "new".to_string())
-        .await?;
-    assert_eq!(updated.name, "new");
-    assert!(!updated.has_file());
-    Ok(())
-}
-
-/// partnote_update_text returns an error for an unknown note
-#[tokio::test]
-async fn partnote_update_text_unknown_returns_not_found() -> TbResult<()> {
-    let mut store = MemStore::new();
-    let result = store
-        .partnote_update_text(PartNoteId::from(99), "x".to_string())
-        .await;
-    assert!(matches!(result, Err(Error::NotFound(_))));
-    Ok(())
-}
-
-/// partnote_update_file converts a text note into a file note
-#[tokio::test]
-async fn partnote_update_file_converts_text_to_file() -> TbResult<()> {
-    let mut store = MemStore::new();
-    let note = store
-        .partnote_create_text(PartId::from(1), "a".to_string(), created())
-        .await?;
-    let (name, mime, filename, size, data) = file_args();
-    let updated = store
-        .partnote_update_file(note.id, name, mime, filename, size, data.clone())
-        .await?;
-    assert!(updated.has_file());
-    assert_eq!(updated.mime, Some("image/png".to_string()));
-    assert_eq!(updated.size, Some(1234));
-    assert_eq!(store.partnote_file(note.id).await?, data);
-    Ok(())
-}
-
-/// partnote_update_file returns an error for an unknown note
-#[tokio::test]
-async fn partnote_update_file_unknown_returns_not_found() -> TbResult<()> {
-    let mut store = MemStore::new();
-    let (name, mime, filename, size, data) = file_args();
-    let result = store
-        .partnote_update_file(PartNoteId::from(99), name, mime, filename, size, data)
-        .await;
-    assert!(matches!(result, Err(Error::NotFound(_))));
-    Ok(())
-}
-
-/// partnote_remove_file converts a file note into a text note and drops the data
-#[tokio::test]
-async fn partnote_remove_file_converts_file_to_text() -> TbResult<()> {
-    let mut store = MemStore::new();
-    let (name, mime, filename, size, data) = file_args();
-    let note = store
-        .partnote_create_file(PartId::from(1), name, mime, filename, size, data, created())
-        .await?;
-    let updated = store.partnote_remove_file(note.id).await?;
-    assert!(!updated.has_file());
-    assert_eq!(updated.mime, None);
-    assert_eq!(updated.filename, None);
-    assert_eq!(updated.size, None);
-    let result = store.partnote_file(note.id).await;
-    assert!(matches!(result, Err(Error::NotFound(_))));
-    Ok(())
-}
-
-/// partnote_remove_file returns an error for an unknown note
-#[tokio::test]
-async fn partnote_remove_file_unknown_returns_not_found() -> TbResult<()> {
-    let mut store = MemStore::new();
-    let result = store.partnote_remove_file(PartNoteId::from(99)).await;
-    assert!(matches!(result, Err(Error::NotFound(_))));
-    Ok(())
-}
-
-/// partnote_delete removes the note and its file data
-#[tokio::test]
-async fn partnote_delete_removes_note_and_file_data() -> TbResult<()> {
-    let mut store = MemStore::new();
-    let (name, mime, filename, size, data) = file_args();
-    let note = store
-        .partnote_create_file(PartId::from(1), name, mime, filename, size, data, created())
-        .await?;
-    assert_eq!(store.partnote_delete(note.id).await?, note.id);
-    let result = store.partnote_get(note.id).await;
-    assert!(matches!(result, Err(Error::NotFound(_))));
-    let result = store.partnote_file(note.id).await;
-    assert!(matches!(result, Err(Error::NotFound(_))));
-    let notes = store.partnote_all_by_part(PartId::from(1)).await?;
-    assert!(notes.is_empty());
-    Ok(())
-}
-
-/// partnote_delete returns an error for an unknown note
-#[tokio::test]
-async fn partnote_delete_unknown_returns_not_found() -> TbResult<()> {
-    let mut store = MemStore::new();
-    let result = store.partnote_delete(PartNoteId::from(99)).await;
-    assert!(matches!(result, Err(Error::NotFound(_))));
-    Ok(())
-}
-
-// === Domain operations (Tier B: single-entity CRUD + validation) ===
-
-/// note_create_text rejects a blank name
+/// note_create_text rejects a blank name before touching the store.
 #[tokio::test]
 async fn partid_note_create_text_rejects_blank_name() -> TbResult<()> {
-    let (mut store, part) = owned_part().await;
+    let part = PartId::from(1);
     let owner = mock_session(UserId::from(1));
+    let mut store = MockStore::new();
     let result = part
         .note_create_text(&owner, "   ".to_string(), created(), &mut store)
         .await;
@@ -245,166 +96,102 @@ async fn partid_note_create_text_rejects_blank_name() -> TbResult<()> {
     Ok(())
 }
 
-/// note_create_text stores the note on the part
-#[tokio::test]
-async fn partid_note_create_text_stores_note() -> TbResult<()> {
-    let (mut store, part) = owned_part().await;
-    let owner = mock_session(UserId::from(1));
-    let note = part
-        .note_create_text(
-            &owner,
-            "suspicious noise".to_string(),
-            created(),
-            &mut store,
-        )
-        .await?;
-    assert_eq!(note.part, part);
-    assert_eq!(note.name, "suspicious noise");
-    assert!(!note.has_file());
-    assert_eq!(note.created, created());
-    Ok(())
-}
-
-/// note_create_file stores the metadata and the file data
-#[tokio::test]
-async fn partid_note_create_file_stores_file() -> TbResult<()> {
-    let (mut store, part) = owned_part().await;
-    let owner = mock_session(UserId::from(1));
-    let (name, mime, filename, size, data) = file_args();
-    let note = part
-        .note_create_file(
-            &owner,
-            name,
-            mime,
-            filename.clone(),
-            size,
-            data.clone(),
-            created(),
-            &mut store,
-        )
-        .await?;
-    assert!(note.has_file());
-    assert_eq!(note.filename, filename);
-    assert_eq!(note.size, Some(size));
-    assert_eq!(note.file(&mut store).await?, data);
-    Ok(())
-}
-
-/// notes returns all notes of the part
-#[tokio::test]
-async fn partid_notes_returns_part_notes() -> TbResult<()> {
-    let (mut store, part) = owned_part().await;
-    let owner = mock_session(UserId::from(1));
-    part.note_create_text(&owner, "a".to_string(), created(), &mut store)
-        .await?;
-    let (name, mime, filename, size, data) = file_args();
-    part.note_create_file(
-        &owner,
-        name,
-        mime,
-        filename,
-        size,
-        data,
-        created(),
-        &mut store,
-    )
-    .await?;
-    part.note_create_text(&owner, "c".to_string(), created(), &mut store)
-        .await?;
-    let notes = part.notes(&owner, &mut store).await?;
-    assert_eq!(notes.len(), 3);
-    let names: Vec<&str> = notes.iter().map(|n| n.name.as_str()).collect::<Vec<_>>();
-    let mut sorted = names.clone();
-    sorted.sort_unstable();
-    assert_eq!(sorted, vec!["a", "c", "photo"]);
-    Ok(())
-}
-
-/// update_text renames the note
-#[tokio::test]
-async fn partnote_id_update_text_renames_note() -> TbResult<()> {
-    let (mut store, part) = owned_part().await;
-    let owner = mock_session(UserId::from(1));
-    let note = part
-        .note_create_text(&owner, "old".to_string(), created(), &mut store)
-        .await?;
-    let updated = note
-        .id
-        .update_text(&owner, "new".to_string(), &mut store)
-        .await?;
-    assert_eq!(updated.name, "new");
-    assert!(!updated.has_file());
-    Ok(())
-}
-
-/// update_text rejects a blank name
+/// update_text rejects a blank name before touching the store.
 #[tokio::test]
 async fn partnote_id_update_text_rejects_blank_name() -> TbResult<()> {
-    let (mut store, part) = owned_part().await;
+    let id = PartNoteId::from(1);
     let owner = mock_session(UserId::from(1));
-    let note = part
-        .note_create_text(&owner, "old".to_string(), created(), &mut store)
-        .await?;
-    let result = note
-        .id
-        .update_text(&owner, "  ".to_string(), &mut store)
-        .await;
+    let mut store = MockStore::new();
+    let result = id.update_text(&owner, "  ".to_string(), &mut store).await;
     assert!(matches!(result, Err(Error::BadRequest(_))));
     Ok(())
 }
 
-/// update_file converts a text note into a file note
+// === The `!has_file()` guards ===
+
+/// remove_file on a text note is NotFound: the guard fires after the access
+/// check, before the store's remove call.
 #[tokio::test]
-async fn partnote_id_update_file_converts_text_to_file() -> TbResult<()> {
-    let (mut store, part) = owned_part().await;
-    let owner = mock_session(UserId::from(1));
-    let note = part
-        .note_create_text(&owner, "a".to_string(), created(), &mut store)
-        .await?;
-    let (name, mime, filename, size, data) = file_args();
-    let updated = note
-        .id
-        .update_file(
-            &owner,
-            Some(name),
-            mime,
-            filename.clone(),
-            size,
-            data.clone(),
-            &mut store,
-        )
-        .await?;
-    assert!(updated.has_file());
-    assert_eq!(updated.filename, filename);
-    assert_eq!(updated.size, Some(size));
-    assert_eq!(updated.file(&mut store).await?, data);
+async fn partnote_id_remove_file_of_text_note_is_not_found() -> TbResult<()> {
+    let part = PartId::from(1);
+    let owner = UserId::from(1);
+    let session = mock_session(owner);
+    // A text note (no file) cannot be de-filed.
+    let stored = note_row(PartNoteId::from(1), part, "a".to_string(), None, None, None);
+
+    let mut store = MockStore::new();
+    store
+        .expect_partnote_get()
+        .returning(move |_| Ok(stored.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, owner)));
+
+    let result = PartNoteId::from(1).remove_file(&session, &mut store).await;
+    assert!(matches!(result, Err(Error::NotFound(_))));
     Ok(())
 }
 
-/// update_file keeps the current filename and name when the multipart sends neither
+/// file on a text note is NotFound: the guard fires before any store call.
+#[tokio::test]
+async fn partnote_file_of_text_note_is_not_found() -> TbResult<()> {
+    let part = PartId::from(1);
+    // A text note (no file) has no bytes to fetch; the guard returns before
+    // any store call.
+    let note = note_row(PartNoteId::from(1), part, "a".to_string(), None, None, None);
+
+    let mut store = MockStore::new();
+    let result = note.file(&mut store).await;
+    assert!(matches!(result, Err(Error::NotFound(_))));
+    Ok(())
+}
+
+// === Filename-fallback resolution ===
+
+/// update_file keeps the current filename and name when the multipart sends
+/// neither: the domain resolves both before calling the store, and the
+/// returned note echoes the resolved arguments.
 #[tokio::test]
 async fn partnote_id_update_file_falls_back_to_existing_filename() -> TbResult<()> {
-    let (mut store, part) = owned_part().await;
-    let owner = mock_session(UserId::from(1));
-    let note = part
-        .note_create_text(&owner, "a".to_string(), created(), &mut store)
-        .await?;
-    let (name, mime, filename, size, _) = file_args();
-    note.id
+    let part = PartId::from(1);
+    let owner = UserId::from(1);
+    let session = mock_session(owner);
+    // The stored note already carries a filename; the update sends neither a
+    // name nor a filename.
+    let stored = note_row(
+        PartNoteId::from(1),
+        part,
+        "a".to_string(),
+        Some("image/png".to_string()),
+        Some("photo.png".to_string()),
+        Some(1),
+    );
+
+    let mut store = MockStore::new();
+    store
+        .expect_partnote_get()
+        .returning(move |_| Ok(stored.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, owner)));
+    // The domain resolves the filename (and the name that falls back to it)
+    // before calling the store; the returned note echoes those resolved args.
+    store
+        .expect_partnote_update_file()
+        .returning(move |_id, name, mime, filename, size, _data| {
+            Ok(note_row(
+                PartNoteId::from(1),
+                part,
+                name,
+                Some(mime),
+                filename,
+                Some(size),
+            ))
+        });
+
+    let updated = PartNoteId::from(1)
         .update_file(
-            &owner,
-            Some(name),
-            mime,
-            filename.clone(),
-            size,
-            vec![1],
-            &mut store,
-        )
-        .await?;
-    let updated = note
-        .id
-        .update_file(
-            &owner,
+            &session,
             None,
             "image/png".to_string(),
             None,
@@ -413,176 +200,152 @@ async fn partnote_id_update_file_falls_back_to_existing_filename() -> TbResult<(
             &mut store,
         )
         .await?;
-    assert_eq!(updated.filename, filename);
+    assert_eq!(updated.filename, Some("photo.png".to_string()));
     assert_eq!(updated.name, "photo.png");
-    assert_eq!(updated.file(&mut store).await?, vec![2, 2]);
     Ok(())
 }
 
-/// remove_file converts a file note into a text note
+/// note_create_file resolves a blank name and a missing filename the same way
+/// update_file does: the filename falls back to "file" and the name to it.
 #[tokio::test]
-async fn partnote_id_remove_file_converts_file_to_text() -> TbResult<()> {
-    let (mut store, part) = owned_part().await;
-    let owner = mock_session(UserId::from(1));
-    let (name, mime, filename, size, data) = file_args();
-    let note = part
+async fn partid_note_create_file_falls_back_to_filename() -> TbResult<()> {
+    let part = PartId::from(1);
+    let owner = UserId::from(1);
+    let session = mock_session(owner);
+
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, owner)));
+    // The domain resolves the filename (and the name that falls back to it)
+    // before calling the store; the returned note echoes those resolved args.
+    store.expect_partnote_create_file().returning(
+        move |_id, name, mime, filename, size, _data, _created| {
+            Ok(note_row(
+                PartNoteId::from(1),
+                part,
+                name,
+                Some(mime),
+                filename,
+                Some(size),
+            ))
+        },
+    );
+
+    let created = part
         .note_create_file(
-            &owner,
-            name,
-            mime,
-            filename,
-            size,
-            data,
+            &session,
+            None,
+            "image/png".to_string(),
+            None,
+            2,
+            vec![2, 2],
             created(),
             &mut store,
         )
         .await?;
-    let updated = note.id.remove_file(&owner, &mut store).await?;
-    assert!(!updated.has_file());
-    assert_eq!(updated.filename, None);
-    let result = updated.file(&mut store).await;
-    assert!(matches!(result, Err(Error::NotFound(_))));
+    assert_eq!(created.filename, Some("file".to_string()));
+    assert_eq!(created.name, "file");
     Ok(())
 }
 
-/// remove_file on a text note is NotFound
-#[tokio::test]
-async fn partnote_id_remove_file_of_text_note_is_not_found() -> TbResult<()> {
-    let (mut store, part) = owned_part().await;
-    let owner = mock_session(UserId::from(1));
-    let note = part
-        .note_create_text(&owner, "a".to_string(), created(), &mut store)
-        .await?;
-    let result = note.id.remove_file(&owner, &mut store).await;
-    assert!(matches!(result, Err(Error::NotFound(_))));
-    Ok(())
-}
+// === Permission matrix (owner / foreign / shop-session) ===
 
-/// file returns the stored bytes
-#[tokio::test]
-async fn partnote_file_returns_stored_bytes() -> TbResult<()> {
-    let (mut store, part) = owned_part().await;
-    let owner = mock_session(UserId::from(1));
-    let (name, mime, filename, size, data) = file_args();
-    let note = part
-        .note_create_file(
-            &owner,
-            name,
-            mime,
-            filename,
-            size,
-            data.clone(),
-            created(),
-            &mut store,
-        )
-        .await?;
-    assert_eq!(note.file(&mut store).await?, data);
-    Ok(())
-}
-
-/// file on a text note is NotFound
-#[tokio::test]
-async fn partnote_file_of_text_note_is_not_found() -> TbResult<()> {
-    let (mut store, part) = owned_part().await;
-    let owner = mock_session(UserId::from(1));
-    let note = part
-        .note_create_text(&owner, "a".to_string(), created(), &mut store)
-        .await?;
-    let result = note.file(&mut store).await;
-    assert!(matches!(result, Err(Error::NotFound(_))));
-    Ok(())
-}
-
-/// delete removes the note and its file data
-#[tokio::test]
-async fn partnote_id_delete_removes_note() -> TbResult<()> {
-    let (mut store, part) = owned_part().await;
-    let owner = mock_session(UserId::from(1));
-    let (name, mime, filename, size, data) = file_args();
-    let note = part
-        .note_create_file(
-            &owner,
-            name,
-            mime,
-            filename,
-            size,
-            data,
-            created(),
-            &mut store,
-        )
-        .await?;
-    assert_eq!(note.id.delete(&owner, &mut store).await?, note.id);
-    let result = note.id.note(&owner, &mut store).await;
-    assert!(matches!(result, Err(Error::NotFound(_))));
-    let notes = part.notes(&owner, &mut store).await?;
-    assert!(notes.is_empty());
-    Ok(())
-}
-
-// === Domain operations (Tier C: permission and cross-entity) ===
-
-/// notes on an unknown part is NotFound
+/// notes on an unknown part is NotFound: the access check reads the part first.
 #[tokio::test]
 async fn partid_notes_of_unknown_part_is_not_found() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let part = PartId::from(99);
     let session = mock_session(UserId::from(1));
-    let result = PartId::from(99).notes(&session, &mut store).await;
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(|_| Err(Error::NotFound("part".into())));
+    let result = part.notes(&session, &mut store).await;
     assert!(matches!(result, Err(Error::NotFound(_))));
     Ok(())
 }
 
-/// notes of another user's part is Forbidden
+/// notes of another user's part is Forbidden (no shop session).
 #[tokio::test]
 async fn partid_notes_of_foreign_part_is_forbidden() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let result = PartId::from(1).notes(&other_user(), &mut store).await;
+    let part = PartId::from(1);
+    let owner = UserId::from(1);
+    let stranger = mock_session(UserId::from(98));
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, owner)));
+    let result = part.notes(&stranger, &mut store).await;
     assert!(matches!(result, Err(Error::Forbidden(_))));
     Ok(())
 }
 
-/// note for an unknown id is NotFound
+/// note for an unknown id is NotFound: the note read comes back empty.
 #[tokio::test]
 async fn partnote_id_note_of_unknown_id_is_not_found() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let id = PartNoteId::from(99);
     let session = mock_session(UserId::from(1));
-    let result = PartNoteId::from(99).note(&session, &mut store).await;
+    let mut store = MockStore::new();
+    store
+        .expect_partnote_get()
+        .returning(|_| Err(Error::NotFound("note".into())));
+    let result = id.note(&session, &mut store).await;
     assert!(matches!(result, Err(Error::NotFound(_))));
     Ok(())
 }
 
-/// note of another user's part is Forbidden
+/// note of another user's part is Forbidden (no shop session).
 #[tokio::test]
 async fn partnote_id_note_of_foreign_part_is_forbidden() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-    let note = PartId::from(1)
-        .note_create_text(&session, "a".to_string(), created(), &mut store)
-        .await?;
-    let result = note.id.note(&other_user(), &mut store).await;
+    let part = PartId::from(1);
+    let owner = UserId::from(1);
+    let stranger = mock_session(UserId::from(98));
+    let note = note_row(PartNoteId::from(1), part, "a".to_string(), None, None, None);
+    let mut store = MockStore::new();
+    let note_owned = note.clone();
+    store
+        .expect_partnote_get()
+        .returning(move |_| Ok(note_owned.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, owner)));
+    let result = note.id.note(&stranger, &mut store).await;
     assert!(matches!(result, Err(Error::Forbidden(_))));
     Ok(())
 }
 
-/// note_create_text of another user's part is Forbidden
+/// note_create_text of another user's part is Forbidden (no shop session).
 #[tokio::test]
 async fn partid_note_create_text_on_foreign_part_is_forbidden() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let result = PartId::from(1)
-        .note_create_text(&other_user(), "a".to_string(), created(), &mut store)
+    let part = PartId::from(1);
+    let owner = UserId::from(1);
+    let stranger = mock_session(UserId::from(98));
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, owner)));
+    let result = part
+        .note_create_text(&stranger, "a".to_string(), created(), &mut store)
         .await;
     assert!(matches!(result, Err(Error::Forbidden(_))));
     Ok(())
 }
 
-/// note_create_file of another user's part is Forbidden
+/// note_create_file of another user's part is Forbidden (no shop session).
 #[tokio::test]
 async fn partid_note_create_file_on_foreign_part_is_forbidden() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
+    let part = PartId::from(1);
+    let owner = UserId::from(1);
+    let stranger = mock_session(UserId::from(98));
     let (name, mime, filename, size, data) = file_args();
-    let result = PartId::from(1)
+    let mut store = MockStore::new();
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, owner)));
+    let result = part
         .note_create_file(
-            &other_user(),
-            name,
+            &stranger,
+            Some(name),
             mime,
             filename,
             size,
@@ -595,35 +358,49 @@ async fn partid_note_create_file_on_foreign_part_is_forbidden() -> TbResult<()> 
     Ok(())
 }
 
-/// update_text of another user's note is Forbidden
+/// update_text of another user's note is Forbidden (no shop session).
 #[tokio::test]
 async fn partnote_id_update_text_of_foreign_note_is_forbidden() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-    let note = PartId::from(1)
-        .note_create_text(&session, "a".to_string(), created(), &mut store)
-        .await?;
+    let part = PartId::from(1);
+    let owner = UserId::from(1);
+    let stranger = mock_session(UserId::from(98));
+    let note = note_row(PartNoteId::from(1), part, "a".to_string(), None, None, None);
+    let mut store = MockStore::new();
+    let note_owned = note.clone();
+    store
+        .expect_partnote_get()
+        .returning(move |_| Ok(note_owned.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, owner)));
     let result = note
         .id
-        .update_text(&other_user(), "b".to_string(), &mut store)
+        .update_text(&stranger, "b".to_string(), &mut store)
         .await;
     assert!(matches!(result, Err(Error::Forbidden(_))));
     Ok(())
 }
 
-/// update_file of another user's note is Forbidden
+/// update_file of another user's note is Forbidden (no shop session).
 #[tokio::test]
 async fn partnote_id_update_file_of_foreign_note_is_forbidden() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-    let note = PartId::from(1)
-        .note_create_text(&session, "a".to_string(), created(), &mut store)
-        .await?;
+    let part = PartId::from(1);
+    let owner = UserId::from(1);
+    let stranger = mock_session(UserId::from(98));
+    let note = note_row(PartNoteId::from(1), part, "a".to_string(), None, None, None);
     let (name, mime, filename, size, data) = file_args();
+    let mut store = MockStore::new();
+    let note_owned = note.clone();
+    store
+        .expect_partnote_get()
+        .returning(move |_| Ok(note_owned.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, owner)));
     let result = note
         .id
         .update_file(
-            &other_user(),
+            &stranger,
             Some(name),
             mime,
             filename,
@@ -636,58 +413,116 @@ async fn partnote_id_update_file_of_foreign_note_is_forbidden() -> TbResult<()> 
     Ok(())
 }
 
-/// remove_file of another user's note is Forbidden
+/// remove_file of another user's note is Forbidden (no shop session).
 #[tokio::test]
 async fn partnote_id_remove_file_of_foreign_note_is_forbidden() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-    let (name, mime, filename, size, data) = file_args();
-    let note = PartId::from(1)
-        .note_create_file(
-            &session,
-            name,
-            mime,
-            filename,
-            size,
-            data,
-            created(),
-            &mut store,
-        )
-        .await?;
-    let result = note.id.remove_file(&other_user(), &mut store).await;
+    let part = PartId::from(1);
+    let owner = UserId::from(1);
+    let stranger = mock_session(UserId::from(98));
+    let note = note_row(
+        PartNoteId::from(1),
+        part,
+        "a".to_string(),
+        Some("image/png".to_string()),
+        Some("photo.png".to_string()),
+        Some(1),
+    );
+    let mut store = MockStore::new();
+    let note_owned = note.clone();
+    store
+        .expect_partnote_get()
+        .returning(move |_| Ok(note_owned.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, owner)));
+    let result = note.id.remove_file(&stranger, &mut store).await;
     assert!(matches!(result, Err(Error::Forbidden(_))));
     Ok(())
 }
 
-/// delete of another user's note is Forbidden
+/// delete of another user's note is Forbidden (no shop session).
 #[tokio::test]
 async fn partnote_id_delete_of_foreign_note_is_forbidden() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let session = mock_session(UserId::from(1));
-    let note = PartId::from(1)
-        .note_create_text(&session, "a".to_string(), created(), &mut store)
-        .await?;
-    let result = note.id.delete(&other_user(), &mut store).await;
+    let part = PartId::from(1);
+    let owner = UserId::from(1);
+    let stranger = mock_session(UserId::from(98));
+    let note = note_row(PartNoteId::from(1), part, "a".to_string(), None, None, None);
+    let mut store = MockStore::new();
+    let note_owned = note.clone();
+    store
+        .expect_partnote_get()
+        .returning(move |_| Ok(note_owned.clone()));
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, owner)));
+    let result = note.id.delete(&stranger, &mut store).await;
     assert!(matches!(result, Err(Error::Forbidden(_))));
     Ok(())
 }
 
-/// a shop owner with a session on the registered part can run the note operations
+/// a shop owner with a session on the registered part can run the note
+/// operations (create, list, update, delete) — the shop session passes the
+/// part's access check via the shop's ownership.
 #[tokio::test]
 async fn shop_owner_can_access_partnotes() -> TbResult<()> {
-    let mut store = MemStore::prepopulated();
-    let shop_owner = UserId::create("Shop", "Owner", &None, &mut store).await?;
-    let shop = ShopId::create("Bike Barn".to_string(), None, true, shop_owner, &mut store).await?;
-    let sub = SubscriptionId::create(shop.id, None, UserId::from(1), &mut store).await?;
-    assert_eq!(sub.status, SubscriptionStatus::Active);
-    let customer = mock_session(UserId::from(1));
-    shop.id
-        .register_part(PartId::from(1), &customer, &mut store)
-        .await?;
-
-    let shop_session = mock_session_with_shop(shop_owner, shop.id);
     let part = PartId::from(1);
-    let note = part
+    let customer = UserId::from(1);
+    let shop_owner = UserId::from(2);
+    let shop = ShopId::from(1);
+
+    let shop_session = mock_session_with_shop(shop_owner, shop);
+    let note = note_row(
+        PartNoteId::from(1),
+        part,
+        "check chain".to_string(),
+        None,
+        None,
+        None,
+    );
+
+    let mut store = MockStore::new();
+    // The part is the customer's; the shop owner acts in the shop, so
+    // checkuser passes via the shop's ownership.
+    store
+        .expect_partid_get_part()
+        .returning(move |_| Ok(part_row(part, customer)));
+    store
+        .expect_shop_get()
+        .returning(move |_| Ok(shop_row(shop, shop_owner)));
+    // create: the returned note echoes the supplied name.
+    store
+        .expect_partnote_create_text()
+        .returning(move |_, name, _| {
+            Ok(note_row(PartNoteId::from(1), part, name, None, None, None))
+        });
+    // list: one note after the create, none after the delete.
+    let notes_counter = Arc::new(Mutex::new(0));
+    let nc = notes_counter.clone();
+    let note_for_list = note.clone();
+    store.expect_partnote_all_by_part().returning(move |_| {
+        let n = *nc.lock().unwrap();
+        *nc.lock().unwrap() += 1;
+        if n == 0 {
+            Ok(vec![note_for_list.clone()])
+        } else {
+            Ok(vec![])
+        }
+    });
+    // update and delete both read the note first (note()).
+    let note_for_read = note.clone();
+    store
+        .expect_partnote_get()
+        .returning(move |_| Ok(note_for_read.clone()));
+    // update: the returned note echoes the new name.
+    store
+        .expect_partnote_update_text()
+        .returning(move |_, name| Ok(note_row(PartNoteId::from(1), part, name, None, None, None)));
+    store
+        .expect_partnote_delete()
+        .returning(|_| Ok(PartNoteId::from(1)));
+
+    // create
+    let created = part
         .note_create_text(
             &shop_session,
             "check chain".to_string(),
@@ -695,14 +530,24 @@ async fn shop_owner_can_access_partnotes() -> TbResult<()> {
             &mut store,
         )
         .await?;
+    assert_eq!(created.name, "check chain");
+
+    // list
     let notes = part.notes(&shop_session, &mut store).await?;
     assert_eq!(notes.len(), 1);
-    let updated = note
+
+    // update
+    let renamed = created
         .id
         .update_text(&shop_session, "chain worn".to_string(), &mut store)
         .await?;
-    assert_eq!(updated.name, "chain worn");
-    assert_eq!(note.id.delete(&shop_session, &mut store).await?, note.id);
+    assert_eq!(renamed.name, "chain worn");
+
+    // delete
+    assert_eq!(
+        created.id.delete(&shop_session, &mut store).await?,
+        created.id
+    );
     let notes = part.notes(&shop_session, &mut store).await?;
     assert!(notes.is_empty());
     Ok(())

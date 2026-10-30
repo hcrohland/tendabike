@@ -17,15 +17,9 @@ Activity (from Strava/CSV)
 
 ---
 
-## Pre-requisite: MemStore Infrastructure
+## Pre-requisite: the store seam
 
-ActivityMemStore is already implemented (`mem_activity.rs`):
-- `activity_create`, `activity_read_by_id`, `activity_update`, `activity_delete` ✓
-- `activities_find_by_gear_and_time` ✓
-- `get_all`, `get_by_user_and_time` ✓
-- `activity_set_gear_if_null`, `activity_get_really_all` ✓
-
-No new infrastructure needed for activity tests — all store methods are in place.
+Activity tests run the real domain operation over a `mockall` `mock!` store double, `MockStore` (`domain/src/test_support/mock_store.rs`): the domain logic runs for real, only the store I/O is canned. The activity store methods (`activity_create`, `activity_read_by_id`, `activity_update`, `activity_delete`, `activities_find_by_gear_and_time`, `get_all`, `get_by_user_and_time`, `activity_set_gear_if_null`, `activity_get_really_all`) are all scriptable on the mock. Store *behavior* rests on the real Postgres path, the sqlx seam suite (`sqlx/tests/store_seam.rs`).
 
 ---
 
@@ -49,7 +43,7 @@ No new infrastructure needed for activity tests — all store methods are in pla
 | A-07 | `activityid_read_returns_activity` | Create activity → read by ID → all fields match (user_id, name, start, etc.) |
 | A-08 | `activityid_read_optional_returns_none_for_missing` | Read non-existent ID → `Ok(None)` |
 | A-09 | `activityid_read_rejects_cross_user` | User 2 tries to read User 1's activity → `Error::Forbidden` |
-| A-10 | `activity_upsert_creates_new_activity` | Insert new activity → Summary has 1 activity, stored in MemStore |
+| A-10 | `activity_upsert_creates_new_activity` | Insert new activity → Summary has 1 activity, canned on the store |
 | A-11 | `activity_upsert_calls_register_on_create` | After upsert, the gear's usage and all attached parts' usages are updated with the activity metrics |
 | A-12 | `activity_upsert_updates_existing` | Same ID as existing → calls `replace()` which unregisters old + registers new |
 | A-13 | `activity_update_returns_summary` | Update activity → Summary contains 1 updated activity entry |
@@ -202,13 +196,13 @@ No new infrastructure needed for activity tests — all store methods are in pla
 
 ## Test Patterns to Follow
 
-- Use `test_support::{MemStore, TestSession}` for store and session setup
+- Use `test_support::MockStore` for the store and `mock_session` for the session
 - Helper functions: `test_user()`, `test_session()`, `sample_activity()` (already defined in activity.rs), `sample_purchase_date()`
 - Use `#[tokio::test]` for all async tests, `#[test]` for sync
 - Return `TbResult<()>` from tests for error propagation
 - Use fixed timestamps via `time::OffsetDateTime::from_unix_timestamp()` for deterministic tests
 - Create parts with `Part::create()` before testing activity-gear associations
-- Use attachment fixtures (`fixtures::fixture_attached_part()`) for testing registration through the attachment timeline
+- Build attachments with `attach_assembly` over the `MockStore` for testing registration through the attachment timeline
 
 ## Key Test Setup Patterns
 
@@ -223,6 +217,6 @@ let att = Attachment::create(chain.id, gear.id, attach_time, detached_future, Pa
 
 - **Suite 1** (Usage Extraction) must pass before Suite 2+ — usage is the atomic unit of propagation
 - **Suite 10** (Usage Vector Ops) must pass before Suite 2+ — Usage add/sub/neg are used throughout
-- **Suite 3** (Registration) depends on proper MemStore for attachments — `mem_service.rs` is NOT needed, but attachment storage works since it's already implemented
+- **Suite 3** (Registration) scripts the attachment store methods on the `MockStore`; the service store is not needed
 - **Suite 11** (Integration with Services) requires the Service entity tests to be understood — `Service::get_usageids()` is called during activity registration
 - **Suite 7** (set_default_part) and **Suite 8** (rescan_all) are standalone but depend on Suite 2 (CRUD) being functional

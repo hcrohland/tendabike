@@ -38,6 +38,10 @@ mod traits;
 use time::OffsetDateTime;
 pub use traits::*;
 
+mod prepopulated_data;
+mod snapshot;
+pub use snapshot::{SNAPSHOT_JSON, StoreSnapshot, load_snapshot};
+
 /// The sentinel "still attached"/"never redone" time (year 9100): an
 /// attachment with `detached == MAX_TIME` is still attached, and a service
 /// with `redone == MAX_TIME` is still valid — the open-ended bound of a span

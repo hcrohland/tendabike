@@ -4,7 +4,7 @@ All tests run in-memory (no database, no network); one `<name>_tests.rs` module 
 
 ## Key infrastructure
 
-- **`TestStravaStore`** (`strava/src/test_support.rs`) — implements `StravaDataStore` (plus the empty `StravaStore` umbrella). Domain data delegates to the domain `MemStore` (accessible as `store.mem`; use qualified calls like `ActivityStore::get_all(&mut store.mem, &user)`). `strava_users: HashMap<UserId, StravaUser>` and `events: Vec<Event>` are plain in-memory collections with auto-assigned event IDs; `insert_user()`, `event_count()` helpers.
+- **`MockStravaConn`** (`strava/src/test_support.rs`) — a `mockall` `mock!` witness (`#[cfg(test)]`) accumulating the full `Store` seam (nine sub-traits + the method-free `Store` marker) plus the `StravaStore` surface; the Strava-logic free functions take a bare `&mut impl StravaStore`, so no `Txn`. The Strava-logic tests (into_partid, activity sync, gear hydration, event processing, deauthorize) run the logic for real and assert on canned `mock!` outcomes.
 - **`strava_session` / `strava_admin_session`** (`strava/src/test_support.rs`) — build a domain `MockSession` that seeds the `TokenCache` with a warm token (no refresh), so the thin free functions' refresh-token persistence is a no-op for it. The canned responses live in a **thread-local** map the free functions consult (each test runs on its own thread → per-test isolation); `strava_session` begins that scope. The canned-response surface is free functions (not methods on the session):
   - `queue(uri, json)` — script a JSON response body for an **exact** request URI (FIFO per URI)
   - `queue_error(uri, error)` — script an error for an exact URI; unscripted URIs yield `Error::BadRequest`
@@ -29,7 +29,7 @@ async fn my_test() -> TbResult<()> {
 ```
 
 - `#[tokio::test]`, return `TbResult<()>`.
-- Assert on `store.events` / `store.event_count()` for webhook event state; on `requests()` for Strava API calls.
+- Assert on the canned `mock!` store outcomes for store state; on `requests()` for Strava API calls.
 - The `CANNED_STRAVA` global (`test_support::canned_strava(uri, json)`, feature `test-support`) is a *separate*, process-wide offline seam for the `tb_sqlx` executor-seam suite, whose session runs in a spawned task on a thread the thread-local map never reaches. The thin free functions consult the thread-local map first, then `CANNED_STRAVA`.
 
 ## Gotchas

@@ -43,11 +43,21 @@ fi
 if [ "$run_rust" -eq 1 ]; then
     cargo fmt --check
     (cd backend/sqlx && cargo sqlx prepare --check)
-    cargo clippy -- -D warnings
+    # --workspace --all-targets lints the #[cfg(test)]/test-support code too;
+    # a bare `cargo clippy` only checks the default (lib/bin) targets and
+    # silently skips the mock! witnesses and test-support modules.
+    cargo clippy --workspace --all-targets -- -D warnings
     cargo check
 fi
 
 if [ "$run_frontend" -eq 1 ]; then
     npm run fmtcheck
     npm run check:ci
+fi
+
+# Dockerfile build-deps stubs: the image compiles from the manifests alone with
+# real source stubbed out, so a [[bin]]/[lib] with no matching stub breaks the
+# docker build — caught only by the slow remote docker CI job. Check locally.
+if printf '%s\n' "$staged_files" | grep -Eq '^(Dockerfile|backend/[^/]+/Cargo\.toml)$'; then
+    python3 .githooks/check-dockerfile-stubs.py
 fi

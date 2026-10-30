@@ -249,7 +249,7 @@ impl<'c> tb_strava::StravaDataStore for SqlxConn<'c> {
     async fn stravauser_update_token(
         &mut self,
         stravaid: StravaId,
-        refresh: Option<&String>,
+        refresh: Option<String>,
     ) -> TbResult<StravaUser> {
         sqlx::query_as!(
             DbStravaUser,

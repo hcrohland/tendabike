@@ -31,15 +31,17 @@
 //!   a concrete adapter.
 //! - [`message`] — the [`Message`] enum and the in-memory plumbing (the
 //!   per-user API-write channel, the oneshot reply, the `Summary` frame sink).
-//! - [`executor`] — [`run`], the loop itself: a biased select, one
-//!   transaction per message, and the reclaim-on-idle policy.
+//! - [`executor`] — [`LoopContext`], the loop itself (its wiring and its
+//!   state) and its `run` method: a biased select, one transaction per
+//!   message, and the reclaim-on-idle policy.
 //!
 //! The loop computes no domain state of its own: it drives the existing
 //! `ApiWrite` dispatch and `tb_strava` event processing inside transactions
-//! it owns. `MemStore` deliberately implements neither trait (a
-//! `tb_domain` → `tb_exec` dependency would be a cycle); the seam's Postgres
-//! half lives in `tb_sqlx`, and the transaction integration is verified
-//! against real Postgres in `tb_sqlx`'s `tests/executor_seam.rs`.
+//! it owns. The seam's Postgres half lives in `tb_sqlx`, and the transaction
+//! integration is verified against real Postgres in `tb_sqlx`'s
+//! `tests/executor_seam.rs`; the unit tests stand in for the seam with a
+//! `mockall` `mock!` witness (the `MockConn` in `executor_tests`), not a
+//! hand-rolled store.
 
 mod api;
 mod executor;
@@ -52,6 +54,3 @@ pub use executor::*;
 pub use message::*;
 pub use registry::*;
 pub use txn::*;
-
-#[cfg(test)]
-mod executor_tests;

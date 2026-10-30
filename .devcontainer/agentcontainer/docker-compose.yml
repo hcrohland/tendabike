@@ -30,6 +30,7 @@ services:
       - PYTHIA_API_KEY=${PYTHIA_API_KEY}
       - DELPHI_API_KEY=${DELPHI_API_KEY}
       - GITHUB_PAT=${GITHUB_PAT}
+      - EDITOR=vi
 
 volumes:
   postgres-data:

@@ -8,11 +8,12 @@ Issues and specs for this repo live as GitHub issues. Use the GitHub MCP server 
 - **Feature label**: one `feature:<slug>` label per feature.
 - **Link as a sub-issue**: `issue_write` with `parent_issue_number` for a new issue; `sub_issue_write` (method `add`) for an existing one — it takes the child's numeric **database id** (the `id` field, not its `#number` or `node_id`), which full `search_issues` / `get_sub_issues` entries carry.
 - **Read an issue**: `issue_read` with `method: "get"` for details (body, labels, state, assignees, hierarchy flags) or `get_comments` for comments.
+- **Read sub-issues**: `issue_read` with `method: "get_sub_issues"` — for a large spec the inline result is **truncated**; the full JSON is written to a tool-output file (path in the tool result). Read that file and parse it; don't rely on the truncated inline output.
 - **List issues**: `list_issues` with `state` and `labels` filters; request only the `fields` you need — `body` is the largest per-result data.
 - **Comment on an issue**: `add_issue_comment` (`issue_number`, `body`).
 - **Apply / remove labels**: `issue_write` with `method: "update"` — its `labels` param *sets* the full label set, so removal is re-setting the list without that label (read the current labels first).
 - **Close**: `issue_write` with `method: "update"`, `state: "closed"`, `state_reason: "completed"`; pair with `add_issue_comment` when a closing comment is wanted.
-- **Close from a PR**: the PR collects `Closes` lines from its commits on merge; a single `Closes` closes only its first issue.
+- **Close from a PR**: a squash merge collects each commit's `Closes #N` line, so each ticket closes via the `Closes #N` in its **own commit** (one issue per line — a line with several space-separated numbers closes only the first). The PR body carries `Closes` for the **umbrella spec only**; do not duplicate the per-ticket `Closes` lines into the PR body.
 - **Sync**: keep a feature branch up to date by merging `main` into it (`git merge origin/main`); never force-push to the remote — the `.githooks/pre-push` hook rejects non-fast-forward updates.
 - **Merge**: `merge_pull_request` with `merge_method: "squash"` — PRs are squash-merged, and the squashed commit takes the PR title, so write the PR title as the commit title you want on `main`. Only merge when the required checks are green on the current head: the ruleset's strict check policy voids check runs from a head behind `main`, so if `main` moved since they ran, sync (above) and let the checks re-run first.
 
