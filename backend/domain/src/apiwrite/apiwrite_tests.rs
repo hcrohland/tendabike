@@ -711,6 +711,20 @@ async fn shop_register_and_unregister_part_dispatch() -> TbResult<()> {
     store
         .expect_parts_unregister_shop()
         .returning(move |_| Ok(vec![part_row(part, test_user())]));
+    store.expect_notification_create().returning(
+        move |recipient, lifecycle, kind, subject, message| {
+            Ok(crate::Notification {
+                id: crate::NotificationId::new(),
+                recipient,
+                lifecycle,
+                kind,
+                subject,
+                message,
+                state: crate::NotificationState::New,
+                created_at: crate::test_support::fixtures::sample_purchase_date(),
+            })
+        },
+    );
 
     let summary = outcome_summary(
         exec(

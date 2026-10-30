@@ -1,4 +1,7 @@
-use crate::{Error, PartStore, Shop, ShopStore, TbResult, UserId};
+use crate::{
+    Error, NotificationKind, NotificationLifecycle, NotificationStore, NotificationSubject,
+    PartStore, Shop, ShopStore, Summary, TbResult, UserId,
+};
 
 use derive_more::{Display, From, Into};
 use serde::{Deserialize, Serialize};
@@ -66,13 +69,18 @@ impl std::fmt::Display for SubscriptionStatus {
 pub struct SubscriptionId(i32);
 
 impl SubscriptionId {
-    /// Create a new subscription request
+    /// Create a new subscription request.
+    ///
+    /// Side effects (never notifies the actor of their own action):
+    /// - **pending**: a `sub_request` (persistent) notification to the shop owner.
+    /// - **auto-approve**: a `sub_response` (persistent) notification to the
+    ///   requester, carrying the welcome message.
     pub async fn create(
         shop_id: ShopId,
         message: Option<String>,
         user: UserId,
-        store: &mut impl ShopStore,
-    ) -> TbResult<ShopSubscription> {
+        store: &mut (impl ShopStore + NotificationStore),
+    ) -> TbResult<Summary> {
         // Verify the shop exists (don't check ownership - users can subscribe to any shop)
         let shop = store.shop_get(shop_id).await?;
 
@@ -93,18 +101,42 @@ impl SubscriptionId {
         }
 
         let subscription = store.subscription_create(shop_id, user, message).await?;
+        let mut summary = Summary::default();
+
         if shop.auto_approve {
-            // Update subscription status to active with response message
+            let welcome = format!("Welcome to {}", shop.name);
             store
                 .subscription_approve(
                     subscription.id,
                     SubscriptionStatus::Active,
-                    Some(format!("Welcome to {}", shop.name)),
+                    Some(welcome.clone()),
                 )
-                .await
+                .await?;
+            // Notify the requester (the actor) with the welcome message
+            let notification = store
+                .notification_create(
+                    user,
+                    NotificationLifecycle::Persistent,
+                    NotificationKind::SubResponse,
+                    NotificationSubject::Subscription(subscription.id),
+                    Some(welcome),
+                )
+                .await?;
+            summary.notifications.upsert(notification);
         } else {
-            Ok(subscription)
+            // Notify the shop owner (not the actor)
+            let notification = store
+                .notification_create(
+                    shop.owner,
+                    NotificationLifecycle::Persistent,
+                    NotificationKind::SubRequest,
+                    NotificationSubject::Subscription(subscription.id),
+                    None,
+                )
+                .await?;
+            summary.notifications.upsert(notification);
         }
+        Ok(summary)
     }
 
     /// Get a subscription by ID
@@ -146,13 +178,16 @@ impl SubscriptionId {
         Ok(self)
     }
 
-    /// Approve a subscription (shop owner only)
+    /// Approve a subscription (shop owner only).
+    ///
+    /// Side effect: a `sub_response` (persistent) notification to the
+    /// requester, carrying the `response_message`.
     pub async fn approve(
         self,
         response_message: Option<String>,
         user: UserId,
-        store: &mut impl ShopStore,
-    ) -> TbResult<ShopSubscription> {
+        store: &mut (impl ShopStore + NotificationStore),
+    ) -> TbResult<Summary> {
         let subscription = store.subscription_get(self).await?;
 
         // Verify user owns the shop
@@ -165,17 +200,34 @@ impl SubscriptionId {
 
         // Update subscription status to active with response message
         store
-            .subscription_approve(self, SubscriptionStatus::Active, response_message)
-            .await
+            .subscription_approve(self, SubscriptionStatus::Active, response_message.clone())
+            .await?;
+
+        // Notify the requester (not the actor — the actor is the shop owner)
+        let notification = store
+            .notification_create(
+                subscription.user_id,
+                NotificationLifecycle::Persistent,
+                NotificationKind::SubResponse,
+                NotificationSubject::Subscription(self),
+                response_message,
+            )
+            .await?;
+        let mut summary = Summary::default();
+        summary.notifications.upsert(notification);
+        Ok(summary)
     }
 
-    /// Reject a subscription (shop owner only)
+    /// Reject a subscription (shop owner only).
+    ///
+    /// Side effect: a `sub_response` (persistent) notification to the
+    /// requester, carrying the `response_message`.
     pub async fn reject(
         self,
         response_message: Option<String>,
         user: UserId,
-        store: &mut impl ShopStore,
-    ) -> TbResult<ShopSubscription> {
+        store: &mut (impl ShopStore + NotificationStore),
+    ) -> TbResult<Summary> {
         let subscription = store.subscription_get(self).await?;
 
         // Verify user owns the shop
@@ -187,17 +239,34 @@ impl SubscriptionId {
         }
 
         store
-            .subscription_approve(self, SubscriptionStatus::Rejected, response_message)
-            .await
+            .subscription_approve(self, SubscriptionStatus::Rejected, response_message.clone())
+            .await?;
+
+        // Notify the requester (not the actor — the actor is the shop owner)
+        let notification = store
+            .notification_create(
+                subscription.user_id,
+                NotificationLifecycle::Persistent,
+                NotificationKind::SubResponse,
+                NotificationSubject::Subscription(self),
+                response_message,
+            )
+            .await?;
+        let mut summary = Summary::default();
+        summary.notifications.upsert(notification);
+        Ok(summary)
     }
 
-    /// Cancel a subscription (subscriber only)
-    /// Allows deletion of pending, active, and rejected subscriptions
+    /// Cancel a subscription (subscriber only).
+    /// Allows deletion of pending, active, and rejected subscriptions.
+    ///
+    /// Side effect: a `sub_cancelled` (persistent) notification to the
+    /// shop owner.
     pub async fn cancel(
         self,
         user: UserId,
-        store: &mut (impl PartStore + ShopStore),
-    ) -> TbResult<()> {
+        store: &mut (impl PartStore + ShopStore + NotificationStore),
+    ) -> TbResult<Summary> {
         let subscription = store.subscription_get(self).await?;
 
         // Verify user is the subscriber
@@ -224,7 +293,22 @@ impl SubscriptionId {
             return Err(Error::Conflict("You have still parts in the shop".into()));
         }
 
-        store.subscription_delete(self).await
+        store.subscription_delete(self).await?;
+
+        // Notify the shop owner (not the actor — the actor is the subscriber)
+        let shop = store.shop_get(subscription.shop_id).await?;
+        let notification = store
+            .notification_create(
+                shop.owner,
+                NotificationLifecycle::Persistent,
+                NotificationKind::SubCancelled,
+                NotificationSubject::Subscription(self),
+                None,
+            )
+            .await?;
+        let mut summary = Summary::default();
+        summary.notifications.upsert(notification);
+        Ok(summary)
     }
 }
 

@@ -500,27 +500,29 @@ pub async fn exec(
             shop.unregister_part(part, session, store).await?,
         )),
 
-        // A `ShopSubscription` is not a kind of the `Summary`, so these
-        // writes report an empty Summary: the stream carries nothing for
-        // them, and the HTTP response is their delivery.
-        ApiWrite::ShopSubscriptionCreate { shop, message } => {
-            SubscriptionId::create(shop, message, session.user_id(), store).await?;
-            Ok(WriteOutcome::Summary(Summary::default()))
-        }
+        // A `ShopSubscription` is not a kind of the `Summary`, so the
+        // subscription itself is not in the summary. The notifications it
+        // creates (side effects) ride the summary.
+        ApiWrite::ShopSubscriptionCreate { shop, message } => Ok(WriteOutcome::Summary(
+            SubscriptionId::create(shop, message, session.user_id(), store).await?,
+        )),
         ApiWrite::ShopSubscriptionApprove { id, message } => {
             let id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
-            id.approve(message, session.user_id(), store).await?;
-            Ok(WriteOutcome::Summary(Summary::default()))
+            Ok(WriteOutcome::Summary(
+                id.approve(message, session.user_id(), store).await?,
+            ))
         }
         ApiWrite::ShopSubscriptionReject { id, message } => {
             let id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
-            id.reject(message, session.user_id(), store).await?;
-            Ok(WriteOutcome::Summary(Summary::default()))
+            Ok(WriteOutcome::Summary(
+                id.reject(message, session.user_id(), store).await?,
+            ))
         }
         ApiWrite::ShopSubscriptionCancel { id } => {
             let id = SubscriptionId::get(id.into(), session.user_id(), store).await?;
-            id.cancel(session.user_id(), store).await?;
-            Ok(WriteOutcome::Summary(Summary::default()))
+            Ok(WriteOutcome::Summary(
+                id.cancel(session.user_id(), store).await?,
+            ))
         }
 
         // --- user (onboarding) ---

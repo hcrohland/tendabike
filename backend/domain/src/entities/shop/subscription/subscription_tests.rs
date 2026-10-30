@@ -1,7 +1,9 @@
 use super::*;
 use crate::test_support::MockStore;
 use crate::test_support::fixtures::sample_purchase_date;
-use crate::{Part, PartId, PartTypeId, UsageId};
+use crate::{
+    Notification, NotificationId, NotificationState, Part, PartId, PartTypeId, Summary, UsageId,
+};
 
 /// A canned `Shop` row: the minimal shape the domain logic needs (id, owner,
 /// name, auto_approve).
@@ -56,16 +58,50 @@ fn part_row(id: PartId, owner: UserId) -> Part {
     }
 }
 
+/// A canned `Notification` row for testing.
+fn notification_row(
+    recipient: UserId,
+    lifecycle: NotificationLifecycle,
+    kind: NotificationKind,
+    subject: NotificationSubject,
+    message: Option<String>,
+) -> Notification {
+    Notification {
+        id: NotificationId::new(),
+        recipient,
+        lifecycle,
+        kind,
+        subject,
+        message,
+        state: NotificationState::New,
+        created_at: sample_purchase_date(),
+    }
+}
+
+/// Extract the sole notification from a `Summary` (panics if not exactly one).
+fn sole_notification(summary: &Summary) -> Notification {
+    let live = summary.notifications.live();
+    assert_eq!(
+        live.len(),
+        1,
+        "expected exactly one notification, got {}",
+        live.len()
+    );
+    live[0].clone()
+}
+
 // === Create ===
 
 /// Auto-approve shops create the subscription, then flip it to Active with a
 /// welcome message: the domain logic runs over the canned store rows.
+/// Side effect: a `sub_response` (persistent) notification to the requester.
 #[tokio::test]
 async fn subscription_create_auto_approve_active() -> TbResult<()> {
     let shop = ShopId::from(1);
     let subscriber = UserId::from(1);
     let owner = UserId::from(2);
     let welcome = "Welcome to Bike Barn".to_string();
+    let welcome_clone = welcome.clone();
     let pending = sub_row(
         SubscriptionId::from(1),
         shop,
@@ -80,7 +116,14 @@ async fn subscription_create_auto_approve_active() -> TbResult<()> {
         subscriber,
         SubscriptionStatus::Active,
         None,
-        Some(welcome.clone()),
+        Some(welcome_clone.clone()),
+    );
+    let notification = notification_row(
+        subscriber,
+        NotificationLifecycle::Persistent,
+        NotificationKind::SubResponse,
+        NotificationSubject::Subscription(SubscriptionId::from(1)),
+        Some(welcome_clone.clone()),
     );
 
     let mut store = MockStore::new();
@@ -99,11 +142,90 @@ async fn subscription_create_auto_approve_active() -> TbResult<()> {
     store
         .expect_subscription_approve()
         .returning(move |_, _, _| Ok(active.clone()));
+    store.expect_notification_create().returning(
+        move |recipient, lifecycle, kind, subject, message| {
+            assert_eq!(recipient, subscriber);
+            assert_eq!(lifecycle, NotificationLifecycle::Persistent);
+            assert_eq!(kind, NotificationKind::SubResponse);
+            assert_eq!(
+                subject,
+                NotificationSubject::Subscription(SubscriptionId::from(1))
+            );
+            assert_eq!(message, Some(welcome_clone.clone()));
+            Ok(notification.clone())
+        },
+    );
 
-    let created = SubscriptionId::create(shop, None, subscriber, &mut store).await?;
+    let summary = SubscriptionId::create(shop, None, subscriber, &mut store).await?;
 
-    assert_eq!(created.status, SubscriptionStatus::Active);
-    assert_eq!(created.response_message, Some(welcome));
+    let notification = sole_notification(&summary);
+    assert_eq!(notification.recipient, subscriber);
+    assert_eq!(notification.lifecycle, NotificationLifecycle::Persistent);
+    assert_eq!(notification.kind, NotificationKind::SubResponse);
+    assert_eq!(
+        notification.subject,
+        NotificationSubject::Subscription(SubscriptionId::from(1))
+    );
+    assert_eq!(notification.message, Some(welcome));
+    Ok(())
+}
+
+/// A pending (non-auto-approve) subscription creates a `sub_request`
+/// (persistent) notification to the shop owner — never to the actor.
+#[tokio::test]
+async fn subscription_create_pending_notifies_shop_owner() -> TbResult<()> {
+    let shop = ShopId::from(1);
+    let subscriber = UserId::from(1);
+    let owner = UserId::from(2);
+    let pending = sub_row(
+        SubscriptionId::from(1),
+        shop,
+        subscriber,
+        SubscriptionStatus::Pending,
+        None,
+        None,
+    );
+    let notification = notification_row(
+        owner,
+        NotificationLifecycle::Persistent,
+        NotificationKind::SubRequest,
+        NotificationSubject::Subscription(SubscriptionId::from(1)),
+        None,
+    );
+
+    let mut store = MockStore::new();
+    store
+        .expect_shop_get()
+        .returning(move |_| Ok(shop_row(shop, owner, "Bike Barn", false)));
+    store
+        .expect_subscription_find_pending()
+        .returning(|_, _| Ok(None));
+    store
+        .expect_subscription_find_active()
+        .returning(|_, _| Ok(None));
+    store
+        .expect_subscription_create()
+        .returning(move |_, _, _| Ok(pending.clone()));
+    store.expect_notification_create().returning(
+        move |recipient, lifecycle, kind, subject, message| {
+            assert_eq!(recipient, owner);
+            assert_eq!(lifecycle, NotificationLifecycle::Persistent);
+            assert_eq!(kind, NotificationKind::SubRequest);
+            assert_eq!(
+                subject,
+                NotificationSubject::Subscription(SubscriptionId::from(1))
+            );
+            assert_eq!(message, None);
+            Ok(notification.clone())
+        },
+    );
+
+    let summary = SubscriptionId::create(shop, None, subscriber, &mut store).await?;
+
+    let notification = sole_notification(&summary);
+    assert_eq!(notification.recipient, owner);
+    assert_eq!(notification.lifecycle, NotificationLifecycle::Persistent);
+    assert_eq!(notification.kind, NotificationKind::SubRequest);
     Ok(())
 }
 
@@ -254,6 +376,7 @@ async fn subscription_checkuser_stranger_forbidden() -> TbResult<()> {
 
 /// Only the shop owner can approve: a non-owner is forbidden, the owner
 /// approves and the domain logic flips the status to Active.
+/// Side effect: a `sub_response` (persistent) notification to the requester.
 #[tokio::test]
 async fn subscription_approve_owner_only() -> TbResult<()> {
     let shop = ShopId::from(1);
@@ -266,6 +389,13 @@ async fn subscription_approve_owner_only() -> TbResult<()> {
         SubscriptionStatus::Pending,
         None,
         None,
+    );
+    let notification = notification_row(
+        subscriber,
+        NotificationLifecycle::Persistent,
+        NotificationKind::SubResponse,
+        NotificationSubject::Subscription(SubscriptionId::from(1)),
+        Some("Welcome!".to_string()),
     );
 
     let mut store = MockStore::new();
@@ -288,18 +418,33 @@ async fn subscription_approve_owner_only() -> TbResult<()> {
                 msg,
             ))
         });
+    store.expect_notification_create().returning(
+        move |recipient, lifecycle, kind, subject, message| {
+            assert_eq!(recipient, subscriber);
+            assert_eq!(lifecycle, NotificationLifecycle::Persistent);
+            assert_eq!(kind, NotificationKind::SubResponse);
+            assert_eq!(
+                subject,
+                NotificationSubject::Subscription(SubscriptionId::from(1))
+            );
+            assert_eq!(message, Some("Welcome!".to_string()));
+            Ok(notification.clone())
+        },
+    );
 
     // Non-owner cannot approve
     let denied = sub.id.approve(None, subscriber, &mut store).await;
     assert!(matches!(denied, Err(Error::Forbidden(_))));
 
     // Owner can approve
-    let approved = sub
+    let summary = sub
         .id
         .approve(Some("Welcome!".to_string()), owner, &mut store)
         .await?;
-    assert_eq!(approved.status, SubscriptionStatus::Active);
-    assert_eq!(approved.response_message, Some("Welcome!".into()));
+    let notification = sole_notification(&summary);
+    assert_eq!(notification.recipient, subscriber);
+    assert_eq!(notification.kind, NotificationKind::SubResponse);
+    assert_eq!(notification.message, Some("Welcome!".into()));
     Ok(())
 }
 
@@ -335,6 +480,7 @@ async fn subscription_approve_pending_only() -> TbResult<()> {
 
 /// Only the shop owner can reject; the domain logic flips the status to
 /// Rejected with the response message.
+/// Side effect: a `sub_response` (persistent) notification to the requester.
 #[tokio::test]
 async fn subscription_reject_owner_only() -> TbResult<()> {
     let shop = ShopId::from(1);
@@ -347,6 +493,13 @@ async fn subscription_reject_owner_only() -> TbResult<()> {
         SubscriptionStatus::Pending,
         None,
         None,
+    );
+    let notification = notification_row(
+        subscriber,
+        NotificationLifecycle::Persistent,
+        NotificationKind::SubResponse,
+        NotificationSubject::Subscription(SubscriptionId::from(1)),
+        Some("Nope".to_string()),
     );
 
     let mut store = MockStore::new();
@@ -369,13 +522,28 @@ async fn subscription_reject_owner_only() -> TbResult<()> {
                 msg,
             ))
         });
+    store.expect_notification_create().returning(
+        move |recipient, lifecycle, kind, subject, message| {
+            assert_eq!(recipient, subscriber);
+            assert_eq!(lifecycle, NotificationLifecycle::Persistent);
+            assert_eq!(kind, NotificationKind::SubResponse);
+            assert_eq!(
+                subject,
+                NotificationSubject::Subscription(SubscriptionId::from(1))
+            );
+            assert_eq!(message, Some("Nope".to_string()));
+            Ok(notification.clone())
+        },
+    );
 
-    let rejected = sub
+    let summary = sub
         .id
         .reject(Some("Nope".to_string()), owner, &mut store)
         .await?;
-    assert_eq!(rejected.status, SubscriptionStatus::Rejected);
-    assert_eq!(rejected.response_message, Some("Nope".into()));
+    let notification = sole_notification(&summary);
+    assert_eq!(notification.recipient, subscriber);
+    assert_eq!(notification.kind, NotificationKind::SubResponse);
+    assert_eq!(notification.message, Some("Nope".into()));
     Ok(())
 }
 
@@ -412,6 +580,7 @@ async fn subscription_reject_non_owner_forbidden() -> TbResult<()> {
 
 /// Only the subscriber can cancel: the shop owner is forbidden, the
 /// subscriber cancels, and the (deleted) subscription is no longer readable.
+/// Side effect: a `sub_cancelled` (persistent) notification to the shop owner.
 #[tokio::test]
 async fn subscription_cancel_subscriber_only() -> TbResult<()> {
     let shop = ShopId::from(1);
@@ -423,6 +592,13 @@ async fn subscription_cancel_subscriber_only() -> TbResult<()> {
         subscriber,
         SubscriptionStatus::Pending,
         None,
+        None,
+    );
+    let notification = notification_row(
+        owner,
+        NotificationLifecycle::Persistent,
+        NotificationKind::SubCancelled,
+        NotificationSubject::Subscription(SubscriptionId::from(1)),
         None,
     );
 
@@ -444,23 +620,43 @@ async fn subscription_cancel_subscriber_only() -> TbResult<()> {
     });
     store.expect_shop_get_parts().returning(|_| Ok(vec![]));
     store.expect_subscription_delete().returning(|_| Ok(()));
+    store
+        .expect_shop_get()
+        .returning(move |_| Ok(shop_row(shop, owner, "Bike Barn", false)));
+    store.expect_notification_create().returning(
+        move |recipient, lifecycle, kind, subject, message| {
+            assert_eq!(recipient, owner);
+            assert_eq!(lifecycle, NotificationLifecycle::Persistent);
+            assert_eq!(kind, NotificationKind::SubCancelled);
+            assert_eq!(
+                subject,
+                NotificationSubject::Subscription(SubscriptionId::from(1))
+            );
+            assert_eq!(message, None);
+            Ok(notification.clone())
+        },
+    );
 
     // Shop owner cannot cancel
     let denied = sub.id.cancel(owner, &mut store).await;
     assert!(matches!(denied, Err(Error::Forbidden(_))));
 
     // Subscriber can cancel
-    sub.id.cancel(subscriber, &mut store).await?;
+    let summary = sub.id.cancel(subscriber, &mut store).await?;
+    let notification = sole_notification(&summary);
+    assert_eq!(notification.recipient, owner);
+    assert_eq!(notification.kind, NotificationKind::SubCancelled);
     assert!(sub.id.read(subscriber, &mut store).await.is_err());
     Ok(())
 }
 
 /// A subscriber can cancel an active subscription when they have no parts in
-/// the shop.
+/// the shop. Side effect: a `sub_cancelled` notification to the shop owner.
 #[tokio::test]
 async fn subscription_cancel_active_ok() -> TbResult<()> {
     let shop = ShopId::from(1);
     let subscriber = UserId::from(1);
+    let owner = UserId::from(2);
     let sub = sub_row(
         SubscriptionId::from(1),
         shop,
@@ -468,6 +664,13 @@ async fn subscription_cancel_active_ok() -> TbResult<()> {
         SubscriptionStatus::Active,
         None,
         Some("Welcome to Bike Barn".into()),
+    );
+    let notification = notification_row(
+        owner,
+        NotificationLifecycle::Persistent,
+        NotificationKind::SubCancelled,
+        NotificationSubject::Subscription(SubscriptionId::from(1)),
+        None,
     );
 
     let mut store = MockStore::new();
@@ -477,8 +680,21 @@ async fn subscription_cancel_active_ok() -> TbResult<()> {
         .returning(move |_| Ok(sub_owned.clone()));
     store.expect_shop_get_parts().returning(|_| Ok(vec![]));
     store.expect_subscription_delete().returning(|_| Ok(()));
+    store
+        .expect_shop_get()
+        .returning(move |_| Ok(shop_row(shop, owner, "Bike Barn", false)));
+    store
+        .expect_notification_create()
+        .returning(move |recipient, _, kind, _, _| {
+            assert_eq!(recipient, owner);
+            assert_eq!(kind, NotificationKind::SubCancelled);
+            Ok(notification.clone())
+        });
 
-    sub.id.cancel(subscriber, &mut store).await?;
+    let summary = sub.id.cancel(subscriber, &mut store).await?;
+    let notification = sole_notification(&summary);
+    assert_eq!(notification.recipient, owner);
+    assert_eq!(notification.kind, NotificationKind::SubCancelled);
     Ok(())
 }
 

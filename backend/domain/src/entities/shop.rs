@@ -160,11 +160,15 @@ impl ShopId {
     /// Can be done by shop owner or any user with an active subscription
     /// Automatically registers all currently attached parts (cascading registration)
     /// Returns a Summary with the registered part and its attachments
+    ///
+    /// Side effect: a `part_registered` (transient) notification to the shop
+    /// owner, naming the top-level part (a cascade of attached subparts does
+    /// not fan out).
     pub async fn register_part(
         self,
         part_id: PartId,
         session: &dyn Session,
-        store: &mut (impl AttachmentStore + PartStore + ShopStore),
+        store: &mut (impl AttachmentStore + PartStore + ShopStore + NotificationStore),
     ) -> TbResult<Summary> {
         ShopSubscription::check(self, session.user_id(), store).await?;
         let parts = parts_for_register(part_id, session, store).await?;
@@ -174,6 +178,20 @@ impl ShopId {
 
         let mut summary = Summary::default();
         summary.parts.upsert_all(parts);
+
+        // Notify the shop owner (not the actor) — one notification for the
+        // top-level part
+        let shop = store.shop_get(self).await?;
+        let notification = store
+            .notification_create(
+                shop.owner,
+                NotificationLifecycle::Transient,
+                NotificationKind::PartRegistered,
+                NotificationSubject::Part(part_id),
+                None,
+            )
+            .await?;
+        summary.notifications.upsert(notification);
         Ok(summary)
     }
 
@@ -187,19 +205,38 @@ impl ShopId {
 
     /// Unregister a part (bike) from this shop
     /// Can be done by shop owner OR part owner
-    /// Returns an empty Summary (for consistency with other endpoints)
+    /// Returns a Summary with the unregistered part and its attachments
+    ///
+    /// Side effect: a `part_unregistered` (transient) notification to the
+    /// part owner.
     pub async fn unregister_part(
         self,
         part_id: PartId,
         session: &dyn Session,
-        store: &mut (impl AttachmentStore + PartStore + ShopStore),
+        store: &mut (impl AttachmentStore + PartStore + ShopStore + NotificationStore),
     ) -> TbResult<Summary> {
         let parts = parts_for_register(part_id, session, store).await?;
 
         let parts = store.parts_unregister_shop(parts).await?;
+        let part_owner = parts
+            .first()
+            .map(|p| p.owner)
+            .ok_or_else(|| Error::AnyFailure(anyhow::anyhow!("no parts to unregister")))?;
 
         let mut summary = Summary::default();
         summary.parts.upsert_all(parts);
+
+        // Notify the part owner (transient)
+        let notification = store
+            .notification_create(
+                part_owner,
+                NotificationLifecycle::Transient,
+                NotificationKind::PartUnregistered,
+                NotificationSubject::Part(part_id),
+                None,
+            )
+            .await?;
+        summary.notifications.upsert(notification);
         Ok(summary)
     }
 

@@ -19,6 +19,26 @@ use crate::test_support::part_type_ids;
 use crate::test_support::{MockStore, mock_session, mock_session_with_shop};
 use part_type_ids::{BIKE, CHAIN, FRONT_WHEEL, REAR_WHEEL};
 
+/// A canned `Notification` row for testing.
+fn notification_row(
+    recipient: UserId,
+    lifecycle: NotificationLifecycle,
+    kind: NotificationKind,
+    subject: NotificationSubject,
+    message: Option<String>,
+) -> Notification {
+    Notification {
+        id: NotificationId::new(),
+        recipient,
+        lifecycle,
+        kind,
+        subject,
+        message,
+        state: NotificationState::New,
+        created_at: sample_purchase_date(),
+    }
+}
+
 // --- Canned rows: the minimal shape the domain logic needs ---
 
 fn shop_row(id: ShopId, owner: UserId, name: &str, auto_approve: bool) -> Shop {
@@ -274,11 +294,30 @@ async fn register_part_ok() -> TbResult<()> {
                 .map(|p| part_row(p, customer, BIKE, Some(shop_id)))
                 .collect())
         });
+    // The shop (for the notification's recipient).
+    store
+        .expect_shop_get()
+        .returning(move |_| Ok(shop_row(shop_id, owner, "Bike Barn", false)));
+    // The notification side effect.
+    store.expect_notification_create().returning(
+        move |recipient, lifecycle, kind, subject, message| {
+            assert_eq!(recipient, owner);
+            assert_eq!(lifecycle, NotificationLifecycle::Transient);
+            assert_eq!(kind, NotificationKind::PartRegistered);
+            assert_eq!(subject, NotificationSubject::Part(bike));
+            assert_eq!(message, None);
+            Ok(notification_row(
+                recipient, lifecycle, kind, subject, message,
+            ))
+        },
+    );
 
     let session = mock_session(customer);
     let summary = shop_id.register_part(bike, &session, &mut store).await?;
     // Bike A + Front Wheel A + Rear Wheel A + Chain A + both tires = 6.
     assert_eq!(summary.parts.len(), 6);
+    // The notification is in the summary.
+    assert_eq!(summary.notifications.len(), 1);
     Ok(())
 }
 
@@ -316,6 +355,16 @@ async fn register_part_cascades_subparts() -> TbResult<()> {
                 .map(|p| part_row(p, customer, BIKE, Some(shop_id)))
                 .collect())
         });
+    store
+        .expect_shop_get()
+        .returning(move |_| Ok(shop_row(shop_id, UserId::from(2), "Bike Barn", false)));
+    store.expect_notification_create().returning(
+        move |recipient, lifecycle, kind, subject, message| {
+            Ok(notification_row(
+                recipient, lifecycle, kind, subject, message,
+            ))
+        },
+    );
 
     let session = mock_session(customer);
     let summary = shop_id.register_part(bike, &session, &mut store).await?;
@@ -449,6 +498,18 @@ async fn unregister_part_by_owner() -> TbResult<()> {
                 .map(|p| part_row(p, customer, BIKE, None))
                 .collect())
         });
+    store.expect_notification_create().returning(
+        move |recipient, lifecycle, kind, subject, message| {
+            assert_eq!(recipient, customer);
+            assert_eq!(lifecycle, NotificationLifecycle::Transient);
+            assert_eq!(kind, NotificationKind::PartUnregistered);
+            assert_eq!(subject, NotificationSubject::Part(bike));
+            assert_eq!(message, None);
+            Ok(notification_row(
+                recipient, lifecycle, kind, subject, message,
+            ))
+        },
+    );
 
     let session = mock_session(customer);
     let summary = shop_id.unregister_part(bike, &session, &mut store).await?;
@@ -456,6 +517,7 @@ async fn unregister_part_by_owner() -> TbResult<()> {
     for part in summary.parts.live() {
         assert_eq!(part.shop, None, "part {} should have no shop", part.id);
     }
+    assert_eq!(summary.notifications.len(), 1);
     Ok(())
 }
 
@@ -491,6 +553,18 @@ async fn unregister_part_by_shop_owner() -> TbResult<()> {
                 .map(|p| part_row(p, customer, BIKE, None))
                 .collect())
         });
+    store.expect_notification_create().returning(
+        move |recipient, lifecycle, kind, subject, message| {
+            assert_eq!(recipient, customer);
+            assert_eq!(lifecycle, NotificationLifecycle::Transient);
+            assert_eq!(kind, NotificationKind::PartUnregistered);
+            assert_eq!(subject, NotificationSubject::Part(bike));
+            assert_eq!(message, None);
+            Ok(notification_row(
+                recipient, lifecycle, kind, subject, message,
+            ))
+        },
+    );
 
     let shop_session = mock_session_with_shop(owner, shop_id);
     let summary = shop_id
@@ -500,6 +574,7 @@ async fn unregister_part_by_shop_owner() -> TbResult<()> {
     for part in summary.parts.live() {
         assert_eq!(part.shop, None, "part {} should have no shop", part.id);
     }
+    assert_eq!(summary.notifications.len(), 1);
     Ok(())
 }
 
@@ -772,6 +847,13 @@ async fn attach_transfers_ownership_to_customer() -> TbResult<()> {
     store.expect_attachment_create().returning(Ok);
     store.expect_services_by_part().returning(|_| Ok(vec![]));
     store.expect_usages_update().returning(|_| Ok(0));
+    store.expect_notification_create().returning(
+        move |recipient, lifecycle, kind, subject, message| {
+            Ok(notification_row(
+                recipient, lifecycle, kind, subject, message,
+            ))
+        },
+    );
 
     // Register the bike to the shop (as the customer).
     let cust_session = mock_session(customer);
@@ -889,6 +971,13 @@ async fn shop_owner_detaches_from_customer_bike() -> TbResult<()> {
         .returning(|_, _, _| Ok(vec![]));
     store.expect_part_update().returning(Ok);
     store.expect_attachment_create().returning(Ok);
+    store.expect_notification_create().returning(
+        move |recipient, lifecycle, kind, subject, message| {
+            Ok(notification_row(
+                recipient, lifecycle, kind, subject, message,
+            ))
+        },
+    );
 
     // Register the bike to the shop (as the customer).
     let cust_session = mock_session(customer);

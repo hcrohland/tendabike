@@ -248,10 +248,18 @@ pub(crate) async fn select_message(
 ///   foreign part must not leak into the shop owner's personal view; the part
 ///   owner, who may be the shop owner, receives the frame via `push_to_user`).
 ///
+/// **Cross-recipient notification routing** (issue #677): after the normal
+/// frame is delivered, each notification in the `Summary` whose recipient is
+/// not the acting user (and not the part owner in a shop context) is pushed
+/// to that recipient's personal stream via [`FramePusher::push_to_user`]. A
+/// recipient whose executor is not running gets nothing live — the row is in
+/// the DB and reaches them on the next hydration.
+///
 /// An empty `Summary` pushes nothing, to any stream (spec §4.5).
 pub(crate) async fn deliver_frame(
     pusher: &dyn FramePusher,
     frames: &broadcast::Sender<Summary>,
+    user_id: UserId,
     shop: Option<ShopId>,
     part_owner: Option<UserId>,
     summary: &Summary,
@@ -259,6 +267,7 @@ pub(crate) async fn deliver_frame(
     if summary.is_empty() {
         return;
     }
+    // Push the normal frame to the acting user's delivery target(s).
     match shop {
         None => push_frame(frames, summary),
         Some(shop_id) => {
@@ -267,6 +276,25 @@ pub(crate) async fn deliver_frame(
                 pusher.push_to_user(owner, summary.clone()).await;
             }
         }
+    }
+    // Cross-recipient notification routing: push each notification to its
+    // recipient's personal stream. The acting user's own notifications ride
+    // the normal frame above; in a shop context the part owner's
+    // notifications also ride the normal frame (pushed to their personal
+    // stream).
+    for notification in summary.notifications.live() {
+        let recipient = notification.recipient;
+        if recipient == user_id {
+            continue;
+        }
+        if let Some(owner) = part_owner
+            && recipient == owner
+        {
+            continue;
+        }
+        let mut recipient_summary = Summary::default();
+        recipient_summary.notifications.upsert(notification);
+        pusher.push_to_user(recipient, recipient_summary).await;
     }
 }
 
@@ -804,7 +832,15 @@ where
         // the oneshot reply, routed by the session's context (spec #517,
         // ticket #584).
         if let Some(frame) = frame(outcome) {
-            deliver_frame(&*ctx.pusher, &ctx.frames, shop, part_owner, frame).await;
+            deliver_frame(
+                &*ctx.pusher,
+                &ctx.frames,
+                ctx.user_id,
+                shop,
+                part_owner,
+                frame,
+            )
+            .await;
         }
     }
     if let Err(err) = &outcome {
@@ -1076,7 +1112,7 @@ where
                 // own parts, so no shop context (spec #517, ticket #584) —
                 // the executor's own personal stream. Then announce the
                 // consumed event (spec §6.4) for good, empty summary or not.
-                deliver_frame(&*ctx.pusher, &ctx.frames, None, None, &summary).await;
+                deliver_frame(&*ctx.pusher, &ctx.frames, ctx.user_id, None, None, &summary).await;
                 let _ = ctx.events.send(event.clone());
                 ctx.backoff.reset();
                 Ok(())
