@@ -2,6 +2,13 @@
 
 All tests run in-memory (no database; the DB boundary is a fast-failing source, not a real connection). Unit tests are colocated in each module's `#[cfg(test)] mod tests` (`error.rs`, `strava/oauth.rs`, `strava/webhook.rs`, `strava/session.rs`, `domain/partnote.rs`); router tests live in `lib_tests.rs` (the `#[cfg(test)]` module declared in `lib.rs`) and exercise the real router built by the private `routes()` helper.
 
+## Behavior ownership
+
+`tb_axum` owns the **HTTP layer behavior**: status codes, JSON shapes, routing, the `Error` → response mapping, the SSE/stream surface, and the executor integration at the HTTP boundary (writes riding the executor, onboarding sync / postpone, webhook wake, executor reap and respawn).
+
+- **What it mocks** — the **domain**: the whole suite runs against `MockServiceApi`, the `mockall` service-API double (no loop, no in-memory store, no executor tokio plumbing). The mock's expectations verify the handler called the right operation with the right args; the canned replies are the mock's; the error mapping (404/500/401/403/400/409/429) is the mock returning `Err(...)` directly — no failing `begin` anywhere.
+- **What it delegates to the seam** — loop + real-store truth (reads-as-messages, FIFO, rollback, reap, queue drain, Registry-level lifecycle, the direct ops' transactions) lives in `sqlx/tests/executor_seam.rs` on real Postgres; the read/write dispatch logic lives in the domain suite (`apiread_tests` beside `apiwrite_tests`).
+
 ## Coverage
 
 - **Error mapping** (`error.rs`): every `Error` variant → expected HTTP status + body text through `AppError::into_response()`
@@ -21,8 +28,6 @@ All in `lib_tests.rs` (the `#[cfg(test)]` module declared in `lib.rs`).
 - **`run` / `run_json` / `run_raw`** — `tower::ServiceExt::oneshot` roundtrip; returns `(StatusCode, HeaderMap, Vec<u8>)`. `run_raw` is the multipart/raw-body helper (raw bytes plus an explicit content type — `run_json` cannot carry one), and `run`/`run_json` are refactored on top of it.
 - **`run_sse` / `read_sse_frames`** — GET a long-lived SSE endpoint and keep the body open (collecting it would hang); read frames with a per-frame timeout.
 - **`user_cookie(store)` / `admin_cookie(store)`** — create a session via `RequestSession::new_dummy(is_admin)`, return the `id` cookie header.
-
-What this suite deliberately does not cover: loop + real-store truth (reads-as-messages, FIFO, rollback, reap, queue drain, Registry-level lifecycle, the direct ops' transactions) lives in `sqlx/tests/executor_seam.rs` on real Postgres; the read/write dispatch logic lives in the domain suite (`apiread_tests` beside `apiwrite_tests`).
 - **`RequestSession::new_dummy(is_admin)`** — `#[cfg(test)]` constructor in `strava/session.rs` (fields are private; always construct sessions this way in tests).
 - **`CANNED_STRAVA` / `canned_strava(uri, json)`** — test-only hook in the production module `strava/session.rs`: maps a Strava URI to a canned JSON response, and `RequestSession::request_json` answers with the canned JSON instead of hitting the Strava API. The `LiveSource` suite runs the real executor loop with a real `RequestSession`, and the summary route's hydration (spec #558 §4) calls `/athlete`: `LiveSource::new` maps an empty athlete so the hydration succeeds offline — no new gear, the common case (no frame, unchanged snapshot).
 - Tests force the `CLIENT_ID` / `CLIENT_SECRET` env vars via a `Once` (edition 2024: `std::env::set_var` is `unsafe`), overriding any values from the environment so the redirect-URL assertions are deterministic; `CSRF_SECRET` is left unset (the `CSRF_KEY` falls back to a per-process random key, which is fine for token roundtrips).

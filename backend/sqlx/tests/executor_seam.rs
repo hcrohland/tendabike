@@ -33,11 +33,9 @@
 //!   per user, spec #558 §3.2) — the write's committed row is in the
 //!   read's `ReadOutcome`;
 //! - a **hydration write** (`Request::Gear`) runs `update_gear` in one live
-//!   loop-owned transaction with the loop's session and pushes a frame —
-//!   the union of the parts it created — and a `User` read enqueued after
-//!   it (FIFO) sees the committed hydration in its snapshot (spec #558
-//!   §4); the common case (no new gear) pushes **no** frame and leaves the
-//!   snapshot unchanged;
+//!   loop-owned transaction with the loop's session and commits — the
+//!   created part row is visible to a fresh connection — and a `User` read
+//!   enqueued after it (FIFO) sees the committed row (spec #558 §4);
 //! - a **queued Strava `Stop`** past its expiry is dropped by the queue
 //!   probe's housekeeping (committed by the probe) and the queue is empty
 //!   afterwards;
@@ -614,13 +612,12 @@ async fn read_sees_every_earlier_write() {
     outcome.expect("a reaped loop returns Ok");
 }
 
-/// The hydration write end to end on the live adapter (spec #558 §4/§8):
-/// the `Request::Gear` travels the in-memory channel, runs `update_gear`
-/// in one live loop-owned transaction with the loop's session, commits, and
-/// pushes exactly one frame — the **union of the parts it created** (one
-/// entry per part, published on commit before the oneshot reply). The `User`
-/// read enqueued after it (FIFO total order per user) sees the committed
-/// hydration: its snapshot carries the new part.
+/// The hydration write's store boundary end to end on the live adapter
+/// (spec #558 §4/§8): the `Request::Gear` travels the in-memory channel,
+/// runs `update_gear` in one live loop-owned transaction with the loop's
+/// session, and commits — the created part row (the fixture's 17 plus the
+/// hydration's) is visible to a fresh connection. The `User` read enqueued
+/// after it (FIFO total order per user) sees the committed row.
 #[tokio::test]
 #[ignore]
 async fn gear_hydration_frame_and_fifo_read() {
@@ -635,7 +632,7 @@ async fn gear_hydration_frame_and_fifo_read() {
         r#"{"id":"b-seam","name":"Seam Bike","brand_name":"SeamBrand","model_name":"SB1","frame_type":1}"#,
     );
     let (tx, rx) = request_channel();
-    let (frames, mut frame_rx) = broadcast::channel(16);
+    let (frames, frame_rx) = broadcast::channel(16);
     let (events, _events_rx) = broadcast::channel(16);
     // The hydration, then the snapshot read — enqueued in order before the
     // loop starts (the channel is the FIFO the loop consumes in order).
@@ -647,33 +644,25 @@ async fn gear_hydration_frame_and_fifo_read() {
 
     let mut loop_task = tokio::spawn(loop_ctx(seam.pool.clone(), frames, events, rx));
 
-    // The hydration commits: the oneshot resolves with the created parts'
-    // summary — one entry per created part.
-    let summary = tokio::time::timeout(TEST_TIMEOUT, gear_reply)
+    // The hydration commits: the oneshot resolves.
+    tokio::time::timeout(TEST_TIMEOUT, gear_reply)
         .await
         .expect("the gear reply must resolve in time")
         .expect("the loop must resolve the oneshot, not drop it")
         .expect("the hydration must succeed");
-    assert_eq!(
-        summary.parts.len(),
-        1,
-        "the frame is the created parts' union"
-    );
-    let created = sole_live(&summary.parts);
-    assert_eq!(created.name, "Seam Bike");
-    assert_eq!(created.source.as_deref(), Some("b-seam"));
 
-    // The created part pushes exactly one frame, published on commit — the
-    // reply already resolved, so the frame is already in the channel.
-    let frame = tokio::time::timeout(TEST_TIMEOUT, frame_rx.recv())
+    // The created part row is committed: the fixture's 17 parts plus the
+    // hydration's, visible to a fresh connection.
+    let mut conn = seam.pool.raw().acquire().await.expect("a fresh connection");
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM parts")
+        .fetch_one(&mut *conn)
         .await
-        .expect("the frame must arrive in time")
-        .expect("the stream must stay open");
-    assert_eq!(frame, summary, "the frame is the created parts' union");
+        .expect("reading the parts table");
+    assert_eq!(n, 18, "the hydration's part row is committed (17 → 18)");
+    drop(conn);
 
-    // The read — enqueued after the hydration — sees the committed part:
-    // the fixture's 17 parts plus the hydration's, and the snapshot carries
-    // the new part exactly as committed.
+    // The read — enqueued after the hydration — sees the committed row:
+    // the fixture's 17 parts plus the hydration's.
     let read_outcome = tokio::time::timeout(TEST_TIMEOUT, read_reply)
         .await
         .expect("the read's reply must resolve in time")
@@ -686,76 +675,6 @@ async fn gear_hydration_frame_and_fifo_read() {
         state.summary.parts.len(),
         18,
         "the FIFO read sees the committed hydration"
-    );
-    assert_eq!(
-        state.summary.parts.get(&created.id),
-        Some(&created),
-        "the snapshot body carries the new part"
-    );
-
-    drop(frame_rx);
-    let outcome = tokio::time::timeout(TEST_TIMEOUT, &mut loop_task)
-        .await
-        .expect("the idle loop must reap in time")
-        .expect("the loop must not panic");
-    outcome.expect("a reaped loop returns Ok");
-}
-
-/// The hydration's common case end to end on the live adapter (spec #558
-/// §4/§8): the Strava athlete carries no new gear — `update_gear` creates
-/// nothing, the `Summary` is empty, and **no frame is pushed** (exactly
-/// today's behavior). The `User` read enqueued after it (FIFO) answers with
-/// the fixture's state, unchanged.
-#[tokio::test]
-#[ignore]
-async fn gear_hydration_without_new_gear_pushes_no_frame() {
-    let seam = ready().await;
-    let fixture_parts: usize = serde_json::from_str::<tb_domain::StoreSnapshot>(SNAPSHOT_JSON)
-        .expect("SNAPSHOT_JSON must be valid JSON")
-        .parts
-        .len();
-    // The offline seam: the hydration's canned (empty) Strava athlete in the
-    // process-wide `CANNED_STRAVA` global (the loop runs in a spawned task).
-    canned_strava("/athlete", r#"{"bikes":[],"shoes":[]}"#);
-    let (tx, rx) = request_channel();
-    let (frames, mut frame_rx) = broadcast::channel(16);
-    let (events, _events_rx) = broadcast::channel(16);
-    let (gear_request, gear_reply) = Request::new_gear(Box::new(mock_session(UserId::from(1))));
-    tx.send(gear_request).expect("the channel is open");
-    let (read_request, read_reply) =
-        Request::new_read(Box::new(mock_session(UserId::from(1))), ApiRead::User);
-    tx.send(read_request).expect("the channel is open");
-
-    let mut loop_task = tokio::spawn(loop_ctx(seam.pool.clone(), frames, events, rx));
-
-    // The hydration commits with an empty summary (nothing new).
-    let summary = tokio::time::timeout(TEST_TIMEOUT, gear_reply)
-        .await
-        .expect("the gear reply must resolve in time")
-        .expect("the loop must resolve the oneshot, not drop it")
-        .expect("the hydration must succeed");
-    assert!(summary.is_empty(), "no new gear: the summary is empty");
-
-    // An empty summary pushes no frame (the gear's commit resolved before
-    // this point, so any frame would already be in the channel).
-    assert!(
-        frame_rx.try_recv().is_err(),
-        "no new gear: an empty summary pushes no frame"
-    );
-
-    // The FIFO read answers with the fixture's state, unchanged.
-    let read_outcome = tokio::time::timeout(TEST_TIMEOUT, read_reply)
-        .await
-        .expect("the read's reply must resolve in time")
-        .expect("the loop must resolve the read's oneshot")
-        .expect("the user read must succeed");
-    let ReadOutcome::User(state) = read_outcome else {
-        panic!("the User read returns the UserState composite");
-    };
-    assert_eq!(
-        state.summary.parts.len(),
-        fixture_parts,
-        "no new gear: the snapshot is the fixture's state"
     );
 
     drop(frame_rx);
