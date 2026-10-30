@@ -4,19 +4,18 @@ Issues and specs for this repo live as GitHub issues. Use the GitHub MCP server 
 
 ## Conventions
 
-- **Create an issue**: `issue_write` with `method: "create"` — `title`, `body` (multi-line bodies go in the string as-is).
+Repo-specific policies and API gotchas — for which tool takes which params, see the MCP tool schemas.
+
 - **Feature label**: one `feature:<slug>` label per feature.
 - **Non-feature issues** (bugs, flaky tests, chores): apply the triage label only — no `feature:` label.
-- **Link as a sub-issue**: `issue_write` with `parent_issue_number` for a new issue; `sub_issue_write` (method `add`) for an existing one — it takes the child's numeric **database id** (the `id` field, not its `#number` or `node_id`), which full `search_issues` / `get_sub_issues` entries carry.
-- **Read an issue**: `issue_read` with `method: "get"` for details (body, labels, state, assignees, hierarchy flags) or `get_comments` for comments.
-- **Read sub-issues**: `issue_read` with `method: "get_sub_issues"` — for a large spec the inline result is **truncated**; the full JSON is written to a tool-output file (path in the tool result). Read that file and parse it; don't rely on the truncated inline output.
-- **List issues**: `list_issues` with `state` and `labels` filters; request only the `fields` you need — `body` is the largest per-result data.
-- **Comment on an issue**: `add_issue_comment` (`issue_number`, `body`).
-- **Apply / remove labels**: `issue_write` with `method: "update"` — its `labels` param *sets* the full label set, so removal is re-setting the list without that label (read the current labels first).
-- **Close**: `issue_write` with `method: "update"`, `state: "closed"`, `state_reason: "completed"`; pair with `add_issue_comment` when a closing comment is wanted.
+- **Sub-issue id**: `sub_issue_write` (`add`) takes the child's numeric **database id** (the `id` field, not its `#number` or `node_id`), which full `search_issues` / `get_sub_issues` entries carry.
+- **Sub-issue list truncation**: `issue_read` `get_sub_issues` on a large spec returns a **truncated** inline result; the full JSON is written to a tool-output file (path in the tool result). Read and parse that file.
+- **Labels are set-based**: `issue_write` `update` `labels` *sets* the full label set, so removal re-sets the list without that label (read the current labels first).
+- **`List` fields**: request only the `fields` you need — `body` is the largest per-result data.
+- **Close an issue**: `state: "closed"` with `state_reason: "completed"`.
 - **Close from a PR**: a squash merge collects each commit's `Closes #N` line, so each ticket closes via the `Closes #N` in its **own commit** (one issue per line — a line with several space-separated numbers closes only the first). The PR body carries `Closes` for the **umbrella spec only**; do not duplicate the per-ticket `Closes` lines into the PR body.
-- **Sync**: keep a feature branch up to date by merging `main` into it (`git merge origin/main`); never force-push to the remote — the `.githooks/pre-push` hook rejects non-fast-forward updates.
-- **Merge**: `merge_pull_request` with `merge_method: "squash"` — PRs are squash-merged, and the squashed commit takes the PR title, so write the PR title as the commit title you want on `main`. Only merge when the required checks are green on the current head: the ruleset's strict check policy voids check runs from a head behind `main`, so if `main` moved since they ran, sync (above) and let the checks re-run first.
+- **Sync**: merge `main` into the feature branch (`git merge origin/main`); the `.githooks/pre-push` hook rejects force-pushes (non-fast-forward).
+- **Merge**: squash-merge (`merge_method: "squash"`); the squashed commit takes the PR title, so write the PR title as the commit title you want on `main`. Only merge when required checks are green on the current head — the ruleset voids check runs from a head behind `main`, so if `main` moved, sync and let the checks re-run first.
 
 ## Pull requests as a triage surface
 
